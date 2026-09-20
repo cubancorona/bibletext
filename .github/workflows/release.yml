@@ -429,7 +429,7 @@ jobs:
           cd ../..
       - name: ANGLE beside the executable (the app renders through Direct3D)
         shell: pwsh
-        run: pwsh scripts/fetch-angle.ps1 -Dest cmd\desktop -Arch ${{ matrix.angle }}
+        run: pwsh scripts/fetch-angle.ps1 -Dest cmd\bibletext -Arch ${{ matrix.angle }}
       - name: zip
         shell: bash
         run: |

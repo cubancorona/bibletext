@@ -250,8 +250,12 @@ func TestTheExecutableIsNamedAfterTheAppOnEveryChannel(t *testing.T) {
 	// The README's own install routes are the ones a flag cannot reach, so they
 	// have to point at the renamed directory or readers keep installing `desktop`.
 	readme := readRepoFile(t, "README.md")
-	if strings.Contains(readme, "cmd/desktop") {
-		t.Error("README.md still tells readers to install github.com/cubancorona/bibletext/cmd/desktop")
+	// The module path, not the bare directory: the README explains in prose
+	// that older tags carry cmd/desktop, which a reader resolving @latest
+	// genuinely needs to know. What must not come back is an install COMMAND
+	// pointing at it.
+	if strings.Contains(readme, "github.com/cubancorona/bibletext/cmd/desktop") {
+		t.Error("README.md gives an install command for github.com/cubancorona/bibletext/cmd/desktop")
 	}
 	for _, want := range []string{
 		"fyne install github.com/cubancorona/bibletext/cmd/bibletext@latest",
@@ -260,5 +264,82 @@ func TestTheExecutableIsNamedAfterTheAppOnEveryChannel(t *testing.T) {
 		if !strings.Contains(readme, want) {
 			t.Errorf("README.md no longer documents %q", want)
 		}
+	}
+}
+
+// A PATH IS A PATH IN EITHER SLASH, AND ONE OF THEM IS INVISIBLE TO THE
+// OBVIOUS SEARCH.
+//
+// When cmd/desktop became cmd/bibletext, every reference was rewritten except
+// one: the Windows release job hands ANGLE's destination to a PowerShell
+// script as `-Dest cmd\desktop`, with a BACKSLASH, so a repository-wide sweep
+// for "cmd/desktop" passed straight over it while the zip step two lines below
+// was correctly rewritten to cmd/bibletext.
+//
+// That miss would not have failed loudly. fetch-angle.ps1 creates its
+// destination (`New-Item -ItemType Directory -Force $Dest`), so the ANGLE step
+// would have gone green having filled a directory nothing reads, and the
+// failure would have surfaced one step later as a zip that could not find four
+// of its five files -- on both Windows architectures, for an executable built
+// `-tags gles` that cannot create a window without those libraries.
+//
+// So this does not check one spelling of one path. It holds every cmd/ path in
+// every workflow and script, in either slash, to a directory that actually
+// exists -- which is the general form of the mistake.
+func TestEveryCmdPathInTheBuildNamesADirectoryThatExists(t *testing.T) {
+	root := repoRoot(t)
+
+	entries, err := os.ReadDir(filepath.Join(root, "cmd"))
+	if err != nil {
+		t.Fatalf("reading cmd/: %v", err)
+	}
+	real := map[string]bool{
+		// third_party/fyne-tools' own program, built by the Linux job; not ours.
+		"fyne": true,
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			real[e.Name()] = true
+		}
+	}
+
+	ref := regexp.MustCompile(`cmd[/\\]([A-Za-z0-9_-]+)`)
+	var checked int
+	for _, dir := range []string{".github/workflows", "scripts"} {
+		err := filepath.Walk(filepath.Join(root, dir), func(p string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() {
+				return err
+			}
+			body, err := os.ReadFile(p)
+			if err != nil {
+				return err
+			}
+			rel, _ := filepath.Rel(root, p)
+			for _, line := range strings.Split(string(body), "\n") {
+				// A whole-line comment is prose -- several of these scripts
+				// explain the rename that made this test necessary, and must
+				// be free to name the directory it moved from.
+				if t := strings.TrimSpace(line); strings.HasPrefix(t, "#") || strings.HasPrefix(t, "//") {
+					continue
+				}
+				for _, m := range ref.FindAllStringSubmatch(line, -1) {
+					checked++
+					if !real[m[1]] {
+						t.Errorf("%s names %q, which is not a directory under cmd/\n    %s",
+							rel, m[0], strings.TrimSpace(line))
+					}
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walking %s: %v", dir, err)
+		}
+	}
+	// A regex that stopped matching would pass this test while checking
+	// nothing, which is the failure mode these guards are prone to.
+	if checked < 50 {
+		t.Errorf("only %d cmd/ references were examined; the build references far more than that, "+
+			"so the scan is no longer looking where it thinks it is", checked)
 	}
 }

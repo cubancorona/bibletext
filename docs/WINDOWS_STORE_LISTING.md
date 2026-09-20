@@ -548,7 +548,7 @@ against the second release. The Linux half has its own checks: `make
 user-install` from the release tarball, `xdg-open bibletext://…`, the
 browsers' prompts, and whether the window comes to the front under
 XWayland (the toolkit asks X11 for it; the compositor decides), with the
-desktop entry's `Exec=desktop %u` and `MimeType=x-scheme-handler/bibletext;`
+desktop entry's `Exec=bibletext %u` and `MimeType=x-scheme-handler/bibletext;`
 already asserted by the release job.
 
 ## Risks

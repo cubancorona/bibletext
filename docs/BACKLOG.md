@@ -381,6 +381,16 @@ launches it; the only live harm is someone typing `desktop` from shell history
 and silently running 1.2.12 forever. **Action: one sentence in the next
 release's notes naming the exact `rm`.**
 
+**Action before the next tag: the Fyne apps directory still prints the OLD
+command.** Verified live on 19 September 2026 — apps.fyne.io/apps/uk.co.bibletext/
+prints `fyne install github.com/cubancorona/bibletext/cmd/desktop@latest`. That
+works TODAY, because `fyne install` resolves `@latest` to the newest v-tag and
+shallow-clones it, and v1.2.12 still contains `cmd/desktop`. **It breaks the
+moment the next tag is cut**, and it is the install route the README points
+readers at. The listing lives outside this repository, so nothing here can fix
+it and no check can catch it — it has to be updated by hand when the rename
+ships. The same applies to any other external page that prints the command.
+
 **Still open, lower priority: iOS ships `CFBundleExecutable: main`.** The same
 class of defect with a different generic name, but it surfaces only in crash
 reports and Xcode Organizer, nothing lands in a PATH, and
@@ -1669,7 +1679,7 @@ A source build is already distinguishable — it carries no bundled NKJV key
 and both review-notes files moving together.
 
 Every tag up to v1.2.5 carries the old bare `module bibletext` line, which Go's
-module resolution rejects: `go install github.com/cubancorona/bibletext/cmd/bibletext@latest`
+module resolution rejects: `go install github.com/cubancorona/bibletext/cmd/desktop@latest`
 and `go run …@latest` resolve `@latest` to the newest tag and stop at "module
 declares its path as: bibletext but was required as:
 github.com/cubancorona/bibletext". main declares the repository path
@@ -1677,7 +1687,7 @@ github.com/cubancorona/bibletext". main declares the repository path
 reach `@latest` when v1.2.6 is tagged.
 
 The directory entry (apps.fyne.io/apps/uk.co.bibletext/) prints
-`fyne install github.com/cubancorona/bibletext/cmd/bibletext@latest`, which takes
+`fyne install github.com/cubancorona/bibletext/cmd/desktop@latest`, which takes
 a different route — `git ls-remote` for the newest v-tag, a depth-1 clone of
 that tag, then `go build` inside the clone — so the module line never enters
 into it and that command works today on v1.2.5. A source build by either

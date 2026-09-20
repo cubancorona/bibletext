@@ -11,7 +11,7 @@
   the real card on a real one. Without these libraries the window is never
   created at all, so they ship in the Store package AND in the download zip.
 
-    pwsh scripts/fetch-angle.ps1 -Dest cmd\desktop [-Arch x64|arm64]
+    pwsh scripts/fetch-angle.ps1 -Dest cmd\bibletext [-Arch x64|arm64]
 
   ANGLE publishes no binaries of its own, so this is a reproducible
   third-party build, pinned and checked by hash the way the AppImage tools

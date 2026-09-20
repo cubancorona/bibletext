@@ -77,7 +77,7 @@ and downloads the complete Bible in the background (~30 seconds), caching it
 locally — so every launch after that is instant and works offline.
 
 **Install by module path** — the route the [Fyne apps directory](https://apps.fyne.io/apps/uk.co.bibletext/)
-prints. With git and the C toolchain above, plus the Fyne CLI
+offers. With git and the C toolchain above, plus the Fyne CLI
 (`go install fyne.io/tools/cmd/fyne@v1.7.2`), this clones the newest tag,
 builds it, and installs a packaged BibleText where your OS keeps applications:
 
@@ -86,10 +86,14 @@ fyne install github.com/cubancorona/bibletext/cmd/bibletext@latest
 ```
 
 The plain Go route, `go run github.com/cubancorona/bibletext/cmd/bibletext@latest`,
-works from release 1.2.6 (earlier tags declare the module by a bare name that
-Go's module resolution rejects); `…@main` builds today. A build from source by
-either route carries no bundled NKJV key — add your own free API.Bible key in
-Settings for that translation; the other translations need nothing.
+works the same way. Both resolve `@latest` to the newest **tag**, and
+`cmd/bibletext` exists only from the first tag cut after 19 September 2026 — the
+directory was `cmd/desktop` before that, so against an older tag either command
+stops at a path that is not there. `…@main` builds today, and tags before 1.2.6
+additionally declare the module by a bare name that Go's module resolution
+rejects. A build from source by either route carries no bundled NKJV key — add
+your own free API.Bible key in Settings for that translation; the other
+translations need nothing.
 
 **iOS simulator** (needs macOS with full Xcode, an iOS simulator runtime, and the
 Fyne CLI — the script checks and tells you what's missing): `./scripts/run-ios-sim.sh`

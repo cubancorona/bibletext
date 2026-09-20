@@ -5,13 +5,13 @@ Icon = "Icon.png"
 Name = "BibleText"
 ID = "uk.co.bibletext"
 Version = "1.2.12"
-Build = 52
+Build = 53
 
 [CanOpen]
 MimeTypes = "x-scheme-handler/bibletext;"
 
 [LinuxAndBSD]
 GenericName = "Bible reader"
-Comment = "Read and study Scripture"
 Categories = ["Education", "Spirituality"]
+Comment = "Read and study Scripture"
 Keywords = ["Bible", "Scripture", "NKJV", "Berean", "WEB", "BSB", "Catholic", "deuterocanon", "audio", "narration", "notes", "offline"]

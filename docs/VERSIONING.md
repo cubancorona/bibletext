@@ -36,9 +36,8 @@ times in August 2026 — each deliberate, recorded, and survivable only because,
 at the time, nothing could fetch this module by its path (it declared the bare
 name `bibletext`) and the release assets were the real product — and the third
 time was declared the last. That cover is gone: the module now declares its
-repository path, the Fyne apps directory points people at
-`github.com/cubancorona/bibletext/cmd/bibletext@latest`, and the module proxy and
-sum database record every tag from here on. A published tag is immutable.
+repository path, the Fyne apps directory points people at a module-path
+install, and the module proxy and sum database record every tag from here on. A published tag is immutable.
 
 ## What enforces it
 

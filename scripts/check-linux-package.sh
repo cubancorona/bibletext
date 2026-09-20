@@ -33,15 +33,17 @@ fi
 entry="$(find "$scan_dir" -type f -name 'uk.co.bibletext.desktop' -print -quit)"
 [ -n "$entry" ] || { echo "::error::no uk.co.bibletext.desktop in the Linux package"; exit 1; }
 # THE EXECUTABLE'S NAME IS USER-VISIBLE, IN THREE PLACES AT ONCE, and the
-# packager picks it for us: `fyne package` names the binary after the source
-# directory, which is cmd/bibletext. So the tarball installed /usr/local/bin/desktop
-# -- a generic name in the reader's PATH that any other Fyne app packaged from a
-# desktop/ directory overwrites, the command a reader must type to start the app,
-# and the client name the sound server shows while narration plays (a Linux
-# volume control read "desktop", never "BibleText"). The snap and the AppImage
-# each rename the same executable; only the tarball shipped it raw. Asserted by
-# name rather than derived, because a check that follows whatever the archive
-# happens to contain cannot notice the name going generic again.
+# packager picks it for us: `fyne package` names the binary after its source
+# directory. That directory was cmd/desktop until September 2026, so the tarball
+# installed /usr/local/bin/desktop -- a generic command in the reader's PATH that
+# any other Fyne app packaged from a desktop/ directory installs over, the
+# command a reader had to type to start the app, and the client name the sound
+# server showed while narration played (a Linux volume control read "desktop",
+# never "BibleText"). The snap and the AppImage each renamed the same executable
+# on their way in; only the plain tarball shipped it raw.
+#
+# Asserted by name rather than derived, because a check that follows whatever
+# the archive happens to contain cannot notice the name going generic again.
 grep -q '^Exec=bibletext %u$' "$entry" || { echo "::error::desktop entry Exec line is not 'bibletext %u'"; cat "$entry"; exit 1; }
 grep -q '^MimeType=x-scheme-handler/bibletext;' "$entry" || { echo "::error::desktop entry does not register x-scheme-handler/bibletext"; cat "$entry"; exit 1; }
 grep -q '^Categories=Education;Spirituality;$' "$entry" || { echo "::error::desktop entry has no Categories"; cat "$entry"; exit 1; }
