@@ -114,9 +114,9 @@ type androidManifest struct {
 			IntentFilters []struct {
 				AutoVerify string `xml:"http://schemas.android.com/apk/res/android autoVerify,attr"`
 				Data       []struct {
-					Scheme     string `xml:"http://schemas.android.com/apk/res/android scheme,attr"`
-					Host       string `xml:"http://schemas.android.com/apk/res/android host,attr"`
-					PathPrefix string `xml:"http://schemas.android.com/apk/res/android pathPrefix,attr"`
+					Scheme      string `xml:"http://schemas.android.com/apk/res/android scheme,attr"`
+					Host        string `xml:"http://schemas.android.com/apk/res/android host,attr"`
+					PathPrefix  string `xml:"http://schemas.android.com/apk/res/android pathPrefix,attr"`
 					PathPattern string `xml:"http://schemas.android.com/apk/res/android pathPattern,attr"`
 				} `xml:"data"`
 			} `xml:"intent-filter"`
