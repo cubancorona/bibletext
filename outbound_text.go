@@ -23,8 +23,14 @@ package bibletext
 // letters the publisher actually sent.
 //
 // So every outbound path goes through here first. What the reader keeps is the
-// verse number as an ordinary number, the publisher's own letters and spacing,
-// and nothing this app invented for its own page.
+// verse number as an ordinary number, the publisher's own spacing, and nothing
+// this app invented for its own page.
+//
+// The divine name is the one deliberate exception to "the publisher's own
+// letters": a small capital resolves to the CAPITAL, so an edition that stored
+// "Lord" sends "LORD". That is the plain-text convention, and the reasoning is
+// set out at smallCapitalToLetter (small_caps_draw.go) and in
+// docs/DIVINE_NAME.md.
 
 import "strings"
 
@@ -45,9 +51,17 @@ const (
 // An omitted verse's mark — "[36]" in the hole Luke 17:36 leaves (verse_gaps.go)
 // — is the newest of the page's own characters and goes the same way. It is
 // stripped by SHAPE, a bracketed run of digits, because no publisher text in
-// any shipped edition contains one (outbound_text_test.go walks the feeds to
-// keep that true), and by shape rather than by state so every funnel is
-// covered by this one place. The space after it goes with it, or "left. [36]
+// any shipped edition is believed to contain one, and by shape rather than by
+// state so every funnel is covered by this one place.
+//
+// THAT BELIEF IS NOT TESTED. This comment used to claim outbound_text_test.go
+// "walks the feeds to keep that true"; it does not, and there is no sign it
+// ever did -- the file is a table of hand-written cases. The exposure is narrow
+// but real: a publisher verse containing a "[12]"-shaped token would have it
+// silently deleted on the way out, and because that strip changes the BYTE
+// LENGTH it would also shift the offsets the share pipeline matches on. A
+// superscript digit or an em/en space in publisher text does the same. Worth a
+// test that walks the shipped translations; recorded in docs/BACKLOG.md. The space after it goes with it, or "left. [36]
 // They" would become "left.  They".
 func outboundText(s string) string {
 	if s == "" {
@@ -67,8 +81,12 @@ func outboundText(s string) string {
 			// The indent is the page's alone. Dropped rather than turned into
 			// spaces, which would leave the paragraph looking hand-indented.
 		case smallCapitalToLetter[r] != 0:
-			// Back to the publisher's own letter. The small capital was the
-			// app's way of SETTING the word, never the word itself.
+			// To the CAPITAL, not back to the publisher's own letter -- see
+			// smallCapitalToLetter. The small capital was the app's way of
+			// SETTING the word, never the word itself, but it records nothing
+			// about which case it replaced, so there is no letter to go back
+			// to. Capitals are the plain-text convention and keep the divine
+			// name distinct from an ordinary "Lord".
 			b.WriteRune(smallCapitalToLetter[r])
 		default:
 			b.WriteRune(r)

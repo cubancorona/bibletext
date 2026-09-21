@@ -456,7 +456,20 @@ func chapterShareStructureIn(state *AppState, book string, chapter int) (string,
 	for paragraphIndex, paragraph := range groupVersesIntoParagraphs(verses) {
 		wroteInParagraph := false
 		for _, verse := range paragraph {
-			text, verseBreaks := verseShareStructure(verse.Text)
+			// THE SAME OUTBOUND FORM chapterProse IS BUILT IN, and for the same
+			// reason: these two corpora are matched against each OTHER.
+			// restoreShareLineBreaks takes the quote -- which came out of
+			// chapterProse -- and locates it in this one to know where the
+			// authored breaks belong. A verse that reads differently here than
+			// there does not fail loudly; the locate simply misses and the text
+			// is returned unbroken, so a psalm ships as one running line.
+			//
+			// That is exactly what happened when chapterProse moved to the
+			// outbound form and this did not: the divergence was invisible on
+			// every verse WITHOUT a SmallCaps span, which is every verse the
+			// shipped WEB gospels contain.
+			source := verseOutboundText(verse)
+			text, verseBreaks := verseShareStructure(source)
 			if text == "" {
 				continue
 			}
@@ -464,7 +477,7 @@ func chapterShareStructureIn(state *AppState, book string, chapter int) (string,
 			// break still wins with "\n\n") — the same verseIsPoetic rule the
 			// reading pane renders with, so displayed lines and shared lines
 			// stay identical.
-			curPoetic := verseIsPoetic(verse.Text)
+			curPoetic := verseIsPoetic(source)
 			if b.Len() > 0 {
 				replacement := ""
 				if paragraphIndex > 0 && !wroteInParagraph {

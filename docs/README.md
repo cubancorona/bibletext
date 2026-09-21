@@ -35,6 +35,7 @@ Adding a document? Add its line here. One line, saying **when** to read it.
 - [ADDITIONS_AND_DROPS.md](ADDITIONS_AND_DROPS.md) — before the app adds or drops any text — what is agreed, what never was, and the escape channels
 - [SOURCE_FIELDS.md](SOURCE_FIELDS.md) — when changing a decoder or asking what a source sends — a decoder change must edit this inventory too
 - [SOURCE_FIELDS_DECISIONS.md](SOURCE_FIELDS_DECISIONS.md) — before arguing to capture, drop or show a source field — each is already costed with an effort/epoch verdict
+- [DIVINE_NAME.md](DIVINE_NAME.md) — before touching small capitals, the `nd`/`sc` markers, or any code that compares selected text against verse text
 - [TEXTUAL-DATA.md](TEXTUAL-DATA.md) — before regenerating or trusting a derived table — versification, red-letter spans, cross-edition verse mapping
 - [FOOTNOTES.md](FOOTNOTES.md) — before changing footnote capture or the chapter-bottom section, or when apparatus could leak into verse text
 

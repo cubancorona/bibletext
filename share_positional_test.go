@@ -115,8 +115,20 @@ func TestRestoreShareLineBreaksReadsTheSelectedCopy(t *testing.T) {
 // chapterShareStructure flatten to the SAME string, so an offset located in one
 // indexes the other. If these ever drift, the offset threading breaks silently
 // — this is the loud version.
+// The two corpora must read character for character alike, because one is
+// searched for text taken out of the other: restoreShareLineBreaks locates the
+// quote (built from chapterProse) inside chapterShareStructure to know where
+// the authored breaks belong, and a miss returns the text unbroken rather than
+// failing.
+//
+// psalm23SmallCapsState is in the list deliberately. The three fixtures below
+// it carry no SmallCaps span, and neither does any verse of the shipped WEB
+// gospels — so when chapterProse moved to the outbound form and
+// chapterShareStructure did not, this test kept passing while every NKJV psalm
+// quietly lost its line breaks. A coupling test is only worth the fixture that
+// can break it.
 func TestChapterProseAndShareStructureAgree(t *testing.T) {
-	for _, st := range []*AppState{twoCopyState(), refrainChapterState(), sampleState()} {
+	for _, st := range []*AppState{twoCopyState(), refrainChapterState(), sampleState(), psalm23SmallCapsState()} {
 		prose, _ := chapterProse(st)
 		flat, _ := chapterShareStructure(st)
 		if prose != flat {

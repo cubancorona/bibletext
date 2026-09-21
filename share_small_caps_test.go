@@ -184,3 +184,53 @@ func TestSharingAPassageWithADivineNameLocatesAndCites(t *testing.T) {
 			"plain-text realisation of the small capitals: %q", quote)
 	}
 }
+
+// THE POEM BREAK MUST SURVIVE THE OUTBOUND FORM.
+//
+// chapterProse is built in the outbound form so a selection carrying small
+// capitals can be located in it. chapterShareStructure — the parallel corpus
+// that carries the authored line breaks — was left on the publisher's raw
+// text, so for any verse with a SmallCaps span the two corpora stopped
+// agreeing character for character. restoreShareLineBreaks locates the quote
+// in the structure corpus to know where to put the breaks back, and when that
+// locate fails it silently returns the text unbroken.
+//
+// The effect is a psalm shared as one running line. It is cosmetic rather than
+// an attribution error, and it lands where it is most visible: SmallCaps marks
+// the divine name, which is densest in the Psalms, which are the verses whose
+// line breaks matter most.
+func TestAPoemBreakSurvivesAVerseWithADivineName(t *testing.T) {
+	poem := "The Lord is my shepherd;\nI shall lack nothing."
+	build := func(withCaps bool) *AppState {
+		v := Verse{BookName: "Psalms", Book: "Psalms", Chapter: 23, Verse: 1, Text: poem}
+		if withCaps {
+			v.SmallCaps = []TextSpan{{Start: 4, End: 8}}
+		}
+		return &AppState{
+			Bible: &BibleData{
+				Books:  []string{"Psalms"},
+				Verses: map[string]map[int][]Verse{"Psalms": {23: {v}}},
+			},
+			CurrentBook: "Psalms", CurrentChapter: 23,
+		}
+	}
+
+	// The control: the identical verse without the divine-name span keeps its
+	// break today. If this half ever fails the test is measuring the wrong thing.
+	plain, _, ok := shareQuoteForPassage(build(false), "Psalms", 23, 1, 1)
+	if !ok {
+		t.Fatal("the control passage did not share at all")
+	}
+	if !strings.Contains(plain, "\n") {
+		t.Fatalf("the control lost its line break, so this test cannot detect the defect: %q", plain)
+	}
+
+	withCaps, _, ok := shareQuoteForPassage(build(true), "Psalms", 23, 1, 1)
+	if !ok {
+		t.Fatal("the divine-name passage did not share at all")
+	}
+	if !strings.Contains(withCaps, "\n") {
+		t.Errorf("the authored line break was dropped on a verse carrying a divine name:\n"+
+			" got  %q\n want a break, as the control has: %q", withCaps, plain)
+	}
+}

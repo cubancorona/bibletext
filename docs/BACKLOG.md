@@ -402,6 +402,84 @@ reports and Xcode Organizer, nothing lands in a PATH, and
 `scripts/release-ios.sh` passes no `--executable`. Read off the packaging line,
 not observed on a built bundle.
 
+## Verse attribution: three findings from measuring it, 21 September 2026
+
+Prompted by a plain question — does the app really work out verse numbers by
+matching text, and what about verses that repeat? The short answer is that
+position is authoritative and the matching is a fenced fallback, and the
+measurements bear that out: across **34,917 sampled drags over all 89 real WEB
+gospel chapters**, a drag that begins inside a verse and carries an honest span
+was cited correctly **every time**. Psalm 136's refrain — identical in all 26
+verses — is attributed correctly in all 26 with a span. No shipped pane
+dispatches a zero span: macOS, iOS, Android, the styled Windows/Linux pane and
+the verse-of-the-day card all supply one, and the only zero-span dispatcher is
+the legacy Fyne Entry pane, which is dead unless `styledPaneEnabledOnPlatform`
+is flipped back. (Zero-span attribution on the same corpus is wrong 0.34% of the
+time, which is what the span is buying.)
+
+Three things did turn up.
+
+### 1. A drag that opens on the previous verse's punctuation can cite the wrong verse
+
+The real residual risk, and it is NOT the fallback. A `selSpan` narrows the
+search REGION — `[start of verse lo, end of verse hi]` — which is always wider
+than the drag itself. The pipeline then runs a chain of repairs (dangling
+verse-number trim, mid-word start/end repair, orphan-punctuation strip, heading
+strip), and **every one of them re-runs the locate from the start of that
+region, first match wins**. So a trim can slide the match backwards into a verse
+the reader never touched.
+
+Begin a drag on the full stop ending verse N−1 and the span is honestly
+(N−1, N). The orphan punctuation is correctly stripped from the quote — and the
+re-locate then matches the earlier copy:
+
+```
+drag starts at verse 39's number   span=(39,39)  ->  Matthew 25:39   correct
+drag starts on verse 38's '?'      span=(38,39)  ->  Matthew 25:38   WRONG
+```
+(identical shared words in both cases)
+
+Measured on the real WEB gospels, for drags of that shape: 2.63% wrong at two
+words, 1.08% at three, 0.27% at four, 0.00% by twelve. It concentrates exactly
+where repetition does — the Beatitudes, Matthew 23's "He who swears by",
+Matthew 25's "When did we see". Overall about 0.12% of boundary drags.
+
+The fix is small and local: after a repair, prefer the match nearest the
+previously-located index, or re-anchor the region to the SELECTION's own extent
+rather than the span verses' full extent. Not done here because it is a
+behaviour change to the attribution core and wants its own pass with the sweep
+harness above as the before/after measure.
+
+### 2. A Psalm superscription can be shared as scripture
+
+`stripHeadings` and `headingOnlySelectionVerse` consult `Bible.Headings` and
+never `Bible.Superscriptions`. On iOS/macOS/Android the title lives in the same
+selectable text storage as the verses (not on the styled pane, which draws it
+outside `p.lay.Text`), so a drag from the title into verse 1 shares
+`"A Psalm by David, when he fled from Absalom his son. Yahweh, ..."` cited as
+`Psalms 3:1` — editorial matter quoted as the text, under a verse reference.
+The heading path deliberately returns reference-only for exactly this case;
+superscriptions were simply missed when it was written. Related to the open
+"quoting, notes and links" heading pass.
+
+### 3. The omitted-verse strip rests on an untested assumption
+
+`outboundText` strips a `[digits]` token by SHAPE, justified by a comment
+claiming `outbound_text_test.go` "walks the feeds to keep that true". It does
+not, and there is no sign it ever did — the file is 59 lines of hand-written
+cases. The comment has been corrected to say so. The exposure is narrow but
+real, and it is not only cosmetic: the strip changes the BYTE LENGTH, so a
+publisher verse containing a `[12]`-shaped token would both lose it and shift
+the offsets the share pipeline matches on. A superscript digit or an em/en space
+in publisher text does the same. Wants a test that walks the shipped
+translations.
+
+### Also: committed test litter
+
+`zz_probe_refute_test.go` is tracked, from commit `a0f34302d`. It looks like a
+throwaway probe someone committed by accident. Left alone rather than deleted
+on someone else's behalf.
+
 ## What we ship has largely never been run
 
 Found by a five-platform survey on 18 September 2026, each platform's claims
