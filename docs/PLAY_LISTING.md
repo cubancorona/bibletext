@@ -178,6 +178,27 @@ Also confirm from the final AAB:
 - target audience and Families eligibility are selected from the real intended
   audience, not to avoid or trigger a policy track.
 
+## Closed-test release notes — 1.2.13
+
+> BibleText 1.2.13 fixes Share as image on Android 6 to 9, where tapping it used
+> to do nothing at all — it now asks for the permission it needs, and says so if
+> it still cannot save. Sharing a verse whose translation sets the divine name in
+> small capitals now sends LORD, the way plain text has always written it, and
+> the reference under it names the verses you chose. No ads, account, analytics,
+> or tracking.
+
+Suggested tester coverage:
+
+- install and confirm version 1.2.13 (183);
+- tap Share as image on a verse. On Android 10 or later it should open the share
+  sheet as before; on Android 6 to 9 it should either ask for permission and then
+  work, or tell you why it cannot — the one thing it must never do again is
+  nothing at all;
+- open the NKJV, find a verse setting the divine name in small capitals, share it
+  as text, and confirm the pasted text reads LORD and the reference names the
+  verse you chose;
+- confirm a shared link still opens at its passage with its note.
+
 ## Closed-test release notes — 1.2.11
 
 > BibleText 1.2.11 follows your phone's dark mode while the app is open. If
