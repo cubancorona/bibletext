@@ -192,8 +192,16 @@ the shipped WEB gospels — has none, so nothing could break it.
 - **Android below API 29.** Font coverage for the Latin small-capital block is
   not guaranteed on the older platform serif. What such a device renders has not
   been measured on hardware.
-- **The website — latent, not live.** The web reader's own font does not carry
-  the block. It does not matter today and the reason is worth knowing: the
+- **The website — deliberately subset, and latent rather than live.** The site
+  ships the SAME typeface as the app — Junicode, same source file, same four
+  cuts — but a tighter subset: `scripts/build-reading-fonts.sh` gives the app
+  `U+1D00-1D7F` and `U+A700-A7FF` and withholds both from `WEB_RANGES`, saying
+  why in the script ("no small capitals, because the site publishes no" edition
+  that uses them). Measured: the desktop Junicode carries 25 of 25, the web
+  woff2 carries 0 of 25 and is 27 KB against 409 KB. The script already checks
+  the APP's subset kept all 25, because they are scattered across three Unicode
+  blocks and a subset missing one loses letters from the divine name silently.
+  It does not matter today and the reason is worth knowing: the
   reader publishes only `/web/`, `/bsb/` and `/webc/`, and those three editions
   carry no small-caps spans at all, so the pages contain ordinary capitals and
   nothing to render. Verified on the live site — zero small-capital codepoints

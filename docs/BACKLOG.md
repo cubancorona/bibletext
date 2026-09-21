@@ -486,9 +486,17 @@ Recorded because it reads like a live defect and is not one, and because the
 condition that would make it real is easy to meet by accident.
 
 The reading pane draws the divine name with Unicode small-capital characters
-(see `docs/DIVINE_NAME.md`). The published web reader's own font does not carry
-that block, so if such a character reached a page it would render as a fallback
-glyph or as tofu.
+(see `docs/DIVINE_NAME.md`). The site ships the SAME typeface as the app, but a
+deliberately tighter subset: `scripts/build-reading-fonts.sh` gives the app
+`U+1D00-1D7F` and `U+A700-A7FF` and withholds both from `WEB_RANGES`, with the
+reason stated in the script — the site publishes no edition that uses them.
+Measured with fontTools: the desktop Junicode carries 25 of 25 small capitals at
+409 KB, the web woff2 carries 0 of 25 at 27 KB. So a small capital reaching a
+page would render as a fallback glyph or as tofu.
+
+This is a considered decision, not an oversight, and the script already verifies
+the APP's subset kept all 25 — they are scattered across three Unicode blocks
+and a subset missing one loses letters from the divine name silently.
 
 **It does not reach one today.** The reader publishes `/web/`, `/bsb/` and
 `/webc/` only, and all three editions spell the divine name with ordinary
@@ -506,10 +514,10 @@ the name, and it is licensed: `/nkjv/` serves a notice rather than text.
 - any future page that echoes text the app drew rather than text a publisher
   sent
 
-The fix, when needed, is to subset the web font to include U+1D00–U+1D7F and
-the strays outside it (`ꜰ ꞯ ꜱ` at U+A730, U+A7B0, U+A731), or to emit the
-publisher's capitals on the web as the app already does on the way out. The
-second is simpler and matches what the pages already show.
+The fix, when needed, is two ranges: add `U+1D00-1D7F` and `U+A700-A7FF` to
+`WEB_RANGES` in `scripts/build-reading-fonts.sh` and rebuild — the app's own
+range list already names both. Cheap, but not free: the web cuts exist to be
+small, and that is the trade the current ranges were chosen to make.
 
 Note that Unicode provides no small-capital `x`, so a subset can never be
 complete — see `docs/DIVINE_NAME.md`.
