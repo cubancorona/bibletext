@@ -75,6 +75,16 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.2.13" date="2026-09-20">
+      <description>
+        <p>Sharing a verse, set right.</p>
+        <ul>
+          <li>A verse you share now carries the letters the edition prints. Where a translation sets the divine name in small capitals, the shared text used to go out with characters no edition uses and no search box matches.</li>
+          <li>The reference under a shared verse now names the verses you chose on those passages too.</li>
+          <li>The command is called bibletext. It was called desktop, which was too general a name to leave in your PATH, and it was the name your volume control showed while narration played. If you installed an earlier version with make install, remove the old one: sudo rm -f /usr/local/bin/desktop /usr/bin/desktop</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.12" date="2026-09-19">
       <description>
         <p>BibleText on ARM computers.</p>

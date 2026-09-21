@@ -4,8 +4,8 @@ Website = "https://bibletext.co.uk"
 Icon = "Icon.png"
 Name = "BibleText"
 ID = "uk.co.bibletext"
-Version = "1.2.12"
-Build = 53
+Version = "1.2.13"
+Build = 54
 
 [CanOpen]
 MimeTypes = "x-scheme-handler/bibletext;"
