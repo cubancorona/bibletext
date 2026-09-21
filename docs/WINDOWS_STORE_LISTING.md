@@ -231,15 +231,25 @@ under the user's config and cache directories); new files under
 `…\LocalCache\Roaming\`, which is where the Bible cache, the preferences
 and the notes land for a Store install and what an uninstall removes. Nothing in the app assumes otherwise.
 
-## The next submission should carry both architectures
+## Both architectures ship — since submission 2
 
 Since 1.2.12 the release builds an **arm64** MSIX as well as the x64 one, and
-`msstore.yml` builds and smokes both. Neither has been submitted: that workflow
-uploads artifacts and nothing more, and the Store has not moved since 1.2.10.
+`msstore.yml` builds and smokes both. For three releases neither reached the
+Store, which sat on 1.2.10, x64 only.
 
-So the next submission should include **both** packages. Partner Center accepts
-several `.msix` files in one submission, or they can be combined into a single
-`.msixbundle` — that is the decision to make when the submission is prepared.
+**Submission 2 (1.2.13, committed 21 September 2026) carries both**, as two
+separate `.msix` files rather than a `.msixbundle`: a submission's
+`applicationPackages` may hold several packages, and two sharing a version
+number are accepted as long as their architectures differ, so the bundle
+bought nothing. `msstore/submit.py` uploads both in one zip.
+
+The 1.2.10.0 x64 package was deliberately left in the submission at
+`fileStatus: Uploaded` rather than marked `PendingDelete`. Certification says
+why itself, in a `PackageValidationWarning`: it will not be distributed to any
+customer while a higher-version package supports the same ones. It costs
+nothing and it is the cheap rollback — flipping the 1.2.13.0 entries to
+`PendingDelete` in one PUT, against a re-upload for a version number that is
+already spent.
 
 The arm64 package is not speculative. It is built with a pinned
 aarch64-targeting toolchain (`scripts/fetch-llvm-mingw.ps1`, needed because the
@@ -392,9 +402,11 @@ pending and published submission ids, `app <store id>` prints one product,
 `submission <store id> <id>` prints a submission's status. The first call
 listed `9NDCCZH9RB9K BibleText`, which proves the tenant association, the
 role and the key. The write side (create a submission, upload the package to
-its SAS URL, commit, poll) is written against the second release, once the
-first has gone through the console: name reservation, the age rating and the
-first publish are console-only. Microsoft's own command-line tool (`msstore`, from
+its SAS URL, commit, poll) was written against the second release, once the
+first had gone through the console: name reservation, the age rating and the
+first publish are console-only. It lives in **`msstore/submit.py`**, with
+subcommands `preflight`, `verify`, `create`, `commit`, `poll` and `abort`;
+`msstore.py` stays read-only. Microsoft's own command-line tool (`msstore`, from
 github.com/microsoft/msstore-cli; it runs on macOS on .NET) answers the same
 reads with `msstore apps list` and is the cross-check when this client and
 the console disagree. Rotating the key is the same console path; the Keychain item

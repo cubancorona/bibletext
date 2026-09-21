@@ -41,11 +41,15 @@ platforms in one place, or directly:
   uploaded per release; the Google Play listing is with Google on the closed
   testing track — see [docs/PLAY_LISTING.md](docs/PLAY_LISTING.md) — and there
   is no production release yet)
+- **Linux, from the Snap Store** — `snap install bibletext`, or
+  [snapcraft.io/bibletext](https://snapcraft.io/bibletext). Intel, AMD and ARM
+  64-bit; signed, updates itself, and registers the `bibletext:` link scheme, which
+  the two downloads below do not do on their own.
 - **macOS / Windows / Linux** — grab the latest build from
   [Releases](https://github.com/cubancorona/bibletext/releases/latest). On a Mac the App
-  Store edition and on Windows the Microsoft Store edition are the easier routes: signed
-  and updated for you. These builds are unsigned, so on macOS right-click → **Open** the
-  first time. Desktop artifacts are built by
+  Store edition, on Windows the Microsoft Store edition and on Linux the snap are the
+  easier routes: signed and updated for you. These builds are unsigned, so on macOS
+  right-click → **Open** the first time. Desktop artifacts are built by
   [`release.yml`](.github/workflows/release.yml) on every `v*` tag.
 - **Linux, as a single file** —
   [BibleText-x86_64.AppImage](https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-x86_64.AppImage)

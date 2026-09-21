@@ -203,13 +203,18 @@ are not what the dashboard's own wording implies.
 **The snap is already PUBLIC.** `bibletext` resolves from the unauthenticated
 API, has a store page, appears in store search, and installs by name. The
 "forced Private" at registration did not survive into a private listing. What a
-reader hits instead is:
+reader hit up to 21 September was:
 
     snap install bibletext
     error: snap "bibletext" is not available on stable but is
            available to install on the following channels
 
-So **the gate is the absence of a stable release, not visibility.**
+So the gate was the absence of a stable release, not visibility — **and that
+gate is gone.** The snap was promoted to `latest/stable` on both architectures
+at 15:53 UTC on 21 September 2026 (amd64 revision 4, arm64 revision 3, version
+1.2.13, the same revisions the v1.2.13 release run had put on `edge` three and
+a half hours earlier). A plain `snap install bibletext` now succeeds with no
+channel flag, and the download page offers it.
 
 **The name review is a separate thing and is about the NAME.** Since March 2024
 every new name registration on the global store goes to manual review by
@@ -220,7 +225,15 @@ the documented and demonstrably effective lever is a polite nudge on the forum
 in the **`store`** category — NOT `store-requests`, which is scoped to
 classic confinement, privileged interfaces, aliases, tracks and ownership.
 
-### Before promoting to stable
+### Checks that were meant to precede stable, and did not
+
+**Read this as a list of what is still unproven, not as a gate.** The promotion
+to stable happened on 21 September 2026 with all three of these open, so they
+are now outstanding checks against a channel readers are already installing
+from rather than conditions on reaching it. `docs/PLATFORM_MATRIX.md` still
+rates the x86_64 snap's proof as `runner` for exactly this reason: the amd64
+snap that readers now take from stable has never been exercised on an x86_64
+desktop.
 
 - [ ] **The hardware pass** (order of work, step 5) — still needs an **x86_64**
       desktop; the ARM VM cannot stand in. arm64 is covered: the published

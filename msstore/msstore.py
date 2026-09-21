@@ -12,10 +12,17 @@ application must be added to the Partner Center account with the Manager role
 (docs/WINDOWS_STORE_LISTING.md, "Automation after the first release").
 
 The write side — create a submission, upload the package to its SAS URL,
-commit, poll — is deliberately not here yet: the first submission is made by
-hand in Partner Center (name reservation, the age rating and the first publish
-are console-only), and the write calls are added against a real second
-submission rather than guessed.
+commit, poll — lives in **msstore/submit.py**, which was written against the
+second submission on 21 September 2026 rather than guessed ahead of one. This
+file stays read-only on purpose: the two have different blast radii, and a
+module that can only ask questions is worth keeping separable from one that
+can publish.
+
+Note if you are extending either: `fetch()` below calls `json.load()`
+unconditionally, which is correct for the GETs it serves and wrong for
+anything with an empty body — a DELETE, or the 201 from a blob upload. It
+would raise AFTER the server had already acted. submit.py splits transport
+from parsing for exactly that reason; do not carry this one over.
 """
 
 from __future__ import annotations

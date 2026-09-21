@@ -67,7 +67,7 @@ Status is separate: `shipping` (a release or store submission carries it),
 | Android | any | Play — production | untried | none | — |
 | Windows | x64 | Microsoft Store (MSIX) | shipping | runner | 14, 15, 16, 18 |
 | Windows | x64 | Direct download (.zip) | shipping | builds | 14, 15 |
-| Windows | arm64 | Microsoft Store (MSIX) | ready | runner | 14, 15, 16, 17, 18 |
+| Windows | arm64 | Microsoft Store (MSIX) | shipping | runner | 14, 15, 16, 17, 18 |
 | Windows | arm64 | Direct download (.zip) | ready | builds | 14, 15, 17 |
 | Windows | x86 (32-bit) | anything | untried | none | — |
 | Linux | x86_64 | Direct download (.tar.xz) | shipping | builds | 19, 20, 25 |

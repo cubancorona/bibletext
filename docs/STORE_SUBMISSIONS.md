@@ -34,7 +34,7 @@ step too.
 | --- | --- | --- | --- | --- |
 | **Apple App Store** (iPhone, iPad) | nothing | `scripts/release-ios.sh` builds and uploads only with `BIBLETEXT_UPLOAD=1`; then metadata, screenshots and review notes in App Store Connect | account holder | [APP_STORE_SUBMISSION.md](APP_STORE_SUBMISSION.md) |
 | **Mac App Store** | nothing | `scripts/release-mac-store.sh` builds a signed, sandboxed `.pkg` against the Store certificates; uploaded and submitted separately | account holder | [MAC_APP_STORE.md](MAC_APP_STORE.md), [APP_STORE_SUBMISSION.md](APP_STORE_SUBMISSION.md) |
-| **Microsoft Store** | nothing | `msstore.yml` builds and smokes the MSIX as an **artifact only**; the submission is made in Partner Center. The first submission after a name reservation cannot use the API | account holder | [WINDOWS_STORE_LISTING.md](WINDOWS_STORE_LISTING.md) |
+| **Microsoft Store** | nothing | `msstore.yml` builds and smokes both MSIX packages; `msstore/submit.py` then creates the submission, uploads them and commits it. Only the FIRST submission after a name reservation had to be made in Partner Center | mixed | [WINDOWS_STORE_LISTING.md](WINDOWS_STORE_LISTING.md) |
 | **Google Play** | nothing — the APK is attached to the GitHub release by hand | `scripts/build-android.sh --release` produces the signed AAB; uploaded to a track in the Play Console | account holder | [PLAY_LISTING.md](PLAY_LISTING.md) |
 | **Snap Store** | **publishes both architectures to `edge`** | promotion to `stable` is one command and can be automated; categories, screenshots and visibility are console-only | mixed | [LINUX_STORES.md](LINUX_STORES.md) |
 | **Flathub** | nothing | a pull request to `flathub/flathub`, which **their policy requires the account holder to write and post personally**, with an AI-assistance disclosure | account holder only | [LINUX_STORES.md](LINUX_STORES.md) |
@@ -60,15 +60,19 @@ deliberate; it is recorded in that store's own document.
 ## Architectures
 
 Since 1.2.12 every desktop channel ships both x86-64 and ARM64
-([PLATFORM_MATRIX.md](PLATFORM_MATRIX.md)). Store submissions have not caught
-up with that, and each store handles it differently:
+([PLATFORM_MATRIX.md](PLATFORM_MATRIX.md)), and as of 1.2.13 the stores have
+caught up. Each handles it differently:
 
-- **Microsoft Store** — the next submission should carry **both** the x64 and
-  the arm64 package. Partner Center accepts several `.msix` files in one
-  submission, or they can be combined into a `.msixbundle`; today `msstore.yml`
-  produces two separate `.msix` artifacts and nothing has submitted the arm64
-  one. Windows on ARM runs the x64 package under emulation, so this is a
-  performance and battery improvement rather than a fix.
+- **Microsoft Store** — carries both since submission 2 (1.2.13, committed
+  21 September 2026), as two separate `.msix` files rather than a
+  `.msixbundle`: a submission's `applicationPackages` may hold several
+  packages, and two that share a version number are accepted as long as their
+  architectures differ. Until then Windows on ARM ran the x64 package under
+  emulation, so this was a performance and battery improvement rather than a
+  fix. The previously published x64-only package is deliberately left in place
+  at `fileStatus: Uploaded`; certification itself notes it will not be
+  distributed while a higher version exists, and keeping it makes a rollback
+  one PUT rather than a rebuild against a spent version number.
 - **Snap Store** — already carries both; a single `snapcraft promote` covers
   every architecture and refuses a partial set.
 - **Flathub** — `flatpak/flathub.json` names both, and both build and smoke in

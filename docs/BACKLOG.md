@@ -719,7 +719,13 @@ who downloads a zip and expects a link to open in the app has a reasonable
 expectation; a reader who finds their URL handlers rearranged without asking
 does not.
 
-## The download page, grouped by platform
+## The download page, grouped by platform — DONE
+
+**Closed 21 September 2026.** The page is grouped by platform, it offers the
+Snap Store under its own heading beside the App Store and Microsoft Store
+buttons with the `snap install bibletext` one-liner beneath, and it carries the
+note that picks between the Linux downloads.
+
 
 `docs/index.html` lists desktop downloads as a flat run of buttons: two
 macOS, one Windows, and since 1.2.10 two Linux. Flat is still the right shape
@@ -854,7 +860,17 @@ Catholic edition from an epoch-5 cache four epochs behind. Fix: record that
 the current translation was served superseded and refresh it as well; the
 version-state tests (docs/VERSION_STATES.md) are the place to pin it.
 
-## Microsoft Store: from the reserved name to the first submission
+## Microsoft Store: from the reserved name to the first submission — DONE
+
+**Closed 21 September 2026.** Submission 1 published on 17 September (1.2.10,
+x64) and submission 2 was committed on the 21st through `msstore/submit.py`,
+carrying 1.2.13.0 x64 **and arm64** — the first ARM package the Store has had.
+The reservation stopped being a clock the moment the first one published, and
+the OpenGL risk below was answered by ANGLE rather than mitigated: the package
+renders through Direct3D and passed certification. The history is kept because
+the reasoning — why ANGLE and not Mesa, why the first submission could not use
+the API — is the part worth having next time.
+
 
 The name `BibleText` was reserved on 16 September 2026 (Store ID
 9NDCCZH9RB9K; identity in msstore/identity.json) and the package pipeline
@@ -938,7 +954,15 @@ is due by mid-December 2026. Left to do, in order:
    register `bibletext:` links", with the AppImage, because all three are
    the same decision.
 
-## Linux stores: from the listing source to three live channels
+## Linux stores: from the listing source to three live channels — SNAP DONE
+
+**The snap half closed 21 September 2026**: `linux-stores.yml` has run on both
+architectures, the name was registered on 18 September, the credential is set,
+four releases have shipped the AppImage, and the snap reached `latest/stable`
+on both architectures at 15:53 UTC. What remains is the Flathub PR and the
+AppImageHub PR, both owner-only, plus the snap listing's console-only fields —
+categories and screenshots are still unset. See docs/LINUX_STORES.md.
+
 
 Prepared 16 September 2026 (`docs/LINUX_STORES.md` is the listing and the
 runbook; `linux/listing.toml` the source; `cmd/linuxmeta` the generator).
