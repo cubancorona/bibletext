@@ -71,6 +71,7 @@ Adding a document? Add its line here. One line, saying **when** to read it.
 
 - [ANDROID.md](ANDROID.md) — before touching android/ or cmd/mobile/AndroidManifest.xml, or building, signing or shipping an APK/AAB
 - [IPAD.md](IPAD.md) — before changing touch navigation or iPad reading typography, or shipping iOS — every release must stay universal
+- [RELEASING.md](RELEASING.md) — **start here to cut a release**: the whole sequence across every store in order, what only the account holder decides, and what to do when a stage fails. `scripts/release-status.py` prints where the stores actually are
 - [STORE_SUBMISSIONS.md](STORE_SUBMISSIONS.md) — before assuming a release reached a store: which store fronts exist, what a tag does for each, and who can do the rest
 - [MAC_APP_STORE.md](MAC_APP_STORE.md) — before building, signing or submitting a Mac Store package, or changing the bundle id, sandbox, or macOS floor
 - [APP_STORE_SUBMISSION.md](APP_STORE_SUBMISSION.md) — before any App Store or Mac App Store step — build identity, metadata, screenshots, review notes, submission
