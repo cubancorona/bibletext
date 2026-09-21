@@ -405,11 +405,32 @@ is replaced and nothing in the repository changes.
 Tested against the live account on 17 September 2026 rather than inferred.
 The API reads this submission perfectly: a GET of
 `applications/9NDCCZH9RB9K/submissions/<id>` returns twenty-four fields —
-the en-GB listing, the notes for certification, `targetPublishMode:
-Manual` — every value the console holds. What it does not return is
+the en-GB listing, the notes for certification, `targetPublishMode` — every
+value the console holds. What it does not return is
 `fileUploadUrl`. The field is absent, not empty, and `applicationPackages`
 is `[]`. That URL is the SAS address a package is uploaded to, and the API
 issues one only for a submission the API itself created.
+
+**Those last two readings were of the submission while it was still pending,
+and both changed when it published.** Re-read on 21 September the same GET
+returns `applicationPackages` with one entry (`1.2.10.0`, `x64`,
+`fileStatus: Uploaded`) and `targetPublishMode: Immediate`. An earlier
+revision of this paragraph recorded the pending value of that field as
+though it were the settled one, which is worth knowing because
+`POST /submissions` clones the LAST PUBLISHED submission: a clone inherits
+`Immediate`, not the value this page used to name. Never infer the mode from
+a note — set it explicitly on every run and read it back from the server
+before committing.
+
+`Immediate` is what this product wants, deliberately. It is the Store's
+equivalent of the App Store's `AFTER_APPROVAL`, which
+`appstore/submit-version.py` sets on every version, so a release reaches
+readers the same way on both: as soon as it passes review, with no separate
+button to press. The alternative, `Manual`, holds the submission after
+certification until someone clicks Publish now. Choose it only for a release
+that genuinely needs a human gate between certification and the public, and
+change it in the same breath on the other stores, or the channels drift
+apart.
 
 Creating one is the part that cannot work yet. `POST .../submissions`
 "creates a new in-progress submission, which is a copy of your last
