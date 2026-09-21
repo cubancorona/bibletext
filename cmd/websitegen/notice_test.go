@@ -558,7 +558,33 @@ func TestNoticeJSOffersTheSchemeOnWindowsAndLinux(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(page), `id="getapp" hidden`) {
+	if !strings.Contains(string(page), `id="getappline" hidden`) {
 		t.Error("the notice page has no hidden download line for a machine without the app")
+	}
+
+	// AND NO ELEMENT ID MAY APPEAR TWICE ON A PAGE.
+	//
+	// This is here because it happened. The download line above and the shared
+	// footer link both carried id="getapp"; the paragraph sits earlier in the
+	// document, and BOTH scripts load on a notice page, so reader.js's
+	// getElementById found the hidden paragraph rather than the footer anchor
+	// and its "point Apple devices at the App Store" step silently did nothing
+	// on every one of the ~1,200 /nkjv/ pages. Nothing failed: the id was
+	// present, the line was hidden, and the footer link still worked -- it just
+	// went to the landing page instead of the store.
+	ids := map[string]int{}
+	for _, m := range regexp.MustCompile(`id="([^"]+)"`).FindAllStringSubmatch(string(page), -1) {
+		ids[m[1]]++
+	}
+	for id, n := range ids {
+		if n > 1 {
+			t.Errorf("id=%q appears %d times on the notice page; getElementById returns only the "+
+				"first, so whichever script wanted the other one silently does nothing", id, n)
+		}
+	}
+	// A control: the scan must be finding ids at all, or it proves nothing.
+	if len(ids) < 2 {
+		t.Errorf("only %d distinct element ids found on the notice page; the scan is not looking "+
+			"where it thinks it is", len(ids))
 	}
 }

@@ -438,7 +438,15 @@ func openInApp(n noticeSpec) string {
 	// Windows and Linux: the button becomes a bibletext: link, which a
 	// machine without the app answers with silence, so the download is named
 	// beneath it — revealed by notice.js on those platforms only.
-	fmt.Fprintf(&b, `<p class="opensub" id="getapp" hidden>Don't have it? <a href="%s">Get BibleText</a></p>`,
+	// id="getappline", NOT "getapp": the shared footer already carries
+	// id="getapp" on every page (render.go), and this paragraph sits EARLIER in
+	// the document. Two elements with one id is invalid, and getElementById
+	// returns the first -- so reader.js, which narrows the footer link to the
+	// App Store on an Apple device, was finding this hidden paragraph instead
+	// and silently doing nothing. Both scripts load on a notice page, so the
+	// footer link stayed pointed at the landing page for every Apple reader of
+	// the ~1,200 /nkjv/ pages.
+	fmt.Fprintf(&b, `<p class="opensub" id="getappline" hidden>Don't have it? <a href="%s">Get BibleText</a></p>`,
 		appLandingURL)
 	b.WriteString(`</section>`)
 	return b.String()

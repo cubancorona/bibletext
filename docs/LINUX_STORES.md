@@ -52,6 +52,87 @@ and the Flathub generative-AI disclosure (next section).
 | AppImageHub | A PR to `AppImage/appimage.github.io` adding `data/BibleText` containing the repository URL, after the first release that carries the AppImage. |
 | bibletext.co.uk | After Flathub publishes: `docs/org.flathub.VerifiedApps.txt` with the token from the Flathub developer page, plus a copy line and a presence check in `scripts/publish-site.sh` beside the other association files (not written yet). |
 
+## Flathub: the submission, step by step
+
+Read from docs.flathub.org on 21 September 2026. Their requirements change, so
+re-read both pages before submitting rather than trusting this.
+
+**The generative-AI policy governs who may do what, and it is stricter than
+this document previously recorded.** Submitters must disclose AI-generated
+code, documentation or packaging that ships, naming the affected parts and
+their approximate extent; AI used only for research, discussion or debugging
+needs no disclosure. And:
+
+> AI tools or agents must not open or automate Flathub submission pull
+> requests, or generate their commit messages, descriptions, review comments,
+> or replies. Submitters must not request AI-agent reviews.
+
+So the PR body, the commit message, the disclosure and every review reply are
+written and posted by the account holder personally. What follows is mechanics
+only. The disclosure needs to cover, in the account holder's own words: the
+Flatpak manifest and the `cmd/linuxmeta` generator that produces it, the
+AppStream metainfo, and the parts of the application's own code and
+documentation that were AI-assisted, with approximate extent.
+
+### 1. Build and run it locally first
+
+Needs a Linux host. Flathub builds `x86_64` and `aarch64` (`flatpak/flathub.json`
+pins both), so the arm64 VM can exercise one of the two.
+
+```
+flatpak install -y flathub org.flatpak.Builder
+flatpak remote-add --if-not-exists --user flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+flatpak run --command=flathub-build org.flatpak.Builder --install uk.co.bibletext.BibleText.yml
+flatpak run uk.co.bibletext.BibleText
+flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest uk.co.bibletext.BibleText.yml
+flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo repo
+```
+
+### 2. Generate the manifest the submission carries
+
+The submitted copy is NOT `flatpak/uk.co.bibletext.BibleText.yml`. That one
+builds from the working tree; the Flathub copy is pinned to a tag and commit:
+
+```
+go run ./cmd/linuxmeta flatpak-manifest -tag v1.2.13 -commit <sha>
+```
+
+Generate it only after the tag exists, and check the pinned tree really holds
+the path the manifest names — `git show <tag>:cmd/bibletext/main.go >/dev/null`
+— because the September 2026 rename moved that directory and a manifest pinned
+to an earlier tag names one that tag does not contain.
+
+### 3. Fork and branch
+
+The base branch is `new-pr`, NOT `master`, and the fork must be made with
+"Copy the master branch only" UNCHECKED or that branch will not come with it.
+
+```
+gh repo fork --clone flathub/flathub && cd flathub && git checkout --track origin/new-pr
+git checkout -b bibletext-submission new-pr
+```
+
+### 4. Add one file and open the PR
+
+Add `uk.co.bibletext.BibleText.yml` at the repository root — that single file
+is the whole submission. Commit and push in the account holder's own words, and
+open the pull request against the `new-pr` base with the title:
+
+```
+Add uk.co.bibletext.BibleText
+```
+
+Keep the PR template and answer it: submissions that remove it may be closed
+without review. A test build is started by commenting `bot, build` on the PR.
+The template also asks for a short video of the Flatpak running, which
+`linux-stores.yml`'s smoke job already records.
+
+### 5. After approval
+
+Reviewers merge it into a new repository under the Flathub organisation and
+send an invitation to it. GitHub two-factor authentication must be on, and the
+invitation accepted within a week. Updates never go through this process again.
+
 ## Product identity
 
 | Field | Value |

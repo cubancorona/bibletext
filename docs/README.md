@@ -45,6 +45,7 @@ Adding a document? Add its line here. One line, saying **when** to read it.
 - [VERSION_STATES.md](VERSION_STATES.md) — before changing version caching, epoch bumps, translation switching or parked links; invariants are pinned
 - [NKJV_FLOW.md](NKJV_FLOW.md) — before touching shared-link handling, web/app handoffs, or the /nkjv/ notice pages — I1-I6 are binding
 - [API_KEY_HANDLING.md](API_KEY_HANDLING.md) — before a release build, an API.Bible key rotation, or a support-address change — has a pre-publish checklist
+- [LINKS.md](LINKS.md) — before touching an association file, an intent filter, an entitlement, a desktop entry's MimeType, or before saying links work on a platform
 - [WEB_READER_PLAN.md](WEB_READER_PLAN.md) — before changing share links, book slugs, or cmd/websitegen — the URL contract here is frozen forever
 
 

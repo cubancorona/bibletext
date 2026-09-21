@@ -226,7 +226,7 @@ const noticeJS = `
       schemeHref();
       window.addEventListener('hashchange', schemeHref);
       btn.textContent = label2;
-      var get = document.getElementById('getapp');
+      var get = document.getElementById('getappline');
       if (get) get.hidden = false;
     }
   }

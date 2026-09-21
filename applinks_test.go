@@ -15,6 +15,7 @@ package bibletext
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"os"
 	"strings"
 	"testing"
@@ -95,26 +96,77 @@ func TestAppleAppSiteAssociationScope(t *testing.T) {
 // two files are edited by hand, separately, and an id added to one and not the
 // other produces a link that opens the app on one platform and 404s on the
 // other — with nothing failing at build time to say so.
+// PARSED, NOT GREPPED, and the difference is the whole point.
+//
+// This test used to run strings.Contains over the raw manifest. Deleting a
+// pathPrefix failed it correctly -- and COMMENTING OUT THE ENTIRE
+// intent-filter did not, because every string it looks for survives inside an
+// XML comment. The App Links claim could have been switched off in full with
+// nothing anywhere noticing, which is not hypothetical: commit 3587ae3ee
+// removed that filter deliberately on 9 August 2026 and it was restored the
+// same day.
+//
+// encoding/xml discards comments, so a commented-out filter simply is not
+// there to be found. The claim now has to be live in the document to pass.
+type androidManifest struct {
+	Application struct {
+		Activities []struct {
+			IntentFilters []struct {
+				AutoVerify string `xml:"http://schemas.android.com/apk/res/android autoVerify,attr"`
+				Data       []struct {
+					Scheme     string `xml:"http://schemas.android.com/apk/res/android scheme,attr"`
+					Host       string `xml:"http://schemas.android.com/apk/res/android host,attr"`
+					PathPrefix string `xml:"http://schemas.android.com/apk/res/android pathPrefix,attr"`
+					PathPattern string `xml:"http://schemas.android.com/apk/res/android pathPattern,attr"`
+				} `xml:"data"`
+			} `xml:"intent-filter"`
+		} `xml:"activity"`
+	} `xml:"application"`
+}
+
 func TestAndroidManifestClaimsEveryLinkPath(t *testing.T) {
 	raw, err := os.ReadFile("cmd/mobile/AndroidManifest.xml")
 	if err != nil {
 		t.Fatalf("the custom manifest must exist — fyne's generated one claims no links: %v", err)
 	}
-	manifest := string(raw)
-	for id := range linkPathVersionIDs {
-		prefix := `android:pathPrefix="/` + id + `/"`
-		if !strings.Contains(manifest, prefix) {
-			t.Errorf("%s is missing — an emitted /%s/ link would open the browser, not the app", prefix, id)
+	var m androidManifest
+	if err := xml.Unmarshal(raw, &m); err != nil {
+		t.Fatalf("cmd/mobile/AndroidManifest.xml does not parse as XML: %v", err)
+	}
+	// The claim must be LIVE: an autoVerify filter carrying https data for the
+	// site. Collect what it actually declares.
+	claimed := map[string]bool{}
+	filters := 0
+	for _, a := range m.Application.Activities {
+		for _, f := range a.IntentFilters {
+			if f.AutoVerify != "true" {
+				continue
+			}
+			filters++
+			for _, d := range f.Data {
+				if d.Scheme == "https" && d.Host == SiteHost() {
+					if d.PathPrefix != "" {
+						claimed[strings.Trim(d.PathPrefix, "/")] = true
+					}
+					// A bare-host or wildcard claim would swallow the privacy
+					// and support URLs the stores point at.
+					if d.PathPrefix == "/" || d.PathPrefix == "" || d.PathPattern != "" {
+						t.Errorf("the manifest claims the whole host (pathPrefix=%q pathPattern=%q) — "+
+							"privacy and support must stay in the browser", d.PathPrefix, d.PathPattern)
+					}
+				}
+			}
 		}
 	}
-	// The allow-list must stay an allow-list: a bare-host claim would swallow
-	// /privacy.html and /support.html, the URLs App Store Connect and the Play
-	// listing point at.
-	for _, forbidden := range []string{
-		`android:pathPrefix="/"`, `android:pathPattern=".*"`, `android:pathPrefix=""`,
-	} {
-		if strings.Contains(manifest, forbidden) {
-			t.Errorf("%s claims the whole host — privacy and support must stay in the browser", forbidden)
+	if filters == 0 {
+		t.Fatal("no LIVE autoVerify intent-filter for " + SiteHost() + " — the Android build claims no " +
+			"App Links at all, so every shared link opens the browser. A filter that is present but " +
+			"commented out counts as absent, which is the case this parse exists to catch.")
+	}
+	for id := range linkPathVersionIDs {
+		if !claimed[id] {
+			t.Errorf("/%s/ is not claimed by a live intent-filter — an emitted /%s/ link "+
+				"would open the browser, not the app", id, id)
 		}
 	}
 }
