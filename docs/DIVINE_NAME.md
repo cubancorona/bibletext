@@ -192,8 +192,15 @@ the shipped WEB gospels — has none, so nothing could break it.
 - **Android below API 29.** Font coverage for the Latin small-capital block is
   not guaranteed on the older platform serif. What such a device renders has not
   been measured on hardware.
-- **The website.** The web reader's own font does not carry the block, so a
-  shared link's page does not reproduce them.
+- **The website — latent, not live.** The web reader's own font does not carry
+  the block. It does not matter today and the reason is worth knowing: the
+  reader publishes only `/web/`, `/bsb/` and `/webc/`, and those three editions
+  carry no small-caps spans at all, so the pages contain ordinary capitals and
+  nothing to render. Verified on the live site — zero small-capital codepoints
+  across those chapters. The NKJV, the one edition that would need them, is
+  licensed and its path serves a notice instead of text. This becomes real the
+  day the reader publishes an edition that marks the divine name, and not
+  before.
 - **Secondary surfaces.** Search result cards and cross-reference snippets show
   the edition's stored mixed-case form, not small capitals. Only the reading
   pane substitutes. Whether that is a defect or a deliberate one-line-of-text

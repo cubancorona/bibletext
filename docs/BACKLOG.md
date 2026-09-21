@@ -480,6 +480,40 @@ translations.
 throwaway probe someone committed by accident. Left alone rather than deleted
 on someone else's behalf.
 
+## The web reader cannot render small capitals — latent until it serves an edition that uses them
+
+Recorded because it reads like a live defect and is not one, and because the
+condition that would make it real is easy to meet by accident.
+
+The reading pane draws the divine name with Unicode small-capital characters
+(see `docs/DIVINE_NAME.md`). The published web reader's own font does not carry
+that block, so if such a character reached a page it would render as a fallback
+glyph or as tofu.
+
+**It does not reach one today.** The reader publishes `/web/`, `/bsb/` and
+`/webc/` only, and all three editions spell the divine name with ordinary
+capitals — they carry no small-caps spans at all, because the feed behind them
+has no field that could express a character style. Verified on the live site on
+21 September 2026: zero small-capital codepoints across those chapters, and
+`LORD` in ordinary capitals throughout. The NKJV is the only edition that marks
+the name, and it is licensed: `/nkjv/` serves a notice rather than text.
+
+**What would make it real**, any one of:
+
+- publishing an edition whose feed carries `nd`/`sc` spans
+- rendering shared-note TEXT on a page rather than a reference (today a note
+  link carries a reference and the recipient's own copy supplies the words)
+- any future page that echoes text the app drew rather than text a publisher
+  sent
+
+The fix, when needed, is to subset the web font to include U+1D00–U+1D7F and
+the strays outside it (`ꜰ ꞯ ꜱ` at U+A730, U+A7B0, U+A731), or to emit the
+publisher's capitals on the web as the app already does on the way out. The
+second is simpler and matches what the pages already show.
+
+Note that Unicode provides no small-capital `x`, so a subset can never be
+complete — see `docs/DIVINE_NAME.md`.
+
 ## What we ship has largely never been run
 
 Found by a five-platform survey on 18 September 2026, each platform's claims
