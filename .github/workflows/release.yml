@@ -444,6 +444,33 @@ jobs:
           7z a BibleText-Windows-${{ matrix.goarch }}.zip ./cmd/bibletext/BibleText.exe \
             ./cmd/bibletext/libEGL.dll ./cmd/bibletext/libGLESv2.dll \
             ./cmd/bibletext/d3dcompiler_47.dll ./cmd/bibletext/ANGLE-LICENSE.txt
+          # ASSERT WHAT IS IN THE ZIP, NOT THAT 7z WAS GIVEN THE RIGHT NAMES.
+          #
+          # This was the only shipped artefact nothing reopened. Every other
+          # channel re-examines its own output -- the macOS zip is extracted and
+          # its Info.plist read, the Linux tarball goes through
+          # check-linux-package.sh, which runs `make install` into a DESTDIR,
+          # and the AppImage is --appimage-extract'ed and grepped -- while this
+          # one went straight from packing to upload with nothing in between.
+          #
+          # That absence is why a real defect was shippable: the ANGLE step
+          # fetched into `cmd\desktop` while these lines read cmd/bibletext, and
+          # because fetch-angle.ps1 does New-Item -Force it CREATED that
+          # directory and reported success. The only thing standing between that
+          # and a published download was the packer's exit code on a missing input,
+          # which is not something to rest an asset on.
+          #
+          # A missing library is not a partial loss. The executable is built
+          # -tags gles and takes its graphics context through EGL, so a zip
+          # without libEGL.dll is an app whose window never opens.
+          for f in BibleText.exe libEGL.dll libGLESv2.dll d3dcompiler_47.dll ANGLE-LICENSE.txt; do
+            7z l "BibleText-Windows-${{ matrix.goarch }}.zip" | grep -qE "(^|[/ ])$f$" || {
+              echo "::error::the Windows ${{ matrix.goarch }} zip does not contain $f"
+              7z l "BibleText-Windows-${{ matrix.goarch }}.zip"
+              exit 1
+            }
+          done
+          echo "windows ${{ matrix.goarch }} zip carries the executable and all three ANGLE libraries"
       - name: upload asset
         env:
           GH_TOKEN: ${{ github.token }}

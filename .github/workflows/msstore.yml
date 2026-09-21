@@ -24,6 +24,9 @@ on:
     paths:
       - "msstore/**"
       - "cmd/msstore/**"
+      # The version this job stamps is read from cmd/bibletext/FyneApp.toml,
+      # so a release bump that touches nothing else must still retrigger it.
+      - "cmd/bibletext/**"
       - "scripts/build-windows-exe.sh"
       - ".github/workflows/msstore.yml"
       - "app.go"

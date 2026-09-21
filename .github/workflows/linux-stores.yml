@@ -19,6 +19,9 @@ on:
       - "flatpak/**"
       - "snap/**"
       - "cmd/linuxmeta/**"
+      # The version this job stamps is read from cmd/bibletext/FyneApp.toml,
+      # so a release bump that touches nothing else must still retrigger it.
+      - "cmd/bibletext/**"
       - "scripts/build-appimage.sh"
       - "scripts/check-glibc-floor.sh"
       - "scripts/smoke-linux-launch.sh"
