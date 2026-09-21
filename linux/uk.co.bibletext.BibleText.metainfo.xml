@@ -77,11 +77,11 @@
   <releases>
     <release version="1.2.13" date="2026-09-20">
       <description>
-        <p>Sharing a verse, set right.</p>
+        <p>Sharing the divine name, and a command with the app's own name.</p>
         <ul>
-          <li>A verse you share now carries the letters the edition prints. Where a translation sets the divine name in small capitals, the shared text used to go out with characters no edition uses and no search box matches.</li>
-          <li>The reference under a shared verse now names the verses you chose on those passages too.</li>
-          <li>The command is called bibletext. It was called desktop, which was too general a name to leave in your PATH, and it was the name your volume control showed while narration played. If you installed an earlier version with make install, remove the old one: sudo rm -f /usr/local/bin/desktop /usr/bin/desktop</li>
+          <li>Share a verse from a translation that sets the divine name in small capitals — the New King James Version does — and it now goes out as LORD, the way plain text has always written it. It used to send the small-capital characters themselves, which no edition prints and no search box matches.</li>
+          <li>The reference under such a verse now names the verses you chose. It could be less exact before.</li>
+          <li>The command is now called bibletext. It was called desktop, which is too general a name to leave in your PATH, and it was the name your volume control showed while narration played. If you installed an earlier version with make install, remove the old one: sudo rm -f /usr/local/bin/desktop /usr/bin/desktop</li>
         </ul>
       </description>
     </release>
