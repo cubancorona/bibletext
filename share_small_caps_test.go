@@ -8,24 +8,21 @@ import (
 // SHARING A VERSE WHOSE DIVINE NAME THE EDITION SETS IN SMALL CAPITALS.
 //
 // The pane draws "Lᴏʀᴅ" — the app's own Unicode small capitals, chosen for the
-// page (small_caps_draw.go). The publisher sent "LORD". Two separate things
-// then have to happen on the way out, and neither did:
+// page (small_caps_draw.go) — where the publisher stored "Lord". Two things
+// have to hold on the way out, and they are separate:
 //
-//   - The quote a reader sends must carry the publisher's letters. A recipient
-//     who pastes "Lᴏʀᴅ" has a word no edition prints, no search box matches and
-//     most fonts render unevenly. outbound_text.go states this rule outright —
-//     "every outbound path goes through here first" — and the share path was
-//     not one of them: only ai.go and the styled pane's Copy call outboundText.
+//   - WHAT A SHARE SENDS is what the page shows: the small capitals, as drawn.
+//     That is the account holder's choice (sharedText, outbound_text.go); it
+//     replaced sending the capitals, "LORD", which 1.2.13 did.
 //
-//   - The share pipeline LOCATES the selection inside chapterProse, which is
-//     built from the publisher's own Verse.Text. A selection still carrying
-//     small capitals cannot be found there, so normalizeShareSelection returns
-//     ok=false and the whole share silently drops to the legacy probe path —
-//     losing the positional citation on exactly the verses the divine-name work
-//     exists for.
+//   - The share pipeline LOCATES the selection among the verses. A selection
+//     carrying small capitals cannot be found in text built from the stored
+//     "Lord", so the verses are drawn the same way before they are searched;
+//     when they were not, normalizeShareSelection returned ok=false and the
+//     share silently dropped to the legacy probe path — losing the positional
+//     citation on exactly the verses the divine-name work exists for.
 //
-// One cause, so one fix; both halves are asserted here because either could
-// regress without the other.
+// Both halves are asserted here because either could regress without the other.
 func psalm23SmallCapsState() *AppState {
 	bd := &BibleData{
 		Books: []string{"Psalms"},
@@ -55,7 +52,7 @@ func drawnVerse(t *testing.T, v Verse) string {
 	return b.String()
 }
 
-func TestSharingADivineNameVerseKeepsThePublishersLetters(t *testing.T) {
+func TestSharingADivineNameVerseSendsTheNameAsDrawn(t *testing.T) {
 	st := psalm23SmallCapsState()
 	v := st.Bible.Verses["Psalms"][23][0]
 
@@ -79,21 +76,21 @@ func TestSharingADivineNameVerseKeepsThePublishersLetters(t *testing.T) {
 		t.Errorf("attributed to verses %d-%d, want 1-1", lo, hi)
 	}
 
-	// HALF TWO: what actually goes out carries the publisher's letters.
-	if strings.ContainsAny(text, "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘꞯʀꜱᴛᴜᴠᴡʏᴢ") {
-		t.Errorf("the normalized share text still carries the app's small capitals: %q", text)
+	// HALF TWO: what actually goes out is the name as the page drew it.
+	if !strings.Contains(text, "Lᴏʀᴅ") {
+		t.Errorf("the normalized share text does not carry the small capitals as drawn: %q", text)
 	}
-	if !strings.Contains(text, "LORD") {
-		t.Errorf("the normalized share text lost the divine name's capitals: %q", text)
+	if strings.Contains(text, "LORD") || strings.Contains(text, "Lord") {
+		t.Errorf("the normalized share text carries the name in another spelling: %q", text)
 	}
 
 	// And through the caller a share actually uses.
 	quote, cite, _, _ := prepareShareQuote(st, drawn, selSpan{})
-	if strings.ContainsAny(quote, "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘꞯʀꜱᴛᴜᴠᴡʏᴢ") {
-		t.Errorf("the shared quote carries the app's small capitals: %q", quote)
+	if !strings.Contains(quote, "Lᴏʀᴅ") {
+		t.Errorf("the shared quote does not carry the small capitals as drawn: %q", quote)
 	}
-	if !strings.Contains(quote, "LORD") {
-		t.Errorf("the shared quote lost the divine name's capitals: %q", quote)
+	if strings.Contains(quote, "LORD") || strings.Contains(quote, "Lord") {
+		t.Errorf("the shared quote carries the name in another spelling: %q", quote)
 	}
 	if cite != "Psalms 23:1" {
 		t.Errorf("citation = %q, want %q — the positional path was not used", cite, "Psalms 23:1")
@@ -161,11 +158,11 @@ func TestSharingAcrossAnOmittedVerseDropsTheGapMark(t *testing.T) {
 // THE PASSAGE ROUTE, which builds its own "selection" rather than taking one
 // from the page — the verse-of-the-day card is the caller.
 //
-// It synthesises the selection from the publisher's Verse.Text, so it never
-// carried small capitals in the first place and the outbound strip has nothing
-// to do. The corpus it is matched against IS in outbound form, though, so the
+// It synthesises the selection from the stored Verse.Text, where the name is
+// "Lord". The corpus it is matched against is in the drawn, shared form, so the
 // two sides have to be put in that form by the same route or a passage holding
-// a divine name stops locating and the card loses its citation.
+// a divine name stops locating and the card loses its citation — and what the
+// card shares must be the name as drawn, like every other share.
 func TestSharingAPassageWithADivineNameLocatesAndCites(t *testing.T) {
 	st := psalm23SmallCapsState()
 
@@ -176,12 +173,11 @@ func TestSharingAPassageWithADivineNameLocatesAndCites(t *testing.T) {
 	if cite != "Psalms 23:1" {
 		t.Errorf("citation = %q, want %q", cite, "Psalms 23:1")
 	}
-	if !strings.Contains(quote, "LORD") {
-		t.Errorf("the passage quote does not carry the divine name's capitals: %q", quote)
+	if !strings.Contains(quote, "Lᴏʀᴅ") {
+		t.Errorf("the passage quote does not carry the small capitals as drawn: %q", quote)
 	}
-	if strings.Contains(quote, "Lord") {
-		t.Errorf("the passage quote carries the publisher's mixed case rather than the "+
-			"plain-text realisation of the small capitals: %q", quote)
+	if strings.Contains(quote, "Lord") || strings.Contains(quote, "LORD") {
+		t.Errorf("the passage quote carries the name in another spelling: %q", quote)
 	}
 }
 

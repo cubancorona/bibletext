@@ -16,21 +16,20 @@ package bibletext
 // no-break space pasted into a document is a character nobody typed; a
 // superscript "¹⁶" pasted into a search box finds nothing.
 //
-// The small capitals are the same kind of thing. The edition marks the divine
-// name and the app draws it with the Unicode small-capital letters, which are
-// its own characters and not the publisher's; a reader who pasted them would
-// have a word no edition prints and no search box matches. They go back to the
-// letters the publisher actually sent.
-//
-// So every outbound path goes through here first. What the reader keeps is the
-// verse number as an ordinary number, the publisher's own spacing, and nothing
-// this app invented for its own page.
-//
-// The divine name is the one deliberate exception to "the publisher's own
-// letters": a small capital resolves to the CAPITAL, so an edition that stored
-// "Lord" sends "LORD". That is the plain-text convention, and the reasoning is
-// set out at smallCapitalToLetter (small_caps_draw.go) and in
+// The small capitals are the one exception, and it depends on who is on the
+// other end. The edition marks the divine name and the app draws it with the
+// Unicode small-capital letters. A READER sending or copying a verse keeps them
+// as drawn (sharedText): that is what the page shows, and the account holder
+// chose it with the costs in view — a pasted "Lᴏʀᴅ" is not found by a later
+// search for "Lord". A MACHINE gets capitals (outboundText): an AI request
+// reads standard text, so a small capital resolves to the CAPITAL and an
+// edition that stored "Lord" sends "LORD", the plain-text convention. The
+// reasoning is at smallCapitalToLetter (small_caps_draw.go) and in
 // docs/DIVINE_NAME.md.
+//
+// So every way out goes through here first, by one of the two doors. Either way
+// the reader keeps the verse number as an ordinary number, the publisher's own
+// spacing, and nothing else this app invented for its own page.
 
 import "strings"
 
@@ -63,7 +62,28 @@ const (
 // superscript digit or an em/en space in publisher text does the same. Worth a
 // test that walks the shipped translations; recorded in docs/BACKLOG.md. The space after it goes with it, or "left. [36]
 // They" would become "left.  They".
-func outboundText(s string) string {
+func outboundText(s string) string { return outboundForm(s, false) }
+
+// sharedText is the form a reader's own shares and copies carry: the page's
+// typography off exactly as outboundText takes it off — superscript numbers,
+// the no-break join, the indent, an omitted verse's mark — but the divine
+// name's small capitals KEPT, as drawn.
+//
+// Why two forms. The small capitals are the one piece of the page's typography
+// that is also the edition's meaning: they are how the NKJV marks the divine
+// name, and a reader sending a verse to a friend is sending what the page
+// shows. The account holder chose that for everything a reader sends or copies
+// — the text share, the image card, the verse of the day, Copy — having seen a
+// shared `Lᴏʀᴅ` arrive in a message and wanted it kept. The costs were weighed
+// and accepted: a pasted `Lᴏʀᴅ` is not found by a later search for "Lord", and
+// a document font without the characters draws them from a fallback.
+//
+// Text the app hands to a MACHINE still goes out as capitals, through
+// outboundText: an AI request reads standard text, and there is no reader on
+// the other end to see the typography.
+func sharedText(s string) string { return outboundForm(s, true) }
+
+func outboundForm(s string, keepSmallCaps bool) string {
 	if s == "" {
 		return s
 	}
@@ -80,7 +100,7 @@ func outboundText(s string) string {
 		case r == emSpace || r == enSpace:
 			// The indent is the page's alone. Dropped rather than turned into
 			// spaces, which would leave the paragraph looking hand-indented.
-		case smallCapitalToLetter[r] != 0:
+		case smallCapitalToLetter[r] != 0 && !keepSmallCaps:
 			// To the CAPITAL, not back to the publisher's own letter -- see
 			// smallCapitalToLetter. The small capital was the app's way of
 			// SETTING the word, never the word itself, but it records nothing
@@ -125,32 +145,36 @@ func stripVerseGapMarks(s string) string {
 	return b.String()
 }
 
-// verseOutboundText is a verse as it LEAVES the app: the publisher's words with
-// the app's own typography resolved exactly as outboundText resolves it.
+// verseSharedText is a verse as a reader's share carries it: drawn the way the
+// page draws it — the divine name in small capitals — with the rest of the
+// page's typography taken off by sharedText.
 //
-// It exists because the share pipeline has to compare the two. A selection is
-// taken from the DRAWN page, where the divine name is set in small capitals;
-// the corpus it is located in is built from the publisher's Verse.Text, where
-// the same word is "Lord". Neither side can simply be stripped to the other:
-// outboundText deliberately resolves a small capital to the CAPITAL, so that a
-// pasted verse keeps the Tetragrammaton/Adonai distinction the small capitals
-// carry (small_caps_draw.go). "Lord" and "LORD" are both right, for different
-// places.
+// It exists because the share pipeline has to compare two things that start in
+// different forms. A selection is taken from the DRAWN page, where the divine
+// name is set in small capitals; the verses it is located among are stored in
+// the publisher's letters, where the same word is "Lord". Neither can simply be
+// stripped to the other — a small capital records nothing about which case it
+// replaced — so both are put in ONE form before they meet, and since the share
+// sends the drawn form, that is the form: the stored verse is drawn, and the
+// selection already is.
 //
-// So both sides are put in the SAME outbound form instead, and this is it: draw
-// the verse the way the page draws it, then resolve it the way the way out
-// resolves it. Running the real applySmallCaps rather than re-deriving the rule
-// is deliberate — a second implementation of which letters shrink would drift
+// The form has moved once. It used to be the capitals (outboundText), when a
+// share sent "LORD"; it moved with the decision to send what the page shows.
+// What must never happen is the two sides being in different forms: when only
+// one corpus was converted, the psalms silently lost their line breaks.
+//
+// Running the real applySmallCaps rather than re-deriving the rule is
+// deliberate — a second implementation of which letters shrink would drift
 // from the first, and the locate would start failing on whichever verses the
 // two disagreed about.
-func verseOutboundText(v Verse) string {
+func verseSharedText(v Verse) string {
 	if len(v.SmallCaps) == 0 {
-		return outboundText(v.Text)
+		return sharedText(v.Text)
 	}
 	var b strings.Builder
 	b.Grow(len(v.Text))
 	for _, r := range applySmallCaps(v, []verseRun{{Text: v.Text}}) {
 		b.WriteString(r.Text)
 	}
-	return outboundText(b.String())
+	return sharedText(b.String())
 }

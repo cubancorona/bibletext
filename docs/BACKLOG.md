@@ -1963,7 +1963,7 @@ into it and that command works today on v1.2.5. A source build by either
 route carries no release ldflags, so it has no bundled NKJV key: the reader
 adds their own API.Bible key in Settings for that translation.
 
-## A shared verse carries the app's own small capitals, and then cannot find itself — FIXED, one decision open
+## A shared verse carries the app's own small capitals, and then cannot find itself — FIXED, and DECIDED 22 Sep 2026
 
 **The locate half is fixed and the send half is an open preference.** 1.2.13
 (cda1575b7) routed the share path through `outboundText`, and a later change
@@ -1979,8 +1979,15 @@ defect was that carrying `Lᴏʀᴅ` also broke the LOCATE. The two can now be
 separated — locate in the outbound form, as the pipeline does, and emit the
 drawn form in the text that leaves. The cost to weigh: a pasted `Lᴏʀᴅ` is
 not found by a search box and renders unevenly in fonts without the
-small-capital block. Decide before the next release so shared text changes
-once, not twice. The original entry follows as the record.
+small-capital block.
+
+**Decided 22 September 2026: the drawn form.** Everything a reader sends or
+copies — the text share, the image card, the verse of the day, the styled
+pane's Copy and the chapter copy icon — keeps `Lᴏʀᴅ`; only an AI request gets
+capitals. The pipeline now meets in the drawn form rather than the capitals
+(`sharedText`, `verseSharedText`), which turned out simpler than locating in
+one form and emitting another. docs/DIVINE_NAME.md section 4 is the account.
+The original entry follows as the record.
 
 Found while checking whether a sentence in docs/ADDITIONS_AND_DROPS.md was true.
 It was not, and the reason is a live defect.

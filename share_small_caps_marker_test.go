@@ -19,9 +19,9 @@ import (
 //
 // Every case here carries the token, or a heading, or a gap mark -- something
 // the plain-verse tests do not -- and asserts the same two things: the
-// selection locates, and nothing the app invented for its own page goes out.
-
-const smallCapitalLetters = "ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘꞯʀꜱᴛᴜᴠᴡʏᴢ"
+// selection locates, and nothing the app invented for its own page goes out
+// EXCEPT the divine name's small capitals, which a share keeps as drawn
+// (sharedText, outbound_text.go).
 
 func TestAWholeVerseDragWithItsNumberStillLocatesADivineNameVerse(t *testing.T) {
 	st := psalm23SmallCapsState()
@@ -43,11 +43,8 @@ func TestAWholeVerseDragWithItsNumberStillLocatesADivineNameVerse(t *testing.T) 
 	if strings.HasPrefix(text, "1 ") {
 		t.Errorf("the verse-number token survived into the quote: %q", text)
 	}
-	if strings.ContainsAny(text, smallCapitalLetters) {
-		t.Errorf("small capitals reached the outbound text: %q", text)
-	}
-	if !strings.Contains(text, "LORD") {
-		t.Errorf("the divine name lost its capitals: %q", text)
+	if !strings.Contains(text, "Lᴏʀᴅ") || strings.Contains(text, "LORD") {
+		t.Errorf("the divine name did not go out as drawn: %q", text)
 	}
 }
 
@@ -68,22 +65,32 @@ func TestTwoVersesWithBothNumbersCiteTheRange(t *testing.T) {
 			t.Errorf("a verse-number token survived: %q in %q", tok, text)
 		}
 	}
-	if strings.ContainsAny(text, smallCapitalLetters) {
-		t.Errorf("small capitals reached the outbound text: %q", text)
+	if !strings.Contains(text, "Lᴏʀᴅ") {
+		t.Errorf("the divine name did not go out as drawn: %q", text)
 	}
 }
 
 // The legacy fallback is the path a selection takes when it cannot be located
-// at all -- a lone partial word, for instance. It is still an outbound path,
-// and the rule in outbound_text.go admits no exception for it.
-func TestADeclinedSelectionStillSendsNoSmallCapitals(t *testing.T) {
+// at all -- a lone partial word, for instance. It is still a way out of the
+// app, so it follows the same rule as the located path: the name as drawn, and
+// none of the page's other typography.
+func TestADeclinedSelectionFollowsTheSameRuleAsALocatedOne(t *testing.T) {
 	st := psalm23SmallCapsState()
 	quote, _, at, _ := prepareShareQuote(st, "Lᴏʀ", selSpan{})
 	if at >= 0 {
 		t.Fatalf("premise broken: a lone partial word was located (at=%d); this test is about the fallback", at)
 	}
-	if strings.ContainsAny(quote, smallCapitalLetters) {
-		t.Errorf("the fallback shipped the app's small capitals: %q", quote)
+	if !strings.Contains(quote, "Lᴏʀ") || strings.Contains(quote, "LOR") {
+		t.Errorf("the fallback changed the drawn small capitals: %q", quote)
+	}
+	// And the fallback's typography strip: a declined selection carrying an
+	// omitted verse's mark.
+	gap, _, gapAt, _ := prepareShareQuote(st, "zz "+verseGapMark(3)+" qq", selSpan{})
+	if gapAt >= 0 {
+		t.Fatalf("premise broken: the gap-mark selection was located (at=%d), so the fallback was not exercised", gapAt)
+	}
+	if strings.Contains(gap, "[") {
+		t.Errorf("the fallback shipped the page's own gap mark: %q", gap)
 	}
 }
 
@@ -105,8 +112,8 @@ func TestAHeadingOverADivineNameVerseIsStrippedAndTheVerseLocated(t *testing.T) 
 	if strings.Contains(text, "Shepherd of His People") {
 		t.Errorf("the heading rode into the quote: %q", text)
 	}
-	if strings.ContainsAny(text, smallCapitalLetters) {
-		t.Errorf("small capitals reached the outbound text: %q", text)
+	if !strings.Contains(text, "Lᴏʀᴅ") {
+		t.Errorf("the divine name did not go out as drawn: %q", text)
 	}
 }
 

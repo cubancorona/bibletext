@@ -130,62 +130,78 @@ DRAW        applySmallCaps substitutes Unicode small-capital CHARACTERS.
             Rune counts are preserved, because every offset the app records
             — notes, highlights, red letter — is measured in those runes.
   │
-  ▼
-OUT         outboundText resolves each small capital to the CAPITAL.
-            "Lᴏʀᴅ" -> "LORD".    "Gᴏᴅ" -> "GOD".
+  ├──▶ TO A READER   sharedText keeps them as drawn.        "Lᴏʀᴅ"
+  │                  Share, image card, verse of the day, Copy.
+  │
+  └──▶ TO A MACHINE  outboundText resolves them to CAPITALS. "LORD"
+                     AI study.
 ```
 
-Two things about that last step matter more than they look.
+Three things about the way out matter more than they look.
 
 **It is characters, not a font feature.** The app substitutes real codepoints
 (`ʟ` U+029F, `ᴏ` U+1D0F, `ʀ` U+0280, `ᴅ` U+1D05, `ɢ` U+0262), rather than asking
 the renderer for `font-variant: small-caps`. That is why the name survives being
-copied, and why it needs undoing on the way out.
+copied at all.
 
-**The resolution goes to the capital, and this is deliberate.** A small capital
-records nothing about which case it replaced, so there is no letter to go back
-to:
+**What a reader sends is what the page shows.** Since 22 September 2026 every
+way a reader sends or copies text — the text share, the image card, the verse
+of the day's share, the styled pane's Copy and the chapter copy icon — keeps the
+small capitals, as the system Copy of the Apple and Android panes always did.
+It is the account holder's choice, made after seeing a shared `Lᴏʀᴅ` arrive in a
+message, with the costs weighed:
 
-```
-publisher "Lord"  ──drawn──►  "Lᴏʀᴅ"  ──out──►  "LORD"    ≠ "Lord"
-publisher "GOD"   ──drawn──►  "Gᴏᴅ"   ──out──►  "GOD"     = "GOD"
-```
+| where it lands | effect |
+| --- | --- |
+| a message, read by a person | reads like the printed page; Apple's system font carries all five characters |
+| a later search for "Lord" or "LORD" | **does not find it** — the characters have no Unicode equivalence to ordinary letters |
+| a document | depends on the font: Arial and Times New Roman carry all five, Helvetica two of five (the others come from a fallback, unevenly), Georgia none |
+| an SMS | no change in length; the curly quotes already force Unicode encoding |
 
-Lower-casing everything would turn `GOD` into `God`; upper-casing diverges from
-`Lord`. Capitals are chosen because they are the plain-text convention every
-other edition and reader puts on a clipboard, and because they keep the divine
-name distinct from an ordinary "Lord". The cost is that outgoing text and stored
-text genuinely differ for the `Lord` shape.
+Before that date a share sent the capitals, and the chapter copy icon sent the
+stored `Lord` — a third spelling no surface shows, and the one that erases the
+distinction the small capitals exist to carry.
 
-### Why that cost reaches the share pipeline
-
-Sharing locates the selected text inside a corpus built from the chapter's
-verses, so the citation can name the verses actually being sent. The selection
-comes off the **page** (small capitals); the corpus was built from the
-**publisher's** text (ordinary letters). Neither can be converted into the
-other, for the reason above.
-
-So both are taken to the same third form — the outbound one — before being
-compared:
+**A machine still gets capitals.** An AI request reads standard text and has no
+reader to see the typography, so it goes through outboundText, which resolves
+each small capital to the CAPITAL. A small capital records nothing about which
+case it replaced, so there is no letter to go back to:
 
 ```
-SELECTION  "The Lᴏʀᴅ ..."  ──outboundText──────────────────────►  "The LORD ..."
-CORPUS     "The Lord ..."  ──applySmallCaps──►  "The Lᴏʀᴅ ..."  ──►  "The LORD ..."
+publisher "Lord"  ──drawn──►  "Lᴏʀᴅ"  ──to a machine──►  "LORD"    ≠ "Lord"
+publisher "GOD"   ──drawn──►  "Gᴏᴅ"   ──to a machine──►  "GOD"     = "GOD"
 ```
 
-`verseOutboundText` (`outbound_text.go`) is that conversion, and it runs the
-real `applySmallCaps` rather than re-deriving which letters shrink — a second
+Capitals are the plain-text convention every other edition uses, and they keep
+the divine name distinct from an ordinary "Lord".
+
+### Why the form reaches the share pipeline
+
+Sharing locates the selection among the chapter's verses, so the citation can
+name the verses actually being sent. The selection comes off the **page** (small
+capitals); the verses are stored in the **publisher's** letters (`Lord`). So the
+stored verses are drawn the same way before they are searched, and the two meet
+in one form:
+
+```
+SELECTION  "The Lᴏʀᴅ ..."  ──sharedText───────────────────────►  "The Lᴏʀᴅ ..."
+CORPUS     "The Lord ..."  ──applySmallCaps──►  "The Lᴏʀᴅ ..."  ──►  "The Lᴏʀᴅ ..."
+```
+
+`verseSharedText` (`outbound_text.go`) is that conversion, and it runs the real
+`applySmallCaps` rather than re-deriving which letters shrink — a second
 implementation of that rule would drift from the first, and the search would
 fail on whichever verses the two disagreed about.
 
-**Both corpora must be in that form.** `chapterProse` and
-`chapterShareStructure` are matched against each other, and when only one was
-converted the psalms silently lost their authored line breaks.
-`TestChapterProseAndShareStructureAgree` holds them equal and now carries a
-fixture with a small-caps span, because every other fixture — and every verse of
-the shipped WEB gospels — has none, so nothing could break it.
-
----
+The form has moved once: it was the capitals while a share sent capitals. What
+must never happen is the two sides being in different forms. Every structure
+the pipeline matches against — `chapterProse`, `chapterShareStructure`, the
+marker strip's verse bodies, the fallback's probes — is built by the same
+function for that reason; when only one corpus was converted, the psalms
+silently lost their authored line breaks, and when the marker strip compared
+against the stored text, a whole-verse drag of any divine-name verse fell off
+the positional path. `TestChapterProseAndShareStructureAgree` and the tests in
+`share_small_caps_marker_test.go` hold both.
 
 ## 5. Where the small capitals are not there
 
@@ -213,8 +229,12 @@ the shipped WEB gospels — has none, so nothing could break it.
   the edition's stored mixed-case form, not small capitals. Only the reading
   pane substitutes. Whether that is a defect or a deliberate one-line-of-text
   decision has never been settled.
-- **Share cards.** The rendered image is built from outbound text, so small
-  capitals never reach it and its fonts do not matter.
+- **Share cards.** Only one of the seven card typefaces, Cardo, carries the
+  five small capitals. The card never draws a missing glyph —
+  `typefaceForText` passes over any face that cannot draw every character, and
+  the reading face (Junicode, all five) is the fallback — so a divine-name
+  verse always comes out in Cardo, and Regenerate cycles its colours but not
+  its typeface. `TestTheShareCardNeverDrawsAMissingSmallCapital` holds it.
 
 ---
 

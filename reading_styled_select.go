@@ -398,10 +398,13 @@ func (p *styledReadingPane) copyToClipboard() {
 	if p.clipboard == nil || p.selStart < 0 || p.selEnd <= p.selStart {
 		return
 	}
-	// What reaches the clipboard is the publisher's text, not the pane's
-	// typography: this pane draws its verse numbers as superscript CHARACTERS
-	// (superscriptNumber), so without this a paste carries "¹⁶" (outbound_text.go).
-	p.clipboard.SetContent(outboundText(p.copySelected()))
+	// What reaches the clipboard is the page without its typography: this
+	// pane draws its verse numbers as superscript CHARACTERS
+	// (superscriptNumber), so without this a paste carries "¹⁶". The divine
+	// name's small capitals are the exception and stay as drawn, as they do in
+	// a share and in the system Copy of the Apple and Android panes
+	// (sharedText, outbound_text.go) — one answer on every platform.
+	p.clipboard.SetContent(sharedText(p.copySelected()))
 }
 
 // --- The study menu ----------------------------------------------------------

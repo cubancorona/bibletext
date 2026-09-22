@@ -1651,9 +1651,15 @@ func (r *plainEntryRenderer) makePlain() {
 }
 
 // chapterCopyText is the whole-chapter plain-text export the copy icon puts
-// on the clipboard — a join of Verse.Text, which is why the translators'
+// on the clipboard — a join of the verses, which is why the translators'
 // footnote section can never appear in it however it is toggled (pinned by
 // TestFootnotesNeverReachSearchSpeechOrProse).
+//
+// Each verse goes out as the page draws it (verseSharedText): the divine name
+// in small capitals, as a share and a selection Copy send it. It used to join
+// the stored Verse.Text, which for the NKJV is the publisher's mixed case —
+// "Lord" — a third spelling of the name that no surface shows and that
+// erases the distinction the small capitals exist to carry.
 func chapterCopyText(state *AppState) string {
 	verses := state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter)
 	if len(verses) == 0 {
@@ -1665,7 +1671,7 @@ func chapterCopyText(state *AppState) string {
 		// Verse.Text may carry authored poem-line breaks — kept on purpose:
 		// a chapter copy is a plain-text export, and poetry copying as poetry
 		// is the same principle as the cited-text share layout.
-		fmt.Fprintf(&b, "%d %s\n", v.Verse, strings.TrimSpace(v.Text))
+		fmt.Fprintf(&b, "%d %s\n", v.Verse, strings.TrimSpace(verseSharedText(v)))
 	}
 	return b.String()
 }

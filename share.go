@@ -226,11 +226,11 @@ func shareQuoteForPassage(state *AppState, book string, chapter, lo, hi int) (qu
 		if v.Verse < lo || v.Verse > hi {
 			continue
 		}
-		// The same outbound form chapterProse is built in, for the same
+		// The same shared form chapterProse is built in, for the same
 		// reason: this synthetic selection is matched against that corpus, and
 		// a passage holding a divine name would otherwise be assembled in the
 		// publisher's mixed case and never found.
-		t := collapseSpaces(verseOutboundText(v))
+		t := collapseSpaces(verseSharedText(v))
 		if t == "" {
 			continue
 		}
@@ -303,18 +303,18 @@ func cleanQuoteText(state *AppState, raw string) string {
 }
 
 // cleanQuoteTextIn is the legacy fallback's text pass, for a selection the
-// positional locate declined. It is still an outbound path, so outboundText
-// runs here too — the rule in outbound_text.go admits no exception for the
-// fallback, and a lone partial word like "Lᴏʀ" used to ship the app's own
-// small capitals through it. The marker probes are built from
-// verseOutboundText for the same reason stripVerseMarkers' bodies are.
+// positional locate declined. It is still a way out of the app, so sharedText
+// runs here too — the fallback takes the page's typography off exactly as the
+// located path does, and it used to ship an omitted verse's gap mark through
+// untouched. The marker probes are built from verseSharedText for the same
+// reason stripVerseMarkers' bodies are.
 func cleanQuoteTextIn(state *AppState, book string, chapter int, raw string) string {
-	s := outboundText(collapseSpaces(raw))
+	s := sharedText(collapseSpaces(raw))
 	if state == nil || state.Bible == nil {
 		return s
 	}
 	for _, v := range state.Bible.GetChapter(book, chapter) {
-		body := collapseSpaces(verseOutboundText(v))
+		body := collapseSpaces(verseSharedText(v))
 		if body == "" {
 			continue
 		}
@@ -389,9 +389,9 @@ func chapterProseIn(state *AppState, book string, chapter int) (string, []verseS
 	var spans []verseSpan
 	for _, v := range state.Bible.GetChapter(book, chapter) {
 		// The corpus is what a normalized selection is matched against, so it
-		// has to be in the same outbound form the selection is put into —
-		// see verseOutboundText.
-		t := collapseSpaces(verseOutboundText(v))
+		// has to be in the same shared form the selection is put into —
+		// see verseSharedText.
+		t := collapseSpaces(verseSharedText(v))
 		if t == "" {
 			continue
 		}
@@ -462,7 +462,7 @@ func chapterShareStructureIn(state *AppState, book string, chapter int) (string,
 	for paragraphIndex, paragraph := range groupVersesIntoParagraphs(verses) {
 		wroteInParagraph := false
 		for _, verse := range paragraph {
-			// THE SAME OUTBOUND FORM chapterProse IS BUILT IN, and for the same
+			// THE SAME SHARED FORM chapterProse IS BUILT IN, and for the same
 			// reason: these two corpora are matched against each OTHER.
 			// restoreShareLineBreaks takes the quote -- which came out of
 			// chapterProse -- and locates it in this one to know where the
@@ -470,11 +470,11 @@ func chapterShareStructureIn(state *AppState, book string, chapter int) (string,
 			// there does not fail loudly; the locate simply misses and the text
 			// is returned unbroken, so a psalm ships as one running line.
 			//
-			// That is exactly what happened when chapterProse moved to the
-			// outbound form and this did not: the divergence was invisible on
+			// That is exactly what happened when chapterProse moved to a new
+			// form and this did not: the divergence was invisible on
 			// every verse WITHOUT a SmallCaps span, which is every verse the
 			// shipped WEB gospels contain.
-			source := verseOutboundText(verse)
+			source := verseSharedText(verse)
 			text, verseBreaks := verseShareStructure(source)
 			if text == "" {
 				continue
@@ -599,24 +599,24 @@ func normalizeShareSelectionIn(state *AppState, book string, chapter int, raw st
 	// built from the publisher's letters; stripping first left the token in
 	// place on every divine-name verse, the locate missed, and a whole-verse
 	// share of exactly those verses fell back to the legacy probe path. So
-	// the selection goes to the outbound form first, and stripVerseMarkers
-	// compares against bodies in that same form (verseOutboundText).
+	// the selection goes to the shared form first, and stripVerseMarkers
+	// compares against bodies in that same form (verseSharedText).
 	//
 	// An earlier version of this comment gave the opposite order a reason —
-	// that the strip matched SUPERSCRIPT tokens which outboundText would have
+	// that the strip matched SUPERSCRIPT tokens which the conversion would have
 	// turned into digits. It does not: it matches ordinary digits, and every
 	// pane hands over ordinary digits. The reason was false and the order it
 	// justified was the defect.
 	//
 	// collapseSpaces has already dealt with the no-break join and the
 	// paragraph indent, because strings.Fields treats them as whitespace. What
-	// outboundText adds is the two the share path had no way to reach: the
-	// small capitals the divine name is DRAWN in, and an omitted verse's
-	// "[36]" mark. Both matter twice over — they would ride out into the
-	// reader's message as characters no publisher sent, and neither exists in
-	// chapterProse, so the locate below could never find a selection carrying
-	// one and every such share fell back to the legacy probe path.
-	out := outboundText(flat)
+	// sharedText adds is the omitted verse's "[36]" mark, which would ride out
+	// into the reader's message as a character no publisher sent and which
+	// chapterProse does not contain, so a selection carrying it could never be
+	// located. The divine name's small capitals it deliberately KEEPS — a share
+	// sends what the page shows (outbound_text.go) — and chapterProse is built
+	// in that same drawn form, so they locate.
+	out := sharedText(flat)
 	s := stripVerseMarkers(state, book, chapter, out)
 	corpus, spans := chapterProseIn(state, book, chapter)
 	if s == "" || corpus == "" {
@@ -683,10 +683,10 @@ func normalizeShareSelectionIn(state *AppState, book string, chapter int, raw st
 		// matching is ever loosened. A repair that can only touch a selection
 		// already known to be unresolvable cannot move an ordinary reader's
 		// note to the wrong verse, whatever the matching decides.
-		// The retry works from the OUTBOUND form, as the first pass did: the
+		// The retry works from the shared form, as the first pass did: the
 		// corpus it searches is in that form, and a candidate rebuilt from
-		// the drawn text would still carry the small capitals or the gap
-		// mark that made the first locate miss.
+		// the raw selection would still carry the gap mark or the superscript
+		// that made the first locate miss.
 		if h := stripHeadings(state, book, chapter, out); h != out {
 			if r := stripVerseMarkers(state, book, chapter, h); r != "" {
 				if j := locate(r); j >= 0 {
@@ -1079,16 +1079,16 @@ func numberTokenIndex(s, num string) int {
 	return -1
 }
 
-// stripVerseMarkers takes a selection in the OUTBOUND form (outboundText has
-// run on it) and compares each token's aftermath with the verse body in that
-// same form. The two must agree byte for byte for the token to be confirmed,
-// which is why the body is verseOutboundText and not the stored Verse.Text: a
-// divine-name verse is drawn in small capitals, leaves as capitals, and is
-// stored in the publisher's mixed case — three forms of one word, and only
-// the outbound one is shared between the selection and the corpus.
+// stripVerseMarkers takes a selection in the SHARED form (sharedText has run
+// on it) and compares each token's aftermath with the verse body in that same
+// form. The two must agree byte for byte for the token to be confirmed, which
+// is why the body is verseSharedText and not the stored Verse.Text: a
+// divine-name verse is drawn in small capitals and stored in the publisher's
+// mixed case, and only the drawn form is shared between the selection and the
+// corpus.
 func stripVerseMarkers(state *AppState, book string, chapter int, s string) string {
 	for _, v := range state.Bible.GetChapter(book, chapter) {
-		body := collapseSpaces(verseOutboundText(v))
+		body := collapseSpaces(verseSharedText(v))
 		if body == "" {
 			continue
 		}
