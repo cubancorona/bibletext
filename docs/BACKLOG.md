@@ -66,11 +66,22 @@ wrap the whole word, as the `fallback < 1` branch already does.
 
 Reachable on every platform through **search result cards**, whose highlight
 segments start mid-line; also on the Android RichText fallback pane, which a
-working install does not reach. Made worse by the search highlighter matching
-SUBSTRINGS: the term "he" is highlighted inside "the" and "she", putting a
-segment boundary inside a word. Two fixes, independent: a toolkit patch beside
-the existing ones in `patches/`, and word-bounded highlighting in
-`matchRanges` (search.go).
+working install does not reach. A highlight that starts inside a word — "he"
+in "the" — puts a segment boundary there, so the cut can land mid-word even
+in a short term.
+
+The fix is the toolkit patch, beside the existing ones in `patches/`. An
+earlier version of this entry also proposed word-bounded highlighting in
+`matchRanges`; that was wrong. Keyword search itself matches substrings
+(`BibleData.Search` is `strings.Contains` on the lowered text), so a verse
+found for "he" was found because of the "he" in "the", and highlighting it
+there is the honest answer to why it matched. Word-bounded highlighting would
+hide some splits by misreporting the match.
+
+One real mismatch sits beside it: search matches the query as a PHRASE, while
+the highlighter splits it into words (`strings.Fields` in search.go), so
+"he said" finds the phrase but highlights every "he" and "said" in the card.
+Minor; worth aligning if search itself is ever revisited.
 
 ## One universal macOS download instead of two — DONE 17 September 2026
 
