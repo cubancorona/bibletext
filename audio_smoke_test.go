@@ -73,15 +73,18 @@ func TestDesktopAudioEndToEnd(t *testing.T) {
 	// WHAT IS ACTUALLY CARRYING THE SAMPLES. Asked here, once playback has
 	// started, because the driver is chosen asynchronously while the first
 	// buffer is prepared — ask any earlier and the answer is "nothing yet".
+	// The decision is audioBackendProof's, not a length check: the null sink
+	// leaves MMDevAPI.dll and winmm.dll mapped from the failed attempts, so a
+	// gate that fails only on an empty list can never fire on the runner it
+	// was written for. That is how the first version shipped.
 	if mods, probed := audioBackendModules(); probed {
-		if len(mods) == 0 {
-			t.Fatalf("no audio backend is loaded in this process: oto found no endpoint and " +
-				"installed its silent nullContext, so every state this test checks can pass " +
-				"with nothing reaching a speaker. Run it where an audio endpoint exists " +
-				"and the backend names itself: AUDIOSES.DLL and MMDevAPI.dll for WASAPI, " +
-				"winmm.dll for WinMM.")
+		ok, why := audioBackendProof(mods)
+		if !ok {
+			t.Fatalf("no real audio backend is carrying the samples -- %s. oto installed its "+
+				"silent nullContext, so every state this test checks can pass with nothing "+
+				"reaching a speaker. Run it where an audio endpoint exists.", why)
 		}
-		t.Logf("✓ audio backend in use: %v", mods)
+		t.Logf("✓ audio backend in use: %s", why)
 	}
 
 	t.Log("skip +15s while playing…")

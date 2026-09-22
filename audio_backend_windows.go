@@ -17,10 +17,15 @@ package bibletext
 // the failure was read as a defect in the app.
 //
 // The backend leaves a fingerprint the process can read: COM activation of the
-// MMDevice enumerator pulls AUDIOSES.DLL and MMDevAPI.dll into the address
-// space, and the WinMM path pulls winmm.dll. The null sink loads neither.
-// GetModuleHandleW asks whether a module is ALREADY loaded and never loads one
-// itself, so the question is free of side effects and cannot change the answer.
+// MMDevice enumerator pulls MMDevAPI.dll into the address space, the WinMM
+// attempt pulls winmm.dll, and a WASAPI stream that was actually set up pulls
+// AUDIOSES.DLL when the audio client is activated. The first two are mapped
+// on the ATTEMPT and stay mapped when no device is found -- the null sink has
+// them too -- so only the third is proof; the decision about that list lives
+// in audio_backend_proof.go, where it can be tested on every OS. This file
+// only gathers the list. GetModuleHandleW asks whether a module is ALREADY
+// loaded and never loads one itself, so the question is free of side effects
+// and cannot change the answer.
 
 import (
 	"syscall"

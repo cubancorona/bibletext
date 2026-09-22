@@ -14,6 +14,12 @@
 # than continuing; the honest reading of a failure here is "this runner has no
 # audio", not "the app is broken".
 #
+# What counts as proof is AUDIOSES.DLL being mapped, and only that: oto loads
+# MMDevAPI.dll and winmm.dll on the ATTEMPT to find a device and leaves them
+# mapped when it finds none, so their presence is the null sink's fingerprint
+# too. The first version of the gate accepted any of the three and could never
+# fire here (audio_backend_proof.go holds the decision and its test).
+#
 # To exercise the real WASAPI path, run it on a Windows machine that has an
 # audio endpoint; a virtualised guest qualifies, and the test names the backend
 # it got so the evidence is in the log rather than assumed.
