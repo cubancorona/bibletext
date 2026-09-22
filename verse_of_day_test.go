@@ -2,6 +2,7 @@ package bibletext
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 	"testing"
 	"time"
@@ -606,4 +607,86 @@ func TestTheCardSetsChristsWordsInRed(t *testing.T) {
 	if red, _ := count(); red != 0 {
 		t.Errorf("red letter off: %d fragments are still red", red)
 	}
+}
+
+// A SPACE THAT IS A RUN OF ITS OWN MUST SURVIVE THE CARD.
+//
+// Red-letter spans routinely stop at a word and restart after the space, so
+// the space between them is a run with no words in it. The card's wrapper
+// used to carry a run's trailing space by tagging that run's last word, which
+// a lone-space run does not have, and the space vanished: WEB Matthew 5:18
+// read "letteror one tiny pen strokeshall" on the card while every reading
+// pane read it correctly. Measured across fresh downloads of every edition,
+// the card lost 129 spaces in the WEB, 128 in the WEBC and 1,302 in the NKJV
+// this way; the BSB, whose spans carry their spaces, lost none.
+func TestTheVerseOfTheDayCardKeepsASpaceThatIsARunOfItsOwn(t *testing.T) {
+	v := Verse{BookName: "Matthew", Book: "Matthew", Chapter: 5, Verse: 18,
+		Text: "For most certainly, I tell you, until heaven and earth pass away, not even one smallest " +
+			"letter or one tiny pen stroke shall in any way pass away from the law, until all things are accomplished."}
+	runs := redLetterRuns("web", v, true)
+	lone := 0
+	for _, r := range runs {
+		if strings.TrimSpace(r.Text) == "" && r.Text != "" {
+			lone++
+		}
+	}
+	// The premise: this verse really does reach the card as red runs split by
+	// lone-space runs. If the table ever changes so it does not, this test
+	// would pass without testing anything.
+	if lone == 0 {
+		t.Fatalf("premise broken: Matthew 5:18's red runs no longer contain a lone-space run: %#v", runs)
+	}
+	d := dayVerse{Book: "Matthew", Chapter: 5, Lo: 18, Hi: 18, Verses: []Verse{v}}
+	got := cardDrawnText(newReadingParagraph(d.runs("web", true), 16, color.Black, color.Black, nil, nil))
+	if want := strings.Join(strings.Fields(v.Text), " "); got != want {
+		t.Errorf("the card lost a space:\n got %q\nwant %q", got, want)
+	}
+}
+
+// The same property for every way a line can be cut into runs: any split
+// point, including one that leaves a run of nothing but space, must read back
+// as the words it started with, spaced as they were.
+func TestTheVerseOfTheDayCardPreservesEveryWordBoundaryWhereverTheRunsSplit(t *testing.T) {
+	lines := []string{
+		"Behold, I stand at the door and knock.",
+		"And Asahel was as fleet of foot as a wild gazelle.",
+		"a b",
+	}
+	for _, line := range lines {
+		rs := []rune(line)
+		// Every pair of cut points gives three runs; that covers a cut before
+		// a space, after it, and on both sides of it (a lone-space run).
+		for i := 0; i <= len(rs); i++ {
+			for j := i; j <= len(rs); j++ {
+				parts := []string{string(rs[:i]), string(rs[i:j]), string(rs[j:])}
+				var runs []cardRun
+				for k, p := range parts {
+					if p != "" {
+						runs = append(runs, cardRun{Text: p, Red: k == 1})
+					}
+				}
+				got := cardDrawnText(newReadingParagraph(runs, 16, color.Black, color.Black, nil, nil))
+				if got != line {
+					t.Fatalf("runs %q read back as %q, want %q", parts, got, line)
+				}
+			}
+		}
+	}
+}
+
+// cardDrawnText is the paragraph as the wrapper places it: a gap where it
+// places a gap, a line where it breaks one, and nothing where two fragments
+// are drawn flush.
+func cardDrawnText(p *readingParagraph) string {
+	var b strings.Builder
+	for i, f := range p.fragments() {
+		switch {
+		case f.breakBefore && i > 0:
+			b.WriteByte('\n')
+		case f.spaceBefore && i > 0:
+			b.WriteByte(' ')
+		}
+		b.WriteString(f.text)
+	}
+	return b.String()
 }

@@ -702,34 +702,43 @@ type paragraphFragment struct {
 	breakBefore bool
 }
 
+// A space between two runs belongs to the text wherever it sits: at the end
+// of one run, at the start of the next, or as a run of its OWN. The last case
+// is ordinary, not exotic — red-letter spans routinely stop at a word and
+// restart after the space ("Behold," | " " | "I stand at the door"), and an
+// italic supplied word can be followed by a lone space before the next one
+// ("was" | " " | "as"). An earlier version carried a run's trailing space by
+// tagging the run's last WORD, so a run with no words had nowhere to put its
+// space and dropped it: the card read "Behold,I stand at the door and
+// knock.If", while every reading pane, which keeps the lone-space run, read
+// correctly. A space seen and not yet placed is now simply pending until the
+// next word takes it.
 func (p *readingParagraph) fragments() []paragraphFragment {
 	var out []paragraphFragment
+	pending := false
 	for _, r := range p.runs {
-		leading := strings.HasPrefix(r.Text, " ")
 		words := strings.Fields(r.Text)
+		if len(words) == 0 {
+			if r.Break {
+				// A line break separates on its own; nothing is pending
+				// across it.
+				out = append(out, paragraphFragment{breakBefore: true})
+				pending = false
+			} else if r.Text != "" {
+				pending = true // a run of nothing but space
+			}
+			continue
+		}
+		leading := unicode.IsSpace([]rune(r.Text)[0])
 		for i, w := range words {
 			out = append(out, paragraphFragment{
 				text: w, red: r.Red, italic: r.Italic,
-				spaceBefore: i > 0 || leading,
+				spaceBefore: i > 0 || leading || (i == 0 && pending),
 				breakBefore: i == 0 && r.Break,
 			})
 		}
-		if len(words) == 0 && r.Break {
-			out = append(out, paragraphFragment{breakBefore: true})
-		}
-		if len(words) > 0 && strings.HasSuffix(r.Text, " ") && len(out) > 0 {
-			// The space belongs to the text; carry it to the next fragment.
-			out[len(out)-1].text += "\u0000" // marker consumed below
-		}
-	}
-	// Resolve the trailing-space markers into spaceBefore on the follower.
-	for i := range out {
-		if strings.HasSuffix(out[i].text, "\u0000") {
-			out[i].text = strings.TrimSuffix(out[i].text, "\u0000")
-			if i+1 < len(out) {
-				out[i+1].spaceBefore = true
-			}
-		}
+		rs := []rune(r.Text)
+		pending = unicode.IsSpace(rs[len(rs)-1])
 	}
 	return out
 }
