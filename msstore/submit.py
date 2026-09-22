@@ -59,7 +59,8 @@ _ms = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_ms)
 
 API = _ms.API
-IDENTITY = json.load(open(os.path.join(HERE, "identity.json")))
+with open(os.path.join(HERE, "identity.json")) as _f:
+    IDENTITY = json.load(_f)
 STORE_ID = IDENTITY["storeId"]
 
 STATE_DIR = os.path.join(REPO, "build", "msstore")
@@ -98,7 +99,8 @@ def redact_text(s: str) -> str:
 
 
 def http(method: str, url: str, token: str | None = None, body: bytes | None = None,
-         content_type: str = "application/json", extra: dict | None = None):
+         content_type: str = "application/json", extra: dict | None = None,
+         timeout: int = 900):
     """Transport only. Returns (status, headers, raw bytes) and parses nothing.
 
     msstore.py's fetch() calls json.load() unconditionally, which raises on the
@@ -116,7 +118,7 @@ def http(method: str, url: str, token: str | None = None, body: bytes | None = N
         headers.update(extra)
     req = urllib.request.Request(url, data=body, method=method, headers=headers)
     try:
-        with urllib.request.urlopen(req, timeout=900) as r:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.status, dict(r.headers), r.read()
     except urllib.error.HTTPError as e:
         raw = e.read()
@@ -309,12 +311,23 @@ def cmd_create(d: str, publish_mode: str):
 
     print("\n==> creating the submission (a copy of the last published one)")
     sub = api("POST", f"/applications/{STORE_ID}/submissions", tok)
-    sid = sub["id"]
+    # The id goes to disk the instant it is known and BEFORE anything is
+    # checked about the response. From this line on the server holds a live
+    # pending submission, and `abort` can only reach it by that id: an exit
+    # between the POST and the write would leave an orphan that preflight then
+    # reports as someone else's work and steers the operator away from
+    # deleting. Record first; judge second.
+    sid = sub.get("id")
+    if sid:
+        save_state(submissionId=sid, created=time.time(), committed=False, publishMode=publish_mode,
+                   packages=[{k: p[k] for k in ("fileName", "sha256", "bytes", "architecture")} for p in pkgs])
+    else:
+        raise SystemExit("the created submission carries no id; check the account in Partner Center "
+                         "for a pending submission before creating another")
     upload_url = sub.get("fileUploadUrl")
     if not upload_url:
-        raise SystemExit("the created submission carries no fileUploadUrl")
-    save_state(submissionId=sid, created=time.time(), committed=False, publishMode=publish_mode,
-               packages=[{k: p[k] for k in ("fileName", "sha256", "bytes", "architecture")} for p in pkgs])
+        raise SystemExit(f"the created submission {sid} carries no fileUploadUrl; "
+                         f"delete it with: msstore/submit.py abort")
     print(f"    id {sid}  status {sub.get('status')}")
     print(f"    upload {redact(upload_url)}")
 
@@ -331,6 +344,28 @@ def cmd_create(d: str, publish_mode: str):
         print(f"\n    cloned packages ({len(cloned_pkgs)}):")
         for p in cloned_pkgs:
             print(f"      {p.get('fileName')}  {p.get('version')}  {p.get('architecture')}  {p.get('fileStatus')}")
+
+        # The rollback story rests on "the Store serves the highest applicable
+        # version, so the new package wins over the kept one". That is only
+        # true if the new one IS higher, and both sides are in hand here, so
+        # it is asserted rather than assumed -- per architecture, since the
+        # kept x64 package says nothing about an arm64 one. And a new package
+        # must not share a fileName with a kept entry: verify_staged keys the
+        # server's list by fileName, and two entries under one name collapse
+        # to whichever the server listed last.
+        def vtuple(v):
+            return tuple(int(x) for x in (v or "0").split("."))
+        kept_names = {p.get("fileName") for p in cloned_pkgs}
+        for p in pkgs:
+            if p["fileName"] in kept_names:
+                raise SystemExit(f"{p['fileName']} is already a package in the published submission; "
+                                 f"a new package needs a new name")
+            for k in cloned_pkgs:
+                if k.get("architecture") == p["architecture"] and k.get("fileStatus") == "Uploaded" \
+                        and vtuple(p["version"]) <= vtuple(k.get("version")):
+                    raise SystemExit(f"{p['fileName']} is {p['version']}, not above the kept "
+                                     f"{k.get('version')} {k.get('architecture')} package; the Store "
+                                     f"would keep serving the old one")
 
         body = copy.deepcopy(sub)
         body.pop("fileUploadUrl", None)
@@ -371,13 +406,16 @@ def cmd_create(d: str, publish_mode: str):
         data = open(zip_path, "rb").read()
         # No Authorization header: the SAS query string IS the authorization,
         # and the manage.devcenter token must never leave that host.
+        # A single deadline for the whole body: 54 MB on a slow uplink is a
+        # correct run that 900 s would cut off, so this one call gets an hour.
         status, _h, raw = http("PUT", url, None, data, "application/zip",
-                               {"x-ms-blob-type": "BlockBlob"})
+                               {"x-ms-blob-type": "BlockBlob"}, timeout=3600)
         if status != 201:
             raise SystemExit(f"blob upload returned {status}, expected 201")
         print(f"    201 Created")
 
         verify_staged(sid, pkgs, publish_mode, sub)
+        save_state(verified=True)
         print(f"\ncreated and staged, NOT committed. Nothing public has changed.")
         print(f"  commit:  msstore/submit.py commit")
         print(f"  abort :  msstore/submit.py abort")
@@ -417,6 +455,12 @@ def verify_staged(sid: str, pkgs: list[dict], publish_mode: str, clone: dict):
     # Partner Center reads them out of the MSIX manifest rather than
     # taking them from us -- which is also why they are not sent. Asserting
     # on them here fails a submission that is in fact correct.
+    names = [p.get("fileName") for p in (fresh.get("applicationPackages") or [])]
+    for n in sorted({n for n in names if names.count(n) > 1}):
+        # Keyed by fileName below, so two entries under one name would collapse
+        # to whichever the server listed last and the check would inspect the
+        # wrong one.
+        problems.append(f"{n!r} appears {names.count(n)} times in the stored package list")
     stored = {p.get("fileName"): p.get("fileStatus")
               for p in (fresh.get("applicationPackages") or [])}
     for p in pkgs:
@@ -464,6 +508,14 @@ def cmd_commit():
         raise SystemExit("no submission recorded; run create first")
     if s.get("committed"):
         raise SystemExit(f"{sid} was already committed")
+    # Commit is the irreversible step, and it takes the server's word that the
+    # staged submission is what we meant only through verify_staged. create
+    # runs that; so does `verify <dir>`, which also proves the bytes on disk are
+    # the bytes that were uploaded. Neither having run is not a state to commit
+    # from.
+    if not s.get("verified"):
+        raise SystemExit(f"{sid} has not been verified against the server since it was staged; "
+                         f"run: msstore/submit.py verify <dir>")
     tok = token()
     fresh = api("GET", f"/applications/{STORE_ID}/submissions/{sid}", tok)
     if fresh.get("status") != "PendingCommit":
@@ -482,10 +534,16 @@ def cmd_poll():
     sid = s.get("submissionId")
     if not sid:
         raise SystemExit("no submission recorded")
+    # Polls until the commit has been TAKEN -- until the status leaves
+    # CommitStarted -- and then says where it landed. It does not sit through
+    # certification: that is up to three business days, and release-status.py
+    # answers "where is it now" at any point. What it must never do is exit 0
+    # on a failure. CommitFailed is a terminal state, and the earlier version
+    # printed it and returned as if it were progress.
     tok, n = token(), 0
     while True:
         r = api("GET", f"/applications/{STORE_ID}/submissions/{sid}/status", tok)
-        st = r.get("status")
+        st = r.get("status") or ""
         print(f"  {time.strftime('%H:%M:%S')}  {st}")
         det = r.get("statusDetails") or {}
         for e in det.get("errors") or []:
@@ -493,7 +551,17 @@ def cmd_poll():
         for w in det.get("warnings") or []:
             print(f"    warning {w.get('code')}: {redact_text(str(w.get('details')))}")
         if st != "CommitStarted":
-            return
+            save_state(commitStatus=st)
+            if st.endswith("Failed") or st == "Canceled":
+                print(f"  the commit did not go through: {st}")
+                return 1
+            if st in ("PreProcessing", "Certification", "Release", "Publishing",
+                      "PendingPublication", "Published"):
+                print(f"  the commit was taken; it is now {st}. Certification takes up to three "
+                      f"business days -- scripts/release-status.py shows where it is.")
+                return 0
+            print(f"  unexpected status {st!r}; treating it as not proven")
+            return 1
         n += 1
         if n % 10 == 0:
             tok = token()
@@ -564,14 +632,26 @@ def main(argv):
                 clone = json.load(f)
         except FileNotFoundError:
             raise SystemExit(f"{clone_path} is missing; verify has nothing to compare the server against")
-        verify_staged(s["submissionId"], read_packages(argv[2]), s.get("publishMode") or mode, clone)
+        pkgs = read_packages(argv[2])
+        # The bytes on disk must be the bytes create uploaded. The digests were
+        # recorded for exactly this, and a directory rebuilt since create would
+        # otherwise pass verify unchanged -- the server has the old bytes and
+        # the operator is looking at new ones.
+        recorded = {p["fileName"]: p["sha256"] for p in (s.get("packages") or [])}
+        for p in pkgs:
+            if recorded.get(p["fileName"]) != p["sha256"]:
+                raise SystemExit(f"{p['fileName']} on disk (sha256 {p['sha256'][:16]}) is not the file "
+                                 f"create uploaded ({(recorded.get(p['fileName']) or '?')[:16]}); "
+                                 f"the server holds different bytes from the ones you are looking at")
+        verify_staged(s["submissionId"], pkgs, s.get("publishMode") or mode, clone)
+        save_state(verified=True)
         return 0
     if cmd == "create":
         cmd_create(argv[2], mode); return 0
     if cmd == "commit":
         cmd_commit(); return 0
     if cmd == "poll":
-        cmd_poll(); return 0
+        return cmd_poll()
     if cmd == "abort":
         cmd_abort(); return 0
     print(__doc__.strip(), file=sys.stderr)

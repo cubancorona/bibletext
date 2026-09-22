@@ -52,7 +52,12 @@ def asc(method, path, body=None):
     if not os.path.exists(ASC):
         sys.exit(f"cannot find {ASC} (build/ is gitignored — see docs/APP_STORE_SUBMISSION.md)")
     cmd = [sys.executable, ASC, method, path] + ([json.dumps(body)] if body is not None else [])
-    out = subprocess.run(cmd, capture_output=True, text=True)
+    # Every ASC call is seconds; a hung connection must not block a release
+    # step, or the status tool that imports this, indefinitely.
+    try:
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    except subprocess.TimeoutExpired:
+        sys.exit(f"App Store Connect {method.upper()} {path} did not answer within 300 s")
     text = out.stdout
     status = text.split("\n", 1)[0].strip() if text[:3].isdigit() else ""
     if "{" not in text:
