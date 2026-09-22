@@ -7,6 +7,45 @@ the date — and says what shipped and why. Closed entries earn their place: thi
 is the file to read before re-investigating a defect that may already be fixed,
 and a fix's reasoning is the expensive half to reconstruct.
 
+## One way to turn a verse into drawn words, not two
+
+Found 22 September 2026 by the spacing audit (`spacing_audit_test.go`). Two
+surfaces draw a verse word by word on a canvas rather than handing text to an
+engine: the styled desktop pane and the verse-of-the-day card. They tokenise
+differently. The pane tokenises the WHOLE verse text once and colours each
+token by offset (verseTokens, redLetterTokenFlags), so it never has to decide
+where a space goes. The card tokenised each RUN and re-derived the spaces
+between runs — a second implementation of spacing — and dropped any space that
+was a run of its own, which red-letter spans produce constantly: 1,302 lost
+spaces in the NKJV, 129 in the WEB. That is fixed and property-tested, but the
+second implementation is still there.
+
+The durable fix is one shared function — verse (or passage) in, a sequence of
+words out, each word carrying its styled pieces and whether a space or a line
+break precedes it — derived by tokenising the verse text once, so a space
+cannot live at a run boundary. Both word-drawing surfaces consume it. Carry
+the card's rune-level colour splitting into it rather than the pane's
+whole-token rule, or two BSB verses (Mark 7:34, Acts 20:35) change colour on
+the card. Keep the audit as the cross-surface guard either way.
+
+## Fyne's RichText breaks a word mid-word at the start of a segment
+
+Found 22 September 2026, same audit. When a segment begins partway along a
+line and its first word does not fit what is left, `lineBounds` (Fyne 2.7.4,
+widget/richtext.go) measures against the remaining width, finds no space
+inside it, and `findSpaceIndex` returns the character fallback — so the word
+is cut ("Bein" / "g therefore") instead of moving to the next line. The right
+behaviour when the row is a partial first line is to emit an empty boundary and
+wrap the whole word, as the `fallback < 1` branch already does.
+
+Reachable on every platform through **search result cards**, whose highlight
+segments start mid-line; also on the Android RichText fallback pane, which a
+working install does not reach. Made worse by the search highlighter matching
+SUBSTRINGS: the term "he" is highlighted inside "the" and "she", putting a
+segment boundary inside a word. Two fixes, independent: a toolkit patch beside
+the existing ones in `patches/`, and word-bounded highlighting in
+`matchRanges` (search.go).
+
 ## One universal macOS download instead of two — DONE 17 September 2026
 
 The direct download offers `BibleText-macOS-AppleSilicon.zip` and

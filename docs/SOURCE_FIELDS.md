@@ -108,6 +108,43 @@ canon, and the available word lists disagree about common inflections.
 So there is no local signal, and manufacturing one would be an editorial act on
 someone else's edition. The verses stand as the provider sends them.
 
+### Re-counted from a fresh download, 22 September 2026
+
+The whole edition was downloaded again, every chapter's raw JSON walked
+(`scripts/nkjv-upstream-joins.py`), and every note whose visible neighbours on
+both sides lack a space classified by hand-checked rules:
+
+| reading | notes |
+|---|---|
+| a space is missing | **286, in 275 verses** |
+| correct: the NKJV's closed em-dash (`are—northward`) | 60 |
+| correct: a note after an opening quotation mark or bracket | 8 |
+| correct: word-internal, already known (`young|est`, `j|ust`, `th|e`) | 3 |
+
+The em-dash row matters because it is the one a naive count gets wrong: the
+edition sets its em-dash closed, so a note beside one legitimately meets a
+letter, and a rule that inserted a space there would damage sixty verses to
+repair none. The book profile is the one recorded on 7 September — Job 41
+verses, Isaiah 39, Jeremiah 28, Acts 17 — so the defect has neither been
+fixed nor grown; the difference from 259 is the stricter per-chapter walk.
+Every missing space is present, joined the same way, in the app's own decoded
+text, which is the confirmation that the decoder reproduces the provider
+faithfully rather than adding to it.
+
+It is noticed often out of proportion to its size — under one verse in a
+hundred — because it concentrates where people read: the words of Christ,
+where cross references break the red-letter spans (Acts 9:15–16 alone has
+five), and the poetry of Job and the prophets.
+
+**Not to be confused with a defect of the app's own**, found in the same pass:
+the verse-of-the-day card dropped any space that formed a run of its own
+between two red-letter or italic spans, in every edition that has such spans
+(1,302 in the NKJV, 129 in the WEB, 128 in the WEBC, none in the BSB), while
+every reading pane showed the same verses correctly. That was fixed in the
+card's word-wrapper (verse_of_day.go); `spacing_audit_test.go`, run with the
+`spacingaudit` tag against fresh downloads, holds eleven surfaces in four
+editions to the decoded text and is how both were told apart.
+
 ### What to do about it
 
 Report it upstream. It is the provider's defect, and only the provider can fix
