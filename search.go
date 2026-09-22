@@ -95,7 +95,7 @@ func buildSearchResultsView(state *AppState) fyne.CanvasObject {
 	subLabel := canvas.NewText(sub, pal.TextMuted)
 	subLabel.TextSize = subheadingTextSize
 
-	terms := strings.Fields(strings.ToLower(trimmed))
+	terms := highlightTermsFor(trimmed)
 
 	rows := make([]fyne.CanvasObject, 0, len(state.SearchResults))
 	for _, verse := range state.SearchResults {
@@ -590,6 +590,28 @@ type matchRange struct {
 
 // termHighlightSegments splits text into RichText segments, emphasising every
 // occurrence of the search terms. Matching is case-insensitive.
+// highlightTermsFor is what a result card highlights for a keyword query:
+// the query as ONE phrase, exactly what BibleData.Search looked for.
+//
+// Search matches the whole query as a substring of the lowered verse, so a
+// verse found for "he said" was found because "he said" occurs in it. The card
+// used to split the query into words and highlight each one wherever it
+// appeared, so the same verse lit up every "he" — inside "the", "she", "then" —
+// and every "said", which is not why it matched. Highlighting inside a word is
+// still right for a one-word query: search is substring search, and the "he"
+// in "the" is genuinely where a search for "he" matched.
+//
+// Whitespace is collapsed to single spaces because the card text is (see
+// searchResultRow), and the search index turns authored line breaks into
+// spaces, so a phrase that spans a poem line still lights up.
+func highlightTermsFor(query string) []string {
+	phrase := strings.Join(strings.Fields(strings.ToLower(query)), " ")
+	if phrase == "" {
+		return nil
+	}
+	return []string{phrase}
+}
+
 func termHighlightSegments(text string, terms []string, base, highlight fyne.ThemeColorName) []widget.RichTextSegment {
 	ranges := matchRanges(text, terms)
 	if len(ranges) == 0 {

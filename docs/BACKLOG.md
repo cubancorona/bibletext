@@ -78,10 +78,10 @@ found for "he" was found because of the "he" in "the", and highlighting it
 there is the honest answer to why it matched. Word-bounded highlighting would
 hide some splits by misreporting the match.
 
-One real mismatch sits beside it: search matches the query as a PHRASE, while
-the highlighter splits it into words (`strings.Fields` in search.go), so
-"he said" finds the phrase but highlights every "he" and "said" in the card.
-Minor; worth aligning if search itself is ever revisited.
+One real mismatch sat beside it, FIXED 22 September 2026: search matches the
+query as a PHRASE, while the highlighter split it into words, so "he said"
+found the phrase but highlighted every "he" and "said" in the card. The card
+now highlights the phrase (`highlightTermsFor`, search.go).
 
 ## One universal macOS download instead of two — DONE 17 September 2026
 

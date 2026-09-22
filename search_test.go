@@ -449,3 +449,38 @@ func TestOnlyOneModeControlIsEverFilled(t *testing.T) {
 		}
 	}
 }
+
+// A card highlights why its verse matched. Search looks for the whole query as
+// one phrase, so the card highlights the phrase — not every occurrence of each
+// word, which lit up the "he" in "the" and "she" for a search that asked for
+// "he said".
+func TestTheResultCardHighlightsThePhraseTheSearchMatched(t *testing.T) {
+	card := "Then he said to her, “She is the one he said would come.”"
+	segs := termHighlightSegments(card, highlightTermsFor("  He   SAID "), colorNameVerseText, colorNameHighlightHi)
+	var lit []string
+	for _, s := range segs {
+		if ts, ok := s.(*widget.TextSegment); ok && ts.Style.ColorName == colorNameHighlightHi {
+			lit = append(lit, ts.Text)
+		}
+	}
+	if len(lit) != 2 || lit[0] != "he said" || lit[1] != "he said" {
+		t.Errorf("highlighted %q, want the phrase twice and nothing else", lit)
+	}
+
+	// A one-word query still highlights inside a word: search is substring
+	// search, so that is where it matched.
+	one := termHighlightSegments("the shepherd", highlightTermsFor("he"), colorNameVerseText, colorNameHighlightHi)
+	n := 0
+	for _, s := range one {
+		if ts, ok := s.(*widget.TextSegment); ok && ts.Style.ColorName == colorNameHighlightHi {
+			n++
+		}
+	}
+	if n != 3 {
+		t.Errorf("a one-word query lit %d places in %q, want 3 (t-HE, s-HE-p-HE-rd)", n, "the shepherd")
+	}
+
+	if highlightTermsFor("   ") != nil {
+		t.Error("an empty query produced a highlight term")
+	}
+}
