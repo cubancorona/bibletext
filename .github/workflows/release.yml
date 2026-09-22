@@ -470,7 +470,34 @@ jobs:
               exit 1
             }
           done
-          echo "windows ${{ matrix.goarch }} zip carries the executable and all three ANGLE libraries"
+          # AND THE ARCHITECTURE, NOT ONLY THE NAMES. The ANGLE fetch is driven
+          # by a separate matrix value from the Go build, so a swapped row would
+          # ship an arm64 executable beside x64 libraries: every name present,
+          # every check above green, and no window on a Windows-on-ARM machine.
+          # Read the PE machine word of the executable and of each library and
+          # hold all four to this row's goarch; and refuse an empty member, which
+          # a name listing cannot see either. Same probe msstore/submit.py runs on
+          # the Store package before it is uploaded.
+          rm -rf "$RUNNER_TEMP/zipcheck" && mkdir -p "$RUNNER_TEMP/zipcheck"
+          7z x -o"$RUNNER_TEMP/zipcheck" "BibleText-Windows-${{ matrix.goarch }}.zip" >/dev/null
+          PY="$(command -v python3 || command -v python)"
+          "$PY" - "$RUNNER_TEMP/zipcheck" "${{ matrix.goarch }}" <<'PYEOF'
+          import os, struct, sys
+          root, goarch = sys.argv[1], sys.argv[2]
+          want = {"amd64": 0x8664, "arm64": 0xAA64}[goarch]
+          for name in ("BibleText.exe", "libEGL.dll", "libGLESv2.dll", "d3dcompiler_47.dll"):
+              path = next((os.path.join(d, name) for d, _, fs in os.walk(root) if name in fs), None)
+              if path is None or os.path.getsize(path) == 0:
+                  sys.exit(f"::error::{name} is missing or empty inside the {goarch} zip")
+              with open(path, "rb") as f:
+                  head = f.read(1024)
+              off = struct.unpack_from("<I", head, 0x3C)[0]
+              machine = struct.unpack_from("<H", head, off + 4)[0]
+              if machine != want:
+                  sys.exit(f"::error::{name} in the {goarch} zip is built for machine {machine:#06x}, want {want:#06x}")
+              print(f"{name}: machine {machine:#06x} ok, {os.path.getsize(path)} bytes")
+          PYEOF
+          echo "windows ${{ matrix.goarch }} zip carries the executable and all three ANGLE libraries, all built for ${{ matrix.goarch }}"
       - name: upload asset
         env:
           GH_TOKEN: ${{ github.token }}

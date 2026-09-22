@@ -114,8 +114,15 @@ func TestAngleIsPinnedSeparatelyForEachWindowsArchitecture(t *testing.T) {
 // tests pass"; Android had none anywhere — not in CI, not as a local script —
 // which is a gap this pair exists to keep closed.
 func TestBothMobilePlatformsHaveACompileGate(t *testing.T) {
+	// Android has TWO halves on the far side of the build tags: the Go sources
+	// (check-android-pane.sh) and the Java on the other side of the JNI
+	// boundary (check-android-java.sh). The Java gate was added after a
+	// silent-failure defect in BtBridge.shareImage survived every green run,
+	// and for a while this test did not name it -- so removing its ci.yml step
+	// would have passed here, which is the one thing this test exists to stop.
 	ci := readRepoFile(t, ".github/workflows/ci.yml")
-	for _, gate := range []string{"scripts/check-ios-pane.sh", "scripts/check-android-pane.sh"} {
+	gates := []string{"scripts/check-ios-pane.sh", "scripts/check-android-pane.sh", "scripts/check-android-java.sh"}
+	for _, gate := range gates {
 		if !strings.Contains(ci, gate) {
 			t.Errorf("ci.yml never runs %s; that platform's tagged sources are compiled by nothing", gate)
 		}
@@ -124,11 +131,14 @@ func TestBothMobilePlatformsHaveACompileGate(t *testing.T) {
 		}
 	}
 	// A gate that skips when its toolchain is missing reads as a pass and is
-	// worse than no gate; on a runner it must fail instead.
-	android := readRepoFile(t, "scripts/check-android-pane.sh")
-	if !strings.Contains(android, "${CI:-}") {
-		t.Error("check-android-pane.sh does not distinguish CI from a local run; " +
-			"a silent skip on a runner would report success while compiling nothing")
+	// worse than no gate; on a runner it must fail instead. Both Android
+	// gates need a toolchain the host may lack, so both must make the
+	// distinction.
+	for _, gate := range []string{"scripts/check-android-pane.sh", "scripts/check-android-java.sh"} {
+		if !strings.Contains(readRepoFile(t, gate), "${CI:-}") {
+			t.Errorf("%s does not distinguish CI from a local run; "+
+				"a silent skip on a runner would report success while compiling nothing", gate)
+		}
 	}
 }
 

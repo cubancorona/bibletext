@@ -113,7 +113,17 @@ type androidManifest struct {
 		Activities []struct {
 			IntentFilters []struct {
 				AutoVerify string `xml:"http://schemas.android.com/apk/res/android autoVerify,attr"`
-				Data       []struct {
+				// App Links verification needs VIEW, DEFAULT and BROWSABLE on
+				// the filter: without BROWSABLE the browser never hands the
+				// link over, without VIEW it matches nothing. A filter that
+				// has lost either is not a live claim, however good its data.
+				Actions []struct {
+					Name string `xml:"http://schemas.android.com/apk/res/android name,attr"`
+				} `xml:"action"`
+				Categories []struct {
+					Name string `xml:"http://schemas.android.com/apk/res/android name,attr"`
+				} `xml:"category"`
+				Data []struct {
 					Scheme      string `xml:"http://schemas.android.com/apk/res/android scheme,attr"`
 					Host        string `xml:"http://schemas.android.com/apk/res/android host,attr"`
 					PathPrefix  string `xml:"http://schemas.android.com/apk/res/android pathPrefix,attr"`
@@ -142,18 +152,47 @@ func TestAndroidManifestClaimsEveryLinkPath(t *testing.T) {
 			if f.AutoVerify != "true" {
 				continue
 			}
+			has := func(names []struct {
+				Name string `xml:"http://schemas.android.com/apk/res/android name,attr"`
+			}, want string) bool {
+				for _, n := range names {
+					if n.Name == want {
+						return true
+					}
+				}
+				return false
+			}
+			if !has(f.Actions, "android.intent.action.VIEW") ||
+				!has(f.Categories, "android.intent.category.DEFAULT") ||
+				!has(f.Categories, "android.intent.category.BROWSABLE") {
+				t.Errorf("an autoVerify intent-filter lacks VIEW, DEFAULT or BROWSABLE; Android will "+
+					"never verify it or hand a browser link to it (actions=%v categories=%v)",
+					f.Actions, f.Categories)
+				continue
+			}
 			filters++
+			// Android merges every <data> in one filter into a scheme set, a
+			// host set and a path set, so ONE wide element widens the whole
+			// filter. Every element is judged, whatever host it names -- a
+			// check scoped to the real host would skip exactly the element
+			// (host="*", host="*.bibletext.co.uk") that does the widening.
 			for _, d := range f.Data {
-				if d.Scheme == "https" && d.Host == SiteHost() {
-					if d.PathPrefix != "" {
-						claimed[strings.Trim(d.PathPrefix, "/")] = true
-					}
-					// A bare-host or wildcard claim would swallow the privacy
-					// and support URLs the stores point at.
-					if d.PathPrefix == "/" || d.PathPrefix == "" || d.PathPattern != "" {
-						t.Errorf("the manifest claims the whole host (pathPrefix=%q pathPattern=%q) — "+
-							"privacy and support must stay in the browser", d.PathPrefix, d.PathPattern)
-					}
+				if d.Scheme != "https" {
+					t.Errorf("the App Links filter carries scheme %q; only https is verified", d.Scheme)
+				}
+				if d.Host != SiteHost() {
+					t.Errorf("the App Links filter claims host %q; only %s may be claimed, and never a "+
+						"wildcard -- it would widen the filter to every https URL on that host set",
+						d.Host, SiteHost())
+				}
+				// A bare-host or wildcard claim would swallow the privacy
+				// and support URLs the stores point at.
+				if d.PathPrefix == "/" || d.PathPrefix == "" || d.PathPattern != "" {
+					t.Errorf("the manifest claims the whole host (host=%q pathPrefix=%q pathPattern=%q) — "+
+						"privacy and support must stay in the browser", d.Host, d.PathPrefix, d.PathPattern)
+				}
+				if d.Host == SiteHost() && d.PathPrefix != "" {
+					claimed[strings.Trim(d.PathPrefix, "/")] = true
 				}
 			}
 		}
