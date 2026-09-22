@@ -70,8 +70,36 @@ working install does not reach. A highlight that starts inside a word — "he"
 in "the" — puts a segment boundary there, so the cut can land mid-word even
 in a short term.
 
-The fix is the toolkit patch, beside the existing ones in `patches/`. An
-earlier version of this entry also proposed word-bounded highlighting in
+**Two mechanisms, measured 22 September 2026, and only one is a small patch.**
+
+1. *A word cut inside one segment.* Fyne already intends to start a new row
+   when a partly-filled row has no space in the part that fits — `if high ==
+   fallback && subWidth <= max.Width { // add a newline… }` — but the test is
+   broken twice: `high` is an absolute index and `fallback` is relative to
+   `low`, so it only works at the start of a segment; and it demands that the
+   WHOLE rest of the segment fit one full row, which a long run of text never
+   does. Adding `|| (measureWidth < max.Width && no space in sub[:fallback+1])`
+   fixes it. Measured with the spacing audit against the patched toolkit: the
+   mobile RichText pane went from 1,392 / 1,090 / 1,549 / 1,159 split words
+   (WEB / BSB / WEBC / NKJV) to 0 / 0 / 0 / 3, the three being correct breaks
+   after an em-dash or hyphen, and Fyne's own widget suite still passes. The
+   draft diff is small; it lives outside the repository until it ships.
+2. *A word split across two segments.* A highlight inside a word — "he" in
+   "the" — makes "t" and "he" separate segments, and Fyne treats every
+   segment boundary as a legal break. This is what search cards show, and
+   patch 1 does not move it (628 / 687 / 734 / 994 before, 631 / 690 / 738 /
+   994 after; the small rises are the corrected rows shifting, not new cuts).
+   Fixing it means keeping a word together ACROSS segments in RichText's row
+   layout: when a segment's first row is empty and the previous row ends in a
+   non-space that the new segment continues, the tail of that word has to move
+   down with it. That is a real change to Fyne's layout, not a one-line fix.
+
+Held out of 1.2.14 on the rule agreed for it — ship only if the search-card
+count fell to zero — since patch 1 alone does not touch what readers see on a
+working install. The natural next step is patch 1 plus the cross-segment fix
+together, verified with the same lens.
+
+An earlier version of this entry also proposed word-bounded highlighting in
 `matchRanges`; that was wrong. Keyword search itself matches substrings
 (`BibleData.Search` is `strings.Contains` on the lowered text), so a verse
 found for "he" was found because of the "he" in "the", and highlighting it
