@@ -302,13 +302,19 @@ func cleanQuoteText(state *AppState, raw string) string {
 	return cleanQuoteTextIn(state, book, chapter, raw)
 }
 
+// cleanQuoteTextIn is the legacy fallback's text pass, for a selection the
+// positional locate declined. It is still an outbound path, so outboundText
+// runs here too — the rule in outbound_text.go admits no exception for the
+// fallback, and a lone partial word like "Lᴏʀ" used to ship the app's own
+// small capitals through it. The marker probes are built from
+// verseOutboundText for the same reason stripVerseMarkers' bodies are.
 func cleanQuoteTextIn(state *AppState, book string, chapter int, raw string) string {
-	s := collapseSpaces(raw)
+	s := outboundText(collapseSpaces(raw))
 	if state == nil || state.Bible == nil {
 		return s
 	}
 	for _, v := range state.Bible.GetChapter(book, chapter) {
-		body := collapseSpaces(v.Text)
+		body := collapseSpaces(verseOutboundText(v))
 		if body == "" {
 			continue
 		}
@@ -585,10 +591,22 @@ func normalizeShareSelectionIn(state *AppState, book string, chapter int, raw st
 		return "", 0, 0, -1, false
 	}
 	flat := collapseSpaces(raw)
-	// The app's own typography comes off here, and AFTER stripVerseMarkers
-	// rather than before it: that strip matches the SUPERSCRIPT verse tokens,
-	// and outboundText would have turned them into ordinary digits first,
-	// leaving bare numbers embedded in the quote.
+	// The app's own typography comes off here, and BEFORE stripVerseMarkers.
+	// That strip confirms a verse-number token by comparing the text after it
+	// with the verse's body, and the two must be in the same form or the
+	// comparison fails at the first character that differs. The selection
+	// arrives as the page drew it — "1 The Lᴏʀᴅ is…" — and the bodies are
+	// built from the publisher's letters; stripping first left the token in
+	// place on every divine-name verse, the locate missed, and a whole-verse
+	// share of exactly those verses fell back to the legacy probe path. So
+	// the selection goes to the outbound form first, and stripVerseMarkers
+	// compares against bodies in that same form (verseOutboundText).
+	//
+	// An earlier version of this comment gave the opposite order a reason —
+	// that the strip matched SUPERSCRIPT tokens which outboundText would have
+	// turned into digits. It does not: it matches ordinary digits, and every
+	// pane hands over ordinary digits. The reason was false and the order it
+	// justified was the defect.
 	//
 	// collapseSpaces has already dealt with the no-break join and the
 	// paragraph indent, because strings.Fields treats them as whitespace. What
@@ -598,7 +616,8 @@ func normalizeShareSelectionIn(state *AppState, book string, chapter int, raw st
 	// reader's message as characters no publisher sent, and neither exists in
 	// chapterProse, so the locate below could never find a selection carrying
 	// one and every such share fell back to the legacy probe path.
-	s := outboundText(stripVerseMarkers(state, book, chapter, flat))
+	out := outboundText(flat)
+	s := stripVerseMarkers(state, book, chapter, out)
 	corpus, spans := chapterProseIn(state, book, chapter)
 	if s == "" || corpus == "" {
 		return "", 0, 0, -1, false
@@ -664,7 +683,11 @@ func normalizeShareSelectionIn(state *AppState, book string, chapter int, raw st
 		// matching is ever loosened. A repair that can only touch a selection
 		// already known to be unresolvable cannot move an ordinary reader's
 		// note to the wrong verse, whatever the matching decides.
-		if h := stripHeadings(state, book, chapter, flat); h != flat {
+		// The retry works from the OUTBOUND form, as the first pass did: the
+		// corpus it searches is in that form, and a candidate rebuilt from
+		// the drawn text would still carry the small capitals or the gap
+		// mark that made the first locate miss.
+		if h := stripHeadings(state, book, chapter, out); h != out {
 			if r := stripVerseMarkers(state, book, chapter, h); r != "" {
 				if j := locate(r); j >= 0 {
 					s, idx = r, j
@@ -1056,9 +1079,16 @@ func numberTokenIndex(s, num string) int {
 	return -1
 }
 
+// stripVerseMarkers takes a selection in the OUTBOUND form (outboundText has
+// run on it) and compares each token's aftermath with the verse body in that
+// same form. The two must agree byte for byte for the token to be confirmed,
+// which is why the body is verseOutboundText and not the stored Verse.Text: a
+// divine-name verse is drawn in small capitals, leaves as capitals, and is
+// stored in the publisher's mixed case — three forms of one word, and only
+// the outbound one is shared between the selection and the corpus.
 func stripVerseMarkers(state *AppState, book string, chapter int, s string) string {
 	for _, v := range state.Bible.GetChapter(book, chapter) {
-		body := collapseSpaces(v.Text)
+		body := collapseSpaces(verseOutboundText(v))
 		if body == "" {
 			continue
 		}
