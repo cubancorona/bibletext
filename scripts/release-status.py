@@ -106,8 +106,12 @@ def play(version: str) -> list[str]:
     finally:
         try:
             pp.call(f"{pp.BASE}/edits/{eid}", tok, method="DELETE")
-        except Exception:
-            pass       # a discarded edit expires on its own; never mask the rows
+        except (Exception, SystemExit):
+            # A discarded edit expires on its own. call() raises SystemExit on
+            # an HTTP error, and letting that escape from a finally would throw
+            # away every row already read above -- the cleanup must never cost
+            # the report.
+            pass
     return rows
 
 
@@ -185,9 +189,17 @@ def main() -> int:
         try:
             for row in fn(version):
                 print(f"  {row}")
-        except Exception as e:
+        except (Exception, SystemExit) as e:
             # Reported, never swallowed: an unreachable store must not read as
             # an up-to-date one.
+            #
+            # SystemExit is named on purpose. Every store helper this imports
+            # -- play-publish.py's call(), msstore/submit.py's http(), the ASC
+            # client -- signals an HTTP or credential failure by raising
+            # SystemExit, which is a BaseException and sails straight past a
+            # bare `except Exception`. Without it one store's 5xx killed the
+            # whole report instead of being printed as UNREACHABLE, which is
+            # the exact promise this tool makes.
             print(f"  UNREACHABLE: {type(e).__name__}: {str(e)[:200]}")
             failures.append(label)
         print()

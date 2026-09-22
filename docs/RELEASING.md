@@ -154,9 +154,18 @@ scripts/build-android.sh --release
 
 ### 4 — Read each artefact back
 
-Version, build number, minimum OS. Android through `bundletool dump manifest`;
-the desktop packages through `verify-release-package.sh`. Record the answers —
-an artefact that was never read back is an assumption.
+Version, build number, minimum OS — from the artefact, not the ledger. An
+artefact that was never read back is an assumption.
+
+The iOS and Mac scripts do this themselves: `release-ios.sh` reads the signed
+`.ipa` back in its final step, and `release-mac-store.sh` checks the signed
+`.pkg` after signing and fails if the entitlement did not survive. The AAB is
+read with `bundletool dump manifest`. Record what each one printed.
+
+`scripts/verify-release-package.sh` is **not** this step. It is the CI-only
+check on the GitHub release assets — trimpath, the release key, and that no
+runner workspace path leaked into the package — and it refuses to run without
+`GITHUB_WORKSPACE` set. It reads no version and no build number.
 
 ### 5 — Upload to Apple, then Play
 

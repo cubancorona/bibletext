@@ -444,19 +444,27 @@ that genuinely needs a human gate between certification and the public, and
 change it in the same breath on the other stores, or the channels drift
 apart.
 
-Creating one is the part that cannot work yet. `POST .../submissions`
-"creates a new in-progress submission, which is a copy of your last
-published submission", and this product has never been published — the
-account reports `firstPublishedDate: 1601-01-01`, the never-published
-sentinel. There is nothing to clone, so the call is the documented 409.
-Only one pending submission may exist at a time besides, and this one
-belongs to the console.
+Creating one was the part that could not work for submission 1, and this
+is the history of why, kept because the reason is what matters.
+`POST .../submissions` "creates a new in-progress submission, which is a
+copy of your last published submission", and at that point this product
+had never been published — the account reported
+`firstPublishedDate: 1601-01-01`, the never-published sentinel. There was
+nothing to clone, so the call was the documented 409. Only one pending
+submission may exist at a time besides, and that one belonged to the
+console.
 
-So the ~28 MB package is dragged into the Packages page by hand, once. The
-browser bridge used for the rest of the form carries at most 10 MB per
-file, which is a limit of that tool, not of the Store. The package is
+So the ~28 MB package was dragged into the Packages page by hand, once.
+The browser bridge used for the rest of the form carries at most 10 MB per
+file, which is a limit of that tool, not of the Store. The package was
 uploaded unsigned on purpose: the Store re-signs MSIX with the publisher
 identity the reservation issued.
+
+**Both conditions ended when submission 1 published on 17 September.** From
+submission 2 on, `msstore/submit.py` creates the submission, uploads every
+package to its SAS URL and commits it, with no browser involved and no size
+limit that matters; the paragraphs above under "Automation after the first
+release" and `docs/RELEASING.md` stage 9 are the current procedure.
 
 **Do not run Microsoft's own Python submission sample against this
 account.** It opens its app-submission flow by DELETING

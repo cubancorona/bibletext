@@ -122,9 +122,13 @@ def http(method: str, url: str, token: str | None = None, body: bytes | None = N
         raw = e.read()
         # MS-CorrelationId is what Microsoft support asks for first.
         cid = e.headers.get("MS-CorrelationId", "?")
+        # The body is server-supplied free text and is the one place a URL we
+        # did not write could leave the process -- so it goes through the same
+        # redaction as everything else, and BEFORE the truncation, so a cut
+        # cannot land inside the query string and leave half a signature.
         raise SystemExit(
             f"{method} {redact(url).split('?')[0]} -> HTTP {e.code} (MS-CorrelationId {cid})\n"
-            f"{raw.decode('utf-8', 'replace')[:900]}"
+            f"{redact_text(raw.decode('utf-8', 'replace'))[:900]}"
         )
 
 
@@ -309,7 +313,7 @@ def cmd_create(d: str, publish_mode: str):
     upload_url = sub.get("fileUploadUrl")
     if not upload_url:
         raise SystemExit("the created submission carries no fileUploadUrl")
-    save_state(submissionId=sid, created=time.time(), committed=False,
+    save_state(submissionId=sid, created=time.time(), committed=False, publishMode=publish_mode,
                packages=[{k: p[k] for k in ("fileName", "sha256", "bytes", "architecture")} for p in pkgs])
     print(f"    id {sid}  status {sub.get('status')}")
     print(f"    upload {redact(upload_url)}")
@@ -373,7 +377,7 @@ def cmd_create(d: str, publish_mode: str):
             raise SystemExit(f"blob upload returned {status}, expected 201")
         print(f"    201 Created")
 
-        verify_staged(sid, pkgs, publish_mode)
+        verify_staged(sid, pkgs, publish_mode, sub)
         print(f"\ncreated and staged, NOT committed. Nothing public has changed.")
         print(f"  commit:  msstore/submit.py commit")
         print(f"  abort :  msstore/submit.py abort")
@@ -383,54 +387,72 @@ def cmd_create(d: str, publish_mode: str):
         raise
 
 
-def verify_staged(sid: str, pkgs: list[dict], publish_mode: str):
+# Keys the server owns and rewrites on its own: never ours to compare.
+SERVER_OWNED = {"status", "statusDetails"}
+
+
+def verify_staged(sid: str, pkgs: list[dict], publish_mode: str, clone: dict):
     """Read the submission back FROM THE SERVER and refuse to go on unless it
     is exactly what we meant. Deliberately a fresh GET rather than the PUT's
     own response: what matters is what Partner Center stored, not what it
-    echoed."""
-    if True:
-        fresh = api("GET", f"/applications/{STORE_ID}/submissions/{sid}", token())
-        problems = []
-        if fresh.get("status") != "PendingCommit":
-            problems.append(f"status is {fresh.get('status')!r}, expected 'PendingCommit'")
-        if fresh.get("targetPublishMode") != publish_mode:
-            problems.append(f"targetPublishMode is {fresh.get('targetPublishMode')!r}, expected {publish_mode!r}")
-        ro = ((fresh.get("packageDeliveryOptions") or {}).get("packageRollout") or {})
-        if ro.get("isPackageRollout"):
-            problems.append("a package rollout is enabled")
-        # A new entry is identified by fileName and fileStatus ONLY. Its
-        # version and architecture come back null until the commit, because
-        # Partner Center reads them out of the MSIX manifest rather than
-        # taking them from us -- which is also why they are not sent. Asserting
-        # on them here fails a submission that is in fact correct.
-        stored = {p.get("fileName"): p.get("fileStatus")
-                  for p in (fresh.get("applicationPackages") or [])}
-        for p in pkgs:
-            if p["fileName"] not in stored:
-                problems.append(f"{p['fileName']} is not in the stored package list")
-            elif stored[p["fileName"]] != "PendingUpload":
-                problems.append(f"{p['fileName']} is {stored[p['fileName']]!r}, expected 'PendingUpload'")
-        # The previously published package must still be there, untouched:
-        # it is the cheap rollback, and losing it would leave no certified
-        # x64 package behind if 1.2.13 turns out bad.
-        kept = [f for f, st in stored.items() if st == "Uploaded"]
-        if not kept:
-            problems.append("no previously published package survived; the rollback path is gone")
-        for lang, val in (fresh.get("listings") or {}).items():
-            imgs = ((val or {}).get("baseListing") or {}).get("images") or []
-            bad = [i for i in imgs if i.get("fileStatus") != "Uploaded"]
-            if bad:
-                problems.append(f"{lang}: {len(bad)} image(s) not 'Uploaded'")
-        if problems:
-            raise SystemExit("REFUSING TO PROCEED:\n  - " + "\n  - ".join(problems))
+    echoed.
 
-        for p in (fresh.get("applicationPackages") or []):
-            print(f"    {str(p.get('fileName')):32} {str(p.get('fileStatus')):14} "
-                  f"{p.get('version') or '(set at commit)'}")
-        li = (fresh.get("listings") or {}).get("en-gb", {}).get("baseListing", {})
-        print(f"    listing: {len(li.get('images') or [])} images, "
-              f"{len(li.get('description') or '')} chars of description")
-        print(f"    targetPublishMode {fresh.get('targetPublishMode')}   status {fresh.get('status')}")
+    `clone` is the submission as the POST returned it -- the state before we
+    touched anything. assert_clone_preserved proved the body we SENT matched
+    it outside the mutable set; this proves the round trip did, because a PUT
+    that returns 200 and quietly drops the hand-entered listing is the failure
+    that matters most, and a printed image count is not a guard against it.
+    """
+    fresh = api("GET", f"/applications/{STORE_ID}/submissions/{sid}", token())
+    problems = []
+    if fresh.get("status") != "PendingCommit":
+        problems.append(f"status is {fresh.get('status')!r}, expected 'PendingCommit'")
+    if fresh.get("targetPublishMode") != publish_mode:
+        problems.append(f"targetPublishMode is {fresh.get('targetPublishMode')!r}, expected {publish_mode!r}")
+    ro = ((fresh.get("packageDeliveryOptions") or {}).get("packageRollout") or {})
+    if ro.get("isPackageRollout"):
+        problems.append("a package rollout is enabled")
+    # A new entry is identified by fileName and fileStatus ONLY. Its
+    # version and architecture come back null until the commit, because
+    # Partner Center reads them out of the MSIX manifest rather than
+    # taking them from us -- which is also why they are not sent. Asserting
+    # on them here fails a submission that is in fact correct.
+    stored = {p.get("fileName"): p.get("fileStatus")
+              for p in (fresh.get("applicationPackages") or [])}
+    for p in pkgs:
+        if p["fileName"] not in stored:
+            problems.append(f"{p['fileName']} is not in the stored package list")
+        elif stored[p["fileName"]] != "PendingUpload":
+            problems.append(f"{p['fileName']} is {stored[p['fileName']]!r}, expected 'PendingUpload'")
+    # The previously published package must still be there, untouched:
+    # it is the cheap rollback, and losing it would leave no certified
+    # x64 package behind if 1.2.13 turns out bad.
+    kept = [f for f, st in stored.items() if st == "Uploaded"]
+    if not kept:
+        problems.append("no previously published package survived; the rollback path is gone")
+    for lang, val in (fresh.get("listings") or {}).items():
+        imgs = ((val or {}).get("baseListing") or {}).get("images") or []
+        bad = [i for i in imgs if i.get("fileStatus") != "Uploaded"]
+        if bad:
+            problems.append(f"{lang}: {len(bad)} image(s) not 'Uploaded'")
+    # Everything we did not mean to change must have come back as it went.
+    # Strict on purpose: a spurious refusal here costs an investigation with
+    # nothing public changed, and the opposite mistake costs the listing.
+    # If a release ever trips on a key the server rewrites benignly, name it
+    # in SERVER_OWNED with the reason, rather than loosening the comparison.
+    for k in sorted((set(clone) | set(fresh)) - MUTABLE - NOT_PAYLOAD - SERVER_OWNED):
+        if json.dumps(clone.get(k), sort_keys=True) != json.dumps(fresh.get(k), sort_keys=True):
+            problems.append(f"{k!r} came back from the server different from the clone")
+    if problems:
+        raise SystemExit("REFUSING TO PROCEED:\n  - " + "\n  - ".join(problems))
+
+    for p in (fresh.get("applicationPackages") or []):
+        print(f"    {str(p.get('fileName')):32} {str(p.get('fileStatus')):14} "
+              f"{p.get('version') or '(set at commit)'}")
+    li = (fresh.get("listings") or {}).get("en-gb", {}).get("baseListing", {})
+    print(f"    listing: {len(li.get('images') or [])} images, "
+          f"{len(li.get('description') or '')} chars of description, identical to the clone")
+    print(f"    targetPublishMode {fresh.get('targetPublishMode')}   status {fresh.get('status')}")
 
 
 # --------------------------------------------------------- commit and abort
@@ -467,9 +489,9 @@ def cmd_poll():
         print(f"  {time.strftime('%H:%M:%S')}  {st}")
         det = r.get("statusDetails") or {}
         for e in det.get("errors") or []:
-            print(f"    ERROR {e.get('code')}: {e.get('details')}")
+            print(f"    ERROR {e.get('code')}: {redact_text(str(e.get('details')))}")
         for w in det.get("warnings") or []:
-            print(f"    warning {w.get('code')}: {w.get('details')}")
+            print(f"    warning {w.get('code')}: {redact_text(str(w.get('details')))}")
         if st != "CommitStarted":
             return
         n += 1
@@ -483,12 +505,30 @@ def cmd_abort():
     sid = s.get("submissionId")
     if not sid:
         raise SystemExit("no submission recorded")
+    # Abort is for a DRAFT. Once commit has run, the submission is in
+    # certification and this file's own docstring calls that the point of no
+    # return; honouring it locally is cheaper than finding out whether the
+    # server would. A committed submission stays as pendingApplicationSubmission
+    # until it publishes, so the ownership check below would let the DELETE
+    # through on its own -- and the runbook's own recovery for a 409 on
+    # `create` sends the operator straight here. Withdrawing an in-flight
+    # release is a Partner Center act, taken with the reason in front of you.
+    if s.get("committed"):
+        raise SystemExit(f"{sid} was committed; a committed submission is not a draft. "
+                         f"If it really must be withdrawn, cancel it in Partner Center.")
     tok = token()
     app = api("GET", f"/applications/{STORE_ID}", tok)
     pending = (app.get("pendingApplicationSubmission") or {}).get("id")
     if pending != sid:
         raise SystemExit(f"the pending submission is {pending}, not the {sid} this run created; "
                          f"refusing to delete someone else's work")
+    # And ask the server what state it is really in: the local flag is written
+    # after the commit call returns, so a crash between the two leaves it
+    # false for a submission that is already in flight.
+    fresh = api("GET", f"/applications/{STORE_ID}/submissions/{sid}", tok)
+    st = fresh.get("status") or ""
+    if not (st == "PendingCommit" or st.endswith("Failed")):
+        raise SystemExit(f"{sid} is {st!r} on the server, not a draft; refusing to delete it")
     status, _h, raw = http("DELETE", f"{API}/applications/{STORE_ID}/submissions/{sid}", tok)
     if status not in (200, 204):
         raise SystemExit(f"delete returned {status}")
@@ -515,7 +555,17 @@ def main(argv):
         s = load_state()
         if not s.get("submissionId"):
             raise SystemExit("no submission recorded; run create first")
-        verify_staged(s["submissionId"], read_packages(argv[2]), mode); return 0
+        # Compare against the clone create saved, and hold the submission to
+        # the publish mode create used -- not whatever this invocation's argv
+        # happens to say, which is how a verify could bless the wrong mode.
+        clone_path = os.path.join(STATE_DIR, f"clone-{s['submissionId']}.json")
+        try:
+            with open(clone_path) as f:
+                clone = json.load(f)
+        except FileNotFoundError:
+            raise SystemExit(f"{clone_path} is missing; verify has nothing to compare the server against")
+        verify_staged(s["submissionId"], read_packages(argv[2]), s.get("publishMode") or mode, clone)
+        return 0
     if cmd == "create":
         cmd_create(argv[2], mode); return 0
     if cmd == "commit":
