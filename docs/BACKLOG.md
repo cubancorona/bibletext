@@ -7,6 +7,32 @@ the date — and says what shipped and why. Closed entries earn their place: thi
 is the file to read before re-investigating a defect that may already be fixed,
 and a fix's reasoning is the expensive half to reconstruct.
 
+## The NKJV's missing spaces: report upstream, and decide on a correction list
+
+The licensed feed runs two words together at 286 places in 275 verses
+(re-counted 22 September 2026, `scripts/nkjv-upstream-joins.py`; the method and
+the exclusions are in docs/SOURCE_FIELDS.md). Every surface shows them
+faithfully, because that is what the provider sends; they concentrate in the
+words of Christ and in the prophetic poetry, which is why they are noticed.
+
+Two actions, independent:
+
+1. **Report it to API.Bible.** A report with the complete list was drafted on
+   7 September; whether it was sent is not recorded. Only the provider can fix
+   the source for everyone.
+2. **Decide whether the app carries a correction list** meanwhile — one entry
+   per affected verse, each restoring the printed reading at one position, and
+   each keyed to a hash of the verse's current text so it switches itself off
+   the moment the provider changes that verse. This reverses the 7 September
+   position, which rejected a RULE (insert a space wherever a note meets two
+   letters) because a rule damages the legitimate joins — the closed em-dash in
+   60 places, `young|est`, `j|ust`. A reviewed list has no such reach: a verse
+   not in it is untouched. What it does require is that every entry be checked
+   against the printed edition before it ships. An entry needs no licensed
+   text at all — book, chapter, verse, a rune offset and a hash of the verse —
+   so the list can be committed like the red-letter tables are. The
+   decode-time count becomes the tripwire that says when entries retire.
+
 ## One way to turn a verse into drawn words, not two
 
 Found 22 September 2026 by the spacing audit (`spacing_audit_test.go`). Two
@@ -1926,7 +1952,24 @@ into it and that command works today on v1.2.5. A source build by either
 route carries no release ldflags, so it has no bundled NKJV key: the reader
 adds their own API.Bible key in Settings for that translation.
 
-## A shared verse carries the app's own small capitals, and then cannot find itself
+## A shared verse carries the app's own small capitals, and then cannot find itself — FIXED, one decision open
+
+**The locate half is fixed and the send half is an open preference.** 1.2.13
+(cda1575b7) routed the share path through `outboundText`, and a later change
+(463da7cd8) made the marker strip, the heading retry and the legacy fallback
+compare in that same outbound form, so a whole-verse drag of a divine-name
+verse now locates and cites correctly. What a share SENDS followed the rule
+below: `LORD`, capitals, the plain-text convention.
+
+The account holder has since said they prefer the shared text to keep the
+small capitals as drawn — `Lᴏʀᴅ` — having seen it in a message and liked it.
+That is a coherent choice and not the defect this entry first described: the
+defect was that carrying `Lᴏʀᴅ` also broke the LOCATE. The two can now be
+separated — locate in the outbound form, as the pipeline does, and emit the
+drawn form in the text that leaves. The cost to weigh: a pasted `Lᴏʀᴅ` is
+not found by a search box and renders unevenly in fonts without the
+small-capital block. Decide before the next release so shared text changes
+once, not twice. The original entry follows as the record.
 
 Found while checking whether a sentence in docs/ADDITIONS_AND_DROPS.md was true.
 It was not, and the reason is a live defect.
