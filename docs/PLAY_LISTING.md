@@ -178,6 +178,29 @@ Also confirm from the final AAB:
 - target audience and Families eligibility are selected from the real intended
   audience, not to avoid or trigger a policy track.
 
+## Closed-test release notes — 1.2.14
+
+> BibleText 1.2.14 shares the divine name as the page sets it: a verse from the
+> NKJV now goes out with Lᴏʀᴅ in small capitals, in text, on picture cards and
+> from the verse of the day. Sharing a whole such verse names exactly that verse
+> and no longer carries its number into the message. The verse of the day no
+> longer runs words together, and search results highlight your search as a
+> phrase. No ads, account, analytics, or tracking.
+
+Suggested tester coverage:
+
+- install and confirm version 1.2.14 (184);
+- open the NKJV, find a verse setting the divine name in small capitals, share it
+  as text, and confirm the pasted text reads Lᴏʀᴅ in small capitals and the
+  reference names the verse you chose — including when the selection starts at
+  the verse number;
+- share the same verse as an image and tap Regenerate a few times: the name
+  should stay in small capitals in every typeface;
+- open the verse of the day on a day whose verse is in red, and confirm no two
+  words run together;
+- search for a two-word phrase and confirm the result cards highlight the
+  phrase, not each word wherever it appears.
+
 ## Closed-test release notes — 1.2.13
 
 > BibleText 1.2.13 fixes Share as image on Android 6 to 9, where tapping it used
