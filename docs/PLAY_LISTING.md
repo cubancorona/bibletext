@@ -178,6 +178,23 @@ Also confirm from the final AAB:
 - target audience and Families eligibility are selected from the real intended
   audience, not to avoid or trigger a policy track.
 
+## Closed-test release notes — 1.2.15
+
+> BibleText 1.2.15 makes the whole height of the tab bar answer a tap, so
+> tapping the top edge of a tab's icon now opens that tab, and the narration
+> no longer lights a section heading along with the verse above it. The rest
+> of this release is for iPhone and iPad. No ads, account, analytics, or
+> tracking.
+
+Suggested tester coverage:
+
+- install and confirm version 1.2.15 (185);
+- in portrait, tap each tab near the top edge of its icon, then near the
+  bottom of the bar under its label: each tap should open that tab;
+- play the narration through a verse that stands just above a section
+  heading: the heading should never light up with it;
+- confirm a shared link still opens at its passage with its note.
+
 ## Closed-test release notes — 1.2.14
 
 > BibleText 1.2.14 shares the divine name as the page sets it: a verse from the
