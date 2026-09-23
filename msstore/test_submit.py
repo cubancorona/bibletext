@@ -226,6 +226,24 @@ class VerifyStaged(Stubbed):
         # message must name the rollback, which is the thing that was lost.
         self.assertIn("rollback path is gone", self.refused(self.m.verify_staged, "S", [{"fileName": "new.msix"}], "Immediate", clone))
 
+    def test_the_servers_own_bookkeeping_is_not_a_difference(self):
+        # What the server did on 23 September 2026: cleared the label and set
+        # the read-only pricing flag. Neither is a change to the listing.
+        clone = clone_fixture()
+        clone["friendlyName"] = "Submission 3"
+        clone["pricing"]["isAdvancedPricingModel"] = True
+        def rewrite(f):
+            f["friendlyName"] = None
+            f["pricing"]["isAdvancedPricingModel"] = False
+        self.fresh_from(clone, rewrite)
+        self.quiet(self.m.verify_staged, "S", [{"fileName": "new.msix"}], "Immediate", clone)
+
+    def test_a_changed_price_is_still_refused(self):
+        # The exemption is one sub-key, not all of pricing.
+        clone = clone_fixture()
+        self.fresh_from(clone, lambda f: f["pricing"].__setitem__("priceId", "Tier2"))
+        self.assertIn("'pricing'", self.refused(self.m.verify_staged, "S", [{"fileName": "new.msix"}], "Immediate", clone))
+
     def test_the_wrong_publish_mode_is_refused(self):
         clone = clone_fixture()
         self.fresh_from(clone, lambda f: f.__setitem__("targetPublishMode", "Manual"))

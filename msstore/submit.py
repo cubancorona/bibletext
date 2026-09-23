@@ -426,7 +426,27 @@ def cmd_create(d: str, publish_mode: str):
 
 
 # Keys the server owns and rewrites on its own: never ours to compare.
-SERVER_OWNED = {"status", "statusDetails"}
+#
+# friendlyName is Partner Center's display label for the submission ("Submission
+# 3"); the server clears it when the submission is updated. It is not part of
+# the listing and no reader sees it. Found on the first release this comparison
+# ran against, 23 September 2026.
+SERVER_OWNED = {"status", "statusDetails", "friendlyName"}
+
+# Sub-keys the server owns inside a key that is otherwise compared. Only the
+# named sub-key is exempt: the rest of `pricing` -- the price itself, the market
+# availability, the trial -- must still come back exactly as it went, because a
+# silently changed price is the failure this comparison most exists to catch.
+# isAdvancedPricingModel is documented read-only and the server set it from
+# true to false on that same release.
+SERVER_OWNED_WITHIN = {"pricing": {"isAdvancedPricingModel"}}
+
+
+def _comparable(key: str, value):
+    exempt = SERVER_OWNED_WITHIN.get(key)
+    if exempt and isinstance(value, dict):
+        return {k: v for k, v in value.items() if k not in exempt}
+    return value
 
 
 def verify_staged(sid: str, pkgs: list[dict], publish_mode: str, clone: dict):
@@ -485,7 +505,8 @@ def verify_staged(sid: str, pkgs: list[dict], publish_mode: str, clone: dict):
     # If a release ever trips on a key the server rewrites benignly, name it
     # in SERVER_OWNED with the reason, rather than loosening the comparison.
     for k in sorted((set(clone) | set(fresh)) - MUTABLE - NOT_PAYLOAD - SERVER_OWNED):
-        if json.dumps(clone.get(k), sort_keys=True) != json.dumps(fresh.get(k), sort_keys=True):
+        if json.dumps(_comparable(k, clone.get(k)), sort_keys=True) != \
+                json.dumps(_comparable(k, fresh.get(k)), sort_keys=True):
             problems.append(f"{k!r} came back from the server different from the clone")
     if problems:
         raise SystemExit("REFUSING TO PROCEED:\n  - " + "\n  - ".join(problems))
