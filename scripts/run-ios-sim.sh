@@ -239,7 +239,9 @@ if [ -z "${BOOTED:-}" ]; then
 fi
 
 echo "==> opening Simulator.app"
-open -a Simulator
+# The window is a convenience: a booted simulator installs and launches without
+# it, and an Xcode that ships no Simulator.app (27.0) must not end the run here.
+open -a Simulator || echo "==> Simulator.app not found; continuing with the booted simulator" >&2
 
 echo "==> installing $APP_NAME on simulator $BOOTED"
 xcrun simctl install "$BOOTED" "$APP"
