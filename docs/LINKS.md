@@ -50,7 +50,7 @@ reads it.
 
 | platform | channel | mechanism | configured | enforced | observed |
 | --- | --- | --- | --- | --- | --- |
-| iOS | App Store | Universal Link | yes | partial | **yes** — real iPhone |
+| iOS | App Store | Universal Link | yes | partial | **yes** — real iPhone, before the scene life cycle; to observe again on a scene build |
 | iOS | Safari already on the domain | **none** (Apple suppresses it) | n/a | n/a | n/a |
 | iOS | dev sideload | Universal Link, if the profile allows | yes | no | yes |
 | iOS | Simulator | **none reachable** | n/a | n/a | n/a |

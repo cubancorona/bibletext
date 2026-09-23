@@ -116,7 +116,10 @@ place a fix on one does not reach the others.
 6. **A hand-assembled `.xcarchive` plus `xcodebuild -exportArchive`**, instead
    of `fyne release -os ios` (`scripts/release-ios.sh`).
 7. **Info.plist keys Fyne never emits, injected per build before signing** —
-   `UIBackgroundModes=['audio']`, privacy strings, `UIDeviceFamily`. *Risk:*
+   `UIBackgroundModes=['audio']`, privacy strings, `UIDeviceFamily`, and the
+   scene manifest (`UIApplicationSceneManifest`, `scripts/ios-scene-manifest.sh`;
+   without it iOS 27 refuses the app at launch — read back from the archived and
+   exported app by `release-ios.sh`). *Risk:*
    `UIDeviceFamily` is the single property that makes the app a universal
    iPhone+iPad binary, and it is **never read back out of the exported `.ipa`**.
 8. **The icon catalogue is rebuilt from scratch** (18 slots scaled with `sips`)

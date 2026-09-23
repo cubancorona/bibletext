@@ -221,6 +221,9 @@ note "binary arch: $(lipo -archs "$APP/$EXE")"
 # is needed for background audio; the plist key is the only requirement).
 note "adding UIBackgroundModes=[audio] (background playback + Now Playing)"
 plutil -replace UIBackgroundModes -json '["audio"]' "$APP/Info.plist"
+# UIScene life cycle: without it an app built with the iOS 27 SDK is refused at
+# launch on iOS 27. Must follow the packaging step (fyne rewrites Info.plist).
+"${REPO_ROOT}/scripts/ios-scene-manifest.sh" "$APP/Info.plist"
 
 # ── 5c. declare add-only Photos access (share sheet "Save Image") ───────────
 # Without NSPhotoLibraryAddUsageDescription, iOS silently HIDES the Save Image

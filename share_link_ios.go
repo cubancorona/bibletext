@@ -5,20 +5,31 @@ package bibletext
 // Receiving a Universal Link on iOS.
 //
 // When someone taps https://bibletext.co.uk/web/john/3/#v16 on an iPhone that
-// has BibleText installed, iOS hands the URL to the app delegate rather than
-// opening Safari — but only if the app's entitlement claims the domain
-// (release-ios.sh pins applinks:bibletext.co.uk) AND the association file we
-// publish at /.well-known/apple-app-site-association allow-lists that path.
+// has BibleText installed, iOS hands the URL to the app rather than opening
+// Safari — but only if the app's entitlement claims the domain (release-ios.sh
+// pins applinks:bibletext.co.uk) AND the association file we publish at
+// /.well-known/apple-app-site-association allow-lists that path.
 //
 // THE PROBLEM: the app delegate belongs to Fyne. Its mobile driver installs
 // GoAppAppDelegate and implements none of the link callbacks, and Fyne exposes
-// no Go-level hook for an incoming URL. Forking Fyne for this would be absurd.
+// no Go-level hook for an incoming URL.
 //
 // THE FIX: an Objective-C CATEGORY on GoAppAppDelegate, compiled into the app
 // from this file's cgo preamble. A category adds methods to an existing class
-// at load time, so iOS finds our implementation on Fyne's delegate without
-// Fyne knowing anything about it — and it keeps working across Fyne upgrades,
-// because it never touches Fyne's source.
+// at load time, so our implementation lives on Fyne's delegate without Fyne's
+// source defining it.
+//
+// HOW THE LINK ARRIVES. The app uses the UIScene life cycle (iOS 27 requires
+// it; patches/fyne-2.7.4-ios-scene-lifecycle.patch), and under scenes iOS
+// delivers links to the SCENE delegate, never to these app-delegate methods.
+// The patched Fyne scene delegate forwards each link to them — from the
+// connection options on a cold start, and from scene:continueUserActivity: and
+// scene:openURLContexts: while running — and acts on the answer: a web link
+// these return NO for is handed back to the system to open in the browser.
+// So link delivery now depends on that patch as well as on this category;
+// scene_manifest_test.go holds the two to the same selectors. Without the
+// scene manifest (an old-style bundle) iOS calls these methods directly and
+// reads the answer itself.
 //
 // Both entry points are covered:
 //   - continueUserActivity — the Universal Link itself, on a warm or cold start.
@@ -38,8 +49,9 @@ package bibletext
 // string immediately, so the transient UTF8String pointer is safe to pass.
 //
 // Returns non-zero when the URL is one of our reader links. ParseShareLink runs
-// synchronously inside it, so this answer is real and both entry points below
-// hand it straight back to iOS — see deliverShareLink for why the handling can
+// synchronously inside it, so this answer is real, and both entry points below
+// return it to their caller (the scene forwarder, or iOS itself for a bundle
+// without a scene manifest) — see deliverShareLink for why the handling can
 // still be asynchronous while the ANSWER is not.
 extern int bibleTextOpenedLink(char *url);
 
@@ -54,8 +66,9 @@ extern int bibleTextOpenedLink(char *url);
 
 @implementation GoAppAppDelegate (BibleTextLinks)
 
-// The Universal Link path. iOS calls this for a tapped https link the app has
-// claimed, on both cold launch and while running.
+// The Universal Link path, for a tapped https link the app has claimed, on
+// both cold launch and while running. Reached through the scene delegate's
+// forwarder (see the header).
 - (BOOL)application:(UIApplication *)application
 continueUserActivity:(NSUserActivity *)userActivity
  restorationHandler:(void (^)(NSArray<id<UIUserActivityRestoring>> *))restorationHandler {
@@ -69,8 +82,8 @@ continueUserActivity:(NSUserActivity *)userActivity
     // absoluteString keeps the fragment (#v16-18) — which is the whole point,
     // since the verse rides there and never reaches a server.
     //
-    // REPORT WHAT GO DECIDED. This returned YES unconditionally, so iOS believed
-    // the app had handled links it refused — /web/john/ (a book index, matched by
+    // REPORT WHAT GO DECIDED. This returned YES unconditionally, so the caller
+    // believed the app had handled links it refused — /web/john/ (a book index, matched by
     // the "/web/*" component of the association file), /web/psalm/23/,
     // /web/john/three/ — and never fell back to Safari. The app just foregrounded
     // on whatever chapter it was already showing.

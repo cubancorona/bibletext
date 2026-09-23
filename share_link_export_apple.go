@@ -23,9 +23,11 @@ import "C"
 // isn't one of our reader links.
 //
 // Returns 1 when the URL is one of our reader links and the app has taken it,
-// 0 when it is not — the native side reports that straight back to the OS so an
-// unclaimed link falls through to the browser instead of vanishing. C int
-// rather than bool because cgo's C.int is the portable thing to hand ObjC.
+// 0 when it is not, so an unclaimed link falls through to the browser instead
+// of vanishing: on macOS the native side reports the answer to the OS; on iOS
+// the patched scene delegate hands a declined web link back to the system
+// (patches/fyne-2.7.4-ios-scene-lifecycle.patch). C int rather than bool
+// because cgo's C.int is the portable thing to hand ObjC.
 //
 //export bibleTextOpenedLink
 func bibleTextOpenedLink(cURL *C.char) C.int {

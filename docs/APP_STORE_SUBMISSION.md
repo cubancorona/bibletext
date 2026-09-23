@@ -130,8 +130,11 @@ Gospel-parallel data and presentation assets are also embedded. The licensed
 NKJV text is fetched through API.Bible and is never packaged into the binary.
 
 Also verify the archive contains the privacy manifest, launch screen, complete
-icon catalog, `UIDeviceFamily=[1,2]`, `get-task-allow=false`, and
-`ITSAppUsesNonExemptEncryption=false`.
+icon catalog, `UIDeviceFamily=[1,2]`, `get-task-allow=false`,
+`ITSAppUsesNonExemptEncryption=false`, and the scene manifest naming
+`GoAppSceneDelegate` (`release-ios.sh` checks it with
+`scripts/ios-scene-manifest.sh --check`; without it iOS 27 refuses the app at
+launch).
 
 ## Metadata — preview first, write only deliberately
 

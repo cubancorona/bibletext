@@ -1,0 +1,313 @@
+--- a/internal/driver/mobile/app/darwin_ios.m
++++ b/internal/driver/mobile/app/darwin_ios.m
+@@ -27,8 +27,46 @@
+ @interface GoAppAppDelegate : UIResponder<UIApplicationDelegate>
+ @property (strong, nonatomic) UIWindow *window;
+ @property (strong, nonatomic) GoAppAppController *controller;
++- (void)attachToWindow:(UIWindow *)window;
+ @end
+ 
++// BibleText patch: UIScene life cycle.
++//
++// An app linked against the iOS 27 SDK is refused at launch on iOS 27 unless it
++// adopts the scene life cycle ("UIScene life cycle is required for apps built
++// with this SDK"), and the app-delegate-only start below was all Fyne had. The
++// window now comes from a UIWindowScene when the bundle declares a scene
++// manifest (UIApplicationSceneManifest), and from the screen as before when it
++// does not, so a bundle without the manifest still starts the old way.
++//
++// The app delegate stays the owner of the window and the controller in both
++// paths, so everything that reaches for them — the keyboard, the file pickers,
++// isDark, the insets — works unchanged.
++API_AVAILABLE(ios(13.0))
++@interface GoAppSceneDelegate : UIResponder<UIWindowSceneDelegate>
++@property (strong, nonatomic) UIWindow *window;
++@end
++
++static BOOL goAppUsesScenes(void) {
++	if (@available(iOS 13.0, *)) {
++		return [[NSBundle mainBundle] objectForInfoDictionaryKey:@"UIApplicationSceneManifest"] != nil;
++	}
++	return NO;
++}
++
++// The interface orientation of the app's window. statusBarOrientation belongs
++// to the pre-scene life cycle; under scenes the window scene is the source.
++static UIInterfaceOrientation goAppInterfaceOrientation(void) {
++	if (@available(iOS 13.0, *)) {
++		GoAppAppDelegate *appDelegate = (GoAppAppDelegate *)[[UIApplication sharedApplication] delegate];
++		UIWindowScene *scene = appDelegate.window.windowScene;
++		if (scene != nil) {
++			return scene.interfaceOrientation;
++		}
++	}
++	return [[UIApplication sharedApplication] statusBarOrientation];
++}
++
+ @implementation GoAppAppDelegate
+ - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+     int scale = 1;
+@@ -39,21 +77,47 @@
+     setDisplayMetrics((int)size.width, (int)size.height, scale);
+ 
+ 	lifecycleAlive();
+-	self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
+-	self.controller = [[GoAppAppController alloc] initWithNibName:nil bundle:nil];
+-	self.window.rootViewController = self.controller;
+-	[self.window makeKeyAndVisible];
++	if (!goAppUsesScenes()) {
++		[self attachToWindow:[[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]]];
++	}
+ 
+-    // update insets once key window is set
+-	UIInterfaceOrientation orientation = [[UIApplication sharedApplication] statusBarOrientation];
+-	updateConfig((int)size.width, (int)size.height, orientation);
+-
+ 	UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
+ 	center.delegate = (id) self;
+ 
+ 	return YES;
+ }
+ 
++// Puts the one controller (and with it the GL context) into a window. A scene
++// the system disconnects and later reconnects gets a new window, but the same
++// controller, so the renderer's state survives the move.
++- (void)attachToWindow:(UIWindow *)window {
++	self.window = window;
++	if (self.controller == nil) {
++		self.controller = [[GoAppAppController alloc] initWithNibName:nil bundle:nil];
++	}
++	window.rootViewController = self.controller;
++	[window makeKeyAndVisible];
++
++	// update insets once key window is set
++	CGSize size = [UIScreen mainScreen].nativeBounds.size;
++	updateConfig((int)size.width, (int)size.height, goAppInterfaceOrientation());
++}
++
++// Only the app's own window scene gets the delegate. Any other role (an
++// external display, for one) gets none, so the system goes on mirroring the
++// device instead of the app moving its single controller onto that screen.
++- (UISceneConfiguration *)application:(UIApplication *)application
++configurationForConnectingSceneSession:(UISceneSession *)connectingSceneSession
++                              options:(UISceneConnectionOptions *)options API_AVAILABLE(ios(13.0)) {
++	if (![connectingSceneSession.role isEqualToString:UIWindowSceneSessionRoleApplication]) {
++		return [[[UISceneConfiguration alloc] initWithName:nil sessionRole:connectingSceneSession.role] autorelease];
++	}
++	UISceneConfiguration *config = [[[UISceneConfiguration alloc] initWithName:@"Default Configuration"
++	                                                               sessionRole:connectingSceneSession.role] autorelease];
++	config.delegateClass = [GoAppSceneDelegate class];
++	return config;
++}
++
+ - (void)applicationDidBecomeActive:(UIApplication * )application {
+ 	lifecycleFocused();
+ }
+@@ -97,7 +161,148 @@
+        willPresentNotification:(UNNotification *)notification
+          withCompletionHandler:(void (^)(UNNotificationPresentationOptions options))completionHandler {
+ 	completionHandler(UNNotificationPresentationOptionAlert);
++}
++@end
++
++// Under scenes UIKit delivers incoming links to the scene delegate and never
++// calls the app delegate's link methods, which is where an app (through a
++// category on GoAppAppDelegate) implements them. These pass each link on, so
++// such an app needs no change.
++//
++// The app delegate's answer used to go back to iOS, and NO meant the app had
++// not handled the link. A scene callback has no answer to give, so a web link
++// the app declines is handed back to the system here, on the assumption that
++// opening an app's own universal link from inside that app goes to the browser
++// rather than back to the app.
++//
++// The hand-back waits until the scene is active: a link that launched the app
++// arrives while the scene is still connecting. The same URL is not handed back
++// twice within a few seconds, so the assumption failing cannot become a loop.
++static NSURL *goAppPendingHandBack;
++static NSURL *goAppLastHandBack;
++static CFAbsoluteTime goAppLastHandBackAt;
++
++static void goAppHandBack(NSURL *url) {
++	CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
++	if (goAppLastHandBack != nil && [goAppLastHandBack isEqual:url] && now - goAppLastHandBackAt < 10) {
++		return;
++	}
++	[goAppLastHandBack release];
++	goAppLastHandBack = [url retain];
++	goAppLastHandBackAt = now;
++	[[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
++}
++
++static void goAppHandBackWhenActive(NSURL *url) {
++	if ([UIApplication sharedApplication].applicationState == UIApplicationStateActive) {
++		dispatch_async(dispatch_get_main_queue(), ^{
++			goAppHandBack(url);
++		});
++		return;
++	}
++	[goAppPendingHandBack release];
++	goAppPendingHandBack = [url retain];
++}
++
++API_AVAILABLE(ios(13.0))
++static void goAppForwardUserActivity(NSUserActivity *activity) {
++	UIApplication *application = [UIApplication sharedApplication];
++	id<UIApplicationDelegate> appDelegate = application.delegate;
++	if (![appDelegate respondsToSelector:@selector(application:continueUserActivity:restorationHandler:)]) {
++		return;
++	}
++	BOOL handled = [appDelegate application:application
++	                   continueUserActivity:activity
++	                     restorationHandler:^(NSArray<id<UIUserActivityRestoring>> *objects) {}];
++	if (!handled && [activity.activityType isEqualToString:NSUserActivityTypeBrowsingWeb]
++	    && activity.webpageURL != nil) {
++		goAppHandBackWhenActive(activity.webpageURL);
++	}
++}
++
++API_AVAILABLE(ios(13.0))
++static void goAppForwardURLContexts(NSSet<UIOpenURLContext *> *contexts) {
++	UIApplication *application = [UIApplication sharedApplication];
++	id<UIApplicationDelegate> appDelegate = application.delegate;
++	if (![appDelegate respondsToSelector:@selector(application:openURL:options:)]) {
++		return;
++	}
++	for (UIOpenURLContext *context in contexts) {
++		[appDelegate application:application openURL:context.URL options:@{}];
++	}
++}
++
++@implementation GoAppSceneDelegate
++// The app has one controller, so only the scene that holds it may drive it:
++// a callback from any other scene must not move it, blank it or change the
++// app's lifecycle stage.
++- (BOOL)ownsAppWindow {
++	GoAppAppDelegate *appDelegate = (GoAppAppDelegate *)[[UIApplication sharedApplication] delegate];
++	return self.window != nil && self.window == appDelegate.window;
++}
++
++- (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)connectionOptions {
++	if (![scene isKindOfClass:[UIWindowScene class]]
++	    || ![session.role isEqualToString:UIWindowSceneSessionRoleApplication]) {
++		return;
++	}
++	GoAppAppDelegate *appDelegate = (GoAppAppDelegate *)[[UIApplication sharedApplication] delegate];
++	self.window = [[[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene] autorelease];
++	[appDelegate attachToWindow:self.window];
++
++	// A link that launched the app arrives with the connection, not through
++	// the continue/open callbacks below.
++	for (NSUserActivity *activity in connectionOptions.userActivities) {
++		goAppForwardUserActivity(activity);
++	}
++	if (connectionOptions.URLContexts.count > 0) {
++		goAppForwardURLContexts(connectionOptions.URLContexts);
++	}
++}
++
++- (void)sceneDidDisconnect:(UIScene *)scene {
++	if (![self ownsAppWindow]) {
++		return;
++	}
++	// Release the controller from this window so a reconnect can adopt it.
++	self.window.rootViewController = nil;
++	lifecycleAlive();
++}
++
++- (void)sceneDidBecomeActive:(UIScene *)scene {
++	if (![self ownsAppWindow]) {
++		return;
++	}
++	lifecycleFocused();
++	if (goAppPendingHandBack != nil) {
++		NSURL *url = goAppPendingHandBack;
++		goAppPendingHandBack = nil;
++		dispatch_async(dispatch_get_main_queue(), ^{
++			goAppHandBack(url);
++			[url release];
++		});
++	}
++}
++
++- (void)sceneWillResignActive:(UIScene *)scene {
++	if ([self ownsAppWindow]) {
++		lifecycleVisible();
++	}
++}
++
++- (void)sceneDidEnterBackground:(UIScene *)scene {
++	if ([self ownsAppWindow]) {
++		lifecycleAlive();
++	}
+ }
++
++- (void)scene:(UIScene *)scene continueUserActivity:(NSUserActivity *)userActivity {
++	goAppForwardUserActivity(userActivity);
++}
++
++- (void)scene:(UIScene *)scene openURLContexts:(NSSet<UIOpenURLContext *> *)URLContexts {
++	goAppForwardURLContexts(URLContexts);
++}
+ @end
+ 
+ @interface GoAppAppController ()
+@@ -151,7 +356,7 @@
+ 	setScreen(scale);
+ 
+ 	CGSize size = [UIScreen mainScreen].nativeBounds.size;
+-	UIInterfaceOrientation orientation = [[UIApplication sharedApplication] statusBarOrientation];
++	UIInterfaceOrientation orientation = goAppInterfaceOrientation();
+ 	updateConfig((int)size.width, (int)size.height, orientation);
+ 
+     self.glview.enableSetNeedsDisplay = NO;
+@@ -163,7 +368,7 @@
+ 	[coordinator animateAlongsideTransition:^(id<UIViewControllerTransitionCoordinatorContext> context) {
+ 		// TODO(crawshaw): come up with a plan to handle animations.
+ 	} completion:^(id<UIViewControllerTransitionCoordinatorContext> context) {
+-		UIInterfaceOrientation orientation = [[UIApplication sharedApplication] statusBarOrientation];
++		UIInterfaceOrientation orientation = goAppInterfaceOrientation();
+ 		CGSize size = [UIScreen mainScreen].nativeBounds.size;
+ 		updateConfig((int)size.width, (int)size.height, orientation);
+ 	}];
+@@ -208,7 +413,7 @@
+ - (void) traitCollectionDidChange: (UITraitCollection *) previousTraitCollection {
+     [super traitCollectionDidChange: previousTraitCollection];
+ 
+-	UIInterfaceOrientation orientation = [[UIApplication sharedApplication] statusBarOrientation];
++	UIInterfaceOrientation orientation = goAppInterfaceOrientation();
+ 	CGSize size = [UIScreen mainScreen].nativeBounds.size;
+ 	updateConfig((int)size.width, (int)size.height, orientation);
+ }
+@@ -218,7 +423,7 @@
+     keyboardHeight = keyboardSize.height;
+ 
+     CGSize size = [UIScreen mainScreen].nativeBounds.size;
+-	UIInterfaceOrientation orientation = [[UIApplication sharedApplication] statusBarOrientation];
++	UIInterfaceOrientation orientation = goAppInterfaceOrientation();
+ 	updateConfig((int)size.width, (int)size.height, orientation);
+ }
+ 
+@@ -226,7 +431,7 @@
+     keyboardHeight = 0;
+ 
+     CGSize size = [UIScreen mainScreen].nativeBounds.size;
+-	UIInterfaceOrientation orientation = [[UIApplication sharedApplication] statusBarOrientation];
++	UIInterfaceOrientation orientation = goAppInterfaceOrientation();
+ 	updateConfig((int)size.width, (int)size.height, orientation);
+ }
+ 
+@@ -295,7 +500,12 @@
+ 
+ UIEdgeInsets getDevicePadding() {
+     if (@available(iOS 11.0, *)) {
+-        UIWindow *window = UIApplication.sharedApplication.keyWindow;
++        // BibleText patch: the app delegate's window, which under scenes is the
++        // scene's window. keyWindow belongs to the pre-scene life cycle.
++        UIWindow *window = ((GoAppAppDelegate *)[[UIApplication sharedApplication] delegate]).window;
++        if (window == nil) {
++            window = UIApplication.sharedApplication.keyWindow;
++        }
+ 
+         UIEdgeInsets inset = window.safeAreaInsets;
+         if (keyboardHeight != 0) {

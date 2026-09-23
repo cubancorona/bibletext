@@ -170,6 +170,9 @@ PB "Delete :UIRequiresFullScreen" 2>/dev/null || true
 # so inject it here (before the step-6 codesign, or the signature breaks); a shipped
 # build without it loses background playback + lock-screen controls. plutil -replace upserts.
 plutil -replace UIBackgroundModes -json '["audio"]' "$APP/Info.plist"
+# UIScene life cycle: without it an app built with the iOS 27 SDK is refused at
+# launch on iOS 27. Must follow the packaging step (fyne rewrites Info.plist).
+"${REPO_ROOT}/scripts/ios-scene-manifest.sh" "$APP/Info.plist"
 # Add-only Photos access: without this key iOS hides "Save Image" in the share
 # sheet for the verse-image cards. Write-only, used solely on the reader's tap.
 plutil -replace NSPhotoLibraryAddUsageDescription -string "BibleText saves a shared verse image to your photo library only when you choose Save Image." "$APP/Info.plist"
@@ -331,6 +334,9 @@ for m in $ARCHIVE_MINOS; do
     [ "$m" = "$IOS_MIN" ] || fail "archived binary is linked for iOS $m, not $IOS_MIN — the version-min flags did not reach the compile"
 done
 echo "  archive min iOS: $ARCHIVE_MIN (plist) / $ARCHIVE_MINOS (linker)"
+# The scene life cycle, in the bundle that is actually sent: without it an
+# iOS 27 device refuses the app at launch.
+"${REPO_ROOT}/scripts/ios-scene-manifest.sh" --check "$AAPP" || fail "archived app has no scene life cycle"
 
 # ── 8. exportArchive → App Store .ipa or direct upload (Xcode re-signs with the
 # distribution cert; BIBLETEXT_UPLOAD=1 sends it straight to App Store Connect
@@ -399,6 +405,7 @@ plutil -lint "$VAPP/PrivacyInfo.xcprivacy" >/dev/null || fail "exported privacy 
 if /usr/libexec/PlistBuddy -c 'Print :UIRequiresFullScreen' "$VAPP/Info.plist" >/dev/null 2>&1; then
     fail "exported app still opts out of iPad multitasking"
 fi
+"${REPO_ROOT}/scripts/ios-scene-manifest.sh" --check "$VAPP" || fail "exported app has no scene life cycle"
 codesign -dvv "$VAPP" 2>&1 | grep -iE 'Authority=Apple|TeamIdentifier' | sed 's/^/  /'
 
 # Publish only after every content, identity, privacy, signature, and keyed-build

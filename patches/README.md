@@ -19,6 +19,9 @@ application source.
 | **Patch 7** | [`fyne-2.7.4-android-night-mode.patch`](fyne-2.7.4-android-night-mode.patch) |
 | **Target** | `fyne.io/fyne/v2@v2.7.4` → `internal/driver/mobile/app/android.go` |
 | **Change 5 (Android follows the system theme while running)** | A theme-only configuration change on Android reached the toolkit and stopped there. The Java side reads `uiMode & UI_MODE_NIGHT_MASK` on `onCreate` and on `onConfigurationChanged` and calls `setDarkMode`, but that only assigns a package variable; the flag is stamped into a `size.Event` in exactly one place, the `windowRedrawNeeded` branch, and the Go `onConfigurationChanged` sends a config struct carrying orientation and density only. So a phone switching to dark at sunset left the app on the old palette until a rotation or a return from the background happened to produce a redraw. The patch forwards the changed flag from the config-change branch as a `size.Event`, and only when it actually changed, so a rotation — which fires that branch and then the redraw branch — does not gain an extra event carrying pre-rotation dimensions. iOS never had the gap: `traitCollectionDidChange` calls `updateConfig`, which sends a `size.Event` carrying `isDark()`. |
+| **Patch 8** | [`fyne-2.7.4-ios-scene-lifecycle.patch`](fyne-2.7.4-ios-scene-lifecycle.patch) |
+| **Target** | `fyne.io/fyne/v2@v2.7.4` → `internal/driver/mobile/app/darwin_ios.m` |
+| **Change 6 (iOS 27 launches the app)** | An app linked against the iOS 27 SDK is refused at launch on iOS 27 unless it adopts the UIScene life cycle, and Fyne started from the app delegate alone. The patch adds a scene delegate that makes the window from the `UIWindowScene`, maps the scene callbacks onto Fyne's lifecycle, reads orientation from the scene, and passes incoming links on to the app delegate. It takes the scene path only when the bundle declares `UIApplicationSceneManifest`, which [`../scripts/ios-scene-manifest.sh`](../scripts/ios-scene-manifest.sh) writes into every iOS bundle. See [Patch 8](#patch-8-ios-scene-life-cycle-fyne-274-ios-scene-lifecyclepatch) below. |
 | **Applied by** | [`../scripts/setup-fyne-patch.sh`](../scripts/setup-fyne-patch.sh) |
 | **Patch (tools)** | [`fyne-tools-1.7.2-ios-deployment-target.patch`](fyne-tools-1.7.2-ios-deployment-target.patch) |
 | **Target** | `fyne.io/tools@v1.7.2` → `cmd/fyne/internal/mobile/build_iosapp.go` + `cmd/fyne/internal/commands/package-mobile.go` |
@@ -430,3 +433,75 @@ already had, one more of them, all inside the `savedRecently` guard. Filtering
 `event.Name` against the watched path in `watchFile` would remove them all *and*
 fix the pre-existing over-firing, but it changes settings-watch behaviour too,
 so it belongs in its own patch with its own testing.
+
+## Patch 8: iOS scene life cycle (`fyne-2.7.4-ios-scene-lifecycle.patch`)
+
+**Without it, no iPhone or iPad on iOS 27 can open an App Store build made with
+Xcode 27.**
+
+UIKit checks, at launch, whether an app linked against the iOS 27 SDK has
+adopted the scene life cycle, and stops it if not:
+
+```
+Application failed to launch: UIScene life cycle is required for apps built
+with this SDK.
+```
+
+Fyne 2.7.4's iOS driver made its window in
+`application:didFinishLaunchingWithOptions:` and had no scene delegate, so
+every build since Xcode 27 carried the defect. Upstream tracks it as
+fyne-io/fyne#6354. It surfaced as a launch crash on iPadOS 27.0 in App Store
+review. No simulator run had shown it, because `run-ios-sim.sh` stamped the
+simulator binary with the iOS 18 SDK, and UIKit keys the requirement on that
+stamp. The simulator build now stamps the SDK it was really built with.
+
+**The fix, in three parts that only work together:**
+
+- The patch adds `GoAppSceneDelegate`. The app delegate still owns the window
+  and the controller, so the keyboard, file pickers, `isDark` and the insets
+  keep working. The scene delegate makes the window from the `UIWindowScene`
+  and maps `sceneDidBecomeActive` / `sceneWillResignActive` /
+  `sceneDidEnterBackground` onto Fyne's focused / visible / alive stages. A
+  scene the system reconnects adopts the same controller, and with it the GL
+  context. Orientation comes from the window scene rather than
+  `statusBarOrientation`.
+- Only the application role gets the delegate. The app has one controller, so
+  any other scene (an external display, for one) is given no delegate and the
+  system goes on mirroring the device; every scene callback acts only for the
+  scene that holds the app's window.
+- Links: under scenes UIKit calls the scene delegate, never the app
+  delegate's link methods, which is where BibleText's category
+  (`share_link_ios.go`) implements them. The scene delegate passes each link
+  on: at launch from the connection options, and while running from
+  `scene:continueUserActivity:` and `scene:openURLContexts:`. A scene callback
+  has no answer to give iOS, so a web link the app declines is handed back to
+  the system with `openURL:`, once the scene is active. That rests on an
+  assumption the repo already makes (`reading_ios.go`, `bibleTextOpenInBrowser`):
+  an app opening its own universal link is sent to the browser, not back to
+  itself. It is not yet confirmed on a device for the scene path, so the same
+  URL is never handed back twice within ten seconds.
+- [`../scripts/ios-scene-manifest.sh`](../scripts/ios-scene-manifest.sh) writes
+  the manifest into every iOS bundle (App Store, device and simulator), after
+  `fyne package` and before signing, and reads it back. With `--check` it
+  reads a finished bundle: the manifest names the scene delegate and the
+  executable carries that class. `release-ios.sh` runs the check on the
+  archived app and again on the exported one, so an App Store build without
+  either part stops before upload.
+
+The manifest is what selects the scene path: without it the patched driver
+starts the old way, so such a bundle launches below iOS 27 and is refused on
+27. The class is named twice on purpose, in the manifest and in the patch's
+`application:configurationForConnectingSceneSession:options:`; the code wins,
+and `scene_manifest_test.go` holds the two names equal so that neither can
+name a class that does not exist. That test also pins the statements the patch
+stands on, the build wiring, the release checks and the link category's
+selectors. The launch itself can only be exercised on an iOS 27 simulator or
+device (`scripts/run-ios-sim.sh`); no simulator runs in CI.
+
+Removal, only when Fyne adopts scenes upstream: drop the `.patch`; in
+`setup-fyne-patch.sh` drop `PATCH_SCENE`, its `patch` line and its verify
+block; drop its entry in `fynePatchesNotOnLinux` (`cmd/linuxmeta/main.go`) and
+the patch checks in `scene_manifest_test.go`. Keep the manifest script, with
+`SCENE_DELEGATE_CLASS` set to Fyne's own scene delegate. Then prove link
+delivery again on a device: upstream's delegate must still reach the category
+in `share_link_ios.go`.

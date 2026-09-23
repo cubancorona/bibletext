@@ -111,6 +111,9 @@ mv "$APP_DIR/$APP_NAME" "$APP"
 # (No codesign on the sim path, so post-package is fine; true background behavior is
 # only reliably testable on a device via run-ios-device.sh.)
 plutil -replace UIBackgroundModes -json '["audio"]' "$APP/Info.plist"
+# UIScene life cycle: without it an app built with the iOS 27 SDK is refused at
+# launch on iOS 27. Must follow the packaging step (fyne rewrites Info.plist).
+"${REPO_ROOT}/scripts/ios-scene-manifest.sh" "$APP/Info.plist"
 # Match the device build: declare add-only Photos access so the share sheet's
 # "Save Image" action appears in the simulator too.
 plutil -replace NSPhotoLibraryAddUsageDescription -string "BibleText saves a shared verse image to your photo library only when you choose Save Image." "$APP/Info.plist"
@@ -193,10 +196,16 @@ else
     exit 1
 fi
 
-# Fyne builds the simulator binary for min iOS 7.0, which modern Simulator
-# runtimes reject ("This app needs to be updated by the developer"). Rewrite the
-# Mach-O build-version to a current minimum and re-sign (ad-hoc) so it installs.
-xcrun vtool -arch "$(uname -m)" -set-build-version 7 15.0 18.0 -replace \
+# Stamp the Mach-O build version explicitly and re-sign (ad hoc) so it
+# installs: fyne's own simulator packaging targets iOS 7.0, which current
+# Simulator runtimes reject ("This app needs to be updated by the developer").
+#
+# The SDK field must be the SDK the build really used. UIKit keys behaviour on
+# it: a binary stamped with an older SDK than the App Store build gets the older
+# behaviour, and a simulator run then passes where the store build fails. A
+# fixed stamp of 18.0 hid the iOS 27 scene life-cycle requirement that way.
+SIM_SDK_VERSION="$(xcrun --sdk iphonesimulator --show-sdk-version)"
+xcrun vtool -arch "$(uname -m)" -set-build-version 7 "$IOS_MIN" "$SIM_SDK_VERSION" -replace \
     -output "$APP/main" "$APP/main" 2>/dev/null \
     || echo "==> vtool min-version bump skipped (older Simulator? continuing)" >&2
 codesign --force --sign - "$APP" >/dev/null 2>&1 || true
