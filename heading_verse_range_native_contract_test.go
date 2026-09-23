@@ -26,13 +26,21 @@ func TestNativeVerseRangesStopAtAHeading(t *testing.T) {
 	}{
 		// iOS: the verse index records each verse's end and the heading
 		// block after it, once per import; every range reads that.
+		// The walk reads each verse's own span for a paragraph separator
+		// rather than asking for the paragraph around every number, which
+		// re-read a one-paragraph psalm once per verse.
 		{"iOS index", "reading_ios.go", "static void btIOSBuildVerseIndex(NSTextStorage *ts) {", false,
 			[]string{"btIOSIsHeadingParagraph(ts, para, thr)", "gVerseIndex[k].end = para.location",
-				"gVerseIndex[k].tail = NSMaxRange(para)"}, nil},
+				"gVerseIndex[k].tail = NSMaxRange(para)", "rangeOfCharacterFromSet:seps"},
+			[]string{"paragraphRangeForRange:NSMakeRange(gVerseIndex[k].loc, 0)"}},
 		{"iOS verse range", "reading_ios.go", "static NSRange btIOSReadAlongRange(NSTextStorage *ts, NSInteger verse) {", false,
 			[]string{"gVerseIndex[lo].end"}, []string{"gVerseIndex[lo + 1].loc"}},
+		// The exit at the range's end is what stops the loop: a narrated verse
+		// just above a heading ends exactly where the heading block starts, so
+		// without it the block is found, clamped back to the end, and found
+		// again — forever, on the main thread.
 		{"iOS bare ranges", "reading_ios.go", "static void btIOSBareRanges(NSTextStorage *ts, NSRange r, void (^yield)(NSRange bare)) {", false,
-			[]string{"btIOSHeadingTailAt(hi)"}, nil},
+			[]string{"btIOSHeadingTailAt(hi)", "if (tail == NSNotFound || hi >= end) break;"}, nil},
 		{"iOS heading block", "reading_ios.go", "static NSUInteger btIOSHeadingTailAt(NSUInteger at) {", false,
 			[]string{"e->end == at", "e->tail > e->end"}, nil},
 		{"iOS heading test", "reading_ios.go", "static BOOL btIOSIsHeadingParagraph(NSTextStorage *ts, NSRange para, CGFloat thr) {", false,
@@ -46,7 +54,9 @@ func TestNativeVerseRangesStopAtAHeading(t *testing.T) {
 		{"macOS verse range", "reading_macos.go", "static NSRange btMacReadAlongRange(NSTextStorage *ts, NSInteger verse) {", false,
 			[]string{"btMacIsHeadingParagraph(ts, para, thr)", "nextLoc = para.location"}, nil},
 		{"macOS bare ranges", "reading_macos.go", "static void btMacUnwashBreaks(NSTextStorage *ts, NSRange r) {", false,
-			[]string{"btMacHeadingBlockEndAt(ts, hi, end, thr)"}, nil},
+			[]string{"btMacHeadingBlockEndAt(ts, hi, end, thr)", "if (hi >= end) break;"}, nil},
+		{"macOS heading block", "reading_macos.go", "static NSUInteger btMacHeadingBlockEndAt(NSTextStorage *ts, NSUInteger at, NSUInteger limit, CGFloat thr) {", false,
+			[]string{"while (at < limit && at < s.length)", "para.location != at"}, nil},
 		{"macOS heading test", "reading_macos.go", "static BOOL btMacIsHeadingParagraph(NSTextStorage *ts, NSRange para, CGFloat thr) {", false,
 			[]string{"kCTFontTraitBold", "f.pointSize < thr", "integerValue"}, nil},
 		// Android washes from the markup; its verse ranges are the narration's.

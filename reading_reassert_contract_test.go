@@ -32,8 +32,18 @@ func TestDeferredReassertsNeverPinToTheTop(t *testing.T) {
 			t.Errorf("btIOSReassertPlacement does not call %s", want)
 		}
 	}
-	if strings.Contains(reassert, "contentOffset") {
-		t.Error("btIOSReassertPlacement moves the view itself — a re-assert with nothing to place must leave it where it is")
+	// By what it does, not only by what it names: no path out of the re-assert
+	// may move the view except the two placements it asks for.
+	for _, bad := range []string{"bibleTextScrollReadingTV", "contentOffset", "scrollRangeToVisible", "scrollToPoint"} {
+		if strings.Contains(strings.ToLower(reassert), strings.ToLower(bad)) {
+			t.Errorf("btIOSReassertPlacement reaches %q — a re-assert with nothing to place must leave the view where it is", bad)
+		}
+	}
+	// The restore moves the view only when it resolved a target.
+	restore := nativeFunctionSource(t, "reading_ios.go", "static BOOL btIOSApplyRestore(void) {")
+	if k := strings.Index(restore, "if (target >= 0) {"); k < 0 || strings.Count(restore, "contentOffset = ") != 1 ||
+		strings.Index(restore, "contentOffset = ") < k {
+		t.Error("btIOSApplyRestore must move the view once, and only inside its resolved-target branch")
 	}
 
 	// The import: the synchronous call keeps the top-pin (the control), and
@@ -81,9 +91,12 @@ func TestDeferredReassertsNeverPinToTheTop(t *testing.T) {
 		t.Error("btMacReassertPlacement must ask the resolver not to pin")
 	}
 	latched := nativeFunctionSource(t, "reading_macos.go", "static void btMacScrollTVLatched(BOOL pinTop) {")
-	stop, pin := strings.Index(latched, "if (!pinTop)"), strings.Index(latched, "pinned to TOP")
-	if stop < 0 || pin < 0 || stop > pin {
-		t.Error("btMacScrollTVLatched must return before the top-pin when pinTop is NO")
+	landed := strings.Index(latched, "if (btMacScrollToHighlight())")
+	stop, pin := strings.Index(latched, "if (!pinTop) {"), strings.Index(latched, "pinned to TOP")
+	if landed < 0 || stop < 0 || pin < 0 || !(landed < stop && stop < pin) {
+		t.Error("btMacScrollTVLatched must try the arrival, then return before the top-pin when pinTop is NO")
+	} else if block := latched[stop:pin]; !strings.Contains(block, "return;") {
+		t.Error("the !pinTop branch of btMacScrollTVLatched no longer returns, so the frame re-assert pins to the top again")
 	}
 	pinning := nativeFunctionSource(t, "reading_macos.go", "static void bibleTextMacScrollTV(void) {")
 	if !strings.Contains(pinning, "btMacScrollTVLatched(YES);") {

@@ -817,6 +817,7 @@ static void btIOSBuildVerseIndex(NSTextStorage *ts) {
     gVerseIndexCount = n;
     NSString *s = ts.string;
     NSUInteger contentEnd = btIOSContentEnd(ts);
+    NSCharacterSet *seps = [NSCharacterSet characterSetWithCharactersInString:@"\n\r\u2029"];
     for (NSUInteger k = 0; k < n; k++) {
         NSUInteger bound = (k + 1 < n) ? gVerseIndex[k + 1].loc : contentEnd;
         gVerseIndex[k].end = bound;
@@ -826,7 +827,19 @@ static void btIOSBuildVerseIndex(NSTextStorage *ts) {
         // can be heading matter: the next verse's own paragraph holds its
         // number, and a verse that shares its paragraph with the next one has
         // no paragraph between them at all.
-        NSUInteger p = NSMaxRange([s paragraphRangeForRange:NSMakeRange(gVerseIndex[k].loc, 0)]);
+        //
+        // Found by scanning this verse's own span for a paragraph separator,
+        // not by asking for the paragraph around its number: the spans
+        // partition the chapter, so the whole pass reads each character once.
+        // Asking paragraphRangeForRange at every number re-read the enclosing
+        // paragraph once per verse in it — about 5ms per import for a psalm set
+        // as one long paragraph, measured on an AppKit port of this function.
+        if (bound <= gVerseIndex[k].loc || bound > s.length) continue;
+        NSRange sep = [s rangeOfCharacterFromSet:seps options:0
+                                           range:NSMakeRange(gVerseIndex[k].loc, bound - gVerseIndex[k].loc)];
+        if (sep.location == NSNotFound) continue;
+        NSUInteger p = NSMaxRange(sep);
+        if ([s characterAtIndex:sep.location] == '\r' && p < bound && [s characterAtIndex:p] == '\n') p++;
         BOOL inHeads = NO;
         while (p < bound) {
             NSRange para = [s paragraphRangeForRange:NSMakeRange(p, 0)];

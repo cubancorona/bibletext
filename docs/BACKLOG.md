@@ -110,14 +110,27 @@ never the top-pin. `arriveNothing` was never meant to mean the top
 (notes_arrival.go). The synchronous resolver keeps its top-pin, which is how a
 plain entry opens a new chapter. Same reproduction after the fix: "landed on
 highlight", then "re-assert: nothing to place — view left where it is", and
-the view on the note. `TestDeferredReassertsNeverPinToTheTop` holds it, seven
-mutations caught. The dev scenario is `headwash` (docs/VISUAL_TESTS.md).
+the view on the note. `TestDeferredReassertsNeverPinToTheTop` holds it by what
+the re-asserts do, not only by the names they call: a review showed the first
+version passed a re-assert that ended in the pinning resolver, or in a
+`setContentOffset:`, and it now fails on both. The dev scenario is `headwash`
+(docs/VISUAL_TESTS.md).
 
 A side effect worth knowing: a reader who scrolled away from a lit wash and
 then rotated the phone, or resized the Mac window, used to be thrown to the
 top of the chapter by the same re-assert. The view now stays put.
 
 **Found by the same investigation and deliberately not changed, with why:**
+
+- *A reader who scrolls away from a note they arrived at is taken back to it
+  by the next width change* (a rotation that does not rebuild the layout, an
+  iPad or Mac window resize). The arrival class is written only when Go pushes
+  the note (`bibleTextSetNote`, the macOS twin); the reader's own scroll clears
+  the restore and the "you left off here" marker but not the class, so a width
+  re-assert still resolves it. Older than the fix above, which neither causes
+  nor cures it. The likely fix is to set the class to nothing beside the restore
+  disarm in `scrollViewDidScroll` and `btMacUserScrolled`: a scroll by the
+  reader is the end of an arrival. Needs a device to confirm the rotation path.
 
 - *A re-import the reader did not ask for could capture the position before
   the link's own import lands.* It cannot on iOS: `bibleTextTVCaptureAnchor`
@@ -875,8 +888,13 @@ affected: a heading line there carries no runs. Held by
 `TestChapterWashCoversExactlyTheMarkedUpCharacters` (the Go model: nine heading
 cases, including one asking every verse range directly, since the pixels come
 out right from the bare ranges alone), `TestNativeVerseRangesStopAtAHeading`
-and `TestHeadingsReachTheNativePanesBold`; every guard mutation-proved. Seen on
-the iPadOS simulator with the `headwash` scenario. Still open from the same
+and `TestHeadingsReachTheNativePanesBold`; every guard mutation-proved, including
+the exit that stops the bare-range loop at a range ending exactly where a heading
+starts (the narration on the verse above one), which a review found unguarded.
+The iOS pass finds each verse's paragraph end by scanning that verse's own span,
+so it reads the chapter once; asking for the paragraph around every verse
+number cost about 5ms per import on a psalm set as one paragraph (measured on
+an AppKit port). Seen on the iPadOS simulator with the `headwash` scenario. Still open from the same
 work: `btIOSNoteAnchorRange` falls back to the whole highlight range for a note
 with no verse, which would restyle a heading inside a multi-verse mark (no note
 has no verse today); and an omitted verse's gap mark before a verse is washed
