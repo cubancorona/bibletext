@@ -53,7 +53,7 @@ Fyne patches and platform bridge code:
 
 `go build ./...` does NOT compile `reading_ios.go` — it is behind `//go:build
 ios`, so the host build and every ordinary test run are blind to its
-Objective-C. After touching it, run the nine-second cross-compile before
+Objective-C. After touching it, run the quick cross-compile before
 anything slower; it is the same check the macOS CI job runs.
 
 ```bash

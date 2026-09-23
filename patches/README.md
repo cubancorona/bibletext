@@ -250,7 +250,9 @@ ships equivalent fixes (or the pinned versions include them):
 1. **Un-hook the packaging scripts:** delete the Fyne-patch block (the
    `setup-fyne-patch.sh` call + `go mod edit -replace` + the `EXIT`-trap
    restore) from `scripts/run-ios-device.sh`, `scripts/run-ios-sim.sh`,
-   `scripts/release-ios.sh`, **and** `scripts/build-android.sh`.
+   `scripts/release-ios.sh`, **and** `scripts/build-android.sh`; and the
+   patched pass in `scripts/check-ios-pane.sh` (which the macOS CI job runs),
+   which builds its own copy with `BIBLETEXT_FYNE_DEST`.
 2. **Delete the tooling:** remove the generated `third_party/fyne` and
    `third_party/fyne-tools` trees plus the patch files and their two setup
    scripts
@@ -504,7 +506,10 @@ and `scene_manifest_test.go` holds the two names equal so that neither can
 name a class that does not exist. That test also pins the statements the patch
 stands on, the build wiring, the release checks and the link category's
 selectors. The launch itself can only be exercised on an iOS 27 simulator or
-device (`scripts/run-ios-sim.sh`); no simulator runs in CI.
+device (`scripts/run-ios-sim.sh`); no simulator runs in CI, and
+`scripts/check-ios-pane.sh` compiles the patched toolkit as well as stock Fyne,
+in its own directory, so a broken patch fails the quick check and the macOS CI
+job.
 
 Removal, only when Fyne adopts scenes upstream: drop the `.patch`; in
 `setup-fyne-patch.sh` drop `PATCH_SCENE`, its `patch` line and its verify

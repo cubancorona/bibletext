@@ -147,7 +147,7 @@ jobs:
         run: go test -race -timeout 20m ./...
 
       # The same script a developer runs locally after touching reading_ios.go
-      # (nine seconds), so the check here and the check there cannot drift.
+      # (under a minute), so the check here and the check there cannot drift.
       - name: iOS cross-compile (ios/arm64, no signing)
         run: scripts/check-ios-pane.sh
 

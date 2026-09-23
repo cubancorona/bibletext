@@ -35,7 +35,10 @@ PATCH_TOUCH_CANCEL="patches/fyne-2.7.4-ios-touch-cancel.patch"
 PATCH_WINDOW_SIZE="patches/fyne-2.7.4-ios-window-size.patch"
 ATOMIC_TEST="patches/testdata/atomic-prefs_test.go"   # copied in, not diffed (a new file); testdata/ so the go tool ignores it here
 EMOJI_FONT="patches/NotoColorEmoji.ttf"
-DEST="third_party/fyne"
+# Where the patched copy goes, relative to the repository root. The packaging
+# scripts build from third_party/fyne; scripts/check-ios-pane.sh passes its own
+# directory, so a check never rewrites the tree a build is compiling from.
+DEST="${BIBLETEXT_FYNE_DEST:-third_party/fyne}"
 
 # Guard: the patch is tied to this exact Fyne version. If go.mod's require has
 # moved, the patch may not apply — regenerate it (see patches/README.md).
@@ -59,8 +62,12 @@ fi
 
 # 2. Copy it in (writable) and apply the one-line patch.
 echo "Regenerating ${DEST} from ${CACHE} ..."
+# The module cache is read-only, and so is a copy of it until the chmod below
+# runs; a run stopped mid-copy leaves a tree `rm -rf` cannot remove. Unlock
+# whatever is there first.
+if [ -d "$DEST" ]; then chmod -R u+w "$DEST"; fi
 rm -rf "$DEST"
-mkdir -p third_party
+mkdir -p "$(dirname "$DEST")"
 cp -R "$CACHE" "$DEST"
 chmod -R u+w "$DEST"
 patch -p1 -d "$DEST" < "$PATCH"

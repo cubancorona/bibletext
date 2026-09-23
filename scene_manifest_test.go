@@ -276,6 +276,31 @@ func TestSceneManifestNamesThePatchedDelegate(t *testing.T) {
 	}
 }
 
+// The quick iOS check (and the macOS CI job that runs it) must compile the
+// patched toolkit, regenerated from patches/ on every run: go.mod carries no
+// replace, so otherwise nothing short of a release build compiles a patch.
+func TestTheIOSCheckCompilesThePatchedToolkit(t *testing.T) {
+	script := readRepoFile(t, "scripts/check-ios-pane.sh")
+	code := regexp.MustCompile(`(?m)^\s*#.*$`).ReplaceAllString(script, "")
+	for claim, want := range map[string]string{
+		"regenerates the patched toolkit":      "scripts/setup-fyne-patch.sh",
+		"builds it in its own directory":       `BIBLETEXT_FYNE_DEST="$PATCHED" scripts/setup-fyne-patch.sh`,
+		"points a scratch go.mod at it":        `-replace "fyne.io/fyne/v2=$ROOT/$PATCHED"`,
+		"compiles against that scratch go.mod": `compile patched -modfile="$scratch/go.mod"`,
+		"still compiles the stock toolkit":     "compile stock",
+	} {
+		if !strings.Contains(code, want) {
+			t.Errorf("scripts/check-ios-pane.sh no longer %s (%q)", claim, want)
+		}
+	}
+	if strings.Contains(code, "go mod edit -replace") {
+		t.Error("scripts/check-ios-pane.sh edits the real go.mod; the replace belongs in the scratch copy")
+	}
+	if !strings.Contains(code, `PATCHED="build/ios-check/fyne"`) {
+		t.Error("scripts/check-ios-pane.sh no longer builds into its own directory; it would rewrite third_party/fyne under a running packaging build")
+	}
+}
+
 // Every script that makes an iOS bundle writes the manifest, as a plain
 // command (not disabled by `|| true` or wrapped in a condition), after fyne has
 // packaged (fyne writes Info.plist afresh) and before anything is signed (a
