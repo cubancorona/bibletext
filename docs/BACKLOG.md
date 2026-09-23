@@ -54,6 +54,43 @@ the card's rune-level colour splitting into it rather than the pane's
 whole-token rule, or two BSB verses (Mark 7:34, Acts 20:35) change colour on
 the card. Keep the audit as the cross-surface guard either way.
 
+## More share-card typefaces with true small capitals
+
+Surveyed 23 September 2026, and optional: since `cardText` (share_image.go)
+every one of the seven card faces already draws the divine name, six of them
+from their own capitals at 0.70. An added face would bring designed small
+capitals and more variety, not correctness.
+
+Eleven SIL-OFL serifs from Google Fonts' repository were checked for the five
+characters the name uses (`ʟ ᴏ ʀ ᴅ ɢ`); five carry all of them, and each was
+rendered through the real card renderer as a Psalm 23:1–2 card:
+
+| typeface | size (regular) | verdict |
+| --- | --- | --- |
+| **Junicode** | already bundled (reading face) | **add** — costs nothing, and ties the card to the page it was shared from. Its default figures are old-style, so the citation's "23:1–2" sits low; a visible difference, not a fault. |
+| **EB Garamond** | ~830 KB (variable) | **add, if one more** — the traditional Bible face and the finest of the five on the card. Google ships it variable-only, and `x/image/font/opentype` cannot pick a weight from a variable font, so it needs the static Regular and SemiBold from the designer's own release, and a read of the licence's reserved-name terms first. |
+| Gentium Book Plus | ~800 KB | skip — built for linguistics; reads utilitarian on a card |
+| Charis SIL | ~735 KB | skip — same family of purpose |
+| Noto Serif | ~1.8 MB (variable) | skip — the most generic and the largest |
+
+None of Source Serif 4, Newsreader, Literata, Libre Caslon Text, Crimson Pro or
+Alegreya carries any of the five.
+
+Two effects of adding any face, both worth saying before it ships:
+
+- The rotation stays whole. Regenerate walks colour schemes (13) and faces
+  together, and reaches every pairing only if the two counts share no factor;
+  13 is prime, so 8 or 9 faces are both fine.
+- Most verses' DEFAULT card changes typeface. The face is chosen from a hash of
+  the reference modulo the number of faces, so adding one re-deals the
+  defaults. Nothing breaks; a reader sharing the same verse again sees a
+  different look.
+
+To re-render the comparison: parse each candidate with `opentype.Parse`, set
+`shareTypefaces` to a one-face list in a tagged test (after `loadShareTypefaces`
+has run once), and call `renderVerseImage`. The four `share_image_smallcaps`
+tests cover any new face automatically, since they iterate the typeface list.
+
 ## Fyne's RichText breaks a word mid-word at the start of a segment
 
 Found 22 September 2026, same audit. When a segment begins partway along a
