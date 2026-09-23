@@ -268,6 +268,26 @@ func devAutoNotesS8(state *AppState) {
 		// The styled pane applies an armed restore from its next layout pass,
 		// so ask for one; the natives read the arm itself.
 		at(15*time.Second, func() { armReadingRestore(15, 0, 0); state.refreshReadingOnly() })
+	case "headwash":
+		// A HEADING BELONGS TO NO VERSE: the note on the verse ABOVE a heading.
+		// BSB John 11:16 stands just above "Jesus Comforts Martha and Mary"
+		// (headnote's heading, which opens v17), so this is the one shape
+		// headnote cannot show — its note is below the heading. The verse's
+		// range used to run to the next verse's NUMBER, so the heading belonged
+		// to v16 and the note washed it. Then the narration on the same verse
+		// (it must never light the heading either), then a mark ACROSS the
+		// heading, v16-17, whose wash must leave the heading on plain paper
+		// between two washed verses.
+		at(1500*time.Millisecond, func() {
+			HandleShareLink(state, ShareLinkURLWithNote("bsb", "John", 11, 16, 16,
+				"Fixture note on the verse above a heading."))
+		})
+		at(8*time.Second, func() { readAlongHighlight(16, true) })
+		at(14*time.Second, func() { readAlongClear() })
+		at(16*time.Second, func() {
+			HandleShareLink(state, ShareLinkURLWithNote("bsb", "John", 11, 16, 17,
+				"Fixture note across a heading."))
+		})
 	case "linkscroll":
 		// The Links-tab state sequence (the
 		// compact tab bar is CurrentTab + rebuildWindow — no widget to tap):

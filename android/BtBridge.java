@@ -1425,7 +1425,8 @@ public final class BtBridge {
     // chapter's Spanned by scanning the verse-number SuperscriptSpans (Html.fromHtml
     // turns each <sup> into one), in document order. A verse's span runs from its
     // number through just before the next verse's number (or end of text) — number +
-    // words, so the tint covers the whole verse, matching the iOS read-along range.
+    // words, so the tint covers the whole verse, matching the iOS read-along range —
+    // or through just before a publisher's heading between them (endBeforeHeading).
     private static void buildVerseIndex(CharSequence cs) {
         verseNums = new int[0];
         verseStarts = new int[0];
@@ -1456,13 +1457,34 @@ public final class BtBridge {
             }
             nums[count] = num;
             starts[count] = st;
-            ends[count] = en;
+            ends[count] = endBeforeHeading(sp, st, en);
             count++;
         }
         verseNums = Arrays.copyOf(nums, count);
         verseStarts = Arrays.copyOf(starts, count);
         verseEnds = Arrays.copyOf(ends, count);
         contentStart = count > 0 ? verseStarts[0] : 0;
+    }
+
+    // endBeforeHeading: where a verse whose number starts at `st` ends, given the
+    // next number at `en` — at `en`, or at the start of the first publisher's
+    // heading between the two. A heading is its own paragraph and belongs to
+    // neither verse; ending at the next number gave it to the verse ABOVE, so
+    // the narration on that verse lit the heading as well. Only lines wholly
+    // before `en` are asked: the next verse's own line holds its number. The
+    // twin of the Apple panes' verse end (btIOSBuildVerseIndex,
+    // btMacReadAlongRange).
+    private static int endBeforeHeading(Spanned sp, int st, int en) {
+        int nl = android.text.TextUtils.indexOf(sp, '\n', st);
+        while (nl >= 0 && nl < en) {
+            int ls = nl + 1;
+            int le = android.text.TextUtils.indexOf(sp, '\n', ls);
+            if (le < 0) le = sp.length();
+            if (le > en) break;
+            if (isHeadingParagraph(sp, ls, le)) return ls;
+            nl = le;
+        }
+        return en;
     }
 
     // parseLeadingInt reads the run of digits starting at `from` (the verse number

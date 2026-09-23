@@ -818,8 +818,55 @@ void bibleTextMacSetFollowButtonColors(double bgR, double bgG, double bgB,
     });
 }
 
+// btMacIsHeadingParagraph reports whether a paragraph is a publisher's heading:
+// it holds no verse number, and its first non-blank character is set BOLD at
+// body size. buildChapterHTML sets p.sec at weight 700 and the reading-face swap
+// keeps the trait (Junicode-Bold, reading_fonts_apple.go); the size bound keeps
+// out the verse numerals, which are bold too. The twin of iOS's
+// btIOSIsHeadingParagraph, which leaves the verse-number half to its caller
+// because iOS has the verse index to hand; this pane has none, so the paragraph
+// is asked directly — it is short, and this runs per mutation, not per frame.
+static BOOL btMacIsHeadingParagraph(NSTextStorage *ts, NSRange para, CGFloat thr) {
+    if (ts == nil || para.length == 0 || NSMaxRange(para) > ts.length) return NO;
+    NSString *s = ts.string;
+    NSCharacterSet *blank = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+    NSUInteger i = para.location, e = NSMaxRange(para);
+    while (i < e && [blank characterIsMember:[s characterAtIndex:i]]) i++;
+    if (i >= e) return NO;
+    NSFont *f = [ts attribute:NSFontAttributeName atIndex:i effectiveRange:NULL];
+    if (f == nil || f.pointSize < thr) return NO;
+    if (!(CTFontGetSymbolicTraits((__bridge CTFontRef)f) & kCTFontTraitBold)) return NO;
+    __block BOOL numbered = NO;
+    [ts enumerateAttribute:NSFontAttributeName inRange:para options:0
+                usingBlock:^(id val, NSRange r, BOOL *stop) {
+        if (val == nil || r.length == 0 || ((NSFont *)val).pointSize >= thr) return;
+        if ([[s substringWithRange:r] integerValue] > 0) { numbered = YES; *stop = YES; }
+    }];
+    return !numbered;
+}
+
+// btMacHeadingBlockEndAt: when a publisher's heading paragraph starts exactly at
+// `at`, where the block of headings starting there ends (a stack of them, each
+// paragraph's newline included, never past `limit`); NSNotFound otherwise.
+static NSUInteger btMacHeadingBlockEndAt(NSTextStorage *ts, NSUInteger at, NSUInteger limit, CGFloat thr) {
+    NSString *s = ts.string;
+    NSUInteger end = NSNotFound;
+    while (at < limit && at < s.length) {
+        NSRange para = [s paragraphRangeForRange:NSMakeRange(at, 0)];
+        if (para.location != at || !btMacIsHeadingParagraph(ts, para, thr)) break;
+        end = NSMaxRange(para) < limit ? NSMaxRange(para) : limit;
+        at = end;
+    }
+    return end;
+}
+
 // btMacReadAlongRange returns verse's number-run start through just before the next
-// verse's number run (or end of text) — i.e. the whole verse, number + words.
+// verse's number run (or end of text) — i.e. the whole verse, number + words —
+// or through just before a publisher's heading standing between the two. A
+// heading is its own paragraph and belongs to neither verse; the old end gave it
+// to the verse ABOVE, so a note, a search hit or the narration on that verse
+// washed the heading too. The iOS twin records the same end in its verse index
+// (btIOSBuildVerseIndex); the Go model is endOf in reading_tint_wash_shape_test.go.
 // Verse 0 (kBTReadAlongTitle) is the Psalm's title paragraph, resolved AHEAD of
 // btMacLocForVerse, which enumerates for integerValue == verse and would accept
 // any sub-threshold non-numeric run for 0; the title ends at or before the first
@@ -838,6 +885,16 @@ static NSRange btMacReadAlongRange(NSTextStorage *ts, NSInteger verse) {
             ((NSFont *)val).pointSize >= thr) return;
         if ([[ts.string substringWithRange:r] integerValue] > 0) { nextLoc = r.location; *stop = YES; }
     }];
+    // The paragraphs after the one holding this verse's number and wholly before
+    // the next number: the first heading among them ends the verse.
+    NSString *s = ts.string;
+    NSUInteger p = NSMaxRange([s paragraphRangeForRange:NSMakeRange(start, 0)]);
+    while (p < nextLoc) {
+        NSRange para = [s paragraphRangeForRange:NSMakeRange(p, 0)];
+        if (para.length == 0 || NSMaxRange(para) > nextLoc) break;
+        if (btMacIsHeadingParagraph(ts, para, thr)) { nextLoc = para.location; break; }
+        p = NSMaxRange(para);
+    }
     if (start >= nextLoc) return NSMakeRange(NSNotFound, 0);
     return NSMakeRange(start, nextLoc - start);
 }
@@ -897,6 +954,7 @@ static void btMacUnwashBreaks(NSTextStorage *ts, NSRange r) {
     NSUInteger end = NSMaxRange(r);
     if (end > s.length) return;
     NSCharacterSet *ws = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+    CGFloat thr = btMacVerseFontThreshold(ts);
     for (NSUInteger i = r.location; i < end; i++) {
         unichar ch = [s characterAtIndex:i];
         if (ch != '\n' && ch != '\r' && ch != 0x2028 && ch != 0x2029) continue;
@@ -906,7 +964,18 @@ static void btMacUnwashBreaks(NSTextStorage *ts, NSRange r) {
         // run holds no break is inside the band and stays.
         NSUInteger lo = i, hi = i;
         while (lo > r.location && [ws characterIsMember:[s characterAtIndex:lo - 1]]) lo--;
-        while (hi < end && [ws characterIsMember:[s characterAtIndex:hi]]) hi++;
+        for (;;) {
+            while (hi < end && [ws characterIsMember:[s characterAtIndex:hi]]) hi++;
+            // A publisher's heading opens right after a break (it is its own
+            // paragraph), so the break's run swallows it and the whitespace
+            // after it — a heading standing inside a multi-verse mark stays on
+            // plain paper, as the markup leaves it. The iOS twin is
+            // btIOSBareRanges.
+            if (hi >= end) break;
+            NSUInteger tail = btMacHeadingBlockEndAt(ts, hi, end, thr);
+            if (tail == NSNotFound) break;
+            hi = tail;
+        }
         [ts removeAttribute:NSBackgroundColorAttributeName range:NSMakeRange(lo, hi - lo)];
         i = hi;
     }

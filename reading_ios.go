@@ -659,7 +659,11 @@ static CGFloat btIOSVerseFontThreshold(NSTextStorage *ts) {
 // scroll-end anchor capture binary-searches this instead of re-enumerating the whole
 // text storage on every finger-lift — that O(n) main-thread walk landed exactly at
 // scroll-settle and was the felt scroll lag (worst on long chapters).
-typedef struct { NSInteger verse; NSUInteger loc; NSUInteger len; } BTVerseLoc;
+//
+// Each entry also records where its verse ENDS and where the heading matter
+// after it ends (`end`, `tail`; see btIOSBuildVerseIndex). A publisher's
+// heading is its own paragraph between two verses, and belongs to neither.
+typedef struct { NSInteger verse; NSUInteger loc; NSUInteger len; NSUInteger end; NSUInteger tail; } BTVerseLoc;
 static BTVerseLoc *gVerseIndex = NULL;
 static NSUInteger  gVerseIndexCount = 0;
 
@@ -754,6 +758,27 @@ static NSRange btIOSTitleRange(NSTextStorage *ts) {
     return gTitleRange;
 }
 
+// btIOSIsHeadingParagraph reports whether a paragraph between two verses is a
+// publisher's heading: its first non-blank character is set BOLD at body size.
+// The caller has already established that the paragraph holds no verse number,
+// which is half the test; bold is the other half, and it is what separates a
+// heading from any other numberless paragraph (buildChapterHTML sets p.sec at
+// weight 700, and the reading-face swap keeps the trait: Junicode-Bold,
+// reading_fonts_apple.go). The size bound keeps out the verse numerals, which
+// are bold too but sit below the verse-number threshold. The Apple twin of
+// Android's isHeadingParagraph; the title's test (btIOSFindTitleRange) is the
+// same shape with italic in place of bold.
+static BOOL btIOSIsHeadingParagraph(NSTextStorage *ts, NSRange para, CGFloat thr) {
+    NSString *s = ts.string;
+    NSCharacterSet *blank = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+    NSUInteger i = para.location, e = NSMaxRange(para);
+    while (i < e && [blank characterIsMember:[s characterAtIndex:i]]) i++;
+    if (i >= e) return NO;
+    UIFont *f = [ts attribute:NSFontAttributeName atIndex:i effectiveRange:NULL];
+    if (f == nil || f.pointSize < thr) return NO;
+    return (CTFontGetSymbolicTraits((__bridge CTFontRef)f) & kCTFontTraitBold) != 0;
+}
+
 // btIOSBuildVerseIndex captures every verse-number run (those below the 0.8x
 // threshold, which is derived per render and not an absolute size) into
 // gVerseIndex. Called on every text assignment; the single buffer is reused for the
@@ -761,6 +786,19 @@ static NSRange btIOSTitleRange(NSTextStorage *ts) {
 // content end: the footnote section's 0.85em runs sit above the 0.8× threshold, so
 // they could never match anyway — bounding the range makes that a structural fact
 // rather than a typographic one.
+//
+// A PUBLISHER'S HEADING BELONGS TO NO VERSE. A verse used to run from its number
+// to the next verse's number, so a heading — its own paragraph, standing between
+// two verses — belonged to the verse ABOVE it: a note, a search hit or the
+// narration on that verse washed the heading too, a tap on the heading counted
+// as a tap on the mark, and the verse's range reached down past it. So after the
+// walk each entry records `end`, where its verse stops: the next verse's number,
+// or the start of the first heading paragraph before it. And `tail`, where that
+// heading matter stops (the last of a stack of headings, trailing newline
+// included), so the bare ranges can leave a heading standing INSIDE a
+// multi-verse mark on plain paper, as the markup does (reading.go writes it as
+// a <p class="sec"> with no wash class). The Go model of this rule is endOf and
+// bareRanges in reading_tint_wash_shape_test.go.
 static void btIOSBuildVerseIndex(NSTextStorage *ts) {
     const NSUInteger CAP = 512; // far above any chapter's verse count (max ~176)
     if (gVerseIndex == NULL) gVerseIndex = malloc(CAP * sizeof(BTVerseLoc));
@@ -777,6 +815,32 @@ static void btIOSBuildVerseIndex(NSTextStorage *ts) {
         if (v > 0) { gVerseIndex[n].verse = v; gVerseIndex[n].loc = r.location; gVerseIndex[n].len = r.length; n++; }
     }];
     gVerseIndexCount = n;
+    NSString *s = ts.string;
+    NSUInteger contentEnd = btIOSContentEnd(ts);
+    for (NSUInteger k = 0; k < n; k++) {
+        NSUInteger bound = (k + 1 < n) ? gVerseIndex[k + 1].loc : contentEnd;
+        gVerseIndex[k].end = bound;
+        gVerseIndex[k].tail = bound;
+        // The paragraphs after the one holding this verse's number, up to the
+        // one holding the next number. Only a paragraph wholly before `bound`
+        // can be heading matter: the next verse's own paragraph holds its
+        // number, and a verse that shares its paragraph with the next one has
+        // no paragraph between them at all.
+        NSUInteger p = NSMaxRange([s paragraphRangeForRange:NSMakeRange(gVerseIndex[k].loc, 0)]);
+        BOOL inHeads = NO;
+        while (p < bound) {
+            NSRange para = [s paragraphRangeForRange:NSMakeRange(p, 0)];
+            if (para.length == 0 || NSMaxRange(para) > bound) break;
+            if (btIOSIsHeadingParagraph(ts, para, thr)) {
+                if (!inHeads) gVerseIndex[k].end = para.location;
+                gVerseIndex[k].tail = NSMaxRange(para);
+                inHeads = YES;
+            } else if (inHeads) {
+                break;
+            }
+            p = NSMaxRange(para);
+        }
+    }
 }
 
 // btIOSApplyMarker recolours the marked verse's number run in the accent colour,
@@ -2288,7 +2352,9 @@ void bibleTextSetFollowButtonColors(double bgR, double bgG, double bgB,
 }
 
 // btIOSReadAlongRange returns verse's number-run start through just before the next
-// verse's number run (or end of text) — i.e. the whole verse, number + words.
+// verse's number run (or end of text) — i.e. the whole verse, number + words —
+// or through just before a publisher's heading that stands between the two,
+// which belongs to neither (the entry's `end`, btIOSBuildVerseIndex).
 // Verse 0 (kBTReadAlongTitle) is the Psalm's title paragraph, which ends at or
 // before the first number run, so neither range can absorb the other. The
 // prebuilt index is in document order, so the entry after `verse` IS the next run
@@ -2304,10 +2370,27 @@ static NSRange btIOSReadAlongRange(NSTextStorage *ts, NSInteger verse) {
     NSUInteger start = gVerseIndex[lo].loc;
     // The LAST verse ends at the content end, not ts.length — the appended
     // footnote section must never inherit its read-along wash, highlight band
-    // or selection attribution (see gContentEnd).
-    NSUInteger end = (lo + 1 < gVerseIndexCount) ? gVerseIndex[lo + 1].loc : btIOSContentEnd(ts);
+    // or selection attribution (see gContentEnd). The index recorded both
+    // bounds when it was built.
+    NSUInteger end = gVerseIndex[lo].end;
+    if (end > ts.length) end = ts.length;
     if (start >= end) return NSMakeRange(NSNotFound, 0);
     return NSMakeRange(start, end - start);
+}
+
+// btIOSHeadingTailAt: when a publisher's heading block starts exactly at `at`,
+// where it ends (btIOSBuildVerseIndex's `tail`); NSNotFound otherwise. The block
+// belongs to the verse entry at or before `at` — the last one whose number
+// starts there or earlier — so it is one binary search, like the verse lookups.
+static NSUInteger btIOSHeadingTailAt(NSUInteger at) {
+    NSUInteger lo = 0, hi = gVerseIndexCount;
+    while (lo < hi) {
+        NSUInteger mid = lo + (hi - lo) / 2;
+        if (gVerseIndex[mid].loc <= at) lo = mid + 1; else hi = mid;
+    }
+    if (lo == 0) return NSNotFound;
+    BTVerseLoc *e = &gVerseIndex[lo - 1];
+    return (e->end == at && e->tail > e->end) ? e->tail : NSNotFound;
 }
 
 // btIOSRunSpanRange is the whole character span of verses lo..hi, untrimmed.
@@ -2373,6 +2456,7 @@ static NSRange btIOSRunWashRange(NSTextStorage *ts, int i) {
 // the importer PAINTS are different questions, and only the second one decides
 // pixels. The narrow rule left every poetic verse the wrong shape, on a
 // single-verse mark, on both panes.
+static NSUInteger btIOSHeadingTailAt(NSUInteger at);
 static void btIOSBareRanges(NSTextStorage *ts, NSRange r, void (^yield)(NSRange bare)) {
     if (r.location == NSNotFound || r.length == 0) return;
     NSString *s = ts.string;
@@ -2388,7 +2472,17 @@ static void btIOSBareRanges(NSTextStorage *ts, NSRange r, void (^yield)(NSRange 
         // run holds no break is inside the band and stays.
         NSUInteger lo = i, hi = i;
         while (lo > r.location && [ws characterIsMember:[s characterAtIndex:lo - 1]]) lo--;
-        while (hi < end && [ws characterIsMember:[s characterAtIndex:hi]]) hi++;
+        for (;;) {
+            while (hi < end && [ws characterIsMember:[s characterAtIndex:hi]]) hi++;
+            // A publisher's heading opens right after a break (it is its own
+            // paragraph), so the break's run swallows it and the whitespace
+            // after it — again for a heading stacked beneath — and a mark over
+            // the verses either side leaves it on plain paper, as the markup
+            // does. The index recorded where each heading block starts and ends.
+            NSUInteger tail = btIOSHeadingTailAt(hi);
+            if (tail == NSNotFound || hi >= end) break;
+            hi = tail < end ? tail : end;
+        }
         yield(NSMakeRange(lo, hi - lo));
         i = hi;
     }
@@ -2573,6 +2667,10 @@ static void btIOSRefreshHighlightRange(NSTextStorage *ts) {
 // a bounding rect, so a multi-line passage never accepts taps in the blank
 // ragged-right margin or in the indent gap beside a short final line. The small
 // inset is tap tolerance.
+//
+// The lines tested are those of the PAINTED pieces (btIOSPaintedPieces), not the
+// run's whole span: a publisher's heading standing inside a multi-verse mark is
+// left bare by the wash view, and a tap on it is a tap on plain paper.
 static BOOL btIOSPointInChapterWash(CGPoint inContainer) {
     if (gReadingTV == nil) return NO;
     NSTextStorage *ts = gReadingTV.textStorage;
@@ -2580,13 +2678,17 @@ static BOOL btIOSPointInChapterWash(CGPoint inContainer) {
     for (int i = 0; i < gTint.n; i++) {
         NSRange r = btIOSRunWashRange(ts, i);
         if (r.location == NSNotFound || NSMaxRange(r) > ts.length) continue;
-        NSRange wg = [lm glyphRangeForCharacterRange:r actualCharacterRange:NULL];
         __block BOOL hit = NO;
-        [lm enumerateLineFragmentsForGlyphRange:wg
-                                     usingBlock:^(CGRect rect, CGRect usedRect, NSTextContainer *tc,
-                                                  NSRange gr, BOOL *stop) {
-            if (CGRectContainsPoint(CGRectInset(usedRect, -2, -2), inContainer)) { hit = YES; *stop = YES; }
-        }];
+        btIOSPaintedPieces(ts, r, ^(NSRange piece) {
+            if (hit) return;
+            NSRange wg = [lm glyphRangeForCharacterRange:piece actualCharacterRange:NULL];
+            if (wg.length == 0) return;
+            [lm enumerateLineFragmentsForGlyphRange:wg
+                                         usingBlock:^(CGRect rect, CGRect usedRect, NSTextContainer *tc,
+                                                      NSRange gr, BOOL *stop) {
+                if (CGRectContainsPoint(CGRectInset(usedRect, -2, -2), inContainer)) { hit = YES; *stop = YES; }
+            }];
+        });
         if (hit) return YES;
     }
     return NO;

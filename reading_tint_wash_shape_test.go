@@ -54,6 +54,11 @@ type importedChapter struct {
 	text  []rune
 	hl    []bool // parallel to text
 	verse []verseAt
+	// heads are the publisher's section headings, [start, end) of each
+	// heading's own text: a <p class="sec"> paragraph, which the native side
+	// recognises as a paragraph holding no verse number whose text is bold
+	// (btIOSIsHeadingParagraph / btMacIsHeadingParagraph).
+	heads [][2]int
 }
 
 // verseAt is a verse number run: the character location the native side finds by
@@ -91,6 +96,7 @@ func importChapterHTML(t *testing.T, html string) importedChapter {
 	var stack []bool // one entry per open element that could carry .hl
 	inSup, supStart := false, 0
 	paraSeen := false
+	headAt := -1 // the open heading's first character, or -1
 
 	emit := func(s string) {
 		on := false
@@ -138,8 +144,15 @@ func importChapterHTML(t *testing.T, html string) importedChapter {
 				stack = stack[:len(stack)-1]
 			}
 			paraSeen = true
+			if strings.Contains(tag, `class="sec"`) {
+				headAt = len(doc.text)
+			}
 		case tag == "</p>":
 			// nothing: the separator is written by the next <p>
+			if headAt >= 0 {
+				doc.heads = append(doc.heads, [2]int{headAt, len(doc.text)})
+				headAt = -1
+			}
 		case tag == "<br>":
 			// A BREAK IS BARE, even nested inside the .hl span. Measured against
 			// the real AppKit importer rather than read off the markup:
@@ -198,14 +211,30 @@ func (d importedChapter) locOf(verse int) int {
 }
 
 // endOf is where verse's own span stops: the next verse number, or the end of the
-// text. The twin of btIOSReadAlongRange / btMacReadAlongRange.
-func (d importedChapter) endOf(verse int) int {
+// text — or, with headings, the start of the first publisher's heading between
+// the two. The twin of btIOSReadAlongRange / btMacReadAlongRange, which read
+// the end the verse index recorded (btIOSBuildVerseIndex).
+//
+// headings=false is the rule this replaced, kept so a case can show the heading
+// clamp is doing something: a heading is its own paragraph between two verses,
+// so the old rule gave it to the verse ABOVE, and a mark on that verse washed
+// the heading with it.
+func (d importedChapter) endOf(verse int, headings bool) int {
 	for i, v := range d.verse {
 		if v.verse == verse {
+			end := len(d.text)
 			if i+1 < len(d.verse) {
-				return d.verse[i+1].loc
+				end = d.verse[i+1].loc
 			}
-			return len(d.text)
+			if headings {
+				for _, h := range d.heads {
+					if h[0] > v.loc && h[0] < end {
+						end = h[0]
+						break
+					}
+				}
+			}
+			return end
 		}
 	}
 	return -1
@@ -229,8 +258,8 @@ func isBreakRune(r rune) bool { return r == '\n' || r == '\r' || r == ' ' || r
 // The narrow rule left every poetic verse the wrong shape on both panes, on a
 // single-verse mark, and this model agreed with it — so the test certified the
 // defect instead of catching it.
-func unwashBreaks(text []rune, mask []bool, start, end int) {
-	bareRanges(text, start, end, func(lo, hi int) {
+func unwashBreaks(text []rune, heads [][2]int, mask []bool, start, end int) {
+	bareRanges(text, heads, start, end, func(lo, hi int) {
 		for j := lo; j < hi && j < len(mask); j++ {
 			mask[j] = false
 		}
@@ -240,7 +269,21 @@ func unwashBreaks(text []rune, mask []bool, start, end int) {
 // bareRanges is btIOSBareRanges: the whitespace run around every break, in
 // order — ONE enumerator with two consumers on the native side (the narration
 // attribute's unwash and the wash view's rects), and two here to match.
-func bareRanges(text []rune, start, end int, yield func(lo, hi int)) {
+//
+// A publisher's heading standing inside a run is bare too: it is its own
+// paragraph, emitted with no .hl, so a mark over the verses either side of it
+// leaves it on plain paper. A heading always opens right after a break (it is a
+// paragraph), so the break's run swallows it and the whitespace after it —
+// repeatedly, for headings stacked one above the other.
+func bareRanges(text []rune, heads [][2]int, start, end int, yield func(lo, hi int)) {
+	headAt := func(i int) int {
+		for _, h := range heads {
+			if h[0] == i {
+				return h[1]
+			}
+		}
+		return -1
+	}
 	for i := start; i < end && i < len(text); i++ {
 		if !isLineBreakRune(text[i]) {
 			continue
@@ -253,8 +296,18 @@ func bareRanges(text []rune, start, end int, yield func(lo, hi int)) {
 		for lo > start && unicode.IsSpace(text[lo-1]) {
 			lo--
 		}
-		for hi < end && hi < len(text) && unicode.IsSpace(text[hi]) {
-			hi++
+		for {
+			for hi < end && hi < len(text) && unicode.IsSpace(text[hi]) {
+				hi++
+			}
+			he := headAt(hi)
+			if he < 0 || hi >= end {
+				break
+			}
+			hi = he
+			if hi > end {
+				hi = end
+			}
 		}
 		yield(lo, hi)
 		i = hi
@@ -265,13 +318,13 @@ func bareRanges(text []rune, start, end int, yield func(lo, hi int)) {
 // ranges, as the ordered pieces the iOS wash view builds a rect per line for.
 // trimBreaks=false is the one-piece rule (the whole outer range), kept so the
 // test can show the subtraction is doing something.
-func paintedPieces(text []rune, start, end int, trimBreaks bool) [][2]int {
+func paintedPieces(text []rune, heads [][2]int, start, end int, trimBreaks bool) [][2]int {
 	if !trimBreaks {
 		return [][2]int{{start, end}}
 	}
 	var pieces [][2]int
 	cursor := start
-	bareRanges(text, start, end, func(lo, hi int) {
+	bareRanges(text, heads, start, end, func(lo, hi int) {
 		if lo > cursor {
 			pieces = append(pieces, [2]int{cursor, lo})
 		}
@@ -289,14 +342,14 @@ func paintedPieces(text []rune, start, end int, trimBreaks bool) [][2]int {
 // washMask uses.
 func (d importedChapter) piecesMask(lo, hi int, trimBreaks bool) []bool {
 	mask := make([]bool, len(d.text))
-	start, end := d.locOf(lo), d.endOf(hi)
+	start, end := d.locOf(lo), d.endOf(hi, trimBreaks)
 	if start < 0 || end < 0 {
 		return mask
 	}
 	for end > start && unicode.IsSpace(d.text[end-1]) {
 		end--
 	}
-	for _, p := range paintedPieces(d.text, start, end, trimBreaks) {
+	for _, p := range paintedPieces(d.text, d.heads, start, end, trimBreaks) {
 		for i := p[0]; i < p[1] && i < len(mask); i++ {
 			mask[i] = true
 		}
@@ -314,7 +367,7 @@ func isLineBreakRune(r rune) bool {
 // show the difference is real.
 func (d importedChapter) washMask(lo, hi int, trimBreaks bool) []bool {
 	mask := make([]bool, len(d.text))
-	start, end := d.locOf(lo), d.endOf(hi)
+	start, end := d.locOf(lo), d.endOf(hi, trimBreaks)
 	if start < 0 || end < 0 {
 		return mask
 	}
@@ -323,7 +376,7 @@ func (d importedChapter) washMask(lo, hi int, trimBreaks bool) []bool {
 		end--
 	}
 	for v := lo; v <= hi; v++ {
-		vs, ve := d.locOf(v), d.endOf(v)
+		vs, ve := d.locOf(v), d.endOf(v, trimBreaks)
 		if vs < 0 {
 			continue
 		}
@@ -342,7 +395,7 @@ func (d importedChapter) washMask(lo, hi int, trimBreaks bool) []bool {
 	}
 	// ...then every break character taken back out, which is the whole rule.
 	if trimBreaks {
-		unwashBreaks(d.text, mask, start, end)
+		unwashBreaks(d.text, d.heads, mask, start, end)
 	}
 	return mask
 }
@@ -404,6 +457,14 @@ func TestChapterWashCoversExactlyTheMarkedUpCharacters(t *testing.T) {
 	// reporter layout that boundary also carries the em+en space indent. Spelled
 	// out per case so the ones that prove something are distinguishable from the
 	// ones that only guard against over-trimming.
+	// A publisher's heading standing before verse 4 (two of them, stacked, in
+	// one case). The heading is its own <p class="sec"> with no .hl, so a mark
+	// on the verse above it, or across it, must leave it on plain paper. It
+	// did not: the verse's range ran to the next verse NUMBER, so the heading
+	// belonged to the verse above and was washed with it.
+	oneHead := []Heading{{Text: "A Heading", BeforeVerse: 4}}
+	twoHeads := []Heading{{Text: "A Major Heading", BeforeVerse: 4}, {Text: "A Heading", BeforeVerse: 4}}
+	poemHead := []Heading{{Text: "A Heading", BeforeVerse: 3}}
 	cases := []struct {
 		name     string
 		book     string
@@ -412,23 +473,63 @@ func TestChapterWashCoversExactlyTheMarkedUpCharacters(t *testing.T) {
 		lo, hi   int
 		reporter bool
 		bare     bool
+		heads    []Heading
 	}{
-		{"prose/1-4", "Romans", 8, proseChapter(), 1, 4, false, false},
-		{"prose/1-4 reporter", "Romans", 8, proseChapter(), 1, 4, true, false},
-		{"poetry/2-3", "Psalms", 23, poeticChapter(), 2, 3, false, true},
-		{"poetry/2-3 reporter", "Psalms", 23, poeticChapter(), 2, 3, true, true},
-		{"paragraphs/2-5", "Romans", 8, longProseChapter(), 2, 5, false, true},
-		{"paragraphs/2-5 reporter", "Romans", 8, longProseChapter(), 2, 5, true, true},
-		{"single/3", "Romans", 8, proseChapter(), 3, 3, false, false},
+		{"prose/1-4", "Romans", 8, proseChapter(), 1, 4, false, false, nil},
+		{"prose/1-4 reporter", "Romans", 8, proseChapter(), 1, 4, true, false, nil},
+		{"poetry/2-3", "Psalms", 23, poeticChapter(), 2, 3, false, true, nil},
+		{"poetry/2-3 reporter", "Psalms", 23, poeticChapter(), 2, 3, true, true, nil},
+		{"paragraphs/2-5", "Romans", 8, longProseChapter(), 2, 5, false, true, nil},
+		{"paragraphs/2-5 reporter", "Romans", 8, longProseChapter(), 2, 5, true, true, nil},
+		{"single/3", "Romans", 8, proseChapter(), 3, 3, false, false, nil},
+		{"heading/after 3", "Romans", 8, proseChapter(), 3, 3, false, true, oneHead},
+		{"heading/after 3 reporter", "Romans", 8, proseChapter(), 3, 3, true, true, oneHead},
+		{"heading/span 3-4", "Romans", 8, proseChapter(), 3, 4, false, true, oneHead},
+		{"heading/span 3-4 reporter", "Romans", 8, proseChapter(), 3, 4, true, true, oneHead},
+		{"heading/stacked 3-4", "Romans", 8, proseChapter(), 3, 4, false, true, twoHeads},
+		{"heading/stacked after 3", "Romans", 8, proseChapter(), 3, 3, false, true, twoHeads},
+		{"heading/poetry 2-3", "Psalms", 23, poeticChapter(), 2, 3, false, true, poemHead},
+		{"heading/poetry after 2", "Psalms", 23, poeticChapter(), 2, 2, false, true, poemHead},
+		// The control: the verse BELOW a heading never held it, under either
+		// rule, and must not start leaving any of itself bare.
+		{"heading/below 4", "Romans", 8, proseChapter(), 4, 4, false, false, oneHead},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			st := tintState(tc.book, tc.chapter, "web", tc.verses)
+			if len(tc.heads) > 0 {
+				st.Bible.Headings = map[string]map[int][]Heading{tc.book: {tc.chapter: tc.heads}}
+			}
 			st.setHL(hlSearch, tc.book, tc.chapter, tc.lo, tc.hi)
 			var html string
 			withReporterLayout(tc.reporter, func() { html = buildChapterHTML(st, tc.verses) })
 			doc := importChapterHTML(t, html)
+			if len(doc.heads) != len(tc.heads) {
+				t.Fatalf("the model found %d heading paragraphs, want %d", len(doc.heads), len(tc.heads))
+			}
+			// A HEADING BELONGS TO NO VERSE. The pixels below would come out
+			// right from the bare ranges alone, so this is asked of the verse
+			// ranges themselves: they are what the tap target, the scroll to a
+			// highlight, the note's anchor and the narration all read. Under the
+			// rule this replaced, the verse above a heading held it.
+			for _, h := range doc.heads {
+				for _, v := range doc.verse {
+					lo, hi := v.loc, doc.endOf(v.verse, true)
+					if lo < h[1] && h[0] < hi {
+						t.Errorf("verse %d's range [%d,%d) holds the heading at [%d,%d)", v.verse, lo, hi, h[0], h[1])
+					}
+				}
+				held := false
+				for _, v := range doc.verse {
+					if v.loc < h[1] && h[0] < doc.endOf(v.verse, false) {
+						held = true
+					}
+				}
+				if !held {
+					t.Errorf("under the old rule no verse held the heading at [%d,%d) — the case proves nothing", h[0], h[1])
+				}
+			}
 
 			// The model must agree with Go's own flattening of the tint, or the
 			// case is testing a run the native side would never be handed.
@@ -465,7 +566,7 @@ func TestChapterWashCoversExactlyTheMarkedUpCharacters(t *testing.T) {
 			if d := maskDiff(doc, doc.piecesMask(tc.lo, tc.hi, true), doc.hl); d != "" {
 				t.Errorf("the wash view's pieces and the .hl markup disagree:%s", d)
 			}
-			if pieces := paintedPieces(doc.text, 0, 0, true); len(pieces) != 0 {
+			if pieces := paintedPieces(doc.text, doc.heads, 0, 0, true); len(pieces) != 0 {
 				t.Errorf("an empty run yielded pieces: %v", pieces)
 			}
 			onePiece := doc.piecesMask(tc.lo, tc.hi, false)

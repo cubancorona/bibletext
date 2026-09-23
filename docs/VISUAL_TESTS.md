@@ -51,6 +51,15 @@ On Android and the web the same fixture is the link
 `ShareLinkURLWithNote("bsb", "John", 11, 17, 17, …)` opened by `am start`
 or in the browser.
 
+Its twin for the WASH around a heading: **headwash** (dev builds). A note on
+BSB John 11:16, the verse just ABOVE that heading, which `headnote` cannot
+show because its note is below it. Three frames on a fixed clock: the note's
+wash on v16 (about 5 s), the narration on v16 (about 11 s), and a second link
+marking v16-17 across the heading (about 21 s). In all three the heading
+stands on plain paper — a verse's range ends where a heading begins
+(`btIOSBuildVerseIndex`, `btMacReadAlongRange`, Android's
+`endBeforeHeading`) — and a tap on it is not a tap on the mark.
+
 ## V1 — the collapsed state (pills), the sharpest fixture
 
 Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.

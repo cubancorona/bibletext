@@ -792,6 +792,34 @@ binary we cannot run in CI at all.
 
 ## Headings: quoting, notes and links need one deliberate pass
 
+**FIXED 23 September 2026: a heading belonged to the verse above it.** On the
+native panes a verse's character range ran from its own number to the next
+verse's number, so a publisher's heading standing between two verses belonged
+to the verse ABOVE it. A note, a search hit or a link on that verse washed the
+heading too (reported on NKJV 2 Corinthians 12:10, whose next heading stands
+before v11), the narration lit it, a tap on it counted as a tap on the mark,
+and the verse's range reached down past it. It shipped from 1.2.7, when
+headings first rendered. A heading now belongs to no verse: iOS records each
+verse's end in its verse index (`btIOSBuildVerseIndex`: the first heading
+paragraph before the next number) and the heading block's end, so the wash view
+leaves a heading inside a multi-verse mark bare and hit-tests only the painted
+pieces; macOS clamps `btMacReadAlongRange` and extends `btMacUnwashBreaks`;
+Android clamps its narration ranges (`endBeforeHeading`) — its note wash comes
+from the markup and was always right. A heading is recognised as a paragraph
+holding no verse number whose text is bold at body size, the Apple twin of
+Android's `isHeadingParagraph`. The styled pane and the web reader were never
+affected: a heading line there carries no runs. Held by
+`TestChapterWashCoversExactlyTheMarkedUpCharacters` (the Go model: nine heading
+cases, including one asking every verse range directly, since the pixels come
+out right from the bare ranges alone), `TestNativeVerseRangesStopAtAHeading`
+and `TestHeadingsReachTheNativePanesBold`; every guard mutation-proved. Seen on
+the iPadOS simulator with the `headwash` scenario. Still open from the same
+work: `btIOSNoteAnchorRange` falls back to the whole highlight range for a note
+with no verse, which would restyle a heading inside a multi-verse mark (no note
+has no verse today); and an omitted verse's gap mark before a verse is washed
+by the markup but not by a single-verse mark's native range, a mismatch older
+than this fix and untested.
+
 Four heading defects were found and fixed on 18 September 2026 (selection led
 by a heading, a drag begun inside one, a drag that ended in one, and a heading
 selected alone). Each was found by pulling the thread of the one before it,
