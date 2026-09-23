@@ -50,7 +50,7 @@ func renderChapterArtwork(title, subtitle string, regularTTF, boldTTF []byte) (s
 	var lineH int
 	for pt := 150; pt >= 48; pt -= 4 {
 		f := newFace(bold, float64(pt))
-		ls := wrapText(f, title, contentW)
+		ls := wrapText(cardText{face: f}, title, contentW)
 		lh := int(float64(pt) * 1.2)
 		if len(ls) <= 2 && len(ls)*lh <= dim*55/100 {
 			face, lines, lineH = f, ls, lh
@@ -60,14 +60,14 @@ func renderChapterArtwork(title, subtitle string, regularTTF, boldTTF []byte) (s
 	if face == nil {
 		pt := 48
 		face = newFace(bold, float64(pt))
-		lines = wrapText(face, title, contentW)
+		lines = wrapText(cardText{face: face}, title, contentW)
 		lineH = int(float64(pt) * 1.2)
 	}
 
 	blockH := len(lines) * lineH
 	y := (dim-blockH)/2 + lineH*3/4
 	for _, line := range lines {
-		drawCentered(img, face, line, sc.text, dim, y)
+		drawCentered(img, cardText{face: face}, line, sc.text, dim, y)
 		y += lineH
 	}
 
@@ -80,7 +80,7 @@ func renderChapterArtwork(title, subtitle string, regularTTF, boldTTF []byte) (s
 				break
 			}
 		}
-		drawCentered(img, subFace, s, sc.accent, dim, y+48)
+		drawCentered(img, cardText{face: subFace}, s, sc.accent, dim, y+48)
 	}
 
 	safe := strings.NewReplacer(" ", "_", "/", "_", ":", "_").Replace(title)

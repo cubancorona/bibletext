@@ -45,22 +45,3 @@ func TestCopyingAChapterSendsTheNameAsDrawn(t *testing.T) {
 		t.Errorf("the chapter copy sent the stored mixed case: %q", got)
 	}
 }
-
-// The image card draws the quote in one of the share typefaces, and only some
-// of them carry the small capitals. typefaceForText must never hand back a face
-// that would draw them as missing-glyph boxes, whichever variant Regenerate is
-// on.
-func TestTheShareCardNeverDrawsAMissingSmallCapital(t *testing.T) {
-	text := "“The Lᴏʀᴅ is my shepherd; I shall not want.”"
-	for variant := 0; variant < 8; variant++ {
-		f, ok := typefaceForText("Psalms 23:1|NKJV", variant, text)
-		if !ok {
-			// The caller then falls back to the reading face, which carries all
-			// of them (build-reading-fonts.sh checks the app's subset).
-			continue
-		}
-		if !faceCanDraw(f, text) {
-			t.Errorf("variant %d chose %s, which cannot draw every character of %q", variant, f.name, text)
-		}
-	}
-}

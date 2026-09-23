@@ -201,14 +201,24 @@ func typefaceForText(ref string, variant int, text string) (shareTypeface, bool)
 	return faces[idx], true
 }
 
-// faceCanDraw reports whether a card face has a glyph for every rune of text.
-// Empty text is drawable by anything, which keeps the reference-only callers
-// on their existing face.
+// faceCanDraw reports whether a card face can draw every rune of text. Empty
+// text is drawable by anything, which keeps the reference-only callers on their
+// existing face.
+//
+// A divine-name small capital counts as drawable when the face has either the
+// small-capital glyph or the capital it stands for: cardText draws the capital
+// at small-capital size in the second case. Only Cardo of the seven card faces
+// carries the small capitals themselves, so without that allowance every card
+// of a verse holding the divine name was set in Cardo whatever Regenerate did.
 func faceCanDraw(f shareTypeface, text string) bool {
 	if text == "" {
 		return true
 	}
 	var buf sfnt.Buffer
+	has := func(fnt *opentype.Font, r rune) bool {
+		idx, err := fnt.GlyphIndex(&buf, r)
+		return err == nil && idx != 0
+	}
 	for _, r := range text {
 		if r == '\n' || r == '\r' {
 			continue
@@ -217,13 +227,146 @@ func faceCanDraw(f shareTypeface, text string) bool {
 			if fnt == nil {
 				continue
 			}
-			idx, err := fnt.GlyphIndex(&buf, r)
-			if err != nil || idx == 0 {
-				return false
+			if has(fnt, r) {
+				continue
 			}
+			if capital := smallCapitalToLetter[r]; capital != 0 && has(fnt, capital) {
+				continue
+			}
+			return false
 		}
 	}
 	return true
+}
+
+// smallCapScale is the size a synthesized small capital is drawn at, as a
+// fraction of the face's size. The real ones measure 0.675 of a capital's
+// height in Cardo and 0.629 in Junicode; 0.70 sits just above, the usual
+// allowance for a scaled capital's strokes coming out a touch lighter than a
+// designed small capital's.
+const smallCapScale = 0.70
+
+// cardText measures and draws verse text for the card.
+//
+// For a line with nothing to synthesize it is exactly font.MeasureString and
+// font.Drawer.DrawString — the path every ordinary card takes, byte for byte
+// the path it always took. Only a line holding a divine-name small capital the
+// typeface does not carry is split into pieces, and each such small capital is
+// drawn as the face's own CAPITAL at smallCapScale: the same design as the rest
+// of the line, rather than a glyph borrowed from another typeface.
+//
+// measure and draw walk the same pieces with the same faces, so the width a
+// line is wrapped and centred to is the width it is drawn at; a card whose text
+// ran past its edge would be the one way this could go wrong, and
+// TestASynthesizedSmallCapitalMeasuresWhatItDraws holds it.
+type cardText struct {
+	face  font.Face
+	small font.Face     // the same typeface at smallCapScale; nil when nothing is synthesized
+	synth map[rune]rune // small capital the typeface lacks → the capital drawn in its place
+}
+
+func newCardText(ft *opentype.Font, pt float64) cardText {
+	ct := cardText{face: newFace(ft, pt)}
+	if m := missingSmallCaps(ft); len(m) > 0 {
+		ct.small = newFace(ft, pt*smallCapScale)
+		ct.synth = m
+	}
+	return ct
+}
+
+// missingSmallCaps maps each small capital the font lacks, and whose capital it
+// has, to that capital.
+func missingSmallCaps(ft *opentype.Font) map[rune]rune {
+	var buf sfnt.Buffer
+	has := func(r rune) bool {
+		idx, err := ft.GlyphIndex(&buf, r)
+		return err == nil && idx != 0
+	}
+	var m map[rune]rune
+	for sc, capital := range smallCapitalToLetter {
+		if !has(sc) && has(capital) {
+			if m == nil {
+				m = map[rune]rune{}
+			}
+			m[sc] = capital
+		}
+	}
+	return m
+}
+
+// cardPiece is a stretch of a line drawn at one size.
+type cardPiece struct {
+	text  string
+	small bool
+}
+
+func (c cardText) synthesizes(s string) bool {
+	if c.synth == nil {
+		return false
+	}
+	for _, r := range s {
+		if _, ok := c.synth[r]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (c cardText) pieces(s string) []cardPiece {
+	var out []cardPiece
+	var b strings.Builder
+	small := false
+	flush := func() {
+		if b.Len() > 0 {
+			out = append(out, cardPiece{b.String(), small})
+			b.Reset()
+		}
+	}
+	for _, r := range s {
+		capital, isSmall := c.synth[r]
+		if isSmall != small {
+			flush()
+			small = isSmall
+		}
+		if isSmall {
+			b.WriteRune(capital)
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	flush()
+	return out
+}
+
+func (c cardText) faceFor(p cardPiece) font.Face {
+	if p.small {
+		return c.small
+	}
+	return c.face
+}
+
+func (c cardText) measure(s string) fixed.Int26_6 {
+	if !c.synthesizes(s) {
+		return font.MeasureString(c.face, s)
+	}
+	var w fixed.Int26_6
+	for _, p := range c.pieces(s) {
+		w += font.MeasureString(c.faceFor(p), p.text)
+	}
+	return w
+}
+
+func (c cardText) draw(d *font.Drawer, s string) {
+	d.Face = c.face
+	if !c.synthesizes(s) {
+		d.DrawString(s)
+		return
+	}
+	for _, p := range c.pieces(s) {
+		d.Face = c.faceFor(p)
+		d.DrawString(p.text)
+	}
+	d.Face = c.face
 }
 
 // renderVerseImage writes a square share card to a temp PNG and returns its path.
@@ -271,26 +414,27 @@ func renderVerseImage(state *AppState, verseText, citation, version string, vari
 	maxBlockH := dim - topInset - botInset
 
 	// Auto-size the verse: the largest size whose wrapped block fits.
-	wrapAll := func(f font.Face) []string {
+	wrapAll := func(f cardText) []string {
 		var out []string
 		for _, seg := range segments {
 			out = append(out, wrapText(f, seg, contentW)...)
 		}
 		return out
 	}
-	var face font.Face
+	var face cardText
 	var lines []string
 	var lineH int
+	found := false
 	for pt := 66; pt >= cardMinPt; pt -= 2 {
-		f := newFace(regular, float64(pt))
+		f := newCardText(regular, float64(pt))
 		ls := wrapAll(f)
 		lh := int(float64(pt) * 1.42)
 		if len(ls)*lh <= maxBlockH {
-			face, lines, lineH = f, ls, lh
+			face, lines, lineH, found = f, ls, lh, true
 			break
 		}
 	}
-	if face == nil {
+	if !found {
 		// Longer than the card can hold even at the smallest readable size. The
 		// old code drew the full block anyway: it bled off the top AND bottom
 		// edges mid-word and the citation printed straight over the verse. Clamp
@@ -298,7 +442,7 @@ func renderVerseImage(state *AppState, verseText, citation, version string, vari
 		// severed quotation as a whole one, which is the one thing this pipeline
 		// is careful never to do (see addEndOmission).
 		pt := cardMinPt
-		face = newFace(regular, float64(pt))
+		face = newCardText(regular, float64(pt))
 		lineH = int(float64(pt) * 1.42)
 		lines = clampLinesToCard(wrapAll(face), maxBlockH/lineH, face, contentW, verseText)
 	}
@@ -327,7 +471,7 @@ func renderVerseImage(state *AppState, verseText, citation, version string, vari
 	if citeY > dim-110 {
 		citeY = dim - 110
 	}
-	drawCentered(img, citeFace, citeStr, sc.accent, dim, citeY)
+	drawCentered(img, cardText{face: citeFace}, citeStr, sc.accent, dim, citeY)
 
 	// A fresh file per variant so the preview's canvas.Image reloads on Regenerate
 	// (a stable path would be served from Fyne's image cache).
@@ -366,7 +510,7 @@ func newFace(ft *opentype.Font, pt float64) font.Face {
 }
 
 // wrapText greedily wraps to the given pixel width using the face's metrics.
-func wrapText(face font.Face, s string, maxW int) []string {
+func wrapText(face cardText, s string, maxW int) []string {
 	raw := strings.Fields(s)
 	// Re-glue the Bluebook omission marks: Rule 5.3's spaced dots (" . . . ." etc.)
 	// must never wrap across lines — law-review practice universally sets them with
@@ -387,7 +531,7 @@ func wrapText(face font.Face, s string, maxW int) []string {
 		if cur != "" {
 			try = cur + " " + w
 		}
-		if font.MeasureString(face, try).Ceil() <= maxW {
+		if face.measure(try).Ceil() <= maxW {
 			cur = try
 			continue
 		}
@@ -403,16 +547,16 @@ func wrapText(face font.Face, s string, maxW int) []string {
 }
 
 // drawCentered draws one line horizontally centred at baseline y.
-func drawCentered(dst *image.RGBA, face font.Face, s string, col color.NRGBA, imgW, baseline int) {
-	w := font.MeasureString(face, s).Ceil()
+func drawCentered(dst *image.RGBA, face cardText, s string, col color.NRGBA, imgW, baseline int) {
+	w := face.measure(s).Ceil()
 	x := (imgW - w) / 2
 	d := &font.Drawer{
 		Dst:  dst,
 		Src:  image.NewUniform(col),
-		Face: face,
+		Face: face.face,
 		Dot:  fixed.P(x, baseline),
 	}
-	d.DrawString(s)
+	face.draw(d, s)
 }
 
 func paintGradient(img *image.RGBA, top, bottom color.NRGBA) {
@@ -453,7 +597,7 @@ const cardMinPt = 20
 // ellipsis, four-dot form — never the single "…" glyph), restoring the closing
 // quotation mark the cut removed. It re-drops words until the marked final line
 // measures within the content width, so the mark can never itself overflow.
-func clampLinesToCard(lines []string, maxLines int, face font.Face, contentW int, original string) []string {
+func clampLinesToCard(lines []string, maxLines int, face cardText, contentW int, original string) []string {
 	if maxLines < 1 {
 		maxLines = 1
 	}
@@ -474,7 +618,7 @@ func clampLinesToCard(lines []string, maxLines int, face font.Face, contentW int
 		// The four-dot form, composed exactly as addEndOmission does it: the
 		// spaced ellipsis, a space, then the sentence's final punctuation.
 		candidate := trimmed + endOmissionEllipsis + " ." + closing
-		if trimmed == "" || font.MeasureString(face, candidate).Ceil() <= contentW {
+		if trimmed == "" || face.measure(candidate).Ceil() <= contentW {
 			kept[len(kept)-1] = candidate
 			return kept
 		}

@@ -230,11 +230,16 @@ the positional path. `TestChapterProseAndShareStructureAgree` and the tests in
   pane substitutes. Whether that is a defect or a deliberate one-line-of-text
   decision has never been settled.
 - **Share cards.** Only one of the seven card typefaces, Cardo, carries the
-  five small capitals. The card never draws a missing glyph —
-  `typefaceForText` passes over any face that cannot draw every character, and
-  the reading face (Junicode, all five) is the fallback — so a divine-name
-  verse always comes out in Cardo, and Regenerate cycles its colours but not
-  its typeface. `TestTheShareCardNeverDrawsAMissingSmallCapital` holds it.
+  five small capitals. The other six draw the name from their OWN capitals at
+  0.70 of the size (`cardText`, share_image.go) — real small capitals measure
+  0.675 of a capital in Cardo and 0.629 in Junicode, and the slightly larger
+  figure allows for a scaled capital's strokes coming out a touch lighter. Cardo
+  uses its designed glyphs. So a divine-name card rotates through all seven
+  typefaces under Regenerate, like any other card. Only a line containing such
+  a small capital takes the new path; every other card was shown byte-identical
+  to its previous rendering. `share_image_smallcaps_test.go` holds the four
+  properties: measured width equals drawn width, ordinary lines draw exactly as
+  before, no face draws a missing glyph, and the rotation reaches every face.
 
 ---
 

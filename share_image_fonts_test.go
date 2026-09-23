@@ -131,9 +131,9 @@ func TestCardNeverOverflowsItsBlock(t *testing.T) {
 
 		var wrapped []string
 		for _, seg := range poemSegments(quote) {
-			wrapped = append(wrapped, wrapText(face, seg, contentW)...)
+			wrapped = append(wrapped, wrapText(cardText{face: face}, seg, contentW)...)
 		}
-		got := clampLinesToCard(wrapped, maxLines, face, contentW, quote)
+		got := clampLinesToCard(wrapped, maxLines, cardText{face: face}, contentW, quote)
 
 		if len(got)*lineH > maxBlockH {
 			t.Errorf("n=%d: block is %dpx tall, exceeds the %dpx content area", n, len(got)*lineH, maxBlockH)
