@@ -310,3 +310,37 @@ func TestAndroidReleaseIdentityComesFromTrackedLedger(t *testing.T) {
 			"ledger must fail the release, never quietly become 1")
 	}
 }
+
+// App Store Connect refuses What's New text containing the Unicode small
+// capitals the app draws the divine name in: ERROR 409
+// INVALID_CHARACTERS, naming "ᴅ" (U+1D05) and "ᴏ" (U+1D0F), on the 1.2.14
+// submission. The refusal came before any review submission was created, so
+// nothing was lost, but it stops a release at its last step. Describe the name
+// ("in small capitals") instead of showing it. Google Play's release notes
+// accepted the same characters, so this is App Store Connect's rule alone.
+//
+// The check covers the whole block the app substitutes from (small_caps_draw.go
+// maps from three: IPA Extensions, Phonetic Extensions and Latin Extended-D),
+// since App Store Connect named only the two it met and the rest are no safer.
+func TestWhatsNewCarriesNoDrawnSmallCapitals(t *testing.T) {
+	want := marketingVersion(t)
+	dir := filepath.Join("build", "appstore", "metadata", "en-GB")
+	if _, err := os.Stat(dir); err != nil {
+		t.Skipf("%s is absent (build/ is gitignored — a fresh clone has no metadata yet)", dir)
+	}
+	for _, p := range []string{
+		filepath.Join(dir, "whats-new-"+want+".txt"),
+		filepath.Join(dir, "mac", "whats-new-"+want+".txt"),
+	} {
+		b, err := os.ReadFile(p)
+		if err != nil {
+			continue // presence is TestWhatsNewIsNamedForThisRelease's job
+		}
+		for _, r := range string(b) {
+			if smallCapitalToLetter[r] != 0 {
+				t.Errorf("%s contains %q (U+%04X), a drawn small capital App Store Connect refuses in "+
+					"What's New; describe the divine name instead of showing it", p, r, r)
+			}
+		}
+	}
+}

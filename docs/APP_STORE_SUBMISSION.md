@@ -428,7 +428,12 @@ evidence that it belongs to the current release. Enforce these controls:
 - a read-only comparison against the previous version;
 - metadata preview plus explicit `--write`;
 - complete local validation before the first PATCH; and
-- read-back after every write and immediately before submission.
+- read-back after every write and immediately before submission;
+- no drawn small capitals in What's New. App Store Connect refuses `ᴅ` and
+  `ᴏ` there as invalid characters (1.2.14), so What's New describes the divine
+  name — "in small capitals" — rather than showing `Lᴏʀᴅ`;
+  `TestWhatsNewCarriesNoDrawnSmallCapitals` holds it. Play's release notes
+  accept the same characters.
 
 An unchanged release-specific field requires explicit verification against the
 current release.
