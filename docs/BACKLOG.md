@@ -7,6 +7,83 @@ the date — and says what shipped and why. Closed entries earn their place: thi
 is the file to read before re-investigating a defect that may already be fixed,
 and a fix's reasoning is the expensive half to reconstruct.
 
+## iOS 27: after the scene life-cycle fix — FIXED 23 September 2026
+
+The launch failure itself (an Xcode 27 build refused at launch on every iOS 27
+device) is fixed by `patches/fyne-2.7.4-ios-scene-lifecycle.patch` and
+`scripts/ios-scene-manifest.sh`; `patches/README.md` (Patch 8) has the account.
+Four pre-existing defects sat next to it. None was caused by that fix; all four
+are fixed.
+
+1. **FIXED: a resized iPad window drew the app for the whole screen.** iPadOS
+   26 and 27 let the reader resize BibleText's window (Windowed Apps, Stage
+   Manager), and Fyne sized its canvas from `[UIScreen mainScreen].nativeBounds`,
+   so a smaller window showed a squashed header, no tab bar, and a reading pane
+   past the window's edge — on the old build and the scene build alike.
+   `patches/fyne-2.7.4-ios-window-size.patch` (Patch 10) reports the view's own
+   size; a full-screen window reports exactly what it did before. On the
+   iPadOS 27 simulator a window dragged to 375 × 643 lays out as a phone, and
+   back at full size matches the full-size layout. `UIRequiresFullScreen`
+   still takes effect on that simulator but UIKit warns it "will soon be
+   ignored", so it was never the answer.
+2. **FIXED: Fyne spelled the cancel method `touchesCanceled:`.** A touch the
+   system took over was never ended; twelve in a row panicked with "out of
+   touchIDs" (reproduced on the simulator). `patches/fyne-2.7.4-ios-touch-cancel.patch`
+   (Patch 9) ends each cancelled touch off the canvas, where it cannot tap.
+3. **FIXED: a tab answered only from the top of its icon down.** Fyne moves
+   every touch up 8pt (`tapYOffset`, Android too), and the bar's 12pt of air
+   above and below sat outside the tab cells, so a tap on the top half of an
+   icon hit nothing. The air now lives inside each cell (`tabCell.padY`), so a
+   tab answers from the rule down to the bar's bottom: after the 8pt shift the
+   top half of an icon selects it, and only a finger within a few points of the
+   rule still lands above the cells. The drawn bar is unchanged to the point
+   (every rule, icon and label measured identical before and after).
+   `TestNavBarIsTappableAcrossItsHeight` taps the old dead bands through the
+   toolkit's own hit test and fails on the old layout; on the simulator a
+   finger placed where the old layout missed now opens Search.
+4. **FIXED: `scripts/check-ios-pane.sh` compiled against stock Fyne.** It now
+   compiles twice, the second time against the patched toolkit, regenerated
+   each run and reached through a scratch copy of go.mod. A deliberate
+   `#error` in a patch fails it; `TestTheIOSCheckCompilesThePatchedToolkit`
+   pins the script's text. It builds its copy in `build/ios-check/fyne`, never
+   in `third_party/fyne`, so it cannot rewrite the tree a packaging build is
+   compiling from. The macOS CI job runs the same script.
+
+Still open, from the same work:
+
+- **iPadOS window buttons sit over the header's title.** In a small iPadOS 26
+  or 27 window the red, yellow and green window controls cover the start of
+  "BibleText" in the top-left of the header. Old and new builds alike; the
+  insets Fyne receives are the window's safe area, which does not include the
+  controls. UIKit offers a layout region that avoids them
+  (`UIView.LayoutRegion.margins(cornerAdaptation:)`); feeding a left inset for
+  the header row from it would clear them. Cosmetic.
+- **The tab bar's style is chosen when the window is built.** `tabBarStyleFor`
+  picks the edge-to-edge or centred bar from the width at build time, and
+  `layoutWatcher` rebuilds only when class, rail or landscape change. A resized
+  iPad window that crosses 560pt keeps the old style until something else
+  rebuilds. Adding the style to `renderedLayout` is one line, but it also makes
+  an iPhone rebuild on rotation on the Books and Search tabs (a landscape phone
+  is wider than 560pt), and a rebuild can reset a list's scroll; that side
+  effect has to be checked on a phone first.
+- **On a device whose nativeScale is not its scale, a Fyne unit is not a
+  point.** The 12 and 13 mini, the Plus models and Display Zoom. The canvas is
+  counted in `nativeScale` pixels (nativeBounds) while Fyne's canvas scale and
+  the GLKView drawable follow `UIScreen.scale`, so clip rects and the native
+  reading pane's frame are off by the ratio (about 4% on a 12 mini).
+  Pre-existing and unchanged by the window-size patch, which keeps full-screen
+  values exactly. The likely fix measures with the drawable's scale in both
+  `goAppReportSize` and `sendTouches`; it changes those devices' numbers, so it
+  needs a device to check on.
+- **A window moved to an external display keeps the iPad's scale.** On an
+  M-series iPad in Stage Manager the app's one window can move to an external
+  screen; the delegate still reads `[UIScreen mainScreen]` for scale and size.
+  Pre-existing; `view.window.screen` would be the source.
+- **Android never ends a cancelled touch either.** Its driver maps
+  `ACTION_CANCEL` to a move (`android.go`), so a touch the system takes over is
+  never ended there. It cannot panic (Android numbers touches by pointer id),
+  but a drag it began is not ended. The iOS fix (Patch 9) does not cover it.
+
 ## The NKJV's missing spaces: report upstream, and decide on a correction list
 
 The licensed feed runs two words together at 286 places in 275 verses
