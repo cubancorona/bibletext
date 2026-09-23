@@ -30,6 +30,9 @@ PATCH_NIGHTMODE="patches/fyne-2.7.4-android-night-mode.patch"
 PATCH_ATOMIC="patches/fyne-2.7.4-atomic-prefs.patch"
 PATCH_WINEGL="patches/fyne-2.7.4-windows-egl.patch"
 PATCH_SCENE="patches/fyne-2.7.4-ios-scene-lifecycle.patch"
+# These two are made against the scene patch and apply after it, in this order.
+PATCH_TOUCH_CANCEL="patches/fyne-2.7.4-ios-touch-cancel.patch"
+PATCH_WINDOW_SIZE="patches/fyne-2.7.4-ios-window-size.patch"
 ATOMIC_TEST="patches/testdata/atomic-prefs_test.go"   # copied in, not diffed (a new file); testdata/ so the go tool ignores it here
 EMOJI_FONT="patches/NotoColorEmoji.ttf"
 DEST="third_party/fyne"
@@ -68,6 +71,8 @@ patch -p1 -d "$DEST" < "$PATCH_NIGHTMODE"
 patch -p1 -d "$DEST" < "$PATCH_ATOMIC"
 patch -p1 -d "$DEST" < "$PATCH_WINEGL"
 patch -p1 -d "$DEST" < "$PATCH_SCENE"
+patch -p1 -d "$DEST" < "$PATCH_TOUCH_CANCEL"
+patch -p1 -d "$DEST" < "$PATCH_WINDOW_SIZE"
 # The emoji swap is patch + binary: the .patch retargets the embed directive, and
 # the font itself (a binary; it cannot ride a unified diff) is copied in here.
 # Noto Color Emoji, OFL 1.1 — licence tracked beside it in patches/.
@@ -122,9 +127,16 @@ if ! grep -q "BibleText patch: UIScene life cycle" "$DEST/internal/driver/mobile
   echo "ERROR: patch did not apply — the iOS scene life cycle is not in place." >&2
   exit 1
 fi
+# A cancelled touch that never frees its slot; a canvas sized by the screen
+# rather than the app's window.
+if ! grep -q "BibleText patch: cancelled touches" "$DEST/internal/driver/mobile/app/darwin_ios.m" \
+   || ! grep -q "BibleText patch: the canvas is the size of the app's window" "$DEST/internal/driver/mobile/app/darwin_ios.m"; then
+  echo "ERROR: patch did not apply — the iOS touch-cancel or window-size patch is not in place." >&2
+  exit 1
+fi
 if ! grep -q "BibleText patch: current emoji" "$DEST/theme/bundled-emoji.go" \
    || [ ! -s "$DEST/theme/font/NotoColorEmoji.ttf" ]; then
   echo "ERROR: emoji swap did not land — bundled-emoji.go unpatched or font missing." >&2
   exit 1
 fi
-echo "OK: ${DEST} regenerated and patched (fyne ${FYNE_VERSION}: drawloop 100ms -> 2ms, discrete caret blink, Noto emoji, atomic preferences write, Windows EGL context, Android night-mode follow, iOS scene life cycle)."
+echo "OK: ${DEST} regenerated and patched (fyne ${FYNE_VERSION}: drawloop 100ms -> 2ms, discrete caret blink, Noto emoji, atomic preferences write, Windows EGL context, Android night-mode follow, iOS scene life cycle, iOS touch cancel, iOS window size)."

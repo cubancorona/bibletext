@@ -22,6 +22,12 @@ application source.
 | **Patch 8** | [`fyne-2.7.4-ios-scene-lifecycle.patch`](fyne-2.7.4-ios-scene-lifecycle.patch) |
 | **Target** | `fyne.io/fyne/v2@v2.7.4` → `internal/driver/mobile/app/darwin_ios.m` |
 | **Change 6 (iOS 27 launches the app)** | An app linked against the iOS 27 SDK is refused at launch on iOS 27 unless it adopts the UIScene life cycle, and Fyne started from the app delegate alone. The patch adds a scene delegate that makes the window from the `UIWindowScene`, maps the scene callbacks onto Fyne's lifecycle, reads orientation from the scene, and passes incoming links on to the app delegate. It takes the scene path only when the bundle declares `UIApplicationSceneManifest`, which [`../scripts/ios-scene-manifest.sh`](../scripts/ios-scene-manifest.sh) writes into every iOS bundle. See [Patch 8](#patch-8-ios-scene-life-cycle-fyne-274-ios-scene-lifecyclepatch) below. |
+| **Patch 9** | [`fyne-2.7.4-ios-touch-cancel.patch`](fyne-2.7.4-ios-touch-cancel.patch) — applies after Patch 8 |
+| **Target** | `fyne.io/fyne/v2@v2.7.4` → `internal/driver/mobile/app/darwin_ios.m` |
+| **Change 7 (a cancelled touch ends, and cannot tap)** | UIKit reports a touch the system takes over through `touchesCancelled:withEvent:`; Fyne spelled its method `touchesCanceled:`, so it never ran. Each cancelled touch kept its slot in `touchIDs`, and twelve in a row with no ordinary touch between them panicked ("out of touchIDs"). The patch ends a cancelled touch at a point far off the canvas: the slot is freed, a drag ends, and nothing is under that point to be tapped. |
+| **Patch 10** | [`fyne-2.7.4-ios-window-size.patch`](fyne-2.7.4-ios-window-size.patch) — applies after Patch 9 |
+| **Target** | `fyne.io/fyne/v2@v2.7.4` → `internal/driver/mobile/app/darwin_ios.m` |
+| **Change 8 (the canvas is the window, not the screen)** | Fyne sized its canvas from `UIScreen.nativeBounds`, so a resized iPad window (Split View, Stage Manager, iPadOS 26 windows) was laid out for the whole screen. Every size report now measures the view, in the same pixels, so a full-screen window reports exactly what it did before. See [Patch 10](#patch-10-ios-window-size-fyne-274-ios-window-sizepatch). |
 | **Applied by** | [`../scripts/setup-fyne-patch.sh`](../scripts/setup-fyne-patch.sh) |
 | **Patch (tools)** | [`fyne-tools-1.7.2-ios-deployment-target.patch`](fyne-tools-1.7.2-ios-deployment-target.patch) |
 | **Target** | `fyne.io/tools@v1.7.2` → `cmd/fyne/internal/mobile/build_iosapp.go` + `cmd/fyne/internal/commands/package-mobile.go` |
@@ -233,9 +239,11 @@ the installed Fyne CLI and are unaffected.
 
 ## How to remove the patches entirely (surgical)
 
-The patches are independent — to drop just one (e.g. upstream ships one fix),
+Most patches are independent — to drop just one (e.g. upstream ships one fix),
 delete its `.patch` file and its `patch -p1` + verify-grep lines in
-`setup-fyne-patch.sh`. The Android CLI patch is removed separately by dropping
+`setup-fyne-patch.sh`. The three iOS delegate patches (8, 9, 10) are the
+exception: they touch one file and each was made against the one before, so
+dropping an earlier one means regenerating the later ones. The Android CLI patch is removed separately by dropping
 its setup call, script, and patch file. To remove everything after upstream
 ships equivalent fixes (or the pinned versions include them):
 
@@ -505,3 +513,56 @@ the patch checks in `scene_manifest_test.go`. Keep the manifest script, with
 `SCENE_DELEGATE_CLASS` set to Fyne's own scene delegate. Then prove link
 delivery again on a device: upstream's delegate must still reach the category
 in `share_link_ios.go`.
+
+## Patch 9: iOS cancelled touches (`fyne-2.7.4-ios-touch-cancel.patch`)
+
+UIKit cancels a touch when the system takes it over: a swipe home, Control
+Center, an iPad window being moved or resized. It says so with
+`touchesCancelled:withEvent:`. Fyne's controller implemented
+`touchesCanceled:` (one l), which UIKit never calls, so a cancelled touch was
+never ended. Its slot in `touchIDs` stayed taken until the next ordinary touch
+ended and cleared them all, and twelve cancelled touches in a row filled all
+eleven slots and panicked with "out of touchIDs". On an iPadOS 26 or 27
+window, where the system claims more gestures, that is easier to reach.
+
+The patch adds the correctly spelled method and ends each cancelled touch at a
+point far off the canvas. That frees the slot and ends a drag in progress, and
+because nothing is under that point, the cancel cannot select whatever was
+under the finger, as ending it at the finger's position could. On the iPad
+simulator, twelve system-cancelled touches kill the unpatched app and leave the
+patched one running. `scene_manifest_test.go` pins the off-canvas end.
+
+Two things it does not do, on purpose. A cancelled drag still ends the way a
+lift does, so a scroll with speed in it can coast on; and a pressed widget that
+implements Fyne's `mobile.Touchable` is not told of the cancel, as before (the
+toolkit has no cancel event to give it). Android has its own version of the
+gap: its driver turns `ACTION_CANCEL` into a move, so a cancelled touch there
+is never ended either, though it cannot panic, because Android numbers touches
+by pointer id rather than from a fixed table.
+
+## Patch 10: iOS window size (`fyne-2.7.4-ios-window-size.patch`)
+
+Fyne reported the screen's size (`UIScreen.nativeBounds`) as the canvas at six
+places in the delegate. iPadOS lets a reader resize an app's window, and a
+window smaller than the screen was then laid out for the whole screen: a
+squashed header, a missing tab bar, the reading pane running past the window's
+edge.
+
+Every report now goes through `goAppReportSize`. A view that fills the screen
+reports `nativeBounds` itself, oriented as the view is, so iPhones and
+full-screen iPads get exactly the numbers they got before (1640 × 2360 portrait
+on an iPad Air 11-inch, read back on the simulator). A smaller window reports
+its own bounds in the same pixels. The keyboard now reserves only the part of
+its height that covers the window (the whole height, as before, for a
+full-screen window), and a change of safe-area insets alone is reported too. `updateConfig` swaps width and height for a landscape
+orientation, so the pair goes in portrait-first; the orientation passed is the
+window's shape, because the layout decides by the space it has. A
+`viewDidLayoutSubviews` override reports a size change that arrives without a
+size transition, and only when the size actually changed, since a report
+re-lays the view and would otherwise loop.
+
+Checked on the iPadOS 27 simulator: a window dragged down to 375 × 643 lays out
+as a phone (header, chapter controls, re-wrapped text, tab bar), and dragged
+back to full size it matches the full-size layout again. Patches 8, 9 and 10
+touch the same file and apply in that order; each was made against the file
+the previous ones leave.

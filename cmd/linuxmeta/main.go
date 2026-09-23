@@ -106,6 +106,8 @@ var fynePatchOrder = []string{
 var fynePatchesNotOnLinux = map[string]string{
 	"fyne-2.7.4-windows-egl.patch":         "Windows only: it routes the OpenGL ES context through EGL so ANGLE can render with Direct3D",
 	"fyne-2.7.4-ios-scene-lifecycle.patch": "iOS only: it changes darwin_ios.m, the UIKit app delegate, which no Linux build compiles",
+	"fyne-2.7.4-ios-touch-cancel.patch":    "iOS only: it changes darwin_ios.m, the UIKit app delegate, which no Linux build compiles",
+	"fyne-2.7.4-ios-window-size.patch":     "iOS only: it changes darwin_ios.m, the UIKit app delegate, which no Linux build compiles",
 }
 
 var ledgerVersion = regexp.MustCompile(`(?m)^Version = "(\d+\.\d+\.\d+)"\r?$`)

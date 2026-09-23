@@ -154,21 +154,98 @@ func TestSceneForwardersReachTheLinkCategory(t *testing.T) {
 	}
 }
 
-func TestTheBuildAppliesTheSceneLifecyclePatch(t *testing.T) {
+// The three iOS delegate patches build on one another, so the setup script must
+// apply each of them, in this order: the later two were made against the
+// file the earlier ones leave.
+func TestTheBuildAppliesTheIOSDelegatePatchesInOrder(t *testing.T) {
+	// Comment lines removed, so a commented-out `patch` line does not count.
 	script := regexp.MustCompile(`(?m)^\s*#.*$`).ReplaceAllString(readRepoFile(t, "scripts/setup-fyne-patch.sh"), "")
-	base := filepath.Base(sceneLifecyclePatch)
-	var variable string
-	for _, line := range strings.Split(script, "\n") {
-		if strings.Contains(line, base) && strings.Contains(line, "=") {
-			variable = strings.TrimSpace(strings.SplitN(line, "=", 2)[0])
-			break
+	last := -1
+	for _, patch := range []string{sceneLifecyclePatch, touchCancelPatch, windowSizePatch} {
+		base := filepath.Base(patch)
+		var variable string
+		for _, line := range strings.Split(script, "\n") {
+			if strings.Contains(line, base) && strings.Contains(line, "=") {
+				variable = strings.TrimSpace(strings.SplitN(line, "=", 2)[0])
+				break
+			}
+		}
+		if variable == "" {
+			t.Fatalf("scripts/setup-fyne-patch.sh does not name %s, so an iOS build would ship without it", base)
+		}
+		apply := `patch -p1 -d "$DEST" < "$` + variable + `"`
+		at := strings.Index(script, apply)
+		if at < 0 {
+			t.Fatalf("%s is assigned to %s but never applied with patch -p1", base, variable)
+		}
+		if at < last {
+			t.Errorf("%s is applied before the patch it was made against", base)
+		}
+		last = at
+	}
+}
+
+const touchCancelPatch = "patches/fyne-2.7.4-ios-touch-cancel.patch"
+const windowSizePatch = "patches/fyne-2.7.4-ios-window-size.patch"
+
+// UIKit reports a touch the system takes over through touchesCancelled:, which
+// Fyne never implemented (it spelled the method touchesCanceled:). The patch
+// must end such a touch, and end it where nothing can be tapped.
+func TestTouchCancelPatchEndsTheTouchWhereNothingIsTapped(t *testing.T) {
+	src := addedLines(readRepoFile(t, touchCancelPatch))
+	body := methodBody(t, src, "- (void)touchesCancelled:(NSSet*)touches withEvent:(UIEvent*)event {")
+	if !strings.Contains(body, "sendTouch((GoUintptr)touch, (GoUintptr)TOUCH_TYPE_END, -100000, -100000);") {
+		t.Error("touchesCancelled: no longer ends each touch off the canvas; a cancel at the finger's position could fire a tap")
+	}
+	if strings.Contains(body, "sendTouches(") {
+		t.Error("touchesCancelled: sends the touches at their own positions, where a cancel can become a tap")
+	}
+}
+
+// The canvas is the app's window, not the screen: every size report goes
+// through goAppReportSize, which measures the view.
+func TestWindowSizePatchReportsTheViewNotTheScreen(t *testing.T) {
+	patch := readRepoFile(t, windowSizePatch)
+	src := addedLines(patch)
+	var removed int
+	for _, line := range strings.Split(patch, "\n") {
+		if strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---") &&
+			strings.Contains(line, "updateConfig((int)size.width, (int)size.height") {
+			removed++
 		}
 	}
-	if variable == "" {
-		t.Fatalf("scripts/setup-fyne-patch.sh does not name %s, so an iOS build would ship without it", base)
+	if removed != 6 {
+		t.Errorf("the patch replaces %d screen-sized updateConfig calls; the delegate has 6", removed)
 	}
-	if !strings.Contains(script, `patch -p1 -d "$DEST" < "$`+variable+`"`) {
-		t.Errorf("%s is assigned to %s but never applied with patch -p1", base, variable)
+	if strings.Contains(src, "nativeBounds.size;\n") && strings.Contains(src, "updateConfig((int)size.width") {
+		t.Error("the patch adds back a report of the screen's size")
+	}
+	report := methodBody(t, src, "static void goAppReportSize(UIView *view) {")
+	for claim, want := range map[string]string{
+		"measures the view":                          "CGSize pt = view.bounds.size;",
+		"gives a full-screen view nativeBounds":      "if (CGSizeEqualToSize(pt, screen.bounds.size)) {",
+		"takes those numbers from nativeBounds":      "CGSize native = screen.nativeBounds.size;",
+		"counts a smaller window in the same pixels": "lround(pt.width * screen.nativeScale)",
+		"takes the window's shape":                   "BOOL wide = w > h;",
+		"hands the pair over portrait-first":         "if (wide) {",
+	} {
+		if !strings.Contains(report, want) {
+			t.Errorf("goAppReportSize no longer %s (%q)", claim, want)
+		}
+	}
+	if !strings.Contains(methodBody(t, src, "- (void)viewSafeAreaInsetsDidChange {"), "goAppReportSize(self.view);") {
+		t.Error("a safe-area change without a size change is no longer reported")
+	}
+	// keyboardWillShow: itself is context, not an added line; its new body is.
+	if !strings.Contains(src, "CGFloat covered = CGRectGetMaxY(inScreen) - CGRectGetMinY(keyboard);") {
+		t.Error("the keyboard reserves its whole height again, even over a window it does not cover")
+	}
+	layout := methodBody(t, src, "- (void)viewDidLayoutSubviews {")
+	if !strings.Contains(layout, "self.reportedSize = self.view.bounds.size;") {
+		t.Error("viewDidLayoutSubviews no longer records the size it reported; every layout pass would report again")
+	}
+	if !strings.Contains(layout, "CGSizeEqualToSize(self.view.bounds.size, self.reportedSize)") {
+		t.Error("viewDidLayoutSubviews reports without checking the size changed; a report re-lays the view and would loop")
 	}
 }
 

@@ -51,8 +51,11 @@ first-line paragraph indents without blank paragraph gaps.
 The leading and paragraph grammar live in `buildChapterHTML` (`reading.go`). The
 centred measure is native: `bibleTextSetReadingMeasure` → `btIOSApplyInsets`
 (`reading_ios.go`) updates the `UITextView.textContainerInset` from its live
-frame. Rotation, Split View, Stage Manager, and text-size changes therefore
-re-centre the column without needing a separate reading implementation.
+frame. Rotation and text-size changes therefore re-centre the column without
+needing a separate reading implementation. A window the reader resizes (Split
+View, Stage Manager, the resizable windows of iPadOS 26 and later) is laid out
+for its own size: the canvas is the window, not the screen
+(`patches/fyne-2.7.4-ios-window-size.patch`, Patch 10 in patches/README.md).
 
 The native `UITextView` still supplies selection, Study with AI, sharing, notes,
 audio/read-along, and scroll restoration. Navigation placement does not change

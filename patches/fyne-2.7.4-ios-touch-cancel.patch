@@ -1,0 +1,26 @@
+--- a/internal/driver/mobile/app/darwin_ios.m
++++ b/internal/driver/mobile/app/darwin_ios.m
+@@ -406,6 +406,23 @@
+ 	sendTouches(TOUCH_TYPE_END, touches);
+ }
+ 
++// BibleText patch: cancelled touches.
++//
++// UIKit cancels a touch the system takes over (a swipe home, Control Center,
++// an iPad window gesture) with touchesCancelled:withEvent:. The method below,
++// spelled touchesCanceled:, is never called, so a cancelled touch kept its slot
++// in touchIDs and a drag it had begun never ended; twelve in a row with no
++// ordinary touch between them exhausted the slots and panicked. This ends each
++// cancelled touch at a point far off the canvas: the slot is freed and a drag
++// in progress ends as a lift would. Nothing is under that point, so a
++// cancelled touch cannot become a tap (and a pressed control is not told of
++// the cancel, as before).
++- (void)touchesCancelled:(NSSet*)touches withEvent:(UIEvent*)event {
++	for (UITouch* touch in touches) {
++		sendTouch((GoUintptr)touch, (GoUintptr)TOUCH_TYPE_END, -100000, -100000);
++	}
++}
++
+ - (void)touchesCanceled:(NSSet*)touches withEvent:(UIEvent*)event {
+     sendTouches(TOUCH_TYPE_END, touches);
+ }

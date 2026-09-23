@@ -1,0 +1,162 @@
+--- a/internal/driver/mobile/app/darwin_ios.m
++++ b/internal/driver/mobile/app/darwin_ios.m
+@@ -67,6 +67,54 @@
+ 	return [[UIApplication sharedApplication] statusBarOrientation];
+ }
+ 
++// BibleText patch: the canvas is the size of the app's window.
++//
++// Fyne sized its canvas from the screen (UIScreen.nativeBounds), so an iPad
++// window smaller than the screen — Split View, Stage Manager, the resizable
++// windows of iPadOS 26 — was laid out as if it filled the screen: a squashed
++// header, and a reading pane running off the window's edge. This reports the
++// view's own size, in the same pixels nativeBounds counts, so a window that
++// fills the screen reports exactly what it did before.
++//
++// A view that fills the screen reports nativeBounds itself, so every phone and
++// every full-screen iPad gets exactly the numbers it got before: bounds times
++// nativeScale can differ from nativeBounds by a pixel (the 12 and 13 mini,
++// Display Zoom), and nothing that already worked should move.
++//
++// updateConfig swaps width and height for a landscape orientation, so the pair
++// goes in portrait-first, as nativeBounds did. The orientation passed is the
++// window's shape: a tall window on a landscape iPad is laid out as portrait,
++// because the layout decides by the space it has.
++static void goAppReportSize(UIView *view) {
++	UIScreen *screen = [UIScreen mainScreen];
++	CGSize pt = view.bounds.size;
++	if (pt.width <= 0 || pt.height <= 0) {
++		pt = view.window != nil ? view.window.bounds.size : screen.bounds.size;
++	}
++	int w, h;
++	if (CGSizeEqualToSize(pt, screen.bounds.size)) {
++		// nativeBounds is portrait whatever the orientation; put it the view's way.
++		CGSize native = screen.nativeBounds.size;
++		BOOL viewWide = pt.width > pt.height;
++		w = (int)(viewWide ? MAX(native.width, native.height) : MIN(native.width, native.height));
++		h = (int)(viewWide ? MIN(native.width, native.height) : MAX(native.width, native.height));
++	} else {
++		w = (int)lround(pt.width * screen.nativeScale);
++		h = (int)lround(pt.height * screen.nativeScale);
++	}
++	BOOL wide = w > h;
++	UIInterfaceOrientation orientation = goAppInterfaceOrientation();
++	if (UIInterfaceOrientationIsLandscape(orientation) != wide) {
++		orientation = wide ? UIInterfaceOrientationLandscapeRight : UIInterfaceOrientationPortrait;
++	}
++	if (wide) {
++		int t = w;
++		w = h;
++		h = t;
++	}
++	updateConfig(w, h, orientation);
++}
++
+ @implementation GoAppAppDelegate
+ - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+     int scale = 1;
+@@ -99,8 +147,7 @@
+ 	[window makeKeyAndVisible];
+ 
+ 	// update insets once key window is set
+-	CGSize size = [UIScreen mainScreen].nativeBounds.size;
+-	updateConfig((int)size.width, (int)size.height, goAppInterfaceOrientation());
++	goAppReportSize(self.controller.view);
+ }
+ 
+ // Only the app's own window scene gets the delegate. Any other role (an
+@@ -306,6 +353,7 @@
+ @end
+ 
+ @interface GoAppAppController ()
++@property (nonatomic) CGSize reportedSize;
+ @property (strong, nonatomic) EAGLContext *context;
+ @property (strong, nonatomic) GLKView *glview;
+ @property (strong, nonatomic) GoInputView *inputView;
+@@ -355,9 +403,7 @@
+ 	}
+ 	setScreen(scale);
+ 
+-	CGSize size = [UIScreen mainScreen].nativeBounds.size;
+-	UIInterfaceOrientation orientation = goAppInterfaceOrientation();
+-	updateConfig((int)size.width, (int)size.height, orientation);
++	goAppReportSize(self.view);
+ 
+     self.glview.enableSetNeedsDisplay = NO;
+     CADisplayLink* displayLink = [CADisplayLink displayLinkWithTarget:self selector:@selector(render:)];
+@@ -368,12 +414,27 @@
+ 	[coordinator animateAlongsideTransition:^(id<UIViewControllerTransitionCoordinatorContext> context) {
+ 		// TODO(crawshaw): come up with a plan to handle animations.
+ 	} completion:^(id<UIViewControllerTransitionCoordinatorContext> context) {
+-		UIInterfaceOrientation orientation = goAppInterfaceOrientation();
+-		CGSize size = [UIScreen mainScreen].nativeBounds.size;
+-		updateConfig((int)size.width, (int)size.height, orientation);
++		goAppReportSize(self.view);
+ 	}];
+ }
+ 
++// Insets can change without the size changing (a window moved against the
++// status bar or the home indicator); report those too.
++- (void)viewSafeAreaInsetsDidChange {
++	[super viewSafeAreaInsetsDidChange];
++	goAppReportSize(self.view);
++}
++
++// A window resized without a size transition still lays the view out again;
++// report when its size has actually changed, so the report cannot loop.
++- (void)viewDidLayoutSubviews {
++	[super viewDidLayoutSubviews];
++	if (!CGSizeEqualToSize(self.view.bounds.size, self.reportedSize)) {
++		self.reportedSize = self.view.bounds.size;
++		goAppReportSize(self.view);
++	}
++}
++
+ - (void)render:(CADisplayLink*)displayLink {
+     [self.glview display];
+ }
+@@ -430,26 +491,33 @@
+ - (void) traitCollectionDidChange: (UITraitCollection *) previousTraitCollection {
+     [super traitCollectionDidChange: previousTraitCollection];
+ 
+-	UIInterfaceOrientation orientation = goAppInterfaceOrientation();
+-	CGSize size = [UIScreen mainScreen].nativeBounds.size;
+-	updateConfig((int)size.width, (int)size.height, orientation);
++	goAppReportSize(self.view);
+ }
+ 
+ - (void)keyboardWillShow:(NSNotification *)note {
+-    CGSize keyboardSize = [[[note userInfo] objectForKey:UIKeyboardFrameEndUserInfoKey] CGRectValue].size;
+-    keyboardHeight = keyboardSize.height;
++    CGRect keyboard = [[[note userInfo] objectForKey:UIKeyboardFrameEndUserInfoKey] CGRectValue];
++    keyboardHeight = keyboard.size.height;
++    // The keyboard frame is in screen coordinates. A window smaller than the
++    // screen is covered only where the two overlap; a full-screen window,
++    // docked or floating keyboard alike, keeps the whole height as before.
++    UIWindow *window = self.view.window;
++    if (window != nil) {
++        CGRect inScreen = [self.view convertRect:self.view.bounds toCoordinateSpace:window.screen.coordinateSpace];
++        CGFloat covered = CGRectGetMaxY(inScreen) - CGRectGetMinY(keyboard);
++        if (covered <= 0) {
++            keyboardHeight = 0;
++        } else if (covered < keyboardHeight) {
++            keyboardHeight = covered;
++        }
++    }
+ 
+-    CGSize size = [UIScreen mainScreen].nativeBounds.size;
+-	UIInterfaceOrientation orientation = goAppInterfaceOrientation();
+-	updateConfig((int)size.width, (int)size.height, orientation);
++	goAppReportSize(self.view);
+ }
+ 
+ - (void)keyboardWillHide:(NSNotification *)note {
+     keyboardHeight = 0;
+ 
+-    CGSize size = [UIScreen mainScreen].nativeBounds.size;
+-	UIInterfaceOrientation orientation = goAppInterfaceOrientation();
+-	updateConfig((int)size.width, (int)size.height, orientation);
++	goAppReportSize(self.view);
+ }
+ 
+ @end
