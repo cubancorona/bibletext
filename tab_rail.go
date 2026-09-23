@@ -61,7 +61,7 @@ func tabRailWidth() float32 {
 // centred on the window's height.
 func buildTabRail(state *AppState) fyne.CanvasObject {
 	pal := state.pal()
-	cells := tabCellsFor(state, tabDestinations())
+	cells := tabCellsFor(state, tabDestinations(), 0) // rail cells already fill their slots
 
 	// GridWithRows is the vertical twin of the bar's GridWithColumns: one equal
 	// slot per destination, so the rhythm between them is the slot and not a

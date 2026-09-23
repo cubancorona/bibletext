@@ -200,11 +200,11 @@ func tabDestinations() []tabDestination {
 // tabCellsFor builds the tappable cells for the destinations. Shared by the bar
 // and the rail so the two can never drift in what they do — only in how they
 // are arranged.
-func tabCellsFor(state *AppState, items []tabDestination) []fyne.CanvasObject {
+func tabCellsFor(state *AppState, items []tabDestination, padY float32) []fyne.CanvasObject {
 	cells := make([]fyne.CanvasObject, len(items))
 	for i, it := range items {
 		i, it := i, it
-		cells[i] = newTabCell(state, it.icon, it.label, i == state.CurrentTab, func() {
+		cells[i] = newTabCell(state, it.icon, it.label, i == state.CurrentTab, padY, func() {
 			if state.CurrentTab == i {
 				return
 			}
@@ -224,7 +224,12 @@ func tabCellsFor(state *AppState, items []tabDestination) []fyne.CanvasObject {
 func buildMobileTabBar(state *AppState) fyne.CanvasObject {
 	pal := state.pal()
 	items := tabDestinations()
-	cells := tabCellsFor(state, items)
+	style := tabBarStyleFor(state)
+	padY := float32(0)
+	if style == tabBarEdgeSpread || style == tabBarEdgeCentred {
+		padY = tabBarEdgePadY // the edge bars' air, carried inside the cells
+	}
+	cells := tabCellsFor(state, items, padY)
 
 	row := container.NewGridWithColumns(len(items), cells...)
 
@@ -239,7 +244,7 @@ func buildMobileTabBar(state *AppState) fyne.CanvasObject {
 	// tightened icon-to-label gap are one piece of code for both. This is the
 	// bar's dress, not a second navigation model — which is the whole point of
 	// the layout unification this sits inside.
-	switch tabBarStyleFor(state) {
+	switch style {
 	case tabBarEdgeSpread:
 		// The literal phone treatment: chrome edge to edge, tabs spread evenly
 		// across the whole width by the same GridWithColumns the phone uses.
@@ -277,6 +282,9 @@ func buildMobileTabBar(state *AppState) fyne.CanvasObject {
 	// That is also the cheaper answer for every other platform: no overlay
 	// arithmetic, no per-platform inset, nothing for the native panes to know
 	// about. The look is the same everywhere and the geometry is unchanged.
+	// The pill keeps its air OUTSIDE the tabs (tabBarPillPadY around the row),
+	// so a band above and below the icons is not tappable. It is not used today;
+	// bringing it back should move that air into the cells as the edge bars do.
 	pill := canvas.NewRectangle(pal.SurfaceAlt)
 	pill.CornerRadius = tabBarPillRadius
 	pill.StrokeColor = pal.Border
@@ -313,10 +321,10 @@ func buildMobileTabBar(state *AppState) fyne.CanvasObject {
 // is between its children, not something you can reason about from the call
 // site — which is why the fix here is the same: take the inter-child padding to
 // zero and state both margins explicitly.
+// The tabs carry the bar's air above and below inside themselves (tabCell's
+// padY), so the row sits directly under the rule and fills the bar.
 func edgeBarBody(rule, tabs fyne.CanvasObject) fyne.CanvasObject {
-	padded := container.New(
-		layout.NewCustomPaddedLayout(tabBarEdgePadY, tabBarEdgePadY, 0, 0), tabs)
-	return container.New(layout.NewCustomPaddedVBoxLayout(0), rule, padded)
+	return container.New(layout.NewCustomPaddedVBoxLayout(0), rule, tabs)
 }
 
 // tabBarCentreLayout caps the pill at tabBarMaxWidth and centres it. Same idea
@@ -850,12 +858,19 @@ type tabCell struct {
 	active   bool
 	onTapped func()
 
+	// padY is air above and below the icon and label, INSIDE the cell. The
+	// bottom bar's padding lives here rather than around the row so the whole
+	// bar is the tap target: Fyne moves every touch up 8pt to allow for how a
+	// finger lands, and with the padding outside the cells a tap on the top
+	// half of an icon fell above its cell and hit nothing.
+	padY float32
+
 	iconImg *canvas.Image
 	text    *canvas.Text
 }
 
-func newTabCell(state *AppState, icon fyne.Resource, label string, active bool, onTapped func()) *tabCell {
-	c := &tabCell{state: state, icon: icon, label: label, active: active, onTapped: onTapped}
+func newTabCell(state *AppState, icon fyne.Resource, label string, active bool, padY float32, onTapped func()) *tabCell {
+	c := &tabCell{state: state, icon: icon, label: label, active: active, padY: padY, onTapped: onTapped}
 	c.ExtendBaseWidget(c)
 	return c
 }
@@ -909,7 +924,8 @@ func (c *tabCell) CreateRenderer() fyne.WidgetRenderer {
 	//
 	// NewCenter is the whole fix: it gives the column its minimum size and puts
 	// it in the middle of whatever the cell turns out to be.
-	return widget.NewSimpleRenderer(container.NewCenter(col))
+	return widget.NewSimpleRenderer(container.New(
+		layout.NewCustomPaddedLayout(c.padY, c.padY, 0, 0), container.NewCenter(col)))
 }
 
 // themedIcon returns the cell's icon as a colour-bound theme resource so it
