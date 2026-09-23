@@ -84,6 +84,69 @@ Still open, from the same work:
   never ended there. It cannot panic (Android numbers touches by pointer id),
   but a drag it began is not ended. The iOS fix (Patch 9) does not cover it.
 
+## A note link that opened the chapter and stayed at the top — FIXED 23 September 2026
+
+Reported on iOS three times: 10 August (a note tapped in the dev Links tab
+while on its chapter), 18 September (a note link from Messages, the app
+backgrounded) and 23 September (once in several tries, the reader's own note).
+The chapter opened, the note and its wash were there, and the view stayed at
+the top of the chapter.
+
+**The mechanism that was reproduced and fixed.** The Apple panes re-assert the
+scroll position after an import settles — a turn later and 200ms later — and
+after a width change. A re-assert reads the arrival class when it RUNS, and
+only the render a link asked for is explicit: every render after it pushes
+`arriveNothing`. When such a render landed between a link's import and its
+re-asserts, the re-assert found nothing to place and pinned the view to the
+top, over the note the link had just placed it on. On the iPad simulator, with
+the app on the WEB and a note link naming the BSB (so the arrival also switches
+translation), `BT_SCROLL_DEBUG=1` read: "landed on highlight", then
+"arrival=nothing", then "pinned to TOP" twice. The appearance round trip iOS
+makes to snapshot a backgrounded app for the switcher rebuilds the window the
+same way, which is the owner's route. The re-asserts are now
+`btIOSReassertPlacement` (both import re-asserts, both width re-asserts) and
+`btMacReassertPlacement` (the macOS frame change): restore, then arrival, and
+never the top-pin. `arriveNothing` was never meant to mean the top
+(notes_arrival.go). The synchronous resolver keeps its top-pin, which is how a
+plain entry opens a new chapter. Same reproduction after the fix: "landed on
+highlight", then "re-assert: nothing to place — view left where it is", and
+the view on the note. `TestDeferredReassertsNeverPinToTheTop` holds it, seven
+mutations caught. The dev scenario is `headwash` (docs/VISUAL_TESTS.md).
+
+A side effect worth knowing: a reader who scrolled away from a lit wash and
+then rotated the phone, or resized the Mac window, used to be thrown to the
+top of the chapter by the same re-assert. The view now stays put.
+
+**Found by the same investigation and deliberately not changed, with why:**
+
+- *A re-import the reader did not ask for could capture the position before
+  the link's own import lands.* It cannot on iOS: `bibleTextTVCaptureAnchor`
+  runs inline only on the main thread, and Go calls it from its own thread (the
+  trace prints the native side's `arrival=nothing` before Go's own `push:` line
+  for the same push), so the capture waits behind the queued import and
+  records the placed position. A generation check in the capture, and carrying
+  the arrival class across renders until the reader scrolls, were designed
+  (`appleArrivalForPush`) and not built: they close a window this threading
+  already closes, at the cost of new state with its own clearing rules.
+- *The import's retry ladder does not know which push it belongs to*
+  (`bibleTextTVSetHTML`: three attempts on the same data, whichever succeeds
+  marks the newest generation applied). It matters only when an HTML import
+  fails, which the code's comments say is likeliest right after returning to
+  the foreground; the failure rate has never been measured. The fix is to
+  stamp each attempt with `gBodyGenPending` read on the main queue and drop a
+  superseded one.
+- *The plain-text fallback never places the view* and does not tell Go the
+  import failed. The owner saw a fully styled chapter each time, which rules
+  this path out for the reports so far.
+- *The fast path can consume an arrival on a pane that has gone blank*, and
+  the foreground recovery then rebuilds without it. Rests on two premises
+  nobody has verified.
+
+Android was checked by reading and is not affected in this way: it captures
+the reader's top line before a theme re-render and preserves it across the
+re-render (reading_android.go), rather than re-asserting from a class a later
+render can overwrite.
+
 ## The NKJV's missing spaces: report upstream, and decide on a correction list
 
 The licensed feed runs two words together at 286 places in 275 verses

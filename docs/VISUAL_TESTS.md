@@ -58,7 +58,12 @@ wash on v16 (about 5 s), the narration on v16 (about 11 s), and a second link
 marking v16-17 across the heading (about 21 s). In all three the heading
 stands on plain paper — a verse's range ends where a heading begins
 (`btIOSBuildVerseIndex`, `btMacReadAlongRange`, Android's
-`endBeforeHeading`) — and a tap on it is not a tap on the mark.
+`endBeforeHeading`) — and a tap on it is not a tap on the mark. Launched
+with the app on another translation (`BIBLETEXT_DEV_SWITCH=web` first), the
+first link is also the arrival that switches translation, which is the route
+on which a deferred re-assert used to pin the view to the top: with
+`BT_SCROLL_DEBUG=1` the trace must read "landed on highlight" and then only
+"re-assert: nothing to place", never "pinned to TOP" after the landing.
 
 ## V1 — the collapsed state (pills), the sharpest fixture
 

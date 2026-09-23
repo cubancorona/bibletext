@@ -1328,13 +1328,24 @@ static NSImage *btMacTrashImage(CGFloat pt) {
     }];
 }
 
-static void btMacScrollTVLatched(void);
+static void btMacScrollTVLatched(BOOL pinTop);
 static void bibleTextMacScrollTV(void) {
     gMacOwnScroll++;
-    btMacScrollTVLatched();
+    btMacScrollTVLatched(YES);
     gMacOwnScroll--;
 }
-static void btMacScrollTVLatched(void) {
+// btMacReassertPlacement is the frame-change re-assert: the same restore-then-
+// arrival order, and NO pin to the top. A re-assert reads the arrival class when
+// it runs, and a render the reader did not ask for pushes "nothing" — so a
+// reader who scrolled away from a lit wash and then resized the window was thrown
+// to the top of the chapter. "Nothing" was never meant to mean the top
+// (notes_arrival.go). The iOS twin is btIOSReassertPlacement.
+static void btMacReassertPlacement(void) {
+    gMacOwnScroll++;
+    btMacScrollTVLatched(NO);
+    gMacOwnScroll--;
+}
+static void btMacScrollTVLatched(BOOL pinTop) {
     if (gTextView == nil || gScroll == nil) return;
     // Programmatic scrolling (e.g. read-along follow-scroll) can leave the
     // verticallyResizable text view's frame origin non-zero inside the clip view.
@@ -1399,6 +1410,10 @@ static void btMacScrollTVLatched(void) {
                 (long)gMacRestoreVerse, gMacRestoreFrac);
     }
     if (btMacScrollToHighlight()) { if (getenv("BT_SCROLL_DEBUG")) fprintf(stderr, "[scroll] mac: landed on highlight\n"); return; }
+    if (!pinTop) {
+        if (getenv("BT_SCROLL_DEBUG")) fprintf(stderr, "[scroll] mac re-assert: nothing to place — view left where it is\n");
+        return;
+    }
     if (getenv("BT_SCROLL_DEBUG")) fprintf(stderr, "[scroll] mac: pinned to TOP\n");
     [gTextView scrollRangeToVisible:NSMakeRange(0, 0)];
     [[gScroll contentView] scrollToPoint:NSZeroPoint];
@@ -2964,7 +2979,7 @@ static void btMacApplyFrame(double x, double y, double w, double h) {
         // against a wrap the next frame then undid. What ends a restore is
         // the reader scrolling (btMacUserScrolled), which is also the only
         // event after which a resize should NOT return to the saved place.
-        bibleTextMacScrollTV();
+        btMacReassertPlacement();
     }
 }
 

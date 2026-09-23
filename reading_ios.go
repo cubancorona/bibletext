@@ -2974,8 +2974,47 @@ static BOOL btIOSScrollToHighlight(void) {
 // explicit arrival clears the restore, so it still wins when it should.
 // Centralised so the several places that re-assert the offset (after setText,
 // after a frame push, and on deferred ticks) all agree.
+static BOOL btIOSApplyRestore(void);
 static void bibleTextScrollReadingTV(void) {
     if (gReadingTV == nil) return;
+    if (btIOSApplyRestore()) return;
+    if (btIOSScrollToHighlight()) {
+        if (getenv("BT_SCROLL_DEBUG")) fprintf(stderr, "[scroll] cadence: landed on highlight\n");
+        return;
+    }
+    if (getenv("BT_SCROLL_DEBUG")) fprintf(stderr, "[scroll] cadence: pinned to TOP\n");
+    gReadingTV.contentOffset = CGPointMake(0, -gReadingTV.adjustedContentInset.top);
+}
+
+// btIOSReassertPlacement is the DEFERRED re-assert: the same restore-then-arrival
+// order as bibleTextScrollReadingTV, and NO pin to the top.
+//
+// The re-asserts run a turn later and 200ms later, to re-place a target against
+// the layout once it has settled, and they read the arrival class when they RUN,
+// not when they were scheduled. A push the reader did not ask for can land in
+// between — iOS flipping the appearance to snapshot the app for the switcher,
+// which rebuilds the window, is the measured one — and it pushes "nothing" for
+// the class, because only the render the link asked for is explicit. The
+// re-assert then found no target and pinned the view to the TOP, over the note
+// the link had just placed it on: a link that opened the chapter and stayed at
+// the top of it, once in several tries. "Nothing" was never meant to mean the
+// top (notes_arrival.go: arriveNothing). The synchronous call at import time
+// keeps the top-pin, which is how a plain entry opens a new chapter; a re-assert
+// with nothing to place leaves the view where that call, or the reader, put it.
+static void btIOSReassertPlacement(void) {
+    if (gReadingTV == nil) return;
+    if (btIOSApplyRestore()) return;
+    if (btIOSScrollToHighlight()) {
+        if (getenv("BT_SCROLL_DEBUG")) fprintf(stderr, "[scroll] re-assert: landed on highlight\n");
+        return;
+    }
+    if (getenv("BT_SCROLL_DEBUG")) fprintf(stderr, "[scroll] re-assert: nothing to place — view left where it is\n");
+}
+
+// btIOSApplyRestore places the view on the one-shot restore target, returning NO
+// when none is armed or it cannot be resolved.
+static BOOL btIOSApplyRestore(void) {
+    if (gReadingTV == nil) return NO;
     NSUInteger len = gReadingTV.textStorage.length;
     // ORDER MATTERS, and it is restore-before-highlight.
     //
@@ -3008,15 +3047,10 @@ static void bibleTextScrollReadingTV(void) {
             if (target > maxY) target = maxY;
             if (target < 0) target = 0;
             tv.contentOffset = CGPointMake(0, target);
-            return;
+            return YES;
         }
     }
-    if (btIOSScrollToHighlight()) {
-        if (getenv("BT_SCROLL_DEBUG")) fprintf(stderr, "[scroll] cadence: landed on highlight\n");
-        return;
-    }
-    if (getenv("BT_SCROLL_DEBUG")) fprintf(stderr, "[scroll] cadence: pinned to TOP\n");
-    gReadingTV.contentOffset = CGPointMake(0, -gReadingTV.adjustedContentInset.top);
+    return NO;
 }
 
 // bibleTextIOSScrollToHighlight is the REPOSITION half of an arrival, on its own.
@@ -3380,11 +3414,11 @@ static BOOL bibleTextApplyHTML(NSData *data) {
     // schedule them when a target is armed, and skip if the user is already scrolling.
     if (gReadingHighlightRange.location != NSNotFound || gReadingHasRestore) {
         dispatch_async(dispatch_get_main_queue(), ^{
-            if (!gReadingTV.dragging && !gReadingTV.decelerating) bibleTextScrollReadingTV();
+            if (!gReadingTV.dragging && !gReadingTV.decelerating) btIOSReassertPlacement();
         });
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
-            if (!gReadingTV.dragging && !gReadingTV.decelerating) bibleTextScrollReadingTV();
+            if (!gReadingTV.dragging && !gReadingTV.decelerating) btIOSReassertPlacement();
         });
     }
     return YES;
@@ -3548,7 +3582,9 @@ void bibleTextTVSetFrame(float x, float y, float w, float h) {
             !gReadingTV.dragging && !gReadingTV.decelerating &&
             (gReadingHighlightRange.location != NSNotFound || gReadingHasRestore)) {
             [gReadingTV layoutIfNeeded];
-            bibleTextScrollReadingTV();
+            // A re-place, never a pin: a reader who scrolled away from a lit
+            // wash and then rotated was thrown to the top of the chapter.
+            btIOSReassertPlacement();
             // THE WIDTH THAT JUST LANDED MAY ITSELF BE TRANSIENT. A window
             // rebuild (the tab return after a Links-tab arrival) lays the pane
             // out in steps, and a re-assert computed against a mid-rebuild
@@ -3564,7 +3600,7 @@ void bibleTextTVSetFrame(float x, float y, float w, float h) {
                 if (gReadingTV == nil || gReadingTV.dragging || gReadingTV.decelerating) return;
                 if (gReadingHighlightRange.location == NSNotFound && !gReadingHasRestore) return;
                 [gReadingTV layoutIfNeeded];
-                bibleTextScrollReadingTV();
+                btIOSReassertPlacement();
             });
         }
     });
