@@ -111,9 +111,9 @@ never the top-pin. `arriveNothing` was never meant to mean the top
 plain entry opens a new chapter. Same reproduction after the fix: "landed on
 highlight", then "re-assert: nothing to place — view left where it is", and
 the view on the note. `TestDeferredReassertsNeverPinToTheTop` holds it by what
-the re-asserts do, not only by the names they call: a review showed the first
-version passed a re-assert that ended in the pinning resolver, or in a
-`setContentOffset:`, and it now fails on both. The dev scenario is `headwash`
+the re-asserts do, not only by the names they call: its first version passed a
+re-assert that ended in the pinning resolver, or in a `setContentOffset:`, and
+it now fails on both. The dev scenario is `headwash`
 (docs/VISUAL_TESTS.md).
 
 A side effect worth knowing: a reader who scrolled away from a lit wash and
@@ -890,7 +890,7 @@ cases, including one asking every verse range directly, since the pixels come
 out right from the bare ranges alone), `TestNativeVerseRangesStopAtAHeading`
 and `TestHeadingsReachTheNativePanesBold`; every guard mutation-proved, including
 the exit that stops the bare-range loop at a range ending exactly where a heading
-starts (the narration on the verse above one), which a review found unguarded.
+starts (the narration on the verse above one), which the first guard left free.
 The iOS pass finds each verse's paragraph end by scanning that verse's own span,
 so it reads the chapter once; asking for the paragraph around every verse
 number cost about 5ms per import on a psalm set as one paragraph (measured on
