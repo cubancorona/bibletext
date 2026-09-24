@@ -244,10 +244,11 @@ This list is kept current as each surface is brought to the spec.
   fixes rode with it, both measured on the emulator: each footnote's closing
   newline now takes the footnote size (at body size it made an entry's last
   line a body line tall; entries now stand 78px apart against the Apple
-  panes' 78.6), and **the book page's heading air is live** — the importer ends
-  every chapter with a newline, and the empty paragraph after it counted as a
-  blank separator, which turned the compact page's heading and footnote air
-  off entirely. The lead and tail now match the phone page to the pixel; a
+  panes' 78.6), and **the book page's heading air is live** — the bridge
+  inferred the page from blank lines, and the compact import has two (the
+  empty paragraph after the newline every chapter ends with, and a psalm
+  title's own gap), which turned the compact page's heading and footnote air
+  off entirely; the page now comes from the import. The lead and tail now match the phone page to the pixel; a
   note pill under a heading sits 7px higher inside that air on the book page,
   because its stack-centring refinement needs the blank line only the phone
   page has.

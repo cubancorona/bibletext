@@ -436,7 +436,7 @@ public final class BtBridge {
     // applyParagraphAir attaches the air spans for one chapter's Spanned. Runs
     // after the indent markers are resolved and before the text is set, so the
     // view receives its final spans in one assignment.
-    private static void applyParagraphAir(android.text.SpannableStringBuilder ssb, TextView tv) {
+    private static void applyParagraphAir(android.text.SpannableStringBuilder ssb, TextView tv, boolean compact) {
         airSpans.clear();
         if (ssb == null || tv == null || lastTextPx <= 0f) return;
         final int em = Math.round(lastTextPx);
@@ -451,12 +451,12 @@ public final class BtBridge {
         for (int i = 0; i <= n; i++) {
             if (i == n || ssb.charAt(i) == '\n') { paras.add(new int[]{ps, i}); ps = i + 1; }
         }
-        // A blank line is the phone page's separator. The empty "paragraph"
-        // after the text's closing newline is not one: the importer ends every
-        // chapter with a newline, and counting what follows it as a blank line
-        // turned the compact page's heading and footnote air off entirely.
-        boolean anyBlank = false;
-        for (int[] pr : paras) if (pr[1] == pr[0] && pr[0] < n) { anyBlank = true; break; }
+        // WHICH PAGE THIS IS comes from the import, not from the text. It was
+        // inferred from blank lines — any blank line meant the phone page —
+        // and the compact page has two: the empty "paragraph" after the
+        // closing newline every chapter ends with, and the one a psalm's title
+        // writes for its own gap. Either turned the compact page's heading and
+        // footnote air off entirely.
         // The footnote section's paragraphs, numbered from 1: the first is the
         // rule's, the rest are the entries. 0 is not the section.
         int[] fn = new int[paras.size()];
@@ -488,7 +488,7 @@ public final class BtBridge {
                 airSpans.add(a);
                 continue;
             }
-            if (anyBlank) continue; // the blank lines carry the air on this page
+            if (!compact) continue; // the blank lines carry the air on this page
             if (fn[k] > 1) {
                 // The compact page's footnotes: the entry's first line carries
                 // the air above it, the way a heading's lead is reserved.
@@ -500,7 +500,9 @@ public final class BtBridge {
             if (!isHeadingParagraph(ssb, pr[0], pr[1])) continue;
             // The compact page: lead above the heading (none at the very top),
             // tail on the paragraph after it.
-            if (k > 0) {
+            // A blank line beside the heading (a psalm title's) already
+            // carries the air on that side.
+            if (k > 0 && paras.get(k - 1)[1] > paras.get(k - 1)[0]) {
                 AirSpan a = new AirSpan(lead, false, pr[0], add);
                 ssb.setSpan(a, pr[0], Math.min(pr[0] + 1, n), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 airSpans.add(a);
@@ -3006,7 +3008,7 @@ public final class BtBridge {
                     footnotesTakeTheirNewlines((Spannable) s);
                 }
                 if (s instanceof android.text.SpannableStringBuilder) {
-                    applyParagraphAir((android.text.SpannableStringBuilder) s, text);
+                    applyParagraphAir((android.text.SpannableStringBuilder) s, text, lastMeasureDp > 0f);
                 }
                 if (s instanceof Spannable) liftWashToLineBackground((Spannable) s);
                 text.setText(s, TextView.BufferType.SPANNABLE);

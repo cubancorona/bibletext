@@ -98,10 +98,11 @@ func TestAndroidDialectSizeTagsAreTheHandlers(t *testing.T) {
 }
 
 // The compact page (the book page) carries its heading and footnote air on
-// spans, and only when the chapter has no blank separator lines. The importer
-// ends every chapter with a newline, and the empty "paragraph" after it is not
-// a separator: counted as one, it switched the compact page's air off
-// entirely, so the Android book page drew no air above or below a heading.
+// spans. Which page a chapter is on comes from the import: it used to be
+// inferred from blank lines, and the compact page has two — the empty
+// "paragraph" after the closing newline every chapter ends with, and a psalm
+// title's own gap — so the Android book page drew no air above or below a
+// heading.
 func TestAndroidCompactPageKeepsItsAir(t *testing.T) {
 	java := readNativeSource(t, "android/BtBridge.java")
 	i := strings.Index(java, "private static void applyParagraphAir(")
@@ -110,8 +111,11 @@ func TestAndroidCompactPageKeepsItsAir(t *testing.T) {
 	}
 	body := java[i:]
 	body = body[:strings.Index(body, "\n    }\n")]
-	if !strings.Contains(body, "if (pr[1] == pr[0] && pr[0] < n) { anyBlank = true; break; }") {
-		t.Error("applyParagraphAir counts the empty paragraph after the closing newline as a blank line")
+	if !strings.Contains(body, "if (!compact) continue;") || strings.Contains(body, "anyBlank") {
+		t.Error("applyParagraphAir infers the page from blank lines rather than from the import")
+	}
+	if !strings.Contains(java, "applyParagraphAir((android.text.SpannableStringBuilder) s, text, lastMeasureDp > 0f);") {
+		t.Error("setHtml does not tell applyParagraphAir which page it imported")
 	}
 	for _, want := range []string{"fn[k] == 2 ? fnRule : fnEntry", "h = fn[k - 1] == 1 ? fnRule : fnEntry;"} {
 		if !strings.Contains(body, want) {
