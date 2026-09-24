@@ -17,8 +17,8 @@ jobs:
   capture:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.24"
           cache: true
@@ -80,7 +80,7 @@ jobs:
           }
           $ErrorActionPreference = 'Stop'
           pwsh scripts/capture-windows-screenshots.ps1 -Exe build\shots\BibleText.exe -Links build\shots\links.txt -Out build\shots\out
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: windows-screenshots

@@ -63,8 +63,8 @@ jobs:
             runner: windows-11-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.24"
           cache: true
@@ -125,7 +125,7 @@ jobs:
           & "$bin\makeappx.exe" pack /d $layout /p build\msstore\BibleText-Windows-${{ matrix.arch }}.msix /o
           if ($LASTEXITCODE -ne 0) { throw "makeappx pack failed" }
           Get-Item build\msstore\BibleText-Windows-${{ matrix.arch }}.msix | Format-List Name, Length
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: BibleText-Windows-${{ matrix.arch }}-msix
           path: build/msstore/BibleText-Windows-${{ matrix.arch }}.msix
@@ -297,7 +297,7 @@ jobs:
           python scripts/check-reading-centred.py docs/windows-reading-centred-ok.png
           # Then the app that just ran on this machine.
           python scripts/check-reading-centred.py build/msstore/smoke-render.png
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: msstore-smoke-screenshots-${{ matrix.arch }}

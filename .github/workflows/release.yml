@@ -21,7 +21,7 @@ jobs:
     name: create release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: verify public support configuration
         run: |
           python3 scripts/check-support-contact.py
@@ -55,8 +55,8 @@ jobs:
     needs: create-release
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.24"
           cache: true
@@ -151,8 +151,8 @@ jobs:
     # (scripts/check-glibc-floor.sh holds the floor at Ubuntu 22.04's 2.35).
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.24"
           cache: true
@@ -203,7 +203,7 @@ jobs:
           # The snap job packages this same executable.
           install -Dm755 cmd/bibletext/bibletext build/snap-stage/bin/bibletext
           install -Dm644 linux/asound.conf build/snap-stage/etc/asound.conf
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: snap-stage
           path: build/snap-stage
@@ -221,8 +221,8 @@ jobs:
     env:
       SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: snap-stage
           path: build/snap-stage
@@ -239,7 +239,7 @@ jobs:
           entry=/var/lib/snapd/desktop/applications/bibletext_bibletext.desktop
           grep -q '^MimeType=x-scheme-handler/bibletext;' "$entry"
           grep -q '^Exec=.*bibletext %u$' "$entry"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bibletext-snap
           path: ${{ steps.snapcraft.outputs.snap }}
@@ -261,8 +261,8 @@ jobs:
     # this host, which is the architecture it is wrapping.
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.24"
           cache: true
@@ -309,7 +309,7 @@ jobs:
           rm -rf squashfs-root
           install -Dm755 cmd/bibletext/bibletext build/snap-stage/bin/bibletext
           install -Dm644 linux/asound.conf build/snap-stage/etc/asound.conf
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: snap-stage-arm64
           path: build/snap-stage
@@ -327,12 +327,12 @@ jobs:
     env:
       SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.24"
           cache: true
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: snap-stage-arm64
           path: build/snap-stage
@@ -362,7 +362,7 @@ jobs:
           # The ALSA plugins must actually resolve inside the confinement, not
           # merely be present in the squashfs.
           sudo snap run --shell bibletext -c 'ls /usr/lib/aarch64-linux-gnu/alsa-lib/ >/dev/null'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bibletext-snap-arm64
           path: ${{ steps.snapcraft.outputs.snap }}
@@ -391,8 +391,8 @@ jobs:
             runner: windows-11-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.24"
           cache: true

@@ -46,8 +46,8 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.24"
           cache: true
@@ -77,13 +77,13 @@ jobs:
           scripts/check-glibc-floor.sh build/linux/bibletext 2.35
           install -Dm755 build/linux/bibletext build/snap-stage/bin/bibletext
           install -Dm644 linux/asound.conf build/snap-stage/etc/asound.conf
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux-binary-${{ matrix.arch }}
           path: build/linux/bibletext
           if-no-files-found: error
           retention-days: 3
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: snap-stage-${{ matrix.arch }}
           path: build/snap-stage
@@ -109,11 +109,11 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5 # verify-release-package.sh reads the build info with go version -m
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7 # verify-release-package.sh reads the build info with go version -m
         with:
           go-version: "1.24"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: linux-binary-${{ matrix.arch }}
           path: build/linux
@@ -150,14 +150,14 @@ jobs:
           # read in build-appimage.sh and by the extraction above.
           scripts/smoke-linux-launch.sh appimage-${{ matrix.appimage }} ./squashfs-root/AppRun
           rm -rf squashfs-root
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: BibleText-${{ matrix.appimage }}-AppImage
           path: |
             BibleText-${{ matrix.appimage }}.AppImage
             BibleText-${{ matrix.appimage }}.AppImage.zsync
           if-no-files-found: error
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: appimage-smoke-${{ matrix.appimage }}
@@ -183,11 +183,11 @@ jobs:
             triplet: aarch64-linux-gnu
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5 # verify-release-package.sh reads the build info with go version -m
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7 # verify-release-package.sh reads the build info with go version -m
         with:
           go-version: "1.24"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: snap-stage-${{ matrix.arch }}
           path: build/snap-stage
@@ -224,11 +224,11 @@ jobs:
           trap clear_release_bible_key EXIT
           BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" scripts/verify-release-package.sh "$RUNNER_TEMP/snapfs/bin/bibletext" "$RUNNER_TEMP/snapfs"
           scripts/smoke-linux-launch.sh snap bibletext
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bibletext-snap-${{ matrix.arch }}
           path: ${{ steps.snapcraft.outputs.snap }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: snap-smoke-${{ matrix.arch }}
@@ -253,7 +253,7 @@ jobs:
       image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
       options: --privileged
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # The action lives in the flatpak organisation (the flathub-infra fork
       # is archived and has no tags); the container images are flathub-infra's.
       - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
@@ -292,8 +292,8 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           name: uk.co.bibletext.BibleText-${{ matrix.arch }}
           path: .
@@ -315,7 +315,7 @@ jobs:
             flatpak run --env=LIBGL_ALWAYS_SOFTWARE=1 uk.co.bibletext.BibleText & sleep 25
             ffmpeg -loglevel error -y -f x11grab -video_size 1280x800 -i "$DISPLAY" -t 20 flatpak-demo.mp4
             kill %1'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: flatpak-smoke-${{ matrix.arch }}
