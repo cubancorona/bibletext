@@ -151,6 +151,57 @@ that glyph never draws.
 
 ---
 
+## The reading page
+
+The page — which page a surface draws, how wide its column is, and how large
+everything inside it is set — is specified once, in `reading_page.go`, and every
+surface derives what it needs from it. Decided 24 September 2026: the reading page
+looks the same on every surface, in each platform's own logical unit (Apple
+points; Fyne units, a pixel at 100% on Windows and Linux; Android dp; CSS pixels
+at a 16px root), and the operating system scales that unit for its screen.
+
+### Two pages, one rule
+
+| | book page | phone page |
+|---|---|---|
+| column | the measure, `reporterMeasureEm × R`, centred | the pane less `readingPageSideMin` each side |
+| side, pane edge to ink | `⌊(pane − measure)/2⌋`, never below 15 | 15 |
+| line pitch | `readingBookPitchEm` × the body | `readingPhonePitchEm` × the body |
+| between paragraphs | nothing | `readingParaGapEm` × the body |
+| first-line indent | `reporterIndentEm` × the body, prose only | none |
+
+**The book page is used when the pane is at least the measure plus 15 on each
+side** (`readingBookPageFits`): 607.5 at Normal, 694.125 at Large, 780.75 at Extra
+large. By width, never by device or orientation — a narrow Mac or iPad window
+reads like a phone, a wide Android tablet like a book. The pane is the width the
+text itself can occupy, with rails, sidebars and scrollers already taken away.
+
+**R** is the reading size before the optical scale, `readingBodyBase × the
+reader's setting` (21, 24.15, 27.3); the body is set at `R × readingOpticalScale()`.
+The measure is figured from R and never from the set size, for the reason the
+optical-scale section gives. Both pages' pitch is `readingLinePitchEm`, the value
+every surface but the canvas pane already used; they have two names so that a
+later decision about either page is one constant.
+
+### Sizes inside the page, in ems of the body
+
+| element | size | notes |
+|---|---|---|
+| Scripture, headings, the Psalm title | 1.0 | headings bold, the title italic |
+| verse number | `readingNumeralEm` 0.66 | the bold cut; baseline `readingNumeralLiftEm` (a third of the body) above the text's |
+| omitted-verse mark `[n]` | `readingGapMarkEm` 0.66 | regular, muted, on the baseline |
+| footnote entries | `readingFootnoteEm` 0.85 | muted; `readingFootnoteRuleGapEm` under the rule, `readingFootnoteEntryGapEm` between entries |
+| note card body / byline and pills | `noteBodySize` 15 / `noteWhoSize` 11 units | furniture, not Scripture: it does not follow the reader's text size |
+
+### Where each surface stands
+
+This list is kept current as each surface is brought to the spec.
+
+- **Windows and Linux canvas pane** — the reading size (was the interface's 18)
+  and the Apple panes' verse numbers since 24 September 2026. Its page choice,
+  side, pitch and note text follow in the steps below.
+- **macOS, iOS, Android, web** — to be brought to the rule and the size table.
+
 ## Vertical spacing of the reading pane
 
 Everything that stacks vertically inside the reading pane, on every surface
