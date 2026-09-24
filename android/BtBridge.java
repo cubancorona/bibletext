@@ -268,6 +268,106 @@ public final class BtBridge {
     private static final float PARA_GAP_EM = 1.0f, HEAD_LEAD_EM = 1.1f, HEAD_TAIL_EM = 0.35f, TITLE_GAP_EM = 0.55f, INDENT_EM = 1.5f;
     private static final java.util.ArrayList<AirSpan> airSpans = new java.util.ArrayList<AirSpan>();
 
+    // --- The small type inside the page ----------------------------------------
+    //
+    // THE SIZES INSIDE THE PAGE, IN EMS OF THE BODY AS SET — reading_page.go's
+    // table, copied because this file cannot import Go; a host test
+    // (android_page_sizes_contract_test.go) holds them to it. A verse number
+    // is 0.66 of the body raised a third of it, baseline to baseline, as UIKit
+    // and AppKit set the Apple dialect's sup.v; an omitted verse's mark is
+    // 0.66 on the baseline; a footnote is 0.85, with a third of the body under
+    // the rule and a fifth between entries. The importer's only size step is
+    // <small>, 0.8, which is none of them, and its <sup> raises by half the
+    // ascent of whatever size reaches it first — so the dialect marks each
+    // with a tag of its own (<btnum>, <btgap>, <btfn>) and READING_SIZES turns
+    // the tag into its span.
+    private static final float NUM_EM = 0.66f, NUM_LIFT_EM = 0.33333f, GAP_MARK_EM = 0.66f, FN_EM = 0.85f, FN_RULE_GAP_EM = 0.33f, FN_ENTRY_GAP_EM = 0.2f;
+
+    // NumeralSpan raises a verse number by a fixed distance, the lift above,
+    // in place of the platform superscript's. A SuperscriptSpan still, because
+    // the verse index reads those (buildVerseIndex); the plain one the <sup>
+    // around it made is dropped as the chapter imports (dropPlainSuperscripts),
+    // or the number would be raised twice.
+    private static final class NumeralSpan extends SuperscriptSpan {
+        final int lift;
+        NumeralSpan(int lift) { this.lift = lift; }
+        @Override public void updateDrawState(android.text.TextPaint tp) { tp.baselineShift -= lift; }
+        @Override public void updateMeasureState(android.text.TextPaint tp) { tp.baselineShift -= lift; }
+    }
+
+    // FootnoteSizeSpan is the footnote section's size, a class of its own so
+    // the paragraph air can tell the section's paragraphs (applyParagraphAir).
+    private static final class FootnoteSizeSpan extends android.text.style.RelativeSizeSpan {
+        FootnoteSizeSpan() { super(FN_EM); }
+    }
+
+    // SizeMark holds an open size tag's start until the tag closes.
+    private static final class SizeMark {
+        final String tag;
+        SizeMark(String tag) { this.tag = tag; }
+    }
+
+    private static final Html.TagHandler READING_SIZES = new Html.TagHandler() {
+        @Override public void handleTag(boolean opening, String tag, android.text.Editable out,
+                org.xml.sax.XMLReader xr) {
+            if (!"btnum".equals(tag) && !"btgap".equals(tag) && !"btfn".equals(tag)) return;
+            if (opening) {
+                out.setSpan(new SizeMark(tag), out.length(), out.length(), Spanned.SPAN_MARK_MARK);
+                return;
+            }
+            SizeMark open = null;
+            for (SizeMark m : out.getSpans(0, out.length(), SizeMark.class)) {
+                if (m.tag.equals(tag)) open = m;
+            }
+            if (open == null) return;
+            int st = out.getSpanStart(open), en = out.length();
+            out.removeSpan(open);
+            if (st < 0 || st >= en) return;
+            final int flags = Spanned.SPAN_EXCLUSIVE_EXCLUSIVE;
+            if ("btnum".equals(tag)) {
+                out.setSpan(new android.text.style.RelativeSizeSpan(NUM_EM), st, en, flags);
+                out.setSpan(new NumeralSpan(Math.round(NUM_LIFT_EM * lastTextPx)), st, en, flags);
+            } else if ("btgap".equals(tag)) {
+                out.setSpan(new android.text.style.RelativeSizeSpan(GAP_MARK_EM), st, en, flags);
+            } else if ("btfn".equals(tag)) {
+                out.setSpan(new FootnoteSizeSpan(), st, en, flags);
+            }
+        }
+    };
+
+    // dropPlainSuperscripts removes the importer's own SuperscriptSpan wherever
+    // a NumeralSpan covers the same run, so each verse number has one span that
+    // raises it and the verse index still finds exactly one per verse.
+    private static void dropPlainSuperscripts(Spannable sp) {
+        for (NumeralSpan n : sp.getSpans(0, sp.length(), NumeralSpan.class)) {
+            int st = sp.getSpanStart(n), en = sp.getSpanEnd(n);
+            for (SuperscriptSpan s : sp.getSpans(st, en, SuperscriptSpan.class)) {
+                if (s.getClass() == SuperscriptSpan.class
+                        && sp.getSpanStart(s) == st && sp.getSpanEnd(s) == en) sp.removeSpan(s);
+            }
+        }
+    }
+
+    // footnotesTakeTheirNewlines extends each footnote span over the newline
+    // that closes its paragraph. The importer writes that newline at </p>,
+    // outside the <btfn> inside it, and a line's height is measured over every
+    // character on it: at body size, the newline made each entry's last line
+    // a body line tall, a fifth looser than the section's own pitch.
+    private static void footnotesTakeTheirNewlines(Spannable sp) {
+        for (FootnoteSizeSpan f : sp.getSpans(0, sp.length(), FootnoteSizeSpan.class)) {
+            int st = sp.getSpanStart(f), en = sp.getSpanEnd(f);
+            if (en < sp.length() && sp.charAt(en) == '\n') {
+                sp.setSpan(f, st, en + 1, sp.getSpanFlags(f));
+            }
+        }
+    }
+
+    // isFootnoteParagraph: a paragraph of the footnote section carries its size.
+    private static boolean isFootnoteParagraph(Spanned sp, int ps, int pe) {
+        FootnoteSizeSpan[] f = sp.getSpans(ps, pe, FootnoteSizeSpan.class);
+        return f != null && f.length > 0;
+    }
+
     private static final class AirSpan
             implements android.text.style.LineHeightSpan, android.text.style.UpdateLayout {
         final int px;         // the air, in pixels
@@ -343,6 +443,7 @@ public final class BtBridge {
         final int add = Math.round(tv.getLineSpacingExtra());
         final int gap = Math.round(PARA_GAP_EM * em), lead = Math.round(HEAD_LEAD_EM * em), tail = Math.round(HEAD_TAIL_EM * em);
         final int titleGap = Math.round(TITLE_GAP_EM * em);
+        final int fnRule = Math.round(FN_RULE_GAP_EM * em), fnEntry = Math.round(FN_ENTRY_GAP_EM * em);
         final int n = ssb.length();
         // Paragraph bounds, once: [starts[i], ends[i]) excludes the '\n'.
         java.util.ArrayList<int[]> paras = new java.util.ArrayList<int[]>();
@@ -350,8 +451,20 @@ public final class BtBridge {
         for (int i = 0; i <= n; i++) {
             if (i == n || ssb.charAt(i) == '\n') { paras.add(new int[]{ps, i}); ps = i + 1; }
         }
+        // A blank line is the phone page's separator. The empty "paragraph"
+        // after the text's closing newline is not one: the importer ends every
+        // chapter with a newline, and counting what follows it as a blank line
+        // turned the compact page's heading and footnote air off entirely.
         boolean anyBlank = false;
-        for (int[] pr : paras) if (pr[1] == pr[0]) { anyBlank = true; break; }
+        for (int[] pr : paras) if (pr[1] == pr[0] && pr[0] < n) { anyBlank = true; break; }
+        // The footnote section's paragraphs, numbered from 1: the first is the
+        // rule's, the rest are the entries. 0 is not the section.
+        int[] fn = new int[paras.size()];
+        int fnSeen = 0;
+        for (int k = 0; k < paras.size(); k++) {
+            int[] pr = paras.get(k);
+            if (pr[1] > pr[0] && isFootnoteParagraph(ssb, pr[0], pr[1])) fn[k] = ++fnSeen;
+        }
         for (int k = 0; k < paras.size(); k++) {
             int[] pr = paras.get(k);
             if (pr[1] == pr[0]) {
@@ -365,12 +478,25 @@ public final class BtBridge {
                 // whose lead wins as it does on the Apple panes.
                 boolean titlePrev = k == 1 && isTitleParagraph(ssb, paras.get(0)[0], paras.get(0)[1]);
                 int h = headNext ? lead : (headPrev ? tail : (titlePrev ? titleGap : gap));
+                // Inside the footnote section the air is the section's: under
+                // the rule, then between entries.
+                if (k > 0 && k + 1 < paras.size() && fn[k - 1] > 0 && fn[k + 1] > 0) {
+                    h = fn[k - 1] == 1 ? fnRule : fnEntry;
+                }
                 AirSpan a = new AirSpan(h, true, pr[0], add);
                 ssb.setSpan(a, pr[0], pr[0] + 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 airSpans.add(a);
                 continue;
             }
             if (anyBlank) continue; // the blank lines carry the air on this page
+            if (fn[k] > 1) {
+                // The compact page's footnotes: the entry's first line carries
+                // the air above it, the way a heading's lead is reserved.
+                AirSpan a = new AirSpan(fn[k] == 2 ? fnRule : fnEntry, false, pr[0], add);
+                ssb.setSpan(a, pr[0], Math.min(pr[0] + 1, n), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                airSpans.add(a);
+                continue;
+            }
             if (!isHeadingParagraph(ssb, pr[0], pr[1])) continue;
             // The compact page: lead above the heading (none at the very top),
             // tail on the paragraph after it.
@@ -2834,7 +2960,7 @@ public final class BtBridge {
                 CharSequence s;
                 if (android.os.Build.VERSION.SDK_INT >= 24) {
                     s = Html.fromHtml(html, lastMeasureDp > 0f
-                            ? Html.FROM_HTML_MODE_COMPACT : Html.FROM_HTML_MODE_LEGACY);
+                            ? Html.FROM_HTML_MODE_COMPACT : Html.FROM_HTML_MODE_LEGACY, null, READING_SIZES);
                 } else {
                     // The two-argument fromHtml is API 24. Below that the import
                     // is always LEGACY, so the reporter page would arrive with
@@ -2842,7 +2968,7 @@ public final class BtBridge {
                     // markers at once, which is the one thing the grammar
                     // forbids. Collapse the blank lines instead; a
                     // SpannableStringBuilder moves its spans with the deletion.
-                    s = Html.fromHtml(html);
+                    s = Html.fromHtml(html, null, READING_SIZES);
                     if (lastMeasureDp > 0f && s instanceof android.text.SpannableStringBuilder) {
                         android.text.SpannableStringBuilder ssb = (android.text.SpannableStringBuilder) s;
                         for (int i = ssb.length() - 1; i > 0; i--) {
@@ -2874,6 +3000,10 @@ public final class BtBridge {
                                     i, end, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                         }
                     }
+                }
+                if (s instanceof Spannable) {
+                    dropPlainSuperscripts((Spannable) s);
+                    footnotesTakeTheirNewlines((Spannable) s);
                 }
                 if (s instanceof android.text.SpannableStringBuilder) {
                     applyParagraphAir((android.text.SpannableStringBuilder) s, text);

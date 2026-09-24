@@ -116,7 +116,7 @@ func TestTheAndroidDialectMarksTheHoleWithoutASup(t *testing.T) {
 	if got := strings.Count(on, "<sup>"); got != len(verses) {
 		t.Errorf("%d <sup> for %d verses — the mark must not be a <sup>", got, len(verses))
 	}
-	if strings.Contains(on, "<sup><small><font") && strings.Contains(on, "[21]</font></small></sup>") {
+	if strings.Contains(on, "<sup><btnum><font") && strings.Contains(on, "[21]</font></btnum></sup>") {
 		t.Errorf("the mark was written inside a <sup>:\n%s", on)
 	}
 }

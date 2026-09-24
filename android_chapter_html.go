@@ -12,8 +12,10 @@ import (
 
 // buildChapterHTMLAndroid emits the Html.fromHtml-safe dialect of the chapter:
 // no CSS classes (fromHtml ignores <style>), so verse numbers are
-// <sup><small><font color><b>, red-letter is <font color>, and a verse's wash is
-// an inline style= span (honored on API 24+).
+// <sup><btnum><font color><b>, red-letter is <font color>, and a verse's wash is
+// an inline style= span (honored on API 24+). The sizes are the reading page's
+// (reading_page.go), carried by three tags of the dialect's own — <btnum>,
+// <btgap>, <btfn> — that BtBridge's tag handler turns into spans.
 //
 // The dialect differences all live in androidTintHTML (tint.go) now. What is
 // left here is the paragraph and join structure — which must stay identical to
@@ -130,7 +132,7 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 				}
 			}
 			// An omitted verse's mark, before this verse's number and after the
-			// join already written above. <small>, never <sup>: BtBridge's verse
+			// join already written above. <btgap>, never <sup>: BtBridge's verse
 			// index reads SuperscriptSpans alone and sets the chapter's content
 			// end at the first non-digit one, so a mark written as a <sup>
 			// would clamp every verb from here down (see tintHTML.Gap).
@@ -191,10 +193,12 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 //     same continuous-hairline-by-construction property the Apple importers
 //     needed (glyph runs gap there; here <hr> simply doesn't exist).
 //
-// Smaller type is <small> (RelativeSizeSpan 0.8 — the dialect's only size
-// step; the Apple panes' 0.85em pact is a native-scan concern that does not
-// apply to this pipeline). BtBridge clamps selection verbs at the sentinel
-// (contentEnd), mirroring the Apple content-end clamps.
+// The section's type is <btfn>: the spec's footnote size (readingFootnoteEm,
+// 0.85), which the importer's own <small> (0.8) is not. BtBridge's tag handler
+// sets it as a span of its own class, and the paragraph air finds the section
+// by that span to give it the spec's air — a third of the body under the rule,
+// a fifth between entries (applyParagraphAir). BtBridge clamps selection verbs
+// at the sentinel (contentEnd), mirroring the Apple content-end clamps.
 func writeFootnoteSectionAndroid(b *strings.Builder, entries []footnoteEntry, mutedHex string, reporter bool) {
 	sep := footnoteSeparator
 	if reporter {
@@ -203,9 +207,9 @@ func writeFootnoteSectionAndroid(b *strings.Builder, entries []footnoteEntry, mu
 		// would sit directly under the last verse.
 		sep = "<br>" + sep
 	}
-	fmt.Fprintf(b, `<p><sup>&#160;</sup><small><font color="%s">%s</font></small></p>`, mutedHex, sep)
+	fmt.Fprintf(b, `<p><sup>&#160;</sup><btfn><font color="%s">%s</font></btfn></p>`, mutedHex, sep)
 	for _, e := range entries {
-		fmt.Fprintf(b, `<p><small><font color="%s"><b>%s</b>&#160;%s</font></small></p>`,
+		fmt.Fprintf(b, `<p><btfn><font color="%s"><b>%s</b>&#160;%s</font></btfn></p>`,
 			mutedHex, footnoteEntryKey(e), htmlEscape(e.Text))
 	}
 }

@@ -41,7 +41,7 @@ func paragraphIndexByVerse(paras [][]Verse) map[int]int {
 // HTML dialects emit; a <br> inside a <p> is a poetic line break and NOT a
 // paragraph, which is exactly the distinction that can drift.
 // The two dialects nest the number differently — the Apple body writes it
-// bare, Android wraps it in <small><font><b> — so the marker is matched as a
+// bare, Android wraps it in <btnum><font><b> — so the marker is matched as a
 // <sup>…</sup> SPAN and the first digit run inside it is the verse.
 var supRe = regexp.MustCompile(`(?s)<sup[^>]*>(.*?)</sup>`)
 var digitsRe = regexp.MustCompile(`\d+`)

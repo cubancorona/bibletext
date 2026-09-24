@@ -266,7 +266,15 @@ var appleTintHTML = func() [tintCount]tintHTML {
 // which change with the theme. Four Sprintfs per live tint, once, against the
 // hundreds of verses that then cost one argument each.
 //
-// NO <b> anywhere, deliberately. Bolding a washed verse re-typesets it (the
+// THE SIZES ARE THE SPEC'S (reading_page.go), in tags of the dialect's own:
+// <btnum> for a verse number (0.66, raised a third of the body), <btgap> for an
+// omitted verse's mark (0.66, on the baseline). The importer's only size step
+// is <small>, 0.8, which is neither; BtBridge's READING_SIZES tag handler turns
+// each tag into its span. The <sup> stays around the number because the
+// bridge's verse index reads SuperscriptSpans, and the numeral's own span is
+// one.
+//
+// NO <b> on the verse text, deliberately. Bolding a washed verse re-typesets it (the
 // bold serif sets ~17% wider), so the paragraph re-wrapped and the text jumped
 // the moment the wash cleared — the same refusal the Apple dialect and the
 // styled pane make.
@@ -276,9 +284,9 @@ func androidTintHTML(pal palette, numHex, redHex, mutedHex string) [tintCount]ti
 		c, ok := tint.wash(pal)
 		if !ok {
 			t[tint] = tintHTML{
-				Number: fmt.Sprintf(`<sup><small><font color="%s"><b>%%d</b></font></small></sup> `, numHex),
+				Number: fmt.Sprintf(`<sup><btnum><font color="%s"><b>%%d</b></font></btnum></sup> `, numHex),
 				BodyWJ: fmt.Sprintf(`<font color="%s">%%s</font>`, redHex),
-				Gap:    fmt.Sprintf(`<small><font color="%s">[%%d]</font></small> `, mutedHex),
+				Gap:    fmt.Sprintf(`<btgap><font color="%s">[%%d]</font></btgap> `, mutedHex),
 			}
 			continue
 		}
@@ -291,13 +299,13 @@ func androidTintHTML(pal palette, numHex, redHex, mutedHex string) [tintCount]ti
 		t[tint] = tintHTML{
 			JoinSpace: fmt.Sprintf(`<span style="background-color:%s"> </span>`, bg),
 			Number: fmt.Sprintf(
-				`<span style="background-color:%s"><sup><small><font color="%s"><b>%%d</b></font></small></sup> </span>`,
+				`<span style="background-color:%s"><sup><btnum><font color="%s"><b>%%d</b></font></btnum></sup> </span>`,
 				bg, numHex),
 			Body: fmt.Sprintf(`<span style="background-color:%s">%%s</span>`, bg),
 			BodyWJ: fmt.Sprintf(
 				`<span style="background-color:%s"><font color="%s">%%s</font></span>`, bg, redHex),
 			Gap: fmt.Sprintf(
-				`<span style="background-color:%s"><small><font color="%s">[%%d]</font></small> </span>`, bg, mutedHex),
+				`<span style="background-color:%s"><btgap><font color="%s">[%%d]</font></btgap> </span>`, bg, mutedHex),
 		}
 	}
 	return t

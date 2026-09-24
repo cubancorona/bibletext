@@ -234,8 +234,23 @@ This list is kept current as each surface is brought to the spec.
   flagged:** Android centres the book page on the WINDOW (so a landscape
   phone's column clears the camera cutout evenly); on a tablet with the side
   rail that sets the column about half the rail's width left of the pane's
-  centre, where the iPad centres on its pane. The numeral, gap-mark and
-  footnote sizes are still Android's own (`<sup><small>`, 0.8).
+  centre, where the iPad centres on its pane. The sizes inside the page are the
+  spec's since the same day: the dialect carries them in tags of its own
+  (`<btnum>`, `<btgap>`, `<btfn>`) that the bridge's `READING_SIZES` tag
+  handler turns into spans — the numeral 0.66 raised a third of the body (the
+  emulator measured 21px on a 63.5px body), the gap mark 0.66 on the baseline,
+  the footnotes 0.85 with the section's own air — where all three had been the
+  importer's `<small>`, 0.8, and the numeral raised by half the ascent. Two
+  fixes rode with it, both measured on the emulator: each footnote's closing
+  newline now takes the footnote size (at body size it made an entry's last
+  line a body line tall; entries now stand 78px apart against the Apple
+  panes' 78.6), and **the book page's heading air is live** — the importer ends
+  every chapter with a newline, and the empty paragraph after it counted as a
+  blank separator, which turned the compact page's heading and footnote air
+  off entirely. The lead and tail now match the phone page to the pixel; a
+  note pill under a heading sits 7px higher inside that air on the book page,
+  because its stack-centring refinement needs the blank line only the phone
+  page has.
 - **Web** — its page choice and the size table are to be brought to the rule.
 
 A dev build can force either page on any width: `BIBLETEXT_DEV_READING_PAGE=
@@ -340,7 +355,8 @@ lines.
   xcrun simctl launch <udid> uk.co.bibletext` and `xcrun simctl io booted screenshot`;
 - Android: `BT_ANDROID_TAGS=bibletextdev scripts/build-android.sh`, `adb install -r`,
   open the fixture's link with `am start -a android.intent.action.VIEW -d <link>`,
-  `adb exec-out screencap -p`; the tablet AVD for the compact page;
+  `adb exec-out screencap -p`; any AVD in landscape, or the Links tab's
+  "Reading page: Book", for the compact page (the book page imports compact);
 - web: `go run ./cmd/websitegen -out build/site -offline`, serve `build/site`
   locally, open the same link there, and read the computed styles in the
   browser rather than eyeballing.

@@ -84,7 +84,7 @@ func TestHighlightBandHasNoGapsAndroid(t *testing.T) {
 		t.Errorf("expected the joining space to be inside the band:\n%s", html)
 	}
 	// The verse NUMBER joins the band too — leaving it out punches the same hole.
-	if !regexp.MustCompile(`<span style="background-color:[^"]*"><sup><small>`).MatchString(html) {
+	if !regexp.MustCompile(`<span style="background-color:[^"]*"><sup><btnum>`).MatchString(html) {
 		t.Errorf("expected the verse number inside the band:\n%s", html)
 	}
 }
