@@ -214,8 +214,16 @@ This list is kept current as each surface is brought to the spec.
   since 24 September 2026: the body unrounded (24.19, was 24; the importer keeps
   the fraction), the pitch, the numeral, gap-mark and footnote sizes, and the
   footnote air in ems (was 8px and 5px, which did not follow the text size).
-- **macOS, iOS, Android, web** — their page choice and the rest of the size table
-  are to be brought to the rule.
+- **macOS and iOS** — choose their page by width since 24 September 2026: the
+  pane reports its width (the scroll view's content on macOS, the frame on iOS),
+  `reporterLayoutActive` asks `currentReadingPage`, and a width that settles on
+  the other page re-renders the chapter in place (`reading_page_width.go`). The
+  Mac always drew the book page, however narrow its window; iOS chose by device.
+  Both place the ink at the spec's side minimum (the inset is the ink side less
+  the container's line-fragment padding), so the book page's ink line is the
+  measure itself — it was 10pt short.
+- **Android, web** — their page choice and the rest of the size table are to be
+  brought to the rule.
 
 ## Vertical spacing of the reading pane
 

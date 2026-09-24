@@ -2,11 +2,10 @@
 
 package bibletext
 
-// reporterLayoutActive on macOS: always. The desktop window is a book page
-// (deliberate: desktop parity with the iPad), and the native measure
-// centering handles a narrow window the same way a narrow iPad multitasking
-// column is handled — the side margins floor out and the column just fills
-// what is there. The 27.5em measure itself is applied by
-// bibleTextMacSetReadingMeasure (reading_macos.go), the NSTextView twin of the
-// iPad's bibleTextSetReadingMeasure.
-func reporterLayoutActive() bool { return true }
+// reporterLayoutActive reports whether the reading pane is on the book page —
+// the U.S. Reports set (reading_page.go). By WIDTH, as on every surface: a
+// window wide enough for the column and its margins reads the book page, and a
+// narrow one the phone page. The width is the one the NSTextView's scroll view
+// reports (btMacReadingWidthChanged); until it has reported one — and in the
+// host tests, which have no pane — the book page, as this pane always drew.
+func reporterLayoutActive() bool { return currentReadingPage().Book() }

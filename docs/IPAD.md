@@ -41,12 +41,21 @@ They do not describe the shipped UI.
 
 ## The reading page: the U.S. Reports layout
 
-The navigation is unified, but iPad reading typography remains device-specific.
-(An iPhone in landscape takes this page too, as its default reading
-presentation — phone_landscape.go and docs/BACKLOG.md.)
-`reporterLayoutActive()` enables a centred **27.5em text column**, approximately
-58–60 characters per line at the Normal 21px base, with **1.3 leading** and
-first-line paragraph indents without blank paragraph gaps.
+The page is chosen by the WIDTH the reading pane has, as on every surface
+(`reading_page.go`, docs/READING_TYPOGRAPHY.md "The reading page"), not by the
+device: the book page — a centred **27.5em text column**, approximately 58–60
+characters per line at the Normal 21px base, first-line paragraph indents
+without blank paragraph gaps — whenever the column and 15pt each side fit; the
+phone page otherwise. A full-screen iPad reads the book page in both
+orientations at Normal and Large; an iPad mini in portrait (744pt) reads the
+phone page at Extra large, as does a narrow Split View or Stage Manager window at
+any size, and an iPhone in landscape reads the book page at Normal because its
+width allows it. The pane reports its width with every frame
+(`setFrameFromObject`), and a width that settles on the other page re-renders
+the chapter in place (`reading_page_width.go`). Until 24 September 2026 the
+choice was by device — every iPad, and a landscape iPhone with its typography
+switch on — and the book page's leading was 1.3; both pages now use the spec's
+pitch.
 
 The leading and paragraph grammar live in `buildChapterHTML` (`reading.go`). The
 centred measure is native: `bibleTextSetReadingMeasure` → `btIOSApplyInsets`
@@ -78,7 +87,9 @@ Verify at least:
 - grouped Books grid and readable-width Search/Notes lists;
 - native reading overlay frame after rotation and Split View resizing;
 - selection menus, notes, audio, and scroll restoration;
-- reporter measure at every text-size setting; and
+- the book page at every text-size setting on a full-screen iPad, and the phone
+  page in a Split View or Stage Manager window narrower than the column plus
+  15pt each side; and
 - the iPhone bottom bar remains unchanged on Books and Search (the Read tab
   reads full-screen in landscape).
 

@@ -529,13 +529,26 @@ static UITextView *gReadingTV = nil;
 // writer — see the comment inside btIOSApplyInsets for what having two cost.
 static CGFloat gNoteTopInset;
 
+// gReadingSideMin is the reading page's side minimum (readingPageSideMin,
+// reading_page.go), pushed from Go: the least distance from the pane's edge to
+// the INK, each side — the phone page's margin and the floor of the book page's.
+static CGFloat gReadingSideMin = 15;
+
 static void btIOSApplyInsets(CGFloat w) {
     if (gReadingTV == nil || w <= 0) return;
-    CGFloat side = 10; // phone default (legacy)
+    // The spec states where the INK starts; UIKit adds the container's line-
+    // fragment padding inside the inset, so the inset is the ink side less it.
+    // That makes the book page's ink line the measure itself — it was 10pt
+    // short, the padding taken out of it — while the wash keeps its 5pt run past
+    // the justified edge.
+    CGFloat pad = gReadingTV.textContainer.lineFragmentPadding;
+    CGFloat ink = gReadingSideMin;
     if (gReadingMeasure > 0) {
-        side = floor((w - gReadingMeasure) / 2.0);
-        if (side < 12) side = 12; // narrow multitasking column: keep a hair of margin
+        ink = floor((w - gReadingMeasure) / 2.0);
+        if (ink < gReadingSideMin) ink = gReadingSideMin;
     }
+    CGFloat side = ink - pad;
+    if (side < 0) side = 0;
     // THE TOP INSET IS NOT A CONSTANT, and writing it as one was a bug.
     //
     // A note anchored to the chapter's FIRST paragraph cannot reserve its band
@@ -598,6 +611,13 @@ int bibleTextIOSReadingTextLength(void) {
 
 void bibleTextSetReporterIndent(double pts) {
     dispatch_async(dispatch_get_main_queue(), ^{ gReporterIndent = (CGFloat)pts; });
+}
+
+void bibleTextSetReadingSideMin(double s) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        gReadingSideMin = (CGFloat)s;
+        if (gReadingTV != nil) btIOSApplyInsets(gReadingTV.frame.size.width);
+    });
 }
 
 void bibleTextSetReadingMeasure(double m) {
@@ -4062,6 +4082,13 @@ func setFrameFromObject(h *nativeReadingHost) {
 		C.float(pos.X), C.float(pos.Y),
 		C.float(sz.Width), C.float(sz.Height),
 	)
+	// The pane's width chooses its page (reading_page_width.go): a width that
+	// settles on the other page re-renders the chapter at it, in place.
+	noteReadingPaneWidth(float64(sz.Width), func() {
+		if currentHost != nil && currentHost.state != nil {
+			currentHost.state.refreshReadingOnly()
+		}
+	})
 }
 
 // Show / Hide are hooked into the tab-switching logic from ui_mobile.go.
@@ -4122,14 +4149,20 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	registerAppleReadingFonts()
 	// The leading, chosen rather than inherited from the numeral that happens
 	// to open each paragraph (reading_face_scale.go).
-	C.bibleTextSetReadingLinePitch(C.double(readingLinePitchEm))
-	if reporterLayoutActive() {
+	// THE PAGE, from the spec (reading_page.go), at the width this pane last
+	// reported (the window's until it has). reporterLayout, which the stylesheet
+	// and the body fingerprint read, answers from the same width.
+	page := currentReadingPage()
+	markReadingPagePushed(page.Kind)
+	C.bibleTextSetReadingLinePitch(C.double(page.PitchEm))
+	C.bibleTextSetReadingSideMin(C.double(readingPageSideMin))
+	if page.Book() {
 		// The REFERENCE size, deliberately, not the size the face is set at.
 		// The column is measured in ems and its width is what decides how many
 		// characters land on a line; figuring it from the optically scaled size
 		// would widen it 15% and hand the line back the extra characters the
 		// narrower face already gave it (reading_face_scale.go).
-		C.bibleTextSetReadingMeasure(C.double(reporterMeasureEm * readingReferencePx()))
+		C.bibleTextSetReadingMeasure(C.double(page.Measure))
 		// The same ~1.5em the em+en pair used to draw, now as a paragraph
 		// attribute so it cannot be copied out as text. An em of the type as it
 		// is SET, unlike the measure above — an indent is a mark made in the

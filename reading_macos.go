@@ -104,6 +104,9 @@ extern void bibleTextReadAlongUserScrolled(void);
 // and saves the live position. Declared here because HBReadingTextView is
 // defined above the restore globals; defined beside them.
 extern void bibleTextReadingScrolled(void);
+// The width the reading text has, reported whenever it changes, so the page can
+// be chosen from it (reading_page_width_darwin.go).
+extern void btMacReadingWidthChanged(double w);
 static void btMacUserScrolled(void);
 // Posted when the floating "Follow narration" button is clicked (audio_export_apple.go).
 extern void bibleTextReadAlongFollowTapped(void);
@@ -1741,13 +1744,24 @@ static CGFloat gMacReadingMeasure = 0;
 // width, the text re-wraps to it, and the note chrome — subviews placed from
 // the layout — must be placed again. The caller refreshes, once, so a frame
 // change that also moves the inset does not refresh twice.
+// gMacReadingSideMin is the reading page's side minimum (readingPageSideMin,
+// reading_page.go), pushed from Go: the least distance from the pane's edge to
+// the INK, each side.
+static CGFloat gMacReadingSideMin = 15;
+
 static BOOL btMacApplyInsets(CGFloat w) {
     if (gTextView == nil || w <= 0) return NO;
-    CGFloat side = 16;
+    // The spec states where the INK starts; AppKit adds the container's line-
+    // fragment padding inside the inset, so the inset is the ink side less it,
+    // and the book page's ink line is the measure itself (it was 10pt short).
+    CGFloat pad = gTextView.textContainer.lineFragmentPadding;
+    CGFloat ink = gMacReadingSideMin;
     if (gMacReadingMeasure > 0) {
-        side = floor((w - gMacReadingMeasure) / 2.0);
-        if (side < 16) side = 16;
+        ink = floor((w - gMacReadingMeasure) / 2.0);
+        if (ink < gMacReadingSideMin) ink = gMacReadingSideMin;
     }
+    CGFloat side = ink - pad;
+    if (side < 0) side = 0;
     NSSize cur = gTextView.textContainerInset;
     if (fabs(cur.width - side) < 0.5) return NO;
     if (getenv("BT_NOTE_GEOM"))
@@ -1755,6 +1769,13 @@ static BOOL btMacApplyInsets(CGFloat w) {
     gTextView.textContainerInset = NSMakeSize(side, cur.height);
     [gTextView.layoutManager ensureLayoutForTextContainer:gTextView.textContainer];
     return YES;
+}
+
+void bibleTextMacSetReadingSideMin(double s) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        gMacReadingSideMin = (CGFloat)s;
+        if (gScroll != nil && btMacApplyInsets(gScroll.contentSize.width)) btMacRefreshNote();
+    });
 }
 
 void bibleTextMacSetReadingMeasure(double m) {
@@ -2962,6 +2983,13 @@ static void btMacApplyFrame(double x, double y, double w, double h) {
             changed ? "CHANGED" : "same", r.origin.x, r.origin.y, r.size.width, r.size.height, (int)gMacHasRestore);
     gScroll.frame = r;
     BOOL insetChanged = btMacApplyInsets(gScroll.contentSize.width); // recentre the reporter column at the new width
+    // The width the text has — the scroll view's content, a legacy scroller
+    // already taken off — chooses the page (reading_page_width.go).
+    static CGFloat gMacReportedWidth = 0;
+    if (fabs(gScroll.contentSize.width - gMacReportedWidth) >= 0.5) {
+        gMacReportedWidth = gScroll.contentSize.width;
+        btMacReadingWidthChanged((double)gMacReportedWidth);
+    }
     btMacLayoutFollowBtn(); // the pill floats relative to the pane's bottom edge
     // The sticker's width and its reserved band both come from the container
     // width, so a resize has to redo both — not just move the view. Without
@@ -3305,16 +3333,20 @@ func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 	macCurrentHost = h
 	// The leading, chosen rather than inherited from the numeral that happens to
 	// open each paragraph (reading_face_scale.go).
-	C.bibleTextMacSetReadingLinePitch(C.double(readingLinePitchEm))
-	// Keep the native reporter column in sync with the text-size setting: the
-	// measure is em-based (27.5 × body px), so Large/XL widen the column and
-	// keep its character count at the reporter's ~59 (the iOS twin does the
-	// same in pushChapterHTML).
-	if reporterLayoutActive() {
+	// THE PAGE, from the spec (reading_page.go), at the width this pane last
+	// reported. reporterLayout, which the stylesheet and the body fingerprint
+	// read, answers from the same width. The measure is em-based (27.5 × the
+	// reference size), so Large/XL widen the column and keep its character
+	// count at the reporter's ~59.
+	page := currentReadingPage()
+	markReadingPagePushed(page.Kind)
+	C.bibleTextMacSetReadingLinePitch(C.double(page.PitchEm))
+	C.bibleTextMacSetReadingSideMin(C.double(readingPageSideMin))
+	if page.Book() {
 		// The REFERENCE size, not the size the face is set at — see the iOS
 		// twin in pushChapterHTML and reading_face_scale.go. The measure is
 		// geometry: it must not move when the face does.
-		C.bibleTextMacSetReadingMeasure(C.double(reporterMeasureEm * readingReferencePx()))
+		C.bibleTextMacSetReadingMeasure(C.double(page.Measure))
 		// The same ~1.5em the em+en pair used to draw, as a paragraph
 		// attribute so it cannot be copied out as text. Without it this pane
 		// shows no paragraph boundary at all, because the reporter stylesheet
