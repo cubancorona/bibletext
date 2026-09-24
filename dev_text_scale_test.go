@@ -61,9 +61,17 @@ func TestTheTextSizeSliderMovesThePaneLive(t *testing.T) {
 	readingCanvasWidth = 0        // no pane has laid out: the slot's width stands in
 	devTextScaleStripOn, devTextScale, readingPaneWidth = true, 0, 0
 
+	// The strip's timed work is queued and run HERE, as the Fyne goroutine
+	// would run it; fyne.Do in the test driver would run it on the timer's
+	// goroutine, beside this one reading the label.
+	prevRun := devTextScaleRun
+	t.Cleanup(func() { devTextScaleRun = prevRun })
+	runs := make(chan func(), 32)
+	devTextScaleRun = func(f func()) { runs <- f }
+
 	st := sampleState()
-	repaints := make(chan struct{}, 16)
-	st.showReading = func() { repaints <- struct{}{} }
+	repaints := 0
+	st.showReading = func() { repaints++ }
 	pane := widget.NewLabel("the pane")
 	pane.Resize(fyne.NewSize(900, 600))
 	slider, setting, numbers := devStripParts(t, devTextScaleStrip(st, pane))
@@ -72,10 +80,14 @@ func TestTheTextSizeSliderMovesThePaneLive(t *testing.T) {
 		t.Fatalf("the strip moved the size before the slider did: %v", got)
 	}
 	wait := func(what string) {
-		select {
-		case <-repaints:
-		case <-time.After(2 * time.Second):
-			t.Fatalf("the pane was not re-rendered after %s", what)
+		deadline := time.After(2 * time.Second)
+		for start := repaints; repaints == start; {
+			select {
+			case f := <-runs:
+				f()
+			case <-deadline:
+				t.Fatalf("the pane was not re-rendered after %s", what)
+			}
 		}
 	}
 

@@ -58,6 +58,11 @@ const (
 	devTextScaleSettle = 60 * time.Millisecond
 )
 
+// devTextScaleRun runs the strip's timed work on the Fyne goroutine; a test
+// replaces it to run that work on its own goroutine, where fyne.Do's test
+// driver would run it on the timer's.
+var devTextScaleRun = func(f func()) { fyne.Do(f) }
+
 func init() {
 	readingTextScaleOverride = func() (float64, bool) { return devTextScale, devTextScale > 0 }
 }
@@ -68,6 +73,7 @@ func devTextScaleStrip(state *AppState, pane fyne.CanvasObject) fyne.CanvasObjec
 	if !devTextScaleStripOn {
 		return nil
 	}
+	run := devTextScaleRun // captured, so a timer that fires late reads no shared state
 	numbers := widget.NewLabel("")
 	numbers.TextStyle = fyne.TextStyle{Monospace: true}
 	numbers.Wrapping = fyne.TextWrapWord // a phone's width holds half the line
@@ -78,7 +84,7 @@ func devTextScaleStrip(state *AppState, pane fyne.CanvasObject) fyne.CanvasObjec
 			devTextScaleTimer.Stop()
 		}
 		devTextScaleTimer = time.AfterFunc(devTextScaleSettle, func() {
-			fyne.Do(func() {
+			run(func() {
 				state.refreshReadingOnly()
 				show()
 			})
@@ -106,10 +112,10 @@ func devTextScaleStrip(state *AppState, pane fyne.CanvasObject) fyne.CanvasObjec
 		rerender()
 	})
 	show()
-	// The numbers are figured from the pane's width, which it has only once
-	// laid out: ask again when it has, and whenever a native pane reports a
-	// new one (a rotation reports several on its way to the last).
-	time.AfterFunc(150*time.Millisecond, func() { fyne.Do(show) })
+	// The numbers are figured from the width the pane lays its page out at,
+	// which it has only once it has laid out: they are asked again each time
+	// the pane lays out at a new width, the first included, and each time a
+	// native pane reports one (a rotation reports several on its way).
 	readingPaneWidthSeen = show
 
 	// The app's theme sets the input border to zero (theme.go), and a Fyne

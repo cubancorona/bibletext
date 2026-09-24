@@ -16,11 +16,16 @@ import (
 func TestReadingPaneWidthRePushesOnceAcrossTheSwitch(t *testing.T) {
 	saveReadingPaneWidth(t)
 	readingPageSettle = 20 * time.Millisecond
-	fired := make(chan struct{}, 8)
-	readingPageRun = func(f func()) { f(); fired <- struct{}{} }
+	// The settle's work is queued and run HERE, on the test's goroutine, as
+	// fyne.Do runs it on the one Fyne goroutine: the width feed's state is
+	// that goroutine's alone, and a stand-in that ran the work on the timer's
+	// own goroutine raced the test writing the same state.
+	runs := make(chan func(), 8)
+	readingPageRun = func(f func()) { runs <- f }
 	wait := func() {
 		select {
-		case <-fired:
+		case f := <-runs:
+			f()
 		case <-time.After(time.Second):
 			t.Fatal("the settle never fired")
 		}
@@ -57,7 +62,7 @@ func TestReadingPaneWidthRePushesOnceAcrossTheSwitch(t *testing.T) {
 	// The same width again is not news.
 	noteReadingPaneWidth(narrow, repush)
 	select {
-	case <-fired:
+	case <-runs:
 		t.Fatal("an unchanged width armed a re-push")
 	case <-time.After(60 * time.Millisecond):
 	}
