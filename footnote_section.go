@@ -26,6 +26,7 @@ package bibletext
 
 import (
 	"fmt"
+	"math"
 	"runtime"
 	"sort"
 	"strconv"
@@ -194,23 +195,31 @@ func chapterHasFootnotes(state *AppState) bool {
 // content-end detector both key on this size band. line-height tightens
 // against the body's airy leading (SCOTUS sets its notes tighter too);
 // entries justify like the body prose above them.
+//
+// The sizes and the air are the reading page's (reading_page.go): 0.85 of the
+// body, the page's pitch, and a third of the body under the rule and a fifth
+// between entries. A margin in em resolves against the element's OWN size, the
+// section's 0.85, so the body's fractions are divided by it.
 func writeFootnoteCSS(b *strings.Builder, mutedHex string) {
+	size := emCSS(readingFootnoteEm)
+	under := emCSS(math.Round(readingFootnoteRuleGapEm/readingFootnoteEm*1e4) / 1e4)
+	between := emCSS(math.Round(readingFootnoteEntryGapEm/readingFootnoteEm*1e4) / 1e4)
 	fmt.Fprintf(b, `p.fnsep {
 		color: %s;
-		font-size: 0.85em;
-		line-height: 1.4;
+		font-size: %s;
+		line-height: %g;
 		text-align: left;
-		margin: 0 0 8px 0;
-	}`, mutedHex)
+		margin: 0 0 %s 0;
+	}`, mutedHex, size, readingBookPitchEm, under)
 	fmt.Fprintf(b, `p.fn {
 		color: %s;
-		font-size: 0.85em;
-		line-height: 1.4;
+		font-size: %s;
+		line-height: %g;
 		text-align: justify;
 		hyphens: auto;
 		-webkit-hyphens: auto;
-		margin: 0 0 5px 0;
-	}`, mutedHex)
+		margin: 0 0 %s 0;
+	}`, mutedHex, size, readingBookPitchEm, between)
 	b.WriteString(`.fnv { font-weight: 600; }`)
 }
 

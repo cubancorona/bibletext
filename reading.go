@@ -645,17 +645,18 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	// and without the correction the same nominal size reads 13% smaller
 	// (reading_face_scale.go). Every em-based measure and indent on these panes
 	// is figured from readingReferencePx instead, and does not move.
-	bodyPx := int(math.Round(readingGlyphPx()))
+	// Unrounded, as the canvas pane and the web set it: the importer keeps a
+	// fractional size (AppKit imports 24.19px as 24.19pt), and rounding put the
+	// Apple body 0.8% off every other surface's at Normal.
+	bodyPx := readingGlyphPx()
 	reporter := reporterLayout()
 
-	// Line spacing + paragraph treatment: phones keep the airy 2.0 leading with
-	// blank-line paragraph gaps; the iPad reporter layout (reporterLayoutActive)
-	// uses the book set measured from the U.S. Reports — 1.2 print leading
-	// (opened slightly to 1.3 so the raised superscript verse numbers don't
-	// perturb the line rhythm) and first-line indents with NO gap between
-	// paragraphs, the octavo page's paragraph grammar. The line LENGTH half of
-	// the reporter page (27.5em measure, centred) is native: the UITextView's
-	// textContainerInset, driven by bibleTextSetReadingMeasure.
+	// Line spacing + paragraph treatment, the reading page's (reading_page.go):
+	// the phone page has a gap between paragraphs, the book page — the U.S.
+	// Reports set — first-line indents with NO gap, the octavo page's paragraph
+	// grammar; both at the spec's pitch. The line LENGTH half of the book page
+	// (27.5em measure, centred) is native: the text container's inset, driven by
+	// bibleTextSetReadingMeasure.
 	// NOTE: on the Apple panes these line-height values are now INERT. The
 	// native paragraph sweep sets the leading explicitly from readingLinePitchEm
 	// (reading_ios.go / reading_macos.go), because left to the stylesheet the
@@ -663,7 +664,7 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	// opens each paragraph — an accident nobody could read off this file. They
 	// are kept because a paragraph the sweep does not reach still falls back to
 	// them, and because the reporter/phone split they encode is still true.
-	lineHeight, paraCSS := "2.0", fmt.Sprintf(`p {
+	lineHeight, paraCSS := fmt.Sprintf("%g", readingPhonePitchEm), fmt.Sprintf(`p {
 		margin: 0 0 %s 0;
 		text-align: justify;
 		hyphens: auto;
@@ -673,7 +674,7 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 		// No text-indent here: the AppKit/UIKit HTML importer drops it
 		// (verified on the iPad sim). The indent is applied to the imported
 		// paragraph style instead, which keeps it out of the text.
-		lineHeight, paraCSS = "1.3", `p {
+		lineHeight, paraCSS = fmt.Sprintf("%g", readingBookPitchEm), `p {
 		margin: 0;
 		text-align: justify;
 		hyphens: auto;
@@ -685,7 +686,7 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	b.WriteString("<html><head><style>")
 	fmt.Fprintf(&b, `body {
 		font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
-		font-size: %dpx;
+		font-size: %.2fpx;
 		color: %s;
 		line-height: %s;
 		letter-spacing: 0.004em;
@@ -721,10 +722,10 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	fmt.Fprintf(&b, `sup.v {
 		color: %s;
 		font-weight: 600;
-		font-size: 0.66em;
+		font-size: %s;
 		letter-spacing: 0;
 		margin-right: 2px;
-	}`, numHex)
+	}`, numHex, emCSS(readingNumeralEm))
 	// One stylesheet rule per tint that paints one, from the tint's own row
 	// (appleTintHTML, tint.go) — which is where the reasons for what the rule
 	// does NOT say are recorded, and where a second wash adds its own. Two
@@ -761,9 +762,9 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 		fmt.Fprintf(&b, `p.pst {
 		font-style: italic;
 		text-align: left;
-		line-height: 1.5;
+		line-height: %g;
 		margin: 0 0 %s 0;
-	}`, emCSS(readingTitleGapEm))
+	}`, readingBookPitchEm, emCSS(readingTitleGapEm))
 	}
 	if len(footnotes) > 0 {
 		writeFootnoteCSS(&b, nrgbaToHex(pal.TextMuted))
@@ -775,9 +776,9 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 		// wash guard requires of every background on this page.
 		fmt.Fprintf(&b, `span.vg {
 		color: %s;
-		font-size: 0.66em;
+		font-size: %s;
 		letter-spacing: 0;
-	}`, nrgbaToHex(pal.TextMuted))
+	}`, nrgbaToHex(pal.TextMuted), emCSS(readingGapMarkEm))
 	}
 	b.WriteString("</style></head><body>")
 	// Blocks, not paragraphs: the publisher's section headings stand among them

@@ -210,6 +210,10 @@ This list is kept current as each surface is brought to the spec.
 - **The note card's text** — `noteBodySize` 15 and `noteWhoSize` 11 on every
   native surface since 24 September 2026 (the Mac set 13 and 10, the canvas pane
   the toolkit's 18), held by `TestNoteTextIsTheSpecsOnEverySurface`.
+- **The Apple stylesheet** (iOS and macOS alike) — writes the spec's numbers
+  since 24 September 2026: the body unrounded (24.19, was 24; the importer keeps
+  the fraction), the pitch, the numeral, gap-mark and footnote sizes, and the
+  footnote air in ems (was 8px and 5px, which did not follow the text size).
 - **macOS, iOS, Android, web** — their page choice and the rest of the size table
   are to be brought to the rule.
 
