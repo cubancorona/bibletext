@@ -1880,15 +1880,17 @@ static CGFloat gMacNoteBorder[3] = {0.74, 0.70, 0.62};
 static NSColor *btMacNoteColor(CGFloat c[3]) {
     return [NSColor colorWithSRGBRed:c[0] green:c[1] blue:c[2] alpha:1.0];
 }
-static NSFont *btMacNoteBodyFont(void) { return [NSFont systemFontOfSize:13]; }
-static NSFont *btMacNoteWhoFont(void)  { return [NSFont systemFontOfSize:10 weight:NSFontWeightSemibold]; }
+// The note card's text: noteBodySize and noteWhoSize (reading_page.go), the same
+// 15 and 11 as every other surface, held there by
+// TestNoteTextIsTheSpecsOnEverySurface. This pane set 13 and 10 until the reading
+// page was specified once, which made the same note visibly smaller on the Mac.
+static NSFont *btMacNoteBodyFont(void) { return [NSFont systemFontOfSize:15]; }
+static NSFont *btMacNoteWhoFont(void)  { return [NSFont systemFontOfSize:11 weight:NSFontWeightSemibold]; }
 
 // THE SHARED NOTE SPACING SPEC — noteMetrics in notes_bubble.go. These are not
 // this file's numbers to choose: notes_spacing_spec_test.go parses these lines
-// and fails if any of them leaves the Go table behind. kMacNoteWho is 13 rather
-// than iOS's 14 because the spec states the who row as a RULE — ceil(whoSize ×
-// 1.27) — and this pane's who font is 10pt, not 11; a flat 14 in the table would
-// be the wrong box here.
+// and fails if any of them leaves the Go table behind. kMacNoteWho is the spec's
+// RULE, ceil(whoSize × 1.27), at this pane's 11pt who font: 14, as on iOS.
 static const CGFloat kMacNoteGapAbove = 10, kMacNoteGapBelow = 10, kMacNotePad = 12;
 // The pill's side padding and width floor — spec (noteMetrics PillPadX /
 // PillMinW). This pane had 12/76 of its own, which made the same "Notes · 3"
@@ -1896,7 +1898,7 @@ static const CGFloat kMacNoteGapAbove = 10, kMacNoteGapBelow = 10, kMacNotePad =
 static const CGFloat kMacNotePillPadX = 14, kMacNotePillMinW = 86;
 // The bin's DRAWN size on the card — small, like the rest of this pane's chrome.
 static const CGFloat kMacNoteTrashPt = 12;
-static const CGFloat kMacNoteWho = 13, kMacNoteWhoGap = 4, kMacNotePill = 28, kMacNoteRad = 10;
+static const CGFloat kMacNoteWho = 14, kMacNoteWhoGap = 4, kMacNotePill = 28, kMacNoteRad = 10;
 // kMacNoteBtn is NOT spec: it is the verb button's size, this platform's 24pt
 // pointer target. The pill used to borrow it (24), which is how a pointer-target
 // decision came to set the height of a piece of content.

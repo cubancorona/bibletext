@@ -204,7 +204,11 @@ This list is kept current as each surface is brought to the spec.
   the footnotes (was 1.55, 1.3 and 1.4), and no 760-unit cap on the column (it
   kept the Extra large book page from ever fitting). Its right edge stays ragged:
   the pane does not justify.
-- **macOS, iOS, Android, web** — to be brought to the rule and the size table.
+- **The note card's text** — `noteBodySize` 15 and `noteWhoSize` 11 on every
+  native surface since 24 September 2026 (the Mac set 13 and 10, the canvas pane
+  the toolkit's 18), held by `TestNoteTextIsTheSpecsOnEverySurface`.
+- **macOS, iOS, Android, web** — their page choice and the rest of the size table
+  are to be brought to the rule.
 
 ## Vertical spacing of the reading pane
 

@@ -56,7 +56,7 @@ import (
 // noteMetrics().PillH, spec'd for all four.
 const (
 	styledNoteBtn   = float32(28)
-	styledNoteWhoSz = float32(11)
+	styledNoteWhoSz = float32(noteWhoSize)
 )
 
 var (
@@ -202,15 +202,12 @@ func (g styledNoteGeom) hits(p fyne.Position) bool {
 
 // --- measuring ---------------------------------------------------------------
 
-// styledUISize is the chrome's body size. The bubble is the APP's furniture,
-// not scripture, so it does not scale with the reader's scripture text size —
-// exactly as the banner's widget.Label did not.
-func styledUISize() float32 {
-	if app := fyne.CurrentApp(); app != nil {
-		return fyneTheme.TextSize()
-	}
-	return 14
-}
+// styledUISize is the note card's body size: noteBodySize (reading_page.go), the
+// same 15 every surface sets it at. The bubble is the APP's furniture, not
+// scripture, so it does not scale with the reader's scripture text size. It
+// used to be the toolkit's text size, 18, which made the same note visibly
+// larger here than on the Mac or a phone.
+func styledUISize() float32 { return float32(noteBodySize) }
 
 func styledUIMeasure(s string, size float32, bold bool) fyne.Size {
 	return fyne.MeasureText(s, size, fyne.TextStyle{Bold: bold})

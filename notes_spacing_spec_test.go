@@ -60,8 +60,8 @@ var nativeNoteSources = []nativeNoteSource{
 		},
 	},
 	{
-		label: "macOS (reading_macos.go)", path: "reading_macos.go", whoSz: 10,
-		whoRef: "systemFontOfSize:10 weight:NSFontWeightSemibold",
+		label: "macOS (reading_macos.go)", path: "reading_macos.go", whoSz: 11,
+		whoRef: "systemFontOfSize:11 weight:NSFontWeightSemibold",
 		names: map[string]string{
 			"GapAbove": "kMacNoteGapAbove", "GapBelow": "kMacNoteGapBelow",
 			"Pad": "kMacNotePad", "WhoH": "kMacNoteWho", "WhoGap": "kMacNoteWhoGap",
@@ -186,10 +186,7 @@ func TestStyledNoteReadsTheSpecDirectly(t *testing.T) {
 	// The who row is the derived one; 11pt must still give 14 or the ratio has
 	// drifted under the platforms that hardcode the answer.
 	if got := noteMetrics().WhoH(11); got != 14 {
-		t.Errorf("WhoH(11) = %v, want 14 (iOS/Android/styled carry that literal)", got)
-	}
-	if got := noteMetrics().WhoH(10); got != 13 {
-		t.Errorf("WhoH(10) = %v, want 13 (macOS carries that literal)", got)
+		t.Errorf("WhoH(11) = %v, want 14 (every surface carries that literal)", got)
 	}
 }
 

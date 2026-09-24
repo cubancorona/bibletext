@@ -51,10 +51,10 @@ import (
 //	           there is already air.
 //	Pad        the card's inner padding, all four sides.
 //	WhoGap     the who row's bottom edge → the message's first line.
-//	WhoH       NOT a literal: ceil(whoSize × noteWhoRatio), because the correct
-//	           box for an 11pt semibold system face (14) is the wrong box for a
-//	           10pt one (13, macOS). A flat 14 in this table would be a bug on
-//	           macOS.
+//	WhoH       NOT a literal: ceil(whoSize × noteWhoRatio), so the box follows
+//	           the who font's size. Every surface sets that at noteWhoSize
+//	           (reading_page.go), 11pt semibold, which gives 14; macOS set 10pt
+//	           and a 13 box until the reading page was specified once.
 //	Radius     the card's corner radius. Was 8 on this pane alone — borrowed
 //	           from surface()'s chrome, never chosen for this card, while the
 //	           three natives all drew 10.
@@ -77,8 +77,8 @@ import (
 // notes_spacing_spec_test.go's shape checks rather than by this table, because
 // they are not numbers:
 //
-//	label font   the WHO font, semibold (11pt on iOS/Android/styled, 10 on
-//	             macOS). MEASURE AND DRAW MUST AGREE: the styled pane measured
+//	label font   the WHO font, semibold, noteWhoSize (11pt) on every surface.
+//	             MEASURE AND DRAW MUST AGREE: the styled pane measured
 //	             the pill at the who size and then let a widget.Button draw the
 //	             title at the THEME's size and foreground ink — 18pt body ink —
 //	             so the text was two-thirds larger than the box sized for it.
@@ -208,8 +208,8 @@ import (
 //	               a reader must not lose. fitWho (Java) is btIOSFitWho's rule:
 //	               the sender half gives way, the counts survive whole.
 //	Apple fonts    fixed system faces, no Dynamic Type on this surface, so the
-//	               WhoH ratio resolves once at build time (14 at iOS's 11pt, 13
-//	               at macOS's 10pt).
+//	               WhoH ratio resolves once at build time (14 at the 11pt both
+//	               Apple panes set).
 //	Styled sizes   the chrome does NOT scale with the reader's scripture text
 //	               size — the bubble is the app's furniture, not scripture.
 //
@@ -426,8 +426,8 @@ var noteSpacingTable = noteSpacing{
 }
 
 // WhoH is the who row's box height for a given who-line font size — derived,
-// never a literal, so the same rule serves iOS's 11pt semibold (14) and macOS's
-// 10pt one (13).
+// never a literal, so the box follows the font: 14 at the 11pt semibold every
+// surface sets.
 func (s noteSpacing) WhoH(size float32) float32 {
 	return float32(math.Ceil(float64(size) * noteWhoRatio))
 }
