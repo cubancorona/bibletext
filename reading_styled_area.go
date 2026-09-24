@@ -19,6 +19,8 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -95,7 +97,11 @@ func styledPaneFP(state *AppState) string {
 
 // styledReadingScrollArea is the styled twin of readingScrollArea.
 func styledReadingScrollArea(state *AppState, verses []Verse, pal palette) fyne.CanvasObject {
-	col := &styledColumn{maxWidth: 760}
+	// No cap on the column: the pane decides its own page from the width it is
+	// given (reading_page.go), and a cap narrower than the widest book page —
+	// 750.75 plus its margins at Extra large — kept that page from ever being
+	// reached there.
+	col := &styledColumn{}
 	var child fyne.CanvasObject
 	var pane *styledReadingPane
 	if len(verses) == 0 {
@@ -122,7 +128,10 @@ func styledReadingScrollArea(state *AppState, verses []Verse, pal palette) fyne.
 	}
 
 	return container.NewStack(
-		readingGround(container.NewPadded(scroll), pal.Background),
+		// Padded above and below only: the pane keeps its own side margins,
+		// the reading page's (reading_page.go), and a second pad beside them
+		// put the phone page's ink 19 from the edge instead of 15.
+		readingGround(container.New(layout.NewCustomPaddedLayout(theme.Padding(), theme.Padding(), 0, 0), scroll), pal.Background),
 		styledFollowPillLayer(),
 	)
 }
@@ -377,7 +386,7 @@ func (l *styledColumn) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 	child := objects[0]
 
 	w := size.Width
-	if w > l.maxWidth {
+	if l.maxWidth > 0 && w > l.maxWidth {
 		w = l.maxWidth
 	}
 	if w < 0 {

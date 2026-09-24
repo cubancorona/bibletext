@@ -30,6 +30,7 @@ package bibletext
 
 import (
 	"image/color"
+	"math"
 	"strings"
 	"sync"
 
@@ -38,9 +39,11 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// styledPaneInset is the horizontal padding inside the pane. Vertical spacing
-// comes from the layout's own line geometry.
-const styledPaneInset = float32(12)
+// styledPaneInset is the least the pane keeps between its edge and the ink, each
+// side: the reading page's side minimum (reading_page.go), which is the phone
+// page's whole margin and the floor of the book page's. Vertical spacing comes
+// from the layout's own line geometry.
+const styledPaneInset = float32(readingPageSideMin)
 
 // styledDrawRun is one merged, drawable style segment of a line.
 type styledDrawRun struct {
@@ -98,10 +101,12 @@ type styledReadingPane struct {
 	// Draw, selection and hit-testing all read it through insetX(), so glyphs
 	// and hit-tests cannot disagree about where the column sits.
 	extraInset float32
-	// lh is the laid-out baseline distance (reporter 1.3 vs cozy 1.55) —
+	// lh is the laid-out baseline distance, the page's pitch times the body —
 	// stored so the renderer centres glyphs in the SAME line height the
 	// layout used.
 	lh float32
+	// page is the reading page this layout was made for (reading_page.go).
+	page readingPage
 
 	widget.BaseWidget
 
@@ -271,36 +276,37 @@ var (
 )
 
 // styledLineHeight is the baseline-to-baseline distance for the pane's body
-// text: comfortable book leading, matching the reading feel of the shipping
-// pane rather than a dense terminal.
-func (p *styledReadingPane) styledLineHeight() float32 { return p.textSize * 1.55 }
+// text: the page's pitch once the pane is laid out, the phone page's before.
+// Every line in the pane uses it, the breathing room under the chapter too, so
+// the pane has one leading, the spec's (reading_page.go).
+func (p *styledReadingPane) styledLineHeight() float32 {
+	if p.lh > 0 {
+		return p.lh
+	}
+	return float32(readingPhonePitchEm) * p.textSize
+}
 
 func (p *styledReadingPane) relayout(width float32) {
-	avail := width - 2*styledPaneInset
+	// THE PAGE COMES FROM THE SPEC (reading_page.go): the book page — the U.S.
+	// Reports set the iPad uses, a centred 27.5em column with first-line
+	// indents and no paragraph gap — whenever it fits with the side minimum
+	// beside it, and otherwise the phone page. The measure is figured from the
+	// REFERENCE size, not the size the type is set at: holding the column still
+	// while the glyphs inside it grow is what keeps the line's character count.
+	page := readingPageAt(float64(width), float64(p.referenceSize()))
+	p.page = page
+	avail := float32(page.Measure)
 	if avail < 80 {
 		avail = 80
 	}
-	lh := p.styledLineHeight()
-	paraGap := float32(readingParaGapEm) * p.textSize
-	indent := float32(0)
-	p.extraInset = 0
-	// THE REPORTER PAGE, when the pane can hold it: the desktop reads like the
-	// iPad. Same U.S. Reports set the iPad uses —
-	// centred 27.5em measure, 1.3 leading, first-line indents with no
-	// paragraph gap — gated purely on width, so a narrow window keeps
-	// today's cozy narrow-pane layout and a resize glides between the two.
-	// The em is the pane's own body size, exactly as the iPad's measure is
-	// 27.5 × ITS body px.
-	// The REFERENCE size, not the size the type is set at: a measure fixes the
-	// column's physical width, and holding it still while the glyphs inside it
-	// grow is what puts the line back to its old character count.
-	if m := reporterMeasureEm * p.referenceSize(); avail > m {
-		p.extraInset = float32(int((avail - m) / 2)) // whole px: keep glyphs crisp
-		avail = m
-		lh = p.textSize * 1.3
-		paraGap = 0
-		indent = float32(reporterIndentEm) * p.textSize
+	// The side, whole units so glyphs stay crisp, beyond the pane's own inset.
+	p.extraInset = float32(math.Floor(page.Side)) - styledPaneInset
+	if p.extraInset < 0 {
+		p.extraInset = 0
 	}
+	lh := float32(page.PitchEm) * p.textSize
+	paraGap := float32(page.ParaGapEm) * p.textSize
+	indent := float32(page.IndentEm) * p.textSize
 	p.lh = lh
 	// MEASURE THE STICKER FIRST. The band's height IS this measurement, so it
 	// has to exist before the layout that reserves it — the same ordering the
@@ -433,7 +439,7 @@ func (p *styledReadingPane) relayout(width float32) {
 	// breathing-room line as its air — geometry assigned beside the layout it
 	// belongs to, like the sticker's.
 	fnSize := p.textSize * styledFnRatio
-	p.fnGeom = measureStyledFootnotes(p.fnEntries, avail, fnSize, func(s string) float32 {
+	p.fnGeom = measureStyledFootnotes(p.fnEntries, avail, fnSize, float32(page.PitchEm), func(s string) float32 {
 		w, _ := fyne.CurrentApp().Driver().RenderedTextSize(s, fnSize, fyne.TextStyle{}, p.faceFor(s, false))
 		return w.Width
 	})
@@ -535,7 +541,7 @@ func hasHebrew(s string) bool {
 	return false
 }
 
-const styledNumRatio = float32(0.66)
+const styledNumRatio = float32(readingNumeralEm)
 
 // A VERSE NUMBER IS DRAWN AS THE APPLE PANES DRAW IT: ordinary figures, in the
 // bold cut, at styledNumRatio of the body, with their baseline lifted
@@ -573,7 +579,7 @@ func (p *styledReadingPane) numeralFace() fyne.Resource {
 // baseline offset because a baseline is the one thing every face agrees on: the
 // numeral's box, and the face's declared line box, differ from face to face, and
 // placing from either moved the number whenever the face did.
-const styledNumLift = float32(1.0 / 3.0)
+const styledNumLift = float32(readingNumeralLiftEm)
 
 func (p *styledReadingPane) CreateRenderer() fyne.WidgetRenderer {
 	r := &styledPaneRenderer{pane: p}

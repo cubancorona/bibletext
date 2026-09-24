@@ -114,7 +114,7 @@ the conclusion that the face needs far more room than it does.
 | surface | glyph size | leading | measure |
 |---|---|---|---|
 | Apple panes (iOS + macOS) | `reading.go` — the CSS `font-size`, from `readingGlyphPx()` | the native paragraph sweep, from `readingLinePitchEm` | `reporterMeasureEm × readingReferencePx()` across the bridge |
-| Fyne canvas pane | `styledPaneTextSize()` — `readingGlyphSize` of `readingBodyBase` × the reader's setting, in Fyne units (a pixel at 100% on Windows and Linux), as the Apple panes use points; it took the toolkit's interface size, 18, until 24 September 2026, which set the page 14% small | `p.textSize × 1.55` (cozy) / `× 1.3` (reporter) | `reporterMeasureEm × p.referenceSize()` |
+| Fyne canvas pane | `styledPaneTextSize()` — `readingGlyphSize` of `readingBodyBase` × the reader's setting, in Fyne units (a pixel at 100% on Windows and Linux), as the Apple panes use points; it took the toolkit's interface size, 18, until 24 September 2026, which set the page 14% small | `page.PitchEm × p.textSize` from the reading page (1.55 on its phone page and 1.3 on its book page until 24 September 2026) | `readingPageAt(width, p.referenceSize())` — the measure, the side and the page |
 | Android overlay | Java: `textSizeDp × density × opticalScale` | Java: `pitch × textSizePx` | `androidReadingMeasureDp(reporter, referenceDp)` |
 | Verse-of-the-day card | `readingGlyphPx()`, the Apple/Android body size, as a `canvas.Text` `FontSource` | the face's own line box (`readingParagraph`) | the card's inner width — no reporter measure; it is one passage |
 | generated site | `remSize(webScriptureBaseRem)` | `ReadingLinePitchEm()` | `.wrap{max-width:40rem}` — root rem, deliberately not em |
@@ -197,9 +197,13 @@ later decision about either page is one constant.
 
 This list is kept current as each surface is brought to the spec.
 
-- **Windows and Linux canvas pane** — the reading size (was the interface's 18)
-  and the Apple panes' verse numbers since 24 September 2026. Its page choice,
-  side, pitch and note text follow in the steps below.
+- **Windows and Linux canvas pane** — on the spec since 24 September 2026: the
+  reading size (was the interface's 18), the Apple panes' verse numbers, its page
+  and side from `readingPageAt` (its own gate sat 24 units lower, with a 12-unit
+  inset and a second 7-unit pad beside it), the spec's pitch on both pages and in
+  the footnotes (was 1.55, 1.3 and 1.4), and no 760-unit cap on the column (it
+  kept the Extra large book page from ever fitting). Its right edge stays ragged:
+  the pane does not justify.
 - **macOS, iOS, Android, web** — to be brought to the rule and the size table.
 
 ## Vertical spacing of the reading pane

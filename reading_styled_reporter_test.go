@@ -97,8 +97,11 @@ func TestStyledPaneReporterGate(t *testing.T) {
 	if p.extraInset <= 0 {
 		t.Fatalf("wide pane (%.0fpt) did not centre the measure (extraInset=%v)", wide, p.extraInset)
 	}
-	if got, want := p.lh, p.textSize*1.3; got != want {
-		t.Errorf("reporter leading %v, want %v (1.3 × body)", got, want)
+	if !p.page.Book() {
+		t.Fatalf("wide pane (%.0f) is on the %v page", wide, p.page.Kind)
+	}
+	if got, want := p.lh, float32(readingBookPitchEm)*p.textSize; got != want {
+		t.Errorf("book page leading %v, want %v (the spec's book pitch × body)", got, want)
 	}
 	// Centred means: inset + column + inset ≈ pane width.
 	col := wide - 2*styledPaneInset - 2*p.extraInset
@@ -124,13 +127,16 @@ func TestStyledPaneReporterGate(t *testing.T) {
 		t.Errorf("first-line indent %v, want %v", got, 1.5*p.textSize)
 	}
 
-	// NARROW: the legacy pane, exactly as before.
-	p.relayout(m) // pane width == measure → avail < measure → legacy
+	// NARROW: the phone page.
+	p.relayout(m) // pane width == measure → no room for the margins → phone
+	if p.page.Book() {
+		t.Fatalf("a pane the width of the measure is on the book page")
+	}
 	if p.extraInset != 0 {
 		t.Errorf("narrow pane grew an extraInset of %v", p.extraInset)
 	}
-	if got, want := p.lh, p.textSize*1.55; got != want {
-		t.Errorf("narrow leading %v, want the cozy %v", got, want)
+	if got, want := p.lh, float32(readingPhonePitchEm)*p.textSize; got != want {
+		t.Errorf("phone page leading %v, want %v (the spec's phone pitch × body)", got, want)
 	}
 	if got := p.lay.Lines[0].Runs[0].X; got != 0 {
 		t.Errorf("narrow pane gained an indent of %v", got)

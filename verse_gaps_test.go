@@ -123,10 +123,16 @@ func TestTheAndroidDialectMarksTheHoleWithoutASup(t *testing.T) {
 
 // --- the styled pane ---------------------------------------------------------
 
-// The mark is drawn but NEVER in the text model: lay.Text is byte-identical
-// with the toggle on or off, so copy, selection offsets and verse attribution
-// cannot see it. This is the same guarantee the footnote section already
-// carries, extended to the mark by construction rather than by stripping.
+// The mark is drawn but NEVER in the text model: lay.Text is the same with the
+// toggle on or off, so copy, selection offsets and verse attribution cannot see
+// it. This is the same guarantee the footnote section already carries, extended
+// to the mark by construction rather than by stripping.
+//
+// "The same" up to where the lines break: the mark takes room on its line, so a
+// word can wrap one line earlier with it drawn, and lay.Text writes a soft wrap
+// as "\n" where the unwrapped model has a space. A wrap is one rune either way,
+// so every offset still lines up; the model is compared with soft wraps read as
+// spaces, and its length is compared whole.
 func TestTheStyledPaneDrawsTheMarkOutsideTheTextModel(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -138,7 +144,8 @@ func TestTheStyledPaneDrawsTheMarkOutsideTheTextModel(t *testing.T) {
 	defer setFootnotesEnabled(false)
 	on := newTestPane(t, st, 420)
 
-	if off.lay.Text != on.lay.Text {
+	unwrap := func(s string) string { return strings.ReplaceAll(s, "\n", " ") }
+	if len([]rune(off.lay.Text)) != len([]rune(on.lay.Text)) || unwrap(off.lay.Text) != unwrap(on.lay.Text) {
 		t.Fatalf("lay.Text changed with the mark on:\n off: %q\n  on: %q", off.lay.Text, on.lay.Text)
 	}
 	if strings.Contains(on.lay.Text, "[21]") {

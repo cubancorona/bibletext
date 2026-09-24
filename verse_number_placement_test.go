@@ -49,9 +49,9 @@ func TestVerseNumbersAreDrawnAsTheApplePanesDrawThem(t *testing.T) {
 			p.Resize(fyne.NewSize(tc.width, 620))
 			p.Refresh()
 
-			if cozy := p.lh >= p.textSize*1.4; cozy != tc.cozy {
-				t.Fatalf("wanted the %s leading and got lh=%.2f at body %.1f — the case did not exercise what it names",
-					tc.name, p.lh, p.textSize)
+			if cozy := !p.page.Book(); cozy != tc.cozy {
+				t.Fatalf("wanted the %s and got the %v page at body %.1f — the case did not exercise what it names",
+					tc.name, p.page.Kind, p.textSize)
 			}
 			r, ok := test.WidgetRenderer(p).(*styledPaneRenderer)
 			if !ok {

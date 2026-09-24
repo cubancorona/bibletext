@@ -20,7 +20,7 @@ import (
 // styledFnRatio sizes the section against the body — the same 0.85 the Apple
 // panes use, for visual parity (their native-scan pact does not apply here;
 // this is typography only).
-const styledFnRatio = float32(0.85)
+const styledFnRatio = float32(readingFootnoteEm)
 
 // styledFnText is one positioned text run of the section: a verse-number key
 // or a wrapped note line. Coordinates are section-relative until place().
@@ -45,11 +45,13 @@ type styledFnGeom struct {
 // column width. First lines wrap short of the verse-number key; continuation
 // lines run the full measure, flush left — the slip-opinion page's own
 // grammar.
-func measureStyledFootnotes(entries []footnoteEntry, avail, fnSize float32, meas func(string) float32) styledFnGeom {
+func measureStyledFootnotes(entries []footnoteEntry, avail, fnSize, pitchEm float32, meas func(string) float32) styledFnGeom {
 	if len(entries) == 0 || avail <= 0 || fnSize <= 0 {
 		return styledFnGeom{}
 	}
-	lh := fnSize * 1.4
+	// The page's pitch at the footnotes' own size (reading_page.go), as the
+	// Apple panes set them.
+	lh := fnSize * pitchEm
 	g := styledFnGeom{present: true}
 
 	ruleW := fnSize * 6
