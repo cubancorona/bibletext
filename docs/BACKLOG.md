@@ -7,6 +7,33 @@ the date — and says what shipped and why. Closed entries earn their place: thi
 is the file to read before re-investigating a defect that may already be fixed,
 and a fix's reasoning is the expensive half to reconstruct.
 
+## The reading page: what is left after 24 September 2026
+
+Every surface takes its page from `reading_page.go` since 24 September 2026
+(docs/READING_TYPOGRAPHY.md, "The reading page", keeps the per-surface list).
+What the spec work left, each one a known difference rather than a guess:
+
+- **The Windows and Linux pane does not justify.** Its right edge is ragged
+  where every other surface justifies. Its own step: the canvas pane lays its
+  lines out itself (`reading_styled_layout.go`), so justification is spreading
+  each full line's word gaps, and selection hit-testing has to follow.
+- **Android centres the book page on the window, the iPad on its pane.** The
+  window is right for a landscape phone (the column clears the camera cutout
+  evenly, `BtBridge.applyReadingPadding`); on a tablet with the side rail it
+  sets the column about half the rail's width left of the pane's centre.
+  Centring on the window only when the pane spans it less the system insets
+  would give both.
+- **A note pill under a heading on Android's book page** sits 7px higher than
+  on the phone page (the entry below).
+- **The web's footnotes keep their "Notes" label and full-width rule,** where
+  the apps draw a short hairline: a web page has no app header to carry the
+  section's name.
+- **Browsers without container queries** (Safari before 16, Chrome before 105)
+  show the web's phone page at every width.
+- **The dev-tab text-size slider** (desktop, queued): a live control that
+  moves the reading size continuously so the page — size, measure, leading,
+  switch — can be watched changing, rather than a sample.
+
 ## iOS 27: after the scene life-cycle fix — FIXED 23 September 2026
 
 The launch failure itself (an Xcode 27 build refused at launch on every iOS 27
@@ -1148,17 +1175,22 @@ first, then Android after the Play closed-testing review clears — see the
 rework's proposal for the design (calendar triggers carrying the full date,
 re-issued on foreground, the passage computed with the fixed day key).
 
-## Android's compact page: a pill under a heading or a title stands down
+## Android's compact page: a pill under a heading stands down
 
 The one surface left out of the pill rule (below). On Android's compact page
-— phone landscape reading — `Html.fromHtml` puts no blank separator line
+— the book page, which since 24 September 2026 is any pane wide enough for it:
+a phone in landscape, a tablet — `Html.fromHtml` puts no blank separator line
 between paragraphs, so the heading's tail rides as an ascent-mode `AirSpan` on
 the next paragraph's first line and `btPillStackInkTop` has no separator line
-to measure; it returns -1 and the pill keeps the band-top placement. A psalm
-title gets no air on that page at all (`TITLE_GAP_EM` is applied only in the
-blank-line branch). Centring there needs the ascent-mode air read back off
-the span rather than off a line. Rare: it needs landscape reading, a note,
-minimized, on the paragraph a heading or a title opens.
+to measure; it returns -1 and the pill keeps the band-top placement. Measured
+on the API 35 emulator under John 11's "Jesus Comforts Martha and Mary": the
+heading-to-verse distance is the phone page's to the pixel (166px), and the
+pill sits 7px higher inside it. Centring there needs the ascent-mode air read
+back off the span rather than off a line. (Until 24 September the compact
+page drew no heading air at all — the bridge read any blank line as the phone
+page, and the compact import has two — so there was no air to centre in. A
+psalm title's gap is a blank line on this page too, written by the dialect's
+`<br>`, and takes `TITLE_GAP_EM` there.)
 
 ## A collapsed note pill directly under a section heading — DONE 12 Sep 2026
 
