@@ -252,7 +252,25 @@ This list is kept current as each surface is brought to the spec.
   note pill under a heading sits 7px higher inside that air on the book page,
   because its stack-centring refinement needs the blank line only the phone
   page has.
-- **Web** — its page choice and the size table are to be brought to the rule.
+- **Web** — on the spec since 24 September 2026, generated but not yet
+  published (`scripts/publish-site.sh` is the owner's). A chapter's column is
+  the reading page (`.wrap.page`): the measure and 15px a side, 37.96875rem at
+  most, and the book page is on through a container query on that column
+  whenever it is the measure wide — so the page switches at 607.5px exactly,
+  where the apps do, instead of at a 46rem viewport, and a classic scrollbar
+  cannot switch it on a column narrower than the measure (a browser without
+  container queries keeps the phone page). Every prose paragraph is indented
+  on the book page, the first included, as every app pane indents it (the web
+  alone skipped the first and the one after a poem, and gave a poem-opening
+  paragraph .55rem of its own). The verse number is raised a third of the body
+  (.5051em of the numeral; was .45em), the omitted verses' holes are marked
+  (the web drew none), the footnotes are the scripture face at .85 of the body
+  with the page's pitch and a fifth of the body between entries (were the
+  interface face at .86 of 16px, line-height 1.6), and the note card's text is
+  15 and 11 (was .95rem and .78rem). The indexes and notice pages keep the
+  plain 40rem column; so does the chapter's footer. Checked in a browser at
+  1200, 608, 607 and 375px: 577.5px of text on the book page, the phone page
+  one pixel under the switch, 15px and 345px at 375.
 
 A dev build can force either page on any width: `BIBLETEXT_DEV_READING_PAGE=
 book|phone` at launch, or the Links tab's "Reading page" choice while the app

@@ -73,7 +73,27 @@ func readerCSS(f webFonts) string {
 		"__HEAD_TAIL_FACTOR__", strconv.FormatFloat(bibletext.ReadingHeadTailEm(), 'f', -1, 64),
 		"__TITLE_GAP_FACTOR__", strconv.FormatFloat(bibletext.ReadingTitleGapEm(), 'f', -1, 64),
 		"__SCRIPTURE_REM__", remSize(webScriptureBaseRem),
-		"__LEADING__", strconv.FormatFloat(bibletext.ReadingLinePitchEm(), 'f', 4, 64),
+		"__LEADING__", strconv.FormatFloat(bibletext.ReadingPhonePitchEm(), 'f', 4, 64),
+		// THE READING PAGE (reading_page.go), in rem at a 16px root. The
+		// chapter's column is the measure plus the side minimum each side,
+		// and the book page is on whenever the column's content box is the
+		// measure. Figured from the REFERENCE size, never the set size.
+		"__PAGE_MAX_REM__", webRem(webMeasurePx()+2*bibletext.ReadingPageSideMin()),
+		"__PAGE_SIDE_REM__", webRem(bibletext.ReadingPageSideMin()),
+		"__MEASURE_REM__", webRem(webMeasurePx()),
+		"__BOOK_PITCH__", strconv.FormatFloat(bibletext.ReadingBookPitchEm(), 'f', 4, 64),
+		// The sizes inside the page. The numeral's lift is written in ems of
+		// the numeral itself, which is what vertical-align reads: a third of
+		// the body is .5051 of a numeral set at .66 of it.
+		"__NUMERAL_EM__", bibletext.EmCSS(bibletext.ReadingNumeralEm()),
+		"__NUMERAL_LIFT__", strconv.FormatFloat(bibletext.ReadingNumeralLiftEm()/bibletext.ReadingNumeralEm(), 'f', 4, 64)+"em",
+		"__GAP_MARK_EM__", bibletext.EmCSS(bibletext.ReadingGapMarkEm()),
+		"__FOOTNOTE_REM__", remSize(webScriptureBaseRem*bibletext.ReadingFootnoteEm()),
+		"__FOOTNOTE_GAP_REM__", remSize(webScriptureBaseRem*bibletext.ReadingFootnoteEntryGapEm()),
+		// The note card's text: the app's furniture sizes, which do not follow
+		// the text size (notes_bubble.go).
+		"__NOTE_BODY_REM__", webRem(bibletext.NoteBodySize()),
+		"__NOTE_WHO_REM__", webRem(bibletext.NoteWhoSize()),
 		// The reading pane's air, from the one place the numbers live
 		// (reading_spacing.go): the paragraph gap as a factor of the body
 		// size (kept in rem so --pgap means the same inside every element),
@@ -87,9 +107,21 @@ func readerCSS(f webFonts) string {
 }
 
 // The reading size BEFORE the optical scale, at a 16px root: 1.3125rem is the
-// app's own 21px body. Headings take no size of their own — they are set at
-// the body size, as on every app pane.
-const webScriptureBaseRem = 1.3125
+// app's own 21px body (readingBodyBase). Headings take no size of their own —
+// they are set at the body size, as on every app pane.
+var webScriptureBaseRem = bibletext.ReadingBodyBase() / 16
+
+// webMeasurePx is the book page's measure in CSS px: the reporter measure at
+// the REFERENCE size, as every surface figures it.
+func webMeasurePx() float64 {
+	return bibletext.ReadingReporterMeasureEm() * bibletext.ReadingBodyBase()
+}
+
+// webRem writes a length in CSS px at a 16px root as rem, so a reader's own
+// default text size scales it along with the type.
+func webRem(px float64) string {
+	return strconv.FormatFloat(px/16, 'f', -1, 64) + "rem"
+}
 
 // remSize opens a reading size up by the shipped face's optical scale — the same
 // correction the app applies, for the same reason. Setting the raw number here
@@ -175,6 +207,14 @@ body{
   touch-action:manipulation;
 }
 .wrap{max-width:40rem; margin:0 auto; padding:1rem 1.6rem 2rem}
+/* THE CHAPTER'S PAGE (reading_page.go): the measure and the side minimum each
+   side, so the column's content box is the measure whenever the window has
+   room for it, and the window's width less the sides when it has not. The
+   page is chosen from that box by the container query below — the same rule
+   every app pane uses, by width and never by device. Chapter pages only: the
+   indexes and the notice keep the plain .wrap. */
+.wrap.page{max-width:__PAGE_MAX_REM__; padding-left:__PAGE_SIDE_REM__; padding-right:__PAGE_SIDE_REM__;
+  container:page / inline-size}
 .top{
   display:flex; flex-wrap:wrap; align-items:center; gap:.5rem;
   font-size:.8rem; padding:.35rem 0 .55rem;
@@ -315,35 +355,11 @@ body{
    21px is written as 1.3125rem rather than px so it still answers a reader who
    has set a larger default text size in their browser, while landing on exactly
    21px at the default. */
-/* LEADING — MEASURED off the app, not copied from its stylesheet, because the
-   app does not render what its stylesheet says. buildChapterHTML asks for
-   line-height 2.0 on phones, but that CSS goes through the UIKit HTML importer
-   into an attributed string, and what comes out is neither 2.0 nor the font's
-   natural height:
-
-     importer on macOS   drops line-height entirely (multiple 0, spacing 0)
-     importer on iOS     turns it into minimumLineHeight 42 (= 2.0 x 21)
-     what iOS RENDERS    a 27.67pt line pitch at 21px  ->  1.3175
-
-   27.67pt was measured twice at 3x — on a real iPhone screenshot and on the
-   simulator at default text size — as 83 device px, both to the pixel. So 1.3175
-   is what a reader actually sees, and it is what the page sets.
-
-   The paragraph gap is measured the same way: a boundary comes out at exactly
-   166 device px, two line pitches, i.e. ONE BLANK LINE — not the 24px the
-   stylesheet asks for. Hence 1.3175em below rather than 24px.
-
-   Both numbers are unitless/em so they still scale with a reader's own font
-   size. If the app's reading pane is ever re-typeset, re-measure — do not read
-   these off buildChapterHTML.
-
-   RE-MEASURED after the reading face was given its optical scale
-   (reading_face_scale.go). The body size here moved with it; 1.3175 did NOT
-   need to. The iOS pitch turns out to be 2.0 x 0.66 x body — TextKit takes a
-   paragraph's line height from its FIRST run, which is always the 0.66em verse
-   numeral — so it is linear in the body size and the ratio survives the change.
-   Confirmed on the iPhone 17 Pro simulator: 83 device px at the old 21px body,
-   95 at the corrected 24px, i.e. 1.3196 against the 1.3175 written here. */
+/* LEADING — the reading page's pitch (reading_page.go), the one number
+   every app pane sets its lines at, as a multiple of the size the body is set
+   at. It was once measured off an iPhone screenshot (1.3175) because the Apple
+   panes drew what their importer made of their CSS; they set it explicitly
+   now, so the page and the apps share the number rather than a measurement. */
 .text{
   font-family:var(--scripture);
   font-size:__SCRIPTURE_REM__; line-height:__LEADING__; letter-spacing:.004em;
@@ -369,29 +385,21 @@ body{
   margin:__HEAD_LEAD__ 0 __HEAD_TAIL__;
 }
 .text .sec:first-child{margin-top:0}
-/* Paragraph shape mirrors the app: on a phone, paragraphs are separated by
-   space (the app's phone reading pane); from tablet width up the app switches
-   to its iPad "reporter" setting — a first-line indent with no blank line
-   between paragraphs, which is how a printed Bible sets prose. A paragraph
-   that OPENS with poetry keeps its space and takes no indent, matching the
-   app's rule that the reporter indent is skipped for poetic paragraphs. */
-@media (min-width:46rem){
-  /* The reporter set: no gap between paragraphs, a first-line indent instead
-     (the app's em+en spaces). Leading stays natural — the importer drops the
-     app's 1.3 exactly as it drops the phone's 2.0. */
-  .text{--pgap:0rem}
+/* THE TWO PAGES (reading_page.go). The phone page separates paragraphs with
+   space; the book page — the U.S. Reports set — has a first-line indent and no
+   space between paragraphs, which is how a printed Bible sets prose. The book
+   page is on whenever the chapter's column is the measure wide: a query on the
+   column, not on the device or the viewport, so a classic scrollbar cannot
+   switch it on a column narrower than the measure. A browser without container
+   queries keeps the phone page.
+   Every prose paragraph is indented, the first included and the one after a
+   poem, as every app pane indents them; a paragraph that OPENS on a poem line
+   takes no indent and no air of its own, because poetry is never first-line
+   indented in print. */
+@container page (min-width:__MEASURE_REM__){
+  .text{--pgap:0rem; line-height:__BOOK_PITCH__}
   .text p{margin:0; text-indent:__INDENT__}
-  /* The first paragraph takes no reporter indent — and a psalm's title is a
-     <p> too, so once it stands first the verse paragraph after it must be
-     named as well or every titled psalm gains an indent it never had. */
-  .text p:first-child, .text p.pst + p{text-indent:0}
-  /* A note's card, chip or notice is inserted BEFORE its paragraph, so the
-     first paragraph of a chapter (or of a titled psalm) stops being the first
-     child once it is noted; it keeps the no-indent it had without the note. */
-  .text .note:first-child + p, .text .notechip:first-child + p, .text .notenotice:first-child + p,
-  .text p.pst + .note + p, .text p.pst + .notechip + p, .text p.pst + .notenotice + p{text-indent:0}
-  .text p.pm{margin:.55rem 0; text-indent:0}
-  .text p.pm + p{text-indent:0}
+  .text p.pm{text-indent:0}
 }
 .text p.pm{text-align:left; hyphens:none}
 /* THE PSALM'S TITLE. Scripture's own title for the psalm — "A Psalm of David,
@@ -410,18 +418,29 @@ body{
    verse: a reader scrolling for the next chapter passes it, and a reader who
    wants it has it without a control the site has no way to remember.
    The key column is the verse number the note belongs to, or "Title". */
+/* The entries are set as the app panes set them (reading_page.go): the
+   scripture face at .85 of the body, the page's pitch, justified, the key in
+   the bold cut and the muted ink, a fifth of the body between entries. The
+   "Notes" label is the page's own — a web page has no app header to carry
+   it — and keeps the interface face at the size it always had. */
 .notes{margin:2.2rem 0 0; padding-top:1.1rem; border-top:1px solid var(--border);
-  font-size:.86em; color:var(--muted)}
-.notes h2{font-size:.86em; font-weight:600; letter-spacing:.06em;
-  text-transform:uppercase; color:var(--muted); margin:0 0 .7rem}
-.notes dl{margin:0; display:grid; grid-template-columns:2.4em 1fr; gap:.34rem .7rem}
-.notes dt{font-variant-numeric:tabular-nums; text-align:right; opacity:.75}
+  font-family:var(--scripture); font-size:__FOOTNOTE_REM__; line-height:__LEADING__;
+  font-feature-settings:"kern" 1,"liga" 1,"calt" 1,"onum" 1;
+  text-align:justify; hyphens:auto; -webkit-hyphens:auto; color:var(--muted)}
+.notes h2{font-family:var(--ui); font-size:.7396rem; line-height:1.6; font-weight:600; letter-spacing:.06em;
+  text-transform:uppercase; text-align:left; color:var(--muted); margin:0 0 .7rem}
+.notes dl{margin:0; display:grid; grid-template-columns:2.4em 1fr; gap:__FOOTNOTE_GAP_REM__ .7rem}
+.notes dt{font-variant-numeric:tabular-nums; text-align:right; font-weight:700}
 .notes dd{margin:0}
-/* The app's verse number: sup.v — 0.66em, weight 600, no tracking, 2px of air
-   after it. The raise is left to the browser's own <sup> handling, damped so a
-   superscript cannot open up the line it sits on. */
-.n{font-size:.66em; font-weight:600; letter-spacing:0; margin-right:2px;
-  vertical-align:.45em; line-height:0}
+/* The verse number (reading_page.go): .66 of the body in the bold cut, its
+   baseline raised a third of the body — the distance UIKit and AppKit put it
+   at — with no tracking and 2px of air after it. line-height:0 keeps the raise
+   from opening up the line it sits on. */
+.n{font-size:__NUMERAL_EM__; font-weight:600; letter-spacing:0; margin-right:2px;
+  vertical-align:__NUMERAL_LIFT__; line-height:0}
+/* An omitted verse's mark, in the hole it leaves (verse_gaps.go): the number's
+   size, the apparatus's ink, on the baseline. */
+.vg{font-size:__GAP_MARK_EM__; color:var(--muted); letter-spacing:0}
 .n a{color:var(--verse); text-decoration:none}
 .n a:hover{text-decoration:underline}
 .wj{color:var(--red)}
@@ -532,12 +551,12 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
 .note.notail::after{display:none}
 .note.notail{margin-bottom:__NOTE_GAP_BELOW__px}
 .notewho{
-  margin:0 0 .3rem; color:var(--muted); font-size:.78rem;
+  margin:0 0 .3rem; color:var(--muted); font-size:__NOTE_WHO_REM__; font-weight:600;
   letter-spacing:.01em;
 }
 /* The note itself is set in the CHROME face, not the scripture serif: it is
    somebody's message, and it must never be mistaken for the text. */
-.notetext{margin:0; font-size:.95rem; line-height:1.5; white-space:pre-wrap; overflow-wrap:anywhere}
+.notetext{margin:0; font-size:__NOTE_BODY_REM__; line-height:1.5; white-space:pre-wrap; overflow-wrap:anywhere}
 /* Minimize and delete, in that order: the reversible one first, so the
    destructive one is never the one a thumb reaches by accident. */
 .notetools{position:absolute; top:.3rem; right:.35rem; display:flex; gap:.1rem}
@@ -573,7 +592,7 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
   scroll-margin-top:__NOTE_LEAD__px;
   letter-spacing:normal; text-indent:0;
   background:none; border:1px solid var(--border); border-radius:999px;
-  padding:.3rem __NOTE_PILL_PAD_X__px; font-size:.78rem; font-family:var(--ui);
+  padding:.3rem __NOTE_PILL_PAD_X__px; font-size:__NOTE_WHO_REM__; font-weight:600; font-family:var(--ui);
   color:var(--muted); cursor:pointer; line-height:1.2;
 }
 /* No separator above, no split: a chip before the FIRST paragraph (it becomes
@@ -595,7 +614,7 @@ html.nohl .v:target{background:none; box-shadow:none; cursor:auto}
 .notenotice{
   margin:1.1rem 0; padding:.8rem 1rem; scroll-margin-top:1.2rem;
   background:var(--surface); border:1px solid var(--border); border-radius:10px;
-  color:var(--muted); font-family:var(--ui); font-size:.9rem; line-height:1.5;
+  color:var(--muted); font-family:var(--ui); font-size:__NOTE_BODY_REM__; line-height:1.5;
   letter-spacing:normal; text-align:left; text-indent:0;
   font-feature-settings:normal;
 }

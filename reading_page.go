@@ -140,13 +140,15 @@ func readingPageAt(paneWidth, reference float64) readingPage {
 }
 
 // The same numbers for the website generator, which lives in another package.
-func ReadingBodyBase() float64          { return readingBodyBase }
-func ReadingReporterMeasureEm() float64 { return reporterMeasureEm }
-func ReadingPageSideMin() float64       { return readingPageSideMin }
-func ReadingBookPitchEm() float64       { return readingBookPitchEm }
-func ReadingPhonePitchEm() float64      { return readingPhonePitchEm }
-func ReadingNumeralEm() float64         { return readingNumeralEm }
-func ReadingNumeralLiftEm() float64     { return readingNumeralLiftEm }
-func ReadingFootnoteEm() float64        { return readingFootnoteEm }
-func NoteBodySize() float64             { return noteBodySize }
-func NoteWhoSize() float64              { return noteWhoSize }
+func ReadingBodyBase() float64           { return readingBodyBase }
+func ReadingReporterMeasureEm() float64  { return reporterMeasureEm }
+func ReadingPageSideMin() float64        { return readingPageSideMin }
+func ReadingBookPitchEm() float64        { return readingBookPitchEm }
+func ReadingPhonePitchEm() float64       { return readingPhonePitchEm }
+func ReadingNumeralEm() float64          { return readingNumeralEm }
+func ReadingNumeralLiftEm() float64      { return readingNumeralLiftEm }
+func ReadingFootnoteEm() float64         { return readingFootnoteEm }
+func ReadingGapMarkEm() float64          { return readingGapMarkEm }
+func ReadingFootnoteEntryGapEm() float64 { return readingFootnoteEntryGapEm }
+func NoteBodySize() float64              { return noteBodySize }
+func NoteWhoSize() float64               { return noteWhoSize }

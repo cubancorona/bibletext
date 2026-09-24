@@ -109,7 +109,8 @@ func renderChapter(v loadedVersion, all []loadedVersion, book, slug string, chap
 	ref := fmt.Sprintf("%s %d", book, chapter)
 
 	var b strings.Builder
-	b.WriteString(`<div class="wrap">`)
+	// .page: the chapter's column is the reading page (assets.go, .wrap.page).
+	b.WriteString(`<div class="wrap page">`)
 	b.WriteString(navBar(v, all, book, slug, chapter))
 	// Heading row: title left, quiet prev/next arrows right — the app's shape.
 	// Arrows only here; the labelled pager at the foot does the wordy version.
@@ -188,6 +189,10 @@ func chapterBody(bd *bibletext.BibleData, versionID, book string, chapter int, v
 	// Blocks, not paragraphs: the publisher's section headings stand among
 	// them, in the places the publisher put them and the reading pane sets
 	// them. A page that dropped them would be a different page from the app's.
+	// The holes omitted verses leave, marked where the apps mark them
+	// (verse_gaps.go). The page always carries its footnotes, so it always
+	// marks them.
+	gaps := bibletext.GapsBefore(versionID, book, chapter, verses)
 	for _, blk := range bibletext.ChapterBlocks(bd, book, chapter, verses) {
 		if blk.HeadingText != "" {
 			fmt.Fprintf(&b, `<h2 class="sec">%s</h2>`,
@@ -203,7 +208,7 @@ func chapterBody(bd *bibletext.BibleData, versionID, book string, chapter int, v
 		} else {
 			b.WriteString(`<p>`)
 		}
-		b.WriteString(paragraphBody(versionID, book, para))
+		b.WriteString(paragraphBody(versionID, book, para, gaps))
 		b.WriteString(`</p>`)
 	}
 	return b.String()
@@ -211,8 +216,10 @@ func chapterBody(bd *bibletext.BibleData, versionID, book string, chapter int, v
 
 // paragraphBody renders the verses of one paragraph, joining them the way the
 // app does: a join touching a poetic verse is a line break, everything else is
-// a space.
-func paragraphBody(versionID, book string, verses []bibletext.Verse) string {
+// a space. An omitted verse's mark stands after the join and before the next
+// verse's number, outside that verse's span — it is the hole's, not the
+// verse's — with a body-size space after it, as the app panes write it.
+func paragraphBody(versionID, book string, verses []bibletext.Verse, gaps map[int][]int) string {
 	var b strings.Builder
 	for i, v := range verses {
 		if i > 0 {
@@ -221,6 +228,9 @@ func paragraphBody(versionID, book string, verses []bibletext.Verse) string {
 			} else {
 				b.WriteByte(' ')
 			}
+		}
+		for _, n := range gaps[v.Verse] {
+			fmt.Fprintf(&b, `<span class="vg">%s</span> `, template.HTMLEscapeString(bibletext.VerseGapMark(n)))
 		}
 		fmt.Fprintf(&b, `<span class="v" id="v%d">`, v.Verse)
 		// An ORDINARY space after the number, not a no-break one. The page can

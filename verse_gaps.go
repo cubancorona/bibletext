@@ -63,3 +63,12 @@ func gapsBefore(versionID, book string, chapter int, verses []Verse) map[int][]i
 func verseGapMark(n int) string {
 	return "[" + itoa(n) + "]"
 }
+
+// GapsBefore and VerseGapMark are the same answers for the website generator,
+// which lives in another package. The web page always carries its footnotes,
+// so it always marks the holes: the toggle's "on" is the page's only state.
+func GapsBefore(versionID, book string, chapter int, verses []Verse) map[int][]int {
+	return gapsBefore(versionID, book, chapter, verses)
+}
+
+func VerseGapMark(n int) string { return verseGapMark(n) }
