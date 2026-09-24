@@ -8,7 +8,9 @@ package bibletext
 // enough, and a phone in portrait or a narrow split-screen window reads the
 // phone page because it is not. The width is the overlay's, in dp, reported by
 // the bridge (BtBridge's content layout listener, btaReadingWidthChanged);
-// until it has reported, the window's stands in for it.
+// until it has reported, the window's stands in for it, and before the Fyne
+// canvas has a size, the activity window's configured width in dp
+// (androidWindowWidthDp); with neither, the phone page.
 //
 // The page reaches the pane by three routes and all three ask THIS question:
 // the paragraph grammar is markup (android_chapter_html.go), the measure is
@@ -16,4 +18,8 @@ package bibletext
 // BtBridge.applyReadingPadding), and the pitch is pushed with the style.
 func reporterLayoutActive() bool { return currentReadingPage().Book() }
 
-func init() { readingWindowWidth = widestWindowWidth }
+func init() {
+	readingWindowWidth = widestWindowWidth
+	readingColdWidth = androidWindowWidthDp
+	readingUnsizedPage = func() readingPageKind { return readingPagePhone }
+}

@@ -64,10 +64,52 @@ func TestReadingPaneWidthRePushesOnceAcrossTheSwitch(t *testing.T) {
 func saveReadingPaneWidth(t *testing.T) {
 	prevSettle, prevRun, prevW, prevWin := readingPageSettle, readingPageRun, readingPaneWidth, readingPaneWindow
 	prevPushed, prevValid, prevEst := readingPagePushed, readingPagePushedValid, readingWindowWidth
+	prevUnsized, prevOverride, prevCold, prevUnit := readingUnsizedPage, readingPageOverride, readingColdWidth, readingPaneUnit
 	t.Cleanup(func() {
 		readingPageSettle, readingPageRun, readingPaneWidth, readingPaneWindow = prevSettle, prevRun, prevW, prevWin
 		readingPagePushed, readingPagePushedValid, readingWindowWidth = prevPushed, prevValid, prevEst
+		readingUnsizedPage, readingPageOverride, readingColdWidth, readingPaneUnit = prevUnsized, prevOverride, prevCold, prevUnit
 	})
+}
+
+// A push made before anything has a width — no report from the pane, and a
+// canvas with no size until its first paint — takes the device's resting page:
+// the phone page on a phone, where "unknown" used to answer the book page and
+// a cold start in portrait imported the chapter as a book page and then again
+// as a phone page. A width, once there is one, outranks the device.
+func TestAPushWithNoWidthTakesTheDevicesRestingPage(t *testing.T) {
+	saveReadingPaneWidth(t)
+	readingPaneWidth, readingPaneWindow = 0, 0
+	readingWindowWidth = func() float64 { return 0 }
+	readingColdWidth = func() float64 { return 0 }
+	readingPageOverride = nil
+
+	readingUnsizedPage = func() readingPageKind { return readingPagePhone }
+	if p := currentReadingPage(); p.Book() {
+		t.Fatalf("an unsized phone pushed the book page: %+v", p)
+	}
+	readingUnsizedPage = func() readingPageKind { return readingPageBook }
+	if p := currentReadingPage(); !p.Book() {
+		t.Fatalf("an unsized tablet pushed the phone page: %+v", p)
+	}
+	// A width outranks the device: the platform's width before the window has
+	// one (Android's configured window width), and the window's once it has.
+	readingUnsizedPage = func() readingPageKind { return readingPagePhone }
+	readingColdWidth = func() float64 { return 914 }
+	if p := currentReadingPage(); !p.Book() {
+		t.Fatalf("a 914dp window with no canvas yet pushed %+v, want the book page its width chooses", p)
+	}
+	readingWindowWidth = func() float64 { return 400 }
+	if p := currentReadingPage(); p.Book() {
+		t.Fatalf("a 400-wide canvas pushed %+v; the window, once sized, outranks the cold width", p)
+	}
+	readingColdWidth = func() float64 { return 0 }
+	// And the dev override outranks both.
+	readingWindowWidth = func() float64 { return 0 }
+	readingPageOverride = func() (readingPageKind, bool) { return readingPageBook, true }
+	if p := currentReadingPage(); !p.Book() {
+		t.Fatalf("the override was ignored with no width known: %+v", p)
+	}
 }
 
 // A rotation pushes the chapter into the new pane before the pane has
@@ -163,12 +205,24 @@ func TestApplePanesTakeTheirPageFromTheSpec(t *testing.T) {
 			}
 		}
 	}
+	// Before its pane reports, the Mac's window stands in.
+	if !strings.Contains(readNativeSource(t, "reporter_macos.go"), "func init() { readingWindowWidth = widestWindowWidth }") {
+		t.Error("the Mac pushes its first page with no width estimate")
+	}
 	// The macOS pane reports its width; iOS reports it with each frame.
 	if !strings.Contains(nativeFunctionSource(t, "reading_macos.go", "static void btMacApplyFrame(double x, double y, double w, double h) {"), "btMacReadingWidthChanged(") {
 		t.Error("the macOS frame change does not report the pane's width")
 	}
 	if !strings.Contains(nativeFunctionSource(t, "reading_ios.go", "func setFrameFromObject(h *nativeReadingHost) {"), "noteReadingPaneWidth(") {
 		t.Error("the iOS frame push does not report the pane's width")
+	}
+	// With no width known at all, an iPhone pushes the phone page and an iPad
+	// the book page.
+	ios := readNativeSource(t, "reporter_ios.go")
+	for _, want := range []string{"readingUnsizedPage = func() readingPageKind {", "if deviceIsTablet() {\n\t\t\treturn readingPageBook", "return readingPagePhone"} {
+		if !strings.Contains(ios, want) {
+			t.Errorf("reporter_ios.go does not say %q", want)
+		}
 	}
 }
 
@@ -192,6 +246,18 @@ func TestAndroidPaneTakesItsPageFromTheSpec(t *testing.T) {
 		if !strings.Contains(export, want) {
 			t.Errorf("reading_android_export.go: the width report does not %q", want)
 		}
+	}
+	// Before the overlay reports, the window stands in; before the canvas has
+	// a size, the activity window's configured width in dp; with neither, the
+	// phone page.
+	reporter := readNativeSource(t, "reporter_android.go")
+	for _, want := range []string{"readingWindowWidth = widestWindowWidth", "readingColdWidth = androidWindowWidthDp", "readingUnsizedPage = func() readingPageKind { return readingPagePhone }"} {
+		if !strings.Contains(reporter, want) {
+			t.Errorf("reporter_android.go does not say %q", want)
+		}
+	}
+	if !strings.Contains(readNativeSource(t, "android/BtBridge.java"), "getConfiguration().screenWidthDp") {
+		t.Error("BtBridge.windowWidthDp does not read the window's configured width")
 	}
 	java := readNativeSource(t, "android/BtBridge.java")
 	i := strings.Index(java, "content.addOnLayoutChangeListener(")

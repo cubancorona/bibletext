@@ -26,7 +26,7 @@ static jmethodID btaInitM, btaSetStyleM, btaSetHtmlM, btaArmRestoreM, btaGetFrac
                  btaShareTextM, btaShareImageM, btaSetAIEnabledM, btaSetNotesEnabledM,
                  btaOpenBrowserM,
                  btaRAHighlightM, btaRAClearM, btaRAFollowM, btaRAColorsM,
-                 btaSetNoteM, btaSetNoteBandsM, btaTimeZoneIDM;
+                 btaSetNoteM, btaSetNoteBandsM, btaTimeZoneIDM, btaWindowWidthM;
 
 // Resolve BtBridge through the ACTIVITY's classloader. FindClass on a
 // JNI-attached background thread uses the system classloader and cannot see
@@ -86,6 +86,8 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	btaSetNoteBandsM = (*env)->GetStaticMethodID(env, btaClass, "setNoteBands", "([I[I[B)V");
 	// The device's zone database name, for time.Local (timezone_mobile.go).
 	btaTimeZoneIDM = (*env)->GetStaticMethodID(env, btaClass, "timeZoneID", "()Ljava/lang/String;");
+	// The activity window's width in dp, for the reading page (reading_page_width.go).
+	btaWindowWidthM = (*env)->GetStaticMethodID(env, btaClass, "windowWidthDp", "()F");
 	// A missing method (a dex/JNI signature skew from editing BtBridge.java
 	// without updating these descriptors) returns NULL and leaves a pending
 	// NoSuchMethodError; every wrapper below guards only on btaClass==NULL, so an
@@ -100,7 +102,7 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	    btaSetAIEnabledM == NULL || btaSetNotesEnabledM == NULL || btaOpenBrowserM == NULL ||
 	    btaRAHighlightM == NULL || btaRAClearM == NULL || btaRAFollowM == NULL ||
 	    btaRAColorsM == NULL || btaSetNoteM == NULL || btaSetNoteBandsM == NULL ||
-	    btaTimeZoneIDM == NULL) {
+	    btaTimeZoneIDM == NULL || btaWindowWidthM == NULL) {
 		(*env)->ExceptionClear(env);
 		(*env)->DeleteGlobalRef(env, btaClass);
 		btaClass = NULL;
@@ -148,6 +150,19 @@ static float btaGetFrac(uintptr_t jni_env) {
 	JNIEnv *env = (JNIEnv*)jni_env;
 	if (btaClass == NULL) return -1.0f;
 	return (*env)->CallStaticFloatMethod(env, btaClass, btaGetFracM);
+}
+
+// btaWindowWidthDp is the activity window's width in dp; 0 when the bridge is
+// absent or Java threw.
+static float btaWindowWidthDp(uintptr_t jni_env) {
+	JNIEnv *env = (JNIEnv*)jni_env;
+	if (btaClass == NULL) return 0.0f;
+	jfloat w = (*env)->CallStaticFloatMethod(env, btaClass, btaWindowWidthM);
+	if ((*env)->ExceptionCheck(env)) {
+		(*env)->ExceptionClear(env);
+		return 0.0f;
+	}
+	return w;
 }
 
 // btaTimeZoneID copies the device's zone database name into buf; empty when
@@ -895,6 +910,22 @@ func captureReadingAnchor() (verse int, delta, frac float64, ok bool) {
 		return 0, 0, 0, false
 	}
 	return 0, 0, float64(f), true
+}
+
+// androidWindowWidthDp is the activity window's width in dp, from its
+// configuration: the reading page's estimate for a push made before the Fyne
+// canvas has a size (readingColdWidth, reading_page_width.go). It is known
+// from the moment the activity exists, and it is in the overlay's own unit. A
+// call into Java, so it is asked only then. 0 without the bridge.
+func androidWindowWidthDp() float64 {
+	if !btaBridgePresent() {
+		return 0
+	}
+	w := float32(0)
+	runBta(func(env uintptr) {
+		w = float32(C.btaWindowWidthDp(C.uintptr_t(env)))
+	})
+	return float64(w)
 }
 
 // deviceTimeZoneName is the zone database name Java reports for the device

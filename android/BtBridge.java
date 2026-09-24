@@ -3160,6 +3160,18 @@ public final class BtBridge {
     /** getScrollFrac is read by the Go side when persisting the reading position. */
     public static float getScrollFrac() { return lastFrac; }
 
+    /** windowWidthDp is the activity window's width in dp, from its current
+     *  configuration (screenWidthDp follows rotation and multi-window): the
+     *  reading page's estimate before the overlay has laid out, read by the Go
+     *  side. 0 before an activity exists. */
+    public static float windowWidthDp() {
+        try {
+            return activity != null ? activity.getResources().getConfiguration().screenWidthDp : 0f;
+        } catch (Throwable t) {
+            return 0f;
+        }
+    }
+
     /** timeZoneID is the device's zone database name (Europe/London), read by the
      *  Go side to set its local zone: Go's own Android start-up leaves that at
      *  UTC, and fyne's launch-time repair fixes only the offset then in force. */

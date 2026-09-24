@@ -3,6 +3,9 @@ package bibletext
 import (
 	"math"
 	"testing"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/test"
 )
 
 // The reading page's one rule (reading_page.go), stated as numbers a reader could
@@ -79,16 +82,34 @@ func TestReadingPageInvariants(t *testing.T) {
 
 // The measure is figured from the REFERENCE size, never the size the type is set
 // at (docs/READING_TYPOGRAPHY.md, "The optical scale, and the one thing it must
-// not touch"). Handing the set size in would widen the column 15%; the control
-// shows the check can tell.
+// not touch"). Asked of the two places a page is made: the native panes'
+// currentReadingPage, and the canvas pane's own page at its width. Either
+// handing the set size in would widen the column 15%.
 func TestReadingPageMeasureIsTheReferences(t *testing.T) {
-	ref := readingReferencePx()
-	p := readingPageFor(2000, ref)
-	if math.Abs(p.Measure-reporterMeasureEm*ref) > 1e-9 {
-		t.Errorf("measure %.3f, want 27.5 × the reference %.3f", p.Measure, ref)
+	saveReadingPaneWidth(t)
+	readingPaneWidth, readingPaneWindow, readingPageOverride = 2000, 0, nil
+	ref, set := readingReferencePx(), readingGlyphPx()
+	if math.Abs(set-ref) < 1 {
+		t.Fatalf("the set size %.3f is the reference %.3f, so this test cannot tell them apart", set, ref)
 	}
-	if wrong := readingPageFor(2000, readingGlyphPx()); math.Abs(wrong.Measure-p.Measure) < 1 {
-		t.Fatal("the control did not move: a measure from the set size must differ, or this test proves nothing")
+	if p := currentReadingPage(); math.Abs(p.Measure-reporterMeasureEm*ref) > 1e-9 {
+		t.Errorf("a native push's measure is %.3f, want 27.5 × the reference %.3f = %.3f (27.5 × the set size is %.3f)",
+			p.Measure, ref, reporterMeasureEm*ref, reporterMeasureEm*set)
+	}
+
+	app := test.NewApp()
+	defer app.Quit()
+	st := sampleState()
+	pane := newStyledReadingPane(st, st.Bible.GetChapter(st.CurrentBook, st.CurrentChapter))
+	pane.Resize(fyne.NewSize(2000, 600))
+	pane.Refresh()
+	// The reference is the spec's, not the pane's own idea of it: 21 × the
+	// reader's setting, in Fyne units.
+	canvasRef := readingBodyBase * readingTextScale()
+	want := reporterMeasureEm * canvasRef
+	if math.Abs(pane.page.Measure-want) > 1e-3 {
+		t.Errorf("the canvas pane's measure is %.3f, want 27.5 × the reference %.3f = %.3f (27.5 × its set size is %.3f)",
+			pane.page.Measure, canvasRef, want, reporterMeasureEm*float64(pane.textSize))
 	}
 }
 
@@ -107,8 +128,8 @@ func TestReadingPageSizeTable(t *testing.T) {
 		{"note body", noteBodySize, 15},
 		{"note byline and pills", noteWhoSize, 11},
 		{"side minimum", readingPageSideMin, 15},
-		{"book pitch", readingBookPitchEm, readingLinePitchEm},
-		{"phone pitch", readingPhonePitchEm, readingLinePitchEm},
+		{"book pitch", readingBookPitchEm, 1.2222},
+		{"phone pitch", readingPhonePitchEm, 1.2222},
 	} {
 		if tc.got != tc.want {
 			t.Errorf("%s = %v, want %v", tc.name, tc.got, tc.want)

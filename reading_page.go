@@ -94,8 +94,10 @@ func readingBookPageFits(paneWidth, reference float64) bool {
 }
 
 // readingPageFor is the page for a pane of this width. A width of zero or less
-// — a pane not yet laid out — answers the book page with no side, which no
-// surface draws: every one lays its page out from a real width.
+// — a pane not yet laid out — answers the book page with no side. The canvas
+// pane never asks it so (it lays out from a real width); the native panes ask
+// currentReadingPage (reading_page_width.go), which answers a push made with no
+// width at all from the device instead.
 func readingPageFor(paneWidth, reference float64) readingPage {
 	if paneWidth <= 0 || readingBookPageFits(paneWidth, reference) {
 		return readingPageOf(readingPageBook, paneWidth, reference)

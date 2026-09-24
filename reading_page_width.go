@@ -30,8 +30,8 @@ var (
 	// pane last reported; 0 where the platform gives no window estimate.
 	readingPaneWindow float64
 	// readingPaneUnit is the pane's unit per window unit: 1 where the pane
-	// reports in the window's own unit (iOS), the ratio of dp to Fyne's unit
-	// on Android, measured from the host each time the bridge reports.
+	// reports in the window's own unit (macOS, iOS), the ratio of dp to Fyne's
+	// unit on Android, measured from the host each time the bridge reports.
 	readingPaneUnit = 1.0
 	// readingPagePushed is the page the last chapter push was made at.
 	readingPagePushed      readingPageKind
@@ -48,13 +48,25 @@ var readingPageSettle = 120 * time.Millisecond
 // readingPageRun runs the re-push on the Fyne goroutine; a test replaces it.
 var readingPageRun = func(f func()) { fyne.Do(f) }
 
-// readingWindowWidth is the estimate before any pane has reported a width. It
-// answers 0 — "not known", which chooses the book page — unless a platform turns
-// on widestWindowWidth: the phones do, where the first push is made before the
-// pane has a frame and a phone's window is its pane's width. The Mac does not:
-// its pane reports a width before the reader can see the page, and the host
-// tests, which build chapters with no pane at all, keep the book page.
+// readingWindowWidth is the widest window's canvas width, the estimate before
+// any pane has reported a width. It answers 0 — "not known" — unless a platform
+// turns on widestWindowWidth, as the native panes all do. The Windows and Linux
+// pane lays out from its own width and never asks.
 var readingWindowWidth = func() float64 { return 0 }
+
+// readingColdWidth is the pane's width, in its own unit, before the window has
+// any size: the canvas has none until its first paint, and a chapter can be
+// pushed before that. Android reads its activity's configured width
+// (androidWindowWidthDp) — a call into Java, made only then; 0 elsewhere.
+var readingColdWidth = func() float64 { return 0 }
+
+// readingUnsizedPage is the page for a push made with no width known at all —
+// no report from the pane and no window size. The book page by default (the
+// Mac, the host tests); the phones answer from the device, as the layout
+// already does for a canvas with no size (phoneLandscapeReadingWanted): an
+// iPhone's resting page is the phone page, an iPad's the book page. The one
+// place a page is chosen by device, and only for want of a width.
+var readingUnsizedPage = func() readingPageKind { return readingPageBook }
 
 // widestWindowWidth is the widest open window's canvas width.
 func widestWindowWidth() float64 {
@@ -82,7 +94,10 @@ func widestWindowWidth() float64 {
 // (readingPaneUnit). The pane's own report follows and settles it.
 func readingPaneWidthNow() float64 {
 	if readingPaneWidth <= 0 {
-		return readingWindowWidth()
+		if w := readingWindowWidth(); w > 0 {
+			return w
+		}
+		return readingColdWidth()
 	}
 	if readingPaneWindow > 0 {
 		if w := readingWindowWidth(); w > 0 && w != readingPaneWindow {
@@ -94,9 +109,20 @@ func readingPaneWidthNow() float64 {
 
 // currentReadingPage is the page a native push is made at now. reporterLayout
 // answers from the same width, so the stylesheet and the pushes agree within one
-// push.
+// push. With no width known at all, the device's resting page
+// (readingUnsizedPage), unless the dev override names one.
 func currentReadingPage() readingPage {
-	return readingPageAt(readingPaneWidthNow(), readingReferencePx())
+	ref := readingReferencePx()
+	w := readingPaneWidthNow()
+	if w <= 0 {
+		if readingPageOverride != nil {
+			if k, ok := readingPageOverride(); ok {
+				return readingPageOf(k, 0, ref)
+			}
+		}
+		return readingPageOf(readingUnsizedPage(), 0, ref)
+	}
+	return readingPageAt(w, ref)
 }
 
 // markReadingPagePushed records the page a chapter push was made at.
