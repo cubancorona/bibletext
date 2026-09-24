@@ -50,8 +50,15 @@ func devStripParts(t *testing.T, o fyne.CanvasObject) (s *widget.Slider, b *widg
 func TestTheTextSizeSliderMovesThePaneLive(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
-	prevOn, prevScale, prevW := devTextScaleStripOn, devTextScale, readingPaneWidth
-	t.Cleanup(func() { devTextScaleStripOn, devTextScale, readingPaneWidth = prevOn, prevScale, prevW })
+	prevOn, prevScale := devTextScaleStripOn, devTextScale
+	prevSeen, prevSettle := readingPaneWidthSeen, readingPageSettle
+	saveReadingPaneWidth(t)
+	t.Cleanup(func() {
+		devTextScaleStripOn, devTextScale = prevOn, prevScale
+		readingPaneWidthSeen, readingPageSettle = prevSeen, prevSettle
+	})
+	readingPageSettle = time.Hour // the pane's width reports below must not re-push
+	readingCanvasWidth = 0        // no pane has laid out: the slot's width stands in
 	devTextScaleStripOn, devTextScale, readingPaneWidth = true, 0, 0
 
 	st := sampleState()
@@ -94,6 +101,21 @@ func TestTheTextSizeSliderMovesThePaneLive(t *testing.T) {
 		t.Errorf("the page did not switch when the measure stopped fitting: %s", numbers.Text)
 	}
 
+	// A native pane's report is the width the numbers use, and a new one
+	// refreshes them without the slider moving.
+	noteReadingPaneWidth(700, func() {})
+	if !strings.Contains(numbers.Text, "pane 700: phone page") {
+		t.Errorf("the numbers did not follow the pane's reported width: %s", numbers.Text)
+	}
+
+	// The canvas pane's own width, which is narrower than the slot by the
+	// padding around it, is the width the numbers use there.
+	readingPaneWidth = 0
+	noteCanvasPaneWidth(597)
+	if !strings.Contains(numbers.Text, "pane 597: phone page") {
+		t.Errorf("the numbers did not follow the canvas pane's own width: %s", numbers.Text)
+	}
+
 	test.Tap(setting)
 	wait("handing the size back")
 	if devTextScale != 0 || readingTextScale() != 1.0 || math.Abs(slider.Value-1.0) > 1e-9 {
@@ -115,5 +137,31 @@ func TestTheTextSizeSeed(t *testing.T) {
 		if on, scale := devTextScaleSeed(tc.in); on != tc.on || scale != tc.scale {
 			t.Errorf("seed %q = %v, %v; want %v, %v", tc.in, on, scale, tc.on, tc.scale)
 		}
+	}
+}
+
+// The strip must not widen the window. Its numbers are one long line; set on
+// one line they made the reading slot at least ~990 units wide, and a desktop
+// window is never narrower than its content, so the pane could never be narrow
+// enough for the phone page. They wrap.
+func TestTheTextSizeStripDoesNotWidenTheWindow(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	app.Settings().SetTheme(&bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()})
+	prevOn, prevScale, prevSeen := devTextScaleStripOn, devTextScale, readingPaneWidthSeen
+	t.Cleanup(func() { devTextScaleStripOn, devTextScale, readingPaneWidthSeen = prevOn, prevScale, prevSeen })
+
+	st := sampleState()
+	devTextScaleStripOn = false
+	off := buildCompactUI(st).MinSize().Width
+	devTextScaleStripOn = true
+	on := buildCompactUI(st).MinSize().Width
+	if on > off+1 {
+		t.Errorf("the strip widens the window's least width from %.0f to %.0f", off, on)
+	}
+	// And the strip alone fits a phone held upright.
+	pane := widget.NewLabel("the pane")
+	if w := devTextScaleStrip(st, pane).MinSize().Width; w > 360 {
+		t.Errorf("the strip needs %.0f units, more than a phone's width", w)
 	}
 }

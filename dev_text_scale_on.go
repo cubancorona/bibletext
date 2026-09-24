@@ -70,6 +70,7 @@ func devTextScaleStrip(state *AppState, pane fyne.CanvasObject) fyne.CanvasObjec
 	}
 	numbers := widget.NewLabel("")
 	numbers.TextStyle = fyne.TextStyle{Monospace: true}
+	numbers.Wrapping = fyne.TextWrapWord // a phone's width holds half the line
 	show := func() { numbers.SetText(devTextScaleNumbers(float64(pane.Size().Width))) }
 
 	rerender := func() {
@@ -106,8 +107,10 @@ func devTextScaleStrip(state *AppState, pane fyne.CanvasObject) fyne.CanvasObjec
 	})
 	show()
 	// The numbers are figured from the pane's width, which it has only once
-	// laid out; ask again when it has.
+	// laid out: ask again when it has, and whenever a native pane reports a
+	// new one (a rotation reports several on its way to the last).
 	time.AfterFunc(150*time.Millisecond, func() { fyne.Do(show) })
+	readingPaneWidthSeen = show
 
 	// The app's theme sets the input border to zero (theme.go), and a Fyne
 	// slider draws its track two borders tall, so the track is given one here.
@@ -130,10 +133,15 @@ func (t devSliderTheme) Size(n fyne.ThemeSizeName) float32 {
 }
 
 // devTextScaleNumbers is the spec's arithmetic at the slider's size, for the
-// pane's width: what the page will be, and where it switches.
+// width the pane lays its page out at: what the page will be, and where it
+// switches. That width is a native pane's own report, or the canvas pane's own
+// width; the reading slot's (paneWidth) only until either has one.
 func devTextScaleNumbers(paneWidth float64) string {
-	if readingPaneWidth > 0 {
-		paneWidth = readingPaneWidth // a native pane's own report is the width it uses
+	switch {
+	case readingPaneWidth > 0:
+		paneWidth = readingPaneWidth
+	case readingCanvasWidth > 0:
+		paneWidth = readingCanvasWidth
 	}
 	ref := readingReferencePx()
 	page := readingPageAt(paneWidth, ref)

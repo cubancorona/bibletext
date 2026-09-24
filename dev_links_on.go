@@ -448,6 +448,7 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 		devTextScaleStripOn = b
 		if !b {
 			devTextScale = 0
+			readingPaneWidthSeen = nil // no strip is listening any more
 		}
 		rebuildWindow(state)
 	}

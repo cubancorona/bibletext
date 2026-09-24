@@ -39,6 +39,29 @@ var (
 	readingPageTimer       *time.Timer
 )
 
+// readingPaneWidthSeen is told of each new width a reading pane lays its page
+// out at — a native pane's report, or the Windows and Linux pane's own width —
+// so a dev build's text-size slider can say what the pane is using
+// (dev_text_scale_on.go). Nil otherwise.
+var readingPaneWidthSeen func()
+
+// readingCanvasWidth is the width the Windows and Linux pane last laid its page
+// out at. That pane chooses its page itself and needs nothing kept; this is
+// only so the slider's numbers name the width the pane used rather than the
+// reading slot's, which is wider by the padding around the pane.
+var readingCanvasWidth float64
+
+// noteCanvasPaneWidth records the width the canvas pane laid out at.
+func noteCanvasPaneWidth(width float64) {
+	if width <= 0 || width == readingCanvasWidth {
+		return
+	}
+	readingCanvasWidth = width
+	if readingPaneWidthSeen != nil {
+		readingPaneWidthSeen()
+	}
+}
+
 // readingPageSettle is how long a new width must hold before a change of page
 // re-pushes the chapter — long enough that a window being dragged across the
 // switch does not re-import it on every frame, short enough to read as the
@@ -143,6 +166,9 @@ func noteReadingPaneWidth(width float64, repush func()) {
 		return
 	}
 	readingPaneWidth = width
+	if readingPaneWidthSeen != nil {
+		readingPaneWidthSeen()
+	}
 	if readingPageTimer != nil {
 		readingPageTimer.Stop()
 	}

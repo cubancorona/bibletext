@@ -295,6 +295,7 @@ func (p *styledReadingPane) relayout(width float32) {
 	// while the glyphs inside it grow is what keeps the line's character count.
 	page := readingPageAt(float64(width), float64(p.referenceSize()))
 	p.page = page
+	noteCanvasPaneWidth(float64(width))
 	avail := float32(page.Measure)
 	if avail < 80 {
 		avail = 80

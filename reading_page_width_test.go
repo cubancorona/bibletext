@@ -4,6 +4,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/test"
 )
 
 // The native panes choose their page from the width they report
@@ -65,7 +68,9 @@ func saveReadingPaneWidth(t *testing.T) {
 	prevSettle, prevRun, prevW, prevWin := readingPageSettle, readingPageRun, readingPaneWidth, readingPaneWindow
 	prevPushed, prevValid, prevEst := readingPagePushed, readingPagePushedValid, readingWindowWidth
 	prevUnsized, prevOverride, prevCold, prevUnit := readingUnsizedPage, readingPageOverride, readingColdWidth, readingPaneUnit
+	prevCanvas := readingCanvasWidth
 	t.Cleanup(func() {
+		readingCanvasWidth = prevCanvas
 		readingPageSettle, readingPageRun, readingPaneWidth, readingPaneWindow = prevSettle, prevRun, prevW, prevWin
 		readingPagePushed, readingPagePushedValid, readingWindowWidth = prevPushed, prevValid, prevEst
 		readingUnsizedPage, readingPageOverride, readingColdWidth, readingPaneUnit = prevUnsized, prevOverride, prevCold, prevUnit
@@ -270,5 +275,29 @@ func TestAndroidPaneTakesItsPageFromTheSpec(t *testing.T) {
 		if !strings.Contains(listener, want) {
 			t.Errorf("BtBridge.java: the content width listener does not %q", want)
 		}
+	}
+}
+
+// The canvas pane records the width it lays its page out at, and says so —
+// what a dev build's text-size slider reads to name the pane's width and page.
+func TestTheCanvasPaneRecordsTheWidthItLaysOutAt(t *testing.T) {
+	saveReadingPaneWidth(t)
+	prevSeen := readingPaneWidthSeen
+	t.Cleanup(func() { readingPaneWidthSeen = prevSeen })
+	readingCanvasWidth = 0
+	seen := 0
+	readingPaneWidthSeen = func() { seen++ }
+
+	app := test.NewApp()
+	defer app.Quit()
+	st := sampleState()
+	pane := newStyledReadingPane(st, st.Bible.GetChapter(st.CurrentBook, st.CurrentChapter))
+	pane.Resize(fyne.NewSize(700, 600))
+	pane.Refresh()
+	if readingCanvasWidth != 700 {
+		t.Errorf("the canvas pane laid out at 700 and recorded %v", readingCanvasWidth)
+	}
+	if seen == 0 {
+		t.Error("the canvas pane's new width was not announced")
 	}
 }

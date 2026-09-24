@@ -17,6 +17,9 @@ func TestReleaseBuildsHaveNoTextSizeSlider(t *testing.T) {
 	if devTextScaleStrip(&AppState{}, nil) != nil {
 		t.Fatal("a release build puts a text-size slider on the Read tab")
 	}
+	if readingPaneWidthSeen != nil {
+		t.Fatal("a release build listens for the pane's width reports")
+	}
 }
 
 // The chapter's fingerprint folds the scale the page is set at, not the
