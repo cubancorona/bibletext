@@ -25,6 +25,7 @@ package main
 // have moved nothing on this surface either.
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -76,8 +77,11 @@ func TestSiteUsesTheAppsTintClass(t *testing.T) {
 	}
 
 	css := readerCSS(webFonts{uiRegular: "x.woff2", uiBold: "y.woff2", scriptureRegular: "s.woff2", scriptureBold: "sb.woff2"})
-	if !strings.Contains(css, ".v:target,.v."+cls+"{") {
-		t.Errorf("reader.css does not style the app's tint class %q — a highlighted range would render unlit", cls)
+	// The rule that PAINTS the class — its selector list may name the rest of
+	// the band after it, but it must carry the highlight's colour.
+	paint := regexp.MustCompile(`\.v:target,\.v\.` + regexp.QuoteMeta(cls) + `[,{][^}]*background:var\(--verse-hl\)`)
+	if !paint.MatchString(css) {
+		t.Errorf("reader.css does not paint the app's tint class %q — a highlighted range would render unlit", cls)
 	}
 
 	// The JS adds and removes it by name. Both directions matter: a mismatch on
