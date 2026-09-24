@@ -14,8 +14,6 @@ func phoneLandscapeNavRail() bool { return false }
 // No phone, no landscape reading mode (phone_landscape.go).
 func phoneLandscapeReadingSupported() bool { return false }
 
-var phoneLandscapeTypographySupported = func() bool { return false }
-
 func rotationRestoreNeeded() bool { return false }
 
 // layoutMayChange gates installing the layoutWatcher; moot off mobile.

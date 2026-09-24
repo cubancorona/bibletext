@@ -29,13 +29,12 @@ func deviceIsTablet() bool {
 // phone_landscape.go); only iPad uses the rail.
 func phoneLandscapeNavRail() bool { return false }
 
-// The iPhone reads like the iPad in landscape (phone_landscape.go), with the
-// reporter typography — the Apple HTML dialect sets it — and a Go-side anchor
-// captured before the rotation's frame lands, because the re-import under the
-// new grammar would otherwise land the reader elsewhere.
+// The iPhone reads like the iPad in landscape (phone_landscape.go) — on the
+// book page too, because a landscape iPhone's pane is wide enough for it
+// (reading_page.go) — with a Go-side anchor captured before the rotation's
+// frame lands, because the re-import under the new grammar would otherwise
+// land the reader elsewhere.
 func phoneLandscapeReadingSupported() bool { return true }
-
-var phoneLandscapeTypographySupported = func() bool { return true }
 
 func rotationRestoreNeeded() bool { return true }
 

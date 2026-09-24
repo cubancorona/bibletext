@@ -19,6 +19,7 @@ extern void btaScrolled(float frac);
 extern void btaReadAlongUserScrolled(void);
 extern void btaReadAlongFollowTapped(void);
 extern void btaKeyboardChanged(float overlapDp);
+extern void btaReadingWidthChanged(float widthDp);
 extern void btaNoteNextTapped(void);
 extern void btaNoteHidden(void);
 extern void btaNoteDeleted(void);
@@ -52,6 +53,12 @@ Java_org_bibletext_BtBridge_nativeReadAlongFollowTapped(JNIEnv *env, jclass claz
 JNIEXPORT void JNICALL
 Java_org_bibletext_BtBridge_nativeKeyboardChanged(JNIEnv *env, jclass clazz, jfloat overlapDp) {
 	btaKeyboardChanged((float)overlapDp);
+}
+
+// The overlay's content width in dp, on every change (reading_page_width.go).
+JNIEXPORT void JNICALL
+Java_org_bibletext_BtBridge_nativeReadingWidthChanged(JNIEnv *env, jclass clazz, jfloat widthDp) {
+	btaReadingWidthChanged((float)widthDp);
 }
 
 // The full-screen note sticker supports next-tap on the count region, Hide,

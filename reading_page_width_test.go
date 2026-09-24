@@ -11,12 +11,7 @@ import (
 // chapter once, and a drag that crosses the switch and comes back re-pushes
 // nothing.
 func TestReadingPaneWidthRePushesOnceAcrossTheSwitch(t *testing.T) {
-	prevSettle, prevRun, prevW := readingPageSettle, readingPageRun, readingPaneWidth
-	prevPushed, prevValid := readingPagePushed, readingPagePushedValid
-	t.Cleanup(func() {
-		readingPageSettle, readingPageRun, readingPaneWidth = prevSettle, prevRun, prevW
-		readingPagePushed, readingPagePushedValid = prevPushed, prevValid
-	})
+	saveReadingPaneWidth(t)
 	readingPageSettle = 20 * time.Millisecond
 	fired := make(chan struct{}, 8)
 	readingPageRun = func(f func()) { f(); fired <- struct{}{} }
@@ -65,10 +60,61 @@ func TestReadingPaneWidthRePushesOnceAcrossTheSwitch(t *testing.T) {
 	}
 }
 
+// saveReadingPaneWidth restores the width feed's state when the test ends.
+func saveReadingPaneWidth(t *testing.T) {
+	prevSettle, prevRun, prevW, prevWin := readingPageSettle, readingPageRun, readingPaneWidth, readingPaneWindow
+	prevPushed, prevValid, prevEst := readingPagePushed, readingPagePushedValid, readingWindowWidth
+	t.Cleanup(func() {
+		readingPageSettle, readingPageRun, readingPaneWidth, readingPaneWindow = prevSettle, prevRun, prevW, prevWin
+		readingPagePushed, readingPagePushedValid, readingWindowWidth = prevPushed, prevValid, prevEst
+	})
+}
+
+// A rotation pushes the chapter into the new pane before the pane has
+// reported, so the page is chosen from the last report moved by what the window
+// has moved since — the rotated phone's first push is already the book page,
+// and its own report, when it comes, changes nothing.
+func TestReadingPaneWidthFollowsTheWindowUntilThePaneReports(t *testing.T) {
+	saveReadingPaneWidth(t)
+	readingPageSettle = time.Hour // no re-push fires inside this test
+	window := 402.0
+	readingWindowWidth = func() float64 { return window }
+	readingPaneWidth, readingPaneWindow = 0, 0
+
+	if got := readingPaneWidthNow(); got != 402 {
+		t.Fatalf("before any report the window is the estimate: got %v", got)
+	}
+	// Portrait: the pane reports its width, a rail's worth narrower.
+	noteReadingPaneWidth(372, func() {})
+	if currentReadingPage().Book() {
+		t.Fatal("a 372-wide pane took the book page")
+	}
+	// Landscape: the window has turned, the pane has not reported yet.
+	window = 874
+	if got := readingPaneWidthNow(); got != 844 {
+		t.Fatalf("after the rotation the estimate is %v, want the report moved by the window's change (844)", got)
+	}
+	if !currentReadingPage().Book() {
+		t.Fatal("the rotated pane's first push is not the book page")
+	}
+	// The report lands: it is the width from now on.
+	noteReadingPaneWidth(750, func() {})
+	if got := readingPaneWidthNow(); got != 750 {
+		t.Fatalf("after the report the width is %v, want the report (750)", got)
+	}
+	// A platform with no window estimate (the Mac) reads its report as it stands.
+	readingWindowWidth = func() float64 { return 0 }
+	readingPaneWidth, readingPaneWindow = 0, 0
+	noteReadingPaneWidth(640, func() {})
+	if got := readingPaneWidthNow(); got != 640 {
+		t.Fatalf("with no window estimate the width is %v, want the report (640)", got)
+	}
+}
+
 // No surface chooses its page by device, idiom or orientation: each asks the
 // spec, from its width.
 func TestNoSurfaceChoosesThePageByDevice(t *testing.T) {
-	for _, path := range []string{"reporter_ios.go", "reporter_macos.go"} {
+	for _, path := range []string{"reporter_ios.go", "reporter_macos.go", "reporter_android.go"} {
 		src := readNativeSource(t, path)
 		i := strings.Index(src, "func reporterLayoutActive() bool")
 		if i < 0 {
@@ -123,5 +169,40 @@ func TestApplePanesTakeTheirPageFromTheSpec(t *testing.T) {
 	}
 	if !strings.Contains(nativeFunctionSource(t, "reading_ios.go", "func setFrameFromObject(h *nativeReadingHost) {"), "noteReadingPaneWidth(") {
 		t.Error("the iOS frame push does not report the pane's width")
+	}
+}
+
+// The Android pane takes its page from the spec by the same moves: the push
+// reads the page and reports it, the side padding is the spec's minimum, the
+// pitch and the book page's measure are the page's, and the bridge reports the
+// overlay's width in dp on every change.
+func TestAndroidPaneTakesItsPageFromTheSpec(t *testing.T) {
+	push := nativeFunctionSource(t, "reading_android.go", "func pushChapterHTML(state *AppState, verses []Verse) {")
+	for _, want := range []string{"page := currentReadingPage()", "markReadingPagePushed(page.Kind)",
+		"padL, padT := int(readingPageSideMin), 14", "C.float(page.PitchEm)", "measureDp = float32(page.Measure)"} {
+		if !strings.Contains(push, want) {
+			t.Errorf("reading_android.go: the page push does not read %q", want)
+		}
+	}
+	if strings.Contains(push, "padL, padT := 10") {
+		t.Error("reading_android.go: the push still carries the 10dp side padding")
+	}
+	export := nativeFunctionSource(t, "reading_android_export.go", "func btaReadingWidthChanged(widthDp C.float) {")
+	for _, want := range []string{"noteReadingPaneWidth(w,", "refreshReadingOnly()", "readingPaneUnit = k"} {
+		if !strings.Contains(export, want) {
+			t.Errorf("reading_android_export.go: the width report does not %q", want)
+		}
+	}
+	java := readNativeSource(t, "android/BtBridge.java")
+	i := strings.Index(java, "content.addOnLayoutChangeListener(")
+	if i < 0 {
+		t.Fatal("BtBridge.java: no content layout listener")
+	}
+	listener := java[i:]
+	listener = listener[:strings.Index(listener, "scroll.addView(content")]
+	for _, want := range []string{"if ((r - l) != (orr - ol))", "nativeReadingWidthChanged((r - l) / density)"} {
+		if !strings.Contains(listener, want) {
+			t.Errorf("BtBridge.java: the content width listener does not %q", want)
+		}
 	}
 }

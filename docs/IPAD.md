@@ -31,7 +31,7 @@ smallest-dimension convention in `device_android.go`. Android phones also use
 the rail in landscape so fixed-height chrome cannot consume the short reading
 edge; this Android-specific policy does not change iPhone navigation. On the
 Read tab both phone platforms go further and drop the navigation altogether in
-landscape, reading full-screen (iPhone with the reporter typography below);
+landscape, reading full-screen, on the book page when the width allows it;
 the entry in [BACKLOG.md](BACKLOG.md) records the mode's state.
 
 The former `buildRegularWidthUI`, sidebar toggle, 700pt split threshold, and

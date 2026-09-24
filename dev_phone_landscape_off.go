@@ -13,5 +13,3 @@ package bibletext
 func devPhoneLandscapeSeedOn() bool { return false }
 
 func devPhoneLandscapeSeedOff() bool { return false }
-
-func devPhoneLandscapeSeedTypography() bool { return false }

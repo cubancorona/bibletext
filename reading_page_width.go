@@ -1,6 +1,7 @@
 package bibletext
 
 import (
+	"math"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -25,6 +26,13 @@ var (
 	// readingPaneWidth is the width, in the surface's unit, that a native pane
 	// last reported for its text; 0 until one has.
 	readingPaneWidth float64
+	// readingPaneWindow is the window's width (readingWindowWidth) when the
+	// pane last reported; 0 where the platform gives no window estimate.
+	readingPaneWindow float64
+	// readingPaneUnit is the pane's unit per window unit: 1 where the pane
+	// reports in the window's own unit (iOS), the ratio of dp to Fyne's unit
+	// on Android, measured from the host each time the bridge reports.
+	readingPaneUnit = 1.0
 	// readingPagePushed is the page the last chapter push was made at.
 	readingPagePushed      readingPageKind
 	readingPagePushedValid bool
@@ -63,12 +71,25 @@ func widestWindowWidth() float64 {
 	return float64(best)
 }
 
-// readingPaneWidthNow is the width to choose a page from now.
+// readingPaneWidthNow is the width to choose a page from now: the pane's last
+// report, moved by as much as the window has moved since. A rotation or a
+// split-screen change rebuilds the window, and the chapter is pushed into the
+// new pane before that pane has been laid out; its last report is the OLD
+// orientation's, and read as it stands would push the old page and correct it
+// a moment later with a second import. The window has its new size by then,
+// and the pane's width changes by what the window's did — exactly so with a
+// sidebar or rail of fixed width beside it — converted to the pane's unit
+// (readingPaneUnit). The pane's own report follows and settles it.
 func readingPaneWidthNow() float64 {
-	if readingPaneWidth > 0 {
-		return readingPaneWidth
+	if readingPaneWidth <= 0 {
+		return readingWindowWidth()
 	}
-	return readingWindowWidth()
+	if readingPaneWindow > 0 {
+		if w := readingWindowWidth(); w > 0 && w != readingPaneWindow {
+			return math.Max(1, readingPaneWidth+(w-readingPaneWindow)*readingPaneUnit)
+		}
+	}
+	return readingPaneWidth
 }
 
 // currentReadingPage is the page a native push is made at now. reporterLayout
@@ -88,7 +109,11 @@ func markReadingPagePushed(k readingPageKind) {
 // later width re-arms the wait, and the page is asked again when it fires, so a
 // drag that crosses the switch and comes back re-pushes nothing.
 func noteReadingPaneWidth(width float64, repush func()) {
-	if width <= 0 || width == readingPaneWidth {
+	if width <= 0 {
+		return
+	}
+	readingPaneWindow = readingWindowWidth()
+	if width == readingPaneWidth {
 		return
 	}
 	readingPaneWidth = width

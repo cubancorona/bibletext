@@ -166,6 +166,33 @@ func btaNoteAction(verb, key int) {
 	})
 }
 
+// btaReadingWidthChanged is the overlay's content width, in dp, reported by
+// BtBridge's content layout listener whenever it changes — the width the
+// reading page is chosen from (reading_page_width.go). It is reported from the
+// view rather than computed from the Fyne frame because the page's measure is
+// in dp and the Fyne unit is not one: the mobile driver buckets its scale by
+// dpi, a dp is continuous. The host's Fyne width at the same moment gives the
+// ratio between the two, which the rotation estimate needs.
+//
+//export btaReadingWidthChanged
+func btaReadingWidthChanged(widthDp C.float) {
+	w := float64(widthDp)
+	fyne.Do(func() {
+		if h := currentHost; h != nil {
+			if fw := float64(h.Size().Width); fw > 0 {
+				if k := w / fw; k > 0.25 && k < 4 {
+					readingPaneUnit = k
+				}
+			}
+		}
+		noteReadingPaneWidth(w, func() {
+			if h := currentHost; h != nil && h.state != nil {
+				h.state.refreshReadingOnly()
+			}
+		})
+	})
+}
+
 // btaKeyboardChanged is the Android twin of iOS's bibleTextKeyboardChanged:
 // the soft keyboard's live on-screen overlap, observed on the activity window by
 // BtBridge.installKeyboardWatcher. It feeds the goto picker's verse-row lift

@@ -449,16 +449,16 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
 - [ ] The bottom bar is a centred pill on wide surfaces; dev builds' 4th
       tab still fits; full-screen reading looks like a phone everywhere.
 - [ ] Phone landscape reading (on by default on iPhone and Android phones;
-      the dev Links tab's two "Landscape …" switches turn either half off,
-      and `BIBLETEXT_DEV_PHONE_LANDSCAPE=on|typo|off scripts/run-ios-sim.sh
-      --dev` seeds a scripted run): on the Read tab, rotate mid-chapter → the reading pane
+      the dev Links tab's "Landscape reading mode" switch turns it off, and
+      `BIBLETEXT_DEV_PHONE_LANDSCAPE=on|off scripts/run-ios-sim.sh --dev`
+      seeds a scripted run): on the Read tab, rotate mid-chapter → the reading pane
       alone, no header, toolbar or bar, the muted "Book Chapter" label with
       the chapter arrows and NO restore button — an arrow turns the page in
       place, opens the new chapter at the top, and greys out at the ends of
       the book; the text starts clear of the Dynamic Island in both
-      landscapes and ends clear of the far edge; with typography on, the
-      centred column with indents and no paragraph gaps (the LEADING is
-      unchanged on purpose — it is measured to match, not nominal). The
+      landscapes and ends clear of the far edge; the book page, because the
+      width allows it (reading_page.go) — the centred column with indents
+      and no paragraph gaps, at the same leading as portrait. The
       verse under the top edge is the same verse after the rotation, both
       directions, with a selection live (the selection drops — the
       re-import replaces the string; it must not strand a menu) and with

@@ -1,9 +1,9 @@
 package bibletext
 
-// THE PHONE-LANDSCAPE GATES: preferences on by default in every build, a
-// switch turns the presentation off and takes the typography half with it,
-// the typography half is ANDed with the pane's reporter support, and a
-// decision that answers only for a sized landscape canvas on a phone.
+// THE PHONE-LANDSCAPE GATE: a preference on by default in every build that a
+// switch turns off, and a decision that answers only for a sized landscape
+// canvas on a phone. The page is not the mode's: it is the width's
+// (reading_page.go).
 
 import (
 	"testing"
@@ -31,9 +31,7 @@ func TestPhoneLandscapeReadingWanted(t *testing.T) {
 	}
 }
 
-// The gates are preferences, on by default, that a switch can turn off; the
-// typography half is read as AND with the presentation and with the pane's
-// support for the reporter page (none on the host).
+// The gate is a preference, on by default, that a switch can turn off.
 func TestPhoneLandscapeGatesDefaultOnAndSwitchOff(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -41,12 +39,9 @@ func TestPhoneLandscapeGatesDefaultOnAndSwitchOff(t *testing.T) {
 	if !phoneLandscapeReadingEnabled() {
 		t.Fatal("the presentation gate is off by default")
 	}
-	if phoneLandscapeTypographyEnabled() != (phoneLandscapeReadingEnabled() && phoneLandscapeTypographySupported()) {
-		t.Fatal("the typography gate does not follow the presentation and the pane's support")
-	}
 	setPhoneLandscapeReadingEnabled(false)
-	if phoneLandscapeReadingEnabled() || phoneLandscapeTypographyEnabled() {
-		t.Fatal("turning the presentation off left a half on")
+	if phoneLandscapeReadingEnabled() {
+		t.Fatal("turning the presentation off left it on")
 	}
 	setPhoneLandscapeReadingEnabled(true)
 	if !phoneLandscapeReadingEnabled() {
@@ -55,23 +50,6 @@ func TestPhoneLandscapeGatesDefaultOnAndSwitchOff(t *testing.T) {
 	// The host is not a phone: the live decision is off whatever the gates say.
 	if phoneLandscapeReadingActive() {
 		t.Fatal("phoneLandscapeReadingActive() answered true on the host")
-	}
-}
-
-// The typography default is on where a pane supports the reporter page: the
-// host answers no support, so the seam stands in for iOS here.
-func TestPhoneLandscapeTypographyDefaultsOnWhereSupported(t *testing.T) {
-	app := test.NewApp()
-	defer app.Quit()
-	orig := phoneLandscapeTypographySupported
-	phoneLandscapeTypographySupported = func() bool { return true }
-	defer func() { phoneLandscapeTypographySupported = orig }()
-	if !phoneLandscapeTypographyEnabled() {
-		t.Fatal("with the pane's support the typography half is off by default")
-	}
-	setPhoneLandscapeTypographyEnabled(false)
-	if phoneLandscapeTypographyEnabled() {
-		t.Fatal("the typography preference does not turn the half off")
 	}
 }
 

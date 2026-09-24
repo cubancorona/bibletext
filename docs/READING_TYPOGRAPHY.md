@@ -222,8 +222,25 @@ This list is kept current as each surface is brought to the spec.
   Both place the ink at the spec's side minimum (the inset is the ink side less
   the container's line-fragment padding), so the book page's ink line is the
   measure itself — it was 10pt short.
-- **Android, web** — their page choice and the rest of the size table are to be
-  brought to the rule.
+- **Android** — chooses its page by width since 24 September 2026: the bridge
+  reports the overlay's content width in dp (`btaReadingWidthChanged`), the
+  side padding is the spec's 15 (was 10), and the pitch and measure are the
+  page's. It had the book page only on a phone in landscape, behind a
+  typography switch of its own, and never on a tablet; the switch is retired.
+  A rotation pushes the right page first time: until the rotated pane reports,
+  its last width moved by the window's change stands in
+  (`readingPaneWidthNow`), which the emulator showed landing within 60dp of
+  the real width both ways, one import per rotation. **One difference,
+  flagged:** Android centres the book page on the WINDOW (so a landscape
+  phone's column clears the camera cutout evenly); on a tablet with the side
+  rail that sets the column about half the rail's width left of the pane's
+  centre, where the iPad centres on its pane. The numeral, gap-mark and
+  footnote sizes are still Android's own (`<sup><small>`, 0.8).
+- **Web** — its page choice and the size table are to be brought to the rule.
+
+A dev build can force either page on any width: `BIBLETEXT_DEV_READING_PAGE=
+book|phone` at launch, or the Links tab's "Reading page" choice while the app
+runs (`dev_reading_page_on.go`). "By width" hands the choice back to the rule.
 
 ## Vertical spacing of the reading pane
 

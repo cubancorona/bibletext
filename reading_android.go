@@ -795,14 +795,20 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// overlay still draws in the platform serif, which needs no correction and
 	// would simply come out 15% too large (reading_face_scale.go).
 	referenceDp := float32(readingReferencePx())
-	padL, padT := 10, 14
-	// The reporter column, as a WIDTH in dp for the bridge to centre — the
-	// same shape as the iOS push (bibleTextSetReadingMeasure): the measure is
-	// em-based, so a larger text size widens the column and the line keeps the
-	// reporter's ~59 characters. 0 keeps the legacy side padding. The bridge
-	// owns the centring because it owns both the display density and the live
-	// view width (BtBridge.applyReadingPadding).
-	measureDp := androidReadingMeasureDp(reporterLayout(), referenceDp)
+	// THE READING PAGE (reading_page.go), at the width the overlay last
+	// reported. The side padding is the spec's minimum — the phone page's
+	// margin and the floor the bridge centres the book page above — and the
+	// book page's column goes across as a WIDTH in dp for the bridge to centre,
+	// the same shape as the iOS push (bibleTextSetReadingMeasure). 0 is the
+	// phone page. The bridge owns the centring because it owns both the display
+	// density and the live view width (BtBridge.applyReadingPadding).
+	page := currentReadingPage()
+	markReadingPagePushed(page.Kind)
+	padL, padT := int(readingPageSideMin), 14
+	measureDp := float32(0)
+	if page.Book() {
+		measureDp = float32(page.Measure)
+	}
 	arrivalVerse := 0
 	// EXPLICIT arrivals only (the classifier's rule, notes_arrival.go): a
 	// plain entry — the arrows, the picker — must open at the top even when
@@ -854,7 +860,7 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 			// number crosses here and the two agree by construction rather than
 			// by a screenshot taken once. The Java side keeps its own legacy
 			// value for the older fleet that never got the shipped face.
-			C.float(referenceDp), C.float(readingLinePitchEm),
+			C.float(referenceDp), C.float(page.PitchEm),
 			C.int(padL), C.int(padT), C.int(padL), C.int(padT),
 			C.float(measureDp), C.float(readingOpticalScale()))
 		ch := C.CString(html)

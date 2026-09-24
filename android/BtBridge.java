@@ -678,6 +678,11 @@ public final class BtBridge {
     // layoutWatcher thrashes the whole window mid-keystroke (reviewed, reverted
     // 2026-08-11). This feed touches nothing but a number.
     private static native void nativeKeyboardChanged(float overlapPx);
+    // Called on the UI thread with the overlay's content width in dp whenever
+    // it changes: the width the Go side chooses the reading page from
+    // (reading_page.go). A page that changes comes back as a new setStyle and
+    // setHtml, which is the only way the paragraph grammar can change.
+    private static native void nativeReadingWidthChanged(float widthDp);
     // Called on the UI thread when the reader scrolls by hand during read-along
     // (suspends follow) and when they tap the "Follow narration" pill (resumes it).
     private static native void nativeReadAlongUserScrolled();
@@ -1242,6 +1247,12 @@ public final class BtBridge {
             @Override public void onLayoutChange(View v, int l, int t, int r, int b,
                     int ol, int ot, int orr, int ob) {
                 if ((r - l) != (orr - ol)) {
+                    // The reading page is chosen from this width, on the Go
+                    // side; a change of page re-pushes the chapter.
+                    if (r > l && activity != null) {
+                        float density = activity.getResources().getDisplayMetrics().density;
+                        if (density > 0f) nativeReadingWidthChanged((r - l) / density);
+                    }
                     // The reporter column is centred against this width, so it
                     // is re-derived here too — the same first-layout and
                     // rotation cases the sticker needs.

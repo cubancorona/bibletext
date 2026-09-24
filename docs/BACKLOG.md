@@ -1582,7 +1582,10 @@ dropping cleanly, Books and Search keeping their layout in landscape.
 Emulator-verified on Android 13 (API 33) and Android 15 (API 35): the Read
 tab's landscape presentation with the position kept across both rotations, a
 link's verse wash surviving them, and the Books tab keeping its rail.
-`BIBLETEXT_DEV_PHONE_LANDSCAPE=on|typo|off` seeds a scripted simulator run.
+`BIBLETEXT_DEV_PHONE_LANDSCAPE=on|off` seeds a scripted simulator run. The
+mode's typography half was retired on 24 September 2026: the page is chosen by
+width on every surface now (docs/READING_TYPOGRAPHY.md, "The reading page"),
+and a landscape phone reads the book page because its pane is wide enough.
 
 ## Android landscape: the status-bar strip is black in the light theme — DONE
 

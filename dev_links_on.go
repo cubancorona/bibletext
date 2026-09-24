@@ -409,34 +409,35 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 	})
 	pillMode.SetChecked(notesPillPerParagraph)
 
-	// The two phone-landscape gates (phone_landscape.go). Each flip rebuilds
-	// the window, which is what re-reads layoutMayChange and the reporter
-	// gate. Checked state is set before the handlers are attached, so wiring
-	// them up does not fire a rebuild.
+	// The phone-landscape presentation (phone_landscape.go). The flip rebuilds
+	// the window, which is what re-reads layoutMayChange. Checked state is set
+	// before the handler is attached, so wiring it up does not fire a rebuild.
 	landscapeMode := widget.NewCheck("Landscape reading mode (phones)", nil)
-	landscapeTypo := widget.NewCheck("Landscape reporter typography (phones)", nil)
 	landscapeMode.SetChecked(phoneLandscapeReadingEnabled())
-	landscapeTypo.SetChecked(phoneLandscapeTypographyEnabled())
-	if !phoneLandscapeTypographySupported() {
-		// The box reads the EFFECTIVE gate, which ANDs the pane's support, so
-		// on a pane that cannot set the reporter page it shows off; a tap would
-		// write the preference and rebuild to no visible effect. Both phone
-		// panes support it today (reporter_ios.go, reporter_android.go); this
-		// is what the desktop dev build sees.
-		landscapeTypo.Disable()
-	}
-	landscapeTypo.OnChanged = func(b bool) {
-		setPhoneLandscapeTypographyEnabled(b)
-		rebuildWindow(state)
-	}
 	landscapeMode.OnChanged = func(b bool) {
-		// The typography half is read as AND, so no cascade is written: the
-		// rebuild recreates this tab and both boxes read the getters again —
-		// off while the mode is off, the stored typography preference (on by
-		// default) when it returns.
 		setPhoneLandscapeReadingEnabled(b)
 		rebuildWindow(state)
 	}
+
+	// The reading page (reading_page.go), forced for a look at either one on a
+	// pane of any width, or chosen by the width as a reader gets it
+	// (dev_reading_page_on.go). The rebuild re-pushes the chapter at the
+	// forced page: the page is part of the chapter's fingerprint.
+	readingPageChoices := []string{"By width", "Book", "Phone"}
+	readingPage := widget.NewSelect(readingPageChoices, nil)
+	switch devReadingPage {
+	case "book":
+		readingPage.SetSelected("Book")
+	case "phone":
+		readingPage.SetSelected("Phone")
+	default:
+		readingPage.SetSelected("By width")
+	}
+	readingPage.OnChanged = func(v string) {
+		devReadingPage = devReadingPageFrom(v)
+		rebuildWindow(state)
+	}
+	readingPageRow := container.NewBorder(nil, nil, widget.NewLabel("Reading page"), nil, readingPage)
 
 	minAll := widget.NewButton("Minimize every stored note", func() {
 		for _, n := range allNotesForBrowsing(appPrefs()) {
@@ -538,7 +539,7 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 
 	head := container.NewVBox(
 		title, blurb,
-		notesSwitch, pillMode, landscapeMode, landscapeTypo, wipe, minAll, seedMine, seedMineNKJV, status,
+		notesSwitch, pillMode, landscapeMode, readingPageRow, wipe, minAll, seedMine, seedMineNKJV, status,
 		widget.NewLabel("Emoji probe (Entry vs Label):"),
 		widget.NewLabel("label 🤏 🥺 🫶 👊 ☕"),
 		emojiProbe,

@@ -3,7 +3,8 @@ package bibletext
 // THE ANDROID REPORTER PAGE, which reaches the reader by three different
 // routes: the first-line indent is markup (android_chapter_html.go), the
 // paragraph gap is closed by the importer's mode (BtBridge.setHtml, COMPACT),
-// and the measure is a width the bridge centres (androidReadingMeasureDp).
+// and the measure is a width the bridge centres (the page's Measure, pushed
+// by reading_android.go).
 // These lock the two halves the host can see, and lock the phone page against
 // picking either up by accident.
 
@@ -130,26 +131,6 @@ func TestAndroidReporterPageIndentsProseAndNotPoetry(t *testing.T) {
 	}
 	if strings.Contains(mixed, "<br>&#xE010;") {
 		t.Errorf("a poem line must not be indented like a paragraph:\n%s", mixed)
-	}
-}
-
-// The measure the bridge is handed: em-based, so it widens with the text size,
-// and zero for the phone page.
-func TestAndroidReadingMeasureDp(t *testing.T) {
-	for _, tc := range []struct {
-		name     string
-		reporter bool
-		textDp   float32
-		want     float32
-	}{
-		{"phone page", false, 21, 0},
-		{"reporter at Normal", true, 21, 27.5 * 21},
-		{"reporter at a larger size", true, 26, 27.5 * 26},
-		{"no text size yet", true, 0, 0},
-	} {
-		if got := androidReadingMeasureDp(tc.reporter, tc.textDp); got != tc.want {
-			t.Errorf("%s: measure = %v, want %v", tc.name, got, tc.want)
-		}
 	}
 }
 
