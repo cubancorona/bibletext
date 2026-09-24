@@ -303,3 +303,59 @@ func TestStyledFootnoteSectionKeysTitleNotes(t *testing.T) {
 		}
 	}
 }
+
+// The section is set as the Apple panes set it (reading_page.go): the whole of
+// it in the muted ink at the footnote size, the verse-number keys in the bold
+// cut, a third of the body under the rule and a fifth between entries. The key
+// was drawn in the verse number's colour in the regular cut, and the air was
+// figured from the section's own line.
+func TestStyledFootnoteSectionIsTheSpecs(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setFootnotesEnabled(true)
+	defer setFootnotesEnabled(false)
+
+	p := newTestPane(t, styledFnState(), 420)
+	if !p.fnGeom.present {
+		t.Fatal("precondition: the fixture has footnotes")
+	}
+	r, ok := test.WidgetRenderer(p).(*styledPaneRenderer)
+	if !ok {
+		t.Fatal("the pane's renderer is not the styled one")
+	}
+	keys := 0
+	for i, ft := range p.fnGeom.texts {
+		txt := r.fnTexts[i]
+		if txt.Color != p.pal.TextMuted {
+			t.Errorf("footnote run %q is not in the muted ink", ft.Text)
+		}
+		if ft.Key {
+			keys++
+			if txt.FontSource == nil || txt.FontSource.Name() != p.headingFace().Name() {
+				t.Errorf("footnote key %q is not in the bold cut", ft.Text)
+			}
+		}
+	}
+	if keys == 0 {
+		t.Fatal("no key was examined — the test proved nothing")
+	}
+
+	body := p.textSize
+	first := p.fnGeom.texts[0]
+	if got, want := first.Y-(p.fnGeom.rule.Y+p.fnGeom.rule.H), body*float32(readingFootnoteRuleGapEm); !nearlyEqual(got, want, 0.01) {
+		t.Errorf("air under the rule %.2f, want %.2f (a third of the body)", got, want)
+	}
+	// The second entry's key starts a fifth of the body below the first
+	// entry's last line.
+	lh := p.textSize * float32(readingFootnoteEm) * float32(p.page.PitchEm)
+	var prevBottom float32
+	for _, ft := range p.fnGeom.texts {
+		if ft.Key && ft.Y > first.Y {
+			if got, want := ft.Y-prevBottom, body*float32(readingFootnoteEntryGapEm); !nearlyEqual(got, want, 0.01) {
+				t.Errorf("air between entries %.2f, want %.2f (a fifth of the body)", got, want)
+			}
+			break
+		}
+		prevBottom = ft.Y + lh
+	}
+}

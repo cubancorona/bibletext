@@ -26,7 +26,7 @@ const styledFnRatio = float32(readingFootnoteEm)
 // or a wrapped note line. Coordinates are section-relative until place().
 type styledFnText struct {
 	Text string
-	Key  bool // verse-number key — drawn in the verse-number colour
+	Key  bool // verse-number key — drawn in the bold cut, in the section's muted ink
 	X, Y float32
 }
 
@@ -45,7 +45,7 @@ type styledFnGeom struct {
 // column width. First lines wrap short of the verse-number key; continuation
 // lines run the full measure, flush left — the slip-opinion page's own
 // grammar.
-func measureStyledFootnotes(entries []footnoteEntry, avail, fnSize, pitchEm float32, meas func(string) float32) styledFnGeom {
+func measureStyledFootnotes(entries []footnoteEntry, avail, fnSize, pitchEm float32, meas func(s string, key bool) float32) styledFnGeom {
 	if len(entries) == 0 || avail <= 0 || fnSize <= 0 {
 		return styledFnGeom{}
 	}
@@ -58,15 +58,19 @@ func measureStyledFootnotes(entries []footnoteEntry, avail, fnSize, pitchEm floa
 	if ruleW > avail {
 		ruleW = avail
 	}
+	// The air is the spec's, in ems of the body (reading_page.go), as the Apple
+	// panes set it: a third of the body under the rule and a fifth between
+	// entries. It was reckoned from this section's own line — 0.6 and 0.25 of it.
+	body := fnSize / float32(readingFootnoteEm)
 	y := float32(0)
 	g.rule = styledNoteRect{X: 0, Y: y, W: ruleW, H: 1}
-	y += 1 + lh*0.6
+	y += 1 + body*float32(readingFootnoteRuleGapEm)
 
 	for _, e := range entries {
 		key := footnoteEntryKey(e) // "Title" for a superscription note
-		keyW := meas(key)
+		keyW := meas(key, true)
 		bodyX := keyW + fnSize*0.35
-		lines := styledFnWrap(e.Text, avail-bodyX, avail, meas)
+		lines := styledFnWrap(e.Text, avail-bodyX, avail, func(s string) float32 { return meas(s, false) })
 		g.texts = append(g.texts, styledFnText{Text: key, Key: true, X: 0, Y: y})
 		for i, ln := range lines {
 			x := bodyX
@@ -79,7 +83,7 @@ func measureStyledFootnotes(entries []footnoteEntry, avail, fnSize, pitchEm floa
 		if len(lines) == 0 {
 			y += lh
 		}
-		y += lh * 0.25 // entry gap
+		y += body * float32(readingFootnoteEntryGapEm)
 	}
 	y += lh * 0.35 // bottom pad
 	g.height = y

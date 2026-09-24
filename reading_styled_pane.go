@@ -439,8 +439,8 @@ func (p *styledReadingPane) relayout(width float32) {
 	// breathing-room line as its air — geometry assigned beside the layout it
 	// belongs to, like the sticker's.
 	fnSize := p.textSize * styledFnRatio
-	p.fnGeom = measureStyledFootnotes(p.fnEntries, avail, fnSize, float32(page.PitchEm), func(s string) float32 {
-		w, _ := fyne.CurrentApp().Driver().RenderedTextSize(s, fnSize, fyne.TextStyle{}, p.faceFor(s, false))
+	p.fnGeom = measureStyledFootnotes(p.fnEntries, avail, fnSize, float32(page.PitchEm), func(s string, key bool) float32 {
+		w, _ := fyne.CurrentApp().Driver().RenderedTextSize(s, fnSize, fyne.TextStyle{}, p.fnFace(s, key))
 		return w.Width
 	})
 	p.fnGeom.place(p.insetX(), p.lay.Height+p.styledLineHeight())
@@ -565,6 +565,15 @@ func styledNumeralText(s string) string {
 		}
 		return r
 	}, s)
+}
+
+// fnFace is the cut a footnote run is set in: a key in the bold cut, a note in
+// the face its text asks for. Measured and drawn through this one place.
+func (p *styledReadingPane) fnFace(text string, key bool) fyne.Resource {
+	if key {
+		return p.headingFace()
+	}
+	return p.faceFor(text, false)
 }
 
 // numeralFace is the cut a verse number is set in.
@@ -844,21 +853,17 @@ func (r *styledPaneRenderer) rebuild() {
 		}
 	}
 	// The footnote section: rule + rows in their own slices. Colours read
-	// here, not in position() — a theme flip arrives as a full rebuild. Keys
-	// take the verse-number colour, bodies the muted tone, both at the
-	// section's 0.85× size in the scripture serif.
+	// here, not in position() — a theme flip arrives as a full rebuild. The
+	// whole section is in the muted tone at 0.85 of the body, keys in the bold
+	// cut, as the Apple stylesheet sets them (p.fn, .fnv).
 	r.fnRule = nil
 	r.fnTexts = r.fnTexts[:0]
 	if p.fnGeom.present {
 		r.fnRule = canvas.NewRectangle(p.pal.TextMuted)
 		r.objects = append(r.objects, r.fnRule)
 		for _, ft := range p.fnGeom.texts {
-			c := p.pal.TextMuted
-			if ft.Key {
-				c = p.pal.VerseNumber
-			}
-			t := canvas.NewText(ft.Text, c)
-			t.FontSource = p.faceFor(ft.Text, false)
+			t := canvas.NewText(ft.Text, p.pal.TextMuted)
+			t.FontSource = p.fnFace(ft.Text, ft.Key)
 			t.TextSize = p.textSize * styledFnRatio
 			r.fnTexts = append(r.fnTexts, t)
 			r.objects = append(r.objects, t)

@@ -202,8 +202,11 @@ This list is kept current as each surface is brought to the spec.
   and side from `readingPageAt` (its own gate sat 24 units lower, with a 12-unit
   inset and a second 7-unit pad beside it), the spec's pitch on both pages and in
   the footnotes (was 1.55, 1.3 and 1.4), and no 760-unit cap on the column (it
-  kept the Extra large book page from ever fitting). Its right edge stays ragged:
-  the pane does not justify.
+  kept the Extra large book page from ever fitting). Its footnote section is set
+  as the Apple panes set theirs: muted throughout, keys in the bold cut, a third
+  of the body under the rule and a fifth between entries (the key was in the
+  verse number's colour and regular, the air a share of the section's line). Its
+  right edge stays ragged: the pane does not justify.
 - **The note card's text** — `noteBodySize` 15 and `noteWhoSize` 11 on every
   native surface since 24 September 2026 (the Mac set 13 and 10, the canvas pane
   the toolkit's 18), held by `TestNoteTextIsTheSpecsOnEverySurface`.
