@@ -104,7 +104,7 @@ func TestReaderCSSTintTokensHaveOneRole(t *testing.T) {
 		t.Fatal("the ambiguous --hl token remains; scripture and control feedback need separate roles")
 	}
 
-	for _, selector := range []string{".v:target", ".v.hl"} {
+	for _, selector := range []string{".v:target", ".v.hl", ".hlgap", ".vg.hlmark"} {
 		assertSelectorUsesToken(t, css, selector, "--verse-hl")
 		assertSelectorDoesNotUseToken(t, css, selector, "--control-hover")
 		assertSelectorDoesNotUseToken(t, css, selector, "--control-selected")

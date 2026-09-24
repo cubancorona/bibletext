@@ -131,6 +131,17 @@ func TestTheChapterPageMarksAnOmittedVerse(t *testing.T) {
 	if other := chapterBody(bd, "web", "Matthew", 17, verses); strings.Contains(other, `class="vg"`) {
 		t.Errorf("an edition without the omission marks one:\n%s", other)
 	}
+	// A mark is washed with the verse after it, as the app panes wash it: the
+	// page's script lights the marks standing before a lit verse, the
+	// stylesheet paints them, and clearing puts them back.
+	for _, want := range []string{"n.classList.contains('vg')", "n.classList.add('hlmark')", "spaces.forEach(wrapGap)", "el.classList.remove('hlmark')"} {
+		if !strings.Contains(readerJSTemplate, want) {
+			t.Errorf("the page's script does not say %q", want)
+		}
+	}
+	if !strings.Contains(testCSS(), ".v:target,.v.hl,.hlgap,.vg.hlmark{background:var(--verse-hl);") {
+		t.Error("the stylesheet does not paint a lit range through a mark")
+	}
 	page := renderChapter(loadedVersion{webVersion: webVersion{ID: "bsb", Name: "Berean Standard Bible"}, bible: bd},
 		nil, "Matthew", "matthew", 17, 16, 18)
 	if !strings.Contains(page, `<div class="wrap page">`) {

@@ -393,9 +393,11 @@ body{
    switch it on a column narrower than the measure. A browser without container
    queries keeps the phone page.
    Every prose paragraph is indented, the first included and the one after a
-   poem, as every app pane indents them; a paragraph that OPENS on a poem line
+   poem, as the app panes indent them; a paragraph that OPENS on a poem line
    takes no indent and no air of its own, because poetry is never first-line
-   indented in print. */
+   indented in print. A paragraph that opens in prose and turns to poetry is
+   indented, as on Android and the Windows and Linux pane; the Apple panes
+   leave it unindented (docs/BACKLOG.md, "The reading page: what is left"). */
 @container page (min-width:__MEASURE_REM__){
   .text{--pgap:0rem; line-height:__BOOK_PITCH__}
   .text p{margin:0; text-indent:__INDENT__}
@@ -448,7 +450,9 @@ body{
    verse's id and :target paints it. reader.js only adds ranges. */
 /* Generous scroll-margin so a deep link lands the verse with the chapter
    heading still on screen, rather than pinning it to the very top edge. */
-.v:target,.v.hl{background:var(--verse-hl); border-radius:3px;
+/* .hlgap and .vg.hlmark are the band BETWEEN two lit verses: the joining space
+   reader.js wraps, and an omitted verse's mark standing in the range. */
+.v:target,.v.hl,.hlgap,.vg.hlmark{background:var(--verse-hl); border-radius:3px;
   box-shadow:0 0 0 .18em var(--verse-hl); scroll-margin-top:6.5rem}
 /* Browsers do NOT re-evaluate :target when history.replaceState drops the
    fragment — the URL loses #v16 but the verse stays lit, so tapping a
@@ -692,32 +696,58 @@ const readerJSTemplate = `
   // is why the fault looked intermittent. Fixed here rather than in the markup so
   // it repairs every page already generated, without regenerating ~3,900 files.
   //
-  // Whitespace-only text nodes only. A <br> between two verses (a poem join) has
-  // no width, so there is nothing to bridge and the band should stop at the line
+  // Whitespace-only text nodes. A <br> between two verses (a poem join) has no
+  // width, so there is nothing to bridge and the band should stop at the line
   // end anyway.
+  //
+  // An omitted verse's mark (.vg) belongs to the verse AFTER it, as the app
+  // panes wash it with that verse's tint (tint.go): a lit verse lights the
+  // marks standing just before it, and the spaces between them.
+  function wrapGap(n) {
+    var s = document.createElement('span');
+    s.className = 'hl hlgap';
+    s.textContent = n.textContent;
+    n.parentNode.replaceChild(s, n);
+  }
+  function blank(n) {
+    return n.nodeType === 3 && n.textContent.length && !n.textContent.trim();
+  }
   function bridgeHighlightGaps() {
     var lit = document.querySelectorAll('.v.hl');
     for (var i = 1; i < lit.length; i++) {
       var n = lit[i - 1].nextSibling;
       while (n && n !== lit[i]) {
         var next = n.nextSibling;
-        if (n.nodeType === 3 && n.textContent.length && !n.textContent.trim()) {
-          var s = document.createElement('span');
-          s.className = 'hl hlgap';
-          s.textContent = n.textContent;
-          n.parentNode.replaceChild(s, n);
-        }
+        if (blank(n)) wrapGap(n);
         n = next;
       }
     }
+    lit.forEach(function (v) {
+      var n = v.previousSibling, spaces = [];
+      while (n) {
+        if (blank(n)) {
+          spaces.push(n);
+        } else if (n.nodeType === 1 && n.classList.contains('vg')) {
+          n.classList.add('hlmark');
+          spaces.forEach(wrapGap);
+          spaces = [];
+        } else {
+          break;
+        }
+        n = n.previousSibling;
+      }
+    });
   }
 
-  // Put the bridged spaces back to plain text. Without this, clearing and
-  // re-highlighting would leave stale .hlgap spans lit between verses that are
-  // no longer highlighted.
+  // Put the bridged spaces back to plain text and the marks back to unlit.
+  // Without this, clearing and re-highlighting would leave stale .hlgap spans
+  // lit between verses that are no longer highlighted.
   function dropHighlightGaps() {
     document.querySelectorAll('.hlgap').forEach(function (el) {
       el.parentNode.replaceChild(document.createTextNode(el.textContent), el);
+    });
+    document.querySelectorAll('.vg.hlmark').forEach(function (el) {
+      el.classList.remove('hlmark');
     });
   }
 
