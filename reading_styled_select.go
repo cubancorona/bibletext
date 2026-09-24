@@ -67,7 +67,12 @@ func (p *styledReadingPane) segTextSize(kind runKind) float32 {
 // segWidth measures segment text with the pane's serif source — the SAME
 // ruler the renderer draws with, so hit-tests always agree with pixels.
 func (p *styledReadingPane) segWidth(text string, kind runKind) float32 {
-	w, _ := fyne.CurrentApp().Driver().RenderedTextSize(text, p.segTextSize(kind), fyne.TextStyle{}, p.faceFor(text, false))
+	face := p.faceFor(text, false)
+	if kind == runVerseNum {
+		// A number is drawn as plain figures in the bold cut; hit-test it so.
+		text, face = styledNumeralText(text), p.numeralFace()
+	}
+	w, _ := fyne.CurrentApp().Driver().RenderedTextSize(text, p.segTextSize(kind), fyne.TextStyle{}, face)
 	return w.Width
 }
 

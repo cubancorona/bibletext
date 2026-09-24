@@ -77,9 +77,9 @@ func readingGlyphPx() float64 {
 	return readingReferencePx() * readingOpticalScale()
 }
 
-// readingGlyphSize applies the same correction to a surface that reckons its
-// reading size from its own base rather than from readingBodyBase — the desktop
-// canvas pane, whose base is the toolkit's text size.
+// readingGlyphSize applies the same correction to a reference size handed in as a
+// number — the desktop canvas pane's, which is readingBodyBase times the reader's
+// setting in Fyne units (styledPaneReferenceSize).
 func readingGlyphSize(reference float32) float32 {
 	return reference * float32(readingOpticalScale())
 }

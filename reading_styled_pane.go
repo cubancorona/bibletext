@@ -30,11 +30,11 @@ package bibletext
 
 import (
 	"image/color"
+	"strings"
 	"sync"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
-	fyneTheme "fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -210,18 +210,19 @@ func newStyledReadingPane(state *AppState, verses []Verse) *styledReadingPane {
 	return p
 }
 
-// styledPaneTextSize matches chapterText's sizing: the theme body size scaled
-// by the reader's Settings → Text size choice, with a sane default for bare
-// test constructions (no running app).
-// styledPaneReferenceSize is the pane's body size before the optical scale: what
-// the toolkit's text size and the reader's own setting ask for between them. Only
-// the measure is figured from it.
+// styledPaneReferenceSize is the pane's body size before the optical scale: the
+// ONE reading size every surface is figured from (readingBodyBase, 21 at the
+// Normal setting) times the reader's own setting, in this pane's unit — a Fyne
+// unit, which is a pixel at 100% on Windows and Linux as the Apple panes' unit is
+// a point. The measure is figured from it, and nothing else.
+//
+// It used to start from the toolkit's text size, 18, which dresses the whole
+// interface. Scripture on Windows and Linux therefore read 14% smaller than the
+// same chapter on the Mac, the iPad and the web, and the 27.5em column was 14%
+// narrower with it (495 against 577.5 at Normal) — the same ~59-character line,
+// set as a smaller copy of the page.
 func styledPaneReferenceSize() float32 {
-	size := float32(15)
-	if app := fyne.CurrentApp(); app != nil {
-		size = fyneTheme.TextSize()
-	}
-	return size * float32(readingTextScale())
+	return float32(readingBodyBase * readingTextScale())
 }
 
 // styledPaneTextSize is the size the shipped face is actually set at. The scale
@@ -473,6 +474,10 @@ func (p *styledReadingPane) measure(text string, kind runKind, italic bool) floa
 		size *= styledNumRatio
 	}
 	face := p.faceFor(text, italic)
+	if kind == runVerseNum {
+		// Measured as it is DRAWN: ordinary figures in the bold cut.
+		text, face = styledNumeralText(text), p.numeralFace()
+	}
 	if kind == runHeading {
 		// Measured in the cut it is DRAWN in, or the heading wraps to a width
 		// it does not occupy.
@@ -532,25 +537,43 @@ func hasHebrew(s string) bool {
 
 const styledNumRatio = float32(0.66)
 
-// styledNumRaise moves the verse number relative to the body's top, as a
-// fraction of the body text size. It is NEGATIVE: the number is dropped, not
-// lifted.
+// A VERSE NUMBER IS DRAWN AS THE APPLE PANES DRAW IT: ordinary figures, in the
+// bold cut, at styledNumRatio of the body, with their baseline lifted
+// styledNumLift of the body above the text's.
 //
-// That reads backwards until you notice that the number is already a
-// superscript before the pane touches it. The runs carry Unicode superscript
-// figures (superscriptNumber), so the face has drawn them raised, and how far
-// raised is the face's decision. The reading face draws them 0.232 em higher
-// than the system serif the pane used to borrow, measured from both faces'
-// outlines. Lifting them again put a third of the numeral above the top of its
-// own line and outside the wash a marked verse is painted with, so a search hit
-// or a selection coloured the words and left the number hanging over them.
+// The run's TEXT stays the Unicode superscript figures (superscriptNumber) — the
+// selection, copy and citation model all read those, and plainSelection turns
+// them back into digits — but what is measured, drawn and hit-tested is the
+// plain digits. Drawing the superscript glyphs themselves made a verse number
+// half the size it is everywhere else: the face draws those glyphs small and
+// raised already, and the pane then set them at 0.66 of the body on top, so a
+// numeral stood 29% of a capital's height where the iPad's stands 59%.
 //
-// The value matches the numeral's ink CENTRE to where the borrowed serif put
-// it. Both the line height and the body box fall out of that equation, so one
-// constant is right for the cozy column and the reporter page alike — which is
-// what the first attempt at this got wrong, having been checked against the
-// cozy leading only.
-const styledNumRaise = float32(-0.117)
+// The bold cut, because the Apple stylesheet sets sup.v at weight 600 and the
+// reading-face swap turns that into Junicode-Bold (reading_fonts_apple.go); the
+// app ships the cut, so there is no synthetic bold to fall back on.
+func styledNumeralText(s string) string {
+	return strings.Map(func(r rune) rune {
+		if d, ok := superToDigit[r]; ok {
+			return d
+		}
+		return r
+	}, s)
+}
+
+// numeralFace is the cut a verse number is set in.
+func (p *styledReadingPane) numeralFace() fyne.Resource {
+	return p.headingFace()
+}
+
+// styledNumLift is how far a verse number's baseline stands above the text's, as
+// a fraction of the body size. The Apple panes mark the number superscript and
+// let the text system raise it; laid out by AppKit in the reading face at the
+// Normal size, that raise is 8.0pt on a 24pt body — one third. Stated as a
+// baseline offset because a baseline is the one thing every face agrees on: the
+// numeral's box, and the face's declared line box, differ from face to face, and
+// placing from either moved the number whenever the face did.
+const styledNumLift = float32(1.0 / 3.0)
 
 func (p *styledReadingPane) CreateRenderer() fyne.WidgetRenderer {
 	r := &styledPaneRenderer{pane: p}
@@ -768,12 +791,13 @@ func (r *styledPaneRenderer) rebuild() {
 		t.FontSource = p.faceFor(dr.Text, dr.Supplied)
 		t.TextSize = p.textSize
 		if dr.Kind == runVerseNum || dr.Kind == runVerseGap {
-			// The serif at the small superscript size (iOS renders numbers in
-			// the same family); no Bold — the source is a single face and a
-			// synthetic-bold fallback would leave the serif for a sans. An
-			// omitted verse's mark takes the same size: it stands where a
-			// number would.
+			// At the number's size. An omitted verse's mark takes the same
+			// size — it stands where a number would — in the regular cut, as
+			// the Apple stylesheet sets span.vg.
 			t.TextSize = p.textSize * styledNumRatio
+		}
+		if dr.Kind == runVerseNum {
+			t.Text, t.FontSource = styledNumeralText(dr.Text), p.numeralFace()
 		}
 		r.texts = append(r.texts, t)
 		r.objects = append(r.objects, t)
@@ -938,18 +962,25 @@ func (r *styledPaneRenderer) position() {
 		lh = p.styledLineHeight()
 	}
 	drv := fyne.CurrentApp().Driver()
-	bodyS, _ := drv.RenderedTextSize("Ag", p.textSize, fyne.TextStyle{}, p.font)
+	bodyS, bodyBase := drv.RenderedTextSize("Ag", p.textSize, fyne.TextStyle{}, p.font)
 	bodyH := bodyS.Height
+	// Where a small run's baseline falls inside its own box, per face: a text
+	// object is drawn with its baseline that far below its top, so aligning
+	// baselines through these values is exact whatever the faces declare.
+	_, numBase := drv.RenderedTextSize("0", p.textSize*styledNumRatio, fyne.TextStyle{}, p.numeralFace())
+	_, gapBase := drv.RenderedTextSize("0", p.textSize*styledNumRatio, fyne.TextStyle{}, p.font)
 	for i, dr := range p.drawRuns {
 		ln := p.lay.Lines[dr.Line]
-		y := ln.Y + (lh-bodyH)/2
-		if dr.Kind == runVerseNum || dr.Kind == runVerseGap {
-			// The number is placed from the TEXT SIZE, never from a
-			// measured box. RenderedTextSize reports the face's DECLARED line
-			// box rather than the height of its ink, and faces declare wildly
-			// different ones, so anything derived from it moves when the face
-			// does. See styledNumRaise for why the offset is a drop.
-			y = ln.Y + (lh-bodyH)/2 - p.textSize*styledNumRaise
+		top := ln.Y + (lh-bodyH)/2 // the body's box; its baseline is bodyBase below
+		y := top
+		switch dr.Kind {
+		case runVerseNum:
+			// The number's baseline, styledNumLift of the body above the text's.
+			y = top + bodyBase - p.textSize*styledNumLift - numBase
+		case runVerseGap:
+			// An omitted verse's mark sits ON the baseline: it is not a
+			// superscript on any pane.
+			y = top + bodyBase - gapBase
 		}
 		r.texts[i].Move(fyne.NewPos(p.insetX()+dr.X, y))
 	}

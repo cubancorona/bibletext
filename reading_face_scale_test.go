@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2/test"
+	fyneTheme "fyne.io/fyne/v2/theme"
 	"golang.org/x/image/font/sfnt"
 	"golang.org/x/image/math/fixed"
 )
@@ -224,5 +225,36 @@ func TestTheCanvasPaneKeepsTheMeasureOffTheOpticalScale(t *testing.T) {
 	if (&styledReadingPane{}).referenceSize() <= 0 {
 		t.Error("a wholly empty pane reports a zero reference size, which reads as an " +
 			"infinitely narrow column")
+	}
+}
+
+// The Windows and Linux pane reads THE reading size — readingBodyBase times the
+// reader's setting — as every other surface does, not the toolkit's text size.
+// That size dresses the whole interface (18), and figuring Scripture from it set
+// the page 14% smaller than the Mac, the iPad and the web: smaller type in a
+// narrower 27.5em column, the same line at a reduced scale. The control makes
+// sure the two sizes differ in the test theme, or the check could not tell them
+// apart.
+func TestTheCanvasPaneReadsTheOneReadingSize(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	app.Settings().SetTheme(&bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()})
+
+	if ui := fyneTheme.TextSize(); float64(ui) == readingBodyBase {
+		t.Fatalf("the interface text size is %v, the reading size itself — the test cannot tell them apart", ui)
+	}
+	want := float32(readingBodyBase * readingTextScale())
+	if got := styledPaneReferenceSize(); math.Abs(float64(got-want)) > 1e-4 {
+		t.Errorf("the canvas pane's reference size is %v, want %v (readingBodyBase %v × the reader's setting %v)",
+			got, want, readingBodyBase, readingTextScale())
+	}
+	st := reporterTestState()
+	p := newStyledReadingPane(st, st.Bible.GetChapter("Romans", 8))
+	if math.Abs(float64(p.refSize-want)) > 1e-4 {
+		t.Errorf("a pane is built at reference %v, want %v", p.refSize, want)
+	}
+	// And so its column is the Apple panes' column: 27.5em of the reading size.
+	if got, apple := reporterMeasureEm*float64(p.referenceSize()), reporterMeasureEm*readingReferencePx(); math.Abs(got-apple) > 1e-3 {
+		t.Errorf("the canvas pane's measure is %.2f, the Apple panes' %.2f", got, apple)
 	}
 }

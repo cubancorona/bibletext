@@ -221,7 +221,12 @@ func TestStyledNoteGallery(t *testing.T) {
 			build: func(t *testing.T) (*AppState, []Verse, string, int) {
 				return contextFixture(t, "Collapsed, with the same paragraphs around it.", true)
 			},
-			w: 560, h: 620, wantSticker: true, wantPill: true,
+			// Wide enough for the book page at the reading size (27.5em of 21
+			// plus the insets), where a pill stands in its band with no
+			// separator lift — what this picture has always shown. The
+			// narrow page's lift has its own tests
+			// (reading_styled_pill_behaviour_test.go).
+			w: 640, h: 620, wantSticker: true, wantPill: true,
 		},
 		{
 			name: "12-no-note-control",

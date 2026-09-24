@@ -114,11 +114,23 @@ the conclusion that the face needs far more room than it does.
 | surface | glyph size | leading | measure |
 |---|---|---|---|
 | Apple panes (iOS + macOS) | `reading.go` — the CSS `font-size`, from `readingGlyphPx()` | the native paragraph sweep, from `readingLinePitchEm` | `reporterMeasureEm × readingReferencePx()` across the bridge |
-| Fyne canvas pane | `styledPaneTextSize()` | `p.textSize × 1.55` (cozy) / `× 1.3` (reporter) | `reporterMeasureEm × p.referenceSize()` |
+| Fyne canvas pane | `styledPaneTextSize()` — `readingGlyphSize` of `readingBodyBase` × the reader's setting, in Fyne units (a pixel at 100% on Windows and Linux), as the Apple panes use points; it took the toolkit's interface size, 18, until 24 September 2026, which set the page 14% small | `p.textSize × 1.55` (cozy) / `× 1.3` (reporter) | `reporterMeasureEm × p.referenceSize()` |
 | Android overlay | Java: `textSizeDp × density × opticalScale` | Java: `pitch × textSizePx` | `androidReadingMeasureDp(reporter, referenceDp)` |
 | Verse-of-the-day card | `readingGlyphPx()`, the Apple/Android body size, as a `canvas.Text` `FontSource` | the face's own line box (`readingParagraph`) | the card's inner width — no reporter measure; it is one passage |
 | generated site | `remSize(webScriptureBaseRem)` | `ReadingLinePitchEm()` | `.wrap{max-width:40rem}` — root rem, deliberately not em |
 | share card | its own face rotation, auto-fitted | n/a | n/a |
+
+**Verse numbers** are ordinary figures in the bold cut at `0.66` of the body,
+their baseline a third of the body above the text's. On the Apple panes that is
+the stylesheet (`sup.v`: weight 600, `0.66em`, superscript) and the reading-face
+swap (Junicode-Bold); AppKit raises a superscript 8.0pt on a 24pt body in this
+face. The canvas pane draws the same thing by hand (`styledNumeralText`,
+`styledNumLift`), held to those figures by
+`TestVerseNumbersAreDrawnAsTheApplePanesDrawThem`. Until 24 September 2026 it
+drew the Unicode superscript figures the run's text carries, which the face
+already sets small and raised, at `0.66` on top: a numeral half the size it is
+everywhere else. An omitted verse's mark (`[36]`) is the same size, in the
+regular cut, on the baseline — it is never a superscript.
 
 Two decisions that look like oversights and are not:
 
