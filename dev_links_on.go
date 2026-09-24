@@ -439,6 +439,19 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 	}
 	readingPageRow := container.NewBorder(nil, nil, widget.NewLabel("Reading page"), nil, readingPage)
 
+	// The text-size slider on the Read tab (dev_text_scale_on.go): there, not
+	// here, because this tab takes the reading pane's place. Turning it off
+	// hands the size back to the setting.
+	textScaleStrip := widget.NewCheck("Text-size slider on the Read tab", nil)
+	textScaleStrip.SetChecked(devTextScaleStripOn)
+	textScaleStrip.OnChanged = func(b bool) {
+		devTextScaleStripOn = b
+		if !b {
+			devTextScale = 0
+		}
+		rebuildWindow(state)
+	}
+
 	minAll := widget.NewButton("Minimize every stored note", func() {
 		for _, n := range allNotesForBrowsing(appPrefs()) {
 			setNoteMinimizedByID(appPrefs(), n.ID, true)
@@ -539,7 +552,7 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 
 	head := container.NewVBox(
 		title, blurb,
-		notesSwitch, pillMode, landscapeMode, readingPageRow, wipe, minAll, seedMine, seedMineNKJV, status,
+		notesSwitch, pillMode, landscapeMode, readingPageRow, textScaleStrip, wipe, minAll, seedMine, seedMineNKJV, status,
 		widget.NewLabel("Emoji probe (Entry vs Label):"),
 		widget.NewLabel("label 🤏 🥺 🫶 👊 ☕"),
 		emojiProbe,

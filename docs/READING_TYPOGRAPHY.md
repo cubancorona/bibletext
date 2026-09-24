@@ -281,6 +281,15 @@ A dev build can force either page on any width: `BIBLETEXT_DEV_READING_PAGE=
 book|phone` at launch, or the Links tab's "Reading page" choice while the app
 runs (`dev_reading_page_on.go`). "By width" hands the choice back to the rule.
 
+A dev build can also move the reading size continuously, to watch the page
+follow it: the Links tab's "Text-size slider on the Read tab" puts a slider
+above the reading pane, from ×0.8 to ×1.6 of the reading size, and the pane is
+re-rendered in place as the thumb rests — on the Mac's native pane as on the
+canvas pane. Under it a line gives the spec's numbers at that size: the
+reference and set sizes, the measure, the width the book page needs, and the
+page the pane is on. "Setting" hands the size back to the reader's own choice.
+`BIBLETEXT_DEV_TEXT_SCALE=on|1.45` seeds it at launch (`dev_text_scale_on.go`).
+
 ## Vertical spacing of the reading pane
 
 Everything that stacks vertically inside the reading pane, on every surface

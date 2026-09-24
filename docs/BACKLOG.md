@@ -40,9 +40,11 @@ What the spec work left, each one a known difference rather than a guess:
   section's name.
 - **Browsers without container queries** (Safari before 16, Chrome before 105)
   show the web's phone page at every width.
-- **The dev-tab text-size slider** (desktop, queued): a live control that
-  moves the reading size continuously so the page — size, measure, leading,
-  switch — can be watched changing, rather than a sample.
+- **The dev text-size slider — DONE 24 September 2026.** On the Read tab rather
+  than the Links tab, because the Links tab takes the reading pane's place: a
+  dev build's Links tab turns on a slider above the pane that moves the size
+  from ×0.8 to ×1.6 and re-renders the pane in place, with the spec's numbers
+  at that size beneath it (docs/READING_TYPOGRAPHY.md).
 
 ## iOS 27: after the scene life-cycle fix — FIXED 23 September 2026
 

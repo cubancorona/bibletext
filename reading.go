@@ -586,8 +586,11 @@ func chapterFingerprint(state *AppState, hl string) string {
 		}
 		note += fmt.Sprintf("!%d.%d.%d.%d", state.NoteID, len(state.ActiveNote), m, state.NoteVerseLo)
 	}
-	return fmt.Sprintf("%s|%s|%d|v%d|r%d|fn%d|h%s|t%s|d%p|n%s|p%d",
-		state.CurrentVersion, state.CurrentBook, state.CurrentChapter, variant, red, fnotes, hl, readingTextSizeID(), state.Bible, note, rep)
+	// The text size is folded as the SCALE the page is set at, not the
+	// setting's name: they are one-to-one for a reader, and a dev build's
+	// slider moves the scale between the names (dev_text_scale_on.go).
+	return fmt.Sprintf("%s|%s|%d|v%d|r%d|fn%d|h%s|t%g|d%p|n%s|p%d",
+		state.CurrentVersion, state.CurrentBook, state.CurrentChapter, variant, red, fnotes, hl, readingTextScale(), state.Bible, note, rep)
 }
 
 // --- Native-overlay chapter HTML (iOS UITextView + macOS NSTextView) ---------

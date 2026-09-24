@@ -136,6 +136,11 @@ func buildCompactUI(state *AppState) fyne.CanvasObject {
 		// The Goto field is now a popup opened from the header's centered button
 		// (showGotoPopup), so the reading view reserves no inline row.
 		content = readingHost
+		// A dev build's text-size slider, above the pane it moves
+		// (dev_text_scale_on.go); nil in a release build.
+		if strip := devTextScaleStrip(state, readingHost); strip != nil {
+			content = container.NewBorder(strip, nil, nil, nil, readingHost)
+		}
 		// When a search is active the Read tab shows the results list (Fyne), so
 		// the native overlay has to stay hidden to avoid overlapping it.
 		notifyReadingOverlay(overlayShouldShow(state))

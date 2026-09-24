@@ -44,8 +44,18 @@ func setReadingTextSizeID(id string) {
 	}
 }
 
+// readingTextScaleOverride stands in for the setting while a dev build's
+// text-size slider is moving the size (dev_text_scale_on.go). Nil in release
+// builds.
+var readingTextScaleOverride func() (float64, bool)
+
 // readingTextScale is the multiplier applied to the scripture body font.
 func readingTextScale() float64 {
+	if readingTextScaleOverride != nil {
+		if s, ok := readingTextScaleOverride(); ok {
+			return s
+		}
+	}
 	id := readingTextSizeID()
 	for _, o := range textSizeOptions {
 		if o.ID == id {
