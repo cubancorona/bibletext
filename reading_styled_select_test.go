@@ -25,6 +25,10 @@ func newTestPane(t *testing.T, st *AppState, width float32) *styledReadingPane {
 	t.Helper()
 	p := newStyledReadingPane(st, st.Bible.GetChapter(st.CurrentBook, st.CurrentChapter))
 	p.Resize(fyne.NewSize(width, 400))
+	// The renderer Resize made goes when the test does. Fyne's cache would
+	// otherwise keep it until some later canvas paints or captures after it
+	// has gone a minute unused, and a run builds hundreds of these.
+	test.TempWidgetRenderer(t, p)
 	return p
 }
 

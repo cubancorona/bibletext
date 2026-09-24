@@ -30,8 +30,6 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-
-	"fyne.io/fyne/v2"
 	"testing"
 
 	"fyne.io/fyne/v2/test"
@@ -503,8 +501,15 @@ func takePlanSnap(st *AppState, withPane bool) planSnap {
 		}
 	}
 	if withPane && len(verses) > 0 {
+		// relayout, not Resize: the geometry N10 judges is all relayout's,
+		// and Resize would also make the pane a renderer. Fyne's cache keeps
+		// a renderer until a canvas paints or captures after it has gone a
+		// minute unused, and nothing in this walk does either, so all 18,624
+		// panes it builds, each drawn word with them, stayed in memory to its
+		// end — about 6.5 GB, 12 GB under the race detector, which is where
+		// the Windows race run ran out of memory.
 		pane := newStyledReadingPane(st, verses)
-		pane.Resize(fyne.NewSize(320, 900))
+		pane.relayout(320)
 		snap.paneSticker = pane.noteGeom.present
 		snap.panePills = len(pane.pillGeoms)
 	}
