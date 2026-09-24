@@ -25,9 +25,10 @@ What the spec work left, each one a known difference rather than a guess:
   would give both.
 - **A note pill under a heading on Android's book page** sits 7px higher than
   on the phone page (the entry below).
-- **A paragraph that opens in prose and turns to poetry** is indented and
-  justified on the web, Android and the Windows and Linux pane, and unindented
-  and ragged on the Apple panes. The Apple dialect marks any paragraph holding
+- **A paragraph that opens in prose and turns to poetry** is indented on the
+  web, Android and the Windows and Linux pane (justified where those surfaces
+  justify: the web, and Android from API 35), and unindented and ragged on the
+  Apple panes. The Apple dialect marks any paragraph holding
   a poem line `p.pm` and left-aligns it (`reading.go`), because TextKit would
   stretch its poem lines if it were justified, and the native indent keys on
   justification (`firstLineHeadIndent` in `reading_ios.go`/`reading_macos.go`),

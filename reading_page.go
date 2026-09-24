@@ -16,7 +16,9 @@ import "math"
 // column and the phone page's own side margins fit. Otherwise the phone page:
 // the full width less those margins, with a gap between paragraphs and no
 // indent. Never by device, orientation or idiom, so a narrow Mac or iPad
-// window reads like a phone and a wide Android tablet like a book.
+// window reads like a phone and a wide Android tablet like a book — save for a
+// push made with no width known at all, which takes the device's resting page
+// until the pane reports one (readingUnsizedPage, reading_page_width.go).
 //
 // Widths are in the surface's own logical unit: Apple points, Fyne units (a
 // pixel at 100% on Windows and Linux), Android dp, CSS pixels at a 16px root.

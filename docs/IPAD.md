@@ -43,7 +43,8 @@ They do not describe the shipped UI.
 
 The page is chosen by the WIDTH the reading pane has, as on every surface
 (`reading_page.go`, docs/READING_TYPOGRAPHY.md "The reading page"), not by the
-device: the book page — a centred **27.5em text column**, approximately 58–60
+device — save for a chapter pushed before the window has any size, which an
+iPad sets on the book page until its pane reports a width: the book page — a centred **27.5em text column**, approximately 58–60
 characters per line at the Normal 21px base, first-line paragraph indents
 without blank paragraph gaps — whenever the column and 15pt each side fit; the
 phone page otherwise. A full-screen iPad reads the book page in both

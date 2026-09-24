@@ -175,6 +175,13 @@ side** (`readingBookPageFits`): 607.5 at Normal, 694.125 at Large, 780.75 at Ext
 large. By width, never by device or orientation — a narrow Mac or iPad window
 reads like a phone, a wide Android tablet like a book. The pane is the width the
 text itself can occupy, with rails, sidebars and scrollers already taken away.
+The one exception is a push made with no width known at all — a native pane
+that has not reported one, in a window that has no size yet. On iOS it takes
+the device's resting page (`readingUnsizedPage`): the phone page on an iPhone,
+the book page on an iPad. The Mac takes the book page. Android is not in this
+case: before its canvas has a size it reads its activity's configured width
+over the bridge (`readingColdWidth`), and takes the phone page only without the
+bridge. The pane's first report corrects any of them.
 
 **R** is the reading size before the optical scale, `readingBodyBase × the
 reader's setting` (21, 24.15, 27.3); the body is set at `R × readingOpticalScale()`.
@@ -263,11 +270,12 @@ This list is kept current as each surface is brought to the spec.
   on the book page, the first included, as every app pane indents it (the web
   alone skipped the first and the one after a poem, and gave a poem-opening
   paragraph .55rem of its own). One difference stays in the rule itself: a
-  paragraph that opens in prose and turns to poetry is indented and justified
-  on the web, Android and the Windows and Linux pane, and unindented and
-  ragged on the Apple panes, which must leave any paragraph holding a poem
-  line unjustified (TextKit stretches a justified paragraph's poem lines) and
-  key their indent on justification. The verse number is raised a third of the body
+  paragraph that opens in prose and turns to poetry is indented on the web,
+  Android and the Windows and Linux pane (and justified where those surfaces
+  justify: the web, and Android from API 35; the Windows and Linux pane
+  justifies nothing), and unindented and ragged on the Apple panes, which must
+  leave any paragraph holding a poem line unjustified (TextKit stretches a
+  justified paragraph's poem lines) and key their indent on justification. The verse number is raised a third of the body
   (.5051em of the numeral; was .45em), the omitted verses' holes are marked
   (the web drew none), the footnotes are the scripture face at .85 of the body
   with the page's pitch and a fifth of the body between entries (were the
