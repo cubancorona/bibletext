@@ -67,6 +67,33 @@ const (
 	readingFootnoteEntryGapEm = 0.2
 )
 
+// readingJustifyProse: a paragraph that opens in prose is JUSTIFIED — each
+// line it breaks for width is spread to the measure — while its last line, the
+// line before an authored poem break and every row of a poetic verse stay
+// ragged, and a paragraph that opens on a poem line is ragged throughout. Only
+// the Windows and Linux pane reads this, because it lays its lines out itself
+// (readingJustify; spreadLine in reading_styled_layout.go); the other surfaces
+// justify through their own text systems, each a little differently
+// (docs/READING_TYPOGRAPHY.md, "Justified prose"). false turns the pane's
+// justification off and gives back its ragged page exactly. The code that goes
+// with it carries this name or stops compiling once the pieces that do are
+// gone, and each doc passage saying the pane justifies names it too.
+const readingJustifyProse = true
+
+// readingJustifyOverride stands in for readingJustifyProse in a dev build
+// (dev_justify_on.go), to compare the two on one pane. Nil otherwise.
+var readingJustifyOverride func() (bool, bool)
+
+// readingJustify is whether the Windows and Linux pane justifies now.
+func readingJustify() bool {
+	if readingJustifyOverride != nil {
+		if on, ok := readingJustifyOverride(); ok {
+			return on
+		}
+	}
+	return readingJustifyProse
+}
+
 // The note card's text, in units. The card is the app's furniture, not
 // Scripture, so it does not follow the reader's text size (notes_bubble.go).
 const (

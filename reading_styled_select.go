@@ -88,10 +88,18 @@ func (p *styledReadingPane) offsetAtPos(pos fyne.Position) int {
 	if len(segs) == 0 || x <= segs[0].X {
 		return ln.StartOffset
 	}
+	// A justified line draws its words apart (readingJustifyProse), so a
+	// pointer between two of them goes to the nearer: the end of the word
+	// before or the start of the word after. On a ragged line the space sits
+	// inside the drawn string, where the search below gives the word before.
+	prevEnd, prevRight := -1, float32(0)
 	for _, seg := range segs {
 		segRunes := []rune(seg.Text)
 		w := p.segWidth(seg.Text, seg.Kind)
 		if x < seg.X {
+			if ln.Justified && prevEnd >= 0 && x-prevRight < seg.X-x {
+				return prevEnd
+			}
 			return seg.FirstOffset
 		}
 		if seg.Kind == runVerseGap && x <= seg.X+w {
@@ -114,6 +122,9 @@ func (p *styledReadingPane) offsetAtPos(pos fyne.Position) int {
 				}
 			}
 			return seg.FirstOffset + lo
+		}
+		if seg.Kind != runVerseGap {
+			prevEnd, prevRight = seg.FirstOffset+len(segRunes), seg.X+w
 		}
 	}
 	return ln.EndOffset

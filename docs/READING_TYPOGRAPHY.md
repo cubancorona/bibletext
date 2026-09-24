@@ -200,6 +200,42 @@ later decision about either page is one constant.
 | footnote entries | `readingFootnoteEm` 0.85 | muted; `readingFootnoteRuleGapEm` under the rule, `readingFootnoteEntryGapEm` between entries |
 | note card body / byline and pills | `noteBodySize` 15 / `noteWhoSize` 11 units | furniture, not Scripture: it does not follow the reader's text size |
 
+### Justified prose
+
+Prose is justified: each line a prose paragraph breaks for width is spread to
+the measure, and a paragraph's last line and the line before an authored poem
+break stay ragged. Past that, each surface does it through its own text system,
+and they differ:
+
+- **The web** decides by a paragraph's first verse: one that opens on a poem
+  line is ragged throughout (`p.pm`), one that opens in prose is justified
+  throughout, the rows of a wrapped poem line included (a defect,
+  docs/SCRIPTURE_WORKLIST.md). It hyphenates.
+- **Android** from API 35 justifies by the line: every line that is not the
+  text's last and does not end at a hard break, whatever its paragraph — the
+  rows of a wrapped poem line too, and a heading or Psalm title that wraps. It
+  hyphenates. Below API 35 it is ragged (docs/ANDROID.md).
+- **The Apple panes** leave any paragraph holding a poem line ragged (below),
+  and their stylesheet asks for hyphenation.
+- **The Windows and Linux pane** (`readingJustifyProse`) justifies a paragraph
+  that opens in prose, except the rows of its poetic verses — poetry is never
+  justified there — and leaves a paragraph that opens on a poem line ragged
+  throughout, as the web does. It does not hyphenate, so its narrow lines stand
+  looser than the web's, and its footnote section stays ragged (both in
+  docs/BACKLOG.md).
+
+That pane lays its lines out itself, so it reads the rule from the constant:
+`spreadLine` shares a line's slack evenly among its word gaps without moving the
+first word, so an indent stays an indent; a justified line's words are drawn one
+object each, since a merged string could only draw one space between them; and
+a pointer between two spread words goes to the nearer one. Setting the constant
+to `false` gives back the ragged page exactly. The code that goes with it
+carries the name or stops compiling once the pieces that do are gone, and each
+doc passage saying the pane justifies names it, so a search for the name finds
+everything to edit. A dev build compares the two on one pane: the Links tab's
+"Justify the Windows and Linux pane", or `BIBLETEXT_DEV_JUSTIFY=on|off` at
+launch.
+
 ### Where each surface stands
 
 This list is kept current as each surface is brought to the spec.
@@ -212,8 +248,9 @@ This list is kept current as each surface is brought to the spec.
   kept the Extra large book page from ever fitting). Its footnote section is set
   as the Apple panes set theirs: muted throughout, keys in the bold cut, a third
   of the body under the rule and a fifth between entries (the key was in the
-  verse number's colour and regular, the air a share of the section's line). Its
-  right edge stays ragged: the pane does not justify.
+  verse number's colour and regular, the air a share of the section's line).
+  Justified since 24 September 2026 (`readingJustifyProse`, above), the washes
+  and selection following the spread words; its footnote section stays ragged.
 - **The note card's text** — `noteBodySize` 15 and `noteWhoSize` 11 on every
   native surface since 24 September 2026 (the Mac set 13 and 10, the canvas pane
   the toolkit's 18), held by `TestNoteTextIsTheSpecsOnEverySurface`.
@@ -271,9 +308,10 @@ This list is kept current as each surface is brought to the spec.
   alone skipped the first and the one after a poem, and gave a poem-opening
   paragraph .55rem of its own). One difference stays in the rule itself: a
   paragraph that opens in prose and turns to poetry is indented on the web,
-  Android and the Windows and Linux pane (and justified where those surfaces
-  justify: the web, and Android from API 35; the Windows and Linux pane
-  justifies nothing), and unindented and ragged on the Apple panes, which must
+  Android and the Windows and Linux pane, and justified where those surfaces
+  justify — whole on the web and Android from API 35, its prose only on the
+  Windows and Linux pane (`readingJustifyProse`) — and unindented and ragged on
+  the Apple panes, which must
   leave any paragraph holding a poem line unjustified (TextKit stretches a
   justified paragraph's poem lines) and key their indent on justification. The verse number is raised a third of the body
   (.5051em of the numeral; was .45em), the omitted verses' holes are marked

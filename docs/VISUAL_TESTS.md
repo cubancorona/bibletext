@@ -174,9 +174,14 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
 
 ## V8 — reading surface and typography
 
-- [ ] Prose justifies with flush right edges (iOS, macOS, Android, web);
-      the styled pane and the legacy Entry pane never justify — an EXPECTED
-      difference, not a bug. Poetry is always ragged.
+- [ ] Prose justifies with flush right edges (iOS, macOS, Android, web, and
+      the Windows and Linux pane); the legacy Entry pane never justifies — an
+      EXPECTED difference, not a bug. Poetry is always ragged, and so is a
+      paragraph's last line. On the Windows and Linux pane, highlight a verse
+      and drag a selection across a justified line: the wash and the selection
+      cover the spread words and their gaps, with no word outside them (dev
+      build: toggle "Justify the Windows and Linux pane" on the Links tab to
+      see the same chapter ragged; `readingJustifyProse`).
 - [ ] Psalm 23: two poem lines per verse, breaks at every verse boundary
       inside the poem; a width-wrapped poem line continues flush left (no
       hanging indent exists anywhere, by design). Copy a wrapped psalm and
@@ -352,7 +357,8 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       note words.
 - [ ] The chapter-bottom section: continuous hairline rule (gapped dashes
       on iOS was the measured quirk), semibold verse keys, muted smaller
-      justified notes. Drive with BSB Ezekiel 40 (25 notes) or WEBC
+      justified notes (ragged on the Windows and Linux pane, a known
+      difference: docs/BACKLOG.md, `readingJustifyProse`). Drive with BSB Ezekiel 40 (25 notes) or WEBC
       2 Maccabees 12 (26). A note-free chapter shows nothing at all.
 - [ ] Omitted-verse orphans: WEB Luke 17 reads "…35 … 37…" with no 36 in
       the body, and "36 Some Greek manuscripts add…" sits between 35's and

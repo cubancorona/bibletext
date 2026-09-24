@@ -13,10 +13,31 @@ Every surface takes its page from `reading_page.go` since 24 September 2026
 (docs/READING_TYPOGRAPHY.md, "The reading page", keeps the per-surface list).
 What the spec work left, each one a known difference rather than a guess:
 
-- **The Windows and Linux pane does not justify.** Its right edge is ragged
-  where every other surface justifies. Its own step: the canvas pane lays its
-  lines out itself (`reading_styled_layout.go`), so justification is spreading
-  each full line's word gaps, and selection hit-testing has to follow.
+- **The Windows and Linux pane justifies — DONE 24 September 2026.** It was
+  ragged where the web, the Apple panes and Android from API 35 justify. The
+  layout spreads each line a prose paragraph breaks for width (`spreadLine`,
+  `reading_styled_layout.go`), moving only X and never a poetic verse's rows;
+  the pane draws a justified line's words one object each (`mergeDrawRuns`),
+  which the washes and selection already read; and a pointer in a widened gap
+  goes to the nearer word (`offsetAtPos`), or a drag past a word would take the
+  space and a double-click beside it the next word. The rejected alternative
+  merged runs only where the gap was a natural space and taught hit-testing
+  about widened gaps: more code in more places for the same page. Gated by
+  `readingJustifyProse` in `reading_page.go` (false gives back the ragged page;
+  docs/READING_TYPOGRAPHY.md, "Justified prose", says what carries the name),
+  with a dev toggle to compare the two. Held by `reading_styled_justify_test.go`.
+  On the Linux VM, Matthew 26 with the same scripted drag and scroll: about 4%
+  more CPU dragging and 6% scrolling, the selection landing in the same place.
+- **The Windows and Linux pane does not hyphenate** where the web and Android
+  hyphenate (and the Apple stylesheet asks for it), so its justified lines on
+  the phone page stand looser. Hyphenating it means a hyphenation dictionary and
+  breaking a word across two runs while the copy and selection text keeps it
+  whole. `readingJustifyProse`.
+- **The Windows and Linux pane's footnote section stays ragged** where every
+  other justifying surface justifies its notes. `styledFnWrap`
+  (`reading_styled_footnotes.go`) draws each wrapped line as one string;
+  justifying it means drawing each line's words apart as the body does, with
+  the section's hit-testing following. `readingJustifyProse`.
 - **Android centres the book page on the window, the iPad on its pane.** The
   window is right for a landscape phone (the column clears the camera cutout
   evenly, `BtBridge.applyReadingPadding`); on a tablet with the side rail it
@@ -27,7 +48,9 @@ What the spec work left, each one a known difference rather than a guess:
   on the phone page (the entry below).
 - **A paragraph that opens in prose and turns to poetry** is indented on the
   web, Android and the Windows and Linux pane (justified where those surfaces
-  justify: the web, and Android from API 35), and unindented and ragged on the
+  justify — whole on the web and Android from API 35, its prose only on the
+  Windows and Linux pane, `readingJustifyProse`), and unindented and ragged on
+  the
   Apple panes. The Apple dialect marks any paragraph holding
   a poem line `p.pm` and left-aligns it (`reading.go`), because TextKit would
   stretch its poem lines if it were justified, and the native indent keys on

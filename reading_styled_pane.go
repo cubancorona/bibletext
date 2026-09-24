@@ -27,6 +27,17 @@ package bibletext
 // selection layer: within a segment, positions come from measuring substring
 // prefixes of exactly the string being drawn, so kerning can never drift
 // between hit-testing and pixels.
+//
+// EXCEPT ON A JUSTIFIED LINE (readingJustifyProse): its words stand wider
+// apart than a space, and a canvas.Text draws one space, so each word is its
+// own object at its own X, and the selection layer resolves a pointer in the
+// gap between two to the nearer. That costs a prose chapter about four and a
+// half times the objects on the phone page and five to seven on the book page
+// — the longest, 1 Kings 8, about 2,000, so "the hundreds" above holds for
+// poetry only. The drawing cost follows the words on screen, not the chapter:
+// the scroller clips, and text outside it is not drawn. Poetry and ragged lines
+// merge as before, which is why merging is kept at all — Psalm 119 unmerged
+// would draw about 2,500.
 
 import (
 	"image/color"
@@ -76,7 +87,8 @@ type styledDrawRun struct {
 func mergeDrawRuns(lineIdx int, ln styledLine) []styledDrawRun {
 	var out []styledDrawRun
 	for _, r := range ln.Runs {
-		if n := len(out); n > 0 {
+		// A justified line's words are drawn one each (readingJustifyProse).
+		if n := len(out); n > 0 && !ln.Justified {
 			prev := &out[n-1]
 			if prev.Kind == r.Kind && prev.Red == r.RedLetter && prev.Tint == r.Tint &&
 				prev.Supplied == r.Supplied &&
@@ -355,6 +367,7 @@ func (p *styledReadingPane) relayout(width float32) {
 		BandVerse:  p.noteAnchorVerse(),
 		BandH:      p.noteGeom.bandH(),
 		Bands:      pillReq,
+		Justify:    readingJustify(), // readingJustifyProse
 	}, p.measure)
 	p.superGeom.place(p.insetX(), 0)
 	// Absolute rects, from the pane's own ruler and the band the layout just

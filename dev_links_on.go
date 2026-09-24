@@ -439,6 +439,20 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 	}
 	readingPageRow := container.NewBorder(nil, nil, widget.NewLabel("Reading page"), nil, readingPage)
 
+	// Justification of the Windows and Linux pane (reading_page.go,
+	// readingJustifyProse), off and on over the same chapter
+	// (dev_justify_on.go). The rebuild builds the pane again, which lays the
+	// chapter out again.
+	justify := widget.NewCheck("Justify the Windows and Linux pane", nil)
+	justify.SetChecked(readingJustify())
+	justify.OnChanged = func(b bool) {
+		devJustify = "off"
+		if b {
+			devJustify = "on"
+		}
+		rebuildWindow(state)
+	}
+
 	// The text-size slider on the Read tab (dev_text_scale_on.go): there, not
 	// here, because this tab takes the reading pane's place. Turning it off
 	// hands the size back to the setting.
@@ -553,7 +567,7 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 
 	head := container.NewVBox(
 		title, blurb,
-		notesSwitch, pillMode, landscapeMode, readingPageRow, textScaleStrip, wipe, minAll, seedMine, seedMineNKJV, status,
+		notesSwitch, pillMode, landscapeMode, readingPageRow, justify, textScaleStrip, wipe, minAll, seedMine, seedMineNKJV, status,
 		widget.NewLabel("Emoji probe (Entry vs Label):"),
 		widget.NewLabel("label 🤏 🥺 🫶 👊 ☕"),
 		emojiProbe,

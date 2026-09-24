@@ -73,7 +73,11 @@ type styledRun struct {
 // styledLine is one visual line: its runs plus vertical geometry.
 type styledLine struct {
 	Runs []styledRun
-	Y, H float32
+	// Justified: the line was spread to the measure (spreadLine), so its
+	// words stand wider apart than a space and are drawn one object each
+	// (mergeDrawRuns). readingJustifyProse.
+	Justified bool
+	Y, H      float32
 
 	// ParaFirst marks the first line of a paragraph. PoemBreakAfter marks a
 	// line whose trailing break is AUTHORED (poem line / poetic verse join)
@@ -236,6 +240,11 @@ type styledLayoutParams struct {
 	// existing test still drives, and this experiment must not be able to
 	// disturb them. Empty = the single-band path below, unchanged.
 	Bands []bandRequest
+
+	// Justify spreads each line a prose paragraph breaks for width to Width
+	// (spreadLine). Off unless the pane asks, so a layout built directly — the
+	// golden file, the geometry tests — is the ragged one. readingJustifyProse.
+	Justify bool
 }
 
 // layoutChapter lays the chapter out as styled runs. It mirrors rewrap's
@@ -364,8 +373,26 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 		// start that far in (place() derives X from curW) and its wrap budget
 		// shrinks by the same amount (the p.Width check); flushLine resets to 0
 		// so every later line of the paragraph sits flush left.
-		if p.Indent > 0 && len(para) > 0 && !verseIsPoetic(para[0].Text) {
+		// A paragraph that OPENS on a poem line is poetry throughout: no
+		// indent, and no justification either.
+		prose := len(para) > 0 && !verseIsPoetic(para[0].Text)
+		if p.Indent > 0 && prose {
 			curW = p.Indent
+		}
+		// And a poetic verse is never justified, even in a paragraph that
+		// opens in prose: the rows of a poem line that wraps stay ragged. A
+		// poetic verse shares no line with another verse (poeticJoin), so a
+		// line holding any of its runs is all poem. readingJustifyProse.
+		var poetic map[int]bool
+		if p.Justify {
+			for _, v := range para {
+				if verseIsPoetic(v.Text) {
+					if poetic == nil {
+						poetic = map[int]bool{}
+					}
+					poetic[v.Verse] = true
+				}
+			}
 		}
 
 		flushLine := func(poemBreak bool) {
@@ -400,6 +427,15 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 			return false
 		}
 
+		poemRow := func() bool {
+			for _, r := range cur {
+				if poetic[r.Verse] {
+					return true
+				}
+			}
+			return false
+		}
+
 		place := func(unit []styledRun) {
 			ghost := len(unit) > 0 && unit[0].Kind == runVerseGap
 			unitW := float32(0)
@@ -414,7 +450,12 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 				add += p.SpaceW
 			}
 			if len(cur) > 0 && curW+add > p.Width {
+				// Justify it before it goes (readingJustifyProse).
+				spread := p.Justify && prose && !poemRow() && spreadLine(cur, p.Width-curW)
 				flushLine(false) // width wrap — never an authored break
+				if spread {
+					lay.Lines[len(lay.Lines)-1].Justified = true
+				}
 			}
 			if !ghost {
 				if lineHasText() {
@@ -529,6 +570,25 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 	lay.Height = y
 	lay.Text = text.String()
 	return lay
+}
+
+// spreadLine justifies one line a prose paragraph broke for width: its slack
+// is shared evenly among the gaps between its runs, so the last run ends on
+// the measure and the first does not move — an indent stays an indent. Every
+// gap stretches, the one after a verse number and those around an omitted
+// verse's mark included, as each is an ordinary space on the other surfaces.
+// Only X moves: the breaks, the offsets and the text are the ragged layout's.
+// It answers whether it spread the line (a line of one run, or with no slack,
+// stays as it is). readingJustifyProse.
+func spreadLine(runs []styledRun, slack float32) bool {
+	if slack <= 0 || len(runs) < 2 {
+		return false
+	}
+	extra := slack / float32(len(runs)-1)
+	for i := 1; i < len(runs); i++ {
+		runs[i].X += float32(i) * extra
+	}
+	return true
 }
 
 // tintSpan is one painted wash rectangle: a maximal run of same-tint tokens
