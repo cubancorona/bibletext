@@ -115,9 +115,9 @@ the conclusion that the face needs far more room than it does.
 |---|---|---|---|
 | Apple panes (iOS + macOS) | `reading.go` — the CSS `font-size`, from `readingGlyphPx()` | the native paragraph sweep, from `readingLinePitchEm` | `reporterMeasureEm × readingReferencePx()` across the bridge |
 | Fyne canvas pane | `styledPaneTextSize()` — `readingGlyphSize` of `readingBodyBase` × the reader's setting, in Fyne units (a pixel at 100% on Windows and Linux), as the Apple panes use points; it took the toolkit's interface size, 18, until 24 September 2026, which set the page 14% small | `page.PitchEm × p.textSize` from the reading page (1.55 on its phone page and 1.3 on its book page until 24 September 2026) | `readingPageAt(width, p.referenceSize())` — the measure, the side and the page |
-| Android overlay | Java: `textSizeDp × density × opticalScale` | Java: `pitch × textSizePx` | `androidReadingMeasureDp(reporter, referenceDp)` |
+| Android overlay | Java: `textSizeDp × density × opticalScale` | Java: `page.PitchEm × textSizePx` | the page's `Measure` in dp, centred by `BtBridge.applyReadingPadding` |
 | Verse-of-the-day card | `readingGlyphPx()`, the Apple/Android body size, as a `canvas.Text` `FontSource` | the face's own line box (`readingParagraph`) | the card's inner width — no reporter measure; it is one passage |
-| generated site | `remSize(webScriptureBaseRem)` | `ReadingLinePitchEm()` | `.wrap{max-width:40rem}` — root rem, deliberately not em |
+| generated site | `remSize(webScriptureBaseRem)` | `ReadingPhonePitchEm()` / `ReadingBookPitchEm()` | `.wrap.page{max-width:37.96875rem}` — the measure plus the side minimum each side, in root rem, deliberately not em |
 | share card | its own face rotation, auto-fitted | n/a | n/a |
 
 **Verse numbers** are ordinary figures in the bold cut at `0.66` of the body,
@@ -262,7 +262,12 @@ This list is kept current as each surface is brought to the spec.
   container queries keeps the phone page). Every prose paragraph is indented
   on the book page, the first included, as every app pane indents it (the web
   alone skipped the first and the one after a poem, and gave a poem-opening
-  paragraph .55rem of its own). The verse number is raised a third of the body
+  paragraph .55rem of its own). One difference stays in the rule itself: a
+  paragraph that opens in prose and turns to poetry is indented and justified
+  on the web, Android and the Windows and Linux pane, and unindented and
+  ragged on the Apple panes, which must leave any paragraph holding a poem
+  line unjustified (TextKit stretches a justified paragraph's poem lines) and
+  key their indent on justification. The verse number is raised a third of the body
   (.5051em of the numeral; was .45em), the omitted verses' holes are marked
   (the web drew none), the footnotes are the scripture face at .85 of the body
   with the page's pitch and a fifth of the body between entries (were the

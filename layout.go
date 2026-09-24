@@ -105,8 +105,8 @@ func mobileRailWanted(tablet, phoneLandscapeRail bool, w, h float32) bool {
 // it for a rail it would not show (an iPad in chosen full-screen keeps its
 // reading position exactly because nothing rebuilds on rotation). landscape is
 // its own term so a phone that had chosen full-screen still rebuilds when the
-// presentation flips: that rebuild is what re-reads the typography gate and
-// pushes the measure.
+// presentation flips: that rebuild re-pushes the chapter, at the page the new
+// width chooses (reading_page_width.go).
 type renderedLayout struct {
 	class     layoutClass
 	rail      bool

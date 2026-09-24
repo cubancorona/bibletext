@@ -599,14 +599,15 @@ func chapterFingerprint(state *AppState, hl string) string {
 //
 // The font stack leads with Georgia — a warm, screen-optimised book serif that
 // is present on both macOS and iOS and matches the desktop chrome — with Iowan
-// Old Style and Times as fallbacks. On phones, generous line-height + blank-line
-// paragraph gaps give an unhurried feel; iPads use the U.S. Reports set — 1.3
-// leading, first-line indents (see reporterLayoutActive / reporterMeasureEm).
-// Kerning + ligatures + old-style numerals add a faint warmth on both.
-// reporterLayout is a test seam over reporterLayoutActive. On darwin,
-// reporterLayoutActive is true for both macOS and iOS because the desktop also
-// uses the reporter page (reporter_macos.go). Host tests therefore use reporter
-// layout unless they pin this seam; phone-layout tests must set it false.
+// Old Style and Times as fallbacks. The page is one of the two the reading page
+// specifies (reading_page.go): the phone page's paragraph gaps, or the book
+// page's first-line indents with none, at the one pitch both share — chosen by
+// the pane's width (reporterLayoutActive). Kerning + ligatures + old-style
+// numerals add a faint warmth on both.
+// reporterLayout is a test seam over reporterLayoutActive. A host test on
+// darwin asks the macOS answer, which is the book page unless a window
+// narrower than it is open; tests that depend on a page pin this seam
+// (withReporterLayout).
 var reporterLayout = reporterLayoutActive
 
 func buildChapterHTML(state *AppState, verses []Verse) string {

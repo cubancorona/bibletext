@@ -4143,7 +4143,8 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 
 	// Keep the native reporter column in sync with the text-size setting (the
 	// measure is em-based, so Large/XL widen the column and keep the line's
-	// character count at the reporter's ~59). Phones pass 0 → legacy insets.
+	// character count at the reporter's ~59). The phone page passes 0: the
+	// side minimum each side, and the full width between.
 	// BEFORE the import below. A face registered afterwards is of no use to a
 	// sweep that has already run.
 	registerAppleReadingFonts()

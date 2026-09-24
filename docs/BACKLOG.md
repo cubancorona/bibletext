@@ -25,6 +25,16 @@ What the spec work left, each one a known difference rather than a guess:
   would give both.
 - **A note pill under a heading on Android's book page** sits 7px higher than
   on the phone page (the entry below).
+- **A paragraph that opens in prose and turns to poetry** is indented and
+  justified on the web, Android and the Windows and Linux pane, and unindented
+  and ragged on the Apple panes. The Apple dialect marks any paragraph holding
+  a poem line `p.pm` and left-aligns it (`reading.go`), because TextKit would
+  stretch its poem lines if it were justified, and the native indent keys on
+  justification (`firstLineHeadIndent` in `reading_ios.go`/`reading_macos.go`),
+  the one paragraph property the importer keeps. Matching the others there
+  needs a second signal through the importer for "opens in prose" — an
+  alignment the stylesheet can set and the importer keeps, such as natural
+  against left — and the prose opening would still be ragged.
 - **The web's footnotes keep their "Notes" label and full-width rule,** where
   the apps draw a short hairline: a web page has no app header to carry the
   section's name.

@@ -99,12 +99,15 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 		}
 		b.WriteString("<p>")
 		if reporter && !verseIsPoetic(para[0].Text) {
-			// A MARKER, not an indent. The same rule as the Apple dialect
-			// (reading.go): every paragraph is indented except one that OPENS
-			// on a poem line, because poetry is never first-line indented in
-			// print, and a mixed paragraph opening with prose keeps it — with
-			// the gap gone, the indent is what tells the reader a new
-			// paragraph started.
+			// A MARKER, not an indent. The rule the web and the Windows and
+			// Linux pane use: every paragraph is indented except one that
+			// OPENS on a poem line, because poetry is never first-line
+			// indented in print, and a mixed paragraph opening with prose
+			// keeps it — with the gap gone, the indent is what tells the
+			// reader a new paragraph started. The Apple panes differ on the
+			// mixed paragraph: they must leave any paragraph holding a poem
+			// line unjustified, and indent only justified ones, so theirs has
+			// none (docs/BACKLOG.md, "The reading page: what is left").
 			//
 			// This used to be an em-space and an en-space, drawing the indent
 			// with characters because the importer has no CSS. They were the
