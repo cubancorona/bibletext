@@ -547,6 +547,18 @@ durable history. Re-reading the same ground with no model in hand is what
 found them, and adversarial verification is what kept the count honest — a
 fifth candidate was refuted on consequence and is not in this table.
 
+**The disk the journeys walk.** Until 24 September 2026 the journeys read the
+translation cache of whatever machine ran them: applyLoadedVersion asks
+versionCacheIsCurrent, and that decoded the machine's own downloaded file, 849
+times a walk. A developer's machine walked a world in which every landed
+translation was current on disk, CI a world in which none was, and the walk
+took ten minutes under the race detector. The suite now keeps its own cache
+(TestMain, `main_test.go`), and the arrivals walk builds the disk an arrival
+lands on — each translation's current edition cached, as the fetch that landed
+it leaves it — so every machine walks the same one. Still not walked: the arm
+where the disk decides an arrival, a failed fetch served by the previous
+edition and marked stale (`versions_ui.go`).
+
 ## The whole machine — what a complete model must cover
 
 This document began as the storage question and grew into the map below,

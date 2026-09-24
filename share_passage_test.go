@@ -312,7 +312,8 @@ func TestPassageShareEqualsSelectionRouteOverLocalCaches_LocalOnly(t *testing.T)
 			t.Fatalf("version %q is not in the catalogue", id)
 		}
 		var bd *BibleData
-		for _, path := range append([]string{cachePathForVersion(id)}, supersededCachePaths(v)...) {
+		for _, own := range append([]string{cachePathForVersion(id)}, supersededCachePaths(v)...) {
+			path := realCachePath(own) // the machine's, not the suite's
 			if _, err := os.Stat(path); err != nil {
 				continue
 			}

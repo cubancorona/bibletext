@@ -37,6 +37,13 @@ go test -race ./...
 go vet ./...
 ```
 
+The suite keeps its own translation cache (TestMain, `main_test.go`): no test
+reads or writes the downloaded translations the app keeps on disk, and a test
+that needs a cache on disk builds it in a temp directory of its own
+(`mustCache`). The few that check real downloaded text do so on purpose,
+through `realCachePath`, and skip without it; the cross-reference render
+fetches the Treasury zip instead.
+
 Format changed Go files with `gofmt -w <files>`. Use `git diff --check` to catch
 whitespace errors and inspect `git status --short` before handing work off.
 

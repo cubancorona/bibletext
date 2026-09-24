@@ -105,8 +105,9 @@ func compactGalleryState(t *testing.T) *AppState {
 
 	// Read exactly the file the build under test would read: cachePathForVersion
 	// carries the compiled cache epoch, so a sibling epoch left behind by another
-	// branch is never picked up and no lexical ordering is involved.
-	path := cachePathForVersion(defaultVersionID)
+	// branch is never picked up and no lexical ordering is involved. The
+	// machine's copy (realCachePath), not the suite's, which holds none.
+	path := realCachePath(cachePathForVersion(defaultVersionID))
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Skipf("no cached WEB translation at %s — run the app once to populate it: %v", path, err)

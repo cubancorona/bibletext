@@ -29,8 +29,8 @@ import (
 // files: BIBLETEXT_RENDER_XREFS names a decoded canon (the JSON
 // TestLiveAPIBibleFullCanon writes to BIBLETEXT_FULL_CANON_OUT; licensed
 // text, so it lives outside the repository) and BIBLETEXT_RENDER_OUT the
-// directory for the PNGs. The Treasury zip must already be cached (open the
-// panel once in the app, or run the app's fetch).
+// directory for the PNGs. The Treasury zip is taken from the machine's cache
+// when it is there (open the panel once in the app), and fetched otherwise.
 //
 //	BIBLETEXT_RENDER_XREFS=/path/to/nkjv-canon.json BIBLETEXT_RENDER_OUT=/tmp/xrefs \
 //	  go test -run TestRenderCrossRefPanel -v .
@@ -58,8 +58,16 @@ func TestRenderCrossRefPanel(t *testing.T) {
 	th := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 	app.Settings().SetTheme(th)
 	licenseNKJVForTest(t)
+	// The suite keeps its own cache, so hand it the machine's Treasury zip
+	// (read, never written); without one, ensureCrossRefs fetches into the
+	// suite's directory, not the machine's.
+	if zip, err := os.ReadFile(realCachePath(crossRefCachePath())); err == nil {
+		if err := os.WriteFile(crossRefCachePath(), zip, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := ensureCrossRefs(); err != nil {
-		t.Fatalf("the Treasury index must be cached for this render: %v", err)
+		t.Fatalf("no Treasury index, neither the machine's nor fetched: %v", err)
 	}
 
 	// The popup's size on a 6.9" phone: aiPanelSize of a 430×932 canvas,

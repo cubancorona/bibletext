@@ -20,9 +20,10 @@ import (
 //
 // Skips without the licensed cache, which is where every other check of this
 // text lives too. Write one with the app, or with the fetch the release
-// pipeline uses.
+// pipeline uses. It reads the machine's cache (realCachePath), never the
+// suite's; BIBLETEXT_CACHE_PATH names another, a simulator's say.
 func TestNKJVRedLetterTableIsAcceptedByItsOwnGuard(t *testing.T) {
-	path := cachePathForVersion("nkjv")
+	path := realCachePath(cachePathForVersion("nkjv"))
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Skipf("no licensed cache at %s — open the NKJV in the app once", path)

@@ -24,6 +24,7 @@ package bibletext
 
 import (
 	"fmt"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -202,6 +203,19 @@ func checkArrivalInvariants(prev, now arrivalFacts, ev arrivalEvent) []string {
 func TestArrivalJourneysKeepTheirPromise(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
+
+	// The disk an arrival lands on: each translation in these journeys has its
+	// current edition cached, as the fetch that landed it has just written it,
+	// so applyLoadedVersion finds it current. Built here, so every machine
+	// walks the same world; the journeys used to read whatever the machine
+	// running them had downloaded, and CI, with nothing, walked another.
+	t.Setenv("BIBLETEXT_CACHE_PATH", filepath.Join(t.TempDir(), cacheFileName))
+	for _, id := range []string{defaultVersionID, arrivalLinkVersion, arrivalOtherVersion} {
+		mustCache(t, cachePathForVersion(id), fullValidBible())
+		if v, ok := versionByID(id); !ok || !versionCacheIsCurrent(v) {
+			t.Fatalf("control: %s's seeded edition is not current, so this is not the world the journeys say they walk", id)
+		}
+	}
 
 	shortest := map[string]int{}
 	route := map[string]string{}

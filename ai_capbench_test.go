@@ -11,14 +11,14 @@ package bibletext
 //	set -a; source ./.env.local; set +a
 //	BIBLETEXT_CAPBENCH=1 go test -run TestFindCapBench -v -timeout 900s .
 //
-// It also needs a full Bible cache on disk (any installed copy's
-// ~/Library/Caches/bibletext/bibletext-cache.json) — skips without one.
+// It also needs the machine's current WEB cache, which any installed copy
+// writes once it has downloaded the translation (realCachePath; the suite's
+// own cache holds none) — skips without one.
 
 import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -65,8 +65,9 @@ func TestFindCapBench(t *testing.T) {
 	if os.Getenv("BIBLETEXT_CAPBENCH") != "1" {
 		t.Skip("set BIBLETEXT_CAPBENCH=1 (and source .env.local) to run the paid cap benchmark")
 	}
-	home, _ := os.UserHomeDir()
-	bd, err := loadBibleFromCache(filepath.Join(home, "Library/Caches/bibletext/bibletext-cache.json"))
+	// The machine's current WEB. This named the pre-epoch file, which no build
+	// since the epochs writes, so it could only find a stale one or none.
+	bd, err := loadBibleFromCache(realCachePath(cachePathForVersion(defaultVersionID)))
 	if err != nil {
 		t.Skipf("no full Bible cache to resolve against: %v", err)
 	}
