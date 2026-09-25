@@ -3,10 +3,13 @@
 > **Status.** All seven machines are enumerated, and the refresh and arrivals
 > layers also carry the TRAJECTORY harness, which walks journeys rather than
 > cells, because a promise is broken by a sequence and no single cell is one.
-> Together they record **zero** incoherent states. **Every defect the scouting
-> reported has now been closed — eighteen in all**: `V1` (a silent stale-serve), `V2` (its root cause, an
-> unsynced cache write), `D1` (a destructive purge on an answer the app could
-> not verify), `D2` (licensed text retained with an unbounded lifetime), `D3`
+> Together they record **one open** incoherent state: `D17` (**a translation
+> shown from its previous edition is not updated while the app runs**), found
+> when the arrivals walk was given the disk that decides an arrival. **Every
+> defect the scouting reported has now been closed — eighteen in all**: `V1`
+> (a silent stale-serve), `V2` (its root cause, an unsynced cache write), `D1`
+> (a destructive purge on an answer the app could not verify), `D2` (licensed
+> text retained with an unbounded lifetime), `D3`
 > (a non-default translation stale in silence), `D4` (a banner outliving the
 > seed), `D5` (a notice unreachable from the only surface that shows it),
 > `D6` (a downloaded Bible discarded because it could not be cached), `D7`
@@ -124,6 +127,8 @@ stateDiagram-v2
         Dead --> Dead: a later switch to that translation must NOT move the reader (D12)
         Parked --> Displaced: another translation loads first — said, not dropped (D14)
         Parked --> Kept: the reader picks a different translation — the park survives (D13)
+        Parked --> Previous: the fetch fails and the previous edition serves — recorded and said (D3)
+        Previous --> Previous: nothing fetches the current edition while the app runs (D17, OPEN)
     }
 
     M4 --> L: what the launch decodes is what M4 then holds
@@ -252,6 +257,7 @@ of how much of the space the defect covers.
 | ~~D14~~ | ~~A link displaced by another translation's load is dropped with nothing said~~ | **FIXED 2026-08-29** | 0 | — |
 | ~~D15~~ | ~~Search results survive a switch: old wording under a new name, and a tap writes a dead reference~~ | **FIXED 2026-08-29** | 0 | — |
 | ~~D16~~ | ~~A wider canon's history is offered dead after a switch and deleted at the next launch~~ | **FIXED 2026-08-29** | 0 | — |
+| D17 | A translation shown from its previous edition is not updated while the app runs | **OPEN** — found 2026-09-25 | 1 | the previous decode for the rest of the session, under a notice promising an update that nothing in the session fetches |
 
 ### V1 — FIXED 2026-08-28
 
@@ -554,10 +560,52 @@ times a walk. A developer's machine walked a world in which every landed
 translation was current on disk, CI a world in which none was, and the walk
 took ten minutes under the race detector. The suite now keeps its own cache
 (TestMain, `main_test.go`), and the arrivals walk builds the disk an arrival
-lands on — each translation's current edition cached, as the fetch that landed
-it leaves it — so every machine walks the same one. Still not walked: the arm
-where the disk decides an arrival, a failed fetch served by the previous
-edition and marked stale (`versions_ui.go`).
+lands on, so every machine walks the same one. Since 25 September it walks
+three: the link's translation with its current edition cached, with only the
+edition before it, and with nothing. The second is the arm where the disk
+decides an arrival — a failed fetch served by the previous edition and marked
+stale (`versions_ui.go`) — and it is where `D17` was found.
+
+### D17 — OPEN, found 2026-09-25
+
+On the disk that holds only a translation's previous edition, a link to it
+whose fetch fails is served that edition: the load tail records it as stale
+(`D3`), and the parked passage opens in it. Every invariant checked after a
+step holds there — the record agrees with the screen, and the picker footer
+names the translation — and it is the right answer for a reader who is
+offline.
+
+What does not hold is the promise the footer makes. It says the translation
+"is showing a previous edition until the update can be downloaded", and nothing
+while the app runs will download it. The previous decode is now in
+`loadedVersions`. The picker (`switchVersionInteractive`) and a tapped link
+(`switchToLinkVersion`) both treat a translation in memory as loaded and
+switch to it without a load. `switchVersion` re-reads the disk for a stale one
+(`D11`), but only once its current edition is there, and the one thing that
+writes a non-default translation's current edition is a load of that
+translation, which a translation in memory is never given. The background
+refresh upgrades the default translation alone. So the reader who comes back
+online, opens the picker and chooses the translation again is handed the same
+previous edition under the same sentence, for as long as the app runs; the
+next launch that restores it with a connection fetches it.
+
+The shortest route, on the previous-edition disk, is link-names-other ->
+fetch-fails-previous-serves. From there nothing the walk does next puts the
+current edition on screen, though the network is up for every step that could.
+That is a reachability property, not a state, so it is checked over the walk
+(`A-F`, `checkArrivalLiveness`), the way `D5` was. It is not an arrivals defect
+in origin: it is the refresh machine covering the default translation only,
+meeting the selection machine's second copy. The reader's own choice of the
+translation, made offline, lands in the same place.
+
+`D11` records its fix as closing exactly this — "before it, a non-default
+translation recorded as stale had no way to stop being stale within a
+session" — and its own reachability note says why it could not: nothing
+writes the current edition it waits for. The walk could not see the hole until
+it walked this disk. `TestAPreviousEditionIsNotUpdatedWhileTheAppRuns`
+reproduces it through the app's own entry points, the picker and a tapped
+link, with the network up and no fetch ever made, and fails the day it is
+fixed.
 
 ## The whole machine — what a complete model must cover
 
@@ -658,10 +706,11 @@ not named in its register, and each test logs its own count when run with
 | **M3** refresh | `version_refresh_flow_test.go` | 160 cells across pending × seed × downloading × backoff × active version, and **310 journeys** to depth 4 from the two starting states a launch can produce |
 | **M4** selection | `version_selection_flow_test.go` | 8 cells — memory (absent, current epoch, previous epoch) × disk (absent, current, previous), one unserveable combination skipped |
 | **M5 × M6 × M7** launch | `version_launch_flow_test.go` | 16 cells — the saved choice (default, wider canon, licensed) × its fate at launch (loads, load fails, superseded only, unselectable) × the saved book (Genesis, or Tobit under the wider canon) |
-| **Arrivals** | `version_arrivals_flow_test.go` | **780 journeys / 2930 steps** to depth 4 over five events — a link naming another translation, its fetch failing or landing, the reader picking that translation or a different one — with the invariants asserted after every step |
+| **Arrivals** | `version_arrivals_flow_test.go` | **4662 journeys / 17730 steps** to depth 4 over six events — a link naming another translation, its fetch failing with nothing to fall back on or with the previous edition serving, or landing, the reader picking that translation or a different one — on three disks for the link's translation (its current edition, only the previous one, none), with the invariants asserted after every step and liveness over the walk |
 
-The cells found `V1`, `V2`, `D1`–`D3`, `D6`–`D11`; the journeys found `D4`
-and `D12`; the model-free second pass found `D13`–`D16`. All are closed.
+The cells found `V1`, `V2`, `D1`–`D3`, `D6`–`D11`; the journeys found `D4`,
+`D12` and `D17`; the model-free second pass found `D13`–`D16`. All are closed
+but `D17`.
 
 Nothing in the map above is unenumerated. What the enumerations do not
 claim: the surfaces listed under *The surfaces that must not lie* are checked
