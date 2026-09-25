@@ -80,6 +80,7 @@ func realCachePath(p string) string { return filepath.Join(realCacheDir, filepat
 //	BIBLE_API_KEY               the API.Bible key                       apiKey, versions.go
 //	BIBLETEXT_LICENSE_<ID>      the operator's licence for <ID>         licensed, versions.go
 //	BIBLETEXT_PROVIDER_ID_<ID>  <ID>'s id at the provider               providerVersionID, versions.go
+//	BIBLETEXT_ENABLE_TESTING    makes unlicensed versions selectable    testingVersionsEnabled, versions.go
 //	ANTHROPIC_API_KEY           each AI provider's key, as envVarFor    providerAPIKey, ai_providers.go
 //	GEMINI_API_KEY              names them
 //	OPENAI_API_KEY
@@ -98,6 +99,11 @@ func realCachePath(p string) string { return filepath.Join(realCacheDir, filepat
 // the environment as their cue to call the real service. CI sets none of
 // them, so nothing there showed it.
 //
+// BIBLETEXT_ENABLE_TESTING is no credential, and .env.local does not set it,
+// but it changes which translations the app offers as the licences do: it
+// makes every unlicensed one selectable, for internal QA. Exported, it failed
+// five tests that expect them locked, so it is withheld with the rest.
+//
 // So TestMain takes every one of them out of the environment before any test
 // runs, and keeps what it found. They are matched by name, the two
 // per-translation families by prefix and the AI keys through envVarFor, so a
@@ -114,7 +120,7 @@ var withheldCredentials map[string]string
 // isCredential reports whether name is one of the variables in the table.
 func isCredential(name string) bool {
 	switch {
-	case name == "BIBLE_API_KEY", name == "GITHUB_TOKEN",
+	case name == "BIBLE_API_KEY", name == "GITHUB_TOKEN", name == "BIBLETEXT_ENABLE_TESTING",
 		strings.HasPrefix(name, "BIBLETEXT_LICENSE_"),
 		strings.HasPrefix(name, "BIBLETEXT_PROVIDER_ID_"):
 		return true
@@ -245,7 +251,7 @@ func TestNoTestSeesTheMachinesCredentials(t *testing.T) {
 		t.Fatalf("tests can see %v, which TestMain should have withheld", names)
 	}
 
-	kinds := []string{"BIBLE_API_KEY", "GITHUB_TOKEN",
+	kinds := []string{"BIBLE_API_KEY", "GITHUB_TOKEN", "BIBLETEXT_ENABLE_TESTING",
 		"BIBLETEXT_LICENSE_NKJV", "BIBLETEXT_PROVIDER_ID_NKJV",
 		"BIBLETEXT_LICENSE_LSB", "BIBLETEXT_PROVIDER_ID_LSB"}
 	for _, p := range aiProviders() {

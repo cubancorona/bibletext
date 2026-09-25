@@ -46,12 +46,14 @@ fetches the Treasury zip instead.
 
 Nor does any test see the machine's credentials. TestMain takes
 `BIBLE_API_KEY`, every `BIBLETEXT_LICENSE_*` and `BIBLETEXT_PROVIDER_ID_*`,
-the AI providers' keys and `GITHUB_TOKEN` out of the environment before the
-run, so a shell that has sourced `.env.local` runs the suite CI runs. A test
-that needs one sets it with `t.Setenv`. The live tests that call API.Bible or
-an AI provider read what the suite found (`liveEnv`) and run only when their
-switch is set as well as the key: `BIBLETEXT_LIVE=1` for the probes,
-`BIBLETEXT_LIVE_FULL_CANON=1` and its like for the whole-canon fetches.
+the AI providers' keys, `GITHUB_TOKEN` and the QA switch
+`BIBLETEXT_ENABLE_TESTING` out of the environment before the run, so a shell
+that has sourced `.env.local`, or exported the QA switch, runs the suite CI
+runs. A test that needs one sets it with `t.Setenv`. The live tests that call
+API.Bible or an AI provider read what the suite found (`liveEnv`) and run only
+when their switch is set as well as the key: `BIBLETEXT_LIVE=1` for the
+probes, `BIBLETEXT_LIVE_FULL_CANON=1` and its like for the whole-canon
+fetches.
 
 Format changed Go files with `gofmt -w <files>`. Use `git diff --check` to catch
 whitespace errors and inspect `git status --short` before handing work off.
