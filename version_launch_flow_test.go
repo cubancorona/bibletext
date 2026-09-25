@@ -21,6 +21,10 @@ package bibletext
 import (
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -511,4 +515,219 @@ func TestAWiderCanonsTrailSurvivesReadingANarrowerOne(t *testing.T) {
 			t.Fatal("a book no canon in this build contains was carried forward")
 		}
 	}
+}
+
+// TestTheLaunchDropsWhatTheRestoreRecords is D18, which is OPEN.
+//
+// Every cell above, and D9's and D10's own tests, read the restore's answer
+// off the state the restore wrote. The reader never sees that state. The
+// launch restores onto one of its own on the load goroutine (loadStateData),
+// and StartBackgroundLoad copies it into the live state field by field — and
+// the fields it copies do not include the two records the restore makes: the
+// translation the reader chose, when the launch had to show another (D9, and
+// the sentence D10 reads off it), and the mark that a restored translation is
+// showing its previous edition (D3's launch site). On the state the reader is
+// using, the choice is gone and their next navigation saves the fallback over
+// it, and the previous edition is shown with nothing said.
+//
+// The hand-off runs inside a goroutine a test cannot await, so that half is
+// read from the source: every field the restore writes on its state, directly
+// or through a helper handed the state, must be one the hand-off copies. The
+// other half runs for real: loadStateData does record both on the state it
+// returns.
+//
+// It asserts what the app does TODAY. The day D18 is fixed it fails, and
+// should be turned round into the fix's guard, with D18 struck from
+// docs/VERSION_STATES.md.
+func TestTheLaunchDropsWhatTheRestoreRecords(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	// The launch this reads needs no network: the default translation's
+	// current edition is on disk, no translation's source is online, and no
+	// licence reads back, so the NKJV cannot be selected.
+	t.Setenv("BIBLETEXT_CACHE_PATH", filepath.Join(t.TempDir(), cacheFileName))
+	t.Setenv("BIBLE_API_KEY", "")
+	t.Setenv("BIBLETEXT_LICENSE_NKJV", "")
+	t.Setenv("BIBLETEXT_PROVIDER_ID_NKJV", "")
+	prev := sharedKeys
+	ks := &keyStore{prefs: newFakePrefs(), secrets: emptySecretStore{}}
+	sharedKeys = func() *keyStore { return ks }
+	t.Cleanup(func() { sharedKeys = prev })
+	for _, id := range []string{defaultVersionID, "webc"} {
+		withVersionSource(t, id, &arrivalSource{offline: true})
+	}
+	mustCache(t, cachePathForVersion(defaultVersionID), fullValidBible())
+	webc, _ := versionByID("webc")
+	mustCache(t, supersededCachePaths(webc)[0], widerCanonBible())
+
+	// The restore records both, on the state loadStateData hands over.
+	for _, tc := range []struct {
+		saved, onScreen string
+		recorded        func(st *AppState) bool
+	}{
+		{"nkjv", defaultVersionID, func(st *AppState) bool { return st.preferredVersion == "nkjv" }},
+		{"webc", "webc", func(st *AppState) bool { return st.staleVersions["webc"] }},
+	} {
+		writeReadingState(appPrefs(), readingState{Version: tc.saved, Book: "John", Chapter: 1})
+		loaded, err := loadStateData()
+		if err != nil {
+			t.Fatalf("control: a launch with %s saved must open: %v", tc.saved, err)
+		}
+		if loaded.CurrentVersion != tc.onScreen || !tc.recorded(loaded) || fullPendingNotice(loaded) == "" {
+			t.Fatalf("control: with %s saved the restore must show %s and record why, and say so; on %s, notice %q",
+				tc.saved, tc.onScreen, loaded.CurrentVersion, fullPendingNotice(loaded))
+		}
+	}
+
+	written := stateFieldsWrittenBy(t, "restoreReadingState")
+	copied := map[string]bool{}
+	for f, from := range stateFieldsCopiedByTheLaunch(t) {
+		copied[f] = from == f
+	}
+	for _, f := range []string{"preferredVersion", "staleVersions", "CurrentVersion"} {
+		if !written[f] {
+			t.Fatalf("control: the restore no longer writes %s, so this reading of the source is wrong", f)
+		}
+	}
+	if !copied["CurrentVersion"] {
+		t.Fatal("control: the hand-off no longer copies CurrentVersion, so this reading of the source is wrong")
+	}
+	var dropped []string
+	for f := range written {
+		if !copied[f] {
+			dropped = append(dropped, f)
+		}
+	}
+	sort.Strings(dropped)
+	if got := strings.Join(dropped, " "); got != "preferredVersion staleVersions" {
+		t.Fatalf("the launch hand-off now drops [%s] of what the restore records, where D18 is exactly "+
+			"preferredVersion and staleVersions. If both are carried, D18 is fixed: strike it from "+
+			"docs/VERSION_STATES.md and turn this test round into the fix's guard. Anything else dropped "+
+			"is a new defect.", got)
+	}
+}
+
+// stateFieldsWrittenBy parses the package and returns the AppState fields the
+// named function writes on its state parameter: assignments to state.X or
+// state.X[k], and the same inside any package function it hands the state to
+// first, one call deep — markVersionStale writing staleVersions is one.
+func stateFieldsWrittenBy(t *testing.T, name string) map[string]bool {
+	t.Helper()
+	funcs := packageFuncs(t)
+	fn := funcs[name]
+	if fn == nil {
+		t.Fatalf("%s is not in the package", name)
+	}
+	param := firstParamName(fn)
+	out := map[string]bool{}
+	for f := range fieldsAssignedOn(fn, param) {
+		out[f] = true
+	}
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok || len(call.Args) == 0 {
+			return true
+		}
+		if arg, ok := call.Args[0].(*ast.Ident); !ok || arg.Name != param {
+			return true
+		}
+		if callee, ok := call.Fun.(*ast.Ident); ok && funcs[callee.Name] != nil {
+			for f := range fieldsAssignedOn(funcs[callee.Name], firstParamName(funcs[callee.Name])) {
+				out[f] = true
+			}
+		}
+		return true
+	})
+	return out
+}
+
+// stateFieldsCopiedByTheLaunch returns what StartBackgroundLoad's hand-off
+// assigns: state.X = loaded.Y, as X -> Y.
+func stateFieldsCopiedByTheLaunch(t *testing.T) map[string]string {
+	t.Helper()
+	fn := packageFuncs(t)["StartBackgroundLoad"]
+	if fn == nil {
+		t.Fatal("StartBackgroundLoad is not in the package")
+	}
+	out := map[string]string{}
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		as, ok := n.(*ast.AssignStmt)
+		if !ok || len(as.Lhs) != 1 || len(as.Rhs) != 1 {
+			return true
+		}
+		lhs, ok1 := as.Lhs[0].(*ast.SelectorExpr)
+		rhs, ok2 := as.Rhs[0].(*ast.SelectorExpr)
+		if !ok1 || !ok2 {
+			return true
+		}
+		if l, ok := lhs.X.(*ast.Ident); ok && l.Name == "state" {
+			if r, ok := rhs.X.(*ast.Ident); ok && r.Name == "loaded" {
+				out[lhs.Sel.Name] = rhs.Sel.Name
+			}
+		}
+		return true
+	})
+	return out
+}
+
+// packageFuncs parses the package's own Go files, tests excluded, and indexes
+// its top-level functions by name.
+func packageFuncs(t *testing.T) map[string]*ast.FuncDecl {
+	t.Helper()
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fset := token.NewFileSet()
+	out := map[string]*ast.FuncDecl{}
+	for _, name := range files {
+		if strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, name, nil, parser.SkipObjectResolution)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, d := range f.Decls {
+			if fn, ok := d.(*ast.FuncDecl); ok && fn.Recv == nil && fn.Body != nil {
+				out[fn.Name.Name] = fn
+			}
+		}
+	}
+	return out
+}
+
+func firstParamName(fn *ast.FuncDecl) string {
+	if ps := fn.Type.Params.List; len(ps) > 0 && len(ps[0].Names) > 0 {
+		return ps[0].Names[0].Name
+	}
+	return ""
+}
+
+// fieldsAssignedOn is every field of param assigned in fn: param.X = … and
+// param.X[k] = ….
+func fieldsAssignedOn(fn *ast.FuncDecl, param string) map[string]bool {
+	out := map[string]bool{}
+	if param == "" {
+		return out
+	}
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		as, ok := n.(*ast.AssignStmt)
+		if !ok {
+			return true
+		}
+		for _, lhs := range as.Lhs {
+			if ix, ok := lhs.(*ast.IndexExpr); ok {
+				lhs = ix.X
+			}
+			if sel, ok := lhs.(*ast.SelectorExpr); ok {
+				if id, ok := sel.X.(*ast.Ident); ok && id.Name == param {
+					out[sel.Sel.Name] = true
+				}
+			}
+		}
+		return true
+	})
+	return out
 }
