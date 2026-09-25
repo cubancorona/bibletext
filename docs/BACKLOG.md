@@ -1764,12 +1764,12 @@ host, so the measurements are the evidence.
 Both halves are in docs/VERSION_STATES.md: the storage diagram (M1–M3) and,
 since 2026-09-05, a second diagram for M4, the launch space and the arrivals
 layer drawn as the enumerations drive them, with a table of every space's
-own count as its test logs it (15, 10, 160 + 310 journeys, 8, 16, and 1142
+own count as its test logs it (18, 10, 160 + 310 journeys, 8, 22, and 1142
 journeys over 4780 steps in six worlds since 2026-09-25). The document's
 closing section had still said M4–M7 were unenumerated; it now says what is,
-and what the enumerations do not claim. The record of the work follows. Five
+and what the enumerations do not claim. The record of the work follows. Eight
 defects found on 2026-09-25 were fixed the same day; they are listed at the
-end of this entry.
+end of this entry, with three questions for the owner that came with them.
 
 
 **Storage space DONE 2026-08-28** — `docs/VERSION_STATES.md` models the machine
@@ -1837,13 +1837,15 @@ The history-erasure invariant itself held in all sixteen cells, including the
 |---|---|---|
 | ~~D11~~ | ~~A stale version's notice is retired by the disk while its previous decode is still on screen~~ | **FIXED 2026-08-29** |
 
-Not reachable today (nothing writes a non-default version's current epoch
-while its previous decode is in memory), but one obvious feature away. Its
-record also claimed the fix closes a live liveness hole — that a stale
-non-default translation previously had no way to stop being stale within a
-session. It does not: the fix waits for a current epoch that nothing in a
-session writes, for the reason the sentence before gives. That hole was D17,
-fixed 2026-09-25 (below).
+Not reachable when it was found (nothing wrote a non-default version's
+current epoch while its previous decode was in memory), but one obvious
+feature away. Its record also claimed the fix closed a live liveness hole —
+that a stale non-default translation previously had no way to stop being
+stale within a session. It did not: the fix waits for a current epoch that
+nothing in a session wrote, for the reason the sentence before gives. That
+hole was D17, fixed 2026-09-25 (below), and D17 was that feature: the
+refresh now writes the current epoch, so the reload is live only between the
+refresh's cache write and its tail on the UI goroutine.
 
 **The arrivals layer — enumerated 2026-08-29, as JOURNEYS** (780 to depth
 four at the time), because an arrival is a promise kept or broken over time and every way
@@ -1866,7 +1868,8 @@ lenses) found four more, every one on a coupling the map had not drawn:
 
 **All seven machines and the arrivals layer are enumerated. Every defect
 found up to 2026-08-29 is closed; four found on 2026-09-25 were fixed the same
-day, with a fifth (D21) found while fixing them.**
+day, with a fifth (D21) found while fixing them and three more (D22–D24)
+found by verifying the fix.**
 Two lessons worth keeping. Third confirmation that
 cross-products are blind to flow (the arrivals defect is invisible to every
 cross-product in the suite; the journeys found it by four routes). And: a
@@ -1890,6 +1893,9 @@ guards.
 | ~~D20~~ | ~~A previous edition behind the substitution sentence: the picker says a translation was shown instead, and nothing about the edition~~ | session, once D18 is fixed | **FIXED 2026-09-25** |
 | ~~D17~~ | ~~A translation shown from its previous edition is not updated while the app runs: nothing in a session fetches a non-default translation that is already in memory~~ | session | **FIXED 2026-09-25** |
 | ~~D21~~ | ~~The default's refresh sentences say its text is shown while another translation is on screen~~ | session | **FIXED 2026-09-25** |
+| ~~D22~~ | ~~A remembered translation saved beside a place from a wider canon is dropped by the launch that can open it~~ | durable, once D18 is fixed | **FIXED 2026-09-25** |
+| ~~D23~~ | ~~A fetch that lands and cannot be written purges the only copy on disk; the D17 refresh reaches it in session~~ | durable | **FIXED 2026-09-25** |
+| ~~D24~~ | ~~The substitution sentence promises a return nothing in the running app performs~~ | session, once D18 is fixed | **FIXED 2026-09-25** |
 
 They were closed in one change, because D18's fix makes D19 and D20 live. The
 launch now hands its state over through one named function, adoptLaunch,
@@ -1902,6 +1908,29 @@ The refresh owes an upgrade to every public-domain translation recorded as
 showing its previous edition, never a licensed one, and swaps the current
 edition in place when it lands (D17). What closed each, and the guard that
 holds it, is in docs/VERSION_STATES.md.
+
+Verifying that change found three more, each made live or moved by it. A
+remembered translation is saved beside wherever an arrival took the reader,
+and when that was a book its canon lacks, the launch that could open it
+declined the whole restore and the next save wrote the default over it; the
+restore now keeps the translation and drops only the place, which waits in
+the trail (D22). The refresh can fetch a translation whose only copy on disk
+is its previous edition, and a fetch whose write failed still purged it; the
+purge now waits for the current edition on disk (D23). The substitution
+sentence ended "comes back when it can", which nothing in a running app does;
+it now says the choice is tried again each time the app starts, and offers
+choosing it now while its row can be chosen (D24). The verification also
+found that the walks reproduced, rather than ran, what the app does on the
+far side of a goroutine; the three doors that work leaves through are now
+seams the walk holds, so the load's cause, the refresh's choice of what to
+fetch, and what its timer does are the app's own.
+
+Three questions are the owner's, recorded in docs/VERSION_STATES.md under
+"Open decisions": whether tapping the translation shown while a substitution
+is in force should accept it; whether a key the reader cleared on purpose
+should still be remembered as a substitution at every launch; and whether a
+launch that cannot open the remembered translation should prefer a
+translation whose canon holds the saved place.
 
 ## CI runs with the race detector, so 14 tests never run there
 

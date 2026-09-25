@@ -974,7 +974,7 @@ func TestTheArrivalInvariantsCanActuallyFail(t *testing.T) {
 	remembered, _ := versionByID(arrivalRemembered)
 	said := link.Name + " is showing a previous edition until the update can be downloaded."
 	substituted := remembered.Name + " could not be opened this time — " + link.Name +
-		" is shown instead. Your choice is remembered and comes back when it can."
+		" is shown instead. Your choice is remembered and tried again each time the app starts."
 	// A live link to the translation the reader's own load brought, parked
 	// behind that load; and the same park after its failure was told.
 	parkedHere := arrivalFacts{loc: "Genesis|1", parked: true, parkedFor: link.ID, loading: true}
@@ -1657,7 +1657,7 @@ func TestAPreviousEditionIsSaidBehindASubstitution(t *testing.T) {
 	def, _ := versionByID(defaultVersionID)
 	substituted := func(shown string) string {
 		return nk.Name + " could not be opened this time — " + shown +
-			" is shown instead. Your choice is remembered and comes back when it can."
+			" is shown instead. Your choice is remembered and tried again each time the app starts."
 	}
 
 	// The arrival: a link to a translation holding only its previous edition,
@@ -1692,11 +1692,15 @@ func TestAPreviousEditionIsSaidBehindASubstitution(t *testing.T) {
 		t.Fatalf("the launch's footer while downloading reads\n  %q\nwant\n  %q", n, want)
 	}
 
-	// D21: the default's sentences describe the default on screen. On
-	// another translation, with nothing else true, there is nothing to say.
-	st = &AppState{CurrentVersion: arrivalOtherVersion, fullPending: true, fullRetryDelay: 20 * time.Second}
-	if n := fullPendingNotice(st); n != "" {
-		t.Fatalf("on %s the footer describes the default's text as shown: %q", arrivalOtherVersion, n)
+	// D21: the default's own sentences describe the default on screen. On
+	// another translation its previous edition is said as any other
+	// translation's is, behind the substitution too.
+	st = &AppState{CurrentVersion: arrivalOtherVersion, preferredVersion: nk.ID, fullPending: true, fullRetryDelay: 20 * time.Second}
+	other, _ := versionByID(arrivalOtherVersion)
+	want = substituted(other.Name) + "\n" +
+		def.Name + " is showing a previous edition until the update can be downloaded."
+	if n := fullPendingNotice(st); n != want {
+		t.Fatalf("on %s the footer reads\n  %q\nwant\n  %q", arrivalOtherVersion, n, want)
 	}
 }
 

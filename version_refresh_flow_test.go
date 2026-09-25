@@ -163,7 +163,10 @@ var knownRefreshIncoherent = []pinnedRefreshDefect{}
 //
 //	R-A  No surface claims the seed while the complete text is on screen.
 //	R-B  A reader waiting offline is told they are waiting, not that work is
-//	     in progress.
+//	     in progress. The default's own sentences say which while the default
+//	     is on screen (D21); off screen its previous edition is said as any
+//	     other translation's (D3), which promises the update and says nothing
+//	     of its progress, and no sentence may say it is in progress.
 //	R-C  Nothing is owed once the download has landed.
 //	R-D  The default's sentences describe only the default. Each says its text
 //	     "is shown meanwhile", which is false while another translation is on
@@ -176,8 +179,10 @@ func checkRefreshInvariants(o refreshObs) []string {
 	// The seed wording legitimately wins while the reader IS on the seed: it
 	// carries the more important fact (the text is partial), so a backoff
 	// under the seed is not a violation.
-	if !o.facts.seedOnly && o.facts.pending && o.facts.retryDelay > 0 && !o.facts.downloading &&
-		o.notice != "" && !strings.Contains(o.notice, "waiting for a connection") {
+	waiting := !o.facts.seedOnly && o.facts.pending && o.facts.retryDelay > 0 && !o.facts.downloading
+	onDefault := o.facts.current == "" || o.facts.current == defaultVersionID
+	if waiting && (strings.Contains(o.notice, "updating to its latest edition") ||
+		(onDefault && !strings.Contains(o.notice, "waiting for a connection"))) {
 		bad = append(bad, "R-B: a waiting reader is told the update is in progress")
 	}
 	if o.facts.current != "" && o.facts.current != defaultVersionID && strings.Contains(o.notice, "shown meanwhile") {
@@ -384,6 +389,19 @@ func TestTheWaitingNoticeIsReachableFromThePicker(t *testing.T) {
 			"written for exactly this reader can never be shown by the only surface "+
 			"that shows it.", got)
 	}
+	// R-B itself can complain: the in-progress sentence to a reader who is
+	// waiting, on the default or away from it.
+	updating := "World English Bible is updating to its latest edition in the background — the previous edition is shown meanwhile."
+	for _, current := range []string{defaultVersionID, "bsb"} {
+		fired := false
+		f := refreshFacts{pending: true, retryDelay: 20 * time.Second, current: current}
+		for _, bad := range checkRefreshInvariants(refreshObs{facts: f, notice: updating}) {
+			fired = fired || strings.HasPrefix(bad, "R-B:")
+		}
+		if !fired {
+			t.Errorf("control: R-B does not fire on the in-progress sentence to a waiting reader on %s", current)
+		}
+	}
 	// And the retry did start: the reader who came to check is not also made
 	// to wait out the backoff.
 	if !st.fullDownloading || st.fullRetryDelay != 0 || upgradeFetchesStarted.Load() == fetches {
@@ -397,7 +415,9 @@ func TestTheWaitingNoticeIsReachableFromThePicker(t *testing.T) {
 // upgrader restored onto a current BSB after a WEB epoch bump while offline,
 // read that the WEB's previous edition was shown while reading the BSB. The
 // seed banner was already gated on the default being on screen; the footer
-// now is too.
+// now is too. Off screen, the default's previous edition is said by the
+// sentence every other translation's is (D3), and the seed, which is not a
+// previous edition, by nothing, as the banner.
 func TestTheDefaultsSentencesDescribeOnlyTheDefault(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -423,17 +443,29 @@ func TestTheDefaultsSentencesDescribeOnlyTheDefault(t *testing.T) {
 	if !fired {
 		t.Fatal("control: R-D does not fire on the default's sentence over another translation, so its silence below proves nothing")
 	}
-	// The app, on the BSB, with the default waiting and on the seed.
-	for _, f := range []refreshFacts{away, {pending: true, seedOnly: true, current: "bsb"}} {
-		st := f.toState(t)
-		if n := fullPendingNotice(st); n != "" {
-			t.Errorf("D21: on %s the footer says %q", f, n)
+	// The app, on the BSB, with the default waiting, updating, and on the
+	// seed.
+	def, _ := versionByID(defaultVersionID)
+	previous := def.Name + " is showing a previous edition until the update can be downloaded."
+	updating := away
+	updating.downloading = true
+	for _, tc := range []struct {
+		f    refreshFacts
+		want string
+	}{
+		{away, previous},
+		{updating, previous},
+		{refreshFacts{pending: true, seedOnly: true, current: "bsb"}, ""},
+	} {
+		st := tc.f.toState(t)
+		if n := fullPendingNotice(st); n != tc.want {
+			t.Errorf("D21: on %s the footer says %q, want %q", tc.f, n, tc.want)
 		}
 	}
 }
 
 // D3 is a COUPLING defect: M1 knows a version is serving a superseded epoch,
-// M3 only ever refreshes and announces the DEFAULT one. A reader restored
+// and M3, until D17, refreshed and announced only the DEFAULT one. A reader restored
 // onto another translation offline read the previous decoder's output with no
 // notice, no banner and no upgrade for the whole session — the same silence
 // V1 was, in a place V1's fix does not reach.

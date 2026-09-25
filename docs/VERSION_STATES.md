@@ -4,7 +4,7 @@
 > layers also carry the TRAJECTORY harness, which walks journeys rather than
 > cells, because a promise is broken by a sequence and no single cell is one.
 > Together they record **no open** incoherent states. **Every defect the
-> scouting reported has been fixed where it lived — twenty-three in all**: `V1`
+> scouting reported has been fixed where it lived — twenty-six in all**: `V1`
 > (a silent stale-serve), `V2` (its root cause, an unsynced cache write), `D1`
 > (a destructive purge on an answer the app could not verify), `D2` (licensed
 > text retained with an unbounded lifetime), `D3`
@@ -14,19 +14,24 @@
 > (a path algebra that could delete a live cache), `D8` (miss branches
 > disagreeing about the mode they report), `D9` (**the reader's chosen
 > translation erased by a condition that fixes itself**), `D10` (a silent
-> substitution of one translation for another) `D11` (a notice retired
-> while the edition it describes is still on screen) `D12` (a dead link
+> substitution of one translation for another), `D11` (a notice retired
+> while the edition it describes is still on screen), `D12` (a dead link
 > honoured behind the reader's back), `D13` (**someone else's link spending
 > the reader's remembered translation**), `D14` (a displaced link discarded in
 > silence), `D15` (one translation's search results read and navigated under
-> another's name) and `D16` (**a wider canon's trail deleted for reading a
+> another's name), `D16` (**a wider canon's trail deleted for reading a
 > narrower translation**), `D17` (a previous edition never updated while the
 > app ran), `D18` (**the launch dropping the reader's remembered translation
 > and the stale mark**), `D19` (the arrival mark spent by a load it was not
-> set for), `D20` (a previous edition silent behind the substitution) and
-> `D21` (the default's refresh sentences describing a screen that shows
-> another translation). Anything a future change breaks appears as an
-> unpinned violation, by name.
+> set for), `D20` (a previous edition silent behind the substitution), `D21`
+> (the default's refresh sentences describing a screen that shows another
+> translation), `D22` (**the remembered translation dropped by the launch
+> that could open it, when the saved place is in a canon it lacks**), `D23`
+> (**a fetch that could not be written purging the only copy on disk**) and
+> `D24` (a promise on the picker that nothing in the running app kept).
+> Anything a future change breaks appears as an unpinned violation, by name.
+> Three questions that came with them are the owner's, and are recorded under
+> *Open decisions*.
 
 ## Why a state machine and not a checklist
 
@@ -120,6 +125,7 @@ stateDiagram-v2
         Unselectable --> Fallback
         Fallback --> Said: the screen says which text this is (D10)
         Loads --> Trail: history validated in the canon IN HAND, never the fallback's (D16)
+        Loads --> Start: the saved book is not in its canon — its start, the translation kept, the place dormant in the trail (D22)
         Fallback --> Trail
     }
 
@@ -171,14 +177,15 @@ What the refresh owes is `owedUpgrades`: the default while `fullPending`, and
 every other translation while it is recorded in `staleVersions`, fetched with
 the translation on screen first, then the default, then the rest in registry
 order. `fullPending` is still computed for the default alone; the stale mark
-is the rest of the list, and before `D17` nothing read it but the picker. Two
-kinds of translation are never owed. A licensed one is never served stale
-(V-E), and a fetch of it spends the API.Bible monthly quota, which the app
-never spends on its own initiative: a remembered NKJV comes back only at a
-launch that can revalidate it, or when the reader taps its row. A placeholder
-has nothing to fetch. One fetch runs at a time (`fullDownloading`) and one
-backoff serves the whole list (`fullRetryDelay`: 20 s, doubling, capped at 10
-minutes, and zero when nothing is owed).
+is the rest of the list, and before `D17` only the picker and `D11`'s re-read
+in `switchVersion` read it. Two kinds of translation are never owed. A
+licensed one is never served stale (V-E), and a fetch of it spends the
+API.Bible monthly quota, which the app never spends on its own initiative: a
+remembered NKJV comes back only at a launch that can revalidate it, or when
+the reader taps its row or a link to it (`D24` makes the picker say so). A
+placeholder has nothing to fetch. One fetch runs at a time (`fullDownloading`)
+and one backoff serves the whole list (`fullRetryDelay`: 20 s, doubling,
+capped at 10 minutes, and zero when nothing is owed).
 
 ## The states
 
@@ -223,7 +230,7 @@ load path revalidates. This is the §11 obligation and the one place where
 | **Current** | interrupted write | `saveBibleToCache` | **Unusable-current** — made unreachable by the fsync (`V2`) |
 | **Placeholder** | a key arrives | `keyStore` write → picker re-derive | **Current**/**Absent** for that version, `modeReal` |
 | **Licensed-stale** | any load | `licensedCacheStale` → `os.Remove` → refetch | **Current**, or an error — never a stale serve |
-| any | purge | `purgeSupersededCaches`, only from inside a *successful* load | previous epochs removed; the current one never touched |
+| any | purge | `purgeSupersededCaches`, only from inside a *successful* load that put the current epoch on disk (`D23`) | previous epochs removed; the current one never touched |
 
 The purge's precondition is the important one, and it is why the enumeration
 drives it through `loadVersionData` rather than calling it: purging first, and
@@ -249,7 +256,9 @@ is a regression even if every existing test stays green.
   reader is not looking at the best available text has a notice that says so
   — the picker footer, or the seed banner. *Was violated by `V1`; fixed.*
 - **V-D — A purge never removes the only readable copy.** Superseded epochs
-  are deleted only after a verified successful load of the current one.
+  are deleted only after a verified successful load of the current one, and
+  only once that load has put it on disk. *Was violated by `D23`, for a fetch
+  that landed and could not be written; fixed.*
 - **V-E — Licensed text is never served past its window.** The recency check
   governs the serve, not merely the refresh.
 
@@ -286,6 +295,9 @@ world, step and invariant.
 | ~~D19~~ | ~~The arrival mark is spent by a load it was not set for, so the reader's own choice is taken for an arrival~~ | **FIXED 2026-09-25** | 0 | — |
 | ~~D20~~ | ~~A previous edition behind the substitution sentence: the picker says a translation was shown instead, and nothing about the edition~~ | **FIXED 2026-09-25** | 0 | — |
 | ~~D21~~ | ~~The default's refresh sentences say its text is shown while another translation is on screen~~ | **FIXED 2026-09-25** | 0 | — |
+| ~~D22~~ | ~~A remembered translation saved beside a place from a wider canon is dropped by the launch that can open it~~ | **FIXED 2026-09-25** | 0 | — |
+| ~~D23~~ | ~~A fetch that lands and cannot be written purges the only copy on disk~~ | **FIXED 2026-09-25** | 0 | — |
+| ~~D24~~ | ~~The substitution sentence promises a return nothing in the running app performs~~ | **FIXED 2026-09-25** | 0 | — |
 
 ### V1 — FIXED 2026-08-28
 
@@ -457,16 +469,17 @@ arrives on disk, the switch serves memory — and `applyLoadedVersion` decides
 staleness by asking the **disk**, so it retires the notice while the old text
 is still on screen. The reader is told the edition is current, and it is not.
 
-**On reachability, plainly.** Nothing in the app today writes a non-default
-version's current epoch while that version's previous decode sits in memory:
-the background refresh only upgrades the default translation, and a version
-already in memory is never re-read from disk. So this is a guard in `D7`'s
-sense rather than a live defect — but a far shorter reach than `D7`'s, because
-the feature that makes it live is the obvious next one, and `D3`'s notice
-already promises it ("until the update can be downloaded"). The fix also
-closes a hole that IS live: before it, a non-default translation recorded as
-stale had **no way to stop being stale within a session**, however long the
-reader spent online — a straight violation of the liveness invariant.
+**On reachability, plainly.** Until `D17`, nothing in the app wrote a
+non-default version's current epoch while that version's previous decode sat
+in memory: the background refresh upgraded only the default translation, and
+a version already in memory is never re-read from disk. So this was a guard
+in `D7`'s sense rather than a live defect — but a far shorter reach than
+`D7`'s, because the feature that made it live was the obvious next one, and
+`D3`'s notice already promised it ("until the update can be downloaded"). The
+fix was also recorded as closing a hole that WAS live: before it, a
+non-default translation recorded as stale had **no way to stop being stale
+within a session**, however long the reader spent online — a straight
+violation of the liveness invariant.
 
 **That last claim was wrong, and the hole stayed open until `D17` closed
 it.** The fix lets a stale translation stop being stale once its current
@@ -540,7 +553,8 @@ them arrives through a caller that no machine in the map owns.
 
 `D13` is the sharpest thing in this document, because it is a fix creating an
 obligation elsewhere. `D10` made the app *promise*, in writing on the picker,
-that the reader's translation is "remembered and comes back when it can".
+that the reader's translation is "remembered and comes back when it can"
+(words `D24` later corrected to what the app does).
 `applyLoadedVersion` then spent that record on any successful load — its
 comment naming two callers, "the reader picked it" and "the licensed one came
 back". **A tapped link is neither.** So a reader in the fallback state whose
@@ -615,23 +629,23 @@ and `D20` were found.
 On the disk that holds only a translation's previous edition, a link to it
 whose fetch fails is served that edition: the load tail records it as stale
 (`D3`), and the parked passage opens in it. Every invariant checked after a
-step holds there — the record agrees with the screen, and the picker footer
-names the translation — and it is the right answer for a reader who is
+step held there — the record agreed with the screen, and the picker footer
+named the translation — and it is the right answer for a reader who is
 offline.
 
-What does not hold is the promise the footer makes. It says the translation
+What did not hold was the promise the footer makes. It says the translation
 "is showing a previous edition until the update can be downloaded", and nothing
-while the app runs will download it. The previous decode is now in
+while the app ran would download it. The previous decode was then in
 `loadedVersions`. The picker (`switchVersionInteractive`) and a tapped link
 (`switchToLinkVersion`) both treat a translation in memory as loaded and
 switch to it without a load. `switchVersion` re-reads the disk for a stale one
 (`D11`), but only once its current edition is there, and the one thing that
-writes a non-default translation's current edition is a load of that
+wrote a non-default translation's current edition was a load of that
 translation, which a translation in memory is never given. The background
-refresh upgrades the default translation alone. So the reader who comes back
-online, opens the picker and chooses the translation again is handed the same
-previous edition under the same sentence, for as long as the app runs; the
-next launch that restores it with a connection fetches it.
+refresh upgraded the default translation alone. So the reader who came back
+online, opened the picker and chose the translation again was handed the same
+previous edition under the same sentence, for as long as the app ran; the
+next launch that restored it with a connection fetched it.
 
 The shortest route, on the previous-edition disk, is link-names-other ->
 fetch-fails-previous-serves. From there nothing the walk does next puts the
@@ -647,7 +661,7 @@ screen (`D18`).
 `D11` records its fix as closing exactly this — "before it, a non-default
 translation recorded as stale had no way to stop being stale within a
 session" — and its own reachability note says why it could not: nothing
-writes the current edition it waits for. The walk could not see the hole until
+wrote the current edition it waits for. The walk could not see the hole until
 it walked this disk. `TestAPreviousEditionIsNotUpdatedWhileTheAppRuns`
 reproduced it through the app's own entry points, the picker and a tapped
 link, with the network up and no fetch ever made.
@@ -698,29 +712,29 @@ network.
 The launch machine's cells, and the tests for `D9` and `D10`, read what the
 restore decided off the state the restore wrote. The reader never sees that
 state. `loadStateData` restores onto one of its own on the load goroutine, and
-`StartBackgroundLoad` copies it into the live state field by field — the text,
+`StartBackgroundLoad` copied it into the live state field by field — the text,
 the translation, the mode, the loaded translations, the book, the chapter, the
-trail, the scroll target and the refresh flags. It does not copy the two
+trail, the scroll target and the refresh flags. It did not copy the two
 records the restore makes: `preferredVersion`, the translation the reader chose
 when the launch has to show another, which `D9` writes and which `D10`'s
 sentence and the next save read; and `staleVersions`, which carries `D3`'s mark
-from the launch's fallback. Both are written, and neither reaches the screen.
+from the launch's fallback. Both were written, and neither reached the screen.
 
 So in the launch every platform runs, the desktop and mobile entry points
-alike, `D9` and `D10` are open again in effect. A launch that cannot select the
-saved NKJV — before the credential store unlocks, or offline past the licence
-window — shows the WEB with nothing said, and the reader's next navigation
-saves `web` over their choice for good. A translation restored on its previous
-edition is shown in silence, which is `D3` at the site its fix was written
-for. Driven through the real `StartBackgroundLoad`, the live state holds
-neither record after the launch and the next save names the fallback; with
-the two fields added to the copy it holds both, the picker says each, and the
-save names the reader's translation.
+alike, `D9` and `D10` were open again in effect. A launch that could not
+select the saved NKJV — before the credential store unlocks, or offline past
+the licence window — showed the WEB with nothing said, and the reader's next
+navigation saved `web` over their choice for good. A translation restored on
+its previous edition was shown in silence, which is `D3` at the site its fix
+was written for. Driven through the real `StartBackgroundLoad`, the live state
+held neither record after the launch and the next save named the fallback;
+with the two fields added to the copy it held both, the picker said each, and
+the save named the reader's translation.
 
 It was found by reading, not by a walk: tracing where `D17` reaches led to the
-launch's fallback, and the mark was not on the screen. The launch cells cross
-the restore and the tail `loadStateData` runs after it, and stop there; the
-seam they do not cross is the one the defect is in.
+launch's fallback, and the mark was not on the screen. The launch cells
+crossed the restore and the tail `loadStateData` runs after it, and stopped
+there; the seam they did not cross was the one the defect was in.
 `TestTheLaunchDropsWhatTheRestoreRecords` pinned it. It ran the restore for
 real, through `loadStateData`, to show both records are made, and read the
 hand-off from the source, because it runs inside a goroutine a test cannot
@@ -741,7 +755,10 @@ which writes both records for reasons of its own.
 
 Closing it made live two defects that the dropped preference hid, because
 each needs the remembered translation on the live state. They are recorded as
-`D19` and `D20` below, and were fixed in the same change.
+`D19` and `D20` below, and were fixed in the same change. It also made the
+remembered translation reach two places nothing had tested with it there: the
+save beside an arrival's place (`D22`) and the substitution sentence's
+promise (`D24`).
 
 **Closed.** The hand-off is a named function, `adoptLaunch`, which carries
 both records with everything else, and runs before the note on the reopened
@@ -760,28 +777,28 @@ deep, remains.
 
 ### D19 — FIXED 2026-09-25, found the same day, live once `D18` was fixed
 
-`versionSwitchForArrival` is how `applyLoadedVersion` tells a link's landing
+`versionSwitchForArrival` was how `applyLoadedVersion` told a link's landing
 from the reader's own, and so whether to spend the remembered translation
-(`D13`). It is one flag with one reader: whichever translation lands next reads
-it and clears it. It is set for a link's load, and nothing ties it to that
-load, so two routes hand it to the wrong one.
+(`D13`). It was one flag with one reader: whichever translation landed next
+read it and cleared it. It was set for a link's load, and nothing tied it to
+that load, so two routes handed it to the wrong one.
 
-- **A failed link load leaves it set.** A link whose translation fails to load
+- **A failed link load left it set.** A link whose translation fails to load
   with nothing on disk to fall back on never reaches `applyLoadedVersion`, and
-  only that clears the mark. The reader's next choice of their own — the same
-  translation or another — is taken for an arrival. Shortest route, on the disk
-  with nothing cached: link-names-other -> fetch-fails -> reader-picks-other.
-- **A link parked behind the reader's own load gives the mark to that load.**
+  only that cleared the mark. The reader's next choice of their own — the same
+  translation or another — was taken for an arrival. Shortest route, on the
+  disk with nothing cached: link-names-other -> fetch-fails -> reader-picks-other.
+- **A link parked behind the reader's own load gave the mark to that load.**
   The reader picks a translation that has to load; a link tapped meanwhile
-  parks behind it (`switchToLinkVersion`, `share_link_open.go`) and sets the
-  mark. The reader's load lands first, reads the mark, and is taken for an
-  arrival; the park is then dropped and said (`D14`). Shortest route, on every
+  parks behind it (`switchToLinkVersion`, `share_link_open.go`) and set the
+  mark. The reader's load landed first, read the mark, and was taken for an
+  arrival; the park was then dropped and said (`D14`). Shortest route, on every
   disk: reader-starts-other -> link-names-other -> fetch-lands.
 
-Either way the remembered translation is not spent by a choice the reader
-made, the picker goes on saying it could not be opened and the reader's choice
-is shown instead, and the next save writes the remembered one over the
-translation the reader has just chosen: `D13`'s rule turned inside out.
+Either way the remembered translation was not spent by a choice the reader
+made, the picker went on saying it could not be opened and the reader's
+choice was shown instead, and the next save wrote the remembered one over the
+translation the reader had just chosen: `D13`'s rule turned inside out.
 Clearing the mark on the load-error arm closes the first route and not the
 second. The mark has to belong to the load it was set for: recorded with the
 translation it was set for, honoured only by that translation's landing, and
@@ -822,17 +839,17 @@ fails.
 
 ### D20 — FIXED 2026-09-25, found the same day, live once `D18` was fixed
 
-`fullPendingNotice` gives one sentence, and ranks what is on screen first:
-another translation shown instead of the reader's (`D10`) outranks a previous
+`fullPendingNotice` gave one sentence, and ranked what is on screen first:
+another translation shown instead of the reader's (`D10`) outranked a previous
 edition of the one shown (`D3`). With the remembered translation on the live
 state, a link to a translation that holds only its previous edition, served
-that edition offline, is recorded as stale — and the picker says only that the
-remembered translation could not be opened and this one is shown instead.
-Nothing says the text on screen is a previous edition. It is `D3`'s silence,
-reached through `D10`'s sentence, and it holds for as long as the substitution
-does. The launch has the same shape: a fallback to the default translation on
-its previous edition reports the substitution and not the edition, though
-there the background refresh repairs the text unannounced.
+that edition offline, is recorded as stale — and the picker said only that the
+remembered translation could not be opened and this one was shown instead.
+Nothing said the text on screen was a previous edition. It was `D3`'s silence,
+reached through `D10`'s sentence, and it held for as long as the substitution
+did. The launch had the same shape: a fallback to the default translation on
+its previous edition reported the substitution and not the edition, though
+there the background refresh repaired the text unannounced.
 
 The first version of the stale-edition check (`A-E`) asked only that the
 footer name the translation on screen. `D10`'s sentence names it too, so the
@@ -845,7 +862,10 @@ reproduced it.
 reader asks: the substitution, then the default's own sentence when the
 default is on screen, then the previous edition. The seed keeps its
 precedence and stands alone, because it is what is on screen. No sentence was
-added or reworded; where one fact holds the footer reads exactly as before.
+added or reworded in this change, and where one fact holds the footer reads
+as it did before, except in the states `D21` changed — the default's
+sentences while another translation is on screen — and in the substitution
+sentence's promise, which `D24` corrected.
 The guard is `TestAPreviousEditionIsSaidBehindASubstitution`, which compares
 the whole footer on the arrival's route and on the launch's, waiting and
 downloading.
@@ -863,10 +883,139 @@ default being on screen (`incompleteBibleBanner`); the footer was not.
 
 It was found placing the default's sentence in `D20`'s composition, which had
 to say where it goes and when. The default's sentences are now said only
-while the default is on screen, and a reader on another translation with
-nothing else true is told nothing. The refresh machine has an invariant for
-it, `R-D`, which its cells and journeys ask after every step, and a guard,
+while the default is on screen. The refresh machine has an invariant for it,
+`R-D`, which its cells and journeys ask after every step, and a guard,
 `TestTheDefaultsSentencesDescribeOnlyTheDefault`.
+
+**One rule for every translation.** The first version of this fix told a
+reader on another translation nothing about the default, while `D3`'s
+sentence went on naming any other translation holding its previous edition,
+on screen or not. Two translations in the same condition — a previous
+edition in memory, off screen, its upgrade owed — were treated oppositely: a
+reader on the BSB with both the WEB and the WEBC superseded was told about
+the WEBC and not the WEB. The rule is now one: a translation holding a
+previous edition is named by `D3`'s sentence, on screen or not, and the
+default is one of them when it is off screen; the default's own three
+sentences, which say what is shown meanwhile, are said only while it is on
+screen; and the seed, a starter portion rather than a previous edition, is
+said only on screen, as the banner is. `R-B` was narrowed to match: a
+waiting reader is never told the update is in progress, and on the default
+is told it is waiting. The alternative rule — say only what is on screen —
+would retire `D3`'s sentence for every translation off screen; that is a
+choice about words, and the owner may prefer it.
+
+### D22 — FIXED 2026-09-25, found verifying `D18`
+
+The remembered translation survives an arrival (`D13`), and since `D18` it is
+what the save writes, beside the reader's current place. That place can be in
+a canon the remembered translation lacks. A launch that cannot open the NKJV
+shows the WEB; a WEBC link to Tobit opens (`byArrival`, so the NKJV is still
+remembered); the save writes `nkjv` with Tobit. At the next launch that could
+open the NKJV, the restore loaded it, found no Tobit, and declined the whole
+restore: `loadStateData`'s tail opened the WEB at its start, nothing was
+remembered, and the next save wrote `web`. The reader's NKJV was gone for good,
+at the very launch the footer had promised it back — `D9`'s loss, through a
+door `D18`'s fix opened. The launch cells could not see it: they skipped the
+licensed translation with Tobit as "not a state the app can have written",
+and since `D18` and `D13` it is exactly what the app writes.
+
+**Closed.** When the saved book is not in the canon of the translation the
+restore opened, the restore keeps the translation and drops only the place:
+it leaves the translation on the state, and the tail (`startAtDefault`, now
+the one function both the launch and the cells run) opens it at its start,
+measuring the trail against its canon, where Tobit waits dormant (`D16`) for
+the canon that has it. The launch cells now include the licensed translation
+with Tobit, four more cells, and `L-A` fails on the tree before the fix. The
+guard is `TestARememberedTranslationSurvivesAPlaceItsCanonLacks`, which
+drives the whole route: the fallback launch, the WEBC link to Tobit, the
+save, and the next launch with the NKJV openable and not.
+
+When the NKJV still cannot be opened at that next launch, the choice survives
+and the reader opens on the WEB at its start, with Tobit in the trail rather
+than on screen. Before `D18`'s fix they reopened on the WEBC in Tobit, having
+lost the NKJV. Reopening the WEBC in Tobit while remembering the NKJV would
+need the fallback to prefer a translation whose canon holds the saved book;
+that is recorded under *Open decisions*.
+
+### D23 — FIXED 2026-09-25, found verifying `D17`
+
+`loadVersionData` purges a translation's superseded epochs after any
+successful load, and since `D6` a fetch whose cache write fails is still a
+success: the text reaches the reader for the session. So a fetch that landed
+and could not be written purged the previous epoch while the current one
+never reached the disk. Before `D17` that needed a launch's restore online
+with a full or read-only cache directory. `D17` moved it into the running
+session: the refresh fetches a public-domain translation that is showing its
+previous edition, whose previous epoch is the reader's only copy on disk.
+The upgrade landed in memory, and both files were gone; the next launch that
+restored that translation offline failed both the load and the cache-only
+read, and, the translation not being licensed, sat on the Retry screen until
+a connection returned. That is `V-D` broken.
+
+**Closed.** `loadBibleData` reports where the text came from and what is on
+disk — `cache`, `api`, or `api-uncached` when the write failed — and
+`loadVersionData` purges only when the current epoch is on disk. The storage
+enumeration has a sixth disk shape for it, `unwritable-current` (a directory
+at the current epoch's path, the previous epoch valid), and its purge cell
+fails `V-D` on the tree before the fix.
+`TestAnUncacheableFetchStillServesTheReader` (`D6`) now also asks for the
+source that says so.
+
+### D24 — FIXED 2026-09-25, found verifying `D18`
+
+`D10`'s sentence ended "Your choice is remembered and comes back when it
+can." Before `D18` no reader ever saw it: the launch dropped the record it
+reads. Carrying the record made it live, and nothing in the running app keeps
+it. The remembered translation is spent only by a landing, and nothing
+retries it when the credential store unlocks or the network returns: it comes
+back at the next launch whose restore can open it, or when the reader chooses
+it or a link to it. On iOS, where the app can stay in memory for days, a
+reader told it "comes back when it can" waited for something that did not
+happen, and the sentence never told them to choose it. By this document's own
+standard that is `D17`'s shape: a promise on the picker that nothing keeps.
+
+**Closed, by the words.** The sentence now says what the app does: "Your
+choice is remembered and tried again each time the app starts." While the
+remembered translation's row can be chosen it adds "To try now, choose it
+above."; while it cannot, the row itself says what unlocks it. The guard,
+`TestTheRememberedTranslationIsPromisedWhatTheAppDoes`, compares the whole
+sentence both ways, runs the next launch to show it is tried again, and taps
+the row the sentence points at in the real picker to show it brings the
+translation back. Keeping the old words and making them true — bringing the
+translation back on its own on foreground or picker opening once it can be
+opened — was not taken: it would switch the text under a reader mid-passage,
+could spend the API.Bible quota without a tap, and would put an error card in
+front of an offline reader at every return. That is recorded under *Open
+decisions*.
+
+## Open decisions
+
+Verifying the change that closed `D17`–`D21` raised three questions that
+are the owner's rather than defects. Each follows from a rule this document
+already holds, and each is safe as it stands.
+
+- **Accepting a substitution.** While the WEB is shown in place of a
+  remembered NKJV, the WEB's row is checked, and tapping it does nothing:
+  `switchVersionInteractive` returns at once for the translation on screen,
+  so no landing spends the record. The reader who wants the WEB has to choose
+  another translation and come back. A tap on the checked row could spend the
+  record as the reader's own choice of what is shown; it could also be a
+  habit of closing the picker, and cost a reader the choice they made.
+- **A key cleared on purpose.** `D9` records the choice for any launch that
+  cannot select the translation, including one after the reader cleared their
+  key in Settings, which the store records as a definitive, deliberate
+  absence. Such a reader is told at every launch that the NKJV could not be
+  opened, and the NKJV comes back if they add a key. The record could be
+  skipped when the store's negative is deliberate and kept for the
+  unreadable-transient case `D9` was written for. The launch cells have that
+  state, `key-cleared`, where the record is kept today; skipping it would
+  make `L-A` and `L-D` fire there, and they would have to say the reader
+  gave the translation up.
+- **A fallback that keeps the place.** When the remembered translation cannot
+  be opened and the saved place is in a wider canon (`D22`), the launch shows
+  the default at its start. It could prefer a public-domain translation
+  whose canon holds the place and whose copy is on disk — the WEBC in Tobit —
+  and say it is shown instead, as it says the WEB is now.
 
 ## The whole machine — what a complete model must cover
 
@@ -962,18 +1111,19 @@ not named in its register, and each test logs its own count when run with
 
 | Space | Test | Cells / journeys |
 |---|---|---|
-| **M1** storage | `version_state_flow_test.go` | 15 cells — five disk shapes × three events, plus the licensed recency boundary from both sides and the four unusable-file shapes |
+| **M1** storage | `version_state_flow_test.go` | 18 cells — six disk shapes × three events, the sixth a current path no write can land on (`D23`), plus the licensed recency boundary from both sides and the four unusable-file shapes |
 | **M2** credentials | `version_credentials_flow_test.go` | 10 cells — five knowledge states (absent, held, unreadable, legacy-only, unreadable-with-legacy) × two events, including the irreversible one |
 | **M3** refresh | `version_refresh_flow_test.go` | 160 cells across pending × seed × downloading × backoff × active version, and **310 journeys** to depth 4 from the two starting states a launch can produce; `R-D` asked after every step since 2026-09-25, and the picker's retry the real `noticeOnPickerOpen`, its fetch held at the door `TestMain` shuts |
 | **M4** selection | `version_selection_flow_test.go` | 8 cells — memory (absent, current epoch, previous epoch) × disk (absent, current, previous), one unserveable combination skipped |
-| **M5 × M6 × M7** launch | `version_launch_flow_test.go` | 16 cells — the saved choice (default, wider canon, licensed) × its fate at launch (loads, load fails, superseded only, unselectable) × the saved book (Genesis, or Tobit under the wider canon) — observed on the live state, through the hand-off `adoptLaunch` (`D18`), with `L-E`/`L-F` asked of the two cells that put a previous edition on screen |
+| **M5 × M6 × M7** launch | `version_launch_flow_test.go` | 22 cells — the saved choice (default, wider canon, licensed) × its fate at launch (loads, load fails, superseded only, unselectable, and for the licensed translation its key cleared on purpose) × the saved book (Genesis, or Tobit under the wider canon or beside the remembered licensed translation, `D22`) — through the real tail (`startAtDefault`) and observed on the live state, through the hand-off `adoptLaunch` (`D18`), with `L-E`/`L-F` asked of the two cells that put a previous edition on screen |
 | **Arrivals** | `version_arrivals_flow_test.go` | **1142 journeys / 4780 steps** to depth 5 over nine events — a link naming another translation, its fetch failing with nothing to fall back on or with the previous edition serving, the load in flight landing, the reader picking that translation or a different one, the reader picking either while it is still loading at the next step, and the refresh's owed upgrade landing — in six worlds: three disks for the link's translation (its current edition: 107 journeys / 420 steps; only the previous one: 198 / 826; none: 266 / 1144), each with nothing remembered and with the reader's licensed translation remembered. Every event goes through the app's own entry point, and what the app starts on a goroutine — a translation's load, the refresh's fetch, its retry timer — is held at its door and landed through the tail the app built (`D17`, `D19`). The invariants are asserted after every step and liveness over the walk. A journey is a sequence of events that each did something; the walk used to count events that could not happen in the state they met, such as a fetch failing with nothing loading, which walked the same states again, and that is why 4662 journeys at depth 4 became fewer at depth 5 |
 
 The cells found `V1`, `V2`, `D1`–`D3`, `D6`–`D11`; the journeys found `D4`,
 `D12`, `D17`, `D19` and `D20`; the model-free second pass found `D13`–`D16`;
-reading the launch's hand-off found `D18`; the refresh cells found `D21` once
-`R-D` asked whether the default's sentences describe what is on screen, a
-question `D20`'s composition raised. All are closed.
+reading the launch's hand-off found `D18`; reading `D20`'s composition found
+`D21`, and `R-D` now asks it of the refresh cells and journeys; adversarial
+verification of the fix found `D22`–`D24`, and the walks' copies of what the
+app does behind a goroutine, recorded under `D17` and `D19`. All are closed.
 
 Nothing in the map above is unenumerated. What the enumerations do not
 claim: the surfaces listed under *The surfaces that must not lie* are checked

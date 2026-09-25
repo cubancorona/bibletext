@@ -92,18 +92,10 @@ func loadStateData() (*AppState, error) {
 		}
 	}
 
-	// A genuinely-gone saved book falls back to the default start — but the
-	// still-valid REST of the history survives (dropping one dead entry must
-	// not erase the reader's whole trail; incident-hardening).
-	if hasSavedReading {
-		state.RecentChapters = restoreRecent(savedReading.Recent, bibleData,
-			defaultStartBook(bibleData), clampChapter(bibleData, defaultStartBook(bibleData), 1))
-	}
-	state.CurrentBook = defaultStartBook(bibleData)
-	state.CurrentChapter = 1
-	if chapters := bibleData.GetChapterNumbersForBook(state.CurrentBook); len(chapters) > 0 {
-		state.CurrentChapter = chapters[0]
-	}
+	// A saved book the translation in hand does not have falls back to the
+	// default start of that translation — the reader's own, when the restore
+	// kept it (D22) — but the still-valid REST of the history survives.
+	startAtDefault(state, savedReading.Recent, hasSavedReading)
 	addRecentChapter(state, state.CurrentBook, state.CurrentChapter)
 	return state, nil
 }
@@ -244,7 +236,7 @@ func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
 // installed (app/window/theme/closures, Annotations) stays. Everything
 // the launch records is carried, including the two records the restore
 // makes when it cannot give the reader what they chose. REPLACES, never
-// merges: Retry (buildLoadingView) re-runs the launch on this same state, and
+// merges: Retry (buildLoadErrorView) re-runs the launch on this same state, and
 // the new restore is the truth. See D18 in docs/VERSION_STATES.md.
 //
 // The maps are handed over, not shared: loaded is dropped once this returns,

@@ -370,8 +370,10 @@ func applyRestoredState(state *AppState, rs readingState, base *BibleData) bool 
 
 // restoreReadingState validates a persisted state against the loaded Bible and,
 // if usable, sets the version/book/chapter/history on state and stashes a
-// pending scroll restore. It returns (false, nil) when the saved book genuinely
-// no longer exists, so the caller may establish a fresh default. A transient
+// pending scroll restore. It returns (false, nil) when the saved book does not
+// exist in the translation it could open, so the caller may establish a fresh
+// default start (startAtDefault) — in that translation, which it leaves on
+// state when it is the saved one rather than the default (D22). A transient
 // error loading the saved translation is returned instead: callers must not
 // fall back and overwrite durable history in that case. base is the already-
 // loaded default translation's data.
@@ -464,21 +466,39 @@ func restoreReadingState(state *AppState, rs readingState, base *BibleData) (boo
 		}
 	}
 
+	hold := func() {
+		state.Bible = bible
+		state.CurrentVersion = versionID
+		state.currentMode = mode
+		if state.loadedVersions == nil {
+			state.loadedVersions = map[string]*BibleData{}
+		}
+		state.loadedVersions[versionID] = bible
+	}
+
 	// Validate only after the saved translation has had a chance to load. This is
 	// essential for wider canons such as WEBC: Tobit is absent from WEB but valid
 	// in the translation that owns the saved history.
 	if bible.GetChaptersForBook(book) == 0 {
+		// THE PLACE CAN BE MISSING WHERE THE TRANSLATION IS NOT. The saved
+		// Version is the reader's choice, and the saved book is wherever they
+		// last were, which can be a book ANOTHER translation showed them: a
+		// remembered translation survives an arrival (D13) and is what the save
+		// writes, so a WEBC link to Tobit read while the NKJV was remembered
+		// saves nkjv with Tobit. Declining the whole restore opened the default
+		// translation instead, and the next save wrote its id over the reader's
+		// choice for good, at the very launch that could open it. So the
+		// translation is kept and only the place is dropped: the caller opens
+		// this translation at its start (startAtDefault), and the trail keeps
+		// the place dormant for the canon that has it (D16). See D22 in
+		// docs/VERSION_STATES.md.
+		if versionID != state.CurrentVersion {
+			hold()
+		}
 		return false, nil
 	}
 	chapter := clampChapter(bible, book, rs.Chapter)
-
-	state.Bible = bible
-	state.CurrentVersion = versionID
-	state.currentMode = mode
-	if state.loadedVersions == nil {
-		state.loadedVersions = map[string]*BibleData{}
-	}
-	state.loadedVersions[versionID] = bible
+	hold()
 
 	state.CurrentBook = book
 	state.CurrentChapter = chapter
@@ -502,6 +522,28 @@ func restoreReadingState(state *AppState, rs readingState, base *BibleData) (boo
 		state.restore = a
 	}
 	return true, nil
+}
+
+// startAtDefault opens the reader at the default start of the translation in
+// hand, state.Bible, and keeps the still-valid rest of the saved trail when
+// there is one: loadStateData's tail when the restore declines. The
+// translation in hand is the reader's own when the restore kept it and dropped
+// only a place its canon lacks (D22), so the start and the trail are measured
+// against it, never against the default's canon. Named so the launch cells run
+// it rather than a copy of it.
+func startAtDefault(state *AppState, saved []ChapterVisit, hasSaved bool) {
+	bd := state.Bible
+	book := defaultStartBook(bd)
+	if hasSaved {
+		// Dropping one dead entry must not erase the reader's whole trail
+		// (incident-hardening).
+		state.RecentChapters = restoreRecent(saved, bd, book, clampChapter(bd, book, 1))
+	}
+	state.CurrentBook = book
+	state.CurrentChapter = 1
+	if chapters := bd.GetChapterNumbersForBook(book); len(chapters) > 0 {
+		state.CurrentChapter = chapters[0]
+	}
 }
 
 // clampChapter keeps a chapter valid for the book (all translations share the

@@ -30,7 +30,9 @@ import (
 	"strings"
 	"testing"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/widget"
 )
 
 // widerCanonBible is the 73-book shape (WEBC): everything in the base canon
@@ -77,10 +79,11 @@ const (
 	fateLoadFails                        // offline, no usable cache
 	fateSupersededOnly                   // current epoch gone, previous epoch on disk
 	fateUnselectable                     // canSelect() is false this launch
+	fateKeyCleared                       // the reader cleared their key: a definitive, deliberate no
 )
 
 func (f choiceFate) String() string {
-	return [...]string{"loads", "load-fails", "superseded-only", "unselectable"}[f]
+	return [...]string{"loads", "load-fails", "superseded-only", "unselectable", "key-cleared"}[f]
 }
 
 // --- what the launch produced, and whether it told the truth -----------------
@@ -100,6 +103,8 @@ type launchObs struct {
 	previous bool   // is the text on screen a previous edition of the chosen translation?
 	saidEd   bool   // does the picker footer say the edition on screen is a previous one?
 	owed     bool   // does the refresh owe the translation on screen its upgrade?
+
+	trail []ChapterVisit // the trail the reader is left with
 }
 
 type pinnedLaunchDefect struct {
@@ -167,12 +172,20 @@ func TestVersionLaunchStateSpace(t *testing.T) {
 	cells, previousCells := 0, 0
 
 	for choice := savedDefault; choice <= savedLicensed; choice++ {
-		for fate := fateLoads; fate <= fateUnselectable; fate++ {
+		for fate := fateLoads; fate <= fateKeyCleared; fate++ {
+			// Only the licensed translation turns on a key.
+			if fate == fateKeyCleared && choice != savedLicensed {
+				continue
+			}
 			for _, book := range []string{"Genesis", "Tobit"} {
-				// A reader can only have been reading Tobit under the canon
-				// that contains it; the other pairings are not states the app
-				// can have written.
-				if book == "Tobit" && choice != savedWiderCanon {
+				// Tobit is saved under the canon that contains it, and under
+				// the licensed translation when it was remembered while an
+				// arrival showed the reader the wider canon: the remembered
+				// translation survives the arrival (D13) and is what the save
+				// writes (D18), beside the place the arrival opened. The
+				// default is never remembered, so default with Tobit is not
+				// a state the app can have written.
+				if book == "Tobit" && choice == savedDefault {
 					continue
 				}
 				name := fmt.Sprintf("%s/%s/%s", choice, fate, book)
@@ -227,9 +240,6 @@ func TestVersionLaunchStateSpace(t *testing.T) {
 // read the restore's own state, which the reader never sees.
 func runLaunchCell(t *testing.T, choice savedChoice, fate choiceFate, book string) launchObs {
 	t.Helper()
-	base := fullValidBible() // the 66-book default canon, already loaded
-	wide := widerCanonBible()
-
 	// The reader's trail: one entry for where they are, one book both canons
 	// share, and one that exists ONLY in the wider canon. All distinct, so a
 	// de-duplicated entry can never be miscounted as a pruned one.
@@ -248,14 +258,24 @@ func runLaunchCell(t *testing.T, choice savedChoice, fate choiceFate, book strin
 		Recent:  savedRecent,
 	}
 
-	// How many of those entries are valid in the READER'S OWN canon — the
+	return launchCell(t, rs, choice, fate)
+}
+
+// launchCell drives one launch of the saved state rs, the choice it names
+// meeting the given fate, and observes what the reader is left with.
+func launchCell(t *testing.T, rs readingState, choice savedChoice, fate choiceFate) launchObs {
+	t.Helper()
+	base := fullValidBible() // the 66-book default canon, already loaded
+	wide := widerCanonBible()
+
+	// How many of the saved entries are valid in the READER'S OWN canon — the
 	// number that must survive, whatever the launch had to fall back to.
 	readerCanon := base
 	if choice == savedWiderCanon {
 		readerCanon = wide
 	}
 	want := 0
-	for _, v := range savedRecent {
+	for _, v := range rs.Recent {
 		if chapterExists(readerCanon, v.Book, v.Chapter) {
 			want++
 		}
@@ -272,20 +292,17 @@ func runLaunchCell(t *testing.T, choice savedChoice, fate choiceFate, book strin
 		loadPhase:      loadReady,
 	}
 
-	obs := launchObs{choice: choice, fate: fate, book: book, wantHist: want}
+	obs := launchObs{choice: choice, fate: fate, book: rs.Book, wantHist: want}
 	restored, err := restoreReadingState(state, rs, base)
 	if err != nil {
 		obs.aborted = true
 		return obs
 	}
 	if !restored {
-		// loadStateData's tail, verbatim (app.go): a saved book that is gone
-		// falls back to the default start, and the REST of the history is
-		// re-validated — against whichever canon answered.
-		state.RecentChapters = restoreRecent(rs.Recent, base,
-			defaultStartBook(base), clampChapter(base, defaultStartBook(base), 1))
-		state.CurrentBook = defaultStartBook(base)
-		state.CurrentChapter = 1
+		// loadStateData's tail (app.go): a saved book the translation in hand
+		// lacks falls back to its default start, and the REST of the history
+		// is re-validated against that translation's canon.
+		startAtDefault(state, rs.Recent, true)
 	}
 
 	// THE STATE THE READER USES: StartBackgroundLoad hands the restore's state
@@ -296,6 +313,7 @@ func runLaunchCell(t *testing.T, choice savedChoice, fate choiceFate, book strin
 	obs.onScreen = live.CurrentVersion
 	obs.wideData = live.Bible.GetChaptersForBook("Tobit") > 0
 	obs.keptHist = len(live.RecentChapters)
+	obs.trail = live.RecentChapters
 	// What the next navigation would write — the only record of the choice.
 	obs.persists = snapshotReadingState(live, 0, 0, 0, 0, 0).Version
 	// Every surface that could carry the news. There is exactly one.
@@ -323,12 +341,19 @@ func restoreVersionFate(t *testing.T, choice savedChoice, fate choiceFate, wide 
 	t.Setenv("BIBLETEXT_CACHE_PATH", cacheDir+"/bibletext-cache.json")
 
 	// The licensed translation is selectable exactly while its licence
-	// configuration reads back. fateUnselectable withdraws it.
-	if choice == savedLicensed && fate != fateUnselectable {
+	// configuration reads back. fateUnselectable withdraws it; fateKeyCleared
+	// keeps the licence and has the reader clear their key, which the store
+	// records as gone for good.
+	switch {
+	case choice == savedLicensed && fate == fateKeyCleared:
+		t.Setenv("BIBLE_API_KEY", "")
+		t.Setenv("BIBLETEXT_LICENSE_NKJV", "1")
+		t.Setenv("BIBLETEXT_PROVIDER_ID_NKJV", "test-provider-id")
+	case choice == savedLicensed && fate != fateUnselectable:
 		t.Setenv("BIBLE_API_KEY", "launch-cell-key")
 		t.Setenv("BIBLETEXT_LICENSE_NKJV", "1")
 		t.Setenv("BIBLETEXT_PROVIDER_ID_NKJV", "test-provider-id")
-	} else {
+	default:
 		t.Setenv("BIBLE_API_KEY", "")
 		t.Setenv("BIBLETEXT_LICENSE_NKJV", "")
 		t.Setenv("BIBLETEXT_PROVIDER_ID_NKJV", "")
@@ -337,6 +362,13 @@ func restoreVersionFate(t *testing.T, choice savedChoice, fate choiceFate, wide 
 	ks := &keyStore{prefs: newFakePrefs(), secrets: emptySecretStore{}}
 	sharedKeys = func() *keyStore { return ks }
 	t.Cleanup(func() { sharedKeys = prev })
+	if fate == fateKeyCleared {
+		ks.setBibleAPIKey("")
+		ks.noteBibleKeyCleared(true)
+		if nk, _ := versionByID(choice.id()); !ks.bibleKeyKnownAbsent() || nk.canSelect() {
+			t.Fatal("control: a key cleared on purpose must read as a definitive absence and leave the translation unselectable, or the cell is not the state it names")
+		}
+	}
 
 	data := wide
 	if choice != savedWiderCanon {
@@ -349,7 +381,7 @@ func restoreVersionFate(t *testing.T, choice savedChoice, fate choiceFate, wide 
 		loadVersionForRestore = func(v BibleVersion, base *BibleData) (*BibleData, dataMode, error) {
 			return data, modeReal, nil
 		}
-	case fateLoadFails, fateUnselectable:
+	case fateLoadFails, fateUnselectable, fateKeyCleared:
 		loadVersionForRestore = func(v BibleVersion, base *BibleData) (*BibleData, dataMode, error) {
 			return nil, modeReal, errors.New("offline")
 		}
@@ -470,6 +502,172 @@ func TestAFallbackTranslationSaysSoOnThePicker(t *testing.T) {
 	state.preferredVersion = defaultVersionID
 	if n := fullPendingNotice(state); n != "" {
 		t.Fatalf("the notice outlived the substitution: %q", n)
+	}
+}
+
+// TestTheRememberedTranslationIsPromisedWhatTheAppDoes is D24's guard. The
+// footer's sentence for a substitution used to end "comes back when it can",
+// and nothing in a running app brings the remembered translation back: no
+// retry when the credential store unlocks or the network returns. What does
+// is the next launch, whose restore tries the saved choice, and the reader
+// choosing it — so that is what the sentence says, and it offers the choice
+// only while the translation's row can be chosen. Both promises are held to
+// here: the launch that can open it opens it, and the row it points at brings
+// it back.
+func TestTheRememberedTranslationIsPromisedWhatTheAppDoes(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	nk, ok := versionByID("nkjv")
+	if !ok {
+		t.Skip("nkjv not registered")
+	}
+	def, _ := versionByID(defaultVersionID)
+	t.Setenv("BIBLETEXT_CACHE_PATH", filepath.Join(t.TempDir(), cacheFileName))
+	prevKeys := sharedKeys
+	ks := &keyStore{prefs: newFakePrefs(), secrets: emptySecretStore{}}
+	sharedKeys = func() *keyStore { return ks }
+	t.Cleanup(func() { sharedKeys = prevKeys })
+	licence := func(on bool) {
+		key, flag, provider := "", "", ""
+		if on {
+			key, flag, provider = "promise-key", "1", "test-provider-id"
+		}
+		t.Setenv("BIBLE_API_KEY", key)
+		t.Setenv("BIBLETEXT_LICENSE_NKJV", flag)
+		t.Setenv("BIBLETEXT_PROVIDER_ID_NKJV", provider)
+	}
+	base := fullValidBible()
+	st := &AppState{
+		Bible:            base,
+		CurrentVersion:   def.ID,
+		currentMode:      modeReal,
+		loadedVersions:   map[string]*BibleData{def.ID: base},
+		loadPhase:        loadReady,
+		CurrentBook:      "John",
+		CurrentChapter:   1,
+		preferredVersion: nk.ID, // the record the restore makes (D9), carried to the screen (D18)
+	}
+	said := nk.Name + " could not be opened this time — " + def.Name +
+		" is shown instead. Your choice is remembered and tried again each time the app starts."
+
+	// Its row cannot be chosen, so the sentence does not offer it.
+	licence(false)
+	if nk.canSelect() {
+		t.Fatal("control: with no licence configured the NKJV must not be selectable")
+	}
+	if n := fullPendingNotice(st); n != said {
+		t.Fatalf("with the NKJV not selectable the footer reads\n  %q\nwant\n  %q", n, said)
+	}
+	// Tried again each time the app starts: the save names it, and a launch
+	// that can open it does.
+	saved := snapshotReadingState(st, 0, 0, 0, 0, 0)
+	if saved.Version != nk.ID {
+		t.Fatalf("control: the next save must name the remembered translation; got %q", saved.Version)
+	}
+	t.Run("the next launch", func(t *testing.T) {
+		if obs := launchCell(t, saved, savedLicensed, fateLoads); obs.onScreen != nk.ID || obs.persists != nk.ID {
+			t.Fatalf("a launch that can open the remembered translation shows %s and would save %q", obs.onScreen, obs.persists)
+		}
+	})
+
+	// Its row can be chosen, so the sentence says so, and the row brings it
+	// back: the load it starts lands as the reader's, and spends the record.
+	licence(true)
+	if !nk.canSelect() {
+		t.Fatal("control: with the licence configured the NKJV must be selectable")
+	}
+	if n, want := fullPendingNotice(st), said+" To try now, choose it above."; n != want {
+		t.Fatalf("with the NKJV selectable the footer reads\n  %q\nwant\n  %q", n, want)
+	}
+	var held *heldFetch
+	prevLoad := startVersionLoad
+	startVersionLoad = func(v BibleVersion, _ *BibleData, land func(*BibleData, dataMode, error)) {
+		held = &heldFetch{v: v, land: land}
+	}
+	t.Cleanup(func() { startVersionLoad = prevLoad })
+	win := app.NewWindow("choose it above")
+	defer win.Close()
+	st.window = win
+	showVersionPicker(st)
+	popup, ok := win.Canvas().Overlays().Top().(*widget.PopUp)
+	if !ok {
+		t.Fatalf("control: the picker did not open; top overlay %T", win.Canvas().Overlays().Top())
+	}
+	var row *tapBox
+	walkTree(popup, func(n fyne.CanvasObject) {
+		if tb, ok := n.(*tapBox); ok && row == nil && treeHasText(tb, nk.Name+"  ("+nk.Abbrev+")") {
+			row = tb
+		}
+	})
+	if row == nil {
+		t.Fatal("the footer says to choose the NKJV above, and its row cannot be tapped")
+	}
+	row.Tapped(&fyne.PointEvent{})
+	if held == nil || held.v.ID != nk.ID {
+		t.Fatalf("choosing the NKJV's row started no load of it: %v", held)
+	}
+	held.land(fullValidBible(), modeReal, nil)
+	if st.CurrentVersion != nk.ID || st.preferredVersion != "" || fullPendingNotice(st) != "" {
+		t.Fatalf("the NKJV's row did not bring it back: on %s, remembered %q, footer %q", st.CurrentVersion, st.preferredVersion, fullPendingNotice(st))
+	}
+}
+
+// TestARememberedTranslationSurvivesAPlaceItsCanonLacks is D22's guard. The
+// remembered translation survives an arrival (D13) and is what the save
+// writes (D18), beside wherever the arrival took the reader — which can be a
+// book the remembered translation does not have. A WEBC link to Tobit, read
+// while the NKJV is remembered, saves nkjv with Tobit. The restore declined
+// such a state whole, so the launch that COULD open the NKJV opened the WEB
+// at its start and the next save wrote web over the reader's choice for good.
+// Now the translation is kept and only the place is dropped: the NKJV opens
+// at its start, and Tobit waits in the trail for the canon that has it.
+func TestARememberedTranslationSurvivesAPlaceItsCanonLacks(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	if _, ok := versionByID("nkjv"); !ok {
+		t.Skip("nkjv not registered")
+	}
+	wide := widerCanonBible()
+
+	// The launch that cannot open the NKJV shows the WEB and remembers it.
+	restoreVersionFate(t, savedLicensed, fateUnselectable, wide)
+	base := fullValidBible()
+	restored := &AppState{Bible: base, CurrentVersion: defaultVersionID, currentMode: modeReal,
+		loadedVersions: map[string]*BibleData{defaultVersionID: base}, loadPhase: loadReady}
+	if ok, err := restoreReadingState(restored, readingState{Version: "nkjv", Book: "John", Chapter: 1}, base); !ok || err != nil {
+		t.Fatalf("control: the fallback launch must open: restored %v, err %v", ok, err)
+	}
+	live := NewLoadingState()
+	adoptLaunch(live, restored)
+	if live.preferredVersion != "nkjv" {
+		t.Fatalf("control: the fallback launch must remember the NKJV; remembers %q", live.preferredVersion)
+	}
+	// A friend's WEBC link to Tobit opens, and the NKJV is still remembered.
+	live.loadedVersions["webc"] = wide
+	applyShareTarget(live, ShareTarget{VersionID: "webc", Book: "Tobit", Chapter: 1, VerseLo: 1})
+	saved := snapshotReadingState(live, 0, 0, 0, 0, 0)
+	if live.CurrentVersion != "webc" || saved.Version != "nkjv" || saved.Book != "Tobit" {
+		t.Fatalf("control: the save must pair the remembered NKJV with the arrival's Tobit; on %s, saves %s with %s",
+			live.CurrentVersion, saved.Version, saved.Book)
+	}
+
+	for _, fate := range []choiceFate{fateLoads, fateUnselectable} {
+		t.Run(fate.String(), func(t *testing.T) {
+			obs := launchCell(t, saved, savedLicensed, fate)
+			if bad := checkLaunchInvariants(obs); len(bad) > 0 {
+				t.Fatalf("the next launch, the NKJV %s: %v", fate, bad)
+			}
+			if fate == fateLoads && obs.onScreen != "nkjv" {
+				t.Fatalf("the next launch could open the NKJV and shows %s", obs.onScreen)
+			}
+			kept := false
+			for _, v := range obs.trail {
+				kept = kept || v.Book == "Tobit"
+			}
+			if !kept {
+				t.Fatalf("the next launch dropped Tobit from the trail, where it waits for the canon that has it: %v", obs.trail)
+			}
+		})
 	}
 }
 

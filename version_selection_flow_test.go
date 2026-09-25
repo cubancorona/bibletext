@@ -237,16 +237,16 @@ func TestTheSelectionInvariantsCanActuallyFail(t *testing.T) {
 // TestAStaleVersionUpgradesInPlaceWhenTheCurrentEpochArrives is D11 — the one
 // the selection cross-product found, at mem-previous/disk-current.
 //
-// ON REACHABILITY, PLAINLY. No path in the app today writes a NON-default
-// version's current epoch while that version's previous decode is sitting in
-// loadedVersions: the background refresh only ever upgrades the default
+// ON REACHABILITY, PLAINLY. Until D17 no path in the app wrote a NON-default
+// version's current epoch while that version's previous decode sat in
+// loadedVersions: the background refresh upgraded only the default
 // translation, and a version already in memory is never re-read from disk. So
-// this is a guard, in D7's sense, not a live defect — and it is a much shorter
-// reach than D7's. The feature that makes it live is the obvious next one, and
-// the notice D3 added already promises it ("until the update can be
-// downloaded"). The fix also closes a liveness hole that IS live: before it, a
-// non-default translation recorded as stale had no way to stop being stale
-// within a session, however much of it the reader spent online.
+// this was written as a guard, in D7's sense, and it claimed to close a
+// liveness hole too — a non-default translation recorded as stale had no way
+// to stop being stale within a session. It did not close it, because nothing
+// wrote the current epoch it waits for; D17 did, by making the refresh fetch
+// it. The re-read is now live in one window: between the refresh's cache
+// write, on its goroutine, and its tail on the UI goroutine.
 func TestAStaleVersionUpgradesInPlaceWhenTheCurrentEpochArrives(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()

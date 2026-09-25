@@ -154,6 +154,12 @@ func saveBibleToCache(path string, data *BibleData, nowFn func() time.Time) erro
 	return nil
 }
 
+// loadBibleData serves cachePath if it loads, and otherwise fetches. The
+// source it reports is where the text came from and what is now on disk:
+// "cache" (read from cachePath), "api" (fetched and written there), or
+// "api-uncached" (fetched, and the write failed, so nothing at cachePath is
+// this text). A caller that deletes anything on the strength of the load
+// must tell the last from the others (loadVersionData's purge, D23).
 func loadBibleData(fetchFn func() (*BibleData, error), cachePath string, nowFn func() time.Time) (*BibleData, string, error) {
 	cachedData, cacheErr := loadBibleFromCache(cachePath)
 	if cacheErr == nil {
@@ -177,12 +183,14 @@ func loadBibleData(fetchFn func() (*BibleData, error), cachePath string, nowFn f
 	// device where the app could never open a version at all. The download
 	// succeeded; the reader gets it for this session, and the next launch
 	// tries the cache again. See D6 in docs/VERSION_STATES.md.
+	source := "api"
 	if err := saveBibleToCache(cachePath, apiData, nowFn); err != nil {
 		fmt.Fprintln(os.Stderr, "BibleText: fetched the Bible but could not cache it, serving it anyway:", err)
+		source = "api-uncached"
 	}
 
 	apiData.PrepareSearchIndex()
-	return apiData, "api", nil
+	return apiData, source, nil
 }
 
 func validateBibleData(data *BibleData) error {

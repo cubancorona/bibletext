@@ -106,7 +106,9 @@ func bibleStamp(bd *BibleData) string {
 // --- the axes ---------------------------------------------------------------
 
 // storageShape is what is on disk for the version when the cell starts. These
-// are the five distinguishable shapes the seven functions can disagree about.
+// are the six distinguishable shapes the seven functions can disagree about.
+// The last is the one a successful fetch cannot write over: the text reaches
+// the reader (D6), and the current epoch never reaches the disk (D23).
 type storageShape int
 
 const (
@@ -115,10 +117,11 @@ const (
 	stoSupersededOnly                     // a valid cache at epoch-1, nothing current
 	stoBoth                               // valid at both
 	stoCorruptCurrent                     // UNREADABLE bytes at the current epoch, valid superseded
+	stoUnwritable                         // a directory at the current epoch's path, valid superseded
 )
 
 func (s storageShape) String() string {
-	return [...]string{"absent", "current-only", "superseded-only", "both", "corrupt-current"}[s]
+	return [...]string{"absent", "current-only", "superseded-only", "both", "corrupt-current", "unwritable-current"}[s]
 }
 
 // storageEvent is the question asked of that disk state.
@@ -205,7 +208,7 @@ func TestVersionStorageStateSpace(t *testing.T) {
 	seen := map[string]bool{}
 	cells, skipped := 0, 0
 
-	for shape := stoAbsent; shape <= stoCorruptCurrent; shape++ {
+	for shape := stoAbsent; shape <= stoUnwritable; shape++ {
 		for event := evCacheOnly; event <= evPurgeOldEpoc; event++ {
 			name := fmt.Sprintf("%s/%s", shape, event)
 			t.Run(name, func(t *testing.T) {
@@ -242,6 +245,16 @@ func TestVersionStorageStateSpace(t *testing.T) {
 					// did not (see V2 in docs/VERSION_STATES.md).
 					if err := os.WriteFile(current, nil, 0o644); err != nil {
 						t.Fatal(err)
+					}
+				case stoUnwritable:
+					mustCache(t, superseded, stampedBible("old"))
+					// Nothing can be read there and nothing can be renamed
+					// over it, so a fetch lands in memory and not on disk.
+					if err := os.Mkdir(current, 0o755); err != nil {
+						t.Fatal(err)
+					}
+					if err := saveBibleToCache(current, stampedBible("fresh"), currentUTCTime); err == nil {
+						t.Fatal("control: the current epoch's path must refuse a write, else this is not the shape")
 					}
 				}
 
@@ -506,8 +519,10 @@ func TestAnUncacheableFetchStillServesTheReader(t *testing.T) {
 	if data == nil || bibleStamp(data) != "fresh" {
 		t.Fatalf("the fetched text must be what is served, got %q", bibleStamp(data))
 	}
-	if src != "api" {
-		t.Errorf("source = %q, want api", src)
+	// And the load says the text is not on disk, so nothing that trusts it
+	// deletes the only copy that is (D23).
+	if src != "api-uncached" {
+		t.Errorf("source = %q, want api-uncached", src)
 	}
 	if calls != 1 {
 		t.Errorf("fetch calls = %d, want 1", calls)

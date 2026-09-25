@@ -428,15 +428,22 @@ func loadVersionData(v BibleVersion, base *BibleData) (*BibleData, dataMode, err
 				_ = os.Remove(path)
 			}
 		}
-		data, _, err := loadBibleData(v.source.fetch, cachePathForVersion(v.ID), currentUTCTime)
+		data, source, err := loadBibleData(v.source.fetch, cachePathForVersion(v.ID), currentUTCTime)
 		if err != nil {
 			return nil, modeReal, err
 		}
-		// The current epoch is now on disk, so whatever was stale is not.
 		// Purge pre-epoch cache files only AFTER the current-epoch cache exists
 		// (incident-hardening): purging first destroyed the reader's only local
 		// copy of the translation and only then discovered the network was down.
-		purgeSupersededCaches(v)
+		// A fetch that landed and could not be written (D6) has not put the
+		// current epoch on disk either: the reader has the text for this
+		// session, and the previous epoch is still the only copy the next
+		// launch can read. The refresh reaches here in session for a
+		// translation showing that very epoch (D17), so it stays. See D23 in
+		// docs/VERSION_STATES.md.
+		if source != "api-uncached" {
+			purgeSupersededCaches(v)
+		}
 		return data, modeReal, nil
 	}
 	if base == nil {
@@ -692,21 +699,6 @@ func clearVersionStale(state *AppState, id string) {
 	delete(state.staleVersions, id)
 }
 
-// staleVersionNames lists the stale translations by NAME, in registry order so
-// the wording is stable.
-func staleVersionNames(state *AppState) []string {
-	if state == nil || len(state.staleVersions) == 0 {
-		return nil
-	}
-	var out []string
-	for _, v := range registeredVersions {
-		if state.staleVersions[v.ID] {
-			out = append(out, v.Name)
-		}
-	}
-	return out
-}
-
 func applyLoadedVersion(state *AppState, v BibleVersion, data *BibleData, mode dataMode, cause switchCause) {
 	// A new translation's text (and recordings) no longer match what's playing, and
 	// a version switch doesn't route through addRecentChapter, so stop here.
@@ -733,12 +725,12 @@ func applyLoadedVersion(state *AppState, v BibleVersion, data *BibleData, mode d
 	// the foot of this function wrote the new id into the reading blob — the
 	// single place the reader's choice is recorded. So a reader in the
 	// fallback state, holding the picker's promise that their translation is
-	// "remembered and comes back when it can", lost that record the moment a
-	// friend sent them a link in some other translation. Not their doing, not
-	// announced, and not recoverable: the notice reads off preferredVersion,
-	// so it went silent in the same breath. The exception keeps the other
-	// half honest — a link TO the chosen translation is exactly it coming
-	// back. See D13 in docs/VERSION_STATES.md.
+	// remembered, lost that record the moment a friend sent them a link in
+	// some other translation. Not their doing, not announced, and not
+	// recoverable: the notice reads off preferredVersion, so it went silent
+	// in the same breath. The exception keeps the other half honest — a link
+	// TO the chosen translation is exactly it coming back. See D13 in
+	// docs/VERSION_STATES.md.
 	// Who asked is this load's own cause, never a mark another load left (D19).
 	if cause == byReader || v.ID == state.preferredVersion {
 		state.preferredVersion = ""

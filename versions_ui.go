@@ -213,14 +213,27 @@ func fullPendingNotice(state *AppState) string {
 	// asked for something else (D10). The second sentence is the one that
 	// matters most: it is the app promising it has not forgotten, which is
 	// only true because D9 made it so.
+	//
+	// AND IT PROMISES ONLY WHAT THE APP DOES. It used to end "comes back when
+	// it can", and nothing in a running app brings it back: the choice is
+	// spent only by a landing, and nothing retries the remembered translation
+	// when the credential store unlocks or the network returns. What does
+	// bring it back is the next launch, whose restore tries the saved choice,
+	// and the reader choosing it or a link to it. The sentence offers the
+	// choice only while its row can be chosen; otherwise the row says what
+	// unlocks it. See D24 in docs/VERSION_STATES.md.
 	if pref := state.preferredVersion; pref != "" && pref != state.CurrentVersion {
 		if v, ok := versionByID(pref); ok {
 			shown := state.CurrentVersion
 			if cur, ok := versionByID(state.CurrentVersion); ok {
 				shown = cur.Name
 			}
-			said = append(said, v.Name+" could not be opened this time — "+shown+
-				" is shown instead. Your choice is remembered and comes back when it can.")
+			line := v.Name + " could not be opened this time — " + shown +
+				" is shown instead. Your choice is remembered and tried again each time the app starts."
+			if v.canSelect() {
+				line += " To try now, choose it above."
+			}
+			said = append(said, line)
 		}
 	}
 	if onDefault && state.fullPending {
@@ -230,10 +243,23 @@ func fullPendingNotice(state *AppState) string {
 			said = append(said, def.Name+" is updating to its latest edition in the background — the previous edition is shown meanwhile.")
 		}
 	}
-	// A translation serving a SUPERSEDED epoch is said too, whether or not it
+	// A translation holding a PREVIOUS EDITION is said too, whether or not it
 	// is the one on screen: only the default one is covered by fullPending, so
-	// without this the reader's own translation says nothing at all (D3).
-	if names := staleVersionNames(state); len(names) > 0 {
+	// without this the reader's own translation says nothing at all (D3). The
+	// default is one of them while another translation is on screen: its own
+	// sentences above say its text is shown meanwhile, which is then false
+	// (D21), and leaving it out would say one translation's previous edition
+	// and not another's in the same condition. The seed is a starter portion,
+	// not a previous edition, and off screen nothing is said of it, as the
+	// banner says nothing. Named in registry order, so the wording is stable.
+	defaultPrevious := !onDefault && state.fullPending && !state.seedOnly
+	var names []string
+	for _, v := range registeredVersions {
+		if state.staleVersions[v.ID] || (v.ID == def.ID && defaultPrevious) {
+			names = append(names, v.Name)
+		}
+	}
+	if len(names) > 0 {
 		said = append(said, joinNatural(names)+pick(len(names), " is", " are")+
 			" showing a previous edition until the update can be downloaded.")
 	}
