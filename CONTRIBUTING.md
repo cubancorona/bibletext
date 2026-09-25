@@ -123,7 +123,14 @@ update tools fetch by themselves — is listed in the checker's `NOT_LINKED`
 map with the reason, so the omission is a reviewable decision rather than a
 gap. The same checker holds the Linux build dependencies identical across the
 README, this file and CI, and holds the README's count of `cmd/` programs to
-what is actually in `cmd/`.
+what is actually in `cmd/`. It also holds the four explanations of opening the
+unsigned Mac download — the release notes in `release.yml`, the download page,
+the README and `docs/MAC_APP_STORE.md` — to the route macOS 15 and later
+require, Open Anyway in Privacy & Security, and, while `macMinimumOSVersion`
+in `config/product.json` is below 15, to Control-click → Open for the older
+releases, and it fails on the right-click → Open advice macOS 15 retired. The
+floor is read rather than assumed, so raising it to 15 drops the Control-click
+requirement without an edit to the checker.
 
 A store is different from a download and needs its own step. The checker holds
 any Microsoft Store link on either page equal to the `storeUrl` in

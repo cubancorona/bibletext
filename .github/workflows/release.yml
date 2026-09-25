@@ -38,7 +38,9 @@ jobs:
           # from macOS 12 (config/product.json), so the older route stays until
           # that floor reaches 15. README.md, docs/index.html and
           # docs/MAC_APP_STORE.md say the same; scripts/check-public-surfaces.py
-          # holds all four to it.
+          # holds all four to it, reading only the printf above here, because
+          # this comment names both routes and would otherwise vouch for notes
+          # that had lost them.
           # The Linux note above is for the 19 September 2026 executable rename
           # (cmd/desktop became cmd/bibletext, so the tarball stopped installing
           # a generic /usr/bin/desktop). It tells a reader who installed an

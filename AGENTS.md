@@ -114,7 +114,13 @@ tree.
   ships, holds the Linux build dependencies identical across the README,
   CONTRIBUTING and CI, and holds the README's count of `cmd/` programs to the
   directory, and holds a Microsoft Store link equal to the `storeUrl` in
-  `msstore/identity.json`. It cannot tell that a channel went live and should
+  `msstore/identity.json`. The four places that explain opening the unsigned
+  Mac download — the release notes' printf, the download page, the README and
+  `docs/MAC_APP_STORE.md` — must each name Open Anyway, must name Control-click
+  while `macMinimumOSVersion` in `config/product.json` is below 15, and must
+  not carry the retired right-click → Open advice; the floor is read, not
+  assumed, so raising it retires the Control-click requirement by itself.
+  It cannot tell that a channel went live and should
   be linked at all — that step lives in the release sequence. It cannot tell that a
   sentence is merely old — read the prose too.
 - Keep changes scoped and preserve unrelated work already present in the tree.

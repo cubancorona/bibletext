@@ -18,7 +18,9 @@ was true when it was written:
   * an instruction outlived the system it described. The release notes, the
     download page, the README and the Mac App Store notes all told a Mac
     reader to right-click the unsigned download and choose Open, an override
-    macOS 15 removed.
+    macOS 15 removed. The rule requires the route that replaced it and
+    rejects the retired wording, since text pasted from an old release would
+    otherwise sit beside the new steps and pass.
 
 Each rule below is mechanical: it compares a public page against the thing it
 claims to describe. Nothing here judges wording, and none of it can tell that
@@ -58,6 +60,18 @@ MAC_STORE_GUIDE = "docs/MAC_APP_STORE.md"
 # are not.
 MAC_OPEN_SURFACES = (RELEASE_WORKFLOW, DOWNLOAD_PAGE, READ_ME, MAC_STORE_GUIDE)
 
+# The release notes are the argument of the printf that fills NOTES, and only
+# that argument reaches a reader. The rest of the workflow is YAML and shell
+# comments, and a comment explaining the macOS note names both routes, so
+# searching the whole file would pass on the comment whatever the notes said.
+# A shell single-quoted string cannot contain a quote, so the argument ends at
+# the first one.
+RELEASE_NOTES = re.compile(r"""NOTES="\$\(printf '([^']*)'""")
+
+# Markup comments on the pages are not shown to a reader either, and would
+# satisfy the rule the same way a workflow comment did.
+MARKUP_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
+
 # macOS asks before it first opens an app it cannot verify, and has had two
 # ways past the question. The Open Anyway button in the security settings
 # works on every macOS the app supports, and is the only way from macOS 15,
@@ -70,6 +84,15 @@ MAC_FLOOR_KEY = "macMinimumOSVersion"
 SETTINGS_ROUTE = "Open Anyway"
 FINDER_ROUTE = "Control-click"
 FINDER_ROUTE_GONE = 15
+
+# The retired instruction: right-click, then Open, in one sentence. Requiring
+# the new routes does not remove it, and a reader on macOS 15 who tries it
+# first meets the same refusal. The Finder route is written as Control-click,
+# as Apple's guide words it, so this spelling is free to mean only the old
+# advice. Open must be the capitalised menu item and not Open Anyway, and the
+# sentence may not end in between, so the app's own right-click menu, which
+# has no Open item, is never mistaken for it.
+STALE_FINDER_ROUTE = re.compile(r"(?i:right[- ]?click)\w*[^.!?]{0,80}?\bOpen\b(?!\s+Anyway)")
 
 # The three places the Linux build dependencies are written out for a reader
 # building this project. They are prose in two of them and a workflow step in
@@ -229,6 +252,18 @@ def mac_floor(config: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
+def mac_open_text(surface: str, body: str) -> str | None:
+    """What a reader of this surface sees, or None when the notes are not found.
+
+    For the release workflow that is the release notes alone; for a page it is
+    the page less its markup comments.
+    """
+    if surface == RELEASE_WORKFLOW:
+        match = RELEASE_NOTES.search(body)
+        return match.group(1).replace("\\n", "\n") if match else None
+    return MARKUP_COMMENT.sub("", body)
+
+
 def readme_cmd_tree(text: str) -> tuple[set[str], int | None, bool]:
     """The programs the README's tree lists under cmd/, and the count it states.
 
@@ -361,7 +396,7 @@ def rule_failures(read, list_cmd) -> list[str]:
             )
 
     # 2b. The first launch of the unsigned Mac download, explained four times,
-    # names the route every supported macOS takes.
+    # names the route every supported macOS takes and not the one 15 removed.
     config = text(PRODUCT_CONFIG)
     floor = mac_floor(config) if config is not None else None
     if config is not None and floor is None:
@@ -374,9 +409,21 @@ def rule_failures(read, list_cmd) -> list[str]:
         RELEASE_WORKFLOW: workflow, DOWNLOAD_PAGE: page, READ_ME: readme, MAC_STORE_GUIDE: guide,
     }
     for surface in MAC_OPEN_SURFACES:
-        body = bodies[surface]
-        if body is None:
+        if bodies[surface] is None:
             continue
+        body = mac_open_text(surface, bodies[surface])
+        if body is None:
+            failures.append(
+                f"{surface}: no NOTES=\"$(printf '...')\" line was found, so this checker cannot "
+                f"read the release notes' macOS steps; its shape changed and the check is blind"
+            )
+            continue
+        for stale in STALE_FINDER_ROUTE.finditer(body):
+            failures.append(
+                f"{surface}: tells a Mac reader to {' '.join(stale.group(0).split())!r}, the "
+                f"override macOS 15 removed; write the Finder route for macOS 12 to 14 as "
+                f"{FINDER_ROUTE}, beside {SETTINGS_ROUTE} for 15 and later"
+            )
         if SETTINGS_ROUTE not in body:
             failures.append(
                 f"{surface}: never names {SETTINGS_ROUTE}; from macOS 15, Privacy & Security's "
@@ -444,10 +491,16 @@ def self_test() -> list[str]:
     routes = b"From macOS 15, click Open Anyway. On 12 to 14, Control-click it and choose Open.\n"
     settings_only = b"Click Open Anyway in Privacy & Security.\n"
     finder_only = b"Control-click the app and choose Open.\n"
+
+    def notes(body: bytes) -> bytes:
+        """A release-notes step whose printf carries body, shaped as release.yml's."""
+        opening = b"""          NOTES="$(printf 'Desktop builds.\\n\\nmacOS note: """
+        return opening + body.strip() + b"""')"\n"""
+
     clean = {
         RELEASE_WORKFLOW: (
             b'        run: gh release upload "$TAG" BibleText-Linux-amd64.tar.xz '
-            b"BibleText-x86_64.AppImage BibleText-x86_64.AppImage.zsync --clobber\n" + routes
+            b"BibleText-x86_64.AppImage BibleText-x86_64.AppImage.zsync --clobber\n" + notes(routes)
         ),
         STORE_IDENTITY: b'{"storeId": "TESTID", "storeUrl": "https://apps.microsoft.com/detail/TESTID"}\n',
         DOWNLOAD_PAGE: (
@@ -483,7 +536,7 @@ def self_test() -> list[str]:
         b'        run: |\n          gh release upload "$TAG" \\\n'
         b"            BibleText-Linux-amd64.tar.xz \\\n"
         b"            BibleText-x86_64.AppImage \\\n"
-        b"            BibleText-x86_64.AppImage.zsync --clobber\n" + routes
+        b"            BibleText-x86_64.AppImage.zsync --clobber\n" + notes(routes)
     )
     if wrapped_failures := run(wrapped):
         problems.append(f"a wrapped upload step is misread: {wrapped_failures}")
@@ -509,7 +562,7 @@ def self_test() -> list[str]:
         b"          - goarch: arm64\n"
         b"    steps:\n"
         b'      - run: gh release upload "$TAG" BibleText-Windows-${{ matrix.goarch }}.zip --clobber\n'
-        + routes
+        + notes(routes)
     )
     matrixed[DOWNLOAD_PAGE] = (
         b'<a href="https://example.invalid/releases/latest/download/'
@@ -529,6 +582,21 @@ def self_test() -> list[str]:
         risen[rel] = clean[rel].replace(routes.strip(), settings_only.strip())
     if risen_failures := run(risen):
         problems.append(f"a macOS 15 floor still owes the Finder route: {risen_failures}")
+
+    # Right-click sentences that are not the retired advice must pass: the
+    # app's own selection menu, with an Open in the next sentence and an open
+    # that is not a menu item, and a sentence that names right-clicking only to
+    # send the reader to Open Anyway.
+    bystanding = dict(clean)
+    for rel in (DOWNLOAD_PAGE, READ_ME):
+        bystanding[rel] = clean[rel] + (
+            b"Select a passage and right-click: the menu offers Copy, Look Up and Share. "
+            b"Open a chapter to begin.\n"
+            b"Right-click a verse to open the study menu.\n"
+            b"On macOS 15 right-clicking no longer helps; click Open Anyway instead.\n"
+        )
+    if bystander_failures := run(bystanding):
+        problems.append(f"a right-click that is not the retired advice fails: {bystander_failures}")
 
     violations: list[tuple[str, dict, object]] = []
 
@@ -558,7 +626,7 @@ def self_test() -> list[str]:
     violations.append(("a dead download link", dead, pair))
 
     blind_upload = dict(clean)
-    blind_upload[RELEASE_WORKFLOW] = b"        run: echo nothing is uploaded here\n" + routes
+    blind_upload[RELEASE_WORKFLOW] = b"        run: echo nothing is uploaded here\n" + notes(routes)
     blind_upload[DOWNLOAD_PAGE] = b"<p>no downloads yet</p>\n" + routes
     blind_upload[READ_ME] = clean[READ_ME]
     violations.append(("a release that uploads nothing", blind_upload, pair))
@@ -635,6 +703,17 @@ def self_test() -> list[str]:
     # on macOS 12 to a System Settings pane that release does not have. The four
     # are named here rather than read from MAC_OPEN_SURFACES, so a copy dropped
     # from that tuple is a copy this self-test still expects to be held.
+    #
+    # Text pasted from an old release strands the same reader even beside the
+    # right routes, so each copy also gets the retired advice added, in the
+    # wording and markup it carried before macOS 15. Both routes are still
+    # named, so only the rule that rejects the old advice can catch it.
+    retired = {
+        RELEASE_WORKFLOW: b"On first launch, right-click the app and choose Open.",
+        DOWNLOAD_PAGE: b"Or right-click the app and choose <em>Open</em> the\n  first time.",
+        READ_ME: b"Or right-click \xe2\x86\x92 **Open** the first time.",
+        MAC_STORE_GUIDE: b"Or readers right-click \xe2\x86\x92 Open.",
+    }
     for rel in (RELEASE_WORKFLOW, DOWNLOAD_PAGE, READ_ME, MAC_STORE_GUIDE):
         stale = dict(clean)
         stale[rel] = clean[rel].replace(routes.strip(), finder_only.strip())
@@ -642,6 +721,45 @@ def self_test() -> list[str]:
         settings_alone = dict(clean)
         settings_alone[rel] = clean[rel].replace(routes.strip(), settings_only.strip())
         violations.append((f"no Finder route in {rel} on a macOS 12 floor", settings_alone, pair))
+        pasted = dict(clean)
+        pasted[rel] = clean[rel].replace(routes.strip(), routes.strip() + b" " + retired[rel])
+        violations.append((f"the retired right-click advice beside the routes in {rel}", pasted, pair))
+
+    # The retired advice in another spelling is still the retired advice.
+    respelled = dict(clean)
+    respelled[READ_ME] = clean[READ_ME].replace(
+        routes.strip(), routes.strip() + b" Right click the app and choose Open."
+    )
+    violations.append(("the retired advice spelled Right click", respelled, pair))
+
+    # The cut-off at 15 is pinned from both sides: the 15 floor above owes no
+    # Finder route, and 14, the last release that has it, still does.
+    fourteen = dict(clean)
+    fourteen[PRODUCT_CONFIG] = b'{"macMinimumOSVersion": "14.0"}\n'
+    for rel in MAC_OPEN_SURFACES:
+        fourteen[rel] = clean[rel].replace(routes.strip(), settings_only.strip())
+    violations.append(("no Finder route on a macOS 14 floor", fourteen, pair))
+
+    # A comment beside the release notes that names both routes must not stand
+    # in for the notes. The notes here carry no macOS steps and no retired
+    # advice, so only reading the printf alone can fail them.
+    commented = dict(clean)
+    commented[RELEASE_WORKFLOW] = clean[RELEASE_WORKFLOW].replace(
+        notes(routes), notes(b"The app is unsigned.")
+    ) + b"          # macOS 15 removed Control-click > Open; Open Anyway is the only way.\n"
+    violations.append(("release notes vouched for by the comment beside them", commented, pair))
+
+    blind_notes = dict(clean)
+    blind_notes[RELEASE_WORKFLOW] = clean[RELEASE_WORKFLOW].replace(
+        notes(routes), b"          # " + routes
+    )
+    violations.append(("release notes no NOTES printf carries", blind_notes, pair))
+
+    commented_page = dict(clean)
+    commented_page[DOWNLOAD_PAGE] = clean[DOWNLOAD_PAGE].replace(
+        routes, b"The downloads are unsigned.\n<!-- " + routes.strip() + b" -->\n"
+    )
+    violations.append(("macOS steps only inside a markup comment", commented_page, pair))
 
     blind_floor = dict(clean)
     blind_floor[PRODUCT_CONFIG] = b'{"iosMinimumOSVersion": "15.0"}\n'
