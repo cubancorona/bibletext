@@ -3,11 +3,16 @@
 > **Status.** All seven machines are enumerated, and the refresh and arrivals
 > layers also carry the TRAJECTORY harness, which walks journeys rather than
 > cells, because a promise is broken by a sequence and no single cell is one.
-> Together they record **two open** incoherent states: `D17` (**a translation
+> Together they record **four open** incoherent states: `D17` (**a translation
 > shown from its previous edition is not updated while the app runs**), found
-> when the arrivals walk was given the disk that decides an arrival, and `D18`
+> when the arrivals walk was given the disk that decides an arrival; `D18`
 > (**the launch drops the reader's remembered translation and the stale mark
-> on the way to the screen**). **Every defect the scouting reported has been
+> on the way to the screen**); and two that `D18` hides and its fix will
+> expose, found when the walk was given the remembered translation: `D19`
+> (the arrival mark spent by a load it was not set for, so the reader's own
+> choice does not spend the remembered translation) and `D20` (a previous
+> edition behind the substitution sentence, with nothing said about the
+> edition). **Every defect the scouting reported has been
 > fixed where it lived — eighteen in all**: `V1`
 > (a silent stale-serve), `V2` (its root cause, an unsynced cache write), `D1`
 > (a destructive purge on an answer the app could not verify), `D2` (licensed
@@ -132,6 +137,8 @@ stateDiagram-v2
         Parked --> Kept: the reader picks a different translation — the park survives (D13)
         Parked --> Previous: the fetch fails and the previous edition serves — recorded and said (D3)
         Previous --> Previous: nothing fetches the current edition while the app runs (D17, OPEN)
+        Previous --> Previous: behind the substitution sentence, nothing says it is a previous edition (D20, OPEN)
+        Parked --> Misread: the arrival mark outlives the load it was set for, and the reader's next landing takes it (D19, OPEN)
     }
 
     M4 --> L: what the launch decodes is what M4 then holds
@@ -238,7 +245,9 @@ is a regression even if every existing test stays green.
 
 Every entry was reached by driving the real functions. `cells` is how many of
 the enumerated combinations reach it — not a count of defects, but a measure
-of how much of the space the defect covers.
+of how much of the space the defect covers. For a defect the journeys found,
+it is how many distinct broken promises the walk files under it, one per
+world, step and invariant.
 
 | # | Name | Exists today | Cells | What it costs the reader |
 |---|---|---|---|---|
@@ -260,8 +269,10 @@ of how much of the space the defect covers.
 | ~~D14~~ | ~~A link displaced by another translation's load is dropped with nothing said~~ | **FIXED 2026-08-29** | 0 | — |
 | ~~D15~~ | ~~Search results survive a switch: old wording under a new name, and a tap writes a dead reference~~ | **FIXED 2026-08-29** | 0 | — |
 | ~~D16~~ | ~~A wider canon's history is offered dead after a switch and deleted at the next launch~~ | **FIXED 2026-08-29** | 0 | — |
-| D17 | A translation shown from its previous edition is not updated while the app runs | **OPEN** — found 2026-09-25 | 1 | the previous decode for the rest of the session, under a notice promising an update that nothing in the session fetches |
+| D17 | A translation shown from its previous edition is not updated while the app runs | **OPEN** — found 2026-09-25 | 4 | the previous decode for the rest of the session, under a notice promising an update that nothing in the session fetches |
 | D18 | The launch hands its state to the screen field by field and drops the two records the restore makes | **OPEN** — found 2026-09-25 | — | the reader's chosen translation overwritten by the fallback at their next navigation, with nothing said; a previous edition restored in silence |
+| D19 | The arrival mark is spent by a load it was not set for, so the reader's own choice is taken for an arrival | **OPEN**, live once `D18` is fixed — found 2026-09-25 | 5 | the translation they have just chosen overwritten at the next save by the one the picker still says is remembered |
+| D20 | A previous edition behind the substitution sentence: the picker says a translation was shown instead, and nothing about the edition | **OPEN**, live once `D18` is fixed — found 2026-09-25 | 2 | `D3`'s silence: a previous edition on screen, and no notice that says so |
 
 ### V1 — FIXED 2026-08-28
 
@@ -568,7 +579,11 @@ lands on, so every machine walks the same one. Since 25 September it walks
 three: the link's translation with its current edition cached, with only the
 edition before it, and with nothing. The second is the arm where the disk
 decides an arrival — a failed fetch served by the previous edition and marked
-stale (`versions_ui.go`) — and it is where `D17` was found.
+stale (`versions_ui.go`) — and it is where `D17` was found. Since the same day
+each disk is walked twice more ways: with the reader's licensed translation
+remembered, as the launch's restore records it, and with the reader's own
+choice of translation still loading when a link arrives. That is where `D19`
+and `D20` were found.
 
 ### D17 — OPEN, found 2026-09-25
 
@@ -660,14 +675,63 @@ automatic switch, and a few more through a link consumed at launch — which
 writes both records for reasons of its own. Whoever makes that fix strikes the
 pin by hand.
 
-Closing it makes live a smaller defect that the dropped preference hides
-today. A link whose translation fails to load, with nothing on disk to fall
-back on, leaves `versionSwitchForArrival` set, because only
-`applyLoadedVersion` clears it and that arm never reaches it; the reader's next
-switch of their own is then taken for an arrival
-and does not spend the remembered translation (`D13`'s rule), so the picker
-goes on saying their choice could not be opened and the next save names it
-over the translation they have just picked.
+Closing it makes live two defects that the dropped preference hides today,
+because each needs the remembered translation on the live state. They are
+recorded as `D19` and `D20` below, and pinned, so the fix cannot ship them
+unseen: both belong in the same change.
+
+### D19 — OPEN, found 2026-09-25, live once `D18` is fixed
+
+`versionSwitchForArrival` is how `applyLoadedVersion` tells a link's landing
+from the reader's own, and so whether to spend the remembered translation
+(`D13`). It is one flag with one reader: whichever translation lands next reads
+it and clears it. It is set for a link's load, and nothing ties it to that
+load, so two routes hand it to the wrong one.
+
+- **A failed link load leaves it set.** A link whose translation fails to load
+  with nothing on disk to fall back on never reaches `applyLoadedVersion`, and
+  only that clears the mark. The reader's next choice of their own — the same
+  translation or another — is taken for an arrival. Shortest route, on the disk
+  with nothing cached: link-names-other -> fetch-fails -> reader-picks-other.
+- **A link parked behind the reader's own load gives the mark to that load.**
+  The reader picks a translation that has to load; a link tapped meanwhile
+  parks behind it (`switchToLinkVersion`, `share_link_open.go`) and sets the
+  mark. The reader's load lands first, reads the mark, and is taken for an
+  arrival; the park is then dropped and said (`D14`). Shortest route, on every
+  disk: reader-starts-other -> link-names-other -> fetch-lands.
+
+Either way the remembered translation is not spent by a choice the reader
+made, the picker goes on saying it could not be opened and the reader's choice
+is shown instead, and the next save writes the remembered one over the
+translation the reader has just chosen: `D13`'s rule turned inside out.
+Clearing the mark on the load-error arm closes the first route and not the
+second. The mark has to belong to the load it was set for: recorded with the
+translation it was set for, honoured only by that translation's landing, and
+closed with that load whichever way it ends. The walk found both routes once
+it was given the remembered translation and a load of the reader's own left in
+flight across a step (`A-G`); `TestTheArrivalMarkIsSpentByTheWrongLoad`
+reproduces each, and fails for a fix that closes either one.
+
+### D20 — OPEN, found 2026-09-25, live once `D18` is fixed
+
+`fullPendingNotice` gives one sentence, and ranks what is on screen first:
+another translation shown instead of the reader's (`D10`) outranks a previous
+edition of the one shown (`D3`). With the remembered translation on the live
+state, a link to a translation that holds only its previous edition, served
+that edition offline, is recorded as stale — and the picker says only that the
+remembered translation could not be opened and this one is shown instead.
+Nothing says the text on screen is a previous edition. It is `D3`'s silence,
+reached through `D10`'s sentence, and it holds for as long as the substitution
+does. The launch has the same shape: a fallback to the default translation on
+its previous edition reports the substitution and not the edition, though
+there the background refresh repairs the text unannounced.
+
+The first version of the stale-edition check (`A-E`) asked only that the
+footer name the translation on screen. `D10`'s sentence names it too, so the
+check passed. It now asks for the edition as well, which is how the walk found
+this at link-names-other -> fetch-fails-previous-serves, on the disk that
+holds only a previous edition. `TestAPreviousEditionIsSilentBehindASubstitution`
+reproduces it and fails the day the picker says both.
 
 ## The whole machine — what a complete model must cover
 
@@ -768,11 +832,11 @@ not named in its register, and each test logs its own count when run with
 | **M3** refresh | `version_refresh_flow_test.go` | 160 cells across pending × seed × downloading × backoff × active version, and **310 journeys** to depth 4 from the two starting states a launch can produce |
 | **M4** selection | `version_selection_flow_test.go` | 8 cells — memory (absent, current epoch, previous epoch) × disk (absent, current, previous), one unserveable combination skipped |
 | **M5 × M6 × M7** launch | `version_launch_flow_test.go` | 16 cells — the saved choice (default, wider canon, licensed) × its fate at launch (loads, load fails, superseded only, unselectable) × the saved book (Genesis, or Tobit under the wider canon) — and the hand-off to the live state, read from the source (`D18`) |
-| **Arrivals** | `version_arrivals_flow_test.go` | **4662 journeys / 17730 steps** to depth 4 over six events — a link naming another translation, its fetch failing with nothing to fall back on or with the previous edition serving, or landing, the reader picking that translation or a different one — on three disks for the link's translation (its current edition, only the previous one, none), with the invariants asserted after every step and liveness over the walk |
+| **Arrivals** | `version_arrivals_flow_test.go` | **478 journeys / 1864 steps** to depth 5 over seven events — a link naming another translation, its fetch failing with nothing to fall back on or with the previous edition serving, the load in flight landing, the reader picking that translation or a different one, or picking a different one that is still loading at the next step — in six worlds: three disks for the link's translation (its current edition, only the previous one, none), each with nothing remembered and with the reader's licensed translation remembered. The invariants are asserted after every step and liveness over the walk. A journey is a sequence of events that each did something; the walk used to count events that could not happen in the state they met, such as a fetch failing with nothing loading, which walked the same states again, and that is why 4662 journeys at depth 4 became fewer at depth 5 |
 
 The cells found `V1`, `V2`, `D1`–`D3`, `D6`–`D11`; the journeys found `D4`,
-`D12` and `D17`; the model-free second pass found `D13`–`D16`; reading the
-launch's hand-off found `D18`. All are closed but `D17` and `D18`.
+`D12`, `D17`, `D19` and `D20`; the model-free second pass found `D13`–`D16`;
+reading the launch's hand-off found `D18`. All are closed but `D17`–`D20`.
 
 Nothing in the map above is unenumerated. What the enumerations do not
 claim: the surfaces listed under *The surfaces that must not lie* are checked
