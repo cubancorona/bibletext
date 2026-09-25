@@ -187,6 +187,11 @@ class ReleaseNotes(Stubbed):
         self.write_notes(NOTES_TEXT + "\n")
         # Less the editor's final line break, and nothing else.
         self.assertEqual(self.read(), {"en-gb": NOTES_TEXT})
+        # Nothing else includes the spaces at either end: what is sent is
+        # what verify_staged holds the server to, so a trimmed reading here
+        # would pass a server that trimmed the same way.
+        self.write_notes("  Indented first line.\nA last line ending in a space. \n")
+        self.assertEqual(self.read(), {"en-gb": "  Indented first line.\nA last line ending in a space. "})
 
     def test_a_missing_file_is_refused(self):
         # A file for another version is not this release's.
@@ -336,10 +341,16 @@ class ClonePreserved(Stubbed):
             "release notes other than the file's": lambda b: base(b).__setitem__("releaseNotes", "Other."),
             "release notes left as the clone's": lambda b: base(b).__setitem__("releaseNotes", ""),
             "release notes dropped": lambda b: base(b).pop("releaseNotes"),
+            # Exactly the file's text: a space is a difference, not a rounding.
+            "release notes with a space before them": lambda b: base(b).__setitem__("releaseNotes", " " + NOTES_TEXT),
+            "release notes with a space after them": lambda b: base(b).__setitem__("releaseNotes", NOTES_TEXT + " "),
             # And only in baseListing: a platform override is a base listing
-            # too, and notes there are a change like any other.
+            # too, and notes there are a change like any other, as are notes
+            # set on the language's entry beside its baseListing.
             "release notes in a platform override": lambda b: b["listings"]["en-gb"]["platformOverrides"].__setitem__(
                 "Windows81", {"releaseNotes": NOTES_TEXT}),
+            "release notes beside baseListing": lambda b: b["listings"]["en-gb"].__setitem__(
+                "releaseNotes", NOTES_TEXT),
         }
         for label, attack in attacks.items():
             b = self.body(clone)
@@ -394,7 +405,10 @@ class VerifyStaged(Stubbed):
 
     def test_release_notes_other_than_the_files_are_refused(self):
         clone = clone_fixture()
-        for label, got in (("the clone's blank", ""), ("other text", "Other."), ("absent", None)):
+        for label, got in (("the clone's blank", ""), ("other text", "Other."), ("absent", None),
+                           # Exactly: a difference in whitespace alone is still one.
+                           ("a space after", NOTES_TEXT + " "), ("a space before", " " + NOTES_TEXT),
+                           ("a line break after", NOTES_TEXT + "\n")):
             with self.subTest(label):
                 def mutate(f, got=got):
                     base = f["listings"]["en-gb"]["baseListing"]
@@ -419,6 +433,7 @@ class VerifyStaged(Stubbed):
             "a listing key the clone lacked": lambda f: f["listings"]["en-gb"]["baseListing"].__setitem__("devStudio", "x"),
             "notes in a platform override": lambda f: f["listings"]["en-gb"]["platformOverrides"].__setitem__(
                 "Windows81", {"releaseNotes": NOTES_TEXT}),
+            "notes beside baseListing": lambda f: f["listings"]["en-gb"].__setitem__("releaseNotes", NOTES_TEXT),
             "a second locale": lambda f: f["listings"].__setitem__("en-us", {"baseListing": {"releaseNotes": NOTES_TEXT}}),
         }.items():
             with self.subTest(label):
@@ -494,6 +509,20 @@ class Abort(Stubbed):
             if path.endswith(self.m.STORE_ID) else {"status": "PendingCommit"})
         self.quiet(self.m.cmd_abort)
         self.assertEqual(deleted, ["DELETE"])
+
+    def test_an_abort_leaves_no_submission_and_no_verification_recorded(self):
+        # The state names no submission once its draft is deleted, so it must
+        # not go on saying one was verified.
+        self.m.save_state(submissionId="A", committed=False, verified=True)
+        deleted = []
+        self.m.http = lambda method, url, *a, **k: (deleted.append(method) or (204, {}, b""))
+        self.m.api = lambda method, path, tok, payload=None: (
+            ({"pendingApplicationSubmission": {"id": "A"}} if not deleted else {})
+            if path.endswith(self.m.STORE_ID) else {"status": "PendingCommit"})
+        self.quiet(self.m.cmd_abort)
+        state = self.m.load_state()
+        self.assertIsNone(state["submissionId"])
+        self.assertIs(state["verified"], False)
 
 
 class Poll(Stubbed):
@@ -580,6 +609,34 @@ class Create(Stubbed):
                 self.assertEqual(self.issued, [], "the server was asked to create a submission "
                                                   "the release notes could not go with")
 
+    def test_a_read_back_that_refuses_leaves_nothing_to_commit(self):
+        # The state starts as the last release left it, committed and
+        # verified. create's own read-back then finds the notes gone from the
+        # server, and commit must not take that old verified for this one.
+        for label, drop in (("the notes came back blank", True), ("control: they came back as sent", False)):
+            with self.subTest(label):
+                self.m.RELEASE_NOTES_DIR = os.path.join(tempfile.mkdtemp(), "metadata")
+                self.m.STATE = os.path.join(tempfile.mkdtemp(), "run-state.json")
+                self.m.save_state(submissionId="OLD", committed=True, verified=True)
+                self.arrange("9.9.9.0")
+                inner, reached = self.m.api, []
+
+                def api(method, path, tok, payload=None, inner=inner, drop=drop, reached=reached):
+                    reached.append((method, path.rsplit("/", 1)[-1]))
+                    r = inner(method, path, tok, payload)
+                    if drop and method == "GET" and "/submissions/" in path:
+                        r["listings"]["en-gb"]["baseListing"]["releaseNotes"] = ""
+                    return r
+                self.m.api = api
+                if drop:
+                    self.assertIn("releaseNotes came back", self.refused(self.m.cmd_create, self.tmp, "Immediate"))
+                    self.assertIn("not been verified", self.refused(self.m.cmd_commit))
+                    self.assertNotIn(("POST", "commit"), reached)
+                else:
+                    self.quiet(self.m.cmd_create, self.tmp, "Immediate")
+                    self.quiet(self.m.cmd_commit)
+                    self.assertIn(("POST", "commit"), reached)
+
     def test_a_version_not_above_the_kept_one_never_reaches_the_put(self):
         self.arrange(ledger_version())
         # A distinct fileName, so the version guard and not the name guard is
@@ -644,6 +701,36 @@ class CommitGate(Stubbed):
         self.arrange_verify(NOTES_TEXT)
         self.assertEqual(self.m.main(["submit.py", "verify", self.tmp]), 0)
         self.assertEqual(self.checked, [NOTES])
+
+    def test_commit_follows_the_latest_verify(self):
+        # create passed and recorded verified; a verify run after it finds the
+        # server changed since. commit must go by the later verdict.
+        for label, passes in (("the verify refuses", False), ("control: it passes", True)):
+            with self.subTest(label):
+                self.m.STATE = os.path.join(tempfile.mkdtemp(), "run-state.json")
+                self.m.save_state(submissionId="A", committed=False, verified=True, publishMode="Immediate",
+                                  packages=[{"fileName": "p.msix", "sha256": "aaaa"}],
+                                  releaseNotes={"en-gb": self.m.notes_digest(NOTES_TEXT)})
+                self.m.read_packages = lambda d: [{"fileName": "p.msix", "sha256": "aaaa"}]
+                json.dump({}, open(os.path.join(self.tmp, "clone-A.json"), "w"))
+                self.write_notes()
+
+                def verify_staged(*a, passes=passes):
+                    if not passes:
+                        raise SystemExit("REFUSING TO PROCEED:\n  - 'listings' came back from the server "
+                                         "different from the clone")
+                self.m.verify_staged = verify_staged
+                reached = []
+                self.m.api = lambda method, path, tok, payload=None, reached=reached: (
+                    reached.append((method, path.rsplit("/", 1)[-1])) or {"status": "PendingCommit"})
+                if passes:
+                    self.assertEqual(self.m.main(["submit.py", "verify", self.tmp]), 0)
+                    self.quiet(self.m.cmd_commit)
+                    self.assertIn(("POST", "commit"), reached)
+                else:
+                    self.refused(self.m.main, ["submit.py", "verify", self.tmp])
+                    self.assertIn("not been verified", self.refused(self.m.cmd_commit))
+                    self.assertEqual(reached, [])
 
 
 class Transport(Stubbed):

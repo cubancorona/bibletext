@@ -139,16 +139,17 @@ but it is not read from the Apple file.
 The Apple files live under the gitignored `build/`; this one is tracked, for
 three reasons. It carries nothing private, because it is published verbatim on
 the Store. The text a version was sent is then in the tree its tag names,
-beside the packages built from it. And CI can hold every release to it:
+beside the packages built from it, unless it had to be corrected after the tag
+(below). And CI can hold every release to it:
 `TestWindowsWhatsNewIsNamedForThisRelease` requires the file for the ledger's
 version, from 1.2.16 on, on every machine, where the Apple files' test skips
 on any machine without `build/` (`docs/RELEASING.md`, stage 0). The cost is
 that the file is written at the version bump, for every release from 1.2.16,
 including one the Store is not sent, and that a note corrected after the tag
-is a commit after the tag (see below). The test's floor is 1.2.16 because the
-ledger stood at 1.2.15, with no file for it, when the file became required;
-`submit.py` has no floor, so a Store submission of 1.2.15 would need a
-`whats-new-1.2.15.txt` of its own.
+cannot be committed until the release is done (see below). The test's floor is
+1.2.16 because the ledger stood at 1.2.15, with no file for it, when the file
+became required; `submit.py` has no floor, so a Store submission of 1.2.15
+would need a `whats-new-1.2.15.txt` of its own.
 
 `msstore/submit.py` sends it as written, less the line break an editor leaves
 at the end, and it is the one listing field the tool changes. `preflight`
@@ -172,7 +173,10 @@ holds the body it sends to the clone byte for byte everywhere else. `create`'s
 own read-back, and `verify` after it, refuse unless the server's
 `releaseNotes` is exactly the file's text and every other listing field came
 back as the clone had it; `verify` also refuses if the file was edited after
-`create` sent it.
+`create` sent it. `commit` goes by the latest of those checks: `create` clears
+the verification the last release left behind as it records the new
+submission, and `verify` clears it before it checks anything, so a refusal
+from either leaves nothing `commit` will take.
 
 The API has been reported enforcing a lower limit than the console for
 another listing field (`shortDescription`: "must be 500 or less" through the
@@ -182,9 +186,15 @@ is refused with the reason in its message and nothing public has changed:
 `msstore/submit.py abort` removes the draft, the file is corrected, and
 `create` runs again. The tool reads the file on disk, not a commit, and the
 packages are the tag's artefacts either way. After the tag, the correction
-waits to be committed until no store build of that version remains, because a
-commit after the tag makes the version unbuildable (`docs/RELEASING.md`,
-stage 7); the tag keeps the text that was refused.
+stays out of every commit until the release is done. A commit after the tag
+makes the version unbuildable, which matters while a store build of it remains
+(`docs/RELEASING.md`, stage 7), and the site is published from the tag's
+tree by `scripts/publish-site.sh`, which refuses the dirty tree the corrected
+file leaves. So the file is stashed across the site publish
+(`git stash push -- msstore/metadata/en-gb/whats-new-<version>.txt` before
+it, `git stash pop` after) and committed once no store build of the version
+remains, shipping under the next number like any work after the tag. The tag
+keeps the text that was refused.
 
 ## Properties and declarations
 

@@ -521,9 +521,15 @@ def cmd_create(d: str, publish_mode: str):
     # between the POST and the write would leave an orphan that preflight then
     # reports as someone else's work and steers the operator away from
     # deleting. Record first; judge second.
+    #
+    # verified is cleared in the same write. save_state merges into the last
+    # run's state, and the last release left verified true behind it; kept,
+    # it would stand for this submission, so a read-back that refuses below
+    # would still leave commit open.
     sid = sub.get("id")
     if sid:
-        save_state(submissionId=sid, created=time.time(), committed=False, publishMode=publish_mode,
+        save_state(submissionId=sid, created=time.time(), committed=False, verified=False,
+                   publishMode=publish_mode,
                    packages=[{k: p[k] for k in ("fileName", "sha256", "bytes", "architecture")} for p in pkgs],
                    releaseNotes={lang: notes_digest(text) for lang, text in notes.items()})
     else:
@@ -727,8 +733,8 @@ def verify_staged(sid: str, pkgs: list[dict], publish_mode: str, clone: dict, no
             # than to loosen the comparison.
             problems.append(f"{lang}: releaseNotes came back with CRLF line breaks where the file has LF")
         else:
-            problems.append(f"{lang}: releaseNotes came back as {utf16_length(got)} characters, "
-                            f"not the {utf16_length(text)} of the release's whats-new file")
+            problems.append(f"{lang}: releaseNotes came back as other text than the release's whats-new "
+                            f"file ({utf16_length(got)} characters against its {utf16_length(text)})")
     # Everything we did not mean to change must have come back as it went.
     # Strict on purpose: a spurious refusal here costs an investigation with
     # nothing public changed, and the opposite mistake costs the listing.
@@ -764,7 +770,8 @@ def cmd_commit():
     # staged submission is what we meant only through verify_staged. create
     # runs that; so does `verify <dir>`, which also proves the bytes on disk are
     # the bytes that were uploaded. Neither having run is not a state to commit
-    # from.
+    # from, and nor is the last of them having refused: each clears the flag
+    # before it checks and sets it only on a pass.
     if not s.get("verified"):
         raise SystemExit(f"{sid} has not been verified against the server since it was staged; "
                          f"run: msstore/submit.py verify <dir>")
@@ -857,7 +864,7 @@ def cmd_abort():
         raise SystemExit("delete reported success but a pending submission is still there")
     print(f"deleted {sid}; lastPublished is still "
           f"{(after.get('lastPublishedApplicationSubmission') or {}).get('id')}")
-    save_state(submissionId=None, committed=False)
+    save_state(submissionId=None, committed=False, verified=False)
 
 
 def main(argv):
@@ -875,6 +882,10 @@ def main(argv):
         s = load_state()
         if not s.get("submissionId"):
             raise SystemExit("no submission recorded; run create first")
+        # Cleared before anything is checked, so commit follows the latest
+        # verdict: a verify that refuses must not leave the verified that a
+        # passing create wrote before it.
+        save_state(verified=False)
         # Compare against the clone create saved, and hold the submission to
         # the publish mode create used -- not whatever this invocation's argv
         # happens to say, which is how a verify could bless the wrong mode.

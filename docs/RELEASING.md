@@ -280,9 +280,20 @@ not, and sets it as the listing's `releaseNotes`, the only listing field a
 submission changes. `verify` holds the server to that exact text and every
 other listing field to the clone. If the PUT is refused over the notes,
 `abort`, correct the file and `create` again. `submit.py` reads the file on
-disk, so the correction need not be committed first, and after the tag it
-should not be until no store build of `<v>` remains: a commit after the tag
-makes `<v>` unbuildable (stage 7).
+disk, so the correction is sent without a commit. After the tag it stays
+uncommitted until the release is done: a commit after the tag makes `<v>`
+unbuildable, which matters while a store build of it remains (stage 7), and
+moves `main` off the tag the site is published from. Stage 11 refuses the
+dirty tree the file leaves, so set it aside for that stage rather than let it
+ride along:
+
+```
+git stash push -- msstore/metadata/en-gb/whats-new-<v>.txt   # before publish-site.sh
+git stash pop                                                # after it
+```
+
+Then commit it, once no store build of `<v>` remains. Like any work after the
+tag, it ships under the next number; the tag keeps the text that was refused.
 
 ### 10 — Snap
 
@@ -308,7 +319,9 @@ scripts/publish-site.sh
 
 Owner machine only — the reader is generated from the app's own decoder and the
 local translation caches, which CI does not have. It refuses a dirty tree, so
-the site always matches a known revision.
+the site always matches a known revision. A Microsoft Store What's New
+corrected after the tag (stage 9) is stashed across this stage, not committed
+into it.
 
 ---
 

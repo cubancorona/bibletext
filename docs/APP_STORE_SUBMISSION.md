@@ -362,7 +362,12 @@ each step it lists.
    the `VERSION` lines of both review-notes files, the writer's pin in
    `appstore/push-review-notes.py`; write `build/appstore/metadata/en-GB/whats-new-<v>.txt`
    AND `…/en-GB/mac/whats-new-<v>.txt` (the Mac has its own — the write refuses
-   without it); add the Play notes section to `docs/PLAY_LISTING.md`; prepend a
+   without it); write the Microsoft Store's What's New,
+   `msstore/metadata/en-gb/whats-new-<v>.txt`, which is tracked and which
+   `TestWindowsWhatsNewIsNamedForThisRelease` requires from 1.2.16 on whether
+   or not this version goes to that Store, so CI goes red on all three OSes
+   without it (docs/WINDOWS_STORE_LISTING.md, "What's new"); add the Play
+   notes section to `docs/PLAY_LISTING.md`; prepend a
    `[[release]]` block to `linux/releases.toml` and run
    `go run ./cmd/linuxmeta render`, which rewrites the two AppStream MetaInfo
    files and `snap/snapcraft.yaml` — `cmd/linuxmeta` refuses a newest entry that
@@ -396,7 +401,16 @@ each step it lists.
    --ref v<version>` — because the MSIX version is the desktop ledger plus a
    fourth part, so a run against a moved branch labels a package for a tree the
    tag does not name. Confirm the artifact's `Version="<version>.0"` before
-   uploading it (docs/WINDOWS_STORE_LISTING.md). Note that the tag's own
+   uploading it (docs/WINDOWS_STORE_LISTING.md). `msstore/submit.py` sends
+   `msstore/metadata/en-gb/whats-new-<v>.txt` as the listing's What's New,
+   the one listing field a submission changes (docs/RELEASING.md, stage 9).
+   If the Store refuses that text, `abort`, correct the file and `create`
+   again. `submit.py` reads the file on disk, so the correction is sent
+   without a commit, and it stays out of the tree until the release is done:
+   set it aside with `git stash push -- msstore/metadata/en-gb/whats-new-<v>.txt`
+   before step 8, whose publish refuses a dirty tree, `git stash pop` after,
+   and commit it once no store build of `<v>` remains, to ship under the next
+   number like any work after the tag (step 10). Note that the tag's own
    release run already builds the snap and publishes it to the public `edge`
    channel whenever `SNAPCRAFT_STORE_CREDENTIALS` is set, so that channel is
    not a separate decision once the secret exists; the Flathub submission,
