@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 )
@@ -22,19 +21,12 @@ import (
 // So this is a probe, not a guard. Five passages, chosen where a heading is
 // most likely to carry a note: the parallel-passage reference lines in the
 // Gospels and Chronicles, and the acrostic headings of Psalm 119. It costs
-// about five API calls against the NKJV quota and skips without a key, so it
-// never runs in CI and never runs by accident.
+// about five API calls against the NKJV quota and skips without a key and
+// BIBLETEXT_LIVE=1, so it never runs in CI and never runs by accident.
 //
-//	BIBLE_API_KEY=… go test -run TestLiveNKJVHeadingNotes -v .
+//	BIBLE_API_KEY=… BIBLETEXT_LIVE=1 go test -run TestLiveNKJVHeadingNotes -v .
 func TestLiveNKJVHeadingNotes(t *testing.T) {
-	key := os.Getenv("BIBLE_API_KEY")
-	if key == "" {
-		t.Skip("BIBLE_API_KEY not set — the NKJV heading-note probe costs quota and is skipped")
-	}
-	bibleID := os.Getenv("BIBLETEXT_PROVIDER_ID_NKJV")
-	if bibleID == "" {
-		bibleID = "63097d2a0a2f7db3-01"
-	}
+	key, bibleID := liveAPIBible(t, "BIBLETEXT_LIVE")
 
 	// Where a heading most plausibly carries a note. Parallel-passage lines
 	// (the "r" style) are references by nature, so they are the best chance of

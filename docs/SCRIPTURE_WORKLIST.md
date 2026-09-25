@@ -268,7 +268,8 @@ held, so the checks now stand as guards rather than as claims.
   answer to why none carried a reference. This is a five-passage sample, not
   the canon, and that is the honest scope of it — but the question was whether
   anything was being lost, and in the places most likely to lose it, nothing
-  is. The probe is `TestLiveNKJVHeadingNotes`, key-gated, about five calls.
+  is. The probe is `TestLiveNKJVHeadingNotes`, gated on the key and
+  `BIBLETEXT_LIVE=1`, about five calls.
 
 **S7's other two parts turned out to need no change, and the census is what
 proved it.** Extending `apiBibleSkipPara` moves any block of that style off the

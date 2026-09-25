@@ -66,7 +66,7 @@ var spacingAuditEditions = []string{"web", "bsb", "webc", "nkjv"}
 func spacingAuditFetch(t *testing.T, id string) (*BibleData, error) {
 	t.Helper()
 	if id == "nkjv" {
-		key := os.Getenv("BIBLE_API_KEY")
+		key := liveEnv("BIBLE_API_KEY") // as the suite found it; TestMain withholds it
 		if key == "" {
 			t.Skip("BIBLE_API_KEY is not set; the NKJV cannot be fetched")
 		}

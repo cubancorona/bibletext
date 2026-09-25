@@ -2,14 +2,16 @@ package bibletext
 
 // Live provider smoke tests. Each hits the REAL provider API using the key from
 // that provider's env var (ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY /
-// XAI_API_KEY) and SKIPS when the key is blank — so this is inert in CI and in any
-// checkout without keys, and costs nothing there.
+// XAI_API_KEY) and SKIPS unless that key and BIBLETEXT_LIVE=1 are both set — so
+// this is inert in CI, in any checkout without keys, and in a plain run from a
+// shell that has them, and costs nothing there. The suite withholds the keys
+// from every other test (TestMain, main_test.go); these take back what it found.
 //
 // To run against real keys, put them in the gitignored .env.local (never
 // committed) and, from the repo root:
 //
 //	set -a; source ./.env.local; set +a
-//	go test -run TestLiveAIProviders -v .
+//	BIBLETEXT_LIVE=1 go test -run TestLiveAIProviders -v .
 //
 // This exercises the whole path a "Test key" tap uses, including self-healing
 // model resolution — if a provider's default model has been retired, the test
@@ -25,6 +27,25 @@ import (
 	"time"
 )
 
+// liveAIKey is p's key for a live call. It skips the test without the key or
+// without BIBLETEXT_LIVE=1, since a key in the environment is as often there
+// for the app as for these tests. The key is the one the suite found, put back
+// for this test so the call reaches it through providerAPIKey, as a "Test key"
+// tap's does.
+func liveAIKey(t *testing.T, store *keyStore, p providerInfo) string {
+	t.Helper()
+	name := envVarFor(p.ID)
+	useLiveEnv(t, name)
+	key := providerAPIKey(store, p.ID)
+	if key == "" {
+		t.Skipf("no key in %s — skipping (fill it in .env.local to run)", name)
+	}
+	if os.Getenv("BIBLETEXT_LIVE") != "1" {
+		t.Skipf("%s is set but BIBLETEXT_LIVE=1 is not — the live call is skipped", name)
+	}
+	return key
+}
+
 func TestLiveAIProviders(t *testing.T) {
 	// Isolated in-memory store: the key comes from the env override, and any
 	// self-healed model is cached here (not on the real device).
@@ -33,10 +54,7 @@ func TestLiveAIProviders(t *testing.T) {
 	for _, p := range aiProviders() {
 		p := p
 		t.Run(p.Name, func(t *testing.T) {
-			key := providerAPIKey(store, p.ID)
-			if key == "" {
-				t.Skipf("no key in %s — skipping (fill it in .env.local to run)", envVarFor(p.ID))
-			}
+			key := liveAIKey(t, store, p)
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
@@ -63,18 +81,15 @@ func TestLiveAIProviders(t *testing.T) {
 
 // TestLiveModelDropdown exercises the settings dropdown's data path against the
 // REAL providers: list models with the user's key, shape them with
-// dropdownModelIDs, and require a non-empty, sane result. Same key-gating as
-// TestLiveAIProviders — skips (free) wherever a key is absent.
+// dropdownModelIDs, and require a non-empty, sane result. Same gating as
+// TestLiveAIProviders — skips (free) without a key or BIBLETEXT_LIVE=1.
 func TestLiveModelDropdown(t *testing.T) {
 	store := newKeyStoreWith(newFakePrefs())
 
 	for _, p := range aiProviders() {
 		p := p
 		t.Run(p.Name, func(t *testing.T) {
-			key := providerAPIKey(store, p.ID)
-			if key == "" {
-				t.Skipf("no key in %s — skipping (fill it in .env.local to run)", envVarFor(p.ID))
-			}
+			key := liveAIKey(t, store, p)
 			if p.ListModels == nil {
 				t.Fatal("provider must expose ListModels for the dropdown")
 			}
@@ -116,19 +131,17 @@ func TestLiveModelDropdown(t *testing.T) {
 // variant slow enough to blow the Find timeout. So a retired default is a real
 // defect to fix deliberately, not a condition to leave to self-heal.
 //
-// It asserts against the provider's LIVE model list (not a chat call), so it
-// costs nothing beyond one GET per provider. Same key-gating as the tests
-// above: inert in CI and in any checkout without keys.
+// It makes real chat calls, one to each provider's default model and one to
+// its fast model, so unlike a listing it spends tokens, a few per call. Same
+// gating as the tests above: inert in CI, in any checkout without keys, and
+// without BIBLETEXT_LIVE=1.
 func TestLivePinnedDefaultsExist(t *testing.T) {
 	store := newKeyStoreWith(newFakePrefs())
 
 	for _, p := range aiProviders() {
 		p := p
 		t.Run(p.Name, func(t *testing.T) {
-			key := providerAPIKey(store, p.ID)
-			if key == "" {
-				t.Skipf("no key in %s — skipping (fill it in .env.local to run)", envVarFor(p.ID))
-			}
+			key := liveAIKey(t, store, p)
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
@@ -167,10 +180,7 @@ func TestLivePinnedDefaultsListed(t *testing.T) {
 	for _, p := range aiProviders() {
 		p := p
 		t.Run(p.Name, func(t *testing.T) {
-			key := providerAPIKey(store, p.ID)
-			if key == "" {
-				t.Skipf("no key in %s", envVarFor(p.ID))
-			}
+			key := liveAIKey(t, store, p)
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			models, err := p.ListModels(ctx, key)

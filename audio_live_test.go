@@ -112,7 +112,7 @@ func releaseAssetNames(client *http.Client, repo, tag string) (map[string]bool, 
 			return err
 		}
 		req.Header.Set("Accept", "application/vnd.github+json")
-		if tok := os.Getenv("GITHUB_TOKEN"); tok != "" {
+		if tok := liveEnv("GITHUB_TOKEN"); tok != "" { // as the suite found it; TestMain withholds it
 			req.Header.Set("Authorization", "Bearer "+tok) // lifts the 60/hour anonymous limit
 		}
 		resp, err := client.Do(req)

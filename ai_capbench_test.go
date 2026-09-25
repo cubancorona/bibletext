@@ -93,6 +93,7 @@ func TestFindCapBench(t *testing.T) {
 	store := newKeyStoreWith(newFakePrefs())
 	for _, p := range aiProviders() {
 		p := p
+		useLiveEnv(t, envVarFor(p.ID)) // the key the suite found; TestMain withholds it
 		key := providerAPIKey(store, p.ID)
 		if key == "" {
 			t.Logf("%s: no key — skipped", p.Name)

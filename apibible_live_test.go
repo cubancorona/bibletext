@@ -11,23 +11,39 @@ import (
 	"time"
 )
 
+// liveAPIBible is the key and NKJV id a live test calls API.Bible with. It
+// skips the test unless the key is set and so is the test's own switch, gate,
+// to 1: a key in the environment is as often there for the app as for these
+// tests. Both are what the suite found (liveEnv), since TestMain withholds
+// them from every other test; the id falls back to the NKJV's in the
+// API.Bible catalogue.
+func liveAPIBible(t *testing.T, gate string) (key, bibleID string) {
+	t.Helper()
+	key = liveEnv("BIBLE_API_KEY")
+	if key == "" {
+		t.Skip("BIBLE_API_KEY not set — the live API.Bible test is skipped")
+	}
+	if os.Getenv(gate) != "1" {
+		t.Skipf("BIBLE_API_KEY is set but %s=1 is not — the live API.Bible test is skipped", gate)
+	}
+	bibleID = liveEnv("BIBLETEXT_PROVIDER_ID_NKJV")
+	if bibleID == "" {
+		bibleID = nkjvProviderBibleID
+	}
+	return key, bibleID
+}
+
 // TestLiveAPIBibleProbe validates the decoder against the real API.Bible
 // service — the fixture tests pin the de-facto JSON shape, but only a live
 // response proves we read it right. Deliberately tiny: one metadata call plus
 // five content calls (~6 of the Starter plan's 5,000 monthly requests), never
-// the full ~1,255-call fetch. Skips unless BIBLE_API_KEY is exported into the
-// test environment, so CI and plain `go test` spend nothing.
+// the full ~1,255-call fetch. Skips unless BIBLE_API_KEY and BIBLETEXT_LIVE=1
+// are both exported, so CI and a plain `go test` spend nothing, even from a
+// shell that holds the key.
 //
-//	BIBLE_API_KEY=… go test -run TestLiveAPIBibleProbe -v .
+//	BIBLE_API_KEY=… BIBLETEXT_LIVE=1 go test -run TestLiveAPIBibleProbe -v .
 func TestLiveAPIBibleProbe(t *testing.T) {
-	key := os.Getenv("BIBLE_API_KEY")
-	if key == "" {
-		t.Skip("BIBLE_API_KEY not set — live probe skipped")
-	}
-	bibleID := os.Getenv("BIBLETEXT_PROVIDER_ID_NKJV")
-	if bibleID == "" {
-		bibleID = "63097d2a0a2f7db3-01" // NKJV per the API.Bible catalogue
-	}
+	key, bibleID := liveAPIBible(t, "BIBLETEXT_LIVE")
 	ctx, cancel := context.WithTimeout(context.Background(), apiBibleRequestTimeout)
 	defer cancel()
 	client := newHTTPClient()
@@ -156,14 +172,7 @@ func TestLiveAPIBibleProbe(t *testing.T) {
 //	BIBLETEXT_LIVE_COMPARE_CACHE=/path/to/bibletext-nkjv.json \
 //	go test -run TestLiveAPIBibleFullFetch -v .
 func TestLiveAPIBibleFullFetch(t *testing.T) {
-	key := os.Getenv("BIBLE_API_KEY")
-	if key == "" || os.Getenv("BIBLETEXT_LIVE_FULL_FETCH") != "1" {
-		t.Skip("live full fetch not requested")
-	}
-	bibleID := os.Getenv("BIBLETEXT_PROVIDER_ID_NKJV")
-	if bibleID == "" {
-		bibleID = "63097d2a0a2f7db3-01"
-	}
+	key, bibleID := liveAPIBible(t, "BIBLETEXT_LIVE_FULL_FETCH")
 	before := apiBibleCallCount.Load()
 	data, err := fetchAPIBible("NKJV", bibleID, key)
 	if err != nil {
@@ -236,14 +245,7 @@ func TestLiveAPIBibleFullFetch(t *testing.T) {
 //
 //	BIBLE_API_KEY=… BIBLETEXT_LIVE_FULL_CANON=1 go test -run TestLiveAPIBibleFullCanon -v -timeout 20m .
 func TestLiveAPIBibleFullCanon(t *testing.T) {
-	key := os.Getenv("BIBLE_API_KEY")
-	if key == "" || os.Getenv("BIBLETEXT_LIVE_FULL_CANON") != "1" {
-		t.Skip("BIBLE_API_KEY and BIBLETEXT_LIVE_FULL_CANON=1 not both set — full-canon fetch skipped")
-	}
-	bibleID := os.Getenv("BIBLETEXT_PROVIDER_ID_NKJV")
-	if bibleID == "" {
-		bibleID = "63097d2a0a2f7db3-01"
-	}
+	key, bibleID := liveAPIBible(t, "BIBLETEXT_LIVE_FULL_CANON")
 	apiBibleCopyrightMu.Lock()
 	apiBibleCopyrightSeen = map[string]int{}
 	apiBibleCopyrightMu.Unlock()
