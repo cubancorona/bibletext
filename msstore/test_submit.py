@@ -21,6 +21,7 @@ import os
 import re
 import struct
 import tempfile
+import unicodedata
 import unittest
 import zipfile
 
@@ -38,6 +39,12 @@ def load_module():
 def ledger_version() -> str:
     text = open(os.path.join(REPO, "cmd", "bibletext", "FyneApp.toml")).read()
     return re.search(r'Version\s*=\s*"([0-9.]+)"', text).group(1) + ".0"
+
+
+# A What's New as a release would write it: two lines, typographic
+# punctuation and a bullet, all of which the Store must be sent unchanged.
+NOTES_TEXT = "Shared notes open where they were written.\n• Search keeps its place — and “quotes” too."
+NOTES = {"en-gb": NOTES_TEXT}
 
 
 def pe_bytes(machine: int) -> bytes:
@@ -85,8 +92,9 @@ def clone_fixture(kept_version: str = "1.2.10.0") -> dict:
                                  "version": kept_version, "architecture": "x64", "id": "P1"}],
         "listings": {"en-gb": {"baseListing": {
             "title": "BibleText", "description": "A clean reader.", "features": ["read", "share"],
-            "keywords": ["bible"], "images": [{"fileStatus": "Uploaded", "id": "I1"},
-                                              {"fileStatus": "Uploaded", "id": "I2"}]}}},
+            "keywords": ["bible"], "releaseNotes": "", "images": [{"fileStatus": "Uploaded", "id": "I1"},
+                                                                  {"fileStatus": "Uploaded", "id": "I2"}]},
+            "platformOverrides": {}}},
         "pricing": {"priceId": "Free"}, "notesForCertification": "runFullTrust: reads its own files",
         "packageDeliveryOptions": {"packageRollout": {"isPackageRollout": False}},
     }
@@ -100,6 +108,9 @@ class Stubbed(unittest.TestCase):
         self.tmp = tempfile.mkdtemp()
         self.m.STATE_DIR = self.tmp
         self.m.STATE = os.path.join(self.tmp, "run-state.json")
+        # The release notes are read from a tempdir too, never from the
+        # tracked msstore/metadata, so no test depends on the owner's copy.
+        self.m.RELEASE_NOTES_DIR = os.path.join(self.tmp, "metadata")
         self.m.token = lambda: "t"
         self.m.time.sleep = lambda s: None
         self.calls: list = []
@@ -107,6 +118,15 @@ class Stubbed(unittest.TestCase):
 
     def fail_http(self, *a, **k):
         self.fail(f"reached http() -- a real request was about to be made: {a[:2]}")
+
+    def write_notes(self, text: str | bytes = NOTES_TEXT + "\n", version: str | None = None,
+                    lang: str = "en-gb") -> str:
+        version = version or self.m.desktop_version()
+        path = os.path.join(self.m.RELEASE_NOTES_DIR, lang, f"whats-new-{version}.txt")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(text if isinstance(text, bytes) else text.encode("utf-8"))
+        return path
 
     def quiet(self, fn, *a):
         buf = io.StringIO()
@@ -156,6 +176,126 @@ class ReadPackages(Stubbed):
         self.assertIn("FyneApp.toml", self.refused(self.m.read_packages, self.tmp))
 
 
+class ReleaseNotes(Stubbed):
+    """read_release_notes: each refusal fires on the input built for it, and
+    the controls beside them pass, so the refusals are about what they name."""
+
+    def read(self):
+        return self.m.read_release_notes(self.m.desktop_version())
+
+    def test_the_file_for_this_version_is_read_as_written(self):
+        self.write_notes(NOTES_TEXT + "\n")
+        # Less the editor's final line break, and nothing else.
+        self.assertEqual(self.read(), {"en-gb": NOTES_TEXT})
+
+    def test_a_missing_file_is_refused(self):
+        # A file for another version is not this release's.
+        self.write_notes(version="0.0.1")
+        self.assertIn("is missing", self.refused(self.read))
+
+    def test_an_empty_file_is_refused(self):
+        self.write_notes(" \n\n")
+        self.assertIn("is empty", self.refused(self.read))
+
+    def test_the_limit_is_1500_counted_in_utf16_code_units(self):
+        self.assertEqual(self.m.RELEASE_NOTES_LIMIT, 1500)
+        book = "\U0001F4D6"   # outside the BMP: one character, two UTF-16 units
+        for label, text, fits in (
+            ("1500 letters", "a" * 1500, True),
+            ("1501 letters", "a" * 1501, False),
+            ("1498 letters and an emoji", "a" * 1498 + book, True),
+            ("1499 letters and an emoji", "a" * 1499 + book, False),
+        ):
+            with self.subTest(label):
+                self.write_notes(text)
+                if fits:
+                    self.assertEqual(self.read()["en-gb"], text)
+                else:
+                    self.assertIn("at most 1500", self.refused(self.read))
+
+    def test_a_copy_of_another_releases_notes_is_refused(self):
+        self.write_notes("Earlier notes.\n\n", version="1.0.0")
+        self.write_notes("Earlier notes.")
+        self.assertIn("the same text as", self.refused(self.read))
+        # Control: another release's file that says something else is no bar.
+        self.write_notes("These notes.")
+        self.assertEqual(self.read(), {"en-gb": "These notes."})
+
+    def test_characters_the_listing_must_not_carry_are_refused(self):
+        for label, text in {
+            "a tab": "One\tTwo",
+            "a CRLF line end": "One\r\nTwo",
+            "a byte-order mark": "\ufeffOne",
+            "a zero-width joiner": "One\u200dTwo",
+            "a private-use character": "One \ue000",
+            "an unassigned code point": "One \u0378",
+            "a noncharacter": "One \uffff",
+            "a line separator": "One\u2028Two",
+            "a drawn small capital": "The name as drawn, L\u1d0f\u0280\u1d05",
+        }.items():
+            with self.subTest(label):
+                self.write_notes(text)
+                self.assertIn("U+", self.refused(self.read))
+        with self.subTest("not UTF-8"):
+            self.write_notes(b"One \xff Two")
+            self.assertIn("not UTF-8", self.refused(self.read))
+        with self.subTest("an unassigned code point names the Unicode version it is judged by"):
+            self.write_notes("One \u0378")
+            self.assertIn(f"unassigned in Unicode {unicodedata.unidata_version}", self.refused(self.read))
+
+    def test_visible_text_of_every_kind_passes(self):
+        text = "Café — “quoted”, ‘single’, 3 × 4 ≥ 10, a\u00a0non-breaking space, \U0001F4D6, THE LORD\nsecond line"
+        self.write_notes(text)
+        self.assertEqual(self.read(), {"en-gb": text})
+
+    def test_the_small_capitals_refused_are_the_ones_the_app_draws(self):
+        with open(os.path.join(REPO, "small_caps_draw.go"), encoding="utf-8") as f:
+            src = f.read()
+        table = re.search(r"var smallCapitals = map\[rune\]rune\{(.*?)\n\}", src, re.S)
+        self.assertIsNotNone(table, "small_caps_draw.go no longer has the smallCapitals table this reads")
+        drawn = set(re.findall(r"'[a-z]':\s*'(.)'", table.group(1)))
+        self.assertEqual(len(drawn), 25, "the table's shape changed; this parse no longer reads all of it")
+        self.assertEqual(drawn, set(self.m.DRAWN_SMALL_CAPITALS))
+        for ch in sorted(drawn):
+            with self.subTest(f"U+{ord(ch):04X}"):
+                self.assertIsNotNone(self.m.refused_character(f"The {ch}"))
+
+    def test_every_listing_language_needs_its_own_file(self):
+        self.m.EXPECTED_LISTINGS = {"en-gb", "fr-fr"}
+        self.write_notes()
+        message = self.refused(self.read)
+        self.assertIn("fr-fr", message)
+        self.assertIn("is missing", message)
+
+
+class Preflight(Stubbed):
+    """preflight reads the notes after the packages and before the account,
+    so an unfit note is reported before anything is asked of the server."""
+
+    def arrange(self):
+        self.pkg_dir = os.path.join(self.tmp, "packages")
+        os.makedirs(self.pkg_dir)
+        synthetic_msix(self.pkg_dir, "x64")
+        synthetic_msix(self.pkg_dir, "arm64")
+        self.asked = []
+        self.m.token = lambda: self.asked.append("token") or "t"
+        self.m.api = lambda method, *a, **k: self.asked.append(method) or {"pendingApplicationSubmission": None}
+
+    def test_an_unfit_note_stops_it_before_the_server_is_asked(self):
+        self.arrange()
+        self.assertIn("is missing", self.refused(self.m.cmd_preflight, self.pkg_dir))
+        self.write_notes("One\tTwo")
+        self.assertIn("U+0009", self.refused(self.m.cmd_preflight, self.pkg_dir))
+        self.assertEqual(self.asked, [])
+
+    def test_a_fit_note_is_measured_and_the_account_read(self):
+        self.arrange()
+        self.write_notes()
+        _, out = self.quiet(self.m.cmd_preflight, self.pkg_dir)
+        self.assertIn(f"{len(NOTES_TEXT)} of 1500 characters", out)
+        self.assertEqual(self.asked, ["token", "GET"])
+
+
 class ClonePreserved(Stubbed):
     def body(self, clone):
         b = copy.deepcopy(clone)
@@ -163,68 +303,145 @@ class ClonePreserved(Stubbed):
         b["applicationPackages"] = list(clone["applicationPackages"]) + [
             {"fileName": "new.msix", "fileStatus": "PendingUpload"}]
         b["targetPublishMode"] = "Immediate"
+        self.m.apply_release_notes(b, NOTES)
         return b
 
     def test_the_intended_change_passes_and_file_upload_url_is_exempt(self):
         clone = clone_fixture()
-        self.m.assert_clone_preserved(clone, self.body(clone))   # no raise
+        self.m.assert_clone_preserved(clone, self.body(clone), NOTES)   # no raise
+
+    def test_apply_release_notes_sets_that_field_and_nothing_else(self):
+        clone = clone_fixture()
+        b = copy.deepcopy(clone)
+        self.m.apply_release_notes(b, NOTES)
+        self.assertEqual(b["listings"]["en-gb"]["baseListing"].pop("releaseNotes"), NOTES_TEXT)
+        clone["listings"]["en-gb"]["baseListing"].pop("releaseNotes")
+        self.assertEqual(b, clone)
 
     def test_every_attack_on_the_listing_is_blocked(self):
         clone = clone_fixture()
+        base = lambda b: b["listings"]["en-gb"]["baseListing"]
         attacks = {
             "listing dropped": lambda b: b["listings"].pop("en-gb"),
-            "description blanked": lambda b: b["listings"]["en-gb"]["baseListing"].__setitem__("description", ""),
-            "screenshot removed": lambda b: b["listings"]["en-gb"]["baseListing"]["images"].pop(),
-            "screenshot marked for deletion": lambda b: b["listings"]["en-gb"]["baseListing"]["images"][0].__setitem__("fileStatus", "PendingDelete"),
+            "description blanked": lambda b: base(b).__setitem__("description", ""),
+            "title changed": lambda b: base(b).__setitem__("title", "BibleText Reader"),
+            "a feature added": lambda b: base(b)["features"].append("new"),
+            "screenshot removed": lambda b: base(b)["images"].pop(),
+            "screenshot marked for deletion": lambda b: base(b)["images"][0].__setitem__("fileStatus", "PendingDelete"),
+            "a listing key added": lambda b: base(b).__setitem__("devStudio", "someone"),
             "pricing rebuilt": lambda b: b.__setitem__("pricing", {"priceId": "Tier2"}),
             "cert notes replaced": lambda b: b.__setitem__("notesForCertification", "see notes"),
             "phantom en-us locale": lambda b: b["listings"].__setitem__("en-us", {"baseListing": {"images": []}}),
+            # The one field that may change must change to the file's text.
+            "release notes other than the file's": lambda b: base(b).__setitem__("releaseNotes", "Other."),
+            "release notes left as the clone's": lambda b: base(b).__setitem__("releaseNotes", ""),
+            "release notes dropped": lambda b: base(b).pop("releaseNotes"),
+            # And only in baseListing: a platform override is a base listing
+            # too, and notes there are a change like any other.
+            "release notes in a platform override": lambda b: b["listings"]["en-gb"]["platformOverrides"].__setitem__(
+                "Windows81", {"releaseNotes": NOTES_TEXT}),
         }
         for label, attack in attacks.items():
             b = self.body(clone)
             attack(b)
             with self.subTest(label):
                 with self.assertRaises(SystemExit):
-                    self.m.assert_clone_preserved(clone, b)
+                    self.m.assert_clone_preserved(clone, b, NOTES)
+
+    def test_notes_for_a_language_the_listing_lacks_are_refused(self):
+        b = copy.deepcopy(clone_fixture())
+        self.assertIn("a new locale", self.refused(self.m.apply_release_notes, b, {"en-gb": "x", "fr-fr": "y"}))
+
+    def test_a_listing_with_no_note_read_for_it_is_refused(self):
+        # A clone whose baseListing has no releaseNotes key at all, sent on
+        # with no note read for its language: the field and the note are both
+        # absent, and that must not pass for agreement.
+        clone = clone_fixture()
+        clone["listings"]["en-gb"]["baseListing"].pop("releaseNotes")
+        b = copy.deepcopy(clone)
+        b.pop("fileUploadUrl")
+        self.assertIn("releaseNotes is not the text", self.refused(self.m.assert_clone_preserved, clone, b, {}))
+        # Control: the same clone with the note written into it passes.
+        self.m.apply_release_notes(b, NOTES)
+        self.m.assert_clone_preserved(clone, b, NOTES)
 
 
 class VerifyStaged(Stubbed):
     def fresh_from(self, clone, mutate=None):
+        """What the server holds after a correct PUT: the clone, the new
+        package pending, and the release's notes in the listing."""
         f = copy.deepcopy(clone)
         f["applicationPackages"] = list(clone["applicationPackages"]) + [
             {"fileName": "new.msix", "fileStatus": "PendingUpload", "version": None, "architecture": None}]
+        f["listings"]["en-gb"]["baseListing"]["releaseNotes"] = NOTES_TEXT
         if mutate:
             mutate(f)
         self.m.api = lambda *a, **k: f
         return f
 
+    def verify(self, clone):
+        return self.m.verify_staged, "S", [{"fileName": "new.msix"}], "Immediate", clone, NOTES
+
     def test_an_identical_round_trip_passes(self):
         clone = clone_fixture()
         self.fresh_from(clone)
-        self.quiet(self.m.verify_staged, "S", [{"fileName": "new.msix"}], "Immediate", clone)
+        self.quiet(*self.verify(clone))
 
     def test_a_server_side_listing_wipe_is_refused(self):
         clone = clone_fixture()
         self.fresh_from(clone, lambda f: f["listings"]["en-gb"]["baseListing"].__setitem__("description", ""))
-        self.assertIn("'listings' came back", self.refused(self.m.verify_staged, "S", [{"fileName": "new.msix"}], "Immediate", clone))
+        self.assertIn("'listings' came back", self.refused(*self.verify(clone)))
+
+    def test_release_notes_other_than_the_files_are_refused(self):
+        clone = clone_fixture()
+        for label, got in (("the clone's blank", ""), ("other text", "Other."), ("absent", None)):
+            with self.subTest(label):
+                def mutate(f, got=got):
+                    base = f["listings"]["en-gb"]["baseListing"]
+                    if got is None:
+                        base.pop("releaseNotes")
+                    else:
+                        base["releaseNotes"] = got
+                self.fresh_from(clone, mutate)
+                self.assertIn("releaseNotes came back as", self.refused(*self.verify(clone)))
+
+    def test_release_notes_with_rewritten_line_breaks_are_named_as_such(self):
+        clone = clone_fixture()
+        self.fresh_from(clone, lambda f: f["listings"]["en-gb"]["baseListing"].__setitem__(
+            "releaseNotes", NOTES_TEXT.replace("\n", "\r\n")))
+        self.assertIn("CRLF line breaks", self.refused(*self.verify(clone)))
+
+    def test_any_other_listing_change_beside_the_notes_is_still_refused(self):
+        clone = clone_fixture()
+        for label, mutate in {
+            "title": lambda f: f["listings"]["en-gb"]["baseListing"].__setitem__("title", "Other"),
+            "keywords": lambda f: f["listings"]["en-gb"]["baseListing"]["keywords"].append("x"),
+            "a listing key the clone lacked": lambda f: f["listings"]["en-gb"]["baseListing"].__setitem__("devStudio", "x"),
+            "notes in a platform override": lambda f: f["listings"]["en-gb"]["platformOverrides"].__setitem__(
+                "Windows81", {"releaseNotes": NOTES_TEXT}),
+            "a second locale": lambda f: f["listings"].__setitem__("en-us", {"baseListing": {"releaseNotes": NOTES_TEXT}}),
+        }.items():
+            with self.subTest(label):
+                self.fresh_from(clone, mutate)
+                self.assertIn("'listings' came back", self.refused(*self.verify(clone)))
 
     def test_a_changed_cert_note_is_refused(self):
         clone = clone_fixture()
         self.fresh_from(clone, lambda f: f.__setitem__("notesForCertification", "different"))
-        self.assertIn("notesForCertification", self.refused(self.m.verify_staged, "S", [{"fileName": "new.msix"}], "Immediate", clone))
+        self.assertIn("notesForCertification", self.refused(*self.verify(clone)))
 
     def test_a_duplicate_file_name_is_refused(self):
         clone = clone_fixture()
         self.fresh_from(clone, lambda f: f["applicationPackages"].append(
             {"fileName": "new.msix", "fileStatus": "Uploaded"}))
-        self.assertIn("appears 2 times", self.refused(self.m.verify_staged, "S", [{"fileName": "new.msix"}], "Immediate", clone))
+        self.assertIn("appears 2 times", self.refused(*self.verify(clone)))
 
     def test_losing_the_kept_package_is_refused(self):
         clone = clone_fixture()
         self.fresh_from(clone, lambda f: f["applicationPackages"].__delitem__(0))
         # The kept package is also a non-mutable difference, but the specific
         # message must name the rollback, which is the thing that was lost.
-        self.assertIn("rollback path is gone", self.refused(self.m.verify_staged, "S", [{"fileName": "new.msix"}], "Immediate", clone))
+        self.assertIn("rollback path is gone", self.refused(*self.verify(clone)))
 
     def test_the_servers_own_bookkeeping_is_not_a_difference(self):
         # What the server did on 23 September 2026: cleared the label and set
@@ -236,18 +453,18 @@ class VerifyStaged(Stubbed):
             f["friendlyName"] = None
             f["pricing"]["isAdvancedPricingModel"] = False
         self.fresh_from(clone, rewrite)
-        self.quiet(self.m.verify_staged, "S", [{"fileName": "new.msix"}], "Immediate", clone)
+        self.quiet(*self.verify(clone))
 
     def test_a_changed_price_is_still_refused(self):
         # The exemption is one sub-key, not all of pricing.
         clone = clone_fixture()
         self.fresh_from(clone, lambda f: f["pricing"].__setitem__("priceId", "Tier2"))
-        self.assertIn("'pricing'", self.refused(self.m.verify_staged, "S", [{"fileName": "new.msix"}], "Immediate", clone))
+        self.assertIn("'pricing'", self.refused(*self.verify(clone)))
 
     def test_the_wrong_publish_mode_is_refused(self):
         clone = clone_fixture()
         self.fresh_from(clone, lambda f: f.__setitem__("targetPublishMode", "Manual"))
-        self.assertIn("targetPublishMode", self.refused(self.m.verify_staged, "S", [{"fileName": "new.msix"}], "Immediate", clone))
+        self.assertIn("targetPublishMode", self.refused(*self.verify(clone)))
 
 
 class Abort(Stubbed):
@@ -302,16 +519,20 @@ class Create(Stubbed):
 
     def arrange(self, new_version: str, names=("x64", "arm64")):
         kept = ledger_version()
-        clone = clone_fixture(kept_version=kept)
+        self.clone = clone = clone_fixture(kept_version=kept)
         self.issued = []
+        self.put = None
         def api(method, path, tok, payload=None):
             self.issued.append(method)
             if method == "POST":
                 return copy.deepcopy(clone)
+            if method == "PUT":
+                # Stored as sent, the way a PUT that works stores it; the
+                # GET below then reads back exactly what create chose to send.
+                self.put = copy.deepcopy(payload)
+                return copy.deepcopy(payload)
             if method == "GET" and "/submissions/" in path:
-                f = copy.deepcopy(clone)
-                f["applicationPackages"] += [{"fileName": p["fileName"], "fileStatus": "PendingUpload"} for p in self.pkgs]
-                return f
+                return copy.deepcopy(self.put)
             return {}
         self.m.api = api
         self.m.http = lambda method, url, *a, **k: (self.issued.append("BLOB") or (201, {}, b""))
@@ -321,6 +542,43 @@ class Create(Stubbed):
             self.pkgs.append({"fileName": os.path.basename(p), "path": p, "architecture": arch,
                               "version": new_version, "bytes": os.path.getsize(p), "sha256": "d"})
         self.m.cmd_preflight = lambda d: self.pkgs
+        self.write_notes()
+
+    def test_a_run_writes_the_packages_and_the_notes_and_nothing_else(self):
+        self.arrange("9.9.9.0")
+        self.quiet(self.m.cmd_create, self.tmp, "Immediate")
+        self.assertEqual(self.issued, ["POST", "PUT", "BLOB", "GET"])
+        sent = copy.deepcopy(self.clone)
+        sent.pop("fileUploadUrl")
+
+        def differ(a, b, path=()):
+            if isinstance(a, dict) and isinstance(b, dict):
+                for k in sorted(set(a) | set(b)):
+                    yield from differ(a.get(k), b.get(k), path + (k,))
+            elif a != b:
+                yield path
+        # targetPublishMode and targetPublishDate are set on every run, and
+        # the fixture already carries the values set, so they do not show.
+        self.assertEqual(sorted(differ(sent, self.put)),
+                         [("applicationPackages",), ("listings", "en-gb", "baseListing", "releaseNotes")])
+        self.assertEqual(self.put["listings"]["en-gb"]["baseListing"]["releaseNotes"], NOTES_TEXT)
+        self.assertEqual(self.m.load_state()["releaseNotes"], {"en-gb": self.m.notes_digest(NOTES_TEXT)})
+
+    def test_unfit_notes_never_reach_the_post(self):
+        for label, arrange in {
+            "missing": lambda: os.remove(self.write_notes()),
+            "empty": lambda: self.write_notes("\n"),
+            "over the limit": lambda: self.write_notes("a" * 1501),
+            "another release's": lambda: self.write_notes(NOTES_TEXT, version="1.0.0"),
+            "a refused character": lambda: self.write_notes("One\tTwo"),
+        }.items():
+            with self.subTest(label):
+                self.m.RELEASE_NOTES_DIR = os.path.join(tempfile.mkdtemp(), "metadata")
+                self.arrange("9.9.9.0")
+                arrange()
+                self.refused(self.m.cmd_create, self.tmp, "Immediate")
+                self.assertEqual(self.issued, [], "the server was asked to create a submission "
+                                                  "the release notes could not go with")
 
     def test_a_version_not_above_the_kept_one_never_reaches_the_put(self):
         self.arrange(ledger_version())
@@ -359,6 +617,33 @@ class CommitGate(Stubbed):
         self.m.read_packages = lambda d: [{"fileName": "p.msix", "sha256": "bbbb"}]
         json.dump({}, open(os.path.join(self.tmp, "clone-A.json"), "w"))
         self.assertIn("not the file create uploaded", self.refused(self.m.main, ["submit.py", "verify", self.tmp]))
+
+    def arrange_verify(self, sent_text: str | None):
+        state = {"submissionId": "A", "packages": [{"fileName": "p.msix", "sha256": "aaaa"}],
+                 "publishMode": "Immediate"}
+        if sent_text is not None:
+            state["releaseNotes"] = {"en-gb": self.m.notes_digest(sent_text)}
+        self.m.load_state = lambda: state
+        self.m.save_state = lambda **kw: kw
+        self.m.read_packages = lambda d: [{"fileName": "p.msix", "sha256": "aaaa"}]
+        json.dump({}, open(os.path.join(self.tmp, "clone-A.json"), "w"))
+        self.checked = []
+        self.m.verify_staged = lambda sid, pkgs, mode, clone, notes: self.checked.append(notes)
+        self.write_notes()
+
+    def test_verify_refuses_notes_edited_since_create(self):
+        self.arrange_verify("What create sent, since edited.")
+        self.assertIn("is not the text create sent", self.refused(self.m.main, ["submit.py", "verify", self.tmp]))
+        self.assertEqual(self.checked, [])
+
+    def test_verify_refuses_a_submission_create_recorded_no_notes_for(self):
+        self.arrange_verify(None)
+        self.assertIn("is not the text create sent", self.refused(self.m.main, ["submit.py", "verify", self.tmp]))
+
+    def test_verify_holds_the_server_to_the_notes_create_sent(self):
+        self.arrange_verify(NOTES_TEXT)
+        self.assertEqual(self.m.main(["submit.py", "verify", self.tmp]), 0)
+        self.assertEqual(self.checked, [NOTES])
 
 
 class Transport(Stubbed):

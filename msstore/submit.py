@@ -2,7 +2,7 @@
 """The Microsoft Store submission API, write side.
 
     . scripts/msstore-env.sh
-    msstore/submit.py preflight <dir>       # read-only: prove the packages before anything is created
+    msstore/submit.py preflight <dir>       # read-only: prove the packages and the notes before anything is created
     msstore/submit.py verify <dir>          # read-only: re-check a staged submission from the server
     msstore/submit.py create <dir>          # POST + PUT + upload, then STOP before commit
     msstore/submit.py commit                # the point of no return
@@ -27,6 +27,12 @@ and then read back from the server, never inherited from the clone: a clone
 carries whatever the last published submission carried, and what that is has
 been wrong in our own notes before.
 
+WHAT A RELEASE CHANGES IN THE LISTING. One field: each listing's What's New,
+releaseNotes in the API, from the release's own file under msstore/metadata/
+(see RELEASE_NOTES_DIR). Every other listing field goes back exactly as the
+clone brought it, and both the body sent and the submission read back are held
+to that.
+
 WHAT THIS DELIBERATELY DOES NOT DO. It does not mark the previously published
 package PendingDelete. That costs nothing -- the Store serves the highest
 applicable version, so 1.2.13.0 wins over 1.2.10.0 -- and it keeps a
@@ -38,6 +44,7 @@ number that is already spent.
 from __future__ import annotations
 
 import copy
+import glob
 import hashlib
 import importlib.util
 import json
@@ -46,6 +53,7 @@ import re
 import struct
 import sys
 import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -71,16 +79,57 @@ STATE = os.path.join(STATE_DIR, "run-state.json")
 # behind, or publish a blank second locale to the largest market.
 EXPECTED_LISTINGS = {"en-gb"}
 
-# Only these keys may differ between the clone and what we send. Everything
-# else must survive byte-identical: the en-GB listing was typed in by hand --
-# description, product features, captioned screenshots, box art, tile,
-# keywords -- and a whole-object PUT that drops an unmodelled key wipes it.
+# Only these keys may differ between the clone and what we send, and inside
+# `listings` only each language's baseListing.releaseNotes (see
+# RELEASE_NOTES_DIR). Everything else must survive byte-identical: the en-GB
+# listing was typed in by hand -- description, product features, captioned
+# screenshots, box art, tile, keywords -- and a whole-object PUT that drops an
+# unmodelled key wipes it. So `listings` stays out of this set, and the
+# comparisons leave out that one field by name rather than the listing.
 MUTABLE = {"applicationPackages", "targetPublishMode", "targetPublishDate"}
 
 # Server-issued, not part of the submission payload. fileUploadUrl comes back
 # from the POST and is not sent to the PUT, so it is neither mutable nor
 # preserved -- it is simply not ours to compare.
 NOT_PAYLOAD = {"fileUploadUrl"}
+
+# What's New, the one listing field a release writes. Partner Center calls it
+# "What's new in this version" (formerly "Release notes"); the API calls it
+# listings -> <language> -> baseListing -> releaseNotes, a string. Until it was
+# written here, each submission this tool made sent the clone's value, which
+# was empty, so the Store never told a Windows reader what a release changed.
+#
+# The text is written for each release in a version-named file per listing
+# language, msstore/metadata/<language>/whats-new-<version>.txt, the shape of
+# the App Store's build/appstore/metadata/en-GB/whats-new-<version>.txt with
+# the directory named by the API's listing key, and sent as written. The files
+# are tracked, unlike the App Store's under the gitignored build/: the text is
+# published verbatim on the Store in any case, the text a version was sent is
+# then in the tree its tag names, and a tracked file lets CI hold every release
+# to it (TestWindowsWhatsNewIsNamedForThisRelease), where the Apple files' test
+# skips on any machine without build/ and so CI cannot see a missing one
+# (docs/RELEASING.md, stage 0).
+RELEASE_NOTES_DIR = os.path.join(HERE, "metadata")
+
+# Partner Center's documented limit for the field ("Add and edit Store listing
+# info for MSIX app" on Microsoft Learn, which also asks for the field to be
+# blank on an app's first submission, the one this tool never makes). Counted
+# in UTF-16 code units, which is how .NET measures a string and never fewer
+# than the characters a reader sees, so a note inside it here is inside it by
+# either count. The API has been reported enforcing a lower limit than the
+# console for another listing field (shortDescription: "must be 500 or less"
+# through the API, 1000 in the form, on Microsoft Q&A); if it does for this
+# one, the PUT is refused with the limit in the message, nothing public has
+# changed, and `abort` removes the draft.
+RELEASE_NOTES_LIMIT = 1500
+
+# The small capitals the app draws the divine name in (smallCapitals in
+# small_caps_draw.go; test_submit.py holds the two equal). App Store Connect
+# refused two of them in its own What's New, with INVALID_CHARACTERS, on
+# 1.2.14. How the Store treats them is untested, and a Windows note is often the
+# Apple one adapted; describing the name ("in small capitals") costs nothing,
+# so a release is not where to find out.
+DRAWN_SMALL_CAPITALS = frozenset("ᴀʙᴄᴅᴇꜰɢʜɪᴊᴋʟᴍɴᴏᴘꞯʀꜱᴛᴜᴠᴡʏᴢ")
 
 
 def redact(url: str) -> str:
@@ -168,6 +217,143 @@ def load_state() -> dict:
         return {}
 
 
+# ------------------------------------------------------------ release notes
+
+def desktop_version() -> str:
+    """The desktop ledger's Version, which names both the packages and the
+    release notes."""
+    with open(os.path.join(REPO, "cmd", "bibletext", "FyneApp.toml")) as f:
+        text = f.read()
+    m = re.search(r'Version\s*=\s*"([0-9.]+)"', text)
+    if not m:
+        raise SystemExit("could not read Version from cmd/bibletext/FyneApp.toml")
+    return m.group(1)
+
+
+def utf16_length(text: str) -> int:
+    return len(text.encode("utf-16-le")) // 2
+
+
+def refused_character(text: str):
+    """The first character a release note must not carry, as (line, column,
+    character, reason), or None.
+
+    Microsoft documents no character rule for the field, so what is refused is
+    what cannot be what the writer meant a reader to see: anything but a
+    letter, mark, number, punctuation, symbol, space or line break. That is a
+    control character (a tab, the carriage return of a file saved with CRLF
+    line ends), a format character (the byte-order mark some Windows editors
+    write at the start of a file, a zero-width joiner, which also rules out an
+    emoji composed of several), and a private-use or unassigned code point.
+    And the drawn small capitals, for the reason at DRAWN_SMALL_CAPITALS.
+
+    Unassigned is as of the Unicode version this Python knows, which can be
+    older than the Go test's, so the reason names it: a character newer than
+    that is refused here though CI passed it.
+    """
+    for n, line in enumerate(text.split("\n"), 1):
+        for c, ch in enumerate(line, 1):
+            if ch in DRAWN_SMALL_CAPITALS:
+                return n, c, ch, "a drawn small capital; describe the divine name instead of showing it"
+            cat = unicodedata.category(ch)
+            if cat == "Cn":
+                return n, c, ch, (f"not a visible character (unassigned in Unicode "
+                                  f"{unicodedata.unidata_version}, the version this Python knows)")
+            if cat[0] not in "LMNPS" and cat != "Zs":
+                return n, c, ch, f"not a visible character (Unicode category {cat})"
+    return None
+
+
+def release_notes_path(lang: str, version: str) -> str:
+    return os.path.join(RELEASE_NOTES_DIR, lang, f"whats-new-{version}.txt")
+
+
+def read_release_notes(version: str) -> dict[str, str]:
+    """Each listing language's What's New for `version`, as it will be sent,
+    or SystemExit naming what is wrong with it.
+
+    Read in full before anything is created, so an unfit note stops the run
+    while the server holds nothing. The text is the file as written, less the
+    line break an editor leaves at the end, the same reading
+    appstore/push-metadata.py gives the App Store's.
+    """
+    notes = {}
+    for lang in sorted(EXPECTED_LISTINGS):
+        path = release_notes_path(lang, version)
+        rel = os.path.relpath(path, REPO)
+        try:
+            with open(path, "rb") as f:
+                raw = f.read()
+        except FileNotFoundError:
+            raise SystemExit(f"{rel} is missing. The {lang} listing's What's New for {version} is written "
+                             f"for each release, like the App Store's, and create will not send a blank "
+                             f"one or an earlier release's.") from None
+        try:
+            text = raw.decode("utf-8").rstrip("\n")
+        except UnicodeDecodeError as e:
+            raise SystemExit(f"{rel} is not UTF-8 (byte {e.start}); save it as UTF-8") from None
+        if not text.strip():
+            raise SystemExit(f"{rel} is empty")
+        bad = refused_character(text)
+        if bad:
+            n, c, ch, why = bad
+            raise SystemExit(f"{rel}: line {n}, column {c} is U+{ord(ch):04X}, {why}")
+        size = utf16_length(text)
+        if size > RELEASE_NOTES_LIMIT:
+            raise SystemExit(f"{rel} is {size} characters; the Store takes at most {RELEASE_NOTES_LIMIT}. "
+                             f"Remove {size - RELEASE_NOTES_LIMIT}.")
+        for other in sorted(glob.glob(os.path.join(os.path.dirname(path), "whats-new-*.txt"))):
+            if os.path.basename(other) == os.path.basename(path):
+                continue
+            with open(other, encoding="utf-8", errors="replace") as f:
+                if f.read().strip() == text.strip():
+                    raise SystemExit(f"{rel} is the same text as {os.path.relpath(other, REPO)}; "
+                                     f"the notes for {version} would describe a different release")
+        notes[lang] = text
+    return notes
+
+
+def notes_digest(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def apply_release_notes(body: dict, notes: dict[str, str]):
+    """Write each listing's releaseNotes into the body, and nothing else. A
+    platformOverrides entry is a base listing too and could carry notes of its
+    own; it is left as the clone had it."""
+    listings = body.get("listings") or {}
+    if {k.lower() for k in listings} != set(notes):
+        raise SystemExit(f"listing languages are {sorted(listings)}, release notes are for {sorted(notes)}; "
+                         f"a new locale must be handled deliberately, not by a default")
+    for lang, val in listings.items():
+        base = (val or {}).get("baseListing")
+        if not isinstance(base, dict):
+            raise SystemExit(f"{lang}: the clone has no baseListing to carry the release notes")
+        base["releaseNotes"] = notes[lang.lower()]
+
+
+def _listings_but_release_notes(listings):
+    """The listings with each baseListing's releaseNotes left out: everything
+    the comparisons still hold byte-identical. Only that one field, and only
+    in baseListing -- a releaseNotes anywhere else is a change like any
+    other."""
+    if not isinstance(listings, dict):
+        return listings
+    out = copy.deepcopy(listings)
+    for val in out.values():
+        base = val.get("baseListing") if isinstance(val, dict) else None
+        if isinstance(base, dict):
+            base.pop("releaseNotes", None)
+    return out
+
+
+def _release_notes_in(listings, lang: str):
+    for k, val in (listings or {}).items():
+        if k.lower() == lang:
+            return ((val or {}).get("baseListing") or {}).get("releaseNotes")
+    return None
+
+
 # ---------------------------------------------------------------- preflight
 
 def read_packages(d: str) -> list[dict]:
@@ -181,11 +367,7 @@ def read_packages(d: str) -> list[dict]:
     that is not 0 (reserved for Store use).
     """
     MACHINE = {"x64": 0x8664, "arm64": 0xAA64}
-    want_version = open(os.path.join(REPO, "cmd", "bibletext", "FyneApp.toml")).read()
-    m = re.search(r'Version\s*=\s*"([0-9.]+)"', want_version)
-    if not m:
-        raise SystemExit("could not read Version from cmd/bibletext/FyneApp.toml")
-    expect_version = m.group(1) + ".0"
+    expect_version = desktop_version() + ".0"
 
     out = []
     for name in sorted(os.listdir(d)):
@@ -253,6 +435,13 @@ def cmd_preflight(d: str):
     if total > 60 * 1048576:
         print("  ! close to the 64 MiB single-shot Put Blob ceiling of the older SAS versions")
 
+    version = desktop_version()
+    notes = read_release_notes(version)
+    print(f"\nrelease notes (What's New) for {version}:")
+    for lang, text in sorted(notes.items()):
+        print(f"  {lang}  {os.path.relpath(release_notes_path(lang, version), REPO)}  "
+              f"{utf16_length(text)} of {RELEASE_NOTES_LIMIT} characters")
+
     tok = token()
     app = api("GET", f"/applications/{STORE_ID}", tok)
     pending = app.get("pendingApplicationSubmission")
@@ -273,15 +462,19 @@ def cmd_preflight(d: str):
 
 # ------------------------------------------------------------------- create
 
-def assert_clone_preserved(clone: dict, body: dict):
+def assert_clone_preserved(clone: dict, body: dict, notes: dict[str, str]):
     """Everything outside MUTABLE must be byte-identical to what the server
-    handed us. This is the guard against the whole-object PUT quietly dropping
-    the hand-entered listing."""
+    handed us, and so must every listing field but releaseNotes, which must be
+    the release's own text. This is the guard against the whole-object PUT
+    quietly dropping the hand-entered listing."""
     for key in set(clone) | set(body):
         if key in MUTABLE or key in NOT_PAYLOAD:
             continue
-        a = json.dumps(clone.get(key), sort_keys=True)
-        b = json.dumps(body.get(key), sort_keys=True)
+        a_val, b_val = clone.get(key), body.get(key)
+        if key == "listings":
+            a_val, b_val = _listings_but_release_notes(a_val), _listings_but_release_notes(b_val)
+        a = json.dumps(a_val, sort_keys=True)
+        b = json.dumps(b_val, sort_keys=True)
         if a != b:
             # The values are echoed to say WHAT differs, so they go through the
             # same redaction as every other log line: a submission can carry a
@@ -295,6 +488,13 @@ def assert_clone_preserved(clone: dict, body: dict):
                          f"a new locale must be handled deliberately, not by a default")
     for lang, val in listings.items():
         base = (val or {}).get("baseListing") or {}
+        # A language with no note read for it is a refusal of its own, not a
+        # comparison: an absent note and an absent field are both None, and
+        # would agree.
+        text = notes.get(lang.lower())
+        if not isinstance(text, str) or base.get("releaseNotes") != text:
+            raise SystemExit(f"refusing to PUT: {lang} releaseNotes is not the text read from "
+                             f"that language's whats-new file")
         imgs = base.get("images") or []
         cimgs = ((clone["listings"][lang] or {}).get("baseListing") or {}).get("images") or []
         if len(imgs) != len(cimgs):
@@ -307,6 +507,10 @@ def assert_clone_preserved(clone: dict, body: dict):
 
 def cmd_create(d: str, publish_mode: str):
     pkgs = cmd_preflight(d)
+    # Read here as well as in preflight, and before the POST: this is the read
+    # whose text is sent, and a note that is missing or unfit has to stop the
+    # run while there is still nothing on the server to abort.
+    notes = read_release_notes(desktop_version())
     tok = token()
 
     print("\n==> creating the submission (a copy of the last published one)")
@@ -320,7 +524,8 @@ def cmd_create(d: str, publish_mode: str):
     sid = sub.get("id")
     if sid:
         save_state(submissionId=sid, created=time.time(), committed=False, publishMode=publish_mode,
-                   packages=[{k: p[k] for k in ("fileName", "sha256", "bytes", "architecture")} for p in pkgs])
+                   packages=[{k: p[k] for k in ("fileName", "sha256", "bytes", "architecture")} for p in pkgs],
+                   releaseNotes={lang: notes_digest(text) for lang, text in notes.items()})
     else:
         raise SystemExit("the created submission carries no id; check the account in Partner Center "
                          "for a pending submission before creating another")
@@ -378,10 +583,12 @@ def cmd_create(d: str, publish_mode: str):
         body["applicationPackages"] = list(cloned_pkgs) + new_entries
         body["targetPublishMode"] = publish_mode
         body["targetPublishDate"] = "1601-01-01T00:00:00Z"
+        apply_release_notes(body, notes)
 
-        assert_clone_preserved(sub, body)
+        assert_clone_preserved(sub, body, notes)
         print(f"\n==> updating it (publish mode {publish_mode}, "
-              f"{len(cloned_pkgs)} kept + {len(new_entries)} new)")
+              f"{len(cloned_pkgs)} kept + {len(new_entries)} new, What's New for "
+              f"{', '.join(sorted(notes))})")
         api("PUT", f"/applications/{STORE_ID}/submissions/{sid}", tok, body)
 
         zip_path = os.path.join(STATE_DIR, f"upload-{sid}.zip")
@@ -414,7 +621,7 @@ def cmd_create(d: str, publish_mode: str):
             raise SystemExit(f"blob upload returned {status}, expected 201")
         print(f"    201 Created")
 
-        verify_staged(sid, pkgs, publish_mode, sub)
+        verify_staged(sid, pkgs, publish_mode, sub, notes)
         save_state(verified=True)
         print(f"\ncreated and staged, NOT committed. Nothing public has changed.")
         print(f"  commit:  msstore/submit.py commit")
@@ -443,13 +650,16 @@ SERVER_OWNED_WITHIN = {"pricing": {"isAdvancedPricingModel"}}
 
 
 def _comparable(key: str, value):
+    if key == "listings":
+        # releaseNotes is checked on its own, against the file, in verify_staged.
+        return _listings_but_release_notes(value)
     exempt = SERVER_OWNED_WITHIN.get(key)
     if exempt and isinstance(value, dict):
         return {k: v for k, v in value.items() if k not in exempt}
     return value
 
 
-def verify_staged(sid: str, pkgs: list[dict], publish_mode: str, clone: dict):
+def verify_staged(sid: str, pkgs: list[dict], publish_mode: str, clone: dict, notes: dict[str, str]):
     """Read the submission back FROM THE SERVER and refuse to go on unless it
     is exactly what we meant. Deliberately a fresh GET rather than the PUT's
     own response: what matters is what Partner Center stored, not what it
@@ -460,6 +670,8 @@ def verify_staged(sid: str, pkgs: list[dict], publish_mode: str, clone: dict):
     it outside the mutable set; this proves the round trip did, because a PUT
     that returns 200 and quietly drops the hand-entered listing is the failure
     that matters most, and a printed image count is not a guard against it.
+    `notes` is the What's New that was sent, per language, and each listing's
+    releaseNotes must have come back as exactly that text.
     """
     fresh = api("GET", f"/applications/{STORE_ID}/submissions/{sid}", token())
     problems = []
@@ -499,6 +711,24 @@ def verify_staged(sid: str, pkgs: list[dict], publish_mode: str, clone: dict):
         bad = [i for i in imgs if i.get("fileStatus") != "Uploaded"]
         if bad:
             problems.append(f"{lang}: {len(bad)} image(s) not 'Uploaded'")
+    for lang, text in sorted(notes.items()):
+        got = _release_notes_in(fresh.get("listings"), lang)
+        if got == text:
+            continue
+        if not isinstance(got, str):
+            problems.append(f"{lang}: releaseNotes came back as "
+                            f"{'nothing' if got is None else type(got).__name__}, "
+                            f"not the text of the release's whats-new file")
+        elif got.replace("\r\n", "\n") == text:
+            # Named apart because it is the one rewrite a server could
+            # plausibly make on its own. If Partner Center makes it, the
+            # refusal says so at once, and the fix is to record it here with
+            # the date it was seen, as SERVER_OWNED records its keys, rather
+            # than to loosen the comparison.
+            problems.append(f"{lang}: releaseNotes came back with CRLF line breaks where the file has LF")
+        else:
+            problems.append(f"{lang}: releaseNotes came back as {utf16_length(got)} characters, "
+                            f"not the {utf16_length(text)} of the release's whats-new file")
     # Everything we did not mean to change must have come back as it went.
     # Strict on purpose: a spurious refusal here costs an investigation with
     # nothing public changed, and the opposite mistake costs the listing.
@@ -516,7 +746,8 @@ def verify_staged(sid: str, pkgs: list[dict], publish_mode: str, clone: dict):
               f"{p.get('version') or '(set at commit)'}")
     li = (fresh.get("listings") or {}).get("en-gb", {}).get("baseListing", {})
     print(f"    listing: {len(li.get('images') or [])} images, "
-          f"{len(li.get('description') or '')} chars of description, identical to the clone")
+          f"{len(li.get('description') or '')} chars of description, identical to the clone "
+          f"but for What's New, which is the file's {utf16_length(li.get('releaseNotes') or '')} characters")
     print(f"    targetPublishMode {fresh.get('targetPublishMode')}   status {fresh.get('status')}")
 
 
@@ -664,7 +895,17 @@ def main(argv):
                 raise SystemExit(f"{p['fileName']} on disk (sha256 {p['sha256'][:16]}) is not the file "
                                  f"create uploaded ({(recorded.get(p['fileName']) or '?')[:16]}); "
                                  f"the server holds different bytes from the ones you are looking at")
-        verify_staged(s["submissionId"], pkgs, s.get("publishMode") or mode, clone)
+        # The same for the release notes: the server is held to the text create
+        # sent, and a file edited since then must not be what it is compared
+        # against, or a verify would pass text nobody is looking at.
+        notes = read_release_notes(desktop_version())
+        sent = s.get("releaseNotes") or {}
+        for lang, text in sorted(notes.items()):
+            if sent.get(lang) != notes_digest(text):
+                raise SystemExit(f"{os.path.relpath(release_notes_path(lang, desktop_version()), REPO)} "
+                                 f"is not the text create sent for {lang}; the server holds different "
+                                 f"release notes from the ones you are looking at")
+        verify_staged(s["submissionId"], pkgs, s.get("publishMode") or mode, clone, notes)
         save_state(verified=True)
         return 0
     if cmd == "create":

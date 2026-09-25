@@ -113,8 +113,78 @@ nothing that is not in the app.
 
 ### What's new
 
-Blank on the first submission. From the second on, the same three-bullet
-note the other stores get (`build/appstore/metadata/en-GB/whats-new-<v>.txt`).
+Partner Center's "What's new in this version", which it used to call
+"Release notes"; in the submission API it is
+`listings.<language>.baseListing.releaseNotes`, a string. Microsoft's listing
+guide ("Add and edit Store listing info for MSIX app") gives it a limit of
+1,500 characters and asks for it blank on an app's first submission. That
+first submission, 1.2.10, went through the console blank, as it should. So
+did 1.2.13 and 1.2.14, through `msstore/submit.py`: it sent the cloned listing
+unchanged, and the clone's field was empty. No Windows reader has yet been
+told what a release changed.
+
+It is written for each release, like the App Store's What's New, in its own
+file:
+
+```
+msstore/metadata/en-gb/whats-new-<version>.txt
+```
+
+one directory per listing language, named by the API's key (the listing is
+en-GB only), in the shape of the Apple files'
+`build/appstore/metadata/en-GB/whats-new-<version>.txt`. The text may say what
+the iOS What's New for that version says, where that is also true of Windows,
+but it is not read from the Apple file.
+
+The Apple files live under the gitignored `build/`; this one is tracked, for
+three reasons. It carries nothing private, because it is published verbatim on
+the Store. The text a version was sent is then in the tree its tag names,
+beside the packages built from it. And CI can hold every release to it:
+`TestWindowsWhatsNewIsNamedForThisRelease` requires the file for the ledger's
+version, from 1.2.16 on, on every machine, where the Apple files' test skips
+on any machine without `build/` (`docs/RELEASING.md`, stage 0). The cost is
+that the file is written at the version bump, for every release from 1.2.16,
+including one the Store is not sent, and that a note corrected after the tag
+is a commit after the tag (see below). The test's floor is 1.2.16 because the
+ledger stood at 1.2.15, with no file for it, when the file became required;
+`submit.py` has no floor, so a Store submission of 1.2.15 would need a
+`whats-new-1.2.15.txt` of its own.
+
+`msstore/submit.py` sends it as written, less the line break an editor leaves
+at the end, and it is the one listing field the tool changes. `preflight`
+reads and measures it. `create` reads it before anything exists on the server
+and refuses a file that is missing, empty, over 1,500 characters, the same
+text as another release's file, not UTF-8, or carrying anything but letters,
+marks, numbers, punctuation, symbols, spaces and line breaks. Microsoft
+documents no character rule for the field, so that rule is ours: it keeps out
+what cannot be meant to show — a tab, a carriage return, a byte-order mark, a
+zero-width joiner (and with it an emoji composed of several), private-use
+code points, and code points unassigned in the Unicode version the Python
+running the tool knows, which the refusal names. It also refuses
+the small capitals the app draws the divine name in, because App Store
+Connect refused them in its own What's New; how the Store treats them is
+untested, and describing the name costs nothing. The limit is counted in
+UTF-16 code units, which is how .NET measures a string and never fewer than
+the characters a reader sees.
+
+The tool then sets `releaseNotes` in each listing and nothing else in it, and
+holds the body it sends to the clone byte for byte everywhere else. `create`'s
+own read-back, and `verify` after it, refuse unless the server's
+`releaseNotes` is exactly the file's text and every other listing field came
+back as the clone had it; `verify` also refuses if the file was edited after
+`create` sent it.
+
+The API has been reported enforcing a lower limit than the console for
+another listing field (`shortDescription`: "must be 500 or less" through the
+API, 1,000 in the form; learn.microsoft.com/answers/questions/2111561). If it
+does the same for this one, or refuses the text for any other reason, the PUT
+is refused with the reason in its message and nothing public has changed:
+`msstore/submit.py abort` removes the draft, the file is corrected, and
+`create` runs again. The tool reads the file on disk, not a commit, and the
+packages are the tag's artefacts either way. After the tag, the correction
+waits to be committed until no store build of that version remains, because a
+commit after the tag makes the version unbuildable (`docs/RELEASING.md`,
+stage 7); the tag keeps the text that was refused.
 
 ## Properties and declarations
 
@@ -406,7 +476,10 @@ its SAS URL, commit, poll) was written against the second release, once the
 first had gone through the console: name reservation, the age rating and the
 first publish are console-only. It lives in **`msstore/submit.py`**, with
 subcommands `preflight`, `verify`, `create`, `commit`, `poll` and `abort`;
-`msstore.py` stays read-only. Microsoft's own command-line tool (`msstore`, from
+`msstore.py` stays read-only. Of the listing, a submission changes one field,
+What's New, from the release's file (see "What's new" above); every other
+field goes back as the clone had it. Microsoft's own command-line tool
+(`msstore`, from
 github.com/microsoft/msstore-cli; it runs on macOS on .NET) answers the same
 reads with `msstore apps list` and is the cross-check when this client and
 the console disagree. Rotating the key is the same console path; the Keychain item

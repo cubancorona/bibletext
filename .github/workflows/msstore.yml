@@ -39,6 +39,10 @@ on:
       - "share_link_*.go"
       - "single_instance*.go"
       - "docs/windows-app-web-link"
+      # The listing's What's New lives under msstore/ but goes into no
+      # package: msstore/submit.py sends it to the listing. A commit that
+      # changes only a release's note has nothing here to pack or install.
+      - "!msstore/metadata/**"
 
 permissions:
   contents: read

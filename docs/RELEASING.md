@@ -44,7 +44,8 @@ A conductor may prepare, verify, upload and report. These stay with the
 account holder, and a conductor that finds one undone stops and says so rather
 than inventing an answer.
 
-**All the human copy.** The iOS and Mac What's New files, the review notes for
+**All the human copy.** The iOS and Mac What's New files, the Microsoft Store
+What's New (`msstore/metadata/en-gb/whats-new-<v>.txt`), the review notes for
 both platforms, the Play release notes, the `[[release]]` head and bullets in
 `linux/releases.toml`, the GitHub release notes. A conductor checks they exist,
 are named for this version, are non-empty, are inside the character limits and
@@ -108,11 +109,13 @@ The host build is blind to those, so nothing else will catch them.
 Confirm `build/appstore/metadata/en-GB` exists before trusting the test run:
 `TestWhatsNewIsNamedForThisRelease` SKIPS when it does not, which is why CI
 cannot catch a missing Mac What's New — the exact fault that got 1.2.8's Mac
-submission refused.
+submission refused. The Microsoft Store's What's New is tracked, so
+`TestWindowsWhatsNewIsNamedForThisRelease` runs everywhere and needs no such
+check.
 
 ### 1 — Prepare, on main
 
-Seven coupled surfaces have to name the same version, each test-enforced:
+Eight coupled surfaces have to name the same version, each test-enforced:
 
 1. `cmd/mobile/FyneApp.toml` — Version and Build
 2. `cmd/bibletext/FyneApp.toml` — Version and Build
@@ -126,6 +129,11 @@ Seven coupled surfaces have to name the same version, each test-enforced:
 7. `linux/releases.toml` — a new `[[release]]` block, then
    `go run ./cmd/linuxmeta render`, which rewrites both AppStream files, the
    desktop entry and `snap/snapcraft.yaml`
+8. `msstore/metadata/en-gb/whats-new-<v>.txt` — the Microsoft Store's What's
+   New, tracked: at most 1,500 characters, nothing but visible text, spaces
+   and line breaks, and not a copy of another release's; required from 1.2.16
+   on, including for a release the Store is not sent
+   (`docs/WINDOWS_STORE_LISTING.md`, "What's new")
 
 Plus the Play notes blockquote in `docs/PLAY_LISTING.md`, under 500 characters.
 
@@ -251,7 +259,7 @@ Download both `BibleText-Windows-<arch>-msix` artefacts, then:
 
 ```
 . scripts/msstore-env.sh
-msstore/submit.py preflight <dir>    # identity, version, ANGLE, PE machine word
+msstore/submit.py preflight <dir>    # identity, version, ANGLE, PE machine word, What's New
 msstore/submit.py create   <dir>     # POST + PUT + upload, stops before commit
 msstore/submit.py verify   <dir>     # re-read from the server
 msstore/submit.py commit             # <- the irreversible one
@@ -263,6 +271,18 @@ so `abort` deletes it with no public trace. The previously published package
 stays `Uploaded` rather than being marked `PendingDelete` — it reaches nobody
 while a higher version exists, and keeping it makes a rollback one PUT instead
 of a rebuild against a spent number.
+
+The listing's What's New goes with the packages: `preflight` measures
+`msstore/metadata/en-gb/whats-new-<v>.txt`, and `create` reads it before
+anything exists on the server, refuses one that is missing, empty, over 1,500
+characters, another release's text or carrying a character the listing must
+not, and sets it as the listing's `releaseNotes`, the only listing field a
+submission changes. `verify` holds the server to that exact text and every
+other listing field to the clone. If the PUT is refused over the notes,
+`abort`, correct the file and `create` again. `submit.py` reads the file on
+disk, so the correction need not be committed first, and after the tag it
+should not be until no store build of `<v>` remains: a commit after the tag
+makes `<v>` unbuildable (stage 7).
 
 ### 10 — Snap
 

@@ -34,7 +34,7 @@ step too.
 | --- | --- | --- | --- | --- |
 | **Apple App Store** (iPhone, iPad) | nothing | `scripts/release-ios.sh` builds and uploads only with `BIBLETEXT_UPLOAD=1`; then metadata, screenshots and review notes in App Store Connect | account holder | [APP_STORE_SUBMISSION.md](APP_STORE_SUBMISSION.md) |
 | **Mac App Store** | nothing | `scripts/release-mac-store.sh` builds a signed, sandboxed `.pkg` against the Store certificates; uploaded and submitted separately | account holder | [MAC_APP_STORE.md](MAC_APP_STORE.md), [APP_STORE_SUBMISSION.md](APP_STORE_SUBMISSION.md) |
-| **Microsoft Store** | nothing | `msstore.yml` builds and smokes both MSIX packages; `msstore/submit.py` then creates the submission, uploads them and commits it. Only the FIRST submission after a name reservation had to be made in Partner Center | mixed | [WINDOWS_STORE_LISTING.md](WINDOWS_STORE_LISTING.md) |
+| **Microsoft Store** | nothing | `msstore.yml` builds and smokes both MSIX packages; `msstore/submit.py` then creates the submission, sets the listing's What's New from the release's file, uploads them and commits it. Only the FIRST submission after a name reservation had to be made in Partner Center | mixed | [WINDOWS_STORE_LISTING.md](WINDOWS_STORE_LISTING.md) |
 | **Google Play** | nothing — the APK is attached to the GitHub release by hand | `scripts/build-android.sh --release` produces the signed AAB; uploaded to a track in the Play Console | account holder | [PLAY_LISTING.md](PLAY_LISTING.md) |
 | **Snap Store** | **publishes both architectures to `edge`** | promotion to `stable` is one command and can be automated; categories, screenshots and visibility are console-only | mixed | [LINUX_STORES.md](LINUX_STORES.md) |
 | **Flathub** | nothing | a pull request to `flathub/flathub`, which **their policy requires the account holder to write and post personally**, with an AI-assistance disclosure | account holder only | [LINUX_STORES.md](LINUX_STORES.md) |
@@ -51,7 +51,8 @@ built from the tag, not from a later HEAD.
 **Version bumps touch more than the two packaging ledgers**, and each coupling
 is enforced by a test: `cmd/bibletext/FyneApp.toml`, `cmd/mobile/FyneApp.toml`,
 both review-notes files' first line, `appstore/push-review-notes.py`'s
-`TARGET_VERSION`, and version-named What's New files for iOS and Mac.
+`TARGET_VERSION`, and version-named What's New files for iOS, Mac and the
+Microsoft Store.
 
 **Not every release is submitted anywhere.** Skipping a store for a release
 that changes nothing a reader of that platform would notice is normal and
