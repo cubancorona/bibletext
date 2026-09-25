@@ -37,7 +37,7 @@ func TestSwitchVersionUpdatesState(t *testing.T) {
 	}
 
 	// No window in tests, so rebuildWindow is a no-op; the state still updates.
-	switchVersion(state, "lsb")
+	switchVersion(state, "lsb", byReader)
 	if state.CurrentVersion != "lsb" || state.currentMode != modeTesting {
 		t.Fatalf("after switch: version=%q mode=%v", state.CurrentVersion, state.currentMode)
 	}
@@ -48,7 +48,7 @@ func TestSwitchVersionUpdatesState(t *testing.T) {
 		t.Errorf("currentVersion abbrev = %q", state.currentVersion().Abbrev)
 	}
 	// Switching back to the cached base is instant and restores it.
-	switchVersion(state, "web")
+	switchVersion(state, "web", byReader)
 	if state.CurrentVersion != "web" || state.Bible != base {
 		t.Error("switching back to web should restore the base data")
 	}

@@ -125,7 +125,7 @@ func showVersionPicker(state *AppState) {
 		ver := v // capture
 		rows.Add(versionRow(state, ver, func() {
 			closePicker()
-			switchVersionInteractive(state, ver.ID)
+			switchVersionInteractive(state, ver.ID, byReader)
 		}))
 	}
 
@@ -182,70 +182,75 @@ func showVersionPicker(state *AppState) {
 
 // fullPendingNotice is the picker's plain answer to a state that must never
 // pass silently: the reader is looking at a previous edition (or the starter
-// portion) while the background refresh works or waits. Empty when nothing
-// is pending. The three states it distinguishes are the three a reader can
-// be in: actively downloading, waiting out the retry backoff offline, or
-// still on the first-run starter text.
+// portion) while the background refresh works or waits, or at another
+// translation than the one they chose. Empty when nothing falls short. The
+// default's own states are the three a reader can be in: actively
+// downloading, waiting out the retry backoff offline, or still on the
+// first-run starter text. More than one fact can hold at once, and each is
+// said, one per line.
 func fullPendingNotice(state *AppState) string {
 	if state == nil {
 		return ""
 	}
-	// ORDER OF PRECEDENCE: what is ON SCREEN first. A reader looking at the
-	// four-book seed needs to hear about the seed before anything else, so
-	// that case is answered below with the rest of the fullPending wording.
-	if !state.seedOnly {
-		// BEING SHOWN A DIFFERENT TRANSLATION outranks being shown a previous
-		// edition of the right one. preferredVersion is set exactly when the
-		// reader's chosen translation could not be opened this launch and the
-		// app fell back — until now a completely silent substitution: the
-		// picker put its check mark on the fallback, every citation named the
-		// fallback, and nothing anywhere said the reader had asked for
-		// something else (D10). The second sentence is the one that matters
-		// most: it is the app promising it has not forgotten, which is only
-		// true because D9 made it so.
-		if pref := state.preferredVersion; pref != "" && pref != state.CurrentVersion {
-			if v, ok := versionByID(pref); ok {
-				shown := state.CurrentVersion
-				if cur, ok := versionByID(state.CurrentVersion); ok {
-					shown = cur.Name
-				}
-				return v.Name + " could not be opened this time — " + shown +
-					" is shown instead. Your choice is remembered and comes back when it can."
-			}
-		}
-		// A translation serving a SUPERSEDED epoch is stale whether or not it
-		// is the default one — and only the default one is covered by
-		// fullPending, so without this the reader's own translation says
-		// nothing at all (D3).
-		if names := staleVersionNames(state); len(names) > 0 {
-			return joinNatural(names) + pick(len(names), " is", " are") +
-				" showing a previous edition until the update can be downloaded."
-		}
-	}
-	if !state.fullPending {
-		return ""
-	}
 	def, _ := versionByID(defaultVersionID)
-	switch {
-	case state.seedOnly:
+	// The default's own sentences say its text "is shown meanwhile": true only
+	// while the default is ON SCREEN ("" is the default, as in currentVersion()).
+	// The seed banner is already gated the same way (incompleteBibleBanner). D21.
+	onDefault := state.CurrentVersion == "" || state.CurrentVersion == defaultVersionID
+	// The seed is what is on screen, and it is the whole answer (D3's precedence).
+	if state.fullPending && state.seedOnly && onDefault {
 		return "The full " + def.Name + " is still downloading — a starter portion is shown meanwhile."
-	case !state.fullDownloading && state.fullRetryDelay > 0:
-		return def.Name + " has a text update waiting for a connection — the previous edition is shown meanwhile. It retries automatically."
-	default:
-		return def.Name + " is updating to its latest edition in the background — the previous edition is shown meanwhile."
 	}
+	// EVERY TRUE FACT, NOT THE HIGHEST-RANKED ONE, in the order a reader asks:
+	// which translation, then which edition. One per line. Ranking them let the
+	// substitution silence the edition (D20).
+	var said []string
+	// BEING SHOWN A DIFFERENT TRANSLATION is said first. preferredVersion is
+	// set exactly when the reader's chosen translation could not be opened
+	// this launch and the app fell back — until now a completely silent
+	// substitution: the picker put its check mark on the fallback, every
+	// citation named the fallback, and nothing anywhere said the reader had
+	// asked for something else (D10). The second sentence is the one that
+	// matters most: it is the app promising it has not forgotten, which is
+	// only true because D9 made it so.
+	if pref := state.preferredVersion; pref != "" && pref != state.CurrentVersion {
+		if v, ok := versionByID(pref); ok {
+			shown := state.CurrentVersion
+			if cur, ok := versionByID(state.CurrentVersion); ok {
+				shown = cur.Name
+			}
+			said = append(said, v.Name+" could not be opened this time — "+shown+
+				" is shown instead. Your choice is remembered and comes back when it can.")
+		}
+	}
+	if onDefault && state.fullPending {
+		if !state.fullDownloading && state.fullRetryDelay > 0 {
+			said = append(said, def.Name+" has a text update waiting for a connection — the previous edition is shown meanwhile. It retries automatically.")
+		} else {
+			said = append(said, def.Name+" is updating to its latest edition in the background — the previous edition is shown meanwhile.")
+		}
+	}
+	// A translation serving a SUPERSEDED epoch is said too, whether or not it
+	// is the one on screen: only the default one is covered by fullPending, so
+	// without this the reader's own translation says nothing at all (D3).
+	if names := staleVersionNames(state); len(names) > 0 {
+		said = append(said, joinNatural(names)+pick(len(names), " is", " are")+
+			" showing a previous edition until the update can be downloaded.")
+	}
+	return strings.Join(said, "\n")
 }
 
 // noticeOnPickerOpen is what the picker footer says when the picker opens: the
-// notice for the state the reader arrived in, and then the manual retry. Split
-// out so the ordering is callable, and therefore provable — the same reason
-// applyFullDownload is a named function rather than a goroutine tail.
+// notice for the state the reader arrived in, and then the manual retry of
+// whatever the refresh owes (owedUpgrades). Split out so the ordering is
+// callable, and therefore provable — the same reason applyFullDownload is a
+// named function rather than a goroutine tail.
 func noticeOnPickerOpen(state *AppState) string {
 	if state == nil {
 		return ""
 	}
 	notice := fullPendingNotice(state)
-	if state.fullPending && !state.fullDownloading {
+	if len(owedUpgrades(state)) > 0 && !state.fullDownloading {
 		state.fullRetryDelay = 0
 		triggerFullDownload(state)
 	}
@@ -478,8 +483,9 @@ var _ fyne.Tappable = (*tapBox)(nil)
 // multi-second network call on the main thread would freeze the UI and risk the
 // launch/run-loop watchdog. On failure the current version is kept and a brief
 // message is shown; the synchronous switchVersion remains the shared core (and is
-// what unit tests drive directly).
-func switchVersionInteractive(state *AppState, id string) {
+// what unit tests drive directly). cause is who asked: the goroutine captures
+// it, and it ends with this load in finishVersionLoad (D19).
+func switchVersionInteractive(state *AppState, id string, cause switchCause) {
 	if state == nil || id == state.CurrentVersion {
 		return
 	}
@@ -490,7 +496,7 @@ func switchVersionInteractive(state *AppState, id string) {
 	// Loaded earlier this session, or an instant base-derived placeholder → swap
 	// synchronously; neither touches the network.
 	if _, inMem := state.loadedVersions[id]; inMem || v.isTesting() {
-		switchVersion(state, id)
+		switchVersion(state, id, cause)
 		return
 	}
 
@@ -516,56 +522,75 @@ func switchVersionInteractive(state *AppState, id string) {
 				return
 			}
 			state.versionLoading = false
+			// The spinner goes before any landing's rebuild or the error card.
 			dismiss()
-			if err != nil {
-				// Offline after a cacheEpoch bump, this version's previous-epoch
-				// cache is still a complete canon — switching to it worked in
-				// 1.1.5 and must keep working. Fall back to it
-				// rather than showing "couldn't load"; the next online load
-				// upgrades the text.
-				if old, oldMode, cerr := loadVersionFromCacheOnly(v); cerr == nil {
-					if !versionCacheIsCurrent(v) {
-						markVersionStale(state, v.ID) // D3: say so, do not serve it silently
-					}
-					applyLoadedVersion(state, v, old, oldMode)
-					return
-				}
-				// CLOSE THE PROMISE WITH THE LOAD. A shared link that named
-				// this translation parked its target here and let this load
-				// own the spinner; the arm above honours it by handing the
-				// previous epoch to applyLoadedVersion, but on this arm the
-				// translation never arrives and nothing will ever consume the
-				// park. Left behind it is not inert — applyLoadedVersion's
-				// tail consumes a park whose id matches, so the reader who
-				// later picks this same translation from the picker, for
-				// their own reasons and long after being told the link
-				// failed, is silently moved to the dead link's passage. The
-				// error card below is the reader's answer; the park is closed
-				// with it. See D12 in docs/VERSION_STATES.md.
-				//
-				// Only OUR park: a target waiting on a different translation
-				// belongs to another load and has its own consumer.
-				//
-				// The passage is deliberately NOT opened in the translation
-				// the reader already has. Re-applying the target would run
-				// switchToLinkVersion again, which would start the very fetch
-				// that just failed; and stripping the version to dodge that
-				// would file the sender's note against wording it was never
-				// about. The link is still in the reader's messages, and
-				// tapping it again is the way forward.
-				if state.pendingLinkVersion == v.ID {
-					state.pendingLink = nil
-					state.pendingLinkRaw = ""
-					state.pendingLinkVersion = ""
-					state.pendingNoteOpenID = 0
-				}
-				fmt.Fprintf(os.Stderr, "BibleText: could not load %s: %v\n", v.Name, err)
-				showVersionLoadError(state, v.Name)
-				return
-			}
-			applyLoadedVersion(state, v, data, mode)
+			finishVersionLoad(state, v, cause, data, mode, err)
 		})
 	}()
+}
+
+// finishVersionLoad is the end of every interactive translation load, on the
+// UI goroutine. Everything the load owns ends here: its cause is spent by the
+// landing or dies with the call (D19), its park is closed on the failed arm
+// (D12), and a previous edition it had to serve is handed to the refresh (D17).
+// Reports whether the error card was shown. Named, rather than the tail of the
+// goroutine closure, so the walks drive the real one.
+func finishVersionLoad(state *AppState, v BibleVersion, cause switchCause, data *BibleData, mode dataMode, err error) (errorShown bool) {
+	state.versionLoading = false
+	if err != nil {
+		// Offline after a cacheEpoch bump, this version's previous-epoch
+		// cache is still a complete canon — switching to it worked in
+		// 1.1.5 and must keep working. Fall back to it rather than showing
+		// "couldn't load"; the refresh then owes it the current edition.
+		if old, oldMode, cerr := loadVersionFromCacheOnly(v); cerr == nil {
+			stale := !versionCacheIsCurrent(v)
+			if stale {
+				markVersionStale(state, v.ID) // D3: say so, do not serve it silently
+			}
+			applyLoadedVersion(state, v, old, oldMode, cause)
+			if stale {
+				// D17: the mark is the refresh's work list, and this fetch has
+				// just failed, so the upgrade waits out the first backoff step
+				// rather than being fetched again at once.
+				ensureUpgradeScheduled(state)
+			}
+			return false
+		}
+		// CLOSE THE PROMISE WITH THE LOAD. A shared link that named
+		// this translation parked its target here and let this load
+		// own the spinner; the arm above honours it by handing the
+		// previous epoch to applyLoadedVersion, but on this arm the
+		// translation never arrives and nothing will ever consume the
+		// park. Left behind it is not inert — applyLoadedVersion's
+		// tail consumes a park whose id matches, so the reader who
+		// later picks this same translation from the picker, for
+		// their own reasons and long after being told the link
+		// failed, is silently moved to the dead link's passage. The
+		// error card below is the reader's answer; the park is closed
+		// with it. See D12 in docs/VERSION_STATES.md.
+		//
+		// Only OUR park: a target waiting on a different translation
+		// belongs to another load and has its own consumer.
+		//
+		// The passage is deliberately NOT opened in the translation
+		// the reader already has. Re-applying the target would run
+		// switchToLinkVersion again, which would start the very fetch
+		// that just failed; and stripping the version to dodge that
+		// would file the sender's note against wording it was never
+		// about. The link is still in the reader's messages, and
+		// tapping it again is the way forward.
+		if state.pendingLinkVersion == v.ID {
+			state.pendingLink = nil
+			state.pendingLinkRaw = ""
+			state.pendingLinkVersion = ""
+			state.pendingNoteOpenID = 0
+		}
+		fmt.Fprintf(os.Stderr, "BibleText: could not load %s: %v\n", v.Name, err)
+		showVersionLoadError(state, v.Name)
+		return true
+	}
+	applyLoadedVersion(state, v, data, mode, cause)
+	return false
 }
 
 // showVersionLoading puts up a modal spinner while a translation downloads, and

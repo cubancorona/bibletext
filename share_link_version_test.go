@@ -92,7 +92,7 @@ func TestParkedLinkForAnotherTranslationIsDropped(t *testing.T) {
 	other, _ := versionByID("webc")
 	bd := NewBibleData()
 	bd.PopulateWithSampleVerses()
-	applyLoadedVersion(st, other, bd, modeReal)
+	applyLoadedVersion(st, other, bd, modeReal, byReader)
 
 	if st.pendingLink != nil || st.pendingLinkVersion != "" {
 		t.Error("a stale parked link survived a different translation landing")

@@ -271,7 +271,7 @@ func devVersionCachePanel(state *AppState) fyne.CanvasObject {
 				// link take the not-downloaded path.
 				switched := false
 				if v.ID == state.CurrentVersion && v.ID != defaultVersionID {
-					switchVersion(state, defaultVersionID)
+					switchVersion(state, defaultVersionID, byReader)
 					switched = state.CurrentVersion != v.ID
 				}
 				unloaded := false

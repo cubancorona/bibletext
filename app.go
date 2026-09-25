@@ -151,10 +151,10 @@ var loadProgressFn func(book string, bookNum, totalBooks, chapter int)
 // caller shows the window FIRST (with state.loadPhase == loadPending, so
 // CreateMainUI renders just a spinner and never attaches the native reading
 // overlay); this keeps the main thread free, so the iOS launch watchdog can't
-// SIGKILL the app on a slow first-run fetch. On success we copy the loaded
-// fields into the same *AppState the UI already closed over (never swap the
-// pointer — the showReading/surfaceReading closures captured it) and rebuild;
-// on failure we show an in-app retry view.
+// SIGKILL the app on a slow first-run fetch. On success we hand the loaded
+// state to the same *AppState the UI already closed over (adoptLaunch; never
+// swap the pointer — the showReading/surfaceReading closures captured it) and
+// rebuild; on failure we show an in-app retry view.
 //
 // Exported so both entry points (desktop Run, cmd/mobile) use the same path.
 func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
@@ -201,24 +201,15 @@ func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
 				rebuildWindow(state)
 				return
 			}
-			// Copy the loaded data into the live state. Only these fields move
-			// over; the wiring (app/window/theme/closures, Annotations) the
-			// loading-phase UI already installed stays put.
-			state.Bible = loaded.Bible
-			state.CurrentVersion = loaded.CurrentVersion
-			state.currentMode = loaded.currentMode
-			state.loadedVersions = loaded.loadedVersions
-			state.CurrentBook = loaded.CurrentBook
-			state.CurrentChapter = loaded.CurrentChapter
-			state.RecentChapters = loaded.RecentChapters
-			state.restore = loaded.restore // carry the one-shot scroll target
-			state.fullPending = loaded.fullPending
-			state.seedOnly = loaded.seedOnly
-			state.loadPhase = loadReady
+			// Hand what the launch decided to the live state. FIRST, and the
+			// order matters: a link tapped at cold start lands below, and its
+			// landing reads preferredVersion under D13, so the reader's
+			// remembered translation must already be on the live state.
+			adoptLaunch(state, loaded)
 			// Bring back the note on the chapter we are reopening into. It has
 			// to happen HERE rather than in the restore itself: the restore runs
-			// on the load goroutine against a throwaway state, and only the
-			// fields copied just above survive the trip — a note set there would
+			// on the load goroutine against a throwaway state, and only what
+			// adoptLaunch carries survives the trip — a note set there would
 			// be dropped on the floor. Before consumePendingLink, so a link
 			// tapped at cold start still wins.
 			applyNoteOnResume(state)
@@ -239,61 +230,152 @@ func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
 			devAutoReadAlong(state)
 			devAutoTintBench(state)
 			devAutoNotesS8(state)
-			if state.fullPending {
-				// Opened on the embedded Gospels; download the complete Bible in the
-				// background (resilient + self-retrying) and swap it in when it lands.
-				triggerFullDownload(state)
-			}
+			// Opened on the embedded Gospels, on the default's previous edition,
+			// or with the restored translation on its previous edition: the
+			// refresh owes each its upgrade and decides for itself what to
+			// fetch first (owedUpgrades). A no-op when nothing is owed (D17).
+			triggerFullDownload(state)
 		})
 	}()
 }
 
-// triggerFullDownload fetches the complete current-version Bible in the background after
-// the app opened on the embedded Gospels seed OR on a superseded-epoch cache
-// (loadStateData sets fullPending for both), then swaps the fresh text into the
-// live state on the UI thread. It is resilient + self-healing: a single-flight
-// guard (fullDownloading) prevents overlapping fetches, and on failure it auto-retries
-// after a short delay — so a stalled, dropped, or backgrounded download can't leave the
-// reader permanently stuck on stale text. The app-foreground hook and a manual retry
-// also funnel through here. MUST be called on the Fyne UI goroutine.
+// adoptLaunch hands what the launch decided to the live state the window
+// already closed over (never swap the pointer). The wiring the loading UI
+// installed (app/window/theme/closures, Annotations) stays. Everything
+// the launch records is carried, including the two records the restore
+// makes when it cannot give the reader what they chose. REPLACES, never
+// merges: Retry (buildLoadingView) re-runs the launch on this same state, and
+// the new restore is the truth. See D18 in docs/VERSION_STATES.md.
+//
+// The maps are handed over, not shared: loaded is dropped once this returns,
+// and the load goroutine is finished with it before fyne.Do runs this.
+func adoptLaunch(live, loaded *AppState) {
+	live.Bible = loaded.Bible
+	live.CurrentVersion = loaded.CurrentVersion
+	live.currentMode = loaded.currentMode
+	live.loadedVersions = loaded.loadedVersions
+	live.CurrentBook = loaded.CurrentBook
+	live.CurrentChapter = loaded.CurrentChapter
+	live.RecentChapters = loaded.RecentChapters
+	live.restore = loaded.restore // the one-shot scroll target
+	live.fullPending = loaded.fullPending
+	live.seedOnly = loaded.seedOnly
+	live.preferredVersion = loaded.preferredVersion // D9's record; D10's sentence and every save read it
+	live.staleVersions = loaded.staleVersions       // D3's mark; the refresh's work list (D17)
+	live.loadPhase = loadReady
+}
+
+// triggerFullDownload starts the refresh's next owed upgrade in the background:
+// the first of owedUpgrades, which is the default translation after the app
+// opened on the embedded Gospels seed or on a superseded-epoch cache
+// (loadStateData sets fullPending for both), and any public-domain translation
+// recorded as showing its previous edition (D17). The fresh text is swapped
+// into the live state on the UI thread (upgradeLanded). It is resilient +
+// self-healing: a single-flight guard (fullDownloading) prevents overlapping
+// fetches, and on failure it auto-retries after a bounded backoff — so a
+// stalled, dropped, or backgrounded download can't leave the reader
+// permanently stuck on stale text. The app-foreground hook, the picker's
+// manual retry and the backoff timer all funnel through here; with nothing
+// owed it settles the backoff at zero and does nothing. MUST be called on the
+// Fyne UI goroutine.
 func triggerFullDownload(state *AppState) {
-	if state == nil || state.stopping.Load() || !state.fullPending || state.fullDownloading {
+	if state == nil || state.stopping.Load() || state.fullDownloading {
 		return
 	}
+	owed := owedUpgrades(state)
+	if len(owed) == 0 {
+		// Nothing owed, so nothing is armed either: a delay left standing
+		// would claim a retry that is not there (ensureUpgradeScheduled).
+		state.fullRetryDelay = 0
+		return
+	}
+	version := owed[0]
 	state.fullDownloading = true
-	// fullPending is computed for the DEFAULT version's cache, so the refresh
-	// must target THAT version. state.CurrentVersion may be a translation the
-	// saved reading state restored, which restoreReadingState already brought
-	// to its current epoch — refetching it is pure waste, and it would leave
-	// the default version's epoch bump permanently unapplied.
-	version, _ := versionByID(defaultVersionID)
 	go func() {
 		full, mode, err := loadVersionData(version, nil) // one helloao request; caches on success
-		fyne.Do(func() {
-			state.fullDownloading = false
-			if state.stopping.Load() {
-				return // tearing down — don't mutate state or schedule timers
-			}
-			if err != nil {
-				fmt.Fprintln(os.Stderr, "BibleText: full-Bible download failed, will retry:", err)
-				// Self-heal with BOUNDED exponential backoff (20s → 40s → … →
-				// 10m): a reader who stays offline already holds a complete
-				// previous-epoch Bible, so retrying every 20s all session only
-				// burns radio and metered data. Foreground re-entry still
-				// retries immediately via SetOnEnteredForeground.
-				switch {
-				case state.fullRetryDelay <= 0:
-					state.fullRetryDelay = 20 * time.Second
-				case state.fullRetryDelay < 10*time.Minute:
-					state.fullRetryDelay *= 2
-				}
-				time.AfterFunc(state.fullRetryDelay, func() { fyne.Do(func() { triggerFullDownload(state) }) })
-				return
-			}
-			state.fullRetryDelay = 0
-			applyFullDownload(state, version, full, mode)
-		})
+		fyne.Do(func() { upgradeLanded(state, version, full, mode, err) })
 	}()
+}
+
+// owedUpgrades is what the refresh owes, in the order it fetches: the
+// translation on screen, then the default, then the rest in registry order.
+// The default is owed while fullPending; any other translation while it is
+// RECORDED as showing its previous edition (D3). Never a licensed one: it is
+// never served stale (V-E), and a fetch of it spends the API.Bible monthly
+// quota, which the app never spends on its own initiative. Never a
+// placeholder: it has nothing to fetch.
+func owedUpgrades(state *AppState) []BibleVersion {
+	if state == nil {
+		return nil
+	}
+	owes := func(v BibleVersion) bool {
+		return !isLicensedSource(v) && !v.isTesting() &&
+			((v.ID == defaultVersionID && state.fullPending) || state.staleVersions[v.ID])
+	}
+	var out []BibleVersion
+	if v, ok := versionByID(state.CurrentVersion); ok && owes(v) {
+		out = append(out, v)
+	}
+	if v, ok := versionByID(defaultVersionID); ok && v.ID != state.CurrentVersion && owes(v) {
+		out = append(out, v)
+	}
+	for _, v := range registeredVersions {
+		if v.ID != state.CurrentVersion && v.ID != defaultVersionID && owes(v) {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// upgradeRetryAfter runs f on the UI goroutine after d: the one door every
+// backoff retry of the refresh goes through. The suite shuts it in TestMain:
+// a timer armed by a test would fire a real helloao fetch minutes later.
+var upgradeRetryAfter = func(d time.Duration, f func()) { time.AfterFunc(d, func() { fyne.Do(f) }) }
+
+// armUpgradeRetry schedules the refresh's next attempt with BOUNDED
+// exponential backoff (20s → 40s → … → 10m): a reader who stays offline
+// already holds a complete previous-epoch Bible, so retrying every 20s all
+// session only burns radio and metered data. Foreground re-entry and opening
+// the picker still retry at once. One backoff, shared by everything owed.
+func armUpgradeRetry(state *AppState) {
+	switch {
+	case state.fullRetryDelay <= 0:
+		state.fullRetryDelay = 20 * time.Second
+	case state.fullRetryDelay < 10*time.Minute:
+		state.fullRetryDelay *= 2
+	}
+	upgradeRetryAfter(state.fullRetryDelay, func() { triggerFullDownload(state) })
+}
+
+// ensureUpgradeScheduled makes an owed upgrade ON ITS WAY: a fetch in
+// flight, or a retry armed. Called where a previous edition has just been put
+// on the live state after a fetch that failed, so it waits out the first
+// backoff step rather than fetching again at once. Deliberately NOT inside
+// markVersionStale: the restore marks a throwaway state on the load goroutine.
+func ensureUpgradeScheduled(state *AppState) {
+	if state == nil || state.stopping.Load() || state.fullDownloading || state.fullRetryDelay > 0 || len(owedUpgrades(state)) == 0 {
+		return
+	}
+	armUpgradeRetry(state)
+}
+
+// upgradeLanded is the refresh's tail on the UI goroutine; named so the
+// walks drive it.
+func upgradeLanded(state *AppState, version BibleVersion, full *BibleData, mode dataMode, err error) {
+	state.fullDownloading = false
+	if state.stopping.Load() {
+		return // tearing down — don't mutate state or schedule timers
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "BibleText: text update for", version.Name, "failed, will retry:", err)
+		armUpgradeRetry(state)
+		return
+	}
+	state.fullRetryDelay = 0
+	applyFullDownload(state, version, full, mode)
+	// The next one owed, if any, is really in flight when this returns, and
+	// the state says so; otherwise this settles the delay at zero.
+	triggerFullDownload(state)
 }
 
 // applyFullDownload is the download's success tail, on the UI goroutine: swap
@@ -302,9 +384,33 @@ func triggerFullDownload(state *AppState) {
 // goroutine closure for the same reason as consumeSeedParkedLink: the rule it
 // carries has to be callable to be provable.
 func applyFullDownload(state *AppState, version BibleVersion, full *BibleData, mode dataMode) {
+	if version.ID != defaultVersionID {
+		// Another translation's upgrade (D17). Nothing about the seed or the
+		// default's refresh is its to clear.
+		if !state.staleVersions[version.ID] {
+			return // already repaired meanwhile (its own load, or D11's re-read): nothing to swap
+		}
+		if state.loadedVersions != nil {
+			state.loadedVersions[version.ID] = full
+		}
+		// Asked of memory, not the disk, so a landing whose cache write
+		// failed (D6) is not owed for ever.
+		clearVersionStale(state, version.ID)
+		if state.CurrentVersion != version.ID {
+			return
+		}
+		state.Bible = full
+		state.currentMode = mode
+		deferOrRebuild(state) // an edition swap under an open sheet waits for it; the seed's park is not this one's
+		return
+	}
 	if state.loadedVersions != nil {
 		state.loadedVersions[version.ID] = full
 	}
+	// Memory holds the current decode now, so a stale mark on the default goes
+	// too, as it does for any other translation above. The refresh owes a
+	// marked translation, and would otherwise fetch this one again at once.
+	clearVersionStale(state, version.ID)
 	// Only swap the live view if the reader is still on the default version (they
 	// may have switched translations while it downloaded); the cache is warm either way.
 	if state.CurrentVersion != version.ID {
@@ -358,9 +464,10 @@ func applyFullDownload(state *AppState, version BibleVersion, full *BibleData, m
 // deferOrRebuild is the background-completion spelling of rebuildWindow: the
 // rebuild happens NOW when nothing would be lost, and waits for the sheet the
 // reader is inside otherwise. Used by the paths a reader never triggered from
-// the sheet itself — the theme observer today; applyFullDownload keeps its own
-// copy of the check because its immediate path must consume the seed-parked
-// link first.
+// the sheet itself — the theme observer, and applyFullDownload's upgrade of a
+// translation other than the default (D17); the default's own path keeps its
+// own copy of the check because its immediate path must consume the
+// seed-parked link first.
 func deferOrRebuild(state *AppState) {
 	if state != nil && state.window != nil && state.window.Canvas().Overlays().Top() != nil {
 		if os.Getenv("BT_SHEET_DEBUG") != "" {
@@ -480,9 +587,9 @@ func InstallReadingStateFlush(myApp fyne.App, window fyne.Window, state *AppStat
 		flushReadingState(state)
 	})
 	lc.SetOnExitedForeground(func() { flushReadingState(state) }) // iOS/Android background
-	// Retry the full-Bible download whenever the app returns to the foreground — covers a
-	// fetch that stalled or dropped while backgrounded. No-op once the full text has landed
-	// (triggerFullDownload guards on fullPending + single-flight).
+	// Retry the refresh whenever the app returns to the foreground — covers a
+	// fetch that stalled or dropped while backgrounded. No-op once nothing is owed
+	// (triggerFullDownload asks owedUpgrades, and is single-flight).
 	// foregroundOverlayRecovery (Android-only) re-renders the native reading
 	// overlay when Android recreated the activity while we were away — without
 	// it the reading pane comes back blank after a swipe-away relaunch (common

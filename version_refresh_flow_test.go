@@ -20,6 +20,7 @@ package bibletext
 // once at the end. A journey is what the reader actually does.
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -92,7 +93,7 @@ const (
 	reSwitchAway                        // the reader picks another translation
 	reSwitchBack                        // ...and returns to the default
 	rePickerOpen                        // the picker's manual retry + its notice
-	reFetchFails                        // the download tail's failure branch
+	reFetchFails                        // the refresh tail's failure branch (upgradeLanded)
 )
 
 func (e refreshEvent) String() string {
@@ -100,9 +101,10 @@ func (e refreshEvent) String() string {
 }
 
 // apply drives ONE event through the app's real logic and returns the state
-// after it. Where the production path is a goroutine (triggerFullDownload's
-// tail) the synchronous half is reproduced exactly and cited, because a test
-// cannot await a goroutine deterministically.
+// after it. Where the production path starts a goroutine (triggerFullDownload)
+// the synchronous half is reproduced exactly and cited, because a test cannot
+// await a goroutine deterministically; the tail it ends in is named
+// (upgradeLanded) and runs for real.
 func (e refreshEvent) apply(t *testing.T, st *AppState) {
 	t.Helper()
 	def, _ := versionByID(defaultVersionID)
@@ -115,22 +117,17 @@ func (e refreshEvent) apply(t *testing.T, st *AppState) {
 		st.CurrentVersion = defaultVersionID
 	case rePickerOpen:
 		// showVersionPicker's head, verbatim (versions_ui.go): the manual
-		// retry, then the notice computed after it.
-		if st.fullPending && !st.fullDownloading {
+		// retry of whatever the refresh owes, then the notice computed after it.
+		if len(owedUpgrades(st)) > 0 && !st.fullDownloading {
 			st.fullRetryDelay = 0
 			if !st.stopping.Load() {
 				st.fullDownloading = true // triggerFullDownload sets this synchronously
 			}
 		}
 	case reFetchFails:
-		// The failure branch of the download tail (app.go), synchronous half.
-		st.fullDownloading = false
-		switch {
-		case st.fullRetryDelay <= 0:
-			st.fullRetryDelay = 20 * time.Second
-		case st.fullRetryDelay < 10*time.Minute:
-			st.fullRetryDelay *= 2
-		}
+		// The refresh's real tail with the fetch failed (app.go): the backoff
+		// grows and a retry is armed, through the seam TestMain holds shut.
+		upgradeLanded(st, def, nil, modeReal, errors.New("offline"))
 	}
 }
 
@@ -173,6 +170,9 @@ var knownRefreshIncoherent = []pinnedRefreshDefect{}
 //	R-B  A reader waiting offline is told they are waiting, not that work is
 //	     in progress.
 //	R-C  Nothing is owed once the download has landed.
+//	R-D  The default's sentences describe only the default. Each says its text
+//	     "is shown meanwhile", which is false while another translation is on
+//	     screen (D21).
 func checkRefreshInvariants(o refreshObs) []string {
 	var bad []string
 	if o.banner && !o.onSeed {
@@ -184,6 +184,9 @@ func checkRefreshInvariants(o refreshObs) []string {
 	if !o.facts.seedOnly && o.facts.pending && o.facts.retryDelay > 0 && !o.facts.downloading &&
 		o.notice != "" && !strings.Contains(o.notice, "waiting for a connection") {
 		bad = append(bad, "R-B: a waiting reader is told the update is in progress")
+	}
+	if o.facts.current != "" && o.facts.current != defaultVersionID && strings.Contains(o.notice, "shown meanwhile") {
+		bad = append(bad, "R-D: the footer says the default's text is shown while another translation is on screen")
 	}
 	return bad
 }
@@ -386,6 +389,47 @@ func TestTheWaitingNoticeIsReachableFromThePicker(t *testing.T) {
 			"The manual retry fires before the notice is computed, so the wording "+
 			"written for exactly this reader can never be shown by the only surface "+
 			"that shows it.", got)
+	}
+}
+
+// D21: the default's three sentences — the seed, waiting, updating — each say
+// its text "is shown meanwhile", and they were returned whatever was on
+// screen. A fresh install that picks the BSB before the WEB lands, or an
+// upgrader restored onto a current BSB after a WEB epoch bump while offline,
+// read that the WEB's previous edition was shown while reading the BSB. The
+// seed banner was already gated on the default being on screen; the footer
+// now is too.
+func TestTheDefaultsSentencesDescribeOnlyTheDefault(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	onDefault := refreshFacts{pending: true, retryDelay: 20 * time.Second, current: defaultVersionID}
+	st := onDefault.toState(t)
+	said := fullPendingNotice(st)
+	if !strings.Contains(said, "waiting for a connection") || !strings.Contains(said, "shown meanwhile") {
+		t.Fatalf("control: the default's waiting sentence must exist at all, else this proves nothing: %q", said)
+	}
+	for _, bad := range checkRefreshInvariants(observe(st, false)) {
+		if strings.HasPrefix(bad, "R-D:") {
+			t.Fatalf("R-D fires with the default on screen, where its sentence is true: %s", bad)
+		}
+	}
+	// The control: R-D fires on that sentence over another translation.
+	away := onDefault
+	away.current = "bsb"
+	fired := false
+	for _, bad := range checkRefreshInvariants(refreshObs{facts: away, notice: said}) {
+		fired = fired || strings.HasPrefix(bad, "R-D:")
+	}
+	if !fired {
+		t.Fatal("control: R-D does not fire on the default's sentence over another translation, so its silence below proves nothing")
+	}
+	// The app, on the BSB, with the default waiting and on the seed.
+	for _, f := range []refreshFacts{away, {pending: true, seedOnly: true, current: "bsb"}} {
+		st := f.toState(t)
+		if n := fullPendingNotice(st); n != "" {
+			t.Errorf("D21: on %s the footer says %q", f, n)
+		}
 	}
 }
 

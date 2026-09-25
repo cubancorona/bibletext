@@ -195,7 +195,7 @@ func runSelectCell(t *testing.T, mem memoryShape, disk diskShape) (selectObs, bo
 		markVersionStale(state, sel.ID)
 	}
 
-	switchVersion(state, sel.ID)
+	switchVersion(state, sel.ID, byReader)
 
 	obs := selectObs{mem: mem, disk: disk, onScreen: state.CurrentVersion}
 	obs.switched = state.CurrentVersion == sel.ID
@@ -284,7 +284,7 @@ func TestAStaleVersionUpgradesInPlaceWhenTheCurrentEpochArrives(t *testing.T) {
 		t.Fatal("the fixture needs a previous epoch")
 	}
 	mustCache(t, prevPaths[0], stampedBible("previous"))
-	switchVersion(state, sel.ID)
+	switchVersion(state, sel.ID, byReader)
 	if got := bibleStamp(state.Bible); got != "previous" {
 		t.Fatalf("control: with nothing better on disk the reader keeps the previous edition; got %q", got)
 	}
@@ -300,7 +300,7 @@ func TestAStaleVersionUpgradesInPlaceWhenTheCurrentEpochArrives(t *testing.T) {
 	mustCache(t, cachePathForVersion(sel.ID), stampedBible("current"))
 	state.CurrentVersion = defaultVersionID
 	state.Bible = base
-	switchVersion(state, sel.ID)
+	switchVersion(state, sel.ID, byReader)
 
 	if got := bibleStamp(state.Bible); got != "current" {
 		t.Fatalf("the current edition was on disk and the reader was left on %q", got)
@@ -367,7 +367,7 @@ func TestAnInMemorySwitchAlwaysTakes(t *testing.T) {
 				if stale {
 					markVersionStale(state, sel.ID)
 				}
-				switchVersion(state, sel.ID)
+				switchVersion(state, sel.ID, byReader)
 				if state.CurrentVersion != sel.ID {
 					t.Fatalf("an in-memory switch did not take — switchToLinkVersion would now open a shared link in %q with no message at all", state.CurrentVersion)
 				}
@@ -422,7 +422,7 @@ func TestASwitchDoesNotLeaveTheOldTranslationsSearchResults(t *testing.T) {
 	}
 
 	st := newState()
-	applyLoadedVersion(st, web, narrow, modeReal)
+	applyLoadedVersion(st, web, narrow, modeReal, byReader)
 	for _, r := range st.SearchResults {
 		if st.Bible.GetChaptersForBook(r.BookName) == 0 {
 			t.Fatalf("a result for %s survived the switch into a translation without that book", r.BookName)

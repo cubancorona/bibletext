@@ -77,7 +77,7 @@ func TestNKJVSelectableAndSwitchLoadsRealText(t *testing.T) {
 		CurrentBook:    "John",
 		CurrentChapter: 1,
 	}
-	switchVersion(state, "nkjv")
+	switchVersion(state, "nkjv", byReader)
 
 	if state.CurrentVersion != "nkjv" || state.currentMode != modeReal {
 		t.Fatalf("after switch: version=%q mode=%v", state.CurrentVersion, state.currentMode)
@@ -131,7 +131,7 @@ func TestNKJVSwitchRefusedWithoutLicenseEnv(t *testing.T) {
 		CurrentBook:    "John",
 		CurrentChapter: 1,
 	}
-	switchVersion(state, "nkjv")
+	switchVersion(state, "nkjv", byReader)
 
 	if state.CurrentVersion != "web" {
 		t.Errorf("refusal must keep the current version; got %q", state.CurrentVersion)

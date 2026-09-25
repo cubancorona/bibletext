@@ -262,18 +262,11 @@ type AppState struct {
 	// on every background/stop flush. Without it, one unlucky launch silently
 	// overwrites the reader's choice with the default and the licensed
 	// translation is forgotten for good rather than returning when they are next
-	// online. Spent by the reader's OWN switch, or by the chosen translation
-	// finally loading — never by a switch somebody else's link performed on
-	// their behalf (D13).
+	// online. Spent by a landing whose load the reader started, or by the
+	// chosen translation itself landing; never by a load an arrival started
+	// (D13, D19: the cause is an argument of the load, not a field). The
+	// launch carries it to the live state (adoptLaunch, D18).
 	preferredVersion string
-	// versionSwitchForArrival marks the load now in flight as one an ARRIVAL
-	// asked for, not the reader. The distinction has exactly one consumer —
-	// whether preferredVersion is spent — and no other way to be known:
-	// applyLoadedVersion sees the same call whether the picker or a tapped
-	// link produced it, and the clearing rule it was written with names two
-	// callers ("the reader picked it", "the licensed one came back") that an
-	// arrival is neither of. Set by switchToLinkVersion, and read once.
-	versionSwitchForArrival bool
 	// notesScroll is the notes browser's scroll position, kept for the WHOLE
 	// session — the browser remembers its place — so any
 	// return to the list — a rebuild while in Notes, opening a note and coming
@@ -301,7 +294,9 @@ type AppState struct {
 	// fullPending is true when the app opened on the embedded Gospels seed (no cache
 	// yet) and the complete Bible is still downloading in the background; it flips to
 	// false once triggerFullDownload swaps the full text in. Drives the "downloading the
-	// full Bible" banner on the book lists (incompleteBibleBanner).
+	// full Bible" banner on the book lists (incompleteBibleBanner). It is the DEFAULT
+	// translation's half of the refresh's work list; staleVersions is every other
+	// translation's (owedUpgrades).
 	fullPending bool
 
 	// seedOnly is true only when the displayed text really IS the 4-book
@@ -319,13 +314,19 @@ type AppState struct {
 	// failed, read the old decode with no notice, no banner and no upgrade
 	// for the whole session. Recorded per version so the picker can say so.
 	// See D3 in docs/VERSION_STATES.md.
+	//
+	// With fullPending it is also the refresh's WORK LIST: every public-domain
+	// translation recorded here is owed its upgrade while the app runs
+	// (owedUpgrades, D17), and the mark is cleared when that lands. The launch
+	// carries it to the live state (adoptLaunch, D18).
 	staleVersions map[string]bool
 
 	// fullRetryDelay is the current auto-retry backoff for triggerFullDownload.
 	// It doubles on each consecutive failure (capped), so an offline reader who
 	// already holds a complete previous-epoch Bible does not burn radio and
 	// metered data all session upgrading text they can already read. Reset when
-	// a fetch succeeds. UI-goroutine only.
+	// a fetch succeeds, and when nothing is owed, so that while it is above zero
+	// a retry is armed (armUpgradeRetry). UI-goroutine only.
 	fullRetryDelay time.Duration
 
 	// fullDownloading guards triggerFullDownload to ONE in-flight fetch: the foreground

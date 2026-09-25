@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -195,6 +196,22 @@ func useLiveEnv(t *testing.T, names ...string) {
 // so the guard below can say where a test's render must not land.
 var realTempDir string
 
+// NOR DOES ANY TEST ARM THE REFRESH'S RETRY TIMER.
+//
+// A translation served from its previous edition is owed its upgrade, and the
+// refresh arms a backoff timer for it (armUpgradeRetry, D17). A timer armed by
+// a test fires minutes later, on a UI goroutine the test no longer owns, and
+// fetches the whole translation from helloao for real. So upgradeRetryAfter,
+// the one door every retry goes through, only counts here: a test that wants
+// to know a retry was armed reads upgradeRetriesArmed.
+//
+// The rule that goes with it: no test may reach triggerFullDownload with
+// anything owed unless it has set stopping first, as
+// TestTheWaitingNoticeIsReachableFromThePicker does — triggerFullDownload
+// starts a real fetch on a goroutine. A test that wants a landing drives the
+// refresh's tail, upgradeLanded, directly.
+var upgradeRetriesArmed atomic.Int64
+
 func TestMain(m *testing.M) {
 	withheldCredentials = withholdCredentials()
 	externalOpener = func(u *url.URL) error {
@@ -203,6 +220,7 @@ func TestMain(m *testing.M) {
 		openedMu.Unlock()
 		return nil
 	}
+	upgradeRetryAfter = func(time.Duration, func()) { upgradeRetriesArmed.Add(1) }
 	realCacheDir = filepath.Dir(defaultCachePath())
 	suiteCache, err := os.MkdirTemp("", "bibletext-test-cache-")
 	if err != nil {

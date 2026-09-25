@@ -70,7 +70,7 @@ func devAutoSwitchVersion(state *AppState) {
 	}
 	time.AfterFunc(6*time.Second, func() {
 		fyne.Do(func() {
-			switchVersion(state, id)
+			switchVersion(state, id, byReader)
 		})
 	})
 }
@@ -439,7 +439,7 @@ func devAutoNotesS8(state *AppState) {
 			HandleShareLink(state, ShareLinkURLWithNote("web", "Esther", 4, 1, 1,
 				"Fixture unplaced message alpha."))
 		})
-		at(8*time.Second, func() { switchVersion(state, "webc") })
+		at(8*time.Second, func() { switchVersion(state, "webc", byReader) })
 	case "s9suppress":
 		at(1500*time.Millisecond, func() { link("Fixture suppressed message alpha.") })
 		// A foreign mark on the same chapter — goToVerseRange is what the

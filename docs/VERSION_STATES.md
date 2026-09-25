@@ -3,17 +3,8 @@
 > **Status.** All seven machines are enumerated, and the refresh and arrivals
 > layers also carry the TRAJECTORY harness, which walks journeys rather than
 > cells, because a promise is broken by a sequence and no single cell is one.
-> Together they record **four open** incoherent states: `D17` (**a translation
-> shown from its previous edition is not updated while the app runs**), found
-> when the arrivals walk was given the disk that decides an arrival; `D18`
-> (**the launch drops the reader's remembered translation and the stale mark
-> on the way to the screen**); and two that `D18` hides and its fix will
-> expose, found when the walk was given the remembered translation: `D19`
-> (the arrival mark spent by a load it was not set for, so the reader's own
-> choice does not spend the remembered translation) and `D20` (a previous
-> edition behind the substitution sentence, with nothing said about the
-> edition). **Every defect the scouting reported has been
-> fixed where it lived — eighteen in all**: `V1`
+> Together they record **no open** incoherent states. **Every defect the
+> scouting reported has been fixed where it lived — twenty-three in all**: `V1`
 > (a silent stale-serve), `V2` (its root cause, an unsynced cache write), `D1`
 > (a destructive purge on an answer the app could not verify), `D2` (licensed
 > text retained with an unbounded lifetime), `D3`
@@ -29,9 +20,13 @@
 > the reader's remembered translation**), `D14` (a displaced link discarded in
 > silence), `D15` (one translation's search results read and navigated under
 > another's name) and `D16` (**a wider canon's trail deleted for reading a
-> narrower translation**). `D18` keeps three of those fixes — `D9`'s, `D10`'s
-> and `D3`'s at the launch — from reaching the reader. Anything a future
-> change breaks appears as an unpinned violation, by name.
+> narrower translation**), `D17` (a previous edition never updated while the
+> app ran), `D18` (**the launch dropping the reader's remembered translation
+> and the stale mark**), `D19` (the arrival mark spent by a load it was not
+> set for), `D20` (a previous edition silent behind the substitution) and
+> `D21` (the default's refresh sentences describing a screen that shows
+> another translation). Anything a future change breaks appears as an
+> unpinned violation, by name.
 
 ## Why a state machine and not a checklist
 
@@ -76,7 +71,7 @@ stateDiagram-v2
 
     state "THE REFRESH" as R {
         [*] --> Settled
-        Settled --> Pending: served from seed OR superseded
+        Settled --> Pending: the default served from seed OR superseded, or a public-domain translation recorded stale (D17)
         Pending --> Downloading: triggerFullDownload
         Downloading --> Settled: applyFullDownload
         Downloading --> Backoff: fetch failed
@@ -136,9 +131,9 @@ stateDiagram-v2
         Parked --> Displaced: another translation loads first — said, not dropped (D14)
         Parked --> Kept: the reader picks a different translation — the park survives (D13)
         Parked --> Previous: the fetch fails and the previous edition serves — recorded and said (D3)
-        Previous --> Previous: nothing fetches the current edition while the app runs (D17, OPEN)
-        Previous --> Previous: behind the substitution sentence, nothing says it is a previous edition (D20, OPEN)
-        Parked --> Misread: the arrival mark outlives the load it was set for, and the reader's next landing takes it (D19, OPEN)
+        Previous --> Upgraded: the refresh owes it; the current edition lands in place and the mark clears (D17)
+        Previous --> Previous: said behind the substitution sentence too, on a line of its own (D20)
+        Kept --> Kept: a landing is the reader's or the link's by the call that started its load, never by a mark another left (D19)
     }
 
     M4 --> L: what the launch decodes is what M4 then holds
@@ -163,16 +158,27 @@ kept or broken over time and every way it breaks is a sequence.
 | the cache file at `cachePathForVersion(id)` | disk | the current epoch's text |
 | the files at `supersededCachePaths(v)` | disk | previous epochs, newest first |
 | `cacheEpoch` | `versions.go` registry | which decoder wrote the current file |
-| `AppState.fullPending` | memory | an upgrade is owed |
+| `AppState.fullPending` | memory | the default translation is owed an upgrade |
 | `AppState.seedOnly` | memory | what serves is the 4-book seed |
+| `AppState.staleVersions` | memory | the translations recorded as showing a previous edition (`D3`'s mark); with `fullPending`, the refresh's work list (`D17`) |
+| `AppState.preferredVersion` | memory | the translation the reader chose when the launch had to show another (`D9`'s record); carried to the live state by `adoptLaunch` (`D18`) |
 | `AppState.fullDownloading` | memory | single-flight guard |
 | `AppState.fullRetryDelay` | memory | bounded backoff, 0 when settled |
 | `dataMode` | memory | `modeReal` vs a `modeTesting` placeholder |
 | the credential trio | keychain / env | whether a licensed source is `available()` |
 
-`fullPending` is computed **for the default version only**, whatever
-translation the reader is restored onto — see `D3` in the register, which is
-the silence that computation left in the translation actually on screen.
+What the refresh owes is `owedUpgrades`: the default while `fullPending`, and
+every other translation while it is recorded in `staleVersions`, fetched with
+the translation on screen first, then the default, then the rest in registry
+order. `fullPending` is still computed for the default alone; the stale mark
+is the rest of the list, and before `D17` nothing read it but the picker. Two
+kinds of translation are never owed. A licensed one is never served stale
+(V-E), and a fetch of it spends the API.Bible monthly quota, which the app
+never spends on its own initiative: a remembered NKJV comes back only at a
+launch that can revalidate it, or when the reader taps its row. A placeholder
+has nothing to fetch. One fetch runs at a time (`fullDownloading`) and one
+backoff serves the whole list (`fullRetryDelay`: 20 s, doubling, capped at 10
+minutes, and zero when nothing is owed).
 
 ## The states
 
@@ -186,8 +192,10 @@ picker says the full text is still downloading.
 loads. This is a *deliberate* stale-serve — the epoch-migration fallback that
 exists so an offline upgrader keeps their whole canon and their history rather
 than dropping to a 4-book seed. It is legal **only because** it is announced
-and repaired: `versionCacheIsCurrent` is false, so `fullPending` is set, the
-background upgrade runs, and the picker says an update is waiting.
+and repaired: `versionCacheIsCurrent` is false, so `fullPending` is set for
+the default; any other public-domain translation is recorded stale, which the
+refresh owes (`D17`). The background upgrade runs, and the picker says an
+update is waiting.
 
 **Unusable-current.** A file exists at the current epoch and cannot be served.
 Before the fix this state *pretended to be Current* — see `V1`.
@@ -208,7 +216,9 @@ load path revalidates. This is the §11 obligation and the one place where
 | **Absent** | full download lands | `applyFullDownload` (`app.go`) | **Current**, `fullPending` cleared |
 | **Current** | `cacheEpoch` bump | registry edit + release | **Superseded-serving** at the next launch |
 | **Superseded-serving** | upgrade lands | `loadVersionData` → `purgeSupersededCaches` | **Current**, old epochs removed |
-| **Superseded-serving** | fetch fails | `triggerFullDownload` tail | **Backoff** (20 s doubling, capped), notice says "waiting for a connection" |
+| **Superseded-serving** | fetch fails | `upgradeLanded`, `triggerFullDownload`'s tail | **Backoff** (20 s doubling, capped), notice says "waiting for a connection" |
+| non-default **Superseded-serving** | fetch fails in session | `finishVersionLoad` → `ensureUpgradeScheduled` | **Backoff** |
+| non-default **Superseded-serving** | upgrade lands | `upgradeLanded` → `applyFullDownload` | **Current**, mark cleared, swapped in place if on screen |
 | **Backoff** | foreground, timer, or the picker being opened | `app.go`, `versions_ui.go` | **Downloading** |
 | **Current** | interrupted write | `saveBibleToCache` | **Unusable-current** — made unreachable by the fsync (`V2`) |
 | **Placeholder** | a key arrives | `keyStore` write → picker re-derive | **Current**/**Absent** for that version, `modeReal` |
@@ -231,8 +241,10 @@ is a regression even if every existing test stays green.
   an error together, and no probe reports a file as usable that the serve path
   would reject. *Was violated by `V1`; fixed.*
 - **V-B — A superseded serve is always scheduled for upgrade.** If what
-  reaches the reader came from a previous epoch, `fullPending` is set.
-  *Was violated by `V1`; fixed.*
+  reaches the reader came from a previous epoch, the refresh owes it an
+  upgrade (`fullPending` for the default, the stale mark otherwise).
+  *Was violated by `V1`, and by `D17` for every translation but the default;
+  fixed.*
 - **V-C — A stale-serving state is never silent.** Every state in which the
   reader is not looking at the best available text has a notice that says so
   — the picker footer, or the seed banner. *Was violated by `V1`; fixed.*
@@ -269,10 +281,11 @@ world, step and invariant.
 | ~~D14~~ | ~~A link displaced by another translation's load is dropped with nothing said~~ | **FIXED 2026-08-29** | 0 | — |
 | ~~D15~~ | ~~Search results survive a switch: old wording under a new name, and a tap writes a dead reference~~ | **FIXED 2026-08-29** | 0 | — |
 | ~~D16~~ | ~~A wider canon's history is offered dead after a switch and deleted at the next launch~~ | **FIXED 2026-08-29** | 0 | — |
-| D17 | A translation shown from its previous edition is not updated while the app runs | **OPEN** — found 2026-09-25 | 4 | the previous decode for the rest of the session, under a notice promising an update that nothing in the session fetches |
-| D18 | The launch hands its state to the screen field by field and drops the two records the restore makes | **OPEN** — found 2026-09-25 | — | the reader's chosen translation overwritten by the fallback at their next navigation, with nothing said; a previous edition restored in silence |
-| D19 | The arrival mark is spent by a load it was not set for, so the reader's own choice is taken for an arrival | **OPEN**, live once `D18` is fixed — found 2026-09-25 | 5 | the translation they have just chosen overwritten at the next save by the one the picker still says is remembered |
-| D20 | A previous edition behind the substitution sentence: the picker says a translation was shown instead, and nothing about the edition | **OPEN**, live once `D18` is fixed — found 2026-09-25 | 2 | `D3`'s silence: a previous edition on screen, and no notice that says so |
+| ~~D17~~ | ~~A translation shown from its previous edition is not updated while the app runs~~ | **FIXED 2026-09-25** | 0 | — |
+| ~~D18~~ | ~~The launch hands its state to the screen field by field and drops the two records the restore makes~~ | **FIXED 2026-09-25** | 0 | — |
+| ~~D19~~ | ~~The arrival mark is spent by a load it was not set for, so the reader's own choice is taken for an arrival~~ | **FIXED 2026-09-25** | 0 | — |
+| ~~D20~~ | ~~A previous edition behind the substitution sentence: the picker says a translation was shown instead, and nothing about the edition~~ | **FIXED 2026-09-25** | 0 | — |
+| ~~D21~~ | ~~The default's refresh sentences say its text is shown while another translation is on screen~~ | **FIXED 2026-09-25** | 0 | — |
 
 ### V1 — FIXED 2026-08-28
 
@@ -455,12 +468,17 @@ closes a hole that IS live: before it, a non-default translation recorded as
 stale had **no way to stop being stale within a session**, however long the
 reader spent online — a straight violation of the liveness invariant.
 
-**That last claim is wrong, and the hole is still open** — see `D17`. The fix
-lets a stale translation stop being stale once its current edition is on
-disk, and the reachability note above is the reason that never happens: nothing
-in a session writes a non-default translation's current edition while its
-previous decode is in memory. The walk that showed it is the arrivals walk on
-the disk that holds only a previous edition.
+**That last claim was wrong, and the hole stayed open until `D17` closed
+it.** The fix lets a stale translation stop being stale once its current
+edition is on disk, and the reachability note above is the reason that never
+happened: nothing in a session wrote a non-default translation's current
+edition while its previous decode was in memory. The walk that showed it is
+the arrivals walk on the disk that holds only a previous edition. Since `D17`
+the refresh writes that edition, so the reload is live in one window only:
+between the refresh's cache write, on its goroutine, and its tail on the UI
+goroutine. A switch to the translation made in that window re-reads the disk
+rather than serving the old decode, which is right, and the refresh's tail
+then finds the mark already cleared and has nothing to swap.
 
 **A note on the enumeration itself.** Its first version passed, and proved
 nothing: it routed the generation stamp through `M1`'s `servedFrom` helper,
@@ -592,7 +610,7 @@ remembered, as the launch's restore records it, and with the reader's own
 choice of translation still loading when a link arrives. That is where `D19`
 and `D20` were found.
 
-### D17 — OPEN, found 2026-09-25
+### D17 — FIXED 2026-09-25, found the same day
 
 On the disk that holds only a translation's previous edition, a link to it
 whose fetch fails is served that edition: the load tail records it as stale
@@ -631,11 +649,32 @@ translation recorded as stale had no way to stop being stale within a
 session" — and its own reachability note says why it could not: nothing
 writes the current edition it waits for. The walk could not see the hole until
 it walked this disk. `TestAPreviousEditionIsNotUpdatedWhileTheAppRuns`
-reproduces it through the app's own entry points, the picker and a tapped
-link, with the network up and no fetch ever made, and fails the day it is
-fixed.
+reproduced it through the app's own entry points, the picker and a tapped
+link, with the network up and no fetch ever made.
 
-### D18 — OPEN, found 2026-09-25
+**Closed.** The refresh machine's work list is now the default while
+`fullPending` and every public-domain translation in `staleVersions`, the one
+on screen first (`owedUpgrades`). It is never a licensed translation, so it
+spends no API.Bible quota, and never a placeholder. The load tail that serves
+a previous edition arms the backoff (`finishVersionLoad` →
+`ensureUpgradeScheduled`), so the upgrade waits out one step rather than
+fetching again at once; the launch, the foreground hook, opening the picker
+and the timer retry it. A landing goes into memory, clears the mark (asked of
+memory, not the disk, so a landing whose cache write failed is not owed for
+ever) and swaps the text in place under `deferOrRebuild` when the translation
+is on screen, with nothing else about the reader changed. The switch itself
+still never fetches: the picker and a link treat a copy in memory as loaded,
+and serve the previous edition at once, still marked and said, while the
+upgrade is on its way. The walk has two events for it, `update-lands` and
+`reader-starts-it` (the reader's own choice made offline), and an invariant,
+`A-H`: an owed upgrade is always on its way, a fetch in flight or a retry
+armed. `A-F` reports nothing stuck. The guard is
+`TestAPreviousEditionIsUpdatedWhileTheAppRuns`, by a link, by the reader's
+offline choice, with the reader away when it lands, back through the picker
+while it is still owed, with the picker opened, and at the launch; it also
+checks the licensed and placeholder exclusions and the order.
+
+### D18 — FIXED 2026-09-25, found the same day
 
 The launch machine's cells, and the tests for `D9` and `D10`, read what the
 restore decided off the state the restore wrote. The reader never sees that
@@ -663,31 +702,44 @@ It was found by reading, not by a walk: tracing where `D17` reaches led to the
 launch's fallback, and the mark was not on the screen. The launch cells cross
 the restore and the tail `loadStateData` runs after it, and stop there; the
 seam they do not cross is the one the defect is in.
-`TestTheLaunchDropsWhatTheRestoreRecords` pins it. It runs the restore for real,
-through `loadStateData`, to show both records are made, and reads the hand-off
-from the source, because it runs inside a goroutine a test cannot await: every
-field the restore writes on its state must reach the live one, and today
-exactly these two do not. A record reaches the live state if the launch reads
+`TestTheLaunchDropsWhatTheRestoreRecords` pinned it. It ran the restore for
+real, through `loadStateData`, to show both records are made, and read the
+hand-off from the source, because it runs inside a goroutine a test cannot
+await: every field the restore writes on its state must reach the live one,
+and exactly these two did not. A record reaches the live state if the launch reads
 it off the restore's state anywhere — a copy, a multiple assignment, a clone,
 a range, an alias, or any function or method handed that state, however deep —
 or writes it on the live state, directly or through a function it hands the
-live state to, or one that function hands it on to. The pin fails for each of
-those shapes of fix, and the day another field is dropped. Its first version
-recognised only the one line the copy uses today, `state.X = loaded.X`, and
-stayed green under a fix written as a multiple assignment or a helper. What it
-still cannot see is a fix that rebuilds the records on the live state three
-or more calls deep in new code without reading the restore's: the search stops
-at two because three reach `applyLoadedVersion` — through the dev builds'
-automatic switch, and a few more through a link consumed at launch — which
-writes both records for reasons of its own. Whoever makes that fix strikes the
-pin by hand.
+live state to, or one that function hands it on to. The pin failed for each
+of those shapes of fix, and would have the day another field was dropped. Its
+first version recognised only the one line the copy used, `state.X =
+loaded.X`, and stayed green under a fix written as a multiple assignment or a
+helper. What it cannot see is a fix that rebuilds the records on the live
+state three or more calls deep in new code without reading the restore's: the
+search stops at two because three reach `applyLoadedVersion` — through the dev
+builds' automatic switch, and a few more through a link consumed at launch —
+which writes both records for reasons of its own.
 
-Closing it makes live two defects that the dropped preference hides today,
-because each needs the remembered translation on the live state. They are
-recorded as `D19` and `D20` below, and pinned, so the fix cannot ship them
-unseen: both belong in the same change.
+Closing it made live two defects that the dropped preference hid, because
+each needs the remembered translation on the live state. They are recorded as
+`D19` and `D20` below, and were fixed in the same change.
 
-### D19 — OPEN, found 2026-09-25, live once `D18` is fixed
+**Closed.** The hand-off is a named function, `adoptLaunch`, which carries
+both records with everything else, and runs before the note on the reopened
+chapter, the link tapped at cold start (whose landing reads the remembered
+translation under `D13`) and the rebuild. It replaces rather than merges,
+because Retry runs the launch again on the same live state and the new
+restore is the truth. The launch cells now observe the live state through it,
+which closes the seam they stopped short of, and ask two more questions: a
+previous edition on screen at launch is said (`L-E`) and owed its upgrade
+(`L-F`). The guard is `TestTheLaunchCarriesWhatTheRestoreRecords`: the same
+source reading, now requiring that nothing the restore records is dropped,
+and `adoptLaunch` run on what `loadStateData` returns, whose live state must
+hold both records, say what the restore's state says, and save the reader's
+choice. The source half's known blind spot, a rebuild three or more calls
+deep, remains.
+
+### D19 — FIXED 2026-09-25, found the same day, live once `D18` was fixed
 
 `versionSwitchForArrival` is how `applyLoadedVersion` tells a link's landing
 from the reader's own, and so whether to spend the remembered translation
@@ -717,9 +769,24 @@ translation it was set for, honoured only by that translation's landing, and
 closed with that load whichever way it ends. The walk found both routes once
 it was given the remembered translation and a load of the reader's own left in
 flight across a step (`A-G`); `TestTheArrivalMarkIsSpentByTheWrongLoad`
-reproduces each, and fails for a fix that closes either one.
+reproduced each.
 
-### D20 — OPEN, found 2026-09-25, live once `D18` is fixed
+**Closed.** The field is gone. Who asked is a `switchCause`, `byReader` or
+`byArrival`, an argument of `switchVersion`, `switchVersionInteractive` and
+`applyLoadedVersion`, so the compiler makes every caller say. The call that
+starts a load passes it, the load's goroutine captures it, and its own tail,
+`finishVersionLoad`, hands it to its own landing, or it dies with the call
+when the load fails. A link that parks behind a running load starts no load,
+so it gives no cause, and the running load lands with its own. Nothing is
+stored, so nothing can outlive its load or be read by another. The guard is
+`TestTheArrivalMarkBelongsToItsLoad`, by both routes, by a link parked behind
+the reader's own load of the same translation (the landing is the reader's,
+and opens the link's passage), and by the evicted spinner: the reader picks a
+translation from the real picker while a link's load is in flight. It also
+reads from the source that every switch `switchToLinkVersion` starts is the
+arrival's and every one the picker starts is the reader's.
+
+### D20 — FIXED 2026-09-25, found the same day, live once `D18` was fixed
 
 `fullPendingNotice` gives one sentence, and ranks what is on screen first:
 another translation shown instead of the reader's (`D10`) outranks a previous
@@ -738,7 +805,34 @@ footer name the translation on screen. `D10`'s sentence names it too, so the
 check passed. It now asks for the edition as well, which is how the walk found
 this at link-names-other -> fetch-fails-previous-serves, on the disk that
 holds only a previous edition. `TestAPreviousEditionIsSilentBehindASubstitution`
-reproduces it and fails the day the picker says both.
+reproduced it.
+
+**Closed.** The footer says every true fact, one per line, in the order a
+reader asks: the substitution, then the default's own sentence when the
+default is on screen, then the previous edition. The seed keeps its
+precedence and stands alone, because it is what is on screen. No sentence was
+added or reworded; where one fact holds the footer reads exactly as before.
+The guard is `TestAPreviousEditionIsSaidBehindASubstitution`, which compares
+the whole footer on the arrival's route and on the launch's, waiting and
+downloading.
+
+### D21 — FIXED 2026-09-25, found the same day
+
+The default translation's three sentences — the seed still downloading, an
+update waiting for a connection, an update in progress — each say the
+default's text "is shown meanwhile", and `fullPendingNotice` returned them
+whatever was on screen. That is reachable: a fresh install that picks the BSB
+before the WEB lands is told a starter portion of the WEB is shown, and an
+upgrader restored onto a current BSB after a WEB epoch bump while offline is
+told the WEB's previous edition is. The seed banner was already gated on the
+default being on screen (`incompleteBibleBanner`); the footer was not.
+
+It was found placing the default's sentence in `D20`'s composition, which had
+to say where it goes and when. The default's sentences are now said only
+while the default is on screen, and a reader on another translation with
+nothing else true is told nothing. The refresh machine has an invariant for
+it, `R-D`, which its cells and journeys ask after every step, and a guard,
+`TestTheDefaultsSentencesDescribeOnlyTheDefault`.
 
 ## The whole machine — what a complete model must cover
 
@@ -761,7 +855,7 @@ couplings that are real get crossed.
 |---|---|---|
 | **M1** | Per-version storage *(enumerated)* | absent · current · superseded · unusable · licensed-stale — **a vector over versions, not a scalar** |
 | **M2** | Credential and licence *(enumerated)* | unconfigured · bundled · BYOK · cleared-sticky · **unreadable-transient** · recency fresh/expired |
-| **M3** | Refresh and download | settled · pending · downloading · backoff(n) · unpersistable-loop |
+| **M3** | Refresh and download | settled · pending · downloading · backoff(n) · unpersistable-loop — over a work list (`owedUpgrades`) |
 | **M4** | Active selection *(enumerated)* | `CurrentVersion` + the `loadedVersions` map — **memory and disk can disagree** |
 | **M5** | App lifecycle *(enumerated, with M6+M7)* | loadPending · loadReady · loadFailed · foreground · background · teardown |
 | **M6** | Reading position *(enumerated, with M5+M7)* | the saved state NAMES a version that may be gone, unlicensed, or uncached |
@@ -836,14 +930,16 @@ not named in its register, and each test logs its own count when run with
 |---|---|---|
 | **M1** storage | `version_state_flow_test.go` | 15 cells — five disk shapes × three events, plus the licensed recency boundary from both sides and the four unusable-file shapes |
 | **M2** credentials | `version_credentials_flow_test.go` | 10 cells — five knowledge states (absent, held, unreadable, legacy-only, unreadable-with-legacy) × two events, including the irreversible one |
-| **M3** refresh | `version_refresh_flow_test.go` | 160 cells across pending × seed × downloading × backoff × active version, and **310 journeys** to depth 4 from the two starting states a launch can produce |
+| **M3** refresh | `version_refresh_flow_test.go` | 160 cells across pending × seed × downloading × backoff × active version, and **310 journeys** to depth 4 from the two starting states a launch can produce; `R-D` asked after every step since 2026-09-25 |
 | **M4** selection | `version_selection_flow_test.go` | 8 cells — memory (absent, current epoch, previous epoch) × disk (absent, current, previous), one unserveable combination skipped |
-| **M5 × M6 × M7** launch | `version_launch_flow_test.go` | 16 cells — the saved choice (default, wider canon, licensed) × its fate at launch (loads, load fails, superseded only, unselectable) × the saved book (Genesis, or Tobit under the wider canon) — and the hand-off to the live state, read from the source (`D18`) |
-| **Arrivals** | `version_arrivals_flow_test.go` | **478 journeys / 1864 steps** to depth 5 over seven events — a link naming another translation, its fetch failing with nothing to fall back on or with the previous edition serving, the load in flight landing, the reader picking that translation or a different one, or picking a different one that is still loading at the next step — in six worlds: three disks for the link's translation (its current edition, only the previous one, none), each with nothing remembered and with the reader's licensed translation remembered. The invariants are asserted after every step and liveness over the walk. A journey is a sequence of events that each did something; the walk used to count events that could not happen in the state they met, such as a fetch failing with nothing loading, which walked the same states again, and that is why 4662 journeys at depth 4 became fewer at depth 5 |
+| **M5 × M6 × M7** launch | `version_launch_flow_test.go` | 16 cells — the saved choice (default, wider canon, licensed) × its fate at launch (loads, load fails, superseded only, unselectable) × the saved book (Genesis, or Tobit under the wider canon) — observed on the live state, through the hand-off `adoptLaunch` (`D18`), with `L-E`/`L-F` asked of the two cells that put a previous edition on screen |
+| **Arrivals** | `version_arrivals_flow_test.go` | **1142 journeys / 4780 steps** to depth 5 over nine events — a link naming another translation, its fetch failing with nothing to fall back on or with the previous edition serving, the load in flight landing, the reader picking that translation or a different one, the reader picking either while it is still loading at the next step, and the refresh's owed upgrade landing — in six worlds: three disks for the link's translation (its current edition: 107 journeys / 420 steps; only the previous one: 198 / 826; none: 266 / 1144), each with nothing remembered and with the reader's licensed translation remembered. The invariants are asserted after every step and liveness over the walk. A journey is a sequence of events that each did something; the walk used to count events that could not happen in the state they met, such as a fetch failing with nothing loading, which walked the same states again, and that is why 4662 journeys at depth 4 became fewer at depth 5 |
 
 The cells found `V1`, `V2`, `D1`–`D3`, `D6`–`D11`; the journeys found `D4`,
 `D12`, `D17`, `D19` and `D20`; the model-free second pass found `D13`–`D16`;
-reading the launch's hand-off found `D18`. All are closed but `D17`–`D20`.
+reading the launch's hand-off found `D18`; the refresh cells found `D21` once
+`R-D` asked whether the default's sentences describe what is on screen, a
+question `D20`'s composition raised. All are closed.
 
 Nothing in the map above is unenumerated. What the enumerations do not
 claim: the surfaces listed under *The surfaces that must not lie* are checked

@@ -601,13 +601,26 @@ func supersededCachePaths(v BibleVersion) []string {
 
 // --- Switching --------------------------------------------------------------
 
+// switchCause is who asked for a translation to land. It travels WITH the
+// load, as an argument, from the call that starts it to the
+// applyLoadedVersion that ends it; never through a field, which outlives the
+// load it was set for (D19).
+type switchCause int
+
+const (
+	byReader  switchCause = iota
+	byArrival             // a shared link, or a note opened from the browser (both via switchToLinkVersion)
+)
+
 // switchVersion loads (or reuses) a translation, swaps it into the reader, and
 // rebuilds the window so the header, reading pane and sidebar reflect it. The
 // canonical 66-book structure is shared across versions, so the open book and
 // chapter stay valid. Cached versions and testing placeholders switch instantly;
 // a first real licensed fetch would block here — a loading affordance for that
-// case is a future refinement (see README → "Bible versions").
-func switchVersion(state *AppState, id string) {
+// case is a future refinement (see README → "Bible versions"). cause is who
+// asked, and is handed to the landing, which spends the remembered
+// translation only for the reader's own choice or its own return (D13, D19).
+func switchVersion(state *AppState, id string, cause switchCause) {
 	if state == nil || id == state.CurrentVersion {
 		return
 	}
@@ -629,7 +642,9 @@ func switchVersion(state *AppState, id string) {
 	// with no way to leave it this session, and applyLoadedVersion — which
 	// asks the DISK whether the version is current — quietly retires the very
 	// notice that says they are on it. Reloading repairs the state instead of
-	// describing it wrongly. See D11 in docs/VERSION_STATES.md.
+	// describing it wrongly. See D11 in docs/VERSION_STATES.md. While a stale
+	// decode is in memory, only the refresh writes its current epoch (D17), so
+	// this is a switch made between that write and the refresh's own tail.
 	if cached && state.staleVersions[id] && versionCacheIsCurrent(v) {
 		cached = false
 	}
@@ -648,7 +663,7 @@ func switchVersion(state *AppState, id string) {
 		data, mode = d, m
 	}
 
-	applyLoadedVersion(state, v, data, mode)
+	applyLoadedVersion(state, v, data, mode, cause)
 }
 
 // applyLoadedVersion swaps an already-loaded translation into the reader: it
@@ -692,7 +707,7 @@ func staleVersionNames(state *AppState) []string {
 	return out
 }
 
-func applyLoadedVersion(state *AppState, v BibleVersion, data *BibleData, mode dataMode) {
+func applyLoadedVersion(state *AppState, v BibleVersion, data *BibleData, mode dataMode, cause switchCause) {
 	// A new translation's text (and recordings) no longer match what's playing, and
 	// a version switch doesn't route through addRecentChapter, so stop here.
 	gAudio.stop()
@@ -724,9 +739,8 @@ func applyLoadedVersion(state *AppState, v BibleVersion, data *BibleData, mode d
 	// so it went silent in the same breath. The exception keeps the other
 	// half honest — a link TO the chosen translation is exactly it coming
 	// back. See D13 in docs/VERSION_STATES.md.
-	byArrival := state.versionSwitchForArrival
-	state.versionSwitchForArrival = false
-	if !byArrival || v.ID == state.preferredVersion {
+	// Who asked is this load's own cause, never a mark another load left (D19).
+	if cause == byReader || v.ID == state.preferredVersion {
 		state.preferredVersion = ""
 	}
 

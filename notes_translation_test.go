@@ -59,7 +59,7 @@ func TestSwitchingTranslationCarriesTheNoteOver(t *testing.T) {
 	}
 	bd := NewBibleData()
 	bd.PopulateWithSampleVerses()
-	applyLoadedVersion(st, other, bd, modeReal)
+	applyLoadedVersion(st, other, bd, modeReal, byReader)
 
 	if st.ActiveNote != "web note" {
 		t.Errorf("the note did not follow the passage into %s: %q", other.ID, st.ActiveNote)
@@ -88,7 +88,7 @@ func TestSwitchingTranslationPicksUpThatTranslationsNote(t *testing.T) {
 	}
 	bd := NewBibleData()
 	bd.PopulateWithSampleVerses()
-	applyLoadedVersion(st, other, bd, modeReal)
+	applyLoadedVersion(st, other, bd, modeReal, byReader)
 
 	if st.ActiveNote != "bsb note" {
 		t.Errorf("the BSB note did not appear on switching to BSB: %q", st.ActiveNote)
@@ -187,7 +187,7 @@ func TestAnExplicitSwitchClearsTheFallbackPreference(t *testing.T) {
 	}
 	bd := NewBibleData()
 	bd.PopulateWithSampleVerses()
-	applyLoadedVersion(st, other, bd, modeReal)
+	applyLoadedVersion(st, other, bd, modeReal, byReader)
 
 	if st.preferredVersion != "" {
 		t.Errorf("preference %q survived an explicit switch", st.preferredVersion)

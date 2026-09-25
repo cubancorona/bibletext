@@ -732,7 +732,9 @@ func switchToLinkVersion(state *AppState, t ShareTarget) bool {
 		parked := t
 		state.pendingLink = &parked
 		state.pendingLinkVersion = want
-		state.versionSwitchForArrival = true // as below: not the reader's choice (D13)
+		// No cause is given here: a park starts no load, and the load in
+		// flight lands with the cause it was started with, the reader's own
+		// included (D19).
 		// A fresh park starts with no Show intent: openNote re-stamps its note
 		// id AFTER this returns true; any other caller's park must not inherit
 		// a browser tap's stale one.
@@ -743,11 +745,11 @@ func switchToLinkVersion(state *AppState, t ShareTarget) bool {
 	// in applyLoadedVersion, which spends the remembered fallback translation
 	// on the assumption that a load it sees was either asked for or awaited.
 	// A link is neither, and the record it would spend is the only copy of
-	// what the reader actually chose (D13).
-	state.versionSwitchForArrival = true
+	// what the reader actually chose (D13). So both routes hand the load
+	// byArrival, and the load carries it to its own landing (D19).
 	_, inMem := state.loadedVersions[want]
 	if inMem || v.isTesting() {
-		switchVersion(state, want) // synchronous; fall through and apply
+		switchVersion(state, want, byArrival) // synchronous; fall through and apply
 		return false
 	}
 	// A real fetch: park the target and let the load's apply tail resume it.
@@ -755,6 +757,6 @@ func switchToLinkVersion(state *AppState, t ShareTarget) bool {
 	state.pendingLink = &parked
 	state.pendingLinkVersion = want
 	state.pendingNoteOpenID = 0 // as above: openNote re-stamps after the return
-	switchVersionInteractive(state, want)
+	switchVersionInteractive(state, want, byArrival)
 	return true
 }

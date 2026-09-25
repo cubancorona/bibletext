@@ -270,7 +270,7 @@ func TestSwitchVersionRefusesUnselectable(t *testing.T) {
 		CurrentChapter: 1,
 	}
 
-	switchVersion(state, "lsb")
+	switchVersion(state, "lsb", byReader)
 	if state.CurrentVersion != "web" || state.Bible != base {
 		t.Errorf("switch to an unlicensed version should be a no-op; got version=%q", state.CurrentVersion)
 	}

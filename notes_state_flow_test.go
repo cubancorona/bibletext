@@ -1395,7 +1395,7 @@ func runOriginFlow(t *testing.T, origin hlOrigin, ev hlEvent) []string {
 		if !ok {
 			t.Fatal("bsb is not registered; the frame invariant needs two translations")
 		}
-		applyLoadedVersion(st, v, romansBible(), modeReal)
+		applyLoadedVersion(st, v, romansBible(), modeReal, byReader)
 	}
 
 	var bad []string
@@ -1613,7 +1613,7 @@ func TestHighlightRenumberedAcrossVersionSwitch(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s is not registered", id)
 		}
-		applyLoadedVersion(st, v, data, modeReal)
+		applyLoadedVersion(st, v, data, modeReal, byReader)
 	}
 
 	t.Run("doxology moved cross-chapter", func(t *testing.T) {
@@ -1778,7 +1778,7 @@ func TestNoteMarkIsRederivedNotRenumberedOnSwitch(t *testing.T) {
 		if !ok {
 			t.Fatal("bsb is not registered")
 		}
-		applyLoadedVersion(st, v, romansBible(), modeReal)
+		applyLoadedVersion(st, v, romansBible(), modeReal, byReader)
 
 		if st.ActiveNote != "on 23" {
 			t.Fatalf("the note did not follow the switch: %q", st.ActiveNote)
@@ -1816,7 +1816,7 @@ func TestNoteMarkIsRederivedNotRenumberedOnSwitch(t *testing.T) {
 		if !ok {
 			t.Fatal("bsb is not registered")
 		}
-		applyLoadedVersion(st, v, romansBible(), modeReal)
+		applyLoadedVersion(st, v, romansBible(), modeReal, byReader)
 
 		if st.ActiveNote != "" {
 			t.Fatalf("chapter 14 should hold no note in the bsb, got %q", st.ActiveNote)

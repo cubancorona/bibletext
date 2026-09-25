@@ -159,7 +159,7 @@ func TestSwitchVersionInteractive(t *testing.T) {
 	state.loadedVersions = map[string]*BibleData{defaultVersionID: web, "bsb": bsb}
 
 	// In-memory target → synchronous swap of both the id and the data.
-	switchVersionInteractive(state, "bsb")
+	switchVersionInteractive(state, "bsb", byReader)
 	if state.CurrentVersion != "bsb" {
 		t.Fatalf("expected CurrentVersion 'bsb', got %q", state.CurrentVersion)
 	}
@@ -168,18 +168,18 @@ func TestSwitchVersionInteractive(t *testing.T) {
 	}
 
 	// Re-selecting the active version is a no-op.
-	switchVersionInteractive(state, "bsb")
+	switchVersionInteractive(state, "bsb", byReader)
 	if state.CurrentVersion != "bsb" || state.Bible != bsb {
 		t.Fatal("re-selecting the active version must change nothing")
 	}
 
 	// A not-yet-licensed version is refused outright (the backstop behind the
 	// picker's inert rows), as is an unknown id.
-	switchVersionInteractive(state, "nrsv")
+	switchVersionInteractive(state, "nrsv", byReader)
 	if state.CurrentVersion != "bsb" || state.Bible != bsb {
 		t.Fatal("an unlicensed version must be refused")
 	}
-	switchVersionInteractive(state, "no-such-version")
+	switchVersionInteractive(state, "no-such-version", byReader)
 	if state.CurrentVersion != "bsb" {
 		t.Fatal("an unknown version id must be refused")
 	}

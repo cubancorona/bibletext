@@ -274,7 +274,7 @@ func TestBrowserTapAlwaysLandsOpen(t *testing.T) {
 		}
 		bd := NewBibleData()
 		bd.PopulateWithSampleVerses()
-		applyLoadedVersion(st, v, bd, modeReal)
+		applyLoadedVersion(st, v, bd, modeReal, byReader)
 
 		if st.CurrentBook != "John" || st.CurrentChapter != 3 {
 			t.Fatalf("the arrival did not land on the passage: %s %d", st.CurrentBook, st.CurrentChapter)
@@ -323,7 +323,7 @@ func TestBrowserTapAlwaysLandsOpen(t *testing.T) {
 		}
 		bd := NewBibleData()
 		bd.PopulateWithSampleVerses()
-		applyLoadedVersion(st, other, bd, modeReal)
+		applyLoadedVersion(st, other, bd, modeReal, byReader)
 
 		if st.pendingNoteOpenID != 0 {
 			t.Error("the Show intent survived the park it rode on")

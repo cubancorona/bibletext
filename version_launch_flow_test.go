@@ -97,6 +97,9 @@ type launchObs struct {
 	keptHist int    // history entries that survived
 	wantHist int    // entries that were valid in the reader's OWN canon
 	told     bool   // does any surface say the chosen translation is not the one shown?
+	previous bool   // is the text on screen a previous edition of the chosen translation?
+	saidEd   bool   // does the picker footer say the edition on screen is a previous one?
+	owed     bool   // does the refresh owe the translation on screen its upgrade?
 }
 
 type pinnedLaunchDefect struct {
@@ -124,6 +127,9 @@ var knownLaunchIncoherent = []pinnedLaunchDefect{}
 //	     canon. Validating a 73-book trail against 66 books is the erasure.
 //	L-C  The version named on screen is the version whose text is on screen.
 //	L-D  A reader who did not get the translation they chose is told so.
+//	L-E  A previous edition on screen at launch is said (D3's launch site).
+//	L-F  ...and the refresh owes it its upgrade, so it is not the text for
+//	     the rest of the session (D17).
 func checkLaunchInvariants(o launchObs) []string {
 	var bad []string
 	if o.aborted {
@@ -141,6 +147,12 @@ func checkLaunchInvariants(o launchObs) []string {
 	if o.onScreen != o.choice.id() && !o.told {
 		bad = append(bad, "L-D: the chosen translation was not opened and nothing says so")
 	}
+	if o.previous && !o.saidEd {
+		bad = append(bad, "L-E: a previous edition is on screen at launch and the picker does not say so")
+	}
+	if o.previous && !o.owed {
+		bad = append(bad, "L-F: a previous edition is on screen at launch and the refresh does not owe it an upgrade")
+	}
 	return bad
 }
 
@@ -152,7 +164,7 @@ func TestVersionLaunchStateSpace(t *testing.T) {
 
 	var unexplained []string
 	seen := map[string]bool{}
-	cells := 0
+	cells, previousCells := 0, 0
 
 	for choice := savedDefault; choice <= savedLicensed; choice++ {
 		for fate := fateLoads; fate <= fateUnselectable; fate++ {
@@ -167,6 +179,9 @@ func TestVersionLaunchStateSpace(t *testing.T) {
 				t.Run(name, func(t *testing.T) {
 					obs := runLaunchCell(t, choice, fate, book)
 					cells++
+					if obs.previous {
+						previousCells++
+					}
 					for _, bad := range checkLaunchInvariants(obs) {
 						explained := false
 						for _, d := range knownLaunchIncoherent {
@@ -190,19 +205,26 @@ func TestVersionLaunchStateSpace(t *testing.T) {
 		t.Errorf("%d launch cells; %d incoherent states with no entry in the register:\n  %v",
 			cells, len(unexplained), unexplained)
 	}
+	// L-E and L-F ask about a previous edition on screen; a space with none
+	// would pass them without asking anything.
+	if previousCells == 0 {
+		t.Error("control: no launch cell put a previous edition on screen, so L-E and L-F were never put to it")
+	}
 	// Set equality: a fix that leaves its pin behind fails here.
 	for _, d := range knownLaunchIncoherent {
 		if !seen[d.name] {
 			t.Errorf("%s is pinned as reachable but no cell reached it — if it is fixed, strike it from knownLaunchIncoherent and from docs/VERSION_STATES.md: %s", d.name, d.what)
 		}
 	}
-	t.Logf("%d launch cells enumerated; %d pinned incoherent states reached", cells, len(seen))
+	t.Logf("%d launch cells enumerated, %d with a previous edition on screen; %d pinned incoherent states reached", cells, previousCells, len(seen))
 }
 
 // runLaunchCell drives ONE launch through the app's real restore, then through
-// the exact tail loadStateData runs when the restore declines (app.go) — the
-// two together are what the reader actually experiences, and the erasure lives
-// in the seam between them.
+// the exact tail loadStateData runs when the restore declines (app.go), then
+// through the hand-off to the live state (adoptLaunch) — the three together are
+// what the reader actually experiences. The erasure lived in the seam between
+// the first two, and D18 in the seam the cells used to stop short of: they
+// read the restore's own state, which the reader never sees.
 func runLaunchCell(t *testing.T, choice savedChoice, fate choiceFate, book string) launchObs {
 	t.Helper()
 	base := fullValidBible() // the 66-book default canon, already loaded
@@ -266,13 +288,28 @@ func runLaunchCell(t *testing.T, choice savedChoice, fate choiceFate, book strin
 		state.CurrentChapter = 1
 	}
 
-	obs.onScreen = state.CurrentVersion
-	obs.wideData = state.Bible.GetChaptersForBook("Tobit") > 0
-	obs.keptHist = len(state.RecentChapters)
+	// THE STATE THE READER USES: StartBackgroundLoad hands the restore's state
+	// to the live one through adoptLaunch, and every observation below is read
+	// off what comes out of it.
+	live := NewLoadingState()
+	adoptLaunch(live, state)
+	obs.onScreen = live.CurrentVersion
+	obs.wideData = live.Bible.GetChaptersForBook("Tobit") > 0
+	obs.keptHist = len(live.RecentChapters)
 	// What the next navigation would write — the only record of the choice.
-	obs.persists = snapshotReadingState(state, 0, 0, 0, 0, 0).Version
+	obs.persists = snapshotReadingState(live, 0, 0, 0, 0, 0).Version
 	// Every surface that could carry the news. There is exactly one.
-	obs.told = fullPendingNotice(state) != ""
+	notice := fullPendingNotice(live)
+	obs.told = notice != ""
+	// A previous edition is on screen exactly when the fate left only the
+	// superseded file and the restore served the chosen translation from it.
+	// The default is left out: its restore has nothing to load, and its own
+	// edition is the refresh machine's cells.
+	obs.previous = fate == fateSupersededOnly && live.CurrentVersion == choice.id() && choice != savedDefault
+	obs.saidEd = strings.Contains(notice, "previous edition")
+	for _, v := range owedUpgrades(live) {
+		obs.owed = obs.owed || v.ID == live.CurrentVersion
+	}
 	return obs
 }
 
@@ -479,7 +516,7 @@ func TestAWiderCanonsTrailSurvivesReadingANarrowerOne(t *testing.T) {
 
 	// The reader switches to the narrower translation.
 	web, _ := versionByID(defaultVersionID)
-	applyLoadedVersion(st, web, narrow, modeReal)
+	applyLoadedVersion(st, web, narrow, modeReal, byReader)
 
 	// The bar must not offer what this canon cannot open.
 	for _, v := range recentJumpTargets(st, maxRecent) {
@@ -518,34 +555,32 @@ func TestAWiderCanonsTrailSurvivesReadingANarrowerOne(t *testing.T) {
 	}
 }
 
-// TestTheLaunchDropsWhatTheRestoreRecords is D18, which is OPEN.
+// TestTheLaunchCarriesWhatTheRestoreRecords is D18's guard.
 //
-// Every cell above, and D9's and D10's own tests, read the restore's answer
-// off the state the restore wrote. The reader never sees that state. The
-// launch restores onto one of its own on the load goroutine (loadStateData),
-// and StartBackgroundLoad copies it into the live state field by field — and
-// the fields it copies do not include the two records the restore makes: the
-// translation the reader chose, when the launch had to show another (D9, and
-// the sentence D10 reads off it), and the mark that a restored translation is
-// showing its previous edition (D3's launch site). On the state the reader is
-// using, the choice is gone and their next navigation saves the fallback over
-// it, and the previous edition is shown with nothing said.
+// The launch restores onto a state of its own on the load goroutine
+// (loadStateData), and StartBackgroundLoad hands that to the live state the
+// window closed over, through adoptLaunch. Every field the restore writes must
+// reach the live state — above all the two records the restore makes when it
+// cannot give the reader what they chose: the translation the reader chose,
+// when the launch had to show another (D9, and the sentence D10 reads off
+// it), and the mark that a restored translation is showing its previous
+// edition (D3's launch site, and now the refresh's work list, D17). The copy
+// used to leave both out, so on the state the reader was using the choice was
+// gone and the next navigation saved the fallback over it, and the previous
+// edition was shown with nothing said.
 //
-// The hand-off runs inside a goroutine a test cannot await, so that half is
-// read from the source. What the restore records is every field it writes on
-// its state, directly or through a function it hands the state to. A record
-// reaches the screen if the launch either reads it off the restore's state or
-// writes it on the live one, and each is looked for in every shape a fix could
-// take rather than the one line the copy uses today — see launchReaches. The
-// other half runs for real: loadStateData does record both on the state it
-// returns.
-//
-// It asserts what the app does TODAY. The day D18 is fixed it fails, and
-// should be turned round into the fix's guard, with D18 struck from
-// docs/VERSION_STATES.md. The one fix it cannot see is one that rebuilds the
+// Both halves are checked. The hand-off runs inside a goroutine a test cannot
+// await, so it is read from the source: what the restore records is every
+// field it writes on its state, directly or through a function it hands the
+// state to, and a record reaches the screen if the launch either reads it off
+// the restore's state or writes it on the live one, in every shape a fix could
+// take — see launchReaches. And adoptLaunch, the function the launch calls,
+// is run for real on what loadStateData returns: the live state holds both
+// records, says what the restore's state says, and saves the reader's choice.
+// The one change the source reading cannot see is one that rebuilds the
 // records on the live state through more than two calls of new code, without
-// reading them off the restore's; whoever makes that fix strikes this by hand.
-func TestTheLaunchDropsWhatTheRestoreRecords(t *testing.T) {
+// reading them off the restore's; the behavioural half is the check on that.
+func TestTheLaunchCarriesWhatTheRestoreRecords(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 
@@ -567,7 +602,8 @@ func TestTheLaunchDropsWhatTheRestoreRecords(t *testing.T) {
 	webc, _ := versionByID("webc")
 	mustCache(t, supersededCachePaths(webc)[0], widerCanonBible())
 
-	// The restore records both, on the state loadStateData hands over.
+	// The restore records both, on the state loadStateData hands over, and the
+	// live state holds them after the hand-off.
 	for _, tc := range []struct {
 		saved, onScreen string
 		recorded        func(st *AppState) bool
@@ -583,6 +619,17 @@ func TestTheLaunchDropsWhatTheRestoreRecords(t *testing.T) {
 		if loaded.CurrentVersion != tc.onScreen || !tc.recorded(loaded) || fullPendingNotice(loaded) == "" {
 			t.Fatalf("control: with %s saved the restore must show %s and record why, and say so; on %s, notice %q",
 				tc.saved, tc.onScreen, loaded.CurrentVersion, fullPendingNotice(loaded))
+		}
+		live := NewLoadingState()
+		adoptLaunch(live, loaded)
+		if live.CurrentVersion != tc.onScreen || !tc.recorded(live) {
+			t.Fatalf("with %s saved the live state does not hold what the restore recorded: on %s", tc.saved, live.CurrentVersion)
+		}
+		if n := fullPendingNotice(live); n != fullPendingNotice(loaded) {
+			t.Fatalf("with %s saved the live state's footer reads %q, and the restore's %q", tc.saved, n, fullPendingNotice(loaded))
+		}
+		if saved := snapshotReadingState(live, 0, 0, 0, 0, 0).Version; saved != tc.saved {
+			t.Fatalf("with %s saved the next save from the live state writes %q over the reader's choice", tc.saved, saved)
 		}
 	}
 
@@ -608,11 +655,10 @@ func TestTheLaunchDropsWhatTheRestoreRecords(t *testing.T) {
 		}
 	}
 	sort.Strings(dropped)
-	if got := strings.Join(dropped, " "); got != "preferredVersion staleVersions" {
-		t.Fatalf("the launch hand-off now drops [%s] of what the restore records, where D18 is exactly "+
-			"preferredVersion and staleVersions. If both reach the live state, D18 is fixed: strike it from "+
-			"docs/VERSION_STATES.md and turn this test round into the fix's guard. Anything else dropped "+
-			"is a new defect.", got)
+	if got := strings.Join(dropped, " "); got != "" {
+		t.Fatalf("the launch hand-off drops [%s] of what the restore records: the reader never sees it. "+
+			"D18 was exactly preferredVersion and staleVersions; anything the restore records must reach "+
+			"the live state, through adoptLaunch.", got)
 	}
 }
 

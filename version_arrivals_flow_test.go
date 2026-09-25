@@ -30,7 +30,13 @@ package bibletext
 // remembered, as the launch's restore records it when it cannot open that
 // translation (D9). And the reader's own choice of translation can still be
 // loading when a link arrives, which is the one moment the app has two
-// arrivals in hand and one mark to tell them apart by.
+// arrivals in hand: each load carries who started it, as an argument, to its
+// own landing (D19).
+//
+// AND THE REFRESH WORKS UNDERNEATH. A previous edition served to an arrival
+// is owed its upgrade while the app runs (D17), so the walk has the upgrade
+// landing as an event of its own, and asks after every step that what is owed
+// is on its way.
 //
 // The cross-product that DOES cover arrivals already exists and is a different
 // question: share_link_flow_test.go asks "is any state a dead end", over the
@@ -40,6 +46,8 @@ package bibletext
 import (
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/types"
 	"os"
 	"path/filepath"
 	"sort"
@@ -47,7 +55,9 @@ import (
 	"testing"
 	"time"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/widget"
 )
 
 // --- the world an arrival lands in ------------------------------------------
@@ -82,6 +92,12 @@ type arrivalFacts struct {
 	// being checked.
 	landed string
 
+	// owed is whether the refresh owes an upgrade (owedUpgrades), and
+	// onItsWay whether one is fetching or a retry is armed: A-H asks that the
+	// first never holds without the second.
+	owed     bool
+	onItsWay bool
+
 	// stuck is set by the liveness pass and nowhere else: a previous edition
 	// is on screen and nothing the walk did from here brought the current one.
 	stuck bool
@@ -112,6 +128,12 @@ func (f arrivalFacts) String() string {
 	}
 	if f.failureTold {
 		s += "+told"
+	}
+	if f.owed {
+		s += "+upgrade-owed"
+	}
+	if f.onItsWay {
+		s += "+upgrade-on-its-way"
 	}
 	if f.stuck {
 		s += "+stuck"
@@ -165,9 +187,9 @@ type arrivalWorld struct {
 
 	// preferred is the translation every journey starts out remembering, ""
 	// for none: the record the restore makes when the launch cannot open the
-	// reader's licensed translation (D9). D18 keeps it off the live state
-	// today, so the journeys that start with it walk the app as it will be the
-	// day D18 is fixed.
+	// reader's licensed translation (D9), which adoptLaunch carries to the live
+	// state (D18). The journeys that start with it walk the app a launch that
+	// fell back leaves.
 	preferred string
 
 	// The load in flight: which translation, and whether the reader asked for
@@ -183,6 +205,16 @@ func (w *arrivalWorld) inflightOwner() string {
 		return "reader"
 	}
 	return "arrival"
+}
+
+// inflightCause is the cause the load in flight was started with, which
+// production keeps in switchVersionInteractive's closure and hands to
+// finishVersionLoad.
+func (w *arrivalWorld) inflightCause() switchCause {
+	if w.inflightReader {
+		return byReader
+	}
+	return byArrival
 }
 
 // newArrivalWorld builds the disk under a cache directory of the test's own
@@ -285,33 +317,17 @@ func (w *arrivalWorld) load(t *testing.T, st *AppState, v BibleVersion, online b
 }
 
 // loadTail is switchVersionInteractive's goroutine and the fyne.Do tail it
-// ends in (versions_ui.go), verbatim from the load down but for the spinner
-// and the error card, which need a window. The error card's one effect a test
-// can see is recorded in told. The load is over either way, so nothing is in
-// flight after it.
-func (w *arrivalWorld) loadTail(t *testing.T, st *AppState, v BibleVersion, online bool, told *bool) {
+// ends in (versions_ui.go): the load, then the real finishVersionLoad with the
+// cause the load was started with. Only the spinner is left out, which needs
+// a window; the error card's one effect a test can see is recorded in told.
+// The load is over either way, so nothing is in flight after it.
+func (w *arrivalWorld) loadTail(t *testing.T, st *AppState, v BibleVersion, cause switchCause, online bool, told *bool) {
 	t.Helper()
 	w.inflight, w.inflightReader = "", false
 	data, mode, err := w.load(t, st, v, online)
-	st.versionLoading = false
-	if err != nil {
-		if old, oldMode, cerr := loadVersionFromCacheOnly(v); cerr == nil {
-			if !versionCacheIsCurrent(v) {
-				markVersionStale(st, v.ID) // D3: say so, do not serve it silently
-			}
-			applyLoadedVersion(st, v, old, oldMode)
-			return
-		}
-		if st.pendingLinkVersion == v.ID {
-			st.pendingLink = nil
-			st.pendingLinkRaw = ""
-			st.pendingLinkVersion = ""
-			st.pendingNoteOpenID = 0
-		}
+	if finishVersionLoad(st, v, cause, data, mode, err) {
 		*told = true // showVersionLoadError
-		return
 	}
-	applyLoadedVersion(st, v, data, mode)
 }
 
 // withVersionSource hands a registered translation another source for the
@@ -347,10 +363,12 @@ const (
 	arReaderPicksIt                                // the reader later chooses that same translation, and it works
 	arReaderPicksOther                             // the reader chooses a different translation, and it lands
 	arReaderStartsOther                            // the reader chooses a different translation, still loading at the next step
+	arReaderStartsIt                               // the reader chooses the link's translation, still loading at the next step
+	arUpdateLands                                  // the refresh's next attempt fetches what it owes, and it lands
 )
 
 func (e arrivalEvent) String() string {
-	return [...]string{"link-names-other", "fetch-fails", "fetch-fails-previous-serves", "fetch-lands", "reader-picks-it", "reader-picks-other", "reader-starts-other"}[e]
+	return [...]string{"link-names-other", "fetch-fails", "fetch-fails-previous-serves", "fetch-lands", "reader-picks-it", "reader-picks-other", "reader-starts-other", "reader-starts-it", "update-lands"}[e]
 }
 
 // the translation a link in these journeys names, and one for the reader to
@@ -381,16 +399,17 @@ func (e arrivalEvent) apply(t *testing.T, w *arrivalWorld, st *AppState, told *b
 			return false, "" // switchToLinkVersion's own guard
 		}
 		if st.versionLoading {
-			if w.inflight == arrivalLinkVersion {
+			if w.inflight == arrivalLinkVersion && !w.inflightReader {
 				// Tapped again while its own fetch runs: the park it makes is
 				// the one already there.
 				return false, ""
 			}
 			// The reader's own load is running, so the link parks behind it:
-			// the real applyShareTarget, whose switchToLinkVersion parks,
-			// marks the switch as not the reader's, and returns without a
-			// load of its own. When the reader's load lands it takes the
-			// screen, and the park is dropped and said (D14).
+			// the real applyShareTarget, whose switchToLinkVersion parks and
+			// returns without a load of its own, and so gives no cause. The
+			// reader's load lands with its own (D19). If it is another
+			// translation it takes the screen, and the park is dropped and
+			// said (D14); if it is this one, it opens the passage.
 			applyShareTarget(st, arrivalLinkTarget)
 			*told = false
 			return true, ""
@@ -404,12 +423,11 @@ func (e arrivalEvent) apply(t *testing.T, w *arrivalWorld, st *AppState, told *b
 		}
 		// switchToLinkVersion's real-fetch branch, verbatim
 		// (share_link_open.go): park the target, name the translation it waits
-		// on, mark the switch as not the reader's, and let
-		// switchVersionInteractive own the spinner.
+		// on, and let switchVersionInteractive own the spinner with the cause
+		// byArrival, which the walk keeps as the load in flight's.
 		parked := arrivalLinkTarget
 		st.pendingLink = &parked
 		st.pendingLinkVersion = arrivalLinkVersion
-		st.versionSwitchForArrival = true
 		st.pendingNoteOpenID = 0
 		st.versionLoading = true
 		w.inflight, w.inflightReader = arrivalLinkVersion, false
@@ -433,7 +451,7 @@ func (e arrivalEvent) apply(t *testing.T, w *arrivalWorld, st *AppState, told *b
 			return false, ""
 		}
 		owner := w.inflightOwner()
-		w.loadTail(t, st, v, false, told)
+		w.loadTail(t, st, v, w.inflightCause(), false, told)
 		if e == arFetchFailsPreviousServes {
 			return true, owner
 		}
@@ -444,7 +462,7 @@ func (e arrivalEvent) apply(t *testing.T, w *arrivalWorld, st *AppState, told *b
 		}
 		v, _ := versionByID(w.inflight)
 		owner := w.inflightOwner()
-		w.loadTail(t, st, v, true, told)
+		w.loadTail(t, st, v, w.inflightCause(), true, told)
 		return true, owner
 	case arReaderPicksIt, arReaderPicksOther:
 		id := arrivalLinkVersion
@@ -460,27 +478,53 @@ func (e arrivalEvent) apply(t *testing.T, w *arrivalWorld, st *AppState, told *b
 		// memory swaps synchronously through the real switchVersion; one that
 		// is not loads behind the spinner — and it works, the network is up.
 		if _, inMem := st.loadedVersions[id]; inMem {
-			switchVersion(st, id)
+			switchVersion(st, id, byReader)
 			return true, "reader"
 		}
 		st.versionLoading = true
-		w.loadTail(t, st, v, true, told)
+		w.loadTail(t, st, v, byReader, true, told)
 		return true, "reader"
-	case arReaderStartsOther:
-		if st.versionLoading || st.CurrentVersion == arrivalOtherVersion {
+	case arReaderStartsOther, arReaderStartsIt:
+		id := arrivalOtherVersion
+		if e == arReaderStartsIt {
+			id = arrivalLinkVersion
+		}
+		if st.versionLoading || st.CurrentVersion == id {
 			return false, ""
 		}
-		// In memory it swaps synchronously, which is reader-picks-other.
-		if _, inMem := st.loadedVersions[arrivalOtherVersion]; inMem {
+		// In memory it swaps synchronously, which is reader-picks-other or
+		// reader-picks-it.
+		if _, inMem := st.loadedVersions[id]; inMem {
 			return false, ""
 		}
 		// switchVersionInteractive's synchronous half (versions_ui.go): the
-		// spinner goes up and the load leaves on its goroutine, which lands at
-		// a later step. Nothing else is recorded, which is the point: the app
-		// cannot tell this load from a link's except by the arrival mark.
+		// spinner goes up and the load leaves on its goroutine with the cause
+		// byReader, and lands at a later step. For the link's translation it
+		// is the reader's own choice made offline, which a failed fetch serves
+		// from the previous edition (D17), and the reader's own load that a
+		// link to the same translation parks behind (D19).
 		st.versionLoading = true
-		w.inflight, w.inflightReader = arrivalOtherVersion, true
+		w.inflight, w.inflightReader = id, true
 		return true, ""
+	case arUpdateLands:
+		// The refresh's next attempt, whichever of its triggers fires it — the
+		// backoff timer, the foreground hook, the picker opening — with the
+		// network up: triggerFullDownload's head and goroutine, then its real
+		// tail, upgradeLanded (app.go).
+		if len(owedUpgrades(st)) == 0 || st.fullDownloading {
+			return false, ""
+		}
+		st.fullDownloading = true // triggerFullDownload's head
+		v := owedUpgrades(st)[0]
+		data, mode, err := w.load(t, st, v, true)
+		upgradeLanded(st, v, data, mode, err)
+		// The tail chains to the next owed upgrade by starting its fetch for
+		// real. Nothing else in this world can be owed, and a fetch started
+		// here would be a goroutine the walk does not own.
+		if st.fullDownloading {
+			t.Fatalf("the refresh chained a real fetch after %s landed; owed %v", v.ID, owedUpgrades(st))
+		}
+		return true, "upgrade"
 	}
 	return false, ""
 }
@@ -502,6 +546,8 @@ func arrivalFactsOf(st *AppState, owed, told bool, landed string) arrivalFacts {
 		notice:    fullPendingNotice(st),
 		preferred: st.preferredVersion,
 		landed:    landed,
+		owed:      len(owedUpgrades(st)) > 0,
+		onItsWay:  st.fullDownloading || st.fullRetryDelay > 0,
 	}
 }
 
@@ -517,37 +563,11 @@ type pinnedArrivalDefect struct {
 // the invariant it explains, so it cannot swallow another one broken in the
 // same state.
 //
-// D19 and D20 are reached only from a remembered translation, which D18 keeps
-// off the live state today: they are what the reader meets the day D18 is
-// fixed, and are pinned so that fix cannot ship them unseen.
-var knownArrivalIncoherent = []pinnedArrivalDefect{
-	{
-		name: "D17",
-		what: "a translation shown from its previous edition is not updated while the app runs: " +
-			"nothing fetches it again, however long the reader is online",
-		covers: func(bad string, _, now arrivalFacts, _ arrivalEvent) bool {
-			return strings.HasPrefix(bad, "A-F:") && now.stuck &&
-				now.current == arrivalLinkVersion && now.edition == "previous"
-		},
-	},
-	{
-		name: "D19",
-		what: "the arrival mark is spent by a load it was not set for: the reader's own choice is taken " +
-			"for an arrival and does not spend the translation they are told is remembered",
-		covers: func(bad string, _, now arrivalFacts, _ arrivalEvent) bool {
-			return strings.HasPrefix(bad, "A-G:") && now.landed == "reader" && now.preferred != ""
-		},
-	},
-	{
-		name: "D20",
-		what: "a previous edition is on screen and the picker says only that a translation was " +
-			"substituted: the substitution sentence outranks the stale one",
-		covers: func(bad string, _, now arrivalFacts, _ arrivalEvent) bool {
-			return strings.HasPrefix(bad, "A-E:") && now.stale &&
-				now.preferred != "" && now.preferred != now.current
-		},
-	},
-}
+// D17, D19 and D20 were struck on 2026-09-25, in the change that fixed D18:
+// the refresh owes a previous edition its upgrade, a load's cause travels
+// with it, and the footer says every true fact. No journey reaches an
+// incoherent state today.
+var knownArrivalIncoherent = []pinnedArrivalDefect{}
 
 // The arrivals invariants. All of them are about a PROMISE over time, which is
 // why they are checked after every step of a journey rather than once.
@@ -557,7 +577,10 @@ var knownArrivalIncoherent = []pinnedArrivalDefect{
 //	     promise is closed and the park must be closed with it.
 //	A-B  The reader's location changes only from what they just did. A park
 //	     retired earlier must never move them later, and a translation they
-//	     chose lands where they were.
+//	     chose lands where they were — unless a live link to that same
+//	     translation was parked behind their load, whose passage it opens.
+//	     An edition upgrade moves nothing: not the location, not the
+//	     translation on screen, not what is remembered.
 //	A-C  A journey never ends owing the reader an arrival: either the passage
 //	     opened or something was said. So an arrival is never owed while
 //	     nothing is in flight that could still honour it.
@@ -577,15 +600,25 @@ var knownArrivalIncoherent = []pinnedArrivalDefect{
 //	     its own return, and by nothing else (D13). A translation the reader
 //	     chose that takes the screen spends it, or the next save writes the
 //	     remembered one over their choice; one a link brought leaves it.
+//	A-H  An upgrade the refresh owes is on its way: a fetch in flight or a
+//	     retry armed. Owed and not on its way is a previous edition nothing
+//	     will ever replace while the app runs (D17), however long the reader
+//	     is online.
 func checkArrivalInvariants(prev, now arrivalFacts, _ arrivalEvent) []string {
 	var bad []string
 	if now.parked && now.failureTold && !now.loading {
 		bad = append(bad, "A-A: the arrival was reported failed and its park is still waiting for a load that will never come")
 	}
 	// A translation the reader chose is not an arrival. If the location moved
-	// when it landed, something else moved them.
-	if now.landed == "reader" && now.loc != prev.loc {
+	// when it landed, something else moved them — except a link to that same
+	// translation, still live, parked behind the reader's own load: its landing
+	// is the arrival's too, and opening the passage keeps the link's promise.
+	consumedLivePark := prev.parked && prev.parkedFor == now.current && !prev.failureTold
+	if now.landed == "reader" && now.loc != prev.loc && !consumedLivePark {
 		bad = append(bad, "A-B: choosing a translation moved the reader to a passage they did not ask for")
+	}
+	if now.landed == "upgrade" && (now.loc != prev.loc || now.current != prev.current || now.preferred != prev.preferred) {
+		bad = append(bad, "A-B: an edition upgrade moved the reader, changed the translation on screen, or spent what is remembered")
 	}
 	if now.arrivalOwed && !now.loading {
 		bad = append(bad, "A-C: an arrival is owed and nothing in flight can honour it")
@@ -608,6 +641,9 @@ func checkArrivalInvariants(prev, now arrivalFacts, _ arrivalEvent) []string {
 	}
 	if now.landed == "arrival" && prev.preferred != "" && now.preferred != prev.preferred && now.current != prev.preferred {
 		bad = append(bad, "A-G: a link spent the reader's remembered translation")
+	}
+	if now.owed && !now.onItsWay {
+		bad = append(bad, "A-H: an upgrade is owed and nothing is fetching it or scheduled to")
 	}
 	return bad
 }
@@ -710,7 +746,7 @@ func TestArrivalJourneysKeepTheirPromise(t *testing.T) {
 		}
 	}
 
-	events := []arrivalEvent{arLinkNamesOther, arFetchFails, arFetchFailsPreviousServes, arFetchLands, arReaderPicksIt, arReaderPicksOther, arReaderStartsOther}
+	events := []arrivalEvent{arLinkNamesOther, arFetchFails, arFetchFailsPreviousServes, arFetchLands, arReaderPicksIt, arReaderPicksOther, arReaderStartsOther, arReaderStartsIt, arUpdateLands}
 
 	// Six worlds: each disk, starting with nothing remembered and starting
 	// with the reader's licensed translation remembered.
@@ -727,6 +763,7 @@ func TestArrivalJourneysKeepTheirPromise(t *testing.T) {
 			// says it is: the controls after the walk read these.
 			sawPrevious, sawTold, sawCurrentLink, sawParkBehindReader := false, false, false, false
 			sawKept, sawSpent := false, false
+			sawUpgrade, sawReaderPrevious := false, false
 
 			var walk func(path []arrivalEvent, depth int)
 			walk = func(path []arrivalEvent, depth int) {
@@ -770,6 +807,8 @@ func TestArrivalJourneysKeepTheirPromise(t *testing.T) {
 					sawParkBehindReader = sawParkBehindReader || (now.parked && w.inflightReader)
 					sawKept = sawKept || (now.landed == "arrival" && now.preferred != "")
 					sawSpent = sawSpent || (now.landed == "reader" && prev.preferred != "" && now.preferred == "")
+					sawUpgrade = sawUpgrade || now.landed == "upgrade"
+					sawReaderPrevious = sawReaderPrevious || (now.landed == "reader" && now.edition == "previous")
 					ends[pathString(next)] = arrivalEnd{path: next, facts: now}
 					walk(next, depth-1)
 				}
@@ -785,16 +824,21 @@ func TestArrivalJourneysKeepTheirPromise(t *testing.T) {
 
 			switch disk {
 			case arDiskCurrent:
-				if sawPrevious || sawTold {
-					t.Errorf("control: %s put a previous edition on screen or failed a load, and with the current edition on disk neither can happen", world)
+				if sawPrevious || sawTold || sawUpgrade {
+					t.Errorf("control: %s put a previous edition on screen, failed a load or landed an upgrade, and with the current edition on disk none can happen", world)
 				}
 			case arDiskPrevious:
 				if !sawPrevious || sawTold {
 					t.Errorf("control: %s never served the previous edition, or failed a load it could not fail, so the arm it exists for was not walked", world)
 				}
+				// The two things D17's fix is for: the upgrade landing, and a
+				// previous edition served to a load the reader started.
+				if !sawUpgrade || !sawReaderPrevious {
+					t.Errorf("control: %s never landed an upgrade (%v) or never served a previous edition to the reader's own load (%v), so the refresh was not put to either", world, sawUpgrade, sawReaderPrevious)
+				}
 			case arDiskNone:
-				if sawPrevious || !sawTold {
-					t.Errorf("control: %s served a previous edition it does not have, or never failed a load", world)
+				if sawPrevious || !sawTold || sawUpgrade {
+					t.Errorf("control: %s served a previous edition it does not have, landed an upgrade nothing owed, or never failed a load", world)
 				}
 			}
 			if !sawCurrentLink {
@@ -862,11 +906,23 @@ func TestTheArrivalInvariantsCanActuallyFail(t *testing.T) {
 	said := link.Name + " is showing a previous edition until the update can be downloaded."
 	substituted := remembered.Name + " could not be opened this time — " + link.Name +
 		" is shown instead. Your choice is remembered and comes back when it can."
+	// A live link to the translation the reader's own load brought, parked
+	// behind that load; and the same park after its failure was told.
+	parkedHere := arrivalFacts{loc: "Genesis|1", parked: true, parkedFor: link.ID, loading: true}
+	parkedHereTold := parkedHere
+	parkedHereTold.failureTold = true
 	for _, tc := range []struct {
 		want      string
 		prev, now arrivalFacts
 	}{
 		{"A-B", arrivalFacts{loc: "Genesis|1"}, arrivalFacts{loc: "John|1", current: arrivalOtherVersion, edition: "current", landed: "reader"}},
+		// The exemption's loud twin: the park that moves the reader was
+		// already told as failed, so it is not a live link keeping its promise.
+		{"A-B", parkedHereTold, arrivalFacts{loc: "John|1", current: link.ID, edition: "current", landed: "reader"}},
+		// An upgrade that moves the reader, and one that spends what is
+		// remembered.
+		{"A-B", arrivalFacts{loc: "Genesis|1", current: link.ID}, arrivalFacts{loc: "John|1", current: link.ID, edition: "current", landed: "upgrade"}},
+		{"A-B", arrivalFacts{loc: "Genesis|1", current: link.ID, preferred: remembered.ID}, arrivalFacts{loc: "Genesis|1", current: link.ID, edition: "current", landed: "upgrade"}},
 		{"A-C", arrivalFacts{}, arrivalFacts{current: link.ID, edition: "current", parked: true, arrivalOwed: true}},
 		{"A-D", arrivalFacts{}, arrivalFacts{current: link.ID, edition: "previous", notice: said}},
 		{"A-D", arrivalFacts{}, arrivalFacts{current: link.ID, edition: "current", stale: true, notice: said}},
@@ -876,6 +932,8 @@ func TestTheArrivalInvariantsCanActuallyFail(t *testing.T) {
 		{"A-E", arrivalFacts{}, arrivalFacts{current: link.ID, edition: "previous", stale: true, preferred: remembered.ID, notice: substituted}},
 		{"A-G", arrivalFacts{preferred: remembered.ID}, arrivalFacts{current: arrivalOtherVersion, edition: "current", landed: "reader", preferred: remembered.ID}},
 		{"A-G", arrivalFacts{preferred: remembered.ID}, arrivalFacts{current: link.ID, edition: "current", landed: "arrival"}},
+		// Owed, and nothing fetching it or armed to.
+		{"A-H", arrivalFacts{}, arrivalFacts{current: link.ID, edition: "previous", stale: true, notice: said, owed: true}},
 	} {
 		got := checkArrivalInvariants(tc.prev, tc.now, arLinkNamesOther)
 		fired := false
@@ -883,21 +941,25 @@ func TestTheArrivalInvariantsCanActuallyFail(t *testing.T) {
 			fired = fired || strings.HasPrefix(bad, tc.want+":")
 		}
 		if !fired {
-			t.Errorf("%s does not fire on %s; got %q", tc.want, tc.now, got)
+			t.Errorf("%s does not fire on %s after %s; got %q", tc.want, tc.now, tc.prev, got)
 		}
 	}
 	// And the states they must leave alone, or the walk would be all noise:
-	// a park with its load still running, a previous edition that is recorded
-	// and said, a link that lands and keeps the remembered translation, and a
-	// choice of the reader's that spends it.
+	// a park with its load still running, a previous edition that is recorded,
+	// said, owed and on its way, a link that lands and keeps the remembered
+	// translation, a choice of the reader's that spends it, a reader's landing
+	// that opens the passage of a live link parked behind it, and an upgrade
+	// that swaps the edition and nothing else.
 	for _, quiet := range []struct{ prev, now arrivalFacts }{
 		{arrivalFacts{}, arrivalFacts{current: link.ID, edition: "current", parked: true, arrivalOwed: true, loading: true}},
-		{arrivalFacts{}, arrivalFacts{current: link.ID, edition: "previous", stale: true, notice: said}},
+		{arrivalFacts{}, arrivalFacts{current: link.ID, edition: "previous", stale: true, notice: said, owed: true, onItsWay: true}},
 		{arrivalFacts{preferred: remembered.ID}, arrivalFacts{current: link.ID, edition: "current", landed: "arrival", preferred: remembered.ID, notice: substituted}},
 		{arrivalFacts{preferred: remembered.ID}, arrivalFacts{current: arrivalOtherVersion, edition: "current", landed: "reader"}},
+		{parkedHere, arrivalFacts{loc: "John|1", current: link.ID, edition: "current", landed: "reader"}},
+		{arrivalFacts{loc: "John|1", current: link.ID, preferred: remembered.ID}, arrivalFacts{loc: "John|1", current: link.ID, edition: "current", landed: "upgrade", preferred: remembered.ID, notice: substituted}},
 	} {
 		if got := checkArrivalInvariants(quiet.prev, quiet.now, arLinkNamesOther); len(got) > 0 {
-			t.Errorf("a coherent state was reported: %s: %q", quiet.now, got)
+			t.Errorf("a coherent state was reported: %s after %s: %q", quiet.now, quiet.prev, got)
 		}
 	}
 
@@ -917,132 +979,474 @@ func TestTheArrivalInvariantsCanActuallyFail(t *testing.T) {
 	}
 }
 
-// TestAPreviousEditionIsNotUpdatedWhileTheAppRuns reproduces D17, which is
-// OPEN, through the app's own entry points rather than the walk's copies of
-// them — the picker's switchVersionInteractive and a tapped link's
-// applyShareTarget — with the network up throughout.
+// TestAPreviousEditionIsUpdatedWhileTheAppRuns is D17's guard. A translation
+// served from its previous edition after a failed fetch is RECORDED as stale
+// (D3), and the record is the refresh's work list: the upgrade is owed at
+// once, waits out the first backoff step, and lands in place, on screen or
+// not, with nothing else about the reader changed. Every route by which a
+// previous edition reaches the screen is here — a tapped link, the reader's
+// own choice made offline, and the launch — and so is what the reader does
+// while it is owed.
 //
-// It asserts what the app does TODAY, and says so: the day D17 is fixed it
-// fails, and should then become the fix's own test with its assertions
-// turned round, and the pin struck from knownArrivalIncoherent and from
-// docs/VERSION_STATES.md.
-func TestAPreviousEditionIsNotUpdatedWhileTheAppRuns(t *testing.T) {
+// It used to reproduce D17, when it asserted the opposite: the picker and a
+// link handed the reader the same previous edition for as long as the app
+// ran, with the network up, and nothing fetched it.
+func TestAPreviousEditionIsUpdatedWhileTheAppRuns(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
-
-	w := newArrivalWorld(t, arDiskPrevious)
 	link, _ := versionByID(arrivalLinkVersion)
-	st, told := freshArrivalState("")
-
-	// Offline, a shared link to the translation parks, its fetch fails, and
-	// the previous edition serves the passage, recorded and said.
-	arLinkNamesOther.apply(t, w, st, &told)
-	arFetchFailsPreviousServes.apply(t, w, st, &told)
-	if st.CurrentVersion != link.ID || bibleStamp(st.Bible) != "previous" || !st.staleVersions[link.ID] {
-		t.Fatalf("control: the link must end on the previous edition, recorded as stale; on %s with %q", st.CurrentVersion, bibleStamp(st.Bible))
-	}
-	if n := fullPendingNotice(st); !strings.Contains(n, "until the update can be downloaded") {
-		t.Fatalf("control: the picker must be promising the update; got %q", n)
-	}
-
-	// The network is back, and stays back. The reader goes to another
-	// translation and returns to this one through the picker, and then taps
-	// another link to it: the two ways the app offers.
-	before := w.src.fetches
-	switchVersion(st, arrivalOtherVersion)
-	switchVersionInteractive(st, link.ID)
-	onPicker := bibleStamp(st.Bible)
-	switchVersion(st, arrivalOtherVersion)
-	applyShareTarget(st, ShareTarget{VersionID: link.ID, Book: "John", Chapter: 3, VerseLo: 16})
-	if st.CurrentVersion != link.ID {
-		t.Fatalf("control: the link must switch to %s; on %s", link.ID, st.CurrentVersion)
-	}
-
-	fetched := w.src.fetches - before
-	if onPicker != "previous" || bibleStamp(st.Bible) != "previous" || fetched != 0 {
-		t.Fatalf("D17 looks fixed: the picker served %q, the link %q, after %d fetch(es). "+
-			"Strike D17 from knownArrivalIncoherent and docs/VERSION_STATES.md, and turn this test round into the fix's guard.",
-			onPicker, bibleStamp(st.Bible), fetched)
-	}
-	if n := fullPendingNotice(st); !strings.Contains(n, "until the update can be downloaded") {
-		t.Fatalf("the notice changed its promise; D17's record needs re-reading: %q", n)
-	}
-}
-
-// TestTheArrivalMarkIsSpentByTheWrongLoad reproduces D19, which is OPEN, by
-// its two shortest routes. Both start from the state the launch's restore
-// records when it cannot open the reader's licensed translation — which D18
-// keeps off the live state today, so the reader meets this the day D18 is
-// fixed.
-//
-// versionSwitchForArrival is one flag with one consumer: the next
-// applyLoadedVersion reads it to decide whether a landing was the reader's,
-// and clears it. It is set for a link's load and read by whichever load lands
-// next. On the first route the link's load fails with nothing to fall back
-// on, never reaches applyLoadedVersion, and leaves the mark for the reader's
-// next choice; on the second the link parks behind a load of the reader's
-// own, which lands first and takes the mark. Either way the reader's own
-// choice is taken for an arrival, the remembered translation is not spent,
-// the picker goes on saying it could not be opened, and the next save writes
-// it over the translation the reader has just chosen.
-//
-// It asserts what the app does TODAY. The day D19 is fixed it fails, and
-// should be turned round into the fix's guard, with the pin struck from
-// knownArrivalIncoherent and from docs/VERSION_STATES.md.
-func TestTheArrivalMarkIsSpentByTheWrongLoad(t *testing.T) {
-	app := test.NewApp()
-	defer app.Quit()
 	other, _ := versionByID(arrivalOtherVersion)
 
+	// servedPrevious walks route on the disk that holds only the link's
+	// translation's previous edition, and requires what the fix promises
+	// there: that edition on screen, recorded and said, owed first, and a
+	// retry armed through the seam rather than a fetch at once.
+	servedPrevious := func(t *testing.T, route ...arrivalEvent) (*arrivalWorld, *AppState) {
+		t.Helper()
+		w := newArrivalWorld(t, arDiskPrevious)
+		st, told := freshArrivalState("")
+		armed := upgradeRetriesArmed.Load()
+		for _, e := range route {
+			if did, _ := e.apply(t, w, st, &told); !did {
+				t.Fatalf("control: %s did nothing, so the route %s is not walked", e, pathString(route))
+			}
+		}
+		if st.CurrentVersion != link.ID || bibleStamp(st.Bible) != "previous" || !st.staleVersions[link.ID] {
+			t.Fatalf("control: %s must end on the previous edition, recorded as stale; on %s with %q", pathString(route), st.CurrentVersion, bibleStamp(st.Bible))
+		}
+		if n := fullPendingNotice(st); !strings.Contains(n, link.Name+" is showing a previous edition until the update can be downloaded") {
+			t.Fatalf("control: the picker must be promising the update; got %q", n)
+		}
+		if owed := owedUpgrades(st); len(owed) == 0 || owed[0].ID != link.ID {
+			t.Fatalf("%s: a previous edition is on screen and the refresh does not owe it first: %v", pathString(route), owed)
+		}
+		if upgradeRetriesArmed.Load() == armed || st.fullRetryDelay <= 0 || st.fullDownloading {
+			t.Fatalf("%s: the previous edition is served and no retry is armed (armed %d, delay %v, fetching %v)",
+				pathString(route), upgradeRetriesArmed.Load()-armed, st.fullRetryDelay, st.fullDownloading)
+		}
+		return w, st
+	}
+	// upgrade fires the refresh's next attempt with the network up, through
+	// the walk's own event, and requires it to land and change nothing else.
+	upgrade := func(t *testing.T, w *arrivalWorld, st *AppState) {
+		t.Helper()
+		loc := fmt.Sprintf("%s|%d", st.CurrentBook, st.CurrentChapter)
+		current, preferred := st.CurrentVersion, st.preferredVersion
+		told := false
+		if did, landed := arUpdateLands.apply(t, w, st, &told); !did || landed != "upgrade" {
+			t.Fatalf("the owed upgrade did not land: did %v, landed %q", did, landed)
+		}
+		if st.staleVersions[link.ID] || bibleStamp(st.loadedVersions[link.ID]) != "current" || !versionCacheIsCurrent(link) {
+			t.Fatalf("the upgrade landed and %s is not current: still marked %v, in memory %q, on disk %v",
+				link.ID, st.staleVersions[link.ID], bibleStamp(st.loadedVersions[link.ID]), versionCacheIsCurrent(link))
+		}
+		if got := fmt.Sprintf("%s|%d", st.CurrentBook, st.CurrentChapter); got != loc || st.CurrentVersion != current || st.preferredVersion != preferred {
+			t.Fatalf("the upgrade moved the reader to %s on %s remembering %q, from %s on %s remembering %q",
+				got, st.CurrentVersion, st.preferredVersion, loc, current, preferred)
+		}
+		if owed := owedUpgrades(st); len(owed) != 0 || st.fullRetryDelay != 0 {
+			t.Fatalf("nothing is owed any more, and the refresh still says otherwise: owed %v, delay %v", owed, st.fullRetryDelay)
+		}
+	}
+
 	for _, tc := range []struct {
-		disk  arrivalDisk
+		name  string
 		route []arrivalEvent
 	}{
-		{arDiskNone, []arrivalEvent{arLinkNamesOther, arFetchFails, arReaderPicksOther}},
-		{arDiskCurrent, []arrivalEvent{arReaderStartsOther, arLinkNamesOther, arFetchLands}},
+		{"link", []arrivalEvent{arLinkNamesOther, arFetchFailsPreviousServes}},
+		{"reader's offline choice", []arrivalEvent{arReaderStartsIt, arFetchFailsPreviousServes}},
 	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w, st := servedPrevious(t, tc.route...)
+			upgrade(t, w, st)
+			if bibleStamp(st.Bible) != "current" {
+				t.Fatalf("the upgrade landed and the screen still shows the %q edition", bibleStamp(st.Bible))
+			}
+			if n := fullPendingNotice(st); n != "" {
+				t.Fatalf("the notice outlived the edition it describes: %q", n)
+			}
+		})
+	}
+
+	t.Run("away", func(t *testing.T) {
+		w, st := servedPrevious(t, arLinkNamesOther, arFetchFailsPreviousServes)
+		switchVersion(st, other.ID, byReader)
+		if st.CurrentVersion != other.ID {
+			t.Fatalf("control: the reader must be on %s; on %s", other.ID, st.CurrentVersion)
+		}
+		upgrade(t, w, st)
+		// Back to it through the picker: memory now holds the current edition.
+		before := w.src.fetches
+		switchVersionInteractive(st, link.ID, byReader)
+		if st.CurrentVersion != link.ID || bibleStamp(st.Bible) != "current" || w.src.fetches != before {
+			t.Fatalf("back through the picker: on %s with %q after %d fetch(es)", st.CurrentVersion, bibleStamp(st.Bible), w.src.fetches-before)
+		}
+		if n := fullPendingNotice(st); n != "" {
+			t.Fatalf("the notice outlived the edition it describes: %q", n)
+		}
+	})
+
+	// While it is owed, the switch itself never fetches: the picker and a
+	// link treat a copy in memory as loaded. The previous edition comes back
+	// at once, still recorded and said, and the upgrade is still on its way.
+	t.Run("picker, while stale", func(t *testing.T) {
+		w, st := servedPrevious(t, arLinkNamesOther, arFetchFailsPreviousServes)
+		switchVersion(st, other.ID, byReader)
+		before := w.src.fetches
+		switchVersionInteractive(st, link.ID, byReader)
+		if st.CurrentVersion != link.ID || bibleStamp(st.Bible) != "previous" || w.src.fetches != before || st.versionLoading {
+			t.Fatalf("back through the picker: on %s with %q after %d fetch(es), loading %v", st.CurrentVersion, bibleStamp(st.Bible), w.src.fetches-before, st.versionLoading)
+		}
+		if !st.staleVersions[link.ID] || !strings.Contains(fullPendingNotice(st), "previous edition") {
+			t.Fatalf("the previous edition is back on screen unrecorded or unsaid: marked %v, notice %q", st.staleVersions[link.ID], fullPendingNotice(st))
+		}
+		if len(owedUpgrades(st)) == 0 || (st.fullRetryDelay <= 0 && !st.fullDownloading) {
+			t.Fatalf("the upgrade is no longer on its way: owed %v, delay %v", owedUpgrades(st), st.fullRetryDelay)
+		}
+	})
+
+	// Opening the picker retries what is owed at once, after reading the
+	// notice (D5). stopping is triggerFullDownload's first guard, so the retry
+	// is seen by the backoff it zeroes, and no fetch starts.
+	t.Run("picker opened", func(t *testing.T) {
+		_, st := servedPrevious(t, arLinkNamesOther, arFetchFailsPreviousServes)
+		st.stopping.Store(true)
+		if n := noticeOnPickerOpen(st); !strings.Contains(n, link.Name+" is showing a previous edition") {
+			t.Fatalf("the picker's footer does not say the previous edition it opened on: %q", n)
+		}
+		if st.fullRetryDelay != 0 || st.fullDownloading {
+			t.Fatalf("opening the picker did not retry the owed upgrade: delay %v, fetching %v", st.fullRetryDelay, st.fullDownloading)
+		}
+	})
+
+	// The launch restores the translation from its previous edition when it
+	// cannot fetch it, and the live state the reader uses owes it the upgrade.
+	t.Run("launch", func(t *testing.T) {
+		t.Setenv("BIBLETEXT_CACHE_PATH", filepath.Join(t.TempDir(), cacheFileName))
+		for _, id := range []string{defaultVersionID, link.ID} {
+			withVersionSource(t, id, &arrivalSource{offline: true})
+		}
+		mustCache(t, cachePathForVersion(defaultVersionID), stampedBible("current"))
+		cur, prev := arrivalLinkPaths(t, link)
+		mustCache(t, prev, stampedBible("previous"))
+		writeReadingState(appPrefs(), readingState{Version: link.ID, Book: "John", Chapter: 1})
+		loaded, err := loadStateData()
+		if err != nil {
+			t.Fatalf("control: a launch with %s saved must open on its previous edition: %v", link.ID, err)
+		}
+		live := NewLoadingState()
+		adoptLaunch(live, loaded)
+		if live.CurrentVersion != link.ID || bibleStamp(live.Bible) != "previous" || !live.staleVersions[link.ID] {
+			t.Fatalf("control: the launch must show %s's previous edition, recorded; on %s with %q", link.ID, live.CurrentVersion, bibleStamp(live.Bible))
+		}
+		if owed := owedUpgrades(live); len(owed) == 0 || owed[0].ID != link.ID {
+			t.Fatalf("the launch shows a previous edition and the refresh does not owe it: %v", owed)
+		}
+		// The launch's own trigger would fetch it now; the tail it lands in is
+		// driven directly, with the current edition written as the fetch would.
+		mustCache(t, cur, stampedBible("current"))
+		upgradeLanded(live, link, stampedBible("current"), modeReal, nil)
+		if bibleStamp(live.Bible) != "current" || live.staleVersions[link.ID] || fullPendingNotice(live) != "" {
+			t.Fatalf("the upgrade landed and the launch's screen shows %q, marked %v, notice %q",
+				bibleStamp(live.Bible), live.staleVersions[link.ID], fullPendingNotice(live))
+		}
+		if live.fullDownloading || live.fullRetryDelay != 0 {
+			t.Fatalf("nothing is owed and the refresh is not settled: fetching %v, delay %v", live.fullDownloading, live.fullRetryDelay)
+		}
+		// The launch's trigger runs in StartBackgroundLoad's fyne.Do tail,
+		// which a test cannot await, so it is read from the source: the launch
+		// calls triggerFullDownload under no condition of its own, because
+		// owedUpgrades decides. A launch that asked fullPending first would
+		// leave this translation unfetched until the reader left the app or
+		// opened the picker.
+		launch := parsePackageSource(t).funcs["StartBackgroundLoad"]
+		if len(launch) != 1 {
+			t.Fatalf("control: StartBackgroundLoad is declared %d times, so this reading of the source is wrong", len(launch))
+		}
+		calls, guarded := 0, 0
+		var stack []ast.Node
+		ast.Inspect(launch[0].Body, func(n ast.Node) bool {
+			if n == nil {
+				stack = stack[:len(stack)-1]
+				return true
+			}
+			stack = append(stack, n)
+			if call, ok := n.(*ast.CallExpr); ok {
+				if id, ok := call.Fun.(*ast.Ident); ok && id.Name == "triggerFullDownload" {
+					calls++
+					for _, outer := range stack {
+						if _, ok := outer.(*ast.IfStmt); ok {
+							guarded++
+							break
+						}
+					}
+				}
+			}
+			return true
+		})
+		if calls != 1 || guarded != 0 {
+			t.Fatalf("the launch calls triggerFullDownload %d time(s), %d under a condition; want once, unconditionally", calls, guarded)
+		}
+	})
+
+	// Two upgrades owed at once: the launch restored this translation on its
+	// previous edition while the default's own cache was a previous edition
+	// too. This one lands first, being on screen, and nothing about the
+	// default's refresh is its to clear, or the default is never fetched. And
+	// a landing for a translation repaired meanwhile, by its own load or D11's
+	// re-read, has nothing to swap.
+	t.Run("the default's refresh is its own", func(t *testing.T) {
+		def, _ := versionByID(defaultVersionID)
+		previous := stampedBible("previous")
+		st := &AppState{
+			Bible:          previous,
+			CurrentVersion: link.ID,
+			loadedVersions: map[string]*BibleData{def.ID: stampedBible("previous"), link.ID: previous},
+			staleVersions:  map[string]bool{link.ID: true},
+			fullPending:    true,
+		}
+		if owed := owedUpgrades(st); len(owed) != 2 || owed[0].ID != link.ID || owed[1].ID != def.ID {
+			t.Fatalf("control: both must be owed, the one on screen first; owed %v", owed)
+		}
+		applyFullDownload(st, link, stampedBible("current"), modeReal)
+		if bibleStamp(st.Bible) != "current" || st.staleVersions[link.ID] {
+			t.Fatalf("%s's upgrade did not land: on %q, marked %v", link.ID, bibleStamp(st.Bible), st.staleVersions[link.ID])
+		}
+		if owed := owedUpgrades(st); !st.fullPending || len(owed) != 1 || owed[0].ID != def.ID {
+			t.Fatalf("%s's landing cleared the default's refresh: pending %v, owed %v", link.ID, st.fullPending, owed)
+		}
+		repaired := st.loadedVersions[link.ID]
+		applyFullDownload(st, link, stampedBible("current"), modeReal)
+		if st.loadedVersions[link.ID] != repaired || st.Bible != repaired {
+			t.Fatal("a landing for a translation no longer marked replaced what is in memory and on screen")
+		}
+	})
+
+	// The default can carry the mark too, should a load of it ever serve its
+	// previous edition. Its own landing clears it, or the refresh, which owes
+	// a marked translation, would fetch it again at once and for ever.
+	t.Run("default marked", func(t *testing.T) {
+		def, _ := versionByID(defaultVersionID)
+		st := &AppState{
+			CurrentVersion: def.ID,
+			loadedVersions: map[string]*BibleData{def.ID: stampedBible("previous")},
+			staleVersions:  map[string]bool{def.ID: true},
+		}
+		if owed := owedUpgrades(st); len(owed) != 1 || owed[0].ID != def.ID {
+			t.Fatalf("control: the marked default must be owed; owed %v", owed)
+		}
+		applyFullDownload(st, def, stampedBible("current"), modeReal)
+		if st.staleVersions[def.ID] || len(owedUpgrades(st)) != 0 {
+			t.Fatalf("the default's upgrade landed and it is still owed: marked %v, owed %v", st.staleVersions[def.ID], owedUpgrades(st))
+		}
+	})
+
+	// Never licensed, never a placeholder: the app does not spend the
+	// API.Bible quota on its own initiative, and a placeholder has nothing to
+	// fetch. The licensed translation here is licensed and available, so the
+	// licence is what excludes it and not its availability.
+	t.Run("licensed", func(t *testing.T) {
+		t.Setenv("BIBLE_API_KEY", "owed-upgrades-key")
+		t.Setenv("BIBLETEXT_LICENSE_NKJV", "1")
+		t.Setenv("BIBLETEXT_PROVIDER_ID_NKJV", "test-provider-id")
+		prevKeys := sharedKeys
+		ks := &keyStore{prefs: newFakePrefs(), secrets: emptySecretStore{}}
+		sharedKeys = func() *keyStore { return ks }
+		t.Cleanup(func() { sharedKeys = prevKeys })
+		nk, _ := versionByID("nkjv")
+		if !isLicensedSource(nk) || nk.isTesting() {
+			t.Fatalf("control: nkjv must be licensed and available, or its exclusion proves nothing (licensed %v, placeholder %v)", isLicensedSource(nk), nk.isTesting())
+		}
+		ids := func(st *AppState) string {
+			var out []string
+			for _, v := range owedUpgrades(st) {
+				out = append(out, v.ID)
+			}
+			return strings.Join(out, " ")
+		}
+		if got := ids(&AppState{CurrentVersion: nk.ID, staleVersions: map[string]bool{nk.ID: true, other.ID: true}}); got != other.ID {
+			t.Errorf("owed %q, want only the public-domain %s", got, other.ID)
+		}
+		// The order the refresh fetches in: on screen, then the default, then
+		// the rest in registry order.
+		if got := ids(&AppState{CurrentVersion: other.ID, fullPending: true, staleVersions: map[string]bool{link.ID: true, other.ID: true}}); got != other.ID+" "+defaultVersionID+" "+link.ID {
+			t.Errorf("owed %q, want the translation on screen, then the default, then the rest", got)
+		}
+		withVersionSource(t, other.ID, nil)
+		if got := ids(&AppState{CurrentVersion: nk.ID, staleVersions: map[string]bool{other.ID: true}}); got != "" {
+			t.Errorf("a placeholder is owed an upgrade: %q", got)
+		}
+	})
+}
+
+// TestTheArrivalMarkBelongsToItsLoad is D19's guard. Every route starts from
+// the state the launch's restore records when it cannot open the reader's
+// licensed translation, which adoptLaunch now carries to the screen (D18).
+// Who asked for a translation is the cause its load was started with,
+// carried by that load to its own landing: a link's failed load leaves
+// nothing behind, a link parked behind the reader's own load gives that load
+// nothing, and the reader's choice spends the remembered translation however
+// the loads around it end.
+//
+// It used to reproduce D19, when the mark was one flag that whichever load
+// landed next read and cleared.
+func TestTheArrivalMarkBelongsToItsLoad(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	link, _ := versionByID(arrivalLinkVersion)
+	other, _ := versionByID(arrivalOtherVersion)
+
+	// honoured asserts the reader's choice was taken as theirs: nothing is
+	// remembered, the next save names it, and the picker no longer calls it
+	// a substitution.
+	honoured := func(t *testing.T, st *AppState, route, choice string) {
+		t.Helper()
+		if saved := snapshotReadingState(st, 0, 0, 0, 0, 0).Version; st.preferredVersion != "" || saved != choice {
+			t.Fatalf("%s: the reader chose %s and it was taken for an arrival: remembered %q, next save %q",
+				route, choice, st.preferredVersion, saved)
+		}
+		if n := fullPendingNotice(st); strings.Contains(n, "could not be opened") {
+			t.Fatalf("%s: the picker still calls the reader's own choice a substitution: %q", route, n)
+		}
+	}
+
+	for _, tc := range []struct {
+		disk   arrivalDisk
+		route  []arrivalEvent
+		choice string
+	}{
+		// A link's load fails with nothing to fall back on; the reader then
+		// chooses a translation of their own.
+		{arDiskNone, []arrivalEvent{arLinkNamesOther, arFetchFails, arReaderPicksOther}, other.ID},
+		// A link parks behind the reader's own load of another translation.
+		{arDiskCurrent, []arrivalEvent{arReaderStartsOther, arLinkNamesOther, arFetchLands}, other.ID},
+		// A link parks behind the reader's own load of the same translation,
+		// whose landing is the reader's and opens the link's passage.
+		{arDiskCurrent, []arrivalEvent{arReaderStartsIt, arLinkNamesOther, arFetchLands}, link.ID},
+	} {
+		route := fmt.Sprintf("%s (%s)", pathString(tc.route), tc.disk)
 		w := newArrivalWorld(t, tc.disk)
 		st, told := freshArrivalState(arrivalRemembered)
 		for _, e := range tc.route {
 			if did, _ := e.apply(t, w, st, &told); !did {
-				t.Fatalf("control: %s did nothing on %s, so the route %s is not walked", e, tc.disk, pathString(tc.route))
+				t.Fatalf("control: %s did nothing in %s, so the route is not walked", e, route)
 			}
 		}
-		if st.CurrentVersion != other.ID || st.pendingLink != nil {
-			t.Fatalf("control: %s must end on the reader's %s with no link waiting; on %s", pathString(tc.route), other.ID, st.CurrentVersion)
+		if st.CurrentVersion != tc.choice || st.pendingLink != nil || st.versionLoading {
+			t.Fatalf("control: %s must end on the reader's %s with nothing waiting or loading; on %s", route, tc.choice, st.CurrentVersion)
 		}
-		saved := snapshotReadingState(st, 0, 0, 0, 0, 0).Version
-		if st.preferredVersion != arrivalRemembered || saved != arrivalRemembered {
-			t.Fatalf("D19's route %s (%s) looks closed: remembered %q, next save %q. A fix must close both "+
-				"routes; when it does, strike D19 from knownArrivalIncoherent and docs/VERSION_STATES.md, "+
-				"and turn this test round into the fix's guard.",
-				pathString(tc.route), tc.disk, st.preferredVersion, saved)
-		}
-		if n := fullPendingNotice(st); !strings.Contains(n, "could not be opened") || !strings.Contains(n, other.Name) {
-			t.Fatalf("the picker no longer says the reader's choice was a substitution; D19's record needs re-reading: %q", n)
+		honoured(t, st, route, tc.choice)
+		if tc.choice == link.ID {
+			if got := fmt.Sprintf("%s|%d", st.CurrentBook, st.CurrentChapter); got != fmt.Sprintf("%s|%d", arrivalLinkTarget.Book, arrivalLinkTarget.Chapter) {
+				t.Fatalf("%s: the link parked behind the reader's load of its translation did not open its passage; on %s", route, got)
+			}
 		}
 	}
+
+	// The evicted spinner: a rebuild takes the spinner down while a link's
+	// load is in flight, and the reader picks a translation already in memory
+	// from the real picker, which swaps at once. That landing is the reader's;
+	// the link's, when it comes, is the link's.
+	t.Run("evicted spinner", func(t *testing.T) {
+		w := newArrivalWorld(t, arDiskCurrent)
+		st, told := freshArrivalState(arrivalRemembered)
+		st.loadedVersions[other.ID] = stampedBible("current") // read earlier this session
+		win := app.NewWindow("evicted spinner")
+		defer win.Close()
+		st.window = win
+		if did, _ := arLinkNamesOther.apply(t, w, st, &told); !did || !st.versionLoading {
+			t.Fatal("control: the link must start a load of its own")
+		}
+		showVersionPicker(st)
+		popup, ok := win.Canvas().Overlays().Top().(*widget.PopUp)
+		if !ok {
+			t.Fatalf("control: the picker did not open; top overlay %T", win.Canvas().Overlays().Top())
+		}
+		var row *tapBox
+		walkTree(popup, func(n fyne.CanvasObject) {
+			if tb, ok := n.(*tapBox); ok && row == nil && treeHasText(tb, other.Name+"  ("+other.Abbrev+")") {
+				row = tb
+			}
+		})
+		if row == nil {
+			t.Fatalf("control: the picker has no row for %s", other.ID)
+		}
+		row.Tapped(&fyne.PointEvent{})
+		if st.CurrentVersion != other.ID {
+			t.Fatalf("control: the picker must swap to %s at once; on %s", other.ID, st.CurrentVersion)
+		}
+		honoured(t, st, "evicted spinner, the reader's pick", other.ID)
+		if did, landed := arFetchLands.apply(t, w, st, &told); !did || landed != "arrival" {
+			t.Fatalf("control: the link's load must land as the link's; did %v, landed %q", did, landed)
+		}
+		if st.preferredVersion != "" || strings.Contains(fullPendingNotice(st), "could not be opened") {
+			t.Fatalf("after the link's landing: remembered %q, notice %q", st.preferredVersion, fullPendingNotice(st))
+		}
+	})
+
+	// The cause is fixed by the call that starts the load. The link's fetch
+	// branch and the picker row start a goroutine a test cannot await, so the
+	// cause each hands its load is read from the source: every switch
+	// switchToLinkVersion starts is the arrival's, and every one the picker
+	// starts is the reader's.
+	t.Run("the cause each entry point gives", func(t *testing.T) {
+		src := parsePackageSource(t)
+		for _, tc := range []struct {
+			fn    string
+			cause string
+			calls int
+		}{
+			{"switchToLinkVersion", "byArrival", 2},
+			{"showVersionPicker", "byReader", 1},
+		} {
+			decls := src.funcs[tc.fn]
+			if len(decls) != 1 {
+				t.Fatalf("control: %s is declared %d times, so this reading of the source is wrong", tc.fn, len(decls))
+			}
+			n := 0
+			ast.Inspect(decls[0].Body, func(node ast.Node) bool {
+				call, ok := node.(*ast.CallExpr)
+				if !ok {
+					return true
+				}
+				if id, ok := call.Fun.(*ast.Ident); !ok || (id.Name != "switchVersion" && id.Name != "switchVersionInteractive") {
+					return true
+				}
+				n++
+				if last, ok := call.Args[len(call.Args)-1].(*ast.Ident); !ok || last.Name != tc.cause {
+					t.Errorf("%s starts a switch with the cause %s, want %s", tc.fn, types.ExprString(call.Args[len(call.Args)-1]), tc.cause)
+				}
+				return true
+			})
+			if n != tc.calls {
+				t.Errorf("control: %s starts %d switches, where this reading expects %d", tc.fn, n, tc.calls)
+			}
+		}
+	})
 }
 
-// TestAPreviousEditionIsSilentBehindASubstitution reproduces D20, which is
-// OPEN, at its shortest route. Like D19 it starts from the remembered
-// translation D18 keeps off the live state today.
+// TestAPreviousEditionIsSaidBehindASubstitution is D20's guard. The footer
+// says every true fact, one per line, in the order a reader asks: which
+// translation, then which edition. Ranking them let the substitution sentence
+// silence the edition. The sentences are the ones the app already had; only
+// their composition changed, so they are compared whole.
 //
-// fullPendingNotice has one sentence to give and ranks the substitution (D10)
-// above the previous edition (D3). So when a link to a translation holding
-// only its previous edition is served that edition offline, the record is
-// made and the picker says only that the remembered translation could not be
-// opened and this one is shown instead. Nothing says the text on screen is a
-// previous edition: D3's silence, reached through D10's sentence.
-//
-// It asserts what the app does TODAY. The day D20 is fixed it fails, and
-// should be turned round into the fix's guard, with the pin struck from
-// knownArrivalIncoherent and from docs/VERSION_STATES.md.
-func TestAPreviousEditionIsSilentBehindASubstitution(t *testing.T) {
+// It used to reproduce D20, when the footer gave one sentence and a previous
+// edition behind a substitution was not said at all.
+func TestAPreviousEditionIsSaidBehindASubstitution(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	link, _ := versionByID(arrivalLinkVersion)
+	nk, _ := versionByID(arrivalRemembered)
+	def, _ := versionByID(defaultVersionID)
+	substituted := func(shown string) string {
+		return nk.Name + " could not be opened this time — " + shown +
+			" is shown instead. Your choice is remembered and comes back when it can."
+	}
 
+	// The arrival: a link to a translation holding only its previous edition,
+	// served that edition offline, with the reader's licensed translation
+	// remembered.
 	w := newArrivalWorld(t, arDiskPrevious)
 	st, told := freshArrivalState(arrivalRemembered)
 	arLinkNamesOther.apply(t, w, st, &told)
@@ -1050,13 +1454,33 @@ func TestAPreviousEditionIsSilentBehindASubstitution(t *testing.T) {
 	if st.CurrentVersion != link.ID || bibleStamp(st.Bible) != "previous" || !st.staleVersions[link.ID] {
 		t.Fatalf("control: the link must end on the previous edition, recorded as stale; on %s with %q", st.CurrentVersion, bibleStamp(st.Bible))
 	}
-	n := fullPendingNotice(st)
-	if !strings.Contains(n, "could not be opened") || !strings.Contains(n, link.Name) {
-		t.Fatalf("control: the picker must be reporting the substitution; got %q", n)
+	want := substituted(link.Name) + "\n" +
+		link.Name + " is showing a previous edition until the update can be downloaded."
+	if n := fullPendingNotice(st); n != want {
+		t.Fatalf("the footer behind a substitution reads\n  %q\nwant the substitution, then the edition:\n  %q", n, want)
 	}
-	if strings.Contains(n, "previous edition") {
-		t.Fatalf("D20 looks fixed: the picker says %q. Strike D20 from knownArrivalIncoherent and "+
-			"docs/VERSION_STATES.md, and turn this test round into the fix's guard.", n)
+
+	// The launch: the remembered translation could not be opened, and the
+	// default serves its previous edition, waiting offline — and then with
+	// its update downloading.
+	st = &AppState{CurrentVersion: defaultVersionID, preferredVersion: nk.ID, fullPending: true, fullRetryDelay: 20 * time.Second}
+	want = substituted(def.Name) + "\n" +
+		def.Name + " has a text update waiting for a connection — the previous edition is shown meanwhile. It retries automatically."
+	if n := fullPendingNotice(st); n != want {
+		t.Fatalf("the launch's footer reads\n  %q\nwant\n  %q", n, want)
+	}
+	st.fullDownloading = true
+	want = substituted(def.Name) + "\n" +
+		def.Name + " is updating to its latest edition in the background — the previous edition is shown meanwhile."
+	if n := fullPendingNotice(st); n != want {
+		t.Fatalf("the launch's footer while downloading reads\n  %q\nwant\n  %q", n, want)
+	}
+
+	// D21: the default's sentences describe the default on screen. On
+	// another translation, with nothing else true, there is nothing to say.
+	st = &AppState{CurrentVersion: arrivalOtherVersion, fullPending: true, fullRetryDelay: 20 * time.Second}
+	if n := fullPendingNotice(st); n != "" {
+		t.Fatalf("on %s the footer describes the default's text as shown: %q", arrivalOtherVersion, n)
 	}
 }
 
@@ -1169,26 +1593,35 @@ func TestAnArrivalDoesNotSpendTheReadersRememberedTranslation(t *testing.T) {
 		t.Fatalf("control: the record must name the reader's translation; got %q", got)
 	}
 
-	// A friend's link in some OTHER translation switches for them.
-	st := newFallbackState()
-	st.versionSwitchForArrival = true // what switchToLinkVersion sets
+	// A friend's link in some OTHER translation switches for them: the
+	// landing its load carries byArrival to, and the whole link through the
+	// real entry point, with that translation already in memory so the switch
+	// is synchronous.
 	other, _ := versionByID(arrivalOtherVersion)
-	applyLoadedVersion(st, other, fullValidBible(), modeReal)
-
-	if st.preferredVersion != nk.ID {
-		t.Fatal("somebody else's link spent the reader's remembered translation")
+	landed := newFallbackState()
+	applyLoadedVersion(landed, other, fullValidBible(), modeReal, byArrival) // what switchToLinkVersion's load carries
+	tapped := newFallbackState()
+	tapped.loadedVersions[other.ID] = fullValidBible()
+	applyShareTarget(tapped, ShareTarget{VersionID: other.ID, Book: "John", Chapter: 1, VerseLo: 1})
+	if tapped.CurrentVersion != other.ID {
+		t.Fatalf("control: the link must switch to %s; on %s", other.ID, tapped.CurrentVersion)
 	}
-	if got := snapshotReadingState(st, 0, 0, 0, 0, 0).Version; got != nk.ID {
-		t.Fatalf("the next save would write %q over the reader's choice", got)
-	}
-	if n := fullPendingNotice(st); !strings.Contains(n, nk.Name) {
-		t.Fatalf("the promise went silent without being kept; notice = %q", n)
+	for _, st := range []*AppState{landed, tapped} {
+		if st.preferredVersion != nk.ID {
+			t.Fatal("somebody else's link spent the reader's remembered translation")
+		}
+		if got := snapshotReadingState(st, 0, 0, 0, 0, 0).Version; got != nk.ID {
+			t.Fatalf("the next save would write %q over the reader's choice", got)
+		}
+		if n := fullPendingNotice(st); !strings.Contains(n, nk.Name) {
+			t.Fatalf("the promise went silent without being kept; notice = %q", n)
+		}
 	}
 
 	// The reader's OWN switch does spend it — that is the pinned behaviour the
 	// exception must not break.
-	st = newFallbackState()
-	applyLoadedVersion(st, other, fullValidBible(), modeReal)
+	st := newFallbackState()
+	applyLoadedVersion(st, other, fullValidBible(), modeReal, byReader)
 	if st.preferredVersion != "" {
 		t.Fatal("an explicit switch must still spend the fallback preference")
 	}
@@ -1196,9 +1629,8 @@ func TestAnArrivalDoesNotSpendTheReadersRememberedTranslation(t *testing.T) {
 	// And so does the chosen translation finally arriving, however it arrives:
 	// a link TO it is exactly the thing coming back.
 	st = newFallbackState()
-	st.versionSwitchForArrival = true
 	st.loadedVersions[nk.ID] = fullValidBible()
-	applyLoadedVersion(st, nk, fullValidBible(), modeReal)
+	applyLoadedVersion(st, nk, fullValidBible(), modeReal, byArrival)
 	if st.preferredVersion != "" {
 		t.Fatal("the chosen translation came back and the fallback record outlived it")
 	}
