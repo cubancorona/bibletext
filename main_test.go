@@ -196,7 +196,7 @@ func useLiveEnv(t *testing.T, names ...string) {
 // so the guard below can say where a test's render must not land.
 var realTempDir string
 
-// NOR DOES ANY TEST ARM THE REFRESH'S RETRY TIMER.
+// NOR DOES ANY TEST ARM THE REFRESH'S RETRY TIMER, OR START A REAL FETCH.
 //
 // A translation served from its previous edition is owed its upgrade, and the
 // refresh arms a backoff timer for it (armUpgradeRetry, D17). A timer armed by
@@ -205,12 +205,18 @@ var realTempDir string
 // the one door every retry goes through, only counts here: a test that wants
 // to know a retry was armed reads upgradeRetriesArmed.
 //
-// The rule that goes with it: no test may reach triggerFullDownload with
-// anything owed unless it has set stopping first, as
-// TestTheWaitingNoticeIsReachableFromThePicker does — triggerFullDownload
-// starts a real fetch on a goroutine. A test that wants a landing drives the
-// refresh's tail, upgradeLanded, directly.
-var upgradeRetriesArmed atomic.Int64
+// The two fetches behind it are shut the same way: startUpgradeFetch, the
+// refresh's, which only counts here (upgradeFetchesStarted), and
+// startVersionLoad, an interactive translation load's. Each starts a
+// goroutine that loads from the translation's real source, so a test that
+// reaches triggerFullDownload or a load not in memory leaves it in flight
+// rather than reaching the network. A test that wants a landing takes the
+// door over for its own duration and lands what it is handed through the tail
+// it is handed (the arrivals walk, arrivalWorld).
+var (
+	upgradeRetriesArmed   atomic.Int64
+	upgradeFetchesStarted atomic.Int64
+)
 
 func TestMain(m *testing.M) {
 	withheldCredentials = withholdCredentials()
@@ -221,6 +227,8 @@ func TestMain(m *testing.M) {
 		return nil
 	}
 	upgradeRetryAfter = func(time.Duration, func()) { upgradeRetriesArmed.Add(1) }
+	startUpgradeFetch = func(BibleVersion, func(*BibleData, dataMode, error)) { upgradeFetchesStarted.Add(1) }
+	startVersionLoad = func(BibleVersion, *BibleData, func(*BibleData, dataMode, error)) {}
 	realCacheDir = filepath.Dir(defaultCachePath())
 	suiteCache, err := os.MkdirTemp("", "bibletext-test-cache-")
 	if err != nil {

@@ -483,8 +483,8 @@ var _ fyne.Tappable = (*tapBox)(nil)
 // multi-second network call on the main thread would freeze the UI and risk the
 // launch/run-loop watchdog. On failure the current version is kept and a brief
 // message is shown; the synchronous switchVersion remains the shared core (and is
-// what unit tests drive directly). cause is who asked: the goroutine captures
-// it, and it ends with this load in finishVersionLoad (D19).
+// what unit tests drive directly). cause is who asked: the tail handed to the
+// load captures it, and it ends with this load in finishVersionLoad (D19).
 func switchVersionInteractive(state *AppState, id string, cause switchCause) {
 	if state == nil || id == state.CurrentVersion {
 		return
@@ -508,24 +508,34 @@ func switchVersionInteractive(state *AppState, id string, cause switchCause) {
 		return // a download is already in flight; its completion will apply
 	}
 	state.versionLoading = true
-	base := state.baseBible()
 	dismiss := showVersionLoading(state, v.Name)
+	startVersionLoad(v, state.baseBible(), func(data *BibleData, mode dataMode, err error) {
+		// If the app began tearing down while the download ran, the desktop
+		// (glfw) driver runs this inline on the load's goroutine after the main
+		// loop drained — drop the result rather than mutate state / write
+		// Preferences off the main thread during exit. (Mobile always enqueues,
+		// so this is a no-op there.)
+		if state.stopping.Load() {
+			return
+		}
+		state.versionLoading = false
+		// The spinner goes before any landing's rebuild or the error card.
+		dismiss()
+		// This load's own cause, captured by this call: never another's (D19).
+		finishVersionLoad(state, v, cause, data, mode, err)
+	})
+}
+
+// startVersionLoad loads v off the UI goroutine and hands the result to land
+// on it: the one door an interactive translation load goes through. A var so
+// the suite can shut it in TestMain, where no test's load may reach the
+// network, and so the arrivals walk can hold a load in flight across a step
+// and then land it through the real tail switchVersionInteractive built, with
+// the cause the real call captured.
+var startVersionLoad = func(v BibleVersion, base *BibleData, land func(*BibleData, dataMode, error)) {
 	go func() {
 		data, mode, err := loadVersionData(v, base)
-		fyne.Do(func() {
-			// If the app began tearing down while the download ran, the desktop
-			// (glfw) driver runs this inline on THIS goroutine after the main loop
-			// drained — drop the result rather than mutate state / write Preferences
-			// off the main thread during exit. (Mobile always enqueues, so this is a
-			// no-op there.)
-			if state.stopping.Load() {
-				return
-			}
-			state.versionLoading = false
-			// The spinner goes before any landing's rebuild or the error card.
-			dismiss()
-			finishVersionLoad(state, v, cause, data, mode, err)
-		})
+		fyne.Do(func() { land(data, mode, err) })
 	}()
 }
 

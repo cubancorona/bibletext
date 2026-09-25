@@ -671,8 +671,27 @@ upgrade is on its way. The walk has two events for it, `update-lands` and
 armed. `A-F` reports nothing stuck. The guard is
 `TestAPreviousEditionIsUpdatedWhileTheAppRuns`, by a link, by the reader's
 offline choice, with the reader away when it lands, back through the picker
-while it is still owed, with the picker opened, and at the launch; it also
-checks the licensed and placeholder exclusions and the order.
+while it is still owed, with the picker opened, and at the launch; with two
+owed at once, the second on its way the moment the first lands and its
+backoff started again from the first step; with the backoff settled once
+nothing is owed, and nothing changed by a landing in teardown; and it checks
+the licensed and placeholder exclusions and the order.
+
+**What the guard first missed.** Its first version, and the walk's
+`update-lands`, decided for themselves what the refresh fetches
+(`owedUpgrades(st)[0]`) and landed it through `upgradeLanded`: they never ran
+`triggerFullDownload`, and the retry the backoff armed was counted and never
+fired. With the trigger put back exactly as it was before the fix — the
+default alone, and only while `fullPending` — every walk, guard and control
+stayed green, as they did with a timer that fired and did nothing, a landing
+that did not chain to the next owed upgrade, and a backoff left standing with
+nothing owed. The refresh's fetch and its timer now go through doors the test
+holds (`startUpgradeFetch`, `upgradeRetryAfter`). `update-lands` fires the
+callback the backoff armed, which runs the real `triggerFullDownload`, and
+lands the fetch it starts through the tail it built; the picker and the
+launch subtests call the real trigger. Each of those reversions now fails,
+and the doors are shut in `TestMain`, so no test's refresh reaches the
+network.
 
 ### D18 — FIXED 2026-09-25, found the same day
 
@@ -785,6 +804,21 @@ and opens the link's passage), and by the evicted spinner: the reader picks a
 translation from the real picker while a link's load is in flight. It also
 reads from the source that every switch `switchToLinkVersion` starts is the
 arrival's and every one the picker starts is the reader's.
+
+**What the guard first missed.** The walk started a link's fetch and a
+reader's load by copying what `switchToLinkVersion` and
+`switchVersionInteractive` do, and ended them by calling `finishVersionLoad`
+with a cause it chose for itself. So the cause the real load's goroutine
+hands its tail was never run: changed to `byReader`, it made every link that
+needs a fetch spend the remembered translation (`D13`), and changed to
+`byArrival`, it made the reader's own choice an arrival (`D19`); both passed.
+So did the pre-fix flag put back on the link's fetch route alone, because
+route one's copy of that route no longer set it. An interactive load
+now leaves through a door the test holds (`startVersionLoad`); every event
+goes through the app's own entry point — a link through `applyShareTarget`,
+a choice through `switchVersionInteractive` or the picker's row — and every
+load lands through the tail that call built. Each of those reversions now
+fails.
 
 ### D20 — FIXED 2026-09-25, found the same day, live once `D18` was fixed
 
@@ -930,10 +964,10 @@ not named in its register, and each test logs its own count when run with
 |---|---|---|
 | **M1** storage | `version_state_flow_test.go` | 15 cells — five disk shapes × three events, plus the licensed recency boundary from both sides and the four unusable-file shapes |
 | **M2** credentials | `version_credentials_flow_test.go` | 10 cells — five knowledge states (absent, held, unreadable, legacy-only, unreadable-with-legacy) × two events, including the irreversible one |
-| **M3** refresh | `version_refresh_flow_test.go` | 160 cells across pending × seed × downloading × backoff × active version, and **310 journeys** to depth 4 from the two starting states a launch can produce; `R-D` asked after every step since 2026-09-25 |
+| **M3** refresh | `version_refresh_flow_test.go` | 160 cells across pending × seed × downloading × backoff × active version, and **310 journeys** to depth 4 from the two starting states a launch can produce; `R-D` asked after every step since 2026-09-25, and the picker's retry the real `noticeOnPickerOpen`, its fetch held at the door `TestMain` shuts |
 | **M4** selection | `version_selection_flow_test.go` | 8 cells — memory (absent, current epoch, previous epoch) × disk (absent, current, previous), one unserveable combination skipped |
 | **M5 × M6 × M7** launch | `version_launch_flow_test.go` | 16 cells — the saved choice (default, wider canon, licensed) × its fate at launch (loads, load fails, superseded only, unselectable) × the saved book (Genesis, or Tobit under the wider canon) — observed on the live state, through the hand-off `adoptLaunch` (`D18`), with `L-E`/`L-F` asked of the two cells that put a previous edition on screen |
-| **Arrivals** | `version_arrivals_flow_test.go` | **1142 journeys / 4780 steps** to depth 5 over nine events — a link naming another translation, its fetch failing with nothing to fall back on or with the previous edition serving, the load in flight landing, the reader picking that translation or a different one, the reader picking either while it is still loading at the next step, and the refresh's owed upgrade landing — in six worlds: three disks for the link's translation (its current edition: 107 journeys / 420 steps; only the previous one: 198 / 826; none: 266 / 1144), each with nothing remembered and with the reader's licensed translation remembered. The invariants are asserted after every step and liveness over the walk. A journey is a sequence of events that each did something; the walk used to count events that could not happen in the state they met, such as a fetch failing with nothing loading, which walked the same states again, and that is why 4662 journeys at depth 4 became fewer at depth 5 |
+| **Arrivals** | `version_arrivals_flow_test.go` | **1142 journeys / 4780 steps** to depth 5 over nine events — a link naming another translation, its fetch failing with nothing to fall back on or with the previous edition serving, the load in flight landing, the reader picking that translation or a different one, the reader picking either while it is still loading at the next step, and the refresh's owed upgrade landing — in six worlds: three disks for the link's translation (its current edition: 107 journeys / 420 steps; only the previous one: 198 / 826; none: 266 / 1144), each with nothing remembered and with the reader's licensed translation remembered. Every event goes through the app's own entry point, and what the app starts on a goroutine — a translation's load, the refresh's fetch, its retry timer — is held at its door and landed through the tail the app built (`D17`, `D19`). The invariants are asserted after every step and liveness over the walk. A journey is a sequence of events that each did something; the walk used to count events that could not happen in the state they met, such as a fetch failing with nothing loading, which walked the same states again, and that is why 4662 journeys at depth 4 became fewer at depth 5 |
 
 The cells found `V1`, `V2`, `D1`–`D3`, `D6`–`D11`; the journeys found `D4`,
 `D12`, `D17`, `D19` and `D20`; the model-free second pass found `D13`–`D16`;

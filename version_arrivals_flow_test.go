@@ -86,15 +86,18 @@ type arrivalFacts struct {
 	// and the next save writes.
 	preferred string
 	// landed is who put a translation on screen in the step just taken:
-	// "reader" for a choice of the reader's own, "arrival" for a link's, ""
-	// when nothing landed. The walk knows it from what it did rather than
-	// from any field, because the field that records it is one of the things
-	// being checked.
+	// "reader" for a choice of the reader's own, "arrival" for a link's,
+	// "upgrade" for the refresh's edition swap, "" when nothing landed. The
+	// walk knows it from the event that started the load, never from the
+	// app: who asked is exactly what the app is being checked on, and no
+	// field records it (D19).
 	landed string
 
 	// owed is whether the refresh owes an upgrade (owedUpgrades), and
-	// onItsWay whether one is fetching or a retry is armed: A-H asks that the
-	// first never holds without the second.
+	// onItsWay whether one is fetching or a retry is really armed — a
+	// callback the backoff handed its timer and nothing has fired yet, with
+	// the delay that says so: A-H asks that the first never holds without
+	// the second.
 	owed     bool
 	onItsWay bool
 
@@ -177,8 +180,9 @@ func (s *arrivalSource) fetch() (*BibleData, error) {
 }
 
 // arrivalWorld is the disk the journeys walk, the source the link's
-// translation is fetched from, and what the reader brings to the journey. A
-// landing rewrites the disk, so every journey puts it back before it replays.
+// translation is fetched from, what the reader brings to the journey, and the
+// three doors the app's background work leaves through. A landing rewrites
+// the disk, so every journey puts it back before it replays.
 type arrivalWorld struct {
 	disk     arrivalDisk
 	src      *arrivalSource
@@ -192,11 +196,28 @@ type arrivalWorld struct {
 	// fell back leaves.
 	preferred string
 
-	// The load in flight: which translation, and whether the reader asked for
-	// it. Production keeps both in switchVersionInteractive's goroutine and no
-	// field records them, so the walk does. "" when nothing is loading.
+	// The load in flight: which translation, the tail the real
+	// switchVersionInteractive handed startVersionLoad — which carries the
+	// cause the real call captured, so the walk never supplies one — and
+	// whether the reader started it, which is the walk's own knowledge of
+	// what it did and what the invariants check the app against. "" and nil
+	// when nothing is loading.
 	inflight       string
+	inflightLand   func(*BibleData, dataMode, error)
 	inflightReader bool
+
+	// The refresh's two doors: the callback the backoff handed its timer,
+	// not yet fired, and a fetch the real triggerFullDownload started, not
+	// yet landed. nil when there is none.
+	armed   func()
+	upgrade *heldFetch
+}
+
+// heldFetch is a fetch the app started through one of its doors, held by the
+// test: what it fetches, and the tail the app built to land it.
+type heldFetch struct {
+	v    BibleVersion
+	land func(*BibleData, dataMode, error)
 }
 
 // inflightOwner is who a landing of the load in flight puts on screen.
@@ -207,20 +228,18 @@ func (w *arrivalWorld) inflightOwner() string {
 	return "arrival"
 }
 
-// inflightCause is the cause the load in flight was started with, which
-// production keeps in switchVersionInteractive's closure and hands to
-// finishVersionLoad.
-func (w *arrivalWorld) inflightCause() switchCause {
-	if w.inflightReader {
-		return byReader
-	}
-	return byArrival
-}
-
 // newArrivalWorld builds the disk under a cache directory of the test's own
 // and hands the two translations a journey can load a source the walk
 // controls. The swap is also the guarantee that nothing a journey drives
 // reaches the network: their real sources fetch from bible.helloao.org.
+//
+// And it takes the doors the app's background work leaves through, for the
+// test's duration: an interactive load (startVersionLoad), the refresh's
+// fetch (startUpgradeFetch) and its retry timer (upgradeRetryAfter). What the
+// app starts through them is held, and the walk lands it at a step of its
+// choosing through the tail the app built, so what is on the far side of a
+// goroutine — the cause a load carries, what the refresh chose to fetch, what
+// its timer does when it fires — is the app's own, never a copy of it.
 func newArrivalWorld(t *testing.T, disk arrivalDisk) *arrivalWorld {
 	t.Helper()
 	t.Setenv("BIBLETEXT_CACHE_PATH", filepath.Join(t.TempDir(), cacheFileName))
@@ -229,6 +248,27 @@ func newArrivalWorld(t *testing.T, disk arrivalDisk) *arrivalWorld {
 	// The other translation is only ever read from its cache, so its source
 	// is never online: a journey that fetched it would fail rather than pass.
 	withVersionSource(t, arrivalOtherVersion, &arrivalSource{offline: true})
+
+	prevLoad, prevFetch, prevRetry := startVersionLoad, startUpgradeFetch, upgradeRetryAfter
+	startVersionLoad = func(v BibleVersion, _ *BibleData, land func(*BibleData, dataMode, error)) {
+		if w.inflightLand != nil {
+			t.Errorf("a load of %s started while %s's was in flight: the single-flight guard did not hold", v.ID, w.inflight)
+			return
+		}
+		w.inflight, w.inflightLand = v.ID, land
+	}
+	startUpgradeFetch = func(v BibleVersion, land func(*BibleData, dataMode, error)) {
+		if w.upgrade != nil {
+			t.Errorf("a fetch of %s started while %s's was in flight: the single-flight guard did not hold", v.ID, w.upgrade.v.ID)
+			return
+		}
+		w.upgrade = &heldFetch{v: v, land: land}
+	}
+	upgradeRetryAfter = func(d time.Duration, f func()) {
+		prevRetry(d, f) // still counted, as every test's is
+		w.armed = f
+	}
+	t.Cleanup(func() { startVersionLoad, startUpgradeFetch, upgradeRetryAfter = prevLoad, prevFetch, prevRetry })
 
 	for _, id := range []string{defaultVersionID, arrivalOtherVersion} {
 		mustCache(t, cachePathForVersion(id), stampedBible("current"))
@@ -285,7 +325,8 @@ func (w *arrivalWorld) reset(t *testing.T) {
 		w.lay(t, prev, w.previous)
 	}
 	w.src.offline = false
-	w.inflight, w.inflightReader = "", false
+	w.inflight, w.inflightLand, w.inflightReader = "", nil, false
+	w.armed, w.upgrade = nil, nil
 }
 
 func (w *arrivalWorld) lay(t *testing.T, path string, b []byte) {
@@ -316,18 +357,36 @@ func (w *arrivalWorld) load(t *testing.T, st *AppState, v BibleVersion, online b
 	return loadVersionData(v, st.baseBible())
 }
 
-// loadTail is switchVersionInteractive's goroutine and the fyne.Do tail it
-// ends in (versions_ui.go): the load, then the real finishVersionLoad with the
-// cause the load was started with. Only the spinner is left out, which needs
-// a window; the error card's one effect a test can see is recorded in told.
-// The load is over either way, so nothing is in flight after it.
-func (w *arrivalWorld) loadTail(t *testing.T, st *AppState, v BibleVersion, cause switchCause, online bool, told *bool) {
+// landInflight ends the load in flight: the load itself, with the network up
+// or down, then the tail switchVersionInteractive handed startVersionLoad, run
+// as fyne.Do would run it — the real tail, with the cause the real call
+// captured, ending in finishVersionLoad. The load is over either way, so
+// nothing is in flight after it.
+func (w *arrivalWorld) landInflight(t *testing.T, st *AppState, online bool) {
 	t.Helper()
-	w.inflight, w.inflightReader = "", false
-	data, mode, err := w.load(t, st, v, online)
-	if finishVersionLoad(st, v, cause, data, mode, err) {
-		*told = true // showVersionLoadError
+	v, ok := versionByID(w.inflight)
+	land := w.inflightLand
+	if !ok || land == nil {
+		t.Fatalf("control: no load is in flight to land (%q)", w.inflight)
 	}
+	w.inflight, w.inflightLand, w.inflightReader = "", nil, false
+	data, mode, err := w.load(t, st, v, online)
+	land(data, mode, err)
+}
+
+// landUpgrade ends the fetch the refresh started, with the network up,
+// through the tail triggerFullDownload handed startUpgradeFetch (upgradeLanded).
+// It reports what was fetched.
+func (w *arrivalWorld) landUpgrade(t *testing.T, st *AppState) BibleVersion {
+	t.Helper()
+	f := w.upgrade
+	if f == nil {
+		t.Fatal("control: the refresh has no fetch in flight to land")
+	}
+	w.upgrade = nil
+	data, mode, err := w.load(t, st, f.v, true)
+	f.land(data, mode, err)
+	return f.v
 }
 
 // withVersionSource hands a registered translation another source for the
@@ -381,12 +440,13 @@ const (
 // arrivalLinkTarget is the passage every link in these journeys opens.
 var arrivalLinkTarget = ShareTarget{VersionID: arrivalLinkVersion, Book: "John", Chapter: 1, VerseLo: 16}
 
-// apply drives ONE event, and reports whether it did anything and who put a
-// translation on screen, if one landed. Where production is a goroutine tail
-// (switchVersionInteractive's fyne.Do body) the synchronous half is reproduced
-// verbatim and cited, exactly as the refresh harness does — a test cannot
-// await a goroutine deterministically. Where production is synchronous and
-// cannot reach the network, the real function runs.
+// apply drives ONE event through the app's own entry points, and reports
+// whether it did anything and who put a translation on screen, if one landed.
+// A link is applyShareTarget, a choice from the picker is
+// switchVersionInteractive, and the refresh's next attempt is the callback
+// its backoff armed. What they start on a goroutine leaves through a door the
+// world holds (newArrivalWorld), and lands at the step that ends it, through
+// the tail the app built; nothing the app decides is reproduced here.
 //
 // An event that does nothing is not walked on from. Every journey through it
 // is a journey through the state before it, one step shorter, and is walked
@@ -398,43 +458,40 @@ func (e arrivalEvent) apply(t *testing.T, w *arrivalWorld, st *AppState, told *b
 		if st.CurrentVersion == arrivalLinkVersion {
 			return false, "" // switchToLinkVersion's own guard
 		}
-		if st.versionLoading {
-			if w.inflight == arrivalLinkVersion && !w.inflightReader {
-				// Tapped again while its own fetch runs: the park it makes is
-				// the one already there.
-				return false, ""
-			}
-			// The reader's own load is running, so the link parks behind it:
-			// the real applyShareTarget, whose switchToLinkVersion parks and
-			// returns without a load of its own, and so gives no cause. The
-			// reader's load lands with its own (D19). If it is another
-			// translation it takes the screen, and the park is dropped and
-			// said (D14); if it is this one, it opens the passage.
-			applyShareTarget(st, arrivalLinkTarget)
+		loading := st.versionLoading
+		if loading && w.inflight == arrivalLinkVersion && !w.inflightReader {
+			// Tapped again while its own fetch runs: the park it makes is the
+			// one already there.
+			return false, ""
+		}
+		_, inMem := st.loadedVersions[arrivalLinkVersion]
+		// The real link, end to end: applyShareTarget, and the
+		// switchToLinkVersion it asks who navigates.
+		applyShareTarget(st, arrivalLinkTarget)
+		switch {
+		case loading:
+			// The reader's own load is running, so the link parked behind it
+			// and started no load, so it gave no cause: the reader's load
+			// lands with its own (D19). If it is another translation it takes
+			// the screen, and the park is dropped and said (D14); if it is this
+			// one, it opens the passage.
 			*told = false
 			return true, ""
-		}
-		if _, inMem := st.loadedVersions[arrivalLinkVersion]; inMem {
-			// Already in memory, so switchToLinkVersion switches synchronously
-			// and applyShareTarget opens the passage in whatever it now holds —
-			// the real functions, end to end. Nothing on this branch fetches.
-			applyShareTarget(st, arrivalLinkTarget)
+		case inMem:
+			// Already in memory: switched synchronously, and the passage
+			// opened in whatever it now holds. Nothing on this branch fetches.
 			return true, "arrival"
 		}
-		// switchToLinkVersion's real-fetch branch, verbatim
-		// (share_link_open.go): park the target, name the translation it waits
-		// on, and let switchVersionInteractive own the spinner with the cause
-		// byArrival, which the walk keeps as the load in flight's.
-		parked := arrivalLinkTarget
-		st.pendingLink = &parked
-		st.pendingLinkVersion = arrivalLinkVersion
-		st.pendingNoteOpenID = 0
-		st.versionLoading = true
-		w.inflight, w.inflightReader = arrivalLinkVersion, false
+		// Parked, and the load started through the door, carrying the cause
+		// the link's call gave it.
+		if w.inflight != arrivalLinkVersion || w.inflightLand == nil {
+			t.Fatalf("control: the link started no load of %s (in flight %q)", arrivalLinkVersion, w.inflight)
+		}
+		w.inflightReader = false
 		*told = false
 		return true, ""
 	case arFetchFails, arFetchFailsPreviousServes:
-		if !st.versionLoading {
+		if !st.versionLoading || w.inflightLand == nil {
 			return false, ""
 		}
 		v, _ := versionByID(w.inflight)
@@ -451,18 +508,20 @@ func (e arrivalEvent) apply(t *testing.T, w *arrivalWorld, st *AppState, told *b
 			return false, ""
 		}
 		owner := w.inflightOwner()
-		w.loadTail(t, st, v, w.inflightCause(), false, told)
+		w.landInflight(t, st, false)
 		if e == arFetchFailsPreviousServes {
 			return true, owner
 		}
+		// Nothing on disk to serve, so the tail showed the error card
+		// (showVersionLoadError), which is how the reader was told.
+		*told = true
 		return true, ""
 	case arFetchLands:
-		if !st.versionLoading {
+		if !st.versionLoading || w.inflightLand == nil {
 			return false, ""
 		}
-		v, _ := versionByID(w.inflight)
 		owner := w.inflightOwner()
-		w.loadTail(t, st, v, w.inflightCause(), true, told)
+		w.landInflight(t, st, true)
 		return true, owner
 	case arReaderPicksIt, arReaderPicksOther:
 		id := arrivalLinkVersion
@@ -473,16 +532,19 @@ func (e arrivalEvent) apply(t *testing.T, w *arrivalWorld, st *AppState, told *b
 		if st.versionLoading || st.CurrentVersion == id {
 			return false, ""
 		}
-		v, _ := versionByID(id)
-		// switchVersionInteractive (versions_ui.go): a translation already in
-		// memory swaps synchronously through the real switchVersion; one that
-		// is not loads behind the spinner — and it works, the network is up.
-		if _, inMem := st.loadedVersions[id]; inMem {
-			switchVersion(st, id, byReader)
-			return true, "reader"
+		// The picker's row: switchVersionInteractive with the cause the row
+		// gives (read from the source, TestTheArrivalMarkBelongsToItsLoad). A
+		// translation already in memory swaps synchronously; one that is not
+		// starts its load, and it works — the network is up — so it lands in
+		// this same step.
+		switchVersionInteractive(st, id, byReader)
+		if w.inflightLand != nil {
+			w.inflightReader = true
+			w.landInflight(t, st, true)
 		}
-		st.versionLoading = true
-		w.loadTail(t, st, v, byReader, true, told)
+		if st.CurrentVersion != id {
+			t.Fatalf("control: the reader chose %s and is on %s", id, st.CurrentVersion)
+		}
 		return true, "reader"
 	case arReaderStartsOther, arReaderStartsIt:
 		id := arrivalOtherVersion
@@ -497,39 +559,46 @@ func (e arrivalEvent) apply(t *testing.T, w *arrivalWorld, st *AppState, told *b
 		if _, inMem := st.loadedVersions[id]; inMem {
 			return false, ""
 		}
-		// switchVersionInteractive's synchronous half (versions_ui.go): the
-		// spinner goes up and the load leaves on its goroutine with the cause
-		// byReader, and lands at a later step. For the link's translation it
-		// is the reader's own choice made offline, which a failed fetch serves
-		// from the previous edition (D17), and the reader's own load that a
-		// link to the same translation parks behind (D19).
-		st.versionLoading = true
-		w.inflight, w.inflightReader = id, true
+		// The spinner goes up and the load leaves through the door, and lands
+		// at a later step. For the link's translation it is the reader's own
+		// choice made offline, which a failed fetch serves from the previous
+		// edition (D17), and the reader's own load that a link to the same
+		// translation parks behind (D19).
+		switchVersionInteractive(st, id, byReader)
+		if w.inflight != id || w.inflightLand == nil {
+			t.Fatalf("control: the reader's choice of %s started no load (in flight %q)", id, w.inflight)
+		}
+		w.inflightReader = true
 		return true, ""
 	case arUpdateLands:
-		// The refresh's next attempt, whichever of its triggers fires it — the
-		// backoff timer, the foreground hook, the picker opening — with the
-		// network up: triggerFullDownload's head and goroutine, then its real
-		// tail, upgradeLanded (app.go).
-		if len(owedUpgrades(st)) == 0 || st.fullDownloading {
+		// The refresh's next attempt, with the network up: the retry its
+		// backoff armed fires. The callback is the app's own, so what it runs —
+		// triggerFullDownload, deciding what is owed and what to fetch first —
+		// is the app's too; the fetch it starts is held at the door and lands
+		// through the tail it built, upgradeLanded. A-H is what says a retry is
+		// armed whenever an upgrade is owed and nothing is fetching.
+		if w.armed == nil || st.fullDownloading {
 			return false, ""
 		}
-		st.fullDownloading = true // triggerFullDownload's head
-		v := owedUpgrades(st)[0]
-		data, mode, err := w.load(t, st, v, true)
-		upgradeLanded(st, v, data, mode, err)
-		// The tail chains to the next owed upgrade by starting its fetch for
-		// real. Nothing else in this world can be owed, and a fetch started
-		// here would be a goroutine the walk does not own.
-		if st.fullDownloading {
-			t.Fatalf("the refresh chained a real fetch after %s landed; owed %v", v.ID, owedUpgrades(st))
+		fire := w.armed
+		w.armed = nil
+		fire()
+		if w.upgrade == nil {
+			return false, "" // the retry fetched nothing
+		}
+		fetched := w.landUpgrade(t, st)
+		// The tail chains to the next owed upgrade by starting its fetch.
+		// Nothing else in this world can be owed, so a chained fetch here is a
+		// refresh that did not settle what it fetched.
+		if w.upgrade != nil {
+			t.Fatalf("the refresh started a fetch of %s after %s landed; owed %v", w.upgrade.v.ID, fetched.ID, owedUpgrades(st))
 		}
 		return true, "upgrade"
 	}
 	return false, ""
 }
 
-func arrivalFactsOf(st *AppState, owed, told bool, landed string) arrivalFacts {
+func arrivalFactsOf(w *arrivalWorld, st *AppState, owed, told bool, landed string) arrivalFacts {
 	return arrivalFacts{
 		loc:         fmt.Sprintf("%s|%d", st.CurrentBook, st.CurrentChapter),
 		parked:      st.pendingLink != nil,
@@ -547,7 +616,7 @@ func arrivalFactsOf(st *AppState, owed, told bool, landed string) arrivalFacts {
 		preferred: st.preferredVersion,
 		landed:    landed,
 		owed:      len(owedUpgrades(st)) > 0,
-		onItsWay:  st.fullDownloading || st.fullRetryDelay > 0,
+		onItsWay:  st.fullDownloading || (w.armed != nil && st.fullRetryDelay > 0),
 	}
 }
 
@@ -781,7 +850,7 @@ func TestArrivalJourneysKeepTheirPromise(t *testing.T) {
 					// its last step is new.
 					w.reset(t)
 					st, told := freshArrivalState(w.preferred)
-					prev := arrivalFactsOf(st, false, told, "")
+					prev := arrivalFactsOf(w, st, false, told, "")
 					var now arrivalFacts
 					did := false
 					for i, e := range next {
@@ -790,7 +859,7 @@ func TestArrivalJourneysKeepTheirPromise(t *testing.T) {
 							break
 						}
 						owed := st.pendingLink != nil && !told
-						now = arrivalFactsOf(st, owed, told, landed)
+						now = arrivalFactsOf(w, st, owed, told, landed)
 						if i < len(next)-1 {
 							prev = now
 						}
@@ -988,6 +1057,13 @@ func TestTheArrivalInvariantsCanActuallyFail(t *testing.T) {
 // own choice made offline, and the launch — and so is what the reader does
 // while it is owed.
 //
+// Every trigger is the app's own. The retry the backoff arms is the callback
+// it handed its timer, fired; opening the picker and the launch call the real
+// triggerFullDownload; and what each fetches is what the real trigger chose,
+// held at its door and landed through the tail it built. A refresh that went
+// back to fetching the default alone, or a timer that fired and did nothing,
+// is a previous edition nothing replaces, and fails here.
+//
 // It used to reproduce D17, when it asserted the opposite: the picker and a
 // link handed the reader the same previous edition for as long as the app
 // ran, with the network up, and nothing fetched it.
@@ -1000,12 +1076,11 @@ func TestAPreviousEditionIsUpdatedWhileTheAppRuns(t *testing.T) {
 	// servedPrevious walks route on the disk that holds only the link's
 	// translation's previous edition, and requires what the fix promises
 	// there: that edition on screen, recorded and said, owed first, and a
-	// retry armed through the seam rather than a fetch at once.
+	// retry armed through the timer's door rather than a fetch at once.
 	servedPrevious := func(t *testing.T, route ...arrivalEvent) (*arrivalWorld, *AppState) {
 		t.Helper()
 		w := newArrivalWorld(t, arDiskPrevious)
 		st, told := freshArrivalState("")
-		armed := upgradeRetriesArmed.Load()
 		for _, e := range route {
 			if did, _ := e.apply(t, w, st, &told); !did {
 				t.Fatalf("control: %s did nothing, so the route %s is not walked", e, pathString(route))
@@ -1020,14 +1095,15 @@ func TestAPreviousEditionIsUpdatedWhileTheAppRuns(t *testing.T) {
 		if owed := owedUpgrades(st); len(owed) == 0 || owed[0].ID != link.ID {
 			t.Fatalf("%s: a previous edition is on screen and the refresh does not owe it first: %v", pathString(route), owed)
 		}
-		if upgradeRetriesArmed.Load() == armed || st.fullRetryDelay <= 0 || st.fullDownloading {
-			t.Fatalf("%s: the previous edition is served and no retry is armed (armed %d, delay %v, fetching %v)",
-				pathString(route), upgradeRetriesArmed.Load()-armed, st.fullRetryDelay, st.fullDownloading)
+		if w.armed == nil || st.fullRetryDelay <= 0 || st.fullDownloading || w.upgrade != nil {
+			t.Fatalf("%s: the previous edition is served and no retry is armed, or it was fetched at once (armed %v, delay %v, fetching %v)",
+				pathString(route), w.armed != nil, st.fullRetryDelay, st.fullDownloading)
 		}
 		return w, st
 	}
-	// upgrade fires the refresh's next attempt with the network up, through
-	// the walk's own event, and requires it to land and change nothing else.
+	// upgrade fires the retry the backoff armed, with the network up, through
+	// the walk's own event, and requires what it fetched to land and change
+	// nothing else.
 	upgrade := func(t *testing.T, w *arrivalWorld, st *AppState) {
 		t.Helper()
 		loc := fmt.Sprintf("%s|%d", st.CurrentBook, st.CurrentChapter)
@@ -1106,31 +1182,35 @@ func TestAPreviousEditionIsUpdatedWhileTheAppRuns(t *testing.T) {
 	})
 
 	// Opening the picker retries what is owed at once, after reading the
-	// notice (D5). stopping is triggerFullDownload's first guard, so the retry
-	// is seen by the backoff it zeroes, and no fetch starts.
+	// notice (D5): the real triggerFullDownload, whose fetch is held at its
+	// door and landed.
 	t.Run("picker opened", func(t *testing.T) {
-		_, st := servedPrevious(t, arLinkNamesOther, arFetchFailsPreviousServes)
-		st.stopping.Store(true)
+		w, st := servedPrevious(t, arLinkNamesOther, arFetchFailsPreviousServes)
 		if n := noticeOnPickerOpen(st); !strings.Contains(n, link.Name+" is showing a previous edition") {
 			t.Fatalf("the picker's footer does not say the previous edition it opened on: %q", n)
 		}
-		if st.fullRetryDelay != 0 || st.fullDownloading {
-			t.Fatalf("opening the picker did not retry the owed upgrade: delay %v, fetching %v", st.fullRetryDelay, st.fullDownloading)
+		if !st.fullDownloading || w.upgrade == nil || w.upgrade.v.ID != link.ID {
+			t.Fatalf("opening the picker did not fetch the owed upgrade of %s: fetching %v, fetch %v", link.ID, st.fullDownloading, w.upgrade)
+		}
+		w.landUpgrade(t, st)
+		if bibleStamp(st.Bible) != "current" || st.staleVersions[link.ID] || fullPendingNotice(st) != "" || st.fullDownloading || st.fullRetryDelay != 0 {
+			t.Fatalf("the picker's retry landed and the screen shows %q, marked %v, notice %q, fetching %v, delay %v",
+				bibleStamp(st.Bible), st.staleVersions[link.ID], fullPendingNotice(st), st.fullDownloading, st.fullRetryDelay)
 		}
 	})
 
 	// The launch restores the translation from its previous edition when it
-	// cannot fetch it, and the live state the reader uses owes it the upgrade.
+	// cannot fetch it, and the live state the reader uses owes it the upgrade:
+	// the launch's own trigger fetches it, and it lands.
 	t.Run("launch", func(t *testing.T) {
-		t.Setenv("BIBLETEXT_CACHE_PATH", filepath.Join(t.TempDir(), cacheFileName))
-		for _, id := range []string{defaultVersionID, link.ID} {
-			withVersionSource(t, id, &arrivalSource{offline: true})
-		}
-		mustCache(t, cachePathForVersion(defaultVersionID), stampedBible("current"))
-		cur, prev := arrivalLinkPaths(t, link)
-		mustCache(t, prev, stampedBible("previous"))
+		w := newArrivalWorld(t, arDiskPrevious)
+		// The default's current edition is on disk; its source is offline all
+		// the same, so nothing this launch does can reach the network.
+		withVersionSource(t, defaultVersionID, &arrivalSource{offline: true})
 		writeReadingState(appPrefs(), readingState{Version: link.ID, Book: "John", Chapter: 1})
+		w.src.offline = true
 		loaded, err := loadStateData()
+		w.src.offline = false
 		if err != nil {
 			t.Fatalf("control: a launch with %s saved must open on its previous edition: %v", link.ID, err)
 		}
@@ -1139,13 +1219,12 @@ func TestAPreviousEditionIsUpdatedWhileTheAppRuns(t *testing.T) {
 		if live.CurrentVersion != link.ID || bibleStamp(live.Bible) != "previous" || !live.staleVersions[link.ID] {
 			t.Fatalf("control: the launch must show %s's previous edition, recorded; on %s with %q", link.ID, live.CurrentVersion, bibleStamp(live.Bible))
 		}
-		if owed := owedUpgrades(live); len(owed) == 0 || owed[0].ID != link.ID {
-			t.Fatalf("the launch shows a previous edition and the refresh does not owe it: %v", owed)
+		// What StartBackgroundLoad's tail runs last.
+		triggerFullDownload(live)
+		if !live.fullDownloading || w.upgrade == nil || w.upgrade.v.ID != link.ID {
+			t.Fatalf("the launch shows a previous edition and its trigger does not fetch it: fetching %v, fetch %v, owed %v", live.fullDownloading, w.upgrade, owedUpgrades(live))
 		}
-		// The launch's own trigger would fetch it now; the tail it lands in is
-		// driven directly, with the current edition written as the fetch would.
-		mustCache(t, cur, stampedBible("current"))
-		upgradeLanded(live, link, stampedBible("current"), modeReal, nil)
+		w.landUpgrade(t, live)
 		if bibleStamp(live.Bible) != "current" || live.staleVersions[link.ID] || fullPendingNotice(live) != "" {
 			t.Fatalf("the upgrade landed and the launch's screen shows %q, marked %v, notice %q",
 				bibleStamp(live.Bible), live.staleVersions[link.ID], fullPendingNotice(live))
@@ -1153,12 +1232,12 @@ func TestAPreviousEditionIsUpdatedWhileTheAppRuns(t *testing.T) {
 		if live.fullDownloading || live.fullRetryDelay != 0 {
 			t.Fatalf("nothing is owed and the refresh is not settled: fetching %v, delay %v", live.fullDownloading, live.fullRetryDelay)
 		}
-		// The launch's trigger runs in StartBackgroundLoad's fyne.Do tail,
-		// which a test cannot await, so it is read from the source: the launch
-		// calls triggerFullDownload under no condition of its own, because
-		// owedUpgrades decides. A launch that asked fullPending first would
-		// leave this translation unfetched until the reader left the app or
-		// opened the picker.
+		// Where the trigger is called runs in StartBackgroundLoad's fyne.Do
+		// tail, which a test cannot await, so that is read from the source:
+		// the launch calls triggerFullDownload under no condition of its own,
+		// because owedUpgrades decides. A launch that asked fullPending first
+		// would leave this translation unfetched until the reader left the app
+		// or opened the picker.
 		launch := parsePackageSource(t).funcs["StartBackgroundLoad"]
 		if len(launch) != 1 {
 			t.Fatalf("control: StartBackgroundLoad is declared %d times, so this reading of the source is wrong", len(launch))
@@ -1186,6 +1265,106 @@ func TestAPreviousEditionIsUpdatedWhileTheAppRuns(t *testing.T) {
 		})
 		if calls != 1 || guarded != 0 {
 			t.Fatalf("the launch calls triggerFullDownload %d time(s), %d under a condition; want once, unconditionally", calls, guarded)
+		}
+	})
+
+	// Two owed at once, both public-domain translations on their previous
+	// editions, and the retry that fires after two failed attempts. The one on
+	// screen is fetched first, and its landing starts the next, so the second
+	// is on its way the moment the first lands rather than at the next
+	// foreground or picker opening (A-H). The landing also restarts the
+	// backoff: a failure after a success waits the first step, not the next
+	// one of a streak that has ended.
+	t.Run("two owed", func(t *testing.T) {
+		w := newArrivalWorld(t, arDiskPrevious)
+		st, _ := freshArrivalState("")
+		st.Bible = stampedBible("previous")
+		st.CurrentVersion = link.ID
+		st.loadedVersions[link.ID] = st.Bible
+		st.loadedVersions[other.ID] = stampedBible("previous")
+		st.staleVersions = map[string]bool{link.ID: true, other.ID: true}
+		st.fullRetryDelay = 40 * time.Second
+		triggerFullDownload(st)
+		if w.upgrade == nil || w.upgrade.v.ID != link.ID {
+			t.Fatalf("control: the refresh must fetch %s, on screen, first; fetch %v", link.ID, w.upgrade)
+		}
+		w.landUpgrade(t, st)
+		if bibleStamp(st.Bible) != "current" || st.staleVersions[link.ID] {
+			t.Fatalf("%s's upgrade did not land: on %q, marked %v", link.ID, bibleStamp(st.Bible), st.staleVersions[link.ID])
+		}
+		if !st.fullDownloading || w.upgrade == nil || w.upgrade.v.ID != other.ID {
+			t.Fatalf("A-H after a landing: %s is still owed and nothing is fetching it (fetching %v, fetch %v, delay %v)",
+				other.ID, st.fullDownloading, w.upgrade, st.fullRetryDelay)
+		}
+		failed := w.upgrade
+		w.upgrade = nil
+		failed.land(nil, modeReal, errors.New("offline"))
+		if st.fullDownloading || w.armed == nil || st.fullRetryDelay != 20*time.Second {
+			t.Fatalf("the fetch after a landing failed and its retry is not the backoff's first step: fetching %v, armed %v, delay %v",
+				st.fullDownloading, w.armed != nil, st.fullRetryDelay)
+		}
+		fire := w.armed
+		w.armed = nil
+		fire()
+		if w.upgrade == nil || w.upgrade.v.ID != other.ID {
+			t.Fatalf("the retry fired and did not fetch %s: fetch %v", other.ID, w.upgrade)
+		}
+		w.landUpgrade(t, st)
+		if st.staleVersions[other.ID] || bibleStamp(st.loadedVersions[other.ID]) != "current" || st.CurrentVersion != link.ID || bibleStamp(st.Bible) != "current" {
+			t.Fatalf("%s's upgrade did not land in memory, or moved the screen: marked %v, in memory %q, on %s with %q",
+				other.ID, st.staleVersions[other.ID], bibleStamp(st.loadedVersions[other.ID]), st.CurrentVersion, bibleStamp(st.Bible))
+		}
+		if len(owedUpgrades(st)) != 0 || st.fullDownloading || st.fullRetryDelay != 0 || w.upgrade != nil {
+			t.Fatalf("nothing is owed and the refresh is not settled: owed %v, fetching %v, delay %v", owedUpgrades(st), st.fullDownloading, st.fullRetryDelay)
+		}
+	})
+
+	// With nothing owed the refresh settles its backoff at zero. A-H reads a
+	// standing delay as a retry on its way, and ensureUpgradeScheduled arms
+	// none while one stands, so a delay left over by a timer that fired with
+	// nothing owed would claim a retry nobody armed, and the next previous
+	// edition served would wait for the reader to leave the app.
+	t.Run("settled", func(t *testing.T) {
+		st := &AppState{CurrentVersion: defaultVersionID, fullRetryDelay: 40 * time.Second}
+		fetches := upgradeFetchesStarted.Load()
+		triggerFullDownload(st)
+		if st.fullRetryDelay != 0 || st.fullDownloading || upgradeFetchesStarted.Load() != fetches {
+			t.Fatalf("with nothing owed the refresh did not settle: delay %v, fetching %v, fetches %d",
+				st.fullRetryDelay, st.fullDownloading, upgradeFetchesStarted.Load()-fetches)
+		}
+		armed := upgradeRetriesArmed.Load()
+		markVersionStale(st, other.ID)
+		ensureUpgradeScheduled(st)
+		if upgradeRetriesArmed.Load() == armed || st.fullRetryDelay <= 0 {
+			t.Fatalf("a previous edition served after the refresh settled armed no retry (delay %v)", st.fullRetryDelay)
+		}
+	})
+
+	// Tearing down, a landing changes nothing and arms nothing. On the
+	// desktop, glfw runs fyne.Do inline after the main loop drains, so a
+	// fetch that ends during teardown would otherwise write the state and
+	// start a timer in a closing app.
+	t.Run("teardown", func(t *testing.T) {
+		previous := stampedBible("previous")
+		st := &AppState{
+			Bible:           previous,
+			CurrentVersion:  link.ID,
+			loadedVersions:  map[string]*BibleData{link.ID: previous},
+			staleVersions:   map[string]bool{link.ID: true},
+			fullDownloading: true,
+			fullRetryDelay:  20 * time.Second,
+		}
+		st.stopping.Store(true)
+		armed := upgradeRetriesArmed.Load()
+		upgradeLanded(st, link, nil, modeReal, errors.New("offline"))
+		if upgradeRetriesArmed.Load() != armed || st.fullRetryDelay != 20*time.Second {
+			t.Fatalf("a failed fetch ending in teardown armed a retry (%d) or moved the backoff to %v",
+				upgradeRetriesArmed.Load()-armed, st.fullRetryDelay)
+		}
+		upgradeLanded(st, link, stampedBible("current"), modeReal, nil)
+		if st.Bible != previous || !st.staleVersions[link.ID] || st.fullRetryDelay != 20*time.Second {
+			t.Fatalf("a fetch landing in teardown changed the state: on %q, marked %v, delay %v",
+				bibleStamp(st.Bible), st.staleVersions[link.ID], st.fullRetryDelay)
 		}
 	})
 
@@ -1286,7 +1465,10 @@ func TestAPreviousEditionIsUpdatedWhileTheAppRuns(t *testing.T) {
 // carried by that load to its own landing: a link's failed load leaves
 // nothing behind, a link parked behind the reader's own load gives that load
 // nothing, and the reader's choice spends the remembered translation however
-// the loads around it end.
+// the loads around it end. Every load starts at the app's own entry point —
+// a link through applyShareTarget, a choice through switchVersionInteractive
+// or the picker's row — and lands through the tail that call built, so the
+// cause is the app's own from the call to the landing.
 //
 // It used to reproduce D19, when the mark was one flag that whichever load
 // landed next read and cleared.
@@ -1384,11 +1566,45 @@ func TestTheArrivalMarkBelongsToItsLoad(t *testing.T) {
 		}
 	})
 
-	// The cause is fixed by the call that starts the load. The link's fetch
-	// branch and the picker row start a goroutine a test cannot await, so the
-	// cause each hands its load is read from the source: every switch
-	// switchToLinkVersion starts is the arrival's, and every one the picker
-	// starts is the reader's.
+	// The reader picks a translation that is not in memory from the real
+	// picker's row: its load leaves through the door, and its landing, through
+	// the tail the row's call built, is the reader's.
+	t.Run("the picker's row", func(t *testing.T) {
+		w := newArrivalWorld(t, arDiskCurrent)
+		st, _ := freshArrivalState(arrivalRemembered)
+		win := app.NewWindow("the picker's row")
+		defer win.Close()
+		st.window = win
+		showVersionPicker(st)
+		popup, ok := win.Canvas().Overlays().Top().(*widget.PopUp)
+		if !ok {
+			t.Fatalf("control: the picker did not open; top overlay %T", win.Canvas().Overlays().Top())
+		}
+		var row *tapBox
+		walkTree(popup, func(n fyne.CanvasObject) {
+			if tb, ok := n.(*tapBox); ok && row == nil && treeHasText(tb, other.Name+"  ("+other.Abbrev+")") {
+				row = tb
+			}
+		})
+		if row == nil {
+			t.Fatalf("control: the picker has no row for %s", other.ID)
+		}
+		row.Tapped(&fyne.PointEvent{})
+		if !st.versionLoading || w.inflight != other.ID {
+			t.Fatalf("control: the row must start a load of %s; loading %v, in flight %q", other.ID, st.versionLoading, w.inflight)
+		}
+		w.landInflight(t, st, true)
+		if st.CurrentVersion != other.ID {
+			t.Fatalf("control: the reader's load must land; on %s", st.CurrentVersion)
+		}
+		honoured(t, st, "the picker's row", other.ID)
+	})
+
+	// The cause is fixed by the call that starts the load, and the walk and
+	// the routes above land every load through the tail that call built, so
+	// a wrong cause anywhere from a call to its landing fails there. This
+	// names the call: every switch switchToLinkVersion starts is the
+	// arrival's, and every one the picker starts is the reader's.
 	t.Run("the cause each entry point gives", func(t *testing.T) {
 		src := parsePackageSource(t)
 		for _, tc := range []struct {

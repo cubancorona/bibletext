@@ -101,10 +101,9 @@ func (e refreshEvent) String() string {
 }
 
 // apply drives ONE event through the app's real logic and returns the state
-// after it. Where the production path starts a goroutine (triggerFullDownload)
-// the synchronous half is reproduced exactly and cited, because a test cannot
-// await a goroutine deterministically; the tail it ends in is named
-// (upgradeLanded) and runs for real.
+// after it. The refresh's fetch leaves through a door TestMain holds shut
+// (startUpgradeFetch), so the picker's real retry starts it and it stays in
+// flight; the tail it ends in is named (upgradeLanded) and runs for real.
 func (e refreshEvent) apply(t *testing.T, st *AppState) {
 	t.Helper()
 	def, _ := versionByID(defaultVersionID)
@@ -116,14 +115,10 @@ func (e refreshEvent) apply(t *testing.T, st *AppState) {
 	case reSwitchBack:
 		st.CurrentVersion = defaultVersionID
 	case rePickerOpen:
-		// showVersionPicker's head, verbatim (versions_ui.go): the manual
-		// retry of whatever the refresh owes, then the notice computed after it.
-		if len(owedUpgrades(st)) > 0 && !st.fullDownloading {
-			st.fullRetryDelay = 0
-			if !st.stopping.Load() {
-				st.fullDownloading = true // triggerFullDownload sets this synchronously
-			}
-		}
+		// showVersionPicker's head (versions_ui.go): the notice for the state
+		// the reader arrived in, then the manual retry of whatever the refresh
+		// owes. The walk observes the state after it.
+		noticeOnPickerOpen(st)
 	case reFetchFails:
 		// The refresh's real tail with the fetch failed (app.go): the backoff
 		// grows and a retry is armed, through the seam TestMain holds shut.
@@ -370,13 +365,12 @@ func TestTheWaitingNoticeIsReachableFromThePicker(t *testing.T) {
 	defer app.Quit()
 
 	// A reader waiting offline on a stale-epoch boot: pending, not on the
-	// seed, backoff armed, nothing in flight.
+	// seed, backoff armed, nothing in flight. The manual retry inside
+	// noticeOnPickerOpen is real, and its fetch stays at the door TestMain
+	// holds shut, so what is under test is the ORDERING: the notice is read
+	// before the retry it then starts.
 	st := refreshFacts{pending: true, retryDelay: 20 * time.Second, current: defaultVersionID}.toState(t)
-	// The manual retry inside noticeOnPickerOpen would otherwise spawn a real
-	// download goroutine and reach the network. stopping is triggerFullDownload's
-	// own first guard, so this exercises the ORDERING under test and nothing
-	// else — the notice is captured before the retry is even attempted.
-	st.stopping.Store(true)
+	fetches := upgradeFetchesStarted.Load()
 
 	// The control: before the picker is involved, the wording exists.
 	if before := fullPendingNotice(st); !strings.Contains(before, "waiting for a connection") {
@@ -389,6 +383,11 @@ func TestTheWaitingNoticeIsReachableFromThePicker(t *testing.T) {
 			"The manual retry fires before the notice is computed, so the wording "+
 			"written for exactly this reader can never be shown by the only surface "+
 			"that shows it.", got)
+	}
+	// And the retry did start: the reader who came to check is not also made
+	// to wait out the backoff.
+	if !st.fullDownloading || st.fullRetryDelay != 0 || upgradeFetchesStarted.Load() == fetches {
+		t.Errorf("opening the picker did not retry the waiting update: fetching %v, delay %v", st.fullDownloading, st.fullRetryDelay)
 	}
 }
 

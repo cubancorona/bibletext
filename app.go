@@ -291,9 +291,20 @@ func triggerFullDownload(state *AppState) {
 	}
 	version := owed[0]
 	state.fullDownloading = true
+	startUpgradeFetch(version, func(full *BibleData, mode dataMode, err error) {
+		upgradeLanded(state, version, full, mode, err)
+	})
+}
+
+// startUpgradeFetch fetches v off the UI goroutine and hands the result to
+// land on it: the one door the refresh's fetch goes through. A var for the
+// same reason as upgradeRetryAfter: the suite shuts it in TestMain, so no
+// test's refresh reaches the network, and the arrivals walk lands what the
+// real triggerFullDownload chose through the real tail it built.
+var startUpgradeFetch = func(v BibleVersion, land func(*BibleData, dataMode, error)) {
 	go func() {
-		full, mode, err := loadVersionData(version, nil) // one helloao request; caches on success
-		fyne.Do(func() { upgradeLanded(state, version, full, mode, err) })
+		full, mode, err := loadVersionData(v, nil) // one helloao request; caches on success
+		fyne.Do(func() { land(full, mode, err) })
 	}()
 }
 
