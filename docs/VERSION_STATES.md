@@ -455,6 +455,13 @@ closes a hole that IS live: before it, a non-default translation recorded as
 stale had **no way to stop being stale within a session**, however long the
 reader spent online — a straight violation of the liveness invariant.
 
+**That last claim is wrong, and the hole is still open** — see `D17`. The fix
+lets a stale translation stop being stale once its current edition is on
+disk, and the reachability note above is the reason that never happens: nothing
+in a session writes a non-default translation's current edition while its
+previous decode is in memory. The walk that showed it is the arrivals walk on
+the disk that holds only a previous edition.
+
 **A note on the enumeration itself.** Its first version passed, and proved
 nothing: it routed the generation stamp through `M1`'s `servedFrom` helper,
 which maps anything it does not recognise to `"none"`, so every

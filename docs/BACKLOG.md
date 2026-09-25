@@ -1764,10 +1764,12 @@ host, so the measurements are the evidence.
 Both halves are in docs/VERSION_STATES.md: the storage diagram (M1–M3) and,
 since 2026-09-05, a second diagram for M4, the launch space and the arrivals
 layer drawn as the enumerations drive them, with a table of every space's
-own count as its test logs it (15, 10, 160 + 310 journeys, 8, 16, and 780
-journeys over 2930 steps). The document's closing section had still said
-M4–M7 were unenumerated; it now says what is, and what the enumerations do
-not claim. The record of the work follows.
+own count as its test logs it (15, 10, 160 + 310 journeys, 8, 16, and 478
+journeys over 1864 steps in six worlds since 2026-09-25). The document's
+closing section had still said M4–M7 were unenumerated; it now says what is,
+and what the enumerations do not claim. The record of the work follows. Four
+defects found on 2026-09-25 are open; they are listed at the end of this
+entry.
 
 
 **Storage space DONE 2026-08-28** — `docs/VERSION_STATES.md` models the machine
@@ -1836,12 +1838,15 @@ The history-erasure invariant itself held in all sixteen cells, including the
 | ~~D11~~ | ~~A stale version's notice is retired by the disk while its previous decode is still on screen~~ | **FIXED 2026-08-29** |
 
 Not reachable today (nothing writes a non-default version's current epoch
-while its previous decode is in memory), but one obvious feature away, and the
-fix also closes a live liveness hole: a stale non-default translation
-previously had no way to stop being stale within a session.
+while its previous decode is in memory), but one obvious feature away. Its
+record also claimed the fix closes a live liveness hole — that a stale
+non-default translation previously had no way to stop being stale within a
+session. It does not: the fix waits for a current epoch that nothing in a
+session writes, for the reason the sentence before gives. That hole is D17,
+open, below.
 
 **The arrivals layer — enumerated 2026-08-29, as JOURNEYS** (780 to depth
-four), because an arrival is a promise kept or broken over time and every way
+four at the time), because an arrival is a promise kept or broken over time and every way
 it breaks is a sequence. One more defect:
 
 | | Defect | Status |
@@ -1859,14 +1864,38 @@ lenses) found four more, every one on a coupling the map had not drawn:
 | ~~D15~~ | ~~Search results survive a switch: old wording under a new name; a tap writes a dead reference~~ | session | **FIXED 2026-08-29** |
 | ~~D14~~ | ~~A link displaced by another translation's load is dropped with nothing said~~ | session | **FIXED 2026-08-29** |
 
-**All seven machines and the arrivals layer are enumerated, and every defect
-found is closed.** Two lessons worth keeping. Third confirmation that
+**All seven machines and the arrivals layer are enumerated. Every defect
+found up to 2026-08-29 is closed; four found on 2026-09-25 are open, below.**
+Two lessons worth keeping. Third confirmation that
 cross-products are blind to flow (the arrivals defect is invisible to every
 cross-product in the suite; the journeys found it by four routes). And: a
 harness can only look where its model points. The journeys found D12 and went
 quiet; re-reading the same ground with no model in hand found four more,
 including the original incident arriving through a version switch rather than
 a launch.
+
+**Open, found 2026-09-25.** The arrivals walk was given the disk that decides
+an arrival (the link's translation holding only its previous edition), the
+reader's remembered licensed translation, and a load of the reader's own still
+in flight when a link arrives; reading where its first finding reaches led to
+the launch's hand-off. Each is recorded in docs/VERSION_STATES.md with its
+shortest route and pinned by a test that fails the day it is fixed.
+
+| | Defect | Severity | Status |
+|---|---|---|---|
+| D18 | The launch hands its state to the screen field by field and drops the two records the restore makes: the reader's chosen translation and the stale-edition mark. D9, D10 and D3's launch site are fixed on a state the reader never sees | durable | **OPEN** |
+| D19 | The arrival mark is spent by a load it was not set for (a failed link load leaves it set; a link parked behind the reader's own load gives it to that load), so the reader's own choice does not spend the remembered translation | durable, once D18 is fixed | **OPEN** |
+| D20 | A previous edition behind the substitution sentence: the picker says a translation was shown instead, and nothing about the edition | session, once D18 is fixed | **OPEN** |
+| D17 | A translation shown from its previous edition is not updated while the app runs: nothing in a session fetches a non-default translation that is already in memory | session | **OPEN** |
+
+The order to take them: D18 first, because it is durable and live in every
+launch that falls back — the reader's next navigation saves the fallback over
+their choice. D19 and D20 go live the moment D18 is fixed and belong in the
+same change: D19's mark has to belong to the load it was set for (recorded
+with its translation, honoured only by that translation's landing, closed with
+that load however it ends), and the picker has to say both the substitution
+and the edition. D17 is the refresh machine covering the default translation
+alone; it costs a session, not a record.
 
 ## CI runs with the race detector, so 14 tests never run there
 
