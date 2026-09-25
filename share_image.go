@@ -369,9 +369,18 @@ func (c cardText) draw(d *font.Drawer, s string) {
 	d.Face = c.face
 }
 
-// renderVerseImage writes a square share card to a temp PNG and returns its path.
-// variant selects the colour treatment (0 = the verse's default; the preview's
-// Regenerate increments it).
+// imageRenderDir is the directory the share card and the lock-screen artwork
+// are written into: the system temp directory, asked afresh on every render.
+// The names in it are fixed — one per Regenerate variant, one per chapter
+// title — and the share sheet and Now Playing are handed the path, so anything
+// else rendering into the same directory replaces the file the reader is
+// about to share. The test binary points it at a directory of its own
+// (TestMain).
+var imageRenderDir = os.TempDir
+
+// renderVerseImage writes a square share card to a PNG in imageRenderDir and
+// returns its path. variant selects the colour treatment (0 = the verse's
+// default; the preview's Regenerate increments it).
 func renderVerseImage(state *AppState, verseText, citation, version string, variant int) (string, error) {
 	const (
 		dim      = 1080
@@ -475,7 +484,7 @@ func renderVerseImage(state *AppState, verseText, citation, version string, vari
 
 	// A fresh file per variant so the preview's canvas.Image reloads on Regenerate
 	// (a stable path would be served from Fyne's image cache).
-	path := filepath.Join(os.TempDir(), fmt.Sprintf("bibletext-verse-%d.png", variant))
+	path := filepath.Join(imageRenderDir(), fmt.Sprintf("bibletext-verse-%d.png", variant))
 	f, err := os.Create(path)
 	if err != nil {
 		return "", err

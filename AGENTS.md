@@ -42,7 +42,12 @@ reads or writes the downloaded translations the app keeps on disk, and a test
 that needs a cache on disk builds it in a temp directory of its own
 (`mustCache`). The few that check real downloaded text do so on purpose,
 through `realCachePath`, and skip without it; the cross-reference render
-fetches the Treasury zip instead.
+fetches the Treasury zip instead. The suite also renders share cards and
+lock-screen artwork into a directory of its own (`imageRenderDir`), never the
+system temp directory where the app keeps the images it hands to the share
+sheet. A test that writes images for looking at writes them only into a
+directory named by an environment variable, such as
+`BIBLETEXT_PANE_SNAPSHOT_DIR`.
 
 Nor does any test see the machine's credentials. TestMain takes
 `BIBLE_API_KEY`, every `BIBLETEXT_LICENSE_*` and `BIBLETEXT_PROVIDER_ID_*`,

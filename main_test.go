@@ -10,6 +10,9 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
+
+	"fyne.io/fyne/v2"
 )
 
 // NO TEST IN THIS PACKAGE OPENS ANYTHING FOR REAL.
@@ -174,6 +177,24 @@ func useLiveEnv(t *testing.T, names ...string) {
 	}
 }
 
+// NOR DOES ANY TEST WRITE THE IMAGES THE APP HANDS TO THE SHARE SHEET.
+//
+// The share card and the lock-screen artwork are written under fixed names in
+// the system temp directory — bibletext-verse-<variant>.png per Regenerate,
+// bibletext-artwork-<title>.png per chapter — and the share sheet and Now
+// Playing are handed that path. Every test that rendered one wrote those same
+// files — the card tests directly, the audio controller's through the artwork
+// startChapter draws — so a run left twelve cards and an artwork behind, and
+// the two card tests deleted the default card after. On a desktop, where the
+// app and the test binary share the user's temp directory, a run could replace
+// or remove the image a running copy of the app was about to share.
+// imageRenderDir now sends every render in the binary to a directory made here
+// and removed after the run; the names inside it are the app's own.
+//
+// realTempDir is where the app itself renders, recorded before the redirect,
+// so the guard below can say where a test's render must not land.
+var realTempDir string
+
 func TestMain(m *testing.M) {
 	withheldCredentials = withholdCredentials()
 	externalOpener = func(u *url.URL) error {
@@ -189,8 +210,17 @@ func TestMain(m *testing.M) {
 		os.Exit(2)
 	}
 	os.Setenv("BIBLETEXT_CACHE_PATH", filepath.Join(suiteCache, cacheFileName))
+	realTempDir = imageRenderDir()
+	suiteRenders, err := os.MkdirTemp("", "bibletext-test-renders-")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "no directory for the suite's rendered images:", err)
+		os.RemoveAll(suiteCache)
+		os.Exit(2)
+	}
+	imageRenderDir = func() string { return suiteRenders }
 	code := m.Run()
 	os.RemoveAll(suiteCache)
+	os.RemoveAll(suiteRenders)
 	if left := openedInTests(); len(left) > 0 && os.Getenv("BT_SHOW_OPENS") != "" {
 		fmt.Fprintf(os.Stderr, "tests would have opened %d URL(s); first: %s\n", len(left), left[0])
 	}
@@ -375,6 +405,58 @@ func TestGoTestKnowsWhichCredentialALiveTestAskedFor(t *testing.T) {
 	}
 	if !read["BIBLE_API_KEY"] {
 		t.Error("the log does not have the child's read of BIBLE_API_KEY through liveEnv, so go test replays a live test's skip after the key is exported")
+	}
+}
+
+// A share card and a lock-screen artwork rendered by a test land in the
+// directory TestMain made, and nothing is written under their names where the
+// app renders its own. The variant and the title are ones no reader reaches,
+// so a file of that name in the system temp directory as new as the render
+// can only be the render's, and the test removes it. The control applies the
+// same freshness check to the suite's copies, which the render did just
+// write, and shows it fires.
+func TestTheSuiteNeverWritesTheAppsSharedImages(t *testing.T) {
+	if realTempDir != os.TempDir() {
+		t.Fatalf("the app renders into %s, not the system temp directory %s", realTempDir, os.TempDir())
+	}
+	// Both directories are compared clean, because the renderers build their
+	// paths with filepath.Join and the directories arrive spelled as TMPDIR
+	// spells them: one ending in two slashes, or holding a ".", is the same
+	// directory written differently, and the check below would call a render
+	// that landed in the right place stray.
+	app, suite := filepath.Clean(realTempDir), filepath.Clean(imageRenderDir())
+	if suite == app {
+		t.Fatalf("the suite renders into the system temp directory %s", suite)
+	}
+	// Truncated so a file system that keeps whole seconds still counts a
+	// write made during the test as made at or after its start.
+	start := time.Now().Truncate(time.Second)
+	fresh := func(p string) bool {
+		fi, err := os.Stat(p)
+		return err == nil && !fi.ModTime().Before(start)
+	}
+
+	const variant = 1 << 20 // far past any Regenerate a reader presses
+	card, err := renderVerseImage(nil, "“Jesus wept.”", "John 11:35", "World English Bible", variant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg, bold := serifFontBytes(nil, fyne.TextStyle{}), serifFontBytes(nil, fyne.TextStyle{Bold: true})
+	art, err := renderChapterArtwork("Render Guard 1", "World English Bible", reg, bold)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{card, art} {
+		if filepath.Dir(p) != suite {
+			t.Errorf("%s was written outside the suite's directory %s", p, suite)
+		}
+		if !fresh(p) {
+			t.Errorf("control: %s, which the render just wrote, does not count as new, so the check below proves nothing", p)
+		}
+		if twin := filepath.Join(app, filepath.Base(p)); fresh(twin) {
+			os.Remove(twin)
+			t.Errorf("%s was written into the system temp directory, where the app keeps its own", twin)
+		}
 	}
 }
 

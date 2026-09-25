@@ -21,8 +21,8 @@ import (
 	"golang.org/x/image/font/opentype"
 )
 
-// renderChapterArtwork writes a square artwork PNG to a temp file and returns its
-// path. title is "Book Chapter" (e.g. "John 20"); subtitle is the translation name.
+// renderChapterArtwork writes a square artwork PNG into imageRenderDir and returns
+// its path. title is "Book Chapter" (e.g. "John 20"); subtitle is the translation name.
 func renderChapterArtwork(title, subtitle string, regularTTF, boldTTF []byte) (string, error) {
 	const (
 		dim    = 1024
@@ -84,7 +84,7 @@ func renderChapterArtwork(title, subtitle string, regularTTF, boldTTF []byte) (s
 	}
 
 	safe := strings.NewReplacer(" ", "_", "/", "_", ":", "_").Replace(title)
-	path := filepath.Join(os.TempDir(), fmt.Sprintf("bibletext-artwork-%s.png", safe))
+	path := filepath.Join(imageRenderDir(), fmt.Sprintf("bibletext-artwork-%s.png", safe))
 	f, err := os.Create(path)
 	if err != nil {
 		return "", err
