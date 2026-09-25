@@ -1217,7 +1217,30 @@ public final class BtBridge {
     private static void ensureView() {
         if (text != null) return;
 
-        text = new TextView(activity);
+        // A long press on text that is already selected starts a DRAG of it
+        // (Editor.performLongClick -> View.startDragAndDrop), with a shadow the
+        // framework builds by measuring the selected text on its own. On some
+        // phones that shadow measures zero wide or high, and startDragAndDrop
+        // throws IllegalStateException("Drag shadow dimensions must be
+        // positive") out of the long-press callback, which nothing catches:
+        // Play's vitals recorded it on 1.2.11, a Vivo phone on Android 14.
+        // startDragAndDrop is final, so the long press is where it can be
+        // held. Nothing in a reader needs Scripture dragged out of the page,
+        // so that one exception ends the long press rather than the app; the
+        // selection and its menu stay as they were. Any other exception from
+        // the long press still surfaces.
+        text = new TextView(activity) {
+            @Override public boolean performLongClick() {
+                try {
+                    return super.performLongClick();
+                } catch (IllegalStateException e) {
+                    if (String.valueOf(e.getMessage()).contains("Drag shadow")) {
+                        return true;
+                    }
+                    throw e;
+                }
+            }
+        };
         text.setFocusable(true);
         text.setFocusableInTouchMode(true);
         text.setText(" ", TextView.BufferType.SPANNABLE); // Editor needs content before selectable arms
