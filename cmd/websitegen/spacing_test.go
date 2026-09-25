@@ -14,7 +14,7 @@ func TestTheReadingPanesAirIsTheApps(t *testing.T) {
 	css := testCSS()
 	for _, want := range []string{
 		"--pgap:calc(" + trimFloat(bibletext.ReadingParaGapEm()) + " * ",
-		".text p.pst{font-style:italic; text-indent:0; margin:0 0 " + bibletext.EmCSS(bibletext.ReadingTitleGapEm()) + "}",
+		".text p.pst{font-style:italic; text-align:left; text-indent:0; hyphens:none; -webkit-hyphens:none; margin:0 0 " + bibletext.EmCSS(bibletext.ReadingTitleGapEm()) + "}",
 		"text-indent:" + bibletext.EmCSS(bibletext.ReadingReporterIndentEm()),
 	} {
 		if !strings.Contains(css, want) {

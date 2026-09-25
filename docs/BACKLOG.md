@@ -46,6 +46,19 @@ What the spec work left, each one a known difference rather than a guess:
   would give both.
 - **A note pill under a heading on Android's book page** sits 7px higher than
   on the phone page (the entry below).
+- **Android from API 35 justifies a Psalm title that wraps,** where the web,
+  the Apple panes and the Windows and Linux pane set it ragged. Its
+  justification is scoped to the line: every line that does not end at a hard
+  break is spread, whatever its paragraph (docs/READING_TYPOGRAPHY.md,
+  "Justified prose").
+- **The Apple panes and Android hyphenate a Psalm title that wraps,** where the
+  web and the Windows and Linux pane leave its words whole. The Apple `p.pst`
+  (`reading.go`) sets no hyphenation, so it keeps the `hyphens: auto` of the
+  `p` rule; Android sets `HYPHENATION_FREQUENCY_NORMAL` on the whole text view
+  (`BtBridge.java`). On macOS, adding `hyphens: none; -webkit-hyphens: none;`
+  to `p.pst` gives the imported title a hyphenation factor of 0 and breaks no
+  word in it, so the Apple half is one rule, but it changes the Apple panes and
+  wants its own check on them, iOS included (scripts/check-ios-pane.sh).
 - **A paragraph that opens in prose and turns to poetry** is indented on the
   web, Android and the Windows and Linux pane (justified where those surfaces
   justify — whole on the web and Android from API 35, its prose only on the

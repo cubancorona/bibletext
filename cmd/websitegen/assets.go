@@ -412,8 +412,19 @@ body{
    web the one surface that differs. The gap below is the same 0.45 of a line
    the panes measure. The face ships no italic cut, so this is a synthesised
    oblique — accepted, because the alternative is a fifth hashed font asset for
-   one line per psalm. */
-.text p.pst{font-style:italic; text-indent:0; margin:0 0 __TITLE_GAP__}
+   one line per psalm.
+   It is set ragged, as the Apple panes (reading.go, p.pst) and the Windows
+   and Linux pane (reading_styled_super.go) set it, and unhyphenated, as the
+   Windows and Linux pane sets it. The title is a <p> inside .text, so without
+   rules of its own it takes the prose paragraph's justification and
+   hyphenation: a title long enough to wrap, such as Psalm 18's, was spread to
+   the measure and broken mid-word. The prefixed name is turned off as well as
+   the plain one because .text p turns both on, and a browser that reads only
+   the prefixed name would keep it. Two known differences remain
+   (docs/READING_TYPOGRAPHY.md, "Justified prose"): Android from API 35
+   justifies a wrapped title's lines, and the Apple panes and Android
+   hyphenate the title as they hyphenate the prose. */
+.text p.pst{font-style:italic; text-align:left; text-indent:0; hyphens:none; -webkit-hyphens:none; margin:0 0 __TITLE_GAP__}
 /* THE FOOTNOTE SECTION. The translators' apparatus, after the chapter and
    outside the article, because the article is the scripture and this is about
    it. Set smaller and muted so it reads as an appendix rather than as more

@@ -210,13 +210,14 @@ and they differ:
 - **The web** decides by a paragraph's first verse: one that opens on a poem
   line is ragged throughout (`p.pm`), one that opens in prose is justified
   throughout, the rows of a wrapped poem line included (a defect,
-  docs/SCRIPTURE_WORKLIST.md). It hyphenates.
+  docs/SCRIPTURE_WORKLIST.md). It hyphenates, the Psalm title apart, which it
+  sets ragged and whole (below).
 - **Android** from API 35 justifies by the line: every line that is not the
   text's last and does not end at a hard break, whatever its paragraph — the
   rows of a wrapped poem line too, and a heading or Psalm title that wraps. It
   hyphenates. Below API 35 it is ragged (docs/ANDROID.md).
 - **The Apple panes** leave any paragraph holding a poem line ragged (below),
-  and their stylesheet asks for hyphenation.
+  and their stylesheet asks for hyphenation, the Psalm title's included.
 - **The Windows and Linux pane** (`readingJustifyProse`) justifies a paragraph
   that opens in prose, except the rows of its poetic verses — poetry is never
   justified there — and leaves a paragraph that opens on a poem line ragged
@@ -235,6 +236,24 @@ doc passage saying the pane justifies names it, so a search for the name finds
 everything to edit. A dev build compares the two on one pane: the Links tab's
 "Justify the Windows and Linux pane", or `BIBLETEXT_DEV_JUSTIFY=on|off` at
 launch.
+
+The Psalm title is not prose, and it is set ragged, as print sets it: on the
+web (`.text p.pst`), on the Apple panes (`p.pst`) and on the Windows and Linux
+pane, which wraps it greedily (`reading_styled_super.go`). Android from API 35
+justifies it, because its justification is scoped to the line and not the
+paragraph: a title that wraps has every line but its last spread to the
+measure. Its hyphenation differs as well. The web turns hyphenation off for the
+title and the Windows and Linux pane hyphenates nothing, so on both it is
+whole; the Apple panes and Android hyphenate it. The Apple `p.pst` sets no
+hyphenation of its own, so it keeps the `hyphens: auto` of their `p` rule: the
+macOS pane's imported title carries a hyphenation factor of 1 and breaks words
+in a 260-point column (the iPhone and iPad pane import the same stylesheet the
+same way, not measured there). Android sets hyphenation on the whole text view,
+the title included. Both are known differences (docs/BACKLOG.md). The site's
+generator justified and hyphenated the title as well until 25 September 2026,
+and the published site does until it is next published: the title is a `<p>`
+inside `.text`, and its rule said nothing of alignment or hyphenation, so a
+title that wraps, such as Psalm 18's, took the prose paragraph's.
 
 ### Where each surface stands
 

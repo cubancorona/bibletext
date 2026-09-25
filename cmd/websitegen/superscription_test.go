@@ -114,3 +114,46 @@ func TestATitleIsEscaped(t *testing.T) {
 		t.Errorf("the title is not escaped as expected:\n%s", got)
 	}
 }
+
+// THE TITLE IS RAGGED AND WHOLE on the web: ragged as the Apple panes
+// (reading.go, p.pst) and the Windows and Linux pane (reading_styled_super.go)
+// set it, and unhyphenated as the Windows and Linux pane sets it. The title is
+// a <p> inside .text, and .text p justifies and hyphenates, so a title with no
+// rules of its own took both: one long enough to wrap, such as Psalm 18's, was
+// spread to the measure and broken mid-word. Android from API 35 justifies a
+// wrapped title's lines, and the Apple panes and Android hyphenate it;
+// docs/READING_TYPOGRAPHY.md records both as known differences.
+// Mutations: text-align:left, hyphens:none or -webkit-hyphens:none taken out
+// of .text p.pst.
+func TestAPsalmTitleIsSetRaggedAndUnhyphenated(t *testing.T) {
+	css := testCSS()
+	// The control: the prose rule still justifies and hyphenates under both
+	// names, so a title rule that said nothing would do both too.
+	prose := cssDecls(cssRule(t, css, ".text p{"))
+	for _, d := range [][2]string{{"text-align", "justify"}, {"hyphens", "auto"}, {"-webkit-hyphens", "auto"}} {
+		if prose[d[0]] != d[1] {
+			t.Fatalf("the prose paragraph's %s is %q, not %q, so this test no longer shows "+
+				"what the title would inherit", d[0], prose[d[0]], d[1])
+		}
+	}
+	title := cssDecls(cssRule(t, css, ".text p.pst{"))
+	for _, d := range [][2]string{{"text-align", "left"}, {"hyphens", "none"}, {"-webkit-hyphens", "none"}} {
+		if title[d[0]] != d[1] {
+			t.Errorf("the Psalm title's %s is %q, not %q: it would take the prose "+
+				"paragraph's %q", d[0], title[d[0]], d[1], prose[d[0]])
+		}
+	}
+}
+
+// cssDecls reads a rule's declarations, property to value, so a check on
+// hyphens cannot be met by -webkit-hyphens.
+func cssDecls(rule string) map[string]string {
+	decls := map[string]string{}
+	_, body, _ := strings.Cut(rule, "{")
+	for _, d := range strings.Split(body, ";") {
+		if prop, val, ok := strings.Cut(d, ":"); ok {
+			decls[strings.TrimSpace(prop)] = strings.TrimSpace(val)
+		}
+	}
+	return decls
+}

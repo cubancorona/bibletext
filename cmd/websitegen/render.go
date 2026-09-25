@@ -168,11 +168,15 @@ func chapterBody(bd *bibletext.BibleData, versionID, book string, chapter int, v
 		return ""
 	}
 	var b strings.Builder
-	// The psalm's own title, above everything, exactly as all four app panes set
-	// it. It is Scripture's title for the psalm rather than a section heading,
+	// The psalm's own title, above everything, where every app pane sets it.
+	// It is Scripture's title for the psalm rather than a section heading,
 	// so it is unnumbered and italic and never enters a verse — the separation
 	// BibleData keeps between Superscriptions and Verse.Text is the whole
-	// reason it can be drawn here at all.
+	// reason it can be drawn here at all. The stylesheet (.text p.pst) sets it
+	// ragged, as every app pane but Android from API 35 sets it, and
+	// unhyphenated, as the Windows and Linux pane sets it; the Apple panes and
+	// Android hyphenate it. Both are known differences
+	// (docs/READING_TYPOGRAPHY.md, "Justified prose").
 	//
 	// Only the Psalter has these, and after the acrostic lift Psalm 119 has
 	// none: its ALEPH is a stanza heading now, so this simply does not fire
