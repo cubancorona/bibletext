@@ -24,6 +24,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"math"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -531,14 +532,19 @@ func TestAWiderCanonsTrailSurvivesReadingANarrowerOne(t *testing.T) {
 // it, and the previous edition is shown with nothing said.
 //
 // The hand-off runs inside a goroutine a test cannot await, so that half is
-// read from the source: every field the restore writes on its state, directly
-// or through a helper handed the state, must be one the hand-off copies. The
+// read from the source. What the restore records is every field it writes on
+// its state, directly or through a function it hands the state to. A record
+// reaches the screen if the launch either reads it off the restore's state or
+// writes it on the live one, and each is looked for in every shape a fix could
+// take rather than the one line the copy uses today — see launchReaches. The
 // other half runs for real: loadStateData does record both on the state it
 // returns.
 //
 // It asserts what the app does TODAY. The day D18 is fixed it fails, and
 // should be turned round into the fix's guard, with D18 struck from
-// docs/VERSION_STATES.md.
+// docs/VERSION_STATES.md. The one fix it cannot see is one that rebuilds the
+// records on the live state through more than two calls of new code, without
+// reading them off the restore's; whoever makes that fix strikes this by hand.
 func TestTheLaunchDropsWhatTheRestoreRecords(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -580,107 +586,75 @@ func TestTheLaunchDropsWhatTheRestoreRecords(t *testing.T) {
 		}
 	}
 
-	written := stateFieldsWrittenBy(t, "restoreReadingState")
-	copied := map[string]bool{}
-	for f, from := range stateFieldsCopiedByTheLaunch(t) {
-		copied[f] = from == f
+	src := parsePackageSource(t)
+	restore := src.funcs["restoreReadingState"]
+	if len(restore) != 1 {
+		t.Fatalf("control: restoreReadingState is declared %d times, so this reading of the source is wrong", len(restore))
 	}
+	written := src.fieldsWritten(restore[0], paramNames(restore[0])[0], 1)
+	readOff, writtenOn := launchReaches(t, src)
 	for _, f := range []string{"preferredVersion", "staleVersions", "CurrentVersion"} {
 		if !written[f] {
 			t.Fatalf("control: the restore no longer writes %s, so this reading of the source is wrong", f)
 		}
 	}
-	if !copied["CurrentVersion"] {
-		t.Fatal("control: the hand-off no longer copies CurrentVersion, so this reading of the source is wrong")
+	if !readOff["CurrentVersion"] {
+		t.Fatal("control: the hand-off no longer copies CurrentVersion off the restore's state, so this reading of the source is wrong")
 	}
 	var dropped []string
 	for f := range written {
-		if !copied[f] {
+		if !readOff[f] && !writtenOn[f] {
 			dropped = append(dropped, f)
 		}
 	}
 	sort.Strings(dropped)
 	if got := strings.Join(dropped, " "); got != "preferredVersion staleVersions" {
 		t.Fatalf("the launch hand-off now drops [%s] of what the restore records, where D18 is exactly "+
-			"preferredVersion and staleVersions. If both are carried, D18 is fixed: strike it from "+
+			"preferredVersion and staleVersions. If both reach the live state, D18 is fixed: strike it from "+
 			"docs/VERSION_STATES.md and turn this test round into the fix's guard. Anything else dropped "+
 			"is a new defect.", got)
 	}
 }
 
-// stateFieldsWrittenBy parses the package and returns the AppState fields the
-// named function writes on its state parameter: assignments to state.X or
-// state.X[k], and the same inside any package function it hands the state to
-// first, one call deep — markVersionStale writing staleVersions is one.
-func stateFieldsWrittenBy(t *testing.T, name string) map[string]bool {
+// launchReaches returns the fields of the restore's state that the launch
+// carries to the live one, by each road a fix could take. A field is read
+// off the restore's state if StartBackgroundLoad reads loaded.X anywhere at
+// all — a copy, a multiple assignment, a clone, a range, a condition — or
+// hands the restore's state, under any name, to a function or method that
+// does, however deep. A field is written on the live state if
+// StartBackgroundLoad assigns it there, or a function it hands the live state
+// to does, or one that function hands it to. Two calls and no more, because
+// three reach applyLoadedVersion through the dev builds' automatic switch, and
+// a few more through a link consumed at launch, and it writes both records for
+// reasons of its own. Counting a field that is only read, or written for
+// another reason, errs the safe way: the pin fails, and a person looks.
+func launchReaches(t *testing.T, src packageSource) (readOff, writtenOn map[string]bool) {
 	t.Helper()
-	funcs := packageFuncs(t)
-	fn := funcs[name]
-	if fn == nil {
-		t.Fatalf("%s is not in the package", name)
+	launch := src.funcs["StartBackgroundLoad"]
+	if len(launch) != 1 {
+		t.Fatalf("control: StartBackgroundLoad is declared %d times, so this reading of the source is wrong", len(launch))
 	}
-	param := firstParamName(fn)
-	out := map[string]bool{}
-	for f := range fieldsAssignedOn(fn, param) {
-		out[f] = true
-	}
-	ast.Inspect(fn.Body, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok || len(call.Args) == 0 {
-			return true
-		}
-		if arg, ok := call.Args[0].(*ast.Ident); !ok || arg.Name != param {
-			return true
-		}
-		if callee, ok := call.Fun.(*ast.Ident); ok && funcs[callee.Name] != nil {
-			for f := range fieldsAssignedOn(funcs[callee.Name], firstParamName(funcs[callee.Name])) {
-				out[f] = true
-			}
-		}
-		return true
-	})
-	return out
+	return src.fieldsRead(launch[0], "loaded", -1), src.fieldsWritten(launch[0], "state", 2)
 }
 
-// stateFieldsCopiedByTheLaunch returns what StartBackgroundLoad's hand-off
-// assigns: state.X = loaded.Y, as X -> Y.
-func stateFieldsCopiedByTheLaunch(t *testing.T) map[string]string {
-	t.Helper()
-	fn := packageFuncs(t)["StartBackgroundLoad"]
-	if fn == nil {
-		t.Fatal("StartBackgroundLoad is not in the package")
-	}
-	out := map[string]string{}
-	ast.Inspect(fn.Body, func(n ast.Node) bool {
-		as, ok := n.(*ast.AssignStmt)
-		if !ok || len(as.Lhs) != 1 || len(as.Rhs) != 1 {
-			return true
-		}
-		lhs, ok1 := as.Lhs[0].(*ast.SelectorExpr)
-		rhs, ok2 := as.Rhs[0].(*ast.SelectorExpr)
-		if !ok1 || !ok2 {
-			return true
-		}
-		if l, ok := lhs.X.(*ast.Ident); ok && l.Name == "state" {
-			if r, ok := rhs.X.(*ast.Ident); ok && r.Name == "loaded" {
-				out[lhs.Sel.Name] = rhs.Sel.Name
-			}
-		}
-		return true
-	})
-	return out
+// packageSource is the package's own Go files, tests excluded and every build
+// tag included: its functions and methods by name, each name with every
+// declaration of it, and AppState's field names. A call is resolved to every
+// declaration its name could mean, which can only find more.
+type packageSource struct {
+	funcs   map[string][]*ast.FuncDecl
+	methods map[string][]*ast.FuncDecl
+	fields  map[string]bool
 }
 
-// packageFuncs parses the package's own Go files, tests excluded, and indexes
-// its top-level functions by name.
-func packageFuncs(t *testing.T) map[string]*ast.FuncDecl {
+func parsePackageSource(t *testing.T) packageSource {
 	t.Helper()
 	files, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatal(err)
 	}
+	src := packageSource{funcs: map[string][]*ast.FuncDecl{}, methods: map[string][]*ast.FuncDecl{}, fields: map[string]bool{}}
 	fset := token.NewFileSet()
-	out := map[string]*ast.FuncDecl{}
 	for _, name := range files {
 		if strings.HasSuffix(name, "_test.go") {
 			continue
@@ -690,44 +664,223 @@ func packageFuncs(t *testing.T) map[string]*ast.FuncDecl {
 			t.Fatal(err)
 		}
 		for _, d := range f.Decls {
-			if fn, ok := d.(*ast.FuncDecl); ok && fn.Recv == nil && fn.Body != nil {
-				out[fn.Name.Name] = fn
+			switch d := d.(type) {
+			case *ast.FuncDecl:
+				if d.Body == nil {
+					continue
+				}
+				if d.Recv == nil {
+					src.funcs[d.Name.Name] = append(src.funcs[d.Name.Name], d)
+				} else {
+					src.methods[d.Name.Name] = append(src.methods[d.Name.Name], d)
+				}
+			case *ast.GenDecl:
+				for _, spec := range d.Specs {
+					ts, ok := spec.(*ast.TypeSpec)
+					if !ok || ts.Name.Name != "AppState" {
+						continue
+					}
+					if st, ok := ts.Type.(*ast.StructType); ok {
+						for _, field := range st.Fields.List {
+							for _, n := range field.Names {
+								src.fields[n.Name] = true
+							}
+						}
+					}
+				}
 			}
 		}
 	}
+	if len(src.fields) == 0 {
+		t.Fatal("control: AppState's fields were not found, so this reading of the source is wrong")
+	}
+	return src
+}
+
+// fieldsRead is every AppState field read off name in fn, or in what fn hands
+// it to, depth calls deep (negative: all the way).
+func (src packageSource) fieldsRead(fn *ast.FuncDecl, name string, depth int) map[string]bool {
+	out := map[string]bool{}
+	src.follow(fn, name, depth, map[string]int{}, func(body ast.Node, names map[string]bool) {
+		targets := assignmentTargets(body)
+		ast.Inspect(body, func(n ast.Node) bool {
+			if sel, ok := n.(*ast.SelectorExpr); ok && !targets[sel] {
+				if f, ok := src.fieldOf(sel, names); ok {
+					out[f] = true
+				}
+			}
+			return true
+		})
+	})
 	return out
 }
 
-func firstParamName(fn *ast.FuncDecl) string {
-	if ps := fn.Type.Params.List; len(ps) > 0 && len(ps[0].Names) > 0 {
-		return ps[0].Names[0].Name
-	}
-	return ""
+// fieldsWritten is every AppState field written on name in fn, or in what fn
+// hands it to, depth calls deep: name.X = …, name.X[k] = …, name.X++, and the
+// map and slice builtins that change name.X in place.
+func (src packageSource) fieldsWritten(fn *ast.FuncDecl, name string, depth int) map[string]bool {
+	out := map[string]bool{}
+	src.follow(fn, name, depth, map[string]int{}, func(body ast.Node, names map[string]bool) {
+		for sel := range assignmentTargets(body) {
+			if f, ok := src.fieldOf(sel, names); ok {
+				out[f] = true
+			}
+		}
+		ast.Inspect(body, func(n ast.Node) bool {
+			if call, ok := n.(*ast.CallExpr); ok && len(call.Args) > 0 {
+				if b, ok := call.Fun.(*ast.Ident); ok && (b.Name == "delete" || b.Name == "clear") {
+					if sel, ok := call.Args[0].(*ast.SelectorExpr); ok {
+						if f, ok := src.fieldOf(sel, names); ok {
+							out[f] = true
+						}
+					}
+				}
+			}
+			return true
+		})
+	})
+	return out
 }
 
-// fieldsAssignedOn is every field of param assigned in fn: param.X = … and
-// param.X[k] = ….
-func fieldsAssignedOn(fn *ast.FuncDecl, param string) map[string]bool {
-	out := map[string]bool{}
-	if param == "" {
-		return out
+// fieldOf reports the AppState field sel selects, when sel is name.X for one
+// of names and X is a field rather than a method.
+func (src packageSource) fieldOf(sel *ast.SelectorExpr, names map[string]bool) (string, bool) {
+	id, ok := sel.X.(*ast.Ident)
+	if !ok || !names[id.Name] || !src.fields[sel.Sel.Name] {
+		return "", false
+	}
+	return sel.Sel.Name, true
+}
+
+// follow visits fn's body with the names name goes by there — itself and
+// anything assigned from it — and then every package function or method fn
+// hands one of those names to, as an argument or as the receiver, under the
+// name it has inside that function, depth calls deep (negative: all the way).
+func (src packageSource) follow(fn *ast.FuncDecl, name string, depth int, seen map[string]int, visit func(ast.Node, map[string]bool)) {
+	// A function met again with more calls left to follow is followed again:
+	// the first meeting may have been at the edge.
+	reach := depth
+	if reach < 0 {
+		reach = math.MaxInt
+	}
+	key := fmt.Sprintf("%p/%s", fn, name)
+	if been, ok := seen[key]; name == "" || name == "_" || (ok && been >= reach) {
+		return
+	}
+	seen[key] = reach
+	names := aliasesOf(fn.Body, name)
+	visit(fn.Body, names)
+	if depth == 0 {
+		return
 	}
 	ast.Inspect(fn.Body, func(n ast.Node) bool {
-		as, ok := n.(*ast.AssignStmt)
+		call, ok := n.(*ast.CallExpr)
 		if !ok {
 			return true
 		}
-		for _, lhs := range as.Lhs {
-			if ix, ok := lhs.(*ast.IndexExpr); ok {
-				lhs = ix.X
+		var callees []*ast.FuncDecl
+		switch f := call.Fun.(type) {
+		case *ast.Ident:
+			callees = src.funcs[f.Name]
+		case *ast.SelectorExpr:
+			callees = src.methods[f.Sel.Name]
+			if recv, ok := f.X.(*ast.Ident); ok && names[recv.Name] {
+				for _, m := range callees {
+					if m.Recv != nil && len(m.Recv.List[0].Names) > 0 {
+						src.follow(m, m.Recv.List[0].Names[0].Name, depth-1, seen, visit)
+					}
+				}
 			}
-			if sel, ok := lhs.(*ast.SelectorExpr); ok {
-				if id, ok := sel.X.(*ast.Ident); ok && id.Name == param {
-					out[sel.Sel.Name] = true
+		}
+		for i, arg := range call.Args {
+			if id, ok := arg.(*ast.Ident); !ok || !names[id.Name] {
+				continue
+			}
+			for _, callee := range callees {
+				if params := paramNames(callee); i < len(params) {
+					src.follow(callee, params[i], depth-1, seen, visit)
 				}
 			}
 		}
 		return true
 	})
+}
+
+// aliasesOf is name and every identifier body assigns it to: x := name,
+// x = name, var x = name, and the same position in a multiple assignment.
+func aliasesOf(body ast.Node, name string) map[string]bool {
+	names := map[string]bool{name: true}
+	for grew := true; grew; {
+		grew = false
+		ast.Inspect(body, func(n ast.Node) bool {
+			var lhs []ast.Expr
+			var rhs []ast.Expr
+			switch n := n.(type) {
+			case *ast.AssignStmt:
+				lhs, rhs = n.Lhs, n.Rhs
+			case *ast.ValueSpec:
+				for _, id := range n.Names {
+					lhs = append(lhs, id)
+				}
+				rhs = n.Values
+			default:
+				return true
+			}
+			if len(lhs) != len(rhs) {
+				return true
+			}
+			for i := range rhs {
+				r, ok1 := rhs[i].(*ast.Ident)
+				l, ok2 := lhs[i].(*ast.Ident)
+				if ok1 && ok2 && names[r.Name] && !names[l.Name] && l.Name != "_" {
+					names[l.Name] = true
+					grew = true
+				}
+			}
+			return true
+		})
+	}
+	return names
+}
+
+// assignmentTargets is every selector body assigns to or increments, with or
+// without an index: the X in X = …, X[k] = … and X++.
+func assignmentTargets(body ast.Node) map[*ast.SelectorExpr]bool {
+	out := map[*ast.SelectorExpr]bool{}
+	add := func(e ast.Expr) {
+		if ix, ok := e.(*ast.IndexExpr); ok {
+			e = ix.X
+		}
+		if sel, ok := e.(*ast.SelectorExpr); ok {
+			out[sel] = true
+		}
+	}
+	ast.Inspect(body, func(n ast.Node) bool {
+		switch n := n.(type) {
+		case *ast.AssignStmt:
+			for _, l := range n.Lhs {
+				add(l)
+			}
+		case *ast.IncDecStmt:
+			add(n.X)
+		}
+		return true
+	})
+	return out
+}
+
+// paramNames is fn's parameter names in order, one per parameter; an unnamed
+// parameter is "".
+func paramNames(fn *ast.FuncDecl) []string {
+	var out []string
+	for _, field := range fn.Type.Params.List {
+		if len(field.Names) == 0 {
+			out = append(out, "")
+			continue
+		}
+		for _, n := range field.Names {
+			out = append(out, n.Name)
+		}
+	}
 	return out
 }

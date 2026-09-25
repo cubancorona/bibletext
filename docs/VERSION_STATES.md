@@ -644,9 +644,21 @@ seam they do not cross is the one the defect is in.
 `TestTheLaunchDropsWhatTheRestoreRecords` pins it. It runs the restore for real,
 through `loadStateData`, to show both records are made, and reads the hand-off
 from the source, because it runs inside a goroutine a test cannot await: every
-field the restore writes on its state must be one the hand-off copies, and
-today exactly these two are not. It fails the day they are, or the day another
-is dropped.
+field the restore writes on its state must reach the live one, and today
+exactly these two do not. A record reaches the live state if the launch reads
+it off the restore's state anywhere — a copy, a multiple assignment, a clone,
+a range, an alias, or any function or method handed that state, however deep —
+or writes it on the live state, directly or through a function it hands the
+live state to, or one that function hands it on to. The pin fails for each of
+those shapes of fix, and the day another field is dropped. Its first version
+recognised only the one line the copy uses today, `state.X = loaded.X`, and
+stayed green under a fix written as a multiple assignment or a helper. What it
+still cannot see is a fix that rebuilds the records on the live state three
+or more calls deep in new code without reading the restore's: the search stops
+at two because three reach `applyLoadedVersion` — through the dev builds'
+automatic switch, and a few more through a link consumed at launch — which
+writes both records for reasons of its own. Whoever makes that fix strikes the
+pin by hand.
 
 Closing it makes live a smaller defect that the dropped preference hides
 today. A link whose translation fails to load, with nothing on disk to fall
