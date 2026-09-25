@@ -197,6 +197,16 @@ type styledLayoutParams struct {
 	SpaceW     float32 // width of the inter-word space at body size
 	TextSize   float32 // the body size the em-reckoned spaces are figured from
 
+	// SuppliedSpaceW is the width of the space between two of the
+	// translators' supplied words: the italic cut's, which is wider than the
+	// upright one. A ragged line draws a supplied phrase as one italic
+	// segment (mergeDrawRuns), its spaces included, so a phrase spaced at
+	// SpaceW was drawn wider than the room the layout kept for it by the
+	// difference at every space: its ink crowded the word after it, ran past
+	// the washes laid over it, and at a line's end ran past the measure.
+	// 0 takes SpaceW.
+	SuppliedSpaceW float32
+
 	// Indent is the reporter layout's first-line paragraph indent (0 = off).
 	// GEOMETRY ONLY, deliberately: the iOS HTML path has to smuggle its indent
 	// in as literal em+en space characters (the importer drops text-indent), so
@@ -272,6 +282,23 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 	}
 	// ONE tint answer for the whole chapter, asked per verse below (tint.go).
 	tints := chapterTint(state)
+	// The space between two runs on a line: the italic one between two
+	// supplied words, as a ragged line draws it inside a supplied phrase
+	// (SuppliedSpaceW), and the upright one everywhere else. It is the italic
+	// one between two supplied words that end up drawn apart as well — a
+	// line is known to be justified only once it is full, and a change of
+	// colour or tint splits a phrase into two segments — where nothing is
+	// drawn in the space, so its width only moves the next word.
+	supSpaceW := p.SuppliedSpaceW
+	if supSpaceW <= 0 {
+		supSpaceW = p.SpaceW
+	}
+	space := func(a, b styledRun) float32 {
+		if a.Supplied && b.Supplied {
+			return supSpaceW
+		}
+		return p.SpaceW
+	}
 	y := p.TopPad // the superscription's reserved advance (0 = none)
 
 	var opened []int // band indices this paragraph opened; reused per paragraph
@@ -442,12 +469,12 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 			for i, r := range unit {
 				unitW += r.W
 				if i > 0 {
-					unitW += p.SpaceW
+					unitW += space(unit[i-1], r)
 				}
 			}
 			add := unitW
 			if len(cur) > 0 {
-				add += p.SpaceW
+				add += space(cur[len(cur)-1], unit[0])
 			}
 			if len(cur) > 0 && curW+add > p.Width {
 				// Justify it before it goes (readingJustifyProse).
@@ -466,12 +493,12 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 			}
 			x := curW
 			if len(cur) > 0 {
-				x += p.SpaceW
+				x += space(cur[len(cur)-1], unit[0])
 			}
 			for i := range unit {
 				if i > 0 {
 					appendText(" ")
-					x += p.SpaceW
+					x += space(unit[i-1], unit[i])
 				}
 				unit[i].X = x
 				unit[i].Offset = offset

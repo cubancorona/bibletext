@@ -154,6 +154,72 @@ func TestSuppliedWordsAreHitTestedWhereTheirItalicIsDrawn(t *testing.T) {
 	}
 }
 
+// A supplied phrase is given the room on its line that its ink takes. A ragged
+// line draws the phrase as one italic segment, the spaces between its words set
+// in italic too, while the layout places it word by word; so every word of it
+// must stand where the segment draws that word, and the last must end where the
+// segment's ink ends. Otherwise the ink crowds the word after it, runs past the
+// washes, which are laid over the layout's words, and at a line's end runs past
+// the measure. Checked on justified pages too, whose paragraphs end on ragged,
+// merged lines.
+func TestASuppliedPhraseIsGivenTheRoomItsInkTakes(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	prev := readingJustifyOverride
+	t.Cleanup(func() { readingJustifyOverride = prev })
+	drv := fyne.CurrentApp().Driver()
+
+	for _, justify := range []bool{false, true} {
+		readingJustifyOverride = func() (bool, bool) { return justify, true }
+		for _, width := range []float32{420, 1100} {
+			p := newTestPane(t, suppliedState(t), width)
+			r := p.CreateRenderer().(*styledPaneRenderer)
+			// The control: the italic space is not the upright one, so a
+			// phrase spaced upright is told apart from its ink.
+			upright, _ := drv.RenderedTextSize(" ", p.textSize, fyne.TextStyle{}, p.font)
+			italic, _ := drv.RenderedTextSize(" ", p.textSize, fyne.TextStyle{}, p.faceFor(" ", true))
+			if math.Abs(float64(italic.Width-upright.Width)) < 0.5 {
+				t.Fatalf("the italic space is %v and the upright %v; the fixture cannot tell them apart", italic.Width, upright.Width)
+			}
+			merged := 0
+			for i, dr := range p.drawRuns {
+				if !dr.Supplied {
+					continue
+				}
+				ink := r.texts[i]
+				drawn := func(s string) float32 {
+					w, _ := drv.RenderedTextSize(s, ink.TextSize, ink.TextStyle, ink.FontSource)
+					return w.Width
+				}
+				runes := []rune(dr.Text)
+				left := ink.Position().X
+				for _, run := range p.lay.Lines[dr.Line].Runs {
+					k := run.Offset - dr.FirstOffset
+					if !run.Supplied || k < 0 || k >= len(runes) {
+						continue
+					}
+					end := k + len([]rune(run.Text))
+					if string(runes[k:end]) != run.Text {
+						t.Fatalf("justify %v width %v: supplied %q is not in its segment %q at %d", justify, width, run.Text, dr.Text, k)
+					}
+					if x, want := p.insetX()+run.X, left+drawn(string(runes[:k])); math.Abs(float64(x-want)) > 0.01 {
+						t.Errorf("justify %v width %v: supplied %q stands at %v in the layout and is drawn at %v", justify, width, run.Text, x, want)
+					}
+					if x, want := p.insetX()+run.X+run.W, left+drawn(string(runes[:end])); math.Abs(float64(x-want)) > 0.01 {
+						t.Errorf("justify %v width %v: supplied %q ends at %v in the layout and its ink at %v", justify, width, run.Text, x, want)
+					}
+				}
+				if strings.Contains(dr.Text, " ") {
+					merged++
+				}
+			}
+			if !justify && merged == 0 {
+				t.Fatalf("width %v: no ragged line drew a supplied phrase as one segment", width)
+			}
+		}
+	}
+}
+
 // A prefix is measured in the face its whole segment is drawn in, which is not
 // always the face the prefix alone would be given. A Hebrew word that opens on
 // a Latin mark is drawn in the Hebrew face from its first rune, the mark

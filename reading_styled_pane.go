@@ -368,6 +368,10 @@ func (p *styledReadingPane) relayout(width float32) {
 		BandH:      p.noteGeom.bandH(),
 		Bands:      pillReq,
 		Justify:    readingJustify(), // readingJustifyProse
+
+		// The italic space beside SpaceW's upright one: a ragged line draws
+		// it inside a supplied phrase, so the layout must keep room for it.
+		SuppliedSpaceW: p.measure(" ", runWord, true),
 	}, p.measure)
 	p.superGeom.place(p.insetX(), 0)
 	// Absolute rects, from the pane's own ruler and the band the layout just
