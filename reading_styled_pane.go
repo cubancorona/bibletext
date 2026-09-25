@@ -489,22 +489,46 @@ func (p *styledReadingPane) noteAnchorVerse() int {
 // fyne.MeasureText cannot), so wrap geometry, hit-testing and glyphs can
 // never drift apart.
 func (p *styledReadingPane) measure(text string, kind runKind, italic bool) float32 {
+	var face fyne.Resource
 	size := p.textSize
-	if kind == runVerseNum || kind == runVerseGap {
-		size *= styledNumRatio
-	}
-	face := p.faceFor(text, italic)
-	if kind == runVerseNum {
-		// Measured as it is DRAWN: ordinary figures in the bold cut.
-		text, face = styledNumeralText(text), p.numeralFace()
-	}
 	if kind == runHeading {
 		// Measured in the cut it is DRAWN in, or the heading wraps to a width
 		// it does not occupy.
 		face = p.headingFace()
+	} else {
+		// A run is measured as drawnAs sets it, so the width it wraps at is
+		// the width of its own ink. The spaces between runs are the layout's.
+		text, face, size = p.drawnAs(styledDrawRun{Text: text, Kind: kind, Supplied: italic}, text)
 	}
 	w, _ := fyne.CurrentApp().Driver().RenderedTextSize(text, size, fyne.TextStyle{}, face)
 	return w.Width
+}
+
+// drawnAs is how a drawn segment is set: the string its glyphs spell, the face
+// and the size. The renderer draws every segment with it and the selection
+// measures every segment with it (segWidth), so no segment is drawn one way and
+// hit-tested another. The layout measures each run with it, as though the run
+// were drawn alone. That is the face and size a run's ink has inside a merged
+// segment too, but the layout never measures a merged segment whole: the spaces
+// between its runs are the layout's to reserve (styledLayoutParams).
+//
+// text is the segment's whole text or a rune prefix of it, and the face is
+// decided from the WHOLE segment, because that is the face its ink is in: a
+// prefix is measured in the face the rest of its segment is drawn in.
+func (p *styledReadingPane) drawnAs(dr styledDrawRun, text string) (string, fyne.Resource, float32) {
+	face, size := p.faceFor(dr.Text, dr.Supplied), p.textSize
+	switch dr.Kind {
+	case runVerseNum:
+		// Ordinary figures in the bold cut, at the number's size.
+		return styledNumeralText(text), p.numeralFace(), p.textSize * styledNumRatio
+	case runVerseGap:
+		// An omitted verse's mark takes the number's size — it stands where a
+		// number would — in the regular cut, as the Apple stylesheet sets
+		// span.vg. Measured at it too: a mark drawn small and hit-tested at
+		// body size would put every click after it on the wrong rune.
+		size = p.textSize * styledNumRatio
+	}
+	return text, face, size
 }
 
 // headingFace is the bold cut a publisher's section heading is set in. Body
@@ -816,18 +840,10 @@ func (r *styledPaneRenderer) rebuild() {
 	}
 
 	for _, dr := range p.drawRuns {
-		t := canvas.NewText(dr.Text, r.runColor(dr))
-		t.FontSource = p.faceFor(dr.Text, dr.Supplied)
-		t.TextSize = p.textSize
-		if dr.Kind == runVerseNum || dr.Kind == runVerseGap {
-			// At the number's size. An omitted verse's mark takes the same
-			// size — it stands where a number would — in the regular cut, as
-			// the Apple stylesheet sets span.vg.
-			t.TextSize = p.textSize * styledNumRatio
-		}
-		if dr.Kind == runVerseNum {
-			t.Text, t.FontSource = styledNumeralText(dr.Text), p.numeralFace()
-		}
+		// Set as the selection measures it (drawnAs), or the two disagree.
+		s, face, size := p.drawnAs(dr, dr.Text)
+		t := canvas.NewText(s, r.runColor(dr))
+		t.FontSource, t.TextSize = face, size
 		r.texts = append(r.texts, t)
 		r.objects = append(r.objects, t)
 	}

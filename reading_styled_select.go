@@ -53,26 +53,16 @@ func (p *styledReadingPane) lineAtY(y float32) int {
 	return len(lines) - 1
 }
 
-// segTextSize returns the rendered size for a segment's kind.
-func (p *styledReadingPane) segTextSize(kind runKind) float32 {
-	if kind == runVerseNum || kind == runVerseGap {
-		// Both are drawn at the small size, so both must be MEASURED at it —
-		// a mark drawn small and hit-tested at body size would put every
-		// click after it on the wrong rune.
-		return p.textSize * styledNumRatio
-	}
-	return p.textSize
-}
-
-// segWidth measures segment text with the pane's serif source — the SAME
-// ruler the renderer draws with, so hit-tests always agree with pixels.
-func (p *styledReadingPane) segWidth(text string, kind runKind) float32 {
-	face := p.faceFor(text, false)
-	if kind == runVerseNum {
-		// A number is drawn as plain figures in the bold cut; hit-test it so.
-		text, face = styledNumeralText(text), p.numeralFace()
-	}
-	w, _ := fyne.CurrentApp().Driver().RenderedTextSize(text, p.segTextSize(kind), fyne.TextStyle{}, face)
+// segWidth measures text — a drawn segment's whole text, or a rune prefix of
+// it — set exactly as the renderer sets that segment (drawnAs), so hit-tests
+// always agree with pixels. It takes the segment rather than its kind because
+// the kind does not say how a segment is set: the translators' supplied words
+// are drawn in the italic cut, and measuring them upright put the selection's
+// end several units past a supplied word's ink and a pointer inside the word
+// on the wrong rune.
+func (p *styledReadingPane) segWidth(seg styledDrawRun, text string) float32 {
+	s, face, size := p.drawnAs(seg, text)
+	w, _ := fyne.CurrentApp().Driver().RenderedTextSize(s, size, fyne.TextStyle{}, face)
 	return w.Width
 }
 
@@ -95,7 +85,7 @@ func (p *styledReadingPane) offsetAtPos(pos fyne.Position) int {
 	prevEnd, prevRight := -1, float32(0)
 	for _, seg := range segs {
 		segRunes := []rune(seg.Text)
-		w := p.segWidth(seg.Text, seg.Kind)
+		w := p.segWidth(seg, seg.Text)
 		if x < seg.X {
 			if ln.Justified && prevEnd >= 0 && x-prevRight < seg.X-x {
 				return prevEnd
@@ -114,7 +104,7 @@ func (p *styledReadingPane) offsetAtPos(pos fyne.Position) int {
 			lo, hi := 0, len(segRunes)
 			for lo < hi {
 				mid := (lo + hi + 1) / 2
-				pw := p.segWidth(string(segRunes[:mid]), seg.Kind)
+				pw := p.segWidth(seg, string(segRunes[:mid]))
 				if seg.X+pw <= x {
 					lo = mid
 				} else {
@@ -152,12 +142,12 @@ func (p *styledReadingPane) xForOffset(li, offset int) float32 {
 			return p.insetX() + seg.X
 		}
 		if offset <= end {
-			pw := p.segWidth(string(segRunes[:offset-seg.FirstOffset]), seg.Kind)
+			pw := p.segWidth(seg, string(segRunes[:offset-seg.FirstOffset]))
 			return p.insetX() + seg.X + pw
 		}
 	}
 	last := segs[len(segs)-1]
-	w := p.segWidth(last.Text, last.Kind)
+	w := p.segWidth(last, last.Text)
 	return p.insetX() + last.X + w
 }
 

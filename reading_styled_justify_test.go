@@ -218,7 +218,7 @@ func TestTheCanvasPaneJustifiesAndEverythingFollows(t *testing.T) {
 					continue
 				}
 				n := len([]rune(r.Text))
-				right := p.insetX() + r.X + p.segWidth(r.Text, r.Kind)
+				right := p.insetX() + r.X + p.segWidth(seg, r.Text)
 				if x := p.xForOffset(li, r.Offset); math.Abs(float64(x-(p.insetX()+r.X))) > 0.01 {
 					t.Errorf("width %v line %d: %q starts at %v for the selection and %v on the page", width, li, r.Text, x, p.insetX()+r.X)
 				}
