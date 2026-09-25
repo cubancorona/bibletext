@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Hold the public pages to what the repository actually ships.
 
-Three kinds of drift have each reached a published page, and none of them is
+Four kinds of drift have each reached a published page, and none of them is
 the sort a reader of the diff notices, because in every case the stale text
 was true when it was written:
 
@@ -15,6 +15,10 @@ was true when it was written:
     first build failed on audio while CI stayed green.
   * prose counted something the tree can count itself. The README said four
     programs live under cmd/ when there were six.
+  * an instruction outlived the system it described. The release notes, the
+    download page, the README and the Mac App Store notes all told a Mac
+    reader to right-click the unsigned download and choose Open, an override
+    macOS 15 removed.
 
 Each rule below is mechanical: it compares a public page against the thing it
 claims to describe. Nothing here judges wording, and none of it can tell that
@@ -45,6 +49,27 @@ DOWNLOAD_PAGE = "docs/index.html"
 READ_ME = "README.md"
 CONTRIBUTING = "CONTRIBUTING.md"
 CI_WORKFLOW = ".github/workflows/ci.yml"
+PRODUCT_CONFIG = "config/product.json"
+MAC_STORE_GUIDE = "docs/MAC_APP_STORE.md"
+
+# The four places that tell a Mac reader how to open the unsigned direct
+# download the first time. The release notes are a printf in the workflow, so
+# no copy can include another, and the wording is free to differ; the routes
+# are not.
+MAC_OPEN_SURFACES = (RELEASE_WORKFLOW, DOWNLOAD_PAGE, READ_ME, MAC_STORE_GUIDE)
+
+# macOS asks before it first opens an app it cannot verify, and has had two
+# ways past the question. The Open Anyway button in the security settings
+# works on every macOS the app supports, and is the only way from macOS 15,
+# which removed the Finder's Control-click > Open override. The Finder route is
+# owed while the floor is below 15 because it reads the same on 12, 13 and 14,
+# where the settings route does not: macOS 12 keeps the button in System
+# Preferences under Security & Privacy, not in System Settings under Privacy &
+# Security, where the pages send a reader on 15 and later.
+MAC_FLOOR_KEY = "macMinimumOSVersion"
+SETTINGS_ROUTE = "Open Anyway"
+FINDER_ROUTE = "Control-click"
+FINDER_ROUTE_GONE = 15
 
 # The three places the Linux build dependencies are written out for a reader
 # building this project. They are prose in two of them and a workflow step in
@@ -194,6 +219,16 @@ def apt_packages(text: str) -> set[str]:
     return packages
 
 
+def mac_floor(config: str) -> int | None:
+    """The major version of the macOS floor, or None when it cannot be read."""
+    try:
+        declared = json.loads(config).get(MAC_FLOOR_KEY, "")
+    except (json.JSONDecodeError, AttributeError):
+        return None
+    match = re.fullmatch(r"(\d+)(?:\.\d+)*", str(declared))
+    return int(match.group(1)) if match else None
+
+
 def readme_cmd_tree(text: str) -> tuple[set[str], int | None, bool]:
     """The programs the README's tree lists under cmd/, and the count it states.
 
@@ -325,6 +360,34 @@ def rule_failures(read, list_cmd) -> list[str]:
                 "a contributor following the odd one out gets a build this repository never tests"
             )
 
+    # 2b. The first launch of the unsigned Mac download, explained four times,
+    # names the route every supported macOS takes.
+    config = text(PRODUCT_CONFIG)
+    floor = mac_floor(config) if config is not None else None
+    if config is not None and floor is None:
+        failures.append(
+            f"{PRODUCT_CONFIG}: {MAC_FLOOR_KEY} is missing or unreadable, so this checker "
+            f"cannot tell which macOS versions the first-launch steps must cover"
+        )
+    guide = text(MAC_STORE_GUIDE)
+    bodies = {
+        RELEASE_WORKFLOW: workflow, DOWNLOAD_PAGE: page, READ_ME: readme, MAC_STORE_GUIDE: guide,
+    }
+    for surface in MAC_OPEN_SURFACES:
+        body = bodies[surface]
+        if body is None:
+            continue
+        if SETTINGS_ROUTE not in body:
+            failures.append(
+                f"{surface}: never names {SETTINGS_ROUTE}; from macOS 15, Privacy & Security's "
+                f"{SETTINGS_ROUTE} is the only way to open the unsigned download"
+            )
+        if floor is not None and floor < FINDER_ROUTE_GONE and FINDER_ROUTE not in body:
+            failures.append(
+                f"{surface}: the app runs from macOS {floor}, and nothing tells a reader on "
+                f"{floor} to {FINDER_ROUTE.lower()} the app in the Finder and choose Open"
+            )
+
     # 3. Prose that counts the tree is checked against the tree.
     if readme is not None:
         listed, stated, found = readme_cmd_tree(readme)
@@ -378,10 +441,13 @@ def self_test() -> list[str]:
     """Every rule and every blindness guard, each violated exactly once."""
     problems: list[str] = []
     deps = b"sudo apt-get install gcc libgl1-mesa-dev libasound2-dev\n"
+    routes = b"From macOS 15, click Open Anyway. On 12 to 14, Control-click it and choose Open.\n"
+    settings_only = b"Click Open Anyway in Privacy & Security.\n"
+    finder_only = b"Control-click the app and choose Open.\n"
     clean = {
         RELEASE_WORKFLOW: (
             b'        run: gh release upload "$TAG" BibleText-Linux-amd64.tar.xz '
-            b"BibleText-x86_64.AppImage BibleText-x86_64.AppImage.zsync --clobber\n"
+            b"BibleText-x86_64.AppImage BibleText-x86_64.AppImage.zsync --clobber\n" + routes
         ),
         STORE_IDENTITY: b'{"storeId": "TESTID", "storeUrl": "https://apps.microsoft.com/detail/TESTID"}\n',
         DOWNLOAD_PAGE: (
@@ -389,17 +455,19 @@ def self_test() -> list[str]:
             b'BibleText-Linux-amd64.tar.xz">Linux</a>\n'
             b'<a href="https://example.invalid/releases/latest/download/'
             b'BibleText-x86_64.AppImage">AppImage</a>\n'
-            b'<a href="https://apps.microsoft.com/detail/TESTID">Store</a>\n'
+            b'<a href="https://apps.microsoft.com/detail/TESTID">Store</a>\n' + routes
         ),
         READ_ME: (
             b"```\n"
             b"\xe2\x94\x94\xe2\x94\x80\xe2\x94\x80 cmd/   # two programs\n"
             b"    \xe2\x94\x9c\xe2\x94\x80\xe2\x94\x80 desktop/\n"
             b"    \xe2\x94\x94\xe2\x94\x80\xe2\x94\x80 mobile/\n"
-            b"```\n" + deps
+            b"```\n" + deps + routes
         ),
         CONTRIBUTING: deps,
         CI_WORKFLOW: deps,
+        PRODUCT_CONFIG: b'{"macMinimumOSVersion": "12.0"}\n',
+        MAC_STORE_GUIDE: b"| Signing | none (" + routes.strip() + b") |\n",
     }
     pair = lambda: {"desktop", "mobile"}  # noqa: E731 - a stub, not a policy
 
@@ -415,7 +483,7 @@ def self_test() -> list[str]:
         b'        run: |\n          gh release upload "$TAG" \\\n'
         b"            BibleText-Linux-amd64.tar.xz \\\n"
         b"            BibleText-x86_64.AppImage \\\n"
-        b"            BibleText-x86_64.AppImage.zsync --clobber\n"
+        b"            BibleText-x86_64.AppImage.zsync --clobber\n" + routes
     )
     if wrapped_failures := run(wrapped):
         problems.append(f"a wrapped upload step is misread: {wrapped_failures}")
@@ -441,16 +509,26 @@ def self_test() -> list[str]:
         b"          - goarch: arm64\n"
         b"    steps:\n"
         b'      - run: gh release upload "$TAG" BibleText-Windows-${{ matrix.goarch }}.zip --clobber\n'
+        + routes
     )
     matrixed[DOWNLOAD_PAGE] = (
         b'<a href="https://example.invalid/releases/latest/download/'
         b'BibleText-Windows-amd64.zip">Windows</a>\n'
         b'<a href="https://example.invalid/releases/latest/download/'
         b'BibleText-Windows-arm64.zip">Windows ARM</a>\n'
-        b'<a href="https://apps.microsoft.com/detail/TESTID">Store</a>\n'
+        b'<a href="https://apps.microsoft.com/detail/TESTID">Store</a>\n' + routes
     )
     if matrix_failures := run(matrixed):
         problems.append(f"a matrixed upload step is misread: {matrix_failures}")
+
+    # Once the floor reaches macOS 15 no supported reader has the Finder route,
+    # so the rule must stop owing it rather than demand it for ever.
+    risen = dict(clean)
+    risen[PRODUCT_CONFIG] = b'{"macMinimumOSVersion": "15.0"}\n'
+    for rel in MAC_OPEN_SURFACES:
+        risen[rel] = clean[rel].replace(routes.strip(), settings_only.strip())
+    if risen_failures := run(risen):
+        problems.append(f"a macOS 15 floor still owes the Finder route: {risen_failures}")
 
     violations: list[tuple[str, dict, object]] = []
 
@@ -480,8 +558,8 @@ def self_test() -> list[str]:
     violations.append(("a dead download link", dead, pair))
 
     blind_upload = dict(clean)
-    blind_upload[RELEASE_WORKFLOW] = b"        run: echo nothing is uploaded here\n"
-    blind_upload[DOWNLOAD_PAGE] = b"<p>no downloads yet</p>\n"
+    blind_upload[RELEASE_WORKFLOW] = b"        run: echo nothing is uploaded here\n" + routes
+    blind_upload[DOWNLOAD_PAGE] = b"<p>no downloads yet</p>\n" + routes
     blind_upload[READ_ME] = clean[READ_ME]
     violations.append(("a release that uploads nothing", blind_upload, pair))
 
@@ -551,6 +629,23 @@ def self_test() -> list[str]:
     unfenced = dict(clean)
     unfenced[READ_ME] = clean[READ_ME].replace(b"```\n", b"", 1)
     violations.append(("a cmd/ line outside any fenced block", unfenced, pair))
+
+    # Each copy is held on its own: the old instruction in any one of them
+    # strands a reader on macOS 15, and the settings route alone sends a reader
+    # on macOS 12 to a System Settings pane that release does not have. The four
+    # are named here rather than read from MAC_OPEN_SURFACES, so a copy dropped
+    # from that tuple is a copy this self-test still expects to be held.
+    for rel in (RELEASE_WORKFLOW, DOWNLOAD_PAGE, READ_ME, MAC_STORE_GUIDE):
+        stale = dict(clean)
+        stale[rel] = clean[rel].replace(routes.strip(), finder_only.strip())
+        violations.append((f"only the Finder route in {rel}", stale, pair))
+        settings_alone = dict(clean)
+        settings_alone[rel] = clean[rel].replace(routes.strip(), settings_only.strip())
+        violations.append((f"no Finder route in {rel} on a macOS 12 floor", settings_alone, pair))
+
+    blind_floor = dict(clean)
+    blind_floor[PRODUCT_CONFIG] = b'{"iosMinimumOSVersion": "15.0"}\n'
+    violations.append(("an unreadable macOS floor", blind_floor, pair))
 
     absent = dict(clean)
     del absent[CONTRIBUTING]

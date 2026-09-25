@@ -68,7 +68,7 @@ NewWithID rather than by the bundle id.
 
 | | Direct download | Mac App Store |
 | --- | --- | --- |
-| Signing | none (readers right-click → Open) | 3rd Party Mac Developer Application + Installer |
+| Signing | none (readers approve the first launch: Open Anyway in Privacy & Security on macOS 15 and later, Control-click → Open on 12 to 14) | 3rd Party Mac Developer Application + Installer |
 | Sandbox | no | **mandatory** |
 | Architecture | one zip each for Intel and Apple Silicon | one universal app |
 | Container | reads `~/Library/Preferences`, `~/Library/Caches` | its own container, redirected |

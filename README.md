@@ -48,8 +48,12 @@ platforms in one place, or directly:
 - **macOS / Windows / Linux** — grab the latest build from
   [Releases](https://github.com/cubancorona/bibletext/releases/latest). On a Mac the App
   Store edition, on Windows the Microsoft Store edition and on Linux the snap are the
-  easier routes: signed and updated for you. These builds are unsigned, so on macOS
-  right-click → **Open** the first time. Desktop artifacts are built by
+  easier routes: signed and updated for you. These builds are unsigned, so macOS
+  blocks the first launch until you allow it. On macOS 15 and later, open the app and
+  dismiss the warning, then, within the hour, go to System Settings → Privacy &
+  Security, scroll to Security, click **Open Anyway** and confirm with your login
+  password. On macOS 12 to 14, Control-click the app in the Finder, choose **Open**,
+  then click **Open** in the warning. Desktop artifacts are built by
   [`release.yml`](.github/workflows/release.yml) on every `v*` tag.
 - **Linux, as a single file** —
   [BibleText-x86_64.AppImage](https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-x86_64.AppImage)

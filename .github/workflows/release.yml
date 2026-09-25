@@ -30,7 +30,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          NOTES="$(printf 'Desktop builds for macOS, Windows, and Linux. iOS ships via the App Store: https://apps.apple.com/app/id6784567351\n\nThe Android APK is attached manually after the desktop assets land.\n\nmacOS note: the apps are unsigned - on first launch, right-click the app and choose Open.\n\nLinux note: the executable is now called bibletext, not desktop. If you installed an earlier tarball with make install, the old binary is left behind - remove it with sudo rm -f /usr/local/bin/desktop /usr/bin/desktop (or rm -f ~/.local/bin/desktop for a user install).')"
+          NOTES="$(printf 'Desktop builds for macOS, Windows, and Linux. iOS ships via the App Store: https://apps.apple.com/app/id6784567351\n\nThe Android APK is attached manually after the desktop assets land.\n\nmacOS note: the app is unsigned, so macOS blocks its first launch until you allow it. On macOS 15 and later, open the app and dismiss the warning, then, within the hour, go to System Settings > Privacy & Security, scroll to Security, click Open Anyway and confirm with your login password. On macOS 12 to 14, Control-click the app in the Finder, choose Open, then click Open in the warning.\n\nLinux note: the executable is now called bibletext, not desktop. If you installed an earlier tarball with make install, the old binary is left behind - remove it with sudo rm -f /usr/local/bin/desktop /usr/bin/desktop (or rm -f ~/.local/bin/desktop for a user install).')"
+          # The macOS note gives two routes because macOS 15 removed the
+          # Finder's Control-click > Open override for an app it cannot
+          # verify: from 15 the only way is Open Anyway in Privacy & Security,
+          # offered for about an hour after the blocked attempt. The app runs
+          # from macOS 12 (config/product.json), so the older route stays until
+          # that floor reaches 15. README.md, docs/index.html and
+          # docs/MAC_APP_STORE.md say the same; scripts/check-public-surfaces.py
+          # holds all four to it.
           # The Linux note above is for the 19 September 2026 executable rename
           # (cmd/desktop became cmd/bibletext, so the tarball stopped installing
           # a generic /usr/bin/desktop). It tells a reader who installed an
