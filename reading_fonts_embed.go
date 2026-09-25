@@ -59,7 +59,26 @@ var readingFontHebrew []byte
 // loadReadingFonts returns the family that sets Latin and Greek. Never nil in a
 // real build: the bytes are compiled in, so there is no file to be missing and
 // no platform that can answer differently.
+//
+// It is resolved once, and every caller is handed the same four resources. The
+// toolkit keeps a parsed face for each font resource it measures or draws with,
+// keyed on the resource itself and kept until the app's settings next change, so
+// a cut built afresh for each call was parsed again and kept again, about 1.7 MB
+// a time. The Windows and Linux pane asks for the bold cut for every verse
+// number and heading and the italic for every supplied word, and building it
+// for seven verses carrying eight supplied phrases kept 59 MB of copies of those
+// two faces.
 func loadReadingFonts() *bookFonts {
+	readingFontsOnce.Do(func() { readingFontsCached = buildReadingFonts() })
+	return readingFontsCached
+}
+
+var (
+	readingFontsOnce   sync.Once
+	readingFontsCached *bookFonts
+)
+
+func buildReadingFonts() *bookFonts {
 	res := func(name string, b []byte) fyne.Resource {
 		if len(b) == 0 {
 			return nil
