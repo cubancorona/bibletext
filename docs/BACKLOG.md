@@ -7,6 +7,163 @@ the date — and says what shipped and why. Closed entries earn their place: thi
 is the file to read before re-investigating a defect that may already be fixed,
 and a fix's reasoning is the expensive half to reconstruct.
 
+## The open narration card covers the phone header's controls — kept as a pop-up for now
+
+On a phone the open narration card lies over the next-chapter arrow and the
+full-screen button, and with a long heading or on the narrowest phones over the
+copy icon and the end of the heading too. The phone header
+(`chapter_header_mobile.go`) centres the audio control on the gap between the
+chapter block and the full-screen button, in a cell reserved at the open card's
+size so opening it never moves anything, and on a phone that gap is narrower
+than the card's 161 units. On a 375-wide canvas (an iPhone SE) the card covers
+the copy icon, the next arrow and the full-screen button in Deuteronomy 34; at
+402 it still covers the full-screen button in five of the six books the tests
+lay out; and in Song of Solomon it covers something up to a canvas 502 wide.
+The desktop toolbar's card does the same to the chapter block on a reading
+pane narrower than about 570 (Song of Solomon again), and so does the Android
+fallback pane's, which uses that toolbar on a phone. A small control whose
+glyph the card touches is hidden while it is open (below): on the phone header
+that is the full-screen button in the last chapter of 69 of the 73 books on a
+402-wide canvas, and something in Song of Solomon up to a canvas 487 wide; on
+the toolbar, something in Song of Solomon up to a canvas 557 wide.
+
+It is kept, for now, as a pop-up: the card's ✕ collapses it back to the speaker
+while narration carries on, and what it covered is back. Since 26 September 2026
+it covers properly. Until then the covered arrow and full-screen glyph were
+drawn over the card's skip button and corner, and a tap on the card's
+background fell through to them: the header's Border drew its centre first, and
+the card's frame is a plain rectangle no driver hands a tap to. Now the phone
+row draws the audio control above its neighbours while the card is open (and
+beneath them, as before, while it is the speaker, whose box on the narrow
+phones reaches under the copy icon and the full-screen button), and the card
+swallows every tap and touch across its rectangle (`tapShield`,
+`audio_button.go`).
+
+Drawn above them, the card still covered a control only where it lay over it,
+and its edge seldom falls between two controls: on a 402-wide iPhone in
+Matthew 27 the → arrow's tail showed to the left of the card and a bracket of
+the full-screen glyph to its right, and on a 360-wide Android phone in Psalm 23
+half the copy icon showed to its left. A fragment of an icon beside the card
+is not covered. So each small control whose glyph the card touches — the copy
+icon, the chapter arrows, and on the phone header the full-screen button — is
+now hidden altogether while the card is open: not drawn, not tappable anywhere
+on its box, and passed over by Tab (it gives up the focus if it held it). It
+is back when the card closes. "Touches" is decided by the glyph, not the tap
+box, which is about twice as wide, so a control whose box the card only
+grazes stays whole beside it — save for the full-screen button's focus
+highlight, which fills its whole box while it has the keyboard focus: a card
+over the highlight hides the button too, until the card closes. The heading
+and the chapter line name the chapter and are only covered. Each hideable
+control sits in a slot that keeps its size shown or hidden, so hiding one
+moves nothing, and what the card hides is worked out again when it opens or
+closes, after every layout of the header row, a rotation's included, and when
+the full-screen button gains or loses the focus (`cardCover`,
+`audio_button.go`; `chapter_header_hide_test.go` holds both headers to it for
+the first and last chapters of every book, at every tenth width from 300 to
+1020, at 1024, and at 375, 393 and 402). The phone row lifts the card by
+moving the audio control between two fixed places in the row, one drawn
+beneath its neighbours and one above them, rather than by reordering the row:
+a painting canvas lays a row out again on the next frame when its parts change
+order, and the test canvas never showed it.
+
+Covering made one more change necessary. Centred on the gap, the open card ran
+past the header's right edge wherever a long heading or a narrow phone put the
+gap far enough right: in every book on a 320-wide canvas, and in Song of
+Solomon up to a 430-wide one. Its ✕ went with it, partly or wholly off the
+screen in 68 of the 73 books at 320, in 12 at 360, and in Song of Solomon up to
+402 — and a card that covers the full-screen button and cannot be closed traps
+the reader. So the open card now stops at the header's right edge
+(`phoneAudioCellLayout`). That moves it left by up to 56 units at 320, 36 at
+360 and 15 at 402, and not at all from 460, nor wherever it already fitted; the
+closed speaker, and everything but the open card, is exactly where it was.
+`chapter_header_cover_test.go` holds both headers to all of this, including
+that every control of the open card, the ✕ first, is on the canvas.
+
+**Tried and not kept:** a header that places its own parts
+(`chapterHeaderLayout`) and, where the card does not fit beside the chapter
+block, gives the open card a row of its own under the header. The header grew
+by that row each time the card opened, so the reading text was pushed down on
+every open and pulled back on every close. Its measurements, on canvases 320
+to 1280 wide:
+
+- The card fits beside the chapter block in every book from a canvas 520 wide;
+  below that it needs the row of its own in some book.
+- The full-screen button and the speaker fit beside the whole chapter block in
+  every book from 399 wide. Where they did not, they moved into a column at the
+  right edge (the button beside the title row, the speaker beside the chapter
+  row): twelve books at 360 (Deuteronomy, 1 and 2 Chronicles, Ecclesiastes,
+  Song of Solomon, Lamentations, 1 and 2 Corinthians, 1 and 2 Thessalonians,
+  1 and 2 Maccabees; 192 chapters), three at 375, one at 390, and all but five
+  books at 320, nine of them on a row of their own.
+- The place had to be chosen by the widest rows the book's chapters make: by
+  each chapter's own rows, a 360-wide canvas moved the controls between
+  1 Chronicles 20, 21 and 22.
+- It also moved the ✕ 3 units inside the card's corner, so its tighter corner
+  followed the card's rounder one instead of standing out past it.
+
+That work is on the branch `fu/narration-card`, commits 9c744ea25 (the
+placement, its fit tests and the measurements above) and b23e5283f (the Android
+fallback pane given the phone header). The branch was kept locally and not
+pushed, so those hashes resolve only in the repository that holds it; what
+mattered from them is written out here.
+
+**The direction to investigate first:** the narration controls as an
+additional horizontal bar, used depending on the layout. Where the layout has
+room for the card beside the chapter block (a tablet, the desktop, a wide
+window) the card can stay where it is; where it has not (a phone in portrait),
+the controls would take a full-width bar of their own instead of a card over
+the header. What the investigation has to settle: where the bar sits (under the
+header, above the tab bar, or over the foot of the reading text), when it is
+shown (while the reader has it open, or for as long as narration plays), how it
+is dismissed, whether it carries the source chip as well as the transport, and
+what it does to the reading text and the native text overlay's frame. The row
+of its own tried above is the nearest thing built so far, and differs in being
+a card, flush right under the header, that pushed the text down.
+
+**What a better placement has to answer or satisfy:**
+
+- Whether opening or closing the controls may move the reading text. The row
+  of its own above moved it on every open and every close and was not kept; a
+  bar placed elsewhere, or laid over the text, might not need to. Today's card
+  keeps the header's height, so the native text overlay is not pushed again.
+- Nothing the reader needs is hidden while the card is open, or, if something
+  is, it is unreachable while it is and back the moment the ✕ is tapped, and
+  no control shows in part beside the card (today's rule, which the tests
+  keep: the card hides each small control whose glyph it touches, and covers
+  only the part of the heading and the chapter line it lies over).
+- The whole card, ✕ included, is on the screen, at every width and in every
+  book (today's header moves the card in from its right edge for this).
+- It holds from a 320-wide canvas, with the longest headings and chapter lines
+  (Deuteronomy 34, Song of Solomon 8, 2 Thessalonians 3), up to a tablet, on
+  iOS, Android and the Android fallback pane alike.
+- The transport row keeps its 44-unit targets and the source chip keeps its
+  label; the ✕ stays in the card's corner.
+- The closed speaker gets a tap area of its own. Today, at 320, its box
+  reaches under the copy icon and the full-screen button, which keep those
+  taps: in Song of Solomon the button lies over 31 of the speaker's 40.
+- Keyboard focus reaches nothing the card hides. Today's header keeps this:
+  Tab passes over the controls the card hides, the full-screen button gives
+  up the focus when the card opens over it, and a hidden button takes no key,
+  even where an overlay that was up when it was hidden kept the page's focus
+  for it. Where the card overlaps only the edge of the button's box, the
+  button's glyph is whole beside the card and Tab reaches it; but its focus
+  highlight fills that box, so the moment Tab lands on it there it is hidden
+  as well, and stays hidden until the card closes. A reader tabbing round the
+  header sees the button go.
+- What a double tap on the ✕ does. The ✕ closes the card on the first tap,
+  which puts back what the card was hiding, so the second tap lands there: on
+  most phones the full-screen button, which the reader is then taken into
+  (in 45 of 48 layouts measured: eight chapters, the longest headings among
+  them, at six phone widths from 320 to 402). A ✕ that waited to see whether
+  a second tap followed (a `fyne.DoubleTappable` ✕, closing on either) would
+  take both taps, at the cost of the double-tap interval on every close; a
+  shield left over the card's place for that interval would take them too,
+  but leaves the controls it covered unreachable for that time after the
+  card has closed. Not yet decided.
+- The place is the same in every chapter of a book, so the controls do not jump
+  as the reader moves between chapters (the branch chose it by the widest
+  rows the book's chapters make for this reason).
+
 ## The reading page: what is left after 24 September 2026
 
 Every surface takes its page from `reading_page.go` since 24 September 2026
