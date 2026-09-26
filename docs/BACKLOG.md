@@ -12,10 +12,14 @@ and a fix's reasoning is the expensive half to reconstruct.
 The page had store buttons by platform at the top and a separate "Desktop —
 direct downloads" half with its own sections, three button styles, and the
 macOS first-launch steps in a note above three platforms' downloads. It now
-has two sections with one vocabulary each. "Get it from a store": four
-matching badges drawn in text in the official badges' look (App Store; Google
-Play, greyed out until the listing is live; Microsoft; Snap Store), each
-captioned with its devices. "Or download a file":
+has two sections with one vocabulary each. "Get it from a store": the
+stores' own badges (App Store, Microsoft Store, Snap Store), the licensed
+form each store publishes for this, kept under `docs/badges/` so the page
+loads nothing from elsewhere, each captioned with its devices, with a dashed
+"Google Play" placeholder until the listing is live (the store's rules cover
+the badge only as a link to a live listing; `docs/badges/google-play.png` is
+ready for then). "Download a file instead", a card that opens on a tap, since
+most readers want a store edition:
 one row per file (Mac .zip, Android .apk, Windows .zip, Linux .tar.xz, Linux
 AppImage) with a button per processor on the right, every row carrying the
 same two lines, what it covers or how it runs and whether it opens shared
@@ -24,9 +28,11 @@ that needs no scripting, and a closing note says what shared links are and
 what ARM means. The masthead, the feature list, the
 open-source paragraph and the footer are unchanged.
 
-When Google Play is live, the greyed badge becomes a link like the other three
-(the HTML comment above it says so) and the Android .apk row keeps its place
-among the files. `scripts/check-public-surfaces.py` still holds every release asset,
+When Google Play is live, the placeholder becomes a link showing the Play
+badge, like the other three (the HTML comment above it says so), and the
+Android .apk row keeps its place among the files. `scripts/publish-site.sh`
+copies `docs/badges/` into the site and refuses a tree missing a badge the
+page shows. `scripts/check-public-surfaces.py` still holds every release asset,
 the Microsoft Store link and the macOS steps to the page.
 
 ## Reword the Linux note on the download page — DONE 26 September 2026

@@ -176,6 +176,11 @@ cp docs/windows-app-web-link "$OUT/windows-app-web-link"
 cp docs/favicon.ico "$OUT/favicon.ico"
 cp docs/apple-touch-icon.png "$OUT/apple-touch-icon.png"
 
+# The store badges the download page shows are the stores' own artwork, kept
+# under docs/badges so the page loads nothing from elsewhere.
+rm -rf "$OUT/badges"
+cp -R docs/badges "$OUT/badges"
+
 # --- Final gate: never push a tree that would break the domain or the pages --
 [[ "$(cat "$OUT/CNAME")" == "$DOMAIN" ]] || fail "CNAME is not $DOMAIN"
 [[ -f "$OUT/.nojekyll" ]] || fail ".nojekyll missing"
@@ -191,6 +196,11 @@ done
 [[ "$(head -c4 "$OUT/favicon.ico" | od -An -tx1 | tr -d ' \n')" == "00000100" ]] ||
   fail "favicon.ico is not an ICO file"
 grep -q 'rel="icon"' "$OUT/index.html" || fail "index.html does not link the favicon"
+# Every badge the download page shows must be in the tree, or the store
+# links lose their artwork on the live site.
+for badge in $(grep -o 'src="badges/[^"]*"' "$OUT/index.html" | sed 's/src="\(.*\)"/\1/'); do
+  [[ -s "$OUT/$badge" ]] || fail "index.html shows $badge, which is missing from the tree about to be published"
+done
 support_email=$(python3 -c 'import json; print(json.load(open("config/product.json"))["supportEmail"], end="")')
 for page in privacy.html support.html; do
   grep -Fq "$support_email" "$OUT/$page" || fail "$page does not contain the configured support address"
