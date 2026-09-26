@@ -126,7 +126,7 @@
   </ul>
 
   <h2>Get it from a store</h2>
-  <p class="lead">Signed, they update themselves, and they open shared links.</p>
+  <p class="lead">Store editions update themselves and open shared links.</p>
   <div class="badges">
     <div>
       <a class="badge" href="https://apps.apple.com/app/id6784567351"
@@ -151,25 +151,26 @@
       <a class="badge" href="https://snapcraft.io/bibletext"
          aria-label="Get it from the Snap Store, for Linux">
         <span class="small">Get it from the</span><span class="big">Snap Store</span></a>
-      <span class="cap">Linux &mdash; Intel, AMD and ARM 64&#8209;bit<br>or <code>snap install bibletext</code></span>
+      <span class="cap">Linux</span>
     </div>
   </div>
 
   <div class="files">
     <h2>Or download a file</h2>
-    <p class="lead">These you update yourself. The desktop files are unsigned.</p>
+    <p class="lead">These you update yourself. The desktop files are unsigned, so your computer may
+    warn you the first time.</p>
     <div class="group">
       <div class="row">
         <div class="what">Mac <span class="fmt">(.zip)</span>
-          <span class="sub">One universal app &mdash; Apple&nbsp;Silicon and Intel</span>
+          <span class="sub">One app for Apple&nbsp;Silicon and Intel</span>
           <span class="sub">Doesn&rsquo;t open shared links</span></div>
         <div class="get">
           <a href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-macOS.zip"
              aria-label="Download the Mac .zip">Download</a>
         </div>
         <details class="steps">
-          <summary>The first time it opens</summary>
-          <p>macOS blocks the .zip&rsquo;s first launch until you allow it. On macOS&nbsp;15 and
+          <summary>Opening it the first time</summary>
+          <p>macOS blocks the app&rsquo;s first launch until you allow it. On macOS&nbsp;15 and
           later, open the app and dismiss the warning, then, within the hour, go to
           System&nbsp;Settings → Privacy &amp; Security, scroll to Security, click <em>Open Anyway</em>
           and confirm with your login password. On macOS&nbsp;12 to&nbsp;14, Control-click the app in
@@ -178,7 +179,7 @@
       </div>
       <div class="row">
         <div class="what">Android <span class="fmt">(.apk)</span>
-          <span class="sub">Phones and tablets &mdash; allow &ldquo;install unknown apps&rdquo;</span>
+          <span class="sub">Phones and tablets &mdash; allow <em>Install unknown apps</em></span>
           <span class="sub">Opens shared links</span></div>
         <div class="get">
           <a href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Android.apk"
@@ -195,33 +196,38 @@
           <a href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Windows-arm64.zip"
              aria-label="Download the Windows .zip for ARM 64-bit" title="ARM 64-bit">ARM</a>
         </div>
+        <details class="steps">
+          <summary>Opening it the first time</summary>
+          <p>Windows may say it protected your PC. Click <em>More info</em>, then <em>Run anyway</em>.</p>
+        </details>
       </div>
       <div class="row">
         <div class="what">Linux <span class="fmt">(.tar.xz)</span>
-          <span class="sub">Install with <code>make install</code></span>
+          <span class="sub">Unpack, then <code>make install</code></span>
           <span class="sub">Opens shared links once installed</span></div>
         <div class="get">
           <a href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Linux-amd64.tar.xz"
              aria-label="Download the Linux .tar.xz for Intel or AMD 64-bit" title="Intel or AMD 64-bit">Intel / AMD</a>
           <a href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Linux-arm64.tar.xz"
-             aria-label="Download the Linux .tar.xz for ARM 64-bit" title="ARM 64-bit: Raspberry Pi, Ampere, Apple Silicon VMs">ARM</a>
+             aria-label="Download the Linux .tar.xz for ARM 64-bit" title="ARM 64-bit">ARM</a>
         </div>
       </div>
       <div class="row">
         <div class="what">Linux <span class="fmt">(AppImage)</span>
-          <span class="sub">One file, no libfuse2 needed: <code>chmod +x</code> and run</span>
+          <span class="sub">One file &mdash; <code>chmod +x</code> and run (AppImageUpdate can refresh it)</span>
           <span class="sub">Doesn&rsquo;t open shared links</span></div>
         <div class="get">
           <a href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-x86_64.AppImage"
-             aria-label="Download the AppImage for Intel or AMD 64-bit" title="Intel or AMD 64-bit (x86_64)">Intel / AMD</a>
+             aria-label="Download the Linux AppImage for Intel or AMD 64-bit" title="Intel or AMD 64-bit">Intel / AMD</a>
           <a href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-aarch64.AppImage"
-             aria-label="Download the AppImage for ARM 64-bit" title="ARM 64-bit (aarch64): Raspberry Pi, Ampere, Apple Silicon VMs">ARM</a>
+             aria-label="Download the Linux AppImage for ARM 64-bit" title="ARM 64-bit">ARM</a>
         </div>
       </div>
     </div>
-    <p class="note links">Shared links are the &ldquo;Open in BibleText&rdquo; links friends send you.
-    An edition that doesn&rsquo;t open them still shows the passage: paste the link into Search.
-    ARM means 64-bit ARM: a Raspberry&nbsp;Pi, an Ampere server or an Apple&nbsp;Silicon virtual machine.</p>
+    <p class="note links">Shared links are the bibletext.co.uk links friends send you. A download that
+    doesn&rsquo;t open them still shows the passage: paste the link into Search. ARM means 64-bit ARM:
+    a Snapdragon laptop, a Raspberry&nbsp;Pi, an Ampere server or an Apple&nbsp;Silicon virtual machine.
+    Most PCs are Intel / AMD.</p>
   </div>
 
   <p class="oss">BibleText is <strong>free and open source</strong> (Apache-2.0) —
