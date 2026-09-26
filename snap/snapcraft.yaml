@@ -6,7 +6,7 @@
 name: bibletext
 title: BibleText
 base: core24
-version: "1.2.15"
+version: "1.2.16"
 summary: Read and study Scripture
 description: |
   BibleText is a clean, unhurried place to read Scripture. No ads, no accounts, no tracking — just the text, carefully set, with the tools you use while reading.

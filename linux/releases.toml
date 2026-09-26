@@ -7,6 +7,23 @@
 # tag that shipped a Linux tarball.
 
 [[release]]
+version = "1.2.16"
+date = "2026-09-26"
+head = "The page set as on the Mac, and your translation kept."
+bullets = [
+  "Scripture is now set at the same size as on the Mac, iPad and the website, about a sixth larger than before. In a wide window the column widens with it, so a line holds as many words as it did, and the line spacing and margins now match the other apps.",
+  "Prose is now justified, as on the Mac and the website: each line of a paragraph runs to both edges of the column. A paragraph's last line and poetry are not stretched.",
+  "Verse numbers are drawn as on the Mac and iPad: in bold, raised, and about twice the size they were.",
+  "Footnotes at the foot of the chapter are set as on the Mac, in the muted text colour with each verse number in bold, and spaced as there.",
+  "A note's card now sets its text at the same size as on a phone. It was larger here than anywhere else.",
+  "In the NKJV, a selection among the words the translators supplied, set in italic, now starts and ends where their letters do, and a double-click takes the word you clicked. An italic phrase no longer crowds the word after it or runs past its own highlight.",
+  "BibleText now holds far less memory as you read, most of all in the NKJV.",
+  "If you were last reading the New King James Version and it cannot be opened when the app starts — it sometimes needs a connection to open — BibleText shows the World English Bible meanwhile and now says so in the translation list, where your choice is remembered and tried again each time the app starts. The NKJV stays your choice while you follow links into other translations, even to a book it does not have, such as Tobit. Before, the app switched without a word and forgot the NKJV as soon as you moved on.",
+  "The Berean Standard Bible and the World English Bible Catholic edition, when left on a previous edition because an update could not be downloaded, now update themselves once a connection returns, as the World English Bible already did.",
+  "The note at the foot of the translation list now gives every fact that applies, one to a line, and while you are reading another translation it no longer says the World English Bible's text is on screen.",
+]
+
+[[release]]
 version = "1.2.15"
 date = "2026-09-23"
 head = "A release for iPhone and iPad."

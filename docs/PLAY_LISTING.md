@@ -178,6 +178,35 @@ Also confirm from the final AAB:
 - target audience and Families eligibility are selected from the real intended
   audience, not to avoid or trigger a policy track.
 
+## Closed-test release notes — 1.2.16
+
+> BibleText 1.2.16 fixes a crash on some phones when you press and hold on
+> text already selected. On a tablet, a chapter now reads as a book page: a
+> centred column with indented paragraphs. Verse numbers, footnotes and
+> margins now match the iPhone's. The whole height of the tab bar answers a
+> tap, and the narration no longer lights a section heading. If the NKJV
+> cannot open when the app starts, the app now says so and keeps it as your
+> choice. No ads, account, analytics, or tracking.
+
+Suggested tester coverage:
+
+- install and confirm version 1.2.16 (186);
+- select a few words, then press and hold on the selection: the app stays
+  open, and the selection and its menu stay;
+- on a tablet (or a tablet emulator), open a chapter: a centred column with
+  indented paragraphs; split the window narrow: full width with space between
+  paragraphs;
+- on a phone in portrait, compare a chapter with 1.2.14, the last build Play
+  testers had: slightly wider side margins, and smaller verse numbers raised
+  clear of the line;
+- turn a phone sideways on a chapter with a section heading (Psalm 3 has a
+  title, a heading and a footnote): the heading has space above and below it;
+- tap each tab near the top edge of its icon, then under its label: each tap
+  opens that tab;
+- play the narration through a verse just above a section heading: the
+  heading never lights;
+- confirm a shared link still opens at its passage with its note.
+
 ## Closed-test release notes — 1.2.15
 
 > BibleText 1.2.15 makes the whole height of the tab bar answer a tap, so

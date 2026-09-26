@@ -1,0 +1,9 @@
+The page set as on the Mac, and your translation kept.
+
+• Scripture is now set at the same size as on the Mac, iPad and the website, about a sixth larger than before, with the same line spacing and margins.
+• Prose is justified: each line of a paragraph runs to both edges of the column. A paragraph's last line and poetry are not stretched.
+• Verse numbers are drawn as on the Mac and iPad: bold, raised, and about twice their old size. Footnotes are set as on the Mac, and a note's text at the size a phone uses.
+• In the NKJV, selecting the italic words the translators supplied now starts and ends where their letters do, and an italic phrase no longer crowds the word after it.
+• BibleText now holds far less memory as you read, most of all in the NKJV.
+• If you were last reading the NKJV and it cannot be opened when the app starts — it sometimes needs a connection to open — BibleText shows the World English Bible, says so in the translation list and keeps the NKJV as your choice, trying it again each time the app starts. Before, it switched without a word and forgot your choice.
+• The Berean Standard Bible and the World English Bible Catholic edition, left on a previous edition when an update could not be downloaded, now update themselves once a connection returns.
