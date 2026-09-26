@@ -7,6 +7,25 @@ the date — and says what shipped and why. Closed entries earn their place: thi
 is the file to read before re-investigating a defect that may already be fixed,
 and a fix's reasoning is the expensive half to reconstruct.
 
+## Reword the Linux note on the download page
+
+The paragraph above the Linux direct downloads on the download page
+(`docs/index.html`, the `note pick` paragraph under "Desktop — direct
+downloads") reads awkwardly. It recommends the Snap, then says "Of these two,
+the .tar.xz also installs a desktop entry, so those links work once you run
+make install", where "these two" means the two formats below it though four
+buttons follow, and it ends with the AppImage not registering "them", some
+way from the shared links that word stands for. It should say the same three
+things plainly, one per format: the Snap is the one to take (it updates itself
+and opens shared "Open in BibleText" links); the .tar.xz opens those links
+once `make install` has run; the AppImage is a single file that runs from
+anywhere but does not open them.
+
+The words are the owner's to settle; a draft goes to the owner first. The
+README says the same about the AppImage (the Linux, as a single file, entry),
+so the two should agree afterwards. The page reaches readers only when the
+site is next published (`scripts/publish-site.sh`).
+
 ## Say which model is working on the AI waiting screen
 
 While a Study with AI request runs, the panel's waiting state (`setThinking`
