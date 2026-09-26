@@ -182,10 +182,12 @@ func chapterHasFootnotes(state *AppState) bool {
 // reading-pane chrome for now. A header toggle existed briefly and was
 // removed; if it returns, chapterHasFootnotes above is its availability gate
 // (the audio-control convention — absent, not disabled), iconFootnote
-// (icons_embed.go) is its reserved glyph, and the mobile header must not
-// widen its right column (the expanded audio card's reserved centre
-// footprint overlaps it on 375pt phones — stack under full-screen in boxH
-// cells instead).
+// (icons_embed.go) is its reserved glyph, and it has no place in the mobile
+// header yet: the open narration card lies over that header's right column on
+// phones (up to about 500 wide with the longest headings) and swallows its
+// taps, so a toggle there, beside the full-screen button or stacked under it,
+// would be hidden and unreachable while the card is open. It waits on a
+// placement for the card (docs/BACKLOG.md).
 
 // writeFootnoteCSS emits the section's stylesheet rules — only called when
 // the section is actually rendered, so a footnotes-off chapter's HTML is

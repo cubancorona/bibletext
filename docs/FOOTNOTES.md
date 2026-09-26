@@ -367,8 +367,11 @@ stripping tags, so the apparatus never enters the fallback at all (pinned in
 TestFootnoteSectionNativeContract); (2) a toggle beside full-screen in the
 mobile header widened the right column into the expanded audio card's
 permanently reserved centre footprint (overlapping on 375pt phones with long
-book names) — the stacked-under-full-screen placement in pinned 36pt cells is
-the recorded mount recipe.
+book names) — the stacked-under-full-screen placement in pinned 36pt cells was
+the recorded mount recipe. It no longer holds: the open narration card now
+covers the phone header's right column while it is open, drawn above it and
+taking its taps, so a toggle there, stacked or not, would be hidden under the
+card; a header toggle waits on a placement for the card (docs/BACKLOG.md).
 
 Icon + settings placement (design round, 2026-08-27): the
 toggle's glyph is now **αω¹** — alpha and omega carrying a raised footnote

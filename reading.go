@@ -91,7 +91,9 @@ func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 		copyChapter(state)
 		copyBtn.flashIcon(theme.ConfirmIcon(), 1200*time.Millisecond)
 	})
-	titleRow := container.NewHBox(ref, hgap(8), copyBtn)
+	// The copy icon and the chapter arrows each sit in a slot that keeps its
+	// size while the open narration card hides it (coverSlot, audio_button.go).
+	titleRow := container.NewHBox(ref, hgap(8), coverSlot(copyBtn))
 
 	const navBoxH = 34
 
@@ -124,7 +126,9 @@ func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 	// The chapter line and arrows sit directly in the HBox (no spacer-VBox
 	// wrapper): each control carries its own boxH so they share a baseline, and
 	// the picker anchor needs a first-class hit box rather than a nested one.
-	chapterRow := container.NewHBox(chapterLine, hgap(8), prev, next)
+	// (The arrows' slots lay each arrow out over exactly the box the HBox gives
+	// the slot, so an arrow's box is the one it had in the HBox itself.)
+	chapterRow := container.NewHBox(chapterLine, hgap(8), coverSlot(prev), coverSlot(next))
 
 	// Focus toggle on the right: enter distraction-free reading (hide the
 	// sidebar + app header) or, when already in it, restore the full layout.
@@ -146,14 +150,23 @@ func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 	// baseline. (The translators'-footnotes toggle is deliberately NOT here:
 	// the feature's one control is the Settings card, by design —
 	// footnote_section.go.)
+	cover := &cardCover{controls: []coverable{copyBtn, prev, next}}
 	var rightControls fyne.CanvasObject = focusBtn
 	if chapterAudioAvailable(state) {
-		rightControls = container.NewHBox(audioControl(state, navBoxH), hgap(8), focusBtn)
+		cover.card = audioControl(state, navBoxH, cover.setOpen)
+		rightControls = container.NewHBox(cover.card, hgap(8), focusBtn)
 	}
 
 	left := container.NewVBox(titleRow, chapterRow)
 	right := container.NewVBox(layout.NewSpacer(), rightControls, layout.NewSpacer())
-	row := container.NewBorder(nil, nil, left, right, nil)
+	// The row draws left before right, as NewBorder did, so the audio control,
+	// in the right column, is drawn after the chapter block. On a narrow pane
+	// the open card reaches over the block, and this order is what puts the
+	// card on top of it (audio_button.go); the copy icon and the arrows whose
+	// glyphs it touches are hidden while it is open (cardCover), and the focus
+	// toggle sits beside the card's cell in the same box, never under it.
+	row := container.New(coverRowLayout{inner: layout.NewBorderLayout(nil, nil, left, right), cover: cover}, left, right)
+	cover.row = row
 
 	rule := canvas.NewLine(pal.Border)
 	rule.StrokeWidth = 1
@@ -189,8 +202,9 @@ type iconTapButton struct {
 	disabled bool
 	onTapped func()
 
-	img      *canvas.Image // the rendered glyph, for in-place icon swaps
-	flashGen int           // supersession guard for overlapping flashes
+	img      *canvas.Image       // the rendered glyph, for in-place icon swaps
+	renderer fyne.WidgetRenderer // the renderer Fyne made, for glyphBounds
+	flashGen int                 // supersession guard for overlapping flashes
 }
 
 func newIconTapButton(state *AppState, icon fyne.Resource, iconSize, boxH float32, onTapped func()) *iconTapButton {
@@ -255,7 +269,20 @@ func (b *iconTapButton) CreateRenderer() fyne.WidgetRenderer {
 		w = b.boxH
 	}
 	box := container.NewGridWrap(fyne.NewSize(w, b.boxH), container.NewCenter(img))
-	return widget.NewSimpleRenderer(box)
+	b.renderer = widget.NewSimpleRenderer(box)
+	return b.renderer
+}
+
+// glyphBounds is where the button draws its glyph, relative to the button: the
+// image its renderer centres in the box, not the box it takes taps in. The
+// open narration card hides the button while it lies over this (cardCover,
+// audio_button.go). Fyne makes a renderer again for a widget whose renderer it
+// has let go, and CreateRenderer keeps the latest, so this is the one drawn.
+func (b *iconTapButton) glyphBounds() (fyne.Position, fyne.Size, bool) {
+	if b.renderer == nil {
+		return fyne.Position{}, fyne.Size{}, false
+	}
+	return imageIn(b.renderer.Objects(), fyne.Position{})
 }
 
 var _ fyne.Tappable = (*iconTapButton)(nil)
