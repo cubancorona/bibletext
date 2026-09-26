@@ -13,14 +13,24 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <style>
   :root { color-scheme: light dark;
-    --paper:#f7f3ea; --ink:#2b2620; --muted:#7a7264; --accent:#3c5a86; --border:#ddd5c4; --card:#fffdf7; }
+    --paper:#f7f3ea; --ink:#2b2620; --muted:#6f675a; --accent:#3c5a86;
+        --border:#ddd5c4; --card:#fffdf7; --code:#efe9db;
+    --badge:#000000; --on-badge:#ffffff; --badge-edge:#a6a6a6; --soon:#e9e4d8; --soon-ink:#8a8272; }
   @media (prefers-color-scheme: dark) {
-    :root { --paper:#211e19; --ink:#e8e2d4; --muted:#9a917f; --accent:#8fb0dd; --border:#3a352c; --card:#2a261f; }
+    :root { --paper:#211e19; --ink:#e8e2d4; --muted:#9a917f; --accent:#8fb0dd;
+      --border:#3a352c; --card:#2a261f; --code:#332e26;
+      --badge:#000000; --on-badge:#ffffff; --badge-edge:#8c8c8c; --soon:#2e2a24; --soon-ink:#8a8272; }
   }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--paper); color:var(--ink);
     font-family: Georgia, 'Times New Roman', serif; line-height:1.55; }
-  main { max-width: 640px; margin: 0 auto; padding: 48px 24px 64px; text-align: center; }
+  main { max-width: 640px; margin: 0 auto; padding: 40px 20px 56px; text-align: center; }
+  a { color: var(--accent); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .92em;
+    background: var(--code); padding: 1px 5px; border-radius: 4px; white-space: nowrap; }
+
+  /* Masthead */
   .glyph { font-size: 56px; line-height: 1; }
   h1 { font-size: 2.2rem; margin: 12px 0 4px; letter-spacing: .5px; }
   .tagline { color: var(--muted); margin: 0 0 36px; font-style: italic; }
@@ -31,39 +41,61 @@
   @media (min-width: 620px) {
     .verse + .verse { border-left: 1px solid var(--border); }
   }
-  h2 { font-size: 1.05rem; text-transform: uppercase; letter-spacing: .12em;
-       color: var(--muted); font-weight: 600; margin: 36px 0 14px; }
-  .btn { display: block; width: 100%; max-width: 420px; margin: 10px auto;
-    padding: 14px 18px; border: 1px solid var(--border); border-radius: 10px;
-    background: var(--card); color: var(--ink); text-decoration: none;
-    font-size: 1.05rem; transition: border-color .15s; }
-  .btn:hover { border-color: var(--accent); }
-  .btn .sub { display: block; font-size: .8rem; color: var(--muted); margin-top: 2px; }
-  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
-  .btn.primary .sub { color: #e8eefb; }
-  h3 { font-size: .82rem; text-transform: uppercase; letter-spacing: .1em;
-       color: var(--muted); font-weight: 600; margin: 26px 0 8px; opacity: .85; }
-  .note { font-size: .85rem; color: var(--muted); max-width: 460px; margin: 18px auto 0; }
-  /* One row per download format, with a button per processor on its right:
-     the format is the reader's choice, the processor only their machine's. */
-  .split { display: flex; align-items: center; gap: 14px; width: 100%; max-width: 420px;
-    margin: 10px auto; padding: 12px 12px 12px 18px; border: 1px solid var(--border);
-    border-radius: 10px; background: var(--card); text-align: left; }
-  .split .what { flex: 1; min-width: 0; font-size: 1.05rem; }
-  .split .what .sub { display: block; font-size: .8rem; color: var(--muted); margin-top: 2px; }
-  .split .arch { display: flex; flex-direction: column; gap: 6px; flex: none; }
-  .split .arch a { display: block; min-width: 96px; padding: 9px 12px; border: 1px solid var(--border);
-    border-radius: 8px; color: var(--accent); text-decoration: none; font-size: .9rem;
-    text-align: center; transition: border-color .15s; }
-  .split .arch a:hover, .split .arch a:focus-visible { border-color: var(--accent); }
   .features { max-width: 480px; margin: 0 auto; text-align: left; list-style: none; padding: 0; }
   .features li { margin: 10px 0; padding-left: 2em; text-indent: -2em; }
   .features .emoji { display: inline-block; width: 1.6em; text-indent: 0; }
+
+  /* Downloads: two sections. The store editions first, one filled button each,
+     then the direct downloads as rows with a button per processor. Every
+     download carries the same two sub-lines: what it covers or how it runs,
+     and whether it opens shared links. */
+  h2 { font-size: 1.4rem; font-weight: 600; margin: 44px 0 6px; letter-spacing: .3px; }
+  .lead { font-size: .92rem; color: var(--muted); max-width: 460px; margin: 0 auto 14px; }
+  .group { max-width: 420px; margin: 0 auto; }
+  .group > * + * { margin-top: 8px; }
+  .files { margin-top: 44px; padding-top: 28px; border-top: 1px solid var(--border); }
+  .files h2 { margin-top: 0; }
+  .sub { display: block; font-size: .82rem; line-height: 1.4; margin-top: 3px; }
+  /* Store badges: the official badges' look (a black panel, a small line over
+     the store's name) drawn in text, so the four match each other. */
+  .badges { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 12px;
+    max-width: 420px; margin: 0 auto; }
+  .badge { display: block; padding: 7px 14px 8px; border-radius: 8px;
+    background: var(--badge); color: var(--on-badge); border: 1px solid var(--badge-edge);
+    text-decoration: none; text-align: left; line-height: 1.15;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
+  .badge .small { display: block; font-size: .7rem; letter-spacing: .01em; }
+  .badge .big { display: block; font-size: 1.2rem; font-weight: 600; letter-spacing: -.01em; }
+  .badge:hover, .badge:focus-visible { border-color: var(--on-badge); }
+  .badge.soon { background: var(--soon); color: var(--soon-ink); border-color: var(--border); }
+  .cap { display: block; font-size: .8rem; color: var(--muted); line-height: 1.35;
+    margin-top: 6px; text-align: center; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 16px;
+    border: 1px solid var(--border); border-radius: 10px; background: var(--card);
+    text-align: left; }
+  .row .what { flex: 1; min-width: 0; font-size: 1.05rem; line-height: 1.3; }
+  .row .sub { color: var(--muted); }
+  .row .fmt { color: var(--muted); font-size: .85rem; }
+  .row .get { display: flex; flex-direction: column; gap: 6px; flex: none; }
+  .row .get a { display: block; min-width: 104px; min-height: 40px; padding: 9px 12px;
+    border: 1px solid var(--border); border-radius: 8px; text-decoration: none;
+    font-size: .9rem; line-height: 1.2; text-align: center; transition: border-color .15s; }
+  .row .get a:hover, .row .get a:focus-visible { border-color: var(--accent); }
+  .row { flex-wrap: wrap; }
+  .steps { flex: 1 1 100%; font-size: .85rem; color: var(--muted); text-align: left;
+    line-height: 1.5; margin-top: 2px; }
+  .steps summary { cursor: pointer; color: var(--accent); padding: 4px 0; }
+  .steps p { margin: 4px 0 2px; }
+  .note { font-size: .85rem; color: var(--muted); max-width: 420px; margin: 0 auto; }
+  .group .note { margin-top: 6px; }
+  .note.links { margin-top: 28px; }
+
+  /* Tail */
   .oss { font-size: .95rem; margin: 26px auto 0; max-width: 460px; }
-  .oss a { color: var(--accent); text-decoration: none; }
+  .oss a { color: var(--accent); text-decoration: none; display: inline-block; padding: 8px 4px; }
   footer { margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--border);
     font-size: .9rem; color: var(--muted); }
-  footer a { color: var(--accent); text-decoration: none; margin: 0 10px; }
+  footer a { color: var(--accent); text-decoration: none; display: inline-block; padding: 8px 5px; }
 </style>
 </head>
 <body>
@@ -93,83 +125,103 @@
         Android, and Mac, where audio also keeps playing with the screen locked.</li>
   </ul>
 
-  <h2>iPhone, iPad &amp; Mac</h2>
-  <a class="btn primary" href="https://apps.apple.com/app/id6784567351">
-    Download on the App&nbsp;Store
-    <span class="sub">iPhone, iPad and Mac · free, no ads, no accounts</span>
-  </a>
-
-  <h2>Android</h2>
-  <a class="btn" href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Android.apk">
-    Download APK
-    <span class="sub">phones &amp; tablets · sideload — allow “install unknown apps”</span>
-  </a>
-  <p class="note">A Google&nbsp;Play release is in preparation — until it arrives, the APK above
-  installs the same signed app.</p>
-
-  <h2>Windows</h2>
-  <a class="btn primary" href="https://apps.microsoft.com/detail/9NDCCZH9RB9K">
-    Get it from the Microsoft&nbsp;Store
-    <span class="sub">Windows&nbsp;10 and 11 · signed and kept up to date</span>
-  </a>
-
-  <h2>Linux</h2>
-  <a class="btn primary" href="https://snapcraft.io/bibletext">
-    Get it from the Snap&nbsp;Store
-    <span class="sub">Intel, AMD and ARM 64-bit &middot; signed and kept up to date</span>
-  </a>
-  <p class="note">Or from a terminal: <code>snap install bibletext</code></p>
-
-  <h2>Desktop &mdash; direct downloads</h2>
-  <p class="note">On a Mac the App&nbsp;Store version, on Windows the Microsoft&nbsp;Store
-  version and on Linux the Snap are the easier routes &mdash; signed and kept up to date for you.
-  The downloads here are unsigned, so macOS blocks the first launch until you allow it. On
-  macOS&nbsp;15 and later, open the app and dismiss the warning, then, within the hour, go to
-  System&nbsp;Settings → Privacy &amp; Security, scroll to Security, click <em>Open Anyway</em>
-  and confirm with your login password. On macOS&nbsp;12 to&nbsp;14, Control-click the app in
-  the Finder, choose <em>Open</em>, then click <em>Open</em> in the warning.</p>
-
-  <h3>macOS</h3>
-  <a class="btn" href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-macOS.zip">
-    macOS
-    <span class="sub">Apple&nbsp;Silicon and Intel &middot; one universal app &middot; .zip<br>Doesn&rsquo;t open shared links</span>
-  </a>
-
-  <h3>Windows</h3>
-  <div class="split">
-    <div class="what">.zip
-      <span class="sub">Unzip and run <code>BibleText.exe</code><br>Doesn&rsquo;t open shared links</span>
+  <h2>Get it from a store</h2>
+  <p class="lead">Signed, they update themselves, and they open shared links.</p>
+  <div class="badges">
+    <div>
+      <a class="badge" href="https://apps.apple.com/app/id6784567351"
+         aria-label="Download on the App Store, for iPhone, iPad and Mac">
+        <span class="small">Download on the</span><span class="big">App Store</span></a>
+      <span class="cap">iPhone, iPad and Mac</span>
     </div>
-    <div class="arch">
-      <a href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Windows-amd64.zip"
-         aria-label="Download the Windows .zip for Intel or AMD 64-bit" title="Intel or AMD 64-bit">Intel / AMD</a>
-      <a href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Windows-arm64.zip"
-         aria-label="Download the Windows .zip for ARM 64-bit" title="ARM 64-bit">ARM</a>
+    <!-- Google Play: greyed out until the listing is live; then this becomes a
+         link like the others, with the Play URL. -->
+    <div>
+      <span class="badge soon" aria-disabled="true">
+        <span class="small">Get it on</span><span class="big">Google Play</span></span>
+      <span class="cap">In preparation &mdash; for now, the Android .apk below</span>
+    </div>
+    <div>
+      <a class="badge" href="https://apps.microsoft.com/detail/9NDCCZH9RB9K"
+         aria-label="Get it from Microsoft, for Windows 10 and 11">
+        <span class="small">Get it from</span><span class="big">Microsoft</span></a>
+      <span class="cap">Windows 10 and 11</span>
+    </div>
+    <div>
+      <a class="badge" href="https://snapcraft.io/bibletext"
+         aria-label="Get it from the Snap Store, for Linux">
+        <span class="small">Get it from the</span><span class="big">Snap Store</span></a>
+      <span class="cap">Linux &mdash; Intel, AMD and ARM 64&#8209;bit<br>or <code>snap install bibletext</code></span>
     </div>
   </div>
 
-  <h3>Linux</h3>
-  <div class="split">
-    <div class="what">.tar.xz
-      <span class="sub">Install with <code>make install</code><br>Opens shared links</span>
+  <div class="files">
+    <h2>Or download a file</h2>
+    <p class="lead">These you update yourself. The desktop files are unsigned.</p>
+    <div class="group">
+      <div class="row">
+        <div class="what">Mac <span class="fmt">(.zip)</span>
+          <span class="sub">One universal app &mdash; Apple&nbsp;Silicon and Intel</span>
+          <span class="sub">Doesn&rsquo;t open shared links</span></div>
+        <div class="get">
+          <a href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-macOS.zip"
+             aria-label="Download the Mac .zip">Download</a>
+        </div>
+        <details class="steps">
+          <summary>The first time it opens</summary>
+          <p>macOS blocks the .zip&rsquo;s first launch until you allow it. On macOS&nbsp;15 and
+          later, open the app and dismiss the warning, then, within the hour, go to
+          System&nbsp;Settings → Privacy &amp; Security, scroll to Security, click <em>Open Anyway</em>
+          and confirm with your login password. On macOS&nbsp;12 to&nbsp;14, Control-click the app in
+          the Finder, choose <em>Open</em>, then click <em>Open</em> in the warning.</p>
+        </details>
+      </div>
+      <div class="row">
+        <div class="what">Android <span class="fmt">(.apk)</span>
+          <span class="sub">Phones and tablets &mdash; allow &ldquo;install unknown apps&rdquo;</span>
+          <span class="sub">Opens shared links</span></div>
+        <div class="get">
+          <a href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Android.apk"
+             aria-label="Download the Android .apk">Download</a>
+        </div>
+      </div>
+      <div class="row">
+        <div class="what">Windows <span class="fmt">(.zip)</span>
+          <span class="sub">Unzip and run <code>BibleText.exe</code></span>
+          <span class="sub">Doesn&rsquo;t open shared links</span></div>
+        <div class="get">
+          <a href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Windows-amd64.zip"
+             aria-label="Download the Windows .zip for Intel or AMD 64-bit" title="Intel or AMD 64-bit">Intel / AMD</a>
+          <a href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Windows-arm64.zip"
+             aria-label="Download the Windows .zip for ARM 64-bit" title="ARM 64-bit">ARM</a>
+        </div>
+      </div>
+      <div class="row">
+        <div class="what">Linux <span class="fmt">(.tar.xz)</span>
+          <span class="sub">Install with <code>make install</code></span>
+          <span class="sub">Opens shared links once installed</span></div>
+        <div class="get">
+          <a href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Linux-amd64.tar.xz"
+             aria-label="Download the Linux .tar.xz for Intel or AMD 64-bit" title="Intel or AMD 64-bit">Intel / AMD</a>
+          <a href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Linux-arm64.tar.xz"
+             aria-label="Download the Linux .tar.xz for ARM 64-bit" title="ARM 64-bit: Raspberry Pi, Ampere, Apple Silicon VMs">ARM</a>
+        </div>
+      </div>
+      <div class="row">
+        <div class="what">Linux <span class="fmt">(AppImage)</span>
+          <span class="sub">One file, no libfuse2 needed: <code>chmod +x</code> and run</span>
+          <span class="sub">Doesn&rsquo;t open shared links</span></div>
+        <div class="get">
+          <a href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-x86_64.AppImage"
+             aria-label="Download the AppImage for Intel or AMD 64-bit" title="Intel or AMD 64-bit (x86_64)">Intel / AMD</a>
+          <a href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-aarch64.AppImage"
+             aria-label="Download the AppImage for ARM 64-bit" title="ARM 64-bit (aarch64): Raspberry Pi, Ampere, Apple Silicon VMs">ARM</a>
+        </div>
+      </div>
     </div>
-    <div class="arch">
-      <a href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Linux-amd64.tar.xz"
-         aria-label="Download the .tar.xz for Intel or AMD 64-bit" title="Intel or AMD 64-bit">Intel / AMD</a>
-      <a href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Linux-arm64.tar.xz"
-         aria-label="Download the .tar.xz for ARM 64-bit" title="ARM 64-bit: Raspberry Pi, Ampere, Apple Silicon VMs">ARM</a>
-    </div>
-  </div>
-  <div class="split">
-    <div class="what">AppImage
-      <span class="sub">One file: <code>chmod +x</code> and run<br>Doesn&rsquo;t open shared links</span>
-    </div>
-    <div class="arch">
-      <a href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-x86_64.AppImage"
-         aria-label="Download the AppImage for Intel or AMD 64-bit" title="Intel or AMD 64-bit">Intel / AMD</a>
-      <a href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-aarch64.AppImage"
-         aria-label="Download the AppImage for ARM 64-bit" title="ARM 64-bit: Raspberry Pi, Ampere, Apple Silicon VMs">ARM</a>
-    </div>
+    <p class="note links">Shared links are the &ldquo;Open in BibleText&rdquo; links friends send you.
+    An edition that doesn&rsquo;t open them still shows the passage: paste the link into Search.
+    ARM means 64-bit ARM: a Raspberry&nbsp;Pi, an Ampere server or an Apple&nbsp;Silicon virtual machine.</p>
   </div>
 
   <p class="oss">BibleText is <strong>free and open source</strong> (Apache-2.0) —
