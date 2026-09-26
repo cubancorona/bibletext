@@ -7,6 +7,37 @@ the date — and says what shipped and why. Closed entries earn their place: thi
 is the file to read before re-investigating a defect that may already be fixed,
 and a fix's reasoning is the expensive half to reconstruct.
 
+## Rework the download page once Google Play is live
+
+When Play production is approved and released, the Android section of the
+download page (`docs/index.html`) has to change anyway: today its only button
+is the sideload APK, with a note that a Play release is in preparation. Take
+that moment to look at the whole page for consistency and clarity rather than
+patching the one section. The owner decides the shape; these are the things
+noticed so far, as starting points:
+
+- Two structures sit side by side. The top half is one section per platform
+  with its store button (iPhone, iPad and Mac; Android; Windows; Linux), and
+  the bottom half, "Desktop — direct downloads", has its own macOS, Windows
+  and Linux sections. Android's direct download (the APK) is in the top half,
+  the desktop ones in the bottom half. Once Play exists, the APK is a direct
+  download like the others.
+- Three button styles: the filled store buttons, plain full-width buttons
+  (Android, macOS) and the rows with a button per processor (Windows .zip,
+  Linux .tar.xz and AppImage). Whether a download opens shared links is said
+  on the desktop direct downloads only.
+- The note at the head of the direct downloads carries the macOS first-launch
+  steps, which concern one of the three platforms under it, and repeats that
+  the store editions and the Snap are the easier routes, which the sections
+  above already show. The steps may read better beside the macOS download.
+- Sub-lines mix separators ("·" in the store and macOS buttons, line breaks
+  in the rows).
+
+Whatever changes, every release asset stays linked from the page
+(`scripts/check-public-surfaces.py` holds it, with the Microsoft Store link and
+the macOS first-launch steps), and the page reaches readers only when the site
+is published (`scripts/publish-site.sh`).
+
 ## Reword the Linux note on the download page — DONE 26 September 2026
 
 The paragraph above the Linux direct downloads on the download page
