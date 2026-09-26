@@ -7,24 +7,23 @@ the date — and says what shipped and why. Closed entries earn their place: thi
 is the file to read before re-investigating a defect that may already be fixed,
 and a fix's reasoning is the expensive half to reconstruct.
 
-## Reword the Linux note on the download page
+## Reword the Linux note on the download page — DONE 26 September 2026
 
 The paragraph above the Linux direct downloads on the download page
-(`docs/index.html`, the `note pick` paragraph under "Desktop — direct
-downloads") reads awkwardly. It recommends the Snap, then says "Of these two,
-the .tar.xz also installs a desktop entry, so those links work once you run
-make install", where "these two" means the two formats below it though four
-buttons follow, and it ends with the AppImage not registering "them", some
-way from the shared links that word stands for. It should say the same three
-things plainly, one per format: the Snap is the one to take (it updates itself
-and opens shared "Open in BibleText" links); the .tar.xz opens those links
-once `make install` has run; the AppImage is a single file that runs from
-anywhere but does not open them.
+(`docs/index.html`) read awkwardly: it recommended the Snap, then said "Of these
+two, the .tar.xz also installs a desktop entry, so those links work once you run
+make install", where "these two" meant two formats though four buttons
+followed, and it ended with the AppImage not registering "them", some way from
+the shared links that word stood for.
 
-The words are the owner's to settle; a draft goes to the owner first. The
-README says the same about the AppImage (the Linux, as a single file, entry),
-so the two should agree afterwards. The page reaches readers only when the
-site is next published (`scripts/publish-site.sh`).
+What shipped: the paragraph is gone, and each direct download is one row per
+format, with a button per processor on its right (Intel / AMD, ARM), so the
+reader picks the format and then their machine. Each row says in two short
+lines how to run it and whether it opens shared links: the .tar.xz does once
+`make install` has run, the AppImage and the Windows .zip do not, and the macOS
+button says the same of its .zip (`docs/LINKS.md` has the table). Windows got the same row, so its two buttons
+became one. The general note above them still says the store editions and the
+Snap are the easier routes. The README's AppImage note already agreed.
 
 ## Say which model is working on the AI waiting screen
 
