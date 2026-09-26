@@ -38,38 +38,85 @@
   // is why the fault looked intermittent. Fixed here rather than in the markup so
   // it repairs every page already generated, without regenerating ~3,900 files.
   //
-  // Whitespace-only text nodes only. A <br> between two verses (a poem join) has
-  // no width, so there is nothing to bridge and the band should stop at the line
+  // Whitespace-only text nodes. A <br> between two verses (a poem join) has no
+  // width, so there is nothing to bridge and the band should stop at the line
   // end anyway.
+  //
+  // An omitted verse's mark (.vg) belongs to the verse AFTER it, as the app
+  // panes wash it with that verse's tint (tint.go): a lit verse lights the
+  // marks standing just before it and the spaces between them, and a range
+  // lights the marks inside it.
+  //
+  // The span between the markers touches the page only through document and
+  // the nodes it is handed, so highlight_band_test.go runs these very lines
+  // against a small stand-in DOM.
+  /*__HIGHLIGHT_BAND_BEGIN__*/
+  function wrapGap(n) {
+    var s = document.createElement('span');
+    s.className = 'hl hlgap';
+    s.textContent = n.textContent;
+    n.parentNode.replaceChild(s, n);
+  }
+  function blank(n) {
+    return n.nodeType === 3 && n.textContent.length && !n.textContent.trim();
+  }
+  function isMark(n) { return n.nodeType === 1 && n.classList.contains('vg'); }
   function bridgeHighlightGaps() {
     var lit = document.querySelectorAll('.v.hl');
+    // Between two lit verses: every space, and every mark.
     for (var i = 1; i < lit.length; i++) {
       var n = lit[i - 1].nextSibling;
       while (n && n !== lit[i]) {
         var next = n.nextSibling;
-        if (n.nodeType === 3 && n.textContent.length && !n.textContent.trim()) {
-          var s = document.createElement('span');
-          s.className = 'hl hlgap';
-          s.textContent = n.textContent;
-          n.parentNode.replaceChild(s, n);
-        }
+        if (blank(n)) wrapGap(n);
+        else if (isMark(n)) n.classList.add('hlmark');
         n = next;
       }
     }
+    // Just before a lit verse: the marks standing there, and the spaces
+    // between them. (Where the verse before is lit too, the first pass has
+    // already lit them, and the walk stops at the first space it lit.)
+    lit.forEach(function (v) {
+      var n = v.previousSibling, spaces = [];
+      while (n) {
+        if (blank(n)) {
+          spaces.push(n);
+        } else if (isMark(n)) {
+          n.classList.add('hlmark');
+          spaces.forEach(wrapGap);
+          spaces = [];
+        } else {
+          break;
+        }
+        n = n.previousSibling;
+      }
+    });
   }
 
-  // Put the bridged spaces back to plain text. Without this, clearing and
-  // re-highlighting would leave stale .hlgap spans lit between verses that are
-  // no longer highlighted.
+  // Put the bridged spaces back to plain text and the marks back to unlit.
+  // Without this, clearing and re-highlighting would leave stale .hlgap spans
+  // lit between verses that are no longer highlighted.
   function dropHighlightGaps() {
     document.querySelectorAll('.hlgap').forEach(function (el) {
       el.parentNode.replaceChild(document.createTextNode(el.textContent), el);
     });
+    document.querySelectorAll('.vg.hlmark').forEach(function (el) {
+      el.classList.remove('hlmark');
+    });
   }
 
-  function highlightRange() {
-    dropHighlightGaps();
+  // unlightVerses takes the band down: the lit verses, and the spaces and
+  // marks lit with them. Every path that unlights a verse comes through here —
+  // a path that unlit the verses alone left the spaces and marks lit on their
+  // own, since they are painted too.
+  function unlightVerses() {
     document.querySelectorAll('.v.hl').forEach(function (el) { el.classList.remove('hl'); });
+    dropHighlightGaps();
+  }
+  /*__HIGHLIGHT_BAND_END__*/
+
+  function highlightRange() {
+    unlightVerses();
     var m = verseSpan();
     if (!m) return;
     // A fresh fragment re-lights the verse: drop the suppression flag a
@@ -187,8 +234,7 @@
     // usual shared link) would stay lit. This flag overrides it in CSS.
     document.documentElement.classList.add('nohl');
     hideBubble();
-    document.querySelectorAll('.v.hl').forEach(function (el) { el.classList.remove('hl'); });
-    dropHighlightGaps(); // the bridged joins go too, or they stay lit alone
+    unlightVerses(); // the bridged spaces and marks go too, or they stay lit alone
     // replaceState fires NO hashchange, so anything reading the fragment has to
     // be updated by hand — otherwise the version switcher keeps carrying a verse
     // that is no longer highlighted.
@@ -241,7 +287,9 @@
       }
       return;
     }
-    if (t.closest('.v.hl') || t.closest('.v:target')) {
+    // The band is the lit verses and the spaces and marks lit with them: a
+    // tap on any of it is a tap on the highlight.
+    if (t.closest('.v.hl') || t.closest('.v:target') || t.closest('.hlgap') || t.closest('.vg.hlmark')) {
       if (bubble) hideBubble();                   // tap again dismisses it
       else showBubble();
       return;
@@ -869,7 +917,7 @@
   function suppressHighlight(off) {
     if (off) {
       document.documentElement.classList.add('nohl');
-      document.querySelectorAll('.v.hl').forEach(function (el) { el.classList.remove('hl'); });
+      unlightVerses();
     } else {
       document.documentElement.classList.remove('nohl');
       highlightRange();
