@@ -7,6 +7,59 @@ the date — and says what shipped and why. Closed entries earn their place: thi
 is the file to read before re-investigating a defect that may already be fixed,
 and a fix's reasoning is the expensive half to reconstruct.
 
+## Say which model is working on the AI waiting screen
+
+While a Study with AI request runs, the panel's waiting state (`setThinking`
+in `ai_panel.go`) shows "Reading the passage…", an endless progress bar,
+"Capable models can take a minute or more." and Cancel, with the faster-model
+offer under it when there is one (`ai_faster_model.go`). It never says which
+model is working. The wait depends on exactly that, and a reader who changed
+the model in Settings, or took the faster-model offer, cannot see from the
+screen what they are waiting on. The waiting screen should name the provider
+and model in use: a quiet line near the bar, in the names the Settings model
+picker uses.
+
+To settle when it is picked up:
+
+- Name the model the request actually sends, not the one configured. The
+  resolver (`ai_model_resolve.go`) sends the reader's override, else a
+  self-healed pick, else the shipped default, and on a model-not-found error
+  it discovers a replacement and retries once. So the line has to come from
+  the running request, and change if that retry moves it to another model,
+  rather than from `activeModelFor` read when the screen is built.
+- Use the reader-facing model name where the app has one, else the model's id.
+- The AI search on the Find surface (`ai_search.go`) has its own wait
+  ("Searching with AI…"); decide whether it carries the same line.
+- The waiting column is in a scroll, sized by `fitBody`, because a landscape
+  phone leaves it half its natural height; the extra line has to keep Cancel
+  reachable there.
+
+## Show the selected words on the Add a note sheet
+
+The share-with-note sheet (`promptShareNote` in `share_note_ui.go`) shows the
+title "Add a note", the passage's reference (`shareNoteReference`, for example
+"John 3:16") and the note field, but not the words the reader selected. The
+reading text is hidden while the sheet is open (it calls
+`hideReadingOverlay`), so writing about a phrase means remembering it. The
+sheet should show the selected words above the field, small and muted, for
+reference while writing: not big, and cut short with an ellipsis when the
+selection is long.
+
+To settle when it is picked up:
+
+- The selection is already passed in (`selectedText`), and
+  `prepareShareQuote` already makes the quote a share sends. Show the words as
+  the page draws them and as the share will carry them, divine name in small
+  capitals included, without verse numbers.
+- On iOS the field is a native text view floated over the sheet
+  (`note_entry_ios.go`, `noteEntrySlot`). The excerpt belongs to the Fyne sheet
+  above the slot, so the native field's frame follows it, in portrait and
+  landscape and with the keyboard up.
+- Nothing in the sheet may make the card wider than the canvas (the comment
+  on the wrapping character count explains why), and that holds for the
+  excerpt too: it wraps, then stops after a few lines.
+- The same sheet on every platform that has it.
+
 ## The open narration card covers the phone header's controls — kept as a pop-up for now
 
 On a phone the open narration card lies over the next-chapter arrow and the
