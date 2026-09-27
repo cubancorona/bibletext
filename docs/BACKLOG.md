@@ -185,12 +185,9 @@ before.
 
 - On Android, an activity destroyed while the process lives on (a swipe-away
   with the audio service holding the process) sends `OnStopped`, which sets
-  `state.stopping`, and nothing clears it for the next activity: Fyne runs
-  `main` once per process. The appearance gate then returns at once for the
-  rest of the process — a light/dark change is never applied — and
-  `triggerFullDownload` stands down the same way. Either reset `stopping` when
-  the lifecycle comes back to Alive after Dead on Android, or tell an activity
-  destroy from a process exit in the `OnStopped` path.
+  `state.stopping`, and nothing cleared it for the next activity. DONE 27
+  September 2026: the next activity's start clears it — see "An Android
+  activity destroyed with the process alive left the app stopping" below.
 - The Android night-mode patch (`patches/fyne-2.7.4-android-night-mode.patch`)
   compares `currentSize.DarkMode` with `darkMode` in the configuration-change
   branch, but `GoNativeActivity.onConfigurationChanged` calls `super` (which
@@ -198,6 +195,131 @@ before.
   read races the write, unsynchronised, and when it loses a foreground change
   waits for the next redraw. Reading the night bit from the `AConfiguration`
   the branch already builds (`AConfiguration_getUiModeNight`) removes the race.
+
+## An Android activity destroyed with the process alive left the app stopping — DONE 27 September 2026
+
+`InstallReadingStateFlush` set `state.stopping` in `OnStopped`: the flag that
+tells late background work the app is tearing down, so a result landing then
+drops itself. On Android that hook runs when the ACTIVITY is destroyed, and
+the process can live on: the audio service holds the process through a
+swipe-away, Back finishes the root activity on Android 11 and older, and the
+system reclaims an activity in the background. A rotation does not: the
+manifest's `configChanges` lacks `screenSize`, yet on the Android 15 emulator
+a rotation kept the same activity instance and process (27 September 2026,
+the released 1.2.16 build, `adb emu rotate`: no create or destroy event, the
+same `Local Activity` in `dumpsys activity top`). Fyne runs
+`main` once per process, so the next activity started in the same process, on
+the same state, and nothing cleared the flag. For the rest of the process the
+appearance gate returned at once, so a light/dark change was never applied;
+the refresh (`triggerFullDownload`, `ensureUpgradeScheduled`) stood down; and
+a translation download that landed between the two activities was dropped
+with `versionLoading` still set, which left the Downloading spinner up in the
+next activity and refused every later download as already in flight.
+
+**The lifecycle, traced** in Fyne 2.7.4's drivers and the repo's patches.
+Android: each activity's first redraw takes the stage from Dead straight to
+Focused, one event that runs `OnStarted` and then `OnEnteredForeground`; its
+`onDestroy` takes the stage to Dead, `OnStopped`; going to the background and
+back moves between Focused and Alive and runs the foreground hooks alone; and
+a real exit is the process being killed, which runs no Go, so from Go it is a
+stop that no start follows. iOS, under the scene life-cycle patch: `OnStarted`
+once at launch, `OnStopped` only from `applicationWillTerminate`, and a scene
+the system disconnects goes back to Alive, not Dead. Desktop: `OnStarted` once
+as the run loop begins, then the close intercept and `OnStopped` as it ends.
+Only on Android does anything start after a stop.
+
+**The fix** (`activity_life.go`, `app.go`). `OnStarted` clears `stopping`:
+the new activity is live, whatever an earlier activity's stop said. It is the
+one point that can tell. At the stop, a destroyed activity and a process about
+to be killed look the same; `OnEnteredForeground` also runs on every return
+from the background and, on desktop, on every regained focus, which would
+clear a desktop teardown. On desktop and iOS the one start comes before any
+stop and changes nothing, and a real teardown still sets the flag with nothing
+to clear it after. One order needed its own answer: the driver runs
+`OnStarted` inside the lifecycle event but QUEUES `OnStopped` on the
+lifecycle's own queue, which hands it back to the UI goroutine, so when a
+recreation's destroy and create are both waiting as the UI loop comes free, the
+old activity's stop can run after the new one's start. Each start therefore
+registers the stop hook for its own activity, with the activity's generation.
+The driver takes the hook as the stage crosses to Dead, so a stop for an older
+activity than the one started last still flushes the reading position and
+stops the audio, as before, and leaves `stopping` clear.
+
+**What the next activity picks up.** Every `stopping.Load()` consumer was
+checked. The appearance gate: `OnEnteredForeground` follows `OnStarted` in the
+same event and reconciles, and a change carried by the new activity's own size
+event arrives after that and rebuilds. The refresh: the same hook retries it,
+and a landing `upgradeLanded` dropped in between had written its cache first,
+so the retry reads it from disk (or fetches again if that write failed, D6). `consumeDeferredFullRebuild`: its flag waits
+for the next sheet close, `refresh()` or rebuild, and the Android overlay
+recovery rebuilds as soon as the native pane finds itself in a new activity. The interactive translation load
+(`switchVersionInteractive`, `versions_ui.go`) was the one left half done, and
+nothing retried it: its landing is now held while stopping
+(`holdWhileStopped`) and landed by the next start, through `fyne.Do`, so it
+runs after the start's own event, as it would have run had it landed while the
+activity was live. After a real exit nothing lands it. On desktop, where the
+glfw driver runs the landing inline off the main thread once the loop has
+drained, it is held and never applied, as it was dropped and never applied
+before.
+
+`OnStopped` still stops the audio and flushes the reading position on every
+activity destroy. Whether an activity destroy should stop the audio is a
+separate question, recorded as open under "Android: an activity destroyed with
+the process alive stops the narration" below.
+
+The host tests (`activity_life_test.go`) run the hooks as installed, in each
+driver's order: the next activity starts not stopping and follows a light/dark
+change made while no activity was live and one made in its foreground; the
+refresh that stood down, and the fetch whose landing was dropped, run again
+and land in the next activity; a translation load landing between activities
+lands in the next one, with its spinner down and the next load accepted, and
+a later recreation, after the reader has moved on, does not land it again
+(the start lets go of what it lands); the old activity's stop run after the
+new one's start marks nothing, while the new activity's own stop still marks;
+a stop with no start after it still marks, and a refresh landing, a
+translation landing and the refresh are all refused. A light/dark change is
+refused there too, but on Android by the appearance gate's background flag,
+which the destroy's own foreground exit closed before the stop; `stopping` is
+what refuses one where no foreground exit comes first, and the tests prove it
+in both such places: desktop, whose gate acts on every change (the close
+intercept, focus moving, the window focused during its teardown, and a
+light/dark change heard then), and an iOS termination that comes while the
+app is still active, one event from Focused to Dead in which the driver's
+Focused crossing returns before the foreground-exit hook once the Visible
+crossing has dropped the GL context. Desktop and iOS (launch, background round
+trips, termination) otherwise stop as they did. What only a device can
+confirm is in `docs/VISUAL_TESTS.md` under V15 and V9.
+
+## Android: an activity destroyed with the process alive stops the narration
+
+From the code, found while tracing the stop above; not run on a device.
+`OnStopped` calls `nativeAudioStop()` on every activity destroy, not only when
+the process is ending (`InstallReadingStateFlush`, `app.go`). On Android that
+is `BtAudio.stop()`, which ends the listening session — both engines, audio
+focus, the MediaSession and the foreground service — and, as its comment says,
+posts no callback, because Go drove the stop. But the Go controller (`gAudio`,
+`audio_controller.go`) never hears of it: it still holds the chapter as loaded
+and playing, so the transport, the read-along wash and the follow pill carry
+on as if the narration were live.
+
+The destroys it runs for with the process alive:
+
+- the system reclaiming the activity while the reader listens with the screen
+  off, the case the foreground service exists for;
+- Back finishing the root activity on Android 11 and older, where iOS keeps
+  playing when the reader leaves the app.
+
+A swipe-away already stops playback in the service's `onTaskRemoved`
+(`BtAudioService.java`), which posts `ST_IDLE` so Go is told; the hook's stop
+adds nothing there. A killed process takes the audio with it and runs no hook.
+The raw stop exists for the desktop quit, where `OnStopped` can run off the
+main thread and must not `fyne.Do` (`ARCHITECTURE.md`, Threading); on Android
+the hook runs on the UI goroutine. Candidates: on Android, stop no audio in
+`OnStopped` at all, or stop through `gAudio.stop()` so the controller follows.
+A rotation is not among these destroys: on the Android 15 emulator it keeps
+the activity and the process (see the entry above), so V9's rotation check
+does not reach this path. Confirm first on a device: with Developer options >
+"Don't keep activities" on, press Home mid-narration and wait (V9).
 
 ## Rework the download page — DONE 26 September 2026; the Play button has its slot
 

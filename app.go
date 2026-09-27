@@ -367,7 +367,11 @@ func ensureUpgradeScheduled(state *AppState) {
 func upgradeLanded(state *AppState, version BibleVersion, full *BibleData, mode dataMode, err error) {
 	state.fullDownloading = false
 	if state.stopping.Load() {
-		return // tearing down — don't mutate state or schedule timers
+		// Tearing down — don't mutate state or schedule timers. Where the stop
+		// was only an Android activity's, the next activity's foreground hook
+		// retries the refresh, and reads this landing back from the cache the
+		// fetch wrote, when it could write one (activity_life.go).
+		return
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "BibleText: text update for", version.Name, "failed, will retry:", err)
@@ -586,16 +590,39 @@ func consumeSeedParkedLink(state *AppState) {
 // points (desktop Run and cmd/mobile) can install it.
 func InstallReadingStateFlush(myApp fyne.App, window fyne.Window, state *AppState) {
 	lc := myApp.Lifecycle()
-	lc.SetOnStopped(func() {
-		state.stopping.Store(true)
-		// Release the audio session / player on quit. Call the raw native stop, NOT
-		// gAudio.stop(): OnStopped can run off the main thread during shutdown, and
-		// the native stop is fire-and-forget (dispatch_async) with no UI callback, so
-		// it can't hang the way a fyne.Do / dispatch_sync(main) would. (Background —
-		// SetOnExitedForeground — deliberately does NOT stop: lock-screen controls and
-		// background playback are the whole point.)
-		nativeAudioStop()
-		flushReadingState(state)
+	// stoppedHook is OnStopped for the activity of generation gen: it marks the
+	// teardown unless a newer activity has started since (activity_life.go).
+	stoppedHook := func(gen uint64) func() {
+		return func() {
+			activityStopped(state, gen)
+			// Release the audio session / player on quit. Call the raw native stop, NOT
+			// gAudio.stop(): OnStopped can run off the main thread during shutdown, and
+			// the native stop is fire-and-forget (dispatch_async) with no UI callback, so
+			// it can't hang the way a fyne.Do / dispatch_sync(main) would. (Background —
+			// SetOnExitedForeground — deliberately does NOT stop: lock-screen controls and
+			// background playback are the whole point.)
+			nativeAudioStop()
+			flushReadingState(state)
+		}
+	}
+	// Until a start registers its own, the hook carries generation 0, where
+	// the record starts, so a stop with no start before it still marks.
+	lc.SetOnStopped(stoppedHook(0))
+	// OnStarted: an activity is live, so the app is not stopping. Once per
+	// process on desktop and iOS, before any stop, where it changes nothing;
+	// on Android once per activity, so the activity that starts after another
+	// was destroyed in the same process clears that destroy's stop. The start
+	// registers the stop hook for its own activity — the driver takes the hook
+	// as the stage crosses to Dead, so a stop that runs after a newer start
+	// names the older activity — and lands, after its own event, whatever
+	// landed while the app was stopping. The foreground hook that follows it
+	// in the same event picks up the rest (activity_life.go).
+	lc.SetOnStarted(func() {
+		gen, held := activityStarted(state)
+		lc.SetOnStopped(stoppedHook(gen))
+		for _, land := range held {
+			fyne.Do(land)
+		}
 	})
 	lc.SetOnExitedForeground(func() { // iOS/Android background
 		// The appearance gate closes FIRST, before anything else here: from

@@ -556,19 +556,26 @@ func switchVersionInteractive(state *AppState, id string, cause switchCause) {
 	state.versionLoading = true
 	dismiss := showVersionLoading(state, v.Name)
 	startVersionLoad(v, state.baseBible(), func(data *BibleData, mode dataMode, err error) {
-		// If the app began tearing down while the download ran, the desktop
-		// (glfw) driver runs this inline on the load's goroutine after the main
-		// loop drained — drop the result rather than mutate state / write
-		// Preferences off the main thread during exit. (Mobile always enqueues,
-		// so this is a no-op there.)
-		if state.stopping.Load() {
-			return
+		var land func()
+		land = func() {
+			// A landing while the app is stopping is held, not applied. On
+			// desktop the teardown is the process's: the glfw driver runs this
+			// inline on the load's goroutine once the main loop has drained, so
+			// applying would mutate state and write Preferences off the main
+			// thread during exit, and nothing ever lands it. On Android the
+			// stop may be only the activity's; the next activity's start lands
+			// it (activity_life.go). Dropped, it left versionLoading set and the
+			// spinner up in the next activity, and refused every later load.
+			if holdWhileStopped(state, land) {
+				return
+			}
+			state.versionLoading = false
+			// The spinner goes before any landing's rebuild or the error card.
+			dismiss()
+			// This load's own cause, captured by this call: never another's (D19).
+			finishVersionLoad(state, v, cause, data, mode, err)
 		}
-		state.versionLoading = false
-		// The spinner goes before any landing's rebuild or the error card.
-		dismiss()
-		// This load's own cause, captured by this call: never another's (D19).
-		finishVersionLoad(state, v, cause, data, mode, err)
+		land()
 	})
 }
 

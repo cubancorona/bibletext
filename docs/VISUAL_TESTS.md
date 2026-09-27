@@ -254,7 +254,15 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       ±15s skips (never next-track); Android has the MediaStyle scrubber
       for recordings and deliberately NO scrubber for TTS; swiping the app
       from recents stops playback. Rotating Android mid-narration restores
-      wash AND pill (activity recreation).
+      wash AND pill (a rotation keeps the activity: the same instance and
+      process on the Android 15 emulator, 27 September 2026).
+- [ ] Android, narration playing: with Developer options > "Don't keep
+      activities" on, press Home mid-narration and wait. Note
+      whether the narration keeps playing and whether the transport, wash
+      and pill say what is true. From the code, the destroyed activity's
+      stop ends the narration and leaves the controller showing it
+      playing (docs/BACKLOG.md, "Android: an activity destroyed with the
+      process alive stops the narration", open).
 - [ ] Theme flip mid-play must NOT stop audio; navigation away does.
 
 ## V10 — search and the AI assistant
@@ -568,6 +576,28 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       Explain / Analyze popup is up flip dark mode by schedule or
       `adb shell cmd uimode night yes`: the popup closes; it never floats in
       the old palette over the re-lit page.
+- [ ] Android, after the activity is recreated with the process alive —
+      turn on Developer options > "Don't keep activities", press Home and
+      come back; or, on Android 11 or older,
+      press Back out of the app and open it again — flip the theme
+      (`adb shell cmd uimode night yes`, then `no`, or by schedule): the
+      whole app follows, every time, as it does before any recreation. Do
+      it twice quickly and flip again: still followed. Before, the first
+      recreation left the app ignoring every later flip for as long as the
+      process lived (activity_life.go).
+- [ ] Android, the same recreations with a translation's first download
+      running (Translation > Berean Standard Bible, "Downloading …" up):
+      press Home with "Don't keep activities" on and come back
+      after the download has had time to land. The translation opens, no
+      spinner is left up, and a later download starts normally. Then pick
+      another translation and do it again, twice: the reader stays on the
+      one picked, and no error card or spinner comes back. Before, a
+      download landing between the two activities left the spinner up for
+      good and refused every later download.
+- [ ] Android, fresh install offline (the Gospels seed and its banner):
+      recreate the activity ("Don't keep activities", Home, back), then go
+      online, press Home and come back. The full text
+      arrives and the banner goes without a relaunch.
 - [ ] Search tab, Find: flip while "Searching with AI…" shows — the spinner
       and Cancel come back, Cancel still stops it, and the answer lands on
       the rebuilt tab. Flip over an error card and over "AI didn't find

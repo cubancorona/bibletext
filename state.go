@@ -398,7 +398,13 @@ type AppState struct {
 	// main loop has drained, so an unguarded apply would write state/Preferences
 	// off-main during exit; this flag lets that callback bail. Read/written across
 	// goroutines, hence atomic. See switchVersionInteractive + InstallReadingStateFlush.
+	// On Android a stop ends the activity, not always the process, so the next
+	// activity's start clears it again (activity_life.go).
 	stopping atomic.Bool
+
+	// activity records which activity started last and holds what landed
+	// while stopping was set, for the next one (activity_life.go).
+	activity activityLife
 
 	// appliedTheme tracks the theme object last handed to app.Settings().SetTheme
 	// so CreateMainUI re-applies it only when it actually changes — re-applying on

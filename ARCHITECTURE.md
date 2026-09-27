@@ -137,6 +137,7 @@ real files; `*_test.go` files are omitted.
 | `product.go` | The product identity: embeds and validates `config/product.json`; every name/URL/id surface derives from it |
 | `app.go` | `Run()`, `loadStateData()`, `StartBackgroundLoad`, `applyTheme`, `ObserveSystemThemeChanges` |
 | `appearance.go` | The light/dark decision: on mobile a change heard out of the foreground is ignored and the return reconciles once against the variant the window was built with (so the app switcher's snapshot round trip is a no-op); a real change rebuilds at once |
+| `activity_life.go` | What `state.stopping` means on each platform: on Android a stop ends the activity, not always the process, so the next activity's start clears it; each start registers the stop hook for its own activity, so a stop the driver runs late cannot mark the next one; a translation load landing while stopping is held for the next start |
 | `title_bar_windows.go` + `title_bar_other.go` | Windows: re-sends the title bar's immersive dark mode after any rebuild that moves the variant, through the window's native handle, and repaints the caption (a no-op elsewhere) |
 | `sheet_reopen.go` | The reopen seam: a showing sheet registers how it comes back; a light/dark rebuild takes the top sheet's closure, drains, and reopens it in the new palette. Lists which sheets reopen and which close, and why |
 | `state.go` | `AppState`, navigation/search/history logic, UI hooks, `loadPhase` machine, `newSearchDebouncer` |
