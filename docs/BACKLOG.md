@@ -1856,7 +1856,7 @@ after-spacing without the rhythm gate, macOS gained the same mirror
 (`btMacPillSeparatorLift`), and the web's `.text .sec + .notechip` and
 `.text p.pst + .notechip` centre in `--htail` and `--tgap`.
 
-## A non-default translation served from a superseded cache epoch is never refreshed
+## A non-default translation served from a superseded cache epoch is never refreshed — FIXED 25 September 2026 as D17
 
 `loadVersionFromCacheOnly` serves a superseded-epoch cache by design (an
 offline upgrader keeps their Bible), and `triggerFullDownload` upgrades it in
@@ -1868,6 +1868,15 @@ drops a stale cache and refetches). Seen 11 Sep 2026 on a Mac reading the WEB
 Catholic edition from an epoch-5 cache four epochs behind. Fix: record that
 the current translation was served superseded and refresh it as well; the
 version-state tests (docs/VERSION_STATES.md) are the place to pin it.
+
+Closed by `D17` in the version-state change of 25 September, and shipped in
+1.2.16: the refresh now owes an upgrade to every public-domain translation
+recorded as showing its previous edition (`state.staleVersions`, read by
+`owedUpgrades` in app.go), not only the default, and swaps the current edition
+in place when it lands. `TestAPreviousEditionIsUpdatedWhileTheAppRuns`,
+`TestAStaleVersionUpgradesInPlaceWhenTheCurrentEpochArrives` and
+`TestANonDefaultStaleVersionIsNotSilent` hold it; docs/VERSION_STATES.md has
+the record. This entry was left open by mistake when that change landed.
 
 ## Microsoft Store: from the reserved name to the first submission — DONE
 
