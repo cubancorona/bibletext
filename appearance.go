@@ -36,8 +36,11 @@ package bibletext
 //   - A change heard in the foreground is real by construction and rebuilds at
 //     once, whatever is open.
 //
-// A light/dark rebuild takes the reopen closure of the sheet on top, rebuilds
-// (which drains), then reopens it on the UI goroutine. Nothing is deferred.
+// A light/dark rebuild takes the reopen closure of the sheet on top, drops the
+// caret, rebuilds (which drains, and brings the Windows title bar into the
+// variant the content was built in), then reopens the sheet on the UI
+// goroutine — or, with no sheet up, puts the caret back in the page field
+// that had it. Nothing is deferred.
 //
 // WHY THE ORDER THE CLOSURES RUN IN CANNOT FOOL IT. The variant itself moves in
 // the driver's own order. On iOS the size event that carries the appearance and
@@ -103,6 +106,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 )
 
 // appearanceEvent is one of the three things the gate hears.
@@ -149,6 +153,11 @@ type appearanceGate struct {
 	// comes from the live variant at build time; decide records it too when it
 	// orders a rebuild, so the decision stands on its own.
 	built fyne.ThemeVariant
+	// frame is the variant the window's own title bar was last put in: seeded
+	// with built when the listener is installed, since Fyne creates the native
+	// window from the same system setting, and moved only by followTitleBar.
+	// The frame follows the content, not the gate — see followTitleBar.
+	frame fyne.ThemeVariant
 }
 
 // appearanceAction is what the gate asks for: a window rebuild, and whether
@@ -202,9 +211,11 @@ var appearanceVariant = func(state *AppState) fyne.ThemeVariant {
 }
 
 // observeAppearance feeds one event to the gate and carries out its answer:
-// take the reopen of the sheet on top, rebuild (which drains every overlay),
-// and reopen that sheet in the new palette. UI goroutine only — the
-// listener's fyne.Do and the lifecycle hooks.
+// take the reopen of the sheet on top, rebuild (which drains every overlay
+// and brings the window's own title bar along), and reopen that sheet in the
+// new palette — or, with no sheet up, put the caret back in the page field
+// that had it. UI goroutine only — the listener's fyne.Do and the lifecycle
+// hooks.
 func observeAppearance(state *AppState, ev appearanceEvent) {
 	if state == nil || state.stopping.Load() {
 		return
@@ -227,31 +238,242 @@ func observeAppearance(state *AppState, ev appearanceEvent) {
 	if act.reopen {
 		reopen = takeTopSheetReopen(state)
 	}
-	// Drop the focus BEFORE the drain. The drain takes each overlay off the
-	// stack along with its focus manager, and nothing then tells the field
-	// that held the caret it has lost it — and on a phone the soft keyboard
-	// goes down only when the canvas is unfocused (Fyne's mobile canvas hides
-	// it in OnUnfocus). Left alone, the number pad or keyboard stayed up over
-	// the reopened sheet typing into nothing until the reader tapped a field
-	// again. Only with a sheet up: that is the drain this change added; the
-	// same rule openSearchResultRange applies before its own rebuild. A
-	// reopen that had the caret puts it back (the Go to picker's capture).
-	if sheetOpen {
+	// The page's own field with the caret — Search, Find, the notes filter,
+	// the Books filter — read before the unfocus below lets it go. Only a
+	// canvas with no sheet on it can answer: with a sheet up the caret, if
+	// any, is the sheet's, and the sheet's capture has already read it.
+	caret, hadCaret := takePageFieldCaret(state)
+	// On a phone the caret comes back only if its keyboard was up: focusing a
+	// field there raises the keyboard, and the reader may have closed it while
+	// the field kept the caret — Done on the Books filter, Back on Android —
+	// so putting the caret back would raise a keyboard nobody asked for over
+	// the rebuilt page. What was typed comes back either way. Read now, before
+	// the unfocus below takes the keyboard down.
+	refocus := pageCaretComesBack(state.appearance.mobile, softKeyboardShown)
+	// Drop the focus BEFORE the rebuild, whatever is open. The drain takes
+	// each overlay off the stack along with its focus manager, and SetContent
+	// swaps the page's focus manager for one that cannot find the old field
+	// in the new tree; in neither case is the field that held the caret told
+	// it has lost it, and on a phone the soft keyboard goes down only when the
+	// canvas is unfocused (Fyne's mobile canvas hides it in OnUnfocus). Left
+	// alone, the keyboard stayed up typing into nothing — over the reopened
+	// sheet, or over a rebuilt Search tab whose new field had no caret — and
+	// on desktop the keystrokes were dropped without a sign. It was once done
+	// only with a sheet up; the page's own fields lose the caret the same way.
+	// A reopen that had the caret puts it back (the Go to picker's capture),
+	// and so does the page field below.
+	if state.window != nil {
 		state.window.Canvas().Unfocus()
 	}
 	// rebuildWindow un-suppresses the native reading overlay after the drain,
-	// and the reopened sheet suppresses it again a moment later. That pair is
-	// kept on purpose: the chapter the rebuild re-renders lands in a SHOWN
-	// overlay, as every other rebuild's does. The Android pane places its
-	// note sticker only in a laid-out view (a hidden one skips it until the
-	// next refresh), and every rebuild has run the same-chapter re-render
-	// that keeps the reading position against a shown one — keeping the
-	// overlay down across this rebuild would put that position on a path no
-	// other rebuild takes.
+	// and the reopened sheet suppresses it again a moment later. On iOS and
+	// Android that pair is kept on purpose: the chapter the rebuild re-renders
+	// lands in a SHOWN overlay, as every other rebuild's does there. The
+	// Android pane places its note sticker only in a laid-out view (a hidden
+	// one skips it until the next refresh), and every rebuild there has run
+	// the same-chapter re-render that keeps the reading position against a
+	// shown one — keeping the overlay down across this rebuild would put that
+	// position on a path no other rebuild takes. macOS is the exception, and
+	// deliberately: it refuses to show a pane holding the other palette's
+	// chapter, so its light/dark rebuild on Read imports into the hidden pane
+	// — the launch path — and keeps the reader's place because its capture
+	// reads the clip view, which a hidden pane keeps
+	// (setReadingOverlayVisible, bibleTextMacCaptureAnchor).
+	//
+	// The cost is known and left: on iOS and Android the pane that comes up
+	// still holds the OLD palette's chapter until the rebuild's own push
+	// lands — a frame or so of it over the sheet before the reopen suppresses
+	// it again, or, after a change made on the Books or Search tab, over the
+	// new chrome when the reader next goes to Read. Holding the pane down
+	// until the push lands means an import into a hidden view — the path the
+	// position restore and the Android sticker skip — or a native
+	// pending-generation gate that, missing a landing once, leaves the pane
+	// invisible; neither can be proved without a device (docs/BACKLOG.md).
+	// macOS does not flash: its UI runs on the main thread, so a rebuild's
+	// hide, its import and its show drain in one pass before anything is
+	// drawn, and a pane holding another palette's chapter is not shown at all.
 	// Whether the Android Dialog paints a frame between the two is a device
 	// question (docs/VISUAL_TESTS.md).
-	rebuildWindow(state)
+	rebuildWindow(state) // → followTitleBar, with every other rebuild
 	if reopen != nil {
 		reopen()
+	} else if hadCaret {
+		caret.restore(state, refocus)
 	}
+}
+
+// followTitleBar brings the window's own chrome into the variant the content
+// was just built in, whenever that variant is not the one the chrome is in.
+// rebuildWindow calls it after every rebuild, so it answers to the variant,
+// not to the reason for the rebuild.
+//
+// Not from the appearance gate's decision, which can miss the change for
+// good. The settings listener reaches the gate through a goroutine and
+// fyne.Do, after Fyne has already moved the variant, so another rebuild can
+// run in between — a tab tapped in the same moment, the startup load landing,
+// a resize — and build the content in the new variant. rebuildWindow records
+// that variant as built, the gate's closure then reads "no change" and
+// rebuilds nothing, and a frame synced only on the gate's rebuild would keep
+// the old mode until the next switch. A rebuild in the same variant sends
+// nothing, so no rebuild but one that moves the variant reaches the native
+// call.
+func followTitleBar(state *AppState) {
+	if state == nil || state.window == nil || state.appearance.built == state.appearance.frame {
+		return
+	}
+	state.appearance.frame = state.appearance.built
+	syncTitleBar(state.window, state.appearance.frame)
+}
+
+// syncTitleBar puts the window's own chrome into a variant. SetContent
+// re-lights everything inside the window and nothing outside it, so the frame
+// needs a word of its own (followTitleBar says when).
+//
+// Only Windows has anything to do (syncNativeTitleBar, title_bar_windows.go).
+// Fyne sets the title bar's immersive dark mode ONCE, when it creates the
+// window, from the registry as it stands then, and never again: its settings
+// listener re-applies the theme to the content and does not touch the frame,
+// and Windows does not flip an attribute an app has set. So a switch made
+// while the app was open left a dark page under a white title bar, or a
+// parchment page under a black one, until the app was relaunched. macOS
+// re-lights its title bar with the system; Linux's belongs to the window
+// manager; the phones have none. A seam, so the host can prove when it is
+// called and with what.
+var syncTitleBar = syncNativeTitleBar
+
+// titleBarDarkMode is the value sent for DWMWA_USE_IMMERSIVE_DARK_MODE for a
+// variant: a Win32 BOOL, TRUE only for dark. The same question the palette
+// asks (isDark), so "no preference" is light in the frame as it is on the page.
+func titleBarDarkMode(v fyne.ThemeVariant) int32 {
+	if v == theme.VariantDark {
+		return 1
+	}
+	return 0
+}
+
+// titleBarRepaint is the WM_NCACTIVATE pair that makes Windows 10 repaint a
+// caption whose immersive dark mode has just been set (syncNativeTitleBar):
+// the opposite of how the caption is drawn now, then how it is drawn — so the
+// pair ends where it started, and only the mode has moved. Sent the other way
+// round, an active window would be left with an inactive, grey caption, and an
+// inactive one with a lit caption, until the next activation change.
+func titleBarRepaint(drawnActive bool) [2]uintptr {
+	if drawnActive {
+		return [2]uintptr{0, 1}
+	}
+	return [2]uintptr{1, 0}
+}
+
+// pageField names a field on the page itself — not in a sheet — whose caret a
+// light/dark rebuild puts back into the field's rebuilt twin.
+type pageField int
+
+const (
+	pageFieldSearch pageField = iota + 1 // the Search tab's keyword field
+	pageFieldFind                        // the Search tab's AI Find field
+	pageFieldNotes                       // the Search tab's notes filter
+	pageFieldBooks                       // the Books tab's filter
+)
+
+// registerPageField records a page field as the build that made it lays it
+// out. buildCompactUI clears the set at the start of every build, so only
+// fields of the tree now on the canvas are ever registered, and a rebuilt
+// tab registers its own new fields over them.
+func registerPageField(state *AppState, f pageField, o fyne.Focusable) {
+	if state == nil || o == nil {
+		return
+	}
+	if state.pageFields == nil {
+		state.pageFields = map[pageField]fyne.Focusable{}
+	}
+	state.pageFields[f] = o
+}
+
+// pageFieldCaret is what a page field held when the rebuild took it: which
+// field, its text, and where the caret stood in it.
+type pageFieldCaret struct {
+	field    pageField
+	text     string
+	row, col int
+}
+
+// takePageFieldCaret reads the caret of the page field that has it, if any.
+// The text is read too: the rebuilt twin is filled from state, and a field
+// can be ahead of state — the Find field is written to state only when the
+// question is submitted, and the keyword field only when its debounce fires.
+func takePageFieldCaret(state *AppState) (pageFieldCaret, bool) {
+	if state == nil || state.window == nil || len(state.pageFields) == 0 {
+		return pageFieldCaret{}, false
+	}
+	focused := state.window.Canvas().Focused()
+	if focused == nil {
+		return pageFieldCaret{}, false
+	}
+	for f, o := range state.pageFields {
+		if o != focused {
+			continue
+		}
+		c := pageFieldCaret{field: f}
+		if e := entryOf(o); e != nil {
+			c.text, c.row, c.col = e.Text, e.CursorRow, e.CursorColumn
+		}
+		return c, true
+	}
+	return pageFieldCaret{}, false
+}
+
+// softKeyboardShown is whether the soft keyboard was on screen at its last
+// report — iOS's keyboard-frame observer (bibleTextKeyboardChanged) and
+// Android's IME insets (btaKeyboardChanged), both on the UI goroutine. False
+// until a report comes, and on desktop, which has no soft keyboard, and on
+// Android before API 30, which reports nothing: there a caret is simply not
+// put back (pageCaretComesBack), and the reader taps the field again.
+var softKeyboardShown bool
+
+// noteSoftKeyboard records the soft keyboard's latest on-screen overlap.
+func noteSoftKeyboard(overlap float32) { softKeyboardShown = overlap > 0 }
+
+// pageCaretComesBack is whether a page field that had the caret before a
+// light/dark rebuild gets it back in its rebuilt twin: always on desktop,
+// where focus raises nothing, and on a phone only when the soft keyboard was
+// up — Fyne's mobile canvas shows the keyboard for every Focus, and Fyne still
+// counts a field focused after the reader has put its keyboard away.
+func pageCaretComesBack(mobile, keyboardShown bool) bool {
+	return !mobile || keyboardShown
+}
+
+// restore gives the rebuilt twin of the field the caret was taken from the
+// text the reader had typed and the caret's place in it, and, when focus is
+// true (pageCaretComesBack), the caret itself. A twin the rebuild did not lay
+// out — the reader's tab or mode is not the one it was — gets nothing.
+func (c pageFieldCaret) restore(state *AppState, focus bool) {
+	if state == nil || state.window == nil {
+		return
+	}
+	o, ok := state.pageFields[c.field]
+	if !ok || o == nil {
+		return
+	}
+	if e := entryOf(o); e != nil {
+		if e.Text != c.text {
+			e.SetText(c.text) // its OnChanged runs as it would for the keystrokes
+		}
+		e.CursorRow, e.CursorColumn = c.row, c.col
+		e.Refresh()
+	}
+	if focus {
+		state.window.Canvas().Focus(o)
+	}
+}
+
+// entryOf is the widget.Entry inside a page field, whichever entry type
+// carries it.
+func entryOf(o fyne.Focusable) *widget.Entry {
+	switch e := o.(type) {
+	case *widget.Entry:
+		return e
+	case *searchKeyEntry:
+		return &e.Entry
+	}
+	return nil
 }

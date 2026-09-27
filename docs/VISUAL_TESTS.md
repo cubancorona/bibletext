@@ -447,13 +447,62 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       (iOS: the native field) the note comes back whole and the keyboard
       types into it. Long-press a Go to verse field for Cut/Copy/Paste and
       flip under the menu: the picker comes back, the menu does not.
-- [ ] Android, flip with Verse of the day or Go to open: the verses must not
-      flash over the sheet for a frame (the rebuild un-suppresses the
-      reading Dialog and the reopened sheet suppresses it again a moment
-      later — appearance.go).
+- [ ] iOS and Android, flip with Verse of the day or Go to open: the verses
+      must not flash over the sheet for a frame. If they do, the frame is
+      the OLD palette's chapter — the rebuild un-suppresses the pane before
+      its re-render lands, and the reopened sheet suppresses it again a
+      moment later (appearance.go; left open, docs/BACKLOG.md). Likewise
+      flip on the Books tab and then tap Read: a frame of the old-palette
+      chapter over the new chrome is the same known gap.
 - [ ] Flip while "Downloading …" is up (a translation's first download):
       the spinner comes back in the new palette and goes when the
       translation lands.
+- [ ] Windows, on Windows 10 22H2 AND on Windows 11: flip Settings >
+      Personalisation > Colours > app mode, both ways, with the app open
+      beside Settings (unfocused), and again with the app FOCUSED while an
+      auto dark-mode switch fires. The title bar follows at once (a black
+      bar over the dark page, a white one over parchment), without a
+      resize or a click elsewhere, and a focused window's caption stays
+      drawn active (an unfocused one inactive); before, it kept the launch
+      mode until relaunch. Windows 10 is the one that needs the caption
+      repaint (title_bar_windows.go).
+- [ ] Windows and Linux, focus mode with a note open as a card: flip both
+      ways. The card's fill and border are the new palette's, under the
+      new ink — never a pale card under pale text, or a dark one under dark.
+      Then drag the window's width back and forth for a few seconds with
+      the card open: memory settles, not climbing by a raster per width.
+      The Notes list (Search tab, notes bubble) on any platform: every
+      bubble's tail is the new palette's.
+- [ ] macOS: go to Books, flip, then open and close Settings (gear, then X),
+      Verse of the day and Go to. No verses appear over the Books tab. Tap
+      Read: the chapter is in the new palette, at the reader's place — not
+      at verse 1.
+- [ ] macOS, mid-chapter on Read: flip with no sheet up, then flip with
+      Settings open and close it. Each time the chapter comes back in the
+      new palette at the reader's place (the import lands in the hidden
+      pane; the capture reads the clip view, which it keeps). Then scroll
+      mid-chapter, go to Books, quit, relaunch: the chapter opens where it
+      was left, not at the top.
+- [ ] Android, AI on: select verse text, tap Study with AI, and while the
+      Explain / Analyze popup is up flip dark mode by schedule or
+      `adb shell cmd uimode night yes`: the popup closes; it never floats in
+      the old palette over the re-lit page.
+- [ ] Search tab, Find: flip while "Searching with AI…" shows — the spinner
+      and Cancel come back, Cancel still stops it, and the answer lands on
+      the rebuilt tab. Flip over an error card and over "AI didn't find
+      matching passages": each comes back as it was, never as the empty
+      prompt.
+- [ ] Flip with the caret in the Search, Find, notes or Books filter field
+      (no sheet up): on a phone the keyboard goes down and comes back up
+      over the rebuilt field with the caret where it was and nothing typed
+      lost; on desktop typing carries on. On a phone, type in the Books
+      filter, tap Done (Android: Back to close the keyboard), then flip from
+      Control Centre or a schedule: the keyboard stays down and the filter
+      keeps its text. Scroll the Books grid halfway and flip: it stays
+      where it was.
+- [ ] Phones, Find: flip mid-Find (and rotate an iPad or Android phone
+      mid-Find), then tap Read before the answer lands: nothing keeps
+      repainting (no sustained GPU load, scrolling stays smooth).
 - [ ] Palette spot-checks in BOTH variants: unchecked boxes visible on
       dark cards, sapphire accent (never stock Fyne blue), no white frame
       around popups, disabled controls quieter but readable, red letters

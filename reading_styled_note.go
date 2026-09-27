@@ -762,7 +762,16 @@ func noteBubblePathSVG(w, h float32, fill, stroke color.Color, tail bool) fyne.R
 			`<path d="%s" fill="%s" fill-opacity="%.3f" stroke="%s" stroke-opacity="%.3f" `+
 			`stroke-width="1" stroke-linejoin="round"/></svg>`,
 		w, h+depth, w, h+depth, d, fillHex, fillA, strokeHex, strokeA)
-	return fyne.NewStaticResource("note-bubble.svg", []byte(svg))
+	// Named after its look (lookNamedSVG): the palette is IN the bytes, and a
+	// fixed name let a rebuilt card draw the previous palette's raster. The
+	// size is not in the name — Fyne's cache already keys on it — and the
+	// shape is, because a card with a tail and a taller one without can come
+	// to the same pixel size.
+	shape := "flat"
+	if tail {
+		shape = "tail"
+	}
+	return lookNamedSVG("note-bubble", shape, fill, stroke, svg)
 }
 
 // receivedShownAs names HOW this chapter's received notes are represented on

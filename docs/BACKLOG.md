@@ -70,7 +70,118 @@ back, and these answer into the one beneath); the menus and the share
 confirmation themselves. Rotation's rebuild still closes every sheet, as
 before.
 
-**Found alongside, not fixed here** (both older than this change):
+**Outside the sheets, what a switch also left behind, and does no longer:**
+
+- **The Windows title bar** kept the immersive dark mode the window was
+  created with: Fyne sets `DWMWA_USE_IMMERSIVE_DARK_MODE` once, at creation,
+  and its settings listener never again, so a dark page sat under a white
+  bar (or the reverse) until relaunch. Every rebuild that moves the variant
+  — whatever asked for it, so a tab tapped in the moment before the
+  listener's closure runs cannot swallow the change — now sends the
+  attribute again through the window's own handle (`followTitleBar`,
+  `title_bar_windows.go`, the `RunNative` seam `restoreNative` uses), then a
+  `WM_NCACTIVATE` pair that leaves the caption drawn active or inactive as it
+  was: Windows 10 repaints a visible caption only on an activation change,
+  and a frame-changed `SetWindowPos` or `RedrawWindow` does not do it.
+  Windows 11 applies the attribute at once; the pair is sent there too.
+  Attribute 20 only, as Fyne sends: builds before 20H1 never had a dark
+  frame at launch either. Not yet seen on the Windows VM, which must check
+  Windows 10 22H2 as well as 11 (`docs/VISUAL_TESTS.md`).
+- **The styled pane's note card** (Windows and Linux, plainly in focus mode,
+  where no widget's theme override happened to clear the cache) could keep
+  the old palette: Fyne caches a rasterised SVG by resource name and pixel
+  size, a switch clears that cache and then refreshes the OLD tree —
+  re-rasterising the old card's old-palette bytes under the same name — and
+  a rebuilt card, same name, same size, rasterised after that refresh is
+  handed that raster. It did not show on the Linux VM, before this change or
+  after it (focus mode, light → dark → light, card and tail matching the
+  page each time), so which runs first decides it; the name below takes the
+  order out of it. The generated SVGs
+  with literal colours (`note-bubble`, `note-tail`) are now named after
+  their look — fill and stroke with alpha, and the shape — never their size
+  (`lookNamedSVG`): Fyne's own size check replaces a raster at another size
+  under the same name, where a name that folded in the width would keep one
+  full-card raster per width through a resize drag (over 100 MB for one
+  sweep, measured). The
+  notes browser's tails were never caught — each row is its own theme
+  override, whose rasters Fyne keys under a scope no rebuilt row shares — so
+  the tail's rename is hardening. The themed icons carry a colour name and
+  were never affected.
+- **macOS** showed the NSTextView over the Books and Search tabs whenever a
+  sheet closed there — its restore closure asked `!IsSearching`, the former
+  sidebar's rule — holding the chapter it last had, which after a switch made
+  on that tab was in the palette just left. All three native panes now
+  restore through one function that asks `overlayShouldShow`
+  (`restoreNativeReadingOverlay`), and macOS will not show a pane holding
+  the other palette's chapter until the Read build's push replaces it
+  (`nativePaneStale`) — so its light/dark rebuild on Read imports into the
+  hidden pane, the launch path. The same-chapter capture that keeps the
+  reader's place across that import read the text view's `visibleRect`,
+  which AppKit gives as zero for a hidden view: a switch made with a sheet
+  open, or on Books before going back to Read, put the reader at verse 1.
+  It reads the clip view's bounds now, which a hidden pane keeps (a Cocoa
+  probe, scrolled to 500 and hidden: visibleRect 0, clip bounds still 500).
+  The reading-state flush
+  asks the same capture, so a window closed from the Books tab or over a
+  sheet should no longer save the top either (follows from the code; not
+  run).
+- **Android's Study with AI popup** (Explain / Analyze context / Analyze
+  translation) floated on in the old palette over the re-lit page; `setStyle`
+  now closes it when the text or paper colour moves, and `hide` and
+  `suppress` close it with the Dialog.
+- **The Search tab's Find** is rendered from state (`renderFind`), in
+  `buildSearchResultsView`'s order, and a landing repaints through the tab on
+  the canvas (`state.repaintFind`): a rebuild mid-Find had brought back the
+  empty prompt with no spinner and no Cancel while the answer painted into
+  the detached tree, and an error card or a finished "found nothing" came
+  back as the prompt too. A Find stopped by Cancel, a mode switch or leaving
+  the tab stays a stopped Find, never "found nothing". Each rebuild of the
+  tab mid-Find draws a bar of its own, so the bar is held on state
+  (`state.findBar`, `stopFindBar`) and every stop reaches the one on the
+  canvas: on the phones the root is a widget (`layoutWatcher`) that a walk
+  over the old tree would stop at, and a rebuilt tab's bar would run on after
+  the reader left the tab. `rebuildWindow` also stops it, and its walk goes
+  into that root (`contentWrapper`).
+- **The caret** is dropped before every light/dark rebuild, not only with a
+  sheet up, so a phone's keyboard no longer stays up typing into nothing; a
+  page field that had it (Search, Find, the notes filter, the Books filter)
+  gets back what was typed, and the caret too — on a phone only if its
+  keyboard was up (`pageCaretComesBack`, from the keyboard reports the Go to
+  picker already had), since focus raises the keyboard there and the reader
+  may have put it away with Done or Back. **The Books grid** keeps its
+  scroll offset across rebuilds (`booksScrollY`).
+
+**Left open, on purpose:**
+
+- On iOS and Android the rebuild un-suppresses the native pane before its
+  re-render lands, so a frame or so of the OLD palette's chapter can show —
+  over the sheet before the reopen suppresses it again, or over the new
+  chrome when the reader goes to Read after a switch made on Books or
+  Search. Keeping the pane down until the push lands means importing into a
+  hidden view, which is the path the reading-position restore and the
+  Android note sticker skip, or a native pending-generation gate that, if it
+  ever misses a landing, leaves the pane invisible. Neither can be proved
+  without a device; `appearance.go` says so beside the call, and
+  `docs/VISUAL_TESTS.md` asks the device question. macOS does not flash (its
+  hide, its import and its show drain in one main-queue pass).
+- If all three of an iOS rebuild's HTML imports fail, the plain-text
+  fallback takes its text colour from the previous import — the old
+  palette — over the new paper, until the next push. Theoretical: the
+  failure rate has never been measured and only single failures are known.
+  Setting `textColor` explicitly on the fallback (and the macOS twin's
+  foreground attribute), or recording the body fingerprint only once the
+  native side reports the import applied, would close it.
+
+**Found alongside, not fixed here** (all older than this change):
+
+- macOS read-along's follow-scroll places the narrated verse from the text
+  view's `visibleRect` too (`bibleTextMacHighlightVerse`), which a hidden
+  pane gives as zero. If it follows while the pane is hidden — narration
+  playing with the reader on Books or Search, or under a sheet — it reads a
+  zero-height viewport and scrolls each verse to the very top instead of
+  keeping it in the comfortable band. From the code alone: whether follow is
+  asked while the pane is hidden was not traced. The fix would be the
+  capture's, reading the clip view.
 
 - On Android, an activity destroyed while the process lives on (a swipe-away
   with the audio service holding the process) sends `OnStopped`, which sets

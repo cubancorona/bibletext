@@ -39,14 +39,16 @@ func bibleTextReadingScrolled() {
 // bibleTextKeyboardChanged reports the iOS soft keyboard's on-screen overlap (its height
 // in points, 0 when hidden) from a keyboard-frame observer, so the Goto verse picker can
 // lift its bottom row to sit EXACTLY above the keyboard rather than estimating. Runs on
-// the native main thread; it hops to Fyne's goroutine and forwards to whatever inset
-// setter the open picker registered (nil when no picker is up, so other keyboards — e.g.
-// the search field — are ignored).
+// the native main thread; it hops to Fyne's goroutine, records whether the keyboard is up
+// (noteSoftKeyboard: a light/dark rebuild puts a page field's caret back only then) and
+// forwards to whatever inset setter the open picker registered (nil when no picker is up,
+// so no other keyboard lifts anything).
 //
 //export bibleTextKeyboardChanged
 func bibleTextKeyboardChanged(height C.double) {
 	h := float32(height)
 	fyne.Do(func() {
+		noteSoftKeyboard(h)
 		if gKeyboardInsetSetter != nil {
 			gKeyboardInsetSetter(h)
 		}

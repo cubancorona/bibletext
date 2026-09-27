@@ -737,6 +737,9 @@ func ObserveSystemThemeChanges(myApp fyne.App, state *AppState) {
 		// (rebuildWindow).
 		state.appearance.mobile = fyne.CurrentDevice().IsMobile()
 		state.appearance.built = appearanceVariant(state)
+		// The title bar Fyne creates at Show reads the same system setting
+		// (followTitleBar keeps it from there).
+		state.appearance.frame = state.appearance.built
 		ch := make(chan fyne.Settings, 1)
 		myApp.Settings().AddChangeListener(ch)
 		go func() {

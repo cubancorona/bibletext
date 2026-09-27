@@ -43,8 +43,9 @@ type AppState struct {
 	aiSearchActive  bool
 	aiSearchQuery   string
 	aiSearchResults []Verse
-	// Desktop AI-search progress: results replace the reading pane, so the in-progress
-	// and error states are driven from state (mobile drives them in its own results host).
+	// AI-search progress. Both surfaces draw the in-progress, error and cancelled
+	// states from here — the desktop sidebar through buildSearchResultsView, the
+	// Search tab through renderFind — so a window rebuild renders them again.
 	aiSearchLoading   bool
 	aiSearchErr       error
 	retryAISearch     func() // re-runs the last AI query (the error view's "Try again")
@@ -54,6 +55,28 @@ type AppState struct {
 	// searchScrollY remembers the results list's scroll offset so returning to the
 	// Search tab lands where you left off. Reset to 0 when a new search runs.
 	searchScrollY float32
+	// booksScrollY is the Books grid's scroll offset, for the same reason: the
+	// tab is built new by every window rebuild — a tab switch, a rotation, a
+	// light/dark change — and the canon is taller than the pane.
+	booksScrollY float32
+	// findBar is the Search tab's Find progress bar, the one on the canvas —
+	// held here, not by the build that drew it, because every build of the
+	// tab draws its own from state while a Find is in flight, and the phones'
+	// root is a widget (layoutWatcher) that rebuildWindow's walk over the old
+	// tree cannot enter. One slot for the whole app: a build that draws a bar
+	// stops the one before it, and the landing, Cancel, a mode switch and
+	// leaving the tab stop the one there is (stopFindBar).
+	findBar *widget.ProgressBarInfinite
+	// repaintFind redraws the Search tab's Find results from state, in the tab
+	// that is on the canvas NOW. A Find's completion paints through it rather
+	// than into the results host of the build that submitted it, which a
+	// window rebuild may have detached. nil whenever no Search tab is built
+	// (buildCompactUI clears it with showReading).
+	repaintFind func()
+	// pageFields are the text fields on the page — not in a sheet — whose caret
+	// a light/dark rebuild puts back in their rebuilt twins (appearance.go).
+	// Cleared by every buildCompactUI and filled by the tab it builds.
+	pageFields map[pageField]fyne.Focusable
 
 	// askSession is the one Find-supersession guard for the whole app, so it
 	// must survive window rebuilds. Making it local to
@@ -204,9 +227,11 @@ type AppState struct {
 	// where search results live in the reading pane). Used by "back to results".
 	surfaceSearch func()
 	// hideReadingOverlay / showReadingOverlay let shared code (e.g. the chapter
-	// picker popup) temporarily hide the iOS native reading overlay (a
-	// UITextView that floats above the Fyne canvas, so it would otherwise cover
-	// any popup). Both are nil/no-op on desktop and Android.
+	// picker popup) temporarily hide a native reading overlay (a text view that
+	// floats above the Fyne canvas, so it would otherwise cover any popup). Set
+	// by the iOS, Android and macOS panes, which restore through
+	// restoreNativeReadingOverlay; on Windows and Linux showReadingOverlay is
+	// only the sheet-close consume point (installSheetCloseConsume).
 	hideReadingOverlay func()
 	showReadingOverlay func()
 	// dismissSheet closes the card sheet that is up, if any — set by the sheet
@@ -384,6 +409,17 @@ type AppState struct {
 	// fetch updates it per book via loadProgressFn so the spinner shows real progress
 	// ("Downloading the Bible… John (43 of 66)") instead of a blind indeterminate bar.
 	loadingMsg *canvas.Text
+}
+
+// stopFindBar halts the Search tab's Find progress bar, wherever the build
+// that drew it now is (safe to call repeatedly / when absent). A bar left
+// animating in a tree the window no longer shows still marks the live canvas
+// dirty on every tick, until the renderer cache expires it a minute later.
+func (s *AppState) stopFindBar() {
+	if s.findBar != nil {
+		s.findBar.Stop()
+		s.findBar = nil
+	}
 }
 
 // stopLoadingBar halts the startup spinner's animation (safe to call repeatedly /

@@ -196,8 +196,10 @@ func btaReadingWidthChanged(widthDp C.float) {
 // btaKeyboardChanged is the Android twin of iOS's bibleTextKeyboardChanged:
 // the soft keyboard's live on-screen overlap, observed on the activity window by
 // BtBridge.installKeyboardWatcher. It feeds the goto picker's verse-row lift
-// (gKeyboardInsetSetter) and nothing else — the canvas is never resized, so the
-// tablet-layout classification never sees the IME.
+// (gKeyboardInsetSetter) and whether the keyboard is up (noteSoftKeyboard, which
+// a light/dark rebuild asks before putting a page field's caret back), and
+// nothing else — the canvas is never resized, so the tablet-layout
+// classification never sees the IME.
 //
 // The overlap arrives in PIXELS and is converted here with the live canvas
 // scale, the same px<->unit factor pushChapterHTML uses for the text size. It
@@ -211,6 +213,7 @@ func btaReadingWidthChanged(widthDp C.float) {
 func btaKeyboardChanged(overlapPx C.float) {
 	px := float32(overlapPx)
 	fyne.Do(func() {
+		noteSoftKeyboard(px) // up or down is the same question in pixels or units
 		if gKeyboardInsetSetter == nil {
 			return
 		}

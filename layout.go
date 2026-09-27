@@ -178,8 +178,9 @@ func regularSplitOffset(width float32) float64 {
 // the same reason.
 
 // overlayShouldShow is the single source of truth for native reading-overlay
-// visibility on mobile: the iOS UITextView must be visible exactly when the
-// reading view is the content actually on screen. Every place that toggles the
+// visibility — iOS, Android, and macOS on the tabbed layout: the native text
+// view must be visible exactly when the reading view is the content actually
+// on screen. Every place that toggles the
 // overlay derives the answer from here, and afterRebuild re-asserts it as the
 // last word after each window rebuild, so a stray async show/hide during the
 // rebuild can't leave the overlay floating over the wrong content as a blank
@@ -196,6 +197,45 @@ func overlayShouldShow(state *AppState) bool {
 		return !state.IsSearching
 	}
 	return state.CurrentTab == 0 && !state.IsSearching
+}
+
+// restoreNativeReadingOverlay is the whole of every native reading pane's
+// showReadingOverlay closure — iOS, Android and macOS each pass their own
+// unsuppress and their own notifyReadingOverlay, and nothing else differs.
+//
+// The closure runs when a sheet closes and at every window rebuild's drain,
+// and it must answer overlayShouldShow like every other visibility decision.
+// macOS once asked !IsSearching instead, a rule from the former sidebar layout
+// in which the reading view was always on screen. On the tabbed layout that
+// said "show" on the Books and Search tabs too: closing any sheet there put
+// the NSTextView back over the tab — catching its clicks — holding whatever
+// chapter it was last given, and after a light/dark change made on that tab
+// that chapter was in the palette just left, since a tab with no reading view
+// pushes nothing. One function now, so the three panes cannot drift apart
+// again.
+func restoreNativeReadingOverlay(state *AppState, unsuppress func(), setVisible func(bool)) {
+	unsuppress()
+	setVisible(overlayShouldShow(state))
+	// The sheet the reader was inside has left the canvas: run the window
+	// rebuild a background data swap deferred to spare it (no-op otherwise,
+	// and non-recursive — rebuildWindow downs the flag before re-running
+	// this closure).
+	consumeDeferredFullRebuild(state)
+}
+
+// nativePaneStale reports whether a native reading pane holds a chapter drawn
+// in the other palette from the one the window is in now: pushed is whether
+// it holds a chapter at all, pushedDark the palette that chapter was drawn in.
+//
+// A light/dark change re-pushes the chapter only through a rebuild that builds
+// the reading view — the fingerprint folds in the variant, so the next Read
+// build always re-imports — and a rebuild made on the Books or Search tab
+// builds none. Until the reader goes back to Read, the pane holds the old
+// palette's chapter; it is hidden there (overlayShouldShow), and this is the
+// second guard: a pane that holds another palette's chapter is not shown at
+// all, whatever asks for it, until the push that replaces it lands.
+func nativePaneStale(pushed, pushedDark, nowDark bool) bool {
+	return pushed && pushedDark != nowDark
 }
 
 // leaveSearchForRead turns the "showing results" flag off when the reader picks

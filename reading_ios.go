@@ -3878,21 +3878,11 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 	// Let shared popups (the chapter picker) hide/show the native overlay so it
 	// doesn't float over them. Idempotent — safe to set on every rebuild.
 	state.hideReadingOverlay = func() { C.bibleTextTVSuppress() }
+	// Restore only the overlay that belongs to the current view (reading, not
+	// search results or another tab) — same invariant as every other
+	// visibility decision, in the body all three native panes share.
 	state.showReadingOverlay = func() {
-		C.bibleTextTVUnsuppress()
-		// Restore only the overlay that belongs to the current view (reading,
-		// not search results or another tab) — same invariant as every other
-		// visibility decision.
-		if overlayShouldShow(state) {
-			C.bibleTextTVShow()
-		} else {
-			C.bibleTextTVHide()
-		}
-		// The sheet the reader was inside has left the canvas: run the window
-		// rebuild a background data swap deferred to spare it (no-op otherwise,
-		// and non-recursive — rebuildWindow downs the flag before re-running
-		// this closure).
-		consumeDeferredFullRebuild(state)
+		restoreNativeReadingOverlay(state, func() { C.bibleTextTVUnsuppress() }, notifyReadingOverlay)
 	}
 
 	chapterNumbers := state.Bible.GetChapterNumbersForBook(state.CurrentBook)
@@ -4310,7 +4300,10 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	C.bibleTextTVSetReadingBG(
 		C.double(float64(bg.R)/255), C.double(float64(bg.G)/255), C.double(float64(bg.B)/255))
 	// Keep the floating "Follow narration" pill styled for the current palette
-	// (this render runs on every theme flip — the fingerprint folds the variant in).
+	// (this render runs on every theme flip made with the reading view built —
+	// the fingerprint folds the variant in; a flip made on the Books or Search
+	// tab reaches here when Read is built again, and the pane stays hidden
+	// until then).
 	pushFollowButtonColors(state.pal())
 }
 

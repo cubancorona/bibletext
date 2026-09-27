@@ -1053,18 +1053,11 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 	state.hideReadingOverlay = func() {
 		runBta(func(env uintptr) { C.btaSimple(C.uintptr_t(env), 2) }) // suppress
 	}
+	// The body all three native panes share (restoreNativeReadingOverlay).
 	state.showReadingOverlay = func() {
-		runBta(func(env uintptr) { C.btaSimple(C.uintptr_t(env), 3) }) // unsuppress
-		if overlayShouldShow(state) {
-			showNativeReadingOverlay()
-		} else {
-			hideNativeReadingOverlay()
-		}
-		// The sheet the reader was inside has left the canvas: run the window
-		// rebuild a background data swap deferred to spare it (no-op otherwise,
-		// and non-recursive — rebuildWindow downs the flag before re-running
-		// this closure).
-		consumeDeferredFullRebuild(state)
+		restoreNativeReadingOverlay(state, func() {
+			runBta(func(env uintptr) { C.btaSimple(C.uintptr_t(env), 3) }) // unsuppress
+		}, notifyReadingOverlay)
 	}
 
 	chapterNumbers := state.Bible.GetChapterNumbersForBook(state.CurrentBook)

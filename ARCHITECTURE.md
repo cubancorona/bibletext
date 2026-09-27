@@ -137,6 +137,7 @@ real files; `*_test.go` files are omitted.
 | `product.go` | The product identity: embeds and validates `config/product.json`; every name/URL/id surface derives from it |
 | `app.go` | `Run()`, `loadStateData()`, `StartBackgroundLoad`, `applyTheme`, `ObserveSystemThemeChanges` |
 | `appearance.go` | The light/dark decision: on mobile a change heard out of the foreground is ignored and the return reconciles once against the variant the window was built with (so the app switcher's snapshot round trip is a no-op); a real change rebuilds at once |
+| `title_bar_windows.go` + `title_bar_other.go` | Windows: re-sends the title bar's immersive dark mode after any rebuild that moves the variant, through the window's native handle, and repaints the caption (a no-op elsewhere) |
 | `sheet_reopen.go` | The reopen seam: a showing sheet registers how it comes back; a light/dark rebuild takes the top sheet's closure, drains, and reopens it in the new palette. Lists which sheets reopen and which close, and why |
 | `state.go` | `AppState`, navigation/search/history logic, UI hooks, `loadPhase` machine, `newSearchDebouncer` |
 | `reading_state.go` | Reading-position + history persistence (translation/book/chapter/scroll anchor) in `fyne.Preferences` |
@@ -283,7 +284,15 @@ are recreated), at once, even with a sheet open: the rebuild drains the sheet
 and the sheet on top comes back in the new palette showing what it showed
 (`sheet_reopen.go`). On iOS and Android a change heard while the app is out of
 the foreground waits for the return, which rebuilds only if the settled variant
-differs from the one the window was built with (`appearance.go`). And
+differs from the one the window was built with (`appearance.go`). The window's
+own chrome is outside the content: on Windows any rebuild that moves the
+variant re-sends the title bar's immersive dark mode, which Fyne sets only at
+creation, and repaints the caption with a `WM_NCACTIVATE` pair, which Windows
+10 needs (`followTitleBar`, `title_bar_windows.go`). Generated SVGs with
+literal colours are named after their look — colours and shape, never size
+(`lookNamedSVG`) — because Fyne's raster cache is keyed by name and pixel size
+and the settings apply re-fills it from the old tree before the rebuild runs.
+And
 `applyTheme` calls Fyne's `SetTheme` **only when the theme object changes** —
 re-running it per build would force a full canvas theme-walk (an iOS perf gate).
 

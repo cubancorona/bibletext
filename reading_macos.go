@@ -3117,11 +3117,25 @@ BTAnchor bibleTextMacCaptureAnchor(void) {
         NSTextStorage *ts = tv.textStorage;
         if (ts.length == 0) return;
         out.ok = 1; // the live scroll was readable (even if it's at the top)
-        CGFloat offY = tv.visibleRect.origin.y;
+        // FROM THE CLIP VIEW, NOT visibleRect. AppKit answers NSZeroRect for
+        // the visibleRect of a view that is effectively hidden, and this pane
+        // is hidden whenever a sheet is up (bibleTextMacTVSuppress) and on the
+        // Books and Search tabs. A same-chapter re-render captured there read
+        // "the top", armed nothing, and the import pinned the reader to verse
+        // 1 — a light/dark switch made with Settings open, or made on Books
+        // before going back to Read — and the reading-state flush, which asks
+        // the same question, would save the top for a window closed from
+        // there. The clip view's bounds are the scroll itself, and a hidden
+        // scroll view keeps them; less the text view's frame origin they are
+        // the number visibleRect gives a shown pane, and the clip's height is
+        // the viewport the restore measures against (btMacScrollTVLatched).
+        // The iOS twin reads contentOffset, which a hidden view keeps too.
+        NSClipView *clip = gScroll.contentView;
+        CGFloat offY = clip.bounds.origin.y - tv.frame.origin.y;
         if (offY <= 0.5) return; // at the top → zero anchor
         CGFloat insetH = tv.textContainerInset.height;
         CGFloat docH = [lm usedRectForTextContainer:tv.textContainer].size.height + insetH * 2;
-        CGFloat viewH = tv.visibleRect.size.height;
+        CGFloat viewH = clip.bounds.size.height;
         CGFloat scrollable = docH - viewH;
         if (scrollable > 1) {
             CGFloat f = offY / scrollable;
@@ -3208,17 +3222,11 @@ func readingScrollArea(state *AppState, verses []Verse, pal palette) fyne.Canvas
 	// chapter picker) would render behind it. Let shared code hide/show the
 	// overlay around such popups — showChapterPicker calls these.
 	state.hideReadingOverlay = func() { C.bibleTextMacTVSuppress() }
+	// Restore only the overlay that belongs to the view on screen — the reading
+	// text on Read, nothing over search results or the Books and Search tabs —
+	// by the rule the iOS and Android panes use (restoreNativeReadingOverlay).
 	state.showReadingOverlay = func() {
-		C.bibleTextMacTVUnsuppress()
-		// Restore only the overlay that belongs to the current view: the reading
-		// text when reading, nothing when search results are showing (so closing
-		// settings mid-search doesn't paint verses over the results).
-		setReadingOverlayVisible(!state.IsSearching)
-		// The sheet the reader was inside has left the canvas: run the window
-		// rebuild a background data swap deferred to spare it (no-op otherwise,
-		// and non-recursive — rebuildWindow downs the flag before re-running
-		// this closure).
-		consumeDeferredFullRebuild(state)
+		restoreNativeReadingOverlay(state, func() { C.bibleTextMacTVUnsuppress() }, notifyReadingOverlay)
 	}
 
 	if len(verses) == 0 {
@@ -3248,12 +3256,37 @@ func setReadingOverlayVisible(visible bool) {
 	if useStyledPane() {
 		return
 	}
+	// A pane holding the other palette's chapter stays down, whatever asks for
+	// it: after a light/dark change made on the Books or Search tab nothing has
+	// re-pushed the chapter, and the NSTextView draws its ink straight over the
+	// Fyne paper (drawsBackground=NO), so showing it would put the old
+	// palette's verses on the new page. The Read tab's own build re-pushes —
+	// the body fingerprint folds in the variant — and shows the pane itself
+	// once the new chapter is queued (newMacReadingHost): a rebuild's early
+	// show is refused, and the push's show, later in the same main-queue
+	// drain, reveals the new chapter.
+	//
+	// So on macOS every light/dark rebuild on Read now imports into a HIDDEN
+	// pane — hide, import, show, in one drain — which is the launch path, not
+	// the shown pane every other rebuild imports into. The reader's place
+	// survives it because the same-chapter capture reads the clip view, which
+	// a hidden pane keeps (bibleTextMacCaptureAnchor); read from visibleRect,
+	// as it once was, a hidden pane answered "the top". docs/VISUAL_TESTS.md
+	// asks for the switch on Read mid-chapter, with and without a sheet.
+	if visible && nativePaneStale(macPanePushed, macPaneDark, isDark()) {
+		visible = false
+	}
 	if visible {
 		C.bibleTextMacTVShow()
 	} else {
 		C.bibleTextMacTVHide()
 	}
 }
+
+// macPanePushed and macPaneDark are what the NSTextView holds: whether it has
+// been given a chapter, and in which palette (setReadingOverlayVisible,
+// nativePaneStale). Written with lastPushedBodyFP, on the UI goroutine.
+var macPanePushed, macPaneDark bool
 
 func hideNativeReadingOverlayMac() { C.bibleTextMacTVHide() }
 
@@ -3428,6 +3461,9 @@ func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 		lastPushedBodyFP = body
 		lastPushedTintFP = tintFP
 		lastPushedBookChapter = bc
+		// The palette the HTML below is built in (state.pal asks isDark), so a
+		// later show can tell a pane left in the palette just left.
+		macPanePushed, macPaneDark = true, isDark()
 		// The model FIRST and unpainted: the HTML below carries this very wash.
 		setNativeTint(state, verses)
 		// Announce the push: the same-chapter answer above, plus the generation
@@ -3448,7 +3484,9 @@ func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 		}
 	}
 	// Keep the floating "Follow narration" pill styled for the current palette
-	// (this build runs on every theme flip).
+	// (this build runs on every theme flip made with the reading view built; a
+	// flip made on the Books or Search tab reaches here when Read is built
+	// again, and setReadingOverlayVisible keeps the pane down until then).
 	pushFollowButtonColors(state.pal())
 	// Push the frame so the (possibly already-populated) text view shows.
 	C.bibleTextMacTVShow()

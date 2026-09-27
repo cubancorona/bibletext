@@ -139,6 +139,13 @@ func (w *layoutWatcher) CreateRenderer() fyne.WidgetRenderer {
 	return widget.NewSimpleRenderer(w.content)
 }
 
+// wrappedContent lets a walk over the page reach the tree inside the watcher
+// (contentWrapper, reading.go): rebuildWindow stops any bar left running in
+// the page it replaces, and on a phone the page IS this widget.
+func (w *layoutWatcher) wrappedContent() fyne.CanvasObject { return w.content }
+
+var _ contentWrapper = (*layoutWatcher)(nil)
+
 // Resize re-evaluates the layout against the new size. If the class or the
 // resolved bar/rail placement changes, a rebuild is scheduled on the UI
 // thread — not run inline, since we're mid-layout. pending coalesces the burst of

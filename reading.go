@@ -454,6 +454,8 @@ func rebuildWindow(state *AppState) {
 			stopInfiniteBars(t.Content)
 		case *widget.PopUp:
 			stopInfiniteBars(t.Content)
+		case contentWrapper:
+			stopInfiniteBars(t.wrappedContent())
 		}
 	}
 	cnv := state.window.Canvas()
@@ -471,6 +473,18 @@ func rebuildWindow(state *AppState) {
 			continue
 		}
 		cnv.Overlays().Remove(o)
+	}
+	// The page this rebuild replaces goes the same way. A bar still running in
+	// it — the Search tab's Find bar while its search is in flight — is in a
+	// tree nothing will show again, and went on marking the canvas dirty until
+	// that search landed; the rebuilt tab draws a bar of its own from state.
+	// The Find bar is stopped through state, which holds the one on the
+	// canvas wherever it is (stopFindBar); the walk is for anything else, and
+	// goes into the phones' root widget through contentWrapper, where a walk
+	// over containers alone would stop at the root and reach nothing.
+	state.stopFindBar()
+	if old := cnv.Content(); old != nil {
+		stopInfiniteBars(old)
 	}
 	// Every sheet is closed now, so no registration to bring one back may
 	// outlive the drain — the closures hold the drained sheets whole. A
@@ -492,6 +506,17 @@ func rebuildWindow(state *AppState) {
 	state.appearance.built = appearanceVariant(state)
 	state.window.SetContent(CreateMainUI(state.app, state, state.window))
 	afterRebuild(state)
+	// The window's own title bar is outside the content SetContent re-lit:
+	// bring it along whenever this rebuild moved the variant, whatever asked
+	// for the rebuild (appearance.go).
+	followTitleBar(state)
+}
+
+// contentWrapper is a root widget that holds the page's whole tree in its
+// renderer — the phones' layoutWatcher (ui_regular.go) — so that a walk over
+// the tree, which goes through containers, can go through it too.
+type contentWrapper interface {
+	wrappedContent() fyne.CanvasObject
 }
 
 // lastPushedChapterFP is the fingerprint of the chapter currently held by the

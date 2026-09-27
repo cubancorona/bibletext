@@ -924,6 +924,30 @@ public final class BtBridge {
     // The reading palette, as last pushed by setStyle — the study popup below
     // draws itself in it, so it belongs to the page it floats over.
     private static int lastTextColor = 0xFF000000, lastPaperColor = 0xFFFFFFFF;
+    // The study popup while it is up, so something other than its own rows can
+    // close it (dismissStudyPopup). UI thread only.
+    private static android.widget.PopupWindow studyPopup;
+
+    // studyPopupStale is the decision setStyle takes the popup down on: its
+    // card and rows were filled from the palette at the moment it opened, so a
+    // push of any other text or paper colour — a light/dark change above all,
+    // which re-renders the page beneath it — would leave it floating in the
+    // old one: a parchment card over the dark page, or a dark one over
+    // parchment. The popup is closed rather than recoloured in place: it is a
+    // two-level choice on a selection the re-render has just replaced, and
+    // the reader asks again from the new selection in the new palette.
+    static boolean studyPopupStale(int oldText, int oldPaper, int newText, int newPaper) {
+        return oldText != newText || oldPaper != newPaper;
+    }
+
+    // dismissStudyPopup closes the study popup if it is up. UI thread only.
+    private static void dismissStudyPopup() {
+        android.widget.PopupWindow pw = studyPopup;
+        studyPopup = null;
+        if (pw != null && pw.isShowing()) {
+            try { pw.dismiss(); } catch (Throwable ignored) {}
+        }
+    }
     // Material list-item metrics for the study popup, in dp.
     private static final int STUDY_ROW_H = 48, STUDY_ROW_PAD_X = 16, STUDY_ROW_MIN_W = 196,
                              STUDY_CARD_PAD_Y = 8, STUDY_EDGE = 8, STUDY_GAP = 4;
@@ -970,6 +994,15 @@ public final class BtBridge {
 
         final android.widget.PopupWindow pw = new android.widget.PopupWindow(list,
                 FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT, true);
+        // Held while it is up (dismissStudyPopup), and let go however it
+        // closes — a row, an outside tap, Back, or a palette change.
+        dismissStudyPopup();
+        studyPopup = pw;
+        pw.setOnDismissListener(new android.widget.PopupWindow.OnDismissListener() {
+            @Override public void onDismiss() {
+                if (studyPopup == pw) studyPopup = null;
+            }
+        });
         pw.setOutsideTouchable(true);
         // A transparent window background so outside taps dismiss; the card
         // itself carries the paper colour and the shadow.
@@ -2879,6 +2912,11 @@ public final class BtBridge {
                 // ordering against setLineHeight matters.
                 android.graphics.Typeface face = readingTypeface();
                 float textSizePx = textSizeDp * density * (face != null ? opticalScale : 1f);
+                // BEFORE the palette moves: the study popup was drawn in the
+                // one being replaced (studyPopupStale).
+                if (studyPopupStale(lastTextColor, lastPaperColor, textColor, paperColor)) {
+                    dismissStudyPopup();
+                }
                 lastTextColor = textColor;
                 lastPaperColor = paperColor;
                 lastPadLDp = padLDp; lastPadTDp = padTDp;
@@ -3341,6 +3379,10 @@ public final class BtBridge {
         UI.post(new Runnable() {
             @Override public void run() {
                 wantShown = false;
+                // The popup is a window of its own: hiding the Dialog leaves it
+                // up, over another tab or a Fyne sheet, acting on a selection
+                // dismissSelection is about to clear.
+                dismissStudyPopup();
                 if (dialog == null || !dialog.isShowing()) return;
                 dismissSelection();
                 dialog.hide();
@@ -3353,6 +3395,7 @@ public final class BtBridge {
         UI.post(new Runnable() {
             @Override public void run() {
                 suppressed = true;
+                dismissStudyPopup(); // as in hide(): never over the modal
                 if (dialog == null || !dialog.isShowing()) return;
                 dismissSelection();
                 dialog.hide();

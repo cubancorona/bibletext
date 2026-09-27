@@ -165,7 +165,7 @@ func newAppearanceHarness(t *testing.T, mobile bool) *appearanceHarness {
 	votdSynchronousRemeasure(t)
 	h.state = deferredTestState(t, app)
 	h.state.window.Resize(fyne.NewSize(900, 760))
-	h.state.appearance = appearanceGate{mobile: mobile, built: h.variant}
+	h.state.appearance = appearanceGate{mobile: mobile, built: h.variant, frame: h.variant}
 	return h
 }
 

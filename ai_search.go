@@ -33,6 +33,14 @@ func startAISearch(state *AppState, query string, done func([]Verse, error)) (ca
 	return cancelCtx
 }
 
+// startFind is how the Search tab starts a Find: startAISearch, behind a seam so
+// the host can hold a completion and deliver it on its own goroutine at the
+// moment it chooses — after a window rebuild, above all, which is the moment
+// that proves where the completion paints. A released stub cannot do that
+// safely: its completion would run app code on the stub's goroutine against
+// whatever test is running by then (stubAIGenerate, ai_timeout_test.go).
+var startFind = startAISearch
+
 // aiSearchSession serializes Find submissions: every submission (and anything
 // that abandons one — clearing the field, toggling the search mode) calls
 // Invalidate/Start, and a completion callback is honored only if it is still the

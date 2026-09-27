@@ -446,6 +446,57 @@ func noteSVGHex(c color.Color) (string, float64) {
 	return fmt.Sprintf("#%02X%02X%02X", r>>8, g>>8, b>>8), float64(a>>8) / 255
 }
 
+// lookNamedSVG wraps a generated SVG in a resource NAMED AFTER ITS LOOK — the
+// colours in its bytes, alpha and all, and which shape it is — and every SVG
+// this app writes with literal colours in it must go through it.
+//
+// Fyne keeps rasterised SVGs in one process-wide cache keyed by the resource's
+// name and the pixel size it was drawn at, and nothing else — not the bytes,
+// not the palette. A light/dark change clears that cache and then, before the
+// app's own rebuild runs, refreshes the OLD tree, which rasterises the old
+// card's old-palette bytes back into it under the old name. The rebuilt card
+// then asked for the same name at the same size and was handed the old raster:
+// on Windows and Linux the styled pane's note card, in focus mode above all,
+// came back as a pale card under the new pale ink, or a black one under dark
+// ink, until its size changed or the entry sat unused for a minute. A name
+// that never changed was the whole defect: nothing guaranteed the cache was
+// cleared between the two builds except, in the normal layout, the Go to
+// chip's theme override doing it as a side effect. (The notes browser's tails
+// were never caught: each row sits in a theme override of its own, and Fyne
+// prefixes an override's rasters with a scope no rebuilt row can share. The
+// tail goes through here all the same, so that no row can come to depend on
+// that.)
+//
+// The SIZE stays out of the name on purpose. Fyne already keys on it: a raster
+// at another size misses and is replaced under the same name, so a card that
+// follows the window's width through a resize drag keeps one entry per
+// palette. A name that folded the width in would keep one full-card raster
+// per width the drag passed through, each for at least a minute — over a
+// hundred megabytes for a single sweep. What can differ at the SAME size is
+// the look, so the look is the name: fill and stroke, each with its alpha,
+// and the shape — the one-path bubble with a tail or without, whose heights
+// coincide for different cards. Anything added later that changes the pixels
+// at a given size belongs in shape. The themed icons (ThemedResource,
+// NewColoredResource) need none of this: they carry a colour NAME and are
+// recoloured when rasterised, so the refresh already draws them in the new
+// palette.
+func lookNamedSVG(stem, shape string, fill, stroke color.Color, svg string) fyne.Resource {
+	name := stem + "-" + svgLookColour(fill) + "-" + svgLookColour(stroke)
+	if shape != "" {
+		name += "-" + shape
+	}
+	return fyne.NewStaticResource(name+".svg", []byte(svg))
+}
+
+// svgLookColour spells a colour for a resource name: all eight hex digits,
+// alpha included. Only the NAME is spelled so — the SVG itself keeps the six
+// digits Fyne's loader accepts (noteSVGHex) — and the eight bits per channel
+// are the ones noteSVGHex writes, so two colours that draw alike name alike.
+func svgLookColour(c color.Color) string {
+	r, g, b, a := c.RGBA()
+	return fmt.Sprintf("%02X%02X%02X%02X", r>>8, g>>8, b>>8, a>>8)
+}
+
 // noteTailSVG draws the tail: filled, with the two SLANTED edges stroked and
 // the mouth left open so it merges into the bubble above it.
 //
@@ -496,7 +547,7 @@ func noteTailSVG(fill, stroke color.Color) fyne.Resource {
 		w, w, lid, w/2, lid+d, lid, fillHex, fillA,
 		lid, w/2, lid+d, w, lid, strokeHex, strokeA,
 	)
-	return fyne.NewStaticResource("note-tail.svg", []byte(svg))
+	return lookNamedSVG("note-tail", "", fill, stroke, svg)
 }
 
 // noteTailLidOverlap is the cover that hides the card's bottom border behind the
