@@ -423,8 +423,37 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       IMMEDIATELY; Delete clears the on-screen note and tint at once (the
       sticker once kept drawing a deleted note).
 - [ ] System theme flip mid-chapter: whole palette swaps, viewport stays
-      on the same verse; with a sheet open the rebuild defers to sheet
-      close; the iOS app-switcher double-snapshot must not yank the sheet.
+      on the same verse. With a sheet open (Go to with a book, chapter and
+      verse typed; Verse of the day; Translation; Settings; a note being
+      written) the whole app re-lights at once and the sheet comes back in
+      the new palette showing the same thing — never a dark card with dark
+      letters, never a page half in each theme. Flip from Control Centre
+      and by schedule with the app backgrounded. Background the app with a
+      sheet open and bring it back WITHOUT changing appearance: the iOS
+      app-switcher double snapshot must leave the sheet exactly as it was
+      (the Go to picker keeps its typed verse), with no rebuild:
+      `BT_SHEET_DEBUG=1` logs one `[sheet] appearance …` line per event —
+      exited-foreground, each variant-changed with background=true and
+      rebuild=false, then entered-foreground with rebuild=false. On
+      Android a change made while away usually logs the other way round:
+      entered-foreground with rebuild=false (the return is heard before
+      the update), then variant-changed with rebuild=true. When the
+      night-mode patch's configuration branch wins its race the update
+      comes first and entered-foreground rebuilds instead. One rebuild
+      either way, never two.
+- [ ] Flip with the keyboard up in a sheet: typing a verse in Go to, the
+      number pad goes down with the old sheet and comes back up over the
+      reopened one with the caret in the same field; in the note composer
+      (iOS: the native field) the note comes back whole and the keyboard
+      types into it. Long-press a Go to verse field for Cut/Copy/Paste and
+      flip under the menu: the picker comes back, the menu does not.
+- [ ] Android, flip with Verse of the day or Go to open: the verses must not
+      flash over the sheet for a frame (the rebuild un-suppresses the
+      reading Dialog and the reopened sheet suppresses it again a moment
+      later — appearance.go).
+- [ ] Flip while "Downloading …" is up (a translation's first download):
+      the spinner comes back in the new palette and goes when the
+      translation lands.
 - [ ] Palette spot-checks in BOTH variants: unchecked boxes visible on
       dark cards, sapphire accent (never stock Fyne blue), no white frame
       around popups, disabled controls quieter but readable, red letters

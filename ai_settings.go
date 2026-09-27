@@ -901,6 +901,12 @@ func showAISettings(state *AppState) {
 	fitSheet()
 	fitSheet()
 	popup.ShowAtPosition(fyne.NewPos(x, y))
+	// A light/dark rebuild drains the sheet; it comes back at its top. Nothing
+	// is lost by that: every control here saves as it changes, and the rebuild
+	// was built from the saved values, so the new sheet's at-open snapshot
+	// above is the right baseline for its own close (sheet_reopen.go). The
+	// model picker opened over it registers nothing — see there.
+	registerSheetReopen(state, popup, func() { showAISettings(state) })
 
 	// done() (overlay-restore cleanup) is called directly by the ✕. An outside-tap close
 	// goes through Fyne's built-in PopUp.Hide, which does NOT call done() — and a PopUp

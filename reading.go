@@ -472,6 +472,11 @@ func rebuildWindow(state *AppState) {
 		}
 		cnv.Overlays().Remove(o)
 	}
+	// Every sheet is closed now, so no registration to bring one back may
+	// outlive the drain — the closures hold the drained sheets whole. A
+	// light/dark rebuild took the top sheet's closure before calling here
+	// (appearance.go); anything else that rebuilds closes its sheets for good.
+	pruneSheetReopens(state)
 	// A popup's own restore may not fire (or not yet — the watchdogs poll on
 	// 150-200ms timers), and a drained modal already called
 	// state.hideReadingOverlay() on open — leaving the native reading view
@@ -481,6 +486,10 @@ func rebuildWindow(state *AppState) {
 	if state.showReadingOverlay != nil {
 		state.showReadingOverlay()
 	}
+	// The palette below comes from the live variant, so this is the variant
+	// the window is built with — whatever asked for the rebuild. The
+	// appearance gate compares against it (appearance.go).
+	state.appearance.built = appearanceVariant(state)
 	state.window.SetContent(CreateMainUI(state.app, state, state.window))
 	afterRebuild(state)
 }

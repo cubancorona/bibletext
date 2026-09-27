@@ -146,10 +146,10 @@ func TestAnyFullRebuildSatisfiesTheDeferredOne(t *testing.T) {
 
 // The Windows/Linux sheet-close consume point: installSheetCloseConsume hands
 // those platforms a stand-in overlay-restore closure whose whole duty is the
-// consume, so a theme flip (the whole palette!) deferred under an open sheet
-// repaints the moment the sheet closes — not at whenever the next navigation
-// happens to run refresh(). The host is darwin, so the platform seam is
-// overridden to prove the closure.
+// consume, so a background swap deferred under an open sheet repaints the
+// moment the sheet closes — not at whenever the next navigation happens to run
+// refresh(). The host is darwin, so the platform seam is overridden to prove
+// the closure.
 func TestSheetCloseConsumeStandInOnFynePanes(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -165,13 +165,13 @@ func TestSheetCloseConsumeStandInOnFynePanes(t *testing.T) {
 		t.Fatal("the stand-in closure must be installed where no native overlay exists")
 	}
 
-	// A real light/dark flip lands while the reader is inside a sheet…
+	// A translation's upgrade lands while the reader is inside a sheet…
 	pop := widget.NewModalPopUp(widget.NewLabel("settings stand-in"), state.window.Canvas())
 	pop.Show()
 	genBefore := windowRebuildGen
 	deferOrRebuild(state)
 	if windowRebuildGen != genBefore || !state.fullRebuildDeferred {
-		t.Fatal("precondition: the flip must defer under the sheet")
+		t.Fatal("precondition: the swap's rebuild must defer under the sheet")
 	}
 	// …a restore that fires while a sheet still owns the canvas declines
 	// (the guarded close paths call it exactly so)…
@@ -183,7 +183,7 @@ func TestSheetCloseConsumeStandInOnFynePanes(t *testing.T) {
 	pop.Hide()
 	state.showReadingOverlay()
 	if windowRebuildGen != genBefore+1 {
-		t.Fatalf("sheet closed: the deferred palette repaint must run NOW, got %d rebuilds",
+		t.Fatalf("sheet closed: the deferred repaint must run NOW, got %d rebuilds",
 			windowRebuildGen-genBefore)
 	}
 	if state.fullRebuildDeferred {
@@ -257,11 +257,11 @@ func TestSwitchedAwayCompletionOnlyCaches(t *testing.T) {
 	}
 }
 
-// The theme observer's spelling: iOS snapshots a backgrounding app in BOTH
-// appearances, so the variant round-trips and each leg reads as a real change
-// at execution time. deferOrRebuild is what keeps the sheet alive:
-// rebuild now with a clear canvas, defer to sheet-close otherwise.
-func TestThemeRebuildDefersWhileASheetIsOpen(t *testing.T) {
+// deferOrRebuild, the spelling applyFullDownload's upgrade of another
+// translation (D17) uses: rebuild now with a clear canvas, defer to
+// sheet-close otherwise. (The light/dark listener used it too, once; it no
+// longer defers — appearance_test.go holds what it does instead.)
+func TestDeferOrRebuildWaitsForTheSheet(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	state := deferredTestState(t, app)
@@ -273,7 +273,7 @@ func TestThemeRebuildDefersWhileASheetIsOpen(t *testing.T) {
 	deferOrRebuild(state)
 
 	if windowRebuildGen != genBefore {
-		t.Fatal("the variant flip rebuilt over an open sheet — the snapshot round trip kills it again")
+		t.Fatal("the background swap rebuilt over an open sheet — the sheet the reader is inside closed")
 	}
 	if !pop.Visible() || !state.fullRebuildDeferred {
 		t.Fatal("the sheet must survive, and the rebuild must be remembered")
@@ -284,8 +284,7 @@ func TestThemeRebuildDefersWhileASheetIsOpen(t *testing.T) {
 		t.Fatal("sheet closed: the deferred repaint must run")
 	}
 
-	// And with a clear canvas the same call rebuilds immediately — today's
-	// behavior for a variant change while the reader is just reading.
+	// And with a clear canvas the same call rebuilds immediately.
 	genBefore = windowRebuildGen
 	deferOrRebuild(state)
 	if windowRebuildGen != genBefore+1 {

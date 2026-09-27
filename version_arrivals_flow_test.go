@@ -1613,7 +1613,7 @@ func TestTheArrivalMarkBelongsToItsLoad(t *testing.T) {
 			calls int
 		}{
 			{"switchToLinkVersion", "byArrival", 2},
-			{"showVersionPicker", "byReader", 1},
+			{"showVersionPickerWith", "byReader", 1},
 		} {
 			decls := src.funcs[tc.fn]
 			if len(decls) != 1 {

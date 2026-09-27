@@ -244,7 +244,12 @@ func applyShareTarget(state *AppState, t ShareTarget) {
 			if unavailable != "" {
 				heading = "Shared in " + unavailable
 			}
-			showLinkNotice(state, heading, shareTargetReference(t), linkParkedMessage(state, replaced))
+			// The card promises the passage will open by itself, so it may come
+			// back after a light/dark rebuild only while THIS park is still
+			// waiting — the rebuild that consumes a deferred download opens it.
+			waiting := state.pendingLink
+			showLinkNoticeWhile(state, heading, shareTargetReference(t), linkParkedMessage(state, replaced),
+				func() bool { return state.pendingLink == waiting })
 		} else {
 			// NO PARK CAN HELP THIS ONE, so it needs the other sentence.
 			//

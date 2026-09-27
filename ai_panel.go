@@ -292,6 +292,12 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		current = text
 		copyBtn.Enable()
 		reportBtn.Enable()
+		// The answer has landed, so a light/dark rebuild may bring the panel
+		// back: the reopen runs the same action, which aiCache answers at once
+		// without a second request. Only now — while a request is in flight the
+		// request belongs to this panel, which reopens itself when it lands
+		// (below), and a second reopen would stack two panels (sheet_reopen.go).
+		registerSheetReopen(state, popup, func() { showAIPanel(state, action, selectedText, question) })
 		setAIAnswerText(answer, text)
 		// A word-wrapped RichText only reports its true height once it has wrapped
 		// at a known width. Pre-wrap at the body width so the height is right, then
@@ -313,6 +319,12 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 
 	setError := func(msg string, needsSettings bool) {
 		stopThinking()
+		// An error is not an answer aiCache holds, so reopening would ask
+		// again, on the reader's key: the error state never comes back after a
+		// light/dark rebuild. Only setResult registers, and nothing leads from
+		// an answer back to a request today, so no registration is live here;
+		// this forget is the belt to that, should a path ever be added.
+		forgetSheetReopen(state, popup)
 		// Drop the previous answer with its buttons. Copy was already disabled
 		// here; Report was not, and nothing disabled it anywhere, so it kept
 		// pointing at whatever `current` still held. Report mails the answer to
@@ -371,6 +383,11 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		// aiRequestBudget while its detached ProgressBarInfinite keeps
 		// repainting the canvas — the exact leak documented above cancelFetch.
 		stopThinking()
+		// Back in flight: not reopenable until the new answer lands. The two
+		// ways in (Try again from an error, the faster model while thinking)
+		// both start from a state that holds no registration, so this is the
+		// same belt as setError's.
+		forgetSheetReopen(state, popup)
 		fetchGen++
 		gen := fetchGen
 		setThinking()

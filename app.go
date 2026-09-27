@@ -466,11 +466,19 @@ func applyFullDownload(state *AppState, version BibleVersion, full *BibleData, m
 
 // deferOrRebuild is the background-completion spelling of rebuildWindow: the
 // rebuild happens NOW when nothing would be lost, and waits for the sheet the
-// reader is inside otherwise. Used by the paths a reader never triggered from
-// the sheet itself — the theme observer, and applyFullDownload's upgrade of a
-// translation other than the default (D17); the default's own path keeps its
-// own copy of the check because its immediate path must consume the
-// seed-parked link first.
+// reader is inside otherwise. Its caller is applyFullDownload's upgrade of a
+// translation other than the default (D17), a data swap the reader never
+// triggered from the sheet and whose rebuild changes nothing the sheet shows;
+// the default's own path keeps its own copy of the check because its
+// immediate path must consume the seed-parked link first.
+//
+// NOT for a light/dark change. The theme listener used this until deferring
+// turned out to be its own defect: with a sheet up for as long as the reader
+// kept it, the app sat half in each theme — the sheet in the palette it was
+// built with over stock widgets Fyne had re-lit, the page behind it the same
+// mix. A real appearance change now rebuilds at once and reopens the sheet in
+// the new palette, and the snapshot round trip the deferral was guarding
+// against never reaches a rebuild at all (appearance.go).
 func deferOrRebuild(state *AppState) {
 	if state != nil && state.window != nil && state.window.Canvas().Overlays().Top() != nil {
 		if os.Getenv("BT_SHEET_DEBUG") != "" {
@@ -491,7 +499,7 @@ func deferOrRebuild(state *AppState) {
 // Reports whether it rebuilt, so refresh() can skip its own repaint.
 //
 // The flag itself is CLEARED inside rebuildWindow, not here: any full rebuild
-// satisfies a deferred one (a version switch, a theme flip), and clearing at
+// satisfies a deferred one (a version switch, a light/dark change), and clearing at
 // the one place every rebuild passes through makes double-consume impossible
 // — including this function's own call, which cannot recurse because the flag
 // is already down by the time rebuildWindow re-runs the restore closure.
@@ -517,15 +525,15 @@ var sheetConsumeClosure = func() bool { return sheetConsumeClosureOnPlatform }
 // their overlay-restore closures. Every popup close path already calls
 // state.showReadingOverlay when it is set; on these platforms there is no
 // overlay to restore, so the closure's only duty is consuming a rebuild that a
-// theme flip or a background data swap deferred while the sheet was open.
-// Without it the deferral had no on-close consume here at all: a REAL
-// light/dark flip under an open sheet parked fullRebuildDeferred and the WHOLE
-// window kept the stale palette after the sheet closed, until the next
-// navigation's refresh() happened to catch it — the very half-dark-window
-// class deferOrRebuild exists to fix, sitting as the entire page instead of
-// one sheet. consumeDeferredFullRebuild itself declines while any overlay
-// still owns the canvas, so the guarded and unguarded restore callers are both
-// safe to hand this closure.
+// background data swap deferred while the sheet was open. Without it the
+// deferral had no on-close consume here at all: a swap that landed under an
+// open sheet parked fullRebuildDeferred and the window kept the old chrome
+// after the sheet closed, until the next navigation's refresh() happened to
+// catch it. (A light/dark change once took this path too, and there it left
+// the WHOLE window in the stale palette; it no longer defers — appearance.go.)
+// consumeDeferredFullRebuild itself declines while any overlay still owns the
+// canvas, so the guarded and unguarded restore callers are both safe to hand
+// this closure.
 // sheetConsumeInstallGen counts installer INVOCATIONS (not installs): on the
 // native platforms the gate stands the installer down, so the only host-
 // observable truth about the WIRING — that desktop CreateMainUI still calls it
@@ -589,7 +597,14 @@ func InstallReadingStateFlush(myApp fyne.App, window fyne.Window, state *AppStat
 		nativeAudioStop()
 		flushReadingState(state)
 	})
-	lc.SetOnExitedForeground(func() { flushReadingState(state) }) // iOS/Android background
+	lc.SetOnExitedForeground(func() { // iOS/Android background
+		// The appearance gate closes FIRST, before anything else here: from
+		// this moment a light/dark change is ignored until the app returns,
+		// which is what keeps the app switcher's two-appearance snapshot
+		// from rebuilding the window (appearance.go). A no-op on desktop.
+		observeAppearance(state, appearanceExitedForeground)
+		flushReadingState(state)
+	})
 	// Retry the refresh whenever the app returns to the foreground — covers a
 	// fetch that stalled or dropped while backgrounded. No-op once nothing is owed
 	// (triggerFullDownload asks owedUpgrades, and is single-flight).
@@ -600,8 +615,18 @@ func InstallReadingStateFlush(myApp fyne.App, window fyne.Window, state *AppStat
 	// refreshLocalTimeZone first: a clock change or a change of country while
 	// the app was away must be in time.Local before anything below rebuilds a
 	// window with a date in it (timezone.go).
+	//
+	// The appearance gate opens next and reconciles ONCE: the settled variant
+	// against the one the window was built with — equal after a snapshot
+	// round trip, so the sheet the reader left open stays as it was; different
+	// after a real change, which rebuilds and reopens the sheet in the new
+	// palette (appearance.go). It is the hook's first act but for the zone
+	// read, which must precede it because the reconcile may be that rebuild.
+	// Nothing else runs on the UI goroutine between the two lines, so no
+	// queued closure can observe the gate in between.
 	lc.SetOnEnteredForeground(func() {
 		refreshLocalTimeZone()
+		observeAppearance(state, appearanceEnteredForeground)
 		foregroundOverlayRecovery(state)
 		fyne.Do(func() { triggerFullDownload(state) })
 	})
@@ -688,60 +713,38 @@ var systemThemeOnce sync.Once
 // The rebuild goes through rebuildWindow, NOT a bare SetContent: SetContent
 // replaces only the content tree and never touches Canvas().Overlays(), so an
 // OPEN popup (the Settings sheet, a picker) survived a variant flip with its
-// captured colors while Fyne re-lit its stock widgets — the resulting
-// dark-panel/dark-text sheet after an overnight dark→light switch with the
-// app suspended. rebuildWindow drains the overlay stack (popups close;
-// reopening shows fresh colors) and re-pins the native reading overlay.
+// captured colours while Fyne re-lit its stock widgets — a dark card with
+// dark-on-dark letters and light entry boxes. rebuildWindow drains the overlay
+// stack and re-pins the native reading overlay, and the sheet that was on top
+// comes straight back, rebuilt in the new palette and showing what it showed,
+// when it registered a way to (sheet_reopen.go); one that did not simply
+// closes.
+//
+// Which changes rebuild is the appearance gate's decision (appearance.go): on
+// a phone or tablet a change heard while the app is out of the foreground is
+// ignored, and the return to the foreground reconciles once against the
+// variant the window was built with — so the switcher's two-appearance
+// snapshot of a backgrounding app nets to nothing and the sheet the reader
+// left open stays as it was, while a real change still rebuilds, at once.
 //
 // applyTheme calls app.Settings().SetTheme() the first time (and on a real theme
-// change), which ALSO fires this listener — so we guard against a rebuild loop by
-// only acting when the actual light/dark variant has changed since last time.
+// change), which ALSO fires this listener — the gate compares against the
+// built variant, so that echo reads as no change and cannot loop.
 func ObserveSystemThemeChanges(myApp fyne.App, state *AppState) {
 	systemThemeOnce.Do(func() {
+		// Seeded here for the window already built, through the same question
+		// its palette asked (appearanceVariant); every rebuild re-records it
+		// (rebuildWindow).
+		state.appearance.mobile = fyne.CurrentDevice().IsMobile()
+		state.appearance.built = appearanceVariant(state)
 		ch := make(chan fyne.Settings, 1)
 		myApp.Settings().AddChangeListener(ch)
-		// The variant the WINDOW was last built with — compared at rebuild
-		// time, on the UI goroutine, not event-to-event on the listener
-		// goroutine. The difference is not pedantry: when iOS backgrounds the
-		// app it snapshots it in BOTH appearances for the app switcher, so
-		// the variant flips away and back and the listener hears two
-		// changes. Event-to-event each leg looks like a real change, the
-		// queued rebuilds run on restore, and the drain takes the sheet the
-		// reader left open with it. Against the built variant, a round
-		// trip nets to no change and both queued closures no-op; a REAL
-		// overnight flip still differs and still rebuilds — with the drain
-		// that exists precisely for that flip's stale-palette sheet.
-		builtVariant := myApp.Settings().ThemeVariant()
 		go func() {
 			for range ch {
-				fyne.Do(func() {
-					if state.stopping.Load() {
-						return
-					}
-					v := myApp.Settings().ThemeVariant()
-					if os.Getenv("BT_SHEET_DEBUG") != "" {
-						fmt.Fprintf(os.Stderr, "[sheet] theme event: built=%v now=%v\n", builtVariant, v)
-					}
-					if v == builtVariant {
-						return // net no-change: a snapshot round trip, or no variant in it at all
-					}
-					builtVariant = v
-					// The built-variant compare alone cannot save an open sheet:
-					// the round trip's two closures interleave with the settings
-					// updates, so each leg reads as a real change at execution
-					// time (measured — the instrumented sim logs built=0 now=1
-					// then built=1 now=0, one rebuild each, sheet drained). No
-					// timer or flag can outrace that delivery. What CAN hold is
-					// pure state: while a sheet owns the canvas, defer the
-					// rebuild to the moment it leaves — the same machinery as
-					// applyFullDownload, consumed by the overlay-restore
-					// closures and satisfied by any other rebuild. The round
-					// trip then nets to one repaint with the settled variant on
-					// close; a REAL flip with a sheet open repaints on close
-					// too, trading the sheet-yank for a briefly stale palette
-					// behind an overlay the reader is actively using.
-					deferOrRebuild(state)
-				})
+				// The closure carries nothing from the event: it runs in no
+				// fixed order against the settings updates and the lifecycle
+				// hooks, so the gate reads the live variant when it runs.
+				fyne.Do(func() { observeAppearance(state, appearanceChanged) })
 			}
 		}()
 	})

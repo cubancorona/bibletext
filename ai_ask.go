@@ -29,6 +29,13 @@ import (
 // native reading overlay hidden — every exit runs through closeAsk, which restores it. On
 // desktop there's no soft keyboard, so a plain centered modal is cleaner.
 func promptAskQuestion(state *AppState, selectedText string) {
+	promptAskQuestionWith(state, selectedText, "")
+}
+
+// promptAskQuestionWith opens the sheet with question already in the field —
+// "" for every ordinary open. The light/dark reopen passes what the reader had
+// typed when the rebuild drained the sheet (sheet_reopen.go).
+func promptAskQuestionWith(state *AppState, selectedText, question string) {
 	if state == nil || state.window == nil {
 		return
 	}
@@ -86,6 +93,9 @@ func promptAskQuestion(state *AppState, selectedText string) {
 	// --- Question field + actions. ---
 	entry := newSearchEntry() // Return submits on iOS (see searchKeyEntry)
 	entry.SetPlaceHolder("Ask a question about this passage…")
+	entry.SetText(question)
+	// Read when the rebuild comes, not now: the question as typed so far.
+	reopen := func() { promptAskQuestionWith(state, selectedText, entry.Text) }
 
 	doAsk := func() {
 		q := strings.TrimSpace(entry.Text)
@@ -124,6 +134,7 @@ func promptAskQuestion(state *AppState, selectedText string) {
 		card := surface(container.NewPadded(form), pal.SurfaceAlt, pal.Border, fyne.Size{})
 		popup = widget.NewModalPopUp(card, cnv)
 		popup.Show()
+		registerSheetReopen(state, popup, reopen)
 		w := float32(460)
 		if cw := cnv.Size().Width - 80; cw > 280 && w > cw {
 			w = cw
@@ -148,6 +159,7 @@ func promptAskQuestion(state *AppState, selectedText string) {
 	}
 	popup.Resize(fyne.NewSize(cw, ch))
 	popup.ShowAtPosition(fyne.NewPos(0, topY))
+	registerSheetReopen(state, popup, reopen)
 	focusEntry()
 
 	// Catch an outside-tap close. The sheet is non-modal and sized to the

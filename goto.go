@@ -73,6 +73,25 @@ var gKeyboardInsetSetter func(float32)
 // On iOS the reading pane is a native UITextView floating above the Fyne canvas, so
 // (like every modal here) we hide it while the picker is up and restore on close.
 func gotoPickerModal(state *AppState, withVerse bool) {
+	gotoPickerModalFrom(state, withVerse, gotoPickerSeed{})
+}
+
+// gotoPickerSeed is what the picker opens showing. The zero seed is the reader's
+// own place, which is every ordinary open; the light/dark reopen (sheet_reopen.go)
+// hands back what the picker held when a rebuild drained it — the book and chapter
+// selected, the alphabet navigator's open letter, the verse fields' text, and which
+// of them had the caret — so the reader finds the picker exactly as they left it,
+// in the new palette.
+type gotoPickerSeed struct {
+	book       string
+	chapter    int
+	letter     rune // the navigator's open letter (its book list); 0 = the letter grid
+	start, end string
+	focusEnd   bool // with focused: the caret was in the end field, not the verse field
+	focused    bool // a verse field had the caret (and, on a phone, the keyboard)
+}
+
+func gotoPickerModalFrom(state *AppState, withVerse bool, seed gotoPickerSeed) {
 	cnv := pickerCanvas(state)
 	if cnv == nil {
 		return
@@ -95,6 +114,10 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 
 	selectedBook := state.CurrentBook
 	selectedChapter := state.CurrentChapter
+	if seed.book != "" && state.Bible.GetChaptersForBook(seed.book) > 0 {
+		selectedBook = seed.book
+		selectedChapter = seed.chapter
+	}
 
 	// Which chapter the grid fills: the live selection (verse flavour), else just the
 	// reader's current chapter when they're browsing their own book.
@@ -167,6 +190,13 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 	var leftPane fyne.CanvasObject
 	var bookList *widget.List
 	var scrollBookIntoView func() // scrolls the nav to the selected book/letter (keyboard)
+	// The alphabet navigator's stage, out here rather than inside its branch so the
+	// reopen below can read where the reader had it.
+	bookStage := 0
+	activeLetter := firstLetter(selectedBook)
+	if seed.letter != 0 {
+		bookStage, activeLetter = 1, seed.letter
+	}
 	if withVerse {
 		sortedBooks := alphabeticalBooks(state.Bible.Books) // groups "1/2/3 John" under J, etc.
 		letters := bookLetters(sortedBooks)
@@ -178,8 +208,6 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		// tapped letter's
 		// books with a back row to the alphabet.
 		bookPane := container.NewStack()
-		bookStage := 0
-		activeLetter := firstLetter(state.CurrentBook)
 		var renderBooks func()
 		renderBooks = func() {
 			if bookStage == 1 {
@@ -293,9 +321,11 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 		// number pad has no return key, so Go is the only commit path.
 		startEntry = newNumberEntry()
 		startEntry.SetPlaceHolder("verse")
+		startEntry.SetText(seed.start)
 		startEntry.OnSubmitted = func(string) { commit() }
 		endEntry = newNumberEntry()
 		endEntry.SetPlaceHolder("end")
+		endEntry.SetText(seed.end)
 		endEntry.OnSubmitted = func(string) { commit() }
 		toLabel := canvas.NewText("to", pal.TextMuted)
 		toLabel.TextSize = 14
@@ -505,6 +535,41 @@ func gotoPickerModal(state *AppState, withVerse bool) {
 			}
 		}
 	}
+
+	// The caret goes back where it was: a reopen after a light/dark rebuild
+	// whose reader was typing a verse (below). An ordinary open focuses nothing
+	// — on a phone that would throw the number pad over the grids unasked.
+	if seed.focused {
+		if f := startEntry; f != nil {
+			if seed.focusEnd && endEntry != nil {
+				f = endEntry
+			}
+			cnv.Focus(f)
+		}
+	}
+
+	// A light/dark rebuild drains this picker; this brings it back as the reader
+	// left it, read at the moment of the rebuild, not at open (sheet_reopen.go).
+	// Captured before the rebuild because the gate drops the caret before it
+	// drains, so which field held it can only be asked then; the rest the
+	// drained picker's own widgets still hold.
+	registerSheetReopenCapture(state, popup, func() func() {
+		again := gotoPickerSeed{book: selectedBook, chapter: selectedChapter}
+		if withVerse && bookStage == 1 {
+			again.letter = activeLetter
+		}
+		if startEntry != nil {
+			again.start = startEntry.Text
+		}
+		if endEntry != nil {
+			again.end = endEntry.Text
+		}
+		if focused := cnv.Focused(); focused != nil && startEntry != nil {
+			again.focused = focused == startEntry || focused == endEntry
+			again.focusEnd = focused == endEntry
+		}
+		return func() { gotoPickerModalFrom(state, withVerse, again) }
+	})
 }
 
 // showGotoPicker is the header "Go to" button's picker: the alphabet-grid book

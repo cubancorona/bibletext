@@ -130,6 +130,9 @@ func offerNoteLinkChoice(state *AppState, rawURL string, t ShareTarget) {
 	popup = widget.NewModalPopUp(card, cnv)
 	popup.Show()
 	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+	// Undecided is the one state this card must not lose: a light/dark rebuild
+	// brings the same question back, with the same link (sheet_reopen.go).
+	registerSheetReopen(state, popup, func() { offerNoteLinkChoice(state, rawURL, t) })
 }
 
 // shareTargetReference is the passage a link names, for the offer's subtitle —

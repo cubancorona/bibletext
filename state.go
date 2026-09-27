@@ -214,6 +214,15 @@ type AppState struct {
 	// handler calls it when an overlay is on top, instead of acting on the
 	// reading view beneath the sheet (installShortcuts, ui_desktop.go).
 	dismissSheet func()
+	// sheetReopens holds, for each sheet showing, how it comes back after a
+	// light/dark rebuild drains it (sheet_reopen.go). A registration is dead
+	// the moment its popup closes and is pruned on the next touch.
+	// UI-goroutine only.
+	sheetReopens []sheetReopen
+	// appearance is the light/dark decision's state: the variant the window
+	// was built with, and on mobile whether the app is out of the foreground
+	// (appearance.go). UI-goroutine only.
+	appearance appearanceGate
 
 	// aiKeys holds the user's AI provider choice + keys (bring-your-own-key),
 	// lazily created via keys(); nil-safe so unit tests work without a Fyne app.

@@ -87,11 +87,27 @@ func (s *noteEntrySlot) push() {
 // it drives the live character counter. nil whenever no sheet is up.
 var noteEntryOnChanged func()
 
+// noteEntryOwner counts compose sheets, so the native field and its counter
+// hook belong to the NEWEST one. There is only one native field (a second show
+// replaces the first), and a composer drained by a rebuild runs its teardown
+// from a watchdog up to 150ms later — by which time the light/dark reopen has
+// already opened a new composer and put its own field up. Torn down
+// unconditionally, the old sheet took the new sheet's field with it. So a
+// sheet tears down only what it still owns. UI goroutine only.
+var noteEntryOwner uint64
+
 // promptShareNote collects an optional note, then shares the link carrying it.
 // It is a SECOND verb beside "Share as link", never a step in front of it: the
 // plain share stays one tap, because most shares carry no note and a modal in
 // everyone's way to serve the minority is the wrong trade.
 func promptShareNote(state *AppState, selectedText string, span selSpan) {
+	promptShareNoteWith(state, selectedText, span, "")
+}
+
+// promptShareNoteWith opens the composer with note already in the field — ""
+// for every ordinary open. The light/dark reopen passes what the reader had
+// written when the rebuild drained the sheet (sheet_reopen.go).
+func promptShareNoteWith(state *AppState, selectedText string, span selSpan, note string) {
 	if state == nil || state.window == nil {
 		return
 	}
@@ -115,14 +131,21 @@ func promptShareNote(state *AppState, selectedText string, span selSpan) {
 	// must drop on EVERY close path, or a stale relayout of this sheet's dead
 	// slot could reposition a newer sheet's field.
 	sheetOpen := true
+	noteEntryOwner++
+	owner := noteEntryOwner
 	closeSheet := func() {
 		if closed {
 			return
 		}
 		closed = true
 		sheetOpen = false
-		noteEntryOnChanged = nil
-		hideNativeNoteEntry() // no-op off iOS, and when the Fyne entry was used
+		// Only this sheet's own field and hook (noteEntryOwner): a newer
+		// composer — the reopen after a rebuild drained this one — has put up
+		// its own by the time a watchdog runs this.
+		if owner == noteEntryOwner {
+			noteEntryOnChanged = nil
+			hideNativeNoteEntry() // no-op off iOS, and when the Fyne entry was used
+		}
 		if popup != nil {
 			popup.Hide() // removes it from the overlay stack synchronously
 		}
@@ -151,6 +174,7 @@ func promptShareNote(state *AppState, selectedText string, span selSpan) {
 
 	entry := newSearchEntry()
 	entry.SetPlaceHolder("Say something about this passage…")
+	entry.SetText(note)
 	noteText := func() string {
 		if useNative {
 			return nativeNoteEntryText()
@@ -223,6 +247,13 @@ func promptShareNote(state *AppState, selectedText string, span selSpan) {
 		}
 	}
 
+	// A light/dark rebuild drains the composer; it comes back with the note as
+	// written so far, read when the reopen runs — from the Fyne entry, which a
+	// drained sheet still holds, or on iOS from the native field, which is
+	// still up until the drained sheet's watchdog finds it no longer owns it
+	// (noteEntryOwner). The new sheet takes the caret, as any open does.
+	reopen := func() { promptShareNoteWith(state, selectedText, span, noteText()) }
+
 	if !mobile {
 		card := surface(container.NewPadded(form), pal.SurfaceAlt, pal.Border, fyne.Size{})
 		popup = widget.NewModalPopUp(card, cnv)
@@ -232,6 +263,7 @@ func promptShareNote(state *AppState, selectedText string, span selSpan) {
 			w = cw
 		}
 		popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+		registerSheetReopen(state, popup, reopen)
 		focusEntry()
 		return
 	}
@@ -250,6 +282,7 @@ func promptShareNote(state *AppState, selectedText string, span selSpan) {
 	}
 	popup.Resize(fyne.NewSize(cw, ch))
 	popup.ShowAtPosition(fyne.NewPos(0, topY))
+	registerSheetReopen(state, popup, reopen)
 
 	// A window rebuild (theme flip, rotation, a background data swap) drains
 	// every popup WITHOUT running closeSheet — Hide() is all a drain does. For
@@ -277,7 +310,7 @@ func promptShareNote(state *AppState, selectedText string, span selSpan) {
 	// Resize/Move fired during the popup's layout pass above and keep firing on
 	// every relayout. The view stays hidden until its first real frame arrives,
 	// so mis-timing shows nothing rather than a box at (0,0).
-	showNativeNoteEntry("", "Say something about this passage…", pal)
+	showNativeNoteEntry(note, "Say something about this passage…", pal)
 	noteEntryOnChanged = updateLeft
 }
 

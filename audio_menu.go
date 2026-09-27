@@ -140,6 +140,9 @@ func showAudioSourceMenu(state *AppState) {
 		y = pos.Y + 16
 	}
 	popup.ShowAtPosition(fyne.NewPos(x, y))
+	// Built from state alone (the chosen source, the chapter's recordings), so a
+	// light/dark rebuild can bring it straight back (sheet_reopen.go).
+	registerSheetReopen(state, popup, func() { showAudioSourceMenu(state) })
 
 	// Catch an outside-tap close (Fyne's PopUp.Hide doesn't call our done()).
 	var watch func()

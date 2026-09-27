@@ -939,12 +939,23 @@ func showVerseOfDay(state *AppState) {
 	if state == nil || state.window == nil {
 		return
 	}
-	cnv := state.window.Canvas()
-	if cnv == nil {
-		return
-	}
 	d, ok := verseOfTheDay(state)
 	if !ok {
+		return
+	}
+	showVerseOfDayCard(state, d)
+}
+
+// showVerseOfDayCard is the card for one passage. Split from showVerseOfDay so
+// the light/dark reopen shows the passage the card was showing rather than
+// asking the calendar again: a card left open overnight comes back with the
+// verse the reader was reading, not the next day's (sheet_reopen.go).
+func showVerseOfDayCard(state *AppState, d dayVerse) {
+	if state == nil || state.window == nil {
+		return
+	}
+	cnv := state.window.Canvas()
+	if cnv == nil {
 		return
 	}
 	pal := state.pal()
@@ -1048,6 +1059,7 @@ func showVerseOfDay(state *AppState) {
 		}
 	}
 	popup.Show()
+	registerSheetReopen(state, popup, func() { showVerseOfDayCard(state, d) })
 	fitVOTD := func() {
 		pos, sz := cnv.InteractiveArea()
 		maxH := sheetMaxHeight(cnv.Size().Height, pos.Y, sz.Height, pos.Y+16)

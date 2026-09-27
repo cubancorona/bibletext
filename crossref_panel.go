@@ -136,6 +136,10 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 	)
 	popup.Show()
 	popup.Resize(fyne.NewSize(ps.Width, minF(ps.Height, 460)))
+	// The same selection again after a light/dark rebuild. The dataset loads
+	// once and is guarded, so a reopen mid-load waits on the same load rather
+	// than starting another (sheet_reopen.go).
+	registerSheetReopen(state, popup, func() { showCrossRefs(state, text, span) })
 
 	setThinking()
 	go func() {

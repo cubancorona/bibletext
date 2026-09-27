@@ -76,8 +76,8 @@ func devApplyMimicSeams(target string) {
 
 	// With the native overlay absent, its showReadingOverlay closure (which
 	// ends on consumeDeferredFullRebuild) is never assigned — the Windows/Linux
-	// stand-in consume point must activate, or a theme flip / background data
-	// swap under an open sheet leaks the deferred rebuild.
+	// stand-in consume point must activate, or a background data swap under
+	// an open sheet leaks the deferred rebuild.
 	sheetConsumeClosure = func() bool { return true }
 
 	// nativeNoteSticker is NOT flipped here any more, and that is the point:

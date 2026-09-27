@@ -177,13 +177,13 @@ type bibleTheme struct {
 
 // isDark reports whether the app should currently render with the dark
 // palette, derived from the current Fyne app's theme variant (which itself
-// tracks the OS appearance setting).
+// tracks the OS appearance setting). It asks through appearanceVariant, the
+// same question the light/dark gate asks (appearance.go), so the variant a
+// window is recorded as built with and the palette it was built from cannot
+// come from two different answers — and a test that moves the variant moves
+// the palette with it.
 func isDark() bool {
-	app := fyne.CurrentApp()
-	if app == nil {
-		return false
-	}
-	return app.Settings().ThemeVariant() == theme.VariantDark
+	return appearanceVariant(nil) == theme.VariantDark
 }
 
 // palette returns the right palette for the current system appearance.

@@ -136,6 +136,8 @@ real files; `*_test.go` files are omitted.
 | --- | --- |
 | `product.go` | The product identity: embeds and validates `config/product.json`; every name/URL/id surface derives from it |
 | `app.go` | `Run()`, `loadStateData()`, `StartBackgroundLoad`, `applyTheme`, `ObserveSystemThemeChanges` |
+| `appearance.go` | The light/dark decision: on mobile a change heard out of the foreground is ignored and the return reconciles once against the variant the window was built with (so the app switcher's snapshot round trip is a no-op); a real change rebuilds at once |
+| `sheet_reopen.go` | The reopen seam: a showing sheet registers how it comes back; a light/dark rebuild takes the top sheet's closure, drains, and reopens it in the new palette. Lists which sheets reopen and which close, and why |
 | `state.go` | `AppState`, navigation/search/history logic, UI hooks, `loadPhase` machine, `newSearchDebouncer` |
 | `reading_state.go` | Reading-position + history persistence (translation/book/chapter/scroll anchor) in `fyne.Preferences` |
 | `history.go` | Recent-chapters history list/bar |
@@ -277,7 +279,11 @@ function hooks that the active widgets install:
   down while a Fyne modal is up (see Reading view).
 
 Toggling light/dark performs a full rebuild (`palette`-coloured canvas objects
-are recreated), and
+are recreated), at once, even with a sheet open: the rebuild drains the sheet
+and the sheet on top comes back in the new palette showing what it showed
+(`sheet_reopen.go`). On iOS and Android a change heard while the app is out of
+the foreground waits for the return, which rebuilds only if the settled variant
+differs from the one the window was built with (`appearance.go`). And
 `applyTheme` calls Fyne's `SetTheme` **only when the theme object changes** —
 re-running it per build would force a full canvas theme-walk (an iOS perf gate).
 

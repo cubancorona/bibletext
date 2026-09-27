@@ -74,6 +74,28 @@ var _ fyne.Tappable = (*versionPickerAnchor)(nil)
 // showVersionPicker presents the list of translations. It hides the native
 // reading overlay while open (same as the chapter picker / AI panels).
 func showVersionPicker(state *AppState) {
+	if state == nil || state.window == nil || state.window.Canvas() == nil {
+		return
+	}
+	// Opening the picker doubles as a manual retry of a pending text update:
+	// the reader who came to check on their translation should not also have
+	// to find a button. Single-flight guarded; a no-op when nothing pends.
+	//
+	// THE NOTICE IS READ FIRST, and that ordering is the whole of D5
+	// (docs/VERSION_STATES.md). triggerFullDownload sets fullDownloading
+	// synchronously and the retry zeroes the backoff, so a notice computed
+	// afterwards can never describe the reader who was waiting offline — the
+	// wording written for exactly that reader was unreachable from the only
+	// surface that shows it. What the footer reports is the situation the
+	// reader came to ask about, not the side effect of their asking.
+	showVersionPickerWith(state, noticeOnPickerOpen(state))
+}
+
+// showVersionPickerWith is the picker itself, with the footer notice already
+// decided. The light/dark reopen calls it with the notice read again from state
+// and without a second manual retry — the retry is what the reader's opening
+// asked for, and a rebuild is not the reader asking again (sheet_reopen.go).
+func showVersionPickerWith(state *AppState, notice string) {
 	if state == nil || state.window == nil {
 		return
 	}
@@ -99,19 +121,6 @@ func showVersionPicker(state *AppState) {
 		}
 		restore()
 	}
-
-	// Opening the picker doubles as a manual retry of a pending text update:
-	// the reader who came to check on their translation should not also have
-	// to find a button. Single-flight guarded; a no-op when nothing pends.
-	//
-	// THE NOTICE IS READ FIRST, and that ordering is the whole of D5
-	// (docs/VERSION_STATES.md). triggerFullDownload sets fullDownloading
-	// synchronously and the retry zeroes the backoff, so a notice computed
-	// afterwards can never describe the reader who was waiting offline — the
-	// wording written for exactly that reader was unreachable from the only
-	// surface that shows it. What the footer reports is the situation the
-	// reader came to ask about, not the side effect of their asking.
-	notice := noticeOnPickerOpen(state)
 
 	title := canvas.NewText("Translation", pal.Text)
 	title.TextStyle = fyne.TextStyle{Bold: true}
@@ -163,6 +172,16 @@ func showVersionPicker(state *AppState) {
 		cnv,
 	)
 	popup.Show()
+	// The notice is read again for the reopen, from state as it stands after
+	// the rebuild — and not with the retry: noticeOnPickerOpen's retry is the
+	// reader's opening, and a rebuild is not the reader asking again. Not the
+	// at-open notice either: a download that landed while the picker was up
+	// had its window rebuild deferred to the sheet's close (applyFullDownload),
+	// and this rebuild is the one that paints it, so "still downloading" over
+	// the full text would be the very false statement the notice exists to
+	// rule out (docs/VERSION_STATES.md). D5's order — the notice before the
+	// retry — is about the opening, and here there is no retry to come before.
+	registerSheetReopen(state, popup, func() { showVersionPickerWith(state, fullPendingNotice(state)) })
 
 	// Size to content, capped to the screen.
 	cs := cnv.Size()
@@ -528,8 +547,9 @@ func switchVersionInteractive(state *AppState, id string, cause switchCause) {
 
 	// A real source not yet in memory may hit the on-disk cache (fast) or the
 	// network (slow). Load off the UI thread either way, behind a spinner —
-	// single-flight: the spinner modal no longer reliably blocks interaction
-	// (a theme-flip rebuild can evict it mid-download), so the guard does.
+	// single-flight: the spinner modal does not reliably block interaction (a
+	// light/dark rebuild brings it back, but a rotation's rebuild evicts it
+	// mid-download), so the guard does.
 	if state.versionLoading {
 		return // a download is already in flight; its completion will apply
 	}
@@ -634,6 +654,15 @@ func finishVersionLoad(state *AppState, v BibleVersion, cause switchCause, data 
 // (the overlay floats above the Fyne canvas); on success the follow-up
 // rebuildWindow re-pins it, and the dismiss func restores it on the error path so
 // the reader is never left blank.
+//
+// THE SPINNER COMES BACK AFTER A LIGHT/DARK REBUILD. The rebuild drains it like
+// every sheet, and a spinner that stays gone does more harm than an illegible
+// one: the modal is what keeps the reader out of other sheets until the load
+// lands, and the landing rebuilds unconditionally (applyLoadedVersion), so a
+// sheet opened in the gap was closed under the reader's hands with nothing to
+// bring it back. So it registers a reopen like any sheet, and the dismiss the
+// download holds closes whichever copy is showing at the time — the one it
+// opened, or the one a rebuild put in its place (sheet_reopen.go).
 func showVersionLoading(state *AppState, name string) func() {
 	if state == nil || state.window == nil {
 		return func() {}
@@ -642,53 +671,67 @@ func showVersionLoading(state *AppState, name string) func() {
 	if cnv == nil {
 		return func() {}
 	}
-	pal := state.pal()
-	if state.hideReadingOverlay != nil {
-		state.hideReadingOverlay()
-	}
 
-	// A wrapped Label, NOT a canvas.Text: a canvas.Text never wraps, so the
-	// version's name made the card's minimum width whatever the whole line
-	// wanted — wider than a phone for the WEBC's full name — and the modal
-	// renderer clamps the FRAME to the canvas while the text sails on
-	// underneath, clipped at both edges.
-	title := widget.NewLabel("Downloading " + name + "…")
-	title.Wrapping = fyne.TextWrapWord
-	title.Alignment = fyne.TextAlignCenter
-	title.TextStyle = fyne.TextStyle{Bold: true}
-	sub := canvas.NewText("One-time download — it's cached after this.", pal.TextMuted)
-	sub.TextSize = 11
-	sub.Alignment = fyne.TextAlignCenter
-	bar := widget.NewProgressBarInfinite()
-
-	// The bar spans the card, like the title and caption above and below it. It
-	// used to be pinned to a fixed 240pt inside a GridWrap, which left it both
-	// narrower than the card AND left-aligned under centred text — 12pt of gap
-	// on one side against 80pt on the other at iPhone width (visible by eye,
-	// then measured). A VBox stretches its children horizontally, so simply
-	// dropping the wrapper makes the bar agree with everything else in the card.
-	content := container.NewVBox(
-		title, spacer(10),
-		bar,
-		spacer(8), sub,
-	)
-	card := surface(container.NewPadded(content), pal.SurfaceAlt, pal.Border, fyne.Size{})
-	popup := widget.NewModalPopUp(card, cnv)
-	popup.Show()
-	// Size it explicitly — never from an unwrapped line. Resize twice: a
-	// wrapping label reports a single-line MinSize until a layout pass has run
-	// it at its real width (the ai_settings lesson).
-	w := cnv.Size().Width - 48
-	if w > 340 {
-		w = 340
-	}
-	if w < 264 {
-		w = 264 // narrow enough for any phone, wide enough for the caption
-	}
-	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
-	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
-
+	var popup *widget.PopUp
+	var bar *widget.ProgressBarInfinite
 	dismissed := false
+	var open func()
+	open = func() {
+		pal := state.pal()
+		if state.hideReadingOverlay != nil {
+			state.hideReadingOverlay()
+		}
+
+		// A wrapped Label, NOT a canvas.Text: a canvas.Text never wraps, so the
+		// version's name made the card's minimum width whatever the whole line
+		// wanted — wider than a phone for the WEBC's full name — and the modal
+		// renderer clamps the FRAME to the canvas while the text sails on
+		// underneath, clipped at both edges.
+		title := widget.NewLabel("Downloading " + name + "…")
+		title.Wrapping = fyne.TextWrapWord
+		title.Alignment = fyne.TextAlignCenter
+		title.TextStyle = fyne.TextStyle{Bold: true}
+		sub := canvas.NewText("One-time download — it's cached after this.", pal.TextMuted)
+		sub.TextSize = 11
+		sub.Alignment = fyne.TextAlignCenter
+		bar = widget.NewProgressBarInfinite()
+
+		// The bar spans the card, like the title and caption above and below it. It
+		// used to be pinned to a fixed 240pt inside a GridWrap, which left it both
+		// narrower than the card AND left-aligned under centred text — 12pt of gap
+		// on one side against 80pt on the other at iPhone width (visible by eye,
+		// then measured). A VBox stretches its children horizontally, so simply
+		// dropping the wrapper makes the bar agree with everything else in the card.
+		content := container.NewVBox(
+			title, spacer(10),
+			bar,
+			spacer(8), sub,
+		)
+		card := surface(container.NewPadded(content), pal.SurfaceAlt, pal.Border, fyne.Size{})
+		popup = widget.NewModalPopUp(card, cnv)
+		popup.Show()
+		// Size it explicitly — never from an unwrapped line. Resize twice: a
+		// wrapping label reports a single-line MinSize until a layout pass has run
+		// it at its real width (the ai_settings lesson).
+		w := cnv.Size().Width - 48
+		if w > 340 {
+			w = 340
+		}
+		if w < 264 {
+			w = 264 // narrow enough for any phone, wide enough for the caption
+		}
+		popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+		popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+		// Only while the download runs: once dismissed, the registration is
+		// already dead with its popup, and this guard is the belt to that.
+		registerSheetReopen(state, popup, func() {
+			if !dismissed {
+				open()
+			}
+		})
+	}
+	open()
+
 	return func() {
 		if dismissed {
 			return
@@ -696,7 +739,11 @@ func showVersionLoading(state *AppState, name string) func() {
 		dismissed = true
 		bar.Stop()
 		popup.Hide()
-		if state.showReadingOverlay != nil {
+		// Restore only when nothing else owns the canvas — the rule every
+		// watchdog follows. A sheet the spinner sat over (a link that arrived
+		// while one was open) still wants the reading view hidden, and the
+		// error card that follows on the failed arm hides it again anyway.
+		if state.showReadingOverlay != nil && cnv.Overlays().Top() == nil {
 			state.showReadingOverlay()
 		}
 	}
@@ -730,7 +777,9 @@ func showVersionLoadError(state *AppState, name string) {
 		if popup != nil {
 			popup.Hide()
 		}
-		if state.showReadingOverlay != nil {
+		// Only when nothing else owns the canvas: a sheet under this card
+		// still wants the reading view hidden (the spinner's rule, above).
+		if state.showReadingOverlay != nil && cnv.Overlays().Top() == nil {
 			state.showReadingOverlay()
 		}
 	})
@@ -738,6 +787,7 @@ func showVersionLoadError(state *AppState, name string) {
 	card := surface(container.NewPadded(content), pal.SurfaceAlt, pal.Border, fyne.Size{})
 	popup = widget.NewModalPopUp(card, cnv)
 	popup.Show()
+	registerSheetReopen(state, popup, func() { showVersionLoadError(state, name) })
 	// THE ONLY WAY OUT OF THIS DIALOG IS THE OK BUTTON, so its geometry is not
 	// cosmetic. Un-Resized, the popup floored at its content's minimum — the
 	// width of the OK button — and the wrapped message re-wrapped into a ribbon

@@ -7,6 +7,87 @@ the date — and says what shipped and why. Closed entries earn their place: thi
 is the file to read before re-investigating a defect that may already be fixed,
 and a fix's reasoning is the expensive half to reconstruct.
 
+## A light/dark change with a sheet open left the app half in each theme — FIXED 27 September 2026
+
+With a sheet open — Go to, Verse of the day, the translation list, Settings —
+a system switch between light and dark left the app in both at once. The sheet
+kept the colours it was built with while Fyne re-lit its stock widgets and
+everything resolved through a theme colour name, so Go to became a dark card
+with dark-on-dark letters and light entry boxes, and the page behind the sheet
+was mixed the same way until the sheet closed. Reproduced on the iOS simulator
+and on an iPhone.
+
+**The cause.** `ObserveSystemThemeChanges` sent the rebuild through
+`deferOrRebuild`, which parks it while any overlay is open and runs it when the
+sheet closes. That deferral was there for the app switcher: iOS renders a
+backgrounding app in both appearances for its snapshot, so the variant flips
+away and back, and rebuilding for each leg drained the sheet the reader had
+left open. The deferral kept the sheet, and in exchange every REAL change made
+with a sheet up waited, half applied, for as long as the sheet stayed.
+
+**The fix** (`appearance.go`, `sheet_reopen.go`). On iOS and Android a change
+heard while the app is out of the foreground is ignored at the time; the gate
+closes at the start of `OnExitedForeground` and opens at `OnEnteredForeground`,
+which reconciles once: the settled variant against the one the window was last
+built with (`rebuildWindow` records it, whatever asked for the rebuild). A round
+trip nets to nothing and the sheet stays exactly as it was; a real change —
+overnight, by schedule, or from Control Centre, which takes the app out of the
+foreground while it is open — rebuilds. A change heard in the foreground
+rebuilds at once. Every light/dark rebuild takes the reopen closure of the sheet
+on top, drops the caret (so a phone's keyboard goes down with the sheet),
+rebuilds (draining it), and reopens it in the new palette showing the same
+thing. Desktop has no snapshot, so the gate never closes there and a window
+behind others still repaints. The listener's closures run in no fixed order
+against the updates and the lifecycle hooks, so each reads the live variant when
+it runs; `TestAppearanceRoundTripInEveryOrder` walks all eight orders of the
+round trip's two closures through the gate and through a real window with the
+Go to picker open. On Android the return is heard BEFORE the update that
+carries a change made while away (the redraw queues the lifecycle event ahead of
+the size event), so there the reconcile finds nothing and the update's own
+closure rebuilds — still once. `deferOrRebuild` stays for the other
+translations' background upgrade (D17), which is not a theme change.
+
+**What reopens:** Go to, both flavours (the same book and chapter selected, the
+navigator at the same letter, the verse fields' text, the caret back in the
+field that had it); Verse of the day (the same verse, even after midnight); the
+translation picker (its notice read again from state, since the rebuild may be
+the one that paints a download that landed under it, and no second manual
+retry); Settings, at its top; the audio source menu; cross-references; the Ask
+sheet with its typed question; the note composer with its note, on every
+platform (a drained composer tears down only the native field it still owns);
+an AI answer that has landed (from aiCache, no second request); the Downloading
+modal, until its download lands (the download's dismissal closes whichever copy
+is up); the note-link offer; the link notices, and the seed park's notice only
+while its passage is still waiting; the translation-download error. A sheet
+registers when it opens, and the registration dies with its popup, however it
+closes. Fyne's menus (an entry's Cut/Copy/Paste, a Select's list) and the
+desktop share confirmation are not sheets: the take looks past them to the
+sheet beneath. **What closes:** an AI answer still in flight (its own landing
+already reopens it); the AI panel showing an error or asking for a key
+(reopening would send the request again); the share-image preview; the model
+picker and the notes questions over Settings (only the top sheet ever comes
+back, and these answer into the one beneath); the menus and the share
+confirmation themselves. Rotation's rebuild still closes every sheet, as
+before.
+
+**Found alongside, not fixed here** (both older than this change):
+
+- On Android, an activity destroyed while the process lives on (a swipe-away
+  with the audio service holding the process) sends `OnStopped`, which sets
+  `state.stopping`, and nothing clears it for the next activity: Fyne runs
+  `main` once per process. The appearance gate then returns at once for the
+  rest of the process — a light/dark change is never applied — and
+  `triggerFullDownload` stands down the same way. Either reset `stopping` when
+  the lifecycle comes back to Alive after Dead on Android, or tell an activity
+  destroy from a process exit in the `OnStopped` path.
+- The Android night-mode patch (`patches/fyne-2.7.4-android-night-mode.patch`)
+  compares `currentSize.DarkMode` with `darkMode` in the configuration-change
+  branch, but `GoNativeActivity.onConfigurationChanged` calls `super` (which
+  hands the change to that branch) BEFORE `updateTheme` writes `darkMode`: the
+  read races the write, unsynchronised, and when it loses a foreground change
+  waits for the next redraw. Reading the night bit from the `AConfiguration`
+  the branch already builds (`AConfiguration_getUiModeNight`) removes the race.
+
 ## Rework the download page — DONE 26 September 2026; the Play button has its slot
 
 The page had store buttons by platform at the top and a separate "Desktop —

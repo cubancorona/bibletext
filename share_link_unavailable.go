@@ -64,6 +64,18 @@ func showLinkVersionUnavailable(state *AppState, name string) {
 // card, and only the wording differs; the hide/restore dance, the sizing rule
 // and the OK button are exactly what they were.
 func showLinkNotice(state *AppState, heading, subheading, para string) {
+	showLinkNoticeWhile(state, heading, subheading, para, nil)
+}
+
+// showLinkNoticeWhile is the card for a notice that PROMISES something still to
+// come — the seed park's "this passage will open on its own as soon as it
+// does". holds reports whether the promise still stands, and a light/dark
+// rebuild brings the card back only while it does: the rebuild can itself be
+// the moment the promise is kept (it consumes a deferred download and opens
+// the parked passage), and a card reopened word for word over the passage it
+// promised would be telling the reader something that is no longer true
+// (sheet_reopen.go). nil for a notice that states a fact, which stays true.
+func showLinkNoticeWhile(state *AppState, heading, subheading, para string, holds func() bool) {
 	if state == nil || heading == "" {
 		return
 	}
@@ -120,4 +132,11 @@ func showLinkNotice(state *AppState, heading, subheading, para string) {
 	popup = widget.NewModalPopUp(card, cnv)
 	popup.Show()
 	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+	// Asked when the reopen runs, after the rebuild: the rebuild is what may
+	// have kept the promise.
+	registerSheetReopen(state, popup, func() {
+		if holds == nil || holds() {
+			showLinkNoticeWhile(state, heading, subheading, para, holds)
+		}
+	})
 }

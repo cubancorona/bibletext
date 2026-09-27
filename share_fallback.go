@@ -118,6 +118,14 @@ func revealInFileManager(path string) {
 // window minimal).
 var shareNotice *widget.PopUp
 
+// The notice is chrome, not a sheet: a light/dark rebuild looks past it to the
+// sheet the reader was reading underneath and brings that back, and the
+// notice, which would have gone in a second anyway, simply closes
+// (sheet_reopen.go).
+func init() { selfDismissingOverlay = isShareNotice }
+
+func isShareNotice(o fyne.CanvasObject) bool { return shareNotice != nil && o == shareNotice }
+
 // showShareNotice flashes a small confirmation at the bottom of the window and
 // auto-dismisses — the desktop stand-in for the mobile share sheet's feedback.
 func showShareNotice(state *AppState, msg string) {
