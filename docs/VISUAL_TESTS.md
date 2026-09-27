@@ -281,6 +281,36 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
 - [ ] The AI answer panel: quote ellipsizes, Cancel exists while thinking,
       truncated answers carry the honest cut-off line, the reading text
       never paints THROUGH the panel, and a no-key error offers settings.
+- [ ] Every AI wait names the model at work, on all five platforms: the
+      Study with AI panel and Find show one line under the bar, over
+      "Capable models can take a minute or more.", in that hint's size and
+      muted colour and centred on its axis — `Gemini (Google) ·
+      gemini-pro-latest`, the Settings pickers' own names; Settings → Test
+      key shows the same line under "Testing…". It fills a moment after the
+      wait appears and moves nothing when it does. Pin a model in Settings:
+      the line names the pinned model. Tap "Switch to a faster model": the
+      line changes to the fast model. With `BIBLETEXT_DESKTOP_TABS=sidebar`,
+      the sidebar's Find wait carries it too.
+- [ ] The model line on a small screen: pin a long model id (a Gemini
+      preview); on a 375pt phone it wraps to a second line and never widens
+      the card or the Search tab. On a phone in landscape (iPhone SE, a Pro
+      Max, an Android phone) the Study wait still scrolls to Cancel with the
+      wrapped line, and nothing paints past the card or over its footer.
+      The empty line, before the name arrives, sits as close under the bar
+      and over the hint as the name will, and the name moves nothing.
+- [ ] Find on a phone in landscape (iPhone SE, an iPhone Pro Max, with the
+      bottom bar; an Android phone, with the rail): ask a Find, then turn
+      the phone. "Searching with AI…" and the bar sit at the top of the
+      results area, just under the Find field, never under it; the rest
+      scrolls, and a drag reaches Cancel and "Switch to a faster model"
+      clear of the tab bar, with the wrapped long model id too. Cancel
+      stops the Find. Back in portrait the wait is centred as before, with
+      nothing to scroll.
+- [ ] Find mid-flight: flip light/dark while it searches — the rebuilt tab
+      still names the model; ask again while it searches — the new search
+      names its own model and its answer lands (it used to stay "Searching
+      with AI…" until Cancel). The retry onto a self-healed replacement
+      needs a retired default to show on a device; the host tests cover it.
 - [ ] Assistant=None leaves no stale AI surface: results pane reverts to
       keyword, notes bubble survives alone.
 

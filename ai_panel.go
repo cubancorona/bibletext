@@ -218,6 +218,10 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 	// nil-ing cancelFetch (disarming the NEW request's cancel) and painting its
 	// stale answer or cancellation error over the state the reader moved on to.
 	var fetchGen int
+	// modelLine names the model the request in flight is sending to, as that
+	// request reports it (ai_model_in_use.go). It belongs to the waiting state
+	// setThinking drew last; a report from any other request is dropped.
+	var modelLine *aiModelLine
 
 	setThinking := func() {
 		// Same reason as setError: a re-run (the faster-model switch, Try again)
@@ -235,6 +239,9 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		// stops repainting the canvas); the Find surface has its own Cancel.
 		hint := container.NewGridWrap(fyne.NewSize(260, captionHeightFor(2)),
 			centeredCaption("Capable models can take a minute or more."))
+		// Empty until the request says which model it is sending to, and new
+		// with every request, so a re-run never shows the model before it.
+		modelLine = newAIModelLine(aiModelInUse{})
 		// Reads the field at TAP time (not the value at build time), so it
 		// always abandons the request that is actually running — the mistake
 		// the Find surface's first Cancel made.
@@ -266,7 +273,8 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 			// Bounded, not full-bleed: a panel-wide bar reads as a banner
 			// rather than a quiet progress hint, and it dwarfed the text.
 			container.NewCenter(container.NewGridWrap(fyne.NewSize(240, bar.MinSize().Height), bar)),
-			spacer(10), container.NewCenter(hint),
+			// The model, under the bar and over the hint, in the hint's style.
+			spacer(10), container.NewCenter(modelLine.box), container.NewCenter(hint),
 			// inputFrame: the theme's button fill IS this panel's card
 			// colour (SurfaceAlt), so a bare Cancel here had no visible
 			// box at all. The outline restores one.
@@ -274,6 +282,9 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 			fasterRow,
 		))
 		waitScroll := container.NewVScroll(waitCol)
+		// A model name that wraps makes the column taller: fit the panel to
+		// it again, as below, so Cancel stays inside the scroll's reach.
+		modelLine.relayout = func() { fitBody(waitScroll, waitCol.MinSize().Height+10) }
 		// Replace, don't layer. The answer scroll underneath is empty in this
 		// state, but it still carries the answer cap as its minimum size, and in
 		// a stack that minimum wins — so the panel was sized for an answer that
@@ -393,6 +404,16 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		setThinking()
 		ctx, cancel := context.WithCancel(context.Background())
 		ctx, cancelTimeout := context.WithTimeout(ctx, aiRequestBudget)
+		// The request names its model on the waiting state it started, and
+		// only there: a request the faster-model switch or Try again has
+		// replaced (a newer gen), or one whose wait is over (Close, Cancel,
+		// an answer — every exit stops the bar), can still report its retry.
+		ctx = showAIModelOnUI(ctx, func(m aiModelInUse) {
+			if gen != fetchGen || thinkingBar == nil {
+				return
+			}
+			modelLine.show(m)
+		})
 		cancelFetch = cancel // so Close / Cancel can abandon THIS request
 		go func() {
 			defer cancelTimeout()

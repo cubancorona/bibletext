@@ -92,7 +92,7 @@ func TestStartAISearchCancelAbandonsRequest(t *testing.T) {
 	}
 	defer func() { aiSearchGenerate = prev }()
 
-	cancel := startAISearch(st, "anything", func([]Verse, error) {})
+	cancel := startAISearch(st, "anything", nil, func([]Verse, error) {})
 	var reqCtx context.Context
 	select {
 	case reqCtx = <-seen:

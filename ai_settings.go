@@ -37,6 +37,20 @@ import (
 // done(), whichever kind it is.
 const settingsTapOutsideCloses = false
 
+// aiKeyTestRun is Test key's request, a seam like aiSearchGenerate so a host
+// test can hold it and watch the wait it shows.
+var aiKeyTestRun = func(ctx context.Context, info providerInfo, store *keyStore, key string) error {
+	_, err := info.New(store, key).generate(ctx, "Reply with the single word: OK")
+	return err
+}
+
+// aiSettingsListModels is the model picker's live list, fetched whenever the
+// key area renders with a key; a seam, so a host test can open the sheet with
+// a key saved and reach no provider.
+var aiSettingsListModels = func(ctx context.Context, info providerInfo, key string) ([]discoveredModel, error) {
+	return info.ListModels(ctx, key)
+}
+
 func showAISettings(state *AppState) {
 	if state == nil || state.window == nil {
 		return
@@ -157,19 +171,51 @@ func showAISettings(state *AppState) {
 			}}
 			result.Refresh()
 		}
+		// The test's wait: "Testing…", and under it, once the request has
+		// said, the model it is sending to (ai_model_in_use.go) — a model the
+		// resolver may have had to replace, which the picker above cannot
+		// know yet — muted, like the model caption.
+		setTesting := func(m aiModelInUse) {
+			segs := []widget.RichTextSegment{&widget.TextSegment{
+				Text:  "Testing…",
+				Style: widget.RichTextStyle{SizeName: theme.SizeNameCaptionText},
+			}}
+			if l := m.label(); l != "" {
+				segs = append(segs, &widget.TextSegment{
+					Text:  l,
+					Style: widget.RichTextStyle{SizeName: theme.SizeNameCaptionText, ColorName: colorNameMuted},
+				})
+			}
+			result.Segments = segs
+			result.Refresh()
+		}
+		// testSeq is the test the line belongs to. Test tapped again before
+		// the last one answered makes that one stale: its model and its
+		// verdict are dropped, not painted over the newer wait.
+		testSeq := 0
 		testBtn := widget.NewButtonWithIcon("Test key", theme.MediaPlayIcon(), func() {
 			key := strings.TrimSpace(entry.Text)
 			result.Show()
+			testSeq++
+			seq := testSeq
 			if key == "" {
 				setResult("Paste a key first.")
 				return
 			}
-			setResult("Testing…")
+			setTesting(aiModelInUse{})
 			go func() {
 				ctx, cancel := context.WithTimeout(context.Background(), aiProbeBudget)
 				defer cancel()
-				_, err := info.New(store, key).generate(ctx, "Reply with the single word: OK")
+				ctx = showAIModelOnUI(ctx, func(m aiModelInUse) {
+					if seq == testSeq {
+						setTesting(m)
+					}
+				})
+				err := aiKeyTestRun(ctx, info, store, key)
 				fyne.Do(func() {
+					if seq != testSeq {
+						return // a newer test owns the line
+					}
 					if err != nil {
 						setResult("✗ " + friendlyAIError(err))
 					} else {
@@ -382,7 +428,7 @@ func showAISettings(state *AppState) {
 			go func() {
 				ctx, cancel := context.WithTimeout(context.Background(), aiProbeBudget)
 				defer cancel()
-				models, err := info.ListModels(ctx, key)
+				models, err := aiSettingsListModels(ctx, info, key)
 				ids := dropdownModelIDs(models, info.ExtraModelExclude, modelFamilyOf(info.Model))
 				fyne.Do(func() {
 					if gen != renderGen || seq != fetchSeq {

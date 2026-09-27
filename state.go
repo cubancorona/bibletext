@@ -67,6 +67,14 @@ type AppState struct {
 	// stops the one before it, and the landing, Cancel, a mode switch and
 	// leaving the tab stop the one there is (stopFindBar).
 	findBar *widget.ProgressBarInfinite
+	// aiSearchModel is the provider and model the Find in flight is sending
+	// to, as its request reported it (ai_model_in_use.go); zero until it has.
+	// Held with the rest of the Find's progress, so a tab rebuilt mid-Find
+	// names the model again. findModelLine is the line on the canvas that
+	// names it — one slot, like findBar and for its reason: the build that
+	// drew the line may not be the build on the canvas when a report lands.
+	aiSearchModel aiModelInUse
+	findModelLine *aiModelLine
 	// repaintFind redraws the Search tab's Find results from state, in the tab
 	// that is on the canvas NOW. A Find's completion paints through it rather
 	// than into the results host of the build that submitted it, which a

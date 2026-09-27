@@ -239,6 +239,7 @@ prose.
 | `ai_settings.go` | AI-study settings sheet (provider pick, key paste, Test key) |
 | `ai_panel.go` | AI answer panel (prose result, Report button, disclosure line) |
 | `ai_search.go` | AI "Find" passage search on the Search tab (returns verses) |
+| `ai_model_in_use.go` | The model a running request reports it is sending to (`reportAIModel`, through the request's context) and the waiting screens' muted line naming it (`aiModelLine`) |
 | `ai_menu_darwin.go` | Native selection-menu → Go bridge (shared with reading overlays) |
 
 ### Share
@@ -538,6 +539,16 @@ keystroke supersedes it (pinned in `search_race_test.go`).
   `<PROVIDER>_API_KEY` env var overrides. Settings sheet:
   [ai_settings.go](ai_settings.go) (header gear). Result panel with a **Report**
   button and an in-app disclosure line: [ai_panel.go](ai_panel.go).
+- Every AI wait names the provider and model at work, in one muted line under
+  its bar: the Study panel, Find (the Search tab and the former sidebar) and
+  Test key. The name comes from the request, not the configuration: the
+  resolver ([ai_model_resolve.go](ai_model_resolve.go)) reports each model it
+  is about to send to, the retry onto a self-healed replacement included,
+  through an observer the screen puts on the request's context
+  ([ai_model_in_use.go](ai_model_in_use.go)). The observer hops to the UI
+  goroutine, and each screen drops a report from a request it is no longer
+  waiting on (the panel's fetch generation, Find's session token, the key
+  test's sequence number).
 - The `//export` callbacks are confined to two files: [ai_menu_darwin.go](ai_menu_darwin.go)
   (`bibleTextAIMenuTapped`, `bibleTextReadingScrolled`, and the other reading/AI
   callbacks) and [audio_export_apple.go](audio_export_apple.go)

@@ -104,6 +104,10 @@ func (r *modelResolver) isPinned(model string) bool {
 
 func (r *modelResolver) generate(ctx context.Context, prompt string) (string, error) {
 	model := r.currentModel()
+	// Each send is announced before it goes, the retry below included, so a
+	// waiting screen names the model the request is working on rather than
+	// the one it was configured with (ai_model_in_use.go).
+	reportAIModel(ctx, r.id, model)
 	out, err := r.build(model).generate(ctx, prompt)
 	if err == nil || !isModelNotFound(err) {
 		return out, err
@@ -128,6 +132,7 @@ func (r *modelResolver) generate(ctx context.Context, prompt string) (string, er
 		}
 		return "", modelGoneError{provider: r.id, tried: model}
 	}
+	reportAIModel(ctx, r.id, fresh)
 	return r.build(fresh).generate(ctx, prompt)
 }
 

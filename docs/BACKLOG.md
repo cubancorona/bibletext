@@ -245,32 +245,77 @@ button says the same of its .zip (`docs/LINKS.md` has the table). Windows got th
 became one. The general note above them still says the store editions and the
 Snap are the easier routes. The README's AppImage note already agreed.
 
-## Say which model is working on the AI waiting screen
+## Say which model is working on the AI waiting screen — DONE 27 September 2026
 
 While a Study with AI request runs, the panel's waiting state (`setThinking`
 in `ai_panel.go`) shows "Reading the passage…", an endless progress bar,
 "Capable models can take a minute or more." and Cancel, with the faster-model
-offer under it when there is one (`ai_faster_model.go`). It never says which
-model is working. The wait depends on exactly that, and a reader who changed
-the model in Settings, or took the faster-model offer, cannot see from the
-screen what they are waiting on. The waiting screen should name the provider
-and model in use: a quiet line near the bar, in the names the Settings model
-picker uses.
+offer under it when there is one (`ai_faster_model.go`). It never said which
+model was working. The wait depends on exactly that, and a reader who changed
+the model in Settings, or took the faster-model offer, could not see from the
+screen what they were waiting on.
 
-To settle when it is picked up:
+What shipped: every AI wait names the provider and model at work, in one
+quiet line under the bar and over the "Capable models…" hint, in that hint's
+style (caption size, muted, centred) and at its measure: 260pt wide, and one
+line as tall as the hint's box makes a line (`captionHeightFor`), not the
+taller padded row a RichText measures for itself. The waits are
+the Study with AI panel, which every study verb opens (`showAIPanel`); Find on
+the Search tab, which all five platforms draw from the shared layout
+(`findSearchingView` in `ui_compact.go`), and in the former sidebar layout
+(`aiSearchingView` in `search.go`, `BIBLETEXT_DESKTOP_TABS=sidebar`); and
+Settings' Test key, whose "Testing…" gains the same line under it, muted like
+the model caption above. The wording is the Settings pickers' own: the
+provider as the assistant picker names it, then the model as the model
+picker lists it, which is by its id: "Claude (Anthropic) · claude-opus-5".
+Before the request has said, the line is empty but holds its height, so the
+report moves nothing. The cross-references panel's "Finding related
+passages…" is the Treasury of Scripture Knowledge dataset, not AI, and is
+unchanged.
 
-- Name the model the request actually sends, not the one configured. The
-  resolver (`ai_model_resolve.go`) sends the reader's override, else a
-  self-healed pick, else the shipped default, and on a model-not-found error
-  it discovers a replacement and retries once. So the line has to come from
-  the running request, and change if that retry moves it to another model,
-  rather than from `activeModelFor` read when the screen is built.
-- Use the reader-facing model name where the app has one, else the model's id.
-- The AI search on the Find surface (`ai_search.go`) has its own wait
-  ("Searching with AI…"); decide whether it carries the same line.
-- The waiting column is in a scroll, sized by `fitBody`, because a landscape
-  phone leaves it half its natural height; the extra line has to keep Cancel
-  reachable there.
+The line comes from the request, not from `activeModelFor`.
+`modelResolver.generate` reports each model it is about to send to (the
+reader's override, a self-healed pick or the shipped default, and on a
+model-not-found error the replacement it discovered, before the retry) to an
+observer the screen puts on the request's context (`ai_model_in_use.go`). The
+observer hops to the UI goroutine with `fyne.Do`, and each screen drops a
+report from a request it is no longer waiting on: the panel by its fetch
+generation and only while its bar runs; Find by its session token, holding
+the model on state (`aiSearchModel`) so a tab rebuilt mid-Find names it
+again; Test key by a sequence number, which now also keeps an older test's
+verdict off a newer test's wait. The faster-model offer starts a new request,
+whose waiting state draws its line empty and fills it from that request's own
+report, so the line follows the switch.
+
+A long model id wraps inside the line's measure rather than widening the
+column, so no sheet or card grows past a 375pt phone, and every wait lays its
+column out again the moment a name wraps. On the Study panel that is a
+re-fit through `fitBody`, so the panel grows to show the column where the
+screen has room, and on a landscape phone the column stays in its scroll with
+Cancel in reach.
+
+Both Find waits now scroll as the Study panel's waiting column does
+(`findWaitScroll` in `search.go`). An iPhone keeps its bottom bar in
+landscape, which leaves the Search tab's results area, between the Find
+field and the bar, less than half the wait's height (in the host layout at
+667×375, 128pt of about 297pt). The wait's column was centred there and ran out of it at both
+ends: "Searching with AI…" and the bar under the Find field, Cancel and the
+faster-model offer under the tab bar, where nothing could bring them back;
+the model line pushed Cancel almost wholly under. The column now starts at
+the top of the area with the rest a scroll away, and wherever there is room
+the scroll never engages and the column centres as before. The desktop wait
+(`aiSearchingView`) scrolls the same way in a short window.
+
+Asking Find again while a Find was in flight left the new Find searching
+until Cancel, on both Find surfaces. The resubmit takes its session token,
+then runs its predecessor's teardown hook (`installAISearchCancel`), and that
+hook invalidated whatever submission was latest, the new one included, so the
+new Find's answer and its model report were both dropped as stale. The hook
+now gives up only its own submission (`aiSearchSession.Abandon`).
+
+The host tests are in `ai_model_in_use_test.go`, with the session case in
+`search_race_test.go`; what only a screen can confirm is in
+`docs/VISUAL_TESTS.md` under V10.
 
 ## Show the selected words on the Add a note sheet
 

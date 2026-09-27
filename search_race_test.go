@@ -31,9 +31,19 @@ func TestAISearchSessionSupersedes(t *testing.T) {
 	}
 
 	// Clearing the field / toggling the mode abandons the in-flight ask outright.
-	s.Invalidate()
+	s.Abandon(g2)
 	if s.Current(g2) {
-		t.Error("Invalidate must abandon the in-flight submission")
+		t.Error("Abandon must give up the in-flight submission")
+	}
+
+	// A resubmit takes its token, then runs its predecessor's teardown hook
+	// (installAISearchCancel). The predecessor giving itself up must leave the
+	// new submission current, or the new Find is stale from the start: its
+	// answer dropped, its screen searching until Cancel.
+	g3 := s.Start()
+	s.Abandon(g2)
+	if !s.Current(g3) {
+		t.Error("the predecessor's Abandon made the newer submission stale")
 	}
 }
 

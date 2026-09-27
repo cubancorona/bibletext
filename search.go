@@ -275,13 +275,17 @@ func aiSearchingView(state *AppState) fyne.CanvasObject {
 	hint := container.NewGridWrap(fyne.NewSize(260, captionHeightFor(2)),
 		centeredCaption("Capable models can take a minute or more."))
 
+	// The model the request reported, if it has yet (showFindModel), over the
+	// hint in the hint's style, as on the Search tab.
+	model := newFindModelLine(state)
+	items := []fyne.CanvasObject{container.NewCenter(msg), spacer(10),
+		container.NewCenter(model.box), container.NewCenter(hint)}
+
 	// The handler is a WRAPPER, not state.cancelAISearch itself: a Button stores
 	// the func VALUE it is given, so binding the field directly would pin
 	// whichever search was in flight when this view was built — from the second
 	// Find on, Cancel would abandon the PREVIOUS request and leave the current
 	// one running. Reading the field at tap time always hits the live one.
-	items := []fyne.CanvasObject{container.NewCenter(msg), spacer(10), container.NewCenter(hint)}
-
 	cancelBtn := widget.NewButton("Cancel", func() {
 		abandonAISearch(state)
 		state.aiSearchCancelled = true
@@ -310,7 +314,26 @@ func aiSearchingView(state *AppState) fyne.CanvasObject {
 			state.refresh()
 		}))
 	}
-	return container.NewCenter(container.NewVBox(items...))
+	view := findWaitScroll(container.NewVBox(items...))
+	model.relayout = view.Refresh
+	return view
+}
+
+// findWaitScroll holds a Find wait's column, on the Search tab and here:
+// centred in the space the wait is given, and scrolling when that space is
+// shorter than the column. The column's height is fixed (the line, the bar on
+// the Search tab, the model, the hint, Cancel and the faster-model offer) and
+// the space is not. On a phone in landscape that keeps its bottom bar, as an
+// iPhone does, the Search tab's results area is about half the column, and a
+// column merely centred there overflowed it at both ends: "Searching with
+// AI…" under the header, Cancel under the tab bar, where nothing could bring
+// it back. In the scroll the column starts at the area's top and Cancel is a
+// scroll away; wherever there is room the scroll never engages, and the column
+// centres as it always has. The Study panel's waiting column scrolls for the
+// same reason (setThinking in ai_panel.go). Refresh on the scroll lays the
+// column out again, which is what a model line that wraps needs.
+func findWaitScroll(col fyne.CanvasObject) *container.Scroll {
+	return container.NewVScroll(container.NewCenter(col))
 }
 
 // buildSearchModeControls builds the whole mode row; see its definition below.

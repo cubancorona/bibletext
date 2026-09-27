@@ -24,10 +24,12 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// heldFind is a Find stopped at the seam: its question, its completion, and
-// whether anything abandoned it.
+// heldFind is a Find stopped at the seam: its question, the screen's callback
+// for the model its request reports, its completion, and whether anything
+// abandoned it.
 type heldFind struct {
 	q         string
+	onModel   func(aiModelInUse)
 	done      func([]Verse, error)
 	abandoned bool
 }
@@ -38,8 +40,8 @@ func holdFinds(t *testing.T) *[]*heldFind {
 	t.Helper()
 	var held []*heldFind
 	prev := startFind
-	startFind = func(_ *AppState, q string, done func([]Verse, error)) func() {
-		f := &heldFind{q: q, done: done}
+	startFind = func(_ *AppState, q string, onModel func(aiModelInUse), done func([]Verse, error)) func() {
+		f := &heldFind{q: q, onModel: onModel, done: done}
 		held = append(held, f)
 		return func() { f.abandoned = true }
 	}

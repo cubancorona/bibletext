@@ -17,9 +17,16 @@ import (
 // (aiRequestBudget), the reader needs a way out that actually ABANDONS the
 // request — dropping the callback alone would leave the connection open and the
 // tokens billing. Safe to call any number of times, including after completion.
-func startAISearch(state *AppState, query string, done func([]Verse, error)) (cancel func()) {
+//
+// onModel, when set, hears on the UI thread each model the request is about
+// to send to (ai_model_in_use.go), for the waiting screen to name; like done,
+// it can arrive after the search was abandoned, and the caller drops it then.
+func startAISearch(state *AppState, query string, onModel func(aiModelInUse), done func([]Verse, error)) (cancel func()) {
 	ctx, cancelCtx := context.WithCancel(context.Background())
 	ctx, cancelTimeout := context.WithTimeout(ctx, aiRequestBudget)
+	if onModel != nil {
+		ctx = showAIModelOnUI(ctx, onModel)
+	}
 	go func() {
 		defer cancelTimeout()
 		verses, err := runAISearch(ctx, state, query)
@@ -41,24 +48,58 @@ func startAISearch(state *AppState, query string, done func([]Verse, error)) (ca
 // whatever test is running by then (stubAIGenerate, ai_timeout_test.go).
 var startFind = startAISearch
 
-// aiSearchSession serializes Find submissions: every submission (and anything
-// that abandons one — clearing the field, toggling the search mode) calls
-// Invalidate/Start, and a completion callback is honored only if it is still the
-// LATEST via Current. Without this, a slow provider response for an abandoned
-// query lands late and clobbers the newer search — the reader edits the query,
-// resubmits, sees the progress bar flash, and then watches the OLD results
-// reappear. All methods run on the Fyne UI goroutine
-// (Entry/Button callbacks and fyne.Do-marshalled completions), so no lock.
+// aiSearchSession serializes Find submissions: every submission calls Start,
+// anything that abandons one — clearing the field, toggling the search mode —
+// reaches its teardown hook, which calls Abandon, and a completion callback is
+// honored only if it is still the LATEST via Current. Without this, a slow
+// provider response for an abandoned query lands late and clobbers the newer
+// search — the reader edits the query, resubmits, sees the progress bar flash,
+// and then watches the OLD results reappear. All methods run on the Fyne UI
+// goroutine (Entry/Button callbacks and fyne.Do-marshalled completions), so no
+// lock.
 type aiSearchSession struct{ gen int }
 
 // Start registers a new submission and returns its token.
 func (s *aiSearchSession) Start() int { s.gen++; return s.gen }
 
-// Invalidate abandons any in-flight submission without starting a new one.
-func (s *aiSearchSession) Invalidate() { s.gen++ }
-
 // Current reports whether the given token is still the latest submission.
 func (s *aiSearchSession) Current(g int) bool { return g == s.gen }
+
+// Abandon gives up submission g without starting a new one. When g is no
+// longer the latest there is nothing to give up: a newer submission has
+// superseded it already. That is the resubmit, which runs its predecessor's
+// teardown hook (installAISearchCancel) after taking its own token; a hook
+// that gave up whatever was latest made the NEW Find stale from the start,
+// its answer and its model dropped as a superseded one's and its screen left
+// searching until Cancel.
+func (s *aiSearchSession) Abandon(g int) {
+	if s.Current(g) {
+		s.gen++
+	}
+}
+
+// showFindModel is how a Find's request names its model on the waiting screen:
+// held on state, for a rebuilt tab to draw, and put on the line on the canvas.
+// Only while submission gen still owns the session: a report from a Find that
+// was cancelled or superseded can land after the Find that replaced it drew
+// its own screen, and must not name its model there. (A Find's own landing
+// cannot overtake its reports, which reach the UI thread first, in order.)
+func showFindModel(state *AppState, gen int, m aiModelInUse) {
+	if state == nil || !state.askSession.Current(gen) {
+		return
+	}
+	state.aiSearchModel = m
+	state.findModelLine.show(m)
+}
+
+// newFindModelLine draws the Find waiting screen's line naming the model, from
+// state, and makes it the line later reports land on. The screen sets its
+// relayout.
+func newFindModelLine(state *AppState) *aiModelLine {
+	line := newAIModelLine(state.aiSearchModel)
+	state.findModelLine = line
+	return line
+}
 
 // AI semantic search: the reader asks for passages in their own words
 // ("what did God say to Jonah?") and the active AI provider returns the most

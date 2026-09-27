@@ -638,11 +638,12 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	var runAsk func(string)
 	var renderFind func()
 
-	// findSearchingView is the in-progress state: the line, the bar, the hint,
-	// Cancel, and the faster-model offer. Built by renderFind, from state, so a
-	// tab rebuilt while a Find is in flight — a light/dark change, a rotation, a
-	// translation landing — shows the search still running, with a Cancel that
-	// reaches it, instead of the empty prompt.
+	// findSearchingView is the in-progress state: the line, the bar, the model
+	// at work, the hint, Cancel, and the faster-model offer. Built by
+	// renderFind, from state, so a tab rebuilt while a Find is in flight — a
+	// light/dark change, a rotation, a translation landing — shows the search
+	// still running, with a Cancel that reaches it, instead of the empty
+	// prompt.
 	findSearchingView := func() fyne.CanvasObject {
 		state.stopFindBar() // one bar at a time, whichever build drew the last
 		bar := widget.NewProgressBarInfinite()
@@ -672,15 +673,21 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 			state.aiSearchCancelled = true
 			renderFind()
 		})
-		return container.NewCenter(container.NewVBox(
+		// The model the request reported, if it has yet (showFindModel). The
+		// column scrolls (findWaitScroll): a phone in landscape leaves it
+		// about half its height.
+		model := newFindModelLine(state)
+		view := findWaitScroll(container.NewVBox(
 			container.NewCenter(msg), spacer(10),
 			container.NewCenter(container.NewGridWrap(fyne.NewSize(240, bar.MinSize().Height), bar)),
-			spacer(10), container.NewCenter(hint),
+			spacer(10), container.NewCenter(model.box), container.NewCenter(hint),
 			// inputFrame: the theme's SurfaceAlt button fill is near-invisible
 			// on this ground, so give Cancel the app's standard visible outline.
 			spacer(4), container.NewCenter(inputFrame(cancelBtn, state.pal().Border)),
 			fasterRow,
 		))
+		model.relayout = view.Refresh
+		return view
 	}
 
 	// renderFind puts the Find results pane in the state the Find is in, read
@@ -768,6 +775,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		state.aiSearchLoading = true
 		state.aiSearchErr = nil
 		state.aiSearchCancelled = false
+		state.aiSearchModel = aiModelInUse{} // this request has not said yet
 		// Declared before the call so the hook can close over it; the real cancel
 		// func replaces it the moment startFind returns. Published to
 		// state.cancelAISearch so EVERY teardown route (a bottom-tab switch that
@@ -777,13 +785,15 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		// for the rest of the multi-minute budget.
 		cancelSearch := func() {}
 		installAISearchCancel(state, func() {
-			askSession.Invalidate() // a late completion must not repaint this pane
+			askSession.Abandon(gen) // a late completion must not repaint this pane
 			cancelSearch()          // abandon the request itself, not just its callback
 			stopAIBar()
 		})
 		renderFind() // → the searching view, with Cancel
 
-		cancelSearch = startFind(state, q, func(verses []Verse, err error) {
+		cancelSearch = startFind(state, q, func(m aiModelInUse) {
+			showFindModel(state, gen, m)
+		}, func(verses []Verse, err error) {
 			if !askSession.Current(gen) {
 				return // superseded: a newer ask/clear/toggle owns the pane now
 			}

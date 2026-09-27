@@ -92,6 +92,7 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		state.aiSearchResults = nil
 		state.aiSearchLoading = true
 		state.aiSearchCancelled = false
+		state.aiSearchModel = aiModelInUse{} // this request has not said yet
 		// Installed BEFORE the refresh below, because that refresh SYNCHRONOUSLY
 		// builds aiSearchingView — which only renders Cancel when this hook is
 		// set. Assigning after would leave the first Find of a session with no
@@ -101,11 +102,13 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		// only, so no synchronisation. (Mirrors the mobile twin.)
 		cancelSearch := func() {}
 		installAISearchCancel(state, func() {
-			askSession.Invalidate()
+			askSession.Abandon(gen)
 			cancelSearch()
 		})
 		state.refresh() // → aiSearchingView (with Cancel)
-		cancelSearch = startAISearch(state, q, func(verses []Verse, err error) {
+		cancelSearch = startAISearch(state, q, func(m aiModelInUse) {
+			showFindModel(state, gen, m)
+		}, func(verses []Verse, err error) {
 			if !askSession.Current(gen) {
 				return // superseded: a newer ask/clear owns the results now
 			}
@@ -373,7 +376,7 @@ func caption(text string) fyne.CanvasObject {
 // centeredCaption is caption() with its text centred — for the calm, centred
 // wait/empty states, where a left-ragged caption under a centred heading reads
 // as a misalignment.
-func centeredCaption(text string) fyne.CanvasObject {
+func centeredCaption(text string) *widget.RichText {
 	rt := widget.NewRichText(&widget.TextSegment{
 		Text: text,
 		Style: widget.RichTextStyle{
