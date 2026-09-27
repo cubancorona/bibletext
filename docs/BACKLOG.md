@@ -317,31 +317,132 @@ The host tests are in `ai_model_in_use_test.go`, with the session case in
 `search_race_test.go`; what only a screen can confirm is in
 `docs/VISUAL_TESTS.md` under V10.
 
-## Show the selected words on the Add a note sheet
+## Show the selected words on the Add a note sheet — DONE 27 September 2026
 
-The share-with-note sheet (`promptShareNote` in `share_note_ui.go`) shows the
-title "Add a note", the passage's reference (`shareNoteReference`, for example
-"John 3:16") and the note field, but not the words the reader selected. The
-reading text is hidden while the sheet is open (it calls
-`hideReadingOverlay`), so writing about a phrase means remembering it. The
-sheet should show the selected words above the field, small and muted, for
-reference while writing: not big, and cut short with an ellipsis when the
-selection is long.
+The share-with-note sheet (`promptShareNote` in `share_note_ui.go`) showed the
+title "Add a note", the passage's reference and the note field, but not the
+words the reader selected, and the reading text is hidden while the sheet is
+open (`hideReadingOverlay`), so writing about a phrase meant remembering it. The
+selected words now sit under the reference and above the field, small and
+muted: a reminder of what the note is about, not a second reading view.
 
-To settle when it is picked up:
+The words are the share's own. `shareNoteQuote` runs `prepareShareQuote` once
+and gives the sheet both the excerpt and the reference, from the same call the
+share makes for its citation, so the three cannot disagree: the verse numbers
+the selection carries are gone, a word the drag cut in half is repaired as the
+share repairs it, the divine name keeps the small capitals the page draws it
+in, and a publisher's heading never shows, because it never reaches the quote.
+A heading selected on its own quotes nothing, so the sheet shows the reference
+to the verse beneath it and no excerpt. The words are the quote before its
+Bluebook framing, without the quotation marks, bracketed capital or omission
+dots a quotation standing on its own takes.
 
-- The selection is already passed in (`selectedText`), and
-  `prepareShareQuote` already makes the quote a share sends. Show the words as
-  the page draws them and as the share will carry them, divine name in small
-  capitals included, without verse numbers.
-- On iOS the field is a native text view floated over the sheet
-  (`note_entry_ios.go`, `noteEntrySlot`). The excerpt belongs to the Fyne sheet
-  above the slot, so the native field's frame follows it, in portrait and
-  landscape and with the keyboard up.
-- Nothing in the sheet may make the card wider than the canvas (the comment
-  on the wrapping character count explains why), and that holds for the
-  excerpt too: it wraps, then stops after a few lines.
-- The same sheet on every platform that has it.
+Two selections still carried the page's apparatus into the quote, and so onto
+the sheet, and both are fixed in the share pipeline (`share.go`) so the share
+and the excerpt keep agreeing. A heading at the top of a chapter, selected on
+its own, was quoted as if it were scripture: the heading-only rule
+(`headingOnlySelectionVerse`) asked for a span naming the verse above the
+heading, and a chapter's opening heading has none. The native panes report a
+drag inside it as no span at all, or as the first verse once the drag reaches
+that verse's number, and the rule now takes either for a heading with no verse
+above it; a span naming a verse further down still leaves the selection where
+it puts it. Most chapters of the licensed editions open with a heading, so this
+was the common case. The rule also takes a heading followed by the number of
+the verse it stands above, the word a drag that runs one word past the heading
+stops at, which had quoted the heading and the number together and cited the
+verse above as well. And a verse number selected on its own (a double-tap or a
+long-press on the superscript) was quoted as the digits:
+`normalizeShareSelectionIn` declined it and the legacy path passed it through.
+It now quotes nothing and names the verse the number labels, with the span the
+pane reports and without one, so the text share, the link, the note's anchor
+and the cross-references all name that verse. Pinned by
+`TestAHeadingAtTheTopOfAChapterSelectedOnItsOwnQuotesNothing` and
+`TestAVerseNumberSelectedOnItsOwnQuotesNothing`
+(`share_heading_selection_test.go`), and on the sheet by
+`TestAHeadingNeverReachesTheNoteExcerpt` and
+`TestTheNoteSheetShowsTheSharesQuote`. A heading in the middle of a chapter
+selected with no span at all would still be quoted; no pane produces that
+shape, since every native pane reports a drag inside one against the verse
+above it and the styled pane cannot select a heading. A text share of a
+selection that quotes nothing, heading or number, sends a blank line and then
+the citation, as a heading selected on its own already did.
+
+The excerpt (`noteExcerpt`, `share_note_excerpt.go`) is set in the reading
+face, at a 14pt reference size through `readingGlyphSize`, in the muted ink,
+because the chrome face has no small-capital glyphs; its rows are
+`canvas.Text`, as in the verse-of-the-day card, since that is the toolkit text
+that takes a font source. It wraps and stops after three rows, the last cut
+with an ellipsis: at about forty-five characters a row on a phone, three rows
+hold a phrase and most of an average verse. On a phone in landscape (a canvas
+under 480pt tall, on iOS and Android alike) it takes one row, because the
+phone sheet is not resized for the keyboard and every row pushes the field a
+row further under it: on a 393pt canvas, under a keyboard about 200pt tall,
+one row leaves three lines of the note above the keyboard and three rows leave
+one. Desktops keep three rows at any window height, a window as short as a
+phone in landscape included, since no soft keyboard covers their sheet. Its
+minimum width is zero, like the counter's, so it never widens the card past the
+canvas, and a word wider than a row is broken between letters.
+
+On iOS the note field is a native text view parked over the sheet's slot
+(`noteEntrySlot`), which pushes its absolute rect on every Move and Resize. The
+excerpt sits above the slot in the form, so the slot moves down by exactly the
+excerpt's height and the field follows it. The popup lays the form out as it
+is resized and again as it is shown, so the first frame the field is given is
+already below the last row; the relayout the phone canvas makes when the
+keyboard's inset changes pushes the same frame again. The excerpt's height is
+that of its rows at the width it was last laid out at, which on a canvas 320pt
+wide (iPad Slide Over, a third of an 11-inch iPad in Split View) is narrower
+than the width an unsized excerpt wraps for; a selection that takes a row more
+there than at that width is what shows the field below the last row rather
+than over it. No other platform floats a native field: Android and the
+desktops draw the Fyne entry in the same place. The excerpt comes back with the
+composer after a light/dark change, in the new palette, since it is built from
+the selection on every open, the reopen's included.
+
+The phone sheet also refits when the canvas changes size, which it did not
+before this item either. The toolkit never resizes a popup for a new canvas;
+it only lays it out again at the size it was given. Narrowing an iPad's Split
+View or Slide Over window, or an Android window, with the composer open changes
+neither the layout class nor the rail, so no rebuild drains the sheet, and the
+card, the excerpt and the slot kept their old width, with the native field
+parked past the canvas's right edge and Share beyond it. The composer's
+watchdog now notices the new canvas size, as the Go to picker's does, and sizes
+the card for it: the excerpt re-wraps, it takes the row budget a sheet opened
+on that canvas would take, and the field follows the slot. The card keeps the
+top and the gap at the canvas's foot it opened with, and never reads its height
+from the interactive area again, which shrinks while the keyboard is up: fitted
+to the keyboard's top, the card would stay short once the keyboard went down.
+The native field is told only where the slot settles (`noteEntrySlot.settle`),
+not the rects the relayout passes through on the way, since the popup lays its
+content out before it moves it and each push reaches the view on the main
+queue, which may draw between two of them. Until the watchdog's next pass,
+within 150ms, the sheet stands at its old size, as the Go to picker does. The
+Ask sheet (`promptAskQuestion`, `ai_ask.go`) is the same full-canvas phone
+sheet and still has no refit: narrowed with it open, its card and Ask stay at
+the old width. It has no native field, so it needs only the resize, not the
+settle.
+
+The desktop card also stood a row taller than its content before this: its
+height was read from the layout Show makes at the form's narrow minimum width,
+where the counter wraps into more rows than at the card's own width. It is now
+sized in two passes, the second taking the height the card's width gives, which
+the excerpt needs as well.
+
+The composer's platform choices are seams (`noteEntryNative`,
+`noteEntryFrameTo`, `noteSheetAfter`, `noteSheetArea`) so the host tests can
+lay out the sheet iOS gets: they make the field native, read the frames it
+would be given, hold the slot's second push and the phone sheet's watchdog to
+run on their own goroutine (see "Deferred-UI timers under the test driver"),
+and give the canvas a device's safe insets and a raised keyboard. Pinned by
+`TestTheNoteSheetShowsTheSharesQuote`, `TestTheNoteSheetCutsALongSelection`,
+`TestNoteExcerptLines`, `TestTheNoteSheetIsNoWiderThanTheCanvas`,
+`TestTheNoteFieldSlotSitsBelowTheExcerpt`,
+`TestTheNoteExcerptComesBackWithTheSheet`,
+`TestAHeadingNeverReachesTheNoteExcerpt`,
+`TestTheDesktopNoteCardIsAsTallAsItsContent` and
+`TestTheNoteSheetRefitsWhenTheCanvasChanges` (`share_note_excerpt_test.go`),
+each proved against a mutation. What only a screen can confirm is listed under
+V12 in `docs/VISUAL_TESTS.md`.
 
 ## The open narration card covers the phone header's controls — kept as a pop-up for now
 
@@ -1485,6 +1586,13 @@ fixed, but neither was caught by anything. The rule needs enforcing at the point
 every quotation is produced, not asserted once and hoped for. Audit every path
 that yields quoted text: `prepareShareQuoteIn`, `cleanQuoteTextIn`, the share
 card, the note composer's preview, the AI panel's quotation, the web reader.
+(The note composer's excerpt is `prepareShareQuote`'s own text, so it is
+covered by that entry; `TestAHeadingNeverReachesTheNoteExcerpt`. Building it
+found a fifth breach, fixed 27 September 2026: a heading at the top of a
+chapter, selected on its own, still quoted itself, because the heading-only
+rule asked for a span naming the verse above and there is none. A lone verse
+number is now held to the same rule. See "Show the selected words on the Add a
+note sheet".)
 
 HEADING STYLES ARE NOT ALL ALIKE, AND THE CODE TREATS THEM AS IF THEY WERE.
 `Heading.Style` carries the publisher's own classification -- `s`/`s1`..`s4` for
@@ -2715,16 +2823,24 @@ None races today — a full `-race` pass of the suite is clean — but each is
 safe for a DIFFERENT reason, and the first test that changes that reason
 must bring the fix with it:
 
-- `goto.go` (60ms inset scroll; 200ms self-rearming `watchDismiss`) and
-  `share_note_ui.go` (50ms slot push; 150ms self-rearming watch): the arms
-  live on the `IsMobile()` / native-entry branches, which no host test
-  compiles into. If a mobile-tagged test target ever opens these, gate the
-  arms with `testing.Testing()` AND add a direct synchronous call for the
-  watch's close-out work — both watches are functional (tap-outside close,
-  overlay restore), not cosmetic, so a bare gate would orphan real behavior.
+- `goto.go` (60ms inset scroll; 200ms self-rearming `watchDismiss`): the
+  arms live on the `IsMobile()` branch, which no host test compiles into. If
+  a mobile-tagged test target ever opens it, gate the arms with
+  `testing.Testing()` AND add a direct synchronous call for the watch's
+  close-out work — the watch is functional (tap-outside close, overlay
+  restore), not cosmetic, so a bare gate would orphan real behavior.
+- `share_note_ui.go` (50ms slot push; 150ms self-rearming watch) — FIXED 27
+  September 2026. The selected-words tests open the phone sheet, through the
+  phone device wrapper, and a `-race -count=30` run of them with the arms on
+  real timers reported the watchdog's `closeSheet`, run from one test's timer,
+  racing the next test's open on `noteEntryOwner`. Both arms now go through
+  `noteSheetAfter`, which the tests replace to hold the closures, running
+  them on the test goroutine where a test needs them (the second push and a
+  pass of the watch, in `TestTheNoteFieldSlotSitsBelowTheExcerpt`); the same
+  run is clean.
 - `audio_menu.go` (150ms self-rearming watch): no test constructs the
-  source menu (the card tests stub `onSrc` deliberately). Same rule as the
-  two above: gate plus a synchronous driver, never a bare gate.
+  source menu (the card tests stub `onSrc` deliberately). Same rule as
+  `goto.go` above: gate plus a synchronous driver, never a bare gate.
 - `search.go:~25` (60ms scroll restore) and `notes_browse.go:~783` (16ms
   scroll restore): armed only when a remembered scroll offset is positive,
   which no test produces. The natural regression test for either restore

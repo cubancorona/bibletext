@@ -525,9 +525,10 @@ func selectionVersesIn(state *AppState, book string, chapter int, text string, s
 		// references for — a verse the share card rightly refused to name, for
 		// one and the same drag. Delegating to the normalize
 		// makes the verbs agree by construction; the raw span survives as the
-		// answer only where the normalize declines outright (a selection that
-		// is ONLY a verse number, a single partial word), where "the verse the
-		// position touches" is the honest reading.
+		// answer only where the normalize declines outright (a single partial
+		// word), where "the verse the position touches" is the honest reading.
+		// A selection that is ONLY a verse number no longer declines: it
+		// resolves to the verse the number labels.
 		if _, l, h, _, ok := normalizeShareSelectionIn(state, book, chapter, text, span); ok {
 			lo, hi = l, h
 		}

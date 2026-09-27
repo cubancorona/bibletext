@@ -360,6 +360,35 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       narrow screen; past 280 runes it says "Too long by N"; sharing the
       same words twice dedups — your own second link shows YOUR note,
       never "Note from Friend".
+- [ ] Share with note, the selected words: under the reference, the words
+      in the reading face, small and muted, with no verse numbers. In the
+      NKJV select Psalm 23:1-2: "Lᴏʀᴅ" is drawn in real small capitals, no
+      boxes and no fallback face. A long selection stops after three rows
+      with "…", on a phone in landscape after one. iOS, in portrait, in
+      landscape and with the keyboard up in each: the native field's outline
+      sits below the last row, never over it, and lines up with the gap the
+      sheet leaves for it; in landscape the typed note is still visible
+      above the keyboard. Android: the same, with the Fyne field. Desktop:
+      the card ends under the buttons with its usual padding and no empty
+      row. Flip light/dark with the composer open: the words come back in
+      the new palette. Select a heading on its own, one in the middle of a
+      chapter and one at its top (most NKJV chapters open with one), and
+      then the heading with the number of the verse under it: each time
+      the sheet shows the reference to the verse beneath the heading and no
+      words. Double-tap (desktop: double-click) a verse number: the sheet
+      shows that verse's reference and no words, not the digits.
+- [ ] Share with note on iPad, at a third of an 11-inch iPad in Split View
+      and in Slide Over (320pt wide), with a verse of about eighty
+      characters selected: the native field's outline sits below the third
+      row. Then open the composer at half width, type a line, and drag the
+      divider to a third, with the keyboard down and again with it up:
+      within a moment the card, the words and the field fit the narrower
+      window, Share is on screen, the field sits below the last row and the
+      typed line is kept; drag back to half and it widens again. With the
+      keyboard up, dismiss it after the resize: the card still reaches the
+      bottom of the window, with no band of the page showing beneath it.
+      Android: the same in a split-screen or freeform window, with the Fyne
+      field.
 - [ ] Inbound links per platform: iOS/Android land with the band in view;
       NON-claimed URLs (/web/john/ index, /privacy.html) fall through to
       the browser — the app must never just foreground; macOS store build

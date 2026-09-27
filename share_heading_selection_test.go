@@ -360,3 +360,106 @@ func TestAnUnlocatableSelectionThatIsNotHeadingTextStaysWhereTheSpanPutsIt(t *te
 		}
 	}
 }
+
+// A heading at the TOP of a chapter, selected on its own, quotes nothing
+// either. It has no verse above it, so the span test the rule above relies on
+// has nothing to name: the native panes report a drag inside it as no span at
+// all (the last verse number before it is none), or as the first verse when
+// the drag reaches that verse's number (selSpanFromNative's clamp). Each of
+// those shapes, and the heading followed by the number of the verse it stands
+// above (a drag that ran one word too far), cites the verse beneath and quotes
+// nothing. Most chapters of the licensed editions open with a heading, so this
+// is the common case, not an edge.
+func openingHeadingState() *AppState {
+	bd := &BibleData{
+		Books: []string{"Genesis"},
+		Verses: map[string]map[int][]Verse{"Genesis": {1: {
+			{BookName: "Genesis", Book: "Genesis", Chapter: 1, Verse: 1,
+				Text: "In the beginning the heavens and the earth were made."},
+			{BookName: "Genesis", Book: "Genesis", Chapter: 1, Verse: 2,
+				Text: "The earth was without form, and the deep was dark."},
+		}}},
+		Headings: map[string]map[int][]Heading{"Genesis": {1: {
+			{Text: "The Making of All Things", Style: "s", BeforeVerse: 1},
+		}}},
+	}
+	return &AppState{Bible: bd, CurrentBook: "Genesis", CurrentChapter: 1}
+}
+
+func TestAHeadingAtTheTopOfAChapterSelectedOnItsOwnQuotesNothing(t *testing.T) {
+	st := openingHeadingState()
+
+	// The control: the first verse's own words, with the span a drag in them
+	// gets, are quoted and cited as ever.
+	if quote, cite, _, _ := prepareShareQuote(st, "In the beginning the heavens", selSpanFromNative(1, 1)); !strings.HasPrefix(quote, "In the beginning") || cite != "Genesis 1:1" {
+		t.Fatalf("control: the first verse's words shared as (%q, %q)", quote, cite)
+	}
+
+	for _, c := range []struct {
+		name, sel string
+		span      selSpan
+	}{
+		{"the whole heading, no span", "The Making of All Things", selSpan{}},
+		{"a drag begun part-way along it", "Making of All Things", selSpan{}},
+		{"reported as the first verse", "The Making of All Things", selSpanFromNative(0, 1)},
+		{"run on to the first verse's number", "The Making of All Things 1", selSpanFromNative(0, 1)},
+	} {
+		quote, cite, _, _ := prepareShareQuote(st, c.sel, c.span)
+		if quote != "" {
+			t.Errorf("%s: the heading was quoted as scripture: %q", c.name, quote)
+		}
+		if cite != "Genesis 1:1" {
+			t.Errorf("%s: cited %q, want Genesis 1:1, the verse the heading stands above", c.name, cite)
+		}
+	}
+
+	// The same rule in the middle of a chapter: the heading and the number of
+	// the verse beneath it, reported against the verse above.
+	mid := headingChapterState()
+	quote, cite, _, _ := prepareShareQuote(mid, headingText+" 44", selSpanFromNative(43, 44))
+	if quote != "" || cite != "Acts 10:44" {
+		t.Errorf("a heading run on to its verse's number shared as (%q, %q), want (\"\", Acts 10:44)", quote, cite)
+	}
+
+	// A span that names a verse further down is not a drag inside the top
+	// heading, whatever the words: the selection stays where the span puts it.
+	if _, cite, _, _ := prepareShareQuote(st, "Making of All", selSpanFromNative(2, 2)); cite != "Genesis 1:2" {
+		t.Errorf("an unlocatable selection reported against verse 2 cited %q; only a selection the top heading "+
+			"could have produced may be moved to the verse beneath it", cite)
+	}
+}
+
+// A verse number selected on its own is the page's apparatus, as a heading is:
+// a double-tap or long-press on the superscript selects it as a word. It
+// quotes nothing, and the reference names the verse the number labels, with
+// the span the pane reports and without one, as ordinary digits (the Apple and
+// Android panes) or as the superscript characters the styled pane draws. The
+// link and the verses every other verb resolves agree with it. Before this the
+// digits went out as the quote, and showed on the note sheet as the selected
+// words.
+func TestAVerseNumberSelectedOnItsOwnQuotesNothing(t *testing.T) {
+	st := psalm23NoteState()
+
+	// The control: the number with its verse's first words is the verse.
+	if quote, cite, _, _ := prepareShareQuote(st, "2 He maketh me", selSpanFromNative(2, 2)); !strings.HasPrefix(quote, "He maketh me") || cite != "Psalms 23:2" {
+		t.Fatalf("control: a number with its verse's words shared as (%q, %q)", quote, cite)
+	}
+
+	for _, sel := range []string{"2", "²"} {
+		for _, span := range []selSpan{selSpanFromNative(2, 2), {}} {
+			quote, cite, _, _ := prepareShareQuote(st, sel, span)
+			if quote != "" {
+				t.Errorf("%q, span %+v: the verse number was quoted as scripture: %q", sel, span, quote)
+			}
+			if cite != "Psalms 23:2" {
+				t.Errorf("%q, span %+v: cited %q, want Psalms 23:2, the verse the number labels", sel, span, cite)
+			}
+			if lo, hi := linkVersesForSelection(st, sel, span); lo != 2 || hi != 2 {
+				t.Errorf("%q, span %+v: the link names verses %d-%d, want 2-2", sel, span, lo, hi)
+			}
+		}
+	}
+	if vs := selectionVersesIn(st, "Psalms", 23, "2", selSpanFromNative(2, 2)); len(vs) != 1 || vs[0].Verse != 2 {
+		t.Errorf("the verse number resolved to %s, want just 2", verseRunString(vs))
+	}
+}

@@ -37,10 +37,12 @@ import (
 // change left the UITextView stranded where the slot used to be.
 //
 // open latches it: a slot from a closed sheet must never push frames, or a
-// stale relayout could reposition a native view belonging to nothing.
+// stale relayout could reposition a native view belonging to nothing. quiet
+// holds its pushes while the sheet is refitted (settle).
 type noteEntrySlot struct {
 	widget.BaseWidget
-	open *bool
+	open  *bool
+	quiet bool
 }
 
 func newNoteEntrySlot(open *bool) *noteEntrySlot {
@@ -69,18 +71,57 @@ func (s *noteEntrySlot) Move(p fyne.Position) {
 // (Resize/Move can fire mid-layout, before siblings have their final heights —
 // same double-push the reading overlay uses).
 func (s *noteEntrySlot) push() {
-	if s.open == nil || !*s.open {
+	if s.open == nil || !*s.open || s.quiet {
 		return
 	}
-	setNativeNoteEntryFrameFromObject(s)
-	time.AfterFunc(50*time.Millisecond, func() {
-		fyne.Do(func() {
-			if s.open != nil && *s.open {
-				setNativeNoteEntryFrameFromObject(s)
-			}
-		})
+	noteEntryFrameTo(s)
+	noteSheetAfter(50*time.Millisecond, func() {
+		if s.open != nil && *s.open {
+			noteEntryFrameTo(s)
+		}
 	})
 }
+
+// settle runs relayout, which lays the sheet out again, with the slot's pushes
+// held, then pushes the rect the slot ended at. The field is told where the
+// slot settles and not the rects a relayout passes through on the way: the
+// popup lays its content out before it moves it, so the first pass measures
+// from the content's old position, and the excerpt's first pass at a new width
+// reports the height of its rows at the old one. Each push reaches the view on
+// the main queue, which may draw between two of them.
+func (s *noteEntrySlot) settle(relayout func()) {
+	s.quiet = true
+	relayout()
+	s.quiet = false
+	s.push()
+}
+
+// The composer's platform seams, variables so a host test can lay out the
+// sheet iOS gets and read what its native field would be told:
+//
+//   - noteEntryNative says whether this platform floats a native field over
+//     the slot (iOS only; note_entry_ios.go);
+//   - noteEntryFrameTo parks the native field over the slot, at the slot's
+//     absolute rect;
+//   - noteSheetAfter runs f on the UI goroutine after d: the slot's second
+//     push and the phone sheet's watchdog. Under the test driver fyne.Do runs
+//     a closure on the timer's own goroutine, so a test that opens the phone
+//     sheet holds these and runs them itself (docs/BACKLOG.md, "Deferred-UI
+//     timers under the test driver");
+//   - noteSheetArea is the part of the canvas the phone sheet may cover, the
+//     canvas's interactive area. On a phone that is the canvas less its safe
+//     insets and, while the keyboard is up, less the keyboard too (the mobile
+//     driver counts the keyboard as a bottom inset); the test driver has no
+//     keyboard and small fixed insets of its own, so a test that needs a
+//     device's insets or a keyboard sets them here.
+var (
+	noteEntryNative  = nativeNoteEntrySupported
+	noteEntryFrameTo = setNativeNoteEntryFrameFromObject
+	noteSheetAfter   = func(d time.Duration, f func()) {
+		time.AfterFunc(d, func() { fyne.Do(f) })
+	}
+	noteSheetArea = func(c fyne.Canvas) (fyne.Position, fyne.Size) { return c.InteractiveArea() }
+)
 
 // noteEntryOnChanged is installed by the compose sheet while it is open, and
 // fired (via fyne.Do) by the native field's //export callback on every edit —
@@ -162,15 +203,27 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	title.TextSize = 20
 
-	ref := canvas.NewText(shareNoteReference(state, selectedText, span), pal.Accent)
+	quote, cite := shareNoteQuote(state, selectedText, span)
+	ref := canvas.NewText(cite, pal.Accent)
 	ref.TextStyle = fyne.TextStyle{Bold: true}
 	ref.TextSize = subheadingTextSize
+
+	// The selected words, as the share makes them, under the reference
+	// (share_note_excerpt.go). It is built from the selection on every open,
+	// the light/dark reopen's included, so it comes back with the sheet.
+	excerpt := newNoteExcerpt(quote, noteExcerptMaxLinesFor(mobile, cnv.Size().Height), pal.TextMuted)
+	if quote == "" {
+		// A heading selected on its own quotes nothing: the share cites the
+		// verse beneath it and carries no words (prepareShareQuote). The sheet
+		// shows the reference alone, without an empty row's gap under it.
+		excerpt.Hide()
+	}
 
 	// On iOS the field is a REAL UITextView floated over the sheet (dictation,
 	// autocorrect, system selection, undo, VoiceOver, system emoji — see
 	// note_entry_ios.go). Everywhere else it is the Fyne entry below. noteText
 	// is the one place that knows which is live.
-	useNative := mobile && nativeNoteEntrySupported()
+	useNative := mobile && noteEntryNative()
 
 	entry := newSearchEntry()
 	entry.SetPlaceHolder("Say something about this passage…")
@@ -235,6 +288,7 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 
 	form := container.NewVBox(
 		title, ref,
+		excerpt,
 		widget.NewSeparator(),
 		entrySlot,
 		left,
@@ -262,6 +316,14 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 		if cw := cnv.Size().Width - 80; cw > 280 && w > cw {
 			w = cw
 		}
+		// Two passes. The card's height is its content's minimum, and the
+		// excerpt and the counter wrap, so their minimum depends on the width
+		// they are laid out at: the first pass lays the form out at the card's
+		// width, the second takes the height that width gives. With one pass
+		// the height was read from Show's layout at the form's narrow minimum
+		// width, where both wrap into more rows, and the card stood taller
+		// than its content by the difference.
+		popup.Resize(fyne.NewSize(w, card.MinSize().Height))
 		popup.Resize(fyne.NewSize(w, card.MinSize().Height))
 		registerSheetReopen(state, popup, reopen)
 		focusEntry()
@@ -277,28 +339,74 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 	popup = widget.NewPopUp(card, cnv)
 	cw, ch := cnv.Size().Width, cnv.Size().Height
 	topY := float32(0)
-	if pos, sz := cnv.InteractiveArea(); sz.Height > 0 {
+	if pos, sz := noteSheetArea(cnv); sz.Height > 0 {
 		topY, ch = pos.Y, sz.Height
 	}
+	// What the card leaves uncovered at the canvas's foot as it opens: the
+	// home indicator's inset, the keyboard not being up yet. A refit keeps it
+	// (below).
+	footGap := cnv.Size().Height - topY - ch
+	// The card is the canvas's size whatever its content, so nothing is read
+	// from the excerpt's height here. The popup lays the form out as it is
+	// resized, where the excerpt wraps at its real width, and again as it is
+	// shown, with the height those rows give: the slot, and on iOS the native
+	// field parked over it, is below the last row before the sheet is on the
+	// canvas (TestTheNoteFieldSlotSitsBelowTheExcerpt).
 	popup.Resize(fyne.NewSize(cw, ch))
 	popup.ShowAtPosition(fyne.NewPos(0, topY))
 	registerSheetReopen(state, popup, reopen)
+
+	// REFIT WHEN THE CANVAS CHANGES SIZE, as the Go to picker does (goto.go).
+	// The toolkit never resizes a popup for a new canvas size; it only lays it
+	// out again at the size it was given. Narrowing an iPad's Split View or
+	// Slide Over window, or an Android window, with the composer open changes
+	// neither the layout class nor the rail, so no rebuild drains the sheet:
+	// the card, the excerpt wrapped for the old width and the slot kept their
+	// old width, the native field was parked past the canvas's right edge,
+	// and Share with it. The refit sizes the card for the canvas it now has,
+	// which lays the form out again, so the excerpt re-wraps and the slot and
+	// its native field follow, and gives the excerpt the row budget a sheet
+	// opened on this canvas would take.
+	//
+	// The card's height comes from the canvas, less what it left at the foot
+	// as it opened, and never from the interactive area again: that shrinks
+	// while the keyboard is up, and the phone sheet is not resized for the
+	// keyboard. A card fitted to it would end at the keyboard's top and stay
+	// short, the page showing beneath it, once the keyboard went down.
+	lastCanvas := cnv.Size()
+	refit := func() {
+		now := cnv.Size()
+		relayout := func() {
+			excerpt.setMaxLines(noteExcerptMaxLinesFor(true, now.Height))
+			popup.Resize(fyne.NewSize(now.Width, now.Height-topY-footGap))
+		}
+		if slot, ok := entrySlot.(*noteEntrySlot); ok {
+			slot.settle(relayout) // the native field is told only where the slot ends up
+			return
+		}
+		relayout()
+	}
 
 	// A window rebuild (theme flip, rotation, a background data swap) drains
 	// every popup WITHOUT running closeSheet — Hide() is all a drain does. For
 	// the Fyne entry that was merely untidy; with a native field it would leave
 	// an orphaned UITextView floating over whatever the rebuild painted. Poll
 	// until the popup is gone by ANY route, then run the (idempotent) teardown —
-	// the same 150ms watchdog the ask sheet uses.
+	// the same 150ms watchdog the ask sheet uses. The same poll notices a new
+	// canvas size and refits the sheet to it.
 	var watch func()
 	watch = func() {
 		if popup == nil || !popup.Visible() {
 			closeSheet() // idempotent; also drops the slot latch
 			return
 		}
-		time.AfterFunc(150*time.Millisecond, func() { fyne.Do(watch) })
+		if now := cnv.Size(); now != lastCanvas {
+			lastCanvas = now
+			refit()
+		}
+		noteSheetAfter(150*time.Millisecond, watch)
 	}
-	time.AfterFunc(150*time.Millisecond, func() { fyne.Do(watch) })
+	noteSheetAfter(150*time.Millisecond, watch)
 
 	if !useNative {
 		focusEntry()
@@ -318,8 +426,22 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 // citation the share itself will carry, so the writer can see what they are
 // attaching the note to.
 func shareNoteReference(state *AppState, selection string, span selSpan) string {
-	if _, cite, _, _ := prepareShareQuote(state, selection, span); cite != "" {
-		return cite
+	_, ref := shareNoteQuote(state, selection, span)
+	return ref
+}
+
+// shareNoteQuote is what the compose sheet shows of the selection: the words
+// and the reference, from ONE run of the share's own pipeline
+// (prepareShareQuote), so the excerpt, the reference and the citation the
+// share sends cannot disagree. The words are the quote before its Bluebook
+// framing — no quotation marks, bracketed capital or omission dots, which
+// belong to a quotation standing on its own, not to a reminder under its
+// reference — with the verse numbers stripped and the divine name in the small
+// capitals the page draws.
+func shareNoteQuote(state *AppState, selection string, span selSpan) (quote, ref string) {
+	quote, ref, _, _ = prepareShareQuote(state, selection, span)
+	if ref == "" {
+		ref = state.CurrentBook + " " + strconv.Itoa(state.CurrentChapter)
 	}
-	return state.CurrentBook + " " + strconv.Itoa(state.CurrentChapter)
+	return quote, ref
 }

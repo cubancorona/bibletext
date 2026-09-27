@@ -653,6 +653,7 @@ func normalizeShareSelectionIn(state *AppState, book string, chapter int, raw st
 	for _, sp := range spans {
 		validNum[strconv.Itoa(sp.verse)] = true
 	}
+	numbers := s
 	for locate(s) < 0 {
 		i := strings.LastIndexByte(strings.TrimSpace(s), ' ')
 		last := strings.TrimSpace(s)
@@ -663,7 +664,14 @@ func normalizeShareSelectionIn(state *AppState, book string, chapter int, raw st
 			break
 		}
 		if i < 0 {
-			return "", 0, 0, -1, false // the selection was only the number
+			// The selection was nothing but verse numbers — a double-tap or
+			// a long-press on a superscript selects it as a word. A number is
+			// the page's apparatus, not a word of scripture, so it is quoted
+			// no more than a heading selected on its own is (below): the quote
+			// is empty, and the reference names the verse the number labels,
+			// which the number itself says whatever span came with it.
+			lo, hi := verseNumberTokenRange(numbers)
+			return "", lo, hi, -1, true
 		}
 		s = strings.TrimSpace(strings.TrimSpace(s)[:i])
 	}
@@ -954,8 +962,22 @@ func stripHeadings(state *AppState, book string, chapter int, s string) string {
 // "Gentiles" down in a verse gets that verse's own span and is left alone, even
 // though the same word appears in the heading. Without the span test this would
 // quietly move such a selection to the heading's verse.
+//
+// A heading at the top of the chapter has no verse above it, so no span can
+// name one. The native panes report a drag inside it as no span at all (the
+// last verse number before it is none: iOS, macOS and Android alike), or,
+// when the drag reaches the first verse's number, as that verse, since
+// selSpanFromNative clamps an opening above verse 1 to verse 1. Either is the
+// shape of a selection there, and neither can belong to a verse further down,
+// whose own span starts at that verse. The words must still be the heading's.
+//
+// The words may end with the number of the verse the heading stands above: a
+// drag that ran on past the heading's last word stops at the next word the
+// page draws, which is that number. The number is the heading's own
+// confirmation (stripHeadings asks for the same), not a word of the verse, so
+// the selection is still the heading alone.
 func headingOnlySelectionVerse(state *AppState, book string, chapter int, s string, span selSpan) (int, bool) {
-	if state == nil || state.Bible == nil || !span.valid() {
+	if state == nil || state.Bible == nil {
 		return 0, false
 	}
 	s = strings.TrimSpace(s)
@@ -964,14 +986,44 @@ func headingOnlySelectionVerse(state *AppState, book string, chapter int, s stri
 	}
 	for _, h := range state.Bible.Headings[book][chapter] {
 		text := collapseSpaces(h.Text)
-		if text == "" || h.BeforeVerse <= 0 || !strings.Contains(text, s) {
+		if text == "" || h.BeforeVerse <= 0 {
 			continue
 		}
-		if above, ok := verseAbove(state, book, chapter, h.BeforeVerse); ok && span.lo == above {
+		words := s
+		if num := " " + strconv.Itoa(h.BeforeVerse); strings.HasSuffix(words, num) {
+			words = strings.TrimSpace(strings.TrimSuffix(words, num))
+		}
+		if words == "" || !strings.Contains(text, words) {
+			continue
+		}
+		above, ok := verseAbove(state, book, chapter, h.BeforeVerse)
+		if ok && span.valid() && span.lo == above {
+			return h.BeforeVerse, true
+		}
+		if !ok && (!span.valid() || span.lo <= h.BeforeVerse) {
 			return h.BeforeVerse, true
 		}
 	}
 	return 0, false
+}
+
+// verseNumberTokenRange is the lowest and highest of the verse numbers s is
+// made of, for a selection normalizeShareSelectionIn has found to be nothing
+// else.
+func verseNumberTokenRange(s string) (lo, hi int) {
+	for _, tok := range strings.Fields(s) {
+		n, err := strconv.Atoi(tok)
+		if err != nil {
+			continue
+		}
+		if lo == 0 || n < lo {
+			lo = n
+		}
+		if n > hi {
+			hi = n
+		}
+	}
+	return lo, hi
 }
 
 // verseAbove is the chapter's last verse before n — the verse a heading that

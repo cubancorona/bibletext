@@ -36,8 +36,10 @@ func TestShareNilAndDegenerateContracts(t *testing.T) {
 	if _, _, _, _, ok := normalizeShareSelection(st, "   ", selSpan{}); ok {
 		t.Error("whitespace-only selection must not normalize")
 	}
-	if _, _, _, _, ok := normalizeShareSelection(st, "17", selSpan{}); ok {
-		t.Error("a bare verse number alone shares nothing via the normalized path")
+	// A bare verse number alone quotes nothing, and names the verse it labels
+	// (TestAVerseNumberSelectedOnItsOwnQuotesNothing).
+	if text, lo, hi, _, ok := normalizeShareSelection(st, "17", selSpan{}); !ok || text != "" || lo != 17 || hi != 17 {
+		t.Errorf("a bare verse number alone normalized to (%q, %d, %d, %v), want (\"\", 17, 17, true)", text, lo, hi, ok)
 	}
 	if got := completeTrailingSentence(nil, "abc", -1); got != "abc" {
 		t.Errorf("nil state completion must be verbatim: %q", got)
