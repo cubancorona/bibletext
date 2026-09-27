@@ -84,9 +84,9 @@ func senderNameWithFlag(n StoredNote, enabled bool) string {
 // "Note from Friend" today, exactly the literal it replaces.
 func senderByline(n StoredNote) string {
 	if n.Kind == noteKindMine {
-		// Own notes are never drawn in the reading text — that exclusion is
-		// deliberate — so this arm serves any future surface that attributes one
-		// natively.
+		// An own note is drawn in the reading text only while focus names it
+		// (opened from the browser, arriving on the reader's own link, or just
+		// sent), and this is the line the native stickers attribute it with.
 		return "Note from you"
 	}
 	return "Note from " + senderName(n)

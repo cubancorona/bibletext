@@ -103,6 +103,7 @@ func (s *noteEntrySlot) settle(relayout func()) {
 //     the slot (iOS only; note_entry_ios.go);
 //   - noteEntryFrameTo parks the native field over the slot, at the slot's
 //     absolute rect;
+//   - noteEntryTyped reads what the reader has typed into the native field;
 //   - noteSheetAfter runs f on the UI goroutine after d: the slot's second
 //     push and the phone sheet's watchdog. Under the test driver fyne.Do runs
 //     a closure on the timer's own goroutine, so a test that opens the phone
@@ -117,6 +118,7 @@ func (s *noteEntrySlot) settle(relayout func()) {
 var (
 	noteEntryNative  = nativeNoteEntrySupported
 	noteEntryFrameTo = setNativeNoteEntryFrameFromObject
+	noteEntryTyped   = nativeNoteEntryText
 	noteSheetAfter   = func(d time.Duration, f func()) {
 		time.AfterFunc(d, func() { fyne.Do(f) })
 	}
@@ -142,13 +144,18 @@ var noteEntryOwner uint64
 // plain share stays one tap, because most shares carry no note and a modal in
 // everyone's way to serve the minority is the wrong trade.
 func promptShareNote(state *AppState, selectedText string, span selSpan) {
-	promptShareNoteWith(state, selectedText, span, "")
+	if state == nil {
+		return
+	}
+	promptShareNoteWith(state, selectedText, span, "", readerPassage(state))
 }
 
 // promptShareNoteWith opens the composer with note already in the field — ""
 // for every ordinary open. The light/dark reopen passes what the reader had
-// written when the rebuild drained the sheet (sheet_reopen.go).
-func promptShareNoteWith(state *AppState, selectedText string, span selSpan, note string) {
+// written when the rebuild drained the sheet (sheet_reopen.go). at is the
+// passage the selection was made on, taken when the composer first opened and
+// carried through a reopen, so a sent note is shown only there (showSentNote).
+func promptShareNoteWith(state *AppState, selectedText string, span selSpan, note string, at notePassage) {
 	if state == nil || state.window == nil {
 		return
 	}
@@ -230,7 +237,7 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 	entry.SetText(note)
 	noteText := func() string {
 		if useNative {
-			return nativeNoteEntryText()
+			return noteEntryTyped()
 		}
 		return entry.Text
 	}
@@ -265,10 +272,19 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 	entry.OnChanged = func(string) { updateLeft() }
 	updateLeft()
 
+	// Share closes the sheet, sends, and shows the note it kept on the
+	// passage, the card the notes browser opens. The share sheet is handed
+	// its message first: on an iPad and on a Mac it opens beside the
+	// selection, and the note's card and the view's placement move the text
+	// it would be measured against. The same closure serves the button and
+	// Return, the Fyne field and iOS's native one, the desktop card and the
+	// phone sheet.
 	send := func() {
 		note := strings.TrimSpace(noteText())
 		closeSheet()
-		shareVerseLinkWithNote(state, selectedText, note, span)
+		if stored, kept := shareVerseLinkWithNote(state, selectedText, note, span); kept {
+			showSentNote(state, stored, at)
+		}
 	}
 	entry.OnSubmitted = func(string) { send() }
 
@@ -306,7 +322,7 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 	// drained sheet still holds, or on iOS from the native field, which is
 	// still up until the drained sheet's watchdog finds it no longer owns it
 	// (noteEntryOwner). The new sheet takes the caret, as any open does.
-	reopen := func() { promptShareNoteWith(state, selectedText, span, noteText()) }
+	reopen := func() { promptShareNoteWith(state, selectedText, span, noteText(), at) }
 
 	if !mobile {
 		card := surface(container.NewPadded(form), pal.SurfaceAlt, pal.Border, fyne.Size{})

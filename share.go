@@ -65,7 +65,14 @@ func dispatchSelectionAction(state *AppState, action, text string, span selSpan)
 // shareVerseLinkWithNote is shareVerseLink carrying the sender's note. An empty
 // note produces exactly the link shareVerseLink would have, so the two paths
 // cannot drift apart.
-func shareVerseLinkWithNote(state *AppState, text, note string, span selSpan) {
+//
+// It returns the record the note was kept as, and kept=false when nothing was
+// stored: no note, or a store that stood the write down (saveMyNote). The
+// composer shows a kept note on the passage (showSentNote, notes_mine.go).
+// Everything here runs before it returns, the save included: the share sheet
+// is handed its message and presented later, on its own, and reports nothing
+// back, so a sheet the reader then cancels leaves the note kept.
+func shareVerseLinkWithNote(state *AppState, text, note string, span selSpan) (stored StoredNote, kept bool) {
 	_, cite, _, _ := prepareShareQuote(state, text, span)
 	version := state.currentVersion()
 	lo, hi := linkVersesForSelection(state, text, span)
@@ -86,8 +93,18 @@ func shareVerseLinkWithNote(state *AppState, text, note string, span selSpan) {
 	//
 	// So the record decides the identity, not this call: whatever nonce comes
 	// back is what goes in the link.
+	//
+	// And keep it. The reader's own words used to vanish with the share sheet
+	// and survive only in whatever messenger they went through, so the app
+	// could show every note the reader had RECEIVED and none they had sent.
+	// The record is a Kind=mine note in the scrapbook store, listed in the
+	// notes browser, and never a chapter's default note: it is drawn on the
+	// passage only while focus names it. The composer focuses it once this
+	// returns (showSentNote), so the reader sees the note on the passage at
+	// once, exactly as opening it from the browser shows it, and the next
+	// navigation puts it away again. Nothing about the showing is stored.
 	if n := strings.TrimSpace(note); n != "" {
-		stored, ok := saveMyNote(appPrefs(), StoredNote{
+		stored, kept = saveMyNote(appPrefs(), StoredNote{
 			VersionID: version.ID,
 			Book:      state.CurrentBook,
 			Chapter:   state.CurrentChapter,
@@ -96,20 +113,15 @@ func shareVerseLinkWithNote(state *AppState, text, note string, span selSpan) {
 			Text:      n,
 			Nonce:     nonce,
 		})
-		if ok && len(stored.Nonce) == noteNonceLen {
+		if kept && len(stored.Nonce) == noteNonceLen {
 			nonce = stored.Nonce
 		}
 	}
 	url := ShareLinkURLWithNoteNonce(version.ID, state.CurrentBook, state.CurrentChapter, lo, hi, note, nonce)
 	if url == "" {
 		shareVerse(state, text, false, span)
-		return
+		return stored, kept
 	}
-	// And keep it. Until now your own words vanished with the share sheet and
-	// survived only in whatever messenger you sent them through — which meant
-	// the app could show you every note you had RECEIVED and none you had sent.
-	// Stored as a Kind=mine record in the scrapbook store, never drawn in the text,
-	// and visible in the notes browser — that visibility is deliberate.
 	// The note goes in the MESSAGE too, not only inside the link. It is how
 	// people share things anyway, it reaches a recipient who never taps, and it
 	// reaches one whose app is too old to read the note out of the fragment.
@@ -117,7 +129,8 @@ func shareVerseLinkWithNote(state *AppState, text, note string, span selSpan) {
 	if n := strings.TrimSpace(note); n != "" {
 		msg = n + "\n\n" + msg
 	}
-	nativeShareText(msg)
+	shareTextOut(msg)
+	return stored, kept
 }
 
 func shareVerseLink(state *AppState, text string, span selSpan) {
@@ -131,7 +144,7 @@ func shareVerseLink(state *AppState, text string, span selSpan) {
 	}
 	// Citation first, then the URL on its own line: messengers unfurl a link on
 	// its own line, and the reference still reads if the preview doesn't render.
-	nativeShareText(cite + " (" + version.Name + ")\n" + url)
+	shareTextOut(cite + " (" + version.Name + ")\n" + url)
 }
 
 // linkVersesForSelection is the URL fragment's verse range: the positional
@@ -174,7 +187,8 @@ func shareVerse(state *AppState, text string, asImage bool, span selSpan) {
 // shareTextOut hands a composed text share to the platform. It is a variable
 // so a test can read what a surface shares without a share sheet or a
 // clipboard — the test driver's window clipboard is single-use, so nothing
-// written to it can be read back. Both text routes deliver through it.
+// written to it can be read back. Every text share delivers through it: the
+// citation, from a selection or a passage, and the two links.
 var shareTextOut = func(s string) { nativeShareText(s) }
 
 // shareQuoteIn is the whole text pipeline for one selection read against ONE

@@ -166,9 +166,10 @@ type chapterPlan struct {
 	display int
 
 	// Own is YOUR OWN note, drawn on the passage only while noteFocus names
-	// it — the reader asked to see it, from the notes browser or by tapping
-	// their own link, and navigating away puts it back out of sight because
-	// navigation resets focus (state.go, resetNoteFocus).
+	// it — the reader opened it from the notes browser, tapped their own
+	// link, or has just sent it (showSentNote) — and navigating away puts it
+	// back out of sight because navigation resets focus (state.go,
+	// resetNoteFocus).
 	//
 	// IT IS A SLOT, NOT A MEMBER OF Notes, and that is the whole design. A
 	// member that exists only while focused would make "K of N on this
@@ -247,11 +248,12 @@ func buildChapterPlan(state *AppState, p prefStore, bible *BibleData) chapterPla
 	s := readNoteStore(p)
 	focusedOwn := state.noteFocus.set && state.noteFocus.id != 0
 	for _, n := range s.notes {
-		// Own notes are not drawn automatically. An explicitly focused own note
-		// is drawn in its own slot until navigation clears that focus. Everything
-		// else about own notes is
-		// unchanged; they never join Notes, never affect the counts, and never
-		// become the default display.
+		// An own note joins the plan only while noteFocus names it, and focus
+		// names one only when the reader asked for it or has just sent it: a
+		// browser row, their own link, or Share on the note composer
+		// (showSentNote). It is then drawn in its own slot until navigation
+		// clears that focus. Never otherwise: own notes never join Notes,
+		// never affect the counts, and never become the default display.
 		if n.Kind == noteKindMine {
 			if !focusedOwn || n.ID != state.noteFocus.id || !displayableNote(n) || n.Book != book {
 				continue

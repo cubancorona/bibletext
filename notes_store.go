@@ -597,8 +597,9 @@ func noteForChapter(p prefStore, versionID, book string, chapter int, bible *Bib
 	s := readNoteStore(p)
 	var candidates []StoredNote
 	for _, n := range s.notes {
-		// Own notes are stored but never drawn in the scripture text (a
-		// deliberate rule); only received notes reach the reading page.
+		// Own notes are never a chapter's default note: one is drawn only
+		// while focus names it (buildChapterPlan's Own slot), so only
+		// received notes are chosen here.
 		if n.Kind != noteKindReceived || !displayableNote(n) {
 			continue
 		}

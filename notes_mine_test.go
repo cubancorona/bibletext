@@ -89,10 +89,10 @@ func TestResharingTheSameNoteDoesNotDuplicateIt(t *testing.T) {
 	}
 }
 
-// Own notes are STORED but never drawn in the scripture text: displaying them
-// there is deliberately not done for now. The reading page derives
-// Kind=received notes alone, so this is structural rather than a rule anyone
-// has to remember.
+// Own notes are STORED but never a chapter's default note: the reading page's
+// default derive takes Kind=received notes alone, so this is structural rather
+// than a rule anyone has to remember. An own note is drawn only while focus
+// names it (the browser, the reader's own link, or a send: showSentNote).
 func TestMyNotesNeverReachTheReadingPage(t *testing.T) {
 	p := newNotePrefs()
 	saveMyNote(p, StoredNote{VersionID: "web", Book: "Mark", Chapter: 4, VerseLo: 39,

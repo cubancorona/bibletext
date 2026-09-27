@@ -377,6 +377,27 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       the sheet shows the reference to the verse beneath the heading and no
       words. Double-tap (desktop: double-click) a verse number: the sheet
       shows that verse's reference and no words, not the digits.
+- [ ] Share with note shows the note it kept, on every surface (iPhone,
+      iPad, Android, macOS, the styled pane): select two verses, Share with
+      note, write a line, Share. Behind the share sheet (on the styled pane,
+      beside the "Copied to the clipboard" notice) the page now shows the
+      note's card over the selected verses, "Note from you" with one ✕ and
+      no −, the verses washed, the view placed on it; Return in the desktop
+      field does the same. Cancel the share sheet: the card stays, and the
+      note is in the notes browser. On an iPad and on a Mac the share sheet
+      opens beside the selection, not mid-page, and the card appearing
+      under it does not move it. On an iPhone, an iPad and a Mac the text
+      does not flash, jump or show at a wrong size as the card appears: the
+      Apple panes rebuild the reading pane and re-import the chapter for it.
+      Arrive on a verse through Results, select another, send: the search
+      wash goes and the card opens, never the pill. Flip light/dark with the
+      share sheet still up: the card comes back in the new palette. Flip
+      light/dark with the composer open (on iOS, the native field showing),
+      then Share: the card appears as it does without the flip. Go to the
+      next chapter and back: the card is gone and stays gone. Android: pick
+      an app in the chooser, send, come back: the card is still there.
+      Share with the field left empty: no card, and a search wash the
+      reader arrived on stays lit.
 - [ ] Share with note on iPad, at a third of an 11-inch iPad in Split View
       and in Slide Over (320pt wide), with a verse of about eighty
       characters selected: the native field's outline sits below the third
@@ -449,9 +470,10 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
 - [ ] Deleting the OPEN note from the list: returning to Read must show
       the passage with its remaining pills — never a stranger's note
       expanded in its place (the measured focus-fell-through defect).
-- [ ] Own notes: never drawn in scripture until their row is tapped;
-      byline "From you"; the bubble carries ONE ✕ (no −); ✕ dismisses
-      without touching the store; only the browser's bin deletes.
+- [ ] Own notes: never drawn in scripture until their row is tapped,
+      their own link is opened or they are sent (V12); byline "From you";
+      the bubble carries ONE ✕ (no −); ✕ dismisses without touching the
+      store; only the browser's bin deletes.
 - [ ] The S10 count-tap (“1 of 3 ›”): same-range trio swaps bubbles with
       the wash NEVER moving; different-range trio moves the wash within
       the paragraph; the view repositions only when the anchor changes.

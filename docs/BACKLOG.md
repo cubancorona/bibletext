@@ -2607,33 +2607,123 @@ TestLiveAPIBibleFullCanon (opt-in, ~200 requests) downloads the whole
 canon and reproduces the 2026-08-23 text byte for byte with 116 titles
 added. What every source carries and what is kept: docs/SOURCE_FIELDS.md.
 
-## Show a note you just sent, the way opening one from the browser does
+## Show a note you just sent, the way opening one from the browser does — DONE 27 September 2026
 
-Sending a note stores it and draws nothing. `share.go` says so where it saves
-the record — "never drawn in the text, and visible in the notes browser — that
-visibility is deliberate" — and `notes_plan.go` enforces it: a `noteKindMine`
-record joins the plan only while `noteFocus` names it, so the browser can show
-one and the send path cannot.
+Sending a note stored it and drew nothing. A `noteKindMine` record joins a
+chapter's plan only while `noteFocus` names it (`notes_plan.go`), and only the
+notes browser and the reader's own link ever set that focus, so the send path
+could not show one; `share.go` recorded that as a decision. The decision is
+reversed: sending is the one moment a reader has no other sign that their
+words were kept, and the browser is several taps away.
 
-The proposal is to let sending focus the note it just stored, exactly as
-`openNoteFromBrowser` does: `state.focusNote(stored.ID)` then
-`applyNoteForCurrentChapter(state)` after `saveMyNote` returns. That inherits
-the transient behaviour already in place — `resetNoteFocus` runs on every
-chapter arrival, so the note goes away on navigating away, with no new lifetime
-rule to define and nothing persisted that was not persisted before.
+What shipped: Share on the note composer (`promptShareNoteWith`,
+`share_note_ui.go`) shows the note it kept through `showSentNote`
+(`notes_mine.go`), which does what opening an own note from the browser does
+(`openNote`, `notes_browse.go`): a foreign mark stands aside, `focusNote`
+names the record, `applyNoteForCurrentChapter` projects it with its own wash,
+and `openedNotePlacesTheView` places the view on it. The reader sees the card
+the browser opens, over the verses they selected, bylined "Note from you" and
+carrying its one ✕, on the iOS, Android and macOS native panes and on the
+Windows and Linux styled pane alike, since every one of them draws from the
+same plan and the same chrome. Nothing new is stored. Focus is session state,
+so the note goes on the next navigation (`addRecentChapter` resets focus)
+exactly as a note opened from the browser does, and a window rebuild, which
+builds the page from state and never touches focus, keeps it: a light/dark
+switch made while the share sheet is up brings the card back in the new
+palette, and one made while the composer is still open brings the composer
+back on the passage it opened on, so Share on it shows the note all the same.
 
-This REVERSES a stated decision rather than fixing a defect, which is why it is
-written down instead of done. What argues for it: sending is the one moment a
-reader has no confirmation that their words were kept, and the browser is
-several taps away.
+The chapter is the one on screen, so the repaint is a note verb's, not a
+navigation's (`refreshNoteOnly`), and it is the only one: the composer closed
+before the send, and nothing after it repaints the reading pane. Android and
+the styled pane rebuild the reading pane. The Apple panes would push the
+sticker and the wash onto the text they hold, but the body fingerprint folds a
+mirror naming any note other than the chapter's display note (the mirror
+clause in `chapterFingerprint`, `reading.go`), and an own note is never that,
+so they refuse the in-place push and are rebuilt too, the chapter re-imported.
+Whether that rebuild shows on an iPhone, an iPad or a Mac as the flash
+`refreshNoteOnly` exists to avoid is for a device to say (V12); if it does,
+that clause is where to look.
 
-The report that raised it was a misreading worth recording, because the app
-invited it. A highlight was still standing after a send with no note beside it,
-which read as a note that had lost its text; it was a search mark, from arriving
-at the passage through Results. `hlOrigin` (mark.go) records provenance but does
-not change the tint, so a note's mark and a search mark are indistinguishable to
-a reader. Whether or not the change above is made, that ambiguity is its own
-item: a reader cannot tell why a verse is lit.
+Every route to it is one closure: the composer's Share button and Return, on
+the desktop card (macOS, Windows, Linux), on the phone sheet with the Fyne
+field (Android) and with iOS's native field floated over it. Only the link
+share carries a note; Share with citation, Share as image and Share as link
+store nothing and show nothing. Where no link can be built (a book with no
+slug, which no shipped book is) the note route falls back to the text share,
+which carries no note, but the note was kept before that, so it is shown too.
+
+The send is synchronous. `shareVerseLinkWithNote` (`share.go`) saves the
+record, builds the link and hands the message to the platform before it
+returns, and the OS share sheet is presented afterwards on its own and reports
+nothing back. So a share sheet the reader cancels still leaves the note kept,
+as it always did: the reader sees it on the passage and in the browser, though
+it may never have reached anyone. The message is handed over before the note
+is shown. On an iPad and on a Mac the sheet opens beside the selection,
+measured on the main queue after the hand-off, and the note's card, the
+chapter's re-import and the pane's new frame are all queued behind it on that
+queue, which runs in order, so the sheet is placed against the text as it
+stood. A note that was not kept (a store that stood the write down, or Share
+with the field left empty) shows nothing and takes no focus, and a search
+result the reader arrived on stays lit.
+
+It is shown only on the passage its words were selected on. The composer
+records the translation, book and chapter when it first opens (`notePassage`)
+and carries them through a light/dark reopen, and `showSentNote` shows nothing
+if the reader is elsewhere when it runs: a link arriving while the composer is
+open moves the reader without closing it. The check is made when the show
+runs, not when the note was saved, so it would hold for a send that completed
+later. It also moves focus only to a note the chapter's plan draws: focus
+naming a note that is not there falls to the default rule, which would reopen
+a friend's note the reader had just closed on the chapter.
+
+Over a search result, a link's span or the verse of the day's mark, the note
+takes the page as a browser tap does: the foreign mark is cleared, as
+`openNote`, a note chip and the pill's Show clear one, and the card opens
+where the mark would have stood it down to its pill. The results trail
+(`CanReturnToSearchResults`) is left as it was, since the reader has not moved.
+No tint changed: that a note's mark and a search mark look alike is the item
+below.
+
+The comments that stated the old decision now describe this one: `share.go`
+where it saves the record, the plan's `Own` slot and its walk in
+`notes_plan.go`, the header of `notes_mine.go`, `noteForChapter` in
+`notes_store.go` and `senderByline` in `notes_byline.go`. Both link shares now
+deliver through `shareTextOut`, the seam every text share uses, and the iOS
+field's text is read through `noteEntryTyped`, so a host test can drive every
+route. The host tests are in `share_note_sent_test.go`: every route to Share,
+the state it leaves and what a pane built from that state draws, and, in a
+window built by `CreateMainUI`, that the Windows and Linux pane on screen is
+repainted with the card, after a light/dark rebuild too and from a composer
+the rebuild brought back. `share_note_sent_macos_test.go` holds that the macOS
+pane is given the chapter with the note, its wash and its placement. What only
+a device can confirm is in `docs/VISUAL_TESTS.md` under V12, and V14's
+own-note row now names the send.
+
+## A reader cannot tell why a verse is lit
+
+The report that raised the item above was a misreading worth recording,
+because the app invited it. A highlight was still standing after a send with
+no note beside it, which read as a note that had lost its text; it was a
+search mark, from arriving at the passage through Results. `hlOrigin`
+(mark.go) records provenance but does not change the tint, so a note's mark
+and a search mark are indistinguishable to a reader. A send no longer leaves
+that scene (the note it keeps replaces the search mark), but the ambiguity is
+its own item and stays open: a reader cannot tell why a verse is lit.
+
+## A note is shared and filed against the chapter the reader is on at Share, not the one it was written on
+
+The note composer holds the words and the span selected on one chapter, but
+`shareVerseLinkWithNote` reads the passage from the reader's state when Share
+is pressed: the quote, the citation, the link's verses and the stored record
+all take the chapter the reader is on then. A link arriving while the
+composer is open navigates without closing it (`applyShareTarget`), so the
+message then names the wrong passage and the note is filed on it. Since the
+item above, the note is at least not drawn there (`showSentNote` checks the
+passage the composer recorded). Two ways to close it: close the composer when
+the reader is moved, or share against the recorded passage, for which
+`prepareShareQuoteIn` exists and `linkVersesForSelection` and the save would
+need the passage passed in.
 
 ## One pill, several noted paragraphs: what the count says and where it points
 
