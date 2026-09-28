@@ -27,6 +27,7 @@ func dismissKeyboard(state *AppState) {
 func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.CanvasObject {
 	state.app = app
 	state.window = window
+	state.header = nil // until buildHeader makes one for this tree
 	registerAIState(state)
 	if state.theme == nil {
 		state.theme = &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}

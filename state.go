@@ -226,6 +226,10 @@ type AppState struct {
 	syncSidebar   func()       // refresh the sidebar book list selection
 	focusSearch   func()       // move keyboard focus into the search field
 	setSearchText func(string) // set the search field's text (e.g. to clear it)
+	// header is the app header the window is showing (buildHeader), nil when
+	// it shows none — full-screen reading, the loading screen. A desktop sheet
+	// reads where it ends so as to open clear of it (headerClearance).
+	header fyne.CanvasObject
 	// surfaceReading is called when a result is opened from search (or another
 	// off-screen view) so the platform can bring the reading pane back into
 	// focus. No-op on desktop (the reading pane is always visible alongside);
@@ -252,6 +256,10 @@ type AppState struct {
 	// the moment its popup closes and is pruned on the next touch.
 	// UI-goroutine only.
 	sheetReopens []sheetReopen
+	// sheetRefits holds, for each desktop sheet showing, how it sizes itself
+	// to the window again when the window changes size (sheet_refit.go).
+	// Pruned like sheetReopens. UI-goroutine only.
+	sheetRefits []sheetRefit
 	// appearance is the light/dark decision's state: the variant the window
 	// was built with, and on mobile whether the app is out of the foreground
 	// (appearance.go). UI-goroutine only.

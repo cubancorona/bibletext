@@ -68,6 +68,10 @@ func treeTexts(o fyne.CanvasObject) []string {
 			add(v.Text)
 		case *widget.Hyperlink:
 			add(v.Text)
+		case *outboundLink:
+			add(v.Text)
+		case *statusLine:
+			add(v.text)
 		case *widget.RichText:
 			add(segmentText(v.Segments))
 		}

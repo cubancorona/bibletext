@@ -1062,7 +1062,8 @@ func showVerseOfDayCard(state *AppState, d dayVerse) {
 	registerSheetReopen(state, popup, func() { showVerseOfDayCard(state, d) })
 	fitVOTD := func() {
 		pos, sz := cnv.InteractiveArea()
-		maxH := sheetMaxHeight(cnv.Size().Height, pos.Y, sz.Height, pos.Y+16)
+		maxH := clearOfHeader(sheetMaxHeight(cnv.Size().Height, pos.Y, sz.Height, pos.Y+16),
+			cnv.Size().Height, headerClearance(state))
 		h := scrollingSheetHeight(
 			popup.MinSize().Height,
 			bodyScroll.MinSize().Height,
@@ -1072,6 +1073,8 @@ func showVerseOfDayCard(state *AppState, d dayVerse) {
 		popup.Resize(fyne.NewSize(w, h))
 	}
 	fitVOTD()
+	// And again when a desktop window changes size (sheet_refit.go).
+	registerSheetRefit(state, popup, fitVOTD)
 
 	// Re-measure once the real layout has landed so the card fits the passage
 	// snugly. Visible() gates it: a dismissed card must not re-measure.

@@ -90,7 +90,9 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 	// the rule, which pooled empty band under the version line.
 	rowWrap := container.New(layout.NewCustomPaddedLayout(3, 3, theme.Padding(), theme.Padding()), row)
 	content := container.New(layout.NewCustomPaddedVBoxLayout(0), rowWrap, rule)
-	return container.NewStack(bg, content)
+	band := container.NewStack(bg, content)
+	state.header = band
+	return band
 }
 
 // incompleteBibleBanner is the status strip shown above the book lists while the app is

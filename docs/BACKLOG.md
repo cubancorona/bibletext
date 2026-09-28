@@ -2174,24 +2174,122 @@ above.
 `docs/APP_STORE_SUBMISSION.md` ("The 1.2.17 set") records how each was taken.
 The Play set is untouched and still stale.
 
-The review of the new images found five small things in the app itself,
-none of them fixed yet:
+The review of the new images found five small things in the app itself.
+Three are FIXED and two are left, 28 September 2026; what only a screen can
+confirm is in `docs/VISUAL_TESTS.md` V15:
 
-- On the iPad Settings sheet the API.Bible status line is cut short: it
-  draws "✓ Included with BibleText — or paste your own" with no full stop
+- FIXED: on the iPad Settings sheet the API.Bible status line was cut short:
+  it drew "✓ Included with BibleText — or paste your own" with no full stop
   and a hard edge on the last letter, where `bible_key_settings.go` has the
-  full stop. The label is narrower than its text at that width.
-- The same block contradicts itself: the status says the key is included,
-  and the caption under it says the NKJV "downloads with your own free
-  API.Bible key". The caption's wording is the owner's to settle.
-- "Get a key ↗" and "Privacy Policy ↗" draw the arrow as a colour emoji
-  keycap on iOS and macOS, the only emoji in the interface. U+2197 needs a
-  text-presentation selector (U+FE0E) or an icon.
-- On the Mac the top edge of the header's Go to button shows as a short
-  dark arc just above the open Settings sheet.
-- The iPad Settings sheet ends with a SHARED NOTES heading whose contents sit
-  under the pinned "Changes save automatically." footer, so the section
-  looks empty until scrolled.
+  full stop. The width was not the cause (the line fits the iPad's row with
+  280pt to spare); the ✓ was. Neither UI face has it, so Fyne takes it from
+  a system font, and it chooses that font per font cache by what the cache
+  has already loaded. The sheet sat inside a `compactTheme` override at 18,
+  the size the app theme already gives, and an override gives its subtree
+  caches of its own: the line was measured through the app's cache, where
+  the header's ▾ had already brought in a narrower ✓, and drawn through the
+  sheet's, and a text is painted into a texture exactly as wide as it
+  measured. The override is gone (`ai_settings.go`), so the sheet is
+  measured and drawn through one cache. Both key sections' status lines are
+  also a `statusLine` now (`status_line.go`), which breaks between words
+  when its row is narrower than its text: at 320pt the Gemini hint (288pt)
+  and both error lines (253pt, 256pt) were wider than the 252pt row and
+  lost their ends at the scroll's edge. Held by `status_line_test.go` from
+  a 320pt phone to a 13-inch iPad and the desktop, where the row each line
+  is given is checked against the lines it draws, not against its own
+  measure, and by a check that no text needing a system font sits under a
+  theme override. The sheet is measured again when either key's status
+  takes a line more or less, so on a window with room for all of it
+  nothing moves below a fold; held there too, on the real sheet.
+- LEFT, by decision: under the status saying the key is included, the
+  caption says the NKJV "downloads with your own free API.Bible key". The
+  caption stays in every state, because read with the section header's
+  "Get a key" link and the status line's "or paste your own" it states the
+  choice plainly. `bible_key_caption_test.go` holds it shown with the
+  included key in force, with no key, with the reader's own and with the
+  included one cleared, and followed by the gap after a caption.
+- FIXED: "Get a key ↗" and "Privacy Policy ↗" drew the arrow as a colour
+  emoji tile on every platform, the only emoji in the interface. Fyne picks
+  a face per character — the theme's Atkinson Hyperlegible, its own Noto
+  Sans, then the bundled Noto Color Emoji (patches/), then system fonts —
+  and only the emoji face has U+2197; it holds colour bitmaps only.
+  U+FE0E, the text-presentation selector, changes nothing: the face is
+  chosen by glyph coverage, not by the selector. The words are now the
+  label of an `outboundLink` (`external_link.go`) that draws the arrow
+  from `assets/icons/arrow_outward.svg` in the link colour, on the
+  baseline, cap height tall; a tap on it opens the link. Held by pixel
+  tests (`outbound_link_test.go`) on the link alone and on the three links
+  the sheet builds, and by a sweep refusing U+2197 in any string in the
+  package. The website's `docs/index.html` keeps its ↗: a browser draws
+  U+2197 as text unless asked otherwise.
+- FIXED: on the Mac the top edge of the header's Go to chip showed as a
+  short arc above the open Settings sheet. The desktop sheets are modal and
+  Fyne centres a modal on the window, so a sheet's top edge follows from its
+  height alone; Settings, capped only by the window, started at 18.5pt on a
+  1280x800 window, about a point below the top of the chip's outline. Every
+  desktop sheet now opens below the header (`headerClearance`,
+  `clearOfHeader` in `sheet_fit.go`): Settings, Go to, Translation, Verse of
+  the day, the audio source menu and the AI answer, cross-reference and
+  share-image sheets. At 1280x800 Go to and Translation already did; at a
+  1280x600 window they reached into the header too and no longer do. The
+  note composer and the ask sheet are sized to their content and already
+  open well clear. Two sheets needed more than a cap: the cross-reference
+  list guessed its chrome at 150pt against the 175pt it has, so the listed
+  panel stood 25pt over its cap (at 1280x800 its top was partway down the
+  chip) and now measures it (`crossref_panel.go`); and the share-image
+  preview kept its image at least 200pt, which put the sheet's top inside
+  the header on windows under about 490pt tall and partway down the chip
+  under about 460pt, so on a desktop window the image now follows the cap
+  down (`shareImageSide`, `share_preview.go`). The toolkit never sizes an
+  open sheet again: on a window resize it only
+  re-centres it at the size it opened at, so restoring a maximised window,
+  or dragging an edge up, brought the arc back. Every desktop sheet whose
+  size comes from the window now registers its fit and is sized again,
+  exactly as opening it at the new size would, whenever the window changes
+  size (`sheet_refit.go`, run by the window's root, `windowRoot`); a sheet
+  opened in a short window also takes the room a taller one gives it. Held
+  by `sheet_header_clearance_test.go`: every sheet, the cross-references
+  waiting and listed, opened at eight window sizes from 1280x860 to
+  1280x440 and 507x440, and resized under seven changes, each ending where
+  a sheet opened at the new size sits. Divergence: phones and tablets keep
+  their sheets sized to the safe area (`sheetMaxHeight`); at their cap
+  those start above the header's controls rather than below the header,
+  and a tablet sheet a little shorter than its cap could still start
+  partway down the Go to chip. Not seen in the new images; left until a
+  screen shows it. Nor are their sheets sized again when the canvas changes
+  size: there the content also changes height as the soft keyboard comes
+  and goes, and a sheet resized under the reader's typing is worse; a
+  rotation that moves the navigation rebuilds the window and closes the
+  sheets, the Go to picker and the note composer refit themselves, and the
+  rest keep the size they opened at, which the modal clamps to the canvas.
+  Also left: a desktop window under about 430pt tall (the window allows
+  386pt) has too little room below the header for the fixed parts of some
+  sheets, so Translation (below 430pt), cross-references while the list
+  loads (below 418pt), the AI answer, the note composer and Go to (below
+  about 400pt) start inside the header's lower band, below the Go to chip;
+  at 386pt Translation's top is 0.7pt below the chip's outline and crosses
+  the translation name's tap area. Raising the window's minimum height to
+  about 430pt, or letting a sheet that cannot clear the header cover it
+  entirely, is the owner's choice.
+- LEFT: the iPad Settings sheet ends on a SHARED NOTES heading with its
+  card below the pinned "Changes save automatically." footer. Not a defect:
+  the body is a scroll that ends above the footer, nothing is drawn under
+  the footer, and at that size the body is about 150pt taller than its view, so
+  the sheet opens at the top with the last sections below the fold, the
+  scroll bar showing it. Scrolled to the end, the last card sits wholly
+  above the footer. `settings_footer_test.go` holds both at the iPad sizes.
+  A separator above the footer, mirroring the one under the title, would
+  say more plainly that the body continues; that is a design choice, not a
+  fix.
+
+## Settings: Clear runs past the key card at 320pt — OPEN
+
+At 320pt, the iPhone SE's width, the Paste / Test key / Clear row under each
+key field in Settings, the assistant's and API.Bible's, is wider than its
+card, and Clear is cut off: it spans 250.3–337.9pt against the card's right
+edge at 298.0pt (Paste 32.0–122.3, Test key 129.3–243.3), measured on the
+real sheet. It is the same at bf10c0403, before the Settings fixes above, so
+it predates them. Not fixed.
 
 ## NKJV cross references: the panel's second pass — PAUSED 10 September 2026
 

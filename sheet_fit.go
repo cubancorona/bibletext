@@ -103,6 +103,77 @@ func sheetMaxHeight(canvasH, safeTop, safeH, top float32) float32 {
 	return h
 }
 
+// sheetHeaderGap is the air a desktop sheet leaves between the header's
+// bottom edge and its own top.
+const sheetHeaderGap = 8
+
+// headerClearance is how far down the canvas a sheet's top edge has to sit on
+// a desktop window to leave the app header uncovered: the header's bottom edge
+// plus sheetHeaderGap. Zero when there is nothing to clear — no header on
+// screen (full-screen reading, the loading screen) — and on a phone or a
+// tablet, whose sheets are sized to the safe area instead (sheetMaxHeight).
+//
+// THE BUG THIS EXISTS TO PREVENT. The desktop sheets are modal, and Fyne
+// centres a modal popup on the canvas whatever position it is shown at, so a
+// sheet's top edge is (canvas height - sheet height) / 2 and nothing else.
+// The Settings sheet was capped only by the canvas, which at 1280x800 put its
+// top at 18.5pt: inside the header, about a point below the top of the
+// centred Go to chip, whose outline showed above the sheet as a small grey
+// arc. A sheet may cover a header control entirely or leave it alone;
+// starting partway down one is the defect. The Go to picker and the
+// translation picker already opened below the header at that size, so every
+// desktop sheet now does, and is sized again when the window changes size
+// (sheet_refit.go).
+func headerClearance(state *AppState) float32 {
+	if state == nil || state.header == nil || state.window == nil || fyne.CurrentDevice().IsMobile() {
+		return 0
+	}
+	h := state.header
+	if !h.Visible() || !objectInTree(state.window.Canvas().Content(), h) {
+		return 0
+	}
+	top := fyne.CurrentApp().Driver().AbsolutePositionForObject(h).Y
+	return top + h.Size().Height + sheetHeaderGap
+}
+
+// objectInTree reports whether target is root or sits under it through
+// containers — how the header hangs off the window's content.
+func objectInTree(root, target fyne.CanvasObject) bool {
+	if root == nil {
+		return false
+	}
+	if root == target {
+		return true
+	}
+	if c, ok := root.(*fyne.Container); ok {
+		for _, o := range c.Objects {
+			if objectInTree(o, target) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// clearOfHeader caps h, the height of a sheet Fyne will centre on a canvas
+// canvasH tall, so its top edge lands at or below clearance. clearance 0
+// leaves h alone. A sheet whose content cannot shrink is not helped by this;
+// every sheet it is applied to either scrolls or sizes its content from the
+// height it is given.
+func clearOfHeader(h, canvasH, clearance float32) float32 {
+	if clearance <= 0 {
+		return h
+	}
+	limit := canvasH - 2*clearance
+	if limit < minSheetHeight {
+		limit = minSheetHeight // a window too short to clear the header at all
+	}
+	if h > limit {
+		h = limit
+	}
+	return h
+}
+
 // scrollingSheetHeight is the height to hand widget.PopUp.Resize for a sheet
 // whose growable middle lives inside a container.Scroll.
 //

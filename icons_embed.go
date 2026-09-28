@@ -30,6 +30,21 @@ var noteBubbleSVG []byte
 //go:embed assets/icons/footnote.svg
 var footnoteIconSVG []byte
 
+//go:embed assets/icons/arrow_outward.svg
+var arrowOutwardSVG []byte
+
+// iconLeavesApp is the arrow after a link that opens outside the app ("Get a
+// key", "Privacy Policy"): the shape of U+2197, drawn from our own asset because
+// the character itself comes out as a colour emoji (see outboundLink). Tinted
+// ColorNameHyperlink, so it is the link's own colour in both variants. Falls
+// back to nil when the asset is missing, and outboundLink then draws no arrow.
+var iconLeavesApp fyne.Resource = func() fyne.Resource {
+	if len(arrowOutwardSVG) == 0 {
+		return nil
+	}
+	return theme.NewColoredResource(fyne.NewStaticResource("arrow_outward.svg", arrowOutwardSVG), theme.ColorNameHyperlink)
+}()
+
 // iconAudioWave is the "read aloud / text-to-speech" source glyph (a small
 // equalizer-style waveform), marking a chapter played by on-device speech as
 // distinct from a recorded human narration (which uses theme.AccountIcon, a

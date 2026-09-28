@@ -43,12 +43,10 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 	src.TextSize = subheadingTextSize
 	header := container.NewVBox(title, src, widget.NewSeparator())
 
-	ps := aiPanelSize(cnv.Size())
+	ps := sheetPanelSize(state, cnv)
 	bodyW := ps.Width - 44
-	maxBodyH := ps.Height - 150
 	listBox := container.NewVBox()
 	scroll := container.NewVScroll(listBox)
-	scroll.SetMinSize(fyne.NewSize(bodyW, maxBodyH))
 	body := container.NewStack(scroll)
 
 	var popup *widget.PopUp
@@ -115,6 +113,22 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 			goToVerse(state, *v)
 		}
 	}
+	// fitList sizes the list so the panel is exactly as tall as its cap, the
+	// list scrolling within it. The chrome around the list (header, footer,
+	// padding, border) is MEASURED, as the AI panel's fitBody measures it: a
+	// 150pt guess stood here, 25pt short of the chrome the panel has, and
+	// the list stood the panel that much over its cap, which on a desktop
+	// window put its top edge inside the header. Only while the list is the
+	// body: the chrome is what the panel needs besides it.
+	listShowing := func() bool { return len(body.Objects) == 1 && body.Objects[0] == scroll }
+	fitList := func() {
+		chrome := popup.MinSize().Height - scroll.MinSize().Height
+		h := ps.Height - chrome
+		if h < 1 {
+			h = 1
+		}
+		scroll.SetMinSize(fyne.NewSize(bodyW, h))
+	}
 	showRefs := func(refs []crossRef, tskErr error) {
 		stopThinking()
 		lst := buildCrossRefList(state, selectionVerses(state, text, span), refs, tskErr, pal, follow)
@@ -125,6 +139,7 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 		listBox.Objects = lst.Objects
 		listBox.Refresh()
 		body.Objects = []fyne.CanvasObject{scroll}
+		fitList()
 		body.Refresh()
 		scroll.ScrollToTop()
 	}
@@ -136,14 +151,23 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 	)
 	popup.Show()
 	popup.Resize(fyne.NewSize(ps.Width, minF(ps.Height, 460)))
+	// Sized again from the height a desktop window now gives it whenever the
+	// window changes size, in whichever state it is (sheet_refit.go).
+	registerSheetRefit(state, popup, func() {
+		ps.Height = sheetPanelSize(state, cnv).Height
+		if listShowing() {
+			fitList()
+		}
+		popup.Resize(fyne.NewSize(ps.Width, minF(ps.Height, 460)))
+	})
 	// The same selection again after a light/dark rebuild. The dataset loads
 	// once and is guarded, so a reopen mid-load waits on the same load rather
 	// than starting another (sheet_reopen.go).
 	registerSheetReopen(state, popup, func() { showCrossRefs(state, text, span) })
 
 	setThinking()
-	go func() {
-		err := ensureCrossRefs()
+	crossRefsRun(func() {
+		err := crossRefsLoad()
 		// crossRefsForSelection always returns the embedded Gospel parallels (offline),
 		// plus the TSK cross-references when they loaded — so a TSK fetch failure still
 		// shows parallels, and we only surface the error when there's nothing at all.
@@ -158,8 +182,18 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 			}
 			showRefs(refs, err)
 		})
-	}()
+	})
 }
+
+// crossRefsRun runs the panel's load and its landing, on a goroutine of their
+// own, and crossRefsLoad is the load: ensureCrossRefs, which may fetch the
+// Treasury. Seams for tests, which keep the panel in the state it opened in by
+// never running the work, or run it where they stand with the load answered,
+// so nothing touches the panel from another goroutine while they read it.
+var (
+	crossRefsRun  = func(work func()) { go work() }
+	crossRefsLoad = ensureCrossRefs
+)
 
 func crossRefRow(state *AppState, c crossRef, pal palette, onTap func(crossRef)) fyne.CanvasObject {
 	ref := canvas.NewText(c.label(), pal.Accent)

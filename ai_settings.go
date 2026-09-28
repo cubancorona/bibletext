@@ -117,6 +117,12 @@ func showAISettings(state *AppState) {
 		idToName[p.ID] = p.Name
 	}
 
+	// fitSheet re-measures and re-sizes the sheet; assigned once the popup exists
+	// (see the sizing block at the end of this function). Declared this early so
+	// the key rows built below can ask for it when their status line changes
+	// height.
+	var fitSheet func()
+
 	// keyArea shows only the selected provider's key + status; it rebuilds when the
 	// picker changes. Everything auto-saves straight to the on-device store — there
 	// is no Save/Cancel — so there's no pending-edits buffer to flush.
@@ -143,7 +149,7 @@ func showAISettings(state *AppState) {
 		// font styling.
 		var link fyne.CanvasObject = layout.NewSpacer()
 		if u, err := url.Parse(info.KeyURL); err == nil {
-			link = externalLink("Get a key ↗", u)
+			link = newOutboundLink("Get a key", u)
 		}
 
 		entry := widget.NewPasswordEntry()
@@ -152,8 +158,9 @@ func showAISettings(state *AppState) {
 
 		// status + the Clear button are kept in step with what's in the field and
 		// what's saved by refreshStatus (defined below, once the button exists).
-		status := canvas.NewText("", pal.TextMuted)
-		status.TextSize = 12
+		// A statusLine rather than a canvas.Text: it breaks between words
+		// where the row is narrower than the text (status_line.go).
+		status := newStatusLine(12)
 
 		// THE SAME STATUS VOICE THE API.BIBLE KEY USES (bible_key_settings.go).
 		// This was a plain Label, which renders at BODY size, so the identical
@@ -257,28 +264,32 @@ func showAISettings(state *AppState) {
 			if store.keyInSecureStore(info.ID) {
 				savedLabel = "✓ Saved in the " + store.secureStoreName() + "."
 			}
+			var text string
+			var col color.Color
 			if strings.TrimSpace(entry.Text) != "" {
 				if saveOK {
-					status.Text = savedLabel
-					status.Color = pal.Accent
+					text, col = savedLabel, pal.Accent
 				} else {
-					status.Text = "Couldn't save this key securely. Please try again."
-					status.Color = theme.Color(theme.ColorNameError)
+					text, col = "Couldn't save this key securely. Please try again.", theme.Color(theme.ColorNameError)
 				}
 				clearBtn.Enable()
 			} else if !saveOK {
 				// The Clear tapped but the credential-store delete FAILED: say
 				// so — a reader who believes a key is gone when it isn't has a
 				// false sense of removal.
-				status.Text = "Couldn't remove the stored key. Please try again."
-				status.Color = theme.Color(theme.ColorNameError)
+				text, col = "Couldn't remove the stored key. Please try again.", theme.Color(theme.ColorNameError)
 				clearBtn.Enable()
 			} else {
-				status.Text = info.KeyHint
-				status.Color = pal.TextMuted
+				text, col = info.KeyHint, pal.TextMuted
 				clearBtn.Disable()
 			}
-			status.Refresh()
+			// A status that now takes a line more or less changes the
+			// sheet's height; re-measure it, twice for the wrapping reason
+			// applyAssistant gives.
+			if status.set(text, col) && fitSheet != nil {
+				fitSheet()
+				fitSheet()
+			}
 		}
 		// Auto-save: every edit writes straight to the on-device key store. A new
 		// key also (re-)fetches the provider's model list for the dropdown below.
@@ -723,13 +734,10 @@ func showAISettings(state *AppState) {
 	// since 2026-07 (the policy moved to privacy.html when the site gained a
 	// download page; keep this in sync with gh-pages).
 	if u, err := url.Parse(product.SiteBase + "/privacy.html"); err == nil {
-		aiDisclosure.Add(container.NewHBox(externalLink("Privacy Policy ↗", u), layout.NewSpacer()))
+		aiDisclosure.Add(container.NewHBox(newOutboundLink("Privacy Policy", u), layout.NewSpacer()))
 	}
 
 	var card *fyne.Container // assigned below, before the popup shows
-	// fitSheet re-measures and re-sizes the sheet; assigned once the popup exists
-	// (see the sizing block at the end of this function).
-	var fitSheet func()
 
 	// The Translations section (the reader's own API.Bible key). Its area
 	// grows when a test result appears or the key arrives, so it re-measures
@@ -878,10 +886,20 @@ func showAISettings(state *AppState) {
 		nil, nil,
 		formScroll,
 	)
-	// Chrome text at the standard 18px (the tighter layout — not a smaller font —
-	// does the de-cluttering). compactTheme stays as the one knob if we ever want to
-	// nudge just the sheet's text size.
-	themed := container.NewThemeOverride(inner, compactTheme{Theme: state.theme, text: 18})
+	// NO THEME OVERRIDE AROUND THE SHEET. There was one, compactTheme at 18 —
+	// the size the app theme already gives, so it changed nothing it was meant
+	// to — and it cost the API.Bible status line its full stop. An override
+	// gives its subtree font caches of its own, and Fyne measures a text
+	// through the app's cache but draws it through the override's. A
+	// character neither UI face has (the ✓ that opens the status lines) is
+	// taken from a system font, and each cache picks that font by whatever it
+	// has already loaded for other characters: once the header's translation
+	// name had drawn its ▾, the app's cache measured the ✓ 3.6pt narrower than
+	// the sheet's drew it, and a text is painted into a texture exactly as
+	// wide as it measured, so the line lost its last 3.6pt. Without the
+	// override the sheet's text is measured and drawn through the same cache.
+	// A size for part of the sheet belongs on that part (the model button, the
+	// site link), where it holds no such character.
 
 	// A CARD-sized sheet at a fixed width, taking its height from the content but
 	// NEVER taller than the screen. The fixed width keeps the popup's overlay-
@@ -894,7 +912,7 @@ func showAISettings(state *AppState) {
 	// history bar on the Background ground — which is what makes Settings look
 	// like the rest of the app rather than a place with its own colour rules.
 	card = container.New(fixedWidthLayout{width: ps.Width},
-		surface(themed, pal.Background, pal.Border, fyne.Size{}))
+		surface(inner, pal.Background, pal.Border, fyne.Size{}))
 
 	// Which popup this is decides how it closes (settingsTapOutsideCloses):
 	//
@@ -933,11 +951,14 @@ func showAISettings(state *AppState) {
 			return
 		}
 		pos, sz := cnv.InteractiveArea()
+		// On a desktop window the cap also keeps the centred sheet below the
+		// header (headerClearance).
 		h := scrollingSheetHeight(
 			popup.MinSize().Height,
 			formScroll.MinSize().Height,
 			formBody.MinSize().Height,
-			sheetMaxHeight(cnv.Size().Height, pos.Y, sz.Height, y),
+			clearOfHeader(sheetMaxHeight(cnv.Size().Height, pos.Y, sz.Height, y),
+				cnv.Size().Height, headerClearance(state)),
 		)
 		popup.Resize(fyne.NewSize(card.MinSize().Width, h))
 	}
@@ -953,6 +974,12 @@ func showAISettings(state *AppState) {
 	// above is the right baseline for its own close (sheet_reopen.go). The
 	// model picker opened over it registers nothing — see there.
 	registerSheetReopen(state, popup, func() { showAISettings(state) })
+	// And sized again, as above, whenever a desktop window changes size
+	// (sheet_refit.go).
+	registerSheetRefit(state, popup, func() {
+		fitSheet()
+		fitSheet()
+	})
 
 	// done() (overlay-restore cleanup) is called directly by the ✕. An outside-tap close
 	// goes through Fyne's built-in PopUp.Hide, which does NOT call done() — and a PopUp
@@ -1102,9 +1129,11 @@ func providerKeyLabel(info providerInfo) string {
 
 // compactTheme shrinks only the base text size of a subtree (applied via
 // container.NewThemeOverride), delegating everything else to the app theme.
-// Its callers pass the size they want: the model button at 15 and the notes sort
-// button at 13 both come out smaller than the 18pt base, while the settings
-// sheet passes 18 and so is unchanged by it.
+// Its callers pass the size they want: the model button at 15, the site link at
+// 11 and the notes list's capacity notice at 12, all under the 18pt base. Keep
+// it around text the UI faces can draw entirely: an override also gives its
+// subtree font caches of its own, so a character that has to come from a system
+// font can be drawn wider than it was measured (see showAISettings).
 type compactTheme struct {
 	fyne.Theme
 	text float32

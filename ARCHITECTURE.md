@@ -140,6 +140,7 @@ real files; `*_test.go` files are omitted.
 | `activity_life.go` | What `state.stopping` means on each platform: on Android a stop ends the activity, not always the process, so the next activity's start clears it; each start registers the stop hook for its own activity, so a stop the driver runs late cannot mark the next one; a translation load landing while stopping is held for the next start |
 | `title_bar_windows.go` + `title_bar_other.go` | Windows: re-sends the title bar's immersive dark mode after any rebuild that moves the variant, through the window's native handle, and repaints the caption (a no-op elsewhere) |
 | `sheet_reopen.go` | The reopen seam: a showing sheet registers how it comes back; a light/dark rebuild takes the top sheet's closure, drains, and reopens it in the new palette. Lists which sheets reopen and which close, and why |
+| `sheet_refit.go` | The refit seam: a showing desktop sheet registers how it sizes itself to the window, and the window's root (`windowRoot`) runs every registration when the window changes size, so no sheet is left at the size it opened at. Not on phones and tablets, where the soft keyboard changes the content's height |
 | `state.go` | `AppState`, navigation/search/history logic, UI hooks, `loadPhase` machine, `newSearchDebouncer` |
 | `reading_state.go` | Reading-position + history persistence (translation/book/chapter/scroll anchor) in `fyne.Preferences` |
 | `history.go` | Recent-chapters history list/bar |
@@ -238,6 +239,7 @@ prose.
 | `ai_keystore.go` | On-device key storage (`keyStore`): Apple Keychain on **iOS only**, preferences elsewhere (incl. macOS); env-var override |
 | `ai_secure_store_darwin.go` / `ai_secure_store_other.go` | `//go:build ios` Keychain adapter (AfterFirstUnlock, backup-restorable) / its no-op twin everywhere else |
 | `ai_settings.go` | AI-study settings sheet (provider pick, key paste, Test key) |
+| `status_line.go` | The status line under each key field in Settings: the key's state in one colour and size, broken between words to the width of its row |
 | `ai_panel.go` | AI answer panel (prose result, Report button, disclosure line) |
 | `ai_search.go` | AI "Find" passage search on the Search tab (returns verses) |
 | `ai_model_in_use.go` | The model a running request reports it is sending to (`reportAIModel`, through the request's context) and the waiting screens' muted line naming it (`aiModelLine`) |

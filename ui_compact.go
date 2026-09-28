@@ -109,7 +109,9 @@ func buildCompactUI(state *AppState) fyne.CanvasObject {
 		state.setSearchText = func(string) {}
 		notifyReadingOverlay(overlayShouldShow(state))
 		base := canvas.NewRectangle(pal.Background)
-		return container.NewStack(base, readingHost)
+		// windowRoot: a stack that refits the open sheets when the window
+		// changes size (sheet_refit.go).
+		return windowRoot(state, base, readingHost)
 	}
 
 	var content fyne.CanvasObject
@@ -168,7 +170,7 @@ func buildCompactUI(state *AppState) fyne.CanvasObject {
 	}
 
 	base := canvas.NewRectangle(pal.Background)
-	return container.NewStack(base, body)
+	return windowRoot(state, base, body)
 }
 
 // compactReadingPane is the reading slot of the shared layout: the search

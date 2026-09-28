@@ -491,6 +491,7 @@ func rebuildWindow(state *AppState) {
 	// light/dark rebuild took the top sheet's closure before calling here
 	// (appearance.go); anything else that rebuilds closes its sheets for good.
 	pruneSheetReopens(state)
+	pruneSheetRefits(state)
 	// A popup's own restore may not fire (or not yet — the watchdogs poll on
 	// 150-200ms timers), and a drained modal already called
 	// state.hideReadingOverlay() on open — leaving the native reading view

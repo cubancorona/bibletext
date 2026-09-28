@@ -35,11 +35,8 @@ func showShareImagePreview(state *AppState, quote, cite, version string) {
 		}
 	}
 
-	ps := aiPanelSize(cnv.Size())
-	side := minF(ps.Width-44, ps.Height-190)
-	if side < 200 {
-		side = 200
-	}
+	ps := sheetPanelSize(state, cnv)
+	side := shareImageSide(ps, headerClearance(state) > 0)
 
 	// The card is square; scale it to fit the preview box.
 	img := &canvas.Image{FillMode: canvas.ImageFillContain}
@@ -104,4 +101,36 @@ func showShareImagePreview(state *AppState, quote, cite, version string) {
 	)
 	popup.Show()
 	popup.Resize(fyne.NewSize(ps.Width, minF(ps.Height, side+220)))
+	// Sized again, image and all, when a desktop window changes size
+	// (sheet_refit.go).
+	registerSheetRefit(state, popup, func() {
+		ps.Height = sheetPanelSize(state, cnv).Height
+		side = shareImageSide(ps, headerClearance(state) > 0)
+		imgBox.Layout = layout.NewGridWrapLayout(fyne.NewSize(side, side))
+		imgBox.Refresh()
+		popup.Resize(fyne.NewSize(ps.Width, minF(ps.Height, side+220)))
+	})
+}
+
+// shareImageSide is the side of the preview image in a share sheet of size
+// ps: the height left under the title and above the buttons, no wider than
+// the sheet.
+//
+// On a phone or tablet it is at least 200pt, so the card stays legible and
+// the sheet grows past its size to hold it. On a desktop window the sheet's
+// height is capped to open below the header (clearOfHeader), and it can only
+// keep to that cap if the image follows it down: with the 200pt floor, a
+// window 440pt tall centred the sheet's 347pt of content 43pt down, partway
+// down the Go to chip. There the image only keeps a side of at least one
+// point; the shortest window the app allows still leaves it about 38pt.
+func shareImageSide(ps fyne.Size, belowHeader bool) float32 {
+	side := minF(ps.Width-44, ps.Height-190)
+	floor := float32(200)
+	if belowHeader {
+		floor = 1
+	}
+	if side < floor {
+		side = floor
+	}
+	return side
 }

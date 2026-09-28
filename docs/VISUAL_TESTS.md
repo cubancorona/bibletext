@@ -621,6 +621,52 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
 - [ ] Changing ONLY an AI key must not flicker the reading pane on close;
       red-letter/text-size/footnotes changes refresh reading only; the
       notes/assistant switches rebuild the window once.
+- [ ] Settings on every platform, light and dark: "Get a key" (the
+      assistant's and API.Bible's) and "Privacy Policy" end in a thin arrow
+      in the link's own colour, standing on the baseline — never a blue
+      emoji tile. Tapping the arrow opens the page, as the words do; on a
+      desktop the pointer turns to a hand over the arrow too. On iOS and
+      Android this is the Fyne sheet over the native reading view, so check
+      it there, not only on the Mac.
+- [ ] Settings on a 13-inch iPad with the included API.Bible key: the
+      status reads "✓ Included with BibleText — or paste your own." with
+      its full stop and nothing cut; open Settings after the header has
+      shown its translation name, as it always has. On a 320pt iPhone SE the
+      Gemini hint breaks onto a second line inside the card; switch to each
+      assistant and back and the sheet grows and shrinks with its status
+      rather than cutting it.
+- [ ] Settings with the included API.Bible key: the NKJV caption sits
+      under the TRANSLATIONS card, READING the usual gap below it. Clear the
+      key, then paste a key of your own: the caption stays through both,
+      unchanged, and a build with no included key shows it too.
+- [ ] Mac at 1280x800, then a short window (1280x600): open Settings, Go
+      to, Translation, Verse of the day, the audio source menu, an AI answer,
+      cross-references and a share image. No sheet starts partway down the
+      header — no arc of the Go to chip above a sheet's top edge; each
+      opens below the header's rule. Cross-references once the list has
+      loaded, not only while it loads. Windows and Linux the same.
+- [ ] Mac, each of those sheets open in turn: maximise the window and open
+      the sheet, then restore the window; drag the bottom edge up to about
+      440pt tall and back down; open a sheet at 1280x600 and make the window
+      taller. The sheet follows the window live, its top staying below the
+      header's rule and never on the Go to chip, and it grows back into a
+      taller window. Nothing typed or scrolled in it is lost (type a key or
+      a verse, scroll Settings part way, then resize). Windows and Linux the
+      same.
+- [ ] Mac at 1280x440: the share image preview opens below the header with
+      a smaller card, the whole card in view and Share and Cancel on
+      screen.
+- [ ] iPhone and iPad, cross-references with a list: the panel stands 40pt
+      from the top and bottom of the screen, as an AI answer does (it stood
+      about 25pt taller), with Close and the credit line fully on screen.
+      Android the same.
+- [ ] iPad in Split View, Settings open with the keyboard up in a key
+      field: resizing the window leaves the sheet at the size it opened at
+      and the caret where it was (sheets are sized again on a desktop
+      window only).
+- [ ] 13-inch iPad, Settings: scroll the sheet to the end. SHARED NOTES'
+      card and WORDS OF JESUS CHRIST OF NAZARETH come fully into view above
+      the pinned footer; nothing is ever drawn under the footer.
 
 ## V16 — platform layout matrix
 

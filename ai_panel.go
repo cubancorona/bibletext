@@ -86,7 +86,7 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 	// states layered on top of it. The panel grows to fit the answer (capped at
 	// maxBodyH) so short answers show in full with no empty space, and only very
 	// long ones need to scroll.
-	ps := aiPanelSize(cnv.Size())
+	ps := sheetPanelSize(state, cnv)
 	bodyW := ps.Width - 44
 	// A floor for the states that size themselves before the popup exists. The
 	// real cap is worked out per-state in fitBody, from the chrome the panel
@@ -166,10 +166,17 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 	// under-reserved by about 54pt against a header that grows with the quote
 	// and the question. That shortfall is what clipped "Try again" out of the
 	// error state and put a scrollbar on a panel with room to spare.
+	//
+	// It keeps the body and the height it wanted, so a window resize can size
+	// the panel again, whichever state it is in, from the height the window
+	// now gives it (sheet_refit.go).
+	var fittedBody *container.Scroll
+	var fittedWant float32
 	fitBody := func(sc *container.Scroll, want float32) {
 		if want < 1 {
 			want = 1
 		}
+		fittedBody, fittedWant = sc, want
 		sc.SetMinSize(fyne.NewSize(bodyW, want))
 		if popup == nil {
 			return
@@ -462,6 +469,12 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 	// A modest starting size for the thinking state; setResult grows or shrinks
 	// the panel to fit the answer once it arrives.
 	popup.Resize(fyne.NewSize(ps.Width, minF(ps.Height, 320)))
+	registerSheetRefit(state, popup, func() {
+		ps.Height = sheetPanelSize(state, cnv).Height
+		if fittedBody != nil {
+			fitBody(fittedBody, fittedWant)
+		}
+	})
 	startFetch()
 }
 
@@ -471,6 +484,15 @@ func minF(a, b float32) float32 {
 		return a
 	}
 	return b
+}
+
+// sheetPanelSize is aiPanelSize for a sheet shown centred on the window: its
+// height is also kept clear of the header on a desktop window, as every
+// desktop sheet's is (headerClearance).
+func sheetPanelSize(state *AppState, cnv fyne.Canvas) fyne.Size {
+	ps := aiPanelSize(cnv.Size())
+	ps.Height = clearOfHeader(ps.Height, cnv.Size().Height, headerClearance(state))
+	return ps
 }
 
 // aiPanelSize fits the panel to the canvas: a comfortable reading width, capped,

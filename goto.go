@@ -521,8 +521,17 @@ func gotoPickerModalFrom(state *AppState, withVerse bool, seed gotoPickerSeed) {
 		// machinery applies.
 		popup = widget.NewModalPopUp(card, cnv)
 		popup.Show()
-		w, h := pickerSplitSize(cnv)
-		popup.Resize(fyne.NewSize(w, h))
+		fit := func() {
+			w, h := pickerSplitSize(cnv)
+			// Centred, so on a short desktop window it is kept below the
+			// header like every desktop sheet (headerClearance).
+			h = clearOfHeader(h, cnv.Size().Height, headerClearance(state))
+			popup.Resize(fyne.NewSize(w, h))
+		}
+		fit()
+		// Sized again when a desktop window changes size (sheet_refit.go);
+		// no tap spans a resize, as the mobile branch's own refit notes.
+		registerSheetRefit(state, popup, fit)
 	}
 
 	// List flavour: reveal + highlight the current book once the popup is laid out.

@@ -139,6 +139,11 @@ func showAudioSourceMenu(state *AppState) {
 	if pos, _ := cnv.InteractiveArea(); pos.Y > 0 {
 		y = pos.Y + 16
 	}
+	// Non-modal, so it opens where it is put: below the header on a desktop
+	// window, where 28pt is partway down the Go to chip (headerClearance).
+	if c := headerClearance(state); c > y {
+		y = c
+	}
 	popup.ShowAtPosition(fyne.NewPos(x, y))
 	// Built from state alone (the chosen source, the chapter's recordings), so a
 	// light/dark rebuild can bring it straight back (sheet_reopen.go).

@@ -159,7 +159,7 @@ func obfuscateForTest(key string) string {
 	return base64.StdEncoding.EncodeToString(out)
 }
 
-// The "Get a key ↗" link must sit top-right of the REAL key box, on the label
+// The "Get a key" link must sit top-right of the REAL key box, on the label
 // row, clear of the label — checked against the section the app actually builds
 // rather than against a lookalike tree the test assembles itself. The first
 // version of this test did the latter and would have passed no matter what
@@ -185,12 +185,12 @@ func TestRealKeySectionPutsTheLinkTopRight(t *testing.T) {
 	win.SetContent(rows)
 	rows.Resize(fyne.NewSize(354, rows.MinSize().Height))
 
-	var link *widget.Hyperlink
+	var link *outboundLink
 	var label *widget.Label
 	var walk func(o fyne.CanvasObject)
 	walk = func(o fyne.CanvasObject) {
 		switch v := o.(type) {
-		case *widget.Hyperlink:
+		case *outboundLink:
 			link = v
 		case *widget.Label:
 			if label == nil && strings.Contains(v.Text, "key") {

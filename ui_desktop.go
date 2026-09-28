@@ -16,6 +16,10 @@ import (
 func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.CanvasObject {
 	state.app = app
 	state.window = window
+	// No header until buildHeader makes one for this tree: the loading screen
+	// and full-screen reading have none, and a sheet must not clear the last
+	// tree's (headerClearance).
+	state.header = nil
 	registerAIState(state)
 	// Windows/Linux only (a platform-gated no-op elsewhere): with no native
 	// overlay to restore, this stand-in closure is the sheet-close moment that
@@ -73,7 +77,7 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 		state.focusSearch = func() {}
 		state.setSearchText = func(string) {}
 		base := canvas.NewRectangle(pal.Background)
-		root := container.NewStack(base, readingHost)
+		root := windowRoot(state, base, readingHost) // refits open sheets on a resize (sheet_refit.go)
 		installShortcuts(state)
 		return root
 	}
@@ -88,7 +92,7 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 	body := container.NewBorder(buildHeader(state), nil, nil, nil, split)
 
 	base := canvas.NewRectangle(pal.Background)
-	root := container.NewStack(base, body)
+	root := windowRoot(state, base, body)
 
 	installShortcuts(state)
 	return root

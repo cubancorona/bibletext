@@ -184,19 +184,27 @@ func showVersionPickerWith(state *AppState, notice string) {
 	registerSheetReopen(state, popup, func() { showVersionPickerWith(state, fullPendingNotice(state)) })
 
 	// Size to content, capped to the screen.
-	cs := cnv.Size()
-	w := cs.Width - 48
-	if w > 460 {
-		w = 460
+	fit := func() {
+		cs := cnv.Size()
+		w := cs.Width - 48
+		if w > 460 {
+			w = 460
+		}
+		if w < 280 {
+			w = 280
+		}
+		h := header.MinSize().Height + rows.MinSize().Height + footer.MinSize().Height + 64
+		if maxH := cs.Height - 80; h > maxH {
+			h = maxH
+		}
+		// Centred, so on a desktop window it is kept below the header like
+		// every desktop sheet (headerClearance); the rows scroll.
+		h = clearOfHeader(h, cs.Height, headerClearance(state))
+		popup.Resize(fyne.NewSize(w, h))
 	}
-	if w < 280 {
-		w = 280
-	}
-	h := header.MinSize().Height + rows.MinSize().Height + footer.MinSize().Height + 64
-	if maxH := cs.Height - 80; h > maxH {
-		h = maxH
-	}
-	popup.Resize(fyne.NewSize(w, h))
+	fit()
+	// And again when a desktop window changes size (sheet_refit.go).
+	registerSheetRefit(state, popup, fit)
 }
 
 // fullPendingNotice is the picker's plain answer to a state that must never

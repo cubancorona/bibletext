@@ -8,12 +8,12 @@ package bibletext
 
 import (
 	"context"
+	"image/color"
 	"net/url"
 	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
@@ -90,8 +90,9 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 		entry.SetText(store.bibleAPIKey())
 	}
 
-	status := canvas.NewText("", pal.TextMuted)
-	status.TextSize = 12
+	// A statusLine rather than a canvas.Text: it breaks between words where
+	// the row is narrower than the text (status_line.go).
+	status := newStatusLine(12)
 
 	// The test result speaks in the status voice (caption size), not
 	// headline size — and a wrapping RichText re-flows dependably when its
@@ -193,25 +194,27 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 		if store.usingBundledBibleKey() {
 			savedLabel = "✓ Included with BibleText — or paste your own."
 		}
+		var text string
+		var col color.Color
 		if keyInUse() != "" {
 			if saveOK {
-				status.Text = savedLabel
-				status.Color = pal.Accent
+				text, col = savedLabel, pal.Accent
 			} else {
-				status.Text = "Couldn't save this key securely. Please try again."
-				status.Color = theme.Color(theme.ColorNameError)
+				text, col = "Couldn't save this key securely. Please try again.", theme.Color(theme.ColorNameError)
 			}
 			clearBtn.Enable()
 		} else if !saveOK {
-			status.Text = "Couldn't remove the stored key. Please try again."
-			status.Color = theme.Color(theme.ColorNameError)
+			text, col = "Couldn't remove the stored key. Please try again.", theme.Color(theme.ColorNameError)
 			clearBtn.Enable()
 		} else {
-			status.Text = "Free for personal use — no card, no charge."
-			status.Color = pal.TextMuted
+			text, col = "Free for personal use — no card, no charge.", pal.TextMuted
 			clearBtn.Disable()
 		}
-		status.Refresh()
+		// A status that now takes a line more or less changes the section's
+		// height, and the sheet's with it.
+		if status.set(text, col) {
+			remeasure()
+		}
 	}
 	hadKey := store.bibleAPIKey() != ""
 	// Clearing has to reach the STORE directly. With the bundled key in force the
@@ -255,7 +258,7 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 
 	var link fyne.CanvasObject = layout.NewSpacer()
 	if u, err := url.Parse("https://api.bible/sign-up/starter"); err == nil {
-		link = externalLink("Get a key ↗", u)
+		link = newOutboundLink("Get a key", u)
 	}
 
 	rows = container.NewVBox(

@@ -55,6 +55,8 @@ func collectText(o fyne.CanvasObject) []string {
 	switch v := o.(type) {
 	case *canvas.Text:
 		return []string{v.Text}
+	case *statusLine:
+		return []string{v.text}
 	case *fyne.Container:
 		var out []string
 		for _, c := range v.Objects {
