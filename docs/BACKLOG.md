@@ -2128,7 +2128,7 @@ Deferred with it:
 - **Bump the Flatpak runtime to 26.08** when the golang SDK extension has
   that branch.
 
-## Recapture the App Store and Play screenshots — deferred from 1.2.7
+## Recapture the App Store and Play screenshots — App Store sets RECAPTURED 28 September 2026; Play still to do
 
 1.2.7 shipped with the screenshot set inherited from 1.2.5, which in turn
 inherits from the last captured set (build/appstore/screenshots-1.2.3/). Those
@@ -2163,6 +2163,35 @@ Worth capturing the new reading face deliberately rather than incidentally: a
 passage with the divine name in small capitals, and a chapter whose publisher
 paragraphing differs visibly from the old uniform rule, are the two images that
 show what changed.
+
+**28 September 2026:** the iPhone 6.9", iPad 13" and Mac sets were retaken on
+the 1.2.17 tree, the same eight shots each, and are ready locally under
+`build/appstore/screenshots-ready-1.2.17/`; nothing is uploaded yet, which
+stays a separate step for the owner. Matthew 1 shows the NKJV's own heading
+and paragraphing in the Junicode face, Psalm 23 the divine name in small
+capitals, and Psalm 82 its superscription and heading: the images asked for
+above.
+`docs/APP_STORE_SUBMISSION.md` ("The 1.2.17 set") records how each was taken.
+The Play set is untouched and still stale.
+
+The review of the new images found five small things in the app itself,
+none of them fixed yet:
+
+- On the iPad Settings sheet the API.Bible status line is cut short: it
+  draws "✓ Included with BibleText — or paste your own" with no full stop
+  and a hard edge on the last letter, where `bible_key_settings.go` has the
+  full stop. The label is narrower than its text at that width.
+- The same block contradicts itself: the status says the key is included,
+  and the caption under it says the NKJV "downloads with your own free
+  API.Bible key". The caption's wording is the owner's to settle.
+- "Get a key ↗" and "Privacy Policy ↗" draw the arrow as a colour emoji
+  keycap on iOS and macOS, the only emoji in the interface. U+2197 needs a
+  text-presentation selector (U+FE0E) or an icon.
+- On the Mac the top edge of the header's Go to button shows as a short
+  dark arc just above the open Settings sheet.
+- The iPad Settings sheet ends with a SHARED NOTES heading whose contents sit
+  under the pinned "Changes save automatically." footer, so the section
+  looks empty until scrolled.
 
 ## NKJV cross references: the panel's second pass — PAUSED 10 September 2026
 
