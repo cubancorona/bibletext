@@ -268,7 +268,8 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 		container.NewBorder(nil, nil, container.NewCenter(widget.NewLabel("API.Bible key")), link),
 		// Field on its own full-width line: an API key is long.
 		entry,
-		container.NewHBox(pasteBtn, testBtn, clearBtn, layout.NewSpacer()),
+		// The same row as the assistant's (key_actions_row.go).
+		keyActionsRow(pasteBtn, testBtn, clearBtn),
 		// Status has the row to itself; the link is up on the label row.
 		status,
 		result,

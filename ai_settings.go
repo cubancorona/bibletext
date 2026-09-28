@@ -505,8 +505,10 @@ func showAISettings(state *AppState) {
 				// reaches for most: a mis-tap aimed at either neighbour wiped the
 				// key. Clear sits at the end on both now, and the two fields no
 				// longer teach different muscle memory for the same three verbs
-				// in one sheet.
-				container.NewHBox(pasteBtn, testBtn, clearBtn, layout.NewSpacer()),
+				// in one sheet. Where the card is too narrow for all three,
+				// Clear goes onto a line of its own under Paste
+				// (key_actions_row.go).
+				keyActionsRow(pasteBtn, testBtn, clearBtn),
 				// Status now has the row to itself — the link moved up to the
 				// label row, so a long hint has the full width to be read in.
 				status,
@@ -592,14 +594,14 @@ func showAISettings(state *AppState) {
 	closeBtn.Importance = widget.LowImportance
 	header := container.NewBorder(nil, nil, container.NewCenter(title), container.NewCenter(closeBtn))
 
-	redLetter := widget.NewCheck("Show the words of King Jesus in red", nil)
+	redLetter := newWrapCheck("Show the words of King Jesus in red", nil)
 	redLetter.SetChecked(redLetterEnabled())
 	redLetter.OnChanged = func(b bool) { setRedLetterEnabled(b) }
 
 	// Shared notes. Turning them OFF asks what to do with the ones already
 	// received rather than deciding for the reader: a note is somebody else's
 	// message, and silently binning a stack of them is not a switch's business.
-	notes := widget.NewCheck("Show notes people share with you", nil)
+	notes := newWrapCheck("Show notes people share with you", nil)
 	notes.SetChecked(notesEnabled())
 	notes.OnChanged = func(on bool) {
 		if on {
@@ -807,7 +809,7 @@ func showAISettings(state *AppState) {
 		// easiest thing in the app to find. The caption below says plainly
 		// what the notes are and are not (docs/FOOTNOTES.md §3). Off by
 		// default.
-		fnCheck := widget.NewCheck("Show the translators' footnotes", nil)
+		fnCheck := newWrapCheck("Show the translators' footnotes", nil)
 		fnCheck.SetChecked(footnotesEnabled())
 		fnCheck.OnChanged = func(b bool) { setFootnotesEnabled(b) }
 		fnNote := widget.NewRichText(&widget.TextSegment{

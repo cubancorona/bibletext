@@ -240,6 +240,8 @@ prose.
 | `ai_secure_store_darwin.go` / `ai_secure_store_other.go` | `//go:build ios` Keychain adapter (AfterFirstUnlock, backup-restorable) / its no-op twin everywhere else |
 | `ai_settings.go` | AI-study settings sheet (provider pick, key paste, Test key) |
 | `status_line.go` | The status line under each key field in Settings: the key's state in one colour and size, broken between words to the width of its row |
+| `key_actions_row.go` | The Paste / Test key / Clear row under each key field in Settings: one line where it fits, the button that would run past the card on a line of its own where it does not |
+| `wrap_check.go` | The Settings switches (footnotes, shared notes, red letter): widget.Check with a label that breaks between words where its row is too narrow for it |
 | `ai_panel.go` | AI answer panel (prose result, Report button, disclosure line) |
 | `ai_search.go` | AI "Find" passage search on the Search tab (returns verses) |
 | `ai_model_in_use.go` | The model a running request reports it is sending to (`reportAIModel`, through the request's context) and the waiting screens' muted line naming it (`aiModelLine`) |

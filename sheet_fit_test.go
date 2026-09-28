@@ -219,6 +219,104 @@ func TestSettingsSheetDoesNotOverflowSideways(t *testing.T) {
 	}
 }
 
+// NOTHING IN THE SETTINGS SHEET IS SQUEEZED. squeezeWidthLayout hands the body
+// the sheet's width whatever its rows ask for, which keeps the scroll from
+// widening it, but a row given less than it asks for still draws at its own
+// width: the Paste / Test key / Clear row did, and the three switch labels
+// did, and the scroll cut each off at the card's edge. So at every width from
+// the iPhone SE's up, with no assistant and with each of the four, no visible
+// object in the sheet is laid out smaller than it asks to be.
+func TestSettingsSheetSqueezesNothing(t *testing.T) {
+	assistants := []string{""}
+	for _, p := range aiProviders() {
+		assistants = append(assistants, p.ID)
+	}
+	for _, sc := range []struct {
+		name string
+		w, h float32
+	}{
+		{"320pt phone", 320, 568},
+		{"360dp phone", 360, 780},
+		{"375pt phone", 375, 812},
+		{"393pt phone", 393, 852},
+		{"402pt phone", 402, 874},
+		{"440pt phone", 440, 956},
+		{"11-inch iPad", 834, 1194},
+		{"13-inch iPad", 1032, 1376},
+		{"desktop", 1280, 800},
+	} {
+		for _, id := range assistants {
+			name := sc.name + ", no assistant"
+			if id != "" {
+				name = sc.name + ", " + id
+			}
+			t.Run(name, func(t *testing.T) {
+				_, _, popup := settingsWithIncludedKey(t, sc.w, sc.h, 1, func() {
+					if id == "" {
+						sharedKeys().setAIEnabled(false)
+					} else {
+						sharedKeys().setActiveProvider(id)
+					}
+				})
+				switches, clears := 0, 0
+				var walk func(o fyne.CanvasObject)
+				walk = func(o fyne.CanvasObject) {
+					if o == nil || !o.Visible() {
+						return
+					}
+					switch v := o.(type) {
+					case *wrapCheck:
+						switches++
+					case *widget.Button:
+						if v.Text == "Clear" {
+							clears++
+						}
+					}
+					size, asks := o.Size(), o.MinSize()
+					if size.Width < asks.Width-0.01 || size.Height < asks.Height-0.01 {
+						what := fmt.Sprintf("%T", o)
+						switch v := o.(type) {
+						case *widget.Button:
+							what += fmt.Sprintf(" %q", v.Text)
+						case *wrapCheck:
+							what += fmt.Sprintf(" %q", v.Text)
+						case *widget.Label:
+							what += fmt.Sprintf(" %q", v.Text)
+						case *fyne.Container:
+							what += fmt.Sprintf(" (%T)", v.Layout)
+						}
+						t.Errorf("%s is laid out %.1f x %.1f and asks for %.1f x %.1f",
+							what, size.Width, size.Height, asks.Width, asks.Height)
+					}
+					switch v := o.(type) {
+					case *fyne.Container:
+						for _, c := range v.Objects {
+							walk(c)
+						}
+					case *container.Scroll:
+						walk(v.Content)
+					case *container.ThemeOverride:
+						walk(v.Content)
+					case *widget.PopUp:
+						walk(v.Content)
+					}
+				}
+				walk(popup)
+				// Control: the walk reaches the rows this is about, the three
+				// switches and a Clear under each key field showing.
+				wantClears := 2
+				if id == "" {
+					wantClears = 1
+				}
+				if switches != 3 || clears != wantClears {
+					t.Fatalf("control: the walk reached %d switches and %d Clear buttons, want 3 and %d",
+						switches, clears, wantClears)
+				}
+			})
+		}
+	}
+}
+
 // The sheet must not gratuitously fill a big screen: on a roomy canvas it stays
 // its natural height, so it still reads as a card rather than a full-screen page.
 func TestSettingsSheetStaysACardWhenThereIsRoom(t *testing.T) {

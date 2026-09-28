@@ -2312,14 +2312,91 @@ confirm is in `docs/VISUAL_TESTS.md` V15:
   say more plainly that the body continues; that is a design choice, not a
   fix.
 
-## Settings: Clear runs past the key card at 320pt — OPEN
+## Settings: Clear runs past the key card at 320pt — DONE 28 September 2026
 
 At 320pt, the iPhone SE's width, the Paste / Test key / Clear row under each
-key field in Settings, the assistant's and API.Bible's, is wider than its
-card, and Clear is cut off: it spans 250.3–337.9pt against the card's right
-edge at 298.0pt (Paste 32.0–122.3, Test key 129.3–243.3), measured on the
-real sheet. It is the same at bf10c0403, before the Settings fixes above, so
-it predates them. Not fixed.
+key field in Settings, the assistant's and API.Bible's, was wider than its
+card, and Clear was cut off: it spanned 250.3–337.9pt, where the key card
+ends at 291.0pt and the sheet at 298.0pt (Paste 32.0–122.3, Test key
+129.3–243.3), measured on the real sheet. The row was an HBox, which lays its
+buttons out at their own widths whatever width it is given: the three need
+305.9pt, and the card gives its rows 252pt there. It predated the Settings
+fixes above. Measured the same way, 375pt was short too: the rows get 299pt,
+and Clear ended at 341.9pt, 6.9pt past the end of the key field above it, over
+the card's padding and against its border, 0.1pt inside the card's edge.
+
+Both rows are now one `keyActionsRow` (`key_actions_row.go`), used by
+`ai_settings.go` and `bible_key_settings.go` alike, so the two sections cannot
+lay their buttons out differently. It places them exactly as the HBox did
+wherever they fit, and the button that would run past the row starts a line of
+its own, one padding below: at 320pt and 375pt Clear sits under Paste, and the
+card grows by that line. Nothing is shrunk or stretched, and the labels and
+icons are the same. Clear moves from beside Test key to under Paste, one
+padding from its nearest neighbour, as it was on one line. The row asks for
+the height of the lines it broke into at the width it was last laid out at, as
+a `statusLine` does, which the sheet's measuring twice whenever it sizes
+itself already provides for. From 393pt up the buttons are where they were: at
+393pt, 440pt, 834pt, 1032pt and a 1280x800 window every button's position was
+measured at bec3f265a and after, and none moved.
+
+`key_actions_row_test.go` holds, in both sections at 320pt, 375pt, 393pt,
+440pt, the 11-inch and 13-inch iPad widths and the desktop, that every button
+is visible, laid out at exactly its own size, neither squeezed nor stretched
+on a line of its own, inside the width the card gives its rows (the key
+field's), wholly in the body's view, between the field and the status line,
+clear of the other two, and reached by a tap at its centre; that at 320pt and
+375pt Clear starts the second line under Paste; and that at the wider widths
+each button is where the HBox put it. A second test holds the layout's
+breaking rule on its own. The switch labels in the same sheet ran past their
+cards at the same widths; they are the entry below. What only a screen can
+confirm is in `docs/VISUAL_TESTS.md` V15.
+
+## Settings: the switch labels run past their cards on narrow phones — DONE 28 September 2026
+
+The labels of the three Settings switches ran past their cards the way Clear
+did: "Show the translators' footnotes", "Show notes people share with you"
+and "Show the words of King Jesus in red". Each was a `widget.Check`, whose
+label is one `canvas.Text`, and Fyne paints a `canvas.Text` at its full
+width whatever width it is given. The checks ask for 279.4pt, 304.2pt and
+322.8pt, and the cards give their rows 252pt at 320pt, 284pt at 360pt, 299pt
+at 375pt and 317pt at 393pt. At 320pt all three labels ran to the scroll's
+edge, which cut them off; at 360pt the second and third did; at 375pt the
+third ended at 350.8pt against the scroll's clip at 342.0pt and read "in re".
+At 393pt only the room widget.Check keeps after its label ran over: the words
+end 2.2pt inside the row. The Settings sheet shows all three on iOS, Android
+and macOS, and on Windows and Linux with the styled pane. It predated the
+key-row change above.
+
+The three are now `wrapCheck` (`wrap_check.go`, built in `ai_settings.go`):
+`widget.Check` itself, with its box, focus ring, colours, taps and keys,
+and a renderer that draws the check's own label exactly where the check
+draws it wherever the words fit the row, and otherwise breaks them between
+words onto further lines, by the rule the key status lines use
+(`statusLines`), centred down the check as one line is. It asks for
+widget.Check's size wherever the row has it; broken, it asks for the lines'
+height and the widest line's width beside the box. The room widget.Check
+keeps after its label is asked for only as far as the row has it, so a label
+whose words fit does not break for empty space after it. Taps and hover reach
+the box and every word, since widget.Check takes them across the size it last
+asked for. At 320pt all three labels take two lines, at 360pt the second and
+third, at 375pt the third; from 393pt up every label is drawn as before. No
+wording, colour or size changed, and the sheet is the same Fyne sheet on
+every platform.
+
+`wrap_check_test.go` holds, at 320pt, 360pt, 375pt, 393pt, 440pt, the 11-inch
+and 13-inch iPad widths and the desktop, that every word of each label is
+drawn inside its card's row and inside the switch, each line under the one
+before and the lines centred, that the switch is laid out at least at the size
+it asks for, that taps at the box, the middle of the last line and the end of
+the widest line reach it, and how many labels break at each width; and where
+a label is one line, that it is the check's own label at widget.Check's place
+with widget.Check's size. A second test holds the breaking rule on its own,
+including that a label stays on one line down to the width of its words.
+`TestSettingsSheetSqueezesNothing` (`sheet_fit_test.go`) walks the whole
+sheet at those widths and at 402pt, with no assistant and with each of the
+four, and finds no visible object laid out smaller than it asks: it fails on
+the key row as an HBox and on any switch as a widget.Check. What only a
+screen can confirm is in `docs/VISUAL_TESTS.md` V15.
 
 ## NKJV cross references: the panel's second pass — PAUSED 10 September 2026
 

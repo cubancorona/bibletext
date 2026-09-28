@@ -635,6 +635,21 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       Gemini hint breaks onto a second line inside the card; switch to each
       assistant and back and the sheet grows and shrinks with its status
       rather than cutting it.
+- [ ] Settings on a 320pt iPhone SE and a 375pt iPhone (an SE of the
+      second or third generation, or a mini), with an assistant chosen:
+      under both key fields Paste and Test key share a line and Clear sits
+      under Paste, all three inside the card with its margin on the right,
+      and each responds to a tap. On a 393pt or wider iPhone, an iPad and a
+      Mac the three stand on one line as before. On Android, a 360dp phone
+      puts Clear under Paste and a 411dp phone keeps one line.
+- [ ] Settings on a 320pt iPhone SE, light and dark: "Show the
+      translators' footnotes", "Show notes people share with you" and "Show
+      the words of King Jesus in red" each take two lines inside their
+      cards, nothing cut, the box centred against the two lines, and a tap
+      on either line ticks the box. On a 375pt iPhone only the red-letter
+      label takes two lines; on a 393pt or wider iPhone, an iPad and a Mac
+      all three stand on one line as before. On Android, a 360dp phone
+      breaks the shared-notes and red-letter labels and a 411dp phone none.
 - [ ] Settings with the included API.Bible key: the NKJV caption sits
       under the TRANSLATIONS card, READING the usual gap below it. Clear the
       key, then paste a key of your own: the caption stays through both,

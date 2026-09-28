@@ -55,11 +55,11 @@ func sheetCloseButton(t *testing.T, popup *widget.PopUp) *widget.Button {
 	return closeBtn
 }
 
-func sheetNotesCheck(t *testing.T, popup *widget.PopUp) *widget.Check {
+func sheetNotesCheck(t *testing.T, popup *widget.PopUp) *wrapCheck {
 	t.Helper()
-	var check *widget.Check
+	var check *wrapCheck
 	walkTree(popup, func(o fyne.CanvasObject) {
-		if c, ok := o.(*widget.Check); ok && c.Text == "Show notes people share with you" {
+		if c, ok := o.(*wrapCheck); ok && c.Text == "Show notes people share with you" {
 			check = c
 		}
 	})

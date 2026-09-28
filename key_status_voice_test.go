@@ -56,11 +56,12 @@ func TestKeyTestResultsShareOneVoice(t *testing.T) {
 // control between the two a reader reaches for most, so a mis-tap aimed at
 // either neighbour wiped the key.
 //
-// Asserted on the source because the rows are built in different files and
-// there is no shared constructor to test through; a shared constructor would
-// be the better fix if a third key field ever appears.
+// Both rows are keyActionsRow (key_actions_row.go), which lays its buttons
+// out in the order it is given them, and each file builds and passes its own
+// three, so the order is asserted on the source. key_actions_row_test.go
+// holds where the row puts them on the sheet.
 func TestKeyFieldButtonsShareOneOrder(t *testing.T) {
-	order := regexp.MustCompile(`NewHBox\(pasteBtn, testBtn, clearBtn`)
+	order := regexp.MustCompile(`keyActionsRow\(pasteBtn, testBtn, clearBtn\)`)
 	for _, f := range []string{"ai_settings.go", "bible_key_settings.go"} {
 		src, err := os.ReadFile(f)
 		if err != nil {
