@@ -13,6 +13,7 @@ package bibletext
 import (
 	"fmt"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,7 +33,10 @@ type desktopSheet struct {
 // stays there: its request is parked for the rest of the test, so nothing
 // lands on another goroutine while the test reads the sheet. The
 // cross-references open twice: waiting on the load, and with the load
-// answered and the list showing, both on the test's own goroutine.
+// answered and the list showing, both on the test's own goroutine. So does
+// the translation picker: with the translations the build compiles in, and
+// with more than any build has and every notice at once, so the sheet's
+// longest form is covered whatever tags the suite is built with.
 func desktopSheets(t *testing.T) []desktopSheet {
 	t.Helper()
 	votdSynchronousRemeasure(t)
@@ -44,6 +48,11 @@ func desktopSheets(t *testing.T) []desktopSheet {
 		{"Settings", func(_ *testing.T, s *AppState) { showAISettings(s) }},
 		{"Go to", func(_ *testing.T, s *AppState) { showGotoPicker(s) }},
 		{"translation picker", func(_ *testing.T, s *AppState) { showVersionPicker(s) }},
+		{"translation picker, more translations", func(t *testing.T, s *AppState) {
+			withMoreTranslations(t)
+			withEveryNotice(t, s)
+			showVersionPicker(s)
+		}},
 		{"verse of the day", func(_ *testing.T, s *AppState) { showVerseOfDayCard(s, longDayPassage()) }},
 		{"audio source menu", func(_ *testing.T, s *AppState) { showAudioSourceMenu(s) }},
 		{"note composer", func(_ *testing.T, s *AppState) { promptShareNote(s, "For God so loved the world", selSpan{}) }},
@@ -71,9 +80,59 @@ func desktopSheets(t *testing.T) []desktopSheet {
 	}
 }
 
+// moreTranslations is how many translations under evaluation
+// withMoreTranslations adds: more than any set of build tags compiles in.
+const moreTranslations = 8
+
+// sampleTranslationID is the id of the i-th translation withMoreTranslations
+// registers.
+func sampleTranslationID(i int) string { return fmt.Sprintf("sample-%c", 'a'+i) }
+
+// withMoreTranslations registers moreTranslations synthetic translations
+// under evaluation for the rest of the test, once however often it is called.
+// The translation picker's height is data: a row for each translation and a
+// sentence naming those under evaluation, which the nrsv and lsb tags
+// lengthen. Opened with these, the picker is longer than any build's, so what
+// the sheet tests cover does not depend on the tags the suite is built with.
+func withMoreTranslations(t *testing.T) {
+	t.Helper()
+	if _, ok := versionByID(sampleTranslationID(0)); ok {
+		return
+	}
+	for i := 0; i < moreTranslations; i++ {
+		id := sampleTranslationID(i)
+		withRegisteredVersion(t, BibleVersion{
+			ID: id, Name: fmt.Sprintf("Sample Translation %c", 'A'+i), Abbrev: strings.ToUpper(id),
+			Publisher: "Sample Publisher — license required",
+			source:    newLicensedSource(id),
+		})
+	}
+}
+
+// withEveryNotice puts s where the picker's notice says every fact it can at
+// once, one per line: the reader's choice could not be opened, the default
+// translation is updating, and every registered translation is on a previous
+// edition. The update is already downloading, so opening the picker starts
+// no fetch.
+func withEveryNotice(t *testing.T, s *AppState) {
+	t.Helper()
+	vs := bibleVersions()
+	s.CurrentVersion = defaultVersionID
+	s.preferredVersion = vs[len(vs)-1].ID
+	s.fullPending, s.fullDownloading, s.seedOnly = true, true, false
+	s.staleVersions = map[string]bool{}
+	for _, v := range vs {
+		s.staleVersions[v.ID] = true
+	}
+	if n := fullPendingNotice(s); strings.Count(n, "\n") != 2 {
+		t.Fatalf("control: the notice should say three facts, one per line; it reads %q", n)
+	}
+}
+
 // longDayPassage is a verse-of-the-day passage long enough that the card is
-// capped by every window these tests use, so its height follows the window's.
-// Today's verse would make the card's height depend on the date.
+// capped by every window these tests use but the portrait display, so its
+// height follows the window's. Today's verse would make the card's height
+// depend on the date.
 func longDayPassage() dayVerse {
 	d := dayVerse{Book: "Psalms", Chapter: 119, Lo: 1, Hi: 16}
 	for v := d.Lo; v <= d.Hi; v++ {
@@ -199,6 +258,10 @@ func TestDesktopSheetsRefitWhenTheWindowResizes(t *testing.T) {
 		{"further", fyne.NewSize(1280, 800), fyne.NewSize(1280, 680)},
 		{"to a short window", fyne.NewSize(1280, 800), fyne.NewSize(1280, 440)},
 		{"grown", fyne.NewSize(1280, 600), fyne.NewSize(1280, 1000)},
+		// Room for every sheet at its natural height, the translation
+		// picker's with more translations too, so each is sized from what its
+		// content measures rather than by the cap.
+		{"grown onto a portrait display", fyne.NewSize(1280, 800), fyne.NewSize(1280, 2400)},
 		{"narrowed", fyne.NewSize(1280, 800), fyne.NewSize(900, 800)},
 	} {
 		for _, sh := range sheets {
@@ -222,6 +285,133 @@ func TestDesktopSheetsRefitWhenTheWindowResizes(t *testing.T) {
 			})
 		}
 	}
+}
+
+// THE PICKER'S SENTENCES SCROLL ONLY WHERE THEY CANNOT BE PINNED. Under its
+// rows the translation picker says which translations are locked and why,
+// and what is true of the edition on screen, pinned above Close. How long
+// those sentences are is data, so where the pinned part alone would be
+// taller than the room below the header they follow the rows inside the
+// scroll instead: every one, in the same words and order, with every row
+// still listed. Given room again they are pinned again.
+func TestTranslationPickerPinsItsSentencesWhereTheyFit(t *testing.T) {
+	// The window the app most often has, the translations this build
+	// compiles in, and the notice a reader most often sees.
+	st, _ := desktopWindow(t, fyne.NewSize(1280, 800))
+	st.fullPending, st.fullDownloading = true, true
+	popup := pickerPopup(t, st, showVersionPicker)
+	pinned := pickerSentences(popup)
+	if len(pinned) == 0 || pinned[0].Text != fullPendingNotice(st) {
+		t.Fatalf("control: the picker should open with the notice first among its sentences; it has %v", labelTexts(pinned))
+	}
+	wantSentencesPinned(t, popup, pinned, "1280x800")
+	popup.Hide()
+
+	// Short, with more translations than any build and every notice at once:
+	// pinned, they would put the sheet's top inside the header.
+	st, w := desktopWindow(t, fyne.NewSize(1280, 440))
+	popup = pickerPopup(t, st, func(s *AppState) {
+		withMoreTranslations(t)
+		withEveryNotice(t, s)
+		showVersionPicker(s)
+	})
+	defer popup.Hide()
+	wantClearOfHeader(t, st, w, popup)
+	scrolled := labelTexts(pickerSentences(popup))
+	body := findScroll(popup)
+	drv := fyne.CurrentApp().Driver()
+	var lastRowBottom float32
+	for _, v := range versionPickerOrder() {
+		name := findTreeText(body.Content, v.Name+"  ("+v.Abbrev+")")
+		if name == nil {
+			t.Fatalf("1280x440: the %s row is not in the list", v.ID)
+		}
+		lastRowBottom = drv.AbsolutePositionForObject(name).Y + name.Size().Height
+	}
+	for _, l := range pickerSentences(popup) {
+		if !objectUnder(body.Content, l) {
+			t.Errorf("1280x440: %q is pinned, where there is no room for it", l.Text)
+		} else if top := drv.AbsolutePositionForObject(l).Y; top < lastRowBottom {
+			t.Errorf("1280x440: %q starts at %.1f, above the end of the last row (%.1f)", l.Text, top, lastRowBottom)
+		}
+	}
+
+	// Grown to a window with room for them, the same sentences are pinned
+	// again.
+	w.Resize(fyne.NewSize(1280, 1600))
+	again := pickerSentences(popup)
+	wantSentencesPinned(t, popup, again, "grown to 1280x1600")
+	if len(scrolled) < 2 {
+		t.Fatalf("control: the notice and the evaluation sentence should both show; the sentences are %q", scrolled)
+	}
+	if got := labelTexts(again); strings.Join(got, "|") != strings.Join(scrolled, "|") {
+		t.Errorf("the sentences changed between the short window and the tall one:\n  %q\n  %q", scrolled, got)
+	}
+}
+
+// pickerSentences returns the translation picker's sentences, in the order it
+// shows them: every label but the intro.
+func pickerSentences(popup *widget.PopUp) []*widget.Label {
+	var out []*widget.Label
+	walkTree(popup, func(o fyne.CanvasObject) {
+		if l, ok := o.(*widget.Label); ok && l.Text != "Choose a Bible version." {
+			out = append(out, l)
+		}
+	})
+	return out
+}
+
+// labelTexts is what each label reads, in order.
+func labelTexts(ls []*widget.Label) []string {
+	var out []string
+	for _, l := range ls {
+		out = append(out, l.Text)
+	}
+	return out
+}
+
+// wantSentencesPinned fails unless every sentence sits outside the scroll,
+// between its bottom edge and the Close button.
+func wantSentencesPinned(t *testing.T, popup *widget.PopUp, sentences []*widget.Label, where string) {
+	t.Helper()
+	sheetBox(t, popup) // lays the popup out
+	drv := fyne.CurrentApp().Driver()
+	body := findScroll(popup)
+	closeBtn := findTreeButton(popup, "Close")
+	if body == nil || closeBtn == nil {
+		t.Fatalf("%s: the picker has no list or no Close button", where)
+	}
+	listBottom := drv.AbsolutePositionForObject(body).Y + body.Size().Height
+	closeTop := drv.AbsolutePositionForObject(closeBtn).Y
+	for _, l := range sentences {
+		top := drv.AbsolutePositionForObject(l).Y
+		if objectUnder(body.Content, l) || top < listBottom || top+l.Size().Height > closeTop {
+			t.Errorf("%s: %q is not pinned between the list (ends %.1f) and Close (starts %.1f); it spans %.1f..%.1f",
+				where, l.Text, listBottom, closeTop, top, top+l.Size().Height)
+		}
+	}
+}
+
+// objectUnder reports whether target is root or anywhere under it.
+func objectUnder(root, target fyne.CanvasObject) bool {
+	found := false
+	walkTree(root, func(o fyne.CanvasObject) {
+		if o == target {
+			found = true
+		}
+	})
+	return found
+}
+
+// findTreeText returns the first canvas.Text under o reading text.
+func findTreeText(o fyne.CanvasObject, text string) *canvas.Text {
+	var found *canvas.Text
+	walkTree(o, func(n fyne.CanvasObject) {
+		if c, ok := n.(*canvas.Text); ok && found == nil && c.Text == text {
+			found = c
+		}
+	})
+	return found
 }
 
 // ON A PHONE OR TABLET NOTHING IS RESIZED UNDER THE READER. There the

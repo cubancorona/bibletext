@@ -656,6 +656,13 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
 - [ ] Mac at 1280x440: the share image preview opens below the header with
       a smaller card, the whole card in view and Share and Cancel on
       screen.
+- [ ] Translation, built with `-tags nrsv,lsb`: at 1280x800 the notice, key
+      and evaluation lines sit above Close as before. At 1280x480 and
+      1280x440 the sheet opens below the header's rule and those lines
+      follow the last translation inside the list, reached by scrolling it,
+      none missing; make the window taller and they return above Close. On
+      an iPhone SE on its side they follow the rows too, with more of the
+      list in view than before.
 - [ ] iPhone and iPad, cross-references with a list: the panel stands 40pt
       from the top and bottom of the screen, as an AI answer does (it stood
       about 25pt taller), with Close and the credit line fully on screen.

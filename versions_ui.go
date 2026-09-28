@@ -139,18 +139,18 @@ func showVersionPickerWith(state *AppState, notice string) {
 	}
 
 	closeBtn := widget.NewButton("Close", closePicker)
-	footerItems := []fyne.CanvasObject{widget.NewSeparator()}
+	var sentences []fyne.CanvasObject
 	if notice != "" {
 		note := widget.NewLabel(notice)
 		note.Wrapping = fyne.TextWrapWord
-		footerItems = append(footerItems, note)
+		sentences = append(sentences, note)
 	}
 	if byok := lockedVersionNames(true); len(byok) > 0 {
 		note := widget.NewLabel(joinNatural(byok) +
 			pick(len(byok), " unlocks", " unlock") +
 			" with your own free API.Bible key — add it in Settings.")
 		note.Wrapping = fyne.TextWrapWord
-		footerItems = append(footerItems, note)
+		sentences = append(sentences, note)
 	}
 	if locked := lockedVersionNames(false); len(locked) > 0 {
 		note := widget.NewLabel(joinNatural(locked) +
@@ -159,12 +159,39 @@ func showVersionPickerWith(state *AppState, notice string) {
 			pick(len(locked), "it unlocks", "they unlock") +
 			" once licensing is complete.")
 		note.Wrapping = fyne.TextWrapWord
-		footerItems = append(footerItems, note)
+		sentences = append(sentences, note)
 	}
-	footerItems = append(footerItems, container.NewBorder(nil, nil, nil, closeBtn))
-	footer := container.NewVBox(footerItems...)
+	closeRow := container.NewBorder(nil, nil, nil, closeBtn)
 
-	body := container.NewVScroll(container.NewPadded(rows))
+	// THE SENTENCES ARE PINNED ONLY WHILE THE SHEET HAS ROOM FOR THEM. They
+	// sit under the rows, above Close, and do not scroll; the rows do. But
+	// their height is data: the evaluation sentence names every translation
+	// still under evaluation, the notice every translation on a previous
+	// edition. With the NRSV or the LSB compiled in, the pinned part alone was
+	// taller than the room below a desktop window's header on a window under
+	// about 500pt tall, and a sheet cannot be sized below its content's
+	// MinSize: Fyne lays the modal out at that height and centres it, so its
+	// top edge landed inside the header, partway down the Go to chip at 440pt.
+	// Where they would not fit in the tallest the sheet may be (fit, below),
+	// the sentences follow the rows inside the scroll, in the same order and
+	// words, and only the heading and Close stay pinned. On a phone the room
+	// is the screen less a margin, and the smallest phone on its side has too
+	// little of it as well.
+	list := container.NewVBox(rows)
+	footer := container.NewVBox()
+	footerRule, listRule := widget.NewSeparator(), widget.NewSeparator()
+	placeSentences := func(pinned bool) {
+		if pinned || len(sentences) == 0 {
+			list.Objects = []fyne.CanvasObject{rows}
+			footer.Objects = append(append([]fyne.CanvasObject{footerRule}, sentences...), closeRow)
+			return
+		}
+		list.Objects = append([]fyne.CanvasObject{rows, listRule}, sentences...)
+		footer.Objects = []fyne.CanvasObject{footerRule, closeRow}
+	}
+	placeSentences(true)
+
+	body := container.NewVScroll(container.NewPadded(list))
 	content := container.NewBorder(header, footer, nil, nil, body)
 
 	popup = widget.NewModalPopUp(
@@ -193,13 +220,25 @@ func showVersionPickerWith(state *AppState, notice string) {
 		if w < 280 {
 			w = 280
 		}
-		h := header.MinSize().Height + rows.MinSize().Height + footer.MinSize().Height + 64
-		if maxH := cs.Height - 80; h > maxH {
+		// The tallest the sheet may be: the screen less a margin and, since
+		// it is centred, on a desktop window the room below the header
+		// (headerClearance).
+		maxH := clearOfHeader(cs.Height-80, cs.Height, headerClearance(state))
+		// Measured at the width the sheet is about to have. A wrapping label
+		// reports the height of the lines it broke into at the width it was
+		// last laid out at, and on opening that is the popup's minimum width,
+		// where the sentences take more lines: an opened sheet came out
+		// taller than one sized again at the same window size.
+		placeSentences(true)
+		popup.Resize(fyne.NewSize(w, 0))
+		if popup.MinSize().Height > maxH {
+			placeSentences(false)
+			popup.Resize(fyne.NewSize(w, 0))
+		}
+		h := header.MinSize().Height + list.MinSize().Height + footer.MinSize().Height + 64
+		if h > maxH {
 			h = maxH
 		}
-		// Centred, so on a desktop window it is kept below the header like
-		// every desktop sheet (headerClearance); the rows scroll.
-		h = clearOfHeader(h, cs.Height, headerClearance(state))
 		popup.Resize(fyne.NewSize(w, h))
 	}
 	fit()

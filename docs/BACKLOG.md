@@ -2240,8 +2240,25 @@ confirm is in `docs/VISUAL_TESTS.md` V15:
   preview kept its image at least 200pt, which put the sheet's top inside
   the header on windows under about 490pt tall and partway down the chip
   under about 460pt, so on a desktop window the image now follows the cap
-  down (`shareImageSide`, `share_preview.go`). The toolkit never sizes an
-  open sheet again: on a window resize it only
+  down (`shareImageSide`, `share_preview.go`). The translation picker
+  needed more too, seen only with `-tags nrsv,lsb`, the build CI tests: the
+  sentences under its rows (the notice about the edition on screen, the key
+  and evaluation lines) were pinned above Close, and their height is data.
+  With the NRSV or the LSB compiled in, the evaluation line took the pinned
+  part to 339pt, over the 322pt below the header at 1280x480, and a modal is
+  never sized below its content's MinSize, so the picker started inside the
+  header, and partway down the chip at 440pt. The sentences now stay pinned
+  while the sheet has room for them and otherwise follow the rows inside
+  the scroll, in the same words and order (`versions_ui.go`); at 1280x800
+  they are pinned in every build, as before. The picker also measured them
+  before it was laid out at its own width, where they wrap onto more lines,
+  so one opened at 1280x1000 was 22pt taller than one sized again to that
+  size; it now measures at its width. The same rule holds on a phone or
+  tablet, where the room is the screen less 80pt: on a 568x320 iPhone SE on
+  its side the sentences now scroll after the rows, and the sheet is 240pt
+  tall with a 68pt list where it was 272pt with a 32pt one; the other phone
+  and tablet sizes keep them pinned. The toolkit never sizes an open sheet
+  again: on a window resize it only
   re-centres it at the size it opened at, so restoring a maximised window,
   or dragging an edge up, brought the arc back. Every desktop sheet whose
   size comes from the window now registers its fit and is sized again,
@@ -2249,10 +2266,16 @@ confirm is in `docs/VISUAL_TESTS.md` V15:
   size (`sheet_refit.go`, run by the window's root, `windowRoot`); a sheet
   opened in a short window also takes the room a taller one gives it. Held
   by `sheet_header_clearance_test.go`: every sheet, the cross-references
-  waiting and listed, opened at eight window sizes from 1280x860 to
-  1280x440 and 507x440, and resized under seven changes, each ending where
-  a sheet opened at the new size sits. Divergence: phones and tablets keep
-  their sheets sized to the safe area (`sheetMaxHeight`); at their cap
+  waiting and listed, and the translation picker with the build's
+  translations and with eight more under evaluation and every notice at
+  once, so what is covered does not depend on the build tags, opened at
+  eight window sizes from 1280x860 to 1280x440 and 507x440, and resized
+  under eight changes up to a 1280x2400 portrait display, each ending where
+  a sheet opened at the new size sits; and by a test that the picker's
+  sentences are pinned at 1280x800, follow the last row at 1280x440, and
+  are pinned again, unchanged, when that window grows. Divergence: phones
+  and tablets keep their sheets sized to the safe area (`sheetMaxHeight`);
+  at their cap
   those start above the header's controls rather than below the header,
   and a tablet sheet a little shorter than its cap could still start
   partway down the Go to chip. Not seen in the new images; left until a
@@ -2262,15 +2285,16 @@ confirm is in `docs/VISUAL_TESTS.md` V15:
   rotation that moves the navigation rebuilds the window and closes the
   sheets, the Go to picker and the note composer refit themselves, and the
   rest keep the size they opened at, which the modal clamps to the canvas.
-  Also left: a desktop window under about 430pt tall (the window allows
+  Also left: a desktop window under about 420pt tall (the window allows
   386pt) has too little room below the header for the fixed parts of some
-  sheets, so Translation (below 430pt), cross-references while the list
-  loads (below 418pt), the AI answer, the note composer and Go to (below
-  about 400pt) start inside the header's lower band, below the Go to chip;
-  at 386pt Translation's top is 0.7pt below the chip's outline and crosses
-  the translation name's tap area. Raising the window's minimum height to
-  about 430pt, or letting a sheet that cannot clear the header cover it
-  entirely, is the owner's choice.
+  sheets, so cross-references while the list loads (below 418pt), the AI
+  answer, the note composer and Go to (below about 400pt) start inside the
+  header's lower band, below the Go to chip; at 386pt cross-references
+  while the list loads reaches furthest in, its top 7pt below the chip's
+  outline. Translation, which used to lead this list, clears the header at
+  every height the window allows, in every build. Raising the window's
+  minimum height to about 420pt, or letting a sheet that cannot clear the
+  header cover it entirely, is the owner's choice.
 - LEFT: the iPad Settings sheet ends on a SHARED NOTES heading with its
   card below the pinned "Changes save automatically." footer. Not a defect:
   the body is a scroll that ends above the footer, nothing is drawn under

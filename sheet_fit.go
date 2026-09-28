@@ -157,9 +157,17 @@ func objectInTree(root, target fyne.CanvasObject) bool {
 
 // clearOfHeader caps h, the height of a sheet Fyne will centre on a canvas
 // canvasH tall, so its top edge lands at or below clearance. clearance 0
-// leaves h alone. A sheet whose content cannot shrink is not helped by this;
-// every sheet it is applied to either scrolls or sizes its content from the
-// height it is given.
+// leaves h alone.
+//
+// The cap holds only if the sheet can be that short. Fyne lays a modal out at
+// the larger of the size it is given and its content's MinSize, and centres
+// that, so a sheet whose parts that do not scroll are taller than the cap
+// ignores it and starts (canvasH - MinSize) / 2 down the canvas, inside the
+// header. Every sheet this is applied to keeps those parts within it: what
+// grows scrolls or is sized from the height it is given, and a part whose
+// height is data, such as the translation picker's sentences naming
+// translations, goes into the scroll when there is no room to pin it
+// (showVersionPickerWith).
 func clearOfHeader(h, canvasH, clearance float32) float32 {
 	if clearance <= 0 {
 		return h
