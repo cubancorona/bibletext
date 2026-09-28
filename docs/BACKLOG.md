@@ -85,8 +85,11 @@ before.
   and a frame-changed `SetWindowPos` or `RedrawWindow` does not do it.
   Windows 11 applies the attribute at once; the pair is sent there too.
   Attribute 20 only, as Fyne sends: builds before 20H1 never had a dark
-  frame at launch either. Not yet seen on the Windows VM, which must check
-  Windows 10 22H2 as well as 11 (`docs/VISUAL_TESTS.md`).
+  frame at launch either. Seen working on the Windows 11 VM (28 September
+  2026: the released 1.2.16 kept a white caption over a dark app after a
+  switch; this code follows dark and back to light, with the app focused
+  during the switch too). Windows 10 22H2 is still unchecked
+  (`docs/VISUAL_TESTS.md`).
 - **The styled pane's note card** (Windows and Linux, plainly in focus mode,
   where no widget's theme override happened to clear the cache) could keep
   the old palette: Fyne caches a rasterised SVG by resource name and pixel
