@@ -178,6 +178,35 @@ Also confirm from the final AAB:
 - target audience and Families eligibility are selected from the real intended
   audience, not to avoid or trigger a policy track.
 
+## Closed-test release notes — 1.2.17
+
+> See which AI is working, and your note where you left it.
+> • The AI waiting screen now names the assistant and model at work, and follows a switch to a faster model.
+> • Adding a note shows the words you selected above it.
+> • A note you send appears on the verse straight away.
+> • Switching between light and dark with a sheet open no longer leaves it half in the old colours.
+> • After Android closes the app's screen in the background, light and dark and downloads work again when you return.
+
+Suggested tester coverage:
+
+- install and confirm version 1.2.17 (187);
+- with an AI key saved, ask a question and then run an AI Find: while each
+  waits, the waiting screen names the assistant and model at work, and
+  switching to a faster model while it waits changes the name;
+- select a few words and choose Add a note: the selected words show above
+  the note, and a long selection stops after three lines;
+- send a note with Share with note: it shows on its verse straight away, and
+  is gone after turning to another chapter;
+- open Go to, the verse of the day, Settings and the translation list in
+  turn, and switch between light and dark with each open: the sheet comes
+  back whole, in the new colours;
+- turn on "Don't keep activities" in Developer options (or leave the app
+  with Home until Android closes its screen), return, then switch between
+  light and dark and download a translation: both still work;
+- open Settings on a small phone: the key buttons and the switch labels
+  wrap inside their cards rather than running past the edge;
+- confirm a shared link still opens at its passage with its note.
+
 ## Closed-test release notes — 1.2.16
 
 > BibleText 1.2.16 fixes a crash on some phones when you press and hold on

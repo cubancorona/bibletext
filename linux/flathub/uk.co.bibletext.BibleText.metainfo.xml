@@ -76,6 +76,20 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.2.17" date="2026-09-28">
+      <description>
+        <p>See which AI is working, and your note where you left it.</p>
+        <ul>
+          <li>While an AI answer or an AI Find is on its way, the waiting screen now names the assistant and model at work, for example &quot;Claude (Anthropic) · claude-opus-5&quot;. If you switch to a faster model while you wait, the name changes with it.</li>
+          <li>Adding a note to a passage now shows the words you selected above the note, small and in the book's own type, so you can see what you are writing about. A long selection is cut short after three lines.</li>
+          <li>A note you send now appears on the verse straight away, as it does when you open it from the notes list. It goes when you turn to another chapter.</li>
+          <li>Switching between light and dark while a sheet is open — Go to, the verse of the day, Settings, the translation list — no longer leaves it half in the old colours. The sheet comes back as it was, in the new colours.</li>
+          <li>Asking Find a second question while the first was still searching no longer leaves it stuck on &quot;Searching with AI…&quot;.</li>
+          <li>The arrow after &quot;Get a key&quot; and &quot;Privacy Policy&quot; in Settings is now a plain arrow, not a blue emoji.</li>
+          <li>Sheets now open below the header, so the Go to button is never half covered.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.16" date="2026-09-26">
       <description>
         <p>The page set as on the Mac, and your translation kept.</p>

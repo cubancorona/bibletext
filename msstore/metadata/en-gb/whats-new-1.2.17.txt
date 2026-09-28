@@ -1,0 +1,10 @@
+See which AI is working, and your note where you left it.
+
+• While an AI answer or an AI Find is on its way, the waiting screen now names the assistant and model at work, for example "Claude (Anthropic) · claude-opus-5". If you switch to a faster model while you wait, the name changes with it.
+• Adding a note to a passage now shows the words you selected above the note, small and in the book's own type, so you can see what you are writing about. A long selection is cut short after three lines.
+• A note you send now appears on the verse straight away, as it does when you open it from the notes list. It goes when you turn to another chapter.
+• Switching between light and dark while a sheet is open — Go to, the verse of the day, Settings, the translation list — no longer leaves it half in the old colours. The sheet comes back as it was, in the new colours.
+• Asking Find a second question while the first was still searching no longer leaves it stuck on "Searching with AI…".
+• The arrow after "Get a key" and "Privacy Policy" in Settings is now a plain arrow, not a blue emoji.
+• Sheets now open below the header, so the Go to button is never half covered.
+• The window's title bar now follows a switch between light and dark. Before, it kept the mode the app was opened in.
