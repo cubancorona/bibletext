@@ -2174,6 +2174,12 @@ above.
 `docs/APP_STORE_SUBMISSION.md` ("The 1.2.17 set") records how each was taken.
 The Play set is untouched and still stale.
 
+The iPad shots carry a small grey resize grip in the bottom-right corner: the
+iPadOS 26 and 27 simulators open in "windowed apps" mode, and that mode is not
+a preference that can be set from outside the simulator. It was left as it is
+by decision; retaking in "Full Screen Apps" needs the setting changed by hand in
+the simulated iPad's Settings > Multitasking & Gestures.
+
 The review of the new images found five small things in the app itself.
 Three are FIXED and two are left, 28 September 2026; what only a screen can
 confirm is in `docs/VISUAL_TESTS.md` V15:
