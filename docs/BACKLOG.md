@@ -3067,19 +3067,68 @@ and a search mark are indistinguishable to a reader. A send no longer leaves
 that scene (the note it keeps replaces the search mark), but the ambiguity is
 its own item and stays open: a reader cannot tell why a verse is lit.
 
-## A note is shared and filed against the chapter the reader is on at Share, not the one it was written on
+## A note is shared and filed against the chapter the reader is on at Share, not the one it was written on — DONE 28 September 2026
 
 The note composer holds the words and the span selected on one chapter, but
-`shareVerseLinkWithNote` reads the passage from the reader's state when Share
-is pressed: the quote, the citation, the link's verses and the stored record
-all take the chapter the reader is on then. A link arriving while the
-composer is open navigates without closing it (`applyShareTarget`), so the
-message then names the wrong passage and the note is filed on it. Since the
-item above, the note is at least not drawn there (`showSentNote` checks the
-passage the composer recorded). Two ways to close it: close the composer when
-the reader is moved, or share against the recorded passage, for which
-`prepareShareQuoteIn` exists and `linkVersesForSelection` and the save would
-need the passage passed in.
+`shareVerseLinkWithNote` read the passage from the reader's state when Share
+was pressed: the citation, the link's translation, chapter and verses and the
+stored record all took the chapter the reader was on then. A link arriving
+while the composer is open navigates without closing it (`applyShareTarget`),
+so the message then named the wrong passage and the note was filed on it,
+where `showSentNote` (which checks the passage the composer recorded) at least
+did not draw it.
+
+The share now takes the passage the composer recorded when it opened
+(`notePassage`: translation, book and chapter) and makes everything against
+it. `shareVerseLinkWithNote` (`share.go`) is handed the passage by the
+composer's send (`promptShareNoteWith`, `share_note_ui.go`) and cites the
+selection through `prepareShareQuoteIn`, reads the link's verses through
+`linkVersesForSelectionIn`, new beside `linkVersesForSelection`, builds the
+link and files the record on that book and chapter in that translation
+(`notePassage.version`, `notes_mine.go`), and, for a book no link can be built
+for, shares the quote and citation of that passage (`shareVerseTextIn`, the
+text share's body, which Share with citation now uses too). The sheet's words
+and reference come from the same passage (`shareNoteQuote`), so a light/dark
+reopen after the reader was moved still shows what Share sends; the reopen
+already carried the recorded passage, and still does. The composer is not
+closed on navigation: the reader may be halfway through a sentence. The words
+are read from `state.Bible`, which is the recorded translation while the
+composer is open: a translation switch rebuilds the window and the rebuild's
+drain closes the composer, and the one rebuild that brings it back, a
+light/dark change, switches no translation. The sent note is still shown only
+on its own passage, so a reader moved elsewhere finds it in the notes browser,
+filed where it was written.
+
+The host tests are in `share_note_passage_test.go`. On the desktop card, the
+phone sheet with the Fyne field and the phone sheet with iOS's native field,
+the composer opens on Psalm 23:3–4 and a real link (`HandleShareLink`) moves
+the reader to John 1 before Share: the sheet still shows Psalm 23's words and
+reference, the message cites Psalm 23:3–4 in its translation, its link opens
+Psalm 23 at verses 3–4 with the note, the record is filed there, and nothing
+is focused on John 1. The same routes without the move share and file exactly
+as before. A note on a book with no link path goes out as that passage's quote
+and citation after the move, and a composer brought back by a light/dark
+change after the move shows, shares and files the passage it first opened on.
+The link's verses are found by locating the selected words in the passage and,
+where they cannot be, from the span; a further case selects words within Psalm
+23:3 and follows a link to a chapter that has the same words at verse 2, as
+Psalm 108 repeats Psalm 57, and the link and the record still name 23:3.
+Each was run against the tree before the change (the moved cases fail) and
+against mutations: the send reading the reader's passage again, the composer
+handing it the reader's passage, the record, the link's verses, the text share
+or the sheet's words read from the reader's chapter, the words alone located
+in the reader's chapter, and the reopen handing on the reader's passage each
+fail a test. The link's verses read wholly from the reader's chapter fail the
+first test only because its fixture John 1 has no verses 3 and 4; the
+repeated-words case fails for either.
+
+`showSentNote` still checks the passage the composer recorded, but on another
+chapter the plan now refuses the note too, since it is filed on its own
+passage: the check alone refuses it only on the same chapter in another
+translation, which a send cannot reach while a translation switch closes the
+composer. `share_note_sent_test.go` holds that case with a late show, and its
+notes say which mutations the other cases catch. What only a device can
+confirm is in `docs/VISUAL_TESTS.md` V12.
 
 ## One pill, several noted paragraphs: what the count says and where it points
 

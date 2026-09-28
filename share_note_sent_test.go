@@ -360,16 +360,31 @@ func TestNothingIsShownWhenTheNoteWasNotKept(t *testing.T) {
 
 // A NOTE IS SHOWN ONLY ON THE PASSAGE ITS WORDS WERE SELECTED ON. The reader
 // can be moved while the composer is open (a link arriving does it); the send
-// then files the note against the chapter the reader is on, and the page they
-// are on must not draw it. The passage is the one the composer first opened
-// on, carried through a light/dark reopen. And a show that comes late, after
-// the reader has gone, focuses nothing on the chapter they went to.
+// still shares and files the note on the passage it was written on
+// (share_note_passage_test.go), and the page the reader was moved to must not
+// draw it. The passage is the one the composer first opened on, carried
+// through a light/dark reopen. And a show that comes late, after the reader
+// has gone, focuses nothing on the chapter they went to, nor on the same
+// chapter in another translation.
 //
-// Mutations: showSentNote without its passage check (the moved and the
-// moved-then-reopened cases fail; the late show is also refused by the plan,
-// which does not draw a Psalm 23 note on Psalm 24, and fails once the plan's
-// giving focus back is dropped too); the light/dark reopen taking the passage
-// the reader is on instead of the one it opened on (the reopened case fails).
+// Two things refuse a note on another chapter now: the send files it on its
+// own passage, so the plan for the chapter the reader was moved to does not
+// hold it, and showSentNote checks the passage before it asks the plan.
+//
+// Mutations: showSentNote without its passage check fails the late show in
+// another translation, into which the plan resolves the note, so there the
+// check is all that refuses it. On another chapter the plan refuses it too:
+// without the check the moved, the reopened and the late-show cases fail only
+// once the plan's giving focus back is dropped as well, a drop that on its
+// own fails TestASentNoteTheChapterCannotDrawTakesNoFocus. The light/dark
+// reopen taking the passage the reader is on instead of the one it opened on
+// fails the reopened case. The send filing the note on the reader's chapter
+// is caught in share_note_passage_test.go, and here only with the check
+// removed too. The send handing showSentNote the reader's passage in place of
+// the composer's is caught by nothing: a translation switch rebuilds the
+// window and closes the composer, so when a send runs the two passages are
+// either the same or differ in chapter, where the plan refuses the note
+// anyway.
 func TestASentNoteIsNotShownOnAnotherChapter(t *testing.T) {
 	t.Run("moved while the composer was open", func(t *testing.T) {
 		st := sentNoteState()
@@ -433,6 +448,34 @@ func TestASentNoteIsNotShownOnAnotherChapter(t *testing.T) {
 		moveChapter(st, 1)
 		if showSentNote(st, n, at) {
 			t.Error("a note written on Psalm 23 was shown on Psalm 24")
+		}
+		assertNothingFocused(t, st)
+	})
+
+	t.Run("a late show after the reader changed translation", func(t *testing.T) {
+		test.NewTempApp(t)
+		setNotesEnabled(true)
+		st := sentNoteState()
+		at := readerPassage(st)
+		n, ok := saveMyNote(appPrefs(), StoredNote{VersionID: defaultVersionID, Book: "Psalms", Chapter: 23,
+			VerseLo: 1, VerseHi: 2, Text: "fixture late beta"})
+		if !ok {
+			t.Fatal("control: the note must be kept")
+		}
+		st.CurrentVersion = "bsb"
+		if readerPassage(st) == at || st.CurrentBook != "Psalms" || st.CurrentChapter != 23 {
+			t.Fatal("control: the reader must be on Psalm 23 in another translation")
+		}
+		// Control: the plan alone would draw the note here, resolved into the
+		// translation being read.
+		st.focusNote(n.ID)
+		if plan := buildChapterPlan(st, appPrefs(), st.Bible); !plan.HasOwn || plan.Own.Note.ID != n.ID {
+			t.Fatal("control: the plan for Psalm 23 in another translation should draw the note it is focused on")
+		}
+		st.noteFocus = noteFocus{}
+
+		if showSentNote(st, n, at) {
+			t.Errorf("a note written on Psalm 23 in %s was shown on Psalm 23 in %s", defaultVersionID, st.CurrentVersion)
 		}
 		assertNothingFocused(t, st)
 	})

@@ -63,8 +63,20 @@ func dispatchSelectionAction(state *AppState, action, text string, span selSpan)
 // an unpinnable selection still shares the chapter, and a book with no slug
 // (impossible today, guarded by tests) falls back to the plain-text share.
 // shareVerseLinkWithNote is shareVerseLink carrying the sender's note. An empty
-// note produces exactly the link shareVerseLink would have, so the two paths
-// cannot drift apart.
+// note on the reader's own passage produces exactly the link shareVerseLink
+// would have, so the two paths cannot drift apart.
+//
+// at is the passage the note was written on, recorded by the composer when it
+// opened (promptShareNote), and everything here is made against it: the
+// citation, the link's translation, chapter and verses, the record, and the
+// text share a link cannot be built for. The reader can be moved while the
+// composer is open — a link arriving navigates without closing it, since the
+// reader may be halfway through a sentence — and the words were selected on
+// at, so the chapter the reader is on when Share is pressed plays no part.
+// The words are read from state.Bible, which is at's translation: a
+// translation switch rebuilds the window, whose drain closes the composer,
+// and the one rebuild that brings it back, a light/dark change, switches no
+// translation.
 //
 // It returns the record the note was kept as, and kept=false when nothing was
 // stored: no note, or a store that stood the write down (saveMyNote). The
@@ -72,10 +84,10 @@ func dispatchSelectionAction(state *AppState, action, text string, span selSpan)
 // Everything here runs before it returns, the save included: the share sheet
 // is handed its message and presented later, on its own, and reports nothing
 // back, so a sheet the reader then cancels leaves the note kept.
-func shareVerseLinkWithNote(state *AppState, text, note string, span selSpan) (stored StoredNote, kept bool) {
-	_, cite, _, _ := prepareShareQuote(state, text, span)
-	version := state.currentVersion()
-	lo, hi := linkVersesForSelection(state, text, span)
+func shareVerseLinkWithNote(state *AppState, text, note string, span selSpan, at notePassage) (stored StoredNote, kept bool) {
+	_, cite, _, _ := prepareShareQuoteIn(state, at.book, at.chapter, text, span)
+	version := at.version(state)
+	lo, hi := linkVersesForSelectionIn(state, at.book, at.chapter, text, span)
 	// One nonce, minted here, used twice: it rides in the link and it is kept on
 	// the record. That is what lets this device recognise its own note when the
 	// reader taps their own link — without asking the words, which cannot answer
@@ -106,8 +118,8 @@ func shareVerseLinkWithNote(state *AppState, text, note string, span selSpan) (s
 	if n := strings.TrimSpace(note); n != "" {
 		stored, kept = saveMyNote(appPrefs(), StoredNote{
 			VersionID: version.ID,
-			Book:      state.CurrentBook,
-			Chapter:   state.CurrentChapter,
+			Book:      at.book,
+			Chapter:   at.chapter,
 			VerseLo:   lo,
 			VerseHi:   hi,
 			Text:      n,
@@ -117,9 +129,9 @@ func shareVerseLinkWithNote(state *AppState, text, note string, span selSpan) (s
 			nonce = stored.Nonce
 		}
 	}
-	url := ShareLinkURLWithNoteNonce(version.ID, state.CurrentBook, state.CurrentChapter, lo, hi, note, nonce)
+	url := ShareLinkURLWithNoteNonce(version.ID, at.book, at.chapter, lo, hi, note, nonce)
 	if url == "" {
-		shareVerse(state, text, false, span)
+		shareVerseTextIn(state, at.book, at.chapter, version.Name, text, span)
 		return stored, kept
 	}
 	// The note goes in the MESSAGE too, not only inside the link. It is how
@@ -156,11 +168,19 @@ func shareVerseLink(state *AppState, text string, span selSpan) {
 // verse, so a chapter-level link under it read as a broken fragment. Both zero
 // = an honest chapter link, exactly as before.
 func linkVersesForSelection(state *AppState, text string, span selSpan) (lo, hi int) {
-	if _, l, h, _, ok := normalizeShareSelection(state, text, span); ok {
+	book, chapter := readerChapter(state)
+	return linkVersesForSelectionIn(state, book, chapter, text, span)
+}
+
+// linkVersesForSelectionIn is linkVersesForSelection read against a named
+// chapter: the note composer's, which is the chapter the selection was made
+// on whether or not the reader is still there (shareVerseLinkWithNote).
+func linkVersesForSelectionIn(state *AppState, book string, chapter int, text string, span selSpan) (lo, hi int) {
+	if _, l, h, _, ok := normalizeShareSelectionIn(state, book, chapter, text, span); ok {
 		return l, h
 	}
 	if span.valid() {
-		if vs := selectionVerses(state, text, span); len(vs) > 0 {
+		if vs := selectionVersesIn(state, book, chapter, text, span); len(vs) > 0 {
 			return vs[0].Verse, vs[len(vs)-1].Verse
 		}
 	}
@@ -173,14 +193,22 @@ func linkVersesForSelection(state *AppState, text string, span selSpan) (lo, hi 
 // an initialism — the Bluebook always names the version in full (e.g. "(King
 // James)"), so we use "(World English Bible)" / "(Berean Standard Bible)".
 func shareVerse(state *AppState, text string, asImage bool, span selSpan) {
-	quote, cite := shareQuoteIn(state, state.CurrentBook, state.CurrentChapter, text, span)
 	version := state.currentVersion().Name
 	if asImage {
+		quote, cite := shareQuoteIn(state, state.CurrentBook, state.CurrentChapter, text, span)
 		// Don't share blind: show the rendered card for review (with Regenerate)
 		// and only hand it to the OS share sheet once the reader taps Share.
 		showShareImagePreview(state, quote, cite, version)
 		return
 	}
+	shareVerseTextIn(state, state.CurrentBook, state.CurrentChapter, version, text, span)
+}
+
+// shareVerseTextIn is the text share of a selection read against book/chapter
+// and cited in the translation named version: the reader's own chapter for
+// Share with citation, the note's passage when a note's link cannot be built.
+func shareVerseTextIn(state *AppState, book string, chapter int, version, text string, span selSpan) {
+	quote, cite := shareQuoteIn(state, book, chapter, text, span)
 	shareTextOut(composeShareText(quote, cite, version))
 }
 

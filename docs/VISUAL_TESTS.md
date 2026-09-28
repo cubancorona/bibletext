@@ -406,6 +406,17 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       an app in the chooser, send, come back: the card is still there.
       Share with the field left empty: no card, and a search wash the
       reader arrived on stays lit.
+- [ ] Share with note, then a link: select two verses, Share with note,
+      start typing, and open a BibleText link to another book from Messages
+      (desktop: from the browser or by pasting it) without closing the
+      composer. The reader moves to the linked passage and the composer
+      stays up with what was typed and the first passage's words and
+      reference. Share: the message cites the first passage and its link
+      opens the first passage at the selected verses; the notes browser
+      lists the note under the first passage, and opening it from there
+      goes there. No card is drawn on the linked passage. iPhone with the
+      native field, Android with the Fyne field, iPad, Mac, Windows and
+      Linux.
 - [ ] Share with note on iPad, at a third of an 11-inch iPad in Split View
       and in Slide Over (320pt wide), with a verse of about eighty
       characters selected: the native field's outline sits below the third

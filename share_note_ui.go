@@ -210,7 +210,7 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	title.TextSize = 20
 
-	quote, cite := shareNoteQuote(state, selectedText, span)
+	quote, cite := shareNoteQuote(state, selectedText, span, at)
 	ref := canvas.NewText(cite, pal.Accent)
 	ref.TextStyle = fyne.TextStyle{Bold: true}
 	ref.TextSize = subheadingTextSize
@@ -278,11 +278,13 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 	// selection, and the note's card and the view's placement move the text
 	// it would be measured against. The same closure serves the button and
 	// Return, the Fyne field and iOS's native one, the desktop card and the
-	// phone sheet.
+	// phone sheet. It shares and files the note against at, the passage the
+	// words were selected on, as the excerpt above shows it: a link arriving
+	// while the sheet is open moves the reader and leaves the sheet up.
 	send := func() {
 		note := strings.TrimSpace(noteText())
 		closeSheet()
-		if stored, kept := shareVerseLinkWithNote(state, selectedText, note, span); kept {
+		if stored, kept := shareVerseLinkWithNote(state, selectedText, note, span, at); kept {
 			showSentNote(state, stored, at)
 		}
 	}
@@ -438,26 +440,28 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 	noteEntryOnChanged = updateLeft
 }
 
-// shareNoteReference is the passage label on the compose sheet — the same
-// citation the share itself will carry, so the writer can see what they are
-// attaching the note to.
+// shareNoteReference is the passage label on the compose sheet for a
+// selection on the reader's chapter — the same citation the share itself will
+// carry, so the writer can see what they are attaching the note to.
 func shareNoteReference(state *AppState, selection string, span selSpan) string {
-	_, ref := shareNoteQuote(state, selection, span)
+	_, ref := shareNoteQuote(state, selection, span, readerPassage(state))
 	return ref
 }
 
 // shareNoteQuote is what the compose sheet shows of the selection: the words
 // and the reference, from ONE run of the share's own pipeline
-// (prepareShareQuote), so the excerpt, the reference and the citation the
-// share sends cannot disagree. The words are the quote before its Bluebook
+// (prepareShareQuoteIn), so the excerpt, the reference and the citation the
+// share sends cannot disagree. Both read the passage the composer recorded,
+// at, so a light/dark reopen after the reader was moved still shows what
+// Share will send. The words are the quote before its Bluebook
 // framing — no quotation marks, bracketed capital or omission dots, which
 // belong to a quotation standing on its own, not to a reminder under its
 // reference — with the verse numbers stripped and the divine name in the small
 // capitals the page draws.
-func shareNoteQuote(state *AppState, selection string, span selSpan) (quote, ref string) {
-	quote, ref, _, _ = prepareShareQuote(state, selection, span)
+func shareNoteQuote(state *AppState, selection string, span selSpan, at notePassage) (quote, ref string) {
+	quote, ref, _, _ = prepareShareQuoteIn(state, at.book, at.chapter, selection, span)
 	if ref == "" {
-		ref = state.CurrentBook + " " + strconv.Itoa(state.CurrentChapter)
+		ref = at.book + " " + strconv.Itoa(at.chapter)
 	}
 	return quote, ref
 }

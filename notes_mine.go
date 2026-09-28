@@ -37,6 +37,16 @@ type notePassage struct {
 	chapter   int
 }
 
+// version is the passage's translation. The id was the reader's own when the
+// composer recorded it, so it is always one this build knows; the reader's
+// translation stands in only if it somehow is not.
+func (p notePassage) version(state *AppState) BibleVersion {
+	if v, ok := versionByID(p.versionID); ok {
+		return v
+	}
+	return state.currentVersion()
+}
+
 // readerPassage is the passage the reader is on now.
 func readerPassage(state *AppState) notePassage {
 	return notePassage{
@@ -59,11 +69,15 @@ func readerPassage(state *AppState) notePassage {
 // (addRecentChapter resets focus), and a window rebuild, which rebuilds the
 // page from state and never resets focus, keeps it.
 //
-// ONLY ON THE PASSAGE IT WAS WRITTEN ON. at is where the composer opened. The
-// send files the note against the chapter the reader is on when Share is
-// pressed, and a link arriving while the composer is open can move the reader
-// in between; the note is not drawn on a chapter other than the one its
-// words were selected on. Nor is focus moved to a note this chapter's plan
+// ONLY ON THE PASSAGE IT WAS WRITTEN ON. at is where the composer opened, and
+// the send shares and files the note against it (shareVerseLinkWithNote). A
+// link arriving while the composer is open can move the reader in between;
+// the note is then kept on its own passage, and the plan for the chapter the
+// reader was moved to does not hold it. The passage check below refuses what
+// the plan would not: the same chapter in another translation, into which the
+// plan resolves a note. No send meets that today, since a translation switch
+// rebuilds the window and closes the composer; the check holds the rule for
+// any call that does. Nor is focus moved to a note this chapter's plan
 // does not draw (notes off, or an anchor the chapter cannot place): focus
 // naming an absent note falls to the default rule, which would reopen a note
 // the reader had closed here (N3). Both are asked when this runs, not when
