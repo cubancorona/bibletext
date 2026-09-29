@@ -342,8 +342,9 @@ func TestEveryBuildCommandParsesAsAString(t *testing.T) {
 }
 
 // The quoting rule is proven by the parser rather than by the text: every
-// command comes back from YAML exactly as it went in, and only a command
-// that needs the quotes gets them.
+// command comes back from YAML as the string it went in as, decoded into
+// any so that a typed value cannot pass for one, and only a command that
+// needs the quotes gets them.
 func TestYAMLScalarRoundTrips(t *testing.T) {
 	for _, s := range []string{
 		"chmod -R u+w vendor/fyne.io/fyne/v2",
@@ -357,18 +358,34 @@ func TestYAMLScalarRoundTrips(t *testing.T) {
 		"- leading dash",
 		"[bracketed]",
 		"",
+		// Plain, each of these is a value rather than a string. flatpak-builder
+		// drops the first four and warns on the fifth; the last two are typed
+		// by yaml.v3 and are quoted for the same reason.
+		"true",
+		"null",
+		"1",
+		"-7",
+		"1.5",
+		"~",
+		"2001-12-14",
 	} {
-		var got []string
+		var got []any
 		if err := yaml.Unmarshal([]byte("- "+yamlScalar(s)+"\n"), &got); err != nil {
 			t.Errorf("%q: %v", s, err)
 			continue
 		}
-		if len(got) != 1 || got[0] != s {
-			t.Errorf("%q came back as %q", s, got)
+		if len(got) != 1 {
+			t.Errorf("%q came back as %d items", s, len(got))
+			continue
+		}
+		if str, ok := got[0].(string); !ok || str != s {
+			t.Errorf("%q came back as %T %v", s, got[0], got[0])
 		}
 	}
-	if q := yamlScalar("grep -q 'a: b' f"); !strings.HasPrefix(q, `"`) {
-		t.Errorf("a command carrying \": \" is not double-quoted: %s", q)
+	for _, s := range []string{"grep -q 'a: b' f", "true", "1"} {
+		if q := yamlScalar(s); !strings.HasPrefix(q, `"`) {
+			t.Errorf("%q is not double-quoted: %s", s, q)
+		}
 	}
 	if q := yamlScalar("rm -f x"); q != "rm -f x" {
 		t.Errorf("a plain command was changed: %s", q)

@@ -28,6 +28,7 @@ import (
 
 	"github.com/BurntSushi/toml"
 	xdraw "golang.org/x/image/draw"
+	"gopkg.in/yaml.v3"
 )
 
 type product struct {
@@ -427,15 +428,21 @@ type flatpakSource struct {
 // yamlScalar renders one build command as a YAML sequence item. A plain
 // scalar cannot carry ": " or " #", end in ":", or begin with an indicator
 // character: YAML reads `grep -q 'BibleText patch: was 100ms' vendor/...` as
-// a one-key mapping, not a string, and flatpak-builder drops a build-command
-// that is not a string without a word, so a guard written that way never
-// ran. Such a command is emitted double-quoted, the form in which only the
-// backslash and the quote itself need escaping; every other command stays
-// plain, so the manifest reads as it always has.
+// a one-key mapping, not a string. Nor is every plain scalar a string: a
+// command that is exactly true, false, null, ~, a number or a date resolves
+// to that value. flatpak-builder drops a build-command that is not a string
+// without a word (its own reader types true, false, null and integers, and
+// warns on a float), so a guard written plain never ran. The rule is the
+// parser's rather than a list of forms: a command stays plain only when
+// yaml.v3 hands it back from a sequence item as that same string, and is
+// otherwise emitted double-quoted, the form in which only the backslash and
+// the quote itself need escaping.
 func yamlScalar(s string) string {
-	if s != "" && !strings.Contains(s, ": ") && !strings.Contains(s, " #") &&
-		!strings.HasSuffix(s, ":") && !strings.ContainsAny(s[:1], "-?:,[]{}#&*!|>'\"%@`") {
-		return s
+	var item []any
+	if err := yaml.Unmarshal([]byte("- "+s+"\n"), &item); err == nil && len(item) == 1 {
+		if got, ok := item[0].(string); ok && got == s {
+			return s
+		}
 	}
 	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
 }
