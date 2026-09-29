@@ -2250,8 +2250,11 @@ Deferred with it:
   draws a quality note, not a rejection.
 - **Snap preferences under the per-revision data dir** — a revert restores
   older notes; `XDG_CONFIG_HOME=$SNAP_USER_COMMON/.config` would opt out.
-- **Bump the Flatpak runtime to 26.08** when the golang SDK extension has
-  that branch.
+- **Bump the Flatpak runtime to 26.08 — DONE 29 September 2026.** The golang
+  SDK extension published its 26.08 branch (Go 1.27.1) on 17 September 2026;
+  the manifest, `linux-stores.yml` and the runbook moved together, the branch
+  written once as `freedesktopRuntime` in `cmd/linuxmeta` and held there by a
+  test.
 
 ## Recapture the App Store and Play screenshots — App Store sets RECAPTURED 28 September 2026; Play still to do
 
