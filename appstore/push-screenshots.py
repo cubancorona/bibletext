@@ -26,8 +26,9 @@ Connect has not yet reported on an image it already calls COMPLETE is read
 again, a bounded number of times, before it counts as a mismatch. A set that
 already holds exactly the files, all COMPLETE, is left alone, and one that
 holds them in another order is only reordered. ``--keep-existing`` appends
-after the images a set already holds instead, and refuses a set that would
-exceed the ten images a set may carry.
+after the images a set already holds instead, holding each kept image to
+what the listing gave, and refuses a set that would exceed the ten images a
+set may carry.
 
 This tool never selects a build, creates a version, writes text metadata or
 submits anything for review. The version record must already exist;
@@ -94,9 +95,11 @@ POLL_LIMIT = 600.0
 # App Store Connect reports an image COMPLETE a moment before it reports the
 # image's sourceFileChecksum, so a read-back that follows the last poll
 # closely can find a null checksum on a delivered image that a read seconds
-# later shows in full. A null checksum on a COMPLETE image is read again,
-# this many times this far apart, before it counts as a mismatch. A checksum
-# that is present and wrong is a mismatch on the read that finds it.
+# later shows in full. A null checksum on a COMPLETE image uploaded this run
+# is read again, this many times this far apart, before it counts as a
+# mismatch. A checksum that is present and wrong is a mismatch on the read
+# that finds it, and a kept image the listing gave without a checksum is
+# not waited on: no read brings a checksum this run did not upload.
 READBACK_ATTEMPTS = 6
 READBACK_INTERVAL = 10.0
 
@@ -592,13 +595,16 @@ def write_set(client, localization_id, item):
 def verify_set(client, item, set_id, order):
     """Read the set back and hold it to the files: count, order, checksums.
 
-    A null checksum on an image the read reports COMPLETE is the one
-    disagreement that is waited on: the set is read again, up to
-    READBACK_ATTEMPTS reads READBACK_INTERVAL apart, and only a checksum
-    still null on the last read is a mismatch. Everything else that
-    disagrees — the count, the order, a state other than COMPLETE, a
-    checksum that is present and wrong — is a mismatch on the read that
-    finds it, and no further read is made.
+    An image uploaded this run is held to the file's MD5; a kept image is
+    held to what the plan's listing gave, and one listed without a checksum
+    is held by its id, name and state alone. A null checksum on an uploaded
+    image the read reports COMPLETE is the one disagreement that is waited
+    on: the set is read again, up to READBACK_ATTEMPTS reads
+    READBACK_INTERVAL apart, and only a checksum still null on the last
+    read is a mismatch. Everything else that disagrees — the count, the
+    order, a state other than COMPLETE, a checksum that is present and
+    wrong — is a mismatch on the read that finds it, and no further read is
+    made.
     """
     expected = [(record["id"],) + summary(record)[::2] for record in item.kept]
     expected += [(screenshot_id, image.name, image.checksum)
@@ -616,6 +622,11 @@ def verify_set(client, item, set_id, order):
                 problems.append(f"position {number} is {name}, expected {want[1]}")
             if state != "COMPLETE":
                 problems.append(f"{name}: assetDeliveryState {state}")
+            if want[2] is None:
+                # A kept image the listing gave without a checksum has none
+                # to be held to; its id, name and state are the check, and
+                # no read will bring a checksum this run did not upload.
+                continue
             if checksum is None:
                 unreported.append((name, want[2]))
             elif checksum != want[2]:

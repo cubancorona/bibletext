@@ -660,6 +660,36 @@ class Writing(Harness):
                          ["old-APP_IPHONE_67-1", "old-APP_IPHONE_67-2", "new-0", "new-1"])
         self.assertIn("APP_IPHONE_67 read back: 4 images", out)
 
+    def test_keep_existing_holds_a_kept_image_listed_without_a_checksum_to_its_place_and_state(self):
+        # A kept image is held to what the listing gave. One listed without
+        # a checksum has none to be held to: the read-back checks its
+        # position and state on the first read and does not wait for a
+        # checksum that no upload of this run will bring.
+        held = [FakeStore.record("held-0", "old-01.png", 100, None)]
+        fake = self.arrange(sets={"APP_IPHONE_67": held})
+        code, out = self.write("--keep-existing")
+        self.assertEqual(code, 0)
+        self.assertIn("APP_IPHONE_67 read back: 3 images", out)
+        self.assertIn("[OK] read-back APP_IPHONE_67", out)
+        self.assertIn("every set read back as uploaded", out)
+        self.assertEqual(self.readbacks(fake), 1, "nothing to read again for")
+        self.assertNotIn(self.m.READBACK_INTERVAL, self.sleeps)
+
+    def test_keep_existing_still_holds_a_kept_image_to_the_checksum_the_listing_gave(self):
+        # Only a kept image listed without a checksum goes unheld; one listed
+        # with a checksum that reads back as another is a mismatch at once.
+        fake = self.arrange()
+
+        def change_a_kept_checksum(records):
+            if records[-1]["id"].startswith("new-"):
+                records[0]["attributes"]["sourceFileChecksum"] = "0" * 32
+        fake.tamper = change_a_kept_checksum
+        message = self.refused("--write", "--confirm-version", self.version, "--keep-existing")
+        self.assertIn("read-back mismatch for APP_IPHONE_67", message)
+        self.assertIn(f"old-01.png: checksum {'0' * 32}, expected {1:032x}", message)
+        self.assertEqual(self.readbacks(fake), 1)
+        self.assertNotIn(self.m.READBACK_INTERVAL, self.sleeps)
+
     def test_a_failed_delivery_is_a_non_zero_exit_naming_the_error(self):
         fake = self.arrange(delivery=("UPLOAD_COMPLETE", "FAILED"),
                             failure=[{"code": "IMAGE_TOO_SMALL", "description": "the image is 1x1"}])
