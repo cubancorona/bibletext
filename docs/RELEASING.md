@@ -141,9 +141,15 @@ Plus the Play notes blockquote in `docs/PLAY_LISTING.md`, under 500 characters.
 
 Push `main` (permission required) and wait for CI green on **all three** OSes.
 Nothing is uploaded before that. A darwin host cannot see a linux or windows
-vet failure, and a red run has sat unnoticed for a day before. The hygiene step
-alone runs nine checks, so a local run of `check-repository-hygiene.py` on its
-own proves nothing.
+vet failure, and a red run has sat unnoticed for a day before. The step named
+"Repository hygiene" is not one script but the whole list in `ci.yml` —
+`check-support-contact.py`, `check-release-identity.py`,
+`check-product-identity.py`, `check-mac-store-config.py`,
+`check-min-os-versions.py` and `check-public-surfaces.py`, the Python unit
+tests under `scripts/audio-align` and `msstore`, and
+`check-repository-hygiene.py` last — so a local run of
+`check-repository-hygiene.py` on its own proves nothing.
+`releasing_doc_test.go` holds this list to the step.
 
 ### 3 — Build the store artefacts, one at a time
 
@@ -160,19 +166,41 @@ scripts/release-mac-store.sh    # -> build/mac-store/BibleText.pkg
 scripts/build-android.sh --release
 ```
 
-At the same time — it needs nothing from this machine — dispatch the Windows
-Store build at the commit CI has just proved:
+The Windows Store package needs nothing from this machine: the push of stage 2
+builds it. `msstore.yml` runs on a push of `main` that touches its inputs, and
+the release bump touches one of them, `cmd/bibletext/FyneApp.toml` — the
+desktop ledger the MSIX version is stamped from, plus a fourth `.0`. On
+29 September 2026 the push of 1.2.17 started it at once, and five minutes
+later both packages were built at the pushed commit. Confirm that rather
+than assume it:
 
 ```
-gh workflow run msstore.yml --ref <sha>          # the commit the tag will name
+gh run list --workflow msstore.yml --limit 1 --json databaseId,headSha,event,conclusion
 ```
 
-Nothing in `msstore.yml` reads the tag; `--ref` decides which tree is checked
-out, and the MSIX is stamped from the desktop ledger plus a fourth `.0`. Give
-it the exact commit, never `main` by name, and if a later fix moves the tag,
-dispatch it again at the new commit: five minutes on CI, where the alternative
-is a package labelled for a tree the tag does not name. Its certification
-clock, about a day, starts here rather than after the tag.
+Its `headSha` must be the pushed commit — the one the tag will name. Nothing
+in `msstore.yml` reads the tag; the tree checked out decides what the package
+is labelled with, so a run at any other tree produces a package labelled for
+one the tag will not name. Only if the push did not start it — the bump went
+up in an earlier push and this one touched none of its inputs — dispatch it
+while `main` is still that commit, and read the new run's `headSha` the same
+way. `workflow_dispatch` takes a branch or a tag, never a commit, so
+`--ref <sha>` is refused:
+
+```
+gh workflow run msstore.yml --ref main           # only while main IS the release commit
+```
+
+If a later fix moves the tag, its push builds the package again only if the
+fix touched one of the workflow's inputs, and most reader code is not among
+them: the filter names a small minority of the root package's files, so a
+push that starts CI need not have started this workflow — on 28 September
+2026 a push of thirty-two files, reader code, docs and an icon, started CI
+and no Store run at all. So run the same `headSha` check on that push, and
+if no run started, dispatch at `main` while `main` is the fixed commit. Done
+that way the package exists before the tag, and stage 9 can go the moment
+the tag is pushed. `releasing_doc_test.go` holds the ledger inside the
+filter and most of the root package outside it.
 
 ### 4 — Read each artefact back
 
@@ -264,18 +292,21 @@ a half-built release becomes everyone's download.
 
 ### 9 — Microsoft Store
 
-The package was built in stage 3, at the commit the tag now names. Check the
-run's ref against the tag before trusting its artefacts (`gh run view` prints
-it); if the tag ended up elsewhere, dispatch again at the tag:
+The package was built in stage 3, at the commit the tag now names — by the
+push of `main`, or by the dispatch that stood in for it. Check the run's
+`headSha` against the tag before trusting its artefacts
+(`gh run view <run-id> --json headSha`; the plain view does not print it); if
+the tag ended up elsewhere, dispatch again at the tag and take that run's
+artefacts instead:
 
 ```
 gh workflow run msstore.yml --ref v<version>     # at the TAG, never the branch
 ```
 
-The MSIX version is the desktop ledger plus a fourth `.0`, so a run dispatched
-at any other tree produces a package labelled for one the tag does not name.
-Nothing in `msstore.yml` reads the tag — `--ref` simply decides which tree is
-checked out — so this is a discipline the workflow cannot enforce for you.
+The MSIX version is the desktop ledger plus a fourth `.0`, so a run at any
+other tree produces a package labelled for one the tag does not name. Nothing
+in `msstore.yml` reads the tag — the ref simply decides which tree is checked
+out — so this is a discipline the workflow cannot enforce for you.
 
 Download both `BibleText-Windows-<arch>-msix` artefacts, then:
 
