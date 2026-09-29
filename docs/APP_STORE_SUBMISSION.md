@@ -237,7 +237,11 @@ nothing without `--write` and an exact `--confirm-version`. A write replaces
 each set in file order, waits for every image to reach `assetDeliveryState`
 COMPLETE, then reads the sets back and compares count, order and MD5
 checksums before it reports success; `--keep-existing` appends instead. The
-version record must already exist (`submit-version.py --write` creates it).
+version record must already exist (`submit-version.py --write` creates it),
+and the upload comes before `--submit`: a version placed in a review
+submission no longer takes image edits, and the tool refuses one. The three
+commands in order are under "Final read-back and submission" below and in
+docs/RELEASING.md, stage 7.
 
 ### The 1.2.17 set — captured 28 September 2026, not yet uploaded
 
@@ -420,13 +424,23 @@ review submission otherwise. That order is the lesson of 1.2.8's Mac
 submission: App Store Connect accepted the submission record and then refused
 the item naming the version because its What's New was empty, leaving an
 empty submission behind. Screenshots are the one field a release may knowingly
-inherit; say so with `--accept-inherited-screenshots`.
+inherit; say so with `--accept-inherited-screenshots`. A release with
+screenshots of its own uploads them between preparing the record and
+submitting it, since a version placed in a review submission no longer takes
+image edits:
 
     . scripts/asc-env.sh
     python3 appstore/submit-version.py --platform IOS --build 178 \
+        --delivery-uuid <from altool> --write --confirm-version 1.2.8
+    python3 appstore/push-screenshots.py --platform IOS \
+        --write --confirm-version 1.2.8
+    python3 appstore/submit-version.py --platform IOS --build 178 \
         --delivery-uuid <from altool> --write --confirm-version 1.2.8 --submit
-    python3 appstore/submit-version.py --platform MAC_OS --build 49 \
-        --delivery-uuid <from altool> --write --confirm-version 1.2.8 --submit
+
+The first command ends non-zero naming `screenshots` as not written once the
+record exists — the expected report until the second has run, since App
+Store Connect seeds the version with the previous release's sets. The Mac is
+the same three commands with `--platform MAC_OS` and its own build number.
 
 ## The whole release, every channel, in order
 
@@ -465,8 +479,9 @@ each step it lists.
    first (uploads into a discarded edit), then the same without `--dry-run`.
    The notes file is the blockquote of that version's section in
    `docs/PLAY_LISTING.md`, under 500 characters.
-5. Wait for each Apple build to reach VALID, then `submit-version.py` per
-   platform as above.
+5. Wait for each Apple build to reach VALID, then per platform, as above:
+   `submit-version.py --write` to prepare the record, `push-screenshots.py
+   --write` for the release's sets, `submit-version.py --write --submit`.
 6. Tag LAST: an annotated `v<version>` at the build commit, pushed; the release
    workflow builds the desktop assets into a DRAFT. Upload the sideload APK
    from `~/Library/Android/bibletext-dist`, compare its SHA after download,

@@ -146,7 +146,7 @@ vet failure, and a red run has sat unnoticed for a day before. The step named
 `check-support-contact.py`, `check-release-identity.py`,
 `check-product-identity.py`, `check-mac-store-config.py`,
 `check-min-os-versions.py` and `check-public-surfaces.py`, the Python unit
-tests under `scripts/audio-align` and `msstore`, and
+tests under `scripts/audio-align`, `msstore` and `appstore`, and
 `check-repository-hygiene.py` last — so a local run of
 `check-repository-hygiene.py` on its own proves nothing.
 `releasing_doc_test.go` holds this list to the step.
@@ -267,21 +267,34 @@ without `--dry-run`, with `--status completed`.
 
 ### 7 — Submit to Apple
 
-Wait for each build to reach `VALID`, then per platform:
+Wait for each build to reach `VALID`, then per platform, three commands in
+this order:
 
 ```
 python3 appstore/submit-version.py --platform IOS --build N --delivery-uuid U \
-    --write --confirm-version <v> --accept-inherited-screenshots --submit
+    --write --confirm-version <v>
+python3 appstore/push-screenshots.py --platform IOS --write --confirm-version <v>
+python3 appstore/submit-version.py --platform IOS --build N --delivery-uuid U \
+    --write --confirm-version <v> --submit
 ```
 
-The release's screenshots go up first, with `appstore/push-screenshots.py
---platform <P> --write --confirm-version <v>` once the version record exists
-(read-only without those flags), and `--accept-inherited-screenshots` is for
-the release that knowingly does not upload any.
-Screenshots are the one field a release may knowingly inherit, and saying so
-explicitly is how that stays a decision rather than an oversight. Apple takes
-**one version per platform** into review at a time, so check nothing else is in
-review on that platform first — `release-status.py` prints it.
+The first creates the version record, attaches the build and writes the
+text, then ends non-zero with `NOT SUBMITTED` naming `screenshots`: App Store
+Connect seeds a new version with the previous release's sets, and that is
+the report to expect at this point; anything else in that list is a real
+gap. The second replaces the sets with the release's own — read-only without
+`--write`, so run it that way first and read the plan. The third submits, and
+the preflight it runs now finds the screenshots written for this release.
+The order is not negotiable: a version placed in a review submission no
+longer takes image edits, so the screenshots cannot follow the submission,
+and `push-screenshots.py` refuses a version past that point.
+
+`--accept-inherited-screenshots` on the last command is for the release that
+knowingly uploads no screenshots. Screenshots are the one field a release may
+knowingly inherit, and saying so explicitly is how that stays a decision
+rather than an oversight. Apple takes **one version per platform** into
+review at a time, so check nothing else is in review on that platform first —
+`release-status.py` prints it.
 
 ### 8 — Finish the GitHub release
 
@@ -403,6 +416,7 @@ Re-running from the top is usually wrong. These steps are not idempotent:
 | `altool --upload-app` | rejects a duplicate build number | bump Build, rebuild |
 | `play-publish.py upload` | rejects a used versionCode | bump Build, rebuild |
 | `submit-version.py --submit` | 409 — already in review | remove from review in the console |
+| `push-screenshots.py --write` | leaves a set that holds the files, reorders one that holds them out of order, replaces the rest | re-run once a FAILED image or a refusal is understood |
 | `msstore/submit.py create` | 409 — one pending submission at a time | `msstore/submit.py abort`, then create |
 | `git tag` push | tags are immutable | use the next number; the old one is spent |
 | `gh release edit --draft=false` | `/releases/latest` has already moved | attach what is missing, fast |
