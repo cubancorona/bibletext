@@ -141,6 +141,8 @@ real files; `*_test.go` files are omitted.
 | `title_bar_windows.go` + `title_bar_other.go` | Windows: re-sends the title bar's immersive dark mode after any rebuild that moves the variant, through the window's native handle, and repaints the caption (a no-op elsewhere) |
 | `sheet_reopen.go` | The reopen seam: a showing sheet registers how it comes back; a light/dark rebuild takes the top sheet's closure, drains, and reopens it in the new palette. Lists which sheets reopen and which close, and why |
 | `sheet_refit.go` | The refit seam: a showing desktop sheet registers how it sizes itself to the window, and the window's root (`windowRoot`) runs every registration when the window changes size, so no sheet is left at the size it opened at. Not on phones and tablets, where the soft keyboard changes the content's height |
+| `sheet_fit.go` | Sizing a sheet to the screen: the height clamp and scroll pairing a card needs to stay on screen, the cap that keeps a centred desktop sheet below the header (`headerClearance`, `clearOfHeader`), and `sheetArea`, the part of the canvas a phone sheet is sized to, which gives back the soft keyboard the iOS driver counts as the bottom inset |
+| `sheet_timers.go` | `sheetAfter`, the one seam the sheets' watchdogs and deferred work are armed through, which the host tests hold: under the test driver a timer's `fyne.Do` runs on the timer's own goroutine |
 | `state.go` | `AppState`, navigation/search/history logic, UI hooks, `loadPhase` machine, `newSearchDebouncer` |
 | `reading_state.go` | Reading-position + history persistence (translation/book/chapter/scroll anchor) in `fyne.Preferences` |
 | `history.go` | Recent-chapters history list/bar |
@@ -239,7 +241,8 @@ prose.
 | `ai_keystore.go` | On-device key storage (`keyStore`): Apple Keychain on **iOS only**, preferences elsewhere (incl. macOS); env-var override |
 | `ai_secure_store_darwin.go` / `ai_secure_store_other.go` | `//go:build ios` Keychain adapter (AfterFirstUnlock, backup-restorable) / its no-op twin everywhere else |
 | `ai_settings.go` | AI-study settings sheet (provider pick, key paste, Test key) |
-| `status_line.go` | The status line under each key field in Settings: the key's state in one colour and size, broken between words to the width of its row |
+| `key_test_progress.go` | What a Test key has shown so far — its wait, the model it reports, its verdict — held on `AppState` per key section and painted by whichever Settings sheet is showing, so the line outlives the sheet a light/dark reopen drains |
+| `status_line.go` | A line of text in one colour, size and style, broken between words to the width of its row: the status line under each key field in Settings, and the translation picker's row names, publishers and captions |
 | `key_actions_row.go` | The Paste / Test key / Clear row under each key field in Settings: one line where it fits, the button that would run past the card on a line of its own where it does not |
 | `wrap_check.go` | The Settings switches (footnotes, shared notes, red letter): widget.Check with a label that breaks between words where its row is too narrow for it |
 | `ai_panel.go` | AI answer panel (prose result, Report button, disclosure line) |
