@@ -31,14 +31,15 @@ single-instance code, and one version names one tree on every channel).
 | OARS | every attribute none | no chat, purchases, ads, location or accounts, and no information about the reader reaches us; Scripture and narration come from their providers, and the AI feature sends the reader's own questions to the provider the reader chose under the reader's own account |
 | Summary | `Read and study Scripture` | at most 35 characters, no full stop, no article, so it fits a software centre's one-line listing; the Play short description fails all three |
 | Categories | `Education;Spirituality;` | the registry ties Spirituality to Education |
-| Licences | `project_license` Apache-2.0; `metadata_license` CC0-1.0; LICENSE, NOTICE and the font licences installed under `share/licenses/<id>` | NOTICE now names Noto Color Emoji, which every patched build embeds |
+| Licences | `project_license` Apache-2.0; `metadata_license` CC0-1.0. The AppImage carries LICENSE, NOTICE and the font licences under `usr/share/doc/bibletext/` (`scripts/build-appimage.sh`); the snap declares `license: Apache-2.0` in `snapcraft.yaml` and, since it stages only the executable and the ALSA configuration, bundles no licence files | NOTICE now names Noto Color Emoji, which every patched build embeds |
 | Developer name | `cubancorona`, the copyright holder in LICENSE and NOTICE | AppStream forbids a domain-style name; **open: a personal name or "BibleText" instead** |
 | Icon | scaled from `cmd/bibletext/Icon.png`, the shipped mark | the same source the Windows tiles now use; `icon/full.png` is the retired dove |
 | Brand colours | `#2F4C86` light, `#7CA0E4` dark | the app's own accents (`theme.go`) |
 | Screenshots | four window captures under `docs/screenshots/linux/`, referenced by commit-pinned raw URLs; the `<screenshots>` block is left out until `screenshots.ref` names that commit | captured 16 Sep 2026 by `.github/workflows/linux-screenshots.yml`; replace them by dispatching it again (docs/screenshots/README.md) |
 
 **Open for the account holder:** the developer name; the metadata licence
-(CC0-1.0 or FSFAP); and the NOTICE line for the emoji font (added, factual).
+(a permissive licence for the metadata itself, as AppStream asks; CC0-1.0
+today); and the NOTICE line for the emoji font (added, factual).
 
 ## Accounts, names and policies
 
@@ -46,6 +47,7 @@ single-instance code, and one version names one tree on every channel).
 | --- | --- |
 | Snap Store | An Ubuntu One account. The name **`bibletext` was REGISTERED on 18 September 2026** through the web console at snapcraft.io/register-snap, which needs no Linux host — the `snapcraft register` CLI is one way to do it, not the only one. The console states the review window as **up to 30 days**, not the two working days recorded here before; the form forces Private at registration and locks all three visibility radios while the review is pending. **In practice the listing is PUBLIC anyway** — verified 19 September 2026: `bibletext` resolves from the unauthenticated store API, has a store page and appears in search. See "Snap Store: what is left" below; the real gate is the absence of a stable release, not visibility. The credential is now DONE: exported on 18 September 2026 with `snapcraft export-login --snaps bibletext --acls package_access,package_push,package_update,package_release --expires 2027-09-18`, and its content set as the repository secret `SNAPCRAFT_STORE_CREDENTIALS`. It is a scoped, revocable macaroon rather than a password, and it verifies as account `cubancorona` with exactly those four permissions. **Setting it changed what a release does**: `release.yml` gates the publish step on that secret, so the next tag now uploads BOTH the amd64 and the arm64 snap to the `edge` channel by itself instead of leaving them artifacts. Promotion beyond edge is still by hand after a desktop test, and the listing stays Private until the name review clears. The export needs a Linux host because `snapcraft` runs only there; the one used was a local Ubuntu 24.04 arm64 VM. |
 | AppImageHub | A PR to `AppImage/appimage.github.io` adding `data/BibleText` containing the repository URL, after the first release that carries the AppImage. |
+
 ## Product identity
 
 | Field | Value |
@@ -97,9 +99,9 @@ AppImage and uploads it with the tarball, and a snap job publishes to the
 `linux-stores.yml` has run green on every push touching its inputs since
 16 September 2026, and on both architectures since 19 September 2026: the
 snap layout and both smokes are proven on runners. What a runner cannot
-prove — audio in each sandbox, the window coming forward on a link, the file
-dialogs — is listed under "Snap Store: what is left" and in order-of-work
-step 5.
+prove — audio inside the snap's confinement, the window coming forward on a
+link, the file dialogs — is listed under "Snap Store: what is left" and in
+order-of-work step 5.
 
 ## Snap Store: what is left
 
@@ -213,10 +215,10 @@ own publishing action recommends.
    produces the tarball, the AppImage and its `.zsync`, and the snap on
    `edge`.
 5. A Linux desktop for an afternoon (an x86_64 machine or a cloud desktop;
-   an ARM virtual machine cannot run these): narration audible in each
-   sandbox, the window coming to the front on a `bibletext:` link under
-   GNOME and KDE, the browsers' prompts, the snap's file dialog, HiDPI, and
-   the FUSE mount on a stock desktop.
+   an ARM virtual machine cannot run these): narration audible from the
+   snap and from the AppImage, the window coming to the front on a
+   `bibletext:` link under GNOME and KDE, the browsers' prompts, the snap's
+   file dialog, HiDPI, and the FUSE mount on a stock desktop.
 6. Publish: promote the snap to `stable`, and the AppImageHub PR, which the
    first release carrying an AppImage (1.2.10) unblocked. The download page
    links the AppImage as of 1.2.10, and `scripts/check-public-surfaces.py`

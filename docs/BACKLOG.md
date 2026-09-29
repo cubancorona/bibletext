@@ -2243,7 +2243,7 @@ Deferred with it:
   with the Windows and macOS halves of the same decision.
 - **oto 3.5 on Linux (pure-Go PulseAudio)** — needs Go 1.25 across CI and
   the release; would drop `libasound2-dev`, the snap's ALSA plumbing and the
-  fallback question in both sandboxes.
+  fallback question inside the snap's confinement.
 - **Snap preferences under the per-revision data dir** — a revert restores
   older notes; `XDG_CONFIG_HOME=$SNAP_USER_COMMON/.config` would opt out.
 
