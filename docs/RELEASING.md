@@ -121,8 +121,8 @@ Eight coupled surfaces have to name the same version, each test-enforced:
    and the write refuses without it; neither may be byte-identical to another
    release's
 7. `linux/releases.toml` — a new `[[release]]` block, then
-   `go run ./cmd/linuxmeta render`, which rewrites both AppStream files, the
-   desktop entry and `snap/snapcraft.yaml`
+   `go run ./cmd/linuxmeta render`, which rewrites the AppStream metainfo,
+   the desktop entries and `snap/snapcraft.yaml`
 8. `msstore/metadata/en-gb/whats-new-<v>.txt` — the Microsoft Store's What's
    New, tracked: at most 1,500 characters, nothing but visible text, spaces
    and line breaks, and not a copy of another release's; required from 1.2.16

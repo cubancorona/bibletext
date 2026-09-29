@@ -461,9 +461,10 @@ each step it lists.
    without it (docs/WINDOWS_STORE_LISTING.md, "What's new"); add the Play
    notes section to `docs/PLAY_LISTING.md`; prepend a
    `[[release]]` block to `linux/releases.toml` and run
-   `go run ./cmd/linuxmeta render`, which rewrites the two AppStream MetaInfo
-   files and `snap/snapcraft.yaml` — `cmd/linuxmeta` refuses a newest entry that
-   is not the desktop ledger's version, so CI goes red without it.
+   `go run ./cmd/linuxmeta render`, which rewrites the AppStream metainfo,
+   the desktop entries and `snap/snapcraft.yaml` — `cmd/linuxmeta` refuses a
+   newest entry that is not the desktop ledger's version, so CI goes red
+   without it.
    `scripts/check-release-identity.py` and the review-notes tests must pass.
 2. Push main; wait for CI on all three OSes. Nothing is uploaded before it is green.
 3. Build the three store artifacts from that commit, ONE AT A TIME —

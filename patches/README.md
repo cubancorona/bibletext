@@ -513,11 +513,10 @@ job.
 
 Removal, only when Fyne adopts scenes upstream: drop the `.patch`; in
 `setup-fyne-patch.sh` drop `PATCH_SCENE`, its `patch` line and its verify
-block; drop its entry in `fynePatchesNotOnLinux` (`cmd/linuxmeta/main.go`) and
-the patch checks in `scene_manifest_test.go`. Keep the manifest script, with
-`SCENE_DELEGATE_CLASS` set to Fyne's own scene delegate. Then prove link
-delivery again on a device: upstream's delegate must still reach the category
-in `share_link_ios.go`.
+block; drop the patch checks in `scene_manifest_test.go`. Keep the manifest
+script, with `SCENE_DELEGATE_CLASS` set to Fyne's own scene delegate. Then
+prove link delivery again on a device: upstream's delegate must still reach
+the category in `share_link_ios.go`.
 
 ## Patch 9: iOS cancelled touches (`fyne-2.7.4-ios-touch-cancel.patch`)
 
