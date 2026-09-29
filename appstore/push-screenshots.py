@@ -21,11 +21,13 @@ committed with its MD5; every image is polled until assetDeliveryState is
 COMPLETE, the only state that means the image will show (an off-size or
 alpha-carrying upload is accepted and then sits at FAILED); and the set is
 then ordered. The sets are read back and compared with the files, and the run
-succeeds only when count, order and checksums all agree. A set that already
-holds exactly the files, all COMPLETE, is left alone, and one that holds them
-in another order is only reordered. ``--keep-existing`` appends after the
-images a set already holds instead, and refuses a set that would exceed the
-ten images a set may carry.
+succeeds only when count, order and checksums all agree; a checksum App Store
+Connect has not yet reported on an image it already calls COMPLETE is read
+again, a bounded number of times, before it counts as a mismatch. A set that
+already holds exactly the files, all COMPLETE, is left alone, and one that
+holds them in another order is only reordered. ``--keep-existing`` appends
+after the images a set already holds instead, and refuses a set that would
+exceed the ten images a set may carry.
 
 This tool never selects a build, creates a version, writes text metadata or
 submits anything for review. The version record must already exist;
@@ -88,6 +90,15 @@ EDITABLE_STATES = {
 # an image that never arrives ends the run with a message rather than a hang.
 POLL_INTERVAL = 5.0
 POLL_LIMIT = 600.0
+
+# App Store Connect reports an image COMPLETE a moment before it reports the
+# image's sourceFileChecksum, so a read-back that follows the last poll
+# closely can find a null checksum on a delivered image that a read seconds
+# later shows in full. A null checksum on a COMPLETE image is read again,
+# this many times this far apart, before it counts as a mismatch. A checksum
+# that is present and wrong is a mismatch on the read that finds it.
+READBACK_ATTEMPTS = 6
+READBACK_INTERVAL = 10.0
 
 # Replaced by the tests so a poll runs without waiting.
 sleep = time.sleep
@@ -579,24 +590,49 @@ def write_set(client, localization_id, item):
 
 
 def verify_set(client, item, set_id, order):
-    """Read the set back and hold it to the files: count, order, checksums."""
+    """Read the set back and hold it to the files: count, order, checksums.
+
+    A null checksum on an image the read reports COMPLETE is the one
+    disagreement that is waited on: the set is read again, up to
+    READBACK_ATTEMPTS reads READBACK_INTERVAL apart, and only a checksum
+    still null on the last read is a mismatch. Everything else that
+    disagrees — the count, the order, a state other than COMPLETE, a
+    checksum that is present and wrong — is a mismatch on the read that
+    finds it, and no further read is made.
+    """
     expected = [(record["id"],) + summary(record)[::2] for record in item.kept]
     expected += [(screenshot_id, image.name, image.checksum)
                  for screenshot_id, image in zip(order[len(item.kept):], item.images)]
-    records = set_screenshots(client, set_id)
-    print(f"\n{item.display_type} read back: {len(records)} images")
-    problems = []
-    if len(records) != len(expected):
-        problems.append(f"holds {len(records)} images, expected {len(expected)}")
-    for number, (want, record) in enumerate(zip(expected, records), 1):
-        name, _size, checksum, state = summary(record)
-        print(f"    {number:2}. {name}  md5 {checksum}  {state}")
-        if record.get("id") != want[0] or name != want[1]:
-            problems.append(f"position {number} is {name}, expected {want[1]}")
-        if checksum != want[2]:
-            problems.append(f"{name}: checksum {checksum}, expected {want[2]}")
-        if state != "COMPLETE":
-            problems.append(f"{name}: assetDeliveryState {state}")
+    for attempt in range(1, READBACK_ATTEMPTS + 1):
+        records = set_screenshots(client, set_id)
+        print(f"\n{item.display_type} read back: {len(records)} images")
+        problems, unreported = [], []
+        if len(records) != len(expected):
+            problems.append(f"holds {len(records)} images, expected {len(expected)}")
+        for number, (want, record) in enumerate(zip(expected, records), 1):
+            name, _size, checksum, state = summary(record)
+            print(f"    {number:2}. {name}  md5 {checksum}  {state}")
+            if record.get("id") != want[0] or name != want[1]:
+                problems.append(f"position {number} is {name}, expected {want[1]}")
+            if state != "COMPLETE":
+                problems.append(f"{name}: assetDeliveryState {state}")
+            if checksum is None:
+                unreported.append((name, want[2]))
+            elif checksum != want[2]:
+                problems.append(f"{name}: checksum {checksum}, expected {want[2]}")
+        if unreported and not problems and attempt < READBACK_ATTEMPTS:
+            print(f"    no checksum yet on {', '.join(name for name, _ in unreported)}; "
+                  f"reading again in {READBACK_INTERVAL:.0f} s "
+                  f"(read {attempt} of {READBACK_ATTEMPTS})")
+            sleep(READBACK_INTERVAL)
+            continue
+        if unreported and not problems:
+            problems += [f"{name}: no checksum after {READBACK_ATTEMPTS} reads "
+                         f"{READBACK_INTERVAL:.0f} s apart, expected {want}"
+                         for name, want in unreported]
+        else:
+            problems += [f"{name}: checksum None, expected {want}" for name, want in unreported]
+        break
     if problems:
         raise SystemExit(
             f"read-back mismatch for {item.display_type}:\n"

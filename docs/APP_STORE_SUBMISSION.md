@@ -236,12 +236,14 @@ files with the preflight's own size and alpha rules, resolves the version, its
 nothing without `--write` and an exact `--confirm-version`. A write replaces
 each set in file order, waits for every image to reach `assetDeliveryState`
 COMPLETE, then reads the sets back and compares count, order and MD5
-checksums before it reports success; `--keep-existing` appends instead. The
-version record must already exist (`submit-version.py --write` creates it),
-and the upload comes before `--submit`: a version placed in a review
-submission no longer takes image edits, and the tool refuses one. The three
-commands in order are under "Final read-back and submission" below and in
-docs/RELEASING.md, stage 7.
+checksums before it reports success — reading a set again, a bounded number
+of times, while App Store Connect has yet to report a checksum on an image it
+already calls COMPLETE, since the checksum can arrive a moment after the
+state; `--keep-existing` appends instead. The version record must already
+exist (`submit-version.py --write` creates it), and the upload comes before
+`--submit`: a version placed in a review submission no longer takes image
+edits, and the tool refuses one. The three commands in order are under "Final
+read-back and submission" below and in docs/RELEASING.md, stage 7.
 
 ### The 1.2.17 set — captured 28 September 2026, not yet uploaded
 

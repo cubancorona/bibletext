@@ -69,9 +69,11 @@ SIZES = {"APP_IPHONE_67": (1320, 2868), "APP_IPAD_PRO_3GEN_129": (2064, 2752),
 SUBDIRS = {"APP_IPHONE_67": "", "APP_IPAD_PRO_3GEN_129": "ipad13", "APP_DESKTOP": "mac"}
 VERSION_ID = "v-0001"
 LOCALIZATION_ID = "loc-0001"
-# More polls of one image than any scripted delivery needs: a poll loop that
-# has lost its exit fails the test here rather than hanging the suite.
+# More polls of one image, and more listings of one set, than any scripted
+# delivery or read-back needs: a loop that has lost its exit fails the test
+# here rather than hanging the suite.
 POLL_CAP = 25
+LISTING_CAP = 25
 
 
 class FakeStore:
@@ -103,6 +105,7 @@ class FakeStore:
         self.failure = failure
         self.calls: list = []
         self.polls: dict = {}
+        self.listings: dict = {}
         self.uploads: dict = {}
         self.tamper = None
         self.connected = 0
@@ -169,6 +172,10 @@ class FakeStore:
         if match:
             for entry in self.sets.values():
                 if entry["id"] == match.group(1):
+                    n = self.listings.get(entry["id"], 0)
+                    self.listings[entry["id"]] = n + 1
+                    if n >= LISTING_CAP:
+                        self.test.fail(f"{path} listed more than {LISTING_CAP} times")
                     records = [dict(r, attributes=dict(r["attributes"])) for r in entry["screenshots"]]
                     if self.tamper:
                         self.tamper(records)
@@ -254,7 +261,8 @@ class Harness(unittest.TestCase):
 
     def setUp(self):
         self.m = load_module()
-        self.m.sleep = lambda seconds: None
+        self.sleeps: list = []
+        self.m.sleep = self.sleeps.append
         # The clock advances 100 s per read, so a poll that never completes
         # reaches the tool's limit within a few rounds rather than spinning
         # through POLL_LIMIT real seconds with sleep stubbed out.
@@ -558,6 +566,13 @@ class Writing(Harness):
                 out.append(("PATCH", target.rsplit("/", 1)[1]))
         return out
 
+    def readbacks(self, fake, display: str = "APP_IPHONE_67") -> int:
+        """How many times the set was listed after its reorder: its read-backs."""
+        ordered = [n for n, call in enumerate(fake.calls) if call[0] == "PATCH"
+                   and call[1].endswith(f"set-{display}/relationships/appScreenshots")]
+        return sum(1 for call in fake.calls[ordered[0]:] if call[0] == "GET"
+                   and call[1] == f"/v1/appScreenshotSets/set-{display}/appScreenshots?limit=200")
+
     def test_the_sequence_delete_reserve_put_commit_order_poll_readback(self):
         fake = self.arrange()
         code, out = self.write()
@@ -697,7 +712,7 @@ class Writing(Harness):
         self.assertLess(fake.polls["new-0"], 20)
         self.assertNotIn(("PATCH", "order set-APP_IPHONE_67"), self.kinds(fake.calls))
 
-    def test_a_read_back_checksum_mismatch_is_a_non_zero_exit(self):
+    def test_a_read_back_checksum_that_is_wrong_is_a_mismatch_at_once(self):
         fake = self.arrange()
 
         def tamper(records):
@@ -708,6 +723,74 @@ class Writing(Harness):
         message = self.refused("--write", "--confirm-version", self.version)
         self.assertIn("read-back mismatch for APP_IPHONE_67", message)
         self.assertIn("02-shot.png: checksum 000", message)
+        self.assertEqual(self.readbacks(fake), 1, "a checksum that is present and wrong is not read again")
+        self.assertNotIn(self.m.READBACK_INTERVAL, self.sleeps)
+
+    def test_a_checksum_not_yet_reported_on_a_complete_image_is_read_again(self):
+        # App Store Connect reports an image COMPLETE a moment before it
+        # reports the image's checksum; the read-back waits for it rather
+        # than calling a delivered image a mismatch.
+        fake = self.arrange()
+        reads = []
+
+        def report_the_checksum_late(records):
+            if not records[-1]["id"].startswith("new-"):
+                return
+            reads.append(len(reads))
+            if len(reads) <= 2:
+                for record in records:
+                    if record["attributes"]["fileName"] == "02-shot.png":
+                        record["attributes"]["sourceFileChecksum"] = None
+        fake.tamper = report_the_checksum_late
+        code, out = self.write()
+        self.assertEqual(code, 0)
+        self.assertEqual(self.readbacks(fake), 3, "read until the checksum is there")
+        self.assertEqual(self.readbacks(fake, "APP_IPAD_PRO_3GEN_129"), 1)
+        self.assertIn("no checksum yet on 02-shot.png; reading again in 10 s (read 1 of 6)", out)
+        self.assertIn("[OK] read-back APP_IPHONE_67", out)
+        self.assertIn("every set read back as uploaded", out)
+        # Every wait — the two polls' and the two re-reads' — went through
+        # the seam; nothing slept for real.
+        self.assertEqual(self.sleeps, [self.m.POLL_INTERVAL, self.m.POLL_INTERVAL,
+                                       self.m.READBACK_INTERVAL, self.m.READBACK_INTERVAL])
+
+    def test_a_checksum_never_reported_is_a_mismatch_after_the_bound(self):
+        fake = self.arrange()
+
+        def never_report_a_checksum(records):
+            for record in records:
+                if record["id"].startswith("new-"):
+                    record["attributes"]["sourceFileChecksum"] = None
+        fake.tamper = never_report_a_checksum
+        self.assertEqual((self.m.READBACK_ATTEMPTS, self.m.READBACK_INTERVAL), (6, 10.0))
+        message = self.refused("--write", "--confirm-version", self.version)
+        self.assertIn("read-back mismatch for APP_IPHONE_67", message)
+        self.assertIn("01-shot.png: no checksum after 6 reads 10 s apart, expected "
+                      + self.md5("APP_IPHONE_67", "01-shot.png"), message)
+        self.assertIn("02-shot.png: no checksum after 6 reads 10 s apart", message)
+        self.assertEqual(self.readbacks(fake), 6)
+        self.assertEqual(self.sleeps.count(self.m.READBACK_INTERVAL), 5)
+        # The first set's mismatch ends the run before the next is read back.
+        self.assertEqual(self.readbacks(fake, "APP_IPAD_PRO_3GEN_129"), 0)
+
+    def test_a_null_checksum_on_an_image_that_is_not_complete_is_a_mismatch_at_once(self):
+        # Only a delivered image is waited for; a null checksum beside any
+        # other disagreement is reported with it on the first read.
+        fake = self.arrange()
+
+        def tamper(records):
+            for record in records:
+                if record["id"].startswith("new-") and record["attributes"]["fileName"] == "02-shot.png":
+                    record["attributes"]["sourceFileChecksum"] = None
+                    record["attributes"]["assetDeliveryState"] = {"state": "UPLOAD_COMPLETE",
+                                                                  "errors": []}
+        fake.tamper = tamper
+        message = self.refused("--write", "--confirm-version", self.version)
+        self.assertIn("02-shot.png: assetDeliveryState UPLOAD_COMPLETE", message)
+        self.assertIn("02-shot.png: checksum None, expected " + self.md5("APP_IPHONE_67", "02-shot.png"),
+                      message)
+        self.assertEqual(self.readbacks(fake), 1)
+        self.assertNotIn(self.m.READBACK_INTERVAL, self.sleeps)
 
     def test_a_read_back_with_a_missing_image_is_a_non_zero_exit(self):
         fake = self.arrange()
