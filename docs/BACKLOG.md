@@ -7,6 +7,40 @@ the date — and says what shipped and why. Closed entries earn their place: thi
 is the file to read before re-investigating a defect that may already be fixed,
 and a fix's reasoning is the expensive half to reconstruct.
 
+## Include the API.Bible key in the Flathub build — TOP PRIORITY for 1.2.18
+
+Decided 29 September 2026: every channel is to include the project's
+API.Bible key, and Flathub is the one that does not. The 1.2.17 submission goes
+in keyless as built (a tag cannot take a key after the fact); the next release
+closes the gap.
+
+Flathub compiles from public source on its own builders with no secrets, so
+whatever its build links in has to live somewhere public: the manifest, the
+tagged tree, or a release asset. The candidate is a **keyed source archive**
+published by the release run beside the binaries — the tagged tree plus one
+generated file carrying the encoded key, produced by CI from the encrypted
+secret the desktop builders already use — with the Flathub manifest's source
+being that archive (URL + sha256, as rymdport's manifest does with its
+vendored tarball) rather than the git tag. The encoded value then sits in a
+public text file: a change of degree from today, where every shipped binary
+already contains it and `docs/API_KEY_HANDLING.md` calls it recoverable, but
+a lowering of the barrier from disassembly to a search, and one that the
+policy must be rewritten to permit (the archive becomes a named "final
+artefact") and that the owed API.Bible conversation (rotation, permitted
+client architecture, rate limits) should accompany. Alternatives weighed:
+fetching the encoded key from the site at first launch (same exposure, plus a
+network dependency at first run); a proxy service holding the key for every
+platform (the only design that keeps the key out of the client, and what the
+provider's guidance asks for — a service to fund and run, so not a release
+item); staying keyless on Flathub (rejected: parity).
+
+To settle before building: what the archive contains and how it is verified
+against the tag; how the release stage publishes it and records its sha256;
+the manifest change (the account holder writes the manifest, so the change
+must be small and the bot's tag-pattern checker must become a release-asset
+checker); the policy rewrite; and how CI proves the keyed Flatpak carries the
+key without ever printing it.
+
 ## The release pipeline: what still waits on something it need not
 
 A standing entry, not a one-off: every release is the moment to ask what
