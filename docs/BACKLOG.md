@@ -47,6 +47,19 @@ watchdogs run, and the reopened sheet spans what the first did; and
 `TestSheetAreaGivesTheKeyboardBack` for the rule itself. Device check:
 `docs/VISUAL_TESTS.md`, V15.
 
+## The Go to picker's reopen raised a put-away number pad — FIXED 29 September 2026
+
+The picker's reopen put the caret back in the verse field that had it,
+which on a phone raises the keyboard, without the gate a page field's caret
+has (`pageCaretComesBack`): Fyne still counts a field focused after the
+reader has put the keyboard away with Back on Android, so a light/dark change
+then threw the number pad back over the reopened grids unasked. The capture
+now asks the same question the page fields ask, from the keyboard report read
+at the take, before the gate's unfocus; the typed verse comes back either way,
+and on desktop, where focus raises nothing, so does the caret. On iOS a
+focused number pad cannot be put away, so the two states never diverged
+there. Held by `TestAppearanceChangeDropsTheCaretAndPutsItBack`.
+
 ## A light/dark change with a sheet open left the app half in each theme — FIXED 27 September 2026
 
 With a sheet open — Go to, Verse of the day, the translation list, Settings —

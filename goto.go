@@ -574,8 +574,16 @@ func gotoPickerModalFrom(state *AppState, withVerse bool, seed gotoPickerSeed) {
 		if endEntry != nil {
 			again.end = endEntry.Text
 		}
+		// The caret comes back on the terms a page field's does
+		// (pageCaretComesBack): always on desktop, and on a phone only while
+		// its keyboard was up. Fyne still counts a field focused after the
+		// reader has put the keyboard away — Back on Android — and focusing
+		// the rebuilt field would raise the number pad over the reopened
+		// grids unasked. The typed verse comes back either way. Read here,
+		// at the take, before the gate's unfocus takes the keyboard down.
 		if focused := cnv.Focused(); focused != nil && startEntry != nil {
-			again.focused = focused == startEntry || focused == endEntry
+			again.focused = (focused == startEntry || focused == endEntry) &&
+				pageCaretComesBack(state.appearance.mobile, softKeyboardShown)
 			again.focusEnd = focused == endEntry
 		}
 		return func() { gotoPickerModalFrom(state, withVerse, again) }

@@ -556,6 +556,11 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       the sheet, not on the page (`sheetArea`). Flip Verse of the day and Go
       to the same way; the Go to card's verse row sits where it did before
       the flip.
+- [ ] Android, API 30+: open Go to, tap the verse field so the number pad
+      rises, type a digit, press Back so the pad hides with the field still
+      focused, then flip dark mode from the quick-settings tile: the picker
+      comes back with the digit and the pad stays down. Flip with the pad
+      up instead: it comes back over the reopened picker, as before.
 - [ ] iOS and Android, flip with Verse of the day or Go to open: the verses
       must not flash over the sheet for a frame. If they do, the frame is
       the OLD palette's chapter — the rebuild un-suppresses the pane before

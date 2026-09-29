@@ -1045,6 +1045,7 @@ func TestAppearanceChangeDropsTheCaretAndPutsItBack(t *testing.T) {
 	for _, field := range []string{"verse", "end"} {
 		t.Run("Go to, the "+field+" field", func(t *testing.T) {
 			h := newAppearanceHarness(t, true)
+			softKeyboard(t, true) // a phone, typing a verse
 			cnv := h.state.window.Canvas()
 			sheet := h.openGotoWithVerse("16", "18")
 			cnv.Focus(findNumberEntry(sheet, field))
@@ -1055,6 +1056,43 @@ func TestAppearanceChangeDropsTheCaretAndPutsItBack(t *testing.T) {
 			}
 			if want := findNumberEntry(again, field); want == nil || cnv.Focused() != fyne.Focusable(want) {
 				t.Errorf("the caret must be back in the reopened %s field; focused %v", field, cnv.Focused())
+			}
+		})
+	}
+	// The picker's fields keep the caret on the terms the page's do: on a
+	// phone whose keyboard was put away (Back on Android leaves the field
+	// focused) the rebuilt field is not focused, since focusing it would
+	// raise the number pad over the reopened grids unasked; on desktop, where
+	// focus raises nothing, the caret is back. The typed verse comes back
+	// either way.
+	for _, tc := range []struct {
+		name          string
+		mobile, shown bool
+		back          bool
+	}{
+		{"Go to, a phone whose keyboard was put away", true, false, false},
+		{"Go to, desktop, which has no soft keyboard", false, false, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newAppearanceHarness(t, tc.mobile)
+			softKeyboard(t, tc.shown)
+			cnv := h.state.window.Canvas()
+			sheet := h.openGotoWithVerse("16", "")
+			cnv.Focus(findNumberEntry(sheet, "verse"))
+			if cnv.Focused() == nil {
+				t.Fatal("control: the verse field must hold the caret")
+			}
+			h.flip()
+			again := h.top()
+			if again == nil || again == sheet {
+				t.Fatal("the picker must come back")
+			}
+			twin := findNumberEntry(again, "verse")
+			if twin == nil || twin.Text != "16" {
+				t.Fatalf("the reopened picker's verse field reads %v, want the typed 16", twin)
+			}
+			if got := cnv.Focused() == fyne.Focusable(twin); got != tc.back {
+				t.Errorf("the caret came back to the verse field: %v, want %v (focused %T)", got, tc.back, cnv.Focused())
 			}
 		})
 	}
