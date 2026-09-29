@@ -576,7 +576,10 @@ class Create(Stubbed):
     def test_a_run_writes_the_packages_and_the_notes_and_nothing_else(self):
         self.arrange("9.9.9.0")
         self.quiet(self.m.cmd_create, self.tmp, "Immediate")
-        self.assertEqual(self.issued, ["POST", "PUT", "BLOB", "GET"])
+        # The account read first, for the published packages the new ones
+        # must not clash with, then the copy, the update, the upload and the
+        # read-back.
+        self.assertEqual(self.issued, ["GET", "POST", "PUT", "BLOB", "GET"])
         sent = copy.deepcopy(self.clone)
         sent.pop("fileUploadUrl")
 
@@ -647,9 +650,24 @@ class Create(Stubbed):
         self.assertNotIn("PUT", self.issued)
 
     def test_a_reused_file_name_never_reaches_the_put(self):
-        self.arrange(ledger_version())
-        self.assertIn("already a package", self.refused(self.m.cmd_create, self.tmp, "Immediate"))
+        # A higher version under the kept package's own name: the copy the
+        # POST returned holds that name, and the account read before it
+        # (which this fixture answers with nothing published) did not.
+        self.arrange("9.9.9.0")
+        self.pkgs[0]["fileName"] = self.clone["applicationPackages"][0]["fileName"]
+        message = self.refused(self.m.cmd_create, self.tmp, "Immediate")
+        self.assertIn("already a package", message)
+        self.assertIn("Rename the file to BibleText-9.9.9.0-x64.msix", message)
         self.assertNotIn("PUT", self.issued)
+
+    def test_a_kept_name_at_a_kept_version_is_a_re_upload_not_a_rename(self):
+        # The same name at the same version is the published release again;
+        # the version guard speaks, and no rename to the name it already has
+        # is offered.
+        self.arrange(ledger_version())
+        message = self.refused(self.m.cmd_create, self.tmp, "Immediate")
+        self.assertIn("not above the kept", message)
+        self.assertNotIn("Rename", message)
 
     def test_the_id_is_saved_before_the_response_is_judged(self):
         self.arrange("9.9.9.0")
@@ -660,6 +678,112 @@ class Create(Stubbed):
         self.m.api = lambda method, path, tok, payload=None: copy.deepcopy(clone)
         self.assertIn("no fileUploadUrl", self.refused(self.m.cmd_create, self.tmp, "Immediate"))
         self.assertEqual(saved[0]["submissionId"], "S", "the id must be on disk before the response is judged")
+
+
+class PublishedNames(Stubbed):
+    """A published submission keeps every package it was sent, and the Store
+    refuses a new package under a file name already there. preflight and
+    create each read that list and refuse the clash while the server holds
+    nothing, naming the file to rename and the name to give it."""
+
+    RAW = "BibleText-Windows-{arch}.msix"   # the workflow's names before they carried the version
+
+    def published(self, names: dict[str, str], version: str = "1.0.0.0") -> list[dict]:
+        return [{"fileName": name, "fileStatus": "Uploaded", "version": version, "architecture": arch,
+                 "id": f"P-{arch}"} for arch, name in sorted(names.items())]
+
+    def serve(self, kept: list[dict]):
+        """An api() whose account carries a published submission P holding
+        `kept`, and whose POST copies it; every method issued is recorded."""
+        self.issued = []
+        clone = clone_fixture()
+        clone["applicationPackages"] = copy.deepcopy(kept)
+        self.put = None
+
+        def api(method, path, tok, payload=None):
+            self.issued.append((method, path.rsplit("/", 1)[-1]))
+            if method == "GET" and path.endswith(self.m.STORE_ID):
+                return {"pendingApplicationSubmission": None,
+                        "lastPublishedApplicationSubmission": {"id": "P"}}
+            if method == "GET" and path.endswith("/submissions/P"):
+                return {"id": "P", "status": "Published", "applicationPackages": copy.deepcopy(kept)}
+            if method == "POST":
+                return copy.deepcopy(clone)
+            if method == "PUT":
+                self.put = copy.deepcopy(payload)
+                return copy.deepcopy(payload)
+            if method == "GET" and "/submissions/" in path:
+                return copy.deepcopy(self.put)
+            self.fail(f"unexpected {method} {path}")
+        self.m.api = api
+        self.m.http = lambda method, url, *a, **k: (self.issued.append(("BLOB", "")) or (201, {}, b""))
+
+    def packages(self, name=None) -> str:
+        d = os.path.join(self.tmp, "packages")
+        os.makedirs(d, exist_ok=True)
+        for arch in ("x64", "arm64"):
+            synthetic_msix(d, arch, name=name.format(arch=arch) if name else None)
+        return d
+
+    def test_the_name_is_the_version_the_package_carries_then_its_architecture(self):
+        self.assertEqual(self.m.package_file_name("1.2.17.0", "arm64"), "BibleText-1.2.17.0-arm64.msix")
+        # The fixtures' default name is the workflow's, so every test that
+        # passes on a default name passes on the name a release will have.
+        path = synthetic_msix(self.tmp, "x64")
+        self.assertEqual(os.path.basename(path), self.m.package_file_name(ledger_version(), "x64"))
+
+    def test_preflight_refuses_a_name_the_published_submission_holds(self):
+        self.serve(self.published({"x64": self.RAW.format(arch="x64"), "arm64": self.RAW.format(arch="arm64")}))
+        self.write_notes()
+        message = self.refused(self.m.cmd_preflight, self.packages(self.RAW))
+        # The clash, and the rename that clears it, for the first file read.
+        self.assertIn("BibleText-Windows-arm64.msix is already a package in the published submission", message)
+        self.assertIn(f"Rename the file to BibleText-{ledger_version()}-arm64.msix", message)
+        self.assertEqual(self.issued, [("GET", self.m.STORE_ID), ("GET", "P")])
+
+    def test_preflight_passes_names_that_carry_the_version(self):
+        # Control: the same published list, and files named as the workflow
+        # names them now, are no clash.
+        self.serve(self.published({"x64": self.RAW.format(arch="x64"), "arm64": self.RAW.format(arch="arm64")}))
+        self.write_notes()
+        pkgs, out = self.quiet(self.m.cmd_preflight, self.packages())
+        self.assertEqual(sorted(p["fileName"] for p in pkgs),
+                         sorted(self.m.package_file_name(ledger_version(), a) for a in ("x64", "arm64")))
+        self.assertIn("packages in the published submission (2)", out)
+        self.assertIn("BibleText-Windows-x64.msix", out)
+
+    def test_create_refuses_the_clash_before_anything_is_created(self):
+        self.serve(self.published({"x64": self.RAW.format(arch="x64"), "arm64": self.RAW.format(arch="arm64")}))
+        self.write_notes()
+        d = self.packages(self.RAW)
+        # preflight is stubbed away, as the other create tests do, so the
+        # refusal proved here is create's own, not preflight's.
+        self.m.cmd_preflight = lambda d: self.m.read_packages(d)
+        message = self.refused(self.m.cmd_create, d, "Immediate")
+        self.assertIn("already a package", message)
+        self.assertIn(f"Rename the file to BibleText-{ledger_version()}-arm64.msix", message)
+        self.assertNotIn("POST", [m for m, _ in self.issued])
+        self.assertIsNone(self.m.load_state().get("submissionId"))
+
+    def test_create_goes_on_with_names_that_carry_the_version(self):
+        # Control: the same published list; the workflow's names are new to
+        # it, and the run reaches the copy, the update and the upload.
+        self.serve(self.published({"x64": self.RAW.format(arch="x64"), "arm64": self.RAW.format(arch="arm64")}))
+        self.write_notes()
+        d = self.packages()
+        self.m.cmd_preflight = lambda d: self.m.read_packages(d)
+        self.quiet(self.m.cmd_create, d, "Immediate")
+        self.assertEqual([m for m, _ in self.issued], ["GET", "GET", "POST", "PUT", "BLOB", "GET"])
+        sent = [p["fileName"] for p in self.put["applicationPackages"] if p["fileStatus"] == "PendingUpload"]
+        self.assertEqual(sorted(sent), sorted(self.m.package_file_name(ledger_version(), a) for a in ("x64", "arm64")))
+
+    def test_a_published_list_with_nothing_in_common_is_no_bar(self):
+        # A kept package under the older convention at a lower version, as
+        # the account stood before 1.2.16 was uploaded under the raw names.
+        self.serve(self.published({"x64": "BibleText-1.2.14.0-x64.msix"}, version="1.2.14.0"))
+        self.write_notes()
+        pkgs, _ = self.quiet(self.m.cmd_preflight, self.packages())
+        self.assertEqual(len(pkgs), 2)
 
 
 class CommitGate(Stubbed):

@@ -33,6 +33,16 @@ releaseNotes in the API, from the release's own file under msstore/metadata/
 clone brought it, and both the body sent and the submission read back are held
 to that.
 
+PACKAGE NAMES. A new submission is a copy of the last published one, packages
+included, and the Store refuses a new package whose file name is already in
+the copy -- after the submission has been created, so the refusal leaves a
+draft to abort and files to rename before a second attempt. The workflow
+names each package BibleText-<version>-<arch>.msix, the four-part version the
+manifest carries and then the architecture (package_file_name), so no two
+releases' packages share a name. preflight and create each read the published
+submission's package list and refuse a local file whose name is in it, naming
+the rename, before anything is created.
+
 WHAT THIS DELIBERATELY DOES NOT DO. It does not mark the previously published
 package PendingDelete. That costs nothing -- the Store serves the highest
 applicable version, so 1.2.13.0 wins over 1.2.10.0 -- and it keeps a
@@ -424,6 +434,63 @@ def read_packages(d: str) -> list[dict]:
     return out
 
 
+def package_file_name(version: str, arch: str) -> str:
+    """The name the workflow gives a package (msstore.yml): the four-part
+    version the manifest carries, then the architecture. A published
+    submission keeps every package it was ever sent and the Store refuses a
+    new one under a file name it already holds, so a name without the version
+    uploads once and never again; this one is new with every release."""
+    return f"BibleText-{version}-{arch}.msix"
+
+
+def published_packages(tok: str, app: dict) -> list[dict]:
+    """The packages of the last published submission, which a new submission
+    is cloned from and so the names a new package must not repeat. Empty
+    before the first publish, which this tool never makes."""
+    published = (app.get("lastPublishedApplicationSubmission") or {}).get("id")
+    if not published:
+        return []
+    sub = api("GET", f"/applications/{STORE_ID}/submissions/{published}", tok)
+    return list(sub.get("applicationPackages") or [])
+
+
+def assert_new_beside(pkgs: list[dict], kept: list[dict]):
+    """Refuse a new package the kept ones would defeat.
+
+    The rollback story rests on "the Store serves the highest applicable
+    version, so the new package wins over the kept one". That is only true if
+    the new one IS higher, and both sides are in hand here, so it is asserted
+    rather than assumed -- per architecture, since the kept x64 package says
+    nothing about an arm64 one. And a new package must not share a fileName
+    with a kept entry: the Store refuses the upload, and verify_staged keys
+    the server's list by fileName, so two entries under one name would
+    collapse to whichever the server listed last. The version is judged
+    first: a file that repeats a kept name at a kept version is a re-upload
+    of a published release, which no rename mends. The name refusal names the
+    clash and the rename that clears it, the workflow's own name for the file.
+    """
+    def vtuple(v):
+        return tuple(int(x) for x in (v or "0").split("."))
+    for p in pkgs:
+        for k in kept:
+            if k.get("architecture") == p["architecture"] and k.get("fileStatus") == "Uploaded" \
+                    and vtuple(p["version"]) <= vtuple(k.get("version")):
+                raise SystemExit(f"{p['fileName']} is {p['version']}, not above the kept "
+                                 f"{k.get('version')} {k.get('architecture')} package; the Store "
+                                 f"would keep serving the old one")
+    kept_names = {k.get("fileName"): k for k in kept if k.get("fileName")}
+    for p in pkgs:
+        k = kept_names.get(p["fileName"])
+        if k is None:
+            continue
+        raise SystemExit(
+            f"{p['fileName']} is already a package in the published submission "
+            f"({k.get('version') or '?'} {k.get('architecture') or '?'}, {k.get('fileStatus')}), and the "
+            f"Store refuses a new package under a name it holds. Rename the file to "
+            f"{package_file_name(p['version'], p['architecture'])}, the version it carries and then its "
+            f"architecture, which is the name the workflow gives it, and run again.")
+
+
 def cmd_preflight(d: str):
     pkgs = read_packages(d)
     print(f"packages in {d}:")
@@ -457,6 +524,16 @@ def cmd_preflight(d: str):
                 f"\nSTOP: a pending submission {pending.get('id')} exists that this automation did not create.\n"
                 f"It may be a draft started in Partner Center. Deleting it would destroy that work with no undo.\n"
                 f"Clear or finish it in the console, then re-run.")
+    # The names and versions the new packages will sit beside, read from the
+    # submission create would copy, so a clash is reported here, with nothing
+    # on the server, rather than by the Store after a submission exists.
+    kept = published_packages(tok, app)
+    print(f"\npackages in the published submission ({len(kept)}):")
+    for k in kept:
+        print(f"  {str(k.get('fileName')):34} {str(k.get('architecture')):6} {str(k.get('version')):10} "
+              f"{k.get('fileStatus')}")
+    assert_new_beside(pkgs, kept)
+    print(f"  each new package is above the kept one of its architecture and under a name none of them has")
     return pkgs
 
 
@@ -512,6 +589,10 @@ def cmd_create(d: str, publish_mode: str):
     # run while there is still nothing on the server to abort.
     notes = read_release_notes(desktop_version())
     tok = token()
+    # Held here as well as in preflight, against the published submission the
+    # POST is about to copy: a clash found after the POST leaves a submission
+    # that must be aborted by hand before anything can be created again.
+    assert_new_beside(pkgs, published_packages(tok, api("GET", f"/applications/{STORE_ID}", tok)))
 
     print("\n==> creating the submission (a copy of the last published one)")
     sub = api("POST", f"/applications/{STORE_ID}/submissions", tok)
@@ -556,27 +637,11 @@ def cmd_create(d: str, publish_mode: str):
         for p in cloned_pkgs:
             print(f"      {p.get('fileName')}  {p.get('version')}  {p.get('architecture')}  {p.get('fileStatus')}")
 
-        # The rollback story rests on "the Store serves the highest applicable
-        # version, so the new package wins over the kept one". That is only
-        # true if the new one IS higher, and both sides are in hand here, so
-        # it is asserted rather than assumed -- per architecture, since the
-        # kept x64 package says nothing about an arm64 one. And a new package
-        # must not share a fileName with a kept entry: verify_staged keys the
-        # server's list by fileName, and two entries under one name collapse
-        # to whichever the server listed last.
-        def vtuple(v):
-            return tuple(int(x) for x in (v or "0").split("."))
-        kept_names = {p.get("fileName") for p in cloned_pkgs}
-        for p in pkgs:
-            if p["fileName"] in kept_names:
-                raise SystemExit(f"{p['fileName']} is already a package in the published submission; "
-                                 f"a new package needs a new name")
-            for k in cloned_pkgs:
-                if k.get("architecture") == p["architecture"] and k.get("fileStatus") == "Uploaded" \
-                        and vtuple(p["version"]) <= vtuple(k.get("version")):
-                    raise SystemExit(f"{p['fileName']} is {p['version']}, not above the kept "
-                                     f"{k.get('version')} {k.get('architecture')} package; the Store "
-                                     f"would keep serving the old one")
+        # Against the packages the copy actually carries, which are what the
+        # PUT below sends back beside the new ones. The read of the published
+        # submission above is the same list a moment earlier; this is the
+        # list in hand.
+        assert_new_beside(pkgs, cloned_pkgs)
 
         body = copy.deepcopy(sub)
         body.pop("fileUploadUrl", None)
