@@ -131,7 +131,9 @@ before.
 - **Android's Study with AI popup** (Explain / Analyze context / Analyze
   translation) floated on in the old palette over the re-lit page; `setStyle`
   now closes it when the text or paper colour moves, and `hide` and
-  `suppress` close it with the Dialog.
+  `suppress` close it with the Dialog. Seen on the Android 15 emulator
+  (29 September 2026): 1.2.16 keeps the white popup over the dark page
+  four seconds after the switch; this build closes it.
 - **The Search tab's Find** is rendered from state (`renderFind`), in
   `buildSearchResultsView`'s order, and a landing repaints through the tab on
   the canvas (`state.repaintFind`): a rebuild mid-Find had brought back the
