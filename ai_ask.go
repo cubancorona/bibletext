@@ -153,7 +153,7 @@ func promptAskQuestionWith(state *AppState, selectedText, question string) {
 	cw := cnv.Size().Width
 	ch := cnv.Size().Height
 	topY := float32(0)
-	if pos, sz := cnv.InteractiveArea(); sz.Height > 0 {
+	if pos, sz := sheetArea(cnv); sz.Height > 0 {
 		topY = pos.Y
 		ch = sz.Height
 	}

@@ -136,7 +136,7 @@ func showAudioSourceMenu(state *AppState) {
 		x = 0
 	}
 	y := float32(28)
-	if pos, _ := cnv.InteractiveArea(); pos.Y > 0 {
+	if pos, _ := sheetArea(cnv); pos.Y > 0 {
 		y = pos.Y + 16
 	}
 	// Non-modal, so it opens where it is put: below the header on a desktop

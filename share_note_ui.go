@@ -110,18 +110,18 @@ func (s *noteEntrySlot) settle(relayout func()) {
 //     sheet holds these and runs them itself (docs/BACKLOG.md, "Deferred-UI
 //     timers under the test driver"); it is the sheets' shared timer seam
 //     (sheetAfter, sheet_timers.go) under a name of its own;
-//   - noteSheetArea is the part of the canvas the phone sheet may cover, the
-//     canvas's interactive area. On a phone that is the canvas less its safe
-//     insets and, while the keyboard is up, less the keyboard too (the mobile
-//     driver counts the keyboard as a bottom inset); the test driver has no
-//     keyboard and small fixed insets of its own, so a test that needs a
-//     device's insets or a keyboard sets them here.
+//   - noteSheetArea is the part of the canvas the phone sheet may cover:
+//     the canvas less its safe insets, with the soft keyboard given back
+//     where the driver has counted it as an inset (sheetArea,
+//     sheet_fit.go); the test driver has no keyboard and small fixed insets
+//     of its own, so a test that needs a device's insets or a keyboard sets
+//     them here.
 var (
 	noteEntryNative  = nativeNoteEntrySupported
 	noteEntryFrameTo = setNativeNoteEntryFrameFromObject
 	noteEntryTyped   = nativeNoteEntryText
 	noteSheetAfter   = func(d time.Duration, f func()) { sheetAfter(d, f) }
-	noteSheetArea    = func(c fyne.Canvas) (fyne.Position, fyne.Size) { return c.InteractiveArea() }
+	noteSheetArea    = func(c fyne.Canvas) (fyne.Position, fyne.Size) { return sheetArea(c) }
 )
 
 // noteEntryOnChanged is installed by the compose sheet while it is open, and

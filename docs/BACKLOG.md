@@ -7,6 +7,46 @@ the date — and says what shipped and why. Closed entries earn their place: thi
 is the file to read before re-investigating a defect that may already be fixed,
 and a fix's reasoning is the expensive half to reconstruct.
 
+## A phone sheet reopened under the keyboard ended at the keyboard's top — FIXED 29 September 2026
+
+Every phone sheet with a field — the note composer, Settings, Ask, and the
+Go to picker — and Verse of the day take their height from the canvas's
+interactive area as they open, and none is sized again for the soft keyboard.
+Fyne's iOS driver reports a raised keyboard as the whole bottom inset
+(`getDevicePadding`: `inset.bottom = keyboardHeight`) and moves it back only
+from the later `UIKeyboardWillHide` notification. An ordinary open never reads
+the area that way, since the keyboard comes up after the sheet is sized; the
+light/dark reopen did. `observeAppearance` unfocuses the canvas, rebuilds and
+runs the sheet's reopen in one call, before the keyboard's notification has
+moved the inset, and with the composer's native field the keyboard is not even
+taken down (the driver resigns its own input view, not the note's). The
+reopened sheet was sized to the canvas less the keyboard and stayed that
+short once the keyboard went down — the composer's refit keeps the foot gap
+it opened with, Settings is sized again only on a status change, and Ask and
+Verse of the day never — so the page showed beneath it, and a tap there closed
+the non-modal composer or Ask sheet with what had been typed. Reached by a
+change made in the foreground (a scheduled switch, Control Centre on an iPad)
+or reconciled on return while a field had the keyboard; Android never counts
+its keyboard in the insets, so only iOS showed it.
+
+**The fix** (`sheetArea`, `sheet_fit.go`). Every phone sheet reads the area
+through `sheetArea`, which remembers the canvas's bottom inset from each read
+made with no keyboard in it — the keyboard reported down by the observers
+(`softKeyboardShown`) and the inset no deeper than a safe inset can be — and,
+on a read that finds the inset deeper than that foot, gives back the
+difference. The keyboard's own height is not subtracted, since the driver
+replaces the safe inset with it rather than adding to it. The driver's inset
+and the observers' report travel by different paths, so either can be a frame
+ahead; a keyboard-deep inset is never remembered as the foot, and a read made
+before any foot is known gives the area as reported, which is what every read
+gave before. `noteSheetArea`, the composer's seam, defaults to it. Held by
+`TestPhoneSheetsReopenedUnderTheKeyboardKeepTheirFoot`: each of the six sheets
+opened on a phone with the keyboard down, its box read, the keyboard raised in
+the inset and in the report, the window flipped, the keyboard dropped and the
+watchdogs run, and the reopened sheet spans what the first did; and
+`TestSheetAreaGivesTheKeyboardBack` for the rule itself. Device check:
+`docs/VISUAL_TESTS.md`, V15.
+
 ## A light/dark change with a sheet open left the app half in each theme — FIXED 27 September 2026
 
 With a sheet open — Go to, Verse of the day, the translation list, Settings —
@@ -539,6 +579,9 @@ on that canvas would take, and the field follows the slot. The card keeps the
 top and the gap at the canvas's foot it opened with, and never reads its height
 from the interactive area again, which shrinks while the keyboard is up: fitted
 to the keyboard's top, the card would stay short once the keyboard went down.
+The one open that reads the area while the keyboard is up, the light/dark
+reopen, reads it through `sheetArea` (`sheet_fit.go`), which gives the
+keyboard back (below, "A phone sheet reopened under the keyboard").
 The native field is told only where the slot settles (`noteEntrySlot.settle`),
 not the rects the relayout passes through on the way, since the popup lays its
 content out before it moves it and each push reaches the view on the main
@@ -2285,7 +2328,10 @@ confirm is in `docs/VISUAL_TESTS.md` V15:
   a sheet opened at the new size sits; and by a test that the picker's
   sentences are pinned at 1280x800, follow the last row at 1280x440, and
   are pinned again, unchanged, when that window grows. Divergence: phones
-  and tablets keep their sheets sized to the safe area (`sheetMaxHeight`);
+  and tablets keep their sheets sized to the safe area (`sheetMaxHeight`),
+  read through `sheetArea` so that a raised keyboard, which the iOS driver
+  counts as the bottom inset, never shortens a sheet the light/dark reopen
+  brings back (below, "A phone sheet reopened under the keyboard");
   at their cap
   those start above the header's controls rather than below the header,
   and a tablet sheet a little shorter than its cap could still start

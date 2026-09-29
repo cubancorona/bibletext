@@ -1061,7 +1061,7 @@ func showVerseOfDayCard(state *AppState, d dayVerse) {
 	popup.Show()
 	registerSheetReopen(state, popup, func() { showVerseOfDayCard(state, d) })
 	fitVOTD := func() {
-		pos, sz := cnv.InteractiveArea()
+		pos, sz := sheetArea(cnv)
 		maxH := clearOfHeader(sheetMaxHeight(cnv.Size().Height, pos.Y, sz.Height, pos.Y+16),
 			cnv.Size().Height, headerClearance(state))
 		h := scrollingSheetHeight(

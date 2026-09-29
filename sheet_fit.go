@@ -83,6 +83,71 @@ func (squeezeWidthLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
 // zero or negative height would collapse it entirely.
 const minSheetHeight = 160
 
+// canvasArea is the canvas's interactive area as the driver reports it: the
+// canvas less the device's safe insets, and on iOS less a raised soft keyboard
+// as well (sheetArea). A seam, so a host test can give the test driver's
+// canvas — which has no insets and no keyboard — a phone's insets and a
+// keyboard.
+var canvasArea = func(c fyne.Canvas) (fyne.Position, fyne.Size) { return c.InteractiveArea() }
+
+// keyboardFootFloor separates a safe inset from a keyboard: no device's
+// bottom safe inset — the home indicator's 34pt, a tablet's 20pt, an Android
+// navigation bar's — is near it, and no soft keyboard is under it.
+const keyboardFootFloor = 100
+
+// keyboardFreeFoot is the canvas's bottom inset as last read with no
+// keyboard in it: what a phone sheet leaves uncovered at the canvas's foot.
+// UI goroutine only.
+var keyboardFreeFoot struct {
+	known bool
+	foot  float32
+}
+
+// sheetArea is the part of the canvas a phone sheet is sized to: the
+// interactive area, with the soft keyboard given back.
+//
+// THE BUG THIS EXISTS TO PREVENT. Fyne's iOS driver reports a raised keyboard
+// as the canvas's whole bottom inset (getDevicePadding: inset.bottom =
+// keyboardHeight), and moves it back only from the later WillHide
+// notification. A sheet sized from the interactive area while the keyboard
+// was up therefore ended at the keyboard's top and stayed that short once the
+// keyboard went down, the page showing beneath it: no phone sheet is sized
+// again for the keyboard, on purpose. An ordinary open never reads the area
+// that way, since the keyboard comes up after the sheet is sized, but the
+// light/dark reopen does: the appearance gate unfocuses the canvas, rebuilds
+// and reopens the sheet on top in one call, before the keyboard's WillHide
+// has moved the inset, and the note composer's native field keeps its
+// keyboard up through the reopen altogether. Android never counts its
+// keyboard in the insets (the activity is not adjustResize'd), so there the
+// area is the area.
+//
+// The keyboard's height is not subtracted back, because the driver replaces
+// the safe inset with it rather than adding to it. Instead the keyboard-free
+// foot is remembered from every read made with no keyboard in the inset —
+// the keyboard reported down (softKeyboardShown, from the keyboard
+// observers) and the inset no deeper than a safe inset can be — and a read
+// that finds the inset deeper than that foot takes the foot instead. The
+// driver's inset and the observers' report travel by different paths, so
+// either can be a frame ahead of the other; the two conditions together keep
+// a keyboard-deep inset from ever being remembered as the foot, and a read
+// made before any keyboard-free foot is known gives the area as reported,
+// which is what every read gave before this rule.
+func sheetArea(c fyne.Canvas) (fyne.Position, fyne.Size) {
+	pos, sz := canvasArea(c)
+	if sz.Height <= 0 {
+		return pos, sz
+	}
+	foot := c.Size().Height - pos.Y - sz.Height
+	if !softKeyboardShown && foot <= keyboardFootFloor {
+		keyboardFreeFoot.known, keyboardFreeFoot.foot = true, foot
+		return pos, sz
+	}
+	if keyboardFreeFoot.known && foot > keyboardFreeFoot.foot {
+		sz.Height = c.Size().Height - pos.Y - keyboardFreeFoot.foot
+	}
+	return pos, sz
+}
+
 // sheetMaxHeight is the tallest a sheet pinned at y=top may be and still sit
 // wholly on screen.
 //

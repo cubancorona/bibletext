@@ -2167,7 +2167,7 @@ func pickerCanvas(state *AppState) fyne.Canvas {
 // book column plus the chapter grid) capped to the screen.
 func pickerSplitSize(cnv fyne.Canvas) (float32, float32) {
 	w, h := float32(560), float32(560)
-	if _, sz := cnv.InteractiveArea(); sz.Width > 0 {
+	if _, sz := sheetArea(cnv); sz.Width > 0 {
 		w = sz.Width - 24
 		if w > 640 {
 			w = 640
@@ -2202,7 +2202,7 @@ func pickerSplitSize(cnv fyne.Canvas) (float32, float32) {
 func pickerVerseSize(cnv fyne.Canvas) (float32, float32) {
 	cw := cnv.Size().Width
 	ch := cnv.Size().Height
-	if _, sz := cnv.InteractiveArea(); sz.Height > 0 {
+	if _, sz := sheetArea(cnv); sz.Height > 0 {
 		ch = sz.Height
 	}
 	w := cw - 24

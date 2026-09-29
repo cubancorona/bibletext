@@ -363,7 +363,7 @@ func gotoPickerModalFrom(state *AppState, withVerse bool, seed gotoPickerSeed) {
 		popup = widget.NewPopUp(card, cnv)
 		w, h := pickerVerseSize(cnv)
 		topY := float32(12)
-		if pos, _ := cnv.InteractiveArea(); pos.Y > 0 {
+		if pos, _ := sheetArea(cnv); pos.Y > 0 {
 			topY = pos.Y + 12
 		}
 		popup.Resize(fyne.NewSize(w, h))
@@ -476,7 +476,7 @@ func gotoPickerModalFrom(state *AppState, withVerse bool, seed gotoPickerSeed) {
 			}
 			w, h = pickerVerseSize(cnv)
 			topY = 12
-			if pos, _ := cnv.InteractiveArea(); pos.Y > 0 {
+			if pos, _ := sheetArea(cnv); pos.Y > 0 {
 				topY = pos.Y + 12
 			}
 			popup.Resize(fyne.NewSize(w, h))

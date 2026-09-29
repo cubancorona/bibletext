@@ -941,7 +941,7 @@ func showAISettings(state *AppState) {
 		x = 0
 	}
 	y := float32(28)
-	if pos, _ := cnv.InteractiveArea(); pos.Y > 0 {
+	if pos, _ := sheetArea(cnv); pos.Y > 0 {
 		y = pos.Y + 16
 	}
 
@@ -952,7 +952,7 @@ func showAISettings(state *AppState) {
 		if popup == nil || card == nil {
 			return
 		}
-		pos, sz := cnv.InteractiveArea()
+		pos, sz := sheetArea(cnv)
 		// On a desktop window the cap also keeps the centred sheet below the
 		// header (headerClearance).
 		h := scrollingSheetHeight(

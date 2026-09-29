@@ -547,6 +547,15 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       (iOS: the native field) the note comes back whole and the keyboard
       types into it. Long-press a Go to verse field for Cut/Copy/Paste and
       flip under the menu: the picker comes back, the menu does not.
+- [ ] iPhone and iPad, flip with the keyboard up and then put the keyboard
+      away: in the note composer (tap the iPad keyboard's dismiss key), in
+      Ask (tap a blank part of the card) and in Settings with a key field
+      focused (the keyboard goes down with the flip), the reopened sheet
+      still reaches the home indicator once the keyboard is down — no page
+      showing beneath it, and a tap on the lower part of the screen lands on
+      the sheet, not on the page (`sheetArea`). Flip Verse of the day and Go
+      to the same way; the Go to card's verse row sits where it did before
+      the flip.
 - [ ] iOS and Android, flip with Verse of the day or Go to open: the verses
       must not flash over the sheet for a frame. If they do, the frame is
       the OLD palette's chapter — the rebuild un-suppresses the pane before
