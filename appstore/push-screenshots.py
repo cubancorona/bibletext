@@ -16,14 +16,16 @@ sorted name order, which is what their numbers are for. Each platform's
 version string comes from its own ledger, as push-metadata reads it.
 
 A write replaces each set: every image the set holds is deleted, each local
-file is reserved, uploaded in the byte ranges App Store Connect names,
-committed with its MD5, the set is ordered, and every image is polled until
-assetDeliveryState is COMPLETE, the only state that means the image will
-show (an off-size or alpha-carrying upload is accepted and then sits at
-FAILED). The sets are then read back and compared with the files, and the run
-succeeds only when count, order and checksums all agree. ``--keep-existing``
-appends after the images a set already holds instead, and refuses a set that
-would exceed the ten images a set may carry.
+file is reserved, uploaded in the byte ranges App Store Connect names and
+committed with its MD5; every image is polled until assetDeliveryState is
+COMPLETE, the only state that means the image will show (an off-size or
+alpha-carrying upload is accepted and then sits at FAILED); and the set is
+then ordered. The sets are read back and compared with the files, and the run
+succeeds only when count, order and checksums all agree. A set that already
+holds exactly the files, all COMPLETE, is left alone, and one that holds them
+in another order is only reordered. ``--keep-existing`` appends after the
+images a set already holds instead, and refuses a set that would exceed the
+ten images a set may carry.
 
 This tool never selects a build, creates a version, writes text metadata or
 submits anything for review. The version record must already exist;
@@ -95,7 +97,8 @@ LocalImage = collections.namedtuple(
     "LocalImage", "name path size checksum width height")
 LocalSet = collections.namedtuple("LocalSet", "display_type directory images")
 SetPlan = collections.namedtuple(
-    "SetPlan", "display_type directory set_id existing deletions kept images unchanged")
+    "SetPlan",
+    "display_type directory set_id existing deletions kept images unchanged reorder")
 
 
 # Deliberately no environment override: a forgotten ASC_VERSION must never
@@ -393,7 +396,15 @@ def summary(record):
 
 
 def build_plan(local_sets, remote, keep_existing):
-    """Per display type: what exists, what would be deleted, what goes up."""
+    """Per display type: what exists, what would be deleted, what goes up.
+
+    A set is matched to the files by name and checksum. One that already
+    holds exactly these files in this order, all delivered, has nothing to
+    gain from being deleted and uploaded again; one that holds them all
+    delivered but in another order needs only the order, which is where a
+    run that stopped at the reorder is picked up. Anything else, a name or
+    checksum that differs or an image that is not COMPLETE, is replaced.
+    """
     plan = []
     for local in local_sets:
         set_id, existing = remote.get(local.display_type, (None, []))
@@ -404,19 +415,22 @@ def build_plan(local_sets, remote, keep_existing):
                     f"--keep-existing would leave {local.display_type} with {total} "
                     f"images; a set may hold at most {SET_CAPACITY}"
                 )
-            deletions, kept = [], list(existing)
+            plan.append(SetPlan(local.display_type, local.directory, set_id, existing,
+                                [], list(existing), local.images, False, False))
+            continue
+        held = [summary(record)[::2] for record in existing]
+        wanted = [(image.name, image.checksum) for image in local.images]
+        delivered = all(summary(record)[3] == "COMPLETE" for record in existing)
+        if delivered and held == wanted:
+            plan.append(SetPlan(local.display_type, local.directory, set_id, existing,
+                                [], [], local.images, True, False))
+        elif delivered and collections.Counter(held) == collections.Counter(wanted):
+            by_file = {summary(record)[::2]: record for record in existing}
+            plan.append(SetPlan(local.display_type, local.directory, set_id, existing,
+                                [], [by_file[file] for file in wanted], [], False, True))
         else:
-            deletions, kept = list(existing), []
-        # A set that already holds exactly these files, all delivered, has
-        # nothing to gain from being deleted and uploaded again.
-        unchanged = (
-            not keep_existing
-            and [summary(record)[::2] for record in existing]
-            == [(image.name, image.checksum) for image in local.images]
-            and all(summary(record)[3] == "COMPLETE" for record in existing)
-        )
-        plan.append(SetPlan(local.display_type, local.directory, set_id, existing,
-                            deletions, kept, local.images, unchanged))
+            plan.append(SetPlan(local.display_type, local.directory, set_id, existing,
+                                list(existing), [], local.images, False, False))
     return plan
 
 
@@ -432,6 +446,12 @@ def print_plan(plan):
                 print(f"    {number:2}. {name}  {size} B  md5 {checksum}  {state}")
         if item.unchanged:
             print("  already holds these files in this order, all COMPLETE; nothing to do")
+            continue
+        if item.reorder:
+            print("  already holds these files, all COMPLETE, in another order; "
+                  "would only reorder them:")
+            for number, record in enumerate(item.kept, 1):
+                print(f"    {number:2}. {summary(record)[0]}")
             continue
         if item.deletions:
             print(f"  would delete all {len(item.deletions)} existing images")
@@ -538,20 +558,23 @@ def wait_for_delivery(client, display_type, screenshot_ids):
 
 
 def write_set(client, localization_id, item):
-    """Replace or extend one set. Returns (set id, expected ids in order)."""
+    """Replace, extend or reorder one set. Returns (set id, expected ids in order)."""
     set_id = item.set_id or create_set(client, localization_id, item.display_type)
     for record in item.deletions:
         written(client, "DELETE", f"/v1/appScreenshots/{record['id']}", None,
                 f"delete {summary(record)[0]}")
         print(f"[OK] deleted {summary(record)[0]}")
     created = [upload_image(client, set_id, image) for image in item.images]
+    # The order is written last, once every new image is COMPLETE: the set is
+    # not touched again while App Store Connect is still processing uploads,
+    # and a FAILED image ends the run before the set is reordered around it.
+    wait_for_delivery(client, item.display_type, created)
     order = [record["id"] for record in item.kept] + created
     written(client, "PATCH", f"/v1/appScreenshotSets/{set_id}/relationships/appScreenshots",
             {"data": [{"type": "appScreenshots", "id": screenshot_id}
                       for screenshot_id in order]},
             f"order {item.display_type}")
     print(f"[OK] ordered {item.display_type}: {len(order)} images")
-    wait_for_delivery(client, item.display_type, created)
     return set_id, order
 
 

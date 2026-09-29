@@ -469,6 +469,20 @@ class ReadOnlyPlan(Harness):
         self.assertIn("already holds these files in this order, all COMPLETE", out)
         self.assertNotIn("would delete all 2", out)
 
+    def test_a_set_holding_the_files_in_another_order_would_only_be_reordered(self):
+        names = self.write_set("APP_IPHONE_67", 2)
+        self.write_set("APP_IPAD_PRO_3GEN_129", 2)
+        held = [FakeStore.record(f"held-{n}", name, 10, self.md5("APP_IPHONE_67", name))
+                for n, name in enumerate(names)]
+        held.reverse()
+        fake = self.store(sets={"APP_IPHONE_67": held})
+        code, out = self.run_tool()
+        self.assertEqual(code, 0)
+        self.assertIn("in another order; would only reorder them:\n"
+                      "     1. 01-shot.png\n     2. 02-shot.png\n", out)
+        self.assertNotIn("would delete all 2", out)
+        self.assertTrue(all(call[0] == "GET" for call in fake.calls))
+
 
 class Writing(Harness):
     def arrange(self, **kwargs):
@@ -515,14 +529,20 @@ class Writing(Harness):
         ])
         gets = [call[1] for call in fake.calls if call[0] == "GET"]
         order_at = [n for n, call in enumerate(fake.calls) if call[0] == "PATCH" and "/relationships/" in call[1]]
-        polls = [n for n, call in enumerate(fake.calls)
-                 if call[0] == "GET" and re.fullmatch(r"/v1/appScreenshots/new-\d+", call[1])]
+
+        def polls_of(pattern):
+            return [n for n, call in enumerate(fake.calls)
+                    if call[0] == "GET" and re.fullmatch(pattern, call[1])]
+        iphone_polls, ipad_polls = polls_of(r"/v1/appScreenshots/new-[01]"), polls_of(r"/v1/appScreenshots/new-2")
         readbacks = [n for n, call in enumerate(fake.calls)
                      if call[0] == "GET" and call[1].endswith("/appScreenshots?limit=200")
                      and n > order_at[0]]
-        self.assertTrue(polls and min(polls) > order_at[0], "polling starts after the reorder")
+        self.assertTrue(iphone_polls and max(iphone_polls) < order_at[0],
+                        "the iPhone set is ordered only after its last image is COMPLETE")
+        self.assertTrue(ipad_polls and order_at[0] < min(ipad_polls) and max(ipad_polls) < order_at[1],
+                        "the iPad set is ordered only after its last image is COMPLETE")
         self.assertEqual(len(readbacks), 2, "each set is read back once")
-        self.assertTrue(min(readbacks) > max(polls), "read-back follows the last poll")
+        self.assertTrue(min(readbacks) > order_at[1], "read-back follows the last reorder")
         self.assertEqual(fake.polls, {"new-0": 2, "new-1": 2, "new-2": 2},
                          "each image is polled until COMPLETE")
         self.assertIn("every set read back as uploaded", out)
@@ -582,11 +602,48 @@ class Writing(Harness):
         self.assertIn("APP_IPHONE_67 read back: 4 images", out)
 
     def test_a_failed_delivery_is_a_non_zero_exit_naming_the_error(self):
-        self.arrange(delivery=("UPLOAD_COMPLETE", "FAILED"),
-                     failure=[{"code": "IMAGE_TOO_SMALL", "description": "the image is 1x1"}])
+        fake = self.arrange(delivery=("UPLOAD_COMPLETE", "FAILED"),
+                            failure=[{"code": "IMAGE_TOO_SMALL", "description": "the image is 1x1"}])
         message = self.refused("--write", "--confirm-version", self.version)
-        self.assertIn("assetDeliveryState FAILED", message)
+        self.assertIn("APP_IPHONE_67 01-shot.png: assetDeliveryState FAILED", message)
         self.assertIn("IMAGE_TOO_SMALL: the image is 1x1", message)
+        self.assertIn("The set is now partial", message)
+        # The poll ends the run: the set is neither reordered nor read back.
+        self.assertNotIn(("PATCH", "order set-APP_IPHONE_67"), self.kinds(fake.calls))
+        polls = [n for n, call in enumerate(fake.calls)
+                 if call[0] == "GET" and re.fullmatch(r"/v1/appScreenshots/new-\d+", call[1])]
+        self.assertEqual([call for call in fake.calls[max(polls) + 1:]], [])
+
+    def test_a_set_holding_the_files_in_another_order_is_only_reordered(self):
+        names = self.write_set("APP_IPHONE_67", 3)
+        self.write_set("APP_IPAD_PRO_3GEN_129", 1)
+        held = [FakeStore.record(f"held-{n}", name, 10, self.md5("APP_IPHONE_67", name))
+                for n, name in enumerate(names)]
+        held.reverse()
+        fake = self.store(sets={"APP_IPHONE_67": held}, writable=True)
+        code, out = self.write()
+        self.assertEqual(code, 0)
+        kinds = self.kinds(fake.calls)
+        self.assertEqual(kinds[0], ("PATCH", "order set-APP_IPHONE_67"))
+        self.assertNotIn("DELETE", [kind[0] for kind in kinds])
+        self.assertEqual(kinds.count(("POST", "/v1/appScreenshots")), 1, "only the iPad's image goes up")
+        orders = [c[2] for c in fake.calls if c[0] == "PATCH" and "set-APP_IPHONE_67/relationships" in c[1]]
+        self.assertEqual([item["id"] for item in orders[0]["data"]], ["held-0", "held-1", "held-2"])
+        self.assertEqual([r["attributes"]["fileName"] for r in fake.sets["APP_IPHONE_67"]["screenshots"]],
+                         names)
+        self.assertIn("APP_IPHONE_67 read back: 3 images", out)
+
+    def test_a_set_holding_the_files_in_another_order_but_not_delivered_is_replaced(self):
+        names = self.write_set("APP_IPHONE_67", 2)
+        self.write_set("APP_IPAD_PRO_3GEN_129", 1)
+        held = [FakeStore.record(f"held-{n}", name, 10, self.md5("APP_IPHONE_67", name), "FAILED")
+                for n, name in enumerate(names)]
+        held.reverse()
+        fake = self.store(sets={"APP_IPHONE_67": held}, writable=True)
+        code, _out = self.write()
+        self.assertEqual(code, 0)
+        self.assertIn(("DELETE", "held-0"), self.kinds(fake.calls))
+        self.assertIn(("DELETE", "held-1"), self.kinds(fake.calls))
 
     def test_a_delivery_that_never_completes_gives_up_and_says_so(self):
         fake = self.arrange(delivery=("UPLOAD_COMPLETE",))
