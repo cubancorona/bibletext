@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+	"gopkg.in/yaml.v3"
 )
 
 const repo = "../.."
@@ -284,6 +285,88 @@ func TestManifestAppliesEveryTrackedPatch(t *testing.T) {
 	}
 	if !strings.Contains(manifest, "go build -tags flatpak") || strings.Contains(manifest, "-X ") {
 		t.Error("the Flathub build must use the flatpak tag and carry no linker value")
+	}
+}
+
+// flatpak-builder runs a build-command only when YAML hands it a string, and
+// says nothing about one it does not: a plain scalar carrying ": " parses as
+// a one-key mapping. The four grep guards were written that way, so every
+// build dropped them and ran 22 of the 26 commands with no patch checked.
+// The rendered manifest, in both its forms, must parse, and every build
+// command must come back a string, as many of them as the text lists.
+func TestEveryBuildCommandParsesAsAString(t *testing.T) {
+	in := loadInputs(t)
+	for name, src := range map[string]flatpakSource{
+		"tree":   {},
+		"tagged": {Tag: "v1.2.17", Commit: strings.Repeat("0", 40)},
+	} {
+		text := renderFlatpakManifest(in, src)
+		var m struct {
+			Modules []struct {
+				BuildCommands []any `yaml:"build-commands"`
+			} `yaml:"modules"`
+		}
+		if err := yaml.Unmarshal([]byte(text), &m); err != nil {
+			t.Fatalf("%s manifest: %v", name, err)
+		}
+		if len(m.Modules) != 1 {
+			t.Fatalf("%s manifest: %d modules, want 1", name, len(m.Modules))
+		}
+		// The item lines the text lists under build-commands, before sources.
+		block := text[strings.Index(text, "    build-commands:\n"):strings.Index(text, "    sources:\n")]
+		listed := strings.Count(block, "\n      - ")
+		got := m.Modules[0].BuildCommands
+		if len(got) != listed {
+			t.Errorf("%s manifest: the text lists %d build commands and YAML yields %d", name, listed, len(got))
+		}
+		guards := 0
+		for i, cmd := range got {
+			s, ok := cmd.(string)
+			if !ok {
+				t.Errorf("%s manifest: build command %d is %T, not a string; flatpak-builder would drop it", name, i+1, cmd)
+				continue
+			}
+			if strings.HasPrefix(s, "grep -q 'BibleText patch: ") {
+				guards++
+			}
+		}
+		if guards != 4 {
+			t.Errorf("%s manifest: %d patch guards survive parsing, want 4", name, guards)
+		}
+	}
+}
+
+// The quoting rule is proven by the parser rather than by the text: every
+// command comes back from YAML exactly as it went in, and only a command
+// that needs the quotes gets them.
+func TestYAMLScalarRoundTrips(t *testing.T) {
+	for _, s := range []string{
+		"chmod -R u+w vendor/fyne.io/fyne/v2",
+		"patch -p1 -d vendor/fyne.io/fyne/v2 < patches/fyne-2.7.4-caret-blink.patch",
+		"grep -q 'BibleText patch: was 100ms' vendor/fyne.io/fyne/v2/internal/driver/mobile/app/darwin_ios.go",
+		"go build -tags flatpak -ldflags '-s -w' -o bibletext ./cmd/bibletext",
+		"install -Dm755 bibletext ${FLATPAK_DEST}/bin/bibletext",
+		`printf "%s\n" done`,
+		"echo a # not a comment",
+		"echo trailing:",
+		"- leading dash",
+		"[bracketed]",
+		"",
+	} {
+		var got []string
+		if err := yaml.Unmarshal([]byte("- "+yamlScalar(s)+"\n"), &got); err != nil {
+			t.Errorf("%q: %v", s, err)
+			continue
+		}
+		if len(got) != 1 || got[0] != s {
+			t.Errorf("%q came back as %q", s, got)
+		}
+	}
+	if q := yamlScalar("grep -q 'a: b' f"); !strings.HasPrefix(q, `"`) {
+		t.Errorf("a command carrying \": \" is not double-quoted: %s", q)
+	}
+	if q := yamlScalar("rm -f x"); q != "rm -f x" {
+		t.Errorf("a plain command was changed: %s", q)
 	}
 }
 

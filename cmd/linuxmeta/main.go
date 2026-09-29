@@ -417,6 +417,22 @@ type flatpakSource struct {
 	Tag, Commit string // both empty means the directory source
 }
 
+// yamlScalar renders one build command as a YAML sequence item. A plain
+// scalar cannot carry ": " or " #", end in ":", or begin with an indicator
+// character: YAML reads `grep -q 'BibleText patch: was 100ms' vendor/...` as
+// a one-key mapping, not a string, and flatpak-builder drops a build-command
+// that is not a string without a word, so a guard written that way never
+// ran. Such a command is emitted double-quoted, the form in which only the
+// backslash and the quote itself need escaping; every other command stays
+// plain, so the manifest reads as it always has.
+func yamlScalar(s string) string {
+	if s != "" && !strings.Contains(s, ": ") && !strings.Contains(s, " #") &&
+		!strings.HasSuffix(s, ":") && !strings.ContainsAny(s[:1], "-?:,[]{}#&*!|>'\"%@`") {
+		return s
+	}
+	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
+}
+
 func renderFlatpakManifest(in inputs, src flatpakSource) string {
 	l, p := in.Listing, in.Product
 	id := l.AppstreamID
@@ -435,26 +451,32 @@ func renderFlatpakManifest(in inputs, src flatpakSource) string {
 	w("build-options:\n  append-path: /usr/lib/sdk/golang/bin\n  env:\n    GOROOT: /usr/lib/sdk/golang\n")
 	w("    GOFLAGS: -mod=vendor -trimpath -buildvcs=false\n    GOPROXY: 'off'\n    GOTOOLCHAIN: local\n    CGO_ENABLED: '1'\n")
 	w("modules:\n  - name: %s\n    buildsystem: simple\n    build-commands:\n", l.Executable)
+	// Every build command goes through c, so yamlScalar's rule applies to
+	// each one rather than to the ones known to need it today.
+	c := func(command string) { w("      - %s\n", yamlScalar(command)) }
 	w("      # The patched toolkit, applied to the vendored stock module the way\n")
 	w("      # scripts/setup-fyne-patch.sh applies it to third_party/fyne.\n")
-	w("      - chmod -R u+w vendor/fyne.io/fyne/v2\n")
+	c("chmod -R u+w vendor/fyne.io/fyne/v2")
 	for _, pt := range in.Patches {
-		w("      - patch -p1 -d vendor/fyne.io/fyne/v2 < patches/%s\n", pt)
+		c("patch -p1 -d vendor/fyne.io/fyne/v2 < patches/" + pt)
 	}
-	w("      - cp patches/NotoColorEmoji.ttf vendor/fyne.io/fyne/v2/theme/font/NotoColorEmoji.ttf\n")
-	w("      - rm -f vendor/fyne.io/fyne/v2/theme/font/EmojiOneColor.otf\n")
-	w("      - grep -q 'BibleText patch: was 100ms' vendor/fyne.io/fyne/v2/internal/driver/mobile/app/darwin_ios.go\n")
-	w("      - grep -q 'BibleText patch: discrete caret blink' vendor/fyne.io/fyne/v2/widget/entry_cursor_anim.go\n")
-	w("      - grep -q 'BibleText patch: atomic preferences write' vendor/fyne.io/fyne/v2/app/preferences_nonweb.go\n")
-	w("      - grep -q 'BibleText patch: current emoji' vendor/fyne.io/fyne/v2/theme/bundled-emoji.go\n")
+	c("cp patches/NotoColorEmoji.ttf vendor/fyne.io/fyne/v2/theme/font/NotoColorEmoji.ttf")
+	c("rm -f vendor/fyne.io/fyne/v2/theme/font/EmojiOneColor.otf")
+	// The guards prove the patches took. Each carries ": " inside the
+	// pattern, so each is emitted double-quoted: left plain, YAML read
+	// them as mappings and flatpak-builder ran none of them.
+	c("grep -q 'BibleText patch: was 100ms' vendor/fyne.io/fyne/v2/internal/driver/mobile/app/darwin_ios.go")
+	c("grep -q 'BibleText patch: discrete caret blink' vendor/fyne.io/fyne/v2/widget/entry_cursor_anim.go")
+	c("grep -q 'BibleText patch: atomic preferences write' vendor/fyne.io/fyne/v2/app/preferences_nonweb.go")
+	c("grep -q 'BibleText patch: current emoji' vendor/fyne.io/fyne/v2/theme/bundled-emoji.go")
 	w("      # Keyless by design: no linker value for the API.Bible key here\n")
 	w("      # (docs/API_KEY_HANDLING.md); the reader adds a key under Settings.\n")
-	w("      - go build -tags flatpak -ldflags '-s -w' -o %s ./cmd/bibletext\n", l.Executable)
-	w("      - install -Dm755 %s ${FLATPAK_DEST}/bin/%s\n", l.Executable, l.Executable)
-	w("      - install -Dm644 linux/%s.desktop ${FLATPAK_DEST}/share/applications/%s.desktop\n", id, id)
-	w("      - install -Dm644 linux/flathub/%s.metainfo.xml ${FLATPAK_DEST}/share/metainfo/%s.metainfo.xml\n", id, id)
+	c("go build -tags flatpak -ldflags '-s -w' -o " + l.Executable + " ./cmd/bibletext")
+	c("install -Dm755 " + l.Executable + " ${FLATPAK_DEST}/bin/" + l.Executable)
+	c("install -Dm644 linux/" + id + ".desktop ${FLATPAK_DEST}/share/applications/" + id + ".desktop")
+	c("install -Dm644 linux/flathub/" + id + ".metainfo.xml ${FLATPAK_DEST}/share/metainfo/" + id + ".metainfo.xml")
 	for _, s := range []string{"256x256", "512x512"} {
-		w("      - install -Dm644 linux/icons/hicolor/%s/apps/%s.png ${FLATPAK_DEST}/share/icons/hicolor/%s/apps/%s.png\n", s, id, s, id)
+		c("install -Dm644 linux/icons/hicolor/" + s + "/apps/" + id + ".png ${FLATPAK_DEST}/share/icons/hicolor/" + s + "/apps/" + id + ".png")
 	}
 	lic := "${FLATPAK_DEST}/share/licenses/" + id
 	for _, f := range [][2]string{
@@ -466,7 +488,7 @@ func renderFlatpakManifest(in inputs, src flatpakSource) string {
 		{"assets/fonts/share/OFL-LICENSES.txt", "OFL-share-card-fonts.txt"},
 		{"patches/NotoColorEmoji-LICENSE-OFL.txt", "OFL-NotoColorEmoji.txt"},
 	} {
-		w("      - install -Dm644 %s %s/%s\n", f[0], lic, f[1])
+		c("install -Dm644 " + f[0] + " " + lic + "/" + f[1])
 	}
 	w("    sources:\n")
 	if src.Tag == "" {

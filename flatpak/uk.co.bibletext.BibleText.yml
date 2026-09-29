@@ -39,10 +39,10 @@ modules:
       - patch -p1 -d vendor/fyne.io/fyne/v2 < patches/fyne-2.7.4-atomic-prefs.patch
       - cp patches/NotoColorEmoji.ttf vendor/fyne.io/fyne/v2/theme/font/NotoColorEmoji.ttf
       - rm -f vendor/fyne.io/fyne/v2/theme/font/EmojiOneColor.otf
-      - grep -q 'BibleText patch: was 100ms' vendor/fyne.io/fyne/v2/internal/driver/mobile/app/darwin_ios.go
-      - grep -q 'BibleText patch: discrete caret blink' vendor/fyne.io/fyne/v2/widget/entry_cursor_anim.go
-      - grep -q 'BibleText patch: atomic preferences write' vendor/fyne.io/fyne/v2/app/preferences_nonweb.go
-      - grep -q 'BibleText patch: current emoji' vendor/fyne.io/fyne/v2/theme/bundled-emoji.go
+      - "grep -q 'BibleText patch: was 100ms' vendor/fyne.io/fyne/v2/internal/driver/mobile/app/darwin_ios.go"
+      - "grep -q 'BibleText patch: discrete caret blink' vendor/fyne.io/fyne/v2/widget/entry_cursor_anim.go"
+      - "grep -q 'BibleText patch: atomic preferences write' vendor/fyne.io/fyne/v2/app/preferences_nonweb.go"
+      - "grep -q 'BibleText patch: current emoji' vendor/fyne.io/fyne/v2/theme/bundled-emoji.go"
       # Keyless by design: no linker value for the API.Bible key here
       # (docs/API_KEY_HANDLING.md); the reader adds a key under Settings.
       - go build -tags flatpak -ldflags '-s -w' -o bibletext ./cmd/bibletext
