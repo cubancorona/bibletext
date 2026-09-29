@@ -1,11 +1,9 @@
 // Command linuxmeta renders the Linux packaging inputs from one listing
 // source, the way cmd/msstore renders the Windows package inputs: the
-// AppStream MetaInfo (a keyed variant for the snap and the AppImage, a
-// keyless one for Flathub), the desktop entries, the icons, snap/snapcraft.yaml
-// and the Flatpak manifest.
+// AppStream MetaInfo for the snap and the AppImage, the desktop entries, the
+// icons and snap/snapcraft.yaml.
 //
 //	go run ./cmd/linuxmeta render
-//	go run ./cmd/linuxmeta flatpak-manifest -tag v1.2.10 -commit <sha>   # the flathub-repo copy
 //
 // linux/listing.toml is the source; config/product.json the identity;
 // cmd/bibletext/FyneApp.toml the version; linux/releases.toml the history. The
@@ -28,7 +26,6 @@ import (
 
 	"github.com/BurntSushi/toml"
 	xdraw "golang.org/x/image/draw"
-	"gopkg.in/yaml.v3"
 )
 
 type product struct {
@@ -59,7 +56,6 @@ type listing struct {
 	Intro           string            `toml:"intro"`
 	Features        []string          `toml:"features"`
 	Outro           string            `toml:"outro"`
-	KeylessNote     string            `toml:"keyless_note"`
 	OARS            map[string]string `toml:"oars"`
 	Screenshots     struct {
 		Ref  string           `toml:"ref"`
@@ -84,31 +80,6 @@ type inputs struct {
 	Listing  listing
 	Releases []release
 	Version  string
-	Patches  []string // the Fyne patches, in the order scripts/setup-fyne-patch.sh applies them
-}
-
-// fynePatchOrder is the order scripts/setup-fyne-patch.sh applies the
-// toolkit patches; the Flatpak build applies them to the vendored module in
-// the same order. TestManifestAppliesEveryTrackedPatch holds it to patches/,
-// allowing for fynePatchesNotOnLinux.
-var fynePatchOrder = []string{
-	"fyne-2.7.4-ios-drawloop.patch",
-	"fyne-2.7.4-caret-blink.patch",
-	"fyne-2.7.4-noto-emoji.patch",
-	"fyne-2.7.4-android-newintent.patch",
-	"fyne-2.7.4-android-night-mode.patch",
-	"fyne-2.7.4-atomic-prefs.patch",
-}
-
-// fynePatchesNotOnLinux are the tracked toolkit patches the Flatpak build
-// deliberately leaves out, with the reason. A patch listed here is still
-// applied by scripts/setup-fyne-patch.sh everywhere else; it simply has
-// nothing to do on this platform.
-var fynePatchesNotOnLinux = map[string]string{
-	"fyne-2.7.4-windows-egl.patch":         "Windows only: it routes the OpenGL ES context through EGL so ANGLE can render with Direct3D",
-	"fyne-2.7.4-ios-scene-lifecycle.patch": "iOS only: it changes darwin_ios.m, the UIKit app delegate, which no Linux build compiles",
-	"fyne-2.7.4-ios-touch-cancel.patch":    "iOS only: it changes darwin_ios.m, the UIKit app delegate, which no Linux build compiles",
-	"fyne-2.7.4-ios-window-size.patch":     "iOS only: it changes darwin_ios.m, the UIKit app delegate, which no Linux build compiles",
 }
 
 var ledgerVersion = regexp.MustCompile(`(?m)^Version = "(\d+\.\d+\.\d+)"\r?$`)
@@ -139,7 +110,6 @@ func readInputs(repo string) (inputs, error) {
 		return in, errors.New("cmd/bibletext/FyneApp.toml: no Version = \"x.y.z\" line")
 	}
 	in.Version = string(m[1])
-	in.Patches = fynePatchOrder
 	return in, validate(in)
 }
 
@@ -149,7 +119,7 @@ func validate(in inputs) error {
 	case l.AppstreamID == "" || strings.Count(l.AppstreamID, ".") < 2:
 		return fmt.Errorf("appstream_id %q is not a reverse-DNS id", l.AppstreamID)
 	case len(l.Summary) > 35 || strings.HasSuffix(l.Summary, "."):
-		return fmt.Errorf("summary %q: Flathub wants at most 35 characters and no full stop", l.Summary)
+		return fmt.Errorf("summary %q: at most 35 characters and no full stop", l.Summary)
 	case len(l.Features) == 0 || len(l.Categories) == 0 || len(l.Keywords) == 0:
 		return errors.New("the listing needs features, categories and keywords")
 	case len(in.Releases) == 0 || in.Releases[0].Version != in.Version:
@@ -157,7 +127,7 @@ func validate(in inputs) error {
 	}
 	// The desktop entry and the snap description are line-oriented: a stray
 	// newline or list separator in a value would silently change a field.
-	flat := append([]string{l.Summary, l.GenericName, l.Intro, l.Outro, l.KeylessNote}, l.Features...)
+	flat := append([]string{l.Summary, l.GenericName, l.Intro, l.Outro}, l.Features...)
 	for _, s := range flat {
 		if strings.ContainsAny(s, "\r\n") {
 			return fmt.Errorf("a listing value carries a line break: %q", s)
@@ -197,7 +167,7 @@ func screenshotsReady(l listing) bool {
 	return len(ref) == 40 && strings.Trim(ref, "0") != "" && len(l.Screenshots.Item) > 0
 }
 
-func renderMetainfo(in inputs, keyless bool) string {
+func renderMetainfo(in inputs) string {
 	l, p := in.Listing, in.Product
 	var b strings.Builder
 	w := func(format string, a ...any) { fmt.Fprintf(&b, format, a...) }
@@ -218,9 +188,6 @@ func renderMetainfo(in inputs, keyless bool) string {
 	}
 	w("    </ul>\n")
 	w("    <p>%s</p>\n", esc(l.Outro))
-	if keyless {
-		w("    <p>%s</p>\n", esc(l.KeylessNote))
-	}
 	w("  </description>\n")
 	w("  <launchable type=\"desktop-id\">%s.desktop</launchable>\n", esc(l.AppstreamID))
 	w("  <url type=\"homepage\">%s/</url>\n", esc(p.SiteBase))
@@ -411,110 +378,6 @@ parts:
 		l.Executable)
 }
 
-// freedesktopRuntime is the org.freedesktop.Platform branch the Flatpak
-// builds against; the Sdk and its golang extension follow the same branch.
-// Flathub asks for the newest branch at submission and its linter warns on
-// an older one. linux-stores.yml pulls the container image and installs
-// the Platform for the same branch, and a test holds it there.
-const freedesktopRuntime = "26.08"
-
-// flatpakSource is where the manifest's first source points: the checked-out
-// tree (the copy in this repository, built by CI) or a tagged commit of the
-// public repository (the copy submitted to Flathub).
-type flatpakSource struct {
-	Tag, Commit string // both empty means the directory source
-}
-
-// yamlScalar renders one build command as a YAML sequence item. A plain
-// scalar cannot carry ": " or " #", end in ":", or begin with an indicator
-// character: YAML reads `grep -q 'BibleText patch: was 100ms' vendor/...` as
-// a one-key mapping, not a string. Nor is every plain scalar a string: a
-// command that is exactly true, false, null, ~, a number or a date resolves
-// to that value. flatpak-builder drops a build-command that is not a string
-// without a word (its own reader types true, false, null and integers, and
-// warns on a float), so a guard written plain never ran. The rule is the
-// parser's rather than a list of forms: a command stays plain only when
-// yaml.v3 hands it back from a sequence item as that same string, and is
-// otherwise emitted double-quoted, the form in which only the backslash and
-// the quote itself need escaping.
-func yamlScalar(s string) string {
-	var item []any
-	if err := yaml.Unmarshal([]byte("- "+s+"\n"), &item); err == nil && len(item) == 1 {
-		if got, ok := item[0].(string); ok && got == s {
-			return s
-		}
-	}
-	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
-}
-
-func renderFlatpakManifest(in inputs, src flatpakSource) string {
-	l, p := in.Listing, in.Product
-	id := l.AppstreamID
-	var b strings.Builder
-	w := func(format string, a ...any) { fmt.Fprintf(&b, format, a...) }
-	w("# Rendered by cmd/linuxmeta from linux/listing.toml; edit the source, not\n")
-	w("# this file. This copy builds the checked-out tree (CI verification); the\n")
-	w("# copy submitted to Flathub pins a release tag and commit instead\n")
-	w("# (go run ./cmd/linuxmeta flatpak-manifest -tag v1.2.x -commit <sha>).\n")
-	w("app-id: %s\n", id)
-	w("runtime: org.freedesktop.Platform\nruntime-version: '%s'\nsdk: org.freedesktop.Sdk\n", freedesktopRuntime)
-	w("sdk-extensions:\n  - org.freedesktop.Sdk.Extension.golang\n")
-	w("command: %s\n", l.Executable)
-	w("finish-args:\n")
-	w("  - --share=ipc\n  - --socket=x11\n  - --device=dri\n  - --socket=pulseaudio\n  - --share=network\n  - --filesystem=xdg-download\n")
-	w("build-options:\n  append-path: /usr/lib/sdk/golang/bin\n  env:\n    GOROOT: /usr/lib/sdk/golang\n")
-	w("    GOFLAGS: -mod=vendor -trimpath -buildvcs=false\n    GOPROXY: 'off'\n    GOTOOLCHAIN: local\n    CGO_ENABLED: '1'\n")
-	w("modules:\n  - name: %s\n    buildsystem: simple\n    build-commands:\n", l.Executable)
-	// Every build command goes through c, so yamlScalar's rule applies to
-	// each one rather than to the ones known to need it today.
-	c := func(command string) { w("      - %s\n", yamlScalar(command)) }
-	w("      # The patched toolkit, applied to the vendored stock module the way\n")
-	w("      # scripts/setup-fyne-patch.sh applies it to third_party/fyne.\n")
-	c("chmod -R u+w vendor/fyne.io/fyne/v2")
-	for _, pt := range in.Patches {
-		c("patch -p1 -d vendor/fyne.io/fyne/v2 < patches/" + pt)
-	}
-	c("cp patches/NotoColorEmoji.ttf vendor/fyne.io/fyne/v2/theme/font/NotoColorEmoji.ttf")
-	c("rm -f vendor/fyne.io/fyne/v2/theme/font/EmojiOneColor.otf")
-	// The guards prove the patches took. Each carries ": " inside the
-	// pattern, so each is emitted double-quoted: left plain, YAML read
-	// them as mappings and flatpak-builder ran none of them.
-	c("grep -q 'BibleText patch: was 100ms' vendor/fyne.io/fyne/v2/internal/driver/mobile/app/darwin_ios.go")
-	c("grep -q 'BibleText patch: discrete caret blink' vendor/fyne.io/fyne/v2/widget/entry_cursor_anim.go")
-	c("grep -q 'BibleText patch: atomic preferences write' vendor/fyne.io/fyne/v2/app/preferences_nonweb.go")
-	c("grep -q 'BibleText patch: current emoji' vendor/fyne.io/fyne/v2/theme/bundled-emoji.go")
-	w("      # Keyless by design: no linker value for the API.Bible key here\n")
-	w("      # (docs/API_KEY_HANDLING.md); the reader adds a key under Settings.\n")
-	c("go build -tags flatpak -ldflags '-s -w' -o " + l.Executable + " ./cmd/bibletext")
-	c("install -Dm755 " + l.Executable + " ${FLATPAK_DEST}/bin/" + l.Executable)
-	c("install -Dm644 linux/" + id + ".desktop ${FLATPAK_DEST}/share/applications/" + id + ".desktop")
-	c("install -Dm644 linux/flathub/" + id + ".metainfo.xml ${FLATPAK_DEST}/share/metainfo/" + id + ".metainfo.xml")
-	for _, s := range []string{"256x256", "512x512"} {
-		c("install -Dm644 linux/icons/hicolor/" + s + "/apps/" + id + ".png ${FLATPAK_DEST}/share/icons/hicolor/" + s + "/apps/" + id + ".png")
-	}
-	lic := "${FLATPAK_DEST}/share/licenses/" + id
-	for _, f := range [][2]string{
-		{"LICENSE", "LICENSE"},
-		{"NOTICE", "NOTICE"},
-		{"assets/fonts/atkinson/OFL.txt", "OFL-Atkinson-Hyperlegible.txt"},
-		{"assets/fonts/reading/Junicode-OFL.txt", "OFL-Junicode.txt"},
-		{"assets/fonts/reading/EzraSIL-Licenses.txt", "EzraSIL-Licenses.txt"},
-		{"assets/fonts/share/OFL-LICENSES.txt", "OFL-share-card-fonts.txt"},
-		{"patches/NotoColorEmoji-LICENSE-OFL.txt", "OFL-NotoColorEmoji.txt"},
-	} {
-		c("install -Dm644 " + f[0] + " " + lic + "/" + f[1])
-	}
-	w("    sources:\n")
-	if src.Tag == "" {
-		w("      - type: dir\n        path: ..\n")
-	} else {
-		w("      - type: git\n        url: %s.git\n        tag: %s\n        commit: %s\n", p.SourceRepo, src.Tag, src.Commit)
-		w("        x-checker-data:\n          type: git\n          tag-pattern: '^v([\\d.]+)$'\n")
-	}
-	w("      - go.mod.yml\n") // flatpak-go-mod's output; its first entry places modules.txt under vendor/
-	return b.String()
-}
-
 // renderIcon scales the shipped mark (cmd/bibletext/Icon.png) to one size.
 func renderIcon(src image.Image, size int) *image.NRGBA {
 	dst := image.NewNRGBA(image.Rect(0, 0, size, size))
@@ -553,15 +416,13 @@ func renderAll(repo string, in inputs, a snapArch) ([]output, error) {
 	id := in.Listing.AppstreamID
 	exe := in.Listing.Executable
 	return []output{
-		{Path: filepath.Join("linux", id+".metainfo.xml"), Text: renderMetainfo(in, false)},
-		{Path: filepath.Join("linux", "flathub", id+".metainfo.xml"), Text: renderMetainfo(in, true)},
+		{Path: filepath.Join("linux", id+".metainfo.xml"), Text: renderMetainfo(in)},
 		{Path: filepath.Join("linux", id+".desktop"), Text: renderDesktop(in, id)},
 		{Path: filepath.Join("snap", "gui", exe+".desktop"), Text: renderDesktop(in, "${SNAP}/meta/gui/icon.png")},
 		{Path: filepath.Join("linux", "icons", "hicolor", "256x256", "apps", id+".png"), Image: renderIcon(icon, 256)},
 		{Path: filepath.Join("linux", "icons", "hicolor", "512x512", "apps", id+".png"), Image: renderIcon(icon, 512)},
 		{Path: filepath.Join("snap", "gui", "icon.png"), Image: renderIcon(icon, 256)},
 		{Path: filepath.Join("snap", "snapcraft.yaml"), Text: renderSnapcraft(in, a)},
-		{Path: filepath.Join("flatpak", id+".yml"), Text: renderFlatpakManifest(in, flatpakSource{})},
 	}, nil
 }
 
@@ -595,7 +456,7 @@ func writeOutputs(repo string, outs []output) error {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: linuxmeta render|flatpak-manifest [flags]")
+		fmt.Fprintln(os.Stderr, "usage: linuxmeta render [flags]")
 		os.Exit(2)
 	}
 	var err error
@@ -615,23 +476,6 @@ func main() {
 				var outs []output
 				if outs, err = renderAll(*repo, in, a); err == nil {
 					err = writeOutputs(*repo, outs)
-				}
-			}
-		}
-	case "flatpak-manifest":
-		fs := flag.NewFlagSet("flatpak-manifest", flag.ContinueOnError)
-		repo := fs.String("repo", ".", "repository root")
-		tag := fs.String("tag", "", "release tag the Flathub copy pins (with -commit)")
-		commit := fs.String("commit", "", "the tag's commit")
-		if err = fs.Parse(os.Args[2:]); err == nil {
-			if (*tag == "") != (*commit == "") {
-				err = errors.New("-tag and -commit go together")
-			} else if *commit != "" && !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(*commit) {
-				err = errors.New("-commit must be the full 40-hex commit")
-			} else {
-				var in inputs
-				if in, err = readInputs(*repo); err == nil {
-					fmt.Print(renderFlatpakManifest(in, flatpakSource{Tag: *tag, Commit: *commit}))
 				}
 			}
 		}

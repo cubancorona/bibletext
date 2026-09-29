@@ -1,5 +1,5 @@
 # Every text file is LF in the working tree on every platform. Generated
-# files (flatpak/, linux/, snap/) are compared byte for byte against a fresh
+# files (linux/, snap/) are compared byte for byte against a fresh
 # render by cmd/linuxmeta's tests, source-scanning tests match "\n", and the
 # toolkit patches apply to LF sources; a CRLF checkout on the Windows runner
 # broke all three. Binary files are detected by content.

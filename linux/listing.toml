@@ -1,19 +1,19 @@
-# The Linux listing: the one hand-written source for Flathub, the Snap Store
-# and the AppImage. `go run ./cmd/linuxmeta render` turns it into the AppStream
-# MetaInfo, the desktop entries, the icons, snap/snapcraft.yaml and the
-# Flatpak manifest; the tests in cmd/linuxmeta hold the committed outputs
-# equal to a fresh render. Identity (name, site, support page, repository)
+# The Linux listing: the one hand-written source for the Snap Store and the
+# AppImage. `go run ./cmd/linuxmeta render` turns it into the AppStream
+# MetaInfo, the desktop entries, the icons and snap/snapcraft.yaml; the tests
+# in cmd/linuxmeta hold the committed outputs equal to a fresh render.
+# Identity (name, site, support page, repository)
 # comes from config/product.json; the version from cmd/bibletext/FyneApp.toml;
 # release dates and notes from linux/releases.toml. Edit here, never the
 # outputs. docs/LINUX_STORES.md carries the reasoning for every value.
 
 appstream_id = "uk.co.bibletext.BibleText"
 executable = "bibletext"
-summary = "Read and study Scripture" # Flathub: at most 35 characters, no full stop, no article; Snap: at most 78
+summary = "Read and study Scripture" # metainfo: at most 35 characters, no full stop, no article; Snap: at most 78
 generic_name = "Bible reader"
 developer_id = "uk.co.bibletext"
 developer = "cubancorona" # the copyright holder in LICENSE and NOTICE; a domain-style name is not allowed here
-metadata_license = "CC0-1.0" # Flathub accepts CC0-1.0 or FSFAP for the metadata itself
+metadata_license = "CC0-1.0" # a permissive licence for the metadata itself, as AppStream asks
 project_license = "Apache-2.0"
 categories = ["Education", "Spirituality"]
 keywords = ["Bible", "Scripture", "NKJV", "Berean", "WEB", "BSB", "Catholic", "deuterocanon", "audio", "narration", "notes", "offline"]
@@ -31,8 +31,6 @@ features = [
   "Optional AI study with your own provider key; leave Assistant set to None to switch it off",
 ]
 outro = "Works offline once a translation has downloaded. Free and open source."
-# Rendered only into the Flathub metainfo (Flathub builds from source, without the bundled key):
-keyless_note = "This build carries no API.Bible key: add your own free key under Settings to read the NKJV."
 
 [oars] # OARS 1.1; every attribute not listed is "none". Nothing applies:
 # no chat, purchases, ads, location or accounts, and no information about

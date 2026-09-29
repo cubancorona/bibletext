@@ -5,14 +5,11 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
-	"regexp"
-	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/BurntSushi/toml"
-	"gopkg.in/yaml.v3"
 )
 
 const repo = "../.."
@@ -34,7 +31,7 @@ func TestCommittedFilesAreTheGeneratorsOutput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(outs) < 9 {
+	if len(outs) < 7 {
 		t.Fatalf("%d outputs rendered; the comparison covers less than it should", len(outs))
 	}
 	for _, o := range outs {
@@ -139,17 +136,12 @@ func TestDesktopEntriesAgreeWithTheMetainfo(t *testing.T) {
 			t.Errorf("the metainfo lacks category %s", c)
 		}
 	}
-	// The Flathub variant says it is keyless; the keyed one must not.
-	flathub := readFile(t, filepath.Join("linux", "flathub", id+".metainfo.xml"))
-	if !strings.Contains(flathub, in.Listing.KeylessNote) || strings.Contains(meta, in.Listing.KeylessNote) {
-		t.Error("the keyless note is not on exactly the Flathub metainfo")
-	}
 }
 
 func TestSummaryFitsEveryStore(t *testing.T) {
 	s := loadInputs(t).Listing.Summary
 	if len(s) > 35 || len(s) > 78 {
-		t.Errorf("summary %q is %d characters; Flathub allows 35, the Snap Store 78", s, len(s))
+		t.Errorf("summary %q is %d characters; the metainfo allows 35, the Snap Store 78", s, len(s))
 	}
 	if strings.HasSuffix(s, ".") {
 		t.Errorf("summary %q ends with a full stop", s)
@@ -165,46 +157,7 @@ func TestSummaryFitsEveryStore(t *testing.T) {
 	bad := loadInputs(t)
 	bad.Listing.Summary = "A quiet, fast Bible reader with everything you need."
 	if validate(bad) == nil {
-		t.Fatal("validate accepted a summary that breaks Flathub's rules")
-	}
-}
-
-// The offline Flatpak build vendors every module go.mod requires: each has
-// an archive in flatpak/go.mod.yml and a module line in flatpak/modules.txt,
-// and the toolkit entry is the version the tracked patches were made for.
-func TestFlatpakSourcesCoverGoMod(t *testing.T) {
-	gomod := readFile(t, "go.mod")
-	sources := readFile(t, filepath.Join("flatpak", "go.mod.yml"))
-	modules := readFile(t, filepath.Join("flatpak", "modules.txt"))
-	req := regexp.MustCompile(`(?m)^\s*([A-Za-z0-9./_\-]+)\s+(v[0-9][^\s]*)`)
-	n := 0
-	for _, m := range req.FindAllStringSubmatch(gomod, -1) {
-		mod, ver := m[1], m[2]
-		if mod == "go" || mod == "module" || mod == "toolchain" {
-			continue
-		}
-		n++
-		if !strings.Contains(sources, "dest: vendor/"+mod+"\n") {
-			t.Errorf("flatpak/go.mod.yml has no archive for %s", mod)
-		}
-		if !strings.Contains(modules, "# "+mod+" "+ver+"\n") {
-			t.Errorf("flatpak/modules.txt has no line for %s %s", mod, ver)
-		}
-	}
-	if n < 10 {
-		t.Fatalf("only %d requirements parsed from go.mod; the check proves little", n)
-	}
-	if !strings.Contains(modules, "# fyne.io/fyne/v2 v2.7.4\n") {
-		t.Error("the vendored toolkit is not v2.7.4, which the patches under patches/ were made for")
-	}
-	if strings.Contains(gomod, "\nreplace ") {
-		t.Error("go.mod carries a replace; the Flatpak sources were generated from the stock file and would no longer match")
-	}
-	// And nothing vendored that go.mod no longer requires.
-	for _, m := range regexp.MustCompile(`(?m)^# (\S+) (v\S+)$`).FindAllStringSubmatch(modules, -1) {
-		if !strings.Contains(gomod, m[1]+" "+m[2]) {
-			t.Errorf("flatpak/modules.txt vendors %s %s, which go.mod does not require; regenerate with flatpak-go-mod", m[1], m[2])
-		}
+		t.Fatal("validate accepted a summary that breaks the listing's rules")
 	}
 }
 
@@ -221,199 +174,8 @@ func semverLess(a, b string) bool {
 	return false
 }
 
-// The manifest applies every tracked toolkit patch, in the order the setup
-// script does, and no patch the tree does not have.
-func TestManifestAppliesEveryTrackedPatch(t *testing.T) {
-	manifest := readFile(t, filepath.Join("flatpak", loadInputs(t).Listing.AppstreamID+".yml"))
-	tracked, err := filepath.Glob(filepath.Join(repo, "patches", "fyne-2.7.4-*.patch"))
-	if err != nil || len(tracked) == 0 {
-		t.Fatalf("no toolkit patches found: %v", err)
-	}
-	if len(tracked) != len(fynePatchOrder)+len(fynePatchesNotOnLinux) {
-		t.Errorf("%d tracked toolkit patches, the manifest applies %d and %d are declared not to apply on Linux",
-			len(tracked), len(fynePatchOrder), len(fynePatchesNotOnLinux))
-	}
-	// A patch excused from the Linux build must say why, and must really be
-	// absent from the manifest rather than quietly listed in both places.
-	for name, why := range fynePatchesNotOnLinux {
-		if why == "" {
-			t.Errorf("%s is excused from the Flatpak build with no reason given", name)
-		}
-		if slices.Contains(fynePatchOrder, name) {
-			t.Errorf("%s is both applied and excused", name)
-		}
-		if strings.Contains(manifest, "patches/"+name) {
-			t.Errorf("%s is excused from the Flatpak build but the manifest applies it", name)
-		}
-	}
-	// The order is the setup script's: the first mention of each patch file
-	// in scripts/setup-fyne-patch.sh must come in the same sequence.
-	script := readFile(t, filepath.Join("scripts", "setup-fyne-patch.sh"))
-	last := -1
-	for _, p := range fynePatchOrder {
-		i := strings.Index(script, p)
-		if i < 0 {
-			t.Errorf("scripts/setup-fyne-patch.sh does not apply %s", p)
-			continue
-		}
-		if i < last {
-			t.Errorf("%s is applied in a different order from scripts/setup-fyne-patch.sh", p)
-		}
-		last = i
-	}
-	last = -1
-	for _, p := range fynePatchOrder {
-		line := "patch -p1 -d vendor/fyne.io/fyne/v2 < patches/" + p + "\n"
-		i := strings.Index(manifest, line)
-		if i < 0 {
-			t.Errorf("the manifest does not apply %s", p)
-			continue
-		}
-		if i < last {
-			t.Errorf("%s is applied out of order", p)
-		}
-		last = i
-	}
-	for _, p := range tracked {
-		name := filepath.Base(p)
-		if _, excused := fynePatchesNotOnLinux[name]; excused {
-			continue
-		}
-		if !strings.Contains(manifest, "patches/"+name+"\n") {
-			t.Errorf("tracked patch %s is neither applied by the manifest nor declared in fynePatchesNotOnLinux", name)
-		}
-	}
-	if !strings.Contains(manifest, "go build -tags flatpak") || strings.Contains(manifest, "-X ") {
-		t.Error("the Flathub build must use the flatpak tag and carry no linker value")
-	}
-}
-
-// flatpak-builder runs a build-command only when YAML hands it a string, and
-// says nothing about one it does not: a plain scalar carrying ": " parses as
-// a one-key mapping. The four grep guards were written that way, so every
-// build dropped them and ran 22 of the 26 commands with no patch checked.
-// The rendered manifest, in both its forms, must parse, and every build
-// command must come back a string, as many of them as the text lists.
-func TestEveryBuildCommandParsesAsAString(t *testing.T) {
-	in := loadInputs(t)
-	for name, src := range map[string]flatpakSource{
-		"tree":   {},
-		"tagged": {Tag: "v1.2.17", Commit: strings.Repeat("0", 40)},
-	} {
-		text := renderFlatpakManifest(in, src)
-		var m struct {
-			RuntimeVersion string `yaml:"runtime-version"`
-			Modules        []struct {
-				BuildCommands []any `yaml:"build-commands"`
-			} `yaml:"modules"`
-		}
-		if err := yaml.Unmarshal([]byte(text), &m); err != nil {
-			t.Fatalf("%s manifest: %v", name, err)
-		}
-		// Quoted on purpose: unquoted, 26.08 would parse as a float.
-		if m.RuntimeVersion != freedesktopRuntime {
-			t.Errorf("%s manifest: runtime-version parses as %q, want %q", name, m.RuntimeVersion, freedesktopRuntime)
-		}
-		if len(m.Modules) != 1 {
-			t.Fatalf("%s manifest: %d modules, want 1", name, len(m.Modules))
-		}
-		// The item lines the text lists under build-commands, before sources.
-		block := text[strings.Index(text, "    build-commands:\n"):strings.Index(text, "    sources:\n")]
-		listed := strings.Count(block, "\n      - ")
-		got := m.Modules[0].BuildCommands
-		if len(got) != listed {
-			t.Errorf("%s manifest: the text lists %d build commands and YAML yields %d", name, listed, len(got))
-		}
-		guards := 0
-		for i, cmd := range got {
-			s, ok := cmd.(string)
-			if !ok {
-				t.Errorf("%s manifest: build command %d is %T, not a string; flatpak-builder would drop it", name, i+1, cmd)
-				continue
-			}
-			if strings.HasPrefix(s, "grep -q 'BibleText patch: ") {
-				guards++
-			}
-		}
-		if guards != 4 {
-			t.Errorf("%s manifest: %d patch guards survive parsing, want 4", name, guards)
-		}
-	}
-}
-
-// The quoting rule is proven by the parser rather than by the text: every
-// command comes back from YAML as the string it went in as, decoded into
-// any so that a typed value cannot pass for one, and only a command that
-// needs the quotes gets them.
-func TestYAMLScalarRoundTrips(t *testing.T) {
-	for _, s := range []string{
-		"chmod -R u+w vendor/fyne.io/fyne/v2",
-		"patch -p1 -d vendor/fyne.io/fyne/v2 < patches/fyne-2.7.4-caret-blink.patch",
-		"grep -q 'BibleText patch: was 100ms' vendor/fyne.io/fyne/v2/internal/driver/mobile/app/darwin_ios.go",
-		"go build -tags flatpak -ldflags '-s -w' -o bibletext ./cmd/bibletext",
-		"install -Dm755 bibletext ${FLATPAK_DEST}/bin/bibletext",
-		`printf "%s\n" done`,
-		"echo a # not a comment",
-		"echo trailing:",
-		"- leading dash",
-		"[bracketed]",
-		"",
-		// Plain, each of these is a value rather than a string. flatpak-builder
-		// drops the first four and warns on the fifth; the last two are typed
-		// by yaml.v3 and are quoted for the same reason.
-		"true",
-		"null",
-		"1",
-		"-7",
-		"1.5",
-		"~",
-		"2001-12-14",
-	} {
-		var got []any
-		if err := yaml.Unmarshal([]byte("- "+yamlScalar(s)+"\n"), &got); err != nil {
-			t.Errorf("%q: %v", s, err)
-			continue
-		}
-		if len(got) != 1 {
-			t.Errorf("%q came back as %d items", s, len(got))
-			continue
-		}
-		if str, ok := got[0].(string); !ok || str != s {
-			t.Errorf("%q came back as %T %v", s, got[0], got[0])
-		}
-	}
-	for _, s := range []string{"grep -q 'a: b' f", "true", "1"} {
-		if q := yamlScalar(s); !strings.HasPrefix(q, `"`) {
-			t.Errorf("%q is not double-quoted: %s", s, q)
-		}
-	}
-	if q := yamlScalar("rm -f x"); q != "rm -f x" {
-		t.Errorf("a plain command was changed: %s", q)
-	}
-}
-
-// The Flatpak lane builds in Flathub's container for one runtime branch and
-// its smoke installs that Platform. Both must be the branch the manifest
-// names, or CI proves a build the manifest does not describe.
-func TestWorkflowBuildsAgainstTheManifestsRuntime(t *testing.T) {
-	wf := readFile(t, filepath.Join(".github", "workflows", "linux-stores.yml"))
-	for _, must := range []string{
-		"image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-" + freedesktopRuntime + "\n",
-		"flatpak install --user -y flathub org.freedesktop.Platform//" + freedesktopRuntime + "\n",
-	} {
-		if !strings.Contains(wf, must) {
-			t.Errorf("linux-stores.yml lacks %q", strings.TrimSpace(must))
-		}
-	}
-	for _, m := range regexp.MustCompile(`(?:freedesktop-|org\.freedesktop\.Platform//)(\d+\.\d+)`).FindAllStringSubmatch(wf, -1) {
-		if m[1] != freedesktopRuntime {
-			t.Errorf("linux-stores.yml names runtime branch %s; the manifest builds against %s", m[1], freedesktopRuntime)
-		}
-	}
-}
-
 // The tarball's desktop entry comes from the ledger's own table: it must say
-// what the listing says, or the four Linux channels disagree on the menu.
+// what the listing says, or the three Linux channels disagree on the menu.
 func TestLedgerLinuxTableMatchesTheListing(t *testing.T) {
 	var ledger struct {
 		LinuxAndBSD struct {
@@ -444,7 +206,7 @@ func TestLedgerLinuxTableMatchesTheListing(t *testing.T) {
 func TestListingDocQuotesTheListing(t *testing.T) {
 	doc := readFile(t, filepath.Join("docs", "LINUX_STORES.md"))
 	l := loadInputs(t).Listing
-	for _, must := range []string{l.AppstreamID, "`" + l.Summary + "`", l.Executable + " %u", "org.freedesktop.Platform " + freedesktopRuntime} {
+	for _, must := range []string{l.AppstreamID, "`" + l.Summary + "`", l.Executable + " %u"} {
 		if !strings.Contains(doc, must) {
 			t.Errorf("docs/LINUX_STORES.md does not mention %q", must)
 		}
@@ -459,12 +221,12 @@ func TestScreenshotsAreLeftOutUntilCaptured(t *testing.T) {
 		}
 		return
 	}
-	if strings.Contains(renderMetainfo(in, false), "<screenshots>") {
+	if strings.Contains(renderMetainfo(in), "<screenshots>") {
 		t.Fatal("a <screenshots> block was rendered with no captured screenshots")
 	}
 	ready := in
 	ready.Listing.Screenshots.Ref = "0123456789abcdef0123456789abcdef01234567"
-	if !strings.Contains(renderMetainfo(ready, false), "<screenshot type=\"default\">") {
+	if !strings.Contains(renderMetainfo(ready), "<screenshot type=\"default\">") {
 		t.Fatal("a named commit did not render the screenshots")
 	}
 }

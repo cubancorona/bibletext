@@ -3,8 +3,7 @@
 # under Xvfb with software OpenGL, screenshot it after 30 s, then launch it
 # again with a share link — the second process must hand the link to the
 # first and exit, leaving exactly one instance. The launch command is the
-# rest of the arguments, so one script serves the AppImage, the snap and the
-# Flatpak.
+# rest of the arguments, so one script serves the AppImage and the snap.
 #
 #   scripts/smoke-linux-launch.sh <name> <command> [args…]
 set -euo pipefail

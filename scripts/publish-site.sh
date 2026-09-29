@@ -168,9 +168,6 @@ cp docs/assetlinks.json "$OUT/.well-known/assetlinks.json"
 # package declares. Microsoft accepts either location; both cost nothing.
 cp docs/windows-app-web-link "$OUT/.well-known/windows-app-web-link"
 cp docs/windows-app-web-link "$OUT/windows-app-web-link"
-# Flathub: the file whose presence confirms the domain for the submission
-# (empty until Flathub's developer page issues a verification token).
-cp docs/org.flathub.VerifiedApps.txt "$OUT/.well-known/org.flathub.VerifiedApps.txt"
 
 # The favicon serves the whole site from the root: browsers request
 # /favicon.ico by default, so the ~5,500 reader pages get it without carrying a
@@ -223,8 +220,6 @@ for f in ".well-known/apple-app-site-association" ".well-known/assetlinks.json" 
   python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$OUT/$f" \
     || fail "$f is not valid JSON — shared links would stop opening the app"
 done
-[[ -f "$OUT/.well-known/org.flathub.VerifiedApps.txt" ]] \
-  || fail ".well-known/org.flathub.VerifiedApps.txt missing — Flathub cannot confirm the domain"
 grep -q 'R8PC7239T2.uk.co.bibletext' "$OUT/.well-known/apple-app-site-association" \
   || fail "the Apple association file does not name the app id"
 # The scope is an ALLOW-LIST on purpose: privacy.html and support.html are the
