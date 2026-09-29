@@ -2406,11 +2406,25 @@ confirm is in `docs/VISUAL_TESTS.md` V15:
   Also left: a desktop window under about 420pt tall (the window allows
   386pt) has too little room below the header for the fixed parts of some
   sheets, so cross-references while the list loads (below 418pt), the AI
-  answer, the note composer and Go to (below about 400pt) start inside the
+  answer and Go to (below about 400pt) start inside the
   header's lower band, below the Go to chip; at 386pt cross-references
   while the list loads reaches furthest in, its top 7pt below the chip's
   outline. Translation, which used to lead this list, clears the header at
-  every height the window allows, in every build. Raising the window's
+  every height the window allows, in every build. The note composer's
+  desktop card is sized from its content and centred, and the selected
+  words it gained took it from the header's edge at about 400pt to partway
+  down the Go to chip at 440pt with a selection of three rows; where the
+  card is taller than the room below the header the excerpt now gives up
+  rows down to one, and takes them back as the window grows
+  (`share_note_ui.go`, `TestTheNoteComposerGivesUpExcerptRowsToClearTheHeader`),
+  so the card clears the header at 440pt and, at one row, stands at the
+  header's edge from 400pt down to 386pt as it did before the excerpt. The
+  other content-sized modals — the link notices, the note-link offer and
+  Ask — are centred the same way with no cap and start inside the header's
+  lower band below about 400pt, and Ask below about 390pt (at 386pt the
+  link notice's top is 51pt down, partway down the chip); each is a few
+  fixed rows with nothing to scroll, unchanged since before 1.2.17, and
+  left with the sheets above. Raising the window's
   minimum height to about 420pt, or letting a sheet that cannot clear the
   header cover it entirely, is the owner's choice.
 - LEFT: the iPad Settings sheet ends on a SHARED NOTES heading with its

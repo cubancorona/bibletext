@@ -429,6 +429,13 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       bottom of the window, with no band of the page showing beneath it.
       Android: the same in a split-screen or freeform window, with the Fyne
       field.
+- [ ] Add a note on a Mac, Windows or Linux window dragged as short as it
+      goes (about 386pt of content), with two or three verses selected: the
+      card's top edge stands at the header's lower edge, never cutting the
+      Go to chip, and the selected words take one row; drag the window to
+      about 440pt and the words take two rows with the card wholly below
+      the header; at the launch size they take three. With the card open,
+      drag the height down and back up: the rows go and come back.
 - [ ] Inbound links per platform: iOS/Android land with the band in view;
       NON-claimed URLs (/web/john/ index, /privacy.html) fall through to
       the browser — the app must never just foreground; macOS store build

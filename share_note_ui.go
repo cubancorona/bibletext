@@ -340,9 +340,33 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 		// the height was read from Show's layout at the form's narrow minimum
 		// width, where both wrap into more rows, and the card stood taller
 		// than its content by the difference.
-		popup.Resize(fyne.NewSize(w, card.MinSize().Height))
-		popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+		//
+		// Then the header. Fyne centres the modal, so on a short window the
+		// card's own height is what puts its top inside the header
+		// (headerClearance): the excerpt's rows had taken the card from the
+		// header's edge at about 400pt to partway down the Go to chip at
+		// 440pt. Where the card is taller than the room below the header the
+		// excerpt gives up rows, one at a time down to one, until the card
+		// clears it or has nothing left to give; a card of one row is the
+		// card the sheet had before the excerpt, which no window the app
+		// allows puts inside the header. The sheet's box is the card plus the
+		// popup's own padding (its MinSize), so that is what is measured
+		// against the room. Sized again the same way when the window changes
+		// size (sheet_refit.go), so the rows come back with the room.
+		rows := excerpt.maxLines
+		fit := func() {
+			excerpt.setMaxLines(rows)
+			popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+			popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+			room := clearOfHeader(cnv.Size().Height, cnv.Size().Height, headerClearance(state))
+			for n := rows; n > 1 && excerpt.Visible() && popup.MinSize().Height > room; n-- {
+				excerpt.setMaxLines(n - 1)
+				popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+			}
+		}
+		fit()
 		registerSheetReopen(state, popup, reopen)
+		registerSheetRefit(state, popup, fit)
 		focusEntry()
 		return
 	}
