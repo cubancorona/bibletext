@@ -274,6 +274,10 @@ python3 appstore/submit-version.py --platform IOS --build N --delivery-uuid U \
     --write --confirm-version <v> --accept-inherited-screenshots --submit
 ```
 
+The release's screenshots go up first, with `appstore/push-screenshots.py
+--platform <P> --write --confirm-version <v>` once the version record exists
+(read-only without those flags), and `--accept-inherited-screenshots` is for
+the release that knowingly does not upload any.
 Screenshots are the one field a release may knowingly inherit, and saying so
 explicitly is how that stays a decision rather than an oversight. Apple takes
 **one version per platform** into review at a time, so check nothing else is in

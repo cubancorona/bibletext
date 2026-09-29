@@ -225,6 +225,20 @@ provider credentials and accurately describe fetched versus embedded text.
 
 ## Screenshots
 
+### Uploading a set
+
+`appstore/push-screenshots.py` uploads the upload-ready set for the ledger
+version (`build/appstore/screenshots-ready-<version>/en-GB`, or `--set-dir`)
+to that version's record: the iPhone and iPad sets by default, the Mac set
+with `--platform MAC_OS`. It is read-only by default — it validates the local
+files with the preflight's own size and alpha rules, resolves the version, its
+`en-GB` localization and the sets it holds, and prints the plan — and changes
+nothing without `--write` and an exact `--confirm-version`. A write replaces
+each set in file order, waits for every image to reach `assetDeliveryState`
+COMPLETE, then reads the sets back and compares count, order and MD5
+checksums before it reports success; `--keep-existing` appends instead. The
+version record must already exist (`submit-version.py --write` creates it).
+
 ### The 1.2.17 set — captured 28 September 2026, not yet uploaded
 
 The same eight shots on every device, retaken on the 1.2.17 tree so the
