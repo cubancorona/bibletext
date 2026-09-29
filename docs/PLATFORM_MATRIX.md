@@ -50,11 +50,11 @@ Status is separate: `shipping` (a release or store submission carries it),
 | OS | Arch | Channel | Status | Proof | Notes |
 | --- | --- | --- | --- | --- | --- |
 | macOS | arm64 | Mac App Store | shipping | builds | 1, 2, 3 |
-| macOS | x86_64 | Mac App Store | shipping | builds | 1, 2, 3, 27 |
+| macOS | x86_64 | Mac App Store | shipping | builds | 1, 2, 3, 26 |
 | macOS | arm64 | Direct download (.zip) | shipping | builds | 1, 2, 4 |
-| macOS | x86_64 | Direct download (.zip) | shipping | builds | 1, 2, 4, 27 |
+| macOS | x86_64 | Direct download (.zip) | shipping | builds | 1, 2, 4, 26 |
 | macOS | arm64 | Build from source (local checkout) | shipping | hardware | 5 |
-| macOS | x86_64 | Build from source | proven | hardware | 5, 27 |
+| macOS | x86_64 | Build from source | proven | hardware | 5, 26 |
 | iOS | arm64 | App Store — iPhone | shipping | field | 6, 7, 8 |
 | iPadOS | arm64 | App Store — iPad | shipping | builds | 6, 7, 8 |
 | iOS | arm64 | Development install to a device | proven | hardware | 7 |
@@ -70,14 +70,12 @@ Status is separate: `shipping` (a release or store submission carries it),
 | Windows | arm64 | Microsoft Store (MSIX) | shipping | runner | 14, 15, 16, 17, 18 |
 | Windows | arm64 | Direct download (.zip) | ready | builds | 14, 15, 17 |
 | Windows | x86 (32-bit) | anything | untried | none | — |
-| Linux | x86_64 | Direct download (.tar.xz) | shipping | builds | 19, 20, 25 |
-| Linux | arm64 | Direct download (.tar.xz) | ready | hardware | 19, 20, 25, 26 |
+| Linux | x86_64 | Direct download (.tar.xz) | shipping | builds | 19, 20, 24 |
+| Linux | arm64 | Direct download (.tar.xz) | ready | hardware | 19, 20, 24, 25 |
 | Linux | x86_64 | AppImage | shipping | builds | 21 |
-| Linux | arm64 | AppImage | ready | hardware | 21, 26 |
+| Linux | arm64 | AppImage | ready | hardware | 21, 25 |
 | Linux | x86_64 | Snap Store | shipping | runner | 22, 23 |
-| Linux | arm64 | Snap Store | shipping | hardware | 22, 23, 26 |
-| Linux | x86_64 | Flathub | ready | runner | 24 |
-| Linux | arm64 | Flathub | ready | runner | 22, 24, 26 |
+| Linux | arm64 | Snap Store | shipping | hardware | 22, 23, 25 |
 | Linux | any | AppImageHub catalogue | untried | none | — |
 
 ## Divergences
@@ -194,13 +192,9 @@ place a fix on one does not reach the others.
     render, and why the arm64 jobs in `.github/workflows/release.yml` re-render.
 23. **The snap is a `dump` plugin from a prebuilt keyed binary**, so the LXD
     build never sees repository secrets.
-24. **Flathub is keyless and built with `-tags flatpak`** from a *second,
-    parallel* recipe that patches the vendored toolkit in `build-commands`
-    rather than via `setup-fyne-patch.sh`. *Risk:* two places to apply six
-    patches; they can drift.
-25. Both Linux architectures run the same packaged-tarball assertions, via
+24. Both Linux architectures run the same packaged-tarball assertions, via
     `scripts/check-linux-package.sh`, so they cannot drift apart.
-26. arm64 Linux was proven on a local UTM VM, 18–19 September 2026 — first at
+25. arm64 Linux was proven on a local UTM VM, 18–19 September 2026 — first at
     the build bench, then on a real GNOME X11 desktop. At the bench: the
     executable builds with no new patches and passes
     `scripts/smoke-linux-launch.sh` (launch, `bibletext:` handoff, single
@@ -238,7 +232,7 @@ place a fix on one does not reach the others.
     The install was run into a `DESTDIR` and its paths checked, and the binary
     was run from the extracted tree — but not from `/usr/bin` on a live system.
 
-27. **x86_64 macOS is now compiled and tested on Intel hardware**, not only
+26. **x86_64 macOS is now compiled and tested on Intel hardware**, not only
     cross-compiled from arm64. On 19 September 2026 an Intel MacBook Pro built
     the whole tree natively — including the 188 KB of AppKit cgo in
     `reading_macos.go`, which CI has never compiled on this architecture —
@@ -264,10 +258,6 @@ something nobody got round to.
   appimagetool and the type-2 runtime publish aarch64 builds at the tags
   already pinned, verified with the x86_64 hashes as controls, and both are
   genuine aarch64 ELF.
-- **D. Flathub aarch64** — *resolved 19 September 2026.* It was held until the
-  `aarch64` leg of `linux-stores.yml` had gone green rather than enabled on
-  optimism; both the build and the smoke passed, so `flatpak/flathub.json` now
-  names both architectures.
 
 ## Not yet proven
 

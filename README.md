@@ -461,7 +461,7 @@ bibletext/
     │   └── Icon*.png            # app icon + Android adaptive-icon layers
     ├── websitegen/         # the static web reader at bibletext.co.uk (scripts/publish-site.sh)
     ├── sitepages/          # the site's hand-written root pages (scripts/publish-site.sh)
-    ├── linuxmeta/          # renders linux/, flatpak/ and snap/ from linux/listing.toml
+    ├── linuxmeta/          # renders linux/ and snap/ from linux/listing.toml
     └── msstore/            # renders the Microsoft Store manifest, listing and tiles
 ```
 

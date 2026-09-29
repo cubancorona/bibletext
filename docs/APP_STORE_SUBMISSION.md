@@ -510,8 +510,7 @@ each step it lists.
    number like any work after the tag (step 10). Note that the tag's own
    release run already builds the snap and publishes it to the public `edge`
    channel whenever `SNAPCRAFT_STORE_CREDENTIALS` is set, so that channel is
-   not a separate decision once the secret exists; the Flathub submission,
-   when it exists, comes from the same tagged tree (docs/LINUX_STORES.md).
+   not a separate decision once the secret exists (docs/LINUX_STORES.md).
 8. Publish the site from the same commit: `scripts/publish-site.sh --dry-run`
    prints a drift report against `origin/gh-pages` — "none", or how many
    pages changed, were added or removed — and `scripts/publish-site.sh`

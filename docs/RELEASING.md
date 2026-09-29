@@ -68,12 +68,6 @@ screenshots, banner and publisher display name; promotion of Google Play beyond
 closed testing (the service account is scoped so it structurally cannot reach
 production); the Play Foreground-service declaration video.
 
-**The Flathub pull request, entirely.** Flathub's policy is that AI tools must
-not open or automate submission PRs, or generate their commit messages,
-descriptions, review comments or replies. A conductor may generate the
-tag-pinned manifest and stage the files; the PR, its text and every reply are
-the account holder's own words. This is not a preference to be weighed.
-
 **The per-release judgement calls**: the privacy answer, content-rights and
 export-compliance declarations, and the accessibility labels, re-read against
 Apple's current definitions and the live terms of every AI provider.
@@ -428,7 +422,6 @@ not create, so a draft started in Partner Center is safe from it.
 
 - Writing the human copy and shipping it unread.
 - Pushing anything — `main`, a tag, or `gh-pages` — without being told.
-- Opening or writing any part of a Flathub PR.
 - Entering a password, or printing, committing or transmitting any credential
   value. Sourcing a credential script into its own process is fine; that is
   what they are for.
@@ -445,8 +438,7 @@ so plainly rather than look incomplete:
 met, and the service account is deliberately scoped so it cannot reach
 production at all. A release reaches the alpha track and stops there.
 
-**Flathub and AppImageHub have no submission** and cannot get one from a
-conductor.
+**AppImageHub has no submission** and cannot get one from a conductor.
 
 Everything else — GitHub, Snap, the App Store, the Mac App Store, the Microsoft
 Store — is reachable in one pass.

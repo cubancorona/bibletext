@@ -63,7 +63,6 @@ reads it.
 | Linux | tarball, before `make install` | none yet | n/a | yes | n/a |
 | Linux | tarball, after `make install` | `bibletext:` | yes | yes | **yes** |
 | Linux | Snap | `bibletext:` | yes | yes | **yes** |
-| Linux | Flatpak | `bibletext:` | yes | yes | never |
 | Linux | AppImage | **none** at system level | n/a | yes | n/a |
 
 Three channels register nothing: the **Windows `.zip`**, the **Linux AppImage**

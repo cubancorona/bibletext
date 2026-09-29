@@ -37,7 +37,6 @@ step too.
 | **Microsoft Store** | nothing | `msstore.yml` builds and smokes both MSIX packages; `msstore/submit.py` then creates the submission, sets the listing's What's New from the release's file, uploads them and commits it. Only the FIRST submission after a name reservation had to be made in Partner Center | mixed | [WINDOWS_STORE_LISTING.md](WINDOWS_STORE_LISTING.md) |
 | **Google Play** | nothing — the APK is attached to the GitHub release by hand | `scripts/build-android.sh --release` produces the signed AAB; uploaded to a track in the Play Console | account holder | [PLAY_LISTING.md](PLAY_LISTING.md) |
 | **Snap Store** | **publishes both architectures to `edge`** | promotion to `stable` is one command and can be automated; categories, screenshots and visibility are console-only | mixed | [LINUX_STORES.md](LINUX_STORES.md) |
-| **Flathub** | nothing | a pull request to `flathub/flathub`, which **their policy requires the account holder to write and post personally**, with an AI-assistance disclosure | account holder only | [LINUX_STORES.md](LINUX_STORES.md) |
 | **AppImageHub** | nothing | a pull request to `AppImage/appimage.github.io` adding `data/BibleText` | account holder | [LINUX_STORES.md](LINUX_STORES.md) |
 
 ## What every submission has in common
@@ -76,6 +75,4 @@ caught up. Each handles it differently:
   one PUT rather than a rebuild against a spent version number.
 - **Snap Store** — already carries both; a single `snapcraft promote` covers
   every architecture and refuses a partial set.
-- **Flathub** — `flatpak/flathub.json` names both, and both build and smoke in
-  `linux-stores.yml`.
 - **Apple and Google** — a single universal artifact each, so nothing to do.
