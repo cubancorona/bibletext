@@ -7,6 +7,40 @@ the date — and says what shipped and why. Closed entries earn their place: thi
 is the file to read before re-investigating a defect that may already be fixed,
 and a fix's reasoning is the expensive half to reconstruct.
 
+## The release pipeline: what still waits on something it need not
+
+A standing entry, not a one-off: every release is the moment to ask what
+sat idle waiting on a step it did not depend on, in the release itself and
+in the testing and deployment around it. Two reorderings landed on
+29 September 2026 (`docs/RELEASING.md`): the Windows Store package is now
+built at the pushed commit alongside the Apple builds rather than after the
+tag, and the tag goes as soon as every store artefact has been read back
+rather than after the Apple submission, so the GitHub release, both snaps and
+the Windows package no longer wait behind Apple's processing. What is left,
+each wanting a dry run on a day that is not a release day:
+
+- **The three store builds run one at a time** only because they swap
+  `go.mod` and `FyneApp.toml` in one shared root under an `EXIT` trap. Each
+  script already takes its root from its own path, so one worktree per build
+  removes the collision; `third_party/` is generated, so each worktree runs
+  `scripts/setup-fyne-patch.sh` first. About twenty-five minutes down to ten.
+- **The local mirror of CI before a push** repeats what CI runs, some
+  forty minutes, and exists because a Mac cannot see a Linux or Windows vet
+  failure. When the tree has just been through a verified review that ran
+  every suite under every tag and under the race detector, the two pane
+  checks (`check-ios-pane.sh` alone, then `check-android-pane.sh`) are the
+  part CI cannot stand in for; the rest can be CI's. The cost is a red public
+  run when something slips.
+- **Screenshots go up by their own tool** (`appstore/push-screenshots.py`,
+  once it lands); `submit-version.py --write` could call it when a ready set
+  named for the version exists, so the upload is not a step to remember.
+- **A conductor for the Apple leg** — build, read back, upload, wait for
+  `VALID`, `submit-version.py --write` — as one script with a ledger of what
+  each step printed, leaving only the submit click.
+- **Play from CI at the tag**, as the Windows package is: needs the upload
+  key and the service account in the repository's secrets, which is the
+  account holder's decision, and matters only once Play grants production.
+
 ## A phone sheet reopened under the keyboard ended at the keyboard's top — FIXED 29 September 2026
 
 Every phone sheet with a field — the note composer, Settings, Ask, and the

@@ -188,7 +188,7 @@ is refused with the reason in its message and nothing public has changed:
 packages are the tag's artefacts either way. After the tag, the correction
 stays out of every commit until the release is done. A commit after the tag
 makes the version unbuildable, which matters while a store build of it remains
-(`docs/RELEASING.md`, stage 7), and the site is published from the tag's
+(`docs/RELEASING.md`, stage 5), and the site is published from the tag's
 tree by `scripts/publish-site.sh`, which refuses the dirty tree the corrected
 file leaves. So the file is stashed across the site publish
 (`git stash push -- msstore/metadata/en-gb/whats-new-<version>.txt` before

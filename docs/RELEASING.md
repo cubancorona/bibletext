@@ -160,6 +160,20 @@ scripts/release-mac-store.sh    # -> build/mac-store/BibleText.pkg
 scripts/build-android.sh --release
 ```
 
+At the same time — it needs nothing from this machine — dispatch the Windows
+Store build at the commit CI has just proved:
+
+```
+gh workflow run msstore.yml --ref <sha>          # the commit the tag will name
+```
+
+Nothing in `msstore.yml` reads the tag; `--ref` decides which tree is checked
+out, and the MSIX is stamped from the desktop ledger plus a fourth `.0`. Give
+it the exact commit, never `main` by name, and if a later fix moves the tag,
+dispatch it again at the new commit: five minutes on CI, where the alternative
+is a package labelled for a tree the tag does not name. Its certification
+clock, about a day, starts here rather than after the tag.
+
 ### 4 — Read each artefact back
 
 Version, build number, minimum OS — from the artefact, not the ledger. An
@@ -175,38 +189,22 @@ check on the GitHub release assets — trimpath, the release key, and that no
 runner workspace path leaked into the package — and it refuses to run without
 `GITHUB_WORKSPACE` set. It reads no version and no build number.
 
-### 5 — Upload to Apple, then Play
+### 5 — Tag, once every artefact exists
 
-`xcrun altool --upload-app -t ios` and `-t macos`. **Keep both delivery
-UUIDs**: each is that build's App Store Connect id and `submit-version.py`
-checks the attached build against it.
+An annotated `v<version>` at the build commit, pushed (permission required),
+as soon as stage 4 has read all three artefacts back — before anything is
+uploaded.
 
-Play: `scripts/play-publish.py --dry-run --notes <file> upload <aab> alpha`
-first — it uploads into an edit it then discards — then the identical command
-without `--dry-run`, with `--status completed`.
-
-### 6 — Submit to Apple
-
-Wait for each build to reach `VALID`, then per platform:
-
-```
-python3 appstore/submit-version.py --platform IOS --build N --delivery-uuid U \
-    --write --confirm-version <v> --accept-inherited-screenshots --submit
-```
-
-Screenshots are the one field a release may knowingly inherit, and saying so
-explicitly is how that stays a decision rather than an oversight. Apple takes
-**one version per platform** into review at a time, so check nothing else is in
-review on that platform first — `release-status.py` prints it.
-
-### 7 — Tag, last
-
-An annotated `v<version>` at the build commit, pushed (permission required).
-
-**This is why the order is what it is.** Tagging last means never publishing a
-version number the store builds turned out to be unable to produce. On
-21 September 2026 the tag went first and it was recoverable only because `HEAD`
-still equalled the tag and the tree was clean.
+**This is why it waits for stage 4 and no longer.** The tag publishes a
+version number, and a number must never be published for a tree the store
+builds turned out unable to produce; by the end of stage 4 that is proven.
+Waiting longer bought nothing: a refusal from here on is a store's — a missing
+What's New, a rejected upload — and the one that has happened (1.2.8, Mac) was
+put right in App Store Connect, not in the tree. Until 29 September 2026 the
+tag went after the Apple submission, which held the GitHub release, both snaps
+and the Windows package behind Apple's processing wait for no reason. On
+21 September 2026 the tag went first, before any build, and it was recoverable
+only because `HEAD` still equalled the tag and the tree was clean.
 
 **And once it is pushed, stop committing to `main` under that number.** The tag
 is what `check-version-not-spent.sh` compares against, so the first commit
@@ -226,7 +224,32 @@ number. Anything merged after the tag ships under the next version.
 
 `release.yml` then builds a **draft** release — macOS universal, Linux amd64
 and arm64 tarballs, both AppImages with `.zsync`, both Windows zips — and
-publishes both snaps to the Snap Store's **edge** channel.
+publishes both snaps to the Snap Store's **edge** channel, while the Apple
+uploads of stage 6 go on.
+
+### 6 — Upload to Apple, then Play
+
+`xcrun altool --upload-app -t ios` and `-t macos`. **Keep both delivery
+UUIDs**: each is that build's App Store Connect id and `submit-version.py`
+checks the attached build against it.
+
+Play: `scripts/play-publish.py --dry-run --notes <file> upload <aab> alpha`
+first — it uploads into an edit it then discards — then the identical command
+without `--dry-run`, with `--status completed`.
+
+### 7 — Submit to Apple
+
+Wait for each build to reach `VALID`, then per platform:
+
+```
+python3 appstore/submit-version.py --platform IOS --build N --delivery-uuid U \
+    --write --confirm-version <v> --accept-inherited-screenshots --submit
+```
+
+Screenshots are the one field a release may knowingly inherit, and saying so
+explicitly is how that stays a decision rather than an oversight. Apple takes
+**one version per platform** into review at a time, so check nothing else is in
+review on that platform first — `release-status.py` prints it.
 
 ### 8 — Finish the GitHub release
 
@@ -241,19 +264,18 @@ a half-built release becomes everyone's download.
 
 ### 9 — Microsoft Store
 
+The package was built in stage 3, at the commit the tag now names. Check the
+run's ref against the tag before trusting its artefacts (`gh run view` prints
+it); if the tag ended up elsewhere, dispatch again at the tag:
+
 ```
 gh workflow run msstore.yml --ref v<version>     # at the TAG, never the branch
 ```
 
 The MSIX version is the desktop ledger plus a fourth `.0`, so a run dispatched
-at `main` produces a package labelled for a tree the tag does not name. Nothing
-in `msstore.yml` reads the tag — `--ref` simply decides which tree is checked
-out — so this is a discipline the workflow cannot enforce for you. Check the
-run's ref before trusting its artefacts.
-
-This stage does not otherwise depend on the tag, so it can run before stage 7
-if a Windows-only fix needs to reach the Store sooner. What it must not do is
-run against a tree that differs from whatever `v<version>` ends up naming.
+at any other tree produces a package labelled for one the tag does not name.
+Nothing in `msstore.yml` reads the tag — `--ref` simply decides which tree is
+checked out — so this is a discipline the workflow cannot enforce for you.
 
 Download both `BibleText-Windows-<arch>-msix` artefacts, then:
 
@@ -282,7 +304,7 @@ other listing field to the clone. If the PUT is refused over the notes,
 `abort`, correct the file and `create` again. `submit.py` reads the file on
 disk, so the correction is sent without a commit. After the tag it stays
 uncommitted until the release is done: a commit after the tag makes `<v>`
-unbuildable, which matters while a store build of it remains (stage 7), and
+unbuildable, which matters while a store build of it remains (stage 5), and
 moves `main` off the tag the site is published from. Stage 11 refuses the
 dirty tree the file leaves, so set it aside for that stage rather than let it
 ride along:
