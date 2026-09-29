@@ -285,8 +285,11 @@ if git -C "$WORKTREE" diff --cached --quiet; then
   exit 0
 fi
 # Last line of defence: refuse a commit that stages a deletion of the domain
-# file or one of the hand-written pages.
-if git -C "$WORKTREE" diff --cached --name-status | grep -E '^D\s+(CNAME|index\.html|privacy\.html|support\.html|\.well-known/.*)$'; then
+# file, one of the hand-written pages, or one of the three association files
+# shared links depend on. Any other file under .well-known/ may go: rsync
+# --delete removes whatever this tree no longer writes, and that is the only
+# way a retired file leaves the site.
+if git -C "$WORKTREE" diff --cached --name-status | grep -E '^D\s+(CNAME|index\.html|privacy\.html|support\.html|\.well-known/(apple-app-site-association|assetlinks\.json|windows-app-web-link))$'; then
   fail "this commit would delete a load-bearing root file"
 fi
 git -C "$WORKTREE" commit --quiet -m "Publish site: landing pages + web reader ($(date -u +%Y-%m-%d))"
