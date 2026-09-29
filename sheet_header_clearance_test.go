@@ -323,7 +323,7 @@ func TestTranslationPickerPinsItsSentencesWhereTheyFit(t *testing.T) {
 	drv := fyne.CurrentApp().Driver()
 	var lastRowBottom float32
 	for _, v := range versionPickerOrder() {
-		name := findTreeText(body.Content, v.Name+"  ("+v.Abbrev+")")
+		name := findTreeStatus(body.Content, v.Name+"  ("+v.Abbrev+")")
 		if name == nil {
 			t.Fatalf("1280x440: the %s row is not in the list", v.ID)
 		}
@@ -404,15 +404,117 @@ func objectUnder(root, target fyne.CanvasObject) bool {
 	return found
 }
 
-// findTreeText returns the first canvas.Text under o reading text.
-func findTreeText(o fyne.CanvasObject, text string) *canvas.Text {
-	var found *canvas.Text
+// findTreeStatus returns the first statusLine under o reading text: the
+// translation picker's row names, publishers and captions.
+func findTreeStatus(o fyne.CanvasObject, text string) *statusLine {
+	var found *statusLine
 	walkTree(o, func(n fyne.CanvasObject) {
-		if c, ok := n.(*canvas.Text); ok && found == nil && c.Text == text {
-			found = c
+		if s, ok := n.(*statusLine); ok && found == nil && s.text == text {
+			found = s
 		}
 	})
 	return found
+}
+
+// THE PICKER FITS A 320PT PHONE. The sheet there is 280pt wide, and its
+// rows are drawn as statusLines that break between words, its sentences
+// wrapped to the list's width by the squeeze the list sits in: nothing in
+// the list ends past the list's edge, and the sheet sits inside the screen.
+// Opened in the notice states a reader meets — the default translation
+// updating on a previous edition, the reader's choice fallen back on a
+// previous edition, and every notice at once — with the translations the
+// build compiles in. Mutations guarded: the list not squeezed (the sentences
+// keep the width they wrapped at pinned, and lose their last words); the
+// rows as canvas.Text (the NKJV publisher line, the WEBC name and the key
+// caption run past the edge).
+func TestTranslationPickerFitsA320Phone(t *testing.T) {
+	staleAll := func(s *AppState) {
+		s.staleVersions = map[string]bool{}
+		for _, v := range bibleVersions() {
+			s.staleVersions[v.ID] = true
+		}
+	}
+	for _, tc := range []struct {
+		name    string
+		arrange func(*testing.T, *AppState)
+	}{
+		{"updating and stale", func(_ *testing.T, s *AppState) {
+			s.CurrentVersion = defaultVersionID
+			s.fullPending, s.fullDownloading = true, true
+			staleAll(s)
+		}},
+		{"fallen back and stale", func(_ *testing.T, s *AppState) {
+			vs := bibleVersions()
+			s.CurrentVersion = defaultVersionID
+			s.preferredVersion = vs[len(vs)-1].ID
+			staleAll(s)
+		}},
+		{"every notice", func(t *testing.T, s *AppState) { withEveryNotice(t, s) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			st := sampleState()
+			st.aiKeys = newKeyStoreWith(newFakePrefs())
+			win := noteSheetWindow(t, st, true, 320, 568)
+			win.SetContent(canvas.NewRectangle(st.pal().Background))
+			tc.arrange(t, st)
+			if n := fullPendingNotice(st); strings.Count(n, "\n") < 1 {
+				t.Fatalf("control: the notice should say at least two facts; it reads %q", n)
+			}
+			popup := pickerPopup(t, st, showVersionPicker)
+			defer popup.Hide()
+			// The frames a painting canvas lays out after the open, until
+			// nothing asks for another (paintedFrames).
+			walk := newLayoutWalker(t)
+			frames := newPaintedFrames(walk, popup)
+			for i := 0; i < 12 && len(frames.frame()) > 0; i++ {
+			}
+			sheetBox(t, popup)
+			drv := fyne.CurrentApp().Driver()
+			if left, width := drv.AbsolutePositionForObject(popup.Content).X, popup.Content.Size().Width; left < 0 || left+width > 320 {
+				t.Errorf("the sheet spans x %.1f..%.1f on a 320pt canvas", left, left+width)
+			}
+			body := findScroll(popup)
+			if body == nil {
+				t.Fatal("the picker has no list")
+			}
+			listRight := drv.AbsolutePositionForObject(body).X + body.Size().Width
+			sentences := pickerSentences(popup)
+			if len(sentences) < 2 {
+				t.Fatalf("control: the notice and the key sentence should both show; the sentences are %q", labelTexts(sentences))
+			}
+			under := func(p placed, root fyne.CanvasObject) bool {
+				for _, a := range p.path {
+					if a == root {
+						return true
+					}
+				}
+				return false
+			}
+			texts := 0
+			for _, p := range walk.walk(popup) {
+				tx, ok := p.obj.(*canvas.Text)
+				if !ok || !p.shown || tx.Text == "" {
+					continue
+				}
+				texts++
+				end := p.pos.X + tx.MinSize().Width
+				if end > 320.5 {
+					t.Errorf("%q ends at %.1f, off the 320pt canvas", tx.Text, end)
+				}
+				if under(p, body.Content) && end > listRight+0.5 {
+					t.Errorf("%q ends at %.1f, past the list's edge at %.1f", tx.Text, end, listRight)
+				}
+			}
+			if texts < 12 {
+				t.Fatalf("control: the walk saw only %d texts; the rows and sentences were not reached", texts)
+			}
+			for _, l := range sentences {
+				if !treeHasText(popup, l.Text) {
+					t.Errorf("the sentence %q is not on the sheet", l.Text)
+				}
+			}
+		})
+	}
 }
 
 // ON A PHONE OR TABLET NOTHING IS RESIZED UNDER THE READER. There the

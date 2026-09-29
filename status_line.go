@@ -26,10 +26,21 @@ type statusLine struct {
 	text  string
 	color color.Color
 	size  float32
+	style fyne.TextStyle
 }
 
 func newStatusLine(size float32) *statusLine {
 	s := &statusLine{size: size}
+	s.ExtendBaseWidget(s)
+	return s
+}
+
+// newStatusText is a statusLine that says text in c from the start, in a
+// style — the translation picker's rows, whose names are bold and whose
+// captions italic (versions_ui.go). Measured in that style, so a bold line
+// breaks where its bold width says.
+func newStatusText(text string, size float32, style fyne.TextStyle, c color.Color) *statusLine {
+	s := &statusLine{text: text, color: c, size: size, style: style}
 	s.ExtendBaseWidget(s)
 	return s
 }
@@ -55,6 +66,11 @@ func (s *statusLine) CreateRenderer() fyne.WidgetRenderer {
 // out: the text is one line. A single word wider than width has a line to
 // itself rather than being cut.
 func statusLines(text string, width, size float32) []string {
+	return statusLinesStyled(text, width, size, fyne.TextStyle{})
+}
+
+// statusLinesStyled is statusLines measured in a style.
+func statusLinesStyled(text string, width, size float32, style fyne.TextStyle) []string {
 	if text == "" {
 		return nil
 	}
@@ -70,7 +86,7 @@ func statusLines(text string, width, size float32) []string {
 	for _, w := range words[1:] {
 		last := &lines[len(lines)-1]
 		joined := *last + " " + w
-		if width > 0 && fyne.MeasureText(joined, size, fyne.TextStyle{}).Width > width {
+		if width > 0 && fyne.MeasureText(joined, size, style).Width > width {
 			lines = append(lines, w)
 			continue
 		}
@@ -88,11 +104,11 @@ type statusLineRenderer struct {
 // rowHeight is the height of one line: the height a canvas.Text of this size
 // reports, which is what the single canvas.Text before it measured.
 func (r *statusLineRenderer) rowHeight() float32 {
-	return fyne.MeasureText("M", r.line.size, fyne.TextStyle{}).Height
+	return fyne.MeasureText("M", r.line.size, r.line.style).Height
 }
 
 func (r *statusLineRenderer) Layout(size fyne.Size) {
-	lines := statusLines(r.line.text, size.Width, r.line.size)
+	lines := statusLinesStyled(r.line.text, size.Width, r.line.size, r.line.style)
 	for len(r.texts) < len(lines) {
 		t := canvas.NewText("", r.line.color)
 		r.texts = append(r.texts, t)
@@ -102,7 +118,7 @@ func (r *statusLineRenderer) Layout(size fyne.Size) {
 	row := r.rowHeight()
 	for i, s := range lines {
 		t := r.texts[i]
-		t.Text, t.Color, t.TextSize = s, r.line.color, r.line.size
+		t.Text, t.Color, t.TextSize, t.TextStyle = s, r.line.color, r.line.size, r.line.style
 		t.Move(fyne.NewPos(0, float32(i)*row))
 		t.Resize(fyne.NewSize(size.Width, row))
 		t.Refresh()
@@ -114,14 +130,14 @@ func (r *statusLineRenderer) Layout(size fyne.Size) {
 // wider than a word, and as tall as the lines the text breaks into at the
 // width it was last laid out at.
 func (r *statusLineRenderer) MinSize() fyne.Size {
-	lines := statusLines(r.line.text, r.line.Size().Width, r.line.size)
+	lines := statusLinesStyled(r.line.text, r.line.Size().Width, r.line.size, r.line.style)
 	n := len(lines)
 	if n == 0 {
 		n = 1 // an empty line keeps its row, as the canvas.Text did
 	}
 	var widest float32
 	for _, w := range strings.Fields(r.line.text) {
-		if ww := fyne.MeasureText(w, r.line.size, fyne.TextStyle{}).Width; ww > widest {
+		if ww := fyne.MeasureText(w, r.line.size, r.line.style).Width; ww > widest {
 			widest = ww
 		}
 	}

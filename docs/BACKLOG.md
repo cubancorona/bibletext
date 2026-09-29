@@ -2354,7 +2354,25 @@ confirm is in `docs/VISUAL_TESTS.md` V15:
   tablet, where the room is the screen less 80pt: on a 568x320 iPhone SE on
   its side the sentences now scroll after the rows, and the sheet is 240pt
   tall with a 68pt list where it was 272pt with a 32pt one; the other phone
-  and tablet sizes keep them pinned. The toolkit never sizes an open sheet
+  and tablet sizes keep them pinned. On a 320pt phone (the first iPhone SE,
+  a 320dp Android) the sentences that followed the rows into the scroll
+  kept the width they had wrapped at pinned, at the popup's minimum width,
+  and a scroll widens its content to that width and clips it sideways: in
+  a 284pt view they were 302pt wide and each lost its last word, whenever
+  two of the notice's facts held at once in the default build (the first
+  launch after an epoch bump while updating) or one with the NRSV or LSB
+  compiled in. The list now sits in `squeezeWidthLayout`, as the Settings
+  body does, so it takes the view's width and the sentences wrap to it;
+  and the rows' name, publisher and caption, which were `canvas.Text` and
+  drew their whole string on one line, are statusLines that break between
+  words, since on that phone the sheet is 280pt wide (the 280pt floor, the
+  canvas less 48pt being narrower) and the NKJV publisher line (301.5pt),
+  the WEBC name and the key caption ran past the list's edge and off the
+  screen — the rows' minimum width had also forced the sheet to 364pt on a
+  320pt canvas, its border on both screen edges. Held by
+  `TestTranslationPickerFitsA320Phone`: the sheet inside the screen and
+  every text in the list ending inside the list's edge, in three notice
+  states with the build's translations. The toolkit never sizes an open sheet
   again: on a window resize it only
   re-centres it at the size it opened at, so restoring a maximised window,
   or dragging an edge up, brought the arc back. Every desktop sheet whose

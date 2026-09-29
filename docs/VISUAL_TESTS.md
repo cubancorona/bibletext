@@ -668,6 +668,15 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       Gemini hint breaks onto a second line inside the card; switch to each
       assistant and back and the sheet grows and shrinks with its status
       rather than cutting it.
+- [ ] The translation picker on a 320pt iPhone SE and a 320dp Android
+      phone, while the default translation is updating on a previous
+      edition (Settings > nothing to do: the first launch after an update
+      shows it) and with the included key: the sheet stands inside the
+      screen with a margin on both sides, the NKJV's publisher line, the
+      WEBC name and the "Unlocks with your own free API.Bible key" caption
+      break onto a second line inside the list, and the sentences under the
+      rows end inside the list with their last words. On a 375pt phone and
+      wider every row stands on one line as before.
 - [ ] Settings on a 320pt iPhone SE and a 375pt iPhone (an SE of the
       second or third generation, or a mini), with an assistant chosen:
       under both key fields Paste and Test key share a line and Clear sits

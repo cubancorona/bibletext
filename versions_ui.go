@@ -191,7 +191,14 @@ func showVersionPickerWith(state *AppState, notice string) {
 	}
 	placeSentences(true)
 
-	body := container.NewVScroll(container.NewPadded(list))
+	// Inside squeezeWidthLayout, as the Settings body is: a scroll widens its
+	// content to the content's MinSize and clips the overflow sideways, and
+	// the sentences, laid out pinned at the popup's minimum width before they
+	// followed the rows into the scroll, kept that width there. On a 320pt
+	// phone that was 302pt of row in a 284pt view, and every sentence lost
+	// its last word at the list's edge. Squeezed, the list takes the view's
+	// width and the sentences wrap to it (sheet_fit.go).
+	body := container.NewVScroll(container.New(squeezeWidthLayout{}, container.NewPadded(list)))
 	content := container.NewBorder(header, footer, nil, nil, body)
 
 	popup = widget.NewModalPopUp(
@@ -474,12 +481,15 @@ func versionRow(state *AppState, v BibleVersion, onTap func()) fyne.CanvasObject
 	if !selectable {
 		nameColor = pal.TextMuted // greyed: present but not available
 	}
-	name := canvas.NewText(v.Name+"  ("+v.Abbrev+")", nameColor)
-	name.TextStyle = fyne.TextStyle{Bold: true}
-	name.TextSize = 15
-
-	publisher := canvas.NewText(v.Publisher, pal.TextMuted)
-	publisher.TextSize = 11
+	// The name, the publisher and the caption are statusLines, not
+	// canvas.Text: a canvas.Text draws its whole string on one line whatever
+	// width it is given, and on a 320pt phone the sheet is 280pt wide, where
+	// the NKJV's publisher line, the WEBC name and the key caption ran past
+	// the list's edge and were cut there. Each breaks between words where the
+	// row is narrower than the text, and on one line reads exactly as the
+	// canvas.Text did.
+	name := newStatusText(v.Name+"  ("+v.Abbrev+")", 15, fyne.TextStyle{Bold: true}, nameColor)
+	publisher := newStatusText(v.Publisher, 11, fyne.TextStyle{}, pal.TextMuted)
 
 	lines := container.NewVBox(name, publisher)
 	switch {
@@ -491,16 +501,10 @@ func versionRow(state *AppState, v BibleVersion, onTap func()) fyne.CanvasObject
 		if byokCapable(v) {
 			text = "Unlocks with your own free API.Bible key — see Settings"
 		}
-		tag := canvas.NewText(text, pal.TextMuted)
-		tag.TextSize = 11
-		tag.TextStyle = fyne.TextStyle{Italic: true}
-		lines.Add(tag)
+		lines.Add(newStatusText(text, 11, fyne.TextStyle{Italic: true}, pal.TextMuted))
 	case v.isTesting():
 		// Selectable only because internal testing mode is on (BIBLETEXT_ENABLE_TESTING).
-		tag := canvas.NewText("TESTING — placeholder text, not the real translation", pal.Accent)
-		tag.TextSize = 11
-		tag.TextStyle = fyne.TextStyle{Italic: true}
-		lines.Add(tag)
+		lines.Add(newStatusText("TESTING — placeholder text, not the real translation", 11, fyne.TextStyle{Italic: true}, pal.Accent))
 	case v.LicenseNotice != "":
 		// Licensed and serving real text: show the attribution the rights
 		// holder requires, wrapped so the full notice is actually readable.
