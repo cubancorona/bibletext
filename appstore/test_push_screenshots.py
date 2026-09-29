@@ -10,14 +10,19 @@ fails the test outright on any write made without --write. ci.yml's
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import importlib.util
 import io
+import itertools
 import os
 import re
 import struct
 import tempfile
 import unittest
+import urllib.error
+import urllib.request
 import zlib
+from unittest import mock
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
@@ -64,6 +69,9 @@ SIZES = {"APP_IPHONE_67": (1320, 2868), "APP_IPAD_PRO_3GEN_129": (2064, 2752),
 SUBDIRS = {"APP_IPHONE_67": "", "APP_IPAD_PRO_3GEN_129": "ipad13", "APP_DESKTOP": "mac"}
 VERSION_ID = "v-0001"
 LOCALIZATION_ID = "loc-0001"
+# More polls of one image than any scripted delivery needs: a poll loop that
+# has lost its exit fails the test here rather than hanging the suite.
+POLL_CAP = 25
 
 
 class FakeStore:
@@ -174,6 +182,8 @@ class FakeStore:
                                  f"polled {path} before its commit")
             n = self.polls.get(record["id"], 0)
             self.polls[record["id"]] = n + 1
+            if n >= POLL_CAP:
+                self.test.fail(f"{path} polled more than {POLL_CAP} times")
             state = self.delivery[min(n, len(self.delivery) - 1)]
             record["attributes"]["assetDeliveryState"] = {
                 "state": state, "errors": list(self.failure or []) if state == "FAILED" else [],
@@ -184,6 +194,7 @@ class FakeStore:
     def write(self, method, path, body):
         if method == "POST" and path == "/v1/appScreenshotSets":
             display = body["data"]["attributes"]["screenshotDisplayType"]
+            self.test.assertEqual(body["data"]["type"], "appScreenshotSets")
             self.test.assertEqual(body["data"]["relationships"]["appStoreVersionLocalization"]["data"],
                                   {"type": "appStoreVersionLocalizations", "id": LOCALIZATION_ID})
             self.sets[display] = {"id": f"set-{display}", "screenshots": []}
@@ -213,6 +224,7 @@ class FakeStore:
         if method == "PATCH" and path.startswith("/v1/appScreenshots/"):
             _entry, record = self.find(path.rsplit("/", 1)[1])
             self.test.assertIsNotNone(record)
+            self.test.assertEqual(body["data"]["type"], "appScreenshots")
             self.test.assertEqual(body["data"]["id"], record["id"])
             record["attributes"]["uploaded"] = body["data"]["attributes"]["uploaded"]
             record["attributes"]["sourceFileChecksum"] = body["data"]["attributes"]["sourceFileChecksum"]
@@ -221,6 +233,8 @@ class FakeStore:
         if method == "PATCH" and match:
             entry = next(e for e in self.sets.values() if e["id"] == match.group(1))
             by_id = {r["id"]: r for r in entry["screenshots"]}
+            self.test.assertEqual({item["type"] for item in body["data"]}, {"appScreenshots"},
+                                  "each reorder item names its resource type")
             self.test.assertEqual(sorted(by_id), sorted(item["id"] for item in body["data"]),
                                   "the reorder must name exactly the set's screenshots")
             entry["screenshots"] = [by_id[item["id"]] for item in body["data"]]
@@ -241,6 +255,11 @@ class Harness(unittest.TestCase):
     def setUp(self):
         self.m = load_module()
         self.m.sleep = lambda seconds: None
+        # The clock advances 100 s per read, so a poll that never completes
+        # reaches the tool's limit within a few rounds rather than spinning
+        # through POLL_LIMIT real seconds with sleep stubbed out.
+        clock = itertools.count(0, 100)
+        self.m.monotonic = lambda: float(next(clock))
         self.version = ledger_version(self.platform)
         self.tmp = tempfile.mkdtemp()
         self.files: dict = {}
@@ -290,7 +309,9 @@ class Harness(unittest.TestCase):
         return f"{code}\n{out.getvalue()}\n{err.getvalue()}"
 
     def md5(self, display: str, name: str) -> str:
-        return self.m.md5_hex(self.files[(display, name)])
+        """hashlib's own MD5 of the file, so a wrong checksum in the tool
+        cannot be held to itself here."""
+        return hashlib.md5(self.files[(display, name)]).hexdigest()
 
 
 class LocalValidation(Harness):
@@ -349,6 +370,14 @@ class LocalValidation(Harness):
         self.store()
         self.assertIn("at most 10", self.refused("--local-only"))
 
+    def test_a_set_of_exactly_ten_is_accepted(self):
+        self.write_set("APP_IPHONE_67", 10)
+        self.write_set("APP_IPAD_PRO_3GEN_129", 1)
+        self.store()
+        code, out = self.run_tool("--local-only")
+        self.assertEqual(code, 0)
+        self.assertIn("APP_IPHONE_67: 10 from", out)
+
     def test_a_file_that_is_not_a_png_is_refused(self):
         self.write_full_set(2)
         with open(os.path.join(self.tmp, "03-shot.png"), "wb") as handle:
@@ -379,6 +408,21 @@ class MacPlatform(Harness):
         self.write_set("APP_DESKTOP", 2, size=(1320, 2868))
         self.store()
         self.assertIn("1320x2868", self.refused("--local-only"))
+
+    def test_the_mac_version_comes_from_the_mac_ledger(self):
+        # Two ledgers that disagree, so reading the mobile one for the Mac
+        # is visible; the repository's own agree on every release.
+        for ledger, version in (("cmd/mobile/FyneApp.toml", "9.9.9"),
+                                ("cmd/bibletext/FyneApp.toml", "8.8.8")):
+            os.makedirs(os.path.join(self.tmp, os.path.dirname(ledger)))
+            with open(os.path.join(self.tmp, ledger), "w", encoding="utf-8") as handle:
+                handle.write(f'Version = "{version}"\n')
+        self.m.REPO = self.tmp
+        self.write_set("APP_DESKTOP", 2)
+        fake = self.store(writable=True)
+        message = self.refused("--write", "--confirm-version", "9.9.9")
+        self.assertIn("--confirm-version 8.8.8", message)
+        self.assertEqual(fake.connected, 0)
 
 
 class Arguments(Harness):
@@ -647,12 +691,11 @@ class Writing(Harness):
 
     def test_a_delivery_that_never_completes_gives_up_and_says_so(self):
         fake = self.arrange(delivery=("UPLOAD_COMPLETE",))
-        clock = iter(range(0, 100000, 100))
-        self.m.monotonic = lambda: float(next(clock))
         message = self.refused("--write", "--confirm-version", self.version)
         self.assertIn("had not reached COMPLETE", message)
         self.assertIn("giving up", message)
         self.assertLess(fake.polls["new-0"], 20)
+        self.assertNotIn(("PATCH", "order set-APP_IPHONE_67"), self.kinds(fake.calls))
 
     def test_a_read_back_checksum_mismatch_is_a_non_zero_exit(self):
         fake = self.arrange()
@@ -678,6 +721,19 @@ class Writing(Harness):
         fake.tamper = lambda records: records.reverse() if records[-1]["id"].startswith("new-") else None
         message = self.refused("--write", "--confirm-version", self.version)
         self.assertIn("position 1 is 02-shot.png, expected 01-shot.png", message)
+
+    def test_a_read_back_that_is_not_complete_is_a_non_zero_exit(self):
+        fake = self.arrange()
+
+        def tamper(records):
+            for record in records:
+                if record["id"].startswith("new-"):
+                    record["attributes"]["assetDeliveryState"] = {"state": "UPLOAD_COMPLETE",
+                                                                  "errors": []}
+        fake.tamper = tamper
+        message = self.refused("--write", "--confirm-version", self.version)
+        self.assertIn("read-back mismatch for APP_IPHONE_67", message)
+        self.assertIn("01-shot.png: assetDeliveryState UPLOAD_COMPLETE", message)
 
     def test_a_version_apple_holds_is_refused_before_any_write(self):
         fake = self.arrange(state="WAITING_FOR_REVIEW")
@@ -769,6 +825,75 @@ class Writing(Harness):
                          ["held-0", "held-1"])
         self.assertIn(("POST", "/v1/appScreenshotSets"), self.kinds(fake.calls))
 
+    def test_a_set_holding_the_same_names_with_other_content_is_replaced(self):
+        # A retaken set keeps its file names from release to release; only
+        # the checksums say the images changed.
+        names = self.write_set("APP_IPHONE_67", 2)
+        self.write_set("APP_IPAD_PRO_3GEN_129", 1)
+        held = [FakeStore.record(f"held-{n}", name, 10, f"{n + 1:032x}")
+                for n, name in enumerate(names)]
+        fake = self.store(sets={"APP_IPHONE_67": held}, writable=True)
+        code, out = self.write()
+        self.assertEqual(code, 0)
+        self.assertNotIn("nothing to do", out)
+        self.assertNotIn("would only reorder", out)
+        self.assertIn(("DELETE", "held-0"), self.kinds(fake.calls))
+        self.assertIn(("DELETE", "held-1"), self.kinds(fake.calls))
+        self.assertEqual([r["attributes"]["sourceFileChecksum"]
+                          for r in fake.sets["APP_IPHONE_67"]["screenshots"]],
+                         [self.md5("APP_IPHONE_67", name) for name in names])
+
+    def test_a_set_holding_the_same_files_at_failed_is_replaced(self):
+        names = self.write_set("APP_IPHONE_67", 2)
+        self.write_set("APP_IPAD_PRO_3GEN_129", 1)
+        held = [FakeStore.record(f"held-{n}", name, 10, self.md5("APP_IPHONE_67", name), "FAILED")
+                for n, name in enumerate(names)]
+        fake = self.store(sets={"APP_IPHONE_67": held}, writable=True)
+        code, out = self.write()
+        self.assertEqual(code, 0)
+        self.assertNotIn("nothing to do", out)
+        self.assertIn(("DELETE", "held-0"), self.kinds(fake.calls))
+        self.assertIn(("DELETE", "held-1"), self.kinds(fake.calls))
+
+    def test_keep_existing_up_to_exactly_ten_is_accepted(self):
+        self.write_set("APP_IPHONE_67", 2)
+        self.write_set("APP_IPAD_PRO_3GEN_129", 1)
+        self.store(sets={"APP_IPHONE_67": self.existing("APP_IPHONE_67", 8)}, writable=True)
+        code, out = self.write("--keep-existing")
+        self.assertEqual(code, 0)
+        self.assertIn("APP_IPHONE_67 read back: 10 images", out)
+
+    def test_a_file_changed_after_validation_is_refused_before_upload(self):
+        fake = self.arrange()
+        path = os.path.join(self.tmp, "01-shot.png")
+
+        def connect_after_a_rewrite():
+            with open(path, "ab") as handle:
+                handle.write(b"tail")
+            return fake.connect()
+        self.m.connect = connect_after_a_rewrite
+        message = self.refused("--write", "--confirm-version", self.version)
+        self.assertIn("01-shot.png changed on disk", message)
+        self.assertNotIn("PUT", [call[0] for call in fake.calls])
+        self.assertNotIn("PATCH", [call[0] for call in fake.calls])
+
+    def test_a_rejected_upload_part_stops_the_run_before_the_commit(self):
+        fake = self.arrange()
+        accept = fake.upload
+
+        def reject_the_second_part(operation, chunk):
+            if operation["url"].endswith("/2"):
+                fake.calls.append(("PUT", operation["url"], chunk, {}))
+                return 403, b"<Error><Code>AccessDenied</Code></Error>"
+            return accept(operation, chunk)
+        fake.upload = reject_the_second_part
+        message = self.refused("--write", "--confirm-version", self.version)
+        self.assertIn("[ERROR 403] upload 01-shot.png bytes", message)
+        self.assertIn("AccessDenied", message)
+        self.assertIn("write stopped", message)
+        self.assertNotIn("PATCH", [call[0] for call in fake.calls])
+        self.assertEqual(self.kinds(fake.calls)[-1], ("PUT", "new-0/2"))
+
     def test_a_refused_write_stops_the_run(self):
         fake = self.arrange()
         real_write = fake.write
@@ -781,6 +906,48 @@ class Writing(Harness):
         message = self.refused("--write", "--confirm-version", self.version)
         self.assertIn("write stopped", message)
         self.assertNotIn("POST", [c[0] for c in fake.calls])
+
+
+class UploadClient(Harness):
+    """Client.upload is the one HTTP request the fake store does not stand in
+    for: the PUT of a byte range to the pre-signed URL an operation names."""
+
+    OPERATION = {"method": "PUT", "url": "https://upload.invalid/x/1", "offset": 0, "length": 3,
+                 "requestHeaders": [{"name": "Content-Type", "value": "image/png"},
+                                    {"name": "X-Part", "value": "1"}]}
+
+    class Response(io.BytesIO):
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def test_the_put_carries_the_operations_headers_and_bytes_and_no_token(self):
+        seen = []
+
+        def urlopen(request, timeout=None):
+            seen.append(request)
+            return self.Response(b"")
+        with mock.patch.object(urllib.request, "urlopen", urlopen):
+            status, body = self.m.Client(None).upload(self.OPERATION, b"abc")
+        self.assertEqual((status, body), (200, b""))
+        request, = seen
+        self.assertEqual(request.get_method(), "PUT")
+        self.assertEqual(request.full_url, self.OPERATION["url"])
+        self.assertEqual(request.data, b"abc")
+        self.assertEqual({name.lower(): value for name, value in request.header_items()},
+                         {"content-type": "image/png", "x-part": "1"})
+
+    def test_a_refused_put_is_reported_as_its_status_and_body(self):
+        def urlopen(request, timeout=None):
+            raise urllib.error.HTTPError(request.full_url, 403, "Forbidden", {},
+                                         io.BytesIO(b"<Error>AccessDenied</Error>"))
+        with mock.patch.object(urllib.request, "urlopen", urlopen):
+            status, body = self.m.Client(None).upload(self.OPERATION, b"abc")
+        self.assertEqual((status, body), (403, b"<Error>AccessDenied</Error>"))
 
 
 if __name__ == "__main__":
