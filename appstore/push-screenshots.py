@@ -69,16 +69,17 @@ DISPLAY_TYPES = {
 SET_CAPACITY = 10
 
 # Screenshots may be changed only while App Store Connect considers the
-# version editable. READY_FOR_REVIEW is a prepared version not yet in a
-# submission and still takes edits; everything from WAITING_FOR_REVIEW on
-# belongs to Apple or to the store.
+# version editable: while it is being prepared, and after a rejection or an
+# invalid binary hands it back. READY_FOR_REVIEW is a version already added
+# to a review submission that has not been sent; App Store Connect still
+# takes text there but no longer takes images or previews, and everything
+# from WAITING_FOR_REVIEW on belongs to Apple or to the store.
 EDITABLE_STATES = {
     "PREPARE_FOR_SUBMISSION",
     "DEVELOPER_REJECTED",
     "REJECTED",
     "METADATA_REJECTED",
     "INVALID_BINARY",
-    "READY_FOR_REVIEW",
 }
 
 # Processing an upload takes seconds to a few minutes. The poll is bounded so
@@ -338,6 +339,19 @@ def resolve_version(client, platform, version):
     return records[0]
 
 
+def version_state(record):
+    """The version's state, read from appVersionState before appStoreState.
+
+    appStoreState is the older attribute, deprecated in favour of
+    appVersionState. Records carry both today, under different names for the
+    released states (READY_FOR_SALE beside READY_FOR_DISTRIBUTION) and the
+    same names for every editable one. A record with neither reads as
+    UNKNOWN, which no write accepts.
+    """
+    attributes = record.get("attributes", {})
+    return attributes.get("appVersionState") or attributes.get("appStoreState") or "UNKNOWN"
+
+
 def resolve_localization(client, version_id):
     localizations = get_data(
         client, f"/v1/appStoreVersions/{version_id}/appStoreVersionLocalizations?limit=200",
@@ -586,10 +600,10 @@ def main(argv=None):
     client = connect()
     version_record = resolve_version(client, platform, version)
     version_id = version_record["id"]
-    version_state = version_record.get("attributes", {}).get("appStoreState", "UNKNOWN")
+    state = version_state(version_record)
     localization = resolve_localization(client, version_id)
     remote = remote_sets(client, localization["id"])
-    print(f"target: app {APP}, {platform} {version}, {LOCALE}, state {version_state}")
+    print(f"target: app {APP}, {platform} {version}, {LOCALE}, state {state}")
     plan = build_plan(local_sets, remote, args.keep_existing)
     print_plan(plan)
     pending = [item for item in plan if not item.unchanged]
@@ -598,9 +612,9 @@ def main(argv=None):
         print("\nDRY RUN: nothing deleted, uploaded or reordered. Re-run with --write and "
               f"--confirm-version {version} only after reviewing this plan.")
         return 0
-    if version_state not in EDITABLE_STATES:
+    if state not in EDITABLE_STATES:
         raise SystemExit(
-            f"refusing to write version in {version_state}; expected an editable "
+            f"refusing to write version in {state}; expected an editable "
             f"preparation state ({', '.join(sorted(EDITABLE_STATES))})"
         )
     if not pending:

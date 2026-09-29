@@ -79,10 +79,14 @@ class FakeStore:
     def __init__(self, test: unittest.TestCase, *, version: str | None,
                  state: str = "PREPARE_FOR_SUBMISSION", locales=("en-GB",),
                  sets: dict | None = None, writable: bool = False,
-                 delivery=("UPLOAD_COMPLETE", "COMPLETE"), failure=None):
+                 delivery=("UPLOAD_COMPLETE", "COMPLETE"), failure=None,
+                 version_attributes: dict | None = None):
         self.test = test
         self.version = version
         self.state = state
+        # The version record carries ``state`` under both names App Store
+        # Connect reports today unless a test gives the attributes itself.
+        self.version_attributes = version_attributes
         self.locales = list(locales)
         self.sets = {display: {"id": f"set-{display}", "screenshots": list(records)}
                      for display, records in (sets or {}).items()}
@@ -138,9 +142,12 @@ class FakeStore:
         if path.startswith("/v1/apps/") and "appStoreVersions?" in path:
             if self.version is None:
                 return 200, {"data": []}
+            attributes = {"appVersionState": self.state, "appStoreState": self.state}
+            if self.version_attributes is not None:
+                attributes = dict(self.version_attributes)
+            attributes["versionString"] = self.version
             return 200, {"data": [{"type": "appStoreVersions", "id": VERSION_ID,
-                                   "attributes": {"versionString": self.version,
-                                                  "appStoreState": self.state}}]}
+                                   "attributes": attributes}]}
         if path.startswith(f"/v1/appStoreVersions/{VERSION_ID}/appStoreVersionLocalizations"):
             return 200, {"data": [{"type": "appStoreVersionLocalizations",
                                    "id": f"{LOCALIZATION_ID}-{n}" if n else LOCALIZATION_ID,
@@ -619,6 +626,72 @@ class Writing(Harness):
         fake = self.arrange(state="WAITING_FOR_REVIEW")
         message = self.refused("--write", "--confirm-version", self.version)
         self.assertIn("refusing to write version in WAITING_FOR_REVIEW", message)
+        self.assertEqual({call[0] for call in fake.calls}, {"GET"})
+
+    def test_a_version_in_an_unsent_submission_is_refused_before_any_write(self):
+        # READY_FOR_REVIEW is a version added to a review submission that has
+        # not been sent: text still changes there, images and previews do not.
+        fake = self.arrange(state="READY_FOR_REVIEW")
+        message = self.refused("--write", "--confirm-version", self.version)
+        self.assertIn("refusing to write version in READY_FOR_REVIEW", message)
+        self.assertEqual({call[0] for call in fake.calls}, {"GET"})
+
+    # Every state in which App Store Connect no longer takes image edits, in
+    # the appVersionState vocabulary and the older appStoreState one, with the
+    # state the released records sit in and the one an unreadable record gets.
+    HELD_STATES = (
+        "READY_FOR_REVIEW", "WAITING_FOR_REVIEW", "IN_REVIEW",
+        "PENDING_DEVELOPER_RELEASE", "PENDING_APPLE_RELEASE",
+        "PROCESSING_FOR_DISTRIBUTION", "PROCESSING_FOR_APP_STORE",
+        "READY_FOR_DISTRIBUTION", "READY_FOR_SALE", "ACCEPTED",
+        "REPLACED_WITH_NEW_VERSION", "WAITING_FOR_EXPORT_COMPLIANCE",
+        "REMOVED_FROM_SALE", "DEVELOPER_REMOVED_FROM_SALE", "UNKNOWN",
+    )
+
+    def test_every_state_apple_or_the_store_holds_is_refused_before_any_write(self):
+        for state in self.HELD_STATES:
+            with self.subTest(state=state):
+                fake = self.arrange(state=state)
+                message = self.refused("--write", "--confirm-version", self.version)
+                self.assertIn(f"refusing to write version in {state}", message)
+                self.assertEqual({call[0] for call in fake.calls}, {"GET"})
+
+    def test_the_editable_states_are_preparation_and_the_states_that_hand_a_version_back(self):
+        self.assertEqual(self.m.EDITABLE_STATES, {
+            "PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED",
+            "METADATA_REJECTED", "INVALID_BINARY"})
+        for state in sorted(self.m.EDITABLE_STATES):
+            with self.subTest(state=state):
+                fake = self.arrange(state=state)
+                code, _out = self.write()
+                self.assertEqual(code, 0)
+                self.assertIn(("DELETE", "old-APP_IPHONE_67-1"), self.kinds(fake.calls))
+
+    def test_the_state_is_read_from_appVersionState_before_the_deprecated_attribute(self):
+        # A released record today: READY_FOR_SALE in the deprecated attribute,
+        # READY_FOR_DISTRIBUTION in the one that replaces it.
+        self.arrange(version_attributes={"appStoreState": "READY_FOR_SALE",
+                                         "appVersionState": "READY_FOR_DISTRIBUTION"})
+        message = self.refused("--write", "--confirm-version", self.version)
+        self.assertIn("state READY_FOR_DISTRIBUTION", message)
+        self.assertIn("refusing to write version in READY_FOR_DISTRIBUTION", message)
+
+    def test_a_record_without_the_deprecated_attribute_still_resolves(self):
+        self.arrange(version_attributes={"appVersionState": "PREPARE_FOR_SUBMISSION"})
+        code, out = self.write()
+        self.assertEqual(code, 0)
+        self.assertIn("state PREPARE_FOR_SUBMISSION", out)
+
+    def test_a_record_with_only_the_deprecated_attribute_still_resolves(self):
+        self.arrange(version_attributes={"appStoreState": "PREPARE_FOR_SUBMISSION"})
+        code, out = self.write()
+        self.assertEqual(code, 0)
+        self.assertIn("state PREPARE_FOR_SUBMISSION", out)
+
+    def test_a_record_with_neither_state_attribute_is_refused(self):
+        fake = self.arrange(version_attributes={})
+        message = self.refused("--write", "--confirm-version", self.version)
+        self.assertIn("refusing to write version in UNKNOWN", message)
         self.assertEqual({call[0] for call in fake.calls}, {"GET"})
 
     def test_a_missing_version_record_is_refused_with_write_too(self):
