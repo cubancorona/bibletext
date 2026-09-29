@@ -431,18 +431,16 @@ func gotoPickerModalFrom(state *AppState, withVerse bool, seed gotoPickerSeed) {
 				if inset > 0 {
 					// The panes just shrank — keep the selected book + chapter on screen.
 					// Deferred so the new (smaller) viewport + cell positions have settled.
-					time.AfterFunc(60*time.Millisecond, func() {
-						fyne.Do(func() {
-							if popup == nil || !popup.Visible() {
-								return
-							}
-							if scrollChapterIntoView != nil {
-								scrollChapterIntoView()
-							}
-							if scrollBookIntoView != nil {
-								scrollBookIntoView()
-							}
-						})
+					sheetAfter(60*time.Millisecond, func() {
+						if popup == nil || !popup.Visible() {
+							return
+						}
+						if scrollChapterIntoView != nil {
+							scrollChapterIntoView()
+						}
+						if scrollBookIntoView != nil {
+							scrollBookIntoView()
+						}
 					})
 				}
 			}
@@ -512,9 +510,12 @@ func gotoPickerModalFrom(state *AppState, withVerse bool, seed gotoPickerSeed) {
 				lastCanvas = now
 				refit()
 			}
-			time.AfterFunc(200*time.Millisecond, func() { fyne.Do(watchDismiss) })
+			sheetAfter(200*time.Millisecond, watchDismiss)
 		}
-		time.AfterFunc(200*time.Millisecond, func() { fyne.Do(watchDismiss) })
+		// Through the sheets' timer seam (sheet_timers.go), as every sheet's
+		// watchdog is, so a host test that opens this picker on a phone holds
+		// it rather than racing it.
+		sheetAfter(200*time.Millisecond, watchDismiss)
 	} else {
 		// DESKTOP (and the non-verse chapter picker on any platform): a normal centered
 		// modal. No soft keyboard, so none of the top-anchor / full-screen / tap-dismiss

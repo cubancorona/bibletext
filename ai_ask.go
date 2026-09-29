@@ -167,7 +167,8 @@ func promptAskQuestionWith(state *AppState, selectedText, question string) {
 	// and after a rotation, much more) are still tappable canvas: Fyne's
 	// PopUp.Tapped runs Hide() directly there, bypassing closeAsk, which would
 	// leave the reading overlay latched hidden (blank verse pane). Same 150ms
-	// Visible() poll as the audio source menu; closeAsk is idempotent.
+	// Visible() poll as the audio source menu, armed through the same seam
+	// (sheet_timers.go); closeAsk is idempotent.
 	var watch func()
 	watch = func() {
 		if popup == nil || !popup.Visible() {
@@ -178,7 +179,7 @@ func promptAskQuestionWith(state *AppState, selectedText, question string) {
 			}
 			return
 		}
-		time.AfterFunc(150*time.Millisecond, func() { fyne.Do(watch) })
+		sheetAfter(150*time.Millisecond, watch)
 	}
-	time.AfterFunc(150*time.Millisecond, func() { fyne.Do(watch) })
+	sheetAfter(150*time.Millisecond, watch)
 }

@@ -150,6 +150,8 @@ func showAudioSourceMenu(state *AppState) {
 	registerSheetReopen(state, popup, func() { showAudioSourceMenu(state) })
 
 	// Catch an outside-tap close (Fyne's PopUp.Hide doesn't call our done()).
+	// Armed through the sheets' timer seam (sheet_timers.go), which the host
+	// tests that open this menu hold.
 	var watch func()
 	watch = func() {
 		if popup == nil || !popup.Visible() {
@@ -160,7 +162,7 @@ func showAudioSourceMenu(state *AppState) {
 			}
 			return
 		}
-		time.AfterFunc(150*time.Millisecond, func() { fyne.Do(watch) })
+		sheetAfter(150*time.Millisecond, watch)
 	}
-	time.AfterFunc(150*time.Millisecond, func() { fyne.Do(watch) })
+	sheetAfter(150*time.Millisecond, watch)
 }

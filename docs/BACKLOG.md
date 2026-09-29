@@ -3332,12 +3332,23 @@ None races today — a full `-race` pass of the suite is clean — but each is
 safe for a DIFFERENT reason, and the first test that changes that reason
 must bring the fix with it:
 
-- `goto.go` (60ms inset scroll; 200ms self-rearming `watchDismiss`): the
-  arms live on the `IsMobile()` branch, which no host test compiles into. If
-  a mobile-tagged test target ever opens it, gate the arms with
-  `testing.Testing()` AND add a direct synchronous call for the watch's
-  close-out work — the watch is functional (tap-outside close, overlay
-  restore), not cosmetic, so a bare gate would orphan real behavior.
+- `goto.go` (60ms inset scroll; 200ms self-rearming `watchDismiss`),
+  `audio_menu.go` (150ms self-rearming watch) and `ai_ask.go` (the same
+  150ms watch) — FIXED 29 September 2026. The sheet tests had begun opening
+  the audio source menu on a test window and hiding it with a deferred
+  Hide, and its watch, armed straight on a timer, read the popup's
+  `Visible()` against that Hide and ran its close-out — the native reading
+  pane's restore, which reads the appearance seam — on the timer's
+  goroutine while the next test was writing the seam: `-race` reported it
+  on a probe replaying the tests' sequence. The Ask sheet's watch was armed
+  the same way under the appearance tests, and the phone tests that now
+  open the Go to picker on the phone device would have armed its. All
+  three go through `sheetAfter` (`sheet_timers.go`), which `holdSheetTimers`
+  replaces to hold the closures; `desktopSheets` and the appearance harness
+  hold it, a test runs a pass where it needs the close-out, and
+  `TestSheetWatchdogsArmThroughTheSeam` holds each of the three armed
+  through the seam and nothing running on a timer. The note composer's
+  `noteSheetAfter` now goes through the same seam.
 - `share_note_ui.go` (50ms slot push; 150ms self-rearming watch) — FIXED 27
   September 2026. The selected-words tests open the phone sheet, through the
   phone device wrapper, and a `-race -count=30` run of them with the arms on
@@ -3347,9 +3358,6 @@ must bring the fix with it:
   them on the test goroutine where a test needs them (the second push and a
   pass of the watch, in `TestTheNoteFieldSlotSitsBelowTheExcerpt`); the same
   run is clean.
-- `audio_menu.go` (150ms self-rearming watch): no test constructs the
-  source menu (the card tests stub `onSrc` deliberately). Same rule as
-  `goto.go` above: gate plus a synchronous driver, never a bare gate.
 - `search.go:~25` (60ms scroll restore) and `notes_browse.go:~783` (16ms
   scroll restore): armed only when a remembered scroll offset is positive,
   which no test produces. The natural regression test for either restore

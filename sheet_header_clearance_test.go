@@ -40,6 +40,7 @@ type desktopSheet struct {
 func desktopSheets(t *testing.T) []desktopSheet {
 	t.Helper()
 	votdSynchronousRemeasure(t)
+	holdSheetTimers(t) // the audio source menu's watchdog, and the composer's
 	studies := stubAIActionParked(t)
 	prevRun, prevLoad := crossRefsRun, crossRefsLoad
 	t.Cleanup(func() { crossRefsRun, crossRefsLoad = prevRun, prevLoad })

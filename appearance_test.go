@@ -163,6 +163,7 @@ func newAppearanceHarness(t *testing.T, mobile bool) *appearanceHarness {
 	appearanceVariant = func(*AppState) fyne.ThemeVariant { return h.variant }
 	t.Cleanup(func() { appearanceVariant = prev })
 	votdSynchronousRemeasure(t)
+	holdSheetTimers(t) // the Ask sheet's watchdog, and a phone's Go to picker's
 	h.state = deferredTestState(t, app)
 	h.state.window.Resize(fyne.NewSize(900, 760))
 	h.state.appearance = appearanceGate{mobile: mobile, built: h.variant, frame: h.variant}
