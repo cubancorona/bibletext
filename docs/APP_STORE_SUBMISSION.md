@@ -245,7 +245,7 @@ exist (`submit-version.py --write` creates it), and the upload comes before
 edits, and the tool refuses one. The three commands in order are under "Final
 read-back and submission" below and in docs/RELEASING.md, stage 7.
 
-### The 1.2.17 set — captured 28 September 2026, not yet uploaded
+### The 1.2.17 set — captured 28 September 2026, uploaded 29 September
 
 The same eight shots on every device, retaken on the 1.2.17 tree so the
 listing finally shows the Junicode reading face, the divine name in small
@@ -475,26 +475,30 @@ each step it lists.
    `BIBLETEXT_MAC_PROFILE` only to override), `scripts/build-android.sh --release`.
    Read each artifact back: version, build, minimum OS, and for Android the
    manifest through `bundletool dump manifest`.
-4. Upload: `xcrun altool --upload-app -t ios|macos` with the ASC key (set
+4. Tag, as soon as all three artifacts have been read back: an annotated
+   `v<version>` at the build commit, pushed. The release workflow then builds
+   the desktop assets into a DRAFT while the uploads below go on. From here no
+   commit lands on `main` under this number.
+5. Upload: `xcrun altool --upload-app -t ios|macos` with the ASC key (set
    `API_PRIVATE_KEYS_DIR` to the key's directory); keep each Delivery UUID.
    Play: `scripts/play-publish.py --dry-run --notes <file> upload <aab> alpha`
    first (uploads into a discarded edit), then the same without `--dry-run`.
    The notes file is the blockquote of that version's section in
    `docs/PLAY_LISTING.md`, under 500 characters.
-5. Wait for each Apple build to reach VALID, then per platform, as above:
+6. Wait for each Apple build to reach VALID, then per platform, as above:
    `submit-version.py --write` to prepare the record, `push-screenshots.py
    --write` for the release's sets, `submit-version.py --write --submit`.
-6. Tag LAST: an annotated `v<version>` at the build commit, pushed; the release
-   workflow builds the desktop assets into a DRAFT. Upload the sideload APK
-   from `~/Library/Android/bibletext-dist`, compare its SHA after download,
-   then `gh release edit v<version> --draft=false`, and verify every
+   Finish the GitHub release: upload the sideload APK from
+   `~/Library/Android/bibletext-dist`, compare its SHA after download, then
+   `gh release edit v<version> --draft=false`, and verify every
    `/releases/latest/download/<asset>` link resolves to the new version.
-7. The Microsoft Store, if this version goes there: dispatch the package
-   workflow AT THE TAG, never at the branch — `gh workflow run msstore.yml
-   --ref v<version>` — because the MSIX version is the desktop ledger plus a
-   fourth part, so a run against a moved branch labels a package for a tree the
-   tag does not name. Confirm the artifact's `Version="<version>.0"` before
-   uploading it (docs/WINDOWS_STORE_LISTING.md). `msstore/submit.py` sends
+7. The Microsoft Store, if this version goes there: the push of `main` built
+   the package (`msstore.yml` runs when the release's What's New file
+   changes); confirm with `gh run view` that the run's commit is the one the
+   tag names, and only if it did not run dispatch at `main` while `main` is
+   still that commit. Confirm the artifact's `Version="<version>.0"` and its
+   file name `BibleText-<version>.0-<arch>.msix` before uploading it
+   (docs/WINDOWS_STORE_LISTING.md). `msstore/submit.py` sends
    `msstore/metadata/en-gb/whats-new-<v>.txt` as the listing's What's New,
    the one listing field a submission changes (docs/RELEASING.md, stage 9).
    If the Store refuses that text, `abort`, correct the file and `create`
