@@ -51,7 +51,18 @@ var aiSettingsListModels = func(ctx context.Context, info providerInfo, key stri
 	return info.ListModels(ctx, key)
 }
 
+// showAISettings opens the sheet as the reader opens it. A Test key line a
+// closed sheet showed is forgotten first, so the sheet never opens on a stale
+// verdict; the light/dark reopen calls openAISettings directly and keeps it
+// (key_test_progress.go).
 func showAISettings(state *AppState) {
+	forgetKeyTests(state)
+	openAISettings(state)
+}
+
+// openAISettings builds and shows the sheet, and registers itself as the
+// sheet's reopen.
+func openAISettings(state *AppState) {
 	if state == nil || state.window == nil {
 		return
 	}
@@ -196,37 +207,44 @@ func showAISettings(state *AppState) {
 			result.Segments = segs
 			result.Refresh()
 		}
-		// testSeq is the test the line belongs to. Test tapped again before
-		// the last one answered makes that one stale: its model and its
-		// verdict are dropped, not painted over the newer wait.
-		testSeq := 0
-		testBtn := widget.NewButtonWithIcon("Test key", theme.MediaPlayIcon(), func() {
-			key := strings.TrimSpace(entry.Text)
-			result.Show()
-			testSeq++
-			seq := testSeq
-			if key == "" {
-				setResult("Paste a key first.")
+		// The line is painted from the test's progress on state
+		// (key_test_progress.go), so a sheet a light/dark reopen brings back
+		// shows the wait of a test still running and the verdict of one that
+		// landed meanwhile, and a test tapped again before the last one
+		// answered owns the line: the older test's model and verdict are
+		// dropped, not painted over the newer wait. A test of another
+		// provider's key is not this row's.
+		slot := state.keyTest(keyTestAI)
+		slot.attach(func() {
+			t := slot.test
+			if t == nil || t.provider != info.ID {
+				result.Hide()
 				return
 			}
-			setTesting(aiModelInUse{})
+			result.Show()
+			if t.running {
+				setTesting(t.model)
+			} else {
+				setResult(t.text)
+			}
+		})
+		testBtn := widget.NewButtonWithIcon("Test key", theme.MediaPlayIcon(), func() {
+			key := strings.TrimSpace(entry.Text)
+			if key == "" {
+				slot.begin(info.ID, false, "Paste a key first.")
+				return
+			}
+			t := slot.begin(info.ID, true, "")
 			go func() {
 				ctx, cancel := context.WithTimeout(context.Background(), aiProbeBudget)
 				defer cancel()
-				ctx = showAIModelOnUI(ctx, func(m aiModelInUse) {
-					if seq == testSeq {
-						setTesting(m)
-					}
-				})
+				ctx = showAIModelOnUI(ctx, func(m aiModelInUse) { slot.report(t, m) })
 				err := aiKeyTestRun(ctx, info, store, key)
 				fyne.Do(func() {
-					if seq != testSeq {
-						return // a newer test owns the line
-					}
 					if err != nil {
-						setResult("✗ " + friendlyAIError(err))
+						slot.finish(t, "✗ "+friendlyAIError(err))
 					} else {
-						setResult("✓ Key works.\nStudy with AI and Find are ready.")
+						slot.finish(t, "✓ Key works.\nStudy with AI and Find are ready.")
 					}
 				})
 			}()
@@ -575,6 +593,9 @@ func showAISettings(state *AppState) {
 			popup.Hide()
 		}
 		restore()
+		// A Test key still running reports to no one from here; the next
+		// sheet opens with no line (key_test_progress.go).
+		forgetKeyTests(state)
 		if windowRebuildGen != rebuildGenAtOpen {
 			return // a rebuild drained us; it already built from live prefs
 		}
@@ -973,9 +994,11 @@ func showAISettings(state *AppState) {
 	// A light/dark rebuild drains the sheet; it comes back at its top. Nothing
 	// is lost by that: every control here saves as it changes, and the rebuild
 	// was built from the saved values, so the new sheet's at-open snapshot
-	// above is the right baseline for its own close (sheet_reopen.go). The
-	// model picker opened over it registers nothing — see there.
-	registerSheetReopen(state, popup, func() { showAISettings(state) })
+	// above is the right baseline for its own close (sheet_reopen.go); a Test
+	// key's wait or verdict is held on state and comes back with the sheet
+	// (key_test_progress.go). The model picker opened over it registers
+	// nothing — see there.
+	registerSheetReopen(state, popup, func() { openAISettings(state) })
 	// And sized again, as above, whenever a desktop window changes size
 	// (sheet_refit.go).
 	registerSheetRefit(state, popup, func() {

@@ -556,6 +556,14 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       the sheet, not on the page (`sheetArea`). Flip Verse of the day and Go
       to the same way; the Go to card's verse row sits where it did before
       the flip.
+- [ ] Settings, a key pasted, Test key, and while "Testing…" shows switch
+      the system between light and dark (a Mac: System Settings >
+      Appearance; a phone: Control Centre, or a scheduled switch with the
+      app in front): Settings comes back at its top still reading
+      "Testing…" under the key, the assistant's wait naming the model once
+      the request has said, and "✓ Key works." (or the error) lands on the
+      sheet that came back. Then the ✕ and Settings again: no line under
+      the key. The same under the API.Bible key.
 - [ ] Android, API 30+: open Go to, tap the verse field so the number pad
       rises, type a digit, press Back so the pad hides with the field still
       focused, then flip dark mode from the quick-settings tile: the picker

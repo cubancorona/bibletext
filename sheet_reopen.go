@@ -69,7 +69,9 @@ package bibletext
 //     download that landed while the picker was up — and without repeating
 //     the manual retry that opening it performs (versions_ui.go);
 //   - Settings, at its top (ai_settings.go — everything in it saves as it
-//     changes, so nothing typed is lost);
+//     changes, so nothing typed is lost), with a Test key's wait or verdict,
+//     which is held on state rather than by the drained sheet
+//     (key_test_progress.go);
 //   - the audio source menu (audio_menu.go);
 //   - cross-references for the same selection (crossref_panel.go);
 //   - the Ask sheet with the question typed so far (ai_ask.go);

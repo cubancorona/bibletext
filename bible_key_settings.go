@@ -128,15 +128,31 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 		return strings.TrimSpace(store.bibleAPIKey())
 	}
 
-	testBtn := widget.NewButtonWithIcon("Test key", theme.MediaPlayIcon(), func() {
-		key := keyInUse()
-		result.Show()
-		remeasure() // the result line just appeared — the sheet grew
-		if key == "" {
-			setResult("Paste a key first.")
+	// The line is painted from the test's progress on state
+	// (key_test_progress.go), so a sheet a light/dark reopen brings back shows
+	// the wait of a test still running and the verdict of one that landed
+	// meanwhile.
+	slot := state.keyTest(keyTestBible)
+	slot.attach(func() {
+		t := slot.test
+		if t == nil {
+			result.Hide()
 			return
 		}
-		setResult("Testing…")
+		result.Show()
+		if t.running {
+			setResult("Testing…")
+		} else {
+			setResult(t.text)
+		}
+	})
+	testBtn := widget.NewButtonWithIcon("Test key", theme.MediaPlayIcon(), func() {
+		key := keyInUse()
+		if key == "" {
+			slot.begin("", false, "Paste a key first.")
+			return
+		}
+		t := slot.begin("", true, "")
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), bibleKeyProbeBudget)
 			defer cancel()
@@ -151,11 +167,11 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 			fyne.Do(func() {
 				switch {
 				case err != nil:
-					setResult("✗ " + friendlyBibleKeyError(err))
+					slot.finish(t, "✗ "+friendlyBibleKeyError(err))
 				case meta.Data.Name == "":
-					setResult("✗ The key works, but the NKJV isn't on it — add the New King James Version to your API.Bible app.")
+					slot.finish(t, "✗ The key works, but the NKJV isn't on it — add the New King James Version to your API.Bible app.")
 				default:
-					setResult("✓ Key works.\n" + meta.Data.Name + " is now available in the translation picker.")
+					slot.finish(t, "✓ Key works.\n"+meta.Data.Name+" is now available in the translation picker.")
 				}
 			})
 		}()

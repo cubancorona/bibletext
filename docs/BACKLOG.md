@@ -47,6 +47,36 @@ watchdogs run, and the reopened sheet spans what the first did; and
 `TestSheetAreaGivesTheKeyboardBack` for the rule itself. Device check:
 `docs/VISUAL_TESTS.md`, V15.
 
+## A Test key started before a light/dark change reported to no one — FIXED 29 September 2026
+
+Under each key field in Settings, Test key shows "Testing…", then the model
+the request reports (the assistant's key), then its verdict — and those were
+painted by closures of the sheet the button was tapped on, into that sheet's
+own line. A light/dark change drains Settings and reopens a fresh one
+(`sheet_reopen.go`), so a test tapped before the change reported to a sheet
+nobody could see: the reopened sheet showed neither the wait nor the verdict,
+and the reader had no sign the test had finished; a second tap ran a new test
+and showed that one. Settings otherwise loses nothing to a reopen, since
+everything in it saves as it changes; a test in flight was the one thing that
+did not.
+
+**The fix** (`key_test_progress.go`). What a test has shown so far — running,
+the model it reported, its verdict — lives on AppState, one slot per key
+section, and the sheet that is showing registers how it paints the slot's line
+and paints it as it is built. So a reopened sheet shows the wait of a test
+still running and the verdict of one that landed while no sheet was up, and a
+test's reports paint through whichever sheet is showing when they arrive. The
+slot is forgotten when the sheet is closed by its ✕ and when Settings is opened
+as the reader opens it (`showAISettings`; the reopen calls `openAISettings`
+and keeps it), so a later visit never opens on a stale verdict. A test tapped
+again before the last one answered still owns the line: the older test's
+reports find another test in the slot and are dropped. Held by
+`TestTheKeyTestOutlivesALightDarkReopen` (desktop and phone: the wait, the
+model's report and the verdict on the reopened sheet, the ✕ forgetting it,
+the next open showing nothing) and `TestTheAPIBibleKeyTestOutlivesALightDarkReopen`
+(the API.Bible key, its probe held at a local server), with
+`TestTheKeyTestNamesTheModel` still holding the second test's ownership.
+
 ## The Go to picker's reopen raised a put-away number pad — FIXED 29 September 2026
 
 The picker's reopen put the caret back in the verse field that had it,

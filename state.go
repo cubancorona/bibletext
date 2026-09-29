@@ -260,6 +260,11 @@ type AppState struct {
 	// to the window again when the window changes size (sheet_refit.go).
 	// Pruned like sheetReopens. UI-goroutine only.
 	sheetRefits []sheetRefit
+	// keyTests holds, for each key section of Settings, what its Test key has
+	// shown so far and how the showing sheet paints it, so the line outlives
+	// the sheet a light/dark reopen drains (key_test_progress.go).
+	// UI-goroutine only.
+	keyTests map[string]*keyTestSlot
 	// appearance is the light/dark decision's state: the variant the window
 	// was built with, and on mobile whether the app is out of the foreground
 	// (appearance.go). UI-goroutine only.
