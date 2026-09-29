@@ -255,7 +255,8 @@ whose manifest is not ours to shape, so it is not used.
    from `msstore/identity.json` and the desktop ledger, and lays out the
    exe, the manifest and `msstore/Assets/` under `build/msstore/layout/`;
 3. runs `makepri` for the `en-GB` qualifier set and `makeappx pack`, and
-   uploads the unsigned `BibleText-Windows-x64.msix` as the run's artifact;
+   uploads the unsigned `BibleText-<version>-<arch>.msix` as the run's
+   artifact, named for the four-part version the manifest carries;
 4. smoke-installs a COPY of the package as it ships, signed with a
    throwaway certificate whose subject is the reserved publisher:
    `Add-AppxPackage`, activation through the shell, and then the app must
@@ -271,6 +272,22 @@ plate. The Store requires the package revision (fourth version part) to be 0,
 so the package version is the ledger's `Version` with `.0`, and re-uploading
 for the same app version means a patch bump: one version, one tree, on every
 channel.
+
+**Package names.** The package file and the workflow's artifact are
+`BibleText-<version>-<arch>.msix`: the four-part version the manifest is
+stamped with, then the architecture, both from the same reading of the ledger
+(`go run ./cmd/msstore version`), and the pack step holds the name to the
+`Identity` in the manifest before it is used. A published submission keeps
+every package it was ever sent, a new submission is a copy of it, and the
+Store refuses a new package whose file name is already in the copy — after
+the submission has been created. Until 1.2.16 the files were named
+`BibleText-Windows-<arch>.msix`, with no version, so the names 1.2.16 was
+uploaded under could never be uploaded again: 1.2.17's first submission was
+refused on them after it had been created, and had to be aborted and its
+files renamed. Every release's names are new now, and
+`msstore/submit.py preflight` and `create` each read the published
+submission's package list and refuse a repeated name before anything is
+created, naming the file and the name to give it.
 
 **Links.** The manifest declares two handlers under the application's
 `Extensions`, both tested by `cmd/msstore`:
@@ -348,7 +365,7 @@ The first submission cannot be made through the API (name reservation, the
 age rating and the first publish are console-only), so it follows this
 document in Partner Center:
 
-1. **Packages**: upload `BibleText-Windows-x64.msix` from the workflow run.
+1. **Packages**: upload `BibleText-<version>-x64.msix` from the workflow run.
    The console checks the identity, version and manifest against the
    reservation.
 2. **Properties**: category, the declarations table above, system
@@ -591,7 +608,7 @@ push. Run logs and artifacts expire after 90 days, so the numbers above are
 history, not something to fetch.
 
 **To get the package onto the machine:** download the
-`BibleText-Windows-x64-msix` artifact from the latest green run of the Store
+`BibleText-<version>-x64-msix` artifact from the latest green run of the Store
 workflow (Actions → Microsoft Store package). Artifacts live 90 days and the
 workflow runs only on pushes that touch its inputs, so if no live one
 exists, start it by hand (Run workflow) and take that run's artifact; it
@@ -600,7 +617,7 @@ started with Run as administrator under your own account, at the
 repository root, with the Windows SDK installed:
 
 ```powershell
-pwsh scripts/msstore-sideload.ps1 -Package .\BibleText-Windows-x64.msix
+pwsh scripts/msstore-sideload.ps1 -Package .\BibleText-<version>-x64.msix
 ```
 
 It signs a copy with a throwaway certificate (the artifact itself stays

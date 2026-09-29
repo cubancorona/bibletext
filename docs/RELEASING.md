@@ -308,11 +308,11 @@ other tree produces a package labelled for one the tag does not name. Nothing
 in `msstore.yml` reads the tag — the ref simply decides which tree is checked
 out — so this is a discipline the workflow cannot enforce for you.
 
-Download both `BibleText-Windows-<arch>-msix` artefacts, then:
+Download both `BibleText-<v>.0-<arch>-msix` artefacts, then:
 
 ```
 . scripts/msstore-env.sh
-msstore/submit.py preflight <dir>    # identity, version, ANGLE, PE machine word, What's New
+msstore/submit.py preflight <dir>    # identity, version, ANGLE, PE machine word, What's New, names
 msstore/submit.py create   <dir>     # POST + PUT + upload, stops before commit
 msstore/submit.py verify   <dir>     # re-read from the server
 msstore/submit.py commit             # <- the irreversible one
@@ -324,6 +324,18 @@ so `abort` deletes it with no public trace. The previously published package
 stays `Uploaded` rather than being marked `PendingDelete` — it reaches nobody
 while a higher version exists, and keeping it makes a rollback one PUT instead
 of a rebuild against a spent number.
+
+The artefacts, and the files inside them, carry the version:
+`BibleText-<v>.0-<arch>.msix`, the four-part version the manifest is stamped
+with and then the architecture, and that is the name to upload under. The
+copy `create` makes holds every package the published submission was ever
+sent, and the Store refuses a new package whose file name the copy already
+has — after the submission exists, so a clash found there leaves a draft to
+`abort` and files to rename before a second attempt. A name without the
+version uploads once and never again, which is why every release's names are
+new. `preflight` and `create` each read the published submission's package
+list and refuse a repeated name while the server holds nothing, naming the
+file and the name to give it; a package renamed by hand keeps the same form.
 
 The listing's What's New goes with the packages: `preflight` measures
 `msstore/metadata/en-gb/whats-new-<v>.txt`, and `create` reads it before
