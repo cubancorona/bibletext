@@ -410,6 +410,13 @@ parts:
 		l.Executable)
 }
 
+// freedesktopRuntime is the org.freedesktop.Platform branch the Flatpak
+// builds against; the Sdk and its golang extension follow the same branch.
+// Flathub asks for the newest branch at submission and its linter warns on
+// an older one. linux-stores.yml pulls the container image and installs
+// the Platform for the same branch, and a test holds it there.
+const freedesktopRuntime = "26.08"
+
 // flatpakSource is where the manifest's first source points: the checked-out
 // tree (the copy in this repository, built by CI) or a tagged commit of the
 // public repository (the copy submitted to Flathub).
@@ -443,7 +450,7 @@ func renderFlatpakManifest(in inputs, src flatpakSource) string {
 	w("# copy submitted to Flathub pins a release tag and commit instead\n")
 	w("# (go run ./cmd/linuxmeta flatpak-manifest -tag v1.2.x -commit <sha>).\n")
 	w("app-id: %s\n", id)
-	w("runtime: org.freedesktop.Platform\nruntime-version: '25.08'\nsdk: org.freedesktop.Sdk\n")
+	w("runtime: org.freedesktop.Platform\nruntime-version: '%s'\nsdk: org.freedesktop.Sdk\n", freedesktopRuntime)
 	w("sdk-extensions:\n  - org.freedesktop.Sdk.Extension.golang\n")
 	w("command: %s\n", l.Executable)
 	w("finish-args:\n")

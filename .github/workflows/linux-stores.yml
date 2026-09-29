@@ -250,7 +250,7 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     container:
-      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
+      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-26.08
       options: --privileged
     steps:
       - uses: actions/checkout@v7
@@ -304,7 +304,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y flatpak xvfb imagemagick ffmpeg
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak install --user -y flathub org.freedesktop.Platform//25.08
+          flatpak install --user -y flathub org.freedesktop.Platform//26.08
           flatpak install --user -y --bundle uk.co.bibletext.BibleText.flatpak
           exp=~/.local/share/flatpak/exports/share/applications/uk.co.bibletext.BibleText.desktop
           grep -q '^MimeType=x-scheme-handler/bibletext;' "$exp"

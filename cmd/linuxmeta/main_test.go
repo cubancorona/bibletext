@@ -302,12 +302,17 @@ func TestEveryBuildCommandParsesAsAString(t *testing.T) {
 	} {
 		text := renderFlatpakManifest(in, src)
 		var m struct {
-			Modules []struct {
+			RuntimeVersion string `yaml:"runtime-version"`
+			Modules        []struct {
 				BuildCommands []any `yaml:"build-commands"`
 			} `yaml:"modules"`
 		}
 		if err := yaml.Unmarshal([]byte(text), &m); err != nil {
 			t.Fatalf("%s manifest: %v", name, err)
+		}
+		// Quoted on purpose: unquoted, 26.08 would parse as a float.
+		if m.RuntimeVersion != freedesktopRuntime {
+			t.Errorf("%s manifest: runtime-version parses as %q, want %q", name, m.RuntimeVersion, freedesktopRuntime)
 		}
 		if len(m.Modules) != 1 {
 			t.Fatalf("%s manifest: %d modules, want 1", name, len(m.Modules))
@@ -370,6 +375,26 @@ func TestYAMLScalarRoundTrips(t *testing.T) {
 	}
 }
 
+// The Flatpak lane builds in Flathub's container for one runtime branch and
+// its smoke installs that Platform. Both must be the branch the manifest
+// names, or CI proves a build the manifest does not describe.
+func TestWorkflowBuildsAgainstTheManifestsRuntime(t *testing.T) {
+	wf := readFile(t, filepath.Join(".github", "workflows", "linux-stores.yml"))
+	for _, must := range []string{
+		"image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-" + freedesktopRuntime + "\n",
+		"flatpak install --user -y flathub org.freedesktop.Platform//" + freedesktopRuntime + "\n",
+	} {
+		if !strings.Contains(wf, must) {
+			t.Errorf("linux-stores.yml lacks %q", strings.TrimSpace(must))
+		}
+	}
+	for _, m := range regexp.MustCompile(`(?:freedesktop-|org\.freedesktop\.Platform//)(\d+\.\d+)`).FindAllStringSubmatch(wf, -1) {
+		if m[1] != freedesktopRuntime {
+			t.Errorf("linux-stores.yml names runtime branch %s; the manifest builds against %s", m[1], freedesktopRuntime)
+		}
+	}
+}
+
 // The tarball's desktop entry comes from the ledger's own table: it must say
 // what the listing says, or the four Linux channels disagree on the menu.
 func TestLedgerLinuxTableMatchesTheListing(t *testing.T) {
@@ -402,7 +427,7 @@ func TestLedgerLinuxTableMatchesTheListing(t *testing.T) {
 func TestListingDocQuotesTheListing(t *testing.T) {
 	doc := readFile(t, filepath.Join("docs", "LINUX_STORES.md"))
 	l := loadInputs(t).Listing
-	for _, must := range []string{l.AppstreamID, "`" + l.Summary + "`", l.Executable + " %u"} {
+	for _, must := range []string{l.AppstreamID, "`" + l.Summary + "`", l.Executable + " %u", "org.freedesktop.Platform " + freedesktopRuntime} {
 		if !strings.Contains(doc, must) {
 			t.Errorf("docs/LINUX_STORES.md does not mention %q", must)
 		}
