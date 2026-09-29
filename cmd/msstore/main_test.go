@@ -318,6 +318,33 @@ func TestWindowsAppWebLinkAgreesWithTheAppleFileAndTheIdentity(t *testing.T) {
 	}
 }
 
+// The version command is what names the package file on the runner, so what
+// it prints must be the version the manifest command stamps, alone on one
+// line, and read from the ledger it is pointed at.
+func TestVersionCommandPrintsThePackageVersionAlone(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "FyneApp.toml")
+	if err := os.WriteFile(path, []byte("[Details]\nVersion = \"3.4.5\"\nBuild = 50\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out strings.Builder
+	if err := runVersion([]string{"-ledger", path}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if got := out.String(); got != "3.4.5.0\n" {
+		t.Fatalf("version printed %q, want %q", got, "3.4.5.0\n")
+	}
+	// And on the repository's ledger it is the version the manifest command
+	// stamps, so the file name and the Identity cannot drift apart.
+	out.Reset()
+	if err := runVersion([]string{"-ledger", filepath.Join(repo, "cmd", "bibletext", "FyneApp.toml")}, &out); err != nil {
+		t.Fatal(err)
+	}
+	_, _, version := filledManifest(t)
+	if got := strings.TrimSuffix(out.String(), "\n"); got != version {
+		t.Fatalf("version printed %q, the manifest is stamped %q", got, version)
+	}
+}
+
 // A Windows checkout can carry CRLF line endings; the ledger must still read.
 func TestPackageVersionToleratesWindowsLineEndings(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "FyneApp.toml")

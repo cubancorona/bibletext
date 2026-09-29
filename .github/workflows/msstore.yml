@@ -2,7 +2,12 @@
 # around the same BibleText.exe the GitHub release ships, with the manifest
 # filled from the reserved identity and the desktop ledger, and the tiles
 # generated from cmd/bibletext/Icon.png, the mark every channel ships. The .msix artifact is what gets uploaded in
-# Partner Center; docs/WINDOWS_STORE_LISTING.md holds the listing.
+# Partner Center; docs/WINDOWS_STORE_LISTING.md holds the listing. The file
+# and the artifact are named BibleText-<version>-<arch>.msix, after the
+# four-part version the manifest is stamped with: a published submission
+# keeps every package it was ever sent, and the Store refuses a new package
+# under a file name already in it, so a name without the version uploads
+# once and never again.
 #
 # The smoke job then proves the package installs and launches: a COPY of the
 # layout gets Mesa's software OpenGL (the runner has no GPU) and a throwaway
@@ -107,6 +112,12 @@ jobs:
           layout=build/msstore/layout
           mkdir -p "$layout"
           go run ./cmd/msstore manifest -arch "${{ matrix.arch }}" -out "$layout/AppxManifest.xml"
+          # The version the manifest was just stamped with, from the same
+          # reading of the ledger, names the package file and the artifact
+          # below (see the note at the top of this file).
+          version=$(go run ./cmd/msstore version)
+          echo "package version $version"
+          echo "MSIX_VERSION=$version" >> "$GITHUB_ENV"
           cp cmd/bibletext/BibleText.exe "$layout/"
           cp -r msstore/Assets "$layout/Assets"
           # ANGLE renders the app through Direct3D, which Windows provides on
@@ -126,13 +137,21 @@ jobs:
           & "$bin\makepri.exe" new /pr $layout /cf build\msstore\priconfig.xml /of build\msstore\resources.pri /o
           if ($LASTEXITCODE -ne 0) { throw "makepri new failed" }
           Copy-Item build\msstore\resources.pri $layout\
-          & "$bin\makeappx.exe" pack /d $layout /p build\msstore\BibleText-Windows-${{ matrix.arch }}.msix /o
+          # The file is named for the version inside it. An empty or odd value
+          # would still pack, under a name no release should carry, so the
+          # value is held to the four-part form and to the manifest's own
+          # Identity before the name is used.
+          if ($env:MSIX_VERSION -notmatch '^\d+\.\d+\.\d+\.0$') { throw "MSIX_VERSION is '$env:MSIX_VERSION'; the layout step did not record the package version" }
+          $stamped = ([xml](Get-Content "$layout\AppxManifest.xml")).Package.Identity.Version
+          if ($stamped -ne $env:MSIX_VERSION) { throw "the manifest is stamped $stamped but the package would be named for $env:MSIX_VERSION" }
+          $package = "build\msstore\BibleText-$($env:MSIX_VERSION)-${{ matrix.arch }}.msix"
+          & "$bin\makeappx.exe" pack /d $layout /p $package /o
           if ($LASTEXITCODE -ne 0) { throw "makeappx pack failed" }
-          Get-Item build\msstore\BibleText-Windows-${{ matrix.arch }}.msix | Format-List Name, Length
+          Get-Item $package | Format-List Name, Length
       - uses: actions/upload-artifact@v7
         with:
-          name: BibleText-Windows-${{ matrix.arch }}-msix
-          path: build/msstore/BibleText-Windows-${{ matrix.arch }}.msix
+          name: BibleText-${{ env.MSIX_VERSION }}-${{ matrix.arch }}-msix
+          path: build/msstore/BibleText-${{ env.MSIX_VERSION }}-${{ matrix.arch }}.msix
           if-no-files-found: error
       - name: smoke-install a signed copy with software OpenGL
         shell: pwsh

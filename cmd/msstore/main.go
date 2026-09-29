@@ -7,6 +7,11 @@
 //	go run ./cmd/msstore assets
 //	go run ./cmd/msstore listing
 //	go run ./cmd/msstore manifest -out build/msstore/layout/AppxManifest.xml
+//	go run ./cmd/msstore version
+//
+// version prints the four-part package version the manifest is stamped with,
+// so the workflow can name the package file after it from the same reading
+// of the ledger rather than a second parse of its own.
 //
 // The packaging itself (makepri, makeappx) runs on the Windows runner; see
 // .github/workflows/msstore.yml and docs/WINDOWS_STORE_LISTING.md.
@@ -20,6 +25,7 @@ import (
 	"image"
 	"image/draw"
 	"image/png"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -272,9 +278,29 @@ func runManifest(args []string) error {
 	return os.WriteFile(*out, []byte(filled), 0o644)
 }
 
+// runVersion prints the package version the manifest command stamps, and
+// nothing else, so a shell can take it as a value. The Store refuses a package
+// whose file name it already holds from an earlier submission, so the file
+// and the workflow artefact are named after this version, and naming them
+// from the same function that fills the manifest keeps the name and the
+// Identity inside the package from ever disagreeing.
+func runVersion(args []string, out io.Writer) error {
+	fs := flag.NewFlagSet("version", flag.ContinueOnError)
+	ledger := fs.String("ledger", repoRelative("cmd", "bibletext", "FyneApp.toml"), "desktop version ledger")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	version, err := packageVersion(*ledger)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(out, version)
+	return err
+}
+
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: msstore assets|listing|manifest [flags]")
+		fmt.Fprintln(os.Stderr, "usage: msstore assets|listing|manifest|version [flags]")
 		os.Exit(2)
 	}
 	var err error
@@ -285,6 +311,8 @@ func main() {
 		err = runListing(os.Args[2:])
 	case "manifest":
 		err = runManifest(os.Args[2:])
+	case "version":
+		err = runVersion(os.Args[2:], os.Stdout)
 	default:
 		err = fmt.Errorf("unknown command %q", os.Args[1])
 	}

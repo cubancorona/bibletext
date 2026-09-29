@@ -6,8 +6,9 @@
 
 .DESCRIPTION
   The Store signs the real package; the workflow's artifact
-  (BibleText-Windows-x64-msix from .github/workflows/msstore.yml) is
-  unsigned and cannot be installed as it is. This does what the workflow's
+  (BibleText-<version>-x64-msix from .github/workflows/msstore.yml, the
+  version being the four-part one the manifest carries) is unsigned and
+  cannot be installed as it is. This does what the workflow's
   smoke step does, on your machine: signs a COPY with a throwaway
   self-signed certificate whose subject is the reserved publisher
   (msstore/identity.json), trusts its public half machine-wide, installs the
@@ -20,8 +21,8 @@
   (makeappx, signtool). Developer Mode or sideloading must be enabled once
   under Settings > For developers.
 
-    pwsh scripts/msstore-sideload.ps1 -Package .\BibleText-Windows-x64.msix
-    pwsh scripts/msstore-sideload.ps1 -Package .\BibleText-Windows-x64.msix -Mesa .\mesa\x64
+    pwsh scripts/msstore-sideload.ps1 -Package .\BibleText-1.2.17.0-x64.msix
+    pwsh scripts/msstore-sideload.ps1 -Package .\BibleText-1.2.17.0-x64.msix -Mesa .\mesa\x64
     pwsh scripts/msstore-sideload.ps1 -Uninstall
 
   -Mesa <dir> copies llvmpipe's DLLs beside the exe inside the copy, for a
@@ -74,7 +75,7 @@ if ($Uninstall) {
   return
 }
 
-if (-not $Package) { throw "-Package <path to BibleText-Windows-x64.msix> is required (or -Uninstall)" }
+if (-not $Package) { throw "-Package <path to BibleText-<version>-x64.msix> is required (or -Uninstall)" }
 $Package = (Resolve-Path $Package).Path
 $bin = Sdk-Bin
 $work = Join-Path ([System.IO.Path]::GetTempPath()) ("bibletext-sideload-" + [guid]::NewGuid().ToString('N'))
