@@ -362,10 +362,25 @@ func TestTheCopiedSheetSurvivesAClickOutside(t *testing.T) {
 	}
 }
 
+// typeOnCanvas sends a key the way the desktop driver does when nothing
+// holds the caret: to the canvas's own handler.
+func (h *shareSheetHarness) typeOnCanvas(key fyne.KeyName) {
+	h.t.Helper()
+	typed := h.canvas().OnTypedKey()
+	if typed == nil {
+		h.t.Fatal("control: the desktop canvas has no key handler")
+	}
+	typed(&fyne.KeyEvent{Name: key})
+}
+
 // DONE, ESCAPE AND RETURN CLOSE IT AND GIVE THE CANVAS BACK: the overlay
-// stack is empty, the sheet-close consume point ran once, and the sheet
-// never comes back. Mutations: Done not hiding; the key catcher not focused
-// or not answering Return; the close not calling showReadingOverlay.
+// stack is empty, the sheet-close consume point ran once, the canvas's key
+// handler is the one the sheet found (Escape still closes the next sheet),
+// and the sheet never comes back. Return reaches the canvas's handler
+// because nothing in the sheet holds the caret — not on opening, and not
+// after a button has been tapped, which gives the caret up. Mutations: Done
+// not hiding; the handler not wrapped for Return, or not put back; the
+// close not calling showReadingOverlay.
 func TestTheCopiedSheetClosesOnDoneEscapeAndReturn(t *testing.T) {
 	for _, way := range []struct {
 		name  string
@@ -375,18 +390,20 @@ func TestTheCopiedSheetClosesOnDoneEscapeAndReturn(t *testing.T) {
 			test.Tap(findTreeButton(p.Content, shareButtonDone))
 		}},
 		{"Escape", func(t *testing.T, h *shareSheetHarness, _ *widget.PopUp) {
-			typed := h.canvas().OnTypedKey()
-			if typed == nil {
-				t.Fatal("control: the desktop canvas has no key handler")
-			}
-			typed(&fyne.KeyEvent{Name: fyne.KeyEscape})
+			h.typeOnCanvas(fyne.KeyEscape)
 		}},
 		{"Return", func(t *testing.T, h *shareSheetHarness, _ *widget.PopUp) {
-			focused, ok := h.canvas().Focused().(*sheetKeyCatcher)
-			if !ok {
-				t.Fatalf("control: the sheet must hold the caret; focused %T", h.canvas().Focused())
+			if f := h.canvas().Focused(); f != nil {
+				t.Fatalf("control: the sheet must open with nothing holding the caret; focused %T", f)
 			}
-			focused.TypedKey(&fyne.KeyEvent{Name: fyne.KeyReturn})
+			h.typeOnCanvas(fyne.KeyReturn)
+		}},
+		{"Return after Copy again", func(t *testing.T, h *shareSheetHarness, p *widget.PopUp) {
+			test.Tap(findTreeButton(p.Content, shareButtonCopyAgain))
+			if f := h.canvas().Focused(); f != nil {
+				t.Fatalf("control: a tapped button gives the caret up; focused %T", f)
+			}
+			h.typeOnCanvas(fyne.KeyEnter)
 		}},
 	} {
 		t.Run(way.name, func(t *testing.T) {
@@ -406,6 +423,21 @@ func TestTheCopiedSheetClosesOnDoneEscapeAndReturn(t *testing.T) {
 			h.flip()
 			if h.overlays() != 0 {
 				t.Errorf("a change brought back a sheet the reader closed: %v", sheetTexts(h.top()))
+			}
+			// The canvas's handler is the desktop's again: Escape closes the
+			// next sheet, and Return does nothing to it.
+			showVerseOfDay(h.st)
+			card := h.top()
+			if card == nil || !sheetHas(card, "Verse of the day") {
+				t.Fatal("control: the verse of the day card did not open")
+			}
+			h.typeOnCanvas(fyne.KeyReturn)
+			if !card.Visible() {
+				t.Error("Return closed the verse of the day card: the sheet's wrapper outlived it")
+			}
+			h.typeOnCanvas(fyne.KeyEscape)
+			if card.Visible() || h.overlays() != 0 {
+				t.Error("Escape no longer closes the next sheet: the handler the sheet found was not put back")
 			}
 		})
 	}

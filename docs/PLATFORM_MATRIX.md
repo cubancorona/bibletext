@@ -256,18 +256,32 @@ place a fix on one does not reach the others.
     arm64, with and without `-tags gles`, takes the two verbs from
     `share_other.go` and `share_fallback.go` and compiles none of
     `reading_macos.go`, `reading_ios.go` or `reading_android.go`. Every text
-    verb ends in `share.go:220` (`var shareTextOut`); the fallback copies
-    (`setShareClipboard`) and opens the sheet
-    (`showShareCopiedSheet`, `share_sheet_desktop.go`): "Copied — ready to
-    paste", one line saying what to do next, by verb, the clipboard's text
-    in a selectable scrolling box, Copy again, Email… when the desktop has a
-    mail client (`share_email_linux.go`, `share_email_windows.go`), and
-    Done, with Escape and Return. It is modal, registered for the
-    light/dark reopen and the window refit, opens below the header, and
-    over the verse-of-the-day card comes back with the card beneath it.
-    Share as image saves the PNG to Downloads, opens the file manager on
-    it, and ends in the same sheet, "Picture saved", with Email… attaching
-    the file on Linux.
+    verb ends in `share.go:220` (`var shareTextOut`); the fallback copies,
+    `share_fallback.go:36` (`setShareClipboard(s)`), and opens the sheet,
+    `share_fallback.go:37` (`showShareCopiedSheet(state, shareDoneForText(s))`):
+    the heading, `share_sheet_desktop.go:59` (`"Copied — ready to paste"`),
+    one line saying what to do next, by verb, the clipboard's text in a
+    selectable scrolling box, `share_sheet_desktop.go:204`
+    (`boxText.Selectable = true`), Copy again, Email… when the desktop has a
+    mail client, `share_sheet_desktop.go:365`
+    (`shareEmailProbe(attachment != "", func(ok bool) {`), and Done, with
+    Escape and Return, `share_sheet_desktop.go:297` (`cnv.SetOnTypedKey(`).
+    It is modal, `share_sheet_desktop.go:286`
+    (`widget.NewModalPopUp(card, cnv)`), registered for the light/dark
+    reopen and the window refit, opens below the header,
+    `share_sheet_desktop.go:334` (`room := clearOfHeader(`), and over the
+    verse-of-the-day card comes back with the card beneath it,
+    `share_sheet_desktop.go:355` (`under := takeReopenBeneath(state, popup)`).
+    Email… on Linux is the desktop portal's Email interface,
+    `share_email_linux.go:165` (`portalEmailIface+".ComposeEmail"`), its
+    request's answer watched, `share_email_linux.go:171`
+    (`case sig := <-responses:`), the image attached as a descriptor,
+    `share_email_linux.go:158` (`"attachment_fds"`); on Windows a `mailto:`
+    link when the class is registered, `share_email_windows.go:24`
+    (`registry.OpenKey(`). Share as image saves the PNG to Downloads, opens
+    the file manager on it, and ends in the same sheet, "Picture saved",
+    `share_fallback.go:64` (`showShareCopiedSheet(state, shareDone{line: line`),
+    with Email… attaching the file on Linux.
 
     Until 30 September 2026 the text verbs ended instead in a 13 pt
     "Copied to the clipboard" pill at the window's foot for 1.4 s, 1.07:1

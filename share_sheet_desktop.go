@@ -213,6 +213,9 @@ func showShareCopiedSheet(state *AppState, d shareDone) {
 	// there — the verse-of-the-day card — and gets it back when this closes,
 	// so Escape then closes the card as it did before the share.
 	prevDismiss := state.dismissSheet
+	// Return closes as Done does, through the canvas's own key handler,
+	// wrapped while the sheet shows and put back as it closes (below).
+	prevKeys := cnv.OnTypedKey()
 	closeSheet := func() {
 		if closed {
 			return
@@ -222,6 +225,7 @@ func showShareCopiedSheet(state *AppState, d shareDone) {
 			popup.Hide()
 		}
 		state.dismissSheet = prevDismiss
+		cnv.SetOnTypedKey(prevKeys)
 		// Restore only when nothing else owns the canvas: over the
 		// verse-of-the-day card the card is still up, and its own close
 		// restores.
@@ -279,12 +283,27 @@ func showShareCopiedSheet(state *AppState, d shareDone) {
 	form := container.NewVBox(parts...)
 
 	card := surface(container.NewPadded(form), pal.SurfaceAlt, pal.Border, fyne.Size{})
-	// Return closes as Done does: the card is wrapped in a widget that holds
-	// the caret while the sheet is up. Escape reaches it too, for a canvas
-	// that has no Escape handler of its own.
-	keys := newSheetKeyCatcher(card, closeSheet, closeSheet)
-	popup = widget.NewModalPopUp(keys, cnv)
+	popup = widget.NewModalPopUp(card, cnv)
 	popup.Show()
+
+	// Return closes as Done does. The desktop driver hands a key to the
+	// focused widget, or else to the canvas's handler, and the sheet's
+	// resting state is nothing focused: it opens with no caret, and a tapped
+	// button gives the caret up. So the canvas's handler — the desktop's
+	// Escape route (installShortcuts) — is wrapped while the sheet is on top
+	// and put back as it closes. A rebuild's drain closes the sheet without
+	// closeSheet and installs the canvas's handler afresh, which replaces
+	// the wrapper along with everything else the canvas had.
+	cnv.SetOnTypedKey(func(ev *fyne.KeyEvent) {
+		if (ev.Name == fyne.KeyReturn || ev.Name == fyne.KeyEnter) &&
+			popup != nil && popup.Visible() && cnv.Overlays().Top() == popup {
+			closeSheet()
+			return
+		}
+		if prevKeys != nil {
+			prevKeys(ev)
+		}
+	})
 
 	w := float32(460)
 	if cw := cnv.Size().Width - 80; cw > 280 && w > cw {
@@ -342,7 +361,6 @@ func showShareCopiedSheet(state *AppState, d shareDone) {
 		}
 	})
 	registerSheetRefit(state, popup, fit)
-	cnv.Focus(keys)
 
 	shareEmailProbe(attachment != "", func(ok bool) {
 		if !ok || closed || popup == nil || !popup.Visible() {
@@ -352,44 +370,4 @@ func showShareCopiedSheet(state *AppState, d shareDone) {
 		buttons.Refresh()
 		fit()
 	})
-}
-
-// sheetKeyCatcher draws its content and holds the caret for a sheet with no
-// field of its own, so Return and Escape reach the sheet: Fyne's buttons
-// answer only Space, and a modal popup handles no keys.
-type sheetKeyCatcher struct {
-	widget.BaseWidget
-	content            fyne.CanvasObject
-	onReturn, onEscape func()
-}
-
-func newSheetKeyCatcher(content fyne.CanvasObject, onReturn, onEscape func()) *sheetKeyCatcher {
-	k := &sheetKeyCatcher{content: content, onReturn: onReturn, onEscape: onEscape}
-	k.ExtendBaseWidget(k)
-	return k
-}
-
-func (k *sheetKeyCatcher) CreateRenderer() fyne.WidgetRenderer {
-	return widget.NewSimpleRenderer(k.content)
-}
-
-// wrappedContent lets a walk of the tree see through the catcher to the card
-// (contentWrapper, reading.go).
-func (k *sheetKeyCatcher) wrappedContent() fyne.CanvasObject { return k.content }
-
-func (k *sheetKeyCatcher) FocusGained()   {}
-func (k *sheetKeyCatcher) FocusLost()     {}
-func (k *sheetKeyCatcher) TypedRune(rune) {}
-
-func (k *sheetKeyCatcher) TypedKey(ev *fyne.KeyEvent) {
-	switch ev.Name {
-	case fyne.KeyReturn, fyne.KeyEnter:
-		if k.onReturn != nil {
-			k.onReturn()
-		}
-	case fyne.KeyEscape:
-		if k.onEscape != nil {
-			k.onEscape()
-		}
-	}
 }
