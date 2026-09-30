@@ -40,7 +40,9 @@ func fallbackShareText(s string) {
 // fallbackShareImage saves the rendered PNG to ~/Downloads (falling back to
 // the temp copy), reveals it in the file manager, and opens the confirmation
 // sheet saying where it went, with Email… attaching it where the platform
-// can.
+// can (shareImageMail). Where there is no Downloads folder, or the copy
+// fails, the sheet says only that the picture is shown in the file manager,
+// which then opens on the temp copy.
 // Each platform's share mechanism is recorded in docs/PLATFORM_MATRIX.md, Sharing.
 func fallbackShareImage(path string) {
 	state := activeAIState
@@ -61,7 +63,7 @@ func fallbackShareImage(path string) {
 	}
 	revealInFileManager(dst)
 	if state != nil {
-		showShareCopiedSheet(state, shareDone{line: line, subject: shareImageSubject, attachment: dst})
+		showShareCopiedSheet(state, shareDone{line: line, subject: shareImageMail.subject, body: shareImageMail.body, attachment: dst})
 	}
 }
 

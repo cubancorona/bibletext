@@ -15,11 +15,11 @@ package bibletext
 // it; Done, Escape and Return close it and give the canvas back, after Tab
 // has put the caret on a button too; Copy again copies again; neither Copy
 // again nor Email…'s late arrival moves a button; a light/dark change brings
-// it back showing the same text,
-// and the verse-of-the-day card beneath it; on the note path the sent note's
-// card is on the page under it; Email… is offered only when the platform
-// says there is a mail client, and hands over the citation, the text and the
-// image's file.
+// it back showing the same text, and the verse-of-the-day card beneath it;
+// on the note path the sent note's card is on the page under it; Email… is
+// offered only when the platform says there is a mail client — one that
+// takes a file, for the image — and hands over the citation, the text, and
+// the image's file with its quote.
 
 import (
 	"fmt"
@@ -58,6 +58,7 @@ type shareSheetHarness struct {
 	*appearanceHarness
 	st       *AppState
 	emailOK  bool
+	probed   []bool // withAttachment, as each sheet asked the mail probe
 	composed chan shareCompose
 	revealed []string
 	restored int // calls to showReadingOverlay, the desktop sheet-close consume point
@@ -88,7 +89,10 @@ func newShareSheetHarness(t *testing.T) *shareSheetHarness {
 	shareTextOut = fallbackShareText
 	t.Cleanup(func() { shareTextOut = prevOut })
 	prevProbe := shareEmailProbe
-	shareEmailProbe = func(_ bool, report func(bool)) { report(h.emailOK) }
+	shareEmailProbe = func(withAttachment bool, report func(bool)) {
+		h.probed = append(h.probed, withAttachment)
+		report(h.emailOK)
+	}
 	t.Cleanup(func() { shareEmailProbe = prevProbe })
 	prevCompose := shareEmailCompose
 	shareEmailCompose = func(subject, body, attachment string) error {
@@ -158,22 +162,47 @@ func (h *shareSheetHarness) shareVerseOfDay() *widget.PopUp {
 	return card
 }
 
-// shareImage hands a rendered card to the image fallback with a Downloads
-// folder under a home of its own, and returns where the fallback put it.
-func (h *shareSheetHarness) shareImage() string {
+// The image mail the harness's image share carries (shareImageMail, which
+// the preview sets before its hand-off).
+const (
+	sampleImageSubject = "John 1:1 (Sample)"
+	sampleImageBody    = "“In the beginning was the Word.”\n\n— John 1:1 (Sample)"
+)
+
+// homeForImage gives the test a home of its own, with a Downloads folder or
+// without one, and the image mail the preview would have set.
+func (h *shareSheetHarness) homeForImage(withDownloads bool) (downloads string) {
 	h.t.Helper()
 	home := h.t.TempDir()
 	h.t.Setenv("HOME", home)
-	downloads := filepath.Join(home, "Downloads")
-	if err := os.MkdirAll(downloads, 0o755); err != nil {
-		h.t.Fatal(err)
+	downloads = filepath.Join(home, "Downloads")
+	if withDownloads {
+		if err := os.MkdirAll(downloads, 0o755); err != nil {
+			h.t.Fatal(err)
+		}
 	}
+	prev := shareImageMail
+	shareImageMail.subject, shareImageMail.body = sampleImageSubject, sampleImageBody
+	h.t.Cleanup(func() { shareImageMail = prev })
+	return downloads
+}
+
+// renderedCard is a card file where the renderer would leave one.
+func (h *shareSheetHarness) renderedCard() string {
+	h.t.Helper()
 	src := filepath.Join(h.t.TempDir(), "card.png")
 	if err := os.WriteFile(src, []byte("not a real png"), 0o644); err != nil {
 		h.t.Fatal(err)
 	}
-	shareImageSubject = "John 1:1 (Sample)"
-	fallbackShareImage(src)
+	return src
+}
+
+// shareImage hands a rendered card to the image fallback with a Downloads
+// folder under a home of its own, and returns where the fallback put it.
+func (h *shareSheetHarness) shareImage() string {
+	h.t.Helper()
+	downloads := h.homeForImage(true)
+	fallbackShareImage(h.renderedCard())
 	entries, err := os.ReadDir(downloads)
 	if err != nil || len(entries) != 1 {
 		h.t.Fatalf("control: the image share must leave one file in Downloads; have %d (%v)", len(entries), err)
@@ -529,10 +558,52 @@ func TestCopyAgainCopiesTheTextAgain(t *testing.T) {
 	}
 }
 
-// A LIGHT/DARK CHANGE BRINGS IT BACK WITH THE SAME TEXT, in the new palette.
+// A LIGHT/DARK CHANGE BRINGS IT BACK WITH THE SAME TEXT, in the new palette,
+// and the image sheet with the same picture: its heading and line, no box,
+// and Email… still attaching the saved file with its subject and text.
 // Mutation: the reopen not registered (the sheet closes for good), or
-// registered without the text (a different sheet comes back).
+// registered without the text or the picture (a different sheet comes
+// back).
 func TestTheCopiedSheetComesBackAfterALightDarkChange(t *testing.T) {
+	t.Run("text", testTheTextSheetComesBack)
+	t.Run("image", func(t *testing.T) {
+		h := newShareSheetHarness(t)
+		dst := h.shareImage()
+		p := h.sheet()
+		for range 2 {
+			h.flip()
+			again := h.sheet()
+			if again == p || h.overlays() != 1 {
+				t.Fatalf("the image sheet must come back rebuilt, alone; overlays %d", h.overlays())
+			}
+			if !sheetHas(again, shareSheetImageHeading) || !sheetHas(again, shareLineImage) {
+				t.Errorf("the reopened image sheet reads %v", sheetTexts(again))
+			}
+			if _, ok := boxText(again); ok {
+				t.Error("the reopened image sheet has a clipboard box")
+			}
+			b := findTreeButton(again.Content, shareButtonEmail)
+			if b == nil || !b.Visible() {
+				t.Fatal("the reopened image sheet has no Email…")
+			}
+			test.Tap(b)
+			select {
+			case c := <-h.composed:
+				if c != (shareCompose{sampleImageSubject, sampleImageBody, dst}) {
+					t.Errorf("the reopened sheet's Email… composed %+v, want the saved file %q with its subject and text", c, dst)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("the reopened sheet's Email… composed nothing")
+			}
+			p = again
+		}
+		if len(h.revealed) != 1 {
+			t.Errorf("the reopen revealed the file again: %v", h.revealed)
+		}
+	})
+}
+
+func testTheTextSheetComesBack(t *testing.T) {
 	h := newShareSheetHarness(t)
 	h.shareCitation()
 	p := h.sheet()
@@ -687,8 +758,10 @@ func TestEmailIsOfferedOnlyWithAMailClient(t *testing.T) {
 
 // THE IMAGE SHARE ENDS IN THE SAME SHEET: saved to Downloads and revealed as
 // before, the sheet saying so with no clipboard box and no Copy again, and
-// Email… attaching the file. Mutations: the reveal dropped; the sheet not
-// opened for the image; the attachment not handed over.
+// Email… attaching the file, with the quote and its citation as the mail's
+// text so that no route that drops the picture sends a blank message.
+// Mutations: the reveal dropped; the sheet not opened for the image; the
+// attachment or the text not handed over.
 func TestTheImageShareEndsInTheSavedSheet(t *testing.T) {
 	h := newShareSheetHarness(t)
 	dst := h.shareImage()
@@ -712,8 +785,8 @@ func TestTheImageShareEndsInTheSavedSheet(t *testing.T) {
 	test.Tap(findTreeButton(p.Content, shareButtonEmail))
 	select {
 	case c := <-h.composed:
-		if c.attachment != dst || c.subject != "John 1:1 (Sample)" {
-			t.Errorf("Email… composed %+v, want the saved file attached under the citation", c)
+		if c != (shareCompose{sampleImageSubject, sampleImageBody, dst}) {
+			t.Errorf("Email… composed %+v, want the saved file attached under the citation, with the quote as its text", c)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("Email… composed nothing")
@@ -725,7 +798,9 @@ func TestTheImageShareEndsInTheSavedSheet(t *testing.T) {
 }
 
 // THE MAIL HELPERS: a subject on one line under the portal's cap, and a
-// mailto: link with %20 for spaces.
+// mailto: link with %20 for spaces and CRLF for a line break (RFC 6068,
+// section 5), a CRLF already there not doubled. Mutation: the body's line
+// breaks left as LF.
 func TestMailHelpers(t *testing.T) {
 	if got := mailSubjectLine("  John 3:16\n(World English Bible) "); got != "John 3:16 (World English Bible)" {
 		t.Errorf("mailSubjectLine = %q", got)
@@ -734,9 +809,11 @@ func TestMailHelpers(t *testing.T) {
 	if got := mailSubjectLine(long); len([]rune(got)) != mailSubjectMaxRunes {
 		t.Errorf("mailSubjectLine left %d runes, want %d", len([]rune(got)), mailSubjectMaxRunes)
 	}
-	u := mailtoURL("John 3:16 (WEB)", "line one\nline two & more")
-	if got := u.String(); got != "mailto:?subject=John%203%3A16%20%28WEB%29&body=line%20one%0Aline%20two%20%26%20more" {
-		t.Errorf("mailtoURL = %q", got)
+	for _, body := range []string{"line one\nline two & more", "line one\r\nline two & more"} {
+		u := mailtoURL("John 3:16 (WEB)", body)
+		if got := u.String(); got != "mailto:?subject=John%203%3A16%20%28WEB%29&body=line%20one%0D%0Aline%20two%20%26%20more" {
+			t.Errorf("mailtoURL for %q = %q", body, got)
+		}
 	}
 }
 
@@ -923,5 +1000,108 @@ func TestCopyAgainMovesNothing(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// EMAIL… IS ASKED FOR WITH THE FILE ONLY FOR THE PICTURE: the text sheets
+// ask the platform for a mail client, the image sheet for one that takes a
+// file, which a mailto: link never carries (Windows, the macOS mimic) and a
+// browser handling mailto: drops (Linux). Mutation: the sheet asking without
+// the file for the image (Email… then shows where pressing it does nothing).
+func TestEmailIsAskedForWithTheFileOnlyForThePicture(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		share func(h *shareSheetHarness)
+		want  bool
+	}{
+		{"citation", (*shareSheetHarness).shareCitation, false},
+		{"link", (*shareSheetHarness).shareLink, false},
+		{"note", func(h *shareSheetHarness) { h.shareNote("fixture probe alpha") }, false},
+		{"verse of the day", func(h *shareSheetHarness) { h.shareVerseOfDay() }, false},
+		{"image", func(h *shareSheetHarness) { h.shareImage() }, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := newShareSheetHarness(t)
+			c.share(h)
+			h.sheet()
+			if len(h.probed) != 1 || h.probed[0] != c.want {
+				t.Errorf("the sheet asked the mail probe %v, want [%v]", h.probed, c.want)
+			}
+		})
+	}
+}
+
+// THE PREVIEW'S SHARE CARRIES THE CITATION AND THE QUOTE TO THE MAIL. Share
+// as image from the selection menu, through the preview's own Share button
+// into the desktop fallback: Email… composes with the citation naming the
+// translation in full as the subject, the quote and its citation — what
+// Share with citation copies — as the text, and the saved file. Mutations:
+// the subject set without the translation; the text left empty.
+func TestTheImagePreviewHandsItsCitationToTheMail(t *testing.T) {
+	h := newShareSheetHarness(t)
+	downloads := h.homeForImage(true)
+	shareImageMail.subject, shareImageMail.body = "", ""
+	prevOut := shareImageOut
+	shareImageOut = fallbackShareImage
+	t.Cleanup(func() { shareImageOut = prevOut })
+
+	text, span := h.selection(1, 2)
+	dispatchSelectionAction(h.st, selActionShareImage, text, span)
+	preview := h.top()
+	if preview == nil || !sheetHas(preview, "Share as image") {
+		t.Fatalf("control: the preview did not open; top %v", sheetTexts(preview))
+	}
+	test.Tap(findTreeButton(preview.Content, "Share"))
+	p := h.sheet()
+	if !sheetHas(p, shareSheetImageHeading) {
+		t.Fatalf("the preview's Share did not end in the image sheet: %v", sheetTexts(p))
+	}
+	entries, _ := os.ReadDir(downloads)
+	if len(entries) != 1 {
+		t.Fatalf("control: want one file in Downloads, have %d", len(entries))
+	}
+	test.Tap(findTreeButton(p.Content, shareButtonEmail))
+	select {
+	case c := <-h.composed:
+		_, cite := shareQuoteIn(h.st, h.st.CurrentBook, h.st.CurrentChapter, text, span)
+		want := shareCompose{cite + " (" + h.st.currentVersion().Name + ")", h.expectedCitationShare(), filepath.Join(downloads, entries[0].Name())}
+		if cite == "" || h.st.currentVersion().Name == "" || want.body == "" {
+			t.Fatalf("control: nothing to compare against (%+v)", want)
+		}
+		if c != want {
+			t.Errorf("Email… composed %+v, want %+v", c, want)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Email… composed nothing")
+	}
+}
+
+// WITHOUT A DOWNLOADS FOLDER THE SHEET SAYS ONLY WHAT IS TRUE: the file
+// manager opens on the temp copy, and the line says the picture is shown
+// there, not that it was saved in Downloads. Mutation: the saved line shown
+// whatever the copy did.
+func TestTheImageSheetWithoutDownloadsSaysOnlyWhereItIsShown(t *testing.T) {
+	h := newShareSheetHarness(t)
+	downloads := h.homeForImage(false)
+	src := h.renderedCard()
+	fallbackShareImage(src)
+	p := h.sheet()
+	if !sheetHas(p, shareLineImageTemp) || sheetHas(p, shareLineImage) {
+		t.Errorf("the sheet reads %v, want %q and not %q", sheetTexts(p), shareLineImageTemp, shareLineImage)
+	}
+	if len(h.revealed) != 1 || h.revealed[0] != src {
+		t.Errorf("revealed %v, want the temp copy %q", h.revealed, src)
+	}
+	if _, err := os.Stat(downloads); !os.IsNotExist(err) {
+		t.Errorf("control: the share made a Downloads folder (%v)", err)
+	}
+	test.Tap(findTreeButton(p.Content, shareButtonEmail))
+	select {
+	case c := <-h.composed:
+		if c.attachment != src {
+			t.Errorf("Email… attached %q, want the temp copy %q", c.attachment, src)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Email… composed nothing")
 	}
 }

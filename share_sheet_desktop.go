@@ -38,7 +38,8 @@ package bibletext
 //
 // Share as image keeps its save to ~/Downloads and the file-manager reveal
 // and ends in the same sheet with no clipboard box: the line says where the
-// picture went, and Email… attaches it where the platform can.
+// picture went, and Email… attaches it where the platform can, with the
+// quote and its citation as the mail's text.
 //
 // UI goroutine only, like every sheet.
 
@@ -53,8 +54,12 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// The sheet's words. The heading and the three verb lines are the approved
-// wording; the image share, which copies nothing, has a heading of its own.
+// The sheet's words. The heading, the three verb lines, the image line and
+// Copied again are the approved wording. Two are not, and are still to be
+// settled (docs/BACKLOG.md, the Linux and Windows share-sheet entry): the
+// image share, which copies nothing, has a heading of its own, and where the
+// picture could not be saved to Downloads its line says only where it is
+// shown.
 const (
 	shareSheetHeading      = "Copied — ready to paste"
 	shareSheetImageHeading = "Picture saved"

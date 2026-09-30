@@ -14,11 +14,19 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// shareImageSubject is the citation of the last card the preview handed to
-// the platform, "John 3:16 (World English Bible)", for a mail's subject on
-// the desktop, whose share seam takes the file's path alone
-// (fallbackShareImage). Set before every hand-off; UI goroutine only.
-var shareImageSubject string
+// shareImageMail is what a mail carrying the last card the preview handed to
+// the platform says, for Email… on the desktop confirmation, whose share seam
+// takes the file's path alone (fallbackShareImage): the citation as the
+// subject, "John 3:16 (World English Bible)", and as the text the quote and
+// its citation — what Share with citation would have copied — so that no
+// route that drops the picture leaves a blank message. Set before every
+// hand-off; UI goroutine only.
+var shareImageMail struct{ subject, body string }
+
+// shareImageOut hands the rendered card to the platform. A variable, like
+// shareTextOut, so a test can drive the preview's Share into the desktop
+// fallback on a Mac, whose own route opens the system picker.
+var shareImageOut = func(path string) { nativeShareImage(path) }
 
 func showShareImagePreview(state *AppState, quote, cite, version string) {
 	if state == nil || state.window == nil {
@@ -88,8 +96,9 @@ func showShareImagePreview(state *AppState, quote, cite, version string) {
 		p := curPath
 		closePanel()
 		if p != "" {
-			shareImageSubject = cite + " (" + version + ")"
-			nativeShareImage(p)
+			shareImageMail.subject = cite + " (" + version + ")"
+			shareImageMail.body = composeShareText(quote, cite, version)
+			shareImageOut(p)
 		}
 	})
 	shareBtn.Importance = widget.HighImportance

@@ -5,16 +5,17 @@ package bibletext
 // Email… on Linux: the xdg-desktop-portal Email interface first, then
 // xdg-email, then a mailto: link. The portal is the desktop's own route — it
 // fills in the subject, the body and an attachment, works from inside the
-// snap's confinement, and is what GTK itself uses — and it is the only one
-// of the three that can attach the image share's PNG through every backend.
+// snap's confinement, and is what GTK itself uses.
 //
-// Only the GTK and KDE backends provide the interface, and with no mail
-// client set up the GTK backend shows nothing and answers 2 on the request:
-// so the button is offered only when the desktop says a mailto: handler
-// exists, and a compose that comes back empty-handed falls through to the
-// next route, which then does as little, so the reader is never shown a
-// route that goes nowhere. Every call here blocks on the bus or a process
-// and runs off the UI goroutine (share_email.go).
+// Only the GTK and KDE backends provide the interface. With no mail client
+// set up the GTK backend shows nothing and answers 2 on the request, and with
+// one it hands the desktop's mailto: handler a mailto: link, the attachment
+// as a path in it, which only a mail client reads: a browser opens an empty
+// compose. So the button is offered only as linuxMailOffered
+// (share_email.go) decides from what shareEmailAvailable finds out here, and
+// a compose the desktop answers 2 to falls through to the next route, which
+// then does as little. Every call here blocks on the bus or a process and
+// runs off the UI goroutine (share_email.go).
 
 import (
 	"context"
@@ -22,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -42,81 +44,88 @@ const (
 	portalProbeWait  = 3 * time.Second
 )
 
-// shareEmailAvailable reports whether Email… has somewhere to go. The
-// portal's own answer is taken when it can give one: OpenURI's
-// SchemeSupported("mailto") (portal 1.19.1 and later) asks the desktop
-// whether anything handles mailto:. On an older portal the Email interface
-// is looked for, and the desktop is asked for its mailto: handler the way
-// the GTK backend asks (the default application for the scheme), since the
-// interface being present says nothing about a client being installed. With
-// no portal at all, xdg-email needs that handler too. Only a mailto: link
-// carries no file, so an attachment needs the portal or xdg-email.
+// shareEmailAvailable reports whether Email… has somewhere to go
+// (linuxMailOffered).
 func shareEmailAvailable(withAttachment bool) bool {
+	return linuxMailOffered(withAttachment, linuxMailFactsNow())
+}
+
+// linuxMailFactsNow asks the desktop what linuxMailOffered needs: the
+// portal, over the session bus, whether anything handles mailto:
+// (OpenURI.SchemeSupported, portal 1.19.1 and later) and whether it has the
+// Email interface; and, outside a sandbox, xdg-email's presence and
+// xdg-mime's mailto: handler, the way the GTK backend finds it (the default
+// application for the scheme), with its desktop entry read for what it is.
+func linuxMailFactsNow() linuxMailFacts {
+	f := linuxMailFacts{confined: linuxSandboxed(), handler: mailHandlerUnknown}
 	ctx, cancel := context.WithTimeout(context.Background(), portalProbeWait)
 	defer cancel()
 	if conn, err := dbus.ConnectSessionBus(); err == nil {
 		defer conn.Close()
 		obj := conn.Object(portalDest, portalPath)
-		var supported bool
 		call := obj.CallWithContext(ctx, portalOpenURIIface+".SchemeSupported", 0, "mailto", map[string]dbus.Variant{})
-		if call.Err == nil && call.Store(&supported) == nil {
-			return supported
-		}
+		f.schemeKnown = call.Err == nil && call.Store(&f.schemeSupported) == nil
 		var xml string
 		call = obj.CallWithContext(ctx, "org.freedesktop.DBus.Introspectable.Introspect", 0)
-		if call.Err == nil && call.Store(&xml) == nil && strings.Contains(xml, `name="`+portalEmailIface+`"`) {
-			return mailtoHandlerRegistered()
+		f.portalEmail = call.Err == nil && call.Store(&xml) == nil && strings.Contains(xml, `name="`+portalEmailIface+`"`)
+	}
+	if f.confined {
+		return f
+	}
+	_, err := exec.LookPath("xdg-email")
+	f.xdgEmail = err == nil
+	if xdgMime, err := exec.LookPath("xdg-mime"); err == nil {
+		if out, err := exec.Command(xdgMime, "query", "default", "x-scheme-handler/mailto").Output(); err == nil {
+			f.handler = mailHandlerOf(string(out), xdgDataDirs())
 		}
 	}
-	if _, err := exec.LookPath("xdg-email"); err == nil {
-		return mailtoHandlerRegistered()
-	}
-	return !withAttachment && mailtoHandlerRegistered()
+	return f
 }
 
-// mailtoHandlerRegistered asks the desktop for its mailto: handler. Without
-// xdg-mime to ask, it answers yes: the portal or xdg-email will say no
-// themselves when pressed, and nothing then happens, which is the graceful
-// outcome; a button withheld for want of a tool would hide a client that is
-// there.
-func mailtoHandlerRegistered() bool {
-	xdgMime, err := exec.LookPath("xdg-mime")
-	if err != nil {
+// linuxSandboxed reports whether the app runs inside a snap or a Flatpak.
+func linuxSandboxed() bool {
+	if os.Getenv("SNAP") != "" {
 		return true
 	}
-	out, err := exec.Command(xdgMime, "query", "default", "x-scheme-handler/mailto").Output()
-	return err == nil && strings.TrimSpace(string(out)) != ""
+	_, err := os.Stat("/.flatpak-info")
+	return err == nil
+}
+
+// xdgDataDirs is where desktop entries are looked for, the user's own first:
+// $XDG_DATA_HOME, then $XDG_DATA_DIRS, with the specification's defaults.
+func xdgDataDirs() []string {
+	home := os.Getenv("XDG_DATA_HOME")
+	if home == "" {
+		if h, err := os.UserHomeDir(); err == nil {
+			home = filepath.Join(h, ".local", "share")
+		}
+	}
+	dirs := os.Getenv("XDG_DATA_DIRS")
+	if dirs == "" {
+		dirs = "/usr/local/share:/usr/share"
+	}
+	return append([]string{home}, strings.Split(dirs, ":")...)
 }
 
 // composeShareEmail opens a new message carrying subject, body and, when
 // given, attachment, by the first route that succeeds: the Email portal,
-// xdg-email, a mailto: link. The error of every route is returned when none
-// does.
+// xdg-email, a mailto: link (composeByRoutes).
 func composeShareEmail(subject, body, attachment string) error {
-	subject = mailSubjectLine(subject)
-	var errs []error
-	for _, route := range []func(string, string, string) error{
+	return composeByRoutes([]mailRoute{
 		composeEmailViaPortal,
 		composeEmailViaXDGEmail,
 		composeEmailViaMailto,
-	} {
-		err := route(subject, body, attachment)
-		if err == nil {
-			return nil
-		}
-		errs = append(errs, err)
-	}
-	return errors.Join(errs...)
+	}, mailSubjectLine(subject), body, attachment)
 }
 
 // composeEmailViaPortal calls org.freedesktop.portal.Email.ComposeEmail on
 // the session bus and waits for its request's Response. The request's
 // object path is known before the call from the handle token, and the
 // Response signal is matched before the call is made, so an answer that
-// arrives at once is not missed. Response 0 is success; 1 is the reader
-// cancelling; 2 is the backend having nothing to show, which is what the
-// GTK backend answers with no mail client, and is an error here so the next
-// route is tried.
+// arrives at once is not missed. The answer means what portalEmailResponse
+// says. Once the portal has taken the call, no answer in time ends the
+// compose too: a slow portal may yet open one, and a second from the next
+// route would make two.
 func composeEmailViaPortal(subject, body, attachment string) error {
 	conn, err := dbus.ConnectSessionBus()
 	if err != nil {
@@ -172,16 +181,16 @@ func composeEmailViaPortal(subject, body, attachment string) error {
 			if sig == nil || (sig.Path != handle && sig.Path != request) {
 				continue
 			}
-			if len(sig.Body) == 0 {
-				return errors.New("the Email portal answered with no response code")
+			code, ok := uint32(0), len(sig.Body) > 0
+			if ok {
+				code, ok = sig.Body[0].(uint32)
 			}
-			code, _ := sig.Body[0].(uint32)
-			if code == 0 {
-				return nil
+			if !ok {
+				return mailRouteStop{errors.New("the Email portal answered with no response code")}
 			}
-			return fmt.Errorf("the Email portal answered %d", code)
+			return portalEmailResponse(code)
 		case <-ctx.Done():
-			return errors.New("no answer from the Email portal")
+			return mailRouteStop{errors.New("no answer from the Email portal")}
 		}
 	}
 }

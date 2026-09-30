@@ -259,29 +259,56 @@ place a fix on one does not reach the others.
     verb ends in `share.go:220` (`var shareTextOut`); the fallback copies,
     `share_fallback.go:36` (`setShareClipboard(s)`), and opens the sheet,
     `share_fallback.go:37` (`showShareCopiedSheet(state, shareDoneForText(s))`):
-    the heading, `share_sheet_desktop.go:59` (`"Copied — ready to paste"`),
+    the heading, `share_sheet_desktop.go:64` (`"Copied — ready to paste"`),
     one line saying what to do next, by verb, the clipboard's text in a
-    read-only scrolling box, `share_sheet_desktop.go:216`
-    (`boxScroll = container.NewVScroll(`), Copy again, Email… when the
-    desktop has a mail client, `share_sheet_desktop.go:384`
-    (`shareEmailProbe(attachment != "", func(ok bool) {`), and Done, with
-    Escape and Return, `share_sheet_desktop.go:316` (`cnv.SetOnTypedKey(`).
-    It is modal, `share_sheet_desktop.go:302`
-    (`widget.NewModalPopUp(card, cnv)`), registered for the light/dark
-    reopen and the window refit, opens below the header,
-    `share_sheet_desktop.go:353` (`room := clearOfHeader(`), and over the
-    verse-of-the-day card comes back with the card beneath it,
-    `share_sheet_desktop.go:374` (`under := takeReopenBeneath(state, popup)`).
+    read-only scrolling box, `share_sheet_desktop.go:221`
+    (`boxScroll = container.NewVScroll(`), Email… when the desktop has a
+    mail client, `share_sheet_desktop.go:389`
+    (`shareEmailProbe(attachment != "", func(ok bool) {`), at the row's
+    left end so that its late arrival moves nothing,
+    `share_sheet_desktop.go:295`
+    (`buttons = container.NewHBox(email, copyAgain, done)`), Copy again,
+    whose "Copied again." keeps the line's height,
+    `share_sheet_desktop.go:205`
+    (`lineSlot := container.New(heldLineLayout{held: held}, line)`), and
+    Done, with Escape and Return, `share_sheet_desktop.go:321`
+    (`cnv.SetOnTypedKey(`), and after Tab has put the caret on a button,
+    `share_sheet_desktop.go:423`
+    (`func (b *shareSheetButton) TypedKey(`). It is modal,
+    `share_sheet_desktop.go:307` (`widget.NewModalPopUp(card, cnv)`),
+    registered for the light/dark reopen and the window refit, opens below
+    the header, `share_sheet_desktop.go:358` (`room := clearOfHeader(`),
+    and over the verse-of-the-day card comes back with the card beneath it,
+    `share_sheet_desktop.go:379` (`under := takeReopenBeneath(state, popup)`).
     Email… on Linux is the desktop portal's Email interface,
-    `share_email_linux.go:165` (`portalEmailIface+".ComposeEmail"`), its
-    request's answer watched, `share_email_linux.go:171`
-    (`case sig := <-responses:`), the image attached as a descriptor,
-    `share_email_linux.go:158` (`"attachment_fds"`); on Windows a `mailto:`
-    link when the class is registered, `share_email_windows.go:24`
-    (`registry.OpenKey(`). Share as image saves the PNG to Downloads, opens
-    the file manager on it, and ends in the same sheet, "Picture saved",
-    `share_fallback.go:64` (`showShareCopiedSheet(state, shareDone{line: line`),
-    with Email… attaching the file on Linux.
+    `share_email_linux.go:174` (`portalEmailIface+".ComposeEmail"`), its
+    request's answer watched, `share_email_linux.go:180`
+    (`case sig := <-responses:`), and only its 2 — no mail client — handing
+    on to xdg-email and a `mailto:` link, `share_email_linux.go:191`
+    (`return portalEmailResponse(code)`); the image goes as a descriptor,
+    `share_email_linux.go:167` (`"attachment_fds"`), and the image's Email…
+    is offered only outside the snap and the Flatpak, and only where the
+    desktop's mailto: handler is a mail client rather than a browser,
+    `share_email.go:296` (`return !f.confined && (f.portalEmail`): a
+    browser, which is what a stock Ubuntu desktop names, is handed a
+    `mailto:` link with the file's local path in it and opens a compose
+    without the picture. Inside the snap and the Flatpak the text's Email…
+    is offered only where the portal can answer `SchemeSupported`,
+    `share_email.go:301` (`if f.confined {`), since `xdg-mime` there reads
+    the sandbox's own handler, not the desktop's; Ubuntu 24.04's portal
+    cannot, so the snap there offers no Email… at all. On Windows it is a
+    `mailto:` link when the shell resolves a handler for the scheme,
+    `share_email_windows.go:32` (`schemeHandlerRegistered("mailto")`). A
+    `mailto:` link, on either platform, carries line breaks as CRLF,
+    `share_email.go:85` (`strings.ReplaceAll(b, "\n", "\r\n")`), and is
+    kept to 2,000 characters, `share_email.go:73`
+    (`const mailtoMaxLen = 2000`): past that the passage or the note is cut
+    at a word and ends in an ellipsis, and the citation, with a link
+    share's link, is kept whole; the whole text is still on the clipboard.
+    Share as image saves the PNG to Downloads, opens the file manager on
+    it, and ends in the same sheet, "Picture saved",
+    `share_fallback.go:66` (`showShareCopiedSheet(state, shareDone{line: line`),
+    whose Email… carries the quote and its citation as the mail's text.
 
     Until 30 September 2026 the text verbs ended instead in a 13 pt
     "Copied to the clipboard" pill at the window's foot for 1.4 s, 1.07:1
@@ -391,8 +418,8 @@ confirmation sheet built on 30 September 2026, which ships next.
 | iPadOS | Share popover; probably points mid-page rather than at the selection | Share popover at the selection | Share popover at the selection | Preview, then a share popover; probably mid-page | Probably a share popover pointing at the hidden reading view, not the icon; not seen | `reading_ios.go` | `builds` — code reading, 29–30 September 2026 |
 | macOS | Share picker at the selection; the note card appears beneath | Share picker at the selection | Share picker at the selection | Preview, then the share picker with the image | Probably the share picker, anchored to the hidden reading view, not the icon; not seen | `reading_macos.go` | `builds` — code reading, 29–30 September 2026 |
 | Android | The note card, then the "Sharing text" sheet with the note, citation and link | "Sharing text" sheet with the quote and citation | "Sharing text" sheet with the link | Preview, then the "Sharing image" sheet | "Sharing text" sheet, by the citation's route; not driven | `reading_android.go` | `runner` — emulator, 1.2.17, 29–30 September 2026 |
-| Windows | Copied; the "Copied — ready to paste" sheet over the new note card, with Copy again, Email… and Done (27) | Copied; the "Copied — ready to paste" sheet (27) | Copied; the "Copied — ready to paste" sheet (27) | Saved to Downloads; Explorer opens with it selected; the "Picture saved" sheet, without Email… | Copied; the "Copied — ready to paste" sheet over the card (27) | `share_other.go`, handing on to `share_fallback.go` | `builds` — build tags and `go list`, 30 September 2026 |
-| Linux | Copied; the "Copied — ready to paste" sheet over the new note card, with Copy again, Email… and Done (27) | Copied; the "Copied — ready to paste" sheet (27) | Copied; the "Copied — ready to paste" sheet (27) | Saved to ~/Downloads; the file manager opens on the folder; the "Picture saved" sheet, Email… attaching the file | Copied; the "Copied — ready to paste" sheet over the card (27) | `share_other.go`, handing on to `share_fallback.go` | `hardware` — arm64 VM, X11, 30 September 2026 |
+| Windows | Copied; the "Copied — ready to paste" sheet over the new note card, with Email…, Copy again and Done (27) | Copied; the "Copied — ready to paste" sheet (27) | Copied; the "Copied — ready to paste" sheet (27) | Saved to Downloads; Explorer opens with it selected; the "Picture saved" sheet, without Email… | Copied; the "Copied — ready to paste" sheet over the card (27) | `share_other.go`, handing on to `share_fallback.go` | `builds` — build tags and `go list`, 30 September 2026 |
+| Linux | Copied; the "Copied — ready to paste" sheet over the new note card, with Email…, Copy again and Done (27) | Copied; the "Copied — ready to paste" sheet (27) | Copied; the "Copied — ready to paste" sheet (27) | Saved to ~/Downloads; the file manager opens on the folder; the "Picture saved" sheet, with Email… attaching the file only where a mail client, not a browser, handles mailto:, and never in the snap (27). | Copied; the "Copied — ready to paste" sheet over the card (27) | `share_other.go`, handing on to `share_fallback.go` | `hardware` — arm64 VM, X11, 30 September 2026 |
 
 What each proof rests on:
 
@@ -429,13 +456,19 @@ What each proof rests on:
   are recorded in `docs/BACKLOG.md` to be seen on a device. On the Mac it is
   not even known that the picker shows while the view it is anchored to is
   hidden.
-- **Windows, `builds`.** Read from the build tags and `go list`; the Windows
-  VM was not started. It runs the Linux code — the same sheet, from the same
-  files — but for two things: the file manager the image share opens
-  (Explorer, with the file selected), and Email…, which opens a `mailto:`
-  link through the shell (`share_email_windows.go`) when a mailto: handler
-  is registered, and which a link cannot carry a file through, so the image
-  sheet has no Email… there.
+- **Windows, `builds`.** Read from the build tags and `go list`, and the
+  Windows files type-checked for windows/arm64 with the `gles` tag; the
+  Windows VM was not started. It runs the Linux code — the same sheet, from
+  the same files — but for two things: the file manager the image share
+  opens (Explorer, with the file selected), and Email…, which opens a
+  `mailto:` link through the shell (`share_email_windows.go`) when the
+  shell's association API resolves a handler for the scheme — the reader's
+  own choice first, a handler whose executable is on disk or a packaged
+  app's — and which a link cannot carry a file through, so the image sheet
+  has no Email… there. The link is kept to 2,000 characters, a longer
+  share's passage cut at a word. Neither the handler check nor a long
+  share's link has run on Windows; `share_email_windows_test.go` holds the
+  check against handlers it registers itself, in the Windows CI job.
 
 ### Planned
 
