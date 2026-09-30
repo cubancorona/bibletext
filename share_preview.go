@@ -31,6 +31,13 @@ var shareImageMail shareMail
 // fallback on a Mac, whose own route opens the system picker.
 var shareImageOut = func(path string) { nativeShareImage(path) }
 
+// previewCardRender renders the card the preview shows. A variable, so a test
+// that opens the preview many times over with the same passage can render
+// its card once: the card is a function of its arguments alone, and drawing
+// and encoding its 1080-pixel square is most of what opening the preview
+// costs.
+var previewCardRender = renderVerseImage
+
 func showShareImagePreview(state *AppState, quote, cite, version string) {
 	if state == nil || state.window == nil {
 		return
@@ -62,7 +69,7 @@ func showShareImagePreview(state *AppState, quote, cite, version string) {
 	variant := 0
 	curPath := ""
 	render := func() {
-		path, err := renderVerseImage(state, quote, cite, version, variant)
+		path, err := previewCardRender(state, quote, cite, version, variant)
 		if err != nil {
 			return
 		}

@@ -13,6 +13,7 @@ package bibletext
 import (
 	"fmt"
 	"math"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -43,6 +44,7 @@ func desktopSheets(t *testing.T) []desktopSheet {
 	votdSynchronousRemeasure(t)
 	holdSheetTimers(t) // the audio source menu's watchdog, and the composer's
 	studies := stubAIActionParked(t)
+	renderEachCardOnce(t)
 	prevRun, prevLoad := crossRefsRun, crossRefsLoad
 	t.Cleanup(func() { crossRefsRun, crossRefsLoad = prevRun, prevLoad })
 	crossRefsLoad = func() error { return nil }
@@ -88,6 +90,44 @@ func desktopSheets(t *testing.T) []desktopSheet {
 			showAIPanel(s, aiActionExplain, "For God so loved the world", "")
 			waitParked(t, studies, "the study request")
 		}},
+	}
+}
+
+// renderEachCardOnce has the share preview render each card once for the
+// rest of the test, and open every later preview of the same card on the
+// file that render wrote. A card is a function of its arguments alone (the
+// reading fonts, the fallback's, are part of the key), so the file is the
+// one rendering again would write; what the preview does with it, loading,
+// scaling and laying it out, it does each time. The renderer writes every
+// card of a variant to one file, so a card is rendered again whenever its
+// file has since been written with another, or is gone.
+func renderEachCardOnce(t *testing.T) {
+	t.Helper()
+	type card struct {
+		quote, cite, version string
+		variant              int
+		fonts                *bookFonts
+	}
+	rendered := map[card]string{} // the file each card was rendered to
+	holds := map[string]card{}    // the card each file was last written with
+	prev := previewCardRender
+	t.Cleanup(func() { previewCardRender = prev })
+	previewCardRender = func(state *AppState, quote, cite, version string, variant int) (string, error) {
+		c := card{quote: quote, cite: cite, version: version, variant: variant}
+		if state != nil && state.theme != nil {
+			c.fonts = state.theme.fonts
+		}
+		if path, ok := rendered[c]; ok && holds[path] == c {
+			if _, err := os.Stat(path); err == nil {
+				return path, nil
+			}
+		}
+		path, err := prev(state, quote, cite, version, variant)
+		if err != nil {
+			return "", err
+		}
+		rendered[c], holds[path] = path, c
+		return path, nil
 	}
 }
 
