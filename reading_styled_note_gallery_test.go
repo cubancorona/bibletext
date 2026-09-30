@@ -249,9 +249,15 @@ func TestStyledNoteGallery(t *testing.T) {
 		{"light", lightPalette, fyneTheme.VariantLight},
 		{"dark", darkPalette, fyneTheme.VariantDark},
 	} {
+		// Once per variant, not once per case. SetTheme empties Fyne's font
+		// faces and measured-text sizes, so setting the same theme again
+		// before every case had each one parse the reading faces and measure
+		// every string afresh. Within a variant the theme does not change,
+		// and those caches are keyed on everything else a measurement
+		// depends on, so every case draws what it drew before.
+		app.Settings().SetTheme(forcedVariant{Theme: realTheme, v: variant.variant})
 		for _, tc := range cases {
 			t.Run(variant.name+"/"+tc.name, func(t *testing.T) {
-				app.Settings().SetTheme(forcedVariant{Theme: realTheme, v: variant.variant})
 				st, verses, book, chapter := tc.build(t)
 				_, _ = book, chapter
 
