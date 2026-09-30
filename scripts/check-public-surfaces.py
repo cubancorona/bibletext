@@ -304,9 +304,9 @@ def reader_text(surface: str, body: str) -> str | None:
     """What a reader of this surface sees, or None when the notes are not found.
 
     For the release workflow that is the release notes alone; for a page it is
-    the page less its markup comments. The macOS steps and the Google Play link
-    are both read through it, so a comment naming either cannot stand in for
-    the text a reader is shown.
+    the page less its markup comments. The macOS steps, the Google Play link and
+    the files the download page offers are all read through it, so a comment
+    naming any of them cannot stand in for the text a reader is shown.
     """
     if surface == RELEASE_WORKFLOW:
         match = RELEASE_NOTES.search(body)
@@ -383,7 +383,12 @@ def rule_failures(read, list_cmd) -> list[str]:
                 f"{RELEASE_WORKFLOW}: no release assets found at all; the upload step's shape "
                 f"changed and this checker is now blind"
             )
-        offered = linked_assets(page)
+        # A file counts as offered only through a link a reader is shown, so a
+        # row left inside a markup comment offers nothing. The two refusals
+        # after it read the whole page, comments and all: a commented link is
+        # one edit from being shown, and should already name a live file from
+        # the latest release.
+        offered = linked_assets(reader_text(DOWNLOAD_PAGE, page))
         for asset in sorted(shipped):
             if asset in offered:
                 continue
@@ -399,7 +404,7 @@ def rule_failures(read, list_cmd) -> list[str]:
                 f"{DOWNLOAD_PAGE}: links {asset} from the {tag} release, which it goes on "
                 f"offering after the next one ships; link releases/latest/download/{asset}"
             )
-        for surface, names in ((DOWNLOAD_PAGE, offered), (READ_ME, linked_assets(readme))):
+        for surface, names in ((DOWNLOAD_PAGE, linked_assets(page)), (READ_ME, linked_assets(readme))):
             for asset in sorted(names - shipped):
                 failures.append(
                     f"{surface}: links {asset}, which no release step uploads — the link is dead"
@@ -751,14 +756,46 @@ def self_test() -> list[str]:
 
     # A file offered from one tagged release stays that release's file after
     # the next ships. In place of the latest link it also leaves the asset
-    # unlinked; beside it, only the tagged-link rule can catch it.
+    # unlinked; beside it, only the tagged-link rule can catch it. That rule
+    # holds every file the page offers, so each one the fixture page links is
+    # given a tagged link of its own; they are named here rather than read
+    # from the page, so a parser that stops finding them cannot empty the loop.
     tagged_apk = page_apk.replace(b"releases/latest/download/", b"releases/download/v1.2.17/")
     tagged_only = dict(clean)
     tagged_only[DOWNLOAD_PAGE] = clean[DOWNLOAD_PAGE].replace(page_apk, tagged_apk)
     violations.append(("the APK linked by a tagged release URL alone", tagged_only, pair))
-    tagged_beside = dict(clean)
-    tagged_beside[DOWNLOAD_PAGE] = clean[DOWNLOAD_PAGE] + tagged_apk
-    violations.append(("a tagged release URL beside the latest link", tagged_beside, pair))
+    page_files = (b"BibleText-Linux-amd64.tar.xz", b"BibleText-x86_64.AppImage", b"BibleText-Android.apk")
+    for asset in page_files:
+        tagged_beside = dict(clean)
+        tagged_beside[DOWNLOAD_PAGE] = clean[DOWNLOAD_PAGE] + (
+            b'<a href="https://example.invalid/releases/download/v1.2.17/' + asset + b'">Old</a>\n'
+        )
+        violations.append(
+            (f"a tagged link to {asset.decode()} beside the latest one", tagged_beside, pair))
+
+    # A link inside a markup comment is not shown, so a file whose only link
+    # is commented out is a file the page does not offer, whichever it is.
+    for asset in page_files:
+        hidden = dict(clean)
+        hidden[DOWNLOAD_PAGE] = re.sub(
+            rb'(<a href="[^"]*/releases/latest/download/' + re.escape(asset) + rb'">[^<]*</a>)',
+            rb"<!-- \1 -->",
+            clean[DOWNLOAD_PAGE],
+        )
+        violations.append(
+            (f"{asset.decode()} linked only inside a markup comment", hidden, pair))
+
+    # The two refusals read comments too: a commented link is one edit from
+    # being shown, so it must already be a latest link, to a file that ships.
+    tagged_commented = dict(clean)
+    tagged_commented[DOWNLOAD_PAGE] = clean[DOWNLOAD_PAGE] + b"<!-- " + tagged_apk.strip() + b" -->\n"
+    violations.append(("a tagged release URL inside a markup comment", tagged_commented, pair))
+    dead_commented = dict(clean)
+    dead_commented[DOWNLOAD_PAGE] = clean[DOWNLOAD_PAGE] + (
+        b'<!-- <a href="https://example.invalid/releases/latest/download/'
+        b'BibleText-Gone.zip">Gone</a> -->\n'
+    )
+    violations.append(("a dead download link inside a markup comment", dead_commented, pair))
 
     dead = dict(clean)
     dead[DOWNLOAD_PAGE] = clean[DOWNLOAD_PAGE] + (

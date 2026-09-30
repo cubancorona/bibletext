@@ -118,7 +118,9 @@ nothing that does not exist rather than to naming everything.
 mechanical half: it reads the asset names out of the `gh release upload`
 steps in `.github/workflows/release.yml` and fails if the download page does
 not offer one of them, or if either page links a name no release uploads.
-The APK, uploaded by hand, counts by the command commented in the workflow.
+A file counts as offered only by a link a reader is shown, so a row left inside
+a markup comment offers nothing. The APK, uploaded by hand, counts by the
+command commented in the workflow.
 The download page offers each file from `releases/latest/download/`, which
 follows every new release, and the checker fails on a link there to a tagged
 release's asset, which would go on offering that release's file after the next

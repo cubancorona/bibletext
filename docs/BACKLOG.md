@@ -1229,9 +1229,13 @@ stays first. Every GitHub release carries the APK (`docs/RELEASING.md`,
 stage 8), uploaded by hand. `scripts/check-public-surfaces.py` no longer has
 a `NOT_LINKED` exception: it holds the page to linking the APK like every
 released file, read from the upload command commented in the release
-workflow, and fails on a link to any release asset by a tagged release's URL
-rather than `releases/latest/download/`, which its self-test proves with the
-APK's link tagged in place of the latest one and beside it.
+workflow, counting only links a reader is shown, so a row inside a markup
+comment offers nothing. It fails on a link to any release asset by a tagged
+release's URL rather than `releases/latest/download/`, comment or not. Its
+self-test proves both for every file its fixture page links, not the APK
+alone: each gets a tagged link beside its latest one, and each has its only
+link commented out. A tagged or dead link inside a comment still fails, since
+it is one edit from being shown.
 `scripts/release-status.py` expects the APK on the latest release because the
 page links it. `scripts/publish-site.sh` copies `docs/badges/` into the site
 and refuses a tree missing a badge the page shows. The checker still holds
