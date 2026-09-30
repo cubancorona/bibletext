@@ -200,30 +200,110 @@ func (w *layoutWalker) renderer(wid fyne.Widget) fyne.WidgetRenderer {
 	return test.TempWidgetRenderer(w.t, wid)
 }
 
+// walk reads the tree under root, each object before what it holds, in
+// three passes: it finds the objects, asks every container for its MinSize,
+// and then reads where each object lies. A container's MinSize is its
+// layout's answer, which asks every object in the container for its own, so
+// asking each container in turn would ask the ones below it again for every
+// container above them, a dozen deep in a header. For the second pass each
+// container's layout is stood in for by one that asks it once (minOnce), and
+// the containers are asked from the bottom up; each answers as it would
+// alone, since nothing changes the tree between the questions. The MinSizes
+// are asked for before any position is read, as the first container's
+// question, which reached them all, used to be.
 func (w *layoutWalker) walk(root fyne.CanvasObject) []placed {
-	var out []placed
-	var visit func(o fyne.CanvasObject, offset fyne.Position, shown bool, path []fyne.CanvasObject)
-	visit = func(o fyne.CanvasObject, offset fyne.Position, shown bool, path []fyne.CanvasObject) {
+	type node struct {
+		obj    fyne.CanvasObject
+		parent int // the index of what holds it; -1 for root
+	}
+	var nodes []node
+	var find func(o fyne.CanvasObject, parent int)
+	find = func(o fyne.CanvasObject, parent int) {
 		if o == nil {
 			return
 		}
-		p := placed{obj: o, pos: o.Position().Add(offset), size: o.Size(), shown: shown && o.Visible(), path: path}
+		at := len(nodes)
+		nodes = append(nodes, node{o, parent})
 		var children []fyne.CanvasObject
 		switch v := o.(type) {
 		case *fyne.Container:
 			children = v.Objects
-			p.min = v.MinSize()
 		case fyne.Widget:
 			children = w.renderer(v).Objects()
 		}
-		out = append(out, p)
-		below := append(append([]fyne.CanvasObject(nil), path...), o)
 		for _, c := range children {
-			visit(c, p.pos, p.shown, below)
+			find(c, at)
 		}
 	}
-	visit(root, fyne.Position{}, true, nil)
+	find(root, -1)
+
+	out := make([]placed, len(nodes))
+	func() {
+		type stoodIn struct {
+			c   *fyne.Container
+			was fyne.Layout
+		}
+		var layouts []stoodIn
+		defer func() {
+			for i := len(layouts) - 1; i >= 0; i-- {
+				layouts[i].c.Layout = layouts[i].was
+			}
+		}()
+		for _, n := range nodes {
+			c, ok := n.obj.(*fyne.Container)
+			if !ok || c.Layout == nil {
+				continue
+			}
+			if _, already := c.Layout.(*minOnce); already {
+				continue // a container the tree holds twice
+			}
+			layouts = append(layouts, stoodIn{c, c.Layout})
+			c.Layout = &minOnce{layout: c.Layout}
+		}
+		for i := len(nodes) - 1; i >= 0; i-- {
+			if c, ok := nodes[i].obj.(*fyne.Container); ok {
+				out[i].min = c.MinSize()
+			}
+		}
+	}()
+
+	below := make([][]fyne.CanvasObject, len(nodes)) // the path of what each object holds
+	for i, n := range nodes {
+		o := n.obj
+		var offset fyne.Position
+		shown := true
+		var path []fyne.CanvasObject
+		if n.parent >= 0 {
+			up := out[n.parent]
+			offset, shown = up.pos, up.shown
+			if below[n.parent] == nil {
+				below[n.parent] = append(append([]fyne.CanvasObject(nil), up.path...), up.obj)
+			}
+			path = below[n.parent]
+		}
+		out[i] = placed{obj: o, pos: o.Position().Add(offset), size: o.Size(), shown: shown && o.Visible(), path: path, min: out[i].min}
+	}
 	return out
+}
+
+// minOnce stands in for a container's layout while walk asks the tree for
+// its MinSizes: it asks the layout the first time, and gives that answer every
+// time after.
+type minOnce struct {
+	layout fyne.Layout
+	min    fyne.Size
+	done   bool
+}
+
+func (m *minOnce) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	m.layout.Layout(objects, size)
+}
+
+func (m *minOnce) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	if !m.done {
+		m.min, m.done = m.layout.MinSize(objects), true
+	}
+	return m.min
 }
 
 // viewControl is one of the header's controls as laid out: its box; the
