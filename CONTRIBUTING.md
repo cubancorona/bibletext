@@ -124,7 +124,7 @@ AppImage's `.zsync` sidecar, which update tools fetch by themselves, by its
 suffix in `SIDECAR_SUFFIXES`, and the Android APK, which every release carries
 for devices without Google Play while the page sends Android readers to Play,
 by name in `NOT_LINKED`. A name in `NOT_LINKED` fails if the download page
-links it or if no release uploads it.
+links it, from the latest release or a tagged one, or if no release uploads it.
 The same checker holds the Linux build dependencies identical across the
 README, this file and CI, and holds the README's count of `cmd/` programs to
 what is actually in `cmd/`. It also holds the four explanations of opening the

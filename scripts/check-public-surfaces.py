@@ -131,8 +131,9 @@ SIDECAR_SUFFIXES = {
 # the reason. Unlike a sidecar, each is something a reader can install, so
 # leaving it off the page is a decision about where readers are sent, and the
 # rule holds it both ways: the download page may not link a name listed here,
-# and a name no release uploads any more is a stale exception. Any other
-# unlinked asset still fails, however like one of these it is named.
+# from the latest release or from a tagged one, and a name no release uploads
+# any more is a stale exception. Any other unlinked asset still fails, however
+# like one of these it is named.
 NOT_LINKED = {
     "BibleText-Android.apk": (
         "the site sends Android readers to Google Play. A sideloaded APK never "
@@ -242,6 +243,22 @@ def expand_matrix(line: str, values: dict[str, list[str]]) -> list[str]:
 
 def linked_assets(text: str) -> set[str]:
     return set(re.findall(rf"releases/latest/download/({ASSET})", text))
+
+
+def links_release_asset(text: str, asset: str) -> bool:
+    """Whether a page links one named asset from any release, latest or tagged.
+
+    linked_assets() reads only the latest-download form, which is the form the
+    page offers files in. An asset the page must not offer has to be refused in
+    the tagged form too, releases/download/<tag>/<name>, which is how GitHub
+    writes its own asset links and so the likeliest form to be pasted back in.
+    The name may be followed by a full stop, not by more of a longer name.
+    """
+    pattern = (
+        rf"releases/(?:latest/download|download/[^/\s\"'<>]+)/{re.escape(asset)}"
+        rf"(?![A-Za-z0-9_+-]|\.[A-Za-z0-9])"
+    )
+    return re.search(pattern, text) is not None
 
 
 def apt_packages(text: str) -> set[str]:
@@ -361,7 +378,7 @@ def rule_failures(read, list_cmd) -> list[str]:
                 f"it in this checker's SIDECAR_SUFFIXES or NOT_LINKED with the reason"
             )
         for asset, reason in sorted(NOT_LINKED.items()):
-            if asset in offered:
+            if links_release_asset(page, asset):
                 failures.append(
                     f"{DOWNLOAD_PAGE}: links {asset}, which this checker names as deliberately "
                     f"not linked ({reason}). Remove the link, or the exception"
@@ -666,6 +683,16 @@ def self_test() -> list[str]:
         b'BibleText-Android.apk">Android</a>\n'
     )
     violations.append(("a NOT_LINKED asset linked from the download page", relinked, pair))
+
+    # ...by a tagged release's URL as much as by the latest one, which the
+    # offered-file rule above never reads...
+    relinked_tagged = dict(clean)
+    relinked_tagged[DOWNLOAD_PAGE] = clean[DOWNLOAD_PAGE] + (
+        b'<a href="https://example.invalid/releases/download/v1.2.17/'
+        b'BibleText-Android.apk">Android</a>\n'
+    )
+    violations.append(
+        ("a NOT_LINKED asset linked by a tagged release URL", relinked_tagged, pair))
 
     # ...and an exception for an asset no release uploads is stale.
     unshipped = dict(clean)
