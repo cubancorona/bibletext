@@ -31,7 +31,10 @@ package bibletext
 // the reader keeps the verse number as an ordinary number, the publisher's own
 // spacing, and nothing else this app invented for its own page.
 
-import "strings"
+import (
+	"strings"
+	"unicode/utf8"
+)
 
 const (
 	// noBreakSpace joins a verse number to its verse on every HTML surface, so
@@ -88,6 +91,10 @@ func outboundForm(s string, keepSmallCaps bool) string {
 		return s
 	}
 	s = stripVerseGapMarks(s)
+	if !hasOutboundRewrite(s, keepSmallCaps) {
+		// The loop below would copy every rune through as itself.
+		return s
+	}
 	var b strings.Builder
 	b.Grow(len(s))
 	for _, r := range s {
@@ -113,6 +120,29 @@ func outboundForm(s string, keepSmallCaps bool) string {
 		}
 	}
 	return b.String()
+}
+
+// hasOutboundRewrite reports whether outboundForm's loop would write any rune
+// of s as something other than itself. Most text needs nothing — the whole
+// verse is the publisher's — and the share pipeline puts every verse of the
+// chapter through here each time it locates a selection, so that text is
+// returned as it came instead of being copied rune by rune.
+//
+// ASCII is never the page's typography (TestOutboundTypographyIsNeverASCII),
+// so only the other runes are looked up. utf8.RuneError counts as a rewrite:
+// the loop writes an invalid byte back as U+FFFD, and a copy is what does that.
+func hasOutboundRewrite(s string, keepSmallCaps bool) bool {
+	for _, r := range s {
+		if r < utf8.RuneSelf {
+			continue
+		}
+		if r == utf8.RuneError || superToDigit[r] != 0 ||
+			r == noBreakSpace || r == emSpace || r == enSpace ||
+			(!keepSmallCaps && smallCapitalToLetter[r] != 0) {
+			return true
+		}
+	}
+	return false
 }
 
 // stripVerseGapMarks removes every "[digits]" token and one following space.

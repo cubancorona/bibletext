@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"unicode"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
@@ -593,7 +594,34 @@ func blend(a, b color.NRGBA, t float64) color.NRGBA {
 
 // collapseSpaces flattens runs of whitespace (incl. newlines) to single spaces.
 func collapseSpaces(s string) string {
+	if isCollapsed(s) {
+		return s
+	}
 	return strings.Join(strings.Fields(s), " ")
+}
+
+// isCollapsed reports whether s is already what collapseSpaces makes of it:
+// no whitespace at either end, and none inside but single ASCII spaces. That is
+// most verse text, and the share pipeline collapses every verse of the chapter
+// each time it locates a selection, so such text is returned as it came rather
+// than split into words and joined again. unicode.IsSpace is the test
+// strings.Fields applies, so the two agree on what counts as whitespace.
+func isCollapsed(s string) bool {
+	prevSpace := true // a leading space is not collapsed
+	for _, r := range s {
+		switch {
+		case r == ' ':
+			if prevSpace {
+				return false
+			}
+			prevSpace = true
+		case unicode.IsSpace(r):
+			return false
+		default:
+			prevSpace = false
+		}
+	}
+	return s == "" || !prevSpace
 }
 
 // cardMinPt is the smallest type the card will set. Below this the card stops

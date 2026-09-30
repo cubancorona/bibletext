@@ -4,7 +4,10 @@ package bibletext
 // selection into text — copy, share, ask an assistant, a link — carries the
 // reading surface's own characters with it unless they are taken out first.
 
-import "testing"
+import (
+	"testing"
+	"unicode/utf8"
+)
 
 func TestOutboundTextKeepsThePublishersWordsAndDropsOurOwn(t *testing.T) {
 	for _, tc := range []struct {
@@ -54,6 +57,49 @@ func TestTheCharactersWeStripAreTheOnesTheSurfacesWrite(t *testing.T) {
 	for _, r := range []rune{noBreakSpace, emSpace, enSpace} {
 		if outboundText(string(r)) == string(r) {
 			t.Errorf("%q survives the clean", r)
+		}
+	}
+}
+
+// outboundForm hands back text with none of the page's typography in it as it
+// came, without copying it (hasOutboundRewrite). That shortcut must see every
+// character the copying loop would change, or the character rides out. It
+// never looks up ASCII, which is sound only while none of those characters is
+// ASCII; and an invalid byte must still go out as U+FFFD, as the loop writes it.
+func TestOutboundShortcutSeesAllThePageTypography(t *testing.T) {
+	for r := rune(0); r < utf8.RuneSelf; r++ {
+		if superToDigit[r] != 0 || smallCapitalToLetter[r] != 0 ||
+			r == noBreakSpace || r == emSpace || r == enSpace {
+			t.Errorf("%U is rewritten on the way out, but hasOutboundRewrite never looks at ASCII", r)
+		}
+	}
+	for _, keepSmallCaps := range []bool{false, true} {
+		for r := range superToDigit {
+			if !hasOutboundRewrite("x"+string(r), keepSmallCaps) {
+				t.Errorf("superscript %q is not seen (keepSmallCaps=%v)", r, keepSmallCaps)
+			}
+		}
+		for _, r := range []rune{noBreakSpace, emSpace, enSpace} {
+			if !hasOutboundRewrite("x"+string(r), keepSmallCaps) {
+				t.Errorf("%U is not seen (keepSmallCaps=%v)", r, keepSmallCaps)
+			}
+		}
+		for r := range smallCapitalToLetter {
+			if got := hasOutboundRewrite("x"+string(r), keepSmallCaps); got == keepSmallCaps {
+				t.Errorf("small capital %q: rewrite %v with keepSmallCaps=%v", r, got, keepSmallCaps)
+			}
+		}
+	}
+	for in, want := range map[string]string{
+		"a\xffb":           "a\uFFFDb",
+		"\xe2\x80":         "\uFFFD\uFFFD",
+		"“Truly,” he said": "“Truly,” he said",
+	} {
+		if got := sharedText(in); got != want {
+			t.Errorf("sharedText(%q) = %q, want %q", in, got, want)
+		}
+		if got := outboundText(in); got != want {
+			t.Errorf("outboundText(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
