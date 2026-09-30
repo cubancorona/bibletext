@@ -122,11 +122,12 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 	// body: the chrome is what the panel needs besides it.
 	listShowing := func() bool { return len(body.Objects) == 1 && body.Objects[0] == scroll }
 	// On a phone or tablet the panel stands at its cap over the header's
-	// controls where the cap would start it partway down one
+	// controls where the cap would start it partway down one, or opens
+	// below the header where the list keeps enough of its height there
 	// (touchSheetHeight).
 	fitList := func() {
 		chrome := popup.MinSize().Height - scroll.MinSize().Height
-		h := touchSheetHeight(state, popup, ps.Width, ps.Height, true, nil) - chrome
+		h := touchSheetHeight(state, popup, ps.Width, ps.Height, true, scroll, nil) - chrome
 		if h < 1 {
 			h = 1
 		}
@@ -134,11 +135,15 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 	}
 	// resize gives the panel its height while it waits for the list or says
 	// there is none: at most 460pt, which is its cap on a short screen. On a
-	// phone or tablet, clear of the header's controls or over them
-	// (touchSheetHeight).
+	// phone or tablet, clear of the header's controls or over them where
+	// that is open to it (touchSheetHeight); only the list scrolls.
 	resize := func() {
 		h := minF(ps.Height, 460)
-		h = touchSheetHeight(state, popup, ps.Width, h, ps.Height <= 460, func() float32 { return popup.MinSize().Height })
+		var give fyne.CanvasObject
+		if listShowing() {
+			give = scroll
+		}
+		h = touchSheetHeight(state, popup, ps.Width, h, ps.Height <= 460, give, nil)
 		popup.Resize(fyne.NewSize(ps.Width, h))
 	}
 	showRefs := func(refs []crossRef, tskErr error) {

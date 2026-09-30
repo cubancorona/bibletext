@@ -194,10 +194,11 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 			capped = true
 		}
 		// On a phone or tablet, clear of the header's controls or over
-		// them (touchSheetHeight). The body scrolls, so the panel can be as
-		// short as its chrome; the body takes whatever height that leaves.
+		// them where that is open to it (touchSheetHeight). The body
+		// scrolls, and takes whatever height the panel's chrome leaves; it
+		// keeps at least two thirds of it below the header.
 		h := want + chrome
-		if t := touchSheetHeight(state, popup, ps.Width, h, capped, func() float32 { return chrome + 1 }); t != h {
+		if t := touchSheetHeight(state, popup, ps.Width, h, capped, sc, nil); t != h {
 			want = t - chrome
 			if want < 1 {
 				want = 1

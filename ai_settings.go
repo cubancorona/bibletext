@@ -985,10 +985,11 @@ func openAISettings(state *AppState) {
 			maxH,
 		)
 		// On a phone or tablet, clear of the header's controls or over
-		// them (touchSheetHeight): its form scrolls, so the least it can be
-		// is what it measures with the scroll at its minimum.
+		// them where that is open to it (touchSheetHeight): its form
+		// scrolls, and keeps at least two thirds of its height below the
+		// header.
 		w := card.MinSize().Width
-		h = touchSheetHeight(state, popup, w, h, h >= maxH, func() float32 { return popup.MinSize().Height })
+		h = touchSheetHeight(state, popup, w, h, h >= maxH, formScroll, nil)
 		popup.Resize(fyne.NewSize(w, h))
 	}
 	// Twice, for the wrapping-RichText reason applyAssistant documents: the two

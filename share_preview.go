@@ -127,11 +127,12 @@ func showShareImagePreview(state *AppState, quote, cite, version string) {
 	)
 	popup.Show()
 	// On a phone or tablet, clear of the header's controls or over them
-	// (touchSheetHeight). The image keeps its side there, so the least the
-	// sheet can be is what it measures.
+	// where that is open to it (touchSheetHeight). Nothing in it scrolls
+	// and the image keeps its side, so the least the sheet can be is what
+	// it measures.
 	resize := func() {
 		h := minF(ps.Height, side+220)
-		h = touchSheetHeight(state, popup, ps.Width, h, ps.Height <= side+220, func() float32 { return popup.MinSize().Height })
+		h = touchSheetHeight(state, popup, ps.Width, h, ps.Height <= side+220, nil, nil)
 		popup.Resize(fyne.NewSize(ps.Width, h))
 	}
 	resize()

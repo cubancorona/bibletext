@@ -17,6 +17,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -137,6 +138,86 @@ func inkCut(ink []inkControl, sp sheetSpan) []string {
 	return cut
 }
 
+// inkPartly names each control the sheet covers in part: some of its drawn
+// pixels lie under the sheet and some outside it, beside it or above it,
+// each by more than a pixel at the scale it is read. A top edge partway down
+// a control is one way; a side edge through one is the other.
+func inkPartly(ink []inkControl, sp sheetSpan) map[string]bool {
+	const px = 1.0 / inkScale
+	out := map[string]bool{}
+	for _, c := range ink {
+		under, outside := false, false
+		for x, tb := range c.cols {
+			switch {
+			case x > sp.x0+px && x < sp.x1-px:
+				if tb[1] > sp.top+px && tb[0] < sp.bottom-px {
+					under = true
+				}
+				if tb[0] < sp.top-px || tb[1] > sp.bottom+px {
+					outside = true
+				}
+			case x < sp.x0-px || x > sp.x1+px:
+				outside = true
+			}
+		}
+		if under && outside {
+			out[c.name] = true
+		}
+	}
+	return out
+}
+
+// newlyPartly names each control after covers in part that before left
+// wholly alone or covered whole.
+func newlyPartly(ink []inkControl, before, after sheetSpan) []string {
+	was := inkPartly(ink, before)
+	var names []string
+	for name := range inkPartly(ink, after) {
+		if !was[name] {
+			names = append(names, "the "+name)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+// keptBody is what a sheet whose scrolling part was body tall must keep of
+// it to move: two thirds, and 120 units, or all of it if it had less.
+func keptBody(body float32) float32 { return max(body*2/3, min(body, 120)) }
+
+// noBetterPlace says why a sheet that starts partway down a control with the
+// rule off has nowhere better to go, from what the test measured rather than
+// what the rule computes, or "" when it has somewhere. Covering the header
+// takes it from the header's top edge to as far above the canvas's foot, and
+// is closed where that foot is under the bottom inset or where the taller
+// sheet's sides pass through a control it left alone. Below the header it
+// ends as far above the foot as the header's foot plus sheetHeaderGap is
+// below the top, and that is closed where its content does not fit, or where
+// its scrolling part keeps less than keptBody.
+func noBetterPlace(s touchScreen, o touchSheetOpening, ink []inkControl) string {
+	var why []string
+	cover := sheetSpan{x0: o.before.x0, x1: o.before.x1, top: o.headerTop, bottom: s.h - o.headerTop}
+	switch newly := newlyPartly(ink, o.before, cover); {
+	case cover.bottom > s.h-s.bottom+0.5:
+		why = append(why, fmt.Sprintf("covering the header would end it at %.1f, under the bottom inset (%.1f)", cover.bottom, s.h-s.bottom))
+	case len(newly) > 0:
+		why = append(why, "covering the header would pass its side through "+strings.Join(newly, " and "))
+	default:
+		return ""
+	}
+	below := s.h - 2*(o.headerBottom+sheetHeaderGap)
+	height := o.before.bottom - o.before.top
+	switch kept := o.before.body - (height - below); {
+	case o.before.body > 0 && kept < keptBody(o.before.body)-0.5:
+		why = append(why, fmt.Sprintf("below the header its scroll would keep %.1f of %.1f", kept, o.before.body))
+	case o.before.body == 0 && below < o.before.least-0.5:
+		why = append(why, fmt.Sprintf("below the header it would be %.1f tall, shorter than its content (%.1f)", below, o.before.least))
+	default:
+		return ""
+	}
+	return strings.Join(why, "; ")
+}
+
 // openTouchSheet opens sh on a fresh window on s and returns where the sheet
 // lies and where the header's edges are.
 func openTouchSheet(t *testing.T, s touchScreen, sh touchSheet) (sp sheetSpan, headerTop, headerBottom float32) {
@@ -191,42 +272,44 @@ func openTouchSheets(t *testing.T) map[string]map[string]touchSheetOpening {
 	return out
 }
 
-// NO SHEET STARTS PARTWAY DOWN A HEADER CONTROL, AND ONE THAT DID NOT DOES
-// NOT MOVE. Every sheet, on every phone and tablet screen, opened with the
-// rule off and on: with it on, none starts partway down a control but one
-// that has no room over or below the header, which stays where it was;
-// wherever a sheet did not with the rule off, the two are the same box; and
-// each that moved lies within the safe area, since a sheet centred over the
-// header ends the header's depth above the canvas's foot, which can be under
-// a deep bottom inset. Mutations guarded: the rule doing nothing, as before
-// it (Settings, the cross-references, the long verse of the day and the
-// audio source menu cut the title's letters at 360x803, the chapter picker
-// the Go to chip at 320x568, the centred sheets the chip on a phone on its
-// side); the header found only through containers (a phone's window holds
-// the page in a root widget, so the rule never saw a header there); a
-// covering sheet started 8pt below the header's top edge (the title's
-// letters show above the translation picker at 320x568); the drawn parts
-// taken as the controls' whole boxes (sheets whose edge misses every drawn
-// pixel, such as the long verse of the day on a 667x375 phone on its side,
-// are moved); covering whatever the bottom inset (Settings ends under the
-// navigation bar with three-button navigation).
+// NO SHEET STARTS PARTWAY DOWN A HEADER CONTROL WHERE IT HAS A BETTER PLACE,
+// AND ONE THAT DID NOT DOES NOT MOVE. Every sheet, on every phone and tablet
+// screen, opened with the rule off and on: with it on, none starts partway
+// down a control but one with no better place (noBetterPlace), which stays
+// exactly where it was; wherever a sheet did not with the rule off, the two
+// are the same box; and each that moved lies within the safe area, since a
+// sheet centred over the header ends the header's depth above the canvas's
+// foot, which can be under a deep bottom inset. Mutations guarded: the rule
+// doing nothing, as before it (Settings, the cross-references, the long
+// verse of the day and the audio source menu cut the title's letters at
+// 360x803, the chapter picker the Go to chip at 320x568, the centred sheets
+// the chip on a phone on its side); the header found only through
+// containers (a phone's window holds the page in a root widget, so the rule
+// never saw a header there); a covering sheet started 8pt below the header's
+// top edge (the title's letters show above the translation picker at
+// 320x568); the drawn parts taken as the controls' whole boxes (sheets whose
+// edge misses every drawn pixel, such as the long verse of the day on a
+// 667x375 phone on its side, are moved); covering whatever the bottom inset
+// (Settings ends under the navigation bar with three-button navigation).
 func TestTouchSheetsKeepClearOfTheHeaderControls(t *testing.T) {
 	opened := openTouchSheets(t)
-	moved := 0
+	moved, left := 0, 0
 	for _, s := range touchScreens {
 		ink := headerInkFor(t, s)
 		for _, sh := range touchSheets(t) {
 			o := opened[s.name][sh.name]
-			// No place holds it: covering the header would end it under the
-			// bottom inset, and it cannot be as short as the room below. It
-			// is left where it was.
-			noRoom := o.headerTop < s.bottom && s.h-2*(o.headerBottom+sheetHeaderGap) < o.after.least
 			if cut := inkCut(ink, o.after); len(cut) > 0 {
-				if noRoom && sameSpan(o.before, o.after) {
-					t.Logf("%s, %s: no room over or below the header; left at %.1f", s.name, sh.name, o.after.top)
-					continue
+				why := noBetterPlace(s, o, ink)
+				switch {
+				case !sameSpan(o.before, o.after):
+					t.Errorf("%s, %s: moved, the sheet's top edge (%.1f) is still partway down %s", s.name, sh.name, o.after.top, strings.Join(cut, " and "))
+				case why == "":
+					t.Errorf("%s, %s: the sheet's top edge (%.1f) is partway down %s, and it had a better place", s.name, sh.name, o.after.top, strings.Join(cut, " and "))
+				default:
+					left++
+					t.Logf("%s, %s: left at %.1f: %s", s.name, sh.name, o.after.top, why)
 				}
-				t.Errorf("%s, %s: the sheet's top edge (%.1f) is partway down %s", s.name, sh.name, o.after.top, strings.Join(cut, " and "))
+				continue
 			}
 			if o.cutBefore {
 				moved++
@@ -243,45 +326,115 @@ func TestTouchSheetsKeepClearOfTheHeaderControls(t *testing.T) {
 	if moved == 0 {
 		t.Error("control: no sheet started partway down a control with the rule off, so nothing here could move")
 	}
+	t.Logf("%d sheets moved, %d left where they were", moved, left)
 }
 
-// WHICH WAY A MOVED SHEET GOES. A sheet as tall as the screen lets it be
-// covers the header, as the tall sheets do on an iPhone; one sized to its
-// content opens below it and scrolls, as the translation picker does on an
-// iPhone; with too little room below the header (a phone on its side) it
-// covers the header too; and where covering would end it under the bottom
-// inset (three-button navigation, an iPhone on its side) it opens below.
-// The header's edges are the lines: at or above its top, or sheetHeaderGap
-// or more below its bottom. Each case starts partway down a control with the
-// rule off, and ends on the screen.
+// A MOVE KEEPS WHAT THE SHEET SHOWS. Below the header a centred sheet is
+// shorter by twice the distance its top edge moves down, and its scroll
+// gives up that height. Every sheet that moved keeps at least two thirds of
+// what its scroll showed, and at least 120 units of it, or all of it if it
+// showed less. Mutation guarded: opening below the header whatever it costs
+// (on an iPhone 16 Pro Max on its side the translation picker kept 36 of
+// its 120 units, a clipped part of one row, and Settings on a 852x393 iPhone
+// its footnotes switch and little else; with landscape reading turned off an
+// AI answer kept 32 units of text).
+func TestTouchSheetsMovedKeepWhatTheyShow(t *testing.T) {
+	opened := openTouchSheets(t)
+	shrank := 0
+	for _, s := range touchScreens {
+		for _, sh := range touchSheets(t) {
+			o := opened[s.name][sh.name]
+			if sameSpan(o.before, o.after) || o.before.body == 0 {
+				continue
+			}
+			if o.after.body < o.before.body-0.5 {
+				shrank++
+			}
+			if need := keptBody(o.before.body); o.after.body < need-0.5 {
+				t.Errorf("%s, %s: moved, its scroll shows %.1f of the %.1f it showed; it should keep %.1f",
+					s.name, sh.name, o.after.body, o.before.body, need)
+			}
+		}
+	}
+	if shrank == 0 {
+		t.Error("control: no sheet that moved gave up any of its scroll, so nothing here holds the floor")
+	}
+}
+
+// A MOVE CUTS NOTHING THE SHEET LEFT ALONE. A sheet is narrower than the
+// header, so one grown to cover it can pass its sides through a control it
+// had cleared: a card on a 568x320 phone, clear of the title with its top
+// edge across the Go to chip, left "BibleT" beside it when it covered the
+// header. Every sheet that moved covers in part, per the pixels drawn, only
+// controls it covered in part before. (A tall sheet's left edge passing
+// through the title's first letter on a phone held upright is how the
+// iPhone's tall sheets have always sat; those sheets cut the title before
+// they moved as well.) Mutation guarded: covering whatever the sheet's sides
+// then pass through.
+func TestTouchSheetsMovedCutNothingTheyLeftAlone(t *testing.T) {
+	opened := openTouchSheets(t)
+	for _, s := range touchScreens {
+		ink := headerInkFor(t, s)
+		for _, sh := range touchSheets(t) {
+			o := opened[s.name][sh.name]
+			if sameSpan(o.before, o.after) {
+				continue
+			}
+			if newly := newlyPartly(ink, o.before, o.after); len(newly) > 0 {
+				t.Errorf("%s, %s: moved to %v, the sheet covers part of %s, which it left alone at %v",
+					s.name, sh.name, o.after, strings.Join(newly, " and "), o.before)
+			}
+		}
+	}
+}
+
+// WHERE A SHEET GOES. A sheet as tall as the screen lets it be covers the
+// header, as the tall sheets do on an iPhone; one sized to its content opens
+// below it and scrolls, as the translation picker does on an iPhone; and
+// where covering would end it under the bottom inset (three-button
+// navigation) or pass its side through a control it had cleared (the title,
+// on a tall iPhone and on a phone on its side) it opens below the header if
+// it keeps what it shows there. With no such place it stays where it was:
+// on an iPhone on its side, where the header is a fifth of the screen, and
+// on the smallest iPhones on their sides, whose sheets are narrower than
+// the header. The header's edges are the lines: at or above its top, or
+// sheetHeaderGap or more below its bottom. Each case starts partway down a
+// control with the rule off, and ends on the screen.
 func TestTouchSheetsMovedGoOverOrBelowTheHeader(t *testing.T) {
 	opened := openTouchSheets(t)
 	heights := map[string]float32{}
 	for _, s := range touchScreens {
 		heights[s.name] = s.h
 	}
-	for _, tc := range []struct {
-		screen, sheet string
-		over          bool
-	}{
-		{"360x803", "Settings", true},
-		{"360x803", "verse of the day, long", true},
-		{"360x803", "translation picker, more translations", true},
-		{"360x803", "cross-references, listed", true},
-		{"360x803", "audio source menu", false},
-		{"320x568", "chapter picker", false},
-		{"375x667", "translation picker", false},
-		{"375x667", "AI answer, waiting", false},
-		{"440x956", "cross-references, listed", true},
-		{"393x852", "audio source menu", false},
-		{"568x320", "translation picker", true},
-		{"568x320", "link notice", true},
-		{"956x440", "audio source menu", false},
-		// Covering would end these under the bottom inset.
-		{"360x803, 3-button navigation", "Settings", false},
-		{"360x803, 3-button navigation", "cross-references, listed", false},
-		{"852x393", "Settings", false},
-		{"852x393", "translation picker", false},
+	const over, below, stays = "over", "below", "stays"
+	for _, tc := range []struct{ screen, sheet, where string }{
+		{"360x803", "Settings", over},
+		{"360x803", "verse of the day, long", over},
+		{"360x803", "translation picker, more translations", over},
+		{"360x803", "cross-references, listed", over},
+		{"360x803", "audio source menu", below},
+		{"320x568", "chapter picker", below},
+		{"375x667", "translation picker", below},
+		{"375x667", "AI answer, waiting", below},
+		{"393x852", "audio source menu", below},
+		{"568x320", "Settings", over},
+		{"956x440", "audio source menu", below},
+		// Covering would end these under the bottom inset, and below the
+		// header they keep at least two thirds of what they show.
+		{"360x803, 3-button navigation", "Settings", below},
+		{"360x803, 3-button navigation", "cross-references, listed", below},
+		{"956x440", "chapter picker", below},
+		// Covering would pass the panel's side through the title.
+		{"440x956", "cross-references, listed", below},
+		// Covering would end these under the bottom inset, and below the
+		// header they would keep 82 of 181, 36 of 120 and 64 of 148 units.
+		{"852x393", "Settings", stays},
+		{"956x440", "translation picker", stays},
+		{"956x440", "AI answer, waiting", stays},
+		// Covering would pass the card's side through the title, or the
+		// translation line, and it cannot be as short as the room below.
+		{"568x320", "link notice", stays},
+		{"667x375", "note link offer", stays},
 	} {
 		o, ok := opened[tc.screen][tc.sheet]
 		switch {
@@ -289,9 +442,13 @@ func TestTouchSheetsMovedGoOverOrBelowTheHeader(t *testing.T) {
 			t.Errorf("no sheet %q opened on %s", tc.sheet, tc.screen)
 		case !o.cutBefore:
 			t.Errorf("%s, %s: control: with the rule off the sheet (top %.1f) starts partway down no control", tc.screen, tc.sheet, o.before.top)
-		case tc.over && o.after.top > o.headerTop+0.5:
+		case tc.where == stays:
+			if !sameSpan(o.before, o.after) {
+				t.Errorf("%s, %s: the sheet spanned %v; it should stay there, and spans %v", tc.screen, tc.sheet, o.before, o.after)
+			}
+		case tc.where == over && o.after.top > o.headerTop+0.5:
 			t.Errorf("%s, %s: the sheet starts at %.1f; it should cover the header, which starts at %.1f", tc.screen, tc.sheet, o.after.top, o.headerTop)
-		case !tc.over && o.after.top < o.headerBottom+sheetHeaderGap-0.5:
+		case tc.where == below && o.after.top < o.headerBottom+sheetHeaderGap-0.5:
 			t.Errorf("%s, %s: the sheet starts at %.1f; it should open below the header, which ends at %.1f", tc.screen, tc.sheet, o.after.top, o.headerBottom)
 		case o.after.top < -0.5 || o.after.bottom > heights[tc.screen]+0.5:
 			t.Errorf("%s, %s: the sheet spans %.1f..%.1f, off the canvas", tc.screen, tc.sheet, o.after.top, o.after.bottom)

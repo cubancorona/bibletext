@@ -756,11 +756,13 @@ standing rule in [RELEASING.md](RELEASING.md)), and only then does
   phone whose status bar is shallow, a sheet could start partway down the
   header's controls — the Translation sheet in the 2:1 frame, and at the
   phone's own 1080×2410 Settings, the cross-references, a long verse of the
-  day and the audio source menu, cutting the title's letters. Sheets now
-  clear the header's controls or cover them (`sheet_touch_header.go`;
-  `docs/BACKLOG.md`, "Phones and tablets: a sheet started partway down the
-  header's controls"). The next phone set can be taken at 420, which is
-  what most people see.
+  day and the audio source menu, cutting the title's letters. On the
+  Android phone, an iPhone held upright and an iPad, sheets now clear the
+  header's controls or cover them; on an iPhone on its side most stay where
+  they were, since neither place is open to them without a worse cost
+  (`sheet_touch_header.go`; `docs/BACKLOG.md`, "Phones and tablets: a sheet
+  started partway down the header's controls"). The next phone set can be
+  taken at 420, which is what most people see.
 - **Light status-bar icons on Android.** The 1.2.17 light Play images show
   the status bar's icons white on the cream page, so the clock and battery
   barely show. Builds after 1.2.17 ask for dark status-bar and

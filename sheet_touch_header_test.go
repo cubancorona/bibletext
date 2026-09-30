@@ -124,9 +124,10 @@ func onCanvasAt(o fyne.CanvasObject) fyne.Position {
 	return canvasPosition(fyne.CurrentApp().Driver().CanvasForObject(o), o)
 }
 
-// sheetSpan is the box a popup occupies, in canvas units, and the least
-// height it can be (its MinSize), where that was read.
-type sheetSpan struct{ x0, x1, top, bottom, least float32 }
+// sheetSpan is the box a popup occupies, in canvas units, and, where they
+// were read, the least height it can be (its MinSize) and the height of its
+// scrolling part (scrollBody).
+type sheetSpan struct{ x0, x1, top, bottom, least, body float32 }
 
 func (s sheetSpan) String() string {
 	return fmt.Sprintf("x %.1f..%.1f, y %.1f..%.1f", s.x0, s.x1, s.top, s.bottom)
@@ -233,7 +234,36 @@ func openSheetAs(t *testing.T, st *AppState, sh touchSheet, on bool) sheetSpan {
 	defer popup.Hide()
 	sp := sheetSpanOf(t, popup)
 	sp.least = popup.MinSize().Height
+	sp.body = scrollBody(popup)
 	return sp
+}
+
+// scrollBody is the height of the tallest scroll showing in o, what a sheet
+// shows of the part of it that scrolls, or zero when nothing in it scrolls
+// (a card, a spinner, the image preview).
+func scrollBody(o fyne.CanvasObject) float32 {
+	var tallest float32
+	var walk func(fyne.CanvasObject)
+	walk = func(o fyne.CanvasObject) {
+		if o == nil || !o.Visible() {
+			return
+		}
+		switch v := o.(type) {
+		case *container.Scroll:
+			tallest = max(tallest, v.Size().Height)
+			walk(v.Content)
+		case *fyne.Container:
+			for _, c := range v.Objects {
+				walk(c)
+			}
+		case *container.ThemeOverride:
+			walk(v.Content)
+		case *widget.PopUp:
+			walk(v.Content)
+		}
+	}
+	walk(o)
+	return tallest
 }
 
 // headerEdges is where st's header begins and ends on the canvas.
@@ -291,5 +321,29 @@ func TestTranslationPickerOnA420DpiAndroidPhoneIsClearOfTheHeader(t *testing.T) 
 				popup.Hide()
 			}
 		})
+	}
+}
+
+// WHAT A SHEET THAT SCROLLS KEEPS TO OPEN BELOW THE HEADER. Two thirds of
+// its scrolling part, and never less than 120 units of it, or all of it if
+// it had less: shortening is refused as soon as either would be broken. The
+// matrix's sheets do not reach the 120-unit floor at the text size the tests
+// use; a larger text size, whose chrome is deeper, would.
+func TestTouchSheetKeepsTwoThirdsAndAHundredAndTwenty(t *testing.T) {
+	for _, tc := range []struct {
+		body, short float32
+		keeps       bool
+	}{
+		{600, 200, true},  // 400 left, two thirds exactly
+		{600, 201, false}, // under two thirds
+		{180, 60, true},   // 120 left, both floors exactly
+		{150, 30, true},   // 120 left, over two thirds
+		{150, 40, false},  // 110 left: over two thirds, under 120
+		{100, 1, false},   // under 120 already: it keeps all of it
+		{100, 0, true},
+	} {
+		if got := touchSheetKeeps(tc.body, tc.short); got != tc.keeps {
+			t.Errorf("a scroll %.0f tall made %.0f shorter: keeps enough %v, want %v", tc.body, tc.short, got, tc.keeps)
+		}
 	}
 }
