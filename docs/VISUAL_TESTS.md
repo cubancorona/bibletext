@@ -379,7 +379,13 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       landscape and with the keyboard up in each: the native field's outline
       sits below the last row, never over it, and lines up with the gap the
       sheet leaves for it; in landscape the typed note is still visible
-      above the keyboard. Android: the same, with the Fyne field. Desktop:
+      above the keyboard. Android: the same, with the Fyne field. Android,
+      with the keyboard up: Share and then Back out of the chooser, and
+      Cancel, each leave the page whole — the reading text fills the pane
+      and the tab bar sits at the foot, not mid-screen with the bottom
+      third empty (the Fyne driver's inset read raced the keyboard's
+      departure); Back to put the keyboard away and then Cancel is the
+      same. Desktop:
       the card ends under the buttons with its usual padding and no empty
       row. Flip light/dark with the composer open: the words come back in
       the new palette. Select a heading on its own, one in the middle of a
@@ -859,5 +865,9 @@ Each line was a real screen defect this list would have caught:
     the header and rail stayed — CreateMainUI returned the shared layout
     before its own full-screen branch, and the shared layout never read
     IsFullScreen. The full-screen tree now lives in the shared layout.
+20. Android: the note composer closed under the keyboard left the app
+    laid out at keyboard height — text in a band, tab bar mid-screen,
+    bottom third empty — until Home and back. The driver reads the insets
+    only on a decor layout pass, and the keyboard's departure brought none.
 9. Harness lesson, not a pixel: wipe the store before counting anything —
    stale fixtures made a correct "Notes · 3" label look like a wire bug.

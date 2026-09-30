@@ -804,7 +804,11 @@ public final class BtBridge {
     // rather than adjustResize'd ON PURPOSE: resizing the canvas under the IME
     // flips the live smallest-dimension tablet test on landscape tablets and
     // layoutWatcher thrashes the whole window mid-keystroke (reviewed, reverted
-    // 2026-08-11). This feed touches nothing but a number.
+    // 2026-08-11). This feed touches nothing but a number. (The canvas's SIZE,
+    // which that test reads, never changes for the keyboard; its interactive
+    // area does, through the driver's own inset read — the system-window
+    // insets count the keyboard, this window being adjust-resize — which
+    // installKeyboardWatcher keeps current.)
     private static native void nativeKeyboardChanged(float overlapPx);
     // Called on the UI thread with the overlay's content width in dp whenever
     // it changes: the width the Go side chooses the reading page from
@@ -1070,7 +1074,9 @@ public final class BtBridge {
      * of softInputMode. Older releases keep the status quo (no lift) — the
      * alternative, adjustResize, breaks landscape tablets (see
      * nativeKeyboardChanged). The listener passes the insets through to the
-     * platform handler, so NativeActivity's own inset processing is untouched.
+     * platform handler, so NativeActivity's own inset processing is untouched,
+     * and asks the decor for a layout pass on every change, which is where
+     * Fyne's driver reads the insets (see the body).
      */
     private static void installKeyboardWatcher(final Activity act) {
         if (act == null || android.os.Build.VERSION.SDK_INT < 30) return;
@@ -1088,6 +1094,29 @@ public final class BtBridge {
                     if (px != lastImePx) {
                         lastImePx = px;
                         nativeKeyboardChanged(px);
+                        // Fyne reads the window's insets in one place, the
+                        // decor's layout pass (GoNativeActivity.updateLayout,
+                        // from an OnLayoutChangeListener), and the
+                        // system-window insets it reads there count a raised
+                        // keyboard as the bottom inset, this window being
+                        // adjust-resize (NativeActivity's own setting): on
+                        // the Android 15 emulator, 883 px up against 63 down.
+                        // The canvas is laid out above the keyboard by
+                        // whichever pass runs while it is up. On that Android
+                        // the decor keeps its full height under the keyboard
+                        // (a window targeting API 35 or later is drawn
+                        // edge-to-edge), so the keyboard's departure arrives
+                        // as this dispatch and brings no pass of its own. The
+                        // one pass near it, the driver hiding its EditText,
+                        // races the IME's inset update, and when it ran first
+                        // the driver read the keyboard still in and the app
+                        // stayed laid out at keyboard height until the
+                        // activity was shown afresh. Asking for the pass here
+                        // lays the decor out in this same traversal, with the
+                        // insets as they now are; on a release that lays the
+                        // decor out for the keyboard by itself (none was
+                        // measured) the request coalesces into that pass.
+                        v.requestLayout();
                     }
                 } catch (Throwable ignored) {}
                 return v.onApplyWindowInsets(insets);

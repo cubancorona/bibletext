@@ -198,8 +198,11 @@ func btaReadingWidthChanged(widthDp C.float) {
 // BtBridge.installKeyboardWatcher. It feeds the goto picker's verse-row lift
 // (gKeyboardInsetSetter) and whether the keyboard is up (noteSoftKeyboard, which
 // a light/dark rebuild asks before putting a page field's caret back), and
-// nothing else — the canvas is never resized, so the tablet-layout
-// classification never sees the IME.
+// nothing else. The canvas's size never changes for the IME, so the
+// tablet-layout classification never sees it; its interactive area does,
+// through the driver's own inset read (the system-window insets count the
+// keyboard, the window being adjust-resize), which the watcher keeps current
+// by asking the decor for a layout pass on every change.
 //
 // The overlap arrives in PIXELS and is converted here with the live canvas
 // scale, the same px<->unit factor pushChapterHTML uses for the text size. It

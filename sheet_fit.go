@@ -117,9 +117,10 @@ var keyboardFreeFoot struct {
 // light/dark reopen does: the appearance gate unfocuses the canvas, rebuilds
 // and reopens the sheet on top in one call, before the keyboard's WillHide
 // has moved the inset, and the note composer's native field keeps its
-// keyboard up through the reopen altogether. Android never counts its
-// keyboard in the insets (the activity is not adjustResize'd), so there the
-// area is the area.
+// keyboard up through the reopen altogether. Fyne's Android driver counts
+// the keyboard the same way (the activity is adjust-resize, and the
+// system-window insets the driver reads fold the IME in — measured on
+// Android 15; older releases were not checked), so the rule serves both.
 //
 // The keyboard's height is not subtracted back, because the driver replaces
 // the safe inset with it rather than adding to it. Instead the keyboard-free

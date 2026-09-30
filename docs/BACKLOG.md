@@ -208,23 +208,56 @@ and a light/dark flip.
 - Temporary files and portals: https://github.com/flatpak/xdg-desktop-portal/issues/1012 ;
   the snap's desktop interface, https://github.com/canonical/snapd/blob/master/interfaces/builtin/desktop.go
 
-## Android: closing the Add a note sheet with the keyboard up leaves the app at keyboard height — found 30 September 2026
+## Android: closing the Add a note sheet with the keyboard up left the app at keyboard height — FIXED 30 September 2026
 
-When the Add a note sheet closes while the soft keyboard is up — by Share or
-by a plain Cancel — the app stays laid out as though the keyboard were still
-there. The reading text is squashed into a band, the Read / Books / Search
-bar sits mid-screen, and the bottom 38 percent or so of the screen is empty
-page. Six seconds later it is unchanged; a tap on the empty part does not
-restore it; Home and back to the app does. Reproduced on the emulator with
-1.2.17, captured at each step: after Back from the share sheet, six seconds
-later, after a tap, after Home and relaunch, and the Cancel-only control
-with its own six-second capture. The control shows the share sheet is not
-the cause. Not checked on a physical phone.
+**The defect** (found the same day, by the share audit). When the Add a note
+sheet closed while the soft keyboard was up — by Share or by a plain Cancel —
+the app stayed laid out as though the keyboard were still there: the reading
+text squashed into a band, the Read / Books / Search bar mid-screen, and the
+bottom 38 percent or so of the screen empty page. Six seconds later it was
+unchanged; a tap on the empty part did not restore it; Home and back to the
+app did. Reproduced on the emulator with 1.2.17, captured at each step: after
+Back from the share sheet, six seconds later, after a tap, after Home and
+relaunch, and the Cancel-only control with its own six-second capture. The
+control shows the share sheet is not the cause; putting the keyboard away
+with Back and then closing the sheet never showed it. It came and went from
+one run to the next. Not checked on a physical phone.
 
-The cause is not investigated. Places to look first: the keyboard is not
-hidden, or the entry not unfocused, before `closeSheet`; or the keyboard
-watcher in `android/BtBridge.java` does not restore the content size when
-the field that raised the keyboard goes away with its sheet.
+**The cause.** Fyne's Android driver learns the window's insets in one
+place: `GoNativeActivity.updateLayout`, run from a layout-change listener
+on the decor, reads the system-window insets and hands them to the canvas,
+which lays its content out inside them. NativeActivity makes its window
+adjust-resize, and those insets then count a raised keyboard as the bottom
+inset — on the Android 15 emulator, 883 px with the keyboard up against 63
+without — so the canvas is laid out above the keyboard by whichever decor
+layout pass happens while it is up. (The canvas's size never changes, so
+the tablet test, which reads it, is untouched.) On that emulator the decor
+and the content root keep the screen's full height under the keyboard — the
+app targets API 36, and Android 15 draws such windows edge-to-edge — so the
+keyboard's departure arrives as an insets dispatch and brings no layout pass
+of its own. The one pass near it is the driver's, from hiding its EditText,
+and that pass races the IME's inset update: it ran twenty-five milliseconds
+before the inset was withdrawn, read the keyboard still in, and nothing read
+the insets again — the canvas kept an interactive area 460 units tall on an
+800 unit canvas. When the pass ran second the layout came back, which is why
+the defect was intermittent. The 29 September entry below took Android never
+to count its keyboard in the insets; Android 15 does. Whether older releases
+count it, or lay the decor out again by themselves when the keyboard goes,
+was not measured — no older image was to hand — and the fix costs nothing
+where they do.
+
+**The fix** (`installKeyboardWatcher`, `android/BtBridge.java`). The
+keyboard watcher on the decor — installed from API 30, where the `ime()`
+inset type it reads exists — sees every insets dispatch, and now asks the
+decor for a layout pass whenever the keyboard's inset changes, so the driver
+reads the insets as they are in the same traversal: the canvas comes back to
+its full area within a frame of the keyboard going, and takes the keyboard's
+arrival in the same frame instead of on the next incidental pass. Held by
+`TestAndroidKeyboardInsetChangeAsksForALayoutPass`, a source contract on
+the watcher, since the stale value lives in the driver's own inset where no
+Go seam reaches it; the contract matches the request as a whole line, so a
+request commented out fails it as a missing one does. Device check:
+`docs/VISUAL_TESTS.md`, V12 (the note composer) and regression pin 20.
 
 ## iPad and Mac: where the share popover points — probable from the code, 30 September 2026, not seen
 

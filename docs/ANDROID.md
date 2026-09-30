@@ -258,6 +258,25 @@ the tap); an unplaced-only pill parks at the top of the text with no band.
   (test automation) and likely Bluetooth keyboards; not worth blocking testers
   over, but know it when driving the emulator: tap the on-screen keys by
   coordinate instead of using `input text`.
+- **The soft keyboard and the insets.** NativeActivity makes its window
+  adjust-resize, and the system-window insets Fyne's driver reads
+  (`GoNativeActivity.updateLayout`, from a layout-change listener on the
+  decor) then count a raised keyboard as the bottom inset — on the Android
+  15 emulator, 883 px with the keyboard up against 63 without — so the
+  canvas's interactive area ends at the keyboard's top while it is up. The
+  canvas's size never changes, so the tablet test (`device_android.go`)
+  never sees the keyboard. The driver reads the insets only on a decor
+  layout pass, and on Android 15, where a window targeting API 35 or later
+  is drawn edge-to-edge and the decor keeps its full height under the
+  keyboard, the keyboard's departure brings no pass of its own; so
+  `BtBridge.installKeyboardWatcher` — API 30 and later, where the `ime()`
+  inset type it reads exists; it also feeds the keyboard's overlap to Go
+  (`btaKeyboardChanged`) for the Go to picker's lift and for
+  `noteSoftKeyboard` — asks the decor for a layout pass on every change.
+  Without that the app could stay laid out at keyboard height after a sheet
+  closed under the keyboard (`docs/BACKLOG.md`, 30 September 2026). Older
+  releases were not measured; where one lays the decor out for the
+  keyboard's departure by itself, the request coalesces into that pass.
 
 ## Toolchain (installed under $HOME, no Homebrew/sudo)
 
