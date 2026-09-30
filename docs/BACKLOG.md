@@ -41,6 +41,227 @@ each wanting a dry run on a day that is not a release day:
   key and the service account in the repository's secrets, which is the
   account holder's decision, and matters only once Play grants production.
 
+## Windows: use the native Share sheet — DECIDED 30 September 2026, not built
+
+On Windows every text share (Share with note, with citation, as link, and the
+verse of the day's Share) copies to the clipboard with a 1.4-second notice,
+and Share as image saves the card to Downloads and opens Explorer on it —
+open divergence 27 in `docs/PLATFORM_MATRIX.md`, where the Sharing table
+records every platform. Windows has a system Share sheet that a desktop app
+can open for its own window, and that is the route: every verb opens it
+beside the window, as the picker does on macOS. Decided; not yet built or
+tried from a Fyne window.
+
+**The route.** `IDataTransferManagerInterop`, from the activation factory of
+`Windows.ApplicationModel.DataTransfer.DataTransferManager`:
+
+- `GetForWindow(hwnd)` gives the window's DataTransferManager. The HWND is
+  reached as `title_bar_windows.go` reaches it: `driver.NativeWindow`,
+  `RunNative`, `WindowsWindowContext.HWND`.
+- A `DataRequested` handler fills the package: `SetText` for the text
+  verbs, `SetWebLink` for Share as link (and the link under a note),
+  `SetStorageItems` with the rendered PNG for Share as image.
+- `ShowShareUIForWindow(hwnd)` opens the sheet.
+
+**Constraints.**
+
+- The calls run on the window's thread, in a single-threaded apartment —
+  the GLFW main thread `RunNative` runs on.
+- The `DataRequested` handler returns `S_OK` whatever happens inside it.
+- Windows 10 has the API. The cancel events (`ShareCanceled`) need
+  10.0.19041, which is already the MSIX floor
+  (`msstore/AppxManifest.xml.in`, `MinVersion="10.0.19041.0"`).
+- No usable Go binding exists. The plan is some 300 lines of hand-written
+  COM on `golang.org/x/sys/windows` (already a requirement) in a new
+  share_windows.go, `//go:build windows`, defining `nativeShareText` and
+  `nativeShareImage`; `share_other.go` narrows to
+  `!darwin && !android && !windows`.
+- A share the reader started cannot end in silence: when the sheet cannot be
+  shown, the clipboard path in `share_fallback.go` still runs and says so,
+  and a way to copy the link stays.
+
+**Prove first, on the Windows VM.** The MSIX is a packaged app and the guide
+covers it. For the unpackaged zip Microsoft's pages disagree — the share
+guide against the table of WinRT APIs supported in desktop apps (both under
+Sources) — so a spike on the VM decides whether the zip opens the sheet or
+keeps the fallback. The same spike is the first time the interop runs from a
+GLFW window at all.
+
+**Files.** share_windows.go (new), `share_other.go`, `share_fallback.go` if
+the fallback gains a failure path, the Windows row of the Sharing table in
+`docs/PLATFORM_MATRIX.md` (`TestTheSharingTableNamesTheFileThatSharesOnEachPlatform`
+fails until it names the new file), and V12 in `docs/VISUAL_TESTS.md`.
+
+**Sources.**
+
+- The route, for packaged and unpackaged apps:
+  https://learn.microsoft.com/en-us/windows/apps/develop/windows-integration/integrate-sharesheet-send
+- WinRT support in desktop apps:
+  https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/winrt-api-desktop-app-support
+- The cancel event and its floor:
+  https://learn.microsoft.com/en-us/uwp/api/windows.applicationmodel.datatransfer.datapackage.sharecanceled
+- Implementations to read before writing ours:
+  https://github.com/chromium/chromium/blob/main/chrome/browser/webshare/win/show_share_ui_for_window_operation.cc ;
+  https://github.com/mozilla-firefox/firefox/blob/main/widget/windows/WindowsUIUtils.cpp ;
+  https://github.com/dotnet/maui/blob/main/src/Essentials/src/Share/Share.windows.cs
+- The Go options that were ruled out: https://github.com/go-ole/go-ole ;
+  https://github.com/saltosystems/winrt-go ;
+  https://github.com/gioui-plugins/gio-plugins/tree/main/share
+
+## Linux: an in-app share sheet in place of the 1.4-second notice — PROPOSED 30 September 2026, wording not yet approved
+
+On Linux the text shares copy to the clipboard and show "Copied to the
+clipboard" for 1.4 seconds: a 13 pt pill at the window's foot, its fill
+1.07:1 against the page in light and about 1.2:1 in dark, hidden early by
+any click. On Share with note it appears in the frame the composer closes
+and the note card draws at the top of the passage, so it is easy to miss
+entirely (divergence 27, `docs/PLATFORM_MATRIX.md`). Seen on the arm64 VM's
+X11 desktop, 29–30 September 2026; Windows runs the same code.
+
+**No system sheet to call.** xdg-desktop-portal has no Share portal; the
+request has been open since 22 June 2016. GNOME's interface guidelines have
+no share pattern, and KDE's Purpose share menu works only inside KDE. What
+others do: Firefox and Chrome offer Copy Link (and a QR code) on Linux;
+GNOME Maps opens a dialog with the link, Copy and email; Flutter's
+share_plus sends a mailto: link. Comparable confirmations stay up 4–7
+seconds (libadwaita's toast, Kirigami's passive notification); this one
+lasts 1.4.
+
+**The proposal.** Share with note, with citation and as link open one sheet
+in the app, styled like the note composer:
+
+- the text shown already copied, under a heading that says so — no timed
+  notice;
+- Copy again and Done; modal, so a stray click cannot lose it; registered as
+  a real sheet (`sheet_reopen.go`), so a light/dark rebuild reopens it; it
+  stacks over the verse-of-the-day card and fits the 520 px minimum window;
+- Email…, which hands the text to the mail client through the Email portal's
+  `ComposeEmail` (subject, body, attachments) over godbus, already in go.mod
+  as an indirect requirement. Portals are the recommended route even for an
+  unsandboxed app. Only the GTK and KDE portal backends provide Email, and
+  with no mail client set up the GTK backend's call returns failure without
+  showing anything, so the button appears only when a mail handler exists
+  (`SchemeSupported("mailto")` on the OpenURI portal, 1.19.1 and later).
+  Fallbacks: `xdg-email`, then a `mailto:` link through `xdg-open`. All of
+  it works under the snap's confinement, through its `desktop` interface.
+- Share as image keeps saving to ~/Downloads (not /tmp, which a sandboxed
+  mail client may not see) and opening the folder, and gains Email… with the
+  image attached. Its notice gets the pill fixes: at least 3:1 against the
+  page, placed in the reading column, up for 3–4 seconds, not taken down by
+  the next click.
+
+Linux only: Windows takes the native sheet (the entry above) and may use this
+sheet as its fallback when the share UI fails. macOS, iOS and Android do not
+change. The sheet is the Linux counterpart of the system share sheet, a
+platform divergence recorded as such.
+
+**Draft wording, not yet approved.**
+
+- Heading, every verb: **Copied — ready to paste**
+- Share with note: *Your note and the link are on the clipboard. Paste them
+  into a message or email to send your note.*
+- Share with citation: *The verse and its citation are on the clipboard.
+  Paste them into a message, email or document.*
+- Share as link: *The link is on the clipboard. Paste it into a message or
+  email.*
+- Buttons: **Copy again** (secondary), **Done** (primary). After Copy again
+  the line reads *Copied again.* for a moment.
+
+**Still to settle.** The wording above; whether Email… is in the first
+version; whether all three text verbs get the sheet (the recommendation, for
+consistency) or only Share with note, with the other two keeping an improved
+notice; and whether "Share" stays the label on Linux (the recommendation —
+the sheet explains) or becomes "Copy…", which is honest but breaks menu
+wording parity with every other platform and with the website's feature
+list.
+
+**Files.** `share_fallback.go` (`fallbackShareText` opens the sheet in place
+of `showShareNotice`), a new file beside it for the sheet, a Linux-only file
+for the portal call, `sheet_reopen.go`, `share_other.go` once Windows leaves
+it, and the Linux row of the Sharing table. About 150–250 lines and one to
+two days with a check on the VM. Nothing tests `showShareNotice` today, so
+the change brings a host test: for each desktop verb the confirmation is
+visible after the handler returns and lies inside the canvas, and the sheet
+survives a click elsewhere and a light/dark flip.
+
+**Sources.**
+
+- https://github.com/flatpak/xdg-desktop-portal/issues/12 (the Share portal
+  request) and the portal list,
+  https://flatpak.github.io/xdg-desktop-portal/docs/api-reference.html
+- https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.Email.html ;
+  https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.OpenURI.html ;
+  https://flatpak.github.io/xdg-desktop-portal/docs/for-app-developers.html
+- Which backends provide Email, and the silent failure:
+  https://github.com/flatpak/xdg-desktop-portal-gtk/blob/main/data/gtk.portal.in ;
+  https://invent.kde.org/plasma/xdg-desktop-portal-kde/-/blob/master/data/kde.portal ;
+  https://github.com/flatpak/xdg-desktop-portal-gtk/blob/ca24c36695e3dcde6a799b883a48a09cb164f536/src/email.c
+- https://developer.gnome.org/hig/patterns.html ; https://invent.kde.org/frameworks/purpose
+- What others do: https://gitlab.gnome.org/GNOME/gnome-maps/-/blob/main/src/sendToDialog.js ;
+  https://github.com/fluttercommunity/plus_plugins/tree/main/packages/share_plus/share_plus/lib/src ;
+  https://github.com/mozilla-firefox/firefox/blob/main/browser/components/sharing/SharingUtils.sys.mjs
+- Notice lengths: https://gnome.pages.gitlab.gnome.org/libadwaita/doc/main/property.Toast.timeout.html ;
+  https://invent.kde.org/frameworks/kirigami/-/blob/master/src/controls/private/PassiveNotificationsManager.qml
+- Temporary files and portals: https://github.com/flatpak/xdg-desktop-portal/issues/1012 ;
+  the snap's desktop interface, https://github.com/canonical/snapd/blob/master/interfaces/builtin/desktop.go
+
+## Android: closing the Add a note sheet with the keyboard up leaves the app at keyboard height — found 30 September 2026
+
+When the Add a note sheet closes while the soft keyboard is up — by Share or
+by a plain Cancel — the app stays laid out as though the keyboard were still
+there. The reading text is squashed into a band, the Read / Books / Search
+bar sits mid-screen, and the bottom 38 percent or so of the screen is empty
+page. Six seconds later it is unchanged; a tap on the empty part does not
+restore it; Home and back to the app does. Reproduced on the emulator with
+1.2.17, captured at each step: after Back from the share sheet, six seconds
+later, after a tap, after Home and relaunch, and the Cancel-only control
+with its own six-second capture. The control shows the share sheet is not
+the cause. Not checked on a physical phone.
+
+The cause is not investigated. Places to look first: the keyboard is not
+hidden, or the entry not unfocused, before `closeSheet`; or the keyboard
+watcher in `android/BtBridge.java` does not restore the content size when
+the field that raised the keyboard goes away with its sheet.
+
+## iPad and Mac: where the share popover points — probable from the code, 30 September 2026, not seen
+
+Read from the code; no simulator was booted and the Mac app was not launched.
+
+- **iPad, Share with note and Share as image.** `bibleTextPresentShare`
+  (`reading_ios.go`) anchors the popover to the reading view's selected
+  range and falls back to the middle of the view when there is none. On
+  these two verbs the reading view gives up first responder before the
+  share (the composer or the image preview opens first), which by its own
+  comment clears the selection, so the popover most likely points at the
+  middle of the page. V12 in `docs/VISUAL_TESTS.md` expects it beside the
+  selection and is not ticked. Fix: take the selection's rectangle when the
+  menu action fires and hand it to the share.
+- **iPad and Mac, the verse of the day's Share.** The card's Share icon
+  shares through `sharePassageText`, and the popover (iPad) or picker (Mac)
+  is anchored to the reading view — `gReadingTV`, `gTextView` — which is
+  hidden while the card is up, not to the icon; with no selection both fall
+  back to the middle of that view. Likely fix: anchor to the icon's
+  rectangle, which the Fyne side knows.
+
+Share with citation and Share as link keep the selection and are expected to
+point at it on both. See each on a device before changing anything; the
+Sharing table in `docs/PLATFORM_MATRIX.md` marks these cells "probably".
+
+## Android: a text share has no failure path — found 30 September 2026
+
+`BtBridge.shareText` (`android/BtBridge.java`) returns without a word when
+there is no activity, and calls `startActivity` with no try/catch, so a
+failure to start the chooser either ends the share in silence or goes
+uncaught on the UI thread. `shareImage` beside it shows a message on each way out, since the
+20 September 2026 fix recorded below ("A share the reader started cannot
+end in silence, whatever the cause"). Never seen to fail; this is hardening
+under that rule: catch around `startActivity` and show the same kind of
+message `shareImage` shows. The same reading of the iOS bridge finds
+`bibleTextPresentShare` returning silently with no view controller to
+present from, and `bibleTextShareImageFile` with an image it cannot read
+(`reading_ios.go`) — worth the same treatment. Every text verb on Android
+goes through `shareText`: note, citation, link and the verse of the day.
+
 ## A phone sheet reopened under the keyboard ended at the keyboard's top — FIXED 29 September 2026
 
 Every phone sheet with a field — the note composer, Settings, Ask, and the
