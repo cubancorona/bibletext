@@ -16,7 +16,9 @@ import (
 	"image/color"
 	"math"
 	"regexp"
+	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -131,6 +133,113 @@ func TestAndroidSystemBarsAreSentAtStartup(t *testing.T) {
 				t.Errorf("startup sent %v; this platform's chrome starts in the content's variant", *sent)
 			}
 		})
+	}
+}
+
+// heldListenerApp is the harness's app with a settings whose change listener
+// is held rather than fed: ObserveSystemThemeChanges installs its listener,
+// the goroutine behind it hears nothing the test does not send, and it ends
+// when the test closes the channel.
+type heldListenerApp struct {
+	fyne.App
+	settings *heldListenerSettings
+}
+
+func (a heldListenerApp) Settings() fyne.Settings { return a.settings }
+
+type heldListenerSettings struct {
+	fyne.Settings
+	listeners []chan fyne.Settings
+}
+
+func (s *heldListenerSettings) AddChangeListener(ch chan fyne.Settings) {
+	s.listeners = append(s.listeners, ch)
+}
+
+// THE APP'S OWN STARTUP SENDS THEM ON ANDROID. The test above seeds with the
+// platform it names; this runs the startup the entry points call,
+// ObserveSystemThemeChanges, as an Android build runs it, holds the platform
+// that startup answers for to the one the binary is built for, and holds the
+// Android entry point to calling it once the window is built — the seed sends
+// on the window CreateMainUI records, and before that there is none
+// (followTitleBar). Mutations guarded: the startup seeding for another
+// platform than chromeGOOS (runtime.GOARCH, a literal), chromeGOOS set from
+// anything but runtime.GOOS, the seed left out of the startup, and
+// cmd/mobile calling the startup before the window's content, or not at all.
+func TestAndroidSystemBarsAreSentByTheAppsOwnStartup(t *testing.T) {
+	if chromeGOOS != runtime.GOOS {
+		t.Errorf("the startup seeds the chrome for %q on a %q build: an Android build would keep "+
+			"the white icons on the light page until the first switch", chromeGOOS, runtime.GOOS)
+	}
+
+	start := func(t *testing.T, goos string, v fyne.ThemeVariant) []fyne.ThemeVariant {
+		t.Helper()
+		h := newAppearanceHarness(t, true)
+		sent := recordChrome(t, h)
+		h.variant = v
+		settings := &heldListenerSettings{Settings: h.state.app.Settings()}
+		prev := chromeGOOS
+		chromeGOOS = goos
+		systemThemeOnce = sync.Once{}
+		t.Cleanup(func() {
+			for _, ch := range settings.listeners {
+				close(ch)
+			}
+			chromeGOOS = prev
+			systemThemeOnce = sync.Once{}
+		})
+		ObserveSystemThemeChanges(heldListenerApp{App: h.state.app, settings: settings}, h.state)
+		if len(settings.listeners) != 1 {
+			t.Fatalf("control: the startup installed %d settings listeners, want 1, so this is "+
+				"not the startup the app runs", len(settings.listeners))
+		}
+		return *sent
+	}
+	t.Run("android, light page", func(t *testing.T) {
+		if got := start(t, "android", light); len(got) != 1 || got[0] != light {
+			t.Errorf("Android's startup on the light page sent %v, want [light]: the bars keep the "+
+				"dark theme's white icons until the first switch", got)
+		}
+	})
+	t.Run("android, dark page", func(t *testing.T) {
+		if got := start(t, "android", dark); len(got) != 0 {
+			t.Errorf("Android's startup on the dark page sent %v; the bars already have light icons", got)
+		}
+	})
+	// CONTROL: the send is Android's. The same startup for the platform the
+	// suite runs on, whose chrome starts in the content's variant, sends
+	// nothing on the same page.
+	t.Run("this host, light page", func(t *testing.T) {
+		if got := start(t, runtime.GOOS, light); len(got) != 0 {
+			t.Fatalf("control: the startup on %s sent %v, so a send on Android says nothing about "+
+				"Android", runtime.GOOS, got)
+		}
+	})
+
+	// The Android entry point runs that startup, after the window's content.
+	line := func(stmt string) *regexp.Regexp {
+		return regexp.MustCompile(`(?m)^[ \t]*` + regexp.QuoteMeta(stmt) + `[ \t]*(//.*)?$`)
+	}
+	const (
+		content = "w.SetContent(bibletext.CreateMainUI(myApp, state, w))"
+		startup = "bibletext.ObserveSystemThemeChanges(myApp, state)"
+	)
+	wired := func(body string) bool {
+		c, s := line(content).FindStringIndex(body), line(startup).FindStringIndex(body)
+		return c != nil && s != nil && s[0] > c[1]
+	}
+	mobile := funcBody(t, readSourceFile(t, "cmd/mobile/main.go"), "main")
+	if !wired(mobile) {
+		t.Fatalf("cmd/mobile must call %s after %s, or Android's startup has no window to send "+
+			"the bars on:\n%s", startup, content, mobile)
+	}
+	// CONTROL: the same check fails with the two swapped, and with the
+	// startup commented out.
+	if wired(swapOnce(mobile, content, startup)) {
+		t.Fatal("control: the check passes an entry point that starts the listener before the window's content")
+	}
+	if wired(strings.Replace(mobile, startup, "// "+startup, 1)) {
+		t.Fatal("control: the check passes an entry point that never starts the listener")
 	}
 }
 

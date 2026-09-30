@@ -732,6 +732,11 @@ func Run() {
 // ObserveSystemThemeChanges, and we don't want stacked subscribers.
 var systemThemeOnce sync.Once
 
+// chromeGOOS is the platform whose window chrome the startup seeds
+// (chromeAtStart): runtime.GOOS, held in a variable so the host can run the
+// startup Android runs and see the bars sent.
+var chromeGOOS = runtime.GOOS
+
 // ObserveSystemThemeChanges subscribes to Fyne's settings-change channel so a
 // system light/dark switch rebuilds the window. Fyne re-runs Color()
 // automatically when the variant changes, but anything generated outside the
@@ -767,7 +772,7 @@ func ObserveSystemThemeChanges(myApp fyne.App, state *AppState) {
 		// system bars, whose icons start white on either page (chromeAtStart);
 		// followTitleBar keeps it from there.
 		state.appearance.mobile = fyne.CurrentDevice().IsMobile()
-		seedAppearance(state, runtime.GOOS)
+		seedAppearance(state, chromeGOOS)
 		ch := make(chan fyne.Settings, 1)
 		myApp.Settings().AddChangeListener(ch)
 		go func() {
