@@ -11,6 +11,8 @@ package bibletext
 // //go:build !race files; see ui_focus_test.go).
 
 import (
+	"reflect"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
@@ -64,8 +66,6 @@ func treeTexts(o fyne.CanvasObject) []string {
 			add(v.Text)
 		case *widget.Label:
 			add(v.Text)
-		case *widget.Button:
-			add(v.Text)
 		case *widget.Hyperlink:
 			add(v.Text)
 		case *outboundLink:
@@ -74,6 +74,9 @@ func treeTexts(o fyne.CanvasObject) []string {
 			add(v.text)
 		case *widget.RichText:
 			add(segmentText(v.Segments))
+		}
+		if b := asTreeButton(n); b != nil {
+			add(b.Text)
 		}
 	})
 	return out
@@ -89,11 +92,31 @@ func treeHasText(o fyne.CanvasObject, want string) bool {
 	return false
 }
 
-// findTreeButton returns the first *widget.Button under o with the given label.
+// asTreeButton is n as a button: a *widget.Button, or a widget built on one —
+// a struct embedding widget.Button to answer keys of its own, such as the
+// share confirmation's (shareSheetButton) — as the button it embeds, which
+// taps, shows and hides as the widget does. nil for anything else.
+func asTreeButton(n fyne.CanvasObject) *widget.Button {
+	if b, ok := n.(*widget.Button); ok {
+		return b
+	}
+	v := reflect.ValueOf(n)
+	if v.Kind() != reflect.Pointer || v.IsNil() || v.Elem().Kind() != reflect.Struct {
+		return nil
+	}
+	f, ok := v.Elem().Type().FieldByName("Button")
+	if !ok || !f.Anonymous || f.Type != reflect.TypeOf(widget.Button{}) {
+		return nil
+	}
+	return v.Elem().FieldByIndex(f.Index).Addr().Interface().(*widget.Button)
+}
+
+// findTreeButton returns the first button under o with the given label
+// (asTreeButton).
 func findTreeButton(o fyne.CanvasObject, label string) *widget.Button {
 	var found *widget.Button
 	walkTree(o, func(n fyne.CanvasObject) {
-		if b, ok := n.(*widget.Button); ok && found == nil && b.Text == label {
+		if b := asTreeButton(n); b != nil && found == nil && b.Text == label {
 			found = b
 		}
 	})

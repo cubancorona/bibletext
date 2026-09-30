@@ -22,12 +22,12 @@ package bibletext
 // that is on the clipboard, and stays until the reader is done with it:
 //
 //   - the heading and one line by verb, the words recorded in
-//     docs/BACKLOG.md ("Linux: an in-app share sheet");
+//     docs/BACKLOG.md ("Linux and Windows: an in-app share sheet");
 //   - a read-only box with the clipboard's contents, wrapping, and
 //     scrolling when the text is long;
-//   - Copy again, for a clipboard something else has taken since; Email…,
-//     when the desktop has a mail client to hand the text to
-//     (share_email.go); and Done. Escape and Return are Done too.
+//   - Email…, when the desktop has a mail client to hand the text to
+//     (share_email.go); Copy again, for a clipboard something else has taken
+//     since; and Done. Escape and Return are Done too, wherever the caret is.
 //
 // It is modal, so a stray click cannot lose it, and a real sheet: it
 // registers a reopen, so a light/dark rebuild brings it back with the same
@@ -190,6 +190,14 @@ func showShareCopiedSheet(state *AppState, d shareDone) {
 
 	line := widget.NewLabel(d.line)
 	line.Wrapping = fyne.TextWrapWord
+	// The line's slot keeps the height the verb's own line wraps to while it
+	// reads "Copied again.", which takes one line where the verb's takes two:
+	// a slot that shrank would lift the box and the buttons for the moment and
+	// drop them back, under a pointer on its way to Done or to a second Copy
+	// again (heldLineLayout).
+	held := widget.NewLabel(d.line)
+	held.Wrapping = fyne.TextWrapWord
+	lineSlot := container.New(heldLineLayout{held: held}, line)
 
 	// The clipboard's contents, exactly, inside a scroll so a long note or a
 	// block quotation cannot push Done off the sheet. The scroll's height is
@@ -241,7 +249,7 @@ func showShareCopiedSheet(state *AppState, d shareDone) {
 	// second press within the moment starts the moment again, and the line
 	// is left alone if the sheet has closed by the time it ends.
 	copies := 0
-	copyAgain := widget.NewButton(shareButtonCopyAgain, func() {
+	copyAgain := newShareSheetButton(shareButtonCopyAgain, closeSheet, func() {
 		setShareClipboard(d.text)
 		copies++
 		n := copies
@@ -260,7 +268,7 @@ func showShareCopiedSheet(state *AppState, d shareDone) {
 	// there too, and reports nothing back but a log line, the copy having
 	// already succeeded.
 	subject, body, attachment := d.subject, d.body, d.attachment
-	email := widget.NewButton(shareButtonEmail, func() {
+	email := newShareSheetButton(shareButtonEmail, closeSheet, func() {
 		go func() {
 			if err := shareEmailCompose(subject, body, attachment); err != nil {
 				fyne.LogError("could not hand the share to a mail client", err)
@@ -269,16 +277,21 @@ func showShareCopiedSheet(state *AppState, d shareDone) {
 	})
 	email.Hide()
 
-	done := widget.NewButton(shareButtonDone, closeSheet)
+	done := newShareSheetButton(shareButtonDone, closeSheet, closeSheet)
 	done.Importance = widget.HighImportance
 
+	// Email… comes first in the row, which is right-aligned: it appears a
+	// moment after the sheet, when the probe answers, and an item appearing
+	// at the row's left end moves nothing to its right. In the middle it
+	// pushed Copy again left by its own width and took its place, under a
+	// pointer already on its way there.
 	buttons := container.NewHBox(email, done)
 	if d.text != "" {
-		buttons = container.NewHBox(copyAgain, email, done)
+		buttons = container.NewHBox(email, copyAgain, done)
 	}
 	actions := container.NewBorder(nil, nil, nil, buttons)
 
-	parts := []fyne.CanvasObject{title, line}
+	parts := []fyne.CanvasObject{title, lineSlot}
 	if box != nil {
 		parts = append(parts, box)
 	}
@@ -297,7 +310,9 @@ func showShareCopiedSheet(state *AppState, d shareDone) {
 	// Escape route (installShortcuts) — is wrapped while the sheet is on top
 	// and put back as it closes. A rebuild's drain closes the sheet without
 	// closeSheet and installs the canvas's handler afresh, which replaces
-	// the wrapper along with everything else the canvas had.
+	// the wrapper along with everything else the canvas had. Tab is the one
+	// way the caret reaches the sheet, onto a button, and the buttons answer
+	// Escape and Return themselves (shareSheetButton).
 	cnv.SetOnTypedKey(func(ev *fyne.KeyEvent) {
 		if (ev.Name == fyne.KeyReturn || ev.Name == fyne.KeyEnter) &&
 			popup != nil && popup.Visible() && cnv.Overlays().Top() == popup {
@@ -374,4 +389,59 @@ func showShareCopiedSheet(state *AppState, d shareDone) {
 		buttons.Refresh()
 		fit()
 	})
+}
+
+// shareSheetButton is a button on the confirmation that keeps Escape and
+// Return with the sheet while it holds the caret. Tab gives a button the
+// caret, and the desktop driver then hands it every key, the canvas's
+// handler only ever hearing a key when nothing is focused; a widget.Button
+// answers Space alone, so after a Tab, Escape and Return did nothing at all.
+// On these, Escape and Return close the sheet as Done does, whichever button
+// holds the caret — Return is Done on this sheet, as the sheet's rule has it,
+// not "press the focused button" — and Space presses the button that holds
+// it, as on any button.
+type shareSheetButton struct {
+	widget.Button
+	closeSheet func()
+}
+
+func newShareSheetButton(label string, closeSheet, tapped func()) *shareSheetButton {
+	b := &shareSheetButton{closeSheet: closeSheet}
+	b.Text = label
+	b.OnTapped = tapped
+	b.ExtendBaseWidget(b)
+	return b
+}
+
+// TypedKey closes the sheet on Escape and Return, and leaves every other
+// key to the button.
+func (b *shareSheetButton) TypedKey(ev *fyne.KeyEvent) {
+	switch ev.Name {
+	case fyne.KeyEscape, fyne.KeyReturn, fyne.KeyEnter:
+		b.closeSheet()
+	default:
+		b.Button.TypedKey(ev)
+	}
+}
+
+// heldLineLayout lays the sheet's line out over its slot and makes the slot
+// as tall as the verb's own line wraps to at the slot's width, whatever the
+// line reads for the moment. held is a copy of the verb's line kept off the
+// canvas — never drawn, never read — and measured at that width.
+type heldLineLayout struct{ held *widget.Label }
+
+func (l heldLineLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	l.held.Resize(size)
+	for _, o := range objects {
+		o.Move(fyne.Position{})
+		o.Resize(size)
+	}
+}
+
+func (l heldLineLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	min := l.held.MinSize()
+	for _, o := range objects {
+		min = min.Max(o.MinSize())
+	}
+	return min
 }

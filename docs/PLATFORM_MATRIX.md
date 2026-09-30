@@ -261,17 +261,17 @@ place a fix on one does not reach the others.
     `share_fallback.go:37` (`showShareCopiedSheet(state, shareDoneForText(s))`):
     the heading, `share_sheet_desktop.go:59` (`"Copied — ready to paste"`),
     one line saying what to do next, by verb, the clipboard's text in a
-    read-only scrolling box, `share_sheet_desktop.go:208`
+    read-only scrolling box, `share_sheet_desktop.go:216`
     (`boxScroll = container.NewVScroll(`), Copy again, Email… when the
-    desktop has a mail client, `share_sheet_desktop.go:369`
+    desktop has a mail client, `share_sheet_desktop.go:384`
     (`shareEmailProbe(attachment != "", func(ok bool) {`), and Done, with
-    Escape and Return, `share_sheet_desktop.go:301` (`cnv.SetOnTypedKey(`).
-    It is modal, `share_sheet_desktop.go:289`
+    Escape and Return, `share_sheet_desktop.go:316` (`cnv.SetOnTypedKey(`).
+    It is modal, `share_sheet_desktop.go:302`
     (`widget.NewModalPopUp(card, cnv)`), registered for the light/dark
     reopen and the window refit, opens below the header,
-    `share_sheet_desktop.go:338` (`room := clearOfHeader(`), and over the
+    `share_sheet_desktop.go:353` (`room := clearOfHeader(`), and over the
     verse-of-the-day card comes back with the card beneath it,
-    `share_sheet_desktop.go:359` (`under := takeReopenBeneath(state, popup)`).
+    `share_sheet_desktop.go:374` (`under := takeReopenBeneath(state, popup)`).
     Email… on Linux is the desktop portal's Email interface,
     `share_email_linux.go:165` (`portalEmailIface+".ComposeEmail"`), its
     request's answer watched, `share_email_linux.go:171`

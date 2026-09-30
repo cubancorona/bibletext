@@ -12,8 +12,10 @@ package bibletext
 // handler returns, inside the canvas and below the header at 1280x800 and
 // at 520x640, in light and in dark; its words are the approved ones; the
 // clipboard holds the text the box shows; a click outside does not dismiss
-// it; Done, Escape and Return close it and give the canvas back; Copy again
-// copies again; a light/dark change brings it back showing the same text,
+// it; Done, Escape and Return close it and give the canvas back, after Tab
+// has put the caret on a button too; Copy again copies again; neither Copy
+// again nor Email…'s late arrival moves a button; a light/dark change brings
+// it back showing the same text,
 // and the verse-of-the-day card beneath it; on the note path the sent note's
 // card is on the page under it; Email… is offered only when the platform
 // says there is a mail client, and hands over the citation, the text and the
@@ -23,6 +25,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -396,9 +399,11 @@ func (h *shareSheetHarness) typeOnCanvas(key fyne.KeyName) {
 // handler is the one the sheet found (Escape still closes the next sheet),
 // and the sheet never comes back. Return reaches the canvas's handler
 // because nothing in the sheet holds the caret — not on opening, and not
-// after a button has been tapped, which gives the caret up. Mutations: Done
-// not hiding; the handler not wrapped for Return, or not put back; the
-// close not calling showReadingOverlay.
+// after a button has been tapped, which gives the caret up. The handler is
+// checked before any light/dark change, whose rebuild installs the canvas's
+// handler afresh and would hide one the close failed to put back.
+// Mutations: Done not hiding; the handler not wrapped for Return, or not put
+// back; the close not calling showReadingOverlay.
 func TestTheCopiedSheetClosesOnDoneEscapeAndReturn(t *testing.T) {
 	for _, way := range []struct {
 		name  string
@@ -426,8 +431,12 @@ func TestTheCopiedSheetClosesOnDoneEscapeAndReturn(t *testing.T) {
 	} {
 		t.Run(way.name, func(t *testing.T) {
 			h := newShareSheetHarness(t)
+			found := reflect.ValueOf(h.canvas().OnTypedKey()).Pointer()
 			h.shareLink()
 			p := h.sheet()
+			if reflect.ValueOf(h.canvas().OnTypedKey()).Pointer() == found {
+				t.Fatal("control: the sheet must wrap the canvas's key handler while it shows")
+			}
 			way.close(t, h, p)
 			if p.Visible() || h.overlays() != 0 {
 				t.Fatalf("after %s the sheet is still up (visible %v, overlays %d)", way.name, p.Visible(), h.overlays())
@@ -438,9 +447,8 @@ func TestTheCopiedSheetClosesOnDoneEscapeAndReturn(t *testing.T) {
 			if registered(h.st, p) {
 				t.Error("the closed sheet still holds its reopen")
 			}
-			h.flip()
-			if h.overlays() != 0 {
-				t.Errorf("a change brought back a sheet the reader closed: %v", sheetTexts(h.top()))
+			if reflect.ValueOf(h.canvas().OnTypedKey()).Pointer() != found {
+				t.Error("the canvas's key handler is not the one the sheet found")
 			}
 			// The canvas's handler is the desktop's again: Escape closes the
 			// next sheet, and Return does nothing to it.
@@ -456,6 +464,10 @@ func TestTheCopiedSheetClosesOnDoneEscapeAndReturn(t *testing.T) {
 			h.typeOnCanvas(fyne.KeyEscape)
 			if card.Visible() || h.overlays() != 0 {
 				t.Error("Escape no longer closes the next sheet: the handler the sheet found was not put back")
+			}
+			h.flip()
+			if h.overlays() != 0 {
+				t.Errorf("a change brought back a sheet the reader closed: %v", sheetTexts(h.top()))
 			}
 		})
 	}
@@ -725,5 +737,191 @@ func TestMailHelpers(t *testing.T) {
 	u := mailtoURL("John 3:16 (WEB)", "line one\nline two & more")
 	if got := u.String(); got != "mailto:?subject=John%203%3A16%20%28WEB%29&body=line%20one%0Aline%20two%20%26%20more" {
 		t.Errorf("mailtoURL = %q", got)
+	}
+}
+
+// AFTER TAB, ESCAPE AND RETURN STILL CLOSE IT, and Space presses the button
+// the caret is on. Tab is the one way the caret reaches the sheet, and the
+// desktop driver then hands every key to the button holding it, never to
+// the canvas's handler. Each button in turn, each key: Escape, Return and
+// Enter close the sheet and give the canvas back once; Space does what a
+// press of that button does and leaves the sheet up, but Done's, which
+// closes it. Mutation: the buttons' own key handling dropped (a plain
+// widget.Button answers Space alone, so Escape and Return then do nothing).
+func TestAfterTabTheKeysStillCloseTheSheet(t *testing.T) {
+	order := []string{shareButtonEmail, shareButtonCopyAgain, shareButtonDone}
+	for i, label := range order {
+		for _, key := range []fyne.KeyName{fyne.KeyEscape, fyne.KeyReturn, fyne.KeyEnter, fyne.KeySpace} {
+			t.Run(fmt.Sprintf("%s then %s", label, key), func(t *testing.T) {
+				h := newShareSheetHarness(t)
+				h.shareCitation()
+				p := h.sheet()
+				for range i + 1 {
+					h.canvas().FocusNext()
+				}
+				f := h.canvas().Focused()
+				if f == nil {
+					t.Fatalf("control: Tab put the caret nowhere")
+				}
+				if b := asTreeButton(f.(fyne.CanvasObject)); b == nil || b.Text != label {
+					t.Fatalf("control: after %d Tabs the caret is on %v, want %q", i+1, sheetTexts(p), label)
+				}
+				fyne.CurrentApp().Clipboard().SetContent("something else took the clipboard")
+				h.typeOnCanvas(key)
+				closes := key != fyne.KeySpace || label == shareButtonDone
+				if closes {
+					if p.Visible() || h.overlays() != 0 {
+						t.Fatalf("%s on %s left the sheet up", key, label)
+					}
+					if h.restored != 1 {
+						t.Errorf("the canvas was given back %d times, want once", h.restored)
+					}
+					return
+				}
+				if !p.Visible() || h.top() != p {
+					t.Fatalf("Space on %s closed the sheet", label)
+				}
+				switch label {
+				case shareButtonEmail:
+					select {
+					case <-h.composed:
+					case <-time.After(5 * time.Second):
+						t.Error("Space on Email… composed nothing")
+					}
+				case shareButtonCopyAgain:
+					if want, _ := boxText(p); h.clipboard() != want {
+						t.Errorf("Space on Copy again left %q on the clipboard", h.clipboard())
+					}
+				}
+			})
+		}
+	}
+}
+
+// findTreeButtonObject is the button labelled label under o as the canvas
+// holds it — the widget itself, where findTreeButton gives the button a
+// widget embeds — for asking the driver where it is.
+func findTreeButtonObject(o fyne.CanvasObject, label string) fyne.CanvasObject {
+	var found fyne.CanvasObject
+	walkTree(o, func(n fyne.CanvasObject) {
+		if b := asTreeButton(n); b != nil && found == nil && b.Text == label {
+			found = n
+		}
+	})
+	return found
+}
+
+// settledSheet lays the sheet out the way a painting canvas does before each
+// frame (paintedFrames), and returns where each named button, and the box,
+// sit on the canvas afterwards.
+func settledSheet(t *testing.T, frames *paintedFrames, p *widget.PopUp, labels ...string) map[string]fyne.Position {
+	t.Helper()
+	frames.frame()
+	d := fyne.CurrentApp().Driver()
+	at := map[string]fyne.Position{}
+	for _, label := range labels {
+		b := findTreeButtonObject(p.Content, label)
+		if b == nil || !b.Visible() {
+			t.Fatalf("control: no visible %q to place", label)
+		}
+		at[label] = d.AbsolutePositionForObject(b)
+	}
+	if l := boxLabel(p); l != nil {
+		at["box"] = d.AbsolutePositionForObject(l)
+	}
+	return at
+}
+
+// EMAIL… ARRIVES WITHOUT MOVING ANYTHING. It shows when the mail probe
+// answers, a moment after the sheet, and it takes the row's left end, so
+// Copy again and Done stay where the reader's pointer is heading: a tap
+// there after the arrival still copies, and composes nothing. Mutation:
+// Email… between Copy again and Done, as it was (it pushed Copy again left
+// by its own width and took its place).
+func TestEmailArrivingMovesNothing(t *testing.T) {
+	h := newShareSheetHarness(t)
+	var report func(bool)
+	shareEmailProbe = func(_ bool, r func(bool)) { report = r }
+	h.shareCitation()
+	p := h.sheet()
+	if report == nil {
+		t.Fatal("control: the sheet never asked the mail probe")
+	}
+	frames := newPaintedFrames(newLayoutWalker(t), p)
+	before := settledSheet(t, frames, p, shareButtonCopyAgain, shareButtonDone)
+	copyAgain := findTreeButtonObject(p.Content, shareButtonCopyAgain)
+	aim := before[shareButtonCopyAgain].Add(fyne.NewPos(copyAgain.Size().Width/2, copyAgain.Size().Height/2))
+
+	report(true)
+	after := settledSheet(t, frames, p, shareButtonEmail, shareButtonCopyAgain, shareButtonDone)
+	for _, label := range []string{shareButtonCopyAgain, shareButtonDone} {
+		if after[label] != before[label] {
+			t.Errorf("Email…'s arrival moved %s from %v to %v", label, before[label], after[label])
+		}
+	}
+	if after[shareButtonEmail].X >= after[shareButtonCopyAgain].X {
+		t.Errorf("Email… at %v is not to the left of Copy again at %v", after[shareButtonEmail], after[shareButtonCopyAgain])
+	}
+	fyne.CurrentApp().Clipboard().SetContent("something else took the clipboard")
+	test.TapCanvas(h.canvas(), aim)
+	if want, _ := boxText(p); h.clipboard() != want {
+		t.Errorf("a tap where Copy again was did not copy: the clipboard holds %q", h.clipboard())
+	}
+	if len(h.composed) != 0 {
+		t.Errorf("a tap where Copy again was composed a mail: %+v", <-h.composed)
+	}
+}
+
+// COPY AGAIN MOVES NOTHING. "Copied again." takes one line where the verb's
+// line takes two at the sheet's width; the line's slot keeps the verb's
+// height, so the box and the buttons stay put while it shows and when the
+// verb's line comes back, under a pointer on its way to Done or to a second
+// Copy again. The control holds that the verb's line does wrap past
+// "Copied again." here, so the test can see a slot that shrank. Mutation:
+// the line laid out in the form without its held slot.
+func TestCopyAgainMovesNothing(t *testing.T) {
+	for _, size := range []fyne.Size{{Width: 1280, Height: 800}, {Width: 520, Height: 640}} {
+		t.Run(fmt.Sprintf("%.0fx%.0f", size.Width, size.Height), func(t *testing.T) {
+			h := newShareSheetHarness(t)
+			h.st.window.Resize(size)
+			h.shareCitation()
+			p := h.sheet()
+			frames := newPaintedFrames(newLayoutWalker(t), p)
+			labels := []string{shareButtonEmail, shareButtonCopyAgain, shareButtonDone}
+			before := settledSheet(t, frames, p, labels...)
+
+			var line *widget.Label
+			walkTree(p, func(o fyne.CanvasObject) {
+				if l, ok := o.(*widget.Label); ok && line == nil && l.Text == shareLineCitation && l.Visible() {
+					line = l
+				}
+			})
+			if line == nil {
+				t.Fatal("control: the verb's line is not on the sheet")
+			}
+			one := widget.NewLabel(shareLineCopiedAgain)
+			one.Wrapping = fyne.TextWrapWord
+			one.Resize(fyne.NewSize(line.Size().Width, 0))
+			if one.MinSize().Height >= line.Size().Height {
+				t.Fatalf("control: the verb's line (%.0f high) does not wrap past %q (%.0f): nothing could move",
+					line.Size().Height, shareLineCopiedAgain, one.MinSize().Height)
+			}
+
+			test.Tap(findTreeButton(p.Content, shareButtonCopyAgain))
+			if !sheetHas(p, shareLineCopiedAgain) {
+				t.Fatalf("control: the line reads %v, want %q", sheetTexts(p), shareLineCopiedAgain)
+			}
+			during := settledSheet(t, frames, p, labels...)
+			(*h.timers)[0]()
+			if !sheetHas(p, shareLineCitation) {
+				t.Fatalf("control: the verb's line did not come back: %v", sheetTexts(p))
+			}
+			after := settledSheet(t, frames, p, labels...)
+			for _, what := range append(labels, "box") {
+				if during[what] != before[what] || after[what] != before[what] {
+					t.Errorf("%s moved: %v, then %v while the line read %q, then %v", what, before[what], during[what], shareLineCopiedAgain, after[what])
+				}
+			}
+		})
 	}
 }
