@@ -48,8 +48,8 @@ verse of the day's Share) copied to the clipboard and opened the in-app
 confirmation sheet (the entry below, which replaced a 1.4-second notice on
 30 September 2026), and Share as image saved the card to Downloads and opened
 Explorer on it. Windows has a system Share sheet that a desktop app can open
-for its own window, and every verb now opens it beside the window, as the
-picker does on macOS — divergence 28 in `docs/PLATFORM_MATRIX.md`, whose
+for its own window, and every verb now opens it over the window, as the
+picker opens on macOS — divergence 28 in `docs/PLATFORM_MATRIX.md`, whose
 Sharing table records every platform. The in-app sheet stays behind it for
 whenever it cannot open.
 
@@ -109,18 +109,30 @@ registration.
   of the app's under the temp directory, cleared of copies over a day old,
   and resolved as a StorageFile before the sheet opens, as .NET MAUI does,
   rather than inside the request, which by the documentation a deferral
-  must answer within 200 ms.
+  must answer within 200 ms. The copy is made at the tap, and the mail the
+  preview set for the card is taken with it (`takeSharedImage`): the
+  renderer writes every card to the same file, so a preview opened before
+  the sheet asks, or before the fallback opens, would otherwise change the
+  card that is shared or saved.
 - `share_session.go` carries each share from the hand-over to the sheet's
   request and ends it exactly once: delivered, or in the verb's fallback,
   the in-app sheet, after a refused step, a package that would not fill,
   or five seconds without the sheet asking (the probe's slowest was 549
-  ms; Chromium waits 30 s). A newer share replaces one still waiting; a
-  reader's cancel opens nothing, as on the other platforms. The handler is
-  removed as the share ends, which is always posted, so never inside
-  `ShowShareUIForWindow`.
+  ms). A sheet asked to open does not know the app has stopped waiting,
+  and a sheet whose host starts slowly could appear after that; so the
+  share keeps its handler and the package's parts after that fallback,
+  and a late request still fills the package, until the sheet asks, a
+  newer share starts, or 30 seconds pass — the time Chromium gives the
+  same sheet before it gives up on a share. A newer share replaces one
+  still waiting; a reader's cancel opens nothing, as on the other
+  platforms. The handler is removed as the share lets go of it, never
+  inside `ShowShareUIForWindow`.
 - Tests: the session's rules, the split of a message into title, text and
   link, the picture's copy and the interface ids on every platform
-  (`share_session_test.go`, `share_parts_test.go`); in the Windows CI job,
+  (`share_session_test.go`, `share_parts_test.go`), among them the late
+  sheet that still gets the share, the kept handler let go by the keep or
+  a newer share, and a late image fallback that saves the card that was
+  shared (`share_sheet_desktop_test.go`); in the Windows CI job,
   against Windows itself with no sheet shown (`share_windows_test.go`), the
   objects answering COM, a real DataPackage filled as the request fills it
   and read back, and every step of a text and a picture share up to the
@@ -134,15 +146,22 @@ registration.
   refusing the handler with E_NOINTERFACE. A control with the DataRequested
   handler's id mistyped still registered: `add_DataRequested` does not ask
   the handler for its interface, so that id rests on its derivation and on
-  the probe's sheet having asked its handler for the share.
+  the probe's sheet having asked its handler for the share. That VM run
+  came before the handler kept for a late sheet and the picture taken at
+  the tap; the tests for those ran on the host, and on Windows they are
+  only type-checked until the Windows CI job runs them.
 
 **Still open.**
 
 - **The app itself on Windows.** The row in the Sharing table is `builds`:
-  the app with this code has not run on Windows, and the Windows tests have
-  not yet run with cgo and the race detector, as the Windows CI job runs
-  them after a push. Seeing the app needs a Windows build of this tree,
-  which CI makes after a push: the Windows
+  the app with this code has not run on Windows, nor compiled as the
+  release compiles it. The package was type-checked for Windows with
+  `-tags ci,gles` and cgo off, which leaves out Fyne's GLFW driver, and the
+  Windows tests ran from a binary built that way; the release
+  configuration (cgo, `gles`, the GLFW window and its RunNative) first
+  compiles with this code, and the tests first run with cgo and the race
+  detector, in the Windows CI job after a push. Seeing the app needs a
+  Windows build of this tree, which CI makes after a push: the Windows
   build artifact workflow (`gh workflow run windows-build.yml --ref
   <branch>`, x64, with Mesa's software OpenGL for a VM without a GPU) and
   the Microsoft Store package workflow for the MSIX. Then every verb from its
@@ -155,6 +174,10 @@ registration.
   text and the web link shows the link twice.
 - **Windows 10.** The interop is there from Windows 8 and the MSIX's floor
   is 10.0.19041, but only Windows 11 has been seen.
+- **A sheet that asks late.** A request after the five seconds, which the
+  kept handler answers, has not been seen: the probe's sheets all asked
+  within 549 ms. A slow Windows 10 machine, or a first share with the
+  share host starting cold, is where it would show.
 
 **Sources.**
 
@@ -171,6 +194,8 @@ registration.
   https://learn.microsoft.com/en-us/uwp/winrt-cref/winrt-type-system
 - The implementations read before writing ours:
   https://github.com/chromium/chromium/blob/main/chrome/browser/webshare/win/show_share_ui_for_window_operation.cc ;
+  https://github.com/chromium/chromium/blob/main/chrome/browser/webshare/win/show_share_ui_for_window_operation.h
+  (its 30-second `kMaxExecutionTime`) ;
   https://github.com/mozilla-firefox/firefox/blob/main/widget/windows/WindowsUIUtils.cpp ;
   https://github.com/dotnet/maui/blob/main/src/Essentials/src/Share/Share.windows.cs ;
   https://github.com/greenshot/greenshot/blob/main/src/Greenshot/Native/DataTransferManagerHelper.cs

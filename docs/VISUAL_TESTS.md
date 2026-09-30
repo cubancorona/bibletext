@@ -368,7 +368,7 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       direct-download zip, and the Store's MSIX where it can be installed),
       in light and in dark: Share with citation, Share as link, Share with
       note, the verse of the day's Share icon and the image preview's Share
-      each open the system Share sheet beside the window, and nothing opens
+      each open the system Share sheet over the window, and nothing opens
       in the app. Share as link and Share with note: the sheet's header
       reads "Share link", with the citation, the link and Copy link; Copy
       link puts the link on the clipboard. Share with citation and the verse
@@ -385,7 +385,9 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       nothing. The sheet may not open where Windows
       refuses it — then the in-app sheet (the next row) opens instead, at
       once or within five seconds, never nothing; the app's log names the
-      step and whether the build was packaged.
+      step and whether the build was packaged. Should the system sheet
+      still appear after the in-app one has opened, it carries the share,
+      not an empty package.
 - [ ] The desktop share confirmation, Linux, and Windows where its Share
       sheet cannot open: Share with
       citation, Share as link, Share with note and the verse of the day's
@@ -459,10 +461,11 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       shows that verse's reference and no words, not the digits.
 - [ ] Share with note shows the note it kept, on every surface (iPhone,
       iPad, Android, macOS, the styled pane): select two verses, Share with
-      note, write a line, Share. Behind the share sheet (on the styled pane,
-      under the "Copied — ready to paste" sheet) the page now shows the
-      note's card over the selected verses, "Note from you" with one ✕ and
-      no −, the verses washed, the view placed on it; Return in the desktop
+      note, write a line, Share. Behind the share sheet (on Linux, under
+      the "Copied — ready to paste" sheet; on Windows, under its Share
+      sheet) the page now shows the note's card over the selected verses,
+      "Note from you" with one ✕ and no −, the verses washed, the view
+      placed on it; Return in the desktop
       field does the same. Cancel the share sheet: the card stays, and the
       note is in the notes browser. On an iPad and on a Mac the share sheet
       opens beside the selection, not mid-page, and the card appearing
