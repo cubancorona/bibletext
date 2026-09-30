@@ -140,7 +140,7 @@ vet failure, and a red run has sat unnoticed for a day before. The step named
 `check-support-contact.py`, `check-release-identity.py`,
 `check-product-identity.py`, `check-mac-store-config.py`,
 `check-min-os-versions.py` and `check-public-surfaces.py`, the Python unit
-tests under `scripts/audio-align`, `msstore` and `appstore`, and
+tests under `scripts/audio-align`, `msstore`, `appstore` and `play`, and
 `check-repository-hygiene.py` last — so a local run of
 `check-repository-hygiene.py` on its own proves nothing.
 `releasing_doc_test.go` holds this list to the step.
@@ -258,6 +258,11 @@ checks the attached build against it.
 Play: `scripts/play-publish.py --dry-run --notes <file> upload <aab> alpha`
 first — it uploads into an edit it then discards — then the identical command
 without `--dry-run`, with `--status completed`.
+
+Play's screenshots are not part of a release: the listing keeps its images
+from one release to the next. An approved new phone and tablet set goes up
+with `play/push-screenshots.py` — read-only first, then `--rehearse`, then
+`--write --confirm-version <v>` (docs/SCREENSHOT_PLAYBOOK.md, §6).
 
 ### 7 — Submit to Apple
 
@@ -411,6 +416,7 @@ Re-running from the top is usually wrong. These steps are not idempotent:
 | `play-publish.py upload` | rejects a used versionCode | bump Build, rebuild |
 | `submit-version.py --submit` | 409 — already in review | remove from review in the console |
 | `push-screenshots.py --write` | leaves a set that holds the files, reorders one that holds them out of order, replaces the rest | re-run once a FAILED image or a refusal is understood |
+| `play/push-screenshots.py --write` | leaves a type that holds the files, replaces the rest | a run stopped before the commit deleted its edit and changed nothing; re-run once the reason is understood |
 | `msstore/submit.py create` | 409 — one pending submission at a time | `msstore/submit.py abort`, then create |
 | `git tag` push | tags are immutable | use the next number; the old one is spent |
 | `gh release edit --draft=false` | `/releases/latest` has already moved | attach what is missing, fast |

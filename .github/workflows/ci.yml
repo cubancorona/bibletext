@@ -30,6 +30,7 @@ jobs:
           python3 -m unittest discover -s scripts/audio-align -p 'test_*.py'
           python3 -m unittest discover -s msstore -p 'test_*.py'
           python3 -m unittest discover -s appstore -p 'test_*.py'
+          python3 -m unittest discover -s play -p 'test_*.py'
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             range="${{ github.event.pull_request.base.sha }}..HEAD"
           else
