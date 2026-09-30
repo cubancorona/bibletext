@@ -18,3 +18,6 @@ replace the files here.
 Both sets are the light appearance, the Berean Standard Bible, and the same
 four scenes: a note received inside a shared link, a passage, search results,
 and the settings sheet.
+
+These four scenes are not yet the eight every store listing is to show; the
+shot list, the recipes and the checks are in docs/SCREENSHOT_PLAYBOOK.md.

@@ -78,6 +78,7 @@ Adding a document? Add its line here. One line, saying **when** to read it.
 - [PLAY_LISTING.md](PLAY_LISTING.md) — before creating the Play app record, answering Data safety or IARC, or uploading an AAB or store graphics
 - [WINDOWS_STORE_LISTING.md](WINDOWS_STORE_LISTING.md) — before any Microsoft Store step — the reserved identity, the MSIX package and its workflow, the listing fields, the first submission, the API prerequisites
 - [LINUX_STORES.md](LINUX_STORES.md) — before touching the Snap Store or AppImage packaging, their listings, or the Linux desktop entry
+- [SCREENSHOT_PLAYBOOK.md](SCREENSHOT_PLAYBOOK.md) — before capturing, checking or uploading store screenshots for any store — the eight shots, recipes, three-lens check, upload gate
 - [PLATFORM_MATRIX.md](PLATFORM_MATRIX.md) — before excluding an architecture or store, calling a platform tested, or changing a platform's Share: what ships, how well it is proven
 
 

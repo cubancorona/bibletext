@@ -102,46 +102,28 @@ The icon and feature graphic under `docs/play-assets/` remain usable:
 | App icon | `icon-512.png` | 512×512 PNG |
 | Feature graphic | `feature-graphic.png` | 1024×500 PNG |
 
+The scenes, the capture recipe for the phone and the 10-inch tablet, the
+checks and the upload steps are in docs/SCREENSHOT_PLAYBOOK.md.
+
 The existing `01-reading.png`, `02-search.png`, and `03-books.png` phone images
-show an older interface and must not be uploaded for 1.2.7. They date from 4
-July 2026 and predate the note chrome, the current typography, and the grouped
-Books grid. Recapture at least:
+show an older interface and must not be uploaded. They date from 4 July 2026
+and predate the note chrome, the current typography, and the grouped Books
+grid.
 
-1. reading with edition-correct red letters;
-2. Search/cross-references;
-3. the grouped Old Testament / New Testament Books grid;
-4. shared notes with plainly synthetic text; and
-5. the NKJV translation/settings state.
+The layout check in `scripts/play-shot-check.py` dates from the September
+capture: changing the system theme while the app was running brought it back
+with its pane in the top ~45% of the window, a "content reaches the bottom"
+test passed anyway, and asking whether there is ink where the tab bar belongs
+failed two images that had already been committed as fine.
 
-Use the release build or an equivalent current emulator build, inspect every
-final image visually and with OCR, and meet Play's current aspect-ratio and pixel
-requirements. Do not overwrite the old assets in place until the new set has
-been reviewed side by side.
-
-**Capture on a freshly booted emulator, and set the appearance BEFORE the app
-starts.** Changing the system theme while it is running brought it back with
-its pane occupying the top ~45% of the window - readable, and useless as a
-store image. Worse, it is invisible to the obvious check: "does content reach
-the bottom of the screen" passes anyway, because the page background is not
-the system background. `scripts/play-shot-check.py` asks the specific question
-instead - is there ink where the tab bar belongs - and it caught two images
-that had already been committed as fine.
-
-**A candidate set is in `play-assets/2026-09-1.2.5/`**, captured from the
-versionCode 176 release APK on a Pixel 7 emulator. It predates 1.2.7's reading
-face (Junicode with small-capital divine name) and the publishers' own
-paragraphing, so it no longer shows the shipped text; recapture before the
-listing goes public. It shows: reading with red
-letters, search results, the grouped Books list, the same passage in the NKJV
-fetched live through API.Bible, and the translation picker showing the licence
-notice. They sit beside the old set rather than replacing it, per the paragraph
-above.
-
-**A raw phone capture is not uploadable.** A Pixel screenshot is 1080x2400,
-which is 2.222:1, and Play rejects anything past 2:1. The candidates are
-cropped to 1080x2160 - exactly 2:1 - by removing the status bar and the gesture
-pill, which a store image should not show anyway. Check this on any future
-capture: the aspect rule is the failure that only shows up at upload.
+**A candidate set is in `play-assets/2026-09-1.2.5/`**: the eight scenes of the
+iOS set, captured on 7 and 8 September 2026 on a Pixel 7 emulator. It predates
+1.2.7's reading face (Junicode with small-capital divine name) and the
+publishers' own paragraphing, so it no longer shows the shipped text. Each
+image was cropped from the Pixel's 1080x2400 to 1080x2160, exactly 2:1, which
+took the status bar and the top of the app header with it; the playbook sets
+the emulator's display to 1080x2160 instead of cropping. They sit beside the
+July set rather than replacing it.
 
 ## Data safety
 

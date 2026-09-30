@@ -225,6 +225,10 @@ provider credentials and accurately describe fetched versus embedded text.
 
 ## Screenshots
 
+The shot list, the capture recipes and the check for every store are in
+docs/SCREENSHOT_PLAYBOOK.md; this section keeps the App Store's upload tool and
+the history of its sets.
+
 ### Uploading a set
 
 `appstore/push-screenshots.py` uploads the upload-ready set for the ledger
@@ -270,42 +274,8 @@ status-bar override; Mac 08's 804 pixels outside the rounded window, which
 showed the desktop, take Mac 07's backdrop. Every image went through an
 independent visual review, and the ones it flagged were retaken.
 
-How it was taken, so a repeat does not have to rediscover it:
-
-- **iOS** — a store build (`scripts/run-ios-sim.sh`, never `--dev`: a dev
-  build adds the Links tab and a debug line) on the existing iPhone 17 Pro
-  Max (1320×2868) and iPad Pro 13-inch (M5) (2064×2752) simulators, with
-  `xcrun simctl status_bar … override --time 9:41` and full battery. The
-  script installs on the FIRST booted simulator, not the one named, so with
-  two booted install by hand from `simctl get_app_container`. The simulator
-  containers already hold the published synthetic notes; a leftover test
-  note was deleted before the notes list was captured. Taps go through the
-  lldb `sendTouch` injector, which kills the app on about one tap in five
-  (relaunch and repeat). Shot 08's native selection and edit menu need no
-  gesture: from lldb, `becomeFirstResponder` and `setSelectedRange:` on
-  `gReadingTV`, then `_presentEditMenuWithPreferredDirection:overrideMenu:`
-  (direction 1 puts the menu below the selection, 2 above) on the text
-  interaction's edit-menu assistant, with
-  the "Study with AI" submenu that the text view's own
-  `textView:editMenuForTextInRange:suggestedActions:` builds — the three
-  items a reader sees after tapping "Study with AI".
-- **macOS** — an unsigned `go build` of `cmd/bibletext` carrying the
-  release API.Bible value (`release-bible-key.sh`, verified with
-  `verify-release-key.py`), launched with `HOME` and `CFFIXED_USER_HOME`
-  pointed at a throwaway home seeded with the simulator's synthetic
-  preferences. The reader's own preferences are never read, moved or
-  photographed (checked by hash before and after), and an unsigned build
-  keeps no secrets in the Keychain. The window is pinned to 1280×800
-  (2560×1600) and captured by region, which keeps shot 08's context menu.
-  For 08, drag from just after the verse number (so Look Up does not quote
-  it), right-click at the end of the first line, and put the window against
-  the screen's right edge so the Study with AI submenu opens to the left
-  inside the frame.
-  The dark shot needs the SYSTEM appearance switched by the owner:
-  `-AppleInterfaceStyle Dark` darkens the content but leaves a light title
-  bar. Capture it by window id (`screencapture -o -l`) so nothing else on
-  the screen can enter the frame. Never attach lldb to a Mac host process:
-  it raises a Developer Tools password prompt.
+How it was taken is now the iPhone, iPad and Mac recipes in
+docs/SCREENSHOT_PLAYBOOK.md, beside the shot list and the check every set passes.
 
 The live listing is 1.2.5, and its images are still the eight iPhone 6.9-inch
 and eight iPad 13-inch captures made for 1.2.2: the complete 1.2.3 replacement
