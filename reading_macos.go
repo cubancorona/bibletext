@@ -3296,6 +3296,7 @@ func hideNativeReadingOverlayMac() { C.bibleTextMacTVHide() }
 // clipboard + notice popup, save-to-Downloads + file-manager reveal) so the
 // real desktop-other share UX can be eyeballed here. devMimicTarget() is a
 // constant "" in release builds (dev_mimic_off.go) — the branch is dead code.
+// Each platform's share mechanism is recorded in docs/PLATFORM_MATRIX.md, Sharing.
 func nativeShareText(s string) {
 	if devMimicTarget() != "" {
 		fallbackShareText(s)
@@ -3306,6 +3307,7 @@ func nativeShareText(s string) {
 	C.bibleTextShareText(c)
 }
 
+// Each platform's share mechanism is recorded in docs/PLATFORM_MATRIX.md, Sharing.
 func nativeShareImage(path string) {
 	if devMimicTarget() != "" {
 		fallbackShareImage(path)

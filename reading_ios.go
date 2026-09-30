@@ -4101,12 +4101,14 @@ func hideNativeReadingOverlay() { C.bibleTextTVHide() }
 
 // nativeShareText / nativeShareImage present the iOS share sheet for the
 // selection-menu Share actions (see share.go).
+// Each platform's share mechanism is recorded in docs/PLATFORM_MATRIX.md, Sharing.
 func nativeShareText(s string) {
 	c := C.CString(s)
 	defer C.free(unsafe.Pointer(c))
 	C.bibleTextShareText(c)
 }
 
+// Each platform's share mechanism is recorded in docs/PLATFORM_MATRIX.md, Sharing.
 func nativeShareImage(path string) {
 	c := C.CString(path)
 	defer C.free(unsafe.Pointer(c))

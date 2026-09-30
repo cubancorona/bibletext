@@ -36,7 +36,7 @@ runtime, so each target links only the drivers and native code it needs:
 | `android` | Android only | `reading_android.go`, `audio_android.go` (cgo/JNI) |
 | `ios \|\| !darwin` | everything but macOS | `reading_fyne.go` (fallback pane) |
 | `!ios && !darwin && !android` | Linux/Win | `reading_scroll_fyne.go` |
-| `!darwin && !android` | Linux/Win | `share_other.go` (no-op share stubs), `audio_other.go` (the oto desktop audio engine) |
+| `!darwin && !android` | Linux/Win | `share_other.go` (the share verbs' desktop fallback: clipboard and notice, save and reveal), `audio_other.go` (the oto desktop audio engine) |
 
 > Note: gopls analyses only the host build, so iOS/Android/cgo-tagged files look
 > greyed-out in the editor. Validate them with `scripts/run-ios-sim.sh` (iOS) or
@@ -257,7 +257,8 @@ prose.
 | `share.go` | Selection-action dispatcher; "Share with citation" text (Bluebook Rule 5 quote formatting + citation) |
 | `share_image.go` | "Share as image" renderer — text-only card, 13 colour schemes × 7 embedded OFL serifs |
 | `share_preview.go` | Preview-and-regenerate sheet before sharing |
-| `share_other.go` | `!darwin && !android` no-op stubs for `nativeShareText` / `nativeShareImage` (Android's live in `reading_android.go`) |
+| `share_other.go` | `!darwin && !android` `nativeShareText` / `nativeShareImage` for Linux and Windows, wrapping the fallback bodies in `share_fallback.go` (the Apple platforms' live in `reading_macos.go` / `reading_ios.go`, Android's in `reading_android.go`; each platform's mechanism is in `docs/PLATFORM_MATRIX.md`, Sharing) |
+| `share_fallback.go` | `!ios && !android` the desktop fallback: text to the clipboard with a short notice (`showShareNotice`), the image saved to Downloads and revealed in the file manager; also reached on macOS by the platform-mimic dev mode |
 | `share_link_argv.go` | Windows/Linux link intake: the first site URL on the command line (`bibletext:` swapped for https, parsed, capped) delivered through `HandleShareLink`; a declined URL goes to the browser (invariant I2) |
 | `single_instance.go` + `_on/_off/_windows/_linux/_other` | one window per reader on Windows/Linux: exclusive record under the cache dir, loopback handshake (nonce → HMAC → token+URL → ok/no), forward-and-exit or listen; compiled in only for `windows || linux || bibletextdev` |
 | `share_link_echo.go`, `share_link_browser_command.go`, `share_link_browser_windows.go` | the loop-safe browser opener: the default browser's own command via the association API on Windows, the toolkit route as fallback with an echo guard so the Store build's web-to-app handler cannot catch the app's own hop |
@@ -614,8 +615,13 @@ From the selection menu ([share.go](share.go), dispatched by
 
 Both hand off to the device's native share sheet on iOS / macOS / Android (the
 Android share `Intent` goes through the bridge — `nativeShareText` /
-`nativeShareImage` in [reading_android.go](reading_android.go));
-[share_other.go](share_other.go) provides graceful no-ops on Linux/Windows.
+`nativeShareImage` in [reading_android.go](reading_android.go)). Linux and
+Windows open no system share sheet today: [share_other.go](share_other.go)
+routes text to the clipboard with a 1.4-second notice and saves the image to
+Downloads, opening the file manager on it
+([share_fallback.go](share_fallback.go)). What each verb does on each
+platform, and the planned Windows and Linux sheets, are recorded in
+[docs/PLATFORM_MATRIX.md](docs/PLATFORM_MATRIX.md), Sharing.
 
 ### iPad typography: the U.S. Reports layout
 

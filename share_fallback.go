@@ -31,6 +31,7 @@ import (
 
 // fallbackShareText copies the composed quote+citation to the clipboard with a
 // brief confirmation notice — ready to paste anywhere.
+// Each platform's share mechanism is recorded in docs/PLATFORM_MATRIX.md, Sharing.
 func fallbackShareText(s string) {
 	state := activeAIState
 	if state == nil || state.window == nil {
@@ -46,6 +47,7 @@ func fallbackShareText(s string) {
 
 // fallbackShareImage saves the rendered PNG to ~/Downloads (falling back to the
 // temp copy) and reveals it in the file manager.
+// Each platform's share mechanism is recorded in docs/PLATFORM_MATRIX.md, Sharing.
 func fallbackShareImage(path string) {
 	state := activeAIState
 	// The renderer writes to a temp file; move the share into ~/Downloads under

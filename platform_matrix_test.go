@@ -12,10 +12,15 @@ package bibletext
 // describing a repository that has moved on.
 
 import (
+	"go/ast"
+	"go/build"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -351,5 +356,303 @@ func TestEveryCmdPathInTheBuildNamesADirectoryThatExists(t *testing.T) {
 	if checked < 50 {
 		t.Errorf("only %d cmd/ references were examined; the build references far more than that, "+
 			"so the scan is no longer looking where it thinks it is", checked)
+	}
+}
+
+// WHAT SHARE DOES IS DECIDED BY ONE FILE PER PLATFORM.
+//
+// Every share verb ends in nativeShareText or nativeShareImage, and exactly
+// one file defines each for a given release build: the Apple and Android
+// panes present their system share sheets, and share_other.go gives Linux and
+// Windows the clipboard fallback. docs/PLATFORM_MATRIX.md's Sharing table
+// records what each platform's verbs do, and its Defined in column names that
+// file. This holds the column to the code in both directions: a platform moved
+// to a new share implementation (the planned Windows sheet is the first) fails
+// here until its row names the new file, and a row edited to name a file the
+// build does not use fails too.
+//
+// The definitions are resolved the way the go command resolves them, with
+// go/build's file matching under each platform's GOOS, every architecture it
+// ships and the tags its release line passes — not by reading the build
+// constraints by eye, which is how a file comes to be believed to cover a
+// platform it does not: a file constrained to linux is compiled into the
+// Android build too, since android satisfies the linux constraint.
+
+// sharingRows are the Sharing table's rows and how each platform's release is
+// built. buildFile and buildLine name the release command the GOOS and tags
+// were read from, so a release line that changes shape fails here instead of
+// leaving the resolution below answering for a build nobody runs.
+var sharingRows = []struct {
+	row, goos            string
+	arches, tags         []string
+	buildFile, buildLine string
+}{
+	// A plain cross-compile with no -tags; GOOS=ios satisfies both the ios
+	// and the darwin constraints, as it does for the go command. iPadOS is the
+	// same universal binary.
+	{"iOS", "ios", []string{"arm64"}, nil, "scripts/release-ios.sh", "GOOS=ios GOARCH=arm64"},
+	{"iPadOS", "ios", []string{"arm64"}, nil, "scripts/release-ios.sh", "GOOS=ios GOARCH=arm64"},
+	// Universal: both slices are compiled.
+	{"macOS", "darwin", []string{"arm64", "amd64"}, nil, "scripts/release-mac-store.sh", "package -os darwin"},
+	// The fyne tool adds the release tag to `fyne release`, and
+	// build-android.sh refuses extra tags on a release build. The four ABIs
+	// the AAB carries; the universal APK is built from the AAB.
+	{"Android", "android", []string{"arm64", "arm", "386", "amd64"}, []string{"release"}, "scripts/build-android.sh", "fyne release -os android"},
+	{"Windows", "windows", []string{"amd64", "arm64"}, []string{"gles"}, "scripts/build-windows-exe.sh", "go build -tags gles"},
+	{"Linux", "linux", []string{"amd64", "arm64"}, nil, ".github/workflows/release.yml", "package -os linux"},
+}
+
+var shareEntryPoints = []string{"nativeShareText", "nativeShareImage"}
+
+func TestTheSharingTableNamesTheFileThatSharesOnEachPlatform(t *testing.T) {
+	root := repoRoot(t)
+	table := sharingTable(t)
+
+	// The table has exactly the rows this test resolves: a platform dropped
+	// from the table, or one added without a build to resolve it against,
+	// fails rather than going unchecked.
+	var want, got []string
+	for _, r := range sharingRows {
+		want = append(want, r.row)
+	}
+	for row := range table {
+		got = append(got, row)
+	}
+	sort.Strings(want)
+	sort.Strings(got)
+	if strings.Join(want, ",") != strings.Join(got, ",") {
+		t.Fatalf("the Sharing table's rows are %v, want %v", got, want)
+	}
+
+	defs := shareDefinitions(t, root)
+	named := regexp.MustCompile("`([A-Za-z0-9_./-]+\\.go)`")
+	proof := regexp.MustCompile("^`(hardware|field|runner|builds|none)`.*\\b20\\d\\d\\b")
+
+	for _, r := range sharingRows {
+		if !strings.Contains(readRepoFile(t, r.buildFile), r.buildLine) {
+			t.Errorf("%s: %s no longer contains %q, the release line this row's GOOS and tags were read from",
+				r.row, r.buildFile, r.buildLine)
+		}
+
+		// One file per entry point, and the same one on every architecture.
+		files := map[string]bool{}
+		for _, arch := range r.arches {
+			ctx := build.Default
+			ctx.GOOS, ctx.GOARCH, ctx.BuildTags, ctx.CgoEnabled = r.goos, arch, r.tags, true
+			for _, fn := range shareEntryPoints {
+				var in []string
+				for file, d := range defs {
+					if d.defines[fn] {
+						ok, err := ctx.MatchFile(root, file)
+						if err != nil {
+							t.Fatalf("matching %s for %s/%s: %v", file, r.goos, arch, err)
+						}
+						if ok {
+							in = append(in, file)
+						}
+					}
+				}
+				sort.Strings(in)
+				if len(in) != 1 {
+					t.Errorf("%s (%s/%s, tags %v): %s is defined in %d files %v, want exactly one",
+						r.row, r.goos, arch, r.tags, fn, len(in), in)
+					continue
+				}
+				files[in[0]] = true
+			}
+		}
+
+		var code []string
+		for f := range files {
+			code = append(code, f)
+		}
+		sort.Strings(code)
+
+		cells := table[r.row]
+		var doc []string
+		seen := map[string]bool{}
+		for _, m := range named.FindAllStringSubmatch(cells["Defined in"], -1) {
+			if !seen[m[1]] {
+				seen[m[1]] = true
+				doc = append(doc, m[1])
+			}
+		}
+		sort.Strings(doc)
+		if strings.Join(code, ",") != strings.Join(doc, ",") {
+			t.Errorf("%s: the Sharing table says the share verbs are defined in %v, but the %s release build "+
+				"takes nativeShareText and nativeShareImage from %v; update the row (and what it says the "+
+				"verbs do) or the code", r.row, doc, r.goos, code)
+		}
+		if !proof.MatchString(cells["Proof"]) {
+			t.Errorf("%s: the Proof cell %q does not open with a proof level from the vocabulary and carry a date",
+				r.row, cells["Proof"])
+		}
+	}
+
+	// Whichever file a platform shares from points back at the table, so a
+	// new implementation arrives with the pointer as well as the row.
+	for file, d := range defs {
+		for fn, ok := range d.defines {
+			if ok && !strings.Contains(d.doc[fn], "docs/PLATFORM_MATRIX.md, Sharing") {
+				t.Errorf("%s: %s has no comment pointing to docs/PLATFORM_MATRIX.md, Sharing", file, fn)
+			}
+		}
+	}
+}
+
+type shareDefinition struct {
+	defines map[string]bool
+	doc     map[string]string
+}
+
+// shareDefinitions finds every non-test file in the package that defines a
+// share entry point at top level, as a function or a variable, whatever its
+// build constraints. Only files that mention a name are parsed.
+func shareDefinitions(t *testing.T, root string) map[string]shareDefinition {
+	t.Helper()
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatalf("reading %s: %v", root, err)
+	}
+	out := map[string]shareDefinition{}
+	fset := token.NewFileSet()
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		src, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil {
+			t.Fatalf("reading %s: %v", name, err)
+		}
+		if !strings.Contains(string(src), "nativeShare") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, name, src, parser.ParseComments|parser.SkipObjectResolution)
+		if err != nil {
+			t.Fatalf("parsing %s: %v", name, err)
+		}
+		d := shareDefinition{defines: map[string]bool{}, doc: map[string]string{}}
+		for _, decl := range f.Decls {
+			switch decl := decl.(type) {
+			case *ast.FuncDecl:
+				if decl.Recv == nil {
+					d.defines[decl.Name.Name] = true
+					d.doc[decl.Name.Name] = decl.Doc.Text()
+				}
+			case *ast.GenDecl:
+				for _, spec := range decl.Specs {
+					if vs, ok := spec.(*ast.ValueSpec); ok {
+						for _, id := range vs.Names {
+							d.defines[id.Name] = true
+							d.doc[id.Name] = decl.Doc.Text() + vs.Doc.Text()
+						}
+					}
+				}
+			}
+		}
+		keep := shareDefinition{defines: map[string]bool{}, doc: map[string]string{}}
+		for _, fn := range shareEntryPoints {
+			if d.defines[fn] {
+				keep.defines[fn] = true
+				keep.doc[fn] = d.doc[fn]
+			}
+		}
+		if len(keep.defines) > 0 {
+			out[name] = keep
+		}
+	}
+	return out
+}
+
+// sharingTable reads the first table under docs/PLATFORM_MATRIX.md's
+// "## Sharing" heading into row name -> column name -> cell.
+func sharingTable(t *testing.T) map[string]map[string]string {
+	t.Helper()
+	doc := readRepoFile(t, "docs/PLATFORM_MATRIX.md")
+	start := strings.Index(doc, "\n## Sharing\n")
+	if start < 0 {
+		t.Fatal("docs/PLATFORM_MATRIX.md has no \"## Sharing\" section")
+	}
+	section := doc[start+1:]
+	if next := strings.Index(section[1:], "\n## "); next >= 0 {
+		section = section[:next+1]
+	}
+	split := func(line string) []string {
+		line = strings.TrimSpace(line)
+		line = strings.TrimSuffix(strings.TrimPrefix(line, "|"), "|")
+		cells := strings.Split(line, "|")
+		for i := range cells {
+			cells[i] = strings.TrimSpace(cells[i])
+		}
+		return cells
+	}
+	var header []string
+	rows := map[string]map[string]string{}
+	for _, line := range strings.Split(section, "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "|") {
+			if header != nil {
+				break // the table has ended
+			}
+			continue
+		}
+		cells := split(line)
+		if header == nil {
+			header = cells
+			continue
+		}
+		if strings.HasPrefix(cells[0], "---") {
+			continue
+		}
+		if len(cells) != len(header) {
+			t.Fatalf("Sharing table row %q has %d cells, the header %d", cells[0], len(cells), len(header))
+		}
+		row := map[string]string{}
+		for i, c := range cells {
+			row[header[i]] = c
+		}
+		rows[cells[0]] = row
+	}
+	for _, col := range []string{"Platform", "Share with note", "Share with citation", "Share as link",
+		"Share as image", "Verse of the day", "Defined in", "Proof"} {
+		found := false
+		for _, h := range header {
+			found = found || h == col
+		}
+		if !found {
+			t.Errorf("the Sharing table has no %q column (header %v)", col, header)
+		}
+	}
+	return rows
+}
+
+// A LINE NUMBER IN A DOCUMENT IS A CLAIM ABOUT CODE THAT MOVES.
+//
+// The matrix cites the cause of a divergence down to the line, in the form
+// `file.go:N` (`what is on that line`). The quoted code is what makes such a
+// citation checkable: a comment added above it, or a function moved, shifts
+// the line, and the citation then points at something else while still
+// reading as precise. So the quoted code must still be on the cited line.
+func TestPlatformMatrixLineCitationsStillPointAtTheirCode(t *testing.T) {
+	doc := readRepoFile(t, "docs/PLATFORM_MATRIX.md")
+	// Line-wrapped prose can put the quoted code on the next line.
+	doc = regexp.MustCompile(`\s+`).ReplaceAllString(doc, " ")
+	cite := regexp.MustCompile("`([A-Za-z0-9_./-]+\\.go):(\\d+)` \\(`([^`]+)`\\)")
+	matches := cite.FindAllStringSubmatch(doc, -1)
+	if len(matches) < 8 {
+		t.Fatalf("only %d line citations found; the extraction is broken, so this test proves nothing", len(matches))
+	}
+	for _, m := range matches {
+		file, code := m[1], m[3]
+		n, _ := strconv.Atoi(m[2])
+		lines := strings.Split(readRepoFile(t, file), "\n")
+		if n < 1 || n > len(lines) {
+			t.Errorf("docs/PLATFORM_MATRIX.md cites %s:%d, but the file has %d lines", file, n, len(lines))
+			continue
+		}
+		if !strings.Contains(lines[n-1], code) {
+			t.Errorf("docs/PLATFORM_MATRIX.md cites %s:%d as %q, but that line is now %q",
+				file, n, code, strings.TrimSpace(lines[n-1]))
+		}
 	}
 }

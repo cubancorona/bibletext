@@ -14,6 +14,8 @@ package bibletext
 //   - Share as image      → the rendered PNG is saved to ~/Downloads (falling
 //     back to the temp copy) and revealed in the file manager.
 
+// Each platform's share mechanism is recorded in docs/PLATFORM_MATRIX.md, Sharing.
 func nativeShareText(s string) { fallbackShareText(s) }
 
+// Each platform's share mechanism is recorded in docs/PLATFORM_MATRIX.md, Sharing.
 func nativeShareImage(path string) { fallbackShareImage(path) }

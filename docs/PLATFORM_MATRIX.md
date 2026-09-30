@@ -1,7 +1,9 @@
 # Platform matrix
 
 What BibleText can be built and shipped as, on which architecture, through
-which channel — and **how well each of those is actually proven**.
+which channel — and **how well each of those is actually proven**. One feature
+has a table of its own, [Sharing](#sharing), because Share is the verb whose
+mechanism differs on every platform.
 
 This is a capability map, not a status board. It does not track store review
 state or which version is live; the release ledger and `linux/releases.toml`
@@ -243,6 +245,45 @@ place a fix on one does not reach the others.
     LAUNCH: driving a GUI app needs a console session, and SSH cannot supply
     one, so the shipped rows stay `builds`.
 
+**Linux and Windows**
+
+27. **Open: Linux and Windows have no system share sheet, so the text verbs
+    copy to the clipboard with a 1.4 s notice.** `share_other.go:1`
+    (`//go:build !darwin && !android`) gives both platforms the desktop
+    fallback: `share_other.go:18` (`fallbackShareText(s)`) and
+    `share_other.go:21` (`fallbackShareImage(path)`). `go list` for linux and
+    windows, amd64 and arm64, with and without `-tags gles`, takes the two
+    verbs from `share_other.go` and `share_fallback.go` and compiles none of
+    `reading_macos.go`, `reading_ios.go` or `reading_android.go`. Every text
+    verb ends in
+    `share.go:220` (`var shareTextOut`), and the fallback copies,
+    `share_fallback.go:44` (`cb.SetContent(s)`), then flashes a notice,
+    `share_fallback.go:45` (`showShareNotice(state, "Copied to the clipboard")`).
+    The notice is weak by construction: 13 pt text,
+    `share_fallback.go:146` (`txt.TextSize = 13`), on a card barely
+    distinguishable from the page, `share_fallback.go:147` (`pal.SurfaceAlt`) — 1.07:1
+    against the page in light, about 1.2:1 in dark, where 3:1 is the
+    non-text guideline — at the window's foot,
+    `share_fallback.go:150` (`cnv.Size().Height-sz.Height-28`), gone after
+    1.4 s, `share_fallback.go:151` (`time.AfterFunc(1400*time.Millisecond`),
+    or at the next click anywhere, since it is a non-modal pop-up. On Share
+    with note it lands in the frame where the composer closes,
+    `share_note_ui.go:285` (`closeSheet()`), and the "Note from you" card
+    draws at the top of the passage,
+    `share_note_ui.go:287` (`showSentNote(state, stored, at)`), so the eye is
+    elsewhere while it shows.
+
+    It is not silent — the notice fires and, left alone, lasts its full
+    1.4 s — but it
+    reads as nothing happening, which is a poor fit with the rule
+    `docs/BACKLOG.md` records with the Android Share as image fix: *"A share
+    the reader started cannot end in silence, whatever the cause."* Share as
+    image is not part of it: it saves the PNG to Downloads and opens the file
+    manager on it. *Risk:* a reader on either platform presses Share, sees the
+    menu or the composer close, and concludes the app did nothing; the note
+    they wrote waits on a clipboard they do not know about. The planned fix for
+    each platform is under [Sharing](#sharing), Planned.
+
 ## Deliberate exclusions
 
 Decisions, with the reason — so that none of these is ever mistaken for
@@ -298,3 +339,90 @@ The honest to-do list, in proof-level terms.
   local Windows ARM VM is the machine that could change that.
 - The owner's outstanding Linux hardware pass needs **an x86_64 machine or a
   cloud desktop**: the arm64 VM explicitly cannot stand in for it.
+- **Share has been watched on two platforms of six.** Linux on the arm64 VM
+  and Android on the emulator; macOS, iOS, iPadOS and Windows are recorded
+  from the code (see [Sharing](#sharing)). The iPad and Mac rows carry
+  anchoring that is probable from the code and has not been seen.
+
+## Sharing
+
+What each Share verb does on each platform: the mechanism, and what the
+reader sees. Every text verb — Share with note, Share with citation, Share as
+link, and the Share icon on the verse of the day — ends in `shareTextOut`
+(`share.go`), which calls `nativeShareText`; Share as image goes through the
+preview sheet (`share_preview.go`) to `nativeShareImage`. The file that
+defines those two functions for a platform's release build decides its row,
+and **Defined in** names it.
+`TestTheSharingTableNamesTheFileThatSharesOnEachPlatform`
+(`platform_matrix_test.go`) resolves the two definitions for each row with
+that platform's GOOS, every architecture it ships and its release build tags,
+and fails when the row and the code disagree in either direction — a platform
+moved to a new share implementation with the row left alone, or a row edited
+with the code left alone. Numbers in a cell are divergences.
+
+Recorded 29–30 September 2026, from the share code as it shipped in 1.2.17.
+
+| Platform | Share with note | Share with citation | Share as link | Share as image | Verse of the day | Defined in | Proof |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| iOS | System share sheet, over the new note card | System share sheet | System share sheet | Preview, then the system share sheet | System share sheet | `reading_ios.go` | `builds` — code reading, 29–30 September 2026 |
+| iPadOS | Share popover; probably points mid-page rather than at the selection | Share popover at the selection | Share popover at the selection | Preview, then a share popover; probably mid-page | Share popover, anchored to the hidden reading view | `reading_ios.go` | `builds` — code reading, 29–30 September 2026 |
+| macOS | Share picker at the selection; the note card appears beneath | Share picker at the selection | Share picker at the selection | Preview, then the share picker with the image | Share picker, anchored to the hidden reading view | `reading_macos.go` | `builds` — code reading, 29–30 September 2026 |
+| Android | The note card, then the "Sharing text" sheet with the note, citation and link | "Sharing text" sheet with the quote and citation | "Sharing text" sheet with the link | Preview, then the "Sharing image" sheet | "Sharing text" sheet, by the citation's route; not driven | `reading_android.go` | `runner` — emulator, 1.2.17, 29–30 September 2026 |
+| Windows | Copied to the clipboard; a 1.4 s notice (27) | Copied; a 1.4 s notice (27) | Copied; a 1.4 s notice (27) | Saved to Downloads; Explorer opens with it selected | Copied; a 1.4 s notice (27) | `share_other.go` | `builds` — build tags and `go list`, 29–30 September 2026 |
+| Linux | Copied; a 1.4 s notice at the window's foot as the note card draws (27) | Copied; a 1.4 s notice (27) | Copied; a 1.4 s notice (27) | Saved to ~/Downloads; the file manager opens on the folder | Copied; a 1.4 s notice (27); not driven | `share_other.go` | `hardware` — arm64 VM, X11, 29–30 September 2026 |
+
+What each proof rests on:
+
+- **Linux, `hardware`.** A build of the audited tree on the arm64 VM's GNOME
+  X11 desktop (divergence 25's machine), recorded at 10 frames a second: the
+  composer closes, the note card draws and the chapter moves down, and the
+  notice shows for 14 frames. Dark mode on the desktop; light mode and the
+  contrast figures come from the test driver on the Linux build tags. Not the
+  installed snap, whose share code is the same; not Wayland; the verse of the
+  day not driven.
+- **Android, `runner`.** The 1.2.17 build on the emulator. A simulator is not
+  hardware (divergence 9), and an emulator is not either. Every verb but the
+  verse of the day was driven to its share sheet; no share target was tapped.
+- **macOS, iOS and iPadOS, `builds`.** Read from the code; nothing was
+  launched for this table. The iPad popovers that are "probably" mid-page and
+  the verse-of-the-day anchoring on iPad and Mac are recorded in
+  `docs/BACKLOG.md` to be seen on a device.
+- **Windows, `builds`.** Read from the build tags and `go list`; the Windows
+  VM was not started. It runs the Linux code, but for the file manager the
+  image share opens: Explorer, with the file selected.
+
+### Planned
+
+- **Windows: the native Share sheet — decided 30 September 2026, not built.**
+  Every verb opens the Windows Share UI beside the window, as the picker does
+  on macOS: `IDataTransferManagerInterop` gives the window's
+  DataTransferManager (`GetForWindow`), a `DataRequested` handler fills the
+  package (`SetText`, `SetWebLink`, `SetStorageItems`), and
+  `ShowShareUIForWindow` opens it
+  (https://learn.microsoft.com/en-us/windows/apps/develop/windows-integration/integrate-sharesheet-send).
+  Files: a new *share_windows.go* defines `nativeShareText` and
+  `nativeShareImage`; `share_other.go` narrows to exclude windows;
+  `share_fallback.go` stays behind the sheet for a share UI that fails; the
+  window handle is reached as `title_bar_windows.go` reaches it; and the
+  Windows row above, which the test holds to whichever file defines the two
+  functions. Whether the unpackaged zip can open the sheet as the MSIX can is
+  to be proven on the Windows VM. The route, its constraints and its sources
+  are in `docs/BACKLOG.md`, "Windows: use the native Share sheet".
+- **Linux: an in-app share sheet in place of the notice — proposed
+  30 September 2026; the wording is not yet approved.** Share with note, with
+  citation and as link open one modal sheet in the app, showing the text
+  already copied, with Copy and Done, and Email… handing the text to the mail
+  client through the xdg-desktop-portal Email portal (`ComposeEmail`),
+  falling back to `xdg-email` and then a `mailto:` link. Share as image keeps
+  its save and reveal and gains Email… with the image attached. Linux has no
+  system sheet to call instead: xdg-desktop-portal has no Share portal, and
+  the request for one has been open since 2016
+  (https://github.com/flatpak/xdg-desktop-portal/issues/12; the portal list,
+  https://flatpak.github.io/xdg-desktop-portal/docs/api-reference.html).
+  Files: `share_fallback.go` (`fallbackShareText` opens the sheet in place of
+  `showShareNotice`), a new file beside it for the sheet, a Linux-only file
+  for the portal call, `sheet_reopen.go` (a real sheet, which a light/dark
+  rebuild reopens rather than closing it as it closes the notice), and
+  `share_other.go` once Windows leaves it. The draft wording and the open
+  questions are in `docs/BACKLOG.md`, "Linux: an in-app share sheet in place
+  of the 1.4-second notice".

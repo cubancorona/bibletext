@@ -980,6 +980,7 @@ func openLinkInBrowser(rawURL string) {
 	})
 }
 
+// Each platform's share mechanism is recorded in docs/PLATFORM_MATRIX.md, Sharing.
 func nativeShareText(s string) {
 	runBta(func(env uintptr) {
 		cs := C.CString(s)
@@ -988,6 +989,7 @@ func nativeShareText(s string) {
 	})
 }
 
+// Each platform's share mechanism is recorded in docs/PLATFORM_MATRIX.md, Sharing.
 func nativeShareImage(path string) {
 	runBta(func(env uintptr) {
 		cs := C.CString(path)

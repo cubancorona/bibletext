@@ -359,8 +359,11 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
 ## V12 — sharing and links
 
 - [ ] Share with citation: quote keeps authored poetry breaks; the
-      citation spells the version in full. The styled pane copies to the
-      clipboard with a notice instead of a sheet — expected.
+      citation spells the version in full. On Windows and Linux the styled
+      pane copies to the clipboard with a 1.4 s notice instead of a sheet.
+      That is what ships, not what is wanted: it is open divergence 27 in
+      docs/PLATFORM_MATRIX.md, and the fix for each platform is under
+      Sharing there. Until it lands, check the notice appears and reads.
 - [ ] Share as image: the preview modal appears BEFORE anything leaves the
       app; Regenerate cycles schemes; the native overlay must not paint
       over the modal; the same verse always opens on the same look.
