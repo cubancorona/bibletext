@@ -13,6 +13,7 @@ package bibletext
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -175,18 +176,111 @@ func waitParked[T any](t *testing.T, started chan T, what string) {
 	}
 }
 
-// desktopWindow lays the real window out at size on a fresh test app.
-func desktopWindow(t *testing.T, size fyne.Size) (*AppState, fyne.Window) {
+// desktopApp is a test app wearing the real theme, for desktop windows to be
+// laid out on.
+type desktopApp struct {
+	app fyne.App
+	th  *bibleTheme
+	// windows is what the app had open when it started, the one window the
+	// test driver opens for itself, and sizes and contents what each had.
+	windows  []fyne.Window
+	sizes    []fyne.Size
+	contents []fyne.CanvasObject
+}
+
+// newDesktopApp starts a test app and gives it the real theme.
+func newDesktopApp(t *testing.T) *desktopApp {
 	t.Helper()
 	app := test.NewApp()
 	t.Cleanup(app.Quit)
 	th := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 	app.Settings().SetTheme(th)
+	d := &desktopApp{app: app, th: th}
+	for _, w := range app.Driver().AllWindows() {
+		d.windows = append(d.windows, w)
+		d.sizes = append(d.sizes, w.Canvas().Size())
+		d.contents = append(d.contents, w.Content())
+	}
+	return d
+}
+
+// asNew puts d back as newDesktopApp left it, apart from what the toolkit has
+// cached, and fails where it cannot. It takes off the two things a case may
+// leave on an app that a new one does not have, preferences set and text on
+// the clipboard (opening Settings stores the text size it shows), and fails
+// unless the rest is as it started: the same current app, the same theme,
+// and no window open but the driver's own, at the size and with the content
+// it had.
+//
+// The sheet sweeps lay every case out on one app rather than starting one
+// per case. Starting a test app throws away the toolkit's parsed font faces
+// and measured text, and parsing and measuring again from nothing was most of
+// what laying a window out cost. What comes back from those caches is what
+// measuring afresh gives: a measure is keyed on the text, its size and style
+// and the font resource it names, and with no resource named it is made in
+// the app's theme, which is the same one for every case. So each case begins
+// here, and nothing else a case might leave on the app carries into the next.
+func (d *desktopApp) asNew(t *testing.T) {
+	t.Helper()
+	if fyne.CurrentApp() != d.app {
+		t.Fatal("another app has replaced the test app the sweep shares")
+	}
+	if th := d.app.Settings().Theme(); th != fyne.Theme(d.th) {
+		t.Fatalf("the shared app wears %T, not the theme it was given", th)
+	}
+	ws := d.app.Driver().AllWindows()
+	if !slices.Equal(ws, d.windows) {
+		t.Fatalf("the shared app has %d windows open, where it started with %d: an earlier case left one open",
+			len(ws), len(d.windows))
+	}
+	for i, w := range ws {
+		if w.Canvas().Size() != d.sizes[i] || w.Content() != d.contents[i] {
+			t.Fatalf("an earlier case changed the test driver's own window")
+		}
+	}
+	prefs := d.app.Preferences()
+	values, ok := prefs.(interface{ ReadValues(func(map[string]any)) })
+	if !ok {
+		t.Fatalf("the shared app's preferences (%T) cannot be read back", prefs)
+	}
+	keys := func() []string {
+		var set []string
+		values.ReadValues(func(m map[string]any) {
+			for k := range m {
+				set = append(set, k)
+			}
+		})
+		return set
+	}
+	for _, k := range keys() {
+		prefs.RemoveValue(k)
+	}
+	if left := keys(); len(left) > 0 {
+		t.Fatalf("preferences %v stay set on the shared app", left)
+	}
+	d.app.Clipboard().SetContent("")
+	if c := d.app.Clipboard().Content(); c != "" {
+		t.Fatalf("the shared app's clipboard still holds %q", c)
+	}
+}
+
+// desktopWindow lays the real window out at size on a fresh test app.
+func desktopWindow(t *testing.T, size fyne.Size) (*AppState, fyne.Window) {
+	t.Helper()
+	return newDesktopApp(t).window(t, size)
+}
+
+// window lays the real window out at size, on a fresh state, on d.
+func (d *desktopApp) window(t *testing.T, size fyne.Size) (*AppState, fyne.Window) {
+	t.Helper()
+	if fyne.CurrentApp() != d.app {
+		t.Fatal("another app has replaced the test app this window is for")
+	}
 	st := sampleState()
 	w := test.NewWindow(nil)
 	t.Cleanup(w.Close)
 	w.Resize(size)
-	st.window, st.app, st.theme = w, app, th
+	st.window, st.app, st.theme = w, d.app, d.th
 	// No assistant key: Settings would fetch the provider's model list for
 	// one. The study request never reads it; it is parked (desktopSheets).
 	st.aiKeys = newKeyStoreWith(newFakePrefs())
@@ -230,6 +324,7 @@ func wantClearOfHeader(t *testing.T, st *AppState, w fyne.Window, popup *widget.
 
 func TestDesktopSheetsOpenBelowTheHeader(t *testing.T) {
 	sheets := desktopSheets(t)
+	app := newDesktopApp(t)
 	for _, win := range []fyne.Size{
 		{Width: 1280, Height: 800}, // the window the arc was seen in
 		{Width: 1280, Height: 860}, // the size the app asks for at launch
@@ -242,7 +337,8 @@ func TestDesktopSheetsOpenBelowTheHeader(t *testing.T) {
 	} {
 		for _, sh := range sheets {
 			t.Run(fmt.Sprintf("%.0fx%.0f/%s", win.Width, win.Height, sh.name), func(t *testing.T) {
-				st, w := desktopWindow(t, win)
+				app.asNew(t)
+				st, w := app.window(t, win)
 				popup := pickerPopup(t, st, func(s *AppState) { sh.open(t, s) })
 				defer popup.Hide()
 				wantClearOfHeader(t, st, w, popup)
@@ -258,6 +354,7 @@ func TestDesktopSheetsOpenBelowTheHeader(t *testing.T) {
 // in a short window takes the room a taller one gives it.
 func TestDesktopSheetsRefitWhenTheWindowResizes(t *testing.T) {
 	sheets := desktopSheets(t)
+	app := newDesktopApp(t)
 	for _, rs := range []struct {
 		why      string
 		from, to fyne.Size
@@ -276,13 +373,14 @@ func TestDesktopSheetsRefitWhenTheWindowResizes(t *testing.T) {
 	} {
 		for _, sh := range sheets {
 			t.Run(fmt.Sprintf("%.0fx%.0f to %.0fx%.0f/%s", rs.from.Width, rs.from.Height, rs.to.Width, rs.to.Height, sh.name), func(t *testing.T) {
+				app.asNew(t)
 				// Where the sheet sits when it opens in a window of the new size.
-				fst, _ := desktopWindow(t, rs.to)
+				fst, _ := app.window(t, rs.to)
 				fresh := pickerPopup(t, fst, func(s *AppState) { sh.open(t, s) })
 				wantTop, wantBottom := sheetBox(t, fresh)
 				fresh.Hide()
 
-				st, w := desktopWindow(t, rs.from)
+				st, w := app.window(t, rs.from)
 				popup := pickerPopup(t, st, func(s *AppState) { sh.open(t, s) })
 				defer popup.Hide()
 				w.Resize(rs.to)
