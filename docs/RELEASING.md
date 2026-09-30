@@ -390,8 +390,18 @@ One action covers every architecture and refuses a partial set.
 ### 11 — Link anything newly live, then publish the site
 
 If a channel has gone live for the **first** time, add it to `docs/index.html`
-and `README.md` **before** publishing. `check-public-surfaces.py` cannot catch
-this: a new store is not a new release asset, so nothing fails.
+and `README.md` **before** publishing, and draft its line for the release
+notes, the `NOTES` printf in `.github/workflows/release.yml`, for the account
+holder to accept, since the GitHub release notes are their copy. The printf is
+read when a tag is pushed, so the line reaches the next release's notes; one
+already published changes only by `gh release edit`, a change to a public page
+that waits for their word. The printf is also its own format string, so the
+line carries no single quote and no percent sign. `check-public-surfaces.py`
+cannot catch a missing channel: a new store is not a new release asset, so
+nothing fails. It holds Google Play in all three places only because it names
+Play; it does not know the next store. Play went live on 30 September 2026,
+the page and the README linked it that day, and the release notes, which this
+stage did not then name, went on offering Android readers only the APK.
 
 ```
 scripts/publish-site.sh --dry-run    # drift report

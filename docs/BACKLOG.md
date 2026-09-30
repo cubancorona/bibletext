@@ -1250,10 +1250,30 @@ self-test takes each of the three places without the link, with a listing
 for another app whose id begins with the product's, and with the link only
 in a comment, and passes a link with parameters after the id.
 
-Still open: the new notes reach readers from the next tag. The releases
-already published keep the old ones, the latest (v1.2.17) among them, until
-each is edited with `gh release edit`, a change to a public page that is not
-made without the account holder's word.
+The same day the release sequence gained the step this drift slipped
+through: a channel that goes live for the first time is drafted into the
+notes' printf as well as linked from the page and the README
+(`docs/RELEASING.md` stage 11, `docs/APP_STORE_SUBMISSION.md` step 9), and
+`CONTRIBUTING.md` describes the checker's Play rule beside its Microsoft Store
+one.
+
+Still open:
+
+- The new notes reach readers from the next tag. The releases already
+  published keep the old ones, the latest (v1.2.17) among them, until each is
+  edited with `gh release edit`, a change to a public page that is not made
+  without the account holder's word.
+- The notes name a store for iOS and for Android only. They call the App
+  Store link an iOS one though the same listing is the Mac App Store edition,
+  and they tell Windows readers nothing of the Microsoft Store (live since
+  1.2.10, signed, updates itself) and Linux readers nothing of the snap, all
+  three of which the README and the download page link; a desktop reader
+  sees only the unsigned downloads and the macOS warning steps. It is the
+  drift above on the other platforms, older than it and outside what was
+  fixed, and the notes are the account holder's copy, so it waits for their
+  decision. Once the notes name every store the page does, the checker could
+  require exactly that, which would catch the next channel to go live in the
+  notes without being told its name.
 
 Whether a Play-signed install verifies its App Links is answered: on
 30 September 2026 a Pixel with 1.2.17 from Google Play reported

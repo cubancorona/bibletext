@@ -138,8 +138,13 @@ requirement without an edit to the checker.
 
 A store is different from a download and needs its own step. The checker holds
 any Microsoft Store link on either page equal to the `storeUrl` in
-`msstore/identity.json`, so a typed or moved id fails — but it cannot know
-that a listing went live and ought to be linked at all. That belongs to the
+`msstore/identity.json`, so a typed or moved id fails. For Google Play it
+goes further, because the page offers Android readers no APK: the release
+notes' printf in `release.yml`, the download page and the README must each
+link the Play listing, counting only what a reader is shown there (a link in
+a comment does not count), and a Play link to any package but the `appID` in
+`config/product.json` fails. Beyond the stores it names, it cannot know that
+a listing went live and ought to be linked at all. That belongs to the
 release sequence in `docs/APP_STORE_SUBMISSION.md`, which now carries it.
 
 What none of it can do is notice that a true sentence has become a stale one.
