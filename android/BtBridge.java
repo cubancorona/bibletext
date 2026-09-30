@@ -3508,15 +3508,28 @@ public final class BtBridge {
         if (cs instanceof Spannable) Selection.removeSelection((Spannable) cs);
     }
 
-    /** shareText opens the system share sheet for "Share with citation". */
+    /**
+     * shareText opens the system share sheet for every text verb: Share with
+     * note, Share with citation, Share as link and the verse of the day's
+     * Share. A share the reader started must not end in silence (shareNotice),
+     * so a chooser that cannot start says so, as shareImage's does. Uncaught,
+     * the failure was thrown on the UI thread, out of this Runnable, and took
+     * the app down with it. With no activity there is nothing to show a
+     * message on, and the return stays bare.
+     */
     public static void shareText(final String body) {
         UI.post(new Runnable() {
             @Override public void run() {
                 if (activity == null) return;
-                Intent i = new Intent(Intent.ACTION_SEND);
-                i.setType("text/plain");
-                i.putExtra(Intent.EXTRA_TEXT, body);
-                activity.startActivity(Intent.createChooser(i, null));
+                try {
+                    Intent i = new Intent(Intent.ACTION_SEND);
+                    i.setType("text/plain");
+                    i.putExtra(Intent.EXTRA_TEXT, body);
+                    activity.startActivity(Intent.createChooser(i, null));
+                } catch (Throwable t) {
+                    android.util.Log.w("BtBridge", "shareText failed", t);
+                    shareNotice("Could not share the passage.");
+                }
             }
         });
     }

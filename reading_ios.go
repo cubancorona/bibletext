@@ -3703,9 +3703,29 @@ static UIViewController *bibleTextTopVC(void) {
     return vc;
 }
 
+// bibleTextShareNotice says that a share the reader started cannot complete.
+// A share must not end in silence (docs/BACKLOG.md, "Share as image failed
+// silently on Android"); Android says it in a toast (BtBridge.shareNotice),
+// and iOS, which has no toast, in an alert with one button, the platform's
+// way of saying an action did not happen. It is presented from the view
+// controller the share sheet would have used. With none there is no window on
+// screen to say anything in (bibleTextFindWindow found no attached scene with
+// a window), which is Android's missing activity, and the return is bare.
+static void bibleTextShareNotice(NSString *msg) {
+    UIViewController *top = bibleTextTopVC();
+    if (top == nil) return;
+    UIAlertController *ac = [UIAlertController alertControllerWithTitle:nil
+                                                                message:msg
+                                                         preferredStyle:UIAlertControllerStyleAlert];
+    [ac addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+    [top presentViewController:ac animated:YES completion:nil];
+}
+
 static void bibleTextPresentShare(NSArray *items) {
     if (items.count == 0) return;
     UIViewController *top = bibleTextTopVC();
+    // No view controller means no window on screen, so nothing can be said
+    // either (bibleTextShareNotice).
     if (top == nil) return;
     UIActivityViewController *av =
         [[UIActivityViewController alloc] initWithActivityItems:items applicationActivities:nil];
@@ -3737,7 +3757,12 @@ void bibleTextShareImageFile(const char *path) {
     NSString *p = [NSString stringWithUTF8String:path];
     dispatch_async(dispatch_get_main_queue(), ^{
         UIImage *img = [UIImage imageWithContentsOfFile:p];
-        if (img == nil) return;
+        if (img == nil) {
+            // The card the preview drew is gone or unreadable: the same
+            // words as Android's for a card that cannot be shared.
+            bibleTextShareNotice(@"Could not share the card.");
+            return;
+        }
         bibleTextPresentShare(@[img]);
     });
 }

@@ -566,7 +566,7 @@ missing the appearance; not investigated further. The light Play images of
 1.2.17 keep their white icons until a set is taken from a release with this
 fix (`docs/SCREENSHOT_PLAYBOOK.md`, §7).
 
-## Android: a text share has no failure path — found 30 September 2026
+## Android: a text share has no failure path — FIXED 30 September 2026
 
 `BtBridge.shareText` (`android/BtBridge.java`) calls `startActivity` with
 no try/catch, so a failure to start the chooser goes uncaught on the UI
@@ -583,6 +583,27 @@ kind of message `shareImage` shows. The same reading of the iOS bridge finds
 present from, and `bibleTextShareImageFile` with an image it cannot read
 (`reading_ios.go`) — worth the same treatment. Every text verb on Android
 goes through `shareText`: note, citation, link and the verse of the day.
+
+**FIXED 30 September 2026.** It was worse than silence. With the system
+chooser disabled on the Android 16 emulator (`pm disable-user` on
+`com.android.intentresolver`, re-enabled after), Share with citation in
+1.2.17 threw `ActivityNotFoundException` out of the posted Runnable and the
+app closed. `shareText` now starts the chooser inside a try whose catch logs
+and shows "Could not share the passage." through `shareNotice`, the words
+matched to Share as image's "Could not share the card."; the same run on the
+fixed build showed that toast and the app stayed open, Share as image showed
+its own, and with the chooser enabled the sheet opened as before. On iOS,
+`bibleTextShareImageFile` with an image it cannot read now says "Could not
+share the card." in an alert with an OK button (`bibleTextShareNotice`,
+presented from the view controller the share sheet would have used), since
+iOS has no toast; that is compiled (`scripts/check-ios-pane.sh`) and held at
+the source, not seen. `bibleTextPresentShare` with no view controller keeps
+its bare return, as Android's missing activity does: the view controller is
+nil only when `bibleTextFindWindow` finds no window in an attached scene, and
+then there is nothing on screen to say anything in. Held by
+`share_failure_notice_test.go`, each check failing with its line taken out.
+Still open: a presentation UIKit refuses (a view controller already
+presenting, or being dismissed) fails silently on iOS and is not detected.
 
 ## A phone sheet reopened under the keyboard ended at the keyboard's top — FIXED 29 September 2026
 
