@@ -77,18 +77,34 @@ func sentenceHasWordBeforeTerminal(corpus string, end int) bool {
 	return false
 }
 
-func assertCutInvariants(t *testing.T, st *AppState, corpus string, label, raw string) {
+// isSubWordDrag reports a drag with no complete word in it. Such drags are
+// degenerate: the mid-word repair rightly leaves nothing, and the pipeline
+// falls back to sharing the fragment verbatim — pinned separately in
+// TestShareSelectionSubWordFragment, excluded from the invariant sweep.
+func isSubWordDrag(raw string) bool {
+	return !strings.Contains(strings.TrimSpace(raw), " ")
+}
+
+// assertCutInvariants runs one drag through prepareShareQuote and asserts
+// C1–C6 on what it shares. corpus and spans are chapterProse(st), which the
+// sweeps build once per chapter: the chapter never changes during a sweep, so
+// rebuilding it for every cut would only repeat the same result. It reports
+// whether the cut was checked (false for a sub-word drag or an empty share).
+func assertCutInvariants(t *testing.T, st *AppState, corpus string, spans []verseSpan, label, raw string) bool {
 	t.Helper()
-	// Sub-word drags (no complete word in the selection) are degenerate: the
-	// mid-word repair rightly leaves nothing, and the pipeline falls back to
-	// sharing the fragment verbatim — pinned separately in
-	// TestShareSelectionSubWordFragment, excluded from the invariant sweep.
-	if !strings.Contains(strings.TrimSpace(raw), " ") {
-		return
+	if isSubWordDrag(raw) {
+		return false
 	}
 	text, cite, _, _ := prepareShareQuote(st, raw, selSpan{})
+	return assertSharedCutInvariants(t, st, corpus, spans, label, text, cite)
+}
+
+// assertSharedCutInvariants asserts C1–C6 on prepareShareQuote's text and
+// citation for one drag, for a caller that already holds them.
+func assertSharedCutInvariants(t *testing.T, st *AppState, corpus string, spans []verseSpan, label, text, cite string) bool {
+	t.Helper()
 	if text == "" {
-		return
+		return false
 	}
 
 	// C1: substring of the prose, allowing one restored terminal at the end.
@@ -120,7 +136,6 @@ func assertCutInvariants(t *testing.T, st *AppState, corpus string, label, raw s
 	}
 
 	// C3: provenance citation.
-	_, spans := chapterProse(st)
 	wantLo, wantHi := 0, 0
 	for _, sp := range spans {
 		if sp.start < end && idx < sp.end {
@@ -186,6 +201,7 @@ func assertCutInvariants(t *testing.T, st *AppState, corpus string, label, raw s
 			t.Fatalf("%s: break follows unexpected rune %q: %q", label, prev, restored)
 		}
 	}
+	return true
 }
 
 func maxInt(a, b int) int {
@@ -212,6 +228,7 @@ func TestRaggedCutSweep(t *testing.T) {
 		if corpus == "" {
 			t.Fatalf("no prose for %s %d", cc.book, cc.chapter)
 		}
+		cuts, checked := 0, 0
 		for e := 1; e <= len(corpus); e += step {
 			if e < len(corpus) && !utf8.RuneStart(corpus[e]) {
 				continue // never cut inside a multibyte rune — real drags can't
@@ -226,9 +243,13 @@ func TestRaggedCutSweep(t *testing.T) {
 				continue
 			}
 			raw := corpus[wStart:e]
-			assertCutInvariants(t, st, corpus,
-				fmt.Sprintf("%s %d end-cut@%d", cc.book, cc.chapter, e), raw)
+			cuts++
+			if assertCutInvariants(t, st, corpus, spans,
+				fmt.Sprintf("%s %d end-cut@%d", cc.book, cc.chapter, e), raw) {
+				checked++
+			}
 		}
+		t.Logf("%s %d: %d end-cuts, %d checked", cc.book, cc.chapter, cuts, checked)
 	}
 }
 
@@ -240,11 +261,12 @@ func TestRaggedStartSweep(t *testing.T) {
 		t.Fatalf("seed: %v", err)
 	}
 	st := &AppState{Bible: bd, CurrentBook: "John", CurrentChapter: 1}
-	corpus, _ := chapterProse(st)
+	corpus, spans := chapterProse(st)
 	step := 1
 	if testing.Short() {
 		step = 7
 	}
+	cuts, checked := 0, 0
 	for s := 0; s < len(corpus)-1; s += step {
 		if !utf8.RuneStart(corpus[s]) {
 			continue
@@ -256,8 +278,12 @@ func TestRaggedStartSweep(t *testing.T) {
 		for e > s && e < len(corpus) && !utf8.RuneStart(corpus[e]) {
 			e--
 		}
-		assertCutInvariants(t, st, corpus, fmt.Sprintf("John 1 start-cut@%d", s), corpus[s:e])
+		cuts++
+		if assertCutInvariants(t, st, corpus, spans, fmt.Sprintf("John 1 start-cut@%d", s), corpus[s:e]) {
+			checked++
+		}
 	}
+	t.Logf("John 1: %d start-cuts, %d checked", cuts, checked)
 }
 
 // TestRaggedMarkerCutSweep rebuilds the READING-VIEW text (verse-number
@@ -271,7 +297,7 @@ func TestRaggedMarkerCutSweep(t *testing.T) {
 	}
 	for _, cc := range cutSweepChapters {
 		st := &AppState{Bible: bd, CurrentBook: cc.book, CurrentChapter: cc.chapter}
-		corpus, _ := chapterProse(st)
+		corpus, spans := chapterProse(st)
 		verses := bd.GetChapter(cc.book, cc.chapter)
 
 		// The overlay's rendition: "1 text 2 text 3 text…"
@@ -296,6 +322,7 @@ func TestRaggedMarkerCutSweep(t *testing.T) {
 
 		// Cut at every boundary within [marker start, marker start+40) for
 		// every verse — straddling the digits, the space, and the first words.
+		cuts, shared, checked := 0, 0, 0
 		for _, m := range marks[1:] { // skip verse 1 (nothing before it to anchor)
 			wStart := maxInt(0, m.mark-260)
 			for wStart > 0 && rendered[wStart-1] != ' ' {
@@ -311,18 +338,29 @@ func TestRaggedMarkerCutSweep(t *testing.T) {
 				}
 				raw := rendered[wStart:e]
 				label := fmt.Sprintf("%s %d marker-cut@%d", cc.book, cc.chapter, e)
-				text, _, _, _ := prepareShareQuote(st, raw, selSpan{})
+				cuts++
+				text, cite, _, _ := prepareShareQuote(st, raw, selSpan{})
 				if text == "" {
 					continue
 				}
+				shared++
 				// The one non-negotiable: a verse-number token NEVER survives.
 				bodyText := strings.TrimRight(text, ".!?…")
 				if strings.Index(corpus, bodyText) < 0 {
 					t.Fatalf("%s: output is not chapter prose (marker leak?): %q", label, text)
 				}
-				assertCutInvariants(t, st, corpus, label, raw)
+				// The same share, checked against C1–C6. prepareShareQuote is a
+				// pure function of the chapter and the drag, so the result above
+				// is the one a second call would return.
+				if isSubWordDrag(raw) {
+					continue
+				}
+				if assertSharedCutInvariants(t, st, corpus, spans, label, text, cite) {
+					checked++
+				}
 			}
 		}
+		t.Logf("%s %d: %d marker-cuts, %d shared, %d checked", cc.book, cc.chapter, cuts, shared, checked)
 	}
 }
 
@@ -379,7 +417,7 @@ func TestRaggedCutSweepPoetry(t *testing.T) {
 			continue
 		}
 		raw := corpus[wStart:e]
-		assertCutInvariants(t, st, corpus,
+		assertCutInvariants(t, st, corpus, spans,
 			fmt.Sprintf("Psalms 23 poetry end-cut@%d", e), raw)
 	}
 }
