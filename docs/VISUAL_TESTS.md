@@ -367,28 +367,42 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       citation, Share as link, Share with note and the verse of the day's
       Share icon each end in a modal sheet headed "Copied — ready to
       paste", with the verb's own line beneath it, the exact clipboard text
-      in a bordered box (a long note scrolls), Copy again, Email… and
-      Done. A click on the page around it does nothing; Done, Escape and
-      Return each close it, Return after Copy again too, and Escape and
-      Return still do after a drag across the box. Put something else on
-      the clipboard, press Copy again: the share is back on the clipboard
-      and the line reads "Copied again." for a moment. At the 520-pt
-      minimum window and at 1280x800 the sheet sits inside the window and
-      below the header, and stays so when the window is resized under it.
-      Flip light/dark with it open: it comes back in the new palette with
-      the same text; opened from the verse of the day, the card comes back
-      beneath it and Done returns to the card, which Escape then closes.
-      Share as image: the PNG lands in Downloads, the file manager opens
-      on it, and the sheet reads "Picture saved" with no box and no Copy
-      again. Email…: the button shows whenever the desktop names a mailto:
+      in a bordered box (a long note scrolls), and Email…, Copy again and
+      Done, in that order. A click on the page around it does nothing;
+      Done, Escape and Return each close it, Return after Copy again too,
+      and Escape and Return still do after a drag across the box. Press
+      Tab: the caret goes to Email…, then Copy again, then Done; with it on
+      any of them Escape and Return still close the sheet, and Space
+      presses that button. Put something else on the clipboard, press Copy
+      again: the share is back on the clipboard and the line reads "Copied
+      again." for a moment, and neither the box nor a button moves while
+      it does. Email… appears a moment after the sheet; Copy again and Done
+      do not move when it does. At the 520-pt minimum window and at
+      1280x800 the sheet sits inside the window and below the header, and
+      stays so when the window is resized under it. Flip light/dark with
+      it open: it comes back in the new palette with the same text; opened
+      from the verse of the day, the card comes back beneath it and Done
+      returns to the card, which Escape then closes. Share as image: the
+      PNG lands in Downloads, the file manager opens on it, and the sheet
+      reads "Picture saved" with no box and no Copy again, and comes back
+      after a light/dark flip; with no Downloads folder the line says only
+      that the picture is shown in the file manager. In the snap neither
+      the save nor the reveal happens yet (docs/BACKLOG.md, the Linux and
+      Windows share-sheet entry): check that it still does not, until the
+      fix lands. Email… on the text
+      sheets: the button shows whenever the desktop names a mailto:
       handler, and a browser counts — a stock Ubuntu desktop names the
       Firefox snap, so the button shows there with no mail client
       installed, and pressing it opens the mailto: link in Firefox, which
-      asks what should handle it. With no handler named the button is
-      absent, or, where the desktop cannot say, pressing it does nothing.
-      With a mail client, a new message opens carrying the citation as its
-      subject and the text as its body, and on Linux the picture as an
-      attachment.
+      asks what should handle it. With no handler named, or nothing to ask,
+      the button is absent; in the snap on a portal older than 1.19.1 it is
+      absent too. Email… on the image sheet: Linux only, outside the snap,
+      and only when the handler is a mail client — absent with Firefox as
+      the handler. With a mail client, a new message opens carrying the
+      citation as its subject and the text as its body — for the picture,
+      the quote and its citation, and the picture as an attachment. On
+      Windows, a whole-chapter share's Email… opens a message whose text
+      is cut at a word with an ellipsis, the citation whole beneath it.
 - [ ] Share as image: the preview modal appears BEFORE anything leaves the
       app; Regenerate cycles schemes; the native overlay must not paint
       over the modal; the same verse always opens on the same look.

@@ -296,7 +296,8 @@ func shareQuoteForPassage(state *AppState, book string, chapter, lo, hi int) (qu
 // same message the selection route's "Share with citation" builds
 // (composeShareText — the quote, a blank line, the citation line naming the
 // translation in full). On Windows/Linux nativeShareText is the clipboard
-// fallback with its notice (share_fallback.go), as it is for a selection.
+// fallback and the confirmation sheet (share_fallback.go,
+// share_sheet_desktop.go), as it is for a selection.
 func sharePassageText(state *AppState, book string, chapter, lo, hi int) {
 	msg, ok := sharePassageMessage(state, book, chapter, lo, hi)
 	if !ok {

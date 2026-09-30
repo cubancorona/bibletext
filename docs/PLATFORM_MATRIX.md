@@ -250,8 +250,8 @@ place a fix on one does not reach the others.
     to the clipboard and open the app's own confirmation sheet — the
     recorded Linux and Windows counterpart of the system share sheet.**
     `share_other.go:1` (`//go:build !darwin && !android`) gives both
-    platforms the desktop fallback: `share_other.go:18`
-    (`fallbackShareText(s)`) and `share_other.go:21`
+    platforms the desktop fallback: `share_other.go:20`
+    (`fallbackShareText(s)`) and `share_other.go:23`
     (`fallbackShareImage(path)`). `go list` for linux and windows, amd64 and
     arm64, with and without `-tags gles`, takes the two verbs from
     `share_other.go` and `share_fallback.go` and compiles none of
@@ -419,7 +419,7 @@ confirmation sheet built on 30 September 2026, which ships next.
 | macOS | Share picker at the selection; the note card appears beneath | Share picker at the selection | Share picker at the selection | Preview, then the share picker with the image | Probably the share picker, anchored to the hidden reading view, not the icon; not seen | `reading_macos.go` | `builds` — code reading, 29–30 September 2026 |
 | Android | The note card, then the "Sharing text" sheet with the note, citation and link | "Sharing text" sheet with the quote and citation | "Sharing text" sheet with the link | Preview, then the "Sharing image" sheet | "Sharing text" sheet, by the citation's route; not driven | `reading_android.go` | `runner` — emulator, 1.2.17, 29–30 September 2026 |
 | Windows | Copied; the "Copied — ready to paste" sheet over the new note card, with Email…, Copy again and Done (27) | Copied; the "Copied — ready to paste" sheet (27) | Copied; the "Copied — ready to paste" sheet (27) | Saved to Downloads; Explorer opens with it selected; the "Picture saved" sheet, without Email… | Copied; the "Copied — ready to paste" sheet over the card (27) | `share_other.go`, handing on to `share_fallback.go` | `builds` — build tags and `go list`, 30 September 2026 |
-| Linux | Copied; the "Copied — ready to paste" sheet over the new note card, with Email…, Copy again and Done (27) | Copied; the "Copied — ready to paste" sheet (27) | Copied; the "Copied — ready to paste" sheet (27) | Saved to ~/Downloads; the file manager opens on the folder; the "Picture saved" sheet, with Email… attaching the file only where a mail client, not a browser, handles mailto:, and never in the snap (27). | Copied; the "Copied — ready to paste" sheet over the card (27) | `share_other.go`, handing on to `share_fallback.go` | `hardware` — arm64 VM, X11, 30 September 2026 |
+| Linux | Copied; the "Copied — ready to paste" sheet over the new note card, with Email…, Copy again and Done (27) | Copied; the "Copied — ready to paste" sheet (27) | Copied; the "Copied — ready to paste" sheet (27) | Saved to ~/Downloads; the file manager opens on the folder; the "Picture saved" sheet, with Email… attaching the file only where a mail client, not a browser, handles mailto:, and never in the snap (27). In the snap, neither the save nor the reveal happens (the proof note below) | Copied; the "Copied — ready to paste" sheet over the card (27) | `share_other.go`, handing on to `share_fallback.go` | `hardware` — arm64 VM, X11, 30 September 2026 |
 
 What each proof rests on:
 
@@ -436,17 +436,41 @@ What each proof rests on:
   the share back on a clipboard something else had taken; a light/dark
   switch brought it back with the same text, and over the verse of the day
   with the card beneath; at the narrowest the window would go, 533x640,
-  it sat inside the window and below the header. Email…: no mail client is
-  installed there, but the session names the Firefox snap as the mailto:
+  it sat inside the window and below the header. With the caret put on a
+  button by Tab — Email…, then Copy again, then Done, then round again —
+  Escape and Return still closed it, and Space on Copy again copied; Copy
+  again left Done where it was (its fill on rows 616–651 before, during
+  "Copied again." and after), and Copy again and Done sat at the same
+  pixels with Email… in the row and without it. Email…: no mail client is
+  installed there, and the session names the Firefox snap as the mailto:
   handler (`xdg-mime query default x-scheme-handler/mailto` answers
-  `firefox_firefox.desktop`), so the button shows. Pressed, it called the
-  Email portal's `ComposeEmail` with the citation as the subject and the
-  text as the body, or the picture as a descriptor; the request answered 0,
-  and Firefox opened the `mailto:` link and asked what should handle it.
-  The portal there is 1.18.4, without `SchemeSupported`, so the Email
-  interface and `xdg-mime` decided. A mail client's compose has not been
-  seen. No shipped package was run; the row moves to the shipped artefact
-  with the release that carries it. Not Wayland.
+  `firefox_firefox.desktop`, an entry in the WebBrowser category). The
+  text sheets offer Email… on that; pressed, it called the Email portal's
+  `ComposeEmail` with the citation as the subject and the text as the
+  body, the request answered 0, and Firefox opened the `mailto:` link and
+  asked what should handle it. The image sheet does not: the first build
+  offered it there too, and pressed, the same answer of 0 hid a compose
+  whose body was empty and whose link carried the PNG's local path as
+  `attachment=`, the picture going nowhere. With a fixture desktop entry in
+  the Email category named as the handler in the app's own scratch home,
+  the image sheet offered Email…, and pressing it sent `ComposeEmail` the
+  citation, the quote and its citation as the body, and the picture as a
+  descriptor (answered 0; the session's portal, which still names Firefox,
+  opened Firefox as before). With no Downloads folder the image sheet said
+  only that the picture is shown in the file manager, which opened on the
+  temp folder. The portal there is 1.18.4, without `SchemeSupported`. The
+  snap, packed from the same executable (its `bin/bibletext` hashed equal)
+  and installed over the store's for the run: Share with citation's sheet
+  had no Email…, Copy again and Done at the same pixels as in the local
+  build, and Share as image's had none either. It also showed what the
+  image share does inside the snap: `HOME` there is the snap's own
+  `~/snap/bibletext/<revision>`, which has no Downloads folder, so the PNG
+  stayed in the snap's private temp folder, which nothing outside the snap
+  can open; no file manager opened, and the sheet's line, that the picture
+  is shown in the file manager, was untrue (`docs/BACKLOG.md`, the Linux and
+  Windows share-sheet entry, Still open). A mail client's compose has not
+  been seen. The row moves to the shipped artefact with the release that
+  carries it. Not Wayland.
 - **Android, `runner`.** The 1.2.17 build on the emulator. A simulator is not
   hardware (divergence 9), and an emulator is not either. Every verb but the
   verse of the day was driven to its share sheet; no share target was tapped.

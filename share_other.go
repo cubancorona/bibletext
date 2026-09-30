@@ -9,10 +9,12 @@ package bibletext
 // same code); these wrappers are what keeps the Windows/Linux release path
 // byte-identical to before the extraction:
 //
-//   - Share with citation → the composed quote+citation goes to the CLIPBOARD,
-//     with a brief confirmation notice — ready to paste anywhere.
+//   - the text verbs      → the composed text goes to the CLIPBOARD, and the
+//     confirmation sheet says so and shows it (share_sheet_desktop.go) —
+//     ready to paste anywhere.
 //   - Share as image      → the rendered PNG is saved to ~/Downloads (falling
-//     back to the temp copy) and revealed in the file manager.
+//     back to the temp copy) and revealed in the file manager, and the same
+//     sheet says where it went.
 
 // Each platform's share mechanism is recorded in docs/PLATFORM_MATRIX.md, Sharing.
 func nativeShareText(s string) { fallbackShareText(s) }

@@ -145,17 +145,26 @@ like the composer, in place of the notice:
 - a read-only box with the exact clipboard text, wrapping, and scrolling
   when it is long, its height given up a step at a time where the
   sheet would otherwise start inside the header;
-- **Copy again** (after it the line reads *Copied again.* for a moment),
-  **Email…** only when the desktop has a mail client, and **Done**; Escape
-  and Return close it too, through the canvas's key handler, wrapped while
-  the sheet is on top. Nothing on the sheet holds the caret, which is why
-  the box is not selectable: a selection in a Fyne label takes every key
-  and answers none. A stray click cannot dismiss it. Registered for the light/dark reopen and the
-  window refit; below the header (`clearOfHeader`). The image share keeps
-  its save to ~/Downloads and the file-manager reveal and ends in the same
-  sheet, *Picture saved* over *The picture is saved in Downloads and shown
-  in your file manager.*, with Email… attaching the file where the platform
-  can and no clipboard box.
+- **Email…** only when the desktop has a mail client, **Copy again** (after
+  it the line reads *Copied again.* for a moment, in a slot that keeps the
+  verb's line's height, so nothing below it moves), and **Done**. Email…
+  is first in the row: it appears when the probe answers, a moment after
+  the sheet, and at the row's left end it moves nothing; between Copy again
+  and Done it pushed Copy again aside and took its place under the
+  pointer. Escape and Return close the sheet, through the canvas's key
+  handler, wrapped while the sheet is on top — nothing on the sheet takes
+  the caret by itself, which is why the box is not selectable: a selection
+  in a Fyne label takes every key and answers none — and after Tab has put
+  the caret on a button, through the buttons' own key handling
+  (`shareSheetButton`): Return is Done there too, wherever the caret is,
+  and Space presses the button that holds it. A stray click cannot dismiss
+  it. Registered for the light/dark reopen and the window refit; below the
+  header (`clearOfHeader`). The image share keeps its save to ~/Downloads
+  and the file-manager reveal and ends in the same sheet, *Picture saved*
+  over *The picture is saved in Downloads and shown in your file manager.*
+  (or, where there is no Downloads folder, *The picture is shown in your
+  file manager.*, the file manager opening on the temp copy), with no
+  clipboard box, and Email… where the platform can attach the file.
 - **Over the verse-of-the-day card** the sheet stacks on the card, Escape
   closes the sheet and then the card, and a light/dark change brings both
   back, the card beneath: the sheet's capture takes the card's registration
@@ -164,17 +173,48 @@ like the composer, in place of the notice:
   begun from the card, not a choice inside it.
 - **Email…** (`share_email.go`): on Linux the xdg-desktop-portal Email
   interface — `ComposeEmail` over godbus with the subject (the citation,
-  one line, at most 200 characters), the body (the clipboard text) and,
+  one line, at most 200 characters), the body (the clipboard text; for the
+  image, the quote and its citation, what Share with citation copies) and,
   for the image, the file as a descriptor; the request's `Response` is
-  watched, and 2 (no mail client) falls through to `xdg-email` and then a
-  `mailto:` link through xdg-open. The button is offered only when the
-  desktop says a mailto: handler exists — OpenURI's `SchemeSupported` on
-  portal 1.19.1 and later, else the Email interface's presence and
-  `xdg-mime`'s default handler for the scheme — asked on a goroutine, so
-  the sheet is never delayed by the bus. On Windows a `mailto:` link
-  through the shell when the `mailto` class is registered, which carries no
-  file, so the image sheet has no Email… there. The macOS mimic of this
-  path opens a `mailto:` link too.
+  watched. Only 2 (no mail client) hands on to `xdg-email` and then a
+  `mailto:` link through xdg-open: 1 (the reader cancelled), any other
+  answer, and no answer once the portal has taken the call end the
+  compose, so a late compose is never joined by a second
+  (`composeByRoutes`, `portalEmailResponse`). The button is offered only
+  when the desktop says a mailto: handler exists (`linuxMailOffered`), asked
+  on a goroutine, so the sheet is never delayed by the bus:
+  - text: OpenURI's `SchemeSupported` wherever the portal can answer it
+    (1.19.1 and later); otherwise `xdg-mime`'s default handler for the
+    scheme, and none when there is no `xdg-mime` to ask. Inside the snap or
+    the Flatpak, `xdg-mime` reads the sandbox's own configuration and not
+    the desktop's, so there, without `SchemeSupported`, Email… is withheld:
+    the snap on Ubuntu 24.04 (portal 1.18.4) offers no Email….
+  - image: only outside a sandbox, with the portal's Email interface or
+    `xdg-email` to take the file, and only when the handler's desktop entry
+    is in the Email category and not WebBrowser. Both routes end in that
+    handler, and the GTK backend (like `xdg-email`) hands it a `mailto:`
+    link with the file's path as `attachment=`, which a mail client reads
+    and a browser does not: the stock Ubuntu desktop's handler, the Firefox
+    snap, opened a compose with no picture and no text and the local path
+    in its link. A sandboxed app cannot tell a mail client from a browser,
+    so the snap and the Flatpak withhold the image's Email…, as Windows
+    does.
+
+  On Windows a `mailto:` link through the shell when the shell resolves a
+  handler for the scheme — `AssocQueryStringW`, which reads the reader's
+  own choice (UserChoice) before the class's registration, counting a
+  handler whose executable is on disk or a packaged app's DelegateExecute
+  handler, and not a key an uninstalled client left behind. A link carries
+  no file, so the image sheet has no Email… there. The macOS mimic of this
+  path opens a `mailto:` link too. Every `mailto:` link the app builds
+  carries line breaks as CRLF (RFC 6068) and is kept to 2,000 characters,
+  the length past which some Windows mail handlers cut or refuse one
+  (`mailtoURL`): the passage or the note is cut at a word and ends in an
+  ellipsis, inside the closing quotation mark of a quotation, and the
+  citation, and a link share's link, stay whole. A whole chapter as a link
+  runs to some 5,900 characters (John 3) or 18,000 (Psalm 119); the whole
+  text is still on the clipboard, which the sheet says, to paste over the
+  cut one.
 
 The notice, `showShareNotice`, and its self-dismissing-overlay
 registration in `sheet_reopen.go` are gone; nothing else used them. The
@@ -190,27 +230,70 @@ overlay stack, inside the canvas and below the header at 1280x800 and at
 520x640, in light and in dark, with the approved words, the box showing
 what the clipboard holds and the message the verb composes; a click outside
 does not dismiss it; Done, Escape and Return close it and run the sheet-close
-consume point once, and Escape and Return still do after a drag across the
-box; Copy again re-copies; a light/dark change brings it back with the same
-text, and with the verse-of-the-day card beneath it; the sent note's card
-is on the page under it; Email… is offered only when the probe says so and
-hands over the citation, the text and the image's file.
+consume point once and give the canvas its own key handler back, and Escape
+and Return still do after a drag across the box and after Tab has put the
+caret on each button in turn, where Space presses that button; Copy again
+re-copies and moves neither the box nor a button, and nor does Email…
+arriving late; a light/dark change brings it back with the same text, and
+with the verse-of-the-day card beneath it, and the image sheet with its
+picture; the sent note's card is on the page under it; Email… is offered
+only when the probe says so, asked with the file only for the picture, and
+hands over the citation, the text, and the image's file with its quote —
+the image's from the preview's own Share button — and, where there is no
+Downloads folder, the image sheet says only where the picture is shown.
+`share_email_test.go` holds the decisions behind Email… on every platform:
+the 2,000-character link and where it is cut, which portal answers hand on
+and which end the compose, the handler's desktop entry, and when Linux
+offers the button, in and out of a sandbox; `share_email_other_test.go` and
+`share_email_windows_test.go` hold that a `mailto:` link never carries the
+picture, and the Windows one, in the Windows CI job, that the handler check
+counts a handler on disk and a packaged one and not a stale key.
 `TestDesktopSheetsOpenBelowTheHeader` and the refit test cover both forms
 of the sheet with the other desktop sheets. Driven on the Linux VM in light
 and dark, every verb, with the clipboard read back each time
 (`docs/VISUAL_TESTS.md`, V12, and the Linux proof note under Sharing in
-`docs/PLATFORM_MATRIX.md`). No mail client is installed there, but the
-session names the Firefox snap as the mailto: handler, so Email… shows;
-pressed, the portal's `ComposeEmail` answered 0 for the text and for the
-picture, and Firefox opened the `mailto:` link and asked what should handle
-it. Not seen: a mail client's compose, Wayland, Windows at runtime.
+`docs/PLATFORM_MATRIX.md`). No mail client is installed there, and the
+session names the Firefox snap as the mailto: handler, so the text sheets
+offer Email…; pressed, the portal's `ComposeEmail` answered 0 and Firefox
+opened the `mailto:` link, subject and body in it, and asked what should
+handle it. The first build offered Email… on the image sheet as well, and
+there the same answer of 0 hid a failure: the portal handed Firefox a link
+whose body was empty and whose `attachment=` was the PNG's local path, and
+the picture went nowhere. Since the fix the image sheet has no Email… on
+that desktop; with a fixture desktop entry in the Email category named as
+the handler in the app's own scratch home, it offers Email…, and pressing
+it sends the subject, the quote and its citation, and the picture (the
+session's portal, which still names Firefox, then opened Firefox as
+before). Also seen there: Tab walking Email…, Copy again and Done with
+Escape and Return still closing the sheet, Copy again moving no button,
+and Copy again and Done at the same pixels with and without Email…; and
+the snap, packed from the same executable and installed for the run,
+offering no Email… on either sheet. Not seen: a mail client's compose,
+Wayland, Windows at runtime — neither the handler check nor the
+2,000-character link has run on Windows.
 
-**Still open.** The image sheet's heading, *Picture saved*, is the one
-string on the sheet outside the wording above and is still to be settled:
-the text verbs' heading says *Copied*, and nothing is copied for a picture.
-After Tab has moved the caret to one of the sheet's buttons, Return and
-Escape go to that button, which answers only Space, as on every other sheet
-in the app.
+**Still open.** Two strings on the sheet are outside the wording above and
+are still to be settled: the image sheet's heading, *Picture saved* — the
+text verbs' heading says *Copied*, and nothing is copied for a picture —
+and the image line where there is no Downloads folder, *The picture is
+shown in your file manager.* The keys after Tab are fixed on this sheet
+only: on every other sheet in the app, a button that Tab has given the
+caret still takes Return and Escape and answers only Space.
+
+**Still open: Share as image in the snap saves nothing the reader can
+find — found 30 September 2026.** Inside the snap `HOME` is the snap's own
+`~/snap/bibletext/<revision>` (the reader's is in `SNAP_REAL_HOME`), which
+has no Downloads folder, so `fallbackShareImage` keeps the PNG in the
+snap's private temp folder, which nothing outside the snap can open; the
+file-manager reveal opens nothing, and the sheet says *Picture saved* and
+that the picture is shown in the file manager, neither of which is so.
+Seen on the arm64 VM with a snap packed from this branch; the store's
+1.2.17 snap runs the same save and reveal, with no sheet after them (from
+the code; not run). The shape of a fix:
+the reader's Downloads folder from `SNAP_REAL_HOME` or the XDG user
+directory, which the snap's home plug reaches; a reveal that goes through
+the portal (OpenURI's OpenDirectory takes a descriptor) and whose failure
+the sheet's line hears; and the same checked in the Flatpak.
 
 **Sources.**
 
@@ -465,15 +548,18 @@ modal, until its download lands (the download's dismissal closes whichever copy
 is up); the note-link offer; the link notices, and the seed park's notice only
 while its passage is still waiting; the translation-download error. A sheet
 registers when it opens, and the registration dies with its popup, however it
-closes. Fyne's menus (an entry's Cut/Copy/Paste, a Select's list) and the
-desktop share confirmation are not sheets: the take looks past them to the
-sheet beneath. **What closes:** an AI answer still in flight (its own landing
+closes. Fyne's menus (an entry's Cut/Copy/Paste, a Select's list) are not
+sheets: the take looks past them to the sheet beneath. The desktop share
+confirmation was not one either when this was written, a notice that took
+itself down; since 30 September 2026 it is a registered sheet, which comes
+back with the same text, and with the verse-of-the-day card beneath it when
+it was opened from there (the Linux and Windows share-sheet entry above).
+**What closes:** an AI answer still in flight (its own landing
 already reopens it); the AI panel showing an error or asking for a key
 (reopening would send the request again); the share-image preview; the model
 picker and the notes questions over Settings (only the top sheet ever comes
-back, and these answer into the one beneath); the menus and the share
-confirmation themselves. Rotation's rebuild still closes every sheet, as
-before.
+back, and these answer into the one beneath); the menus themselves.
+Rotation's rebuild still closes every sheet, as before.
 
 **Outside the sheets, what a switch also left behind, and does no longer:**
 
