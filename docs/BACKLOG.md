@@ -607,6 +607,10 @@ then there is nothing on screen to say anything in. Held by
 `share_failure_notice_test.go`, each check failing with its line taken out.
 Still open: a presentation UIKit refuses (a view controller already
 presenting, or being dismissed) fails silently on iOS and is not detected.
+And on every platform, a Share as image card that fails to render
+(`renderVerseImage` returning an error: a font that will not parse, a file
+that cannot be written) leaves the preview empty, and its Share then closes
+the sheet and hands nothing over, without a word (`share_preview.go`).
 
 ## A phone sheet reopened under the keyboard ended at the keyboard's top — FIXED 29 September 2026
 

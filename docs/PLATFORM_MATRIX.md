@@ -661,17 +661,23 @@ What each proof rests on:
   `share_email_windows_test.go` holds the check against handlers it
   registers itself, in the Windows CI job.
 
-**When a share cannot start.** A share the reader started says so when it
-cannot complete, on both phones, in each platform's own way. Android shows
-a toast from `android/BtBridge.java`: "Could not share the passage." when a
-text verb's chooser cannot start, and "Could not share the card." for Share
-as image. Until 30 September 2026 the text verbs had no such path, and a
-chooser that could not start closed the app; driven on the Android 16
-emulator with the system chooser disabled, before and after. iOS and iPadOS
-have no toast, and `reading_ios.go` says "Could not share the card." in an
-alert with an OK button when the card cannot be read — a divergence in
-presentation only, compiled and held at the source but not seen. The iOS
-text verbs have no failure the bridge can see beyond the last case: with no
-window on screen (no view controller on iOS, no activity on Android) there
-is nothing to show a message on, and nothing is shown. Recorded in
-`docs/BACKLOG.md`, "Android: a text share has no failure path".
+**When a share cannot start.** Once a share reaches the platform, it says
+so when it cannot complete, on both phones, in each platform's own way.
+Android shows a toast from `android/BtBridge.java`: "Could not share the
+passage." when a text verb's chooser cannot start, and "Could not share
+the card." for Share as image. Until 30 September 2026 the text verbs had
+no such path, and a chooser that could not start closed the app; driven on
+the Android 16 emulator with the system chooser disabled, before and
+after. iOS and iPadOS have no toast, and `reading_ios.go` says "Could not
+share the card." in an alert with an OK button when the card cannot be
+read — a divergence in presentation only, compiled and held at the source
+but not seen. The iOS text verbs have no failure the bridge can see beyond
+the last case: with no window on screen (no view controller on iOS, no
+activity on Android) there is nothing to show a message on, and nothing is
+shown. Two silences remain. On every platform, a Share as image card that
+fails to render (`renderVerseImage`) leaves the preview empty, and its
+Share then closes the sheet without handing anything over
+(`share_preview.go`). On iOS, a presentation UIKit refuses (a view
+controller already presenting, or being dismissed) is not detected.
+Recorded in `docs/BACKLOG.md`, "Android: a text share has no failure
+path".
