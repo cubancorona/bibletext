@@ -64,7 +64,7 @@ Status is separate: `shipping` (a release or store submission carries it),
 | iOS | x86_64 | anything | excluded | none | A |
 | Android | arm64-v8a | Google Play — production and closed testing (AAB) | shipping | field | 10, 11, 12 |
 | Android | armeabi-v7a, x86, x86_64 | Google Play — production and closed testing (AAB) | shipping | builds | 10, 11 |
-| Android | all four ABIs | GitHub Releases — universal APK, not linked from the site | shipping | builds | 10, 12 |
+| Android | all four ABIs | GitHub Releases — universal APK | shipping | builds | 10, 12 |
 | Android | arm64-v8a | Local install / adb (debug APK) | proven | hardware | 11 |
 | Windows | x64 | Microsoft Store (MSIX) | shipping | runner | 14, 15, 16, 18 |
 | Windows | x64 | Direct download (.zip) | shipping | builds | 14, 15 |

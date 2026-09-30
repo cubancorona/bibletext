@@ -132,22 +132,6 @@ SIDECAR_SUFFIXES = {
     ),
 }
 
-# Released assets the site deliberately does not link, by exact filename, with
-# the reason. Unlike a sidecar, each is something a reader can install, so
-# leaving it off the page is a decision about where readers are sent, and the
-# rule holds it both ways: the download page may not link a name listed here,
-# from the latest release or from a tagged one, and a name no release uploads
-# any more is a stale exception. Any other unlinked asset still fails, however
-# like one of these it is named.
-NOT_LINKED = {
-    "BibleText-Android.apk": (
-        "the site sends Android readers to Google Play. A sideloaded APK never "
-        "updates itself, and it cannot update into the Play build, which is "
-        "signed with a different key, without an uninstall that deletes the "
-        "reader's notes. Releases still carry it for devices without Google Play"
-    ),
-}
-
 
 # Every public page that points a Windows reader at the Store must use the URL
 # the packaging identity owns. A store link is not an asset, so the release
@@ -157,8 +141,9 @@ NOT_LINKED = {
 # that a link which exists names the right product.
 STORE_LINK = r"https://apps\.microsoft\.com/detail/[A-Za-z0-9]+"
 
-# Google Play is the one Android route the site offers, since the download page
-# links no APK (NOT_LINKED above), and the release notes are where a reader who
+# Google Play is the Android route the site puts first, since it is the one that
+# updates itself; the APK the download page also offers never does, and moving
+# from it to Play means an uninstall. The release notes are where a reader who
 # found the project on GitHub meets the choice. So the notes, the download page
 # and the README must each link the listing, and every Play link on them must
 # name the package config/product.json declares: the Android build installs as
@@ -210,8 +195,7 @@ def released_assets(text: str) -> tuple[set[str], list[str]]:
 
     Both the automated `gh release upload` steps and the commented sideload
     command count: the APK is uploaded by hand, and a page that links it makes
-    the same promise as one that links the tarball. Reading it is also what
-    lets its NOT_LINKED exception be found stale.
+    the same promise as one that links the tarball.
     """
     names: set[str] = set()
     unreadable: list[str] = []
@@ -280,20 +264,16 @@ def linked_assets(text: str) -> set[str]:
     return set(re.findall(rf"releases/latest/download/({ASSET})", text))
 
 
-def links_release_asset(text: str, asset: str) -> bool:
-    """Whether a page links one named asset from any release, latest or tagged.
+def tagged_assets(text: str) -> set[tuple[str, str]]:
+    """Every release asset text links from one tagged release, as (tag, name).
 
     linked_assets() reads only the latest-download form, which is the form the
-    page offers files in. An asset the page must not offer has to be refused in
-    the tagged form too, releases/download/<tag>/<name>, which is how GitHub
-    writes its own asset links and so the likeliest form to be pasted back in.
-    The name may be followed by a full stop, not by more of a longer name.
+    download page offers files in: it follows each new release. The tagged
+    form, releases/download/<tag>/<name>, is how GitHub writes its own asset
+    links and so the likeliest to be pasted in, and it goes on offering that
+    one release's file after the next ships.
     """
-    pattern = (
-        rf"releases/(?:latest/download|download/[^/\s\"'<>]+)/{re.escape(asset)}"
-        rf"(?![A-Za-z0-9_+-]|\.[A-Za-z0-9])"
-    )
-    return re.search(pattern, text) is not None
+    return set(re.findall(rf"releases/download/([^/\s\"'<>]+)/({ASSET})", text))
 
 
 def apt_packages(text: str) -> set[str]:
@@ -407,24 +387,18 @@ def rule_failures(read, list_cmd) -> list[str]:
         for asset in sorted(shipped):
             if asset in offered:
                 continue
-            if is_sidecar(asset) or asset in NOT_LINKED:
+            if is_sidecar(asset):
                 continue
             failures.append(
                 f"{DOWNLOAD_PAGE}: the release ships {asset} and nothing on the download page "
-                f"links it. Add a download button, or, if it is deliberately not offered, name "
-                f"it in this checker's SIDECAR_SUFFIXES or NOT_LINKED with the reason"
+                f"links it. Add a download button, or give it a sidecar suffix in this checker "
+                f"with the reason it is never offered"
             )
-        for asset, reason in sorted(NOT_LINKED.items()):
-            if links_release_asset(page, asset):
-                failures.append(
-                    f"{DOWNLOAD_PAGE}: links {asset}, which this checker names as deliberately "
-                    f"not linked ({reason}). Remove the link, or the exception"
-                )
-            if shipped and asset not in shipped:
-                failures.append(
-                    f"scripts/check-public-surfaces.py: NOT_LINKED names {asset}, which no release "
-                    f"step uploads; the exception is stale"
-                )
+        for tag, asset in sorted(tagged_assets(page)):
+            failures.append(
+                f"{DOWNLOAD_PAGE}: links {asset} from the {tag} release, which it goes on "
+                f"offering after the next one ships; link releases/latest/download/{asset}"
+            )
         for surface, names in ((DOWNLOAD_PAGE, offered), (READ_ME, linked_assets(readme))):
             for asset in sorted(names - shipped):
                 failures.append(
@@ -523,8 +497,8 @@ def rule_failures(read, list_cmd) -> list[str]:
                 f"{floor} to {FINDER_ROUTE.lower()} the app in the Finder and choose Open"
             )
 
-    # 2c. Google Play, where the site sends Android readers in place of the
-    # APK, is linked from every place that sends them, by the product's package.
+    # 2c. Google Play, where the site sends Android readers first, is linked
+    # from every place that sends them, by the product's package.
     package = play_package(config) if config is not None else None
     if config is not None and package is None:
         failures.append(
@@ -538,8 +512,8 @@ def rule_failures(read, list_cmd) -> list[str]:
         if not ids:
             where = "the release notes never link" if surface == RELEASE_WORKFLOW else "never links"
             failures.append(
-                f"{surface}: {where} the Google Play listing; the download page offers Android "
-                f"readers no APK, so every place that sends them anywhere must send them to Play"
+                f"{surface}: {where} the Google Play listing; Play is the Android edition that "
+                f"updates itself, so every place that sends Android readers anywhere must offer it"
             )
         if package is None:
             continue
@@ -624,9 +598,12 @@ def self_test() -> list[str]:
         return opening + body.strip() + b"""')"\n"""
 
     # The APK goes up by hand, from the command commented in release.yml, and
-    # no page below links it: the NOT_LINKED exception, which a consistent tree
-    # must pass.
+    # the download page links it like every other released file.
     sideload = b"          #   gh release upload <tag> BibleText-Android.apk --clobber\n"
+    page_apk = (
+        b'<a href="https://example.invalid/releases/latest/download/'
+        b'BibleText-Android.apk">Android</a>\n'
+    )
 
     clean = {
         RELEASE_WORKFLOW: (
@@ -639,7 +616,7 @@ def self_test() -> list[str]:
             b'<a href="https://example.invalid/releases/latest/download/'
             b'BibleText-Linux-amd64.tar.xz">Linux</a>\n'
             b'<a href="https://example.invalid/releases/latest/download/'
-            b'BibleText-x86_64.AppImage">AppImage</a>\n'
+            b'BibleText-x86_64.AppImage">AppImage</a>\n' + page_apk +
             b'<a href="https://apps.microsoft.com/detail/TESTID">Store</a>\n' + page_play + routes
         ),
         READ_ME: (
@@ -700,7 +677,7 @@ def self_test() -> list[str]:
         b'<a href="https://example.invalid/releases/latest/download/'
         b'BibleText-Windows-amd64.zip">Windows</a>\n'
         b'<a href="https://example.invalid/releases/latest/download/'
-        b'BibleText-Windows-arm64.zip">Windows ARM</a>\n'
+        b'BibleText-Windows-arm64.zip">Windows ARM</a>\n' + page_apk +
         b'<a href="https://apps.microsoft.com/detail/TESTID">Store</a>\n' + page_play + routes
     )
     if matrix_failures := run(matrixed):
@@ -760,36 +737,28 @@ def self_test() -> list[str]:
     )
     violations.append(("an unlinked release asset", unlinked, pair))
 
-    # The exception is one exact filename. An asset sharing its prefix and its
-    # extension is still an asset the page must link.
-    near_miss = dict(clean)
-    near_miss[RELEASE_WORKFLOW] = clean[RELEASE_WORKFLOW] + (
-        b'        run: gh release upload "$TAG" BibleText-Android-arm64.apk --clobber\n'
-    )
-    violations.append(("an unlinked asset named like a NOT_LINKED one", near_miss, pair))
+    # The APK is uploaded by hand, so only the commented command in the
+    # workflow says a release carries it. Read from there, it is an asset the
+    # page must link like any other...
+    apk_unlinked = dict(clean)
+    apk_unlinked[DOWNLOAD_PAGE] = clean[DOWNLOAD_PAGE].replace(page_apk, b"")
+    violations.append(("the hand-uploaded APK left unlinked", apk_unlinked, pair))
 
-    # Held both ways: the page may not link what it deliberately leaves out...
-    relinked = dict(clean)
-    relinked[DOWNLOAD_PAGE] = clean[DOWNLOAD_PAGE] + (
-        b'<a href="https://example.invalid/releases/latest/download/'
-        b'BibleText-Android.apk">Android</a>\n'
-    )
-    violations.append(("a NOT_LINKED asset linked from the download page", relinked, pair))
+    # ...and without that command the page's link to it is dead.
+    apk_unshipped = dict(clean)
+    apk_unshipped[RELEASE_WORKFLOW] = clean[RELEASE_WORKFLOW].replace(sideload, b"")
+    violations.append(("an APK link no release uploads", apk_unshipped, pair))
 
-    # ...by a tagged release's URL as much as by the latest one, which the
-    # offered-file rule above never reads...
-    relinked_tagged = dict(clean)
-    relinked_tagged[DOWNLOAD_PAGE] = clean[DOWNLOAD_PAGE] + (
-        b'<a href="https://example.invalid/releases/download/v1.2.17/'
-        b'BibleText-Android.apk">Android</a>\n'
-    )
-    violations.append(
-        ("a NOT_LINKED asset linked by a tagged release URL", relinked_tagged, pair))
-
-    # ...and an exception for an asset no release uploads is stale.
-    unshipped = dict(clean)
-    unshipped[RELEASE_WORKFLOW] = clean[RELEASE_WORKFLOW].replace(sideload, b"")
-    violations.append(("a NOT_LINKED asset no release uploads", unshipped, pair))
+    # A file offered from one tagged release stays that release's file after
+    # the next ships. In place of the latest link it also leaves the asset
+    # unlinked; beside it, only the tagged-link rule can catch it.
+    tagged_apk = page_apk.replace(b"releases/latest/download/", b"releases/download/v1.2.17/")
+    tagged_only = dict(clean)
+    tagged_only[DOWNLOAD_PAGE] = clean[DOWNLOAD_PAGE].replace(page_apk, tagged_apk)
+    violations.append(("the APK linked by a tagged release URL alone", tagged_only, pair))
+    tagged_beside = dict(clean)
+    tagged_beside[DOWNLOAD_PAGE] = clean[DOWNLOAD_PAGE] + tagged_apk
+    violations.append(("a tagged release URL beside the latest link", tagged_beside, pair))
 
     dead = dict(clean)
     dead[DOWNLOAD_PAGE] = clean[DOWNLOAD_PAGE] + (

@@ -4,9 +4,10 @@ BibleText is live on Google Play, at
 https://play.google.com/store/apps/details?id=uk.co.bibletext. Its first
 production release, 1.2.17 (versionCode 187), went out on 30 September 2026 to
 all 178 countries, and the download page links the listing with the Play
-badge; the APK attached to each GitHub release is no longer linked from the
-site. Before production, releases went to the closed testing track "Alpha",
-targeting 176 countries, with testers supplied through the Google Group
+badge, above the APK attached to each GitHub release, which it also offers
+among its files for anyone without Google Play. Before production, releases
+went to the closed testing track "Alpha", targeting 176 countries, with
+testers supplied through the Google Group
 `testers-community@googlegroups.com`. The first submission, 1.2.7 (versionCode
 177), was sent for review on 8 September 2026; 1.2.9 (179) followed on 15
 September. 1.2.10 is a desktop-packaging release and was deliberately not sent

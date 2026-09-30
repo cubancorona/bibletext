@@ -1184,7 +1184,7 @@ the activity and the process (see the entry above), so V9's rotation check
 does not reach this path. Confirm first on a device: with Developer options >
 "Don't keep activities" on, press Home mid-narration and wait (V9).
 
-## Rework the download page — DONE 26 September 2026; Google Play filled its slot, and the release notes followed, 30 September 2026
+## Rework the download page — DONE 26 September 2026; Google Play filled its slot, the release notes followed, and the APK row returned, 30 September 2026
 
 The page had store buttons by platform at the top and a separate "Desktop —
 direct downloads" half with its own sections, three button styles, and the
@@ -1215,22 +1215,27 @@ panel stands 40px tall like the others, where the plain 40px image height
 would have shrunk it to 27px, smaller than the badges beside it.
 
 The Android .apk row left "Download a file instead" the same day, and the
-card's line now names Mac, Windows or Linux. Android is offered through Google
-Play only: a sideloaded APK never updates itself, and it cannot update into
-the Play build, which is signed with a different key, so a reader who started
+card's line named Mac, Windows or Linux, to offer Android through Google Play
+only: a sideloaded APK never updates itself, and it cannot update into the
+Play build, which is signed with a different key, so a reader who started
 from it could reach Play only by uninstalling it, which deletes their notes.
-Every GitHub release still carries the APK (`docs/RELEASING.md`, stage 8) for
-devices without Google Play, and the README says so in one line; the site
-does not link it. `scripts/check-public-surfaces.py` names it in `NOT_LINKED`
-with that reason, and fails if the page links it again, from the latest release
-or a tagged one, or no release uploads it; any other released asset the page
-does not link still fails, which its self-test proves with a near-miss name.
-`scripts/release-status.py` expects the `NOT_LINKED` names on the latest
-release as well as every file the page links, since the APK is the one asset
-uploaded by hand and the page no longer names it. `scripts/publish-site.sh`
-copies `docs/badges/` into the site and refuses a tree missing a badge the
-page shows. The checker still holds every other release asset, the Microsoft
-Store link and the macOS steps to the page.
+REVERSED 30 September 2026, in case it is useful to someone without Google
+Play: the row is back in its old place, after Mac and before Windows, in its
+old wording, with one line more, taken from the README's caution: "Never
+updates itself; moving to Google Play later means uninstalling it, notes and
+all". The card's line names Android again, and its lead says again that the
+desktop files are the unsigned ones, since the APK is signed. The Play badge
+stays first. Every GitHub release carries the APK (`docs/RELEASING.md`,
+stage 8), uploaded by hand. `scripts/check-public-surfaces.py` no longer has
+a `NOT_LINKED` exception: it holds the page to linking the APK like every
+released file, read from the upload command commented in the release
+workflow, and fails on a link to any release asset by a tagged release's URL
+rather than `releases/latest/download/`, which its self-test proves with the
+APK's link tagged in place of the latest one and beside it.
+`scripts/release-status.py` expects the APK on the latest release because the
+page links it. `scripts/publish-site.sh` copies `docs/badges/` into the site
+and refuses a tree missing a badge the page shows. The checker still holds
+every release asset, the Microsoft Store link and the macOS steps to the page.
 
 The GitHub release notes, the `NOTES` printf in
 `.github/workflows/release.yml`, linked the App Store for iOS but offered

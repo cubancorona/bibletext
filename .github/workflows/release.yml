@@ -46,8 +46,9 @@ jobs:
           # sideloaded APK never updates, and it cannot update into the Play
           # build, which is signed with a different key, so moving over means an
           # uninstall that takes the reader's notes with it. The download page
-          # does not offer the APK at all: scripts/check-public-surfaces.py
-          # names it in NOT_LINKED, and requires the Play link in the printf
+          # offers the APK too, below the Play badge, with the same caution;
+          # scripts/check-public-surfaces.py holds it to linking the APK like
+          # every released file, and requires the Play link in the printf
           # above, on that page and in the README, each naming the appID in
           # config/product.json. The printf reads the notes as its format, so
           # they carry no single quote, which would end the argument, and no

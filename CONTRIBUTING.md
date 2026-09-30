@@ -117,16 +117,17 @@ nothing that does not exist rather than to naming everything.
 `scripts/check-public-surfaces.py` (self-testing, run by CI) closes the
 mechanical half: it reads the asset names out of the `gh release upload`
 steps in `.github/workflows/release.yml` and fails if the download page does
-not offer one of them, or if either page links a name no release uploads. An
-asset that is deliberately not offered is named in the checker with the
-reason, so the omission is a reviewable decision rather than a gap: the
-AppImage's `.zsync` sidecar, which update tools fetch by themselves, by its
-suffix in `SIDECAR_SUFFIXES`, and the Android APK, which every release carries
-for devices without Google Play while the page sends Android readers to Play,
-by name in `NOT_LINKED`. A name in `NOT_LINKED` fails if the download page
-links it, from the latest release or a tagged one, or if no release uploads it.
-The same checker holds the Linux build dependencies identical across the
-README, this file and CI, and holds the README's count of `cmd/` programs to
+not offer one of them, or if either page links a name no release uploads.
+The APK, uploaded by hand, counts by the command commented in the workflow.
+The download page offers each file from `releases/latest/download/`, which
+follows every new release, and the checker fails on a link there to a tagged
+release's asset, which would go on offering that release's file after the next
+one ships. An asset that is deliberately not offered — the AppImage's `.zsync`
+sidecar, which update tools fetch by themselves — is listed in the checker's
+`SIDECAR_SUFFIXES` with the reason, so the omission is a reviewable decision
+rather than a gap. The same checker holds the Linux build dependencies
+identical across the README, this file and CI, and holds the README's count
+of `cmd/` programs to
 what is actually in `cmd/`. It also holds the four explanations of opening the
 unsigned Mac download — the release notes in `release.yml`, the download page,
 the README and `docs/MAC_APP_STORE.md` — to the route macOS 15 and later
@@ -139,8 +140,9 @@ requirement without an edit to the checker.
 A store is different from a download and needs its own step. The checker holds
 any Microsoft Store link on either page equal to the `storeUrl` in
 `msstore/identity.json`, so a typed or moved id fails. For Google Play it
-goes further, because the page offers Android readers no APK: the release
-notes' printf in `release.yml`, the download page and the README must each
+goes further, because Play is the Android edition that updates itself and
+the one the page puts first, above the APK: the release notes' printf in
+`release.yml`, the download page and the README must each
 link the Play listing, counting only what a reader is shown there (a link in
 a comment does not count), and a Play link to any package but the `appID` in
 `config/product.json` fails. Beyond the stores it names, it cannot know that

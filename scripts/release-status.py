@@ -161,18 +161,14 @@ def github(version: str) -> list[str]:
     names = [a["name"] for a in d.get("assets", [])]
     rows = [f"latest     {d.get('tagName')}  {len(names)} assets"
             f"{'  DRAFT' if d.get('isDraft') else ''}  {(d.get('publishedAt') or '')[:10]}"]
+    # Every file the page links is expected here, the APK among them. It is
+    # the one asset uploaded by hand, in stage 8, so a release that skipped
+    # that upload reports it missing rather than looking complete.
     linked = set(re.findall(r"releases/latest/download/([A-Za-z0-9._-]+)",
                             open(os.path.join(REPO, "docs/index.html")).read()))
-    # The page is not the whole list. The APK goes on every release, uploaded
-    # by hand in stage 8, but the site deliberately does not link it, so it is
-    # expected here by the checker's NOT_LINKED list rather than by the page;
-    # read from the page alone, a release that skipped the hand upload looks
-    # complete.
-    unlinked = set(load("scripts/check-public-surfaces.py", "cps").NOT_LINKED)
-    missing = sorted((linked | unlinked) - set(names))
-    label = "page links" + (f" + unlinked {', '.join(sorted(unlinked))}" if unlinked else "")
-    rows.append(f"{label}: " + ("all present on this release" if not missing
-                                else f"MISSING from the release: {', '.join(missing)}"))
+    missing = sorted(linked - set(names))
+    rows.append("page links: " + ("all present on this release" if not missing
+                                  else f"MISSING from the release: {', '.join(missing)}"))
     return rows
 
 

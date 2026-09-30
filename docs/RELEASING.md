@@ -304,7 +304,9 @@ gh release edit v<version> --draft=false
 
 Compare the APK's sha256 after downloading it back. Publish only once every
 asset is attached: `/releases/latest` reassigns the moment the draft clears, so
-a half-built release becomes everyone's download.
+a half-built release becomes everyone's download. The APK is one of them: the
+download page links it, and `release-status.py` reports it missing from a
+release that skipped this upload.
 
 ### 9 — Microsoft Store
 

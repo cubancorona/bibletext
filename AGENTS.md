@@ -111,12 +111,14 @@ tree.
   The download page names every download by filename, so a new one is invisible
   until it is linked; `scripts/check-public-surfaces.py` holds that page equal
   to what the release workflow uploads, fails on a link to an asset no release
-  ships, holds the Linux build dependencies identical across the README,
+  ships or to one tagged release's copy of an asset rather than the latest,
+  holds the Linux build dependencies identical across the README,
   CONTRIBUTING and CI, and holds the README's count of `cmd/` programs to the
   directory, and holds a Microsoft Store link equal to the `storeUrl` in
   `msstore/identity.json`. The release notes' printf, the download page and
   the README must each link the Google Play listing, by the `appID` in
-  `config/product.json`, since the page offers Android readers no APK. The
+  `config/product.json`, since Play is the Android edition that updates
+  itself and the one the page puts first, above the APK. The
   four places that explain opening the unsigned Mac download — the release
   notes' printf, the download page, the README and
   `docs/MAC_APP_STORE.md` — must each name Open Anyway, must name Control-click
