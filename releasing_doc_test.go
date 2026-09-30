@@ -157,6 +157,10 @@ var (
 	hygieneScript = regexp.MustCompile(`(?:^|\s)scripts/([a-z0-9_-]+\.py)`)
 	hygieneSuite  = regexp.MustCompile(`unittest discover -s (\S+)`)
 	stageScript   = regexp.MustCompile("`(check-[a-z0-9-]+\\.py)`")
+	// The directories stage 2 lists after "unit tests under", joined by
+	// ", " and " and "; the list ends before ", and `check-...`".
+	stageSuites = regexp.MustCompile("unit tests under ((?:`[^`]+`(?:, | and ))*`[^`]+`)")
+	backticked  = regexp.MustCompile("`([^`]+)`")
 )
 
 // The desktop ledger is what the MSIX version is stamped from, and it is the
@@ -260,10 +264,29 @@ func TestStage2NamesEveryCheckInTheHygieneStep(t *testing.T) {
 				"not name it; a reader who runs only what the stage lists has not run the step", s)
 		}
 	}
+	runsSuite := map[string]bool{}
 	for _, d := range suites {
+		runsSuite[d] = true
 		if !strings.Contains(stage, "`"+d+"`") {
 			t.Errorf("ci.yml's Repository hygiene step runs the unit tests under %s and stage 2 of "+
 				"docs/RELEASING.md does not name that directory", d)
+		}
+	}
+	// The other direction: a suite line dropped from ci.yml would otherwise
+	// leave the stage naming a directory whose tests CI no longer runs.
+	under := stageSuites.FindStringSubmatch(strings.Join(strings.Fields(stage), " "))
+	if under == nil {
+		t.Fatal("stage 2 of docs/RELEASING.md no longer lists directories after \"unit tests under\"; " +
+			"the check that CI runs each of them would compare nothing")
+	}
+	named := backticked.FindAllStringSubmatch(under[1], -1)
+	if len(named) < 2 {
+		t.Fatalf("stage 2's unit-test list parsed to %d directories: %q", len(named), under[1])
+	}
+	for _, m := range named {
+		if !runsSuite[m[1]] {
+			t.Errorf("stage 2 of docs/RELEASING.md names the unit tests under %s, which the "+
+				"Repository hygiene step does not run; the list is stale or CI lost the suite", m[1])
 		}
 	}
 	for _, m := range stageScript.FindAllStringSubmatch(stage, -1) {
