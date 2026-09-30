@@ -75,7 +75,10 @@ class FakePlay:
     write kinds the test permits ("deleteall", "upload", "validate",
     "commit"); any other write fails the test. ``fail`` maps a call kind to
     the error message Play answers it with; ``tamper`` rewrites what a list
-    of an edit returns.
+    of an edit returns. Every error carries the HTTP status its message
+    names, as the real Client's do, and a delete of an edit that is not open
+    (one a commit ended) is answered with HTTP 404, as Play answers it,
+    rather than failing the test inside the tool's cleanup.
     """
 
     def __init__(self, test: unittest.TestCase, *, languages=("en-GB",), live=None,
@@ -94,6 +97,7 @@ class FakePlay:
         self.committed: list = []
         self.calls: list = []
         self.uploads: list = []
+        self.delete_misses: list = []
         self.connected = 0
         self.serial = 0
 
@@ -106,9 +110,17 @@ class FakePlay:
         return {"id": f"img-{self.serial}", "url": f"https://play.invalid/{self.serial}",
                 "sha1": hashlib.sha1(data).hexdigest(), "sha256": sha(data)}
 
+    def play_error(self, message: str):
+        """What the real Client raises: the message, and the HTTP status it
+        names, or None for a request that got no answer."""
+        error = self.test.m.PlayError(message)
+        match = re.search(r"-> HTTP (\d{3})", message)
+        error.status = int(match.group(1)) if match else None
+        return error
+
     def refuse(self, kind: str):
         if kind in self.fail:
-            raise self.test.m.PlayError(self.fail[kind])
+            raise self.play_error(self.fail[kind])
 
     def permit(self, kind: str, path: str):
         if kind not in self.allow:
@@ -132,9 +144,11 @@ class FakePlay:
         self.test.assertIsNotNone(match, f"unexpected {method} {path}")
         edit_id, rest = match.groups()
         if method == "DELETE" and rest == "":
-            self.edit(edit_id)
+            if edit_id not in self.edits:
+                self.delete_misses.append(edit_id)
+                raise self.play_error(f"Play API DELETE /edits/{edit_id} -> HTTP 404\nno such edit")
             if self.fail_delete_edit:
-                raise self.test.m.PlayError("Play API DELETE -> HTTP 500\nbackend error")
+                raise self.play_error("Play API DELETE -> HTTP 500\nbackend error")
             del self.edits[edit_id]
             self.deleted.append(edit_id)
             return {}
@@ -438,6 +452,14 @@ class Arguments(Harness):
         self.refused("--local-only", "--rehearse")
         self.assertEqual(play.connected, 0)
 
+    def test_the_help_says_every_networked_mode_opens_an_edit(self):
+        out = io.StringIO()
+        with self.assertRaises(SystemExit), contextlib.redirect_stdout(out):
+            self.m.main(["--help"])
+        text = " ".join(out.getvalue().split())
+        self.assertIn("Every mode but --local-only opens an edit", text)
+        self.assertIn("invalidates any other edit the same service account has open", text)
+
     def test_the_default_set_is_build_play_screenshots_version(self):
         base = os.path.join(self.tmp, "repo")
         os.makedirs(os.path.join(base, "build", "play"))
@@ -629,6 +651,35 @@ class Rehearsal(Harness):
         self.assertNotIn(("POST", "/edits/edit-1:validate"), play.calls)
         self.assert_every_edit_deleted(play)
 
+    def test_a_read_back_with_another_image_id_aborts(self):
+        # Same bytes, so the same sha256, but not the image this run uploaded.
+        self.write_set(2)
+
+        def tamper(image_type, images):
+            if image_type == "phoneScreenshots" and len(images) == 2:
+                images[1]["id"] = "img-other"
+        play = self.fake(allow=self.ALLOW, tamper=tamper)
+        message = self.refused("--rehearse")
+        self.assertIn("phoneScreenshots position 2: id img-other, expected img-2", message)
+        self.assertNotIn("position 2: sha256", message)
+        self.assertNotIn(("POST", "/edits/edit-1:validate"), play.calls)
+        self.assert_every_edit_deleted(play)
+
+    def test_an_upload_play_reports_with_another_sha256_stops_the_uploads(self):
+        self.write_set(2)
+        play = self.fake(allow=self.ALLOW)
+        original = play.upload
+
+        def upload(path, data):
+            answer = original(path, data)
+            answer["image"]["sha256"] = "e" * 64
+            return answer
+        play.upload = upload
+        message = self.refused("--rehearse")
+        self.assertIn("play-phone-01.png: Play reports sha256 " + "e" * 64, message)
+        self.assertEqual(len(play.uploads), 1, "an upload followed one Play reported wrongly")
+        self.assert_every_edit_deleted(play)
+
     def test_a_read_back_out_of_order_aborts(self):
         self.write_set(2)
 
@@ -735,7 +786,7 @@ class Writing(Harness):
     def write_args(self, *extra):
         return ("--write", "--confirm-version", VERSION, *extra)
 
-    def test_write_commits_then_reads_the_live_listing_in_a_fresh_edit(self):
+    def test_write_commits_then_reads_the_committed_listing_in_a_fresh_edit(self):
         self.write_set(2)
         play = self.fake(live=self.old_live(), allow=self.ALLOW)
         code, out = self.run_tool(*self.write_args())
@@ -755,7 +806,9 @@ class Writing(Harness):
             self.assertEqual([image["sha256"] for image in play.live[("en-GB", TYPES[sub])]],
                              self.expected(sub))
         self.assertIn("committed edit edit-1", out)
-        self.assertIn("live listing matches the files: count, order and sha256", out)
+        self.assertIn("committed listing matches the files: count, order and sha256", out)
+        self.assertIn("in Play's review", out)
+        self.assertNotIn("live listing", out)
 
     def test_validate_comes_before_the_commit(self):
         self.write_set(1)
@@ -777,27 +830,47 @@ class Writing(Harness):
         code, out = self.run_tool(*self.write_args("--changes-not-sent-for-review"))
         self.assertEqual(code, 0)
         self.assertEqual(play.commit_query, "changesNotSentForReview=true")
-        self.assertIn("not sent for review", out)
+        self.assertIn("committed listing matches the files", out)
+        self.assertIn("committed but NOT sent for review", out)
+        self.assertNotIn("in Play's review", out)
+
+    NOT_SENT_REFUSAL = (
+        "Play API POST https://example.invalid/edits/edit-1:commit -> HTTP 400\n"
+        '{"error": {"code": 400, "message": "Changes cannot be sent for review '
+        "automatically. Please set the query parameter changesNotSentForReview "
+        'to true."}}')
 
     def test_a_commit_play_cannot_send_for_review_says_so_and_deletes_the_edit(self):
         self.write_set(1)
-        refusal = ("Play API POST https://example.invalid/edits/edit-1:commit -> HTTP 400\n"
-                   '{"error": {"code": 400, "message": "Changes cannot be sent for review '
-                   "automatically. Please set the query parameter changesNotSentForReview "
-                   'to true."}}')
-        play = self.fake(live=self.old_live(), allow=self.ALLOW, fail={"commit": refusal})
+        play = self.fake(live=self.old_live(), allow=self.ALLOW,
+                         fail={"commit": self.NOT_SENT_REFUSAL})
         message = self.refused(*self.write_args())
         self.assertIn("cannot be sent for review automatically", message)
+        self.assertIn("Nothing was committed; edit edit-1 is deleted.", message)
         self.assertIn("--changes-not-sent-for-review", message)
         self.assertEqual(play.committed, [])
         self.assert_every_edit_deleted(play)
         self.assertEqual(play.live, self.old_live())
 
+    def test_a_refusal_whose_edit_cannot_be_deleted_does_not_claim_it_was(self):
+        self.write_set(1)
+        play = self.fake(allow=self.ALLOW, fail={"commit": self.NOT_SENT_REFUSAL},
+                         fail_delete_edit=True)
+        message = self.refused(*self.write_args())
+        self.assertIn("cannot be sent for review automatically", message)
+        self.assertIn("edit edit-1 was NOT deleted", message)
+        self.assertIn("delete it before another run", message)
+        self.assertNotIn("is deleted", message)
+        self.assertEqual(list(play.edits), ["edit-1"])
+        self.assertEqual(play.committed, [])
+
     def test_any_other_refused_commit_deletes_the_edit(self):
         self.write_set(1)
         play = self.fake(allow=self.ALLOW,
                          fail={"commit": "Play API POST -> HTTP 400\nchanges are in review"})
-        self.assertIn("changes are in review", self.refused(*self.write_args()))
+        message = self.refused(*self.write_args())
+        self.assertIn("changes are in review", message)
+        self.assertNotIn("outcome is unknown", message)
         self.assert_every_edit_deleted(play)
 
     def test_a_read_back_mismatch_aborts_before_the_commit_and_deletes_the_edit(self):
@@ -814,7 +887,7 @@ class Writing(Harness):
         self.assert_every_edit_deleted(play)
         self.assertEqual(play.live, self.old_live())
 
-    def test_a_live_listing_that_differs_after_the_commit_is_a_non_zero_exit(self):
+    def test_a_committed_listing_that_differs_is_a_non_zero_exit(self):
         self.write_set(2)
         play = self.fake(allow=self.ALLOW)
         original = play.api
@@ -826,8 +899,85 @@ class Writing(Harness):
             return result
         play.api = api
         message = self.refused(*self.write_args())
-        self.assertIn("the live listing does not match the files", message)
+        self.assertIn("the committed listing does not match the files", message)
+        self.assertNotIn("from before the commit", message)
         self.assertEqual(play.committed, ["edit-1"])
+        self.assert_every_edit_deleted(play)
+
+    def test_a_fresh_edit_that_still_shows_the_old_images_says_so(self):
+        # Google's edits overview: a new edit "is a copy of the current
+        # deployed state of the app". If that state lags a commit in review,
+        # the read-back sees the images from before it.
+        self.write_set(2)
+        play = self.fake(live=self.old_live(), allow=self.ALLOW)
+        original = play.api
+
+        def api(method, path, payload=None):
+            result = original(method, path, payload)
+            if ":commit" in path:
+                play.live = self.old_live()
+            return result
+        play.api = api
+        message = self.refused(*self.write_args())
+        self.assertIn("the committed listing does not match the files", message)
+        self.assertIn("phoneScreenshots, tenInchScreenshots still hold the images from before "
+                      "the commit", message)
+        self.assertIn("Play Console", message)
+        self.assertEqual(play.committed, ["edit-1"])
+        self.assert_every_edit_deleted(play)
+
+    def test_a_commit_whose_answer_is_lost_says_its_outcome_is_unknown(self):
+        self.write_set(2)
+        play = self.fake(live=self.old_live(), allow=self.ALLOW)
+        original = play.api
+
+        def api(method, path, payload=None):
+            result = original(method, path, payload)
+            if ":commit" in path:
+                # Play applied the commit; its answer never arrived.
+                raise play.play_error("POST https://play.invalid/edits/edit-1:commit: "
+                                      "The read operation timed out")
+            return result
+        play.api = api
+        message = self.refused(*self.write_args())
+        self.assertEqual(play.committed, ["edit-1"])
+        self.assertIn("the commit's outcome is unknown", message)
+        self.assertIn("The read operation timed out", message)
+        self.assertIn("may already hold the new images", message)
+        self.assertIn("edit edit-1 could not be deleted after the commit was sent", message)
+        self.assertIn("run the tool read-only", message)
+        self.assertNotIn("stopped:", message)
+        self.assertNotIn("Nothing was committed", message)
+        self.assertEqual(play.opened, ["edit-1"], "a read-back ran after an unknown outcome")
+
+    def test_a_server_error_on_the_commit_is_an_unknown_outcome(self):
+        self.write_set(1)
+        play = self.fake(allow=self.ALLOW,
+                         fail={"commit": "Play API POST -> HTTP 503\nbackend unavailable"})
+        message = self.refused(*self.write_args())
+        self.assertIn("the commit's outcome is unknown", message)
+        self.assertIn("HTTP 503", message)
+        self.assertIn("edit edit-1 was deleted after the commit was sent", message)
+        self.assertIn("run the tool read-only", message)
+        self.assert_every_edit_deleted(play)
+
+    def test_an_interrupt_during_the_commit_is_an_unknown_outcome(self):
+        self.write_set(1)
+        play = self.fake(allow=self.ALLOW)
+        original = play.api
+
+        def api(method, path, payload=None):
+            if ":commit" in path:
+                play.calls.append((method, path))
+                raise KeyboardInterrupt
+            return original(method, path, payload)
+        play.api = api
+        try:
+            message = self.refused(*self.write_args())
+        except KeyboardInterrupt:
+            self.fail("an interrupt during the commit left as a bare interrupt")
+        self.assertIn("the commit's outcome is unknown", message)
+        self.assertIn("run the tool read-only", message)
         self.assert_every_edit_deleted(play)
 
     def test_the_committed_edit_is_not_deleted(self):
@@ -877,6 +1027,18 @@ class PlayClient(Harness):
             client.api("POST", "/edits/e:commit")
         self.assertIn("HTTP 400", str(caught.exception))
         self.assertNotIn(self.TOKEN, str(caught.exception))
+
+    def test_a_refusal_carries_its_http_status(self):
+        client, _seen = self.stand_in("Play API POST https://x -> HTTP 409\nconflict")
+        with self.assertRaises(self.m.PlayError) as caught:
+            client.api("POST", "/edits/e:commit")
+        self.assertEqual(caught.exception.status, 409)
+
+    def test_a_request_with_no_answer_has_no_status(self):
+        client, _seen = self.stand_in(OSError("timed out"))
+        with self.assertRaises(self.m.PlayError) as caught:
+            client.api("POST", "/edits/e:commit")
+        self.assertIsNone(caught.exception.status)
 
     def test_a_connection_failure_becomes_a_play_error_without_the_query(self):
         client, _seen = self.stand_in(OSError("timed out"))

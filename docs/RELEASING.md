@@ -416,7 +416,7 @@ Re-running from the top is usually wrong. These steps are not idempotent:
 | `play-publish.py upload` | rejects a used versionCode | bump Build, rebuild |
 | `submit-version.py --submit` | 409 — already in review | remove from review in the console |
 | `push-screenshots.py --write` | leaves a set that holds the files, reorders one that holds them out of order, replaces the rest | re-run once a FAILED image or a refusal is understood |
-| `play/push-screenshots.py --write` | leaves a type that holds the files, replaces the rest | a run stopped before the commit deleted its edit and changed nothing; re-run once the reason is understood |
+| `play/push-screenshots.py --write` | leaves a type that holds the files, replaces the rest | a run stopped before the commit deleted its edit and changed nothing; one that reports the commit's outcome unknown may have committed, so run it read-only first; re-run once the reason is understood |
 | `msstore/submit.py create` | 409 — one pending submission at a time | `msstore/submit.py abort`, then create |
 | `git tag` push | tags are immutable | use the next number; the old one is spent |
 | `gh release edit --draft=false` | `/releases/latest` has already moved | attach what is missing, fast |

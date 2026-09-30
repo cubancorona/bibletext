@@ -189,8 +189,10 @@ from the whole image.
 Two of the Play limits above — JPEG or 24-bit PNG, and at most eight images
 per device type — are not taken from a tracked source. Check them against the
 console's own text on the main store listing page before an upload.
-`play/push-screenshots.py` enforces both as written here, with at most 8 MB
-per file, so a change in them is a change to its constants too.
+`play/push-screenshots.py` is stricter than Play on the format: it takes
+24-bit RGB PNG only and refuses a JPEG. It holds at most eight images per
+type and at most 8 MB per file, so a change in either limit is a change to
+its `MAX_IMAGES` or `MAX_BYTES` too.
 
 ### What each store shows today
 
@@ -631,6 +633,11 @@ set is `build/play/screenshots-<v>/`, or `--set-dir`. In this order:
    listing's languages (images are per language, so any language beside
    `en-GB` keeps its own), lists what each type holds by `sha256` beside the
    files that would replace it, and deletes the edit. Read the plan.
+   Read-only means the listing does not change. Play keeps one edit open per
+   user, so opening one invalidates any other edit the service account has
+   open. Every mode but `--local-only` opens one, and `play-publish.py` uses
+   the same account. Run nothing else against the account while
+   `--rehearse` or `--write` runs.
 3. `--rehearse` does everything the write does except the commit. In one
    edit it deletes every image of each type that changes, uploads each file
    in sorted name order, reads the type back — the count, the order, and
@@ -638,16 +645,23 @@ set is `build/play/screenshots-<v>/`, or `--set-dir`. In this order:
    and deletes it. Nothing reaches the listing.
 4. `--write --confirm-version <v>`, with `<v>` exactly the `--version`
    given: the rehearsal's steps, then the commit, then a fresh edit that
-   reads the live listing back the same way and is deleted. It ends non-zero
-   if the listing does not match the files.
+   reads the committed listing back the same way and is deleted. It ends
+   non-zero if the listing does not match the files. The commit sends the
+   change to Play's review, and the store shows the new images only after
+   that, so a match is a committed listing, not a public one. Record the set
+   as in review until the Play Console shows it published.
 
 The commit asks Play to refuse rather than cancel a review already in
 progress (`changesInReviewBehavior=ERROR_IF_IN_REVIEW`). If Play answers that
 the changes cannot be sent for review automatically, the tool deletes the
 edit and says so; `--changes-not-sent-for-review` then commits them with
 `changesNotSentForReview=true`, and they wait in the Play Console until they
-are sent for review there. Anything that stops a run before the commit
-deletes its edit, so a stopped run changes nothing.
+are sent for review there.
+
+A run stopped before the commit deletes its edit and changes nothing. A run
+stopped during the commit may have committed: when the commit gets no answer,
+a server error or an interrupt, the tool says the outcome is unknown, and a
+read-only run shows what the listing holds before any retry.
 
 The console does the same by hand under the main store listing (Store
 presence): phone screenshots, 10-inch tablet screenshots, feature graphic.

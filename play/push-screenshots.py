@@ -25,12 +25,23 @@ other file that is not a PNG is refused rather than skipped.
                    delete it. Nothing reaches the listing.
   --write --confirm-version <v>
                    the rehearsal, then commit the edit, then open a fresh
-                   edit and read the live listing back the same way.
+                   edit and read the committed listing back the same way.
+                   A commit sends the change to Play's review; the store
+                   shows the new images only after that.
+
+Every mode but --local-only opens an edit, and Play keeps one edit open per
+user: opening one invalidates any other edit the same service account has
+open, scripts/play-publish.py's included. So a read-only run leaves the
+listing alone but not another run's edit; run nothing else against the Play
+account while --rehearse or --write runs.
 
 Any failure after an edit is opened deletes that edit; only a committed edit
-is left, because a commit consumes it. The token comes from
-scripts/play-publish.py's access_token(), which reads the service-account key
-it names; nothing here prints the token or the key.
+is left, because a commit consumes it. A commit that gets no definite answer
+(no response, a server error, an interrupt) may still have gone through: the
+tool says the outcome is unknown, and a read-only run shows what the listing
+holds. The token comes from scripts/play-publish.py's access_token(), which
+reads the service-account key it names; nothing here prints the token or
+the key.
 """
 
 from __future__ import annotations
@@ -84,12 +95,32 @@ IN_REVIEW_QUERY = "changesInReviewBehavior=ERROR_IF_IN_REVIEW"
 NOT_SENT_QUERY = "changesNotSentForReview=true"
 NOT_SENT_MARKER = "changesNotSentForReview"
 
+# play-publish.py's call() ends the process with "Play API <method> <url> ->
+# HTTP <code>" and the body when Play answers with an error.
+HTTP_STATUS = re.compile(r"-> HTTP (\d{3})\b")
+
 LocalImage = collections.namedtuple("LocalImage", "name path size sha256 width height")
 LocalSet = collections.namedtuple("LocalSet", "subdirectory image_type directory images")
 
 
 class PlayError(Exception):
-    """A request the Play Developer API refused or that did not complete."""
+    """A request the Play Developer API refused or that did not complete.
+
+    ``status`` is the HTTP status of Play's answer, or None when no answer
+    came back.
+    """
+
+    def __init__(self, message, status=None):
+        super().__init__(message)
+        self.status = status
+
+
+class NotSentForReview(Exception):
+    """Play refused the commit because it cannot send the change for review."""
+
+
+class CommitOutcomeUnknown(Exception):
+    """The commit was sent and no definite answer came back."""
 
 
 def png_header(data):
@@ -194,7 +225,9 @@ class Client:
         try:
             _status, body = self._pp.call(url, self._token, method, **kwargs)
         except SystemExit as stop:
-            raise PlayError(str(stop.code)) from None
+            message = str(stop.code)
+            status = HTTP_STATUS.search(message)
+            raise PlayError(message, int(status.group(1)) if status else None) from None
         except OSError as error:
             # A connection that failed or timed out, never an answer; the
             # URL is printed without its query and the token is not in it.
@@ -243,7 +276,7 @@ def parse_args(argv=None):
     mode.add_argument("--rehearse", action="store_true",
                       help="upload into an edit, read it back, validate it, delete it")
     mode.add_argument("--write", action="store_true",
-                      help="the rehearsal, then commit, then read the live listing back")
+                      help="the rehearsal, then commit, then read the committed listing back")
     parser.add_argument("--confirm-version", metavar="VERSION",
                         help="required with --write; must equal --version exactly")
     parser.add_argument("--changes-not-sent-for-review", action="store_true",
@@ -308,9 +341,10 @@ def check_languages(client, edit_id):
 def plan(client, edit_id, local_sets):
     """Print what each type holds and what would replace it.
 
-    Returns the sets whose images differ from the files, by sha256 and order.
+    Returns the sets whose images differ from the files, by sha256 and order,
+    and each type's sha256 list as the edit held it.
     """
-    changing = []
+    changing, held_by_type = [], {}
     for local in local_sets:
         current = list_images(client, edit_id, local.image_type)
         print(f"\n{local.image_type} ({LANGUAGE})  <-  {local.directory}")
@@ -322,12 +356,13 @@ def plan(client, edit_id, local_sets):
             print(f"    {number}. sha256 {short(image.sha256)}  {image.name}  "
                   f"{image.width}x{image.height}  {image.size} B")
         held = [(image.get("sha256") or "").lower() for image in current]
+        held_by_type[local.image_type] = held
         if held == [image.sha256 for image in local.images]:
             print("  already holds these files in this order; left alone")
             continue
         print(f"  would delete all {len(current)} and upload {len(local.images)}")
         changing.append(local)
-    return changing
+    return changing, held_by_type
 
 
 def compare(image_type, listed, local, ids=None):
@@ -379,71 +414,134 @@ def replace(client, edit_id, local):
 
 
 def commit(client, edit_id, not_sent):
+    """POST :commit, and tell a refusal from an outcome nobody knows.
+
+    An HTTP 4xx is Play refusing the commit, so nothing was committed; it is
+    raised as it came, or as NotSentForReview for the refusal that flag
+    answers. Anything else (no answer, a 5xx, an answer that cannot be read,
+    an interrupt) may have reached Play after the commit took effect, so it
+    is CommitOutcomeUnknown and never reported as a plain stop.
+    """
     query = NOT_SENT_QUERY if not_sent else IN_REVIEW_QUERY
     try:
         client.api("POST", f"/edits/{edit_id}:commit?{query}")
     except PlayError as error:
-        if NOT_SENT_MARKER in str(error) and not not_sent:
-            raise SystemExit(
-                "Play refused the commit: these changes cannot be sent for review "
-                "automatically. Nothing was committed, and the edit is deleted. "
-                "--changes-not-sent-for-review commits them without sending them; "
-                "they then wait in the Play Console until sent for review there."
-            ) from None
-        raise
-    print(f"committed edit {edit_id}"
-          + (" (not sent for review; send it from the Play Console)" if not_sent else ""))
+        if error.status is not None and 400 <= error.status < 500:
+            if NOT_SENT_MARKER in str(error) and not not_sent:
+                raise NotSentForReview(str(error)) from None
+            raise
+        raise CommitOutcomeUnknown(str(error)) from None
+    except (Exception, KeyboardInterrupt) as error:  # pylint: disable=broad-except
+        raise CommitOutcomeUnknown(str(error) or type(error).__name__) from None
+    if not_sent:
+        print(f"committed edit {edit_id}, NOT sent for review")
+    else:
+        print(f"committed edit {edit_id}; Play reviews it before the store shows it")
 
 
-def verify_live(client, local_sets):
-    """A fresh edit shows what the listing now holds; hold it to the files."""
-    print("\nreading the live listing back in a fresh edit")
+def not_sent_message(edit_id, deleted):
+    return ("Play refused the commit: these changes cannot be sent for review "
+            "automatically. Nothing was committed; "
+            + (f"edit {edit_id} is deleted.\n" if deleted else
+               f"edit {edit_id} was NOT deleted (the error is above); "
+               "delete it before another run.\n")
+            + "--changes-not-sent-for-review commits them without sending them; "
+            "they then wait in the Play Console until sent for review there.")
+
+
+def unknown_message(edit_id, reason, deleted):
+    return (f"the commit's outcome is unknown: {reason}\n"
+            "Play may have taken the commit before the answer was lost, so the "
+            "listing may already hold the new images.\n"
+            + (f"edit {edit_id} was deleted after the commit was sent.\n" if deleted else
+               f"edit {edit_id} could not be deleted after the commit was sent (the error "
+               "is above); a commit that went through ends its edit.\n")
+            + "run the tool read-only to see what the listing holds before any retry.")
+
+
+def verify_committed(client, local_sets, before, not_sent):
+    """A fresh edit shows the listing as committed; hold it to the files.
+
+    This is the committed state, not what the store shows: the store shows a
+    change only after Play's review, and one committed with
+    changesNotSentForReview waits in the console until it is sent. Google's
+    edits overview says a new edit "is a copy of the current deployed state
+    of the app"; if that state lags a commit in review, a type still holds
+    what it held before the commit, and the message says so.
+    """
+    print("\nreading the committed listing back in a fresh edit")
     edit_id = open_edit(client)
-    problems, deleted = [], False
+    problems, unchanged, deleted = [], [], False
     try:
         for local in local_sets:
             listed = list_images(client, edit_id, local.image_type)
-            problems += compare(local.image_type, listed, local)
+            found = compare(local.image_type, listed, local)
+            held = [(image.get("sha256") or "").lower() for image in listed]
+            if found and held == before.get(local.image_type):
+                unchanged.append(local.image_type)
+            problems += found
             print(f"  {local.image_type}: {len(listed)} image(s)")
     finally:
         deleted = discard_edit(client, edit_id)
     if problems:
-        raise SystemExit("the live listing does not match the files:\n"
-                         + "\n".join(f"  - {problem}" for problem in problems))
+        message = ("the committed listing does not match the files:\n"
+                   + "\n".join(f"  - {problem}" for problem in problems))
+        if unchanged:
+            message += (f"\n{', '.join(unchanged)} still hold the images from before the "
+                        "commit; a new edit copies the app's deployed state, which may not "
+                        "show a change in review. Look at the Play Console before any re-run.")
+        if not deleted:
+            message += f"\nedit {edit_id} was not deleted; delete it before another run"
+        raise SystemExit(message)
     if not deleted:
         raise SystemExit(f"edit {edit_id} was not deleted; delete it before another run")
-    print("live listing matches the files: count, order and sha256")
+    print("committed listing matches the files: count, order and sha256")
+    if not_sent:
+        print("committed but NOT sent for review: send it for review from the Play "
+              "Console; the store shows it only after that review.")
+    else:
+        print("the change is in Play's review, and the store shows it only after that. "
+              "Record it as in review until the Play Console shows it published.")
 
 
 def run_remote(client, args, local_sets):
     edit_id = open_edit(client)
     committed = deleted = False
+    before = {}
     try:
-        check_languages(client, edit_id)
-        changing = plan(client, edit_id, local_sets)
-        if not (args.rehearse or args.write):
-            print("\nREAD-ONLY: nothing deleted or uploaded.")
-        elif not changing:
-            print("\nevery type already holds its files; nothing to upload")
-        else:
-            for local in changing:
-                replace(client, edit_id, local)
-            client.api("POST", f"/edits/{edit_id}:validate")
-            print("\nPlay validated the edit")
-            if args.write:
-                commit(client, edit_id, args.changes_not_sent_for_review)
-                committed = True
+        try:
+            check_languages(client, edit_id)
+            changing, before = plan(client, edit_id, local_sets)
+            if not (args.rehearse or args.write):
+                print("\nREAD-ONLY: nothing deleted or uploaded.")
+            elif not changing:
+                print("\nevery type already holds its files; nothing to upload")
             else:
-                print("REHEARSAL: not committed.")
-    finally:
-        if not committed:
-            deleted = discard_edit(client, edit_id)
+                for local in changing:
+                    replace(client, edit_id, local)
+                client.api("POST", f"/edits/{edit_id}:validate")
+                print("\nPlay validated the edit")
+                if args.write:
+                    commit(client, edit_id, args.changes_not_sent_for_review)
+                    committed = True
+                else:
+                    print("REHEARSAL: not committed.")
+        finally:
+            # A committed edit is spent. One whose commit went unanswered is
+            # deleted all the same: open, it would linger; spent, the delete
+            # fails and the message below says what that means.
+            if not committed:
+                deleted = discard_edit(client, edit_id)
+    except NotSentForReview:
+        raise SystemExit(not_sent_message(edit_id, deleted)) from None
+    except CommitOutcomeUnknown as error:
+        raise SystemExit(unknown_message(edit_id, error, deleted)) from None
     if not committed:
         if not deleted:
             raise SystemExit(f"edit {edit_id} was not deleted; delete it before another run")
         print("nothing changed on Play")
         return 0
-    verify_live(client, local_sets)
+    verify_committed(client, local_sets, before, args.changes_not_sent_for_review)
     return 0
 
 
