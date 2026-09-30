@@ -127,6 +127,21 @@ SIDECAR_SUFFIXES = {
     ),
 }
 
+# Released assets the site deliberately does not link, by exact filename, with
+# the reason. Unlike a sidecar, each is something a reader can install, so
+# leaving it off the page is a decision about where readers are sent, and the
+# rule holds it both ways: the download page may not link a name listed here,
+# and a name no release uploads any more is a stale exception. Any other
+# unlinked asset still fails, however like one of these it is named.
+NOT_LINKED = {
+    "BibleText-Android.apk": (
+        "the site sends Android readers to Google Play. A sideloaded APK never "
+        "updates itself, and it cannot update into the Play build, which is "
+        "signed with a different key, without an uninstall that deletes the "
+        "reader's notes. Releases still carry it for devices without Google Play"
+    ),
+}
+
 
 # Every public page that points a Windows reader at the Store must use the URL
 # the packaging identity owns. A store link is not an asset, so the release
@@ -159,7 +174,8 @@ def released_assets(text: str) -> tuple[set[str], list[str]]:
 
     Both the automated `gh release upload` steps and the commented sideload
     command count: the APK is uploaded by hand, and a page that links it makes
-    the same promise as one that links the tarball.
+    the same promise as one that links the tarball. Reading it is also what
+    lets its NOT_LINKED exception be found stale.
     """
     names: set[str] = set()
     unreadable: list[str] = []
@@ -337,13 +353,24 @@ def rule_failures(read, list_cmd) -> list[str]:
         for asset in sorted(shipped):
             if asset in offered:
                 continue
-            if is_sidecar(asset):
+            if is_sidecar(asset) or asset in NOT_LINKED:
                 continue
             failures.append(
                 f"{DOWNLOAD_PAGE}: the release ships {asset} and nothing on the download page "
-                f"links it. Add a download button, or give it a sidecar suffix in this checker "
-                f"with the reason it is never offered"
+                f"links it. Add a download button, or, if it is deliberately not offered, name "
+                f"it in this checker's SIDECAR_SUFFIXES or NOT_LINKED with the reason"
             )
+        for asset, reason in sorted(NOT_LINKED.items()):
+            if asset in offered:
+                failures.append(
+                    f"{DOWNLOAD_PAGE}: links {asset}, which this checker names as deliberately "
+                    f"not linked ({reason}). Remove the link, or the exception"
+                )
+            if shipped and asset not in shipped:
+                failures.append(
+                    f"scripts/check-public-surfaces.py: NOT_LINKED names {asset}, which no release "
+                    f"step uploads; the exception is stale"
+                )
         for surface, names in ((DOWNLOAD_PAGE, offered), (READ_ME, linked_assets(readme))):
             for asset in sorted(names - shipped):
                 failures.append(
@@ -497,10 +524,16 @@ def self_test() -> list[str]:
         opening = b"""          NOTES="$(printf 'Desktop builds.\\n\\nmacOS note: """
         return opening + body.strip() + b"""')"\n"""
 
+    # The APK goes up by hand, from the command commented in release.yml, and
+    # no page below links it: the NOT_LINKED exception, which a consistent tree
+    # must pass.
+    sideload = b"          #   gh release upload <tag> BibleText-Android.apk --clobber\n"
+
     clean = {
         RELEASE_WORKFLOW: (
             b'        run: gh release upload "$TAG" BibleText-Linux-amd64.tar.xz '
-            b"BibleText-x86_64.AppImage BibleText-x86_64.AppImage.zsync --clobber\n" + notes(routes)
+            b"BibleText-x86_64.AppImage BibleText-x86_64.AppImage.zsync --clobber\n"
+            + sideload + notes(routes)
         ),
         STORE_IDENTITY: b'{"storeId": "TESTID", "storeUrl": "https://apps.microsoft.com/detail/TESTID"}\n',
         DOWNLOAD_PAGE: (
@@ -536,7 +569,7 @@ def self_test() -> list[str]:
         b'        run: |\n          gh release upload "$TAG" \\\n'
         b"            BibleText-Linux-amd64.tar.xz \\\n"
         b"            BibleText-x86_64.AppImage \\\n"
-        b"            BibleText-x86_64.AppImage.zsync --clobber\n" + notes(routes)
+        b"            BibleText-x86_64.AppImage.zsync --clobber\n" + sideload + notes(routes)
     )
     if wrapped_failures := run(wrapped):
         problems.append(f"a wrapped upload step is misread: {wrapped_failures}")
@@ -562,7 +595,7 @@ def self_test() -> list[str]:
         b"          - goarch: arm64\n"
         b"    steps:\n"
         b'      - run: gh release upload "$TAG" BibleText-Windows-${{ matrix.goarch }}.zip --clobber\n'
-        + notes(routes)
+        + sideload + notes(routes)
     )
     matrixed[DOWNLOAD_PAGE] = (
         b'<a href="https://example.invalid/releases/latest/download/'
@@ -617,6 +650,27 @@ def self_test() -> list[str]:
         b"",
     )
     violations.append(("an unlinked release asset", unlinked, pair))
+
+    # The exception is one exact filename. An asset sharing its prefix and its
+    # extension is still an asset the page must link.
+    near_miss = dict(clean)
+    near_miss[RELEASE_WORKFLOW] = clean[RELEASE_WORKFLOW] + (
+        b'        run: gh release upload "$TAG" BibleText-Android-arm64.apk --clobber\n'
+    )
+    violations.append(("an unlinked asset named like a NOT_LINKED one", near_miss, pair))
+
+    # Held both ways: the page may not link what it deliberately leaves out...
+    relinked = dict(clean)
+    relinked[DOWNLOAD_PAGE] = clean[DOWNLOAD_PAGE] + (
+        b'<a href="https://example.invalid/releases/latest/download/'
+        b'BibleText-Android.apk">Android</a>\n'
+    )
+    violations.append(("a NOT_LINKED asset linked from the download page", relinked, pair))
+
+    # ...and an exception for an asset no release uploads is stale.
+    unshipped = dict(clean)
+    unshipped[RELEASE_WORKFLOW] = clean[RELEASE_WORKFLOW].replace(sideload, b"")
+    violations.append(("a NOT_LINKED asset no release uploads", unshipped, pair))
 
     dead = dict(clean)
     dead[DOWNLOAD_PAGE] = clean[DOWNLOAD_PAGE] + (

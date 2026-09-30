@@ -14,12 +14,10 @@
 <style>
   :root { color-scheme: light dark;
     --paper:#f7f3ea; --ink:#2b2620; --muted:#6f675a; --accent:#3c5a86;
-        --border:#ddd5c4; --card:#fffdf7; --code:#efe9db;
-    --soon-ink:#8a8272; }
+        --border:#ddd5c4; --card:#fffdf7; --code:#efe9db; }
   @media (prefers-color-scheme: dark) {
     :root { --paper:#211e19; --ink:#e8e2d4; --muted:#9a917f; --accent:#8fb0dd;
-      --border:#3a352c; --card:#2a261f; --code:#332e26;
-      --soon-ink:#8a8272; }
+      --border:#3a352c; --card:#2a261f; --code:#332e26; }
   }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--paper); color:var(--ink);
@@ -71,17 +69,20 @@
   .files[open] > summary { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
   .files .lead { margin: 14px auto 12px; }
   .sub { display: block; font-size: .82rem; line-height: 1.4; margin-top: 3px; }
-  /* Store badges: the official badges' look (a black panel, a small line over
-     the store's name) drawn in text, so the four match each other. */
+  /* Store badges: each store's own artwork, unaltered, with its panel drawn
+     40px tall, so the four match each other. */
   .badges { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 12px;
     max-width: 420px; margin: 0 auto; }
   .badge { display: flex; justify-content: center; align-items: center; height: 44px;
     border-radius: 8px; }
   .badge img { height: 40px; width: auto; display: block; }
   .badge:hover img, .badge:focus-visible img { opacity: .85; }
-  /* Google Play's badge is not shown until the listing is live: the store's
-     rules cover the badge only as a link to a live listing. */
-  .badge.soon { border: 1px dashed var(--border); color: var(--soon-ink); font-size: .95rem; }
+  /* Google Play's badge file carries its clear space inside the image: a
+     transparent margin of 41px around a 168px panel, 250px in all. The image
+     is drawn larger by that margin and the margin is taken back out of the
+     layout, so its panel stands 40px tall like the others and the artwork is
+     neither cropped nor shrunk. */
+  .badge img.padded { height: calc(40px * 250 / 168); margin: calc(-40px * 41 / 168); }
   .cap { display: block; font-size: .8rem; color: var(--muted); line-height: 1.35;
     margin-top: 6px; text-align: center; }
   .row { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 16px;
@@ -148,11 +149,10 @@
         <img src="badges/app-store.svg" alt="Download on the App Store"></a>
       <span class="cap">iPhone, iPad and Mac</span>
     </div>
-    <!-- Google Play: a placeholder until the listing is live; then it becomes
-         a link like the others, showing badges/google-play.png. -->
     <div>
-      <span class="badge soon">Google&nbsp;Play</span>
-      <span class="cap">In preparation &mdash; for now, the Android file below</span>
+      <a class="badge" href="https://play.google.com/store/apps/details?id=uk.co.bibletext">
+        <img class="padded" src="badges/google-play.png" alt="Get it on Google Play"></a>
+      <span class="cap">Android phones and tablets</span>
     </div>
     <div>
       <a class="badge" href="https://apps.microsoft.com/detail/9NDCCZH9RB9K">
@@ -169,11 +169,11 @@
   <details class="files">
     <summary>
       <span class="what">Download a file instead
-        <span class="sub">Mac, Android, Windows or Linux, without a store</span></span>
+        <span class="sub">Mac, Windows or Linux, without a store</span></span>
       <span class="chev" aria-hidden="true"></span>
     </summary>
-    <p class="lead">These you update yourself. The desktop files are unsigned, so your computer may
-    warn you the first time.</p>
+    <p class="lead">These you update yourself. They are unsigned, so your computer may warn you
+    the first time.</p>
     <div class="group">
       <div class="row">
         <div class="what">Mac <span class="fmt">(.zip)</span>
@@ -191,15 +191,6 @@
           and confirm with your login password. On macOS&nbsp;12 to&nbsp;14, <span class="nowrap">Control-click</span> the app in
           the Finder, choose <em>Open</em>, then click <em>Open</em> in the warning.</p>
         </details>
-      </div>
-      <div class="row">
-        <div class="what">Android <span class="fmt">(.apk)</span>
-          <span class="sub">Phones and tablets &mdash; allow <em>Install unknown apps</em></span>
-          <span class="sub">Opens shared links</span></div>
-        <div class="get">
-          <a href="https://github.com/cubancorona/bibletext/releases/latest/download/BibleText-Android.apk"
-             aria-label="Download the Android .apk">Download</a>
-        </div>
       </div>
       <div class="row">
         <div class="what">Windows <span class="fmt">(.zip)</span>

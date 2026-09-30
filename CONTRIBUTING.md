@@ -107,7 +107,7 @@ it and refuses to build if it is malformed. To ship your own deployment:
 
 ## Adding a download or a store
 
-Every artifact a reader can get is named by filename on the download page at
+Every artifact the site offers is named by filename on the download page at
 `docs/index.html`, which no generator writes. A new release asset is therefore
 invisible until someone links it — which is how the AppImage shipped in 1.2.10
 with nothing pointing at it. The README's Download section names some of the
@@ -118,10 +118,14 @@ nothing that does not exist rather than to naming everything.
 mechanical half: it reads the asset names out of the `gh release upload`
 steps in `.github/workflows/release.yml` and fails if the download page does
 not offer one of them, or if either page links a name no release uploads. An
-asset that is deliberately not offered — the AppImage's `.zsync` sidecar, which
-update tools fetch by themselves — is listed in the checker's `NOT_LINKED`
-map with the reason, so the omission is a reviewable decision rather than a
-gap. The same checker holds the Linux build dependencies identical across the
+asset that is deliberately not offered is named in the checker with the
+reason, so the omission is a reviewable decision rather than a gap: the
+AppImage's `.zsync` sidecar, which update tools fetch by themselves, by its
+suffix in `SIDECAR_SUFFIXES`, and the Android APK, which every release carries
+for devices without Google Play while the page sends Android readers to Play,
+by name in `NOT_LINKED`. A name in `NOT_LINKED` fails if the download page
+links it or if no release uploads it.
+The same checker holds the Linux build dependencies identical across the
 README, this file and CI, and holds the README's count of `cmd/` programs to
 what is actually in `cmd/`. It also holds the four explanations of opening the
 unsigned Mac download — the release notes in `release.yml`, the download page,
