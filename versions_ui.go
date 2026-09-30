@@ -252,20 +252,22 @@ func showVersionPickerWith(state *AppState, notice string) {
 		}
 		// On a phone or tablet, clear of the header's controls or over
 		// them where that is open to it (touchSheetHeight). The rows
-		// scroll, and keep at least two thirds of their height below the
-		// header. There the sentences follow the rows into the scroll
-		// where the pinned part would not fit, as they do under a desktop
-		// window's header; the least the sheet can be is with them there.
-		// Asking that moves them, so they are placed again for the height
-		// the sheet ends at.
+		// scroll, and keep at least two thirds of their height wherever the
+		// sheet moves. The sentences are placed for the height the sheet
+		// would have, as they are for maxH: below the header they follow
+		// the rows into the scroll where the pinned part would not fit, as
+		// they do under a desktop window's header, and over it they are
+		// pinned again where it would, which can leave the rows less room
+		// than they had. Asking moves them, so they are placed again for
+		// the height the sheet ends at.
 		asked := false
-		least := func() float32 {
+		relayout := func(t float32) (float32, float32) {
 			asked = true
-			placeSentences(false)
-			popup.Resize(fyne.NewSize(w, 0))
-			return popup.MinSize().Height
+			place(t)
+			least := popup.MinSize().Height
+			return least, t - least + body.MinSize().Height
 		}
-		if t := touchSheetHeight(state, popup, w, h, natural > maxH, body, least); t != h || asked {
+		if t := touchSheetHeight(state, popup, w, h, natural > maxH, body, relayout); t != h || asked {
 			place(t)
 			h = t
 		}

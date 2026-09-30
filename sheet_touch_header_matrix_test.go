@@ -189,11 +189,13 @@ func keptBody(body float32) float32 { return max(body*2/3, min(body, 120)) }
 // rule off has nowhere better to go, from what the test measured rather than
 // what the rule computes, or "" when it has somewhere. Covering the header
 // takes it from the header's top edge to as far above the canvas's foot, and
-// is closed where that foot is under the bottom inset or where the taller
-// sheet's sides pass through a control it left alone. Below the header it
-// ends as far above the foot as the header's foot plus sheetHeaderGap is
-// below the top, and that is closed where its content does not fit, or where
-// its scrolling part keeps less than keptBody.
+// is closed where that foot is under the bottom inset, where the taller
+// sheet's sides pass through a control it left alone, or where the sheet,
+// opened covering the header (o.cover), shows less of its scrolling part
+// than keptBody. Below the header it ends as far above the foot as the
+// header's foot plus sheetHeaderGap is below the top, and that is closed
+// where its content does not fit, or where its scrolling part keeps less
+// than keptBody.
 func noBetterPlace(s touchScreen, o touchSheetOpening, ink []inkControl) string {
 	var why []string
 	cover := sheetSpan{x0: o.before.x0, x1: o.before.x1, top: o.headerTop, bottom: s.h - o.headerTop}
@@ -202,6 +204,8 @@ func noBetterPlace(s touchScreen, o touchSheetOpening, ink []inkControl) string 
 		why = append(why, fmt.Sprintf("covering the header would end it at %.1f, under the bottom inset (%.1f)", cover.bottom, s.h-s.bottom))
 	case len(newly) > 0:
 		why = append(why, "covering the header would pass its side through "+strings.Join(newly, " and "))
+	case o.before.body > 0 && o.cover.body < keptBody(o.before.body)-0.5:
+		why = append(why, fmt.Sprintf("covering the header would leave its scroll %.1f of %.1f", o.cover.body, o.before.body))
 	default:
 		return ""
 	}
@@ -230,11 +234,54 @@ func openTouchSheet(t *testing.T, s touchScreen, sh touchSheet) (sp sheetSpan, h
 }
 
 // touchSheetOpening is one sheet opened on one screen, before the rule and
-// with it.
+// with it, and, where it starts partway down a control before the rule,
+// made to cover the header (openSheetCovering).
 type touchSheetOpening struct {
-	before, after           sheetSpan
+	before, after, cover    sheetSpan
 	headerTop, headerBottom float32
 	cutBefore               bool
+}
+
+// openSheetCovering opens sh on st's window with the rule on and made to
+// cover the header wherever it would start partway down a control
+// (touchSheetsAlwaysCover), reads it as openSheetAs does, and closes it:
+// what covering the header would leave the sheet, as laid out.
+func openSheetCovering(t *testing.T, st *AppState, sh touchSheet) sheetSpan {
+	t.Helper()
+	prev := touchSheetsAlwaysCover
+	touchSheetsAlwaysCover = true
+	defer func() { touchSheetsAlwaysCover = prev }()
+	return openSheetAs(t, st, sh, true)
+}
+
+// openTouchOpening opens sh on st's window, on s, with the rule off, on and,
+// where it starts partway down a control with the rule off, made to cover
+// the header, which must then start at the header's top edge.
+func openTouchOpening(t *testing.T, s touchScreen, st *AppState, ink []inkControl, sh touchSheet) touchSheetOpening {
+	t.Helper()
+	top, bottom := headerEdges(st)
+	o := touchSheetOpening{before: openSheetAs(t, st, sh, false), after: openSheetAs(t, st, sh, true), headerTop: top, headerBottom: bottom}
+	o.cutBefore = len(inkCut(ink, o.before)) > 0
+	if o.cutBefore {
+		o.cover = openSheetCovering(t, st, sh)
+		if math.Abs(float64(o.cover.top-top)) > 0.5 {
+			t.Errorf("%s, %s: control: made to cover the header, the sheet starts at %.1f, not at the header's top edge (%.1f)",
+				s.name, sh.name, o.cover.top, top)
+		}
+	}
+	return o
+}
+
+// screenNamed is the screen of touchScreens called name.
+func screenNamed(t *testing.T, name string) touchScreen {
+	t.Helper()
+	for _, s := range touchScreens {
+		if s.name == name {
+			return s
+		}
+	}
+	t.Fatalf("no screen %q", name)
+	return touchScreen{}
 }
 
 // openTouchSheets opens every sheet on a window on each screen, with the
@@ -257,12 +304,9 @@ func openTouchSheets(t *testing.T) map[string]map[string]touchSheetOpening {
 		t.Run("open on "+s.name, func(t *testing.T) {
 			ink := headerInkFor(t, s)
 			st, _ := touchAppWindow(t, s)
-			top, bottom := headerEdges(st)
 			out[s.name] = map[string]touchSheetOpening{}
 			for _, sh := range sheets {
-				before := openSheetAs(t, st, sh, false)
-				after := openSheetAs(t, st, sh, true)
-				out[s.name][sh.name] = touchSheetOpening{before, after, top, bottom, len(inkCut(ink, before)) > 0}
+				out[s.name][sh.name] = openTouchOpening(t, s, st, ink, sh)
 			}
 		})
 	}
@@ -307,7 +351,8 @@ func TestTouchSheetsKeepClearOfTheHeaderControls(t *testing.T) {
 					t.Errorf("%s, %s: the sheet's top edge (%.1f) is partway down %s, and it had a better place", s.name, sh.name, o.after.top, strings.Join(cut, " and "))
 				default:
 					left++
-					t.Logf("%s, %s: left at %.1f: %s", s.name, sh.name, o.after.top, why)
+					t.Logf("%s, %s: left at %v, %.1f tall, across %s: %s",
+						s.name, sh.name, o.after, o.after.bottom-o.after.top, strings.Join(cut, " and "), why)
 				}
 				continue
 			}
@@ -400,13 +445,22 @@ func TestTouchSheetsMovedCutNothingTheyLeftAlone(t *testing.T) {
 // the header. The header's edges are the lines: at or above its top, or
 // sheetHeaderGap or more below its bottom. Each case starts partway down a
 // control with the rule off, and ends on the screen.
+//
+// Whether a sheet is sized to its content or stands at its cap can be data.
+// The translation picker on a 375x667 iPhone is sized to its rows and its
+// sentences, and opens below the header; with a translation under
+// evaluation compiled in (the nrsv and lsb builds), the evaluation sentence
+// makes it stand at its cap, from 40 units down, and it covers the header
+// like any sheet at its cap. That case follows what was measured: over
+// where the sheet's scroll holds more than it shows with the rule off,
+// below where it holds no more.
 func TestTouchSheetsMovedGoOverOrBelowTheHeader(t *testing.T) {
 	opened := openTouchSheets(t)
 	heights := map[string]float32{}
 	for _, s := range touchScreens {
 		heights[s.name] = s.h
 	}
-	const over, below, stays = "over", "below", "stays"
+	const over, below, stays, byCap = "over", "below", "stays", "over at its cap, below at its content's height"
 	for _, tc := range []struct{ screen, sheet, where string }{
 		{"360x803", "Settings", over},
 		{"360x803", "verse of the day, long", over},
@@ -414,7 +468,7 @@ func TestTouchSheetsMovedGoOverOrBelowTheHeader(t *testing.T) {
 		{"360x803", "cross-references, listed", over},
 		{"360x803", "audio source menu", below},
 		{"320x568", "chapter picker", below},
-		{"375x667", "translation picker", below},
+		{"375x667", "translation picker", byCap},
 		{"375x667", "AI answer, waiting", below},
 		{"393x852", "audio source menu", below},
 		{"568x320", "Settings", over},
@@ -437,22 +491,125 @@ func TestTouchSheetsMovedGoOverOrBelowTheHeader(t *testing.T) {
 		{"667x375", "note link offer", stays},
 	} {
 		o, ok := opened[tc.screen][tc.sheet]
+		where := tc.where
+		if ok && where == byCap {
+			where = below
+			if o.before.overflows {
+				where = over
+			}
+			t.Logf("%s, %s: with the rule off its scroll shows %.1f, and its content overflows it: %v; it should go %s",
+				tc.screen, tc.sheet, o.before.body, o.before.overflows, where)
+		}
 		switch {
 		case !ok:
 			t.Errorf("no sheet %q opened on %s", tc.sheet, tc.screen)
 		case !o.cutBefore:
 			t.Errorf("%s, %s: control: with the rule off the sheet (top %.1f) starts partway down no control", tc.screen, tc.sheet, o.before.top)
-		case tc.where == stays:
+		case where == stays:
 			if !sameSpan(o.before, o.after) {
 				t.Errorf("%s, %s: the sheet spanned %v; it should stay there, and spans %v", tc.screen, tc.sheet, o.before, o.after)
 			}
-		case tc.where == over && o.after.top > o.headerTop+0.5:
+		case where == over && o.after.top > o.headerTop+0.5:
 			t.Errorf("%s, %s: the sheet starts at %.1f; it should cover the header, which starts at %.1f", tc.screen, tc.sheet, o.after.top, o.headerTop)
-		case tc.where == below && o.after.top < o.headerBottom+sheetHeaderGap-0.5:
+		case where == below && o.after.top < o.headerBottom+sheetHeaderGap-0.5:
 			t.Errorf("%s, %s: the sheet starts at %.1f; it should open below the header, which ends at %.1f", tc.screen, tc.sheet, o.after.top, o.headerBottom)
 		case o.after.top < -0.5 || o.after.bottom > heights[tc.screen]+0.5:
 			t.Errorf("%s, %s: the sheet spans %.1f..%.1f, off the canvas", tc.screen, tc.sheet, o.after.top, o.after.bottom)
 		}
+	}
+}
+
+// THE TRANSLATION PICKER ON A 1080-PIXEL ANDROID PHONE AT 420 DPI. On its
+// full 1080x2410 screen, with gesture or three-button navigation, and at 2:1
+// (1080x2160), with the translations this build compiles in and with more
+// than any build has and every notice at once, the picker's top edge is at
+// or below the header's bottom, or at or above its top: never between,
+// unless it starts partway down a control with nowhere better to go
+// (noBetterPlace), when it is where it was with the rule off. With more
+// translations it started 12pt down the header, partway down the title.
+// With three-button navigation and a translation under evaluation compiled
+// in, the picker stands at its cap from 40 units down, across the Go to
+// chip, and stays: covering the header would end it under the navigation
+// bar, and below the header its rows would keep 222.7 of their 348.9 units.
+func TestTranslationPickerOnA420DpiAndroidPhoneIsClearOfTheHeader(t *testing.T) {
+	opened := openTouchSheets(t)
+	checked := 0
+	for _, s := range touchScreens {
+		if s.w != 360 {
+			continue
+		}
+		ink := headerInkFor(t, s)
+		for _, sh := range touchSheets(t) {
+			if !strings.HasPrefix(sh.name, "translation picker") {
+				continue
+			}
+			checked++
+			o := opened[s.name][sh.name]
+			if o.after.top <= o.headerTop+0.5 || o.after.top >= o.headerBottom-0.5 {
+				continue
+			}
+			why := ""
+			if o.cutBefore && sameSpan(o.before, o.after) {
+				why = noBetterPlace(s, o, ink)
+			}
+			if why == "" {
+				t.Errorf("%s, %s: the picker starts at %.1f, inside the header (%.1f..%.1f)", s.name, sh.name, o.after.top, o.headerTop, o.headerBottom)
+				continue
+			}
+			t.Logf("%s, %s: left at %.1f, inside the header (%.1f..%.1f): %s", s.name, sh.name, o.after.top, o.headerTop, o.headerBottom, why)
+		}
+	}
+	if checked == 0 {
+		t.Error("control: no translation picker was opened on a 360-unit-wide screen")
+	}
+}
+
+// A COVER THAT TAKES THE PICKER'S ROWS IS NOT A BETTER PLACE. The translation
+// picker pins its sentences under the rows wherever the sheet has room for
+// them and moves them into the scroll after the rows where it has not. On a
+// 667x375 phone on its side with a translation under evaluation, the picker
+// stands at its cap from 40 units down, across the Go to chip, its sentences
+// in the scroll; grown to cover the header it had room to pin them, and the
+// scroll that shows its rows went from 123 units to 54. It stays where it
+// was, as it would if covering were closed to it: below the header its rows
+// would keep less than two thirds. Every build: where none is compiled in,
+// the test registers a translation under evaluation. Mutations guarded:
+// covering without asking the picker how it lays out at the taller height,
+// in the rule (touchSheetHeight) or at the picker (no relayout passed).
+func TestTranslationPickerCoversOnlyWhereItsRowsKeepTheirRoom(t *testing.T) {
+	s := screenNamed(t, "667x375")
+	var picker touchSheet
+	for _, sh := range touchSheets(t) {
+		if sh.name == "translation picker" {
+			picker = sh
+		}
+	}
+	if picker.open == nil {
+		t.Fatal("no translation picker among the sheets")
+	}
+	if len(lockedVersionNames(false)) == 0 {
+		withRegisteredVersion(t, BibleVersion{
+			ID: "sample", Name: "Sample Translation", Abbrev: "SAMPLE",
+			Publisher: "Sample Publisher — license required",
+			source:    newLicensedSource("sample"),
+		})
+	}
+	ink := headerInkFor(t, s)
+	st, _ := touchAppWindow(t, s)
+	o := openTouchOpening(t, s, st, ink, picker)
+	switch why := noBetterPlace(s, o, ink); {
+	case !o.cutBefore:
+		t.Fatalf("control: with the rule off the picker (%v) starts partway down no control", o.before)
+	case o.cover.body >= keptBody(o.before.body)-0.5:
+		t.Fatalf("control: covering the header, the picker's scroll shows %.1f of %.1f, enough to keep; nothing here holds the floor",
+			o.cover.body, o.before.body)
+	case !sameSpan(o.before, o.after):
+		t.Errorf("the picker spanned %v; it moved to %v, where its scroll shows %.1f of the %.1f it showed",
+			o.before, o.after, o.after.body, o.before.body)
+	case why == "":
+		t.Errorf("the picker stays at %v, and measured, it had a better place", o.after)
+	default:
+		t.Logf("the picker stays at %v: %s", o.after, why)
 	}
 }
 

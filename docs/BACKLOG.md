@@ -682,6 +682,16 @@ its 181 on a 852x393 iPhone, and shortening a sheet as far as it could go,
 so that its top edge fell under the controls inside the header, left an AI
 answer there 32 of its 101 units with landscape reading turned off. Those
 sheets stay where they were, and nothing is shortened that way any more.
+Covering the header makes a sheet taller, so its scroll only gains, except
+where the sheet lays its content out afresh for its height: the
+translation picker pins its sentences under the rows wherever there is
+room for them. With a translation under evaluation compiled in (the `nrsv`
+and `lsb` builds), the picker on a 667x375 phone on its side stands at its
+cap from 40 units down with its sentences in the scroll; grown to cover the
+header it had room to pin them, and the scroll that shows its rows went
+from 123 units to 54. A sheet covers the header only where its scroll
+keeps what it would have to keep below it (the picker is asked how it lays
+out at the taller height), so that picker stays where it was.
 **A side edge:** a sheet is
 narrower than the header, so one grown upwards to cover it passes its
 sides through any control at the header's edge. It covers the header only
@@ -705,7 +715,12 @@ phones on their sides: seven on a 568x320 iPhone and four on a 667x375 one
 (the side edge), ten on a 852x393 iPhone and seven on a 956x440 one (the
 home indicator, then the height). Every sheet on the Android phone, upright
 or on its side, with either navigation, every iPhone held upright and every
-iPad moves. A sheet that did not start partway down a control is
+iPad moves. In the `nrsv` and `lsb` builds, whose translation picker
+carries the evaluation sentence, 30 stay: the picker on the 667x375 phone
+(above), and with three-button navigation on the 420 dpi Android phone the
+picker at its cap from 40 units down, across the title, since covering
+would end it under the navigation bar and below the header its rows would
+keep 223 of their 349 units. A sheet that did not start partway down a control is
 untouched. The notes questions and the model list open only over Settings
 and are left as they were. The cross-references panel is now sized after
 its waiting state is in place, so on a phone the least it can be is what
@@ -726,16 +741,23 @@ window, the root widget) on fifteen screens (320x568 to 440x956 with
 phone, five phones on their sides, three iPad sizes) and read the header's
 controls off a rendering at 3x: no sheet's top edge crosses a control's
 drawn pixels unless it has no better place, which the test works out from
-what it measured (covering ends under the bottom inset or passes a side
-through a control, per the pixels, that the sheet cleared; below the
-header its scroll keeps less than two thirds or 120 units, or its content
-does not fit), and such a sheet is the same box as with the rule off; no
+what it measured (covering ends under the bottom inset, passes a side
+through a control, per the pixels, that the sheet cleared, or, the sheet
+opened covering the header through the `touchSheetsAlwaysCover` seam,
+leaves its scroll less than two thirds or 120 units; below the header its
+scroll keeps less than that, or its content does not fit), and such a
+sheet is the same box as with the rule off; no
 sheet that moved shows less of its scroll than that; no sheet that moved
 covers in part a control it left alone; every sheet that did not cross a
 control is the same box with the rule on; every sheet that moved lies
-within the safe area; twenty cases go over, below or stay as described;
-the translation picker at 360x803 and 360x720 is at or below the header's
-bottom or at or above its top; the rule's idea of each control holds all
+within the safe area; twenty cases go over, below or stay as described,
+the translation picker on a 375x667 iPhone over the header where it stands
+at its cap (with a translation under evaluation) and below it where it is
+sized to its content; the translation picker at 360x803 and 360x720 is at
+or below the header's bottom or at or above its top, unless it has no
+better place; the picker on a 667x375 phone with a translation under
+evaluation stays where it was, in every build (the test registers one
+where none is compiled in); the rule's idea of each control holds all
 its pixels; the floor's arithmetic holds at its edges; and no desktop sheet
 moves. Seen on the Pixel 11 Pro emulator (Android 17, 1080x2410, 420):
 Settings and the cross-references start at the header's top edge, the
@@ -750,7 +772,11 @@ the centre, which Fyne's modal does not do, or a shorter header there. A
 card grown to cover the header (on the Android phone on its side) has
 space under its buttons. The cross-references panel on a 956x440 iPhone
 waits below the header and, when its list comes, stands at its cap from
-40 units down, where it was. The Play phone set can now be taken at 420
+40 units down, where it was. The translation picker that stays on a
+667x375 phone with a translation under evaluation could instead cover the
+header with its sentences left in the scroll, which would then show 189
+units rather than 123; the picker pins its sentences wherever they fit,
+and that is unchanged. The Play phone set can now be taken at 420
 (`docs/SCREENSHOT_PLAYBOOK.md` §7).
 
 ## A phone sheet reopened under the keyboard ended at the keyboard's top — FIXED 29 September 2026

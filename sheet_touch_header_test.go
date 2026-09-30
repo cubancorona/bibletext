@@ -16,7 +16,6 @@ package bibletext
 import (
 	"fmt"
 	"math"
-	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -125,9 +124,13 @@ func onCanvasAt(o fyne.CanvasObject) fyne.Position {
 }
 
 // sheetSpan is the box a popup occupies, in canvas units, and, where they
-// were read, the least height it can be (its MinSize) and the height of its
-// scrolling part (scrollBody).
-type sheetSpan struct{ x0, x1, top, bottom, least, body float32 }
+// were read, the least height it can be (its MinSize), the height of its
+// scrolling part and whether that part's content is taller than it
+// (scrollBody).
+type sheetSpan struct {
+	x0, x1, top, bottom, least, body float32
+	overflows                        bool
+}
 
 func (s sheetSpan) String() string {
 	return fmt.Sprintf("x %.1f..%.1f, y %.1f..%.1f", s.x0, s.x1, s.top, s.bottom)
@@ -234,15 +237,16 @@ func openSheetAs(t *testing.T, st *AppState, sh touchSheet, on bool) sheetSpan {
 	defer popup.Hide()
 	sp := sheetSpanOf(t, popup)
 	sp.least = popup.MinSize().Height
-	sp.body = scrollBody(popup)
+	sp.body, sp.overflows = scrollBody(popup)
 	return sp
 }
 
 // scrollBody is the height of the tallest scroll showing in o, what a sheet
 // shows of the part of it that scrolls, or zero when nothing in it scrolls
-// (a card, a spinner, the image preview).
-func scrollBody(o fyne.CanvasObject) float32 {
-	var tallest float32
+// (a card, a spinner, the image preview), and whether that scroll's content
+// is taller than the scroll: whether the sheet stands at a cap, short of the
+// height its content wants.
+func scrollBody(o fyne.CanvasObject) (height float32, overflows bool) {
 	var walk func(fyne.CanvasObject)
 	walk = func(o fyne.CanvasObject) {
 		if o == nil || !o.Visible() {
@@ -250,7 +254,10 @@ func scrollBody(o fyne.CanvasObject) float32 {
 		}
 		switch v := o.(type) {
 		case *container.Scroll:
-			tallest = max(tallest, v.Size().Height)
+			if h := v.Size().Height; h > height {
+				height = h
+				overflows = v.Content != nil && v.Content.MinSize().Height > h+0.5
+			}
 			walk(v.Content)
 		case *fyne.Container:
 			for _, c := range v.Objects {
@@ -263,7 +270,7 @@ func scrollBody(o fyne.CanvasObject) float32 {
 		}
 	}
 	walk(o)
-	return tallest
+	return height, overflows
 }
 
 // headerEdges is where st's header begins and ends on the canvas.
@@ -293,35 +300,6 @@ func TestTouchHeaderRuleLeavesDesktopSheetsAlone(t *testing.T) {
 func sameSpan(a, b sheetSpan) bool {
 	near := func(x, y float32) bool { return math.Abs(float64(x-y)) <= 0.5 }
 	return near(a.x0, b.x0) && near(a.x1, b.x1) && near(a.top, b.top) && near(a.bottom, b.bottom)
-}
-
-// THE TRANSLATION PICKER ON A 1080-PIXEL ANDROID PHONE AT 420 DPI. On its
-// full 1080x2410 screen and at 2:1 (1080x2160), with the translations this
-// build compiles in and with more than any build has and every notice at
-// once, the picker's top edge is at or below the header's bottom, or at or
-// above its top: never between. With more translations it started 12pt
-// down the header, partway down the title.
-func TestTranslationPickerOnA420DpiAndroidPhoneIsClearOfTheHeader(t *testing.T) {
-	sheets := touchSheets(t)
-	for _, s := range touchScreens {
-		if s.w != 360 {
-			continue
-		}
-		t.Run(s.name, func(t *testing.T) {
-			st, _ := touchAppWindow(t, s)
-			top, bottom := headerEdges(st)
-			for _, sh := range sheets {
-				if !strings.HasPrefix(sh.name, "translation picker") {
-					continue
-				}
-				popup := pickerPopup(t, st, func(a *AppState) { sh.open(t, a) })
-				if sp := sheetSpanOf(t, popup); sp.top > top+0.5 && sp.top < bottom-0.5 {
-					t.Errorf("%s: the picker starts at %.1f, inside the header (%.1f..%.1f)", sh.name, sp.top, top, bottom)
-				}
-				popup.Hide()
-			}
-		})
-	}
 }
 
 // WHAT A SHEET THAT SCROLLS KEEPS TO OPEN BELOW THE HEADER. Two thirds of

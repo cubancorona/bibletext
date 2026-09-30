@@ -36,7 +36,14 @@ package bibletext
 // two thirds of its scrolling part, and never less than touchSheetLeastBody
 // of it (touchSheetKeeps). Where the header's depth is a large share of the
 // screen, on an iPhone on its side, opening below the header cost a sheet up
-// to seven tenths of what it shows.
+// to seven tenths of what it shows. Covering the header makes a sheet taller,
+// which only adds to its scroll, unless the sheet lays its content out
+// afresh for the height it has: the translation picker pins its sentences
+// under the rows wherever there is room for them, and grown to cover the
+// header it found that room and pinned them: on a 667x375 phone with a
+// translation under evaluation, the scroll that shows its rows went from
+// 123 units to 54. A sheet covers the header only where its scroll keeps
+// what it would have to keep below it.
 //
 // Only the top edge is the defect. A sheet covering the header is narrower
 // than the header, so its sides can pass through a control at the header's
@@ -57,6 +64,12 @@ import (
 // open every sheet with it off as well, and hold each sheet that did not
 // start partway down a control exactly where it was.
 var touchSheetsKeepClearOfHeader = true
+
+// touchSheetsAlwaysCover makes a sheet that would start partway down a
+// control cover the header whatever that costs. A seam: the host tests open
+// each sheet that crosses a control this way as well, and measure what
+// covering would leave it, rather than take the rule's word for it.
+var touchSheetsAlwaysCover = false
 
 // touchSheetLeastBelow is the shortest a sheet is made to open below the
 // header: the shortest aiPanelSize lets a panel be. With less room than that
@@ -228,12 +241,22 @@ func touchSheetKeeps(body, by float32) bool {
 // if not.
 //
 // give is the part of the sheet that takes whatever height the sheet has
-// beyond its MinSize, its scroll, or nil when nothing in it scrolls. Below
-// the header a sheet is shorter, and it is the scroll that gives up the
-// height: the sheet opens there only if its scroll keeps what
-// touchSheetKeeps asks. least, when not nil, is the shortest the sheet can
-// be by some other measure (the translation picker with its sentences moved
-// into the scroll); it is asked at most once, and only when it decides.
+// beyond its MinSize, its scroll, or nil when nothing in it scrolls. A sheet
+// that moves keeps what its scroll shows, as touchSheetKeeps asks. Below the
+// header a sheet is shorter, and it is the scroll that gives up the height:
+// the sheet opens there only if its scroll keeps enough. Over the header a
+// sheet is taller, and its scroll only gains, unless the sheet lays its
+// content out afresh for its height. relayout, when not nil, is how such a
+// sheet is laid out: it lays the sheet out as its site would for a height t
+// and returns the least the sheet can then be and the height of its scroll.
+// The translation picker's sentences follow the rows into the scroll where
+// the pinned part would not fit, and are pinned again where it would. The
+// sheet opens below the header only if it can be that short, and covers the
+// header only if its scroll keeps enough at that height. (Below the header
+// what the scroll keeps is still taken as all the height the sheet gives up:
+// the sentences only join the rows in the scroll there, so the rows keep at
+// least that much.) relayout moves the sheet's content, so a site that passes
+// it lays the sheet out again for the height it is given.
 //
 // A centred sheet ends as far above the canvas's foot as it starts below its
 // top, so one that covers the header ends the header's depth above the foot.
@@ -249,7 +272,7 @@ func touchSheetKeeps(body, by float32) bool {
 // The sheet's box is the larger of the size it is given and its MinSize,
 // since Fyne lays a modal out at no less than its content wants, so that is
 // what is measured.
-func touchSheetHeight(state *AppState, popup *widget.PopUp, w, h float32, capped bool, give fyne.CanvasObject, least func() float32) float32 {
+func touchSheetHeight(state *AppState, popup *widget.PopUp, w, h float32, capped bool, give fyne.CanvasObject, relayout func(t float32) (least, scroll float32)) float32 {
 	band, ok := touchHeaderBand(state)
 	if !ok || popup == nil {
 		return h
@@ -263,6 +286,16 @@ func touchSheetHeight(state *AppState, popup *widget.PopUp, w, h float32, capped
 		return h
 	}
 	below := cs.Height - 2*(band.bottom+sheetHeaderGap)
+	cover := cs.Height - 2*band.top
+	if touchSheetsAlwaysCover {
+		return cover
+	}
+	// What the sheet's scroll shows as given: the scroll takes the sheet's
+	// height beyond its MinSize.
+	var shows float32
+	if give != nil {
+		shows = box.Height - minSize.Height + give.MinSize().Height
+	}
 	// Whether the sheet may open below the header, decided once.
 	var belowOK *bool
 	fitsBelow := func() bool {
@@ -271,26 +304,37 @@ func touchSheetHeight(state *AppState, popup *widget.PopUp, w, h float32, capped
 			switch {
 			case !ok:
 			case give != nil:
-				// The scroll takes the sheet's height beyond its MinSize.
-				ok = touchSheetKeeps(box.Height-minSize.Height+give.MinSize().Height, box.Height-below)
+				ok = touchSheetKeeps(shows, box.Height-below)
 			default:
 				ok = below >= minSize.Height // nothing scrolls: its content must fit
 			}
-			if ok && least != nil {
-				ok = below >= least()
+			if ok && relayout != nil {
+				least, _ := relayout(below)
+				ok = below >= least
 			}
 			belowOK = &ok
 		}
 		return *belowOK
 	}
-	cover := cs.Height - 2*band.top
-	pos, area := sheetArea(popup.Canvas)
-	coverFits := cs.Height-band.top <= pos.Y+area.Height &&
-		!band.passesThrough(x0, x1, top, cs.Height-top, band.top, cs.Height-band.top)
+	// Whether the sheet may cover the header, decided once.
+	var coverOK *bool
+	coverFits := func() bool {
+		if coverOK == nil {
+			pos, area := sheetArea(popup.Canvas)
+			ok := cs.Height-band.top <= pos.Y+area.Height &&
+				!band.passesThrough(x0, x1, top, cs.Height-top, band.top, cs.Height-band.top)
+			if ok && give != nil && relayout != nil {
+				_, scroll := relayout(cover)
+				ok = touchSheetKeeps(shows, shows-scroll)
+			}
+			coverOK = &ok
+		}
+		return *coverOK
+	}
 	switch {
 	case !capped && below >= touchSheetLeastBelow && fitsBelow():
 		return below
-	case coverFits:
+	case coverFits():
 		return cover
 	case fitsBelow():
 		return below
@@ -309,6 +353,9 @@ func touchSheetTop(state *AppState, cnv fyne.Canvas, x, w, y, h float32) float32
 	band, ok := touchHeaderBand(state)
 	if !ok || !band.cuts(x, x+w, y) {
 		return y
+	}
+	if touchSheetsAlwaysCover {
+		return band.top
 	}
 	pos, sz := sheetArea(cnv)
 	if below := band.bottom + sheetHeaderGap; below+h <= pos.Y+sz.Height-sheetBottomMargin {
