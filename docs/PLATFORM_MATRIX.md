@@ -365,28 +365,35 @@ Recorded 29–30 September 2026, from the share code as it shipped in 1.2.17.
 | Platform | Share with note | Share with citation | Share as link | Share as image | Verse of the day | Defined in | Proof |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | iOS | System share sheet, over the new note card | System share sheet | System share sheet | Preview, then the system share sheet | System share sheet | `reading_ios.go` | `builds` — code reading, 29–30 September 2026 |
-| iPadOS | Share popover; probably points mid-page rather than at the selection | Share popover at the selection | Share popover at the selection | Preview, then a share popover; probably mid-page | Share popover, anchored to the hidden reading view | `reading_ios.go` | `builds` — code reading, 29–30 September 2026 |
-| macOS | Share picker at the selection; the note card appears beneath | Share picker at the selection | Share picker at the selection | Preview, then the share picker with the image | Share picker, anchored to the hidden reading view | `reading_macos.go` | `builds` — code reading, 29–30 September 2026 |
+| iPadOS | Share popover; probably points mid-page rather than at the selection | Share popover at the selection | Share popover at the selection | Preview, then a share popover; probably mid-page | Probably a share popover pointing at the hidden reading view, not the icon; not seen | `reading_ios.go` | `builds` — code reading, 29–30 September 2026 |
+| macOS | Share picker at the selection; the note card appears beneath | Share picker at the selection | Share picker at the selection | Preview, then the share picker with the image | Probably the share picker, anchored to the hidden reading view, not the icon; not seen | `reading_macos.go` | `builds` — code reading, 29–30 September 2026 |
 | Android | The note card, then the "Sharing text" sheet with the note, citation and link | "Sharing text" sheet with the quote and citation | "Sharing text" sheet with the link | Preview, then the "Sharing image" sheet | "Sharing text" sheet, by the citation's route; not driven | `reading_android.go` | `runner` — emulator, 1.2.17, 29–30 September 2026 |
 | Windows | Copied to the clipboard; a 1.4 s notice (27) | Copied; a 1.4 s notice (27) | Copied; a 1.4 s notice (27) | Saved to Downloads; Explorer opens with it selected | Copied; a 1.4 s notice (27) | `share_other.go` | `builds` — build tags and `go list`, 29–30 September 2026 |
 | Linux | Copied; a 1.4 s notice at the window's foot as the note card draws (27) | Copied; a 1.4 s notice (27) | Copied; a 1.4 s notice (27) | Saved to ~/Downloads; the file manager opens on the folder | Copied; a 1.4 s notice (27); not driven | `share_other.go` | `hardware` — arm64 VM, X11, 29–30 September 2026 |
 
 What each proof rests on:
 
-- **Linux, `hardware`.** A build of the audited tree on the arm64 VM's GNOME
-  X11 desktop (divergence 25's machine), recorded at 10 frames a second: the
-  composer closes, the note card draws and the chapter moves down, and the
-  notice shows for 14 frames. Dark mode on the desktop; light mode and the
-  contrast figures come from the test driver on the Linux build tags. Not the
-  installed snap, whose share code is the same; not Wayland; the verse of the
-  day not driven.
+- **Linux, `hardware`, as an exception to the rule that the artefact must
+  be the shipped one.** A local build of c8a98d9e6 ran on the arm64 VM's
+  GNOME X11 desktop (divergence 25's machine), recorded at 10 frames a
+  second: the composer closes, the note card draws and the chapter moves
+  down, and the notice shows for 14 frames. No shipped package was run, not
+  even the installed snap. The build stands in for them because between
+  v1.2.17 and c8a98d9e6 the only Go files that change are in `cmd/linuxmeta`,
+  `cmd/msstore` and `releasing_doc_test.go`: no file on the share path
+  differs, so the share code that ran is the code 1.2.17 ships; only its
+  packaging was not run. Dark mode on the desktop; light mode and the
+  contrast figures come from the test driver on the Linux build tags. Not
+  Wayland; the verse of the day not driven.
 - **Android, `runner`.** The 1.2.17 build on the emulator. A simulator is not
   hardware (divergence 9), and an emulator is not either. Every verb but the
   verse of the day was driven to its share sheet; no share target was tapped.
 - **macOS, iOS and iPadOS, `builds`.** Read from the code; nothing was
-  launched for this table. The iPad popovers that are "probably" mid-page and
-  the verse-of-the-day anchoring on iPad and Mac are recorded in
-  `docs/BACKLOG.md` to be seen on a device.
+  launched for this table. The cells marked "probably" — the iPad's Share
+  with note and Share as image, and the verse of the day on iPad and Mac —
+  are recorded in `docs/BACKLOG.md` to be seen on a device. On the Mac it is
+  not even known that the picker shows while the view it is anchored to is
+  hidden.
 - **Windows, `builds`.** Read from the build tags and `go list`; the Windows
   VM was not started. It runs the Linux code, but for the file manager the
   image share opens: Explorer, with the file selected.

@@ -240,23 +240,29 @@ Read from the code; no simulator was booted and the Mac app was not launched.
   shares through `sharePassageText`, and the popover (iPad) or picker (Mac)
   is anchored to the reading view — `gReadingTV`, `gTextView` — which is
   hidden while the card is up, not to the icon; with no selection both fall
-  back to the middle of that view. Likely fix: anchor to the icon's
-  rectangle, which the Fyne side knows.
+  back to the middle of that view. On the Mac it is not known that the
+  picker shows at all while the view it is anchored to is hidden. Likely
+  fix: anchor to the icon's rectangle, which the Fyne side knows.
 
 Share with citation and Share as link keep the selection and are expected to
 point at it on both. See each on a device before changing anything; the
-Sharing table in `docs/PLATFORM_MATRIX.md` marks these cells "probably".
+Sharing table in `docs/PLATFORM_MATRIX.md` marks the four cells above
+"probably": the iPad's Share with note and Share as image, and the verse of
+the day on iPad and on Mac.
 
 ## Android: a text share has no failure path — found 30 September 2026
 
-`BtBridge.shareText` (`android/BtBridge.java`) returns without a word when
-there is no activity, and calls `startActivity` with no try/catch, so a
-failure to start the chooser either ends the share in silence or goes
-uncaught on the UI thread. `shareImage` beside it shows a message on each way out, since the
-20 September 2026 fix recorded below ("A share the reader started cannot
-end in silence, whatever the cause"). Never seen to fail; this is hardening
-under that rule: catch around `startActivity` and show the same kind of
-message `shareImage` shows. The same reading of the iOS bridge finds
+`BtBridge.shareText` (`android/BtBridge.java`) calls `startActivity` with
+no try/catch, so a failure to start the chooser goes uncaught on the UI
+thread and the reader is told nothing. `shareImage` beside it wraps the same
+call in a try/catch that shows "Could not share the card." through
+`shareNotice`, part of the 20 September 2026 fix recorded below ("A share
+the reader started cannot end in silence, whatever the cause"). That catch
+is the difference. Both methods open with the same bare return when there is
+no activity, and neither can say anything there: with no activity there is
+nothing to show a message on. Never seen to fail; this is hardening under
+that rule: catch around `startActivity` in `shareText` and show the same
+kind of message `shareImage` shows. The same reading of the iOS bridge finds
 `bibleTextPresentShare` returning silently with no view controller to
 present from, and `bibleTextShareImageFile` with an image it cannot read
 (`reading_ios.go`) — worth the same treatment. Every text verb on Android
