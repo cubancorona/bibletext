@@ -119,18 +119,18 @@ with its pane in the top ~45% of the window, a "content reaches the bottom"
 test passed anyway, and asking whether there is ink where the tab bar belongs
 failed two images that had already been committed as fine.
 
-**The listing shows the set in `play-assets/2026-09-1.2.5/`**, with
-`feature-graphic.png` and `icon-512.png`: a read-back of the listing's images
-on 30 September 2026 matched those files byte for byte. The eight phone images
-were captured on 7 and 8 September 2026 from the 1.2.5 release APK
-(versionCode 176) on a Pixel 7 emulator. They predate 1.2.7's reading face
-(Junicode with small-capital divine name) and the publishers' own
-paragraphing, so they no longer show the shipped text, and they follow an
-earlier shot list (docs/SCREENSHOT_PLAYBOOK.md, §3). Each image was cropped
-from the Pixel's 1080x2400 to 1080x2160, exactly 2:1, which took the status
-bar and the top of the app header with it; the playbook sets the emulator's
-display to 1080x2160 instead of cropping. A 1.2.17 set is being prepared to
-replace them. They sit beside the July set rather than replacing it.
+**The 1.2.17 set replaces `play-assets/2026-09-1.2.5/` on the listing.**
+`play/push-screenshots.py --write` committed eight phone and eight 10-inch
+tablet images from `build/play/screenshots-1.2.17/` on 30 September 2026, and
+a fresh edit read them back matching by sha256. The change goes through
+Play's review, so the store shows the 1.2.5 set until the Play Console shows
+it published. The feature graphic and the icon did not change. The 1.2.5
+set stays in `play-assets/2026-09-1.2.5/` as history: captured on 7 and 8
+September 2026 from the 1.2.5 release APK, it predates 1.2.7's reading face
+and was cropped from 1080x2400, which took the status bar and the top of the
+app header. [SCREENSHOT_PLAYBOOK.md](SCREENSHOT_PLAYBOOK.md) §3 records what
+each store shows, and §7 why the 1.2.17 phone set uses the Small display
+size.
 
 ## Data safety
 

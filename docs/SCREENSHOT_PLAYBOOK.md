@@ -202,7 +202,7 @@ As the sources record it on 30 September 2026:
 | --- | --- | --- |
 | App Store (iOS) | The 1.2.17 version record holds the 1.2.17 iPhone and iPad sets. Readers see them once 1.2.17 is released; until then the released version shows what every release since 1.2.2 inherited, the 1.2.2 captures (the 1.2.3 replacement was prepared and never uploaded). | 29 September 2026 |
 | Mac App Store | The 1.2.17 version record holds the 1.2.17 Mac set, shown from 1.2.17's release. What earlier Mac versions carried is not recorded here. | 29 September 2026 |
-| Google Play | Exactly the tracked `docs/play-assets/2026-09-1.2.5/` set, with `docs/play-assets/feature-graphic.png` and `icon-512.png`: a read-back of the listing's images through the Play Developer API on 30 September 2026 matched those files by sha256. The eight phone images come from the 1.2.5 release APK (versionCode 176), each cropped from 1080×2400 to 1080×2160, which took the top of the app header with the status bar. They predate the reading face and follow an earlier shot list: 03 and 04 are dark, 05 and 06 show three "From you" notes on John 11 in the WEB, and 08 selects the single word "stands" with the menu over the verse. No tablet images. A 1.2.17 phone and 10-inch tablet set is being prepared under `build/play/screenshots-1.2.17/` to replace them. | Not recorded; the files date from 7 and 8 September 2026 |
+| Google Play | The 1.2.17 set from `build/play/screenshots-1.2.17/`: eight phone images (1080×2160) and eight 10-inch tablet images (2560×1600), the first tablet images the listing has carried, with `docs/play-assets/feature-graphic.png` and `icon-512.png` unchanged. `play/push-screenshots.py --write` committed them on 30 September 2026, and a fresh edit read them back matching by count, order and sha256. A committed listing change goes through Play's review first, so the store shows them once the Play Console shows the change published; until then shoppers still see the 1.2.5 set in `docs/play-assets/2026-09-1.2.5/`. The phone images were taken at the Pixel 11 Pro's Small display size (density 356), not its default 420 (§4, Android phone, step 3). | Committed 30 September 2026; in Play's review |
 | Microsoft Store | The four runner captures in `docs/screenshots/windows/` (1600×960; reading, search, note and settings in that order, each captioned), the BSB in light, uploaded by hand with submission 1. `msstore/submit.py` carries them into every later submission unchanged. | Captured 16 September 2026, live 17 September 2026 |
 | Snap Store | No gallery images are recorded as set: the item stands open in [LINUX_STORES.md](LINUX_STORES.md), "Listing work that snapcraft.yaml cannot do". | — |
 | AppStream metainfo | The four runner captures in `docs/screenshots/linux/` (1280×860; reading, search, note, settings), the BSB in light, pinned at the commit `screenshots.ref` names. | 16 September 2026 |
@@ -391,22 +391,35 @@ password prompt. The Mac shots are driven with the mouse and keyboard.
    `~/Library/Android/bibletext-dist/BibleText-Android.apk` is the universal
    APK drawn from the release AAB, which is the store build.
 2. A capture AVD of its own, so an emulator in use for verification is not
-   disturbed:
+   disturbed, matching the phone class the account holder uses: the Pixel 11
+   Pro, 1080×2410 at 420 dpi, on Android 17. `bibletext_pixel11pro` is the
+   Pixel 9 profile with its display set to those values in `config.ini`
+   (`hw.lcd.width=1080`, `hw.lcd.height=2410`, `hw.lcd.density=420`) and the
+   `system-images;android-37.0;google_apis;arm64-v8a` image. It is kept
+   between releases. The line the 1.2.17 set was taken with:
 
    ```
-   avdmanager create avd -n bibletext_playshots -k "system-images;android-36;google_apis;arm64-v8a" -d pixel_7
-   emulator -avd bibletext_playshots -port 5580 -no-snapshot-load -no-boot-anim -no-audio -no-window -gpu swiftshader_indirect &
+   emulator -avd bibletext_pixel11pro -port 5580 -memory 4096 -feature GLDirectMem,HasSharedSlotsHostMemoryAllocator -no-snapshot-save -no-boot-anim -no-window -no-audio -no-metrics -qemu -enable-hvf &
    adb -s emulator-5580 wait-for-device
    ```
 
-   `-no-snapshot-load` boots it cold: capture on a freshly booted emulator.
-   Every command below names it with `-s emulator-5580`.
-3. The display, before anything else. A Pixel captures 1080×2400, which is
-   2.22:1 and past Play's 2:1, so set the display itself to exactly 1080×2160
+   Capture on a freshly booted emulator. Every command below names it with
+   `-s emulator-5580`.
+3. The display, before anything else. The Pixel 11 Pro captures 1080×2410,
+   2.23:1 and past Play's 2:1, so set the display itself to exactly 1080×2160
    — `adb -s emulator-5580 shell wm size 1080x2160` — and confirm that `adb
    -s emulator-5580 shell wm size` reports the override. **Never crop a
    capture instead**: cropping the 2026-09 set to 1080×2160 took the top of
    the app header with the status bar.
+
+   The density stays at the default 420, what most people see. The 1.2.17
+   phone set is the exception: it was taken at `adb -s emulator-5580 shell
+   wm density 356`, the smallest step of Android's Display size setting on a
+   420 phone (`int(420 × 0.85)`, rounded down to even), because at 420 the
+   app's phone layout still has the faults listed in §7. The toolkit draws
+   the interface at 3× from 405 dpi and at 2× below, so the two sizes differ
+   by more than the density ratio. Whichever density a set uses, every image
+   in it uses the same one.
 4. Appearance, set before the app starts: `adb -s emulator-5580 shell cmd
    uimode night no` (`yes` for 02). Changing it while the app runs has
    brought the app back with its pane in the top 45% of the window.
@@ -448,7 +461,8 @@ password prompt. The Mac shots are driven with the mouse and keyboard.
    platform's own selection menu — so that they show below the selection.
 10. Afterwards: `adb -s emulator-5580 shell am broadcast -a
     com.android.systemui.demo -e command exit`, `adb -s emulator-5580 shell wm
-    size reset`, `adb -s emulator-5580 emu kill`.
+    size reset`, `adb -s emulator-5580 shell wm density reset`, `adb -s
+    emulator-5580 emu kill`.
 
 ### Android tablet
 
@@ -722,7 +736,17 @@ standing rule in [RELEASING.md](RELEASING.md)), and only then does
 - **Android shot 08's menu placement** is not yet written down step by step:
   how the Study with AI menu is brought below verse 1 on Android is to be
   recorded from the first Android set that meets §2.
-- **`docs/play-assets/2026-09-1.2.5/` is live and being replaced.** It is
-  the set the Play listing shows (§3), with the cropped header, text that
-  predates 1.2.7's reading face, and an earlier shot list. It is never
-  uploaded again, and stays as history once the 1.2.17 set replaces it.
+- **`docs/play-assets/2026-09-1.2.5/` is history.** The 1.2.17 set
+  replaced it on the listing on 30 September 2026 (§3), pending Play's
+  review. It is never uploaded again.
+- **The Play phone set is at the Small display size.** At the Pixel 11 Pro's
+  default density, 420, the app's phone layout shows Books as one column,
+  the Settings sheet cutting rows, and the Translation sheet over the
+  header, so the 1.2.17 phone set was taken at 356. Once the app lays those
+  screens out properly at 420, the phone set is taken again at 420, which
+  is what most people see.
+- **Light status-bar icons on Android.** In light mode the app leaves the
+  status bar's icons white on the cream page, so the clock and battery
+  barely show in the light Play images. The app does not ask for light
+  status-bar appearance; demo mode cannot change it, and nothing is
+  composed over a capture (§2).
