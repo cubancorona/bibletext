@@ -34,10 +34,32 @@ import (
 // are up and the sheet is not yet open.
 func settingsWithIncludedKey(t *testing.T, w, h, scale float32, before func()) (*AppState, fyne.Window, *widget.PopUp) {
 	t.Helper()
+	app, th := settingsApp(t)
+	return openSettingsWithIncludedKey(t, app, th, w, h, scale, before)
+}
+
+// settingsApp is a new test app in the app's real theme, quit when t ends.
+func settingsApp(t *testing.T) (fyne.App, *bibleTheme) {
+	t.Helper()
 	app := test.NewApp()
 	t.Cleanup(app.Quit)
 	th := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 	app.Settings().SetTheme(th)
+	return app, th
+}
+
+// openSettingsWithIncludedKey is settingsWithIncludedKey in an app settingsApp
+// built, so a sweep can open the sheet many times in one app. Each call opens
+// it in a window of its own, with keys, state and preferences of its own: the
+// app's preferences are emptied first, which is what a new app has, so no
+// call opens the sheet on what an earlier one left.
+func openSettingsWithIncludedKey(t *testing.T, app fyne.App, th *bibleTheme, w, h, scale float32, before func()) (*AppState, fyne.Window, *widget.PopUp) {
+	t.Helper()
+	prefs, ok := app.Preferences().(interface{ WriteValues(func(map[string]any)) })
+	if !ok {
+		t.Fatalf("setup: the test app's preferences (%T) cannot be emptied", app.Preferences())
+	}
+	prefs.WriteValues(func(m map[string]any) { clear(m) })
 	t.Setenv("BIBLE_API_KEY", "")
 	fake := withFakeSharedKeys(t)
 	prev := bundledBibleKeyEnc

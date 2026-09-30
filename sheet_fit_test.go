@@ -231,6 +231,10 @@ func TestSettingsSheetSqueezesNothing(t *testing.T) {
 	for _, p := range aiProviders() {
 		assistants = append(assistants, p.ID)
 	}
+	// One app for the whole sweep; each case still opens a new sheet in a new
+	// window, on keys and preferences of its own. A new app and theme per
+	// case only emptied Fyne's font caches for the sheet to fill again.
+	app, th := settingsApp(t)
 	for _, sc := range []struct {
 		name string
 		w, h float32
@@ -251,7 +255,7 @@ func TestSettingsSheetSqueezesNothing(t *testing.T) {
 				name = sc.name + ", " + id
 			}
 			t.Run(name, func(t *testing.T) {
-				_, _, popup := settingsWithIncludedKey(t, sc.w, sc.h, 1, func() {
+				_, _, popup := openSettingsWithIncludedKey(t, app, th, sc.w, sc.h, 1, func() {
 					if id == "" {
 						sharedKeys().setAIEnabled(false)
 					} else {
