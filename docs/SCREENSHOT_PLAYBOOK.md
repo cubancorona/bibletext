@@ -127,7 +127,8 @@ checks passages, bylines and wording, not dates.
 ### File names
 
 Every store's set is numbered in §1's order; the number and the name travel
-together, and `push-screenshots.py` uploads in sorted name order.
+together, and both `push-screenshots.py` tools, `appstore/` and `play/`,
+upload in sorted name order.
 
 | # | iPhone, `en-GB/` | iPad, `en-GB/ipad13/` | Mac, `en-GB/mac/` | Play, `phone/` and `tablet10/` |
 | --- | --- | --- | --- | --- |
@@ -180,7 +181,7 @@ from the whole image.
 | --- | --- | --- | --- | --- | --- |
 | App Store (iOS) | iPhone 6.9-inch (`APP_IPHONE_67`) and iPad 13-inch (`APP_IPAD_PRO_3GEN_129`); smaller devices scale from these | iPhone 1320×2868 (1290×2796 and 1260×2736 also taken), iPad 2064×2752 (2048×2732 also taken); portrait here, landscape also taken; PNG without alpha. `ACCEPTED_SCREENSHOT_SIZES` in `appstore/preflight.py` is the list | 8 + 8; a set holds at most 10 | `build/appstore/screenshots-ready-<v>/en-GB/` and `…/ipad13/` | `appstore/push-screenshots.py` |
 | Mac App Store | Mac (`APP_DESKTOP`) | 2560×1600 (1280×800, 1440×900 and 2880×1800 also taken), landscape only; PNG without alpha | 8 | `…/en-GB/mac/` | `push-screenshots.py --platform MAC_OS` |
-| Google Play | Phone, 10-inch tablet, feature graphic | Phone 1080×2160: the long side at most twice the short, and a Pixel's own 1080×2400 is past it. Tablet 2560×1600 from the Pixel Tablet profile. Feature graphic 1024×500. PNG without alpha (Play asks for JPEG or 24-bit PNG) | 8 phone + 8 tablet (at most eight per device type) + the feature graphic | `build/play/screenshots-<v>/phone/` and `…/tablet10/`; `docs/play-assets/feature-graphic.png` | No tracked tool (§7): the listing images API or the console |
+| Google Play | Phone, 10-inch tablet, feature graphic | Phone 1080×2160: the long side at most twice the short, and a Pixel's own 1080×2400 is past it. Tablet 2560×1600 from the Pixel Tablet profile. Feature graphic 1024×500. PNG without alpha (Play asks for JPEG or 24-bit PNG) | 8 phone + 8 tablet (at most eight per device type) + the feature graphic | `build/play/screenshots-<v>/phone/` and `…/tablet10/`; `docs/play-assets/feature-graphic.png` | `play/push-screenshots.py` for the phone and tablet; the feature graphic in the console |
 | Microsoft Store | Desktop | PNG, 1366×768 or larger, at most 50 MB; key content in the top two thirds; no added logos or marketing text; an optional caption of at most 200 characters | At most 10, one required, four or more recommended | `docs/screenshots/windows/` | Partner Center only |
 | Snap Store | Desktop | GIF, JPEG or PNG; 480×480 to 3840×2160; aspect between 1:2 and 2:1; at most 2 MB each; a 3:1 banner besides | At most 5 | `docs/screenshots/linux/` | The snapcraft.io dashboard only |
 | AppStream metainfo (software centres, AppImageHub) | Desktop | The `docs/screenshots/linux/` files, by commit-pinned URL | As many as `linux/listing.toml` lists | `docs/screenshots/linux/` and `screenshots.ref` | `go run ./cmd/linuxmeta render`, then a commit |
@@ -188,6 +189,8 @@ from the whole image.
 Two of the Play limits above — JPEG or 24-bit PNG, and at most eight images
 per device type — are not taken from a tracked source. Check them against the
 console's own text on the main store listing page before an upload.
+`play/push-screenshots.py` enforces both as written here, with at most 8 MB
+per file, so a change in them is a change to its constants too.
 
 ### What each store shows today
 
@@ -558,8 +561,9 @@ round passes with nothing flagged.
 
 - [ ] Every file's pixel size is one its store takes (§3). For the App Store,
       `push-screenshots.py --local-only`, and again with `--platform
-      MAC_OS`; for Play, the phone at exactly 1080×2160, the tablet within
-      2:1, the feature graphic 1024×500.
+      MAC_OS`; for Play, the phone at exactly 1080×2160 and the tablet at
+      exactly 2560×1600, which `python3 play/push-screenshots.py --version
+      <v> --local-only` checks, and the feature graphic 1024×500.
 - [ ] PNG, RGB, no alpha channel: `png_inspect` in `appstore/preflight.py`
       reports `has_alpha` False for every file.
 - [ ] Every file present: 24 for the App Store (8 iPhone, 8 iPad, 8 Mac), 16
@@ -610,27 +614,44 @@ A release that keeps the previous images says so with
 
 ### Google Play
 
-No tracked tool uploads Play listing images (§7). The service account that
-`scripts/play-publish.py` uses has store-presence access, so the Play
-Developer API can make the change in one edit on the `en-GB` listing, with
-the token that script's `access_token()` mints from the service-account key
-it reads (`BIBLETEXT_PLAY_KEY`, or its default path):
+`play/push-screenshots.py` replaces the phone and 10-inch tablet screenshots
+on the `en-GB` listing in one edit of the Play Developer API. It uses the
+token that `scripts/play-publish.py`'s `access_token()` mints from the
+service-account key it reads (`BIBLETEXT_PLAY_KEY`, or its default path);
+that account has store-presence access. It touches `phoneScreenshots`, from
+`phone/`, and `tenInchScreenshots`, from `tablet10/`, and nothing else: the
+feature graphic, the icon and every other language keep what they hold. The
+set is `build/play/screenshots-<v>/`, or `--set-dir`. In this order:
 
-1. `POST …/applications/uk.co.bibletext/edits` opens an edit.
-2. For each image type that changes — `phoneScreenshots`,
-   `tenInchScreenshots`, and `featureGraphic` only if it does — `DELETE
-   …/edits/<edit>/listings/en-GB/<type>` removes every image of that type,
-   then one `POST` to the upload endpoint,
-   `https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/uk.co.bibletext/edits/<edit>/listings/en-GB/<type>?uploadType=media`
-   with `Content-Type: image/png`, per file, in §1's order.
-3. `GET …/edits/<edit>/listings/en-GB/<type>` reads the set back: the count,
-   and each image's `sha256` against its file's.
-4. `POST …/edits/<edit>:commit`. A dry run is the same with `DELETE
-   …/edits/<edit>` in place of the commit, as `play-publish.py --dry-run`
-   does for bundles.
+1. `python3 play/push-screenshots.py --version <v> --local-only` checks the
+   files and makes no request: 1 to 8 per type, 24-bit RGB PNG without
+   alpha, the phone exactly 1080×2160 and the tablet exactly 2560×1600, at
+   most 8 MB each, no two alike. Every mode runs these checks first.
+2. The same without `--local-only` is read-only. It opens an edit, names the
+   listing's languages (images are per language, so any language beside
+   `en-GB` keeps its own), lists what each type holds by `sha256` beside the
+   files that would replace it, and deletes the edit. Read the plan.
+3. `--rehearse` does everything the write does except the commit. In one
+   edit it deletes every image of each type that changes, uploads each file
+   in sorted name order, reads the type back — the count, the order, and
+   each image's `sha256` against its file's — has Play validate the edit,
+   and deletes it. Nothing reaches the listing.
+4. `--write --confirm-version <v>`, with `<v>` exactly the `--version`
+   given: the rehearsal's steps, then the commit, then a fresh edit that
+   reads the live listing back the same way and is deleted. It ends non-zero
+   if the listing does not match the files.
+
+The commit asks Play to refuse rather than cancel a review already in
+progress (`changesInReviewBehavior=ERROR_IF_IN_REVIEW`). If Play answers that
+the changes cannot be sent for review automatically, the tool deletes the
+edit and says so; `--changes-not-sent-for-review` then commits them with
+`changesNotSentForReview=true`, and they wait in the Play Console until they
+are sent for review there. Anything that stops a run before the commit
+deletes its edit, so a stopped run changes nothing.
 
 The console does the same by hand under the main store listing (Store
 presence): phone screenshots, 10-inch tablet screenshots, feature graphic.
+The feature graphic goes up there.
 
 ### Microsoft Store
 
@@ -662,10 +683,6 @@ standing rule in [RELEASING.md](RELEASING.md)), and only then does
 
 ## 7. Known gaps
 
-- **No Play uploader.** Nothing tracked uploads Play listing images; §6 names
-  the API calls. A tool in the shape of `appstore/push-screenshots.py` —
-  read-only by default, `--write` with an exact confirmation, a read-back by
-  `sha256` — would close it.
 - **The Mac dark shot needs the account holder.** Shot 02 on the Mac waits
   for the system appearance to be switched and switched back by hand, so a
   Mac set cannot be captured unattended.

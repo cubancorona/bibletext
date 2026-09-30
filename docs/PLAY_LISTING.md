@@ -103,7 +103,10 @@ The icon and feature graphic under `docs/play-assets/` remain usable:
 | Feature graphic | `feature-graphic.png` | 1024×500 PNG |
 
 The scenes, the capture recipe for the phone and the 10-inch tablet, the
-checks and the upload steps are in docs/SCREENSHOT_PLAYBOOK.md.
+checks and the upload steps are in docs/SCREENSHOT_PLAYBOOK.md. The phone and
+tablet screenshots go up with `play/push-screenshots.py`, read-only first,
+then `--rehearse`, then `--write --confirm-version <v>` (§6 there); the
+feature graphic and the icon go up in the console.
 
 The existing `01-reading.png`, `02-search.png`, and `03-books.png` phone images
 show an older interface and must not be uploaded. They date from 4 July 2026
