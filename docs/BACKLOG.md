@@ -41,7 +41,7 @@ each wanting a dry run on a day that is not a release day:
   key and the service account in the repository's secrets, which is the
   account holder's decision, and matters only once Play grants production.
 
-## Windows: use the native Share sheet — BUILT 30 September 2026, not yet seen in the app
+## Windows: use the native Share sheet — BUILT 30 September 2026, seen in the app unpackaged the same day
 
 On Windows every text share (Share with note, with citation, as link, and the
 verse of the day's Share) copied to the clipboard and opened the in-app
@@ -148,36 +148,74 @@ registration.
   the handler for its interface, so that id rests on its derivation and on
   the probe's sheet having asked its handler for the share. That VM run
   came before the handler kept for a late sheet and the picture taken at
-  the tap; the tests for those ran on the host, and on Windows they are
-  only type-checked until the Windows CI job runs them.
+  the tap; the tests for those ran on the host. At 1517e3771 the Windows
+  CI job, on its x64 server image with cgo and the race detector, passed
+  the whole suite; it runs without `-v`, so its log does not say whether
+  that image let the Windows share tests reach the sheet's step or
+  skipped them where it refuses a share.
+
+**Seen in the app (30 September 2026).** The Microsoft Store package
+workflow built 1517e3771 in the release configuration, cgo and `-tags
+gles`, and packed and smoke-installed it for x64 and arm64 (run
+36720846058). The arm64 package's executable, with ANGLE beside it, ran
+on the Windows VM (Windows 11 arm64, build 26200) from a folder, without
+package identity, as the direct download runs; the installed MSIX was
+not run. Every verb from its own entry point — the selection menu's
+Share with citation and Share as link, the composer's Share, the image
+preview's Share and the verse-of-the-day card's icon — opened Windows'
+own Share sheet over the window within about 2–4 s, and nothing opened
+in the app. The text sheets, for the citation and the verse of the day,
+were headed "Share" and listed the apps, with no title, preview or Copy.
+The link and note sheets were headed "Share link", with the citation,
+the link (the note's with its `n=` part), a QR-code button and a link
+button with no label, which on the note sheet turned to a check when
+pressed. The picture sheet named the file "BibleText verse 2026-09-30
+13.51.34.png", with its size, the card's thumbnail, Edit and a copy
+button with no label; the thumbnail means the sheet read the copy in the
+unpackaged app's temp folder. Each sheet closed with its X, and no
+in-app sheet had opened 6 to 18 s after any of the seven closes; Share
+with citation and the verse of the day each opened the sheet again the
+second time. An Escape sent through the VM's input left one sheet up;
+its X closed it. The note card showed between verses 9 and 10 after the
+page moved, probably at the head of the paragraph that holds verse 16;
+its anchoring was not checked. No share target was pressed. The
+selection was one word, taken by a double-click, since the VM's input
+has no drag, and the app ran in dark only. The Sharing table's Windows
+row is `hardware` on this run, as an exception scoped to it, until a
+release carries the code (`docs/PLATFORM_MATRIX.md`, the Windows proof
+note under Sharing).
 
 **Still open.**
 
-- **The app itself on Windows.** The row in the Sharing table is `builds`:
-  the app with this code has not run on Windows, nor compiled as the
-  release compiles it. The package was type-checked for Windows with
-  `-tags ci,gles` and cgo off, which leaves out Fyne's GLFW driver, and the
-  Windows tests ran from a binary built that way; the release
-  configuration (cgo, `gles`, the GLFW window and its RunNative) first
-  compiles with this code, and the tests first run with cgo and the race
-  detector, in the Windows CI job after a push. Seeing the app needs a
-  Windows build of this tree, which CI makes after a push: the Windows
-  build artifact workflow (`gh workflow run windows-build.yml --ref
-  <branch>`, x64, with Mesa's software OpenGL for a VM without a GPU) and
-  the Microsoft Store package workflow for the MSIX. Then every verb from its
-  own entry point on the VM, in light and in dark (`docs/VISUAL_TESTS.md`,
-  V12), with the log for any fallback.
-- **The MSIX.** Windows redirects a packaged app's writes under AppData,
-  the temp folder the picture is copied into among them; whether the apps
-  the sheet hands the file to can read it from there is to be seen.
+- **The installed MSIX, and its picture share.** The package has not
+  been installed and run with package identity on the VM, so neither
+  the sheet opening for a packaged app nor its picture share has been
+  seen. Windows redirects a packaged app's writes under AppData, the temp
+  folder the picture is copied into among them; whether the apps the
+  sheet hands the file to can read it from there is to be seen.
+  Unpackaged, the sheet read it.
+- **What a target receives.** No app in the sheet was chosen, and
+  Windows 11's text sheet shows neither the quote nor its citation, so
+  the text each verb hands over has not been seen arriving. What the
+  note sheet's link button put on the clipboard was not read back, and
+  the picture sheet's copy button was not pressed.
 - **A mail app with a link share.** Whether a target that takes both the
-  text and the web link shows the link twice.
+  text and the web link shows the link twice; not seen.
 - **Windows 10.** The interop is there from Windows 8 and the MSIX's floor
   is 10.0.19041, but only Windows 11 has been seen.
+- **x64, the light theme, a whole-verse selection, and a share while a
+  sheet is open.** The app ran on arm64 only, in dark, with a one-word
+  selection, and no share was started over an open sheet
+  (`docs/VISUAL_TESTS.md`, V12). The probe, not the app, ran under x64
+  emulation.
+- **The in-app sheet on Windows.** The Share sheet opened every time, so
+  its fallback, the image share's Explorer reveal and Email… have not run
+  in the app on Windows.
 - **A sheet that asks late.** A request after the five seconds, which the
   kept handler answers, has not been seen: the probe's sheets all asked
-  within 549 ms. A slow Windows 10 machine, or a first share with the
-  share host starting cold, is where it would show.
+  within 549 ms, and the app's were up within about 2–4 s of the click. A
+  slow Windows 10 machine, or a first share with the share host starting
+  cold, is where it would show.
 
 **Sources.**
 
@@ -363,8 +401,9 @@ Escape and Return still closing the sheet, Copy again moving no button,
 and Copy again and Done at the same pixels with and without Email…; and
 the snap, packed from the same executable and installed for the run,
 offering no Email… on either sheet. Not seen: a mail client's compose,
-Wayland, Windows at runtime — neither the handler check nor the
-2,000-character link has run on Windows.
+Wayland, and this sheet on Windows, where Windows' own Share sheet opened
+for every verb in the app (the entry above) — neither the handler check
+nor the 2,000-character link has run on Windows.
 
 **Still open.** Two strings on the sheet are outside the wording above and
 are still to be settled: the image sheet's heading, *Picture saved* — the

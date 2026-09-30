@@ -370,8 +370,9 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       note, the verse of the day's Share icon and the image preview's Share
       each open the system Share sheet over the window, and nothing opens
       in the app. Share as link and Share with note: the sheet's header
-      reads "Share link", with the citation, the link and Copy link; Copy
-      link puts the link on the clipboard. Share with citation and the verse
+      reads "Share link", with the citation, the link, a QR-code button and
+      Copy link (on Windows 11 a link icon with no label); Copy link puts
+      the link on the clipboard. Share with citation and the verse
       of the day: the sheet lists the apps to share to; pick a mail app
       where one is set up and check the message carries the quote and its
       citation, and for a note the note, the citation and the link — and
@@ -379,7 +380,8 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       the card's thumbnail under a name of the form "BibleText verse
       2026-09-30 14.02.11.png", and Copy copies the picture. Share with
       note: the note card is on the page behind the sheet. Cancel each
-      sheet: nothing else opens, and the next share opens its sheet again.
+      sheet with its X (on Windows 11 an Escape sent to it left it up):
+      nothing else opens, and the next share opens its sheet again.
       Share again while a sheet is open and note what Windows does with the
       second: it ends in a sheet, the system's or the app's, and never in
       nothing. The sheet may not open where Windows
@@ -387,7 +389,12 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       once or within five seconds, never nothing; the app's log names the
       step and whether the build was packaged. Should the system sheet
       still appear after the in-app one has opened, it carries the share,
-      not an empty package.
+      not an empty package. Run in part on 30 September 2026, on Windows 11
+      arm64 with the arm64 Store package's executable run unpackaged, in
+      dark only (the Windows proof note under Sharing in
+      docs/PLATFORM_MATRIX.md); still to run: light, the installed MSIX,
+      x64, a mail app, the clipboard after Copy link, the picture's Copy,
+      and a share while a sheet is open.
 - [ ] The desktop share confirmation, Linux, and Windows where its Share
       sheet cannot open: Share with
       citation, Share as link, Share with note and the verse of the day's

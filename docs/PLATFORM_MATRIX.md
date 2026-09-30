@@ -380,8 +380,11 @@ place a fix on one does not reach the others.
     download and the MSIX run the same code, although Microsoft's pages
     disagree on whether an app without package identity may open the
     sheet: a probe executable without it opened the sheet on Windows 11
-    arm64, natively and under x64 emulation; neither the app's zip nor its
-    MSIX has yet been seen to. Held by `share_session_test.go`,
+    arm64, natively and under x64 emulation, and so did the app itself,
+    for every verb: the arm64 Store package's executable, run without
+    package identity as the zip runs (the Windows proof note under
+    [Sharing](#sharing)). The installed MSIX has not yet been seen to, nor
+    the zip itself. Held by `share_session_test.go`,
     `share_parts_test.go` and `share_sheet_desktop_test.go` on every
     platform, `share_windows_test.go` in the Windows CI job, and recorded
     in `docs/BACKLOG.md`, "Windows: use the native Share sheet".
@@ -437,17 +440,23 @@ The honest to-do list, in proof-level terms.
   (`scripts/check-linux-package.sh`), and the first run of it found `make
   install` had always failed — see docs/BACKLOG.md. Fixed. What is still
   unproven is launching the installed application from where it installs.
-- **Windows arm64 has never been run by a person.** It builds, packs,
-  installs and renders on the runner, which is `runner` and not `field`. The
-  local Windows ARM VM is the machine that could change that.
+- **Windows arm64 has not been run by a person from an artefact we ship.**
+  It builds, packs, installs and renders on the runner, which is `runner`
+  and not `field`. On 30 September 2026 the executable from the arm64
+  Store package of a tree not yet released (the Microsoft Store package
+  workflow, run 36720846058) was run unpackaged on the local Windows ARM
+  VM and every Share verb driven there (the Windows proof note under
+  [Sharing](#sharing)). That is not the shipped artefact, and the
+  installed MSIX was not run, so the matrix rows stay where they are.
 - The owner's outstanding Linux hardware pass needs **an x86_64 machine or a
   cloud desktop**: the arm64 VM explicitly cannot stand in for it.
-- **Share has been watched on two platforms of six.** Linux on the arm64 VM
-  and Android on the emulator; macOS, iOS, iPadOS and Windows are recorded
-  from the code (see [Sharing](#sharing)). The iPad and Mac rows carry
-  anchoring that is probable from the code and has not been seen. The
-  Windows Share sheet has been seen opening from a probe on the Windows VM,
-  not from the app.
+- **Share has been watched on three platforms of six.** Linux and Windows
+  on arm64 VMs and Android on the emulator; macOS, iOS and iPadOS are
+  recorded from the code (see [Sharing](#sharing)). The iPad and Mac rows
+  carry anchoring that is probable from the code and has not been seen.
+  On Windows no share target was pressed, so what an app receives from
+  the sheet has not been seen, and the in-app sheet behind it, which opens
+  only when the sheet cannot, has not run there.
 
 ## Sharing
 
@@ -474,8 +483,8 @@ calls `revealInFileManager`. Numbers in a cell are divergences.
 Recorded 29–30 September 2026: the Apple and Android rows from the share
 code as it shipped in 1.2.17, the Linux row from the desktop confirmation
 sheet built on 30 September 2026, and the Windows row from its native Share
-sheet built the same day and from what a probe's sheet showed on the
-Windows VM; neither is in a release yet.
+sheet built the same day and driven in the app on the Windows VM that day;
+neither is in a release yet.
 
 | Platform | Share with note | Share with citation | Share as link | Share as image | Verse of the day | Defined in | Proof |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -483,7 +492,7 @@ Windows VM; neither is in a release yet.
 | iPadOS | Share popover; probably points mid-page rather than at the selection | Share popover at the selection | Share popover at the selection | Preview, then a share popover; probably mid-page | Probably a share popover pointing at the hidden reading view, not the icon; not seen | `reading_ios.go` | `builds` — code reading, 29–30 September 2026 |
 | macOS | Share picker at the selection; the note card appears beneath | Share picker at the selection | Share picker at the selection | Preview, then the share picker with the image | Probably the share picker, anchored to the hidden reading view, not the icon; not seen | `reading_macos.go` | `builds` — code reading, 29–30 September 2026 |
 | Android | The note card, then the "Sharing text" sheet with the note, citation and link | "Sharing text" sheet with the quote and citation | "Sharing text" sheet with the link | Preview, then the "Sharing image" sheet | "Sharing text" sheet, by the citation's route; not driven | `reading_android.go` | `runner` — emulator, 1.2.17, 29–30 September 2026 |
-| Windows | The Windows Share sheet over the window, headed "Share link", with the citation, the link and Copy link; the note, the citation and the link go to the chosen app as text, and the link as a web link too; the new note card beneath (28) | The Windows Share sheet over the window, listing the apps to share to, with no title or Copy on Windows 11; the quote and its citation go to the chosen app as text (28) | The Windows Share sheet over the window, headed "Share link", with the citation, the link and Copy link (28) | Preview, then the Windows Share sheet over the window with the card as a file named "BibleText verse <date> <time>.png", shown in place of a title, with its thumbnail and Copy (28) | The Windows Share sheet, as for Share with citation (28) | `share_windows.go` | `builds` — type-checked (`go vet`) for windows/amd64, arm64 and 386 with cgo off, 30 September 2026, not yet compiled as the release is; the sheet seen from a probe on the arm64 VM, not from the app |
+| Windows | The Windows Share sheet over the window, headed "Share link", with the citation, the link carrying the note, a QR-code button and a link button with no label (Copy link, by its icon), which shows a check when pressed; the new note card on the page beneath. By the code the note, the citation and the link go to the chosen app as text, and the link as a web link too; not seen (28) | The Windows Share sheet over the window, headed "Share", listing the apps to share to, with no title, preview or Copy on Windows 11. By the code the quote and its citation go to the chosen app as text; not seen (28) | The Windows Share sheet over the window, headed "Share link", with the citation, the link, a QR-code button and a link button with no label (Copy link, by its icon) (28) | Preview, then the Windows Share sheet over the window with the card as a file named "BibleText verse <date> <time>.png" in local time, shown in place of a title, with its thumbnail, its size and a size picker, Edit, and a copy button with no label (28) | The Windows Share sheet, as for Share with citation (28) | `share_windows.go` | `hardware` — arm64 VM, Windows 11 build 26200, the Store package workflow's arm64 executable run unpackaged, 30 September 2026 (the proof note below) |
 | Linux | Copied; the "Copied — ready to paste" sheet over the new note card, with Email…, Copy again and Done (27) | Copied; the "Copied — ready to paste" sheet (27) | Copied; the "Copied — ready to paste" sheet (27) | Saved to ~/Downloads; the file manager opens on the folder; the "Picture saved" sheet, with Email… attaching the file only where a mail client, not a browser, handles mailto:, and never in the snap (27). In the snap, neither the save nor the reveal happens (the proof note below) | Copied; the "Copied — ready to paste" sheet over the card (27) | `share_other.go`, handing on to `share_fallback.go` | `hardware` — arm64 VM, X11, 30 September 2026 |
 
 What each proof rests on:
@@ -545,55 +554,109 @@ What each proof rests on:
   are recorded in `docs/BACKLOG.md` to be seen on a device. On the Mac it is
   not even known that the picker shows while the view it is anchored to is
   hidden.
-- **Windows, `builds`.** The app with its Share sheet has not been run on
-  Windows, nor compiled as the release compiles it. What was compiled is
-  a copy of the tree with the one cgo file the package needs on the
-  desktop stubbed (`window_workarea_desktop.go`), type-checked with
-  `go vet` for windows/amd64, windows/arm64 and windows/386 with
-  `-tags ci,gles` and cgo off. The `ci` tag leaves out Fyne's GLFW driver,
-  and without it the `gles` painter cannot build with cgo off, so the
-  release configuration — cgo, `gles`, the GLFW window and its RunNative —
-  first compiles with this code in the Windows CI job. The code's rules
-  are held by tests — the session's on every platform, and against
-  Windows itself, with no sheet shown, in the Windows CI job
-  (`share_windows_test.go`: the objects Windows calls, a real DataPackage
-  filled as the sheet's request fills it, and every step up to the
-  sheet's opening for text and for a picture, each refusal ending in one
-  fallback). Those tests passed on the arm64 VM on 30 September 2026,
-  natively and as x64 under emulation, from a test binary built the same
-  way, without Fyne's GLFW driver; a control build with IAgileObject
-  unanswered, and another with the file handler's interface id mistyped,
-  each failed there. That run came before the handler kept for a late
-  sheet and the picture taken at the tap; their tests ran on the host,
-  and on Windows they are only type-checked until the Windows CI job runs
-  them. What has been seen beyond that is the mechanism: on
-  30 September 2026 a standalone probe executable, without package
-  identity, opened the sheet on the arm64 VM (Windows 11, build 26200)
-  for text, a link and a picture, natively and under x64 emulation, every
-  call answering S_OK. Each sheet opened over the probe's window, covering
-  most of it. The text sheet there was headed "Share" and showed the apps
-  to share to, with no title and no Copy; the link sheet showed the
-  title, the link, a QR code and Copy link; the picture sheet showed the
-  file's name in place of the title, a thumbnail, Edit and Copy. The
-  sheet asked for the share 140–549 ms after it was asked to open, on the
+- **Windows, `hardware`, as an exception to the rule that the artefact
+  must be the shipped one.** This code is not yet in a release. The
+  Microsoft Store package workflow built a tree that carries it,
+  1517e3771, in the release configuration — cgo, `-tags gles`, the
+  patched Fyne, the GLFW window and its RunNative — and packed and
+  smoke-installed it for x64 and arm64 (run 36720846058, 30 September
+  2026). The arm64 package's
+  executable (go1.24.13, windows/arm64; its build information marks the
+  tree modified, which the workflow's `go mod edit -replace` before the
+  build accounts for), with the three ANGLE libraries beside it, was
+  carried to the arm64 VM (Windows 11, build 26200) on an ISO, hashed
+  equal there to the file in the package, and run from a folder without
+  package identity, as the direct download runs. Every verb was driven
+  from its own entry point in the app, in the dark theme — the selection
+  menu's Share with citation and Share as link, the composer's Share, the
+  image preview's Share and the verse-of-the-day card's icon — with
+  screenshots over the eleven seconds after each and after each close.
+  The selection was one word, "loved" in John 3:16 in the World English
+  Bible, taken by a double-click, since the VM's input has no drag. Each
+  verb opened Windows' own Share sheet over the app's window within about
+  2–4 s, and nothing opened in the app. The link, note and picture sheets
+  carry what the app handed over; the two text sheets show nothing of the
+  share, so that they are the app's rests on their timing, their place
+  and that nothing else on screen opens a text sheet. What the sheets
+  showed:
+
+  - Share with citation and the verse of the day: "Share" and the apps
+    to share to; no title and no Copy.
+  - Share as link: "Share link", the title "John 3:16 (World English
+    Bible)", the verse's web-reader link, ending `/web/john/3/#v16`, a
+    QR-code button, a button with a link icon and no label, and the apps.
+  - Share with note: the composer's Share put the "Note from you" card on
+    the page, and the sheet followed with the same title and the note's
+    link (`#v16&n=…`). Pressed, the link button turned to a check and the
+    sheet stayed up. The page had moved, and the card showed between
+    verses 9 and 10, probably the head of the paragraph that holds verse
+    16; where it is anchored was not checked.
+  - Share as image: the preview's Share closed the preview, and the sheet
+    opened with placeholders and filled about two seconds later:
+    "BibleText verse 2026-09-30 13.51.34.png" (the VM's local time), its
+    size, a size picker at "Original", the card's thumbnail, Edit, a copy
+    button with no label, and the apps. The thumbnail means the sheet
+    read the copy in the unpackaged app's temp folder.
+
+  Each sheet was closed with its X, seven times in all, and no screenshot
+  6 to 18 s after a close shows an in-app sheet; the "Copied — ready to
+  paste" sheet stays up until Done, Escape or Return, so it would have
+  been seen. A second Share with citation, and a second share from the
+  verse of the day, each opened the sheet again. An Escape sent through
+  the VM's input left the second citation sheet up, the next screenshot
+  unchanged; its X closed it. No share target was pressed and nothing
+  left the VM; besides the X, the only button pressed on a sheet was the
+  note sheet's link button. Not seen: what an app chosen in the sheet
+  receives —
+  Windows 11's text sheet shows neither the quote nor its citation, so no
+  text a verb hands over has been seen; what the link button put on the
+  clipboard, which was not read back; the picture's copy button and the
+  QR-code button, not pressed; the light theme; x64, natively or under
+  emulation; Windows 10; and the installed MSIX. What the cells describe
+  is Windows 11's sheet. The app's standard error went to a file that
+  held only the line written before launch, which says nothing either way
+  about a fallback; the screenshots after each close are what show none
+  opened. The row moves to the shipped artefact with the release that
+  carries it.
+
+  Before the app, the mechanism was seen from a standalone probe
+  executable, without package identity, on the same VM the same day, for
+  text, a link and a picture, natively and under x64 emulation, every
+  call answering S_OK; its sheets looked as the app's did. The sheet
+  asked for the share 140–549 ms after it was asked to open, on the
   window's thread, never within the call, and the picture's file first
   resolved on a thread-pool thread. A sheet that asks after the five
   seconds the app waits before opening the in-app sheet still gets the
-  share (divergence 28); none that slow has been seen. The row moves to
-  `hardware` when a Windows build of this tree is driven on the VM, each
-  verb from its own entry point.
-  The Store's MSIX is to be seen there too: Windows redirects a packaged
+  share (divergence 28); none that slow has been seen, from the probe or
+  from the app. The code's rules are held by tests — the session's on
+  every platform, and against Windows itself, with no sheet shown, in the
+  Windows CI job (`share_windows_test.go`: the objects Windows calls, a
+  real DataPackage filled as the sheet's request fills it, and every step
+  up to the sheet's opening for text and for a picture, each refusal
+  ending in one fallback). Those tests passed on the arm64 VM, natively
+  and as x64 under emulation, from a test binary built with cgo off and
+  without Fyne's GLFW driver, before the handler kept for a late sheet
+  and the picture taken at the tap were added; a control build with
+  IAgileObject unanswered, and another with the file handler's interface
+  id mistyped, each failed there. At 1517e3771 the Windows CI job, on its
+  x64 server image with cgo and the race detector, passed the whole
+  suite; it runs without `-v`, so its log does not say whether that image
+  let the Windows share tests reach the sheet's step or skipped them
+  where it refuses a share.
+  The Store's MSIX is still to be seen: Windows redirects a packaged
   app's writes under AppData, the temp folder the picture is copied into
   among them, and whether the apps the sheet hands the file to can read
-  it there is not known. Behind the sheet it runs the Linux code — the
-  same confirmation sheet, from the same files — but for two things: the
-  file manager the image share opens (Explorer, with the file selected),
-  and Email…, which opens a `mailto:` link through the shell
-  (`share_email_windows.go`) when the shell's association API resolves a
-  handler for the scheme — the reader's own choice first, a handler whose
-  executable is on disk or a packaged app's — and which a link cannot
-  carry a file through, so the image sheet has no Email… there. The link
-  is kept to 2,000 characters, a longer share's passage cut at a word.
-  Neither the handler check nor a long share's link has run on Windows;
+  it there is not known; unpackaged, the sheet read it. Behind the sheet
+  it runs the Linux code — the same confirmation sheet, from the same
+  files — but for two things: the file manager the image share opens
+  (Explorer, with the file selected), and Email…, which opens a
+  `mailto:` link through the shell (`share_email_windows.go`) when the
+  shell's association API resolves a handler for the scheme — the
+  reader's own choice first, a handler whose executable is on disk or a
+  packaged app's — and which a link cannot carry a file through, so the
+  image sheet has no Email… there. The link is kept to 2,000 characters,
+  a longer share's passage cut at a word. None of that has run in the app
+  on Windows, where the Share sheet opened every time: neither the in-app
+  sheet, Explorer's reveal, the handler check nor a long share's link;
   `share_email_windows_test.go` holds the check against handlers it
   registers itself, in the Windows CI job.
