@@ -369,20 +369,26 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       paste", with the verb's own line beneath it, the exact clipboard text
       in a bordered box (a long note scrolls), Copy again, Email… and
       Done. A click on the page around it does nothing; Done, Escape and
-      Return each close it, and still do after a drag across the box. Put something else on the clipboard,
-      press Copy again: the share is back on the clipboard and the line
-      reads "Copied again." for a moment. At the 520-pt minimum window and
-      at 1280x800 the sheet sits inside the window and below the header,
-      and stays so when the window is resized under it. Flip light/dark
-      with it open: it comes back in the new palette with the same text;
-      opened from the verse of the day, the card comes back beneath it and
-      Done returns to the card, which Escape then closes. Share as image:
-      the PNG lands in Downloads, the file manager opens on it, and the
-      sheet reads "Picture saved" with no box and no Copy again. Email…:
-      with no mail client the button is absent (GNOME reports no mailto:
-      handler) or, where the desktop cannot say, pressing it does nothing;
-      with one, a new message opens carrying the citation as its subject
-      and the text as its body, and on Linux the picture as an attachment.
+      Return each close it, Return after Copy again too, and Escape and
+      Return still do after a drag across the box. Put something else on
+      the clipboard, press Copy again: the share is back on the clipboard
+      and the line reads "Copied again." for a moment. At the 520-pt
+      minimum window and at 1280x800 the sheet sits inside the window and
+      below the header, and stays so when the window is resized under it.
+      Flip light/dark with it open: it comes back in the new palette with
+      the same text; opened from the verse of the day, the card comes back
+      beneath it and Done returns to the card, which Escape then closes.
+      Share as image: the PNG lands in Downloads, the file manager opens
+      on it, and the sheet reads "Picture saved" with no box and no Copy
+      again. Email…: the button shows whenever the desktop names a mailto:
+      handler, and a browser counts — a stock Ubuntu desktop names the
+      Firefox snap, so the button shows there with no mail client
+      installed, and pressing it opens the mailto: link in Firefox, which
+      asks what should handle it. With no handler named the button is
+      absent, or, where the desktop cannot say, pressing it does nothing.
+      With a mail client, a new message opens carrying the citation as its
+      subject and the text as its body, and on Linux the picture as an
+      attachment.
 - [ ] Share as image: the preview modal appears BEFORE anything leaves the
       app; Regenerate cycles schemes; the native overlay must not paint
       over the modal; the same verse always opens on the same look.

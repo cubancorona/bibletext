@@ -190,15 +190,27 @@ overlay stack, inside the canvas and below the header at 1280x800 and at
 520x640, in light and in dark, with the approved words, the box showing
 what the clipboard holds and the message the verb composes; a click outside
 does not dismiss it; Done, Escape and Return close it and run the sheet-close
-consume point once; Copy again re-copies; a light/dark change brings it back
-with the same text, and with the verse-of-the-day card beneath it; the
-sent note's card is on the page under it; Email… is offered only when the
-probe says so and hands over the citation, the text and the image's file.
+consume point once, and Escape and Return still do after a drag across the
+box; Copy again re-copies; a light/dark change brings it back with the same
+text, and with the verse-of-the-day card beneath it; the sent note's card
+is on the page under it; Email… is offered only when the probe says so and
+hands over the citation, the text and the image's file.
 `TestDesktopSheetsOpenBelowTheHeader` and the refit test cover both forms
 of the sheet with the other desktop sheets. Driven on the Linux VM in light
-and dark, every verb, with no mail client installed (Email… withheld):
-`docs/VISUAL_TESTS.md`, V12. Not seen: Email… with a real mail client, the
-portal's compose with an attachment, Windows at runtime.
+and dark, every verb, with the clipboard read back each time
+(`docs/VISUAL_TESTS.md`, V12, and the Linux proof note under Sharing in
+`docs/PLATFORM_MATRIX.md`). No mail client is installed there, but the
+session names the Firefox snap as the mailto: handler, so Email… shows;
+pressed, the portal's `ComposeEmail` answered 0 for the text and for the
+picture, and Firefox opened the `mailto:` link and asked what should handle
+it. Not seen: a mail client's compose, Wayland, Windows at runtime.
+
+**Still open.** The image sheet's heading, *Picture saved*, is the one
+string on the sheet outside the wording above and is still to be settled:
+the text verbs' heading says *Copied*, and nothing is copied for a picture.
+After Tab has moved the caret to one of the sheet's buttons, Return and
+Escape go to that button, which answers only Space, as on every other sheet
+in the app.
 
 **Sources.**
 

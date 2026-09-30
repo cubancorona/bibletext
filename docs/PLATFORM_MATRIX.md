@@ -402,12 +402,24 @@ What each proof rests on:
   25's machine), and every verb was driven from its own entry point — the
   selection menu's Share with citation and Share as link, the composer's
   Share, the verse-of-the-day card's icon, the image preview's Share —
-  in light and in dark, with a screenshot of each sheet; the clipboard was
-  read back after each text share. Email… was pressed with no mail client
-  installed, where the button is withheld (the desktop reports no mailto:
-  handler) — the portal's compose with a real client has not been seen. No
-  shipped package was run; the row moves to the shipped artefact with the
-  release that carries it. Not Wayland.
+  in light and in dark, with a screenshot of each sheet, and the clipboard
+  read back after each text share held what the box showed. A click
+  outside left the sheet up; Done, Escape and Return closed it, Return also
+  after Copy again and Escape after a drag across the box; Copy again put
+  the share back on a clipboard something else had taken; a light/dark
+  switch brought it back with the same text, and over the verse of the day
+  with the card beneath; at the narrowest the window would go, 533x640,
+  it sat inside the window and below the header. Email…: no mail client is
+  installed there, but the session names the Firefox snap as the mailto:
+  handler (`xdg-mime query default x-scheme-handler/mailto` answers
+  `firefox_firefox.desktop`), so the button shows. Pressed, it called the
+  Email portal's `ComposeEmail` with the citation as the subject and the
+  text as the body, or the picture as a descriptor; the request answered 0,
+  and Firefox opened the `mailto:` link and asked what should handle it.
+  The portal there is 1.18.4, without `SchemeSupported`, so the Email
+  interface and `xdg-mime` decided. A mail client's compose has not been
+  seen. No shipped package was run; the row moves to the shipped artefact
+  with the release that carries it. Not Wayland.
 - **Android, `runner`.** The 1.2.17 build on the emulator. A simulator is not
   hardware (divergence 9), and an emulator is not either. Every verb but the
   verse of the day was driven to its share sheet; no share target was tapped.
