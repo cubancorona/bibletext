@@ -525,8 +525,12 @@ func gotoPickerModalFrom(state *AppState, withVerse bool, seed gotoPickerSeed) {
 		fit := func() {
 			w, h := pickerSplitSize(cnv)
 			// Centred, so on a short desktop window it is kept below the
-			// header like every desktop sheet (headerClearance).
+			// header like every desktop sheet (headerClearance), and on a
+			// phone or tablet clear of the header's controls or over them
+			// (touchSheetHeight). Its height is a share of the screen rather
+			// than its content's, and its panes scroll.
 			h = clearOfHeader(h, cnv.Size().Height, headerClearance(state))
+			h = touchSheetHeight(state, popup, w, h, false, func() float32 { return popup.MinSize().Height })
 			popup.Resize(fyne.NewSize(w, h))
 		}
 		fit()
@@ -794,5 +798,7 @@ func gotoButton(state *AppState) fyne.CanvasObject {
 		base = state.theme
 	}
 	chip := container.NewThemeOverride(btn, smallChipTheme{Theme: base})
-	return container.NewCenter(inputFrame(chip, pal.Border))
+	// The outline, which the header centres: its box is what a sheet must
+	// cover or leave alone (touchHeaderBand).
+	return inputFrame(chip, pal.Border)
 }

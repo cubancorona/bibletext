@@ -1070,6 +1070,9 @@ func showVerseOfDayCard(state *AppState, d dayVerse) {
 			body.MinSize().Height,
 			maxH,
 		)
+		// On a phone or tablet, clear of the header's controls or over
+		// them (touchSheetHeight); the passage scrolls.
+		h = touchSheetHeight(state, popup, w, h, h >= maxH, func() float32 { return popup.MinSize().Height })
 		popup.Resize(fyne.NewSize(w, h))
 	}
 	fitVOTD()

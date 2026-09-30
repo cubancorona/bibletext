@@ -415,11 +415,14 @@ password prompt. The Mac shots are driven with the mouse and keyboard.
    The density stays at the default 420, what most people see. The 1.2.17
    phone set is the exception: it was taken at `adb -s emulator-5580 shell
    wm density 356`, the smallest step of Android's Display size setting on a
-   420 phone (`int(420 × 0.85)`, rounded down to even), because at 420 the
-   app's phone layout still has the faults listed in §7. The toolkit draws
-   the interface at 3× from 405 dpi and at 2× below, so the two sizes differ
-   by more than the density ratio. Whichever density a set uses, every image
-   in it uses the same one.
+   420 phone (`int(420 × 0.85)`, rounded down to even), because at 420 three
+   screens were taken for faults of the app (§7). Two are its phone layout
+   working as designed at 420: Books in one column, and Settings putting
+   Clear on a line of its own and scrolling. The third, the Translation
+   sheet starting partway down the header, was a defect, since fixed. The
+   toolkit draws the interface at 3× from 405 dpi and at 2× below, so the
+   two sizes differ by more than the density ratio. Whichever density a set
+   uses, every image in it uses the same one.
 4. Appearance, set before the app starts: `adb -s emulator-5580 shell cmd
    uimode night no` (`yes` for 02). Changing it while the app runs has
    brought the app back with its pane in the top 45% of the window.
@@ -739,12 +742,25 @@ standing rule in [RELEASING.md](RELEASING.md)), and only then does
 - **`docs/play-assets/2026-09-1.2.5/` is history.** The 1.2.17 set
   replaced it on the listing on 30 September 2026 (§3), pending Play's
   review. It is never uploaded again.
-- **The Play phone set is at the Small display size.** At the Pixel 11 Pro's
-  default density, 420, the app's phone layout shows Books as one column,
-  the Settings sheet cutting rows, and the Translation sheet over the
-  header, so the 1.2.17 phone set was taken at 356. Once the app lays those
-  screens out properly at 420, the phone set is taken again at 420, which
-  is what most people see.
+- **The Play phone set is at the Small display size.** The 1.2.17 phone
+  set was taken at 356, not the Pixel 11 Pro's default 420, because at 420
+  three screens looked like faults: Books in one column, the Settings sheet
+  with Clear on a line of its own and a row cut by the sheet's foot, and the
+  Translation sheet over the header. The first two are by design. At 420
+  the toolkit lays the phone out about 360 units wide, too narrow for two
+  of the Books grid's cells, which are sized so that the longest book name
+  fits (`denseGridWrapLayout`, `books_grid.go`), so Books shows one column;
+  and Settings starts Clear on a line of its own where the key card is
+  narrow (`keyActionsRow`) and scrolls its body, so a row part-shown at the
+  foot is the scroll's edge (`sheet_fit.go`). The third was a defect: on a
+  phone whose status bar is shallow, a sheet could start partway down the
+  header's controls — the Translation sheet in the 2:1 frame, and at the
+  phone's own 1080×2410 Settings, the cross-references, a long verse of the
+  day and the audio source menu, cutting the title's letters. Sheets now
+  clear the header's controls or cover them (`sheet_touch_header.go`;
+  `docs/BACKLOG.md`, "Phones and tablets: a sheet started partway down the
+  header's controls"). The next phone set can be taken at 420, which is
+  what most people see.
 - **Light status-bar icons on Android.** The 1.2.17 light Play images show
   the status bar's icons white on the cream page, so the clock and battery
   barely show. Builds after 1.2.17 ask for dark status-bar and

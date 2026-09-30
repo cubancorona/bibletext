@@ -976,14 +976,20 @@ func openAISettings(state *AppState) {
 		pos, sz := sheetArea(cnv)
 		// On a desktop window the cap also keeps the centred sheet below the
 		// header (headerClearance).
+		maxH := clearOfHeader(sheetMaxHeight(cnv.Size().Height, pos.Y, sz.Height, y),
+			cnv.Size().Height, headerClearance(state))
 		h := scrollingSheetHeight(
 			popup.MinSize().Height,
 			formScroll.MinSize().Height,
 			formBody.MinSize().Height,
-			clearOfHeader(sheetMaxHeight(cnv.Size().Height, pos.Y, sz.Height, y),
-				cnv.Size().Height, headerClearance(state)),
+			maxH,
 		)
-		popup.Resize(fyne.NewSize(card.MinSize().Width, h))
+		// On a phone or tablet, clear of the header's controls or over
+		// them (touchSheetHeight): its form scrolls, so the least it can be
+		// is what it measures with the scroll at its minimum.
+		w := card.MinSize().Width
+		h = touchSheetHeight(state, popup, w, h, h >= maxH, func() float32 { return popup.MinSize().Height })
+		popup.Resize(fyne.NewSize(w, h))
 	}
 	// Twice, for the wrapping-RichText reason applyAssistant documents: the two
 	// disclosure paragraphs report a single line until a layout pass has run them

@@ -203,7 +203,8 @@ func headerClearance(state *AppState) float32 {
 }
 
 // objectInTree reports whether target is root or sits under it through
-// containers — how the header hangs off the window's content.
+// containers — how the header hangs off the window's content — and through
+// the root widget a phone's window holds the page in (contentWrapper).
 func objectInTree(root, target fyne.CanvasObject) bool {
 	if root == nil {
 		return false
@@ -211,12 +212,15 @@ func objectInTree(root, target fyne.CanvasObject) bool {
 	if root == target {
 		return true
 	}
-	if c, ok := root.(*fyne.Container); ok {
+	switch c := root.(type) {
+	case *fyne.Container:
 		for _, o := range c.Objects {
 			if objectInTree(o, target) {
 				return true
 			}
 		}
+	case contentWrapper:
+		return objectInTree(c.wrappedContent(), target)
 	}
 	return false
 }

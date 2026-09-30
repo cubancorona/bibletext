@@ -236,15 +236,33 @@ func showVersionPickerWith(state *AppState, notice string) {
 		// last laid out at, and on opening that is the popup's minimum width,
 		// where the sentences take more lines: an opened sheet came out
 		// taller than one sized again at the same window size.
-		placeSentences(true)
-		popup.Resize(fyne.NewSize(w, 0))
-		if popup.MinSize().Height > maxH {
-			placeSentences(false)
+		place := func(maxH float32) float32 {
+			placeSentences(true)
 			popup.Resize(fyne.NewSize(w, 0))
+			if popup.MinSize().Height > maxH {
+				placeSentences(false)
+				popup.Resize(fyne.NewSize(w, 0))
+			}
+			return header.MinSize().Height + list.MinSize().Height + footer.MinSize().Height + 64
 		}
-		h := header.MinSize().Height + list.MinSize().Height + footer.MinSize().Height + 64
+		natural := place(maxH)
+		h := natural
 		if h > maxH {
 			h = maxH
+		}
+		// On a phone or tablet, clear of the header's controls or over
+		// them (touchSheetHeight). Below the header the sentences follow
+		// the rows into the scroll where the pinned part would not fit, as
+		// they do under a desktop window's header; the least the sheet can
+		// be is with them there.
+		least := func() float32 {
+			placeSentences(false)
+			popup.Resize(fyne.NewSize(w, 0))
+			return popup.MinSize().Height
+		}
+		if t := touchSheetHeight(state, popup, w, h, natural > maxH, least); t != h {
+			place(t)
+			h = t
 		}
 		popup.Resize(fyne.NewSize(w, h))
 	}
@@ -779,7 +797,7 @@ func showVersionLoading(state *AppState, name string) func() {
 			w = 264 // narrow enough for any phone, wide enough for the caption
 		}
 		popup.Resize(fyne.NewSize(w, card.MinSize().Height))
-		popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+		fitTouchCard(state, popup, w, card.MinSize().Height)
 		// Only while the download runs: once dismissed, the registration is
 		// already dead with its popup, and this guard is the belt to that.
 		registerSheetReopen(state, popup, func() {
@@ -861,5 +879,5 @@ func showVersionLoadError(state *AppState, name string) {
 		w = 240
 	}
 	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
-	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+	fitTouchCard(state, popup, w, card.MinSize().Height)
 }
