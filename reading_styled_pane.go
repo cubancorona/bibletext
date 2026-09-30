@@ -193,6 +193,14 @@ type styledReadingPane struct {
 }
 
 func newStyledReadingPane(state *AppState, verses []Verse) *styledReadingPane {
+	return newStyledReadingPaneAt(state, verses, 720) // provisional; corrected when the real width arrives
+}
+
+// newStyledReadingPaneAt builds the pane and lays it out at width. relayout
+// derives everything it writes from the width and the fields set here, so a
+// pane built at one width and relaid at another is the pane built at the
+// second; a caller that already knows its width skips the provisional pass.
+func newStyledReadingPaneAt(state *AppState, verses []Verse, width float32) *styledReadingPane {
 	p := &styledReadingPane{
 		state:     state,
 		verses:    verses,
@@ -223,7 +231,7 @@ func newStyledReadingPane(state *AppState, verses []Verse) *styledReadingPane {
 			super.Footnotes)
 	}
 	p.ExtendBaseWidget(p)
-	p.relayout(720) // provisional; corrected when the real width arrives
+	p.relayout(width)
 	return p
 }
 
