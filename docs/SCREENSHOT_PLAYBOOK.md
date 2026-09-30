@@ -26,10 +26,13 @@ in [PLAY_LISTING.md](PLAY_LISTING.md), and the runner captures in
   status_bar … override` on iOS, the System UI demo mode on Android. Desktop
   images are the window alone.
 - **Only synthetic notes, written for the listing** — never a reader's data,
-  never a copy of anyone's preferences file. The wording is plainly invented
-  and neutral: no personal message, no family role, nothing
-  `scripts/check-repository-hygiene.py` would refuse as a realistic
-  private-message fixture ([PRIVACY_RELEASE_CHECKLIST.md](PRIVACY_RELEASE_CHECKLIST.md)).
+  never a copy of anyone's preferences file. The notes are invented, but they
+  are written the way people actually send a verse to someone, because that
+  is what the feature is for, and every store shows the same six (§1). Their
+  text lives only in the images and on the capture devices: the repository
+  does not quote it, since `scripts/check-repository-hygiene.py` refuses
+  realistic private-message phrases in tracked text
+  ([PRIVACY_RELEASE_CHECKLIST.md](PRIVACY_RELEASE_CHECKLIST.md)).
 - **No real API key is typed, pasted or shown**, on any device. Shot 03 shows
   the key field empty, with its placeholder.
 - **Nothing composed.** Every image is a capture of the app. The only edits
@@ -71,21 +74,23 @@ on every received note: the app shows no sender names yet, whatever name a
 note carries (`senderNamesEnabled` in `notes_byline.go`). "From you" marks a
 note the reader sent.
 
-| Passage (NKJV) | Byline | Date in the 1.2.17 set | Wording for the next retake |
-| --- | --- | --- | --- |
-| Psalms 23:1-4 | From Friend | 22 Aug | Reading plan, day 23: the shepherd psalm. |
-| Psalms 23:1-3 | From Friend | 21 Aug | Compare verse 3 in the WEB and the NKJV. *(the note shot 06 opens)* |
-| Philippians 4:6-7 | From you | 21 Aug | Study group, week 3: verses 6 and 7. |
-| Isaiah 40:31 | From Friend | 20 Aug | A verse to learn by heart this month. |
-| Romans 8:38-39 | From you | 17 Aug | Keeping this one for Thursday's study. *(unchanged)* |
-| Matthew 11:28-30 | From Friend | 12 Aug | Read with verses 25 to 27 for the context. |
+| Passage (NKJV) | Byline | Date in the 1.2.17 set |
+| --- | --- | --- |
+| Psalms 23:1-4 | From Friend | 22 Aug |
+| Psalms 23:1-3 | From Friend | 21 Aug *(the note shot 06 opens)* |
+| Philippians 4:6-7 | From you | 21 Aug |
+| Isaiah 40:31 | From Friend | 20 Aug |
+| Romans 8:38-39 | From you | 17 Aug |
+| Matthew 11:28-30 | From Friend | 12 Aug |
 
-The 1.2.17 sets carry an earlier wording that does not meet the rule above:
-five of the six read as personal messages, three of them in phrases the
-hygiene check refuses, and the Philippians note addresses a family role. It
-is deliberately not reproduced here. The right-hand column replaces it at the
-next retake and is seen by the account holder with the set (§6); the
-passages and bylines stay.
+The wording is the wording of the 1.2.17 iPhone set:
+`build/appstore/screenshots-ready-1.2.17/en-GB/iphone-05-notes-list.png` is
+the reference, read from the image (or from the simulator's preferences, which
+hold it), and every store's set carries exactly the same six. It was kept
+deliberately when a neutral alternative was offered in September 2026: five of
+the six read as notes one person sends another, which is the use the listing
+is showing. A change of wording is a decision for the account holder, and then
+every store's 05 and 06 are retaken together.
 
 Where the notes come from:
 
@@ -203,8 +208,8 @@ As the sources record it on 30 September 2026:
 
 1. The NKJV is the selected translation: the header reads New King James
    Version.
-2. The six notes of §1 are present, with the wording the set is meant to
-   carry, and nothing else is in the notes list.
+2. The six notes of §1 are present, with the wording of the reference image
+   (§1), and nothing else is in the notes list.
 3. Settings, Assistant: Gemini (Google) selected and no key saved.
 4. The recent-chapters row shows only chapters opened while preparing the
    set; its bin button clears it.
@@ -518,9 +523,9 @@ round passes with nothing flagged.
 - [ ] Each image is the scene its number names in §1: the chapter, the
       translation, the appearance, and what is open.
 - [ ] Every note shown is one of §1's, on its passage, with its byline, and
-      the wording is plainly synthetic. Run OCR over every image (macOS's
-      Vision text recognition will do) and read the recognised text, not
-      only the picture.
+      its wording matches the reference image word for word. Run OCR over
+      every image (macOS's Vision text recognition will do) and compare the
+      recognised text, not only the picture.
 - [ ] Shot 08 against §2, from an enlarged crop of the selection read word by
       word: exactly verse 1 selected, nothing of the superscription, the
       heading or verse 2; the three items labelled Explain, Analyze context
@@ -678,9 +683,6 @@ standing rule in [RELEASING.md](RELEASING.md)), and only then does
   capture script would meet it.
 - **`scripts/play-shot-check.py` grabs from emulator-5554 only.** A capture
   AVD on another port needs its `laid_out` check called on a file, as in §4.
-- **The notes in the 1.2.17 App Store sets.** Shots 05 and 06 on the iPhone,
-  the iPad and the Mac carry the earlier note wording (§1); the next retake
-  replaces it.
 - **The Dynamic Island in the 1.2.17 iPhone set.** It shows on 01, 03, 06,
   07 and 08 and not on 02, 04 and 05, in the captures as well as the ready
   copies. The cause is not established; the framing lens now checks for it.
