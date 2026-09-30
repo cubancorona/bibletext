@@ -352,13 +352,18 @@ link, and the Share icon on the verse of the day — ends in `shareTextOut`
 (`share.go`), which calls `nativeShareText`; Share as image goes through the
 preview sheet (`share_preview.go`) to `nativeShareImage`. The file that
 defines those two functions for a platform's release build decides its row,
-and **Defined in** names it.
+and **Defined in** names it, followed, where that file only hands the verbs
+on, by the file it hands them to.
 `TestTheSharingTableNamesTheFileThatSharesOnEachPlatform`
-(`platform_matrix_test.go`) resolves the two definitions for each row with
-that platform's GOOS, every architecture it ships and its release build tags,
-and fails when the row and the code disagree in either direction — a platform
-moved to a new share implementation with the row left alone, or a row edited
-with the code left alone. Numbers in a cell are divergences.
+(`platform_matrix_test.go`) resolves the two definitions and their hand-ons
+for each row with that platform's GOOS, every architecture it ships and the
+build tags read off its release lines, and fails when the row and the code
+disagree in either direction — a platform moved to a new share
+implementation with the row left alone, or a row edited with the code left
+alone. It holds two claims in the cells to the code as well: a row says
+"notice" for the text verbs exactly when the function they end in calls
+`showShareNotice`, and "Downloads" for the image exactly when it calls
+`revealInFileManager`. Numbers in a cell are divergences.
 
 Recorded 29–30 September 2026, from the share code as it shipped in 1.2.17.
 
@@ -368,8 +373,8 @@ Recorded 29–30 September 2026, from the share code as it shipped in 1.2.17.
 | iPadOS | Share popover; probably points mid-page rather than at the selection | Share popover at the selection | Share popover at the selection | Preview, then a share popover; probably mid-page | Probably a share popover pointing at the hidden reading view, not the icon; not seen | `reading_ios.go` | `builds` — code reading, 29–30 September 2026 |
 | macOS | Share picker at the selection; the note card appears beneath | Share picker at the selection | Share picker at the selection | Preview, then the share picker with the image | Probably the share picker, anchored to the hidden reading view, not the icon; not seen | `reading_macos.go` | `builds` — code reading, 29–30 September 2026 |
 | Android | The note card, then the "Sharing text" sheet with the note, citation and link | "Sharing text" sheet with the quote and citation | "Sharing text" sheet with the link | Preview, then the "Sharing image" sheet | "Sharing text" sheet, by the citation's route; not driven | `reading_android.go` | `runner` — emulator, 1.2.17, 29–30 September 2026 |
-| Windows | Copied to the clipboard; a 1.4 s notice (27) | Copied; a 1.4 s notice (27) | Copied; a 1.4 s notice (27) | Saved to Downloads; Explorer opens with it selected | Copied; a 1.4 s notice (27) | `share_other.go` | `builds` — build tags and `go list`, 29–30 September 2026 |
-| Linux | Copied; a 1.4 s notice at the window's foot as the note card draws (27) | Copied; a 1.4 s notice (27) | Copied; a 1.4 s notice (27) | Saved to ~/Downloads; the file manager opens on the folder | Copied; a 1.4 s notice (27); not driven | `share_other.go` | `hardware` — arm64 VM, X11, 29–30 September 2026 |
+| Windows | Copied to the clipboard; a 1.4 s notice (27) | Copied; a 1.4 s notice (27) | Copied; a 1.4 s notice (27) | Saved to Downloads; Explorer opens with it selected | Copied; a 1.4 s notice (27) | `share_other.go`, handing on to `share_fallback.go` | `builds` — build tags and `go list`, 29–30 September 2026 |
+| Linux | Copied; a 1.4 s notice at the window's foot as the note card draws (27) | Copied; a 1.4 s notice (27) | Copied; a 1.4 s notice (27) | Saved to ~/Downloads; the file manager opens on the folder | Copied; a 1.4 s notice (27); not driven | `share_other.go`, handing on to `share_fallback.go` | `hardware` — arm64 VM, X11, 29–30 September 2026 |
 
 What each proof rests on:
 
@@ -411,10 +416,12 @@ What each proof rests on:
   `nativeShareImage`; `share_other.go` narrows to exclude windows;
   `share_fallback.go` stays behind the sheet for a share UI that fails; the
   window handle is reached as `title_bar_windows.go` reaches it; and the
-  Windows row above, which the test holds to whichever file defines the two
-  functions. Whether the unpackaged zip can open the sheet as the MSIX can is
-  to be proven on the Windows VM. The route, its constraints and its sources
-  are in `docs/BACKLOG.md`, "Windows: use the native Share sheet".
+  Windows row above, which the test holds to whichever files define the two
+  functions and whatever they hand on to, and which must stop saying
+  "notice" once the verbs no longer end in `showShareNotice`. Whether the
+  unpackaged zip can open the sheet as the MSIX can is to be proven on the
+  Windows VM. The route, its constraints and its sources are in
+  `docs/BACKLOG.md`, "Windows: use the native Share sheet".
 - **Linux: an in-app share sheet in place of the notice — proposed
   30 September 2026; the wording is not yet approved.** Share with note, with
   citation and as link open one modal sheet in the app, showing the text
@@ -429,7 +436,9 @@ What each proof rests on:
   Files: `share_fallback.go` (`fallbackShareText` opens the sheet in place of
   `showShareNotice`), a new file beside it for the sheet, a Linux-only file
   for the portal call, `sheet_reopen.go` (a real sheet, which a light/dark
-  rebuild reopens rather than closing it as it closes the notice), and
-  `share_other.go` once Windows leaves it. The draft wording and the open
-  questions are in `docs/BACKLOG.md`, "Linux: an in-app share sheet in place
-  of the 1.4-second notice".
+  rebuild reopens rather than closing it as it closes the notice),
+  `share_other.go` once Windows leaves it, and the Linux row above, which the
+  test fails while it says "notice" and `fallbackShareText` no longer calls
+  `showShareNotice`. The draft wording and the open questions are in
+  `docs/BACKLOG.md`, "Linux: an in-app share sheet in place of the 1.4-second
+  notice".

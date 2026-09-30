@@ -178,11 +178,14 @@ list.
 **Files.** `share_fallback.go` (`fallbackShareText` opens the sheet in place
 of `showShareNotice`), a new file beside it for the sheet, a Linux-only file
 for the portal call, `sheet_reopen.go`, `share_other.go` once Windows leaves
-it, and the Linux row of the Sharing table. About 150–250 lines and one to
-two days with a check on the VM. Nothing tests `showShareNotice` today, so
-the change brings a host test: for each desktop verb the confirmation is
-visible after the handler returns and lies inside the canvas, and the sheet
-survives a click elsewhere and a light/dark flip.
+it, and the Linux row of the Sharing table, which
+`TestTheSharingTableNamesTheFileThatSharesOnEachPlatform` fails while it
+still says "notice" and `fallbackShareText` no longer calls
+`showShareNotice`. About 150–250 lines and one to two days with a check on
+the VM. Nothing tests `showShareNotice` today, so the change brings a host
+test: for each desktop verb the confirmation is visible after the handler
+returns and lies inside the canvas, and the sheet survives a click elsewhere
+and a light/dark flip.
 
 **Sources.**
 

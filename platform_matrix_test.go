@@ -12,6 +12,7 @@ package bibletext
 // describing a repository that has moved on.
 
 import (
+	"fmt"
 	"go/ast"
 	"go/build"
 	"go/parser"
@@ -359,50 +360,102 @@ func TestEveryCmdPathInTheBuildNamesADirectoryThatExists(t *testing.T) {
 	}
 }
 
-// WHAT SHARE DOES IS DECIDED BY ONE FILE PER PLATFORM.
+// WHAT SHARE DOES IS DECIDED BY A FEW FILES PER PLATFORM.
 //
 // Every share verb ends in nativeShareText or nativeShareImage, and exactly
 // one file defines each for a given release build: the Apple and Android
-// panes present their system share sheets, and share_other.go gives Linux and
-// Windows the clipboard fallback. docs/PLATFORM_MATRIX.md's Sharing table
-// records what each platform's verbs do, and its Defined in column names that
-// file. This holds the column to the code in both directions: a platform moved
-// to a new share implementation (the planned Windows sheet is the first) fails
-// here until its row names the new file, and a row edited to name a file the
-// build does not use fails too.
+// panes present their system share sheets, and share_other.go hands Linux and
+// Windows on to the clipboard fallback in share_fallback.go.
+// docs/PLATFORM_MATRIX.md's Sharing table records what each platform's verbs
+// do. Its Defined in column names the file that defines the two functions
+// and, where that file only hands a verb on, every file the hand-ons lead to.
+// This holds the column to the code in both directions: a platform moved to a
+// new share implementation (the planned Windows sheet is the first) fails here
+// until its row names the new file, and a row edited to name a file the build
+// does not use fails too. What the cells say is held to the code as well, one
+// call per claim (sharingClaims), and that is also what catches a hand-on
+// that starts doing something of its own: its chain then ends a file sooner,
+// at a function that does not make the call.
 //
 // The definitions are resolved the way the go command resolves them, with
 // go/build's file matching under each platform's GOOS, every architecture it
-// ships and the tags its release line passes — not by reading the build
-// constraints by eye, which is how a file comes to be believed to cover a
-// platform it does not: a file constrained to linux is compiled into the
-// Android build too, since android satisfies the linux constraint.
+// ships and the tags its release build passes, which are read off the release
+// lines themselves. Reading build constraints by eye is how a file comes to
+// be believed to cover a platform it does not: a file constrained to linux is
+// compiled into the Android build too, since android satisfies the linux
+// constraint.
+
+// shareRelease names the lines of a release script or workflow that compile a
+// platform's shipped binary: the lines that match, once continuation lines
+// are joined and comment lines dropped.
+type shareRelease struct {
+	file, lines string
+}
+
+var iosRelease = shareRelease{"scripts/release-ios.sh", `\bGOOS=ios GOARCH=arm64 .*\bgo build\b.*/cmd/mobile"?$`}
+
+const windowsReleaseLines = `\bgo build\b.* -o BibleText\.exe \.$|\bpackage -os windows\b`
 
 // sharingRows are the Sharing table's rows and how each platform's release is
-// built. buildFile and buildLine name the release command the GOOS and tags
-// were read from, so a release line that changes shape fails here instead of
-// leaving the resolution below answering for a build nobody runs.
+// built. tags is the set the resolution uses. Every selected release line must
+// pass exactly tags less toolTags, the tags the fyne tool adds without their
+// being written on the line, and a line with no -tags passes none. A tag added
+// to or dropped from a release line fails here until the row agrees, and so
+// does a release whose lines no longer match, so the resolution cannot go on
+// answering for a build nobody runs.
 var sharingRows = []struct {
-	row, goos            string
-	arches, tags         []string
-	buildFile, buildLine string
+	row, goos      string
+	arches         []string
+	tags, toolTags []string
+	releases       []shareRelease
 }{
-	// A plain cross-compile with no -tags; GOOS=ios satisfies both the ios
+	// A plain cross-compile of cmd/mobile; GOOS=ios satisfies both the ios
 	// and the darwin constraints, as it does for the go command. iPadOS is the
 	// same universal binary.
-	{"iOS", "ios", []string{"arm64"}, nil, "scripts/release-ios.sh", "GOOS=ios GOARCH=arm64"},
-	{"iPadOS", "ios", []string{"arm64"}, nil, "scripts/release-ios.sh", "GOOS=ios GOARCH=arm64"},
-	// Universal: both slices are compiled.
-	{"macOS", "darwin", []string{"arm64", "amd64"}, nil, "scripts/release-mac-store.sh", "package -os darwin"},
-	// The fyne tool adds the release tag to `fyne release`, and
-	// build-android.sh refuses extra tags on a release build. The four ABIs
-	// the AAB carries; the universal APK is built from the AAB.
-	{"Android", "android", []string{"arm64", "arm", "386", "amd64"}, []string{"release"}, "scripts/build-android.sh", "fyne release -os android"},
-	{"Windows", "windows", []string{"amd64", "arm64"}, []string{"gles"}, "scripts/build-windows-exe.sh", "go build -tags gles"},
-	{"Linux", "linux", []string{"amd64", "arm64"}, nil, ".github/workflows/release.yml", "package -os linux"},
+	{"iOS", "ios", []string{"arm64"}, nil, nil, []shareRelease{iosRelease}},
+	{"iPadOS", "ios", []string{"arm64"}, nil, nil, []shareRelease{iosRelease}},
+	// Universal: both slices are compiled, for the App Store and for the
+	// download alike, and `fyne package` is handed the joined binary.
+	{"macOS", "darwin", []string{"arm64", "amd64"}, nil, nil, []shareRelease{
+		{"scripts/release-mac-store.sh", `\bgo build\b.* -o "\$WORK/BibleText-(arm64|amd64)" \.$`},
+		{".github/workflows/release.yml", `\bgo build\b.* -o "\$RUNNER_TEMP/BibleText-(arm64|amd64)" \.$`},
+	}},
+	// `fyne release` adds the release tag itself (the fyne tool's
+	// mobile/build.go), and build-android.sh refuses extra tags on a release
+	// build. The four ABIs the AAB carries; the universal APK is built from
+	// the AAB.
+	{"Android", "android", []string{"arm64", "arm", "386", "amd64"}, []string{"release"}, []string{"release"},
+		[]shareRelease{{"scripts/build-android.sh", `(?:^|\s)fyne release -os android\b`}}},
+	// The zip and the MSIX's executable are built alike, and `fyne package`
+	// rebuilds the executable to add its resources, so its tags count too.
+	{"Windows", "windows", []string{"amd64", "arm64"}, []string{"gles"}, nil, []shareRelease{
+		{"scripts/build-windows-exe.sh", windowsReleaseLines},
+		{".github/workflows/release.yml", windowsReleaseLines},
+	}},
+	// One executable per architecture, which the tarball, the AppImage and the
+	// snap all carry; `fyne package` is handed it.
+	{"Linux", "linux", []string{"amd64", "arm64"}, nil, nil, []shareRelease{
+		{".github/workflows/release.yml", `\bgo build\b.* -o bibletext \.$`},
+	}},
 }
 
 var shareEntryPoints = []string{"nativeShareText", "nativeShareImage"}
+
+// sharingClaims tie what a row's cells say a verb does to the call that does
+// it. The function a verb's hand-ons end at calls `call` directly exactly
+// when every cell in cols says `word`; when it does not, no cell may say it.
+// So the planned Linux sheet, which takes fallbackShareText off
+// showShareNotice, fails here until the Linux row stops promising a notice.
+// It catches the call going, not every change behind it: a notice kept as the
+// sheet's failure path would still pass.
+var sharingClaims = []struct {
+	entry, word, call string
+	cols              []string
+}{
+	{"nativeShareText", "notice", "showShareNotice",
+		[]string{"Share with note", "Share with citation", "Share as link", "Verse of the day"}},
+	{"nativeShareImage", "Downloads", "revealInFileManager", []string{"Share as image"}},
+}
 
 func TestTheSharingTableNamesTheFileThatSharesOnEachPlatform(t *testing.T) {
 	root := repoRoot(t)
@@ -424,49 +477,48 @@ func TestTheSharingTableNamesTheFileThatSharesOnEachPlatform(t *testing.T) {
 		t.Fatalf("the Sharing table's rows are %v, want %v", got, want)
 	}
 
-	defs := shareDefinitions(t, root)
+	pkg := loadSharePackage(t, root)
 	named := regexp.MustCompile("`([A-Za-z0-9_./-]+\\.go)`")
 	proof := regexp.MustCompile("^`(hardware|field|runner|builds|none)`.*\\b20\\d\\d\\b")
+	pointed := map[string]shareDecl{} // every declaration that must point back at the table
 
 	for _, r := range sharingRows {
-		if !strings.Contains(readRepoFile(t, r.buildFile), r.buildLine) {
-			t.Errorf("%s: %s no longer contains %q, the release line this row's GOOS and tags were read from",
-				r.row, r.buildFile, r.buildLine)
-		}
+		checkReleaseLines(t, r.row, r.goos, r.arches, r.tags, r.toolTags, r.releases)
 
-		// One file per entry point, and the same one on every architecture.
-		files := map[string]bool{}
-		for _, arch := range r.arches {
+		// The files each entry point's chain passes through, the same on
+		// every architecture, and where each chain ends.
+		var code []string
+		ends := map[string]shareDecl{}
+		for i, arch := range r.arches {
 			ctx := build.Default
 			ctx.GOOS, ctx.GOARCH, ctx.BuildTags, ctx.CgoEnabled = r.goos, arch, r.tags, true
+			files := map[string]bool{}
 			for _, fn := range shareEntryPoints {
-				var in []string
-				for file, d := range defs {
-					if d.defines[fn] {
-						ok, err := ctx.MatchFile(root, file)
-						if err != nil {
-							t.Fatalf("matching %s for %s/%s: %v", file, r.goos, arch, err)
-						}
-						if ok {
-							in = append(in, file)
-						}
-					}
-				}
-				sort.Strings(in)
-				if len(in) != 1 {
-					t.Errorf("%s (%s/%s, tags %v): %s is defined in %d files %v, want exactly one",
-						r.row, r.goos, arch, r.tags, fn, len(in), in)
+				chain, err := pkg.chain(t, ctx, fn)
+				if err != nil {
+					t.Errorf("%s (%s/%s, tags %v): %v", r.row, r.goos, arch, r.tags, err)
 					continue
 				}
-				files[in[0]] = true
+				for _, d := range chain {
+					files[d.file] = true
+					pointed[d.file+" "+d.name] = d
+				}
+				if i == 0 {
+					ends[fn] = chain[len(chain)-1]
+				}
+			}
+			var these []string
+			for f := range files {
+				these = append(these, f)
+			}
+			sort.Strings(these)
+			if i == 0 {
+				code = these
+			} else if strings.Join(these, ",") != strings.Join(code, ",") {
+				t.Errorf("%s: %s/%s shares through %v, but %s/%s through %v",
+					r.row, r.goos, arch, these, r.goos, r.arches[0], code)
 			}
 		}
-
-		var code []string
-		for f := range files {
-			code = append(code, f)
-		}
-		sort.Strings(code)
 
 		cells := table[r.row]
 		var doc []string
@@ -480,89 +532,298 @@ func TestTheSharingTableNamesTheFileThatSharesOnEachPlatform(t *testing.T) {
 		sort.Strings(doc)
 		if strings.Join(code, ",") != strings.Join(doc, ",") {
 			t.Errorf("%s: the Sharing table says the share verbs are defined in %v, but the %s release build "+
-				"takes nativeShareText and nativeShareImage from %v; update the row (and what it says the "+
-				"verbs do) or the code", r.row, doc, r.goos, code)
+				"takes nativeShareText and nativeShareImage, and what they hand on to, from %v; update the row "+
+				"(and what it says the verbs do) or the code", r.row, doc, r.goos, code)
 		}
 		if !proof.MatchString(cells["Proof"]) {
 			t.Errorf("%s: the Proof cell %q does not open with a proof level from the vocabulary and carry a date",
 				r.row, cells["Proof"])
 		}
+
+		for _, c := range sharingClaims {
+			end, ok := ends[c.entry]
+			if !ok {
+				continue // the chain failed to resolve, reported above
+			}
+			var saying []string
+			for _, col := range c.cols {
+				if strings.Contains(cells[col], c.word) {
+					saying = append(saying, col)
+				}
+			}
+			calls := callsFunc(end.fn, c.call)
+			switch {
+			case calls && len(saying) != len(c.cols):
+				t.Errorf("%s: %s in %s calls %s, but only %v of the cells %v say %q; say what the verb does "+
+					"in every one", r.row, end.name, end.file, c.call, saying, c.cols, c.word)
+			case !calls && len(saying) > 0:
+				t.Errorf("%s: the cells %v say %q, but %s ends at %s in %s, which does not call %s; update "+
+					"the cells to what the verb does now", r.row, saying, c.word, c.entry, end.name, end.file, c.call)
+			}
+		}
 	}
 
-	// Whichever file a platform shares from points back at the table, so a
-	// new implementation arrives with the pointer as well as the row.
-	for file, d := range defs {
-		for fn, ok := range d.defines {
-			if ok && !strings.Contains(d.doc[fn], "docs/PLATFORM_MATRIX.md, Sharing") {
-				t.Errorf("%s: %s has no comment pointing to docs/PLATFORM_MATRIX.md, Sharing", file, fn)
-			}
+	// Whichever file a platform shares from, and every file it hands on to,
+	// points back at the table, so a new implementation arrives with the
+	// pointer as well as the row. Every definition of an entry point counts,
+	// whatever its build.
+	for _, fn := range shareEntryPoints {
+		for _, d := range pkg.decls(t, fn) {
+			pointed[d.file+" "+d.name] = d
+		}
+	}
+	var keys []string
+	for k := range pointed {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		d := pointed[k]
+		if !strings.Contains(d.doc, "docs/PLATFORM_MATRIX.md, Sharing") {
+			t.Errorf("%s: %s has no comment pointing to docs/PLATFORM_MATRIX.md, Sharing", d.file, d.name)
 		}
 	}
 }
 
-type shareDefinition struct {
-	defines map[string]bool
-	doc     map[string]string
+var (
+	releaseTagFlag = regexp.MustCompile(`(?:^|[\s"'=])--?tags(?:=|\s+)("[^"]*"|'[^']*'|[^\s"']+)`)
+	releaseGOOS    = regexp.MustCompile(`\bGOOS=([a-z0-9]+)\b`)
+	releaseGOARCH  = regexp.MustCompile(`\bGOARCH=([a-z0-9]+)\b`)
+)
+
+// checkReleaseLines holds a row's tags, and its GOOS and architectures where a
+// release line spells them out, to the release lines they were read from.
+// -tags and --tags are read with a space or an =, quoted or bare, and comma-
+// or space-separated; a value the shell supplies cannot be read, and fails.
+func checkReleaseLines(t *testing.T, row, goos string, arches, tags, toolTags []string, releases []shareRelease) {
+	t.Helper()
+	want := append([]string(nil), tags...)
+	sort.Strings(want)
+	for _, rel := range releases {
+		sel := regexp.MustCompile(rel.lines)
+		src := strings.ReplaceAll(readRepoFile(t, rel.file), "\\\n", " ")
+		matched := 0
+		for _, line := range strings.Split(src, "\n") {
+			line = strings.Join(strings.Fields(line), " ")
+			if strings.HasPrefix(line, "#") || !sel.MatchString(line) {
+				continue
+			}
+			matched++
+			set := map[string]bool{}
+			for _, tag := range toolTags {
+				set[tag] = true
+			}
+			for _, m := range releaseTagFlag.FindAllStringSubmatch(line, -1) {
+				v := strings.Trim(m[1], `"'`)
+				if strings.Contains(v, "$") {
+					t.Errorf("%s: %s passes build tags the shell supplies (%s), which this test cannot read: %s",
+						row, rel.file, m[1], line)
+					continue
+				}
+				for _, tag := range strings.FieldsFunc(v, func(r rune) bool { return r == ',' || r == ' ' }) {
+					set[tag] = true
+				}
+			}
+			var got []string
+			for tag := range set {
+				got = append(got, tag)
+			}
+			sort.Strings(got)
+			if strings.Join(got, ",") != strings.Join(want, ",") {
+				t.Errorf("%s: %s builds with tags %v, but the row resolves the share files with %v; update the "+
+					"row's tags, and see what the build now shares with, or the line: %s", row, rel.file, got, want, line)
+			}
+			if m := releaseGOOS.FindStringSubmatch(line); m != nil && m[1] != goos {
+				t.Errorf("%s: %s builds for GOOS=%s, but the row resolves for %s: %s", row, rel.file, m[1], goos, line)
+			}
+			if m := releaseGOARCH.FindStringSubmatch(line); m != nil {
+				found := false
+				for _, a := range arches {
+					found = found || a == m[1]
+				}
+				if !found {
+					t.Errorf("%s: %s builds for GOARCH=%s, which is not among the row's architectures %v: %s",
+						row, rel.file, m[1], arches, line)
+				}
+			}
+		}
+		if matched == 0 {
+			t.Errorf("%s: no line of %s matches %q, the release lines this row's tags are read from",
+				row, rel.file, rel.lines)
+		}
+	}
 }
 
-// shareDefinitions finds every non-test file in the package that defines a
-// share entry point at top level, as a function or a variable, whatever its
-// build constraints. Only files that mention a name are parsed.
-func shareDefinitions(t *testing.T, root string) map[string]shareDefinition {
+// sharePackage is the root package's non-test source, parsed on demand, with
+// every file's build constraints left to go/build to judge.
+type sharePackage struct {
+	root  string
+	names []string
+	src   map[string]string
+	fset  *token.FileSet
+	files map[string]*ast.File
+	found map[string][]shareDecl
+}
+
+type shareDecl struct {
+	file, name, doc string
+	fn              *ast.FuncDecl // nil for a variable
+}
+
+func loadSharePackage(t *testing.T, root string) *sharePackage {
 	t.Helper()
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		t.Fatalf("reading %s: %v", root, err)
 	}
-	out := map[string]shareDefinition{}
-	fset := token.NewFileSet()
+	p := &sharePackage{root: root, src: map[string]string{}, fset: token.NewFileSet(),
+		files: map[string]*ast.File{}, found: map[string][]shareDecl{}}
 	for _, e := range entries {
 		name := e.Name()
 		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 			continue
 		}
-		src, err := os.ReadFile(filepath.Join(root, name))
+		b, err := os.ReadFile(filepath.Join(root, name))
 		if err != nil {
 			t.Fatalf("reading %s: %v", name, err)
 		}
-		if !strings.Contains(string(src), "nativeShare") {
+		p.names = append(p.names, name)
+		p.src[name] = string(b)
+	}
+	return p
+}
+
+// decls is every file's top-level declaration of name, as a function or a
+// variable, whatever the file's build constraints. Only files that mention
+// the name are parsed.
+func (p *sharePackage) decls(t *testing.T, name string) []shareDecl {
+	t.Helper()
+	if out, ok := p.found[name]; ok {
+		return out
+	}
+	var out []shareDecl
+	for _, file := range p.names {
+		if !strings.Contains(p.src[file], name) {
 			continue
 		}
-		f, err := parser.ParseFile(fset, name, src, parser.ParseComments|parser.SkipObjectResolution)
-		if err != nil {
-			t.Fatalf("parsing %s: %v", name, err)
+		f := p.files[file]
+		if f == nil {
+			var err error
+			f, err = parser.ParseFile(p.fset, file, p.src[file], parser.ParseComments|parser.SkipObjectResolution)
+			if err != nil {
+				t.Fatalf("parsing %s: %v", file, err)
+			}
+			p.files[file] = f
 		}
-		d := shareDefinition{defines: map[string]bool{}, doc: map[string]string{}}
 		for _, decl := range f.Decls {
 			switch decl := decl.(type) {
 			case *ast.FuncDecl:
-				if decl.Recv == nil {
-					d.defines[decl.Name.Name] = true
-					d.doc[decl.Name.Name] = decl.Doc.Text()
+				if decl.Recv == nil && decl.Name.Name == name {
+					out = append(out, shareDecl{file: file, name: name, doc: decl.Doc.Text(), fn: decl})
 				}
 			case *ast.GenDecl:
 				for _, spec := range decl.Specs {
 					if vs, ok := spec.(*ast.ValueSpec); ok {
 						for _, id := range vs.Names {
-							d.defines[id.Name] = true
-							d.doc[id.Name] = decl.Doc.Text() + vs.Doc.Text()
+							if id.Name == name {
+								out = append(out, shareDecl{file: file, name: name, doc: decl.Doc.Text() + vs.Doc.Text()})
+							}
 						}
 					}
 				}
 			}
 		}
-		keep := shareDefinition{defines: map[string]bool{}, doc: map[string]string{}}
-		for _, fn := range shareEntryPoints {
-			if d.defines[fn] {
-				keep.defines[fn] = true
-				keep.doc[fn] = d.doc[fn]
+	}
+	p.found[name] = out
+	return out
+}
+
+// chain follows name through its hand-ons under ctx and returns every
+// declaration it passes through, name's own first. A hand-on is a function
+// whose whole body is one call passing its own parameters, in order, to
+// another function of the package. Anything more and the chain ends there, at
+// the function that does the work.
+func (p *sharePackage) chain(t *testing.T, ctx build.Context, name string) ([]shareDecl, error) {
+	t.Helper()
+	var out []shareDecl
+	for len(out) < 8 {
+		var in []shareDecl
+		for _, d := range p.decls(t, name) {
+			ok, err := ctx.MatchFile(p.root, d.file)
+			if err != nil {
+				t.Fatalf("matching %s for %s/%s: %v", d.file, ctx.GOOS, ctx.GOARCH, err)
+			}
+			if ok {
+				in = append(in, d)
 			}
 		}
-		if len(keep.defines) > 0 {
-			out[name] = keep
+		if len(in) != 1 {
+			var files []string
+			for _, d := range in {
+				files = append(files, d.file)
+			}
+			return nil, fmt.Errorf("%s is defined in %d files %v, want exactly one", name, len(in), files)
+		}
+		out = append(out, in[0])
+		next := handsOnTo(in[0].fn)
+		if next == "" || len(p.decls(t, next)) == 0 {
+			return out, nil
+		}
+		name = next
+	}
+	return nil, fmt.Errorf("%s hands on more than %d times", out[0].name, len(out))
+}
+
+// handsOnTo is the function fn's whole body calls with fn's own parameters,
+// in order, or "" when fn does anything else.
+func handsOnTo(fn *ast.FuncDecl) string {
+	if fn == nil || fn.Body == nil || len(fn.Body.List) != 1 {
+		return ""
+	}
+	stmt, ok := fn.Body.List[0].(*ast.ExprStmt)
+	if !ok {
+		return ""
+	}
+	call, ok := stmt.X.(*ast.CallExpr)
+	if !ok || call.Ellipsis.IsValid() {
+		return ""
+	}
+	callee, ok := call.Fun.(*ast.Ident)
+	if !ok {
+		return ""
+	}
+	var params []string
+	for _, field := range fn.Type.Params.List {
+		for _, n := range field.Names {
+			params = append(params, n.Name)
 		}
 	}
-	return out
+	if len(call.Args) != len(params) {
+		return ""
+	}
+	for i, arg := range call.Args {
+		if id, ok := arg.(*ast.Ident); !ok || id.Name != params[i] {
+			return ""
+		}
+	}
+	return callee.Name
+}
+
+// callsFunc reports whether fn's body calls the package function name itself.
+func callsFunc(fn *ast.FuncDecl, name string) bool {
+	if fn == nil || fn.Body == nil {
+		return false
+	}
+	found := false
+	ast.Inspect(fn.Body, func(n ast.Node) bool {
+		if call, ok := n.(*ast.CallExpr); ok {
+			if id, ok := call.Fun.(*ast.Ident); ok && id.Name == name {
+				found = true
+			}
+		}
+		return !found
+	})
+	return found
 }
 
 // sharingTable reads the first table under docs/PLATFORM_MATRIX.md's
