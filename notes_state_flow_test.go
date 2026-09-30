@@ -532,6 +532,39 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 	t.Helper()
 	var obs notesObs
 
+	// REACHABILITY FROM THE WORLD ALONE, decided before any of it is built:
+	// each refusal here reads nothing but w, so seeding the store and
+	// deriving the chapter first would only be thrown away. About two worlds
+	// in three of the cross-product are refused here.
+	switch {
+	case w.spread && w.placement == placeNone:
+		// The second received note is not offered on placeNone, whose whole
+		// meaning is that the passage carries nothing.
+		return obs, false
+	case w.focus == focusNoneAx && w.placement == placeNone,
+		w.focus == focusExactKey && w.placement != placeOwn && w.placement != placeBoth,
+		w.focus == focusFollowedNote && w.placement != placeFollowed && w.placement != placeBoth:
+		// A focus value naming a note the world does not contain is not a
+		// reachable state — reported as not-offered, like a verb no surface
+		// presents.
+		return obs, false
+	case w.focus == focusOwnAx && !w.ownNote:
+		// Not a reachable state without one to open: the browser can only
+		// offer a row the store holds.
+		return obs, false
+	case w.arrival && !w.featureOn:
+		// With notes OFF the link never reaches applyShareTarget at all: it
+		// takes the offer card (share_link_open.go:62-65), which mutates
+		// nothing. Driving the arrival anyway would invent a state the app
+		// does not have.
+		return obs, false
+	case !w.featureOn && (w.verb == verbHide || w.verb == verbShow || w.verb == verbDelete):
+		// The verbs ride on the open bubble, and with notes off there is
+		// none. This is the half of the offered test below that the world
+		// alone decides; that test still states the whole rule.
+		return obs, false
+	}
+
 	deleteAllNotes(appPrefs())
 	setNotesEnabled(true) // seed with the feature on, then set the world's value
 
@@ -573,12 +606,9 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 		addNote(appPrefs(), own)
 	}
 
-	// The second received note, in another paragraph. Not offered on placeNone,
-	// whose whole meaning is that the passage carries nothing.
+	// The second received note, in another paragraph (never on placeNone:
+	// refused above).
 	if w.spread {
-		if w.placement == placeNone {
-			return obs, false
-		}
 		addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
 			Book: "John", Chapter: 3, VerseLo: enumerationSpreadVerse(),
 			Text: "a note in another paragraph"})
@@ -634,34 +664,19 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 
 	// The session focus, applied AFTER the derive exactly as the reader
 	// applies it (a chip or note tapped after landing on the chapter), and
-	// re-projected the way Show re-projects. A focus value naming a note the
-	// world does not contain is not a reachable state — reported as
-	// not-offered, like a verb no surface presents.
+	// re-projected the way Show re-projects. A focus naming a note the world
+	// does not contain was refused above.
 	switch w.focus {
 	case focusNoneAx:
-		if w.placement == placeNone {
-			return obs, false
-		}
 		st.focusNone()
 		applyNoteForCurrentChapter(st)
 	case focusExactKey:
-		if w.placement != placeOwn && w.placement != placeBoth {
-			return obs, false
-		}
 		st.focusNote(storedIDByText(t, "note under web"))
 		applyNoteForCurrentChapter(st)
 	case focusFollowedNote:
-		if w.placement != placeFollowed && w.placement != placeBoth {
-			return obs, false
-		}
 		st.focusNote(storedIDByText(t, "note under bsb"))
 		applyNoteForCurrentChapter(st)
 	case focusOwnAx:
-		// Not a reachable state without one to open: the browser can only
-		// offer a row the store holds.
-		if !w.ownNote {
-			return obs, false
-		}
 		st.focusNote(storedIDByText(t, "a note of my own"))
 		applyNoteForCurrentChapter(st)
 	}
@@ -669,16 +684,9 @@ func runNotesFlow(t *testing.T, w notesWorld) (notesObs, bool) {
 	// A note-bearing link landing on the chapter the reader is already on. The
 	// arrival stores the note and then writes the mirror by hand — including
 	// the stored identity the verbs address — which is why it belongs on the
-	// cross-product and not in a case somebody thought of.
-	//
-	// With notes OFF the link never reaches applyShareTarget at all: it takes the
-	// offer card (share_link_open.go:62-65), which mutates nothing. Driving the
-	// arrival anyway would invent a state the app does not have, so those cells
-	// report as not-offered.
+	// cross-product and not in a case somebody thought of. With notes OFF the
+	// link takes the offer card instead, refused above.
 	if w.arrival {
-		if !w.featureOn {
-			return obs, false
-		}
 		applyShareTarget(st, ShareTarget{
 			VersionID: "web", Book: "John", Chapter: 3, VerseLo: 16, Note: "note from the link",
 		})
