@@ -1,13 +1,13 @@
-//go:build !darwin && !android
+//go:build !darwin && !android && !windows
 
 package bibletext
 
-// Desktop share verbs for the platforms without a system share sheet
-// (Linux/Windows; darwin has NSSharingServicePicker / UIActivityViewController,
-// Android has ACTION_SEND via BtBridge). The bodies live in share_fallback.go
-// (untagged-for-desktop, so the darwin platform-mimic dev mode can reach the
-// same code); these wrappers are what keeps the Windows/Linux release path
-// byte-identical to before the extraction:
+// Desktop share verbs for Linux, which has no system share sheet to call:
+// xdg-desktop-portal has no Share portal (darwin has NSSharingServicePicker
+// and UIActivityViewController, Android ACTION_SEND via BtBridge, Windows its
+// Share sheet, share_windows.go). The bodies live in share_fallback.go,
+// untagged for the desktop so that Windows reaches them as its Share sheet's
+// fallback and the darwin platform-mimic dev mode can reach them too:
 //
 //   - the text verbs      → the composed text goes to the CLIPBOARD, and the
 //     confirmation sheet says so and shows it (share_sheet_desktop.go) —

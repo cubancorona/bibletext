@@ -4,18 +4,18 @@ package bibletext
 
 // The desktop share FALLBACK bodies — clipboard + the confirmation sheet for
 // text, save to ~/Downloads + file-manager reveal + the same sheet for
-// images (share_sheet_desktop.go). These are the shipping Windows/Linux
-// share verbs (share_other.go's nativeShareText/-Image are one-line wrappers
-// over them), and they are untagged-for-desktop so the darwin platform-mimic
-// dev mode (dev_mimic_on.go) can route the macOS share verbs here and show
-// the real Windows/Linux share UX on a Mac. On release macOS nothing
+// images (share_sheet_desktop.go). These are the shipping Linux share verbs
+// (share_other.go's nativeShareText/-Image are one-line wrappers over them),
+// and the Windows Share sheet's fallback, wherever it cannot take a share
+// (share_windows.go). They are untagged-for-desktop so the darwin
+// platform-mimic dev mode (dev_mimic_on.go) can route the macOS share verbs
+// here and show the real Linux share UX on a Mac. On release macOS nothing
 // references them (reading_macos.go's mimic branch is dead behind a
 // constant), so the linker drops them.
 //
 // All run on the Fyne UI goroutine (the share flow dispatches from menu taps).
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -53,8 +53,7 @@ func fallbackShareImage(path string) {
 	if home, err := os.UserHomeDir(); err == nil {
 		dir := filepath.Join(home, "Downloads")
 		if st, err := os.Stat(dir); err == nil && st.IsDir() {
-			name := fmt.Sprintf("BibleText verse %s.png", time.Now().Format("2006-01-02 15.04.05"))
-			target := filepath.Join(dir, name)
+			target := filepath.Join(dir, shareImageName(time.Now()))
 			if copyFileContents(path, target) == nil {
 				dst = target
 				line = shareLineImage

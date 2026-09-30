@@ -5,9 +5,10 @@ package bibletext
 // Email… on Windows: a mailto: link through the shell, the route every other
 // link the app opens takes there (external_link.go, rundll32's protocol
 // handler), with the subject and body in the link (mailtoURL, which keeps it
-// to 2,000 characters). A link carries no file, so the image share offers no
-// Email… on Windows; the native Share sheet planned for Windows will carry
-// it (docs/BACKLOG.md).
+// to 2,000 characters). It is on the in-app sheet, which Windows reaches
+// only when its Share sheet cannot open (share_windows.go). A link carries
+// no file, so the image share offers no Email… there; the Share sheet
+// itself hands the picture to a mail app as a file.
 
 import (
 	"errors"

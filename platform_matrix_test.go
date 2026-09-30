@@ -364,15 +364,16 @@ func TestEveryCmdPathInTheBuildNamesADirectoryThatExists(t *testing.T) {
 //
 // Every share verb ends in nativeShareText or nativeShareImage, and exactly
 // one file defines each for a given release build: the Apple and Android
-// panes present their system share sheets, and share_other.go hands Linux and
-// Windows on to the clipboard fallback in share_fallback.go.
+// panes present their system share sheets, share_windows.go opens the
+// Windows Share sheet, and share_other.go hands Linux on to the clipboard
+// fallback in share_fallback.go.
 // docs/PLATFORM_MATRIX.md's Sharing table records what each platform's verbs
 // do. Its Defined in column names the file that defines the two functions
 // and, where that file only hands a verb on, every file the hand-ons lead to.
 // This holds the column to the code in both directions: a platform moved to a
-// new share implementation (the planned Windows sheet is the first) fails here
-// until its row names the new file, and a row edited to name a file the build
-// does not use fails too. What the cells say is held to the code as well, one
+// new share implementation (as Windows was, to its own Share sheet) fails
+// here until its row names the new file, and a row edited to name a file the
+// build does not use fails too. What the cells say is held to the code as well, one
 // call per claim (sharingClaims), and that is also what catches a hand-on
 // that starts doing something of its own: its chain then ends a file sooner,
 // at a function that does not make the call.

@@ -2,13 +2,13 @@
 
 package bibletext
 
-// THE DESKTOP SHARE CONFIRMATION: the sheet every Windows and Linux share
-// ends in (share_fallback.go), and the recorded counterpart there of the
-// system share sheet the other platforms open (docs/PLATFORM_MATRIX.md,
-// Sharing).
+// THE DESKTOP SHARE CONFIRMATION: the sheet every Linux share ends in
+// (share_fallback.go), and every Windows share whose Share sheet cannot open
+// (share_windows.go): the recorded counterpart there of the system share
+// sheet the other platforms open (docs/PLATFORM_MATRIX.md, Sharing).
 //
-// Neither platform has a system share sheet to call: Linux has none (the
-// portal request has been open since 2016), and the Windows one is not yet
+// Linux has no system share sheet to call (the portal request has been open
+// since 2016), and Windows shared this way too until its Share sheet was
 // built. What the reader gets instead is the clipboard, and until this sheet
 // the only sign of it was a 13pt "Copied to the clipboard" pill at the
 // window's foot for 1.4 seconds, barely lighter than the page, gone at the

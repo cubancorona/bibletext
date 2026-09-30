@@ -246,16 +246,19 @@ place a fix on one does not reach the others.
 
 **Linux and Windows**
 
-27. **Linux and Windows have no system share sheet, so the text verbs copy
-    to the clipboard and open the app's own confirmation sheet — the
-    recorded Linux and Windows counterpart of the system share sheet.**
-    `share_other.go:1` (`//go:build !darwin && !android`) gives both
-    platforms the desktop fallback: `share_other.go:20`
+27. **Linux has no system share sheet, so the text verbs copy to the
+    clipboard and open the app's own confirmation sheet — the recorded Linux
+    counterpart of the system share sheet, and the sheet Windows falls back
+    to wherever its own Share sheet cannot open (28).**
+    `share_other.go:1` (`//go:build !darwin && !android && !windows`) gives
+    Linux the desktop fallback: `share_other.go:20`
     (`fallbackShareText(s)`) and `share_other.go:23`
-    (`fallbackShareImage(path)`). `go list` for linux and windows, amd64 and
-    arm64, with and without `-tags gles`, takes the two verbs from
-    `share_other.go` and `share_fallback.go` and compiles none of
-    `reading_macos.go`, `reading_ios.go` or `reading_android.go`. Every text
+    (`fallbackShareImage(path)`). `go list` for linux, amd64 and arm64, with
+    and without `-tags gles`, takes the two verbs from `share_other.go` and
+    `share_fallback.go` and compiles none of `reading_macos.go`,
+    `reading_ios.go`, `reading_android.go` or `share_windows.go`; windows
+    takes them from `share_windows.go`, whose fallbacks are the same two
+    functions. Every text
     verb ends in `share.go:220` (`var shareTextOut`); the fallback copies,
     `share_fallback.go:36` (`setShareClipboard(s)`), and opens the sheet,
     `share_fallback.go:37` (`showShareCopiedSheet(state, shareDoneForText(s))`):
@@ -298,7 +301,7 @@ place a fix on one does not reach the others.
     the sandbox's own handler, not the desktop's; Ubuntu 24.04's portal
     cannot, so the snap there offers no Email… at all. On Windows it is a
     `mailto:` link when the shell resolves a handler for the scheme,
-    `share_email_windows.go:32` (`schemeHandlerRegistered("mailto")`). A
+    `share_email_windows.go:33` (`schemeHandlerRegistered("mailto")`). A
     `mailto:` link, on either platform, carries line breaks as CRLF,
     `share_email.go:85` (`strings.ReplaceAll(b, "\n", "\r\n")`), and is
     kept to 2,000 characters, `share_email.go:73`
@@ -307,7 +310,7 @@ place a fix on one does not reach the others.
     share's link, is kept whole; the whole text is still on the clipboard.
     Share as image saves the PNG to Downloads, opens the file manager on
     it, and ends in the same sheet, "Picture saved",
-    `share_fallback.go:66` (`showShareCopiedSheet(state, shareDone{line: line`),
+    `share_fallback.go:65` (`showShareCopiedSheet(state, shareDone{line: line`),
     whose Email… carries the quote and its citation as the mail's text.
 
     Until 30 September 2026 the text verbs ended instead in a 13 pt
@@ -319,11 +322,56 @@ place a fix on one does not reach the others.
     *"A share the reader started cannot end in silence, whatever the
     cause."* — does not allow. What remains divergent is what the sheet is
     not: a way to hand the text straight to another app. Linux has no
-    portal for that; Windows has a native Share sheet, planned under
-    [Sharing](#sharing), Planned, and shares through this sheet until it
-    lands. Held by `share_sheet_desktop_test.go`, driven on the Linux VM
-    (the Linux row's proof), and recorded in `docs/BACKLOG.md`, "Linux and
-    Windows: an in-app share sheet in place of the 1.4-second notice".
+    portal for that; Windows has its Share sheet, which it now opens (28),
+    reaching this sheet only when that cannot open. Held by
+    `share_sheet_desktop_test.go`, driven on the Linux VM (the Linux row's
+    proof), and recorded in `docs/BACKLOG.md`, "Linux and Windows: an
+    in-app share sheet in place of the 1.4-second notice".
+
+**Windows**
+
+28. **Windows opens its own Share sheet, through COM written by hand, with
+    the Linux sheet (27) behind it.** Every verb hands its share to
+    `windowsShareVerb`, `share_windows.go:62`
+    (`windowsShareVerb(func() { fallbackShareText(s) }`), with the in-app
+    sheet as its fallback. The window's thread joins a single-threaded
+    apartment on the first share, `share_winrt_windows.go:254`
+    (`procRoInitialize.Call(roInitSingleThreaded)`): nothing else in the
+    process initialises COM there, and RunNative on Windows runs on the
+    calling goroutine, so the thread is checked, not assumed. The window's
+    DataTransferManager, `share_windows.go:225`
+    (`return comCall(interop, 3, hwnd`), takes a DataRequested handler,
+    `share_windows.go:265` (`return comCall(dtm, 6,`), and the sheet opens,
+    `share_windows.go:274` (`hr = windowsShareStep(stepShowSheet,`). When
+    the sheet asks, the handler fills the package: the citation as the
+    title the sheet requires, `share_windows.go:353`
+    (`hr := comCall(props, 7, uintptr(ws.title))`), the message as text, a
+    link or note share's link as a web link, `share_windows.go:373`
+    (`hr = comCall(pkg2, 7, uintptr(unsafe.Pointer(ws.uri)))`), and the
+    picture through a one-item collection the app implements,
+    `share_windows.go:381`
+    (`comCall(pkg, 23, uintptr(unsafe.Pointer(ws.items)), 1)`). The picture
+    is copied to a file named for the reader, `share_windows.go:408`
+    (`file, err := copyShareImage(path, time.Now())`), and resolved as a
+    StorageFile before the sheet opens, `share_windows.go:441`
+    (`return comCall(op, 6, uintptr(unsafe.Pointer(done)))`), since a
+    request that defers has 200 ms by the documentation. The Go objects
+    Windows calls aggregate the free-threaded marshaler,
+    `share_winrt_object_windows.go:108`
+    (`procCoCreateFreeThreadedMarshaler.Call(`), because the picture's file
+    completes on a thread-pool thread and Windows asks the handler for
+    IAgileObject first. Every step that fails, and a sheet that has not
+    asked within `share_session.go:35`
+    (`const shareSessionWait = 5 * time.Second`), ends the share in its
+    fallback, once, `share_session.go:188` (`s.fallback()`); a reader's
+    cancel is a choice, as on the other platforms, and opens nothing. The
+    unpackaged download and the MSIX run the same code, although
+    Microsoft's pages disagree on whether an app without package identity
+    may open the sheet: a probe executable without it opened the sheet on
+    Windows 11 arm64, natively and under x64 emulation. Held by
+    `share_session_test.go` and `share_parts_test.go` on every platform,
+    `share_windows_test.go` in the Windows CI job, and recorded in
+    `docs/BACKLOG.md`, "Windows: use the native Share sheet".
 
 ## Deliberate exclusions
 
@@ -384,7 +432,9 @@ The honest to-do list, in proof-level terms.
 - **Share has been watched on two platforms of six.** Linux on the arm64 VM
   and Android on the emulator; macOS, iOS, iPadOS and Windows are recorded
   from the code (see [Sharing](#sharing)). The iPad and Mac rows carry
-  anchoring that is probable from the code and has not been seen.
+  anchoring that is probable from the code and has not been seen. The
+  Windows Share sheet has been seen opening from a probe on the Windows VM,
+  not from the app.
 
 ## Sharing
 
@@ -409,8 +459,9 @@ for the text verbs exactly when the function they end in calls
 calls `revealInFileManager`. Numbers in a cell are divergences.
 
 Recorded 29–30 September 2026: the Apple and Android rows from the share
-code as it shipped in 1.2.17, the Windows and Linux rows from the desktop
-confirmation sheet built on 30 September 2026, which ships next.
+code as it shipped in 1.2.17, the Linux row from the desktop confirmation
+sheet built on 30 September 2026, and the Windows row from its native Share
+sheet built the same day; neither is in a release yet.
 
 | Platform | Share with note | Share with citation | Share as link | Share as image | Verse of the day | Defined in | Proof |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -418,7 +469,7 @@ confirmation sheet built on 30 September 2026, which ships next.
 | iPadOS | Share popover; probably points mid-page rather than at the selection | Share popover at the selection | Share popover at the selection | Preview, then a share popover; probably mid-page | Probably a share popover pointing at the hidden reading view, not the icon; not seen | `reading_ios.go` | `builds` — code reading, 29–30 September 2026 |
 | macOS | Share picker at the selection; the note card appears beneath | Share picker at the selection | Share picker at the selection | Preview, then the share picker with the image | Probably the share picker, anchored to the hidden reading view, not the icon; not seen | `reading_macos.go` | `builds` — code reading, 29–30 September 2026 |
 | Android | The note card, then the "Sharing text" sheet with the note, citation and link | "Sharing text" sheet with the quote and citation | "Sharing text" sheet with the link | Preview, then the "Sharing image" sheet | "Sharing text" sheet, by the citation's route; not driven | `reading_android.go` | `runner` — emulator, 1.2.17, 29–30 September 2026 |
-| Windows | Copied; the "Copied — ready to paste" sheet over the new note card, with Email…, Copy again and Done (27) | Copied; the "Copied — ready to paste" sheet (27) | Copied; the "Copied — ready to paste" sheet (27) | Saved to Downloads; Explorer opens with it selected; the "Picture saved" sheet, without Email… | Copied; the "Copied — ready to paste" sheet over the card (27) | `share_other.go`, handing on to `share_fallback.go` | `builds` — build tags and `go list`, 30 September 2026 |
+| Windows | The Windows Share sheet beside the window, titled with the citation, with the note, the citation and the link as text and the link as a web link, which gives it Copy link; the new note card beneath (28) | The Windows Share sheet, titled with the citation, with the quote and its citation as text (28) | The Windows Share sheet with the citation and the link, and Copy link (28) | Preview, then the Windows Share sheet with the card as a file named for the verse and the moment it was shared (28) | The Windows Share sheet, as for Share with citation (28) | `share_windows.go` | `builds` — cross-compiled and vetted for windows/amd64 and arm64, 30 September 2026; the sheet seen from a probe on the arm64 VM, not from the app |
 | Linux | Copied; the "Copied — ready to paste" sheet over the new note card, with Email…, Copy again and Done (27) | Copied; the "Copied — ready to paste" sheet (27) | Copied; the "Copied — ready to paste" sheet (27) | Saved to ~/Downloads; the file manager opens on the folder; the "Picture saved" sheet, with Email… attaching the file only where a mail client, not a browser, handles mailto:, and never in the snap (27). In the snap, neither the save nor the reveal happens (the proof note below) | Copied; the "Copied — ready to paste" sheet over the card (27) | `share_other.go`, handing on to `share_fallback.go` | `hardware` — arm64 VM, X11, 30 September 2026 |
 
 What each proof rests on:
@@ -480,37 +531,41 @@ What each proof rests on:
   are recorded in `docs/BACKLOG.md` to be seen on a device. On the Mac it is
   not even known that the picker shows while the view it is anchored to is
   hidden.
-- **Windows, `builds`.** Read from the build tags and `go list`, and the
-  Windows files type-checked for windows/arm64 with the `gles` tag; the
-  Windows VM was not started. It runs the Linux code — the same sheet, from
-  the same files — but for two things: the file manager the image share
-  opens (Explorer, with the file selected), and Email…, which opens a
-  `mailto:` link through the shell (`share_email_windows.go`) when the
-  shell's association API resolves a handler for the scheme — the reader's
-  own choice first, a handler whose executable is on disk or a packaged
-  app's — and which a link cannot carry a file through, so the image sheet
-  has no Email… there. The link is kept to 2,000 characters, a longer
-  share's passage cut at a word. Neither the handler check nor a long
-  share's link has run on Windows; `share_email_windows_test.go` holds the
-  check against handlers it registers itself, in the Windows CI job.
-
-### Planned
-
-- **Windows: the native Share sheet — decided 30 September 2026, not built.**
-  Every verb opens the Windows Share UI beside the window, as the picker does
-  on macOS: `IDataTransferManagerInterop` gives the window's
-  DataTransferManager (`GetForWindow`), a `DataRequested` handler fills the
-  package (`SetText`, `SetWebLink`, `SetStorageItems`), and
-  `ShowShareUIForWindow` opens it
-  (https://learn.microsoft.com/en-us/windows/apps/develop/windows-integration/integrate-sharesheet-send).
-  Files: a new *share_windows.go* defines `nativeShareText` and
-  `nativeShareImage`; `share_other.go` narrows to exclude windows;
-  `share_fallback.go` stays behind the sheet for a share UI that fails; the
-  window handle is reached as `title_bar_windows.go` reaches it; and the
-  Windows row above, which the test holds to whichever files define the two
-  functions and whatever they hand on to, and which must stop naming the
-  confirmation sheet once the verbs no longer end in `showShareCopiedSheet`.
-  Whether the unpackaged zip can open the sheet as the MSIX can is to be
-  proven on the Windows VM. The route, its constraints and its sources are in
-  `docs/BACKLOG.md`, "Windows: use the native Share sheet". Until it lands
-  Windows shares through the confirmation sheet Linux has (divergence 27).
+- **Windows, `builds`.** The app with its Share sheet has not been run on
+  Windows: the code is cross-compiled and vetted for windows/amd64 and
+  windows/arm64 with the `gles` tag, and its rules are held by tests — the
+  session's on every platform, and against Windows itself, with no sheet
+  shown, in the Windows CI job (`share_windows_test.go`: the objects
+  Windows calls, a real DataPackage filled as the sheet's request fills
+  it, and every step up to the sheet's opening for text and for a
+  picture, each refusal ending in one fallback). Those tests passed on the
+  arm64 VM on 30 September 2026 from a test binary cross-compiled without
+  cgo, natively and as x64 under emulation, and a control build with
+  IAgileObject unanswered, and another with the file handler's interface
+  id mistyped, each failed there. What has been seen beyond that is the
+  mechanism: on 30 September 2026 a standalone probe executable, without
+  package identity, opened the sheet on the arm64 VM (Windows 11, build
+  26200) for text, a link and a picture, natively and under x64
+  emulation, every call answering S_OK. The text sheet there showed the
+  apps to share to and no Copy; the link sheet showed the title, the
+  link, a QR code and Copy link; the picture sheet showed the file's name
+  in place of the title, a thumbnail, Edit and Copy. The sheet asked for
+  the share 140–549 ms after it was asked to open, on the window's
+  thread, never within the call, and the picture's file first resolved on
+  a thread-pool thread. The row moves to `hardware` when a Windows build
+  of this tree is driven on the VM, each verb from its own entry point.
+  The Store's MSIX is to be seen there too: Windows redirects a packaged
+  app's writes under AppData, the temp folder the picture is copied into
+  among them, and whether the apps the sheet hands the file to can read
+  it there is not known. Behind the sheet it runs the Linux code — the
+  same confirmation sheet, from the same files — but for two things: the
+  file manager the image share opens (Explorer, with the file selected),
+  and Email…, which opens a `mailto:` link through the shell
+  (`share_email_windows.go`) when the shell's association API resolves a
+  handler for the scheme — the reader's own choice first, a handler whose
+  executable is on disk or a packaged app's — and which a link cannot
+  carry a file through, so the image sheet has no Email… there. The link
+  is kept to 2,000 characters, a longer share's passage cut at a word.
+  Neither the handler check nor a long share's link has run on Windows;
+  `share_email_windows_test.go` holds the check against handlers it
+  registers itself, in the Windows CI job.

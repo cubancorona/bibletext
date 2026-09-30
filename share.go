@@ -295,9 +295,9 @@ func shareQuoteForPassage(state *AppState, book string, chapter, lo, hi int) (qu
 // sharePassageText hands the passage to the native share sheet as text: the
 // same message the selection route's "Share with citation" builds
 // (composeShareText — the quote, a blank line, the citation line naming the
-// translation in full). On Windows/Linux nativeShareText is the clipboard
-// fallback and the confirmation sheet (share_fallback.go,
-// share_sheet_desktop.go), as it is for a selection.
+// translation in full). On Linux nativeShareText is the clipboard fallback
+// and the confirmation sheet (share_fallback.go, share_sheet_desktop.go), and
+// on Windows the Windows Share sheet (share_windows.go), as for a selection.
 func sharePassageText(state *AppState, book string, chapter, lo, hi int) {
 	msg, ok := sharePassageMessage(state, book, chapter, lo, hi)
 	if !ok {
