@@ -363,12 +363,13 @@ func (p *styledReadingPane) relayout(width float32) {
 	if p.superGeom.present {
 		titleGap = float32(readingTitleGapEm) * p.textSize
 	}
+	measure := p.measurePass()
 	p.lay = layoutChapter(p.state, p.verses, styledLayoutParams{
 		Width:      avail,
 		LineHeight: lh,
 		ParaGap:    paraGap,
 		TextSize:   p.textSize,
-		SpaceW:     p.measure(" ", runWord, false),
+		SpaceW:     measure(" ", runWord, false),
 		Indent:     indent,
 		TopPad:     p.superGeom.height,
 		TitleGap:   titleGap,
@@ -379,8 +380,8 @@ func (p *styledReadingPane) relayout(width float32) {
 
 		// The italic space beside SpaceW's upright one: a ragged line draws
 		// it inside a supplied phrase, so the layout must keep room for it.
-		SuppliedSpaceW: p.measure(" ", runWord, true),
-	}, p.measure)
+		SuppliedSpaceW: measure(" ", runWord, true),
+	}, measure)
 	p.superGeom.place(p.insetX(), 0)
 	// Absolute rects, from the pane's own ruler and the band the layout just
 	// reserved — so draw, hit-testing and the reservation cannot disagree. If
@@ -514,6 +515,31 @@ func (p *styledReadingPane) measure(text string, kind runKind, italic bool) floa
 	}
 	w, _ := fyne.CurrentApp().Driver().RenderedTextSize(text, size, fyne.TextStyle{}, face)
 	return w.Width
+}
+
+// styledMeasureKey is every argument measure reads.
+type styledMeasureKey struct {
+	text   string
+	kind   runKind
+	italic bool
+}
+
+// measurePass is measure, remembered for one layout pass. Everything else a
+// measurement reads — the pane's size and faces, the loaded fonts, the
+// driver — holds still for the pass, so a word the chapter repeats is
+// measured once rather than at every occurrence. The memory goes with the
+// pass: the next relayout measures afresh.
+func (p *styledReadingPane) measurePass() styledMeasure {
+	seen := make(map[styledMeasureKey]float32)
+	return func(text string, kind runKind, italic bool) float32 {
+		k := styledMeasureKey{text, kind, italic}
+		if w, ok := seen[k]; ok {
+			return w
+		}
+		w := p.measure(text, kind, italic)
+		seen[k] = w
+		return w
+	}
 }
 
 // drawnAs is how a drawn segment is set: the string its glyphs spell, the face
