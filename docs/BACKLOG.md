@@ -2558,7 +2558,7 @@ channels are the tarball, the AppImage and the snap; the
 `uk.co.bibletext.BibleText` id stays on the snap's metainfo and the AppImage,
 and the 1.2.10 release note that promised a Flatpak stands as shipped.
 
-## Recapture the App Store and Play screenshots — App Store sets RECAPTURED 28 September 2026; Play still to do
+## Recapture the App Store and Play screenshots — App Store sets RECAPTURED 28 September 2026 and uploaded 29 September; Play being retaken
 
 1.2.7 shipped with the screenshot set inherited from 1.2.5, which in turn
 inherits from the last captured set (build/appstore/screenshots-1.2.3/). Those
@@ -2584,10 +2584,11 @@ What a recapture needs:
   later — so validate locally first, which the preflight does for
   `build/appstore/screenshots-ready-<version>/en-GB/` and `.../ipad13/`.
 - macOS: landscape only, per the same table.
-- Play: `docs/PLAY_LISTING.md` carries its own capture recipe, including
-  `scripts/play-shot-check.py` and the boot-the-emulator-before-setting-the-
-  appearance rule. The Play candidate set has the same staleness and is noted
-  there.
+- Play: the phone and 10-inch tablet recipes are in
+  `docs/SCREENSHOT_PLAYBOOK.md` §4, including `scripts/play-shot-check.py`
+  and the set-the-appearance-before-the-app-starts rule. The set the Play
+  listing shows, `docs/play-assets/2026-09-1.2.5/`, has the same staleness
+  and is noted in `docs/PLAY_LISTING.md`.
 
 Worth capturing the new reading face deliberately rather than incidentally: a
 passage with the divine name in small capitals, and a chapter whose publisher
@@ -2596,13 +2597,14 @@ show what changed.
 
 **28 September 2026:** the iPhone 6.9", iPad 13" and Mac sets were retaken on
 the 1.2.17 tree, the same eight shots each, and are ready locally under
-`build/appstore/screenshots-ready-1.2.17/`; nothing is uploaded yet, which
-stays a separate step for the owner. Matthew 1 shows the NKJV's own heading
+`build/appstore/screenshots-ready-1.2.17/`, and were uploaded to the 1.2.17
+version records on 29 September 2026. Matthew 1 shows the NKJV's own heading
 and paragraphing in the Junicode face, Psalm 23 the divine name in small
 capitals, and Psalm 82 its superscription and heading: the images asked for
 above.
-`docs/APP_STORE_SUBMISSION.md` ("The 1.2.17 set") records how each was taken.
-The Play set is untouched and still stale.
+`docs/APP_STORE_SUBMISSION.md` ("The 1.2.17 set") keeps the set's history,
+and `docs/SCREENSHOT_PLAYBOOK.md` how each shot is taken. The Play set is being
+retaken to the same eight scenes under `build/play/screenshots-1.2.17/`.
 
 The iPad shots carry a small grey resize grip in the bottom-right corner: the
 iPadOS 26 and 27 simulators open in "windowed apps" mode, and that mode is not

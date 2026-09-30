@@ -277,10 +277,11 @@ independent visual review, and the ones it flagged were retaken.
 How it was taken is now the iPhone, iPad and Mac recipes in
 docs/SCREENSHOT_PLAYBOOK.md, beside the shot list and the check every set passes.
 
-The live listing is 1.2.5, and its images are still the eight iPhone 6.9-inch
-and eight iPad 13-inch captures made for 1.2.2: the complete 1.2.3 replacement
-set was prepared and never uploaded, so App Store Connect carried the older
-images forward with each release since. That set is prepared locally at:
+Until 1.2.17 is released, the released version's images are still the eight
+iPhone 6.9-inch and eight iPad 13-inch captures made for 1.2.2: the complete
+1.2.3 replacement set was prepared and never uploaded, so App Store Connect
+carried the older images forward with each release since. That set is
+prepared locally at:
 
 - `build/appstore/screenshots-iphone-1.2.3/`
 - `build/appstore/screenshots-1.2.3/`

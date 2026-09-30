@@ -67,8 +67,9 @@ Read, Books or Search, it means the rail entry on those two.
 ### The notes
 
 Shot 05 lists six notes and shot 06 opens one of them. "Friend" is the byline
-the app gives a received note whose sender left no name
-(`notes_byline.go`); "From you" marks a note the reader sent.
+on every received note: the app shows no sender names yet, whatever name a
+note carries (`senderNamesEnabled` in `notes_byline.go`). "From you" marks a
+note the reader sent.
 
 | Passage (NKJV) | Byline | Date in the 1.2.17 set | Wording for the next retake |
 | --- | --- | --- | --- |
@@ -96,11 +97,24 @@ Where the notes come from:
   register no custom scheme, so links are not a way in.
 - **Android** opens a link minted by the app's own `ShareLinkURLWithNote`,
   the way the runner workflows mint theirs:
-  `adb shell am start -a android.intent.action.VIEW -d '<link>'`.
-- **The Mac capture build** takes a link as its argument, as the runner
-  workflows open theirs; its preferences can seed a simulator in turn.
-- The reader's own two notes are written in the app: Add a note, then Share
-  with note.
+  `adb shell am start -a android.intent.action.VIEW -d '<link>'`. Press HOME
+  between two links (`adb shell input keyevent KEYCODE_HOME`): with the app
+  in the foreground, a second link is swallowed.
+- **The Mac capture build** takes a link as its one argument at launch (§4,
+  Mac, step 3), one link per launch: quit the app before launching it with the
+  next. A Mac release build has no single-instance handoff
+  (`single_instance_off.go`), so a second launch does not pass its link to the
+  running one, as it does in the Linux and Windows runner workflows; it starts
+  a second process, and two processes writing one `preferences.json` can lose
+  notes. The Mac's preferences can seed a simulator in turn.
+- The reader's own two notes are written in the app: select the passage, then
+  Share > Share with note, write the text in the "Add a note" composer, and
+  tap its Share button. The note is kept on the passage before the platform's
+  share sheet opens (`share.go`), so close that sheet without sending
+  anything. On Android, type the text by tapping the on-screen keys by
+  coordinate, never with `adb shell input text`: characters typed through the
+  hardware-key path arrive doubled in the app's text fields
+  ([ANDROID.md](ANDROID.md)).
 
 A note seeded on the day of capture shows that day's date. The content lens
 checks passages, bylines and wording, not dates.
@@ -166,6 +180,10 @@ from the whole image.
 | Snap Store | Desktop | GIF, JPEG or PNG; 480×480 to 3840×2160; aspect between 1:2 and 2:1; at most 2 MB each; a 3:1 banner besides | At most 5 | `docs/screenshots/linux/` | The snapcraft.io dashboard only |
 | AppStream metainfo (software centres, AppImageHub) | Desktop | The `docs/screenshots/linux/` files, by commit-pinned URL | As many as `linux/listing.toml` lists | `docs/screenshots/linux/` and `screenshots.ref` | `go run ./cmd/linuxmeta render`, then a commit |
 
+Two of the Play limits above — JPEG or 24-bit PNG, and at most eight images
+per device type — are not taken from a tracked source. Check them against the
+console's own text on the main store listing page before an upload.
+
 ### What each store shows today
 
 As the sources record it on 30 September 2026:
@@ -174,7 +192,7 @@ As the sources record it on 30 September 2026:
 | --- | --- | --- |
 | App Store (iOS) | The 1.2.17 version record holds the 1.2.17 iPhone and iPad sets. Readers see them once 1.2.17 is released; until then the released version shows what every release since 1.2.2 inherited, the 1.2.2 captures (the 1.2.3 replacement was prepared and never uploaded). | 29 September 2026 |
 | Mac App Store | The 1.2.17 version record holds the 1.2.17 Mac set, shown from 1.2.17's release. What earlier Mac versions carried is not recorded here. | 29 September 2026 |
-| Google Play | Eight phone images of a 1.2.x build, cropped from 1080×2400 to 1080×2160 — the crop took the top of the app header with the status bar, as the tracked `docs/play-assets/2026-09-1.2.5/` set shows; no tablet images; the feature graphic. A 1.2.17 phone and 10-inch tablet set is being prepared under `build/play/screenshots-1.2.17/`. | Not recorded |
+| Google Play | Exactly the tracked `docs/play-assets/2026-09-1.2.5/` set, with `docs/play-assets/feature-graphic.png` and `icon-512.png`: a read-back of the listing's images through the Play Developer API on 30 September 2026 matched those files by sha256. The eight phone images come from the 1.2.5 release APK (versionCode 176), each cropped from 1080×2400 to 1080×2160, which took the top of the app header with the status bar. They predate the reading face and follow an earlier shot list: 03 and 04 are dark, 05 and 06 show three "From you" notes on John 11 in the WEB, and 08 selects the single word "stands" with the menu over the verse. No tablet images. A 1.2.17 phone and 10-inch tablet set is being prepared under `build/play/screenshots-1.2.17/` to replace them. | Not recorded; the files date from 7 and 8 September 2026 |
 | Microsoft Store | The four runner captures in `docs/screenshots/windows/` (1600×960; reading, search, note and settings in that order, each captioned), the BSB in light, uploaded by hand with submission 1. `msstore/submit.py` carries them into every later submission unchanged. | Captured 16 September 2026, live 17 September 2026 |
 | Snap Store | No gallery images are recorded as set: the item stands open in [LINUX_STORES.md](LINUX_STORES.md), "Listing work that snapcraft.yaml cannot do". | — |
 | AppStream metainfo | The four runner captures in `docs/screenshots/linux/` (1280×860; reading, search, note, settings), the BSB in light, pinned at the commit `screenshots.ref` names. | 16 September 2026 |
@@ -411,12 +429,13 @@ password prompt. The Mac shots are driven with the mouse and keyboard.
    §7.) If `png_inspect` in `appstore/preflight.py` reports an alpha channel,
    redraw the file as RGB, as for the iPhone.
 9. Shot 08. A long press selects one word: `adb -s emulator-5580 shell input
-   swipe <x> <y> <x> <y> 1000`. Drag the start handle to verse 1's first word
-   and the end handle past "gods." with one `input swipe <from x> <from y>
-   <to x> <to y> 800` each, and confirm on a capture that exactly verse 1 is
-   selected. Then open Study with AI from the selection menu — on Android its
-   three actions sit one level below the platform's own selection menu — so
-   that they show below the selection.
+   swipe <x> <y> <x> <y> 1000`. Drag the start handle to the start of verse
+   1's first word and the end handle to just after the full stop after
+   "gods" — on that line, never onto the next, where verse 2 begins — with
+   one `input swipe <from x> <from y> <to x> <to y> 800` each, and confirm on
+   a capture that exactly verse 1 is selected. Then open Study with AI from
+   the selection menu — on Android its three actions sit one level below the
+   platform's own selection menu — so that they show below the selection.
 10. Afterwards: `adb -s emulator-5580 shell am broadcast -a
     com.android.systemui.demo -e command exit`, `adb -s emulator-5580 shell wm
     size reset`, `adb -s emulator-5580 emu kill`.
@@ -557,7 +576,12 @@ until the new set has been compared with them side by side.
 ### App Store and Mac App Store
 
 Per platform, in this order (also [RELEASING.md](RELEASING.md), stage 7, and
-"Uploading a set" in [APP_STORE_SUBMISSION.md](APP_STORE_SUBMISSION.md)):
+"Uploading a set" in [APP_STORE_SUBMISSION.md](APP_STORE_SUBMISSION.md)).
+Steps 2 to 5 reach App Store Connect through the local client
+`build/appstore/asc.py`, which reads its credentials from the environment, so
+load them first in the shell that runs those steps: `. scripts/asc-env.sh`.
+The script is sourced, never executed or piped: it exports into the calling
+shell and prints nothing. `--local-only` needs no credentials.
 
 1. `python3 appstore/push-screenshots.py --local-only`, and with `--platform
    MAC_OS`.
@@ -582,7 +606,9 @@ A release that keeps the previous images says so with
 
 No tracked tool uploads Play listing images (§7). The service account that
 `scripts/play-publish.py` uses has store-presence access, so the Play
-Developer API can make the change in one edit on the `en-GB` listing:
+Developer API can make the change in one edit on the `en-GB` listing, with
+the token that script's `access_token()` mints from the service-account key
+it reads (`BIBLETEXT_PLAY_KEY`, or its default path):
 
 1. `POST …/applications/uk.co.bibletext/edits` opens an edit.
 2. For each image type that changes — `phoneScreenshots`,
@@ -606,10 +632,11 @@ Partner Center only. `msstore/submit.py` sends one listing field, What's
 New, and holds every other listing field, the screenshots included, to what
 the published submission carries; it refuses a change in the image count. So:
 
-1. With no submission pending (`msstore/msstore.py app 9NDCCZH9RB9K` shows
-   none), start a submission in Partner Center; under Store listings >
-   English (United Kingdom), remove the screenshots and add the new ones in
-   order, each with its caption.
+1. Load the submission API's credentials: `. scripts/msstore-env.sh`,
+   sourced, never executed or piped. With no submission pending
+   (`msstore/msstore.py app 9NDCCZH9RB9K` shows none), start a submission in
+   Partner Center; under Store listings > English (United Kingdom), remove
+   the screenshots and add the new ones in order, each with its caption.
 2. Submit it for certification. The next `msstore/submit.py create` clones
    the published submission and so carries the new images forward.
 
@@ -661,6 +688,7 @@ standing rule in [RELEASING.md](RELEASING.md)), and only then does
 - **Android shot 08's menu placement** is not yet written down step by step:
   how the Study with AI menu is brought below verse 1 on Android is to be
   recorded from the first Android set that meets §2.
-- **`docs/play-assets/2026-09-1.2.5/`** is not uploadable — the cropped
-  header, and text that predates 1.2.7's reading face — and stays only as
-  history.
+- **`docs/play-assets/2026-09-1.2.5/` is live and being replaced.** It is
+  the set the Play listing shows (§3), with the cropped header, text that
+  predates 1.2.7's reading face, and an earlier shot list. It is never
+  uploaded again, and stays as history once the 1.2.17 set replaces it.

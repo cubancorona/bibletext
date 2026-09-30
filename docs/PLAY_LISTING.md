@@ -116,14 +116,18 @@ with its pane in the top ~45% of the window, a "content reaches the bottom"
 test passed anyway, and asking whether there is ink where the tab bar belongs
 failed two images that had already been committed as fine.
 
-**A candidate set is in `play-assets/2026-09-1.2.5/`**: the eight scenes of the
-iOS set, captured on 7 and 8 September 2026 on a Pixel 7 emulator. It predates
-1.2.7's reading face (Junicode with small-capital divine name) and the
-publishers' own paragraphing, so it no longer shows the shipped text. Each
-image was cropped from the Pixel's 1080x2400 to 1080x2160, exactly 2:1, which
-took the status bar and the top of the app header with it; the playbook sets
-the emulator's display to 1080x2160 instead of cropping. They sit beside the
-July set rather than replacing it.
+**The listing shows the set in `play-assets/2026-09-1.2.5/`**, with
+`feature-graphic.png` and `icon-512.png`: a read-back of the listing's images
+on 30 September 2026 matched those files byte for byte. The eight phone images
+were captured on 7 and 8 September 2026 from the 1.2.5 release APK
+(versionCode 176) on a Pixel 7 emulator. They predate 1.2.7's reading face
+(Junicode with small-capital divine name) and the publishers' own
+paragraphing, so they no longer show the shipped text, and they follow an
+earlier shot list (docs/SCREENSHOT_PLAYBOOK.md, §3). Each image was cropped
+from the Pixel's 1080x2400 to 1080x2160, exactly 2:1, which took the status
+bar and the top of the app header with it; the playbook sets the emulator's
+display to 1080x2160 instead of cropping. A 1.2.17 set is being prepared to
+replace them. They sit beside the July set rather than replacing it.
 
 ## Data safety
 
