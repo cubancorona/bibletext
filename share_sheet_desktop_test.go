@@ -172,22 +172,6 @@ const (
 	sampleImageBody    = "“In the beginning was the Word.”\n\n— John 1:1 (Sample)"
 )
 
-// redirectHome makes a temp directory the test's home, set the way
-// os.UserHomeDir reads it on each platform — HOME on Linux and macOS,
-// USERPROFILE on Windows — and stops the test unless the home now resolves
-// there, before anything can be saved into the Downloads folder of the
-// machine running it.
-func redirectHome(t *testing.T) string {
-	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-	if got, err := os.UserHomeDir(); err != nil || got != home {
-		t.Fatalf("the home directory resolves to %q (%v), not the test's own %q; an image share would save into the machine's Downloads", got, err, home)
-	}
-	return home
-}
-
 // homeForImage gives the test a home of its own, with a Downloads folder or
 // without one, and the image mail the preview would have set.
 func (h *shareSheetHarness) homeForImage(withDownloads bool) (downloads string) {
@@ -1091,6 +1075,60 @@ func TestTheImagePreviewHandsItsCitationToTheMail(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("Email… composed nothing")
+	}
+}
+
+// A picture shared from the preview goes nowhere: its Share, tapped outside
+// the share sheet tests, reaches the suite's recorder with the card rendered
+// in the suite's own directory, nothing lands in a Downloads folder, and no
+// file manager is asked to show one. The home and the file manager are the
+// test's own as well, so that were the recorder ever gone, the fallback would
+// save into this home, not the machine's, and open no window. The control
+// puts an out that records nothing in its place and shows the check fires.
+func TestNoTestSavesASharedPictureIntoTheMachinesDownloads(t *testing.T) {
+	downloads := filepath.Join(redirectHome(t), "Downloads")
+	if err := os.MkdirAll(downloads, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var revealed []string
+	prevReveal, prevMail := revealInFileManager, shareImageMail
+	revealInFileManager = func(p string) { revealed = append(revealed, p) }
+	t.Cleanup(func() { revealInFileManager, shareImageMail = prevReveal, prevMail })
+	h := newAppearanceHarness(t, false)
+	share := func() []string {
+		imageSharesInTests() // drain anything an earlier test recorded
+		showShareImagePreview(h.state, "For God so loved the world", "John 3:16", "WEB")
+		p := h.top()
+		if p == nil || !sheetHas(p, "Share as image") {
+			t.Fatal("control: the preview did not open")
+		}
+		b := findTreeButton(p.Content, "Share")
+		if b == nil {
+			t.Fatal("control: the preview has no Share button")
+		}
+		test.Tap(b)
+		return imageSharesInTests()
+	}
+
+	got := share()
+	if len(got) != 1 || filepath.Dir(got[0]) != filepath.Clean(imageRenderDir()) {
+		t.Errorf("the preview's Share reached %v, want the suite's recorder with one card rendered in %s", got, imageRenderDir())
+	}
+	if entries, _ := os.ReadDir(downloads); len(entries) > 0 {
+		t.Errorf("the preview's Share saved %d file(s) into Downloads, first %s", len(entries), entries[0].Name())
+	}
+	if len(revealed) > 0 {
+		t.Errorf("the preview's Share asked the file manager to show %v", revealed)
+	}
+	if t.Failed() {
+		return
+	}
+
+	prevOut := shareImageOut
+	shareImageOut = func(string) {}
+	t.Cleanup(func() { shareImageOut = prevOut })
+	if got := share(); len(got) != 0 {
+		t.Fatalf("control: with an out that records nothing the check still saw %v, so its pass above proves nothing", got)
 	}
 }
 

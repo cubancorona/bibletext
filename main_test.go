@@ -196,6 +196,52 @@ func useLiveEnv(t *testing.T, names ...string) {
 // so the guard below can say where a test's render must not land.
 var realTempDir string
 
+// NOR DOES ANY TEST SAVE A SHARED PICTURE INTO THE MACHINE'S DOWNLOADS.
+//
+// The image preview's Share hands the card to shareImageOut. On Linux and
+// Windows that ends in fallbackShareImage, which copies the picture into the
+// Downloads folder of the home os.UserHomeDir names and opens the file
+// manager on it; on a Mac it opens the system share picker. The desktop share
+// sheet tests give each share a home of its own (redirectHome), but the
+// preview is opened outside them as well, and a test there that tapped Share
+// would save into the Downloads folder of whoever ran it. The sheet tests did
+// exactly that in CI's Windows job while they set HOME alone, which Windows
+// does not read. So shareImageOut only records here (imageSharesInTests), and
+// a test that wants the desktop fallback puts fallbackShareImage in its place
+// itself, as the sheet tests do, behind redirectHome. The guard,
+// TestNoTestSavesASharedPictureIntoTheMachinesDownloads, sits with the sheet
+// tests, since the fallback is the desktop's.
+var (
+	imageSharesMu sync.Mutex
+	imageShares   []string
+)
+
+// imageSharesInTests returns, and clears, the pictures the suite would have
+// shared.
+func imageSharesInTests() []string {
+	imageSharesMu.Lock()
+	defer imageSharesMu.Unlock()
+	out := imageShares
+	imageShares = nil
+	return out
+}
+
+// redirectHome makes a temp directory the test's home, set the way
+// os.UserHomeDir reads it on each platform — HOME on Linux and macOS,
+// USERPROFILE on Windows — and stops the test unless the home now resolves
+// there, before anything can be saved into the Downloads folder of the
+// machine running it.
+func redirectHome(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	if got, err := os.UserHomeDir(); err != nil || got != home {
+		t.Fatalf("the home directory resolves to %q (%v), not the test's own %q; an image share would save into the machine's Downloads", got, err, home)
+	}
+	return home
+}
+
 // NOR DOES ANY TEST ARM THE REFRESH'S RETRY TIMER, OR START A REAL FETCH.
 //
 // A translation served from its previous edition is owed its upgrade, and the
@@ -225,6 +271,11 @@ func TestMain(m *testing.M) {
 		opened = append(opened, u.String())
 		openedMu.Unlock()
 		return nil
+	}
+	shareImageOut = func(path string) {
+		imageSharesMu.Lock()
+		imageShares = append(imageShares, path)
+		imageSharesMu.Unlock()
 	}
 	upgradeRetryAfter = func(time.Duration, func()) { upgradeRetriesArmed.Add(1) }
 	startUpgradeFetch = func(BibleVersion, func(*BibleData, dataMode, error)) { upgradeFetchesStarted.Add(1) }
