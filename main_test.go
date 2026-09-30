@@ -198,10 +198,11 @@ var realTempDir string
 
 // NOR DOES ANY TEST SAVE A SHARED PICTURE INTO THE MACHINE'S DOWNLOADS.
 //
-// The image preview's Share hands the card to shareImageOut. On Linux and
-// Windows that ends in fallbackShareImage, which copies the picture into the
-// Downloads folder of the home os.UserHomeDir names and opens the file
-// manager on it; on a Mac it opens the system share picker. The desktop share
+// The image preview's Share hands the card to shareImageOut. On Linux that
+// ends in fallbackShareImage, which copies the picture into the Downloads
+// folder of the home os.UserHomeDir names and opens the file manager on it;
+// on Windows in its Share sheet, with fallbackShareImage behind it; on a Mac
+// it opens the system share picker. The desktop share
 // sheet tests give each share a home of its own (redirectHome), but the
 // preview is opened outside them as well, and a test there that tapped Share
 // would save into the Downloads folder of whoever ran it. The sheet tests did

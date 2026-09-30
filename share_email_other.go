@@ -4,7 +4,8 @@ package bibletext
 
 // Email… where the desktop fallback bodies compile but neither Linux nor
 // Windows is the platform: macOS running the platform-mimic dev mode down
-// the Windows/Linux share path (dev_mimic_on.go), and any other desktop. A
+// the Linux share path, which is also the Windows Share sheet's fallback
+// (dev_mimic_on.go), and any other desktop. A
 // mailto: link through the platform's own opener (external_link.go), which
 // carries no file, so the image share offers no Email… here.
 

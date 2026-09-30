@@ -14,6 +14,9 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+// shareMail is what a mail carrying a shared picture says.
+type shareMail struct{ subject, body string }
+
 // shareImageMail is what a mail carrying the last card the preview handed to
 // the platform says, for Email… on the desktop confirmation, whose share seam
 // takes the file's path alone (fallbackShareImage): the citation as the
@@ -21,7 +24,7 @@ import (
 // its citation — what Share with citation would have copied — so that no
 // route that drops the picture leaves a blank message. Set before every
 // hand-off; UI goroutine only.
-var shareImageMail struct{ subject, body string }
+var shareImageMail shareMail
 
 // shareImageOut hands the rendered card to the platform. A variable, like
 // shareTextOut, so a test can drive the preview's Share into the desktop

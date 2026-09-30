@@ -33,12 +33,14 @@ package bibletext
 // the toolkit's event loop dispatches, so the handler runs inside that loop;
 // it fills the package and posts everything else.
 //
-// The unpackaged download opens the sheet as the Store's MSIX does: from an
-// executable without package identity on Windows 11 arm64, natively and
-// under x64 emulation, every step answered S_OK and the sheet opened for
-// text, a link and a picture. Microsoft's pages disagree about whether it
-// should, so a refusal on some other Windows lands in the fallback like any
-// other failure.
+// A standalone probe making these calls from an executable without package
+// identity opened the sheet on Windows 11 arm64, natively and under x64
+// emulation, for text, a link and a picture, every step answering S_OK. The
+// app's zip, which has no package identity either, and the Store's MSIX,
+// which has, are expected to do the same and have not yet been seen to.
+// Microsoft's pages disagree about whether an app without package identity
+// may open the sheet, so a refusal on some other Windows lands in the
+// fallback like any other failure.
 
 import (
 	"errors"
@@ -64,14 +66,14 @@ func nativeShareText(s string) {
 
 // nativeShareImage opens the Windows Share sheet with the rendered card, as
 // a file named for the reader (shareImageName) under the verse's citation.
-// The in-app confirmation sheet is its fallback.
+// The in-app confirmation sheet is its fallback. The card and its mail are
+// taken at the tap (takeSharedImage), so that the sheet, and a fallback that
+// opens seconds later, have the card that was shared, not one a later
+// preview has rendered over it.
 // Each platform's share mechanism is recorded in docs/PLATFORM_MATRIX.md, Sharing.
 func nativeShareImage(path string) {
-	title := shareImageMail.subject // read now: the next preview rewrites it
-	if title == "" {
-		title = ProductName()
-	}
-	windowsShareVerb(func() { fallbackShareImage(path) }, func(sh *shareSession) { shareImageFile(sh, path, title) })
+	img := takeSharedImage(path, time.Now())
+	windowsShareVerb(img.fallback, func(sh *shareSession) { shareImageFile(sh, img) })
 }
 
 // windowsSharePayload is what one share hands the sheet.
@@ -83,7 +85,8 @@ type windowsSharePayload struct {
 // windowsShare is the package's parts, as the DataRequested handler hands
 // them to the sheet. They are made on the window's thread before the sheet
 // opens, because the handler may run on any thread and makes nothing
-// itself, and the session frees them when the share ends.
+// itself, and the session frees them when the share lets go of them
+// (shareSession.release).
 type windowsShare struct {
 	session *shareSession
 	title   hstring
@@ -253,10 +256,13 @@ func presentShare(s *shareSession, p windowsSharePayload) {
 		}
 	}
 
-	// One handler per share, removed as the share ends. That is always
-	// posted, so never inside ShowShareUIForWindow, whose own call to the
-	// handler, where it makes one, is a point Chromium's implementation
-	// records the system as not handling a removal at.
+	// One handler per share, removed as the share lets go of what it holds
+	// (shareSession.release): when it ends, or, where the sheet did not ask
+	// in time, when the sheet asks late, a newer share starts or
+	// shareSheetKeep runs out. That is never inside ShowShareUIForWindow,
+	// whose own call to the handler, where it makes one, is a point
+	// Chromium's implementation records the system as not handling a
+	// removal at.
 	handler := newComObject(&comObject{iid: iidDataRequestedHandler, share: ws},
 		func() *comVtbl { return &dataRequestedVtbl })
 	s.hold(handler.release)
@@ -274,7 +280,11 @@ func presentShare(s *shareSession, p windowsSharePayload) {
 	hr = windowsShareStep(stepShowSheet, func() int32 { return comCall(interop, 4, hwnd) })
 	if hr < 0 {
 		failWindowsShare(s, hresultError{stepShowSheet, hr})
+		return
 	}
+	// The sheet is on its way and does not know when the app stops waiting:
+	// a watchdog from here keeps the handler for it (shareSheetKeep).
+	s.sheetOpening()
 }
 
 // tokenArgs is an EventRegistrationToken, a struct holding one int64, as it
@@ -389,14 +399,18 @@ func fillSharePackage(pkg *comRef, ws *windowsShare) error {
 	return nil
 }
 
-// shareImageFile copies the card to a file named for the reader, has Windows
-// resolve it as a StorageFile, and opens the sheet with it once it has. The
+// shareImageFile has Windows resolve the card's copy, made for the reader
+// at the tap, as a StorageFile, and opens the sheet with it once it has. The
 // file is resolved before the sheet opens, as .NET MAUI does it, not inside
 // the sheet's request: a request that defers has 200 ms by the
 // documentation, which a first resolve, loading the storage broker, can
 // exceed, and a picture that cannot be resolved falls back before any system
 // UI has appeared. Window's thread.
-func shareImageFile(s *shareSession, path, title string) {
+func shareImageFile(s *shareSession, pic sharedImage) {
+	if pic.err != nil {
+		failWindowsShare(s, pic.err)
+		return
+	}
 	if _, err := shareWindowHere(); err != nil {
 		failWindowsShare(s, err)
 		return
@@ -405,17 +419,12 @@ func shareImageFile(s *shareSession, path, title string) {
 		failWindowsShare(s, err)
 		return
 	}
-	file, err := copyShareImage(path, time.Now())
-	if err != nil {
-		failWindowsShare(s, err)
-		return
-	}
 	statics, err := activationFactory("Windows.Storage.StorageFile", &iidIStorageFileStatics)
 	if err != nil {
 		failWindowsShare(s, err)
 		return
 	}
-	hs, err := newHString(file)
+	hs, err := newHString(pic.file)
 	if err != nil {
 		statics.release()
 		failWindowsShare(s, err)
@@ -432,7 +441,7 @@ func shareImageFile(s *shareSession, path, title string) {
 		return
 	}
 	s.hold(op.release)
-	img := &windowsImage{session: s, op: op, title: title}
+	img := &windowsImage{session: s, op: op, title: pic.title()}
 	img.status.Store(-1)
 	done := newComObject(&comObject{iid: iidStorageFileCompletedHandler, image: img},
 		func() *comVtbl { return &fileResolvedVtbl })

@@ -79,3 +79,45 @@ func copyShareImage(path string, now time.Time) (string, error) {
 	}
 	return dst, nil
 }
+
+// sharedImage is a picture share as it stood when the reader tapped Share:
+// the card copied under the reader's name and the mail the preview set for
+// it. Both are taken then, because the Windows Share sheet, or its fallback,
+// can take the share seconds later, and a preview opened in between
+// rewrites the renderer's file (renderVerseImage) and shareImageMail for its
+// own card.
+type sharedImage struct {
+	file string    // the copy (copyShareImage), or the renderer's file when the copy failed
+	mail shareMail // shareImageMail as the tap left it
+	err  error     // why the copy failed, or nil
+}
+
+// takeSharedImage takes the card at path and the mail for it.
+func takeSharedImage(path string, now time.Time) sharedImage {
+	img := sharedImage{file: path, mail: shareImageMail}
+	if file, err := copyShareImage(path, now); err != nil {
+		img.err = err
+	} else {
+		img.file = file
+	}
+	return img
+}
+
+// title is the package title the Windows Share sheet is given for the
+// picture: its citation, or the product's name where the preview set none,
+// since the sheet refuses a package without a title.
+func (img sharedImage) title() string {
+	if img.mail.subject != "" {
+		return img.mail.subject
+	}
+	return ProductName()
+}
+
+// fallback opens the in-app sheet for the picture as it was taken. It puts
+// the share's mail back first, since fallbackShareImage reads shareImageMail
+// and a later preview may have replaced it; that preview sets its own again
+// before it hands its card on. UI goroutine.
+func (img sharedImage) fallback() {
+	shareImageMail = img.mail
+	fallbackShareImage(img.file)
+}

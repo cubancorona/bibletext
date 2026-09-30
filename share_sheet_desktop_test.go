@@ -3,9 +3,10 @@
 package bibletext
 
 // THE DESKTOP SHARE CONFIRMATION (share_sheet_desktop.go), driven as a
-// Windows or Linux reader drives it: a real window holding CreateMainUI's
-// tree with the styled reading pane, the share verbs delivering through the
-// desktop fallback exactly as share_other.go routes them there, and every
+// Linux reader drives it, or a Windows reader whose Share sheet cannot open:
+// a real window holding CreateMainUI's tree with the styled reading pane, the
+// share verbs delivering through the desktop fallback exactly as
+// share_other.go routes Linux there, and every
 // verb run from its own entry point — the selection menu's actions, the
 // composer's Share, the verse-of-the-day card's icon, the image share's
 // hand-off. What each holds: the sheet is on the overlay stack when the
@@ -1075,6 +1076,68 @@ func TestTheImagePreviewHandsItsCitationToTheMail(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("Email… composed nothing")
+	}
+}
+
+// A PICTURE SHARE'S FALLBACK SAVES THE CARD THAT WAS SHARED. On Windows the
+// in-app sheet can open seconds after the tap, when the Share sheet has not
+// asked for the share in time (share_windows.go), and a preview opened in
+// between renders its own card over the renderer's file and sets
+// shareImageMail for it. The share takes both at the tap (takeSharedImage):
+// its fallback saves the first card's bytes into Downloads and mails them
+// under the first card's citation, which is also the title the Share sheet
+// is given — or the product's name where the preview set none. Mutations:
+// the fallback handed the renderer's file (the second card is saved), the
+// mail not put back (the second citation is composed).
+func TestALateImageFallbackSavesTheCardThatWasShared(t *testing.T) {
+	h := newShareSheetHarness(t)
+	downloads := h.homeForImage(true)
+	renders := t.TempDir()
+	prevDir := imageRenderDir
+	imageRenderDir = func() string { return renders }
+	t.Cleanup(func() { imageRenderDir = prevDir })
+	card := filepath.Join(renders, "bibletext-verse-0.png")
+	if err := os.WriteFile(card, []byte("the first card"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	pic := takeSharedImage(card, time.Now())
+	if pic.err != nil || pic.file == card {
+		t.Fatalf("control: the share took %q (%v), want a copy of the card", pic.file, pic.err)
+	}
+	if got := pic.title(); got != sampleImageSubject {
+		t.Errorf("the Share sheet's title is %q, want the citation %q", got, sampleImageSubject)
+	}
+
+	// The next preview, before the fallback opens.
+	if err := os.WriteFile(card, []byte("the second card"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	shareImageMail = shareMail{"Romans 8:28 (Sample)", "“All things work together for good.”\n\n— Romans 8:28 (Sample)"}
+
+	pic.fallback()
+	entries, _ := os.ReadDir(downloads)
+	if len(entries) != 1 {
+		t.Fatalf("control: want one file in Downloads, have %d", len(entries))
+	}
+	saved := filepath.Join(downloads, entries[0].Name())
+	if b, err := os.ReadFile(saved); err != nil || string(b) != "the first card" {
+		t.Errorf("the fallback saved %q (%v), want the card that was shared", b, err)
+	}
+	p := h.sheet()
+	test.Tap(findTreeButton(p.Content, shareButtonEmail))
+	select {
+	case c := <-h.composed:
+		if c != (shareCompose{sampleImageSubject, sampleImageBody, saved}) {
+			t.Errorf("Email… composed %+v, want the shared card's citation and quote, with the saved file", c)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Email… composed nothing")
+	}
+
+	shareImageMail = shareMail{}
+	if got := takeSharedImage(card, time.Now()).title(); got != ProductName() {
+		t.Errorf("with no citation the Share sheet's title is %q, want %q", got, ProductName())
 	}
 }
 

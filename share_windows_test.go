@@ -529,11 +529,14 @@ func skipWithoutShareWindow(t *testing.T, s *shareSession, steps []string) {
 
 // A TEXT SHARE REACHES THE POINT WHERE THE SHEET OPENS, with the window's
 // DataTransferManager and a handler registered, and nothing falls back
-// until the sheet has not asked within the wait; then exactly one fallback.
-// And each step that Windows refuses ends the share in exactly one fallback
-// at once, naming that step. Mutations: a step's failure not checked (no
-// fallback, the share goes on), the watchdog not armed before the sheet is
-// asked to open. What this cannot see is the handler's interface id:
+// until the sheet has not asked within the wait; then exactly one fallback,
+// with the handler still registered for a sheet that asks late, and removed
+// when the keep runs out. And each step that Windows refuses ends the share
+// in exactly one fallback at once, naming that step. Mutations: a step's
+// failure not checked (no fallback, the share goes on), the watchdog not
+// armed before the sheet is asked to open, the sheet's opening not recorded
+// (the handler goes as the fallback opens). What this cannot see is the
+// handler's interface id:
 // add_DataRequested takes a handler that answers the wrong one, as a
 // control build on Windows 11 showed, so that id is held by its derivation
 // (share_parts_test.go) and was proven by the sheet asking a probe's
@@ -560,6 +563,14 @@ func TestAWindowsTextShareFallsBackAtEveryStep(t *testing.T) {
 	var noAnswer shareNoAnswer
 	if h.fallbacks != 1 || !errors.As(s.result, &noAnswer) {
 		t.Errorf("a sheet that never asked: %d fallbacks, ended with %v; want one, for no answer", h.fallbacks, s.result)
+	}
+	if currentShareSession != s {
+		t.Error("the share removed its handler as the fallback opened; a sheet that asks late would find none")
+	}
+	h.fire() // the keep runs out, and remove_DataRequested is called
+	h.drain()
+	if currentShareSession != nil || h.fallbacks != 1 {
+		t.Errorf("after the keep: still held %v, %d fallbacks; want let go, and the one fallback", currentShareSession == s, h.fallbacks)
 	}
 
 	// Not subtests: a subtest runs on a goroutine of its own, off the
@@ -594,7 +605,8 @@ func TestAWindowsPictureShareResolvesItsFileFirst(t *testing.T) {
 	steps := holdShareSteps(t)
 	card := writeTestCard(t)
 
-	s := startTestShare(h, func(sh *shareSession) { shareImageFile(sh, card, "John 3:16 (Sample)") })
+	pic := takeSharedImage(card, time.Now())
+	s := startTestShare(h, func(sh *shareSession) { shareImageFile(sh, pic) })
 	deadline := time.Now().Add(10 * time.Second)
 	for !s.ended() && !slices.Contains(steps.steps, stepShowSheet) {
 		if time.Now().After(deadline) {
@@ -629,7 +641,8 @@ func TestAWindowsPictureShareResolvesItsFileFirst(t *testing.T) {
 		{stepFileHandler, card, stepFileHandler},
 	} {
 		h.fallbacks, steps.steps, steps.fail = 0, nil, c.fail
-		s := startTestShare(h, func(sh *shareSession) { shareImageFile(sh, c.card, "John 3:16 (Sample)") })
+		pic := takeSharedImage(c.card, time.Now())
+		s := startTestShare(h, func(sh *shareSession) { shareImageFile(sh, pic) })
 		h.drain()
 		if s == nil || h.fallbacks != 1 || !s.ended() {
 			t.Errorf("%s: %d fallbacks, %s; want the share ended in one", c.name, h.fallbacks, shareEnd(s))

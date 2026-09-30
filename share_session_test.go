@@ -24,6 +24,7 @@ type sessionHarness struct {
 }
 
 type sessionTimer struct {
+	d       time.Duration
 	f       func()
 	stopped bool
 }
@@ -37,10 +38,10 @@ func newSessionHarness(t *testing.T) *sessionHarness {
 		h.mu.Unlock()
 	}
 	shareSessionAfter = func(d time.Duration, f func()) func() bool {
-		if d != shareSessionWait {
-			t.Errorf("a timer of %v, want %v", d, shareSessionWait)
+		if d != shareSessionWait && d != shareSheetKeep {
+			t.Errorf("a timer of %v, want %v or %v", d, shareSessionWait, shareSheetKeep)
 		}
-		tm := &sessionTimer{f: f}
+		tm := &sessionTimer{d: d, f: f}
 		h.timers = append(h.timers, tm)
 		return func() bool { was := !tm.stopped; tm.stopped = true; return was }
 	}
@@ -124,6 +125,7 @@ func TestADeliveredShareEndsWithoutAFallback(t *testing.T) {
 	h := newSessionHarness(t)
 	s := h.start("share")
 	s.await("the sheet asking")
+	s.sheetOpening()
 	filled := 0
 	h.fire() // the watchdog's end, queued ahead of the delivery's
 	s.deliver(func() error { filled++; return nil })
@@ -141,22 +143,120 @@ func TestADeliveredShareEndsWithoutAFallback(t *testing.T) {
 	}
 }
 
-// A SHEET THAT NEVER ASKS ENDS IN THE FALLBACK when the watchdog fires, with
-// the step it was waiting on named. Mutations: the watchdog not armed, its
-// finish given no error.
-func TestASheetThatNeverAsksEndsInTheFallback(t *testing.T) {
+// A STEP THAT NEVER ANSWERS ENDS IN THE FALLBACK when the watchdog fires,
+// with the step it was waiting on named; before the sheet has been asked to
+// open — the picture's file resolving — there is nothing to keep, and what
+// the share holds is freed as the fallback opens. Mutations: the watchdog
+// not armed, its finish given no error, the share kept though no sheet was
+// asked to open.
+func TestAStepThatNeverAnswersEndsInTheFallback(t *testing.T) {
 	h := newSessionHarness(t)
 	s := h.start("share")
-	s.await("the sheet asking")
+	s.await("the picture resolving")
 	h.drain()
 	h.wantLog()
 	h.fire()
 	h.drain()
 	h.wantLog("share release 2", "share release 1", "share fallback")
 	var noAnswer shareNoAnswer
-	if !errors.As(s.result, &noAnswer) || string(noAnswer) != "the sheet asking" {
-		t.Errorf("the share ended with %v, want no answer from the sheet asking", s.result)
+	if !errors.As(s.result, &noAnswer) || string(noAnswer) != "the picture resolving" {
+		t.Errorf("the share ended with %v, want no answer from the picture resolving", s.result)
 	}
+	if currentShareSession != nil {
+		t.Error("a share that fell back before any sheet was asked to open is still held")
+	}
+}
+
+// A SHEET THAT ASKS LATE STILL GETS THE SHARE. Once the sheet has been asked
+// to open, the watchdog opens the fallback, so the reader is not kept
+// waiting, but keeps the handler and the package's parts: the sheet does not
+// know the app stopped waiting, and when it asks, the package is filled
+// rather than left empty. Nothing more opens, and the share lets go after
+// that request; a request after that fills nothing. Mutations: the parts
+// released as the fallback opens (the late request fills nothing), the late
+// request opening the fallback again, the parts never let go.
+func TestASheetThatAsksLateStillGetsTheShare(t *testing.T) {
+	h := newSessionHarness(t)
+	s := h.start("share")
+	s.await("the sheet asking")
+	s.sheetOpening()
+	h.fire()
+	h.drain()
+	h.wantLog("share fallback")
+	if currentShareSession != s {
+		t.Error("the share let go of its parts as the fallback opened; a late sheet would find no handler")
+	}
+	filled := 0
+	s.deliver(func() error { filled++; return nil })
+	h.drain()
+	if filled != 1 {
+		t.Errorf("the late request filled the package %d times, want once", filled)
+	}
+	h.wantLog("share fallback", "share release 2", "share release 1")
+	if currentShareSession != nil {
+		t.Error("the share still holds its parts after the late request")
+	}
+	if h.fallbacks != 1 {
+		t.Errorf("%d fallbacks, want the one the watchdog opened", h.fallbacks)
+	}
+	s.deliver(func() error { filled++; return nil })
+	h.drain()
+	if filled != 1 {
+		t.Error("a request after the share let go filled the package")
+	}
+	var noAnswer shareNoAnswer
+	if !errors.As(s.result, &noAnswer) {
+		t.Errorf("the share ended with %v, want no answer in time", s.result)
+	}
+}
+
+// A SHARE KEPT FOR A LATE SHEET LETS GO after shareSheetKeep, or as soon as
+// a newer share starts, which stops the keep; either way a request after
+// that fills nothing, and only the fallback that opened at the watchdog
+// ever opens. Mutations: the keep never armed or armed for the wrong time,
+// a newer share not freeing the kept one (its handler would sit beside the
+// newer share's).
+func TestAShareKeptForALateSheetLetsGo(t *testing.T) {
+	kept := func(h *sessionHarness, name string) *shareSession {
+		s := h.start(name)
+		s.await("the sheet asking")
+		s.sheetOpening()
+		h.fire()
+		h.drain()
+		return s
+	}
+	t.Run("after the keep", func(t *testing.T) {
+		h := newSessionHarness(t)
+		s := kept(h, "share")
+		keep := h.timers[len(h.timers)-1]
+		if keep.stopped || keep.d != shareSheetKeep {
+			t.Fatalf("the keep is armed for %v (stopped %v), want %v", keep.d, keep.stopped, shareSheetKeep)
+		}
+		h.fire()
+		h.drain()
+		h.wantLog("share fallback", "share release 2", "share release 1")
+		s.deliver(func() error { t.Error("a request after the keep filled the package"); return nil })
+		h.drain()
+	})
+	t.Run("when a newer share starts", func(t *testing.T) {
+		h := newSessionHarness(t)
+		old := kept(h, "old")
+		keep := h.timers[len(h.timers)-1]
+		newer := h.start("newer")
+		h.drain()
+		h.wantLog("old fallback", "old release 2", "old release 1")
+		if !keep.stopped {
+			t.Error("the newer share left the old share's keep armed")
+		}
+		if currentShareSession != newer {
+			t.Error("the newer share is not current")
+		}
+		old.deliver(func() error { t.Error("the old share's request filled a package"); return nil })
+		h.drain()
+		if h.fallbacks != 1 {
+			t.Errorf("%d fallbacks, want the old share's one", h.fallbacks)
+		}
+	})
 }
 
 // A WATCHDOG ARMED FOR AN EARLIER STEP DOES NOTHING once the share has moved
