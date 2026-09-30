@@ -1184,7 +1184,7 @@ the activity and the process (see the entry above), so V9's rotation check
 does not reach this path. Confirm first on a device: with Developer options >
 "Don't keep activities" on, press Home mid-narration and wait (V9).
 
-## Rework the download page — DONE 26 September 2026; Google Play filled its slot 30 September 2026
+## Rework the download page — DONE 26 September 2026; Google Play filled its slot, and the release notes followed, 30 September 2026
 
 The page had store buttons by platform at the top and a separate "Desktop —
 direct downloads" half with its own sections, three button styles, and the
@@ -1232,12 +1232,30 @@ copies `docs/badges/` into the site and refuses a tree missing a badge the
 page shows. The checker still holds every other release asset, the Microsoft
 Store link and the macOS steps to the page.
 
-One thing stays open. The GitHub release notes, the `NOTES` printf in
-`.github/workflows/release.yml`, link the App Store for iOS but still offer
-Android readers only the APK, with no word of Google Play, on every release
-page. A Play line there reaches readers from the next tag, and has to stay
-free of single quotes, because the checker reads that printf. The other,
-whether a Play-signed install verifies its App Links, is answered: on
+The GitHub release notes, the `NOTES` printf in
+`.github/workflows/release.yml`, linked the App Store for iOS but offered
+Android readers only the APK, in a line addressed to whoever publishes the
+release, with no word of Google Play, on every release page. FIXED 30 September
+2026: the notes say "Android ships via Google Play" with the listing's link,
+in the form of the App Store line above it, and keep the APK for devices
+without Google Play in the README's terms: it is attached below, it never
+updates itself, and moving to Google Play later means uninstalling it, which
+deletes the reader's notes. They carry no single quote and no percent sign,
+since the printf reads them as its format. `scripts/check-public-surfaces.py`
+now requires a Play link in the notes' printf, on the download page and in
+the README, reading only what a reader is shown there (the printf alone; a
+page less its markup comments), and fails on a Play link to any package but
+the `appID` in `config/product.json`, or when that id cannot be read. Its
+self-test takes each of the three places without the link, with a listing
+for another app whose id begins with the product's, and with the link only
+in a comment, and passes a link with parameters after the id.
+
+Still open: the new notes reach readers from the next tag. The releases
+already published keep the old ones, the latest (v1.2.17) among them, until
+each is edited with `gh release edit`, a change to a public page that is not
+made without the account holder's word.
+
+Whether a Play-signed install verifies its App Links is answered: on
 30 September 2026 a Pixel with 1.2.17 from Google Play reported
 `bibletext.co.uk: verified`, and a bibletext.co.uk/web/ link opened in the app
 (`docs/LINKS.md`, the matrix and section 6).

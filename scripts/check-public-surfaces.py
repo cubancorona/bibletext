@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Hold the public pages to what the repository actually ships.
 
-Four kinds of drift have each reached a published page, and none of them is
+Five kinds of drift have each reached a published page, and none of them is
 the sort a reader of the diff notices, because in every case the stale text
 was true when it was written:
 
@@ -21,6 +21,11 @@ was true when it was written:
     macOS 15 removed. The rule requires the route that replaced it and
     rejects the retired wording, since text pasted from an old release would
     otherwise sit beside the new steps and pass.
+  * a channel went live and one of the places that send readers to it never
+    said so. Google Play went live and the download page and the README
+    linked it the same day, while the release notes, which every release
+    takes from the release workflow, went on offering Android readers only
+    the APK.
 
 Each rule below is mechanical: it compares a public page against the thing it
 claims to describe. Nothing here judges wording, and none of it can tell that
@@ -152,9 +157,39 @@ NOT_LINKED = {
 # that a link which exists names the right product.
 STORE_LINK = r"https://apps\.microsoft\.com/detail/[A-Za-z0-9]+"
 
+# Google Play is the one Android route the site offers, since the download page
+# links no APK (NOT_LINKED above), and the release notes are where a reader who
+# found the project on GitHub meets the choice. So the notes, the download page
+# and the README must each link the listing, and every Play link on them must
+# name the package config/product.json declares: the Android build installs as
+# its appID, the value scripts/check-product-identity.py holds the Android App
+# Links file to, so any other id is another app's listing or none. Unlike the
+# Microsoft Store rule this one requires the link, because the channel is live;
+# like it, it cannot see the next channel to go live.
+PLAY_SURFACES = (RELEASE_WORKFLOW, DOWNLOAD_PAGE, READ_ME)
+PLAY_ID_KEY = "appID"
+PLAY_LINK = r"https://play\.google\.com/store/apps/details\?id=([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*)"
+ANDROID_PACKAGE = re.compile(r"[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+")
+
 
 def store_links(text: str) -> set[str]:
     return set(re.findall(STORE_LINK, text))
+
+
+def play_links(text: str) -> list[str]:
+    """The package id of every Google Play listing link in text."""
+    return re.findall(PLAY_LINK, text)
+
+
+def play_package(config: str) -> str | None:
+    """The Android package the product declares, or None when it cannot be read."""
+    try:
+        declared = json.loads(config).get(PLAY_ID_KEY, "")
+    except (json.JSONDecodeError, AttributeError):
+        return None
+    if isinstance(declared, str) and ANDROID_PACKAGE.fullmatch(declared):
+        return declared
+    return None
 
 
 def is_sidecar(asset: str) -> bool:
@@ -285,11 +320,13 @@ def mac_floor(config: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
-def mac_open_text(surface: str, body: str) -> str | None:
+def reader_text(surface: str, body: str) -> str | None:
     """What a reader of this surface sees, or None when the notes are not found.
 
     For the release workflow that is the release notes alone; for a page it is
-    the page less its markup comments.
+    the page less its markup comments. The macOS steps and the Google Play link
+    are both read through it, so a comment naming either cannot stand in for
+    the text a reader is shown.
     """
     if surface == RELEASE_WORKFLOW:
         match = RELEASE_NOTES.search(body)
@@ -452,16 +489,23 @@ def rule_failures(read, list_cmd) -> list[str]:
     bodies = {
         RELEASE_WORKFLOW: workflow, DOWNLOAD_PAGE: page, READ_ME: readme, MAC_STORE_GUIDE: guide,
     }
-    for surface in MAC_OPEN_SURFACES:
-        if bodies[surface] is None:
+    seen: dict[str, str] = {}
+    for surface, raw in bodies.items():
+        if raw is None:
             continue
-        body = mac_open_text(surface, bodies[surface])
-        if body is None:
+        shown = reader_text(surface, raw)
+        if shown is None:
             failures.append(
                 f"{surface}: no NOTES=\"$(printf '...')\" line was found, so this checker cannot "
-                f"read the release notes' macOS steps; its shape changed and the check is blind"
+                f"read the release notes' macOS steps or Google Play link; its shape changed and "
+                f"the check is blind"
             )
             continue
+        seen[surface] = shown
+    for surface in MAC_OPEN_SURFACES:
+        if surface not in seen:
+            continue
+        body = seen[surface]
         for stale in STALE_FINDER_ROUTE.finditer(body):
             failures.append(
                 f"{surface}: tells a Mac reader to {' '.join(stale.group(0).split())!r}, the "
@@ -477,6 +521,32 @@ def rule_failures(read, list_cmd) -> list[str]:
             failures.append(
                 f"{surface}: the app runs from macOS {floor}, and nothing tells a reader on "
                 f"{floor} to {FINDER_ROUTE.lower()} the app in the Finder and choose Open"
+            )
+
+    # 2c. Google Play, where the site sends Android readers in place of the
+    # APK, is linked from every place that sends them, by the product's package.
+    package = play_package(config) if config is not None else None
+    if config is not None and package is None:
+        failures.append(
+            f"{PRODUCT_CONFIG}: {PLAY_ID_KEY} is missing or unreadable, so this checker cannot "
+            f"tell whether a Google Play link names this app"
+        )
+    for surface in PLAY_SURFACES:
+        if surface not in seen:
+            continue
+        ids = play_links(seen[surface])
+        if not ids:
+            where = "the release notes never link" if surface == RELEASE_WORKFLOW else "never links"
+            failures.append(
+                f"{surface}: {where} the Google Play listing; the download page offers Android "
+                f"readers no APK, so every place that sends them anywhere must send them to Play"
+            )
+        if package is None:
+            continue
+        for found in sorted(set(ids) - {package}):
+            failures.append(
+                f"{surface}: links the Google Play listing for {found}, but the app installs as "
+                f"{package} ({PLAY_ID_KEY} in {PRODUCT_CONFIG}); the link is to another app"
             )
 
     # 3. Prose that counts the tree is checked against the tree.
@@ -536,9 +606,21 @@ def self_test() -> list[str]:
     settings_only = b"Click Open Anyway in Privacy & Security.\n"
     finder_only = b"Control-click the app and choose Open.\n"
 
+    # A package no store lists, so the fixtures cannot be mistaken for the
+    # real listing, and the product declaring it beside the macOS floor.
+    package = b"org.example.reader"
+    play = b"https://play.google.com/store/apps/details?id=" + package
+    play_line = b"Android ships via Google Play: " + play
+    config = b'{"appID": "' + package + b'", "macMinimumOSVersion": "12.0"}\n'
+    page_play = b'<a class="badge" href="' + play + b'">Google Play</a>\n'
+    readme_play = b"- **Android** \xe2\x80\x94 [Google Play](" + play + b")\n"
+
     def notes(body: bytes) -> bytes:
         """A release-notes step whose printf carries body, shaped as release.yml's."""
-        opening = b"""          NOTES="$(printf 'Desktop builds.\\n\\nmacOS note: """
+        opening = (
+            b"""          NOTES="$(printf 'Desktop builds.\\n\\n"""
+            + play_line + b"""\\n\\nmacOS note: """
+        )
         return opening + body.strip() + b"""')"\n"""
 
     # The APK goes up by hand, from the command commented in release.yml, and
@@ -558,18 +640,18 @@ def self_test() -> list[str]:
             b'BibleText-Linux-amd64.tar.xz">Linux</a>\n'
             b'<a href="https://example.invalid/releases/latest/download/'
             b'BibleText-x86_64.AppImage">AppImage</a>\n'
-            b'<a href="https://apps.microsoft.com/detail/TESTID">Store</a>\n' + routes
+            b'<a href="https://apps.microsoft.com/detail/TESTID">Store</a>\n' + page_play + routes
         ),
         READ_ME: (
             b"```\n"
             b"\xe2\x94\x94\xe2\x94\x80\xe2\x94\x80 cmd/   # two programs\n"
             b"    \xe2\x94\x9c\xe2\x94\x80\xe2\x94\x80 desktop/\n"
             b"    \xe2\x94\x94\xe2\x94\x80\xe2\x94\x80 mobile/\n"
-            b"```\n" + deps + routes
+            b"```\n" + readme_play + deps + routes
         ),
         CONTRIBUTING: deps,
         CI_WORKFLOW: deps,
-        PRODUCT_CONFIG: b'{"macMinimumOSVersion": "12.0"}\n',
+        PRODUCT_CONFIG: config,
         MAC_STORE_GUIDE: b"| Signing | none (" + routes.strip() + b") |\n",
     }
     pair = lambda: {"desktop", "mobile"}  # noqa: E731 - a stub, not a policy
@@ -619,7 +701,7 @@ def self_test() -> list[str]:
         b'BibleText-Windows-amd64.zip">Windows</a>\n'
         b'<a href="https://example.invalid/releases/latest/download/'
         b'BibleText-Windows-arm64.zip">Windows ARM</a>\n'
-        b'<a href="https://apps.microsoft.com/detail/TESTID">Store</a>\n' + routes
+        b'<a href="https://apps.microsoft.com/detail/TESTID">Store</a>\n' + page_play + routes
     )
     if matrix_failures := run(matrixed):
         problems.append(f"a matrixed upload step is misread: {matrix_failures}")
@@ -627,7 +709,7 @@ def self_test() -> list[str]:
     # Once the floor reaches macOS 15 no supported reader has the Finder route,
     # so the rule must stop owing it rather than demand it for ever.
     risen = dict(clean)
-    risen[PRODUCT_CONFIG] = b'{"macMinimumOSVersion": "15.0"}\n'
+    risen[PRODUCT_CONFIG] = config.replace(b'"12.0"', b'"15.0"')
     for rel in MAC_OPEN_SURFACES:
         risen[rel] = clean[rel].replace(routes.strip(), settings_only.strip())
     if risen_failures := run(risen):
@@ -647,6 +729,16 @@ def self_test() -> list[str]:
         )
     if bystander_failures := run(bystanding):
         problems.append(f"a right-click that is not the retired advice fails: {bystander_failures}")
+
+    # A Play link may carry parameters after the id, as the store's own share
+    # links do, with the ampersand escaped on a page, and may end a sentence;
+    # the id ends where the parameters or the sentence begin.
+    suffixed = dict(clean)
+    suffixed[RELEASE_WORKFLOW] = clean[RELEASE_WORKFLOW].replace(play_line, play_line + b".")
+    suffixed[DOWNLOAD_PAGE] = clean[DOWNLOAD_PAGE].replace(play + b'"', play + b'&amp;hl=en_GB"')
+    suffixed[READ_ME] = clean[READ_ME].replace(play + b")", play + b"&hl=en_GB)")
+    if suffixed_failures := run(suffixed):
+        problems.append(f"a Play link with text after the id is misread: {suffixed_failures}")
 
     violations: list[tuple[str, dict, object]] = []
 
@@ -708,7 +800,7 @@ def self_test() -> list[str]:
 
     blind_upload = dict(clean)
     blind_upload[RELEASE_WORKFLOW] = b"        run: echo nothing is uploaded here\n" + notes(routes)
-    blind_upload[DOWNLOAD_PAGE] = b"<p>no downloads yet</p>\n" + routes
+    blind_upload[DOWNLOAD_PAGE] = b"<p>no downloads yet</p>\n" + page_play + routes
     blind_upload[READ_ME] = clean[READ_ME]
     violations.append(("a release that uploads nothing", blind_upload, pair))
 
@@ -816,7 +908,7 @@ def self_test() -> list[str]:
     # The cut-off at 15 is pinned from both sides: the 15 floor above owes no
     # Finder route, and 14, the last release that has it, still does.
     fourteen = dict(clean)
-    fourteen[PRODUCT_CONFIG] = b'{"macMinimumOSVersion": "14.0"}\n'
+    fourteen[PRODUCT_CONFIG] = config.replace(b'"12.0"', b'"14.0"')
     for rel in MAC_OPEN_SURFACES:
         fourteen[rel] = clean[rel].replace(routes.strip(), settings_only.strip())
     violations.append(("no Finder route on a macOS 14 floor", fourteen, pair))
@@ -842,8 +934,45 @@ def self_test() -> list[str]:
     )
     violations.append(("macOS steps only inside a markup comment", commented_page, pair))
 
+    # Google Play is held in each of its three places on its own: release notes
+    # that offer only the APK, as every release's did after Play went live, a
+    # page that lost its badge, a README that lost its line. Each is also given
+    # a listing whose id only begins with the product's, which is another
+    # app's. The three are named here rather than read from PLAY_SURFACES, for
+    # the reason the macOS copies are.
+    apk_only = b"The Android APK is attached below."
+    unplayed = {
+        RELEASE_WORKFLOW: clean[RELEASE_WORKFLOW].replace(play_line, apk_only),
+        DOWNLOAD_PAGE: clean[DOWNLOAD_PAGE].replace(page_play, b""),
+        READ_ME: clean[READ_ME].replace(readme_play, b""),
+    }
+    for rel in (RELEASE_WORKFLOW, DOWNLOAD_PAGE, READ_ME):
+        unlisted = dict(clean)
+        unlisted[rel] = unplayed[rel]
+        violations.append((f"no Google Play link in {rel}", unlisted, pair))
+        other_app = dict(clean)
+        other_app[rel] = clean[rel].replace(play, play + b".beta")
+        violations.append((f"a Google Play link to another app in {rel}", other_app, pair))
+
+    # As with the macOS steps, a Play link no reader is shown cannot stand in
+    # for one: beside the notes in the workflow, or inside a markup comment.
+    play_commented = dict(clean)
+    play_commented[RELEASE_WORKFLOW] = (
+        unplayed[RELEASE_WORKFLOW] + b"          # " + play_line + b"\n"
+    )
+    violations.append(("a Play link only beside the release notes", play_commented, pair))
+    play_markup = dict(clean)
+    play_markup[DOWNLOAD_PAGE] = clean[DOWNLOAD_PAGE].replace(
+        page_play, b"<!-- " + page_play.strip() + b" -->\n"
+    )
+    violations.append(("a Play link only inside a markup comment", play_markup, pair))
+
+    blind_package = dict(clean)
+    blind_package[PRODUCT_CONFIG] = config.replace(b'"appID"', b'"desktopAppID"')
+    violations.append(("an unreadable Android package", blind_package, pair))
+
     blind_floor = dict(clean)
-    blind_floor[PRODUCT_CONFIG] = b'{"iosMinimumOSVersion": "15.0"}\n'
+    blind_floor[PRODUCT_CONFIG] = config.replace(b"macMinimumOSVersion", b"iosMinimumOSVersion")
     violations.append(("an unreadable macOS floor", blind_floor, pair))
 
     absent = dict(clean)

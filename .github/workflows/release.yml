@@ -30,7 +30,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          NOTES="$(printf 'Desktop builds for macOS, Windows, and Linux. iOS ships via the App Store: https://apps.apple.com/app/id6784567351\n\nThe Android APK is attached manually after the desktop assets land.\n\nmacOS note: the app is unsigned, so macOS blocks its first launch until you allow it. On macOS 15 and later, open the app and dismiss the warning, then, within the hour, go to System Settings > Privacy & Security, scroll to Security, click Open Anyway and confirm with your login password. On macOS 12 to 14, Control-click the app in the Finder, choose Open, then click Open in the warning.\n\nLinux note: the executable is now called bibletext, not desktop. If you installed an earlier tarball with make install, the old binary is left behind - remove it with sudo rm -f /usr/local/bin/desktop /usr/bin/desktop (or rm -f ~/.local/bin/desktop for a user install).')"
+          NOTES="$(printf 'Desktop builds for macOS, Windows, and Linux. iOS ships via the App Store: https://apps.apple.com/app/id6784567351\n\nAndroid ships via Google Play: https://play.google.com/store/apps/details?id=uk.co.bibletext\n\nWithout Google Play, install BibleText-Android.apk, attached below. It never updates itself, and moving to Google Play later means uninstalling it, which deletes your notes.\n\nmacOS note: the app is unsigned, so macOS blocks its first launch until you allow it. On macOS 15 and later, open the app and dismiss the warning, then, within the hour, go to System Settings > Privacy & Security, scroll to Security, click Open Anyway and confirm with your login password. On macOS 12 to 14, Control-click the app in the Finder, choose Open, then click Open in the warning.\n\nLinux note: the executable is now called bibletext, not desktop. If you installed an earlier tarball with make install, the old binary is left behind - remove it with sudo rm -f /usr/local/bin/desktop /usr/bin/desktop (or rm -f ~/.local/bin/desktop for a user install).')"
           # The macOS note gives two routes because macOS 15 removed the
           # Finder's Control-click > Open override for an app it cannot
           # verify: from 15 the only way is Open Anyway in Privacy & Security,
@@ -41,6 +41,17 @@ jobs:
           # holds all four to it, reading only the printf above here, because
           # this comment names both routes and would otherwise vouch for notes
           # that had lost them.
+          # The Android paragraphs send a reader to Google Play, the build that
+          # updates itself, and keep the APK for devices without Google Play. A
+          # sideloaded APK never updates, and it cannot update into the Play
+          # build, which is signed with a different key, so moving over means an
+          # uninstall that takes the reader's notes with it. The download page
+          # does not offer the APK at all: scripts/check-public-surfaces.py
+          # names it in NOT_LINKED, and requires the Play link in the printf
+          # above, on that page and in the README, each naming the appID in
+          # config/product.json. The printf reads the notes as its format, so
+          # they carry no single quote, which would end the argument, and no
+          # percent sign, which would start a conversion.
           # The Linux note above is for the 19 September 2026 executable rename
           # (cmd/desktop became cmd/bibletext, so the tarball stopped installing
           # a generic /usr/bin/desktop). It tells a reader who installed an
