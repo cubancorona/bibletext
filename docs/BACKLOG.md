@@ -706,7 +706,7 @@ the activity and the process (see the entry above), so V9's rotation check
 does not reach this path. Confirm first on a device: with Developer options >
 "Don't keep activities" on, press Home mid-narration and wait (V9).
 
-## Rework the download page — DONE 26 September 2026; the Play button has its slot
+## Rework the download page — DONE 26 September 2026; Google Play filled its slot 30 September 2026
 
 The page had store buttons by platform at the top and a separate "Desktop —
 direct downloads" half with its own sections, three button styles, and the
@@ -727,12 +727,29 @@ that needs no scripting, and a closing note says what shared links are and
 what ARM means. The masthead, the feature list, the
 open-source paragraph and the footer are unchanged.
 
-When Google Play is live, the placeholder becomes a link showing the Play
-badge, like the other three (the HTML comment above it says so), and the
-Android .apk row keeps its place among the files. `scripts/publish-site.sh`
-copies `docs/badges/` into the site and refuses a tree missing a badge the
-page shows. `scripts/check-public-surfaces.py` still holds every release asset,
-the Microsoft Store link and the macOS steps to the page.
+Google Play went live on 30 September 2026 (production, 1.2.17, build 187),
+and the placeholder became a link to the listing showing the Play badge,
+captioned "Android phones and tablets" like the other three. The file is the
+store's own, unaltered. It carries its clear space inside the image, a
+transparent 41px around a 168px panel, so the page draws it larger by that
+margin and takes the margin back out of the layout (`.badge img.padded`): its
+panel stands 40px tall like the others, where the plain 40px image height
+would have shrunk it to 27px, smaller than the badges beside it.
+
+The Android .apk row left "Download a file instead" the same day, and the
+card's line now names Mac, Windows or Linux. Android is offered through Google
+Play only: a sideloaded APK never updates itself, and it cannot update into
+the Play build, which is signed with a different key, so a reader who started
+from it could reach Play only by uninstalling it, which deletes their notes.
+Every GitHub release still carries the APK (`docs/RELEASING.md`, stage 8) for
+devices without Google Play, and the README says so in one line; the site
+does not link it. `scripts/check-public-surfaces.py` names it in `NOT_LINKED`
+with that reason, and fails if the page links it again or no release uploads
+it; any other released asset the page does not link still fails, which its
+self-test proves with a near-miss name. `scripts/publish-site.sh` copies
+`docs/badges/` into the site and refuses a tree missing a badge the page
+shows. The checker still holds every other release asset, the Microsoft Store
+link and the macOS steps to the page.
 
 ## Reword the Linux note on the download page — DONE 26 September 2026
 

@@ -62,11 +62,10 @@ Status is separate: `shipping` (a release or store submission carries it),
 | iOS | arm64 | Development install to a device | proven | hardware | 7 |
 | iOS | arm64 | Simulator | proven | runner | 9 |
 | iOS | x86_64 | anything | excluded | none | A |
-| Android | arm64-v8a | Play — closed testing (AAB) | shipping | field | 10, 11, 12 |
-| Android | armeabi-v7a, x86, x86_64 | Play — closed testing (AAB) | shipping | builds | 10, 11 |
-| Android | all four ABIs | GitHub Releases — universal APK | shipping | builds | 10, 12 |
+| Android | arm64-v8a | Google Play — production and closed testing (AAB) | shipping | field | 10, 11, 12 |
+| Android | armeabi-v7a, x86, x86_64 | Google Play — production and closed testing (AAB) | shipping | builds | 10, 11 |
+| Android | all four ABIs | GitHub Releases — universal APK, not linked from the site | shipping | builds | 10, 12 |
 | Android | arm64-v8a | Local install / adb (debug APK) | proven | hardware | 11 |
-| Android | any | Play — production | untried | none | — |
 | Windows | x64 | Microsoft Store (MSIX) | shipping | runner | 14, 15, 16, 18 |
 | Windows | x64 | Direct download (.zip) | shipping | builds | 14, 15 |
 | Windows | arm64 | Microsoft Store (MSIX) | shipping | runner | 14, 15, 16, 17, 18 |
@@ -313,7 +312,8 @@ The honest to-do list, in proof-level terms.
   whose atomic preferences writer is missing, measured against a control string.
   That closed the axis that mattered most, and left three.
 - **Android and iOS are in real use, and neither has a repeatable check.**
-  The Play closed-testing build is with testers on real devices and the iOS App
+  The Play build is with closed testers on real devices, and with readers
+  since it reached production on 30 September 2026; the iOS App
   Store build has many installs, so both work — that is `field`, and it is
   better evidence than any runner could give. What neither has is anything that
   would catch a regression before readers do: no Android CI beyond the new
