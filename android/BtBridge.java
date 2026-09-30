@@ -1195,6 +1195,7 @@ public final class BtBridge {
                 }
                 // A recreated activity is a fresh window; ask again.
                 extendIntoTheCutout(act);
+                applySystemBars(act);
                 dialog = null;
                 root = null;
                 scroll = null;
@@ -2814,6 +2815,66 @@ public final class BtBridge {
                 lp.layoutInDisplayCutoutMode =
                         android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
                 aw.setAttributes(lp);
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    /**
+     * The system bars' icons, as the Go side last asked for them: -1 before it
+     * has said anything, 1 for dark icons (a light page behind the bars), 0 for
+     * light icons. Kept here because a recreated activity (a configuration
+     * change the activity does not handle, a relaunch with the process alive)
+     * is a fresh window in the theme's appearance, and the Go side sends only
+     * when the page's variant moves.
+     */
+    private static int systemBarsLight = -1;
+
+    /**
+     * setSystemBarsLight gives the status bar and the navigation bar dark
+     * icons over a light page and light icons over a dark one.
+     *
+     * Nothing else decides them. The view hierarchy that would paint a bar
+     * colour never draws (extendIntoTheCutout), so the canvas's paper shows
+     * through the bars, and the activity's theme is the platform's dark one,
+     * so the icons started white whatever the page was: on the Android 16
+     * emulator the clock stood at 1.19:1 on the light paper, and a three-button
+     * navigation bar's buttons were as faint. (A gesture bar's handle samples
+     * what is under it and was already dark there.)
+     *
+     * The flags are appearance only, and cannot make a bar worse: AOSP's
+     * SystemUI darkens a bar's icons only while that bar is transparent, so a
+     * bar the system draws opaque keeps light icons on its black whatever is
+     * asked. SYSTEM_UI_FLAG_LIGHT_STATUS_BAR is API 23 and
+     * SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR API 26; below 23, down to the app's
+     * floor of 21, there is nothing to ask for.
+     */
+    public static void setSystemBarsLight(final boolean light) {
+        UI.post(new Runnable() {
+            @Override public void run() {
+                systemBarsLight = light ? 1 : 0;
+                applySystemBars(activity);
+            }
+        });
+    }
+
+    private static void applySystemBars(Activity act) {
+        if (act == null || systemBarsLight < 0) return;
+        final boolean light = systemBarsLight == 1;
+        try {
+            Window w = act.getWindow();
+            if (Build.VERSION.SDK_INT >= 30) {
+                android.view.WindowInsetsController c = w.getInsetsController();
+                if (c != null) {
+                    int mask = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                            | android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+                    c.setSystemBarsAppearance(light ? mask : 0, mask);
+                }
+            } else if (Build.VERSION.SDK_INT >= 23) {
+                View decor = w.getDecorView();
+                int mask = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+                if (Build.VERSION.SDK_INT >= 26) mask |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+                int flags = decor.getSystemUiVisibility();
+                decor.setSystemUiVisibility(light ? (flags | mask) : (flags & ~mask));
             }
         } catch (Throwable ignored) {}
     }

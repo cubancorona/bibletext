@@ -3,6 +3,7 @@ package bibletext
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"sync"
 	"time"
 
@@ -761,12 +762,12 @@ func ObserveSystemThemeChanges(myApp fyne.App, state *AppState) {
 	systemThemeOnce.Do(func() {
 		// Seeded here for the window already built, through the same question
 		// its palette asked (appearanceVariant); every rebuild re-records it
-		// (rebuildWindow).
+		// (rebuildWindow). The window's chrome is seeded with the variant it
+		// starts in and brought to the content where that differs — Android's
+		// system bars, whose icons start white on either page (chromeAtStart);
+		// followTitleBar keeps it from there.
 		state.appearance.mobile = fyne.CurrentDevice().IsMobile()
-		state.appearance.built = appearanceVariant(state)
-		// The title bar Fyne creates at Show reads the same system setting
-		// (followTitleBar keeps it from there).
-		state.appearance.frame = state.appearance.built
+		seedAppearance(state, runtime.GOOS)
 		ch := make(chan fyne.Settings, 1)
 		myApp.Settings().AddChangeListener(ch)
 		go func() {

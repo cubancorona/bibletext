@@ -527,6 +527,45 @@ Sharing table in `docs/PLATFORM_MATRIX.md` marks the four cells above
 "probably": the iPad's Share with note and Share as image, and the verse of
 the day on iPad and on Mac.
 
+## Android: the status-bar icons were white on the light page — FIXED 30 September 2026
+
+In the light theme the clock, battery and signal icons were white on the
+cream paper, 1.19:1 on the Android 16 emulator, and a three-button
+navigation bar's buttons were as faint; the light Play images show it. The
+bars have no background here — the NativeActivity window's view hierarchy
+never draws, so the canvas's paper shows through them (the landscape
+cutout entry below) — and nothing asked for their icons, which therefore
+came from the activity's theme, the platform's dark one, on either page. A
+gesture bar's handle samples what is under it and was already dark.
+
+The icons now follow the page: dark over the light paper (5.44:1 measured),
+light over the dark (17.9:1). Android's system bars take the Windows title
+bar's place in the window-chrome seam (`followTitleBar`,
+`title_bar_android.go`): `chromeAtStart` records that they start in the
+dark theme's appearance, so a light page has them sent at startup, and every
+rebuild that moves the variant sends them again.
+`BtBridge.setSystemBarsLight` sets `APPEARANCE_LIGHT_STATUS_BARS` and
+`APPEARANCE_LIGHT_NAVIGATION_BARS` on API 30+ and the
+`SYSTEM_UI_FLAG_LIGHT_*` flags on 23–29 (the navigation one from 26), keeps
+the answer, and gives it to a recreated activity's new window from `init`.
+Seen on the Android 16 emulator: light and dark launches, the system
+switched both ways while the app ran, a rotation to landscape and back, and
+the activity recreated in the same process by a font-size change — which
+went back to white icons in a control build without the re-apply in `init`.
+The rotation did not recreate the activity on that emulator. Held by
+`android_system_bars_test.go`.
+
+Not seen below Android 15; no older emulator was driven for this. AOSP's
+SystemUI darkens a bar's icons only while that bar is transparent, so where
+a release draws a bar opaque itself its icons stay light whatever is asked.
+Still open: after the navigation mode was switched while the app was open
+(gesture to three-button), the new three-button bar kept white buttons until
+the app was next started, the status bar correct throughout. The activity
+was recreated with the flags set, so this looks like SystemUI's new bar
+missing the appearance; not investigated further. The light Play images of
+1.2.17 keep their white icons until a set is taken from a release with this
+fix (`docs/SCREENSHOT_PLAYBOOK.md`, §7).
+
 ## Android: a text share has no failure path — found 30 September 2026
 
 `BtBridge.shareText` (`android/BtBridge.java`) calls `startActivity` with

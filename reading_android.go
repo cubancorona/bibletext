@@ -26,7 +26,8 @@ static jmethodID btaInitM, btaSetStyleM, btaSetHtmlM, btaArmRestoreM, btaGetFrac
                  btaShareTextM, btaShareImageM, btaSetAIEnabledM, btaSetNotesEnabledM,
                  btaOpenBrowserM,
                  btaRAHighlightM, btaRAClearM, btaRAFollowM, btaRAColorsM,
-                 btaSetNoteM, btaSetNoteBandsM, btaTimeZoneIDM, btaWindowWidthM;
+                 btaSetNoteM, btaSetNoteBandsM, btaTimeZoneIDM, btaWindowWidthM,
+                 btaSetSystemBarsLightM;
 
 // Resolve BtBridge through the ACTIVITY's classloader. FindClass on a
 // JNI-attached background thread uses the system classloader and cannot see
@@ -88,6 +89,9 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	btaTimeZoneIDM = (*env)->GetStaticMethodID(env, btaClass, "timeZoneID", "()Ljava/lang/String;");
 	// The activity window's width in dp, for the reading page (reading_page_width.go).
 	btaWindowWidthM = (*env)->GetStaticMethodID(env, btaClass, "windowWidthDp", "()F");
+	// The system bars' icons: dark over a light page, light over a dark one
+	// (title_bar_android.go).
+	btaSetSystemBarsLightM = (*env)->GetStaticMethodID(env, btaClass, "setSystemBarsLight", "(Z)V");
 	// A missing method (a dex/JNI signature skew from editing BtBridge.java
 	// without updating these descriptors) returns NULL and leaves a pending
 	// NoSuchMethodError; every wrapper below guards only on btaClass==NULL, so an
@@ -102,7 +106,7 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	    btaSetAIEnabledM == NULL || btaSetNotesEnabledM == NULL || btaOpenBrowserM == NULL ||
 	    btaRAHighlightM == NULL || btaRAClearM == NULL || btaRAFollowM == NULL ||
 	    btaRAColorsM == NULL || btaSetNoteM == NULL || btaSetNoteBandsM == NULL ||
-	    btaTimeZoneIDM == NULL || btaWindowWidthM == NULL) {
+	    btaTimeZoneIDM == NULL || btaWindowWidthM == NULL || btaSetSystemBarsLightM == NULL) {
 		(*env)->ExceptionClear(env);
 		(*env)->DeleteGlobalRef(env, btaClass);
 		btaClass = NULL;
@@ -226,6 +230,12 @@ static void btaSetNotesEnabled(uintptr_t jni_env, int on) {
 	JNIEnv *env = (JNIEnv*)jni_env;
 	if (btaClass == NULL) return;
 	(*env)->CallStaticVoidMethod(env, btaClass, btaSetNotesEnabledM, on ? JNI_TRUE : JNI_FALSE);
+}
+
+static void btaSetSystemBarsLight(uintptr_t jni_env, int light) {
+	JNIEnv *env = (JNIEnv*)jni_env;
+	if (btaClass == NULL) return;
+	(*env)->CallStaticVoidMethod(env, btaClass, btaSetSystemBarsLightM, light ? JNI_TRUE : JNI_FALSE);
 }
 
 static void btaOpenBrowser(uintptr_t jni_env, char *url) {
@@ -978,6 +988,16 @@ func openLinkInBrowser(rawURL string) {
 		C.btaOpenBrowser(C.uintptr_t(env), cs)
 		C.free(unsafe.Pointer(cs))
 	})
+}
+
+// setAndroidSystemBarsLight asks for dark system-bar icons (light true) or
+// light ones; title_bar_android.go says when.
+func setAndroidSystemBarsLight(light bool) {
+	on := C.int(0)
+	if light {
+		on = 1
+	}
+	runBta(func(env uintptr) { C.btaSetSystemBarsLight(C.uintptr_t(env), on) })
 }
 
 // Each platform's share mechanism is recorded in docs/PLATFORM_MATRIX.md, Sharing.

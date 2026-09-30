@@ -153,10 +153,11 @@ type appearanceGate struct {
 	// comes from the live variant at build time; decide records it too when it
 	// orders a rebuild, so the decision stands on its own.
 	built fyne.ThemeVariant
-	// frame is the variant the window's own title bar was last put in: seeded
-	// with built when the listener is installed, since Fyne creates the native
-	// window from the same system setting, and moved only by followTitleBar.
-	// The frame follows the content, not the gate — see followTitleBar.
+	// frame is the variant the window's own chrome — the title bar on
+	// Windows, the system bars' icons on Android — was last put in: seeded when
+	// the listener is installed with the variant that chrome starts in
+	// (chromeAtStart), and moved only by followTitleBar. The frame follows the
+	// content, not the gate — see followTitleBar.
 	frame fyne.ThemeVariant
 }
 
@@ -329,17 +330,54 @@ func followTitleBar(state *AppState) {
 // re-lights everything inside the window and nothing outside it, so the frame
 // needs a word of its own (followTitleBar says when).
 //
-// Only Windows has anything to do (syncNativeTitleBar, title_bar_windows.go).
-// Fyne sets the title bar's immersive dark mode ONCE, when it creates the
+// Windows and Android have something to do (syncNativeTitleBar). Fyne sets
+// the Windows title bar's immersive dark mode ONCE, when it creates the
 // window, from the registry as it stands then, and never again: its settings
 // listener re-applies the theme to the content and does not touch the frame,
 // and Windows does not flip an attribute an app has set. So a switch made
 // while the app was open left a dark page under a white title bar, or a
-// parchment page under a black one, until the app was relaunched. macOS
-// re-lights its title bar with the system; Linux's belongs to the window
-// manager; the phones have none. A seam, so the host can prove when it is
-// called and with what.
+// parchment page under a black one, until the app was relaunched
+// (title_bar_windows.go). Android's chrome is its status and navigation bars,
+// whose icons nothing set at all: white, from the activity's dark theme, on
+// either page (title_bar_android.go). macOS re-lights its title bar with the
+// system; Linux's belongs to the window manager; the iPhone's status bar
+// follows the system appearance, which is the app's. A seam, so the host can
+// prove when it is called and with what.
 var syncTitleBar = syncNativeTitleBar
+
+// chromeAtStart is the variant a platform's window chrome is in before the
+// app has said anything to it, for a window whose content was built in built.
+// On Windows that is built: Fyne creates the window from the same system
+// setting. Android's system bars start with the white icons of the activity's
+// theme, the platform's dark one, whatever the page is — so there the frame
+// starts dark, and a light page has its chrome sent at startup rather than
+// only after a switch. Elsewhere there is nothing to send, and built keeps
+// followTitleBar from asking.
+func chromeAtStart(goos string, built fyne.ThemeVariant) fyne.ThemeVariant {
+	if goos == "android" {
+		return theme.VariantDark
+	}
+	return built
+}
+
+// seedAppearance records, for the window already built, the variant its
+// content was built in and the one its chrome starts in, then brings the
+// chrome to the content. ObserveSystemThemeChanges runs it once, when the
+// listener is installed; every rebuild after that goes through followTitleBar
+// from rebuildWindow.
+func seedAppearance(state *AppState, goos string) {
+	state.appearance.built = appearanceVariant(state)
+	state.appearance.frame = chromeAtStart(goos, state.appearance.built)
+	followTitleBar(state)
+}
+
+// systemBarsLight is whether Android's status and navigation bars should draw
+// dark icons (the platform's "light" system-bar appearance) over a page built
+// in v. The same question the palette asks (isDark): "no preference" is the
+// light page, so it is dark icons.
+func systemBarsLight(v fyne.ThemeVariant) bool {
+	return v != theme.VariantDark
+}
 
 // titleBarDarkMode is the value sent for DWMWA_USE_IMMERSIVE_DARK_MODE for a
 // variant: a Win32 BOOL, TRUE only for dark. The same question the palette
