@@ -56,7 +56,7 @@ reads it.
 | iOS | Simulator | **none reachable** | n/a | n/a | n/a |
 | macOS | Mac App Store | Universal Link | yes | **strongest here** | **never** |
 | macOS | direct `.zip` | **none**, by design | n/a | n/a | n/a |
-| Android | Play | App Links | yes | partial | **never on the Play cert** |
+| Android | Play | App Links | yes | partial | **yes** — Pixel, Play install of 1.2.17, 30 September 2026 |
 | Android | sideload APK | App Links | yes | yes | yes (upload cert) |
 | Windows | Microsoft Store | `bibletext:` + appUriHandler | yes | yes | **yes** |
 | Windows | direct `.zip` | **none** — there is no installer | n/a | n/a | n/a |
@@ -136,11 +136,15 @@ every string it looked for survived inside the XML comment. That is not
 hypothetical: commit `3587ae3ee` removed that filter deliberately on 9 August
 2026. It now parses the manifest, so a commented-out claim counts as absent.
 
-**Nothing has ever asked Android whether verification actually succeeded.**
-`adb shell pm get-app-links` appears nowhere in the repo. The one recorded
-observation predates the Play signing certificate being added to
-`assetlinks.json`, so it cannot have exercised the Play-signed install — which
-is the one real readers get.
+**Android verification has been asked once, by hand.** On 30 September 2026 a
+Pixel on Android 17 with 1.2.17 installed from Google Play (installer
+`com.android.vending`, signed by the Play app-signing certificate that
+`assetlinks.json` lists second) answered `adb shell pm get-app-links
+uk.co.bibletext` with `bibletext.co.uk: verified` and link handling allowed,
+and a `VIEW` of a bibletext.co.uk/web/ link was delivered to BibleText rather
+than a browser. Nothing repeats this check automatically: a release that
+changes the signing certificate, or an `assetlinks.json` edit, needs it asked
+again on a Play install.
 
 **The iOS release script never re-reads the signed artefact** to confirm the
 entitlement survived export. The Mac script does, and fails if it is missing.

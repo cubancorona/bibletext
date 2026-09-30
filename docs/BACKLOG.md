@@ -754,18 +754,15 @@ copies `docs/badges/` into the site and refuses a tree missing a badge the
 page shows. The checker still holds every other release asset, the Microsoft
 Store link and the macOS steps to the page.
 
-Two things stay open. The GitHub release notes, the `NOTES` printf in
+One thing stays open. The GitHub release notes, the `NOTES` printf in
 `.github/workflows/release.yml`, link the App Store for iOS but still offer
 Android readers only the APK, with no word of Google Play, on every release
 page. A Play line there reaches readers from the next tag, and has to stay
-free of single quotes, because the checker reads that printf. And no
-Play-signed install has been asked whether App Links verified (`docs/LINKS.md`,
-section 6), though the line above the badges says store editions open shared
-links and the Play badge now sits under it. The live `assetlinks.json` serves
-the same two fingerprints as `docs/assetlinks.json` (read 30 September 2026).
-Before the site is published: install from the listing on a device, run
-`adb shell pm get-app-links uk.co.bibletext`, open a bibletext.co.uk/web/ link,
-and record the result in the LINKS.md matrix.
+free of single quotes, because the checker reads that printf. The other,
+whether a Play-signed install verifies its App Links, is answered: on
+30 September 2026 a Pixel with 1.2.17 from Google Play reported
+`bibletext.co.uk: verified`, and a bibletext.co.uk/web/ link opened in the app
+(`docs/LINKS.md`, the matrix and section 6).
 
 ## Reword the Linux note on the download page — DONE 26 September 2026
 
