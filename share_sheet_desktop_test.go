@@ -53,7 +53,9 @@ func withoutMailProbe(t *testing.T) {
 // wired as Linux and Windows wire it, the platform seams the sheet reaches
 // out through replaced — the mail probe answers at once with emailOK, a
 // compose lands on composed instead of opening a client, the file-manager
-// reveal is recorded instead of run — and the sheet's timers held.
+// reveal is recorded instead of run — the sheet's timers held, and a home
+// directory of the test's own (redirectHome), with no Downloads folder
+// until homeForImage makes one, so no image share reaches the machine's.
 type shareSheetHarness struct {
 	*appearanceHarness
 	st       *AppState
@@ -77,6 +79,7 @@ func newShareSheetHarness(t *testing.T) *shareSheetHarness {
 		composed:          make(chan shareCompose, 8),
 	}
 	h.st = h.state
+	redirectHome(t)
 	h.timers = holdSheetTimers(t)
 	setNotesEnabled(true)
 	deleteAllNotes(appPrefs())
@@ -169,12 +172,27 @@ const (
 	sampleImageBody    = "“In the beginning was the Word.”\n\n— John 1:1 (Sample)"
 )
 
+// redirectHome makes a temp directory the test's home, set the way
+// os.UserHomeDir reads it on each platform — HOME on Linux and macOS,
+// USERPROFILE on Windows — and stops the test unless the home now resolves
+// there, before anything can be saved into the Downloads folder of the
+// machine running it.
+func redirectHome(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	if got, err := os.UserHomeDir(); err != nil || got != home {
+		t.Fatalf("the home directory resolves to %q (%v), not the test's own %q; an image share would save into the machine's Downloads", got, err, home)
+	}
+	return home
+}
+
 // homeForImage gives the test a home of its own, with a Downloads folder or
 // without one, and the image mail the preview would have set.
 func (h *shareSheetHarness) homeForImage(withDownloads bool) (downloads string) {
 	h.t.Helper()
-	home := h.t.TempDir()
-	h.t.Setenv("HOME", home)
+	home := redirectHome(h.t)
 	downloads = filepath.Join(home, "Downloads")
 	if withDownloads {
 		if err := os.MkdirAll(downloads, 0o755); err != nil {
