@@ -41,17 +41,17 @@ each wanting a dry run on a day that is not a release day:
   key and the service account in the repository's secrets, which is the
   account holder's decision, and matters only once Play grants production.
 
-## Windows: use the native Share sheet — DECIDED 30 September 2026, not built
+## Windows: use the native Share sheet — BUILT 30 September 2026, not yet seen in the app
 
 On Windows every text share (Share with note, with citation, as link, and the
-verse of the day's Share) copies to the clipboard and opens the in-app
+verse of the day's Share) copied to the clipboard and opened the in-app
 confirmation sheet (the entry below, which replaced a 1.4-second notice on
-30 September 2026), and Share as image saves the card to Downloads and opens
-Explorer on it — divergence 27 in `docs/PLATFORM_MATRIX.md`, where the
-Sharing table records every platform. Windows has a system Share sheet that a desktop app
-can open for its own window, and that is the route: every verb opens it
-beside the window, as the picker does on macOS. Decided; not yet built or
-tried from a Fyne window.
+30 September 2026), and Share as image saved the card to Downloads and opened
+Explorer on it. Windows has a system Share sheet that a desktop app can open
+for its own window, and every verb now opens it beside the window, as the
+picker does on macOS — divergence 28 in `docs/PLATFORM_MATRIX.md`, whose
+Sharing table records every platform. The in-app sheet stays behind it for
+whenever it cannot open.
 
 **The route.** `IDataTransferManagerInterop`, from the activation factory of
 `Windows.ApplicationModel.DataTransfer.DataTransferManager`:
@@ -59,39 +59,102 @@ tried from a Fyne window.
 - `GetForWindow(hwnd)` gives the window's DataTransferManager. The HWND is
   reached as `title_bar_windows.go` reaches it: `driver.NativeWindow`,
   `RunNative`, `WindowsWindowContext.HWND`.
-- A `DataRequested` handler fills the package: `SetText` for the text
-  verbs, `SetWebLink` for Share as link (and the link under a note),
+- A `DataRequested` handler fills the package: the citation as the title,
+  which the sheet will not open without; `SetText` with the message every
+  platform shares; `SetWebLink` as well for Share as link and a note's link;
   `SetStorageItems` with the rendered PNG for Share as image.
 - `ShowShareUIForWindow(hwnd)` opens the sheet.
 
-**Constraints.**
+**Proven first, on the Windows VM (30 September 2026).** A standalone probe —
+a plain Win32 window driving the same calls, with no package identity —
+opened the sheet for text, a link and a picture on Windows 11 arm64 (build
+26200), natively and as an x64 executable under emulation; every HRESULT was
+S_OK. So the unpackaged zip can use the interop there, whatever Microsoft's
+pages say (they disagree: the share guide says packaged or unpackaged, the
+table of WinRT APIs in desktop apps lists the DataTransferManager as needing
+package identity, and the interop's reference says UWP apps only). What the
+sheet showed: for text, the apps to share to and no Copy; for a link, "Share
+link", the title, the link, a QR code and Copy link; for a picture, the
+file's name where the title would be, a thumbnail, Edit and Copy — which is
+why the picture goes as a copy named for the reader. The sheet asked for the
+share 140–549 ms after it was asked to open (the longest the first time),
+always on the window's thread from its message loop, never inside the call,
+and gave a deadline of about two seconds. The picture's file resolved on a
+thread-pool thread the first time and inside `put_Completed` after that,
+and Windows asked the completion handler for `IAgileObject` before taking
+it. The DataPackage walked the one-item collection with First, HasCurrent,
+Current and MoveNext on the window's thread and let it go. After the handler
+is removed the DataTransferManager keeps one reference to it until the next
+registration.
 
-- The calls run on the window's thread, in a single-threaded apartment —
-  the GLFW main thread `RunNative` runs on.
-- The `DataRequested` handler returns `S_OK` whatever happens inside it.
-- Windows 10 has the API. The cancel events (`ShareCanceled`) need
-  10.0.19041, which is already the MSIX floor
-  (`msstore/AppxManifest.xml.in`, `MinVersion="10.0.19041.0"`).
-- No usable Go binding exists. The plan is some 300 lines of hand-written
-  COM on `golang.org/x/sys/windows` (already a requirement) in a new
-  share_windows.go, `//go:build windows`, defining `nativeShareText` and
+**What was built.**
+
+- `share_windows.go` (`//go:build windows`) defines `nativeShareText` and
   `nativeShareImage`; `share_other.go` narrows to
-  `!darwin && !android && !windows`.
-- A share the reader started cannot end in silence: when the sheet cannot be
-  shown, the clipboard path in `share_fallback.go` still runs and says so,
-  and a way to copy the link stays.
+  `!darwin && !android && !windows`, so Linux keeps the in-app sheet.
+- The COM is hand-written on `golang.org/x/sys/windows`
+  (`share_winrt_windows.go`, `share_winrt_object_windows.go`): HSTRINGs,
+  calls through vtable slots read from the SDK's headers, and the objects
+  Windows calls — the DataRequested handler, the file's completion handler
+  and the picture's `IIterable<IStorageItem>` — as pinned Go objects with
+  callback vtables made once, agile through the aggregated free-threaded
+  marshaler. The parameterized interface ids are held to the hash they are
+  derived from by a host test (`share_winrt_iids.go`).
+- The window's thread joins a single-threaded apartment on the first share
+  (`RoInitialize`); nothing else in the process initialises COM there. The
+  thread is checked, since RunNative on Windows does not switch to it, and a
+  verb started from a click dispatched inside one of the share's own calls
+  waits for that share to be handed over.
+- The picture is copied to "BibleText verse <date> <time>.png" in a folder
+  of the app's under the temp directory, cleared of copies over a day old,
+  and resolved as a StorageFile before the sheet opens, as .NET MAUI does,
+  rather than inside the request, which by the documentation a deferral
+  must answer within 200 ms.
+- `share_session.go` carries each share from the hand-over to the sheet's
+  request and ends it exactly once: delivered, or in the verb's fallback,
+  the in-app sheet, after a refused step, a package that would not fill,
+  or five seconds without the sheet asking (the probe's slowest was 549
+  ms; Chromium waits 30 s). A newer share replaces one still waiting; a
+  reader's cancel opens nothing, as on the other platforms. The handler is
+  removed as the share ends, which is always posted, so never inside
+  `ShowShareUIForWindow`.
+- Tests: the session's rules, the split of a message into title, text and
+  link, the picture's copy and the interface ids on every platform
+  (`share_session_test.go`, `share_parts_test.go`); in the Windows CI job,
+  against Windows itself with no sheet shown (`share_windows_test.go`), the
+  objects answering COM, a real DataPackage filled as the request fills it
+  and read back, and every step of a text and a picture share up to the
+  sheet's opening with a window that is never shown, each refused step
+  ending in one fallback, and the verbs with no native window ending in the
+  in-app sheet. Those Windows tests passed on the arm64 VM (Windows 11,
+  build 26200), natively and as x64 under emulation, from a test binary
+  cross-compiled without cgo and carried in on an ISO; a control build
+  with IAgileObject unanswered failed the object test, and one with the
+  file handler's interface id mistyped failed the picture test, Windows
+  refusing the handler with E_NOINTERFACE. A control with the DataRequested
+  handler's id mistyped still registered: `add_DataRequested` does not ask
+  the handler for its interface, so that id rests on its derivation and on
+  the probe's sheet having asked its handler for the share.
 
-**Prove first, on the Windows VM.** The MSIX is a packaged app and the guide
-covers it. For the unpackaged zip Microsoft's pages disagree — the share
-guide against the table of WinRT APIs supported in desktop apps (both under
-Sources) — so a spike on the VM decides whether the zip opens the sheet or
-keeps the fallback. The same spike is the first time the interop runs from a
-GLFW window at all.
+**Still open.**
 
-**Files.** share_windows.go (new), `share_other.go`, `share_fallback.go` if
-the fallback gains a failure path, the Windows row of the Sharing table in
-`docs/PLATFORM_MATRIX.md` (`TestTheSharingTableNamesTheFileThatSharesOnEachPlatform`
-fails until it names the new file), and V12 in `docs/VISUAL_TESTS.md`.
+- **The app itself on Windows.** The row in the Sharing table is `builds`:
+  the app with this code has not run on Windows, and the Windows tests have
+  not yet run with cgo and the race detector, as the Windows CI job runs
+  them after a push. Seeing the app needs a Windows build of this tree,
+  which CI makes after a push: the Windows
+  build artifact workflow (`gh workflow run windows-build.yml --ref
+  <branch>`, x64, with Mesa's software OpenGL for a VM without a GPU) and
+  the Microsoft Store package workflow for the MSIX. Then every verb from its
+  own entry point on the VM, in light and in dark (`docs/VISUAL_TESTS.md`,
+  V12), with the log for any fallback.
+- **The MSIX.** Windows redirects a packaged app's writes under AppData,
+  the temp folder the picture is copied into among them; whether the apps
+  the sheet hands the file to can read it from there is to be seen.
+- **A mail app with a link share.** Whether a target that takes both the
+  text and the web link shows the link twice.
+- **Windows 10.** The interop is there from Windows 8 and the MSIX's floor
+  is 10.0.19041, but only Windows 11 has been seen.
 
 **Sources.**
 
@@ -101,10 +164,16 @@ fails until it names the new file), and V12 in `docs/VISUAL_TESTS.md`.
   https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/winrt-api-desktop-app-support
 - The cancel event and its floor:
   https://learn.microsoft.com/en-us/uwp/api/windows.applicationmodel.datatransfer.datapackage.sharecanceled
-- Implementations to read before writing ours:
+- The interop, and the 200 ms a deferral has:
+  https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nn-shobjidl_core-idatatransfermanagerinterop ;
+  https://learn.microsoft.com/en-us/uwp/api/windows.applicationmodel.datatransfer.datarequest.getdeferral
+- How a parameterized interface's id is derived:
+  https://learn.microsoft.com/en-us/uwp/winrt-cref/winrt-type-system
+- The implementations read before writing ours:
   https://github.com/chromium/chromium/blob/main/chrome/browser/webshare/win/show_share_ui_for_window_operation.cc ;
   https://github.com/mozilla-firefox/firefox/blob/main/widget/windows/WindowsUIUtils.cpp ;
-  https://github.com/dotnet/maui/blob/main/src/Essentials/src/Share/Share.windows.cs
+  https://github.com/dotnet/maui/blob/main/src/Essentials/src/Share/Share.windows.cs ;
+  https://github.com/greenshot/greenshot/blob/main/src/Greenshot/Native/DataTransferManagerHelper.cs
 - The Go options that were ruled out: https://github.com/go-ole/go-ole ;
   https://github.com/saltosystems/winrt-go ;
   https://github.com/gioui-plugins/gio-plugins/tree/main/share
@@ -126,8 +195,8 @@ others do: Firefox and Chrome offer Copy Link (and a QR code) on Linux;
 GNOME Maps opens a dialog with the link, Copy and email; Flutter's
 share_plus sends a mailto: link. Comparable confirmations stay up 4–7
 seconds (libadwaita's toast, Kirigami's passive notification); this one
-lasted 1.4. Windows has a native Share sheet, recorded above as the next
-step for that platform; until it lands Windows shares through this sheet.
+lasted 1.4. Windows has a native Share sheet, which it now opens (the entry
+above); it shares through this sheet only when that cannot open.
 
 **The fix** (`share_sheet_desktop.go`, from `share_fallback.go`). Share
 with note, with citation, as link and the verse of the day's Share copy to

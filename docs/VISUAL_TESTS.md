@@ -359,11 +359,35 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
 ## V12 — sharing and links
 
 - [ ] Share with citation: quote keeps authored poetry breaks; the
-      citation spells the version in full. On Windows and Linux the styled
-      pane copies to the clipboard and opens the "Copied — ready to paste"
-      sheet (the next row) in place of a system sheet: divergence 27 in
-      docs/PLATFORM_MATRIX.md, the recorded counterpart there.
-- [ ] The desktop share confirmation, Windows and Linux: Share with
+      citation spells the version in full. On Linux the styled pane copies
+      to the clipboard and opens the "Copied — ready to paste" sheet (the
+      row after next) in place of a system sheet: divergence 27 in
+      docs/PLATFORM_MATRIX.md, the recorded counterpart there. On Windows
+      it opens the Windows Share sheet (the next row).
+- [ ] The Windows Share sheet, from a Windows build of the app (the
+      direct-download zip, and the Store's MSIX where it can be installed),
+      in light and in dark: Share with citation, Share as link, Share with
+      note, the verse of the day's Share icon and the image preview's Share
+      each open the system Share sheet beside the window, and nothing opens
+      in the app. Share as link and Share with note: the sheet's header
+      reads "Share link", with the citation, the link and Copy link; Copy
+      link puts the link on the clipboard. Share with citation and the verse
+      of the day: the sheet lists the apps to share to; pick a mail app
+      where one is set up and check the message carries the quote and its
+      citation, and for a note the note, the citation and the link — and
+      whether the link then appears twice. Share as image: the sheet shows
+      the card's thumbnail under a name of the form "BibleText verse
+      2026-09-30 14.02.11.png", and Copy copies the picture. Share with
+      note: the note card is on the page behind the sheet. Cancel each
+      sheet: nothing else opens, and the next share opens its sheet again.
+      Share again while a sheet is open and note what Windows does with the
+      second: it ends in a sheet, the system's or the app's, and never in
+      nothing. The sheet may not open where Windows
+      refuses it — then the in-app sheet (the next row) opens instead, at
+      once or within five seconds, never nothing; the app's log names the
+      step and whether the build was packaged.
+- [ ] The desktop share confirmation, Linux, and Windows where its Share
+      sheet cannot open: Share with
       citation, Share as link, Share with note and the verse of the day's
       Share icon each end in a modal sheet headed "Copied — ready to
       paste", with the verb's own line beneath it, the exact clipboard text

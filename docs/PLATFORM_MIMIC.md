@@ -44,7 +44,7 @@ pattern — flipped once at startup by `devApplyMimic` (called first thing in
 | `reporterLayout` | false | The styled pane takes its page from the reading page spec (`readingPageAt`, `reading_page.go`): the book page — centred 27.5em, indents, no paragraph gap — when it fits with 15 each side, the phone page otherwise, both at the spec's pitch — exactly the target platforms' truth. |
 | `ttsSupported` | false | No "Read aloud" source row, and **no audio button at all** on chapters without a recording (licensed versions, the deuterocanon) — the most visible Win/Linux audio difference, in the reading header. |
 | `nativeNoteSticker` | **true** (not pinned — it follows `useStyledPane`) | Shared notes render as the styled pane's own **in-text sticker** (`reading_styled_note.go`): one card drawn in a band above the note's verse, with a speech tail pointing at the passage, the byline and "K of N in this chapter ›" counts on one row, the sender's words below, and − / ✕ at the top right — the exact Win/Linux surface since 19 Aug. `dev_mimic_on.go` no longer assigns this seam at all: it asks "does the pane draw the note itself?", and `useStyledPane` (set two lines above it) already answers yes. What still comes from the Fyne **banner** on those platforms, and so under mimic: the could-not-read-the-payload **notice**, and the **R4 unplaced** rows, whose sentence does not fit a one-band sticker. |
-| Share verbs | fallback bodies | `nativeShareText`/`nativeShareImage` on darwin route to the real Win/Linux bodies (`share_fallback.go`): clipboard + the "Copied — ready to paste" sheet (`share_sheet_desktop.go`), save-to-`~/Downloads` + file-manager reveal (`open -R` stands in for Explorer/xdg-open) + the "Picture saved" sheet. Email… on the sheet opens a mailto: link through NSWorkspace here (`share_email_other.go`), where Linux asks the desktop portal and Windows the shell; the image's Email… is withheld off Linux. |
+| Share verbs | fallback bodies | `nativeShareText`/`nativeShareImage` on darwin route to the real Linux bodies, which are also Windows' when its Share sheet cannot open (`share_fallback.go`): clipboard + the "Copied — ready to paste" sheet (`share_sheet_desktop.go`), save-to-`~/Downloads` + file-manager reveal (`open -R` stands in for Explorer/xdg-open) + the "Picture saved" sheet. Email… on the sheet opens a mailto: link through NSWorkspace here (`share_email_other.go`), where Linux asks the desktop portal and Windows the shell; the image's Email… is withheld off Linux. Windows' own Share sheet (`share_windows.go`) is not mimicked: under `BIBLETEXT_MIMIC=windows` the verbs show its fallback. |
 
 Also active by construction (safe, unconditional two-line delegations added to
 `reading_macos.go`): within-chapter scroll capture/arm delegates to the styled
@@ -124,6 +124,9 @@ into.
   `open -R`, what the default browser is, whether `libasound` is present,
   desktop-portal behaviour — properties of the target OS, not the binary.
   Mimic substitutes the Mac equivalent where a flow must complete.
+- **The Windows Share sheet.** What Windows shares through is a system
+  sheet reached through COM (`share_windows.go`); mimic shows the in-app
+  sheet it falls back to, never the sheet itself.
 - **Dev-only darwin extras** (tint benchmark, notes next-tap driver) reach
   native-pane state and measure nothing under mimic — they are dev tooling,
   not app behaviour.
