@@ -581,7 +581,8 @@ Steps 2 to 5 reach App Store Connect through the local client
 `build/appstore/asc.py`, which reads its credentials from the environment, so
 load them first in the shell that runs those steps: `. scripts/asc-env.sh`.
 The script is sourced, never executed or piped: it exports into the calling
-shell and prints nothing. `--local-only` needs no credentials.
+shell and prints one status line naming the key id,
+never the issuer id or the key path. `--local-only` needs no credentials.
 
 1. `python3 appstore/push-screenshots.py --local-only`, and with `--platform
    MAC_OS`.
