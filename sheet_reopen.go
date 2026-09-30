@@ -40,21 +40,24 @@ package bibletext
 // and every sheet under it closes with it. A sheet opened over another — the
 // model picker over Settings, the keep-or-delete question over Settings — is
 // a choice being made inside the one below, and bringing back the bottom one
-// without it would drop the choice half made.
+// without it would drop the choice half made. The one sheet that brings the
+// sheet beneath it back too is the desktop share confirmation over Verse of
+// the day (share_sheet_desktop.go): it is not a choice inside the card but
+// the end of a verb begun from it, the card is where the reader was, and Done
+// returns them to it. Its capture takes the card's registration as well
+// (takeReopenBeneath), and its reopen runs the card's first.
 //
-// MENUS AND TOASTS ARE NOT SHEETS, and the take looks straight through them to
-// the sheet beneath. A Fyne menu is on the overlay stack as Fyne's own
+// MENUS ARE NOT SHEETS, and the take looks straight through them to the
+// sheet beneath. A Fyne menu is on the overlay stack as Fyne's own
 // container, not a *widget.PopUp: an entry's Cut/Copy/Paste menu (a
 // right-click on desktop, a long-press on a phone — in the Go to verse fields,
 // the Ask field, the note composer, Settings' key field), a Select's list, the
-// selection menus. The desktop share confirmation is a *widget.PopUp that
-// takes itself down after a second and a half (showShareNotice). None of them
-// is something the reader opened to read, and any of them over a sheet made
-// that sheet look unregistered: the drain took the sheet and nothing brought
-// it back, so the Go to picker under a context menu went, with the reader's
-// book, chapter and verse. So they are skipped — the drain closes them like
-// everything else — and the first real sheet beneath them answers, under the
-// rule above: its registration, or nothing.
+// selection menus. None of them is something the reader opened to read, and
+// any of them over a sheet made that sheet look unregistered: the drain took
+// the sheet and nothing brought it back, so the Go to picker under a context
+// menu went, with the reader's book, chapter and verse. So they are skipped —
+// the drain closes them like everything else — and the first real sheet
+// beneath them answers, under the rule above: its registration, or nothing.
 //
 // WHAT REOPENS, each registered beside its own popup, from what the sheet
 // already holds or what state still says:
@@ -88,7 +91,10 @@ package bibletext
 //     error (notes_offer.go, share_link_unavailable.go, versions_ui.go) — and
 //     a notice that promises something still to come only while the promise
 //     stands: the seed-parked link's notice does not come back once the
-//     rebuild has opened the passage it was waiting for (share_link_open.go).
+//     rebuild has opened the passage it was waiting for (share_link_open.go);
+//   - the desktop share confirmation, with the same text it was showing, and
+//     the verse-of-the-day card beneath it when it was opened from there
+//     (share_sheet_desktop.go).
 //
 // WHAT CLOSES, deliberately, registering nothing:
 //
@@ -102,17 +108,14 @@ package bibletext
 //     Regenerate cycle the reader has been stepping through;
 //   - the model picker and the notes keep-or-delete and delete-all questions:
 //     each sits on top of Settings and answers into its controls (above);
-//   - menus and the desktop share confirmation: not sheets (above), so they
-//     close, and the sheet beneath them comes back;
+//   - menus: not sheets (above), so they close, and the sheet beneath them
+//     comes back;
 //   - a notice whose promise the rebuild has kept (above).
 //
 // Any of these simply closes, which is still far better than an illegible
 // sheet. UI goroutine only, like the overlay stack it reads.
 
-import (
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/widget"
-)
+import "fyne.io/fyne/v2/widget"
 
 // sheetReopen is one showing sheet's way back: capture runs at the take,
 // before the rebuild, and returns the reopen that runs after it.
@@ -202,23 +205,48 @@ func clearSheetReopenTail(all []sheetReopen, n int) {
 	}
 }
 
-// selfDismissingOverlay reports whether an overlay is a notice that takes
-// itself down — chrome, not a sheet (MENUS AND TOASTS, above). The desktop
-// share confirmation fills it in (share_fallback.go); on the phones the OS's
-// own share sheet confirms, and no overlay is one.
-var selfDismissingOverlay = func(fyne.CanvasObject) bool { return false }
-
 // topSheet is the sheet on top of the canvas: the highest *widget.PopUp on the
-// overlay stack that is not a self-dismissing notice, looking past any of
-// Fyne's menus above it. nil when no sheet is showing.
+// overlay stack, looking past any of Fyne's menus above it. nil when no sheet
+// is showing.
 func topSheet(state *AppState) *widget.PopUp {
 	if state == nil || state.window == nil {
 		return nil
 	}
 	list := state.window.Canvas().Overlays().List()
 	for i := len(list) - 1; i >= 0; i-- {
-		if p, ok := list[i].(*widget.PopUp); ok && !selfDismissingOverlay(p) {
+		if p, ok := list[i].(*widget.PopUp); ok {
 			return p
+		}
+	}
+	return nil
+}
+
+// takeReopenBeneath removes the registration of the sheet directly beneath
+// popup on the overlay stack, runs its capture, and returns its reopen — nil
+// when nothing is beneath, or what is registered none. For a sheet whose
+// reopen brings back the sheet it was opened over (NESTED AND STACKED
+// SHEETS, above): called from that sheet's own capture, while the stack is
+// whole, so the lower sheet is read before the drain takes it.
+func takeReopenBeneath(state *AppState, popup *widget.PopUp) func() {
+	if state == nil || state.window == nil || popup == nil {
+		return nil
+	}
+	var under *widget.PopUp
+	for _, o := range state.window.Canvas().Overlays().List() {
+		if o == popup {
+			break
+		}
+		if p, ok := o.(*widget.PopUp); ok {
+			under = p
+		}
+	}
+	if under == nil {
+		return nil
+	}
+	for _, r := range state.sheetReopens {
+		if r.popup == under {
+			forgetSheetReopen(state, under)
+			return r.capture()
 		}
 	}
 	return nil

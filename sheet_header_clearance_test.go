@@ -60,6 +60,15 @@ func desktopSheets(t *testing.T) []desktopSheet {
 		{"share image preview", func(_ *testing.T, s *AppState) {
 			showShareImagePreview(s, "For God so loved the world", "John 3:16", "WEB")
 		}},
+		{"share confirmation", func(t *testing.T, s *AppState) {
+			withoutMailProbe(t)
+			showShareCopiedSheet(s, shareDoneForText(strings.Repeat("For God so loved the world, that he gave his one and only Son. ", 12)+
+				"\n\n— John 3:16 (World English Bible)"))
+		}},
+		{"share confirmation, image", func(t *testing.T, s *AppState) {
+			withoutMailProbe(t)
+			showShareCopiedSheet(s, shareDone{line: shareLineImage, subject: "John 3:16 (World English Bible)", attachment: "card.png"})
+		}},
 		{"cross-references", func(_ *testing.T, s *AppState) {
 			crossRefsRun = func(func()) {} // the load never lands
 			showCrossRefs(s, "For God so loved the world", selSpan{})

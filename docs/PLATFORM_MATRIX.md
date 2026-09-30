@@ -246,42 +246,43 @@ place a fix on one does not reach the others.
 
 **Linux and Windows**
 
-27. **Open: Linux and Windows have no system share sheet, so the text verbs
-    copy to the clipboard with a 1.4 s notice.** `share_other.go:1`
-    (`//go:build !darwin && !android`) gives both platforms the desktop
-    fallback: `share_other.go:18` (`fallbackShareText(s)`) and
-    `share_other.go:21` (`fallbackShareImage(path)`). `go list` for linux and
-    windows, amd64 and arm64, with and without `-tags gles`, takes the two
-    verbs from `share_other.go` and `share_fallback.go` and compiles none of
+27. **Linux and Windows have no system share sheet, so the text verbs copy
+    to the clipboard and open the app's own confirmation sheet — the
+    recorded Linux and Windows counterpart of the system share sheet.**
+    `share_other.go:1` (`//go:build !darwin && !android`) gives both
+    platforms the desktop fallback: `share_other.go:18`
+    (`fallbackShareText(s)`) and `share_other.go:21`
+    (`fallbackShareImage(path)`). `go list` for linux and windows, amd64 and
+    arm64, with and without `-tags gles`, takes the two verbs from
+    `share_other.go` and `share_fallback.go` and compiles none of
     `reading_macos.go`, `reading_ios.go` or `reading_android.go`. Every text
-    verb ends in
-    `share.go:220` (`var shareTextOut`), and the fallback copies,
-    `share_fallback.go:44` (`cb.SetContent(s)`), then flashes a notice,
-    `share_fallback.go:45` (`showShareNotice(state, "Copied to the clipboard")`).
-    The notice is weak by construction: 13 pt text,
-    `share_fallback.go:146` (`txt.TextSize = 13`), on a card barely
-    distinguishable from the page, `share_fallback.go:147` (`pal.SurfaceAlt`) — 1.07:1
-    against the page in light, about 1.2:1 in dark, where 3:1 is the
-    non-text guideline — at the window's foot,
-    `share_fallback.go:150` (`cnv.Size().Height-sz.Height-28`), gone after
-    1.4 s, `share_fallback.go:151` (`time.AfterFunc(1400*time.Millisecond`),
-    or at the next click anywhere, since it is a non-modal pop-up. On Share
-    with note it lands in the frame where the composer closes,
-    `share_note_ui.go:285` (`closeSheet()`), and the "Note from you" card
-    draws at the top of the passage,
-    `share_note_ui.go:287` (`showSentNote(state, stored, at)`), so the eye is
-    elsewhere while it shows.
+    verb ends in `share.go:220` (`var shareTextOut`); the fallback copies
+    (`setShareClipboard`) and opens the sheet
+    (`showShareCopiedSheet`, `share_sheet_desktop.go`): "Copied — ready to
+    paste", one line saying what to do next, by verb, the clipboard's text
+    in a selectable scrolling box, Copy again, Email… when the desktop has a
+    mail client (`share_email_linux.go`, `share_email_windows.go`), and
+    Done, with Escape and Return. It is modal, registered for the
+    light/dark reopen and the window refit, opens below the header, and
+    over the verse-of-the-day card comes back with the card beneath it.
+    Share as image saves the PNG to Downloads, opens the file manager on
+    it, and ends in the same sheet, "Picture saved", with Email… attaching
+    the file on Linux.
 
-    It is not silent — the notice fires and, left alone, lasts its full
-    1.4 s — but it
-    reads as nothing happening, which is a poor fit with the rule
-    `docs/BACKLOG.md` records with the Android Share as image fix: *"A share
-    the reader started cannot end in silence, whatever the cause."* Share as
-    image is not part of it: it saves the PNG to Downloads and opens the file
-    manager on it. *Risk:* a reader on either platform presses Share, sees the
-    menu or the composer close, and concludes the app did nothing; the note
-    they wrote waits on a clipboard they do not know about. The planned fix for
-    each platform is under [Sharing](#sharing), Planned.
+    Until 30 September 2026 the text verbs ended instead in a 13 pt
+    "Copied to the clipboard" pill at the window's foot for 1.4 s, 1.07:1
+    against the page in light and about 1.2:1 in dark, gone at the next
+    click, and on Share with note drawn in the frame the composer closed and
+    the "Note from you" card appeared; it read as nothing happening, which
+    the rule `docs/BACKLOG.md` records with the Android Share as image fix —
+    *"A share the reader started cannot end in silence, whatever the
+    cause."* — does not allow. What remains divergent is what the sheet is
+    not: a way to hand the text straight to another app. Linux has no
+    portal for that; Windows has a native Share sheet, planned under
+    [Sharing](#sharing), Planned, and shares through this sheet until it
+    lands. Held by `share_sheet_desktop_test.go`, driven on the Linux VM
+    (the Linux row's proof), and recorded in `docs/BACKLOG.md`, "Linux and
+    Windows: an in-app share sheet in place of the 1.4-second notice".
 
 ## Deliberate exclusions
 
@@ -360,12 +361,15 @@ for each row with that platform's GOOS, every architecture it ships and the
 build tags read off its release lines, and fails when the row and the code
 disagree in either direction — a platform moved to a new share
 implementation with the row left alone, or a row edited with the code left
-alone. It holds two claims in the cells to the code as well: a row says
-"notice" for the text verbs exactly when the function they end in calls
-`showShareNotice`, and "Downloads" for the image exactly when it calls
-`revealInFileManager`. Numbers in a cell are divergences.
+alone. It holds two claims in the cells to the code as well: a row names
+the desktop confirmation sheet by its heading, "Copied — ready to paste",
+for the text verbs exactly when the function they end in calls
+`showShareCopiedSheet`, and says "Downloads" for the image exactly when it
+calls `revealInFileManager`. Numbers in a cell are divergences.
 
-Recorded 29–30 September 2026, from the share code as it shipped in 1.2.17.
+Recorded 29–30 September 2026: the Apple and Android rows from the share
+code as it shipped in 1.2.17, the Windows and Linux rows from the desktop
+confirmation sheet built on 30 September 2026, which ships next.
 
 | Platform | Share with note | Share with citation | Share as link | Share as image | Verse of the day | Defined in | Proof |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -373,23 +377,23 @@ Recorded 29–30 September 2026, from the share code as it shipped in 1.2.17.
 | iPadOS | Share popover; probably points mid-page rather than at the selection | Share popover at the selection | Share popover at the selection | Preview, then a share popover; probably mid-page | Probably a share popover pointing at the hidden reading view, not the icon; not seen | `reading_ios.go` | `builds` — code reading, 29–30 September 2026 |
 | macOS | Share picker at the selection; the note card appears beneath | Share picker at the selection | Share picker at the selection | Preview, then the share picker with the image | Probably the share picker, anchored to the hidden reading view, not the icon; not seen | `reading_macos.go` | `builds` — code reading, 29–30 September 2026 |
 | Android | The note card, then the "Sharing text" sheet with the note, citation and link | "Sharing text" sheet with the quote and citation | "Sharing text" sheet with the link | Preview, then the "Sharing image" sheet | "Sharing text" sheet, by the citation's route; not driven | `reading_android.go` | `runner` — emulator, 1.2.17, 29–30 September 2026 |
-| Windows | Copied to the clipboard; a 1.4 s notice (27) | Copied; a 1.4 s notice (27) | Copied; a 1.4 s notice (27) | Saved to Downloads; Explorer opens with it selected | Copied; a 1.4 s notice (27) | `share_other.go`, handing on to `share_fallback.go` | `builds` — build tags and `go list`, 29–30 September 2026 |
-| Linux | Copied; a 1.4 s notice at the window's foot as the note card draws (27) | Copied; a 1.4 s notice (27) | Copied; a 1.4 s notice (27) | Saved to ~/Downloads; the file manager opens on the folder | Copied; a 1.4 s notice (27); not driven | `share_other.go`, handing on to `share_fallback.go` | `hardware` — arm64 VM, X11, 29–30 September 2026 |
+| Windows | Copied; the "Copied — ready to paste" sheet over the new note card, with Copy again, Email… and Done (27) | Copied; the "Copied — ready to paste" sheet (27) | Copied; the "Copied — ready to paste" sheet (27) | Saved to Downloads; Explorer opens with it selected; the "Picture saved" sheet, without Email… | Copied; the "Copied — ready to paste" sheet over the card (27) | `share_other.go`, handing on to `share_fallback.go` | `builds` — build tags and `go list`, 30 September 2026 |
+| Linux | Copied; the "Copied — ready to paste" sheet over the new note card, with Copy again, Email… and Done (27) | Copied; the "Copied — ready to paste" sheet (27) | Copied; the "Copied — ready to paste" sheet (27) | Saved to ~/Downloads; the file manager opens on the folder; the "Picture saved" sheet, Email… attaching the file | Copied; the "Copied — ready to paste" sheet over the card (27) | `share_other.go`, handing on to `share_fallback.go` | `hardware` — arm64 VM, X11, 30 September 2026 |
 
 What each proof rests on:
 
 - **Linux, `hardware`, as an exception to the rule that the artefact must
-  be the shipped one.** A local build of c8a98d9e6 ran on the arm64 VM's
-  GNOME X11 desktop (divergence 25's machine), recorded at 10 frames a
-  second: the composer closes, the note card draws and the chapter moves
-  down, and the notice shows for 14 frames. No shipped package was run, not
-  even the installed snap. The build stands in for them because between
-  v1.2.17 and c8a98d9e6 the only Go files that change are in `cmd/linuxmeta`,
-  `cmd/msstore` and `releasing_doc_test.go`: no file on the share path
-  differs, so the share code that ran is the code 1.2.17 ships; only its
-  packaging was not run. Dark mode on the desktop; light mode and the
-  contrast figures come from the test driver on the Linux build tags. Not
-  Wayland; the verse of the day not driven.
+  be the shipped one.** The sheet is not yet in a release: a local build of
+  the tree that adds it ran on the arm64 VM's GNOME X11 desktop (divergence
+  25's machine), and every verb was driven from its own entry point — the
+  selection menu's Share with citation and Share as link, the composer's
+  Share, the verse-of-the-day card's icon, the image preview's Share —
+  in light and in dark, with a screenshot of each sheet; the clipboard was
+  read back after each text share. Email… was pressed with no mail client
+  installed, where the button is withheld (the desktop reports no mailto:
+  handler) — the portal's compose with a real client has not been seen. No
+  shipped package was run; the row moves to the shipped artefact with the
+  release that carries it. Not Wayland.
 - **Android, `runner`.** The 1.2.17 build on the emulator. A simulator is not
   hardware (divergence 9), and an emulator is not either. Every verb but the
   verse of the day was driven to its share sheet; no share target was tapped.
@@ -400,8 +404,12 @@ What each proof rests on:
   not even known that the picker shows while the view it is anchored to is
   hidden.
 - **Windows, `builds`.** Read from the build tags and `go list`; the Windows
-  VM was not started. It runs the Linux code, but for the file manager the
-  image share opens: Explorer, with the file selected.
+  VM was not started. It runs the Linux code — the same sheet, from the same
+  files — but for two things: the file manager the image share opens
+  (Explorer, with the file selected), and Email…, which opens a `mailto:`
+  link through the shell (`share_email_windows.go`) when a mailto: handler
+  is registered, and which a link cannot carry a file through, so the image
+  sheet has no Email… there.
 
 ### Planned
 
@@ -417,28 +425,9 @@ What each proof rests on:
   `share_fallback.go` stays behind the sheet for a share UI that fails; the
   window handle is reached as `title_bar_windows.go` reaches it; and the
   Windows row above, which the test holds to whichever files define the two
-  functions and whatever they hand on to, and which must stop saying
-  "notice" once the verbs no longer end in `showShareNotice`. Whether the
-  unpackaged zip can open the sheet as the MSIX can is to be proven on the
-  Windows VM. The route, its constraints and its sources are in
-  `docs/BACKLOG.md`, "Windows: use the native Share sheet".
-- **Linux: an in-app share sheet in place of the notice — proposed
-  30 September 2026; the wording is not yet approved.** Share with note, with
-  citation and as link open one modal sheet in the app, showing the text
-  already copied, with Copy and Done, and Email… handing the text to the mail
-  client through the xdg-desktop-portal Email portal (`ComposeEmail`),
-  falling back to `xdg-email` and then a `mailto:` link. Share as image keeps
-  its save and reveal and gains Email… with the image attached. Linux has no
-  system sheet to call instead: xdg-desktop-portal has no Share portal, and
-  the request for one has been open since 2016
-  (https://github.com/flatpak/xdg-desktop-portal/issues/12; the portal list,
-  https://flatpak.github.io/xdg-desktop-portal/docs/api-reference.html).
-  Files: `share_fallback.go` (`fallbackShareText` opens the sheet in place of
-  `showShareNotice`), a new file beside it for the sheet, a Linux-only file
-  for the portal call, `sheet_reopen.go` (a real sheet, which a light/dark
-  rebuild reopens rather than closing it as it closes the notice),
-  `share_other.go` once Windows leaves it, and the Linux row above, which the
-  test fails while it says "notice" and `fallbackShareText` no longer calls
-  `showShareNotice`. The draft wording and the open questions are in
-  `docs/BACKLOG.md`, "Linux: an in-app share sheet in place of the 1.4-second
-  notice".
+  functions and whatever they hand on to, and which must stop naming the
+  confirmation sheet once the verbs no longer end in `showShareCopiedSheet`.
+  Whether the unpackaged zip can open the sheet as the MSIX can is to be
+  proven on the Windows VM. The route, its constraints and its sources are in
+  `docs/BACKLOG.md`, "Windows: use the native Share sheet". Until it lands
+  Windows shares through the confirmation sheet Linux has (divergence 27).

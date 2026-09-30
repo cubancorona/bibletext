@@ -14,6 +14,12 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+// shareImageSubject is the citation of the last card the preview handed to
+// the platform, "John 3:16 (World English Bible)", for a mail's subject on
+// the desktop, whose share seam takes the file's path alone
+// (fallbackShareImage). Set before every hand-off; UI goroutine only.
+var shareImageSubject string
+
 func showShareImagePreview(state *AppState, quote, cite, version string) {
 	if state == nil || state.window == nil {
 		return
@@ -82,6 +88,7 @@ func showShareImagePreview(state *AppState, quote, cite, version string) {
 		p := curPath
 		closePanel()
 		if p != "" {
+			shareImageSubject = cite + " (" + version + ")"
 			nativeShareImage(p)
 		}
 	})

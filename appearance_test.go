@@ -954,16 +954,17 @@ func TestTheReopenedSheetIsInTheNewPalette(t *testing.T) {
 	}
 }
 
-// --- menus, toasts and the caret ---------------------------------------------------------
+// --- menus and the caret ---------------------------------------------------------
 
-// A MENU OR A TOAST OVER A SHEET DOES NOT STAND IN FOR IT. The entry's
-// Cut/Copy/Paste menu over the Go to picker (a right-click, or a long-press on
-// a phone) and the desktop share confirmation over Verse of the day are not
-// sheets; the take looks past them, the drain closes them, and the sheet
+// A MENU OVER A SHEET DOES NOT STAND IN FOR IT. The entry's Cut/Copy/Paste
+// menu over the Go to picker (a right-click, or a long-press on a phone) is
+// not a sheet; the take looks past it, the drain closes it, and the sheet
 // beneath comes back with what the reader had in it. Mutation guarded: the
-// take answering only for the overlay on top (the picker and the card then
-// close for good, the typed verse with them).
-func TestMenusAndToastsDoNotHideTheSheetBeneath(t *testing.T) {
+// take answering only for the overlay on top (the picker then closes for
+// good, the typed verse with it). The desktop share confirmation over Verse
+// of the day is a sheet, and brings the card back beneath it
+// (share_sheet_desktop_test.go).
+func TestMenusDoNotHideTheSheetBeneath(t *testing.T) {
 	for _, mobile := range []bool{false, true} {
 		t.Run(fmt.Sprintf("the context menu over Go to, mobile %v", mobile), func(t *testing.T) {
 			h := newAppearanceHarness(t, mobile)
@@ -983,30 +984,6 @@ func TestMenusAndToastsDoNotHideTheSheetBeneath(t *testing.T) {
 			}
 		})
 	}
-	t.Run("the share confirmation over Verse of the day", func(t *testing.T) {
-		h := newAppearanceHarness(t, false)
-		showVerseOfDay(h.state)
-		card := h.top()
-		// showShareNotice's own popup, without its 1.4s timer: a timer's
-		// fyne.Do runs on the timer's goroutine under the test driver and would
-		// touch the overlay stack while a later test runs.
-		toast := widget.NewPopUp(widget.NewLabel("Copied to the clipboard"), h.state.window.Canvas())
-		shareNotice = toast
-		t.Cleanup(func() { shareNotice = nil })
-		toast.ShowAtPosition(fyne.NewPos(10, 10))
-		if !selfDismissingOverlay(toast) || h.top() != toast {
-			t.Fatal("control: the confirmation must be on top and known for what it is")
-		}
-		h.flip()
-		again := h.top()
-		if again == nil || again == card || again == toast || h.overlays() != 1 || !sheetHas(again, "Verse of the day") {
-			t.Fatalf("the card beneath the confirmation must come back, alone; overlays %d, texts %v",
-				h.overlays(), sheetTexts(again))
-		}
-		if toast.Visible() {
-			t.Error("the confirmation itself must close with the drain")
-		}
-	})
 }
 
 // focusProbe is a field that counts the times it is told it lost the caret.

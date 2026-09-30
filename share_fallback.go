@@ -2,15 +2,15 @@
 
 package bibletext
 
-// The desktop share FALLBACK bodies — clipboard + notice for text, save to
-// ~/Downloads + file-manager reveal for images. These are the shipping
-// Windows/Linux share verbs (share_other.go's nativeShareText/-Image are
-// one-line wrappers over them, byte-identical in behaviour to before the
-// extraction), and they are untagged-for-desktop so the darwin platform-mimic
-// dev mode (dev_mimic_on.go) can route the macOS share verbs here and show the
-// real Windows/Linux share UX on a Mac. On release macOS nothing references
-// them (reading_macos.go's mimic branch is dead behind a constant), so the
-// linker drops them.
+// The desktop share FALLBACK bodies — clipboard + the confirmation sheet for
+// text, save to ~/Downloads + file-manager reveal + the same sheet for
+// images (share_sheet_desktop.go). These are the shipping Windows/Linux
+// share verbs (share_other.go's nativeShareText/-Image are one-line wrappers
+// over them), and they are untagged-for-desktop so the darwin platform-mimic
+// dev mode (dev_mimic_on.go) can route the macOS share verbs here and show
+// the real Windows/Linux share UX on a Mac. On release macOS nothing
+// references them (reading_macos.go's mimic branch is dead behind a
+// constant), so the linker drops them.
 //
 // All run on the Fyne UI goroutine (the share flow dispatches from menu taps).
 
@@ -22,38 +22,32 @@ import (
 	"path/filepath"
 	"runtime"
 	"time"
-
-	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
-	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/widget"
 )
 
-// fallbackShareText copies the composed quote+citation to the clipboard with a
-// brief confirmation notice — ready to paste anywhere.
+// fallbackShareText copies the composed text to the clipboard and opens the
+// confirmation sheet over the page: what was copied, what to do with it,
+// Copy again, Email… where there is a mail client, Done.
 // Each platform's share mechanism is recorded in docs/PLATFORM_MATRIX.md, Sharing.
 func fallbackShareText(s string) {
 	state := activeAIState
 	if state == nil || state.window == nil {
 		return
 	}
-	cb := state.window.Clipboard()
-	if cb == nil {
-		return
-	}
-	cb.SetContent(s)
-	showShareNotice(state, "Copied to the clipboard")
+	setShareClipboard(s)
+	showShareCopiedSheet(state, shareDoneForText(s))
 }
 
-// fallbackShareImage saves the rendered PNG to ~/Downloads (falling back to the
-// temp copy) and reveals it in the file manager.
+// fallbackShareImage saves the rendered PNG to ~/Downloads (falling back to
+// the temp copy), reveals it in the file manager, and opens the confirmation
+// sheet saying where it went, with Email… attaching it where the platform
+// can.
 // Each platform's share mechanism is recorded in docs/PLATFORM_MATRIX.md, Sharing.
 func fallbackShareImage(path string) {
 	state := activeAIState
 	// The renderer writes to a temp file; move the share into ~/Downloads under
 	// a readable name so it outlives temp cleaning and is easy to find.
 	dst := path
-	notice := "Image ready"
+	line := shareLineImageTemp
 	if home, err := os.UserHomeDir(); err == nil {
 		dir := filepath.Join(home, "Downloads")
 		if st, err := os.Stat(dir); err == nil && st.IsDir() {
@@ -61,13 +55,13 @@ func fallbackShareImage(path string) {
 			target := filepath.Join(dir, name)
 			if copyFileContents(path, target) == nil {
 				dst = target
-				notice = "Image saved to Downloads"
+				line = shareLineImage
 			}
 		}
 	}
 	revealInFileManager(dst)
 	if state != nil {
-		showShareNotice(state, notice)
+		showShareCopiedSheet(state, shareDone{line: line, subject: shareImageSubject, attachment: dst})
 	}
 }
 
@@ -96,10 +90,11 @@ func copyFileContents(src, dst string) error {
 // the flow still needs to COMPLETE there, and the Mac equivalent is the honest
 // substitute; the doc's not-mimicked table names the real Explorer/xdg-open
 // behaviour as provable only on the target OS), the containing folder via
-// xdg-open elsewhere (Linux/BSD). Failures are silent — the notice already says
+// xdg-open elsewhere (Linux/BSD). Failures are silent — the sheet already says
 // where the file went. The Wait goroutine reaps the short-lived helper so each
-// share doesn't leave a zombie behind.
-func revealInFileManager(path string) {
+// share doesn't leave a zombie behind. A variable so a host test of the image
+// share opens no window on the machine running it.
+var revealInFileManager = func(path string) {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
@@ -112,48 +107,4 @@ func revealInFileManager(path string) {
 	if cmd.Start() == nil {
 		go func() { _ = cmd.Wait() }()
 	}
-}
-
-// shareNotice is the currently-showing confirmation popup, so back-to-back
-// shares replace the notice instead of stacking overlays (each PopUp overlay
-// intercepts scroll for its lifetime — one short-lived notice keeps that
-// window minimal).
-var shareNotice *widget.PopUp
-
-// The notice is chrome, not a sheet: a light/dark rebuild looks past it to the
-// sheet the reader was reading underneath and brings that back, and the
-// notice, which would have gone in a second anyway, simply closes
-// (sheet_reopen.go).
-func init() { selfDismissingOverlay = isShareNotice }
-
-func isShareNotice(o fyne.CanvasObject) bool { return shareNotice != nil && o == shareNotice }
-
-// showShareNotice flashes a small confirmation at the bottom of the window and
-// auto-dismisses — the desktop stand-in for the mobile share sheet's feedback.
-func showShareNotice(state *AppState, msg string) {
-	if state == nil || state.window == nil {
-		return
-	}
-	cnv := state.window.Canvas()
-	if cnv == nil {
-		return
-	}
-	if shareNotice != nil {
-		shareNotice.Hide()
-	}
-	pal := state.pal()
-	txt := canvas.NewText(msg, pal.Text)
-	txt.TextSize = 13
-	pop := widget.NewPopUp(surface(container.NewPadded(txt), pal.SurfaceAlt, pal.Border, fyne.Size{}), cnv)
-	shareNotice = pop
-	sz := pop.MinSize()
-	pop.ShowAtPosition(fyne.NewPos((cnv.Size().Width-sz.Width)/2, cnv.Size().Height-sz.Height-28))
-	time.AfterFunc(1400*time.Millisecond, func() {
-		fyne.Do(func() {
-			pop.Hide()
-			if shareNotice == pop {
-				shareNotice = nil
-			}
-		})
-	})
 }

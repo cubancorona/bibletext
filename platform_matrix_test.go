@@ -444,15 +444,16 @@ var shareEntryPoints = []string{"nativeShareText", "nativeShareImage"}
 // sharingClaims tie what a row's cells say a verb does to the call that does
 // it. The function a verb's hand-ons end at calls `call` directly exactly
 // when every cell in cols says `word`; when it does not, no cell may say it.
-// So the planned Linux sheet, which takes fallbackShareText off
-// showShareNotice, fails here until the Linux row stops promising a notice.
-// It catches the call going, not every change behind it: a notice kept as the
-// sheet's failure path would still pass.
+// So a platform whose text verbs leave the desktop confirmation sheet
+// (showShareCopiedSheet) fails here until its row stops promising the sheet
+// by its heading, and one that arrives at it fails until the row says so.
+// It catches the call going, not every change behind it: a sheet kept as a
+// native share's failure path would still pass.
 var sharingClaims = []struct {
 	entry, word, call string
 	cols              []string
 }{
-	{"nativeShareText", "notice", "showShareNotice",
+	{"nativeShareText", "Copied — ready to paste", "showShareCopiedSheet",
 		[]string{"Share with note", "Share with citation", "Share as link", "Verse of the day"}},
 	{"nativeShareImage", "Downloads", "revealInFileManager", []string{"Share as image"}},
 }
