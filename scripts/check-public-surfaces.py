@@ -424,7 +424,14 @@ def rule_failures(read, list_cmd) -> list[str]:
                 f"Store link on a public page is the right one"
             )
         else:
-            for surface, body in ((DOWNLOAD_PAGE, page), (READ_ME, readme)):
+            # The release notes are read through their printf alone, as for
+            # the macOS steps and the Play link, so a comment beside them
+            # neither passes nor fails this.
+            surfaces = [(DOWNLOAD_PAGE, page), (READ_ME, readme)]
+            release_notes = reader_text(RELEASE_WORKFLOW, workflow) if workflow is not None else None
+            if release_notes is not None:
+                surfaces.append((RELEASE_WORKFLOW, release_notes))
+            for surface, body in surfaces:
                 for link in sorted(store_links(body)):
                     if link != want:
                         failures.append(
@@ -824,6 +831,14 @@ def self_test() -> list[str]:
     stale_store_readme = dict(clean)
     stale_store_readme[READ_ME] = clean[READ_ME] + b"https://apps.microsoft.com/detail/OLDID\n"
     violations.append(("a stale Store link in the README", stale_store_readme, pair))
+
+    # The clean notes carry no Store link, so a stale one is the only thing
+    # this tree can fail on.
+    stale_store_notes = dict(clean)
+    stale_store_notes[RELEASE_WORKFLOW] = clean[RELEASE_WORKFLOW].replace(
+        notes(routes), notes(routes + b"https://apps.microsoft.com/detail/OLDID\n")
+    )
+    violations.append(("a stale Store link in the release notes", stale_store_notes, pair))
 
     no_store_url = dict(clean)
     no_store_url[STORE_IDENTITY] = b'{"storeId": "TESTID"}\n'

@@ -1266,23 +1266,21 @@ notes' printf as well as linked from the page and the README
 `CONTRIBUTING.md` describes the checker's Play rule beside its Microsoft Store
 one.
 
-Still open:
+Simplified 30 September 2026. The notes now open with the four stores, each
+a line (App Store for iPhone, iPad and Mac; Google Play; the Microsoft Store;
+the Snap Store), then say the attached files are for use without a store and
+updated by hand, then give the APK caution, the Mac file's first-launch steps
+and the Windows files' one. The 1.2.13 Linux rename note is gone. The same text
+was put on the published v1.2.17 release with `gh release edit` the same day,
+at the account holder's word, so the latest release no longer offers Android
+readers only the APK. The checker now also holds a Microsoft Store link in the
+notes' printf to `msstore/identity.json`.
 
-- The new notes reach readers from the next tag. The releases already
-  published keep the old ones, the latest (v1.2.17) among them, until each is
-  edited with `gh release edit`, a change to a public page that is not made
-  without the account holder's word.
-- The notes name a store for iOS and for Android only. They call the App
-  Store link an iOS one though the same listing is the Mac App Store edition,
-  and they tell Windows readers nothing of the Microsoft Store (live since
-  1.2.10, signed, updates itself) and Linux readers nothing of the snap, all
-  three of which the README and the download page link; a desktop reader
-  sees only the unsigned downloads and the macOS warning steps. It is the
-  drift above on the other platforms, older than it and outside what was
-  fixed, and the notes are the account holder's copy, so it waits for their
-  decision. Once the notes name every store the page does, the checker could
-  require exactly that, which would catch the next channel to go live in the
-  notes without being told its name.
+Still open: the checker does not require the App Store or Snap Store links in
+the notes, so a store line could be dropped unnoticed; requiring exactly the
+set of stores the download page links would also catch the next channel to go
+live. The notes still say nothing of what changed in a release; each store's
+own What's New carries that.
 
 Whether a Play-signed install verifies its App Links is answered: on
 30 September 2026 a Pixel with 1.2.17 from Google Play reported

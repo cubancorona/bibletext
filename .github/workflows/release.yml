@@ -30,7 +30,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          NOTES="$(printf 'Desktop builds for macOS, Windows, and Linux. iOS ships via the App Store: https://apps.apple.com/app/id6784567351\n\nAndroid ships via Google Play: https://play.google.com/store/apps/details?id=uk.co.bibletext\n\nWithout Google Play, install BibleText-Android.apk, attached below. It never updates itself, and moving to Google Play later means uninstalling it, which deletes your notes.\n\nmacOS note: the app is unsigned, so macOS blocks its first launch until you allow it. On macOS 15 and later, open the app and dismiss the warning, then, within the hour, go to System Settings > Privacy & Security, scroll to Security, click Open Anyway and confirm with your login password. On macOS 12 to 14, Control-click the app in the Finder, choose Open, then click Open in the warning.\n\nLinux note: the executable is now called bibletext, not desktop. If you installed an earlier tarball with make install, the old binary is left behind - remove it with sudo rm -f /usr/local/bin/desktop /usr/bin/desktop (or rm -f ~/.local/bin/desktop for a user install).')"
+          NOTES="$(printf 'Get BibleText from a store. Store editions update themselves.\n\n- iPhone, iPad and Mac: [App Store](https://apps.apple.com/app/id6784567351)\n- Android: [Google Play](https://play.google.com/store/apps/details?id=uk.co.bibletext)\n- Windows: [Microsoft Store](https://apps.microsoft.com/detail/9NDCCZH9RB9K)\n- Linux: [Snap Store](https://snapcraft.io/bibletext)\n\nThe files below are for Mac, Android, Windows and Linux without a store. You update them yourself.\n\nWithout Google Play, install BibleText-Android.apk, attached below. It never updates itself, and moving to Google Play later means uninstalling it, which deletes your notes.\n\nMac file (BibleText-macOS.zip): the app is unsigned, so macOS blocks its first launch until you allow it. On macOS 15 and later, open the app and dismiss the warning. Then, within the hour, go to System Settings > Privacy & Security, scroll to Security, click Open Anyway and confirm with your login password. On macOS 12 to 14, Control-click the app in the Finder, choose Open, then click Open in the warning.\n\nWindows files: if Windows says it protected your PC, click More info, then Run anyway.')"
+          # The store lines come first: a store edition updates itself, and
+          # the files attached below the notes are for
+          # a reader without a store. scripts/check-public-surfaces.py holds
+          # the Play link to the appID in config/product.json and the Microsoft
+          # Store link to the storeUrl in msstore/identity.json, reading only
+          # the printf. It cannot tell that another store went live; stage 11
+          # of docs/RELEASING.md adds that line here.
           # The macOS note gives two routes because macOS 15 removed the
           # Finder's Control-click > Open override for an app it cannot
           # verify: from 15 the only way is Open Anyway in Privacy & Security,
@@ -41,7 +48,7 @@ jobs:
           # holds all four to it, reading only the printf above here, because
           # this comment names both routes and would otherwise vouch for notes
           # that had lost them.
-          # The Android paragraphs send a reader to Google Play, the build that
+          # The Android lines send a reader to Google Play, the build that
           # updates itself, and keep the APK for devices without Google Play. A
           # sideloaded APK never updates, and it cannot update into the Play
           # build, which is signed with a different key, so moving over means an
@@ -53,13 +60,6 @@ jobs:
           # config/product.json. The printf reads the notes as its format, so
           # they carry no single quote, which would end the argument, and no
           # percent sign, which would start a conversion.
-          # The Linux note above is for the 19 September 2026 executable rename
-          # (cmd/desktop became cmd/bibletext, so the tarball stopped installing
-          # a generic /usr/bin/desktop). It tells a reader who installed an
-          # earlier tarball how to remove the binary the new package's
-          # `make uninstall` no longer names. Drop it once the releases that
-          # shipped `desktop` are far enough back to be unlikely - it is a
-          # migration note, not a standing one.
           # --draft is load-bearing: publishing immediately reassigns
           # /releases/latest to this tag while the build jobs are still running,
           # so the download page would point at assets that are not available

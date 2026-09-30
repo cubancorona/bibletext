@@ -114,7 +114,8 @@ tree.
   ships or to one tagged release's copy of an asset rather than the latest,
   holds the Linux build dependencies identical across the README,
   CONTRIBUTING and CI, and holds the README's count of `cmd/` programs to the
-  directory, and holds a Microsoft Store link equal to the `storeUrl` in
+  directory, and holds a Microsoft Store link on the page, in the README or
+  in the release notes' printf equal to the `storeUrl` in
   `msstore/identity.json`. The release notes' printf, the download page and
   the README must each link the Google Play listing, by the `appID` in
   `config/product.json`, since Play is the Android edition that updates

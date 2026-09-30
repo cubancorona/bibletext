@@ -140,7 +140,8 @@ floor is read rather than assumed, so raising it to 15 drops the Control-click
 requirement without an edit to the checker.
 
 A store is different from a download and needs its own step. The checker holds
-any Microsoft Store link on either page equal to the `storeUrl` in
+any Microsoft Store link on the page, in the README or in the release
+notes' printf equal to the `storeUrl` in
 `msstore/identity.json`, so a typed or moved id fails. For Google Play it
 goes further, because Play is the Android edition that updates itself and
 the one the page puts first, above the APK: the release notes' printf in
