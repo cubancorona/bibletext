@@ -138,6 +138,45 @@ func TestChapterProseAndShareStructureAgree(t *testing.T) {
 	}
 }
 
+// stripVerseMarkersProse reads each verse's body out of the chapter the
+// pipeline has already built instead of drawing every verse again, so a span's
+// slice of chapterProse must be exactly the body the strip compares a token's
+// aftermath with — collapseSpaces(verseSharedText(v)) — verse for verse, in
+// chapter order, with the verses whose body is empty left out.
+func TestChapterProseSpansAreTheVerseBodies(t *testing.T) {
+	bd, err := loadSeedGospels()
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	states := []*AppState{twoCopyState(), refrainChapterState(), sampleState(), psalm23SmallCapsState()}
+	for _, book := range bd.Books {
+		for _, ch := range bd.GetChapterNumbersForBook(book) {
+			states = append(states, &AppState{Bible: bd, CurrentBook: book, CurrentChapter: ch})
+		}
+	}
+	for _, st := range states {
+		corpus, spans := chapterProse(st)
+		i := 0
+		for _, v := range st.Bible.GetChapter(st.CurrentBook, st.CurrentChapter) {
+			body := collapseSpaces(verseSharedText(v))
+			if body == "" {
+				continue
+			}
+			if i >= len(spans) {
+				t.Fatalf("%s %d: verse %d has a body but no span", st.CurrentBook, st.CurrentChapter, v.Verse)
+			}
+			if sp := spans[i]; sp.verse != v.Verse || corpus[sp.start:sp.end] != body {
+				t.Fatalf("%s %d: span %d is verse %d %q, want verse %d %q",
+					st.CurrentBook, st.CurrentChapter, i, sp.verse, corpus[sp.start:sp.end], v.Verse, body)
+			}
+			i++
+		}
+		if i != len(spans) {
+			t.Fatalf("%s %d: %d spans for %d verse bodies", st.CurrentBook, st.CurrentChapter, len(spans), i)
+		}
+	}
+}
+
 // The verbs agree on the dangling-number drag: a selection swept just past the
 // next verse's NUMBER spans (2,3) natively, but no word of verse 3 is quoted —
 // the share cites verse 2, and the crossref resolver must name the same verse,

@@ -396,8 +396,14 @@ func prepareShareQuote(state *AppState, raw string, span selSpan) (text, cite st
 }
 
 func prepareShareQuoteIn(state *AppState, book string, chapter int, raw string, span selSpan) (text, cite string, at, baseLen int) {
-	if t, lo, hi, idx, ok := normalizeShareSelectionIn(state, book, chapter, raw, span); ok {
-		return completeTrailingSentenceIn(state, book, chapter, t, idx), verseRangeCitation(book, chapter, lo, hi), idx, len(t)
+	if state != nil && state.Bible != nil {
+		// One build of the chapter's prose serves the marker strip, the locate
+		// and the completion: all three read the same chapter, unchanged
+		// between them, so building it for each would only repeat the result.
+		corpus, spans := chapterProseIn(state, book, chapter)
+		if t, lo, hi, idx, ok := normalizeShareSelectionProse(state, book, chapter, corpus, spans, raw, span); ok {
+			return completeTrailingSentenceProse(corpus, t, idx), verseRangeCitation(book, chapter, lo, hi), idx, len(t)
+		}
 	}
 	cleaned := completeTrailingSentenceIn(state, book, chapter, cleanQuoteTextIn(state, book, chapter, raw), -1)
 	return cleaned, citationForSelectionIn(state, book, chapter, raw, span), -1, 0
@@ -633,6 +639,14 @@ func normalizeShareSelectionIn(state *AppState, book string, chapter int, raw st
 	if state == nil || state.Bible == nil {
 		return "", 0, 0, -1, false
 	}
+	corpus, spans := chapterProseIn(state, book, chapter)
+	return normalizeShareSelectionProse(state, book, chapter, corpus, spans, raw, span)
+}
+
+// normalizeShareSelectionProse is normalizeShareSelectionIn for a caller that
+// has already built the chapter: corpus and spans must be
+// chapterProseIn(state, book, chapter). state must be non-nil with a Bible.
+func normalizeShareSelectionProse(state *AppState, book string, chapter int, corpus string, spans []verseSpan, raw string, span selSpan) (text string, lo, hi, at int, ok bool) {
 	flat := collapseSpaces(raw)
 	// The app's own typography comes off here, and BEFORE stripVerseMarkers.
 	// That strip confirms a verse-number token by comparing the text after it
@@ -660,8 +674,7 @@ func normalizeShareSelectionIn(state *AppState, book string, chapter int, raw st
 	// sends what the page shows (outbound_text.go) — and chapterProse is built
 	// in that same drawn form, so they locate.
 	out := sharedText(flat)
-	s := stripVerseMarkers(state, book, chapter, out)
-	corpus, spans := chapterProseIn(state, book, chapter)
+	s := stripVerseMarkersProse(corpus, spans, out)
 	if s == "" || corpus == "" {
 		return "", 0, 0, -1, false
 	}
@@ -739,7 +752,7 @@ func normalizeShareSelectionIn(state *AppState, book string, chapter int, raw st
 		// the raw selection would still carry the gap mark or the superscript
 		// that made the first locate miss.
 		if h := stripHeadings(state, book, chapter, out); h != out {
-			if r := stripVerseMarkers(state, book, chapter, h); r != "" {
+			if r := stripVerseMarkersProse(corpus, spans, h); r != "" {
 				if j := locate(r); j >= 0 {
 					s, idx = r, j
 				}
@@ -894,13 +907,26 @@ func completeTrailingSentence(state *AppState, s string, at int) string {
 }
 
 func completeTrailingSentenceIn(state *AppState, book string, chapter int, s string, at int) string {
-	if state == nil || state.Bible == nil || s == "" {
+	if state == nil || state.Bible == nil || s == "" || endsOnTerminal(s) {
 		return s
 	}
-	if r, _ := utf8.DecodeLastRuneInString(strings.TrimRight(s, " \t”’\"'")); r == '.' || r == '!' || r == '?' || r == '…' {
+	corpus, _ := chapterProseIn(state, book, chapter)
+	return completeTrailingSentenceProse(corpus, s, at)
+}
+
+// endsOnTerminal reports a text that already ends on its sentence's terminal
+// punctuation, inside any closing quotation marks: nothing to complete.
+func endsOnTerminal(s string) bool {
+	r, _ := utf8.DecodeLastRuneInString(strings.TrimRight(s, " \t”’\"'"))
+	return r == '.' || r == '!' || r == '?' || r == '…'
+}
+
+// completeTrailingSentenceProse is completeTrailingSentenceIn for a caller
+// that has already built the chapter: corpus must be chapterProseIn's.
+func completeTrailingSentenceProse(corpus, s string, at int) string {
+	if s == "" || endsOnTerminal(s) {
 		return s // already complete
 	}
-	corpus, _ := chapterProseIn(state, book, chapter)
 	idx := -1
 	if at >= 0 && at+len(s) <= len(corpus) && strings.HasPrefix(corpus[at:], s) {
 		idx = at
@@ -1182,12 +1208,19 @@ func numberTokenIndex(s, num string) int {
 // mixed case, and only the drawn form is shared between the selection and the
 // corpus.
 func stripVerseMarkers(state *AppState, book string, chapter int, s string) string {
-	for _, v := range state.Bible.GetChapter(book, chapter) {
-		body := collapseSpaces(verseSharedText(v))
-		if body == "" {
-			continue
-		}
-		marker := strconv.Itoa(v.Verse) + " "
+	corpus, spans := chapterProseIn(state, book, chapter)
+	return stripVerseMarkersProse(corpus, spans, s)
+}
+
+// stripVerseMarkersProse is stripVerseMarkers against a chapter the caller has
+// already built with chapterProseIn. Each span's slice of the corpus is that
+// verse's body in exactly the form the strip compares against —
+// collapseSpaces(verseSharedText(v)) — in chapter order, with the verses whose
+// body is empty left out, as the strip leaves them out.
+func stripVerseMarkersProse(corpus string, spans []verseSpan, s string) string {
+	for _, sp := range spans {
+		body := corpus[sp.start:sp.end]
+		marker := strconv.Itoa(sp.verse) + " "
 		for from := 0; ; {
 			i := strings.Index(s[from:], marker)
 			if i < 0 {
