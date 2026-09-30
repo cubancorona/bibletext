@@ -23,8 +23,8 @@ package bibletext
 //
 //   - the heading and one line by verb, the words recorded in
 //     docs/BACKLOG.md ("Linux: an in-app share sheet");
-//   - a read-only, selectable box with the clipboard's contents, wrapping,
-//     and scrolling when the text is long;
+//   - a read-only box with the clipboard's contents, wrapping, and
+//     scrolling when the text is long;
 //   - Copy again, for a clipboard something else has taken since; Email…,
 //     when the desktop has a mail client to hand the text to
 //     (share_email.go); and Done. Escape and Return are Done too.
@@ -191,17 +191,20 @@ func showShareCopiedSheet(state *AppState, d shareDone) {
 	line := widget.NewLabel(d.line)
 	line.Wrapping = fyne.TextWrapWord
 
-	// The clipboard's contents, exactly: a selectable label so the reader can
-	// check, or take, a part of it, inside a scroll so a long note or a
+	// The clipboard's contents, exactly, inside a scroll so a long note or a
 	// block quotation cannot push Done off the sheet. The scroll's height is
-	// set by fit below, from the text's wrapped height.
+	// set by fit below, from the text's wrapped height. The label is not
+	// selectable: a selection in a Fyne label holds the caret, the desktop
+	// driver then hands every key to it and never to the canvas's handler,
+	// and the label answers none, so after a drag across the box Escape and
+	// Return did nothing until the reader clicked elsewhere. The whole text
+	// is on the clipboard already, and Copy again puts it back.
 	var boxText *widget.Label
 	var boxScroll *container.Scroll
 	var box fyne.CanvasObject
 	if d.text != "" {
 		boxText = widget.NewLabel(d.text)
 		boxText.Wrapping = fyne.TextWrapWord
-		boxText.Selectable = true
 		boxScroll = container.NewVScroll(container.New(squeezeWidthLayout{}, boxText))
 		box = inputFrame(container.NewPadded(boxScroll), pal.Border)
 	}
@@ -288,8 +291,9 @@ func showShareCopiedSheet(state *AppState, d shareDone) {
 
 	// Return closes as Done does. The desktop driver hands a key to the
 	// focused widget, or else to the canvas's handler, and the sheet's
-	// resting state is nothing focused: it opens with no caret, and a tapped
-	// button gives the caret up. So the canvas's handler — the desktop's
+	// resting state is nothing focused: it opens with no caret, a tapped
+	// button gives the caret up, and nothing else on it can take the caret
+	// (the box, above). So the canvas's handler — the desktop's
 	// Escape route (installShortcuts) — is wrapped while the sheet is on top
 	// and put back as it closes. A rebuild's drain closes the sheet without
 	// closeSheet and installs the canvas's handler afresh, which replaces

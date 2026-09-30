@@ -142,13 +142,15 @@ like the composer, in place of the notice:
   verb is told from the message's own shape (`shareVerbOf`), since the
   platform seam carries the text alone; a note share with the note left
   empty is the link share, and reads as one;
-- a read-only box with the exact clipboard text, selectable, wrapping, and
-  scrolling when it is long, its height given up a step at a time where the
+- a read-only box with the exact clipboard text, wrapping, and scrolling
+  when it is long, its height given up a step at a time where the
   sheet would otherwise start inside the header;
 - **Copy again** (after it the line reads *Copied again.* for a moment),
   **Email…** only when the desktop has a mail client, and **Done**; Escape
-  and Return close it too (`sheetKeyCatcher` holds the caret). A stray
-  click cannot dismiss it. Registered for the light/dark reopen and the
+  and Return close it too, through the canvas's key handler, wrapped while
+  the sheet is on top. Nothing on the sheet holds the caret, which is why
+  the box is not selectable: a selection in a Fyne label takes every key
+  and answers none. A stray click cannot dismiss it. Registered for the light/dark reopen and the
   window refit; below the header (`clearOfHeader`). The image share keeps
   its save to ~/Downloads and the file-manager reveal and ends in the same
   sheet, *Picture saved* over *The picture is saved in Downloads and shown

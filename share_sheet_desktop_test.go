@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -187,18 +188,29 @@ func (h *shareSheetHarness) sheet() *widget.PopUp {
 	return p
 }
 
-// boxText is the clipboard box's text: the one selectable label on the sheet.
-func boxText(p *widget.PopUp) (string, bool) {
+// boxLabel is the clipboard box's label: the one label inside a scroll on
+// the sheet. nil for a sheet with no box.
+func boxLabel(p *widget.PopUp) *widget.Label {
 	var found *widget.Label
 	walkTree(p, func(o fyne.CanvasObject) {
-		if l, ok := o.(*widget.Label); ok && l.Selectable && found == nil {
-			found = l
+		if sc, ok := o.(*container.Scroll); ok && found == nil {
+			walkTree(sc.Content, func(o fyne.CanvasObject) {
+				if l, ok := o.(*widget.Label); ok && found == nil {
+					found = l
+				}
+			})
 		}
 	})
-	if found == nil {
+	return found
+}
+
+// boxText is the clipboard box's text.
+func boxText(p *widget.PopUp) (string, bool) {
+	l := boxLabel(p)
+	if l == nil {
 		return "", false
 	}
-	return found.Text, true
+	return l.Text, true
 }
 
 // wantOnCanvas fails unless the sheet lies wholly inside the canvas and
@@ -362,15 +374,21 @@ func TestTheCopiedSheetSurvivesAClickOutside(t *testing.T) {
 	}
 }
 
-// typeOnCanvas sends a key the way the desktop driver does when nothing
-// holds the caret: to the canvas's own handler.
+// typeOnCanvas sends a key the way the desktop driver does
+// (glfw's processKeyPressed): to the widget holding the caret when one does,
+// and only otherwise to the canvas's own handler.
 func (h *shareSheetHarness) typeOnCanvas(key fyne.KeyName) {
 	h.t.Helper()
+	ev := &fyne.KeyEvent{Name: key}
+	if f := h.canvas().Focused(); f != nil {
+		f.TypedKey(ev)
+		return
+	}
 	typed := h.canvas().OnTypedKey()
 	if typed == nil {
 		h.t.Fatal("control: the desktop canvas has no key handler")
 	}
-	typed(&fyne.KeyEvent{Name: key})
+	typed(ev)
 }
 
 // DONE, ESCAPE AND RETURN CLOSE IT AND GIVE THE CANVAS BACK: the overlay
@@ -438,6 +456,38 @@ func TestTheCopiedSheetClosesOnDoneEscapeAndReturn(t *testing.T) {
 			h.typeOnCanvas(fyne.KeyEscape)
 			if card.Visible() || h.overlays() != 0 {
 				t.Error("Escape no longer closes the next sheet: the handler the sheet found was not put back")
+			}
+		})
+	}
+}
+
+// A DRAG ACROSS THE BOX LEAVES ESCAPE AND RETURN WITH THE SHEET. A reader
+// checking the text runs the pointer over it; nothing there may take the
+// caret, or the driver hands the next key to what took it and the sheet
+// stays. Mutation guarded: the box's label made selectable (the drag
+// focuses its selection, which answers no key).
+func TestADragAcrossTheBoxLeavesTheKeysWithTheSheet(t *testing.T) {
+	for _, key := range []fyne.KeyName{fyne.KeyEscape, fyne.KeyReturn} {
+		t.Run(string(key), func(t *testing.T) {
+			h := newShareSheetHarness(t)
+			h.shareNote("fixture drag alpha: a note of some length to run the pointer across")
+			p := h.sheet()
+			test.WidgetRenderer(p).Layout(p.Size())
+			l := boxLabel(p)
+			if l == nil {
+				t.Fatal("control: the sheet has no clipboard box")
+			}
+			at := fyne.CurrentApp().Driver().AbsolutePositionForObject(l).Add(fyne.NewPos(12, 12))
+			if !l.Visible() || l.Size().Width < 100 {
+				t.Fatalf("control: the box's text is not laid out to drag across (%v)", l.Size())
+			}
+			test.Drag(h.canvas(), at, 80, 0)
+			if f := h.canvas().Focused(); f != nil {
+				t.Errorf("a drag across the box gave the caret to %T", f)
+			}
+			h.typeOnCanvas(key)
+			if p.Visible() || h.overlays() != 0 {
+				t.Fatalf("after a drag across the box %s left the sheet up", key)
 			}
 		})
 	}

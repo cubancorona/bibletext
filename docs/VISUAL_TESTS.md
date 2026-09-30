@@ -367,9 +367,9 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       citation, Share as link, Share with note and the verse of the day's
       Share icon each end in a modal sheet headed "Copied — ready to
       paste", with the verb's own line beneath it, the exact clipboard text
-      in a bordered box (selectable; a long note scrolls), Copy again,
-      Email… and Done. A click on the page around it does nothing; Done,
-      Escape and Return each close it. Put something else on the clipboard,
+      in a bordered box (a long note scrolls), Copy again, Email… and
+      Done. A click on the page around it does nothing; Done, Escape and
+      Return each close it, and still do after a drag across the box. Put something else on the clipboard,
       press Copy again: the share is back on the clipboard and the line
       reads "Copied again." for a moment. At the 520-pt minimum window and
       at 1280x800 the sheet sits inside the window and below the header,

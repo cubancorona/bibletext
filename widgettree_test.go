@@ -39,8 +39,6 @@ func walkTree(o fyne.CanvasObject, visit func(fyne.CanvasObject)) {
 		walkTree(v.Trailing, visit)
 	case *widget.PopUp:
 		walkTree(v.Content, visit)
-	case contentWrapper:
-		walkTree(v.wrappedContent(), visit)
 	case *tapBox:
 		walkTree(v.content, visit)
 	case *searchResultCard:
