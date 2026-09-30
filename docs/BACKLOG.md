@@ -44,10 +44,11 @@ each wanting a dry run on a day that is not a release day:
 ## Windows: use the native Share sheet — DECIDED 30 September 2026, not built
 
 On Windows every text share (Share with note, with citation, as link, and the
-verse of the day's Share) copies to the clipboard with a 1.4-second notice,
-and Share as image saves the card to Downloads and opens Explorer on it —
-open divergence 27 in `docs/PLATFORM_MATRIX.md`, where the Sharing table
-records every platform. Windows has a system Share sheet that a desktop app
+verse of the day's Share) copies to the clipboard and opens the in-app
+confirmation sheet (the entry below, which replaced a 1.4-second notice on
+30 September 2026), and Share as image saves the card to Downloads and opens
+Explorer on it — divergence 27 in `docs/PLATFORM_MATRIX.md`, where the
+Sharing table records every platform. Windows has a system Share sheet that a desktop app
 can open for its own window, and that is the route: every verb opens it
 beside the window, as the picker does on macOS. Decided; not yet built or
 tried from a Fyne window.
@@ -108,15 +109,15 @@ fails until it names the new file), and V12 in `docs/VISUAL_TESTS.md`.
   https://github.com/saltosystems/winrt-go ;
   https://github.com/gioui-plugins/gio-plugins/tree/main/share
 
-## Linux: an in-app share sheet in place of the 1.4-second notice — PROPOSED 30 September 2026, wording not yet approved
+## Linux and Windows: an in-app share sheet in place of the 1.4-second notice — FIXED 30 September 2026
 
-On Linux the text shares copy to the clipboard and show "Copied to the
-clipboard" for 1.4 seconds: a 13 pt pill at the window's foot, its fill
-1.07:1 against the page in light and about 1.2:1 in dark, hidden early by
-any click. On Share with note it appears in the frame the composer closes
-and the note card draws at the top of the passage, so it is easy to miss
-entirely (divergence 27, `docs/PLATFORM_MATRIX.md`). Seen on the arm64 VM's
-X11 desktop, 29–30 September 2026; Windows runs the same code.
+On Linux and Windows the text shares copied to the clipboard and showed
+"Copied to the clipboard" for 1.4 seconds: a 13 pt pill at the window's
+foot, its fill 1.07:1 against the page in light and about 1.2:1 in dark,
+hidden early by any click. On Share with note it appeared in the frame the
+composer closed and the note card drew at the top of the passage, so it was
+easy to miss entirely (divergence 27, `docs/PLATFORM_MATRIX.md`). Seen on
+the arm64 VM's X11 desktop, 29–30 September 2026; Windows ran the same code.
 
 **No system sheet to call.** xdg-desktop-portal has no Share portal; the
 request has been open since 22 June 2016. GNOME's interface guidelines have
@@ -125,67 +126,77 @@ others do: Firefox and Chrome offer Copy Link (and a QR code) on Linux;
 GNOME Maps opens a dialog with the link, Copy and email; Flutter's
 share_plus sends a mailto: link. Comparable confirmations stay up 4–7
 seconds (libadwaita's toast, Kirigami's passive notification); this one
-lasts 1.4.
+lasted 1.4. Windows has a native Share sheet, recorded above as the next
+step for that platform; until it lands Windows shares through this sheet.
 
-**The proposal.** Share with note, with citation and as link open one sheet
-in the app, styled like the note composer:
+**The fix** (`share_sheet_desktop.go`, from `share_fallback.go`). Share
+with note, with citation, as link and the verse of the day's Share copy to
+the clipboard as before and then open one modal sheet in the app, styled
+like the composer, in place of the notice:
 
-- the text shown already copied, under a heading that says so — no timed
-  notice;
-- Copy again and Done; modal, so a stray click cannot lose it; registered as
-  a real sheet (`sheet_reopen.go`), so a light/dark rebuild reopens it; it
-  stacks over the verse-of-the-day card and fits the 520 px minimum window;
-- Email…, which hands the text to the mail client through the Email portal's
-  `ComposeEmail` (subject, body, attachments) over godbus, already in go.mod
-  as an indirect requirement. Portals are the recommended route even for an
-  unsandboxed app. Only the GTK and KDE portal backends provide Email, and
-  with no mail client set up the GTK backend's call returns failure without
-  showing anything, so the button appears only when a mail handler exists
-  (`SchemeSupported("mailto")` on the OpenURI portal, 1.19.1 and later).
-  Fallbacks: `xdg-email`, then a `mailto:` link through `xdg-open`. All of
-  it works under the snap's confinement, through its `desktop` interface.
-- Share as image keeps saving to ~/Downloads (not /tmp, which a sandboxed
-  mail client may not see) and opening the folder, and gains Email… with the
-  image attached. Its notice gets the pill fixes: at least 3:1 against the
-  page, placed in the reading column, up for 3–4 seconds, not taken down by
-  the next click.
+- the heading **Copied — ready to paste**, and one line by verb — note:
+  *Your note and the link are on the clipboard. Paste them into a message
+  or email to send your note.*; citation: *The verse and its citation are
+  on the clipboard. Paste them into a message, email or document.*; link:
+  *The link is on the clipboard. Paste it into a message or email.* The
+  verb is told from the message's own shape (`shareVerbOf`), since the
+  platform seam carries the text alone; a note share with the note left
+  empty is the link share, and reads as one;
+- a read-only box with the exact clipboard text, selectable, wrapping, and
+  scrolling when it is long, its height given up a step at a time where the
+  sheet would otherwise start inside the header;
+- **Copy again** (after it the line reads *Copied again.* for a moment),
+  **Email…** only when the desktop has a mail client, and **Done**; Escape
+  and Return close it too (`sheetKeyCatcher` holds the caret). A stray
+  click cannot dismiss it. Registered for the light/dark reopen and the
+  window refit; below the header (`clearOfHeader`). The image share keeps
+  its save to ~/Downloads and the file-manager reveal and ends in the same
+  sheet, *Picture saved* over *The picture is saved in Downloads and shown
+  in your file manager.*, with Email… attaching the file where the platform
+  can and no clipboard box.
+- **Over the verse-of-the-day card** the sheet stacks on the card, Escape
+  closes the sheet and then the card, and a light/dark change brings both
+  back, the card beneath: the sheet's capture takes the card's registration
+  too (`takeReopenBeneath`, `sheet_reopen.go`), the one exception to
+  reopening only the top sheet, because the sheet is the end of a verb
+  begun from the card, not a choice inside it.
+- **Email…** (`share_email.go`): on Linux the xdg-desktop-portal Email
+  interface — `ComposeEmail` over godbus with the subject (the citation,
+  one line, at most 200 characters), the body (the clipboard text) and,
+  for the image, the file as a descriptor; the request's `Response` is
+  watched, and 2 (no mail client) falls through to `xdg-email` and then a
+  `mailto:` link through xdg-open. The button is offered only when the
+  desktop says a mailto: handler exists — OpenURI's `SchemeSupported` on
+  portal 1.19.1 and later, else the Email interface's presence and
+  `xdg-mime`'s default handler for the scheme — asked on a goroutine, so
+  the sheet is never delayed by the bus. On Windows a `mailto:` link
+  through the shell when the `mailto` class is registered, which carries no
+  file, so the image sheet has no Email… there. The macOS mimic of this
+  path opens a `mailto:` link too.
 
-Linux only: Windows takes the native sheet (the entry above) and may use this
-sheet as its fallback when the share UI fails. macOS, iOS and Android do not
-change. The sheet is the Linux counterpart of the system share sheet, a
-platform divergence recorded as such.
+The notice, `showShareNotice`, and its self-dismissing-overlay
+registration in `sheet_reopen.go` are gone; nothing else used them. The
+Sharing table's Windows and Linux rows now name the sheet, and
+`TestTheSharingTableNamesTheFileThatSharesOnEachPlatform` holds the cells
+to `showShareCopiedSheet` as it held them to the notice.
 
-**Draft wording, not yet approved.**
-
-- Heading, every verb: **Copied — ready to paste**
-- Share with note: *Your note and the link are on the clipboard. Paste them
-  into a message or email to send your note.*
-- Share with citation: *The verse and its citation are on the clipboard.
-  Paste them into a message, email or document.*
-- Share as link: *The link is on the clipboard. Paste it into a message or
-  email.*
-- Buttons: **Copy again** (secondary), **Done** (primary). After Copy again
-  the line reads *Copied again.* for a moment.
-
-**Still to settle.** The wording above; whether Email… is in the first
-version; whether all three text verbs get the sheet (the recommendation, for
-consistency) or only Share with note, with the other two keeping an improved
-notice; and whether "Share" stays the label on Linux (the recommendation —
-the sheet explains) or becomes "Copy…", which is honest but breaks menu
-wording parity with every other platform and with the website's feature
-list.
-
-**Files.** `share_fallback.go` (`fallbackShareText` opens the sheet in place
-of `showShareNotice`), a new file beside it for the sheet, a Linux-only file
-for the portal call, `sheet_reopen.go`, `share_other.go` once Windows leaves
-it, and the Linux row of the Sharing table, which
-`TestTheSharingTableNamesTheFileThatSharesOnEachPlatform` fails while it
-still says "notice" and `fallbackShareText` no longer calls
-`showShareNotice`. About 150–250 lines and one to two days with a check on
-the VM. Nothing tests `showShareNotice` today, so the change brings a host
-test: for each desktop verb the confirmation is visible after the handler
-returns and lies inside the canvas, and the sheet survives a click elsewhere
-and a light/dark flip.
+**Held by** `share_sheet_desktop_test.go`, with the share verbs delivering
+through the desktop fallback as `share_other.go` routes them: each verb
+from its own entry point — the selection menu's actions, the composer's
+Share, the card's icon, the image hand-off — leaves the sheet on the
+overlay stack, inside the canvas and below the header at 1280x800 and at
+520x640, in light and in dark, with the approved words, the box showing
+what the clipboard holds and the message the verb composes; a click outside
+does not dismiss it; Done, Escape and Return close it and run the sheet-close
+consume point once; Copy again re-copies; a light/dark change brings it back
+with the same text, and with the verse-of-the-day card beneath it; the
+sent note's card is on the page under it; Email… is offered only when the
+probe says so and hands over the citation, the text and the image's file.
+`TestDesktopSheetsOpenBelowTheHeader` and the refit test cover both forms
+of the sheet with the other desktop sheets. Driven on the Linux VM in light
+and dark, every verb, with no mail client installed (Email… withheld):
+`docs/VISUAL_TESTS.md`, V12. Not seen: Email… with a real mail client, the
+portal's compose with an attachment, Windows at runtime.
 
 **Sources.**
 

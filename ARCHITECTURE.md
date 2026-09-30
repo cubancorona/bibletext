@@ -36,7 +36,7 @@ runtime, so each target links only the drivers and native code it needs:
 | `android` | Android only | `reading_android.go`, `audio_android.go` (cgo/JNI) |
 | `ios \|\| !darwin` | everything but macOS | `reading_fyne.go` (fallback pane) |
 | `!ios && !darwin && !android` | Linux/Win | `reading_scroll_fyne.go` |
-| `!darwin && !android` | Linux/Win | `share_other.go` (the share verbs' desktop fallback: clipboard and notice, save and reveal), `audio_other.go` (the oto desktop audio engine) |
+| `!darwin && !android` | Linux/Win | `share_other.go` (the share verbs' desktop fallback: clipboard and the confirmation sheet, save and reveal), `audio_other.go` (the oto desktop audio engine) |
 
 > Note: gopls analyses only the host build, so iOS/Android/cgo-tagged files look
 > greyed-out in the editor. Validate them with `scripts/run-ios-sim.sh` (iOS) or
@@ -258,7 +258,9 @@ prose.
 | `share_image.go` | "Share as image" renderer — text-only card, 13 colour schemes × 7 embedded OFL serifs |
 | `share_preview.go` | Preview-and-regenerate sheet before sharing |
 | `share_other.go` | `!darwin && !android` `nativeShareText` / `nativeShareImage` for Linux and Windows, wrapping the fallback bodies in `share_fallback.go` (the Apple platforms' live in `reading_macos.go` / `reading_ios.go`, Android's in `reading_android.go`; each platform's mechanism is in `docs/PLATFORM_MATRIX.md`, Sharing) |
-| `share_fallback.go` | `!ios && !android` the desktop fallback: text to the clipboard with a short notice (`showShareNotice`), the image saved to Downloads and revealed in the file manager; also reached on macOS by the platform-mimic dev mode |
+| `share_fallback.go` | `!ios && !android` the desktop fallback: text to the clipboard, then the confirmation sheet; the image saved to Downloads and revealed in the file manager, then the same sheet; also reached on macOS by the platform-mimic dev mode |
+| `share_sheet_desktop.go` | `!ios && !android` the desktop share confirmation, the recorded Linux/Windows counterpart of the system share sheet: "Copied — ready to paste", one line by verb (told from the message's shape, `shareVerbOf`), the clipboard text in a selectable scrolling box, Copy again, Email… when a mail client exists, Done (Escape and Return too); modal, registered for reopen and refit, opened below the header, stacking over the verse-of-the-day card and bringing it back after a light/dark change |
+| `share_email.go` + `share_email_linux.go` / `share_email_windows.go` / `share_email_other.go` | Email… behind the sheet, off the UI goroutine through two seams: whether a mail client exists (`shareEmailAvailable`) and the compose (`composeShareEmail`). Linux: the xdg-desktop-portal Email interface (`ComposeEmail` over godbus, the request's `Response` watched, an attachment as a file descriptor), then `xdg-email`, then a `mailto:` link; the button only when the desktop reports a mailto: handler. Windows and the macOS mimic: a `mailto:` link through the platform opener, which carries no file |
 | `share_link_argv.go` | Windows/Linux link intake: the first site URL on the command line (`bibletext:` swapped for https, parsed, capped) delivered through `HandleShareLink`; a declined URL goes to the browser (invariant I2) |
 | `single_instance.go` + `_on/_off/_windows/_linux/_other` | one window per reader on Windows/Linux: exclusive record under the cache dir, loopback handshake (nonce → HMAC → token+URL → ok/no), forward-and-exit or listen; compiled in only for `windows || linux || bibletextdev` |
 | `share_link_echo.go`, `share_link_browser_command.go`, `share_link_browser_windows.go` | the loop-safe browser opener: the default browser's own command via the association API on Windows, the toolkit route as fallback with an echo guard so the Store build's web-to-app handler cannot catch the app's own hop |
@@ -616,11 +618,15 @@ From the selection menu ([share.go](share.go), dispatched by
 Both hand off to the device's native share sheet on iOS / macOS / Android (the
 Android share `Intent` goes through the bridge — `nativeShareText` /
 `nativeShareImage` in [reading_android.go](reading_android.go)). Linux and
-Windows open no system share sheet today: [share_other.go](share_other.go)
-routes text to the clipboard with a 1.4-second notice and saves the image to
-Downloads, opening the file manager on it
-([share_fallback.go](share_fallback.go)). What each verb does on each
-platform, and the planned Windows and Linux sheets, are recorded in
+Windows have no system share sheet to call: [share_other.go](share_other.go)
+routes text to the clipboard and opens the in-app confirmation sheet
+([share_fallback.go](share_fallback.go),
+[share_sheet_desktop.go](share_sheet_desktop.go)) — "Copied — ready to
+paste", the text as copied, Copy again, Email… through the desktop's mail
+client, Done — and saves the image to Downloads, opening the file manager on
+it, then the same sheet. That sheet is the recorded Linux and Windows
+counterpart of the system share sheet; what each verb does on each platform,
+and the native Windows sheet still planned, are recorded in
 [docs/PLATFORM_MATRIX.md](docs/PLATFORM_MATRIX.md), Sharing.
 
 ### iPad typography: the U.S. Reports layout

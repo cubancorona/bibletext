@@ -360,10 +360,29 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
 
 - [ ] Share with citation: quote keeps authored poetry breaks; the
       citation spells the version in full. On Windows and Linux the styled
-      pane copies to the clipboard with a 1.4 s notice instead of a sheet.
-      That is what ships, not what is wanted: it is open divergence 27 in
-      docs/PLATFORM_MATRIX.md, and the fix for each platform is under
-      Sharing there. Until it lands, check the notice appears and reads.
+      pane copies to the clipboard and opens the "Copied — ready to paste"
+      sheet (the next row) in place of a system sheet: divergence 27 in
+      docs/PLATFORM_MATRIX.md, the recorded counterpart there.
+- [ ] The desktop share confirmation, Windows and Linux: Share with
+      citation, Share as link, Share with note and the verse of the day's
+      Share icon each end in a modal sheet headed "Copied — ready to
+      paste", with the verb's own line beneath it, the exact clipboard text
+      in a bordered box (selectable; a long note scrolls), Copy again,
+      Email… and Done. A click on the page around it does nothing; Done,
+      Escape and Return each close it. Put something else on the clipboard,
+      press Copy again: the share is back on the clipboard and the line
+      reads "Copied again." for a moment. At the 520-pt minimum window and
+      at 1280x800 the sheet sits inside the window and below the header,
+      and stays so when the window is resized under it. Flip light/dark
+      with it open: it comes back in the new palette with the same text;
+      opened from the verse of the day, the card comes back beneath it and
+      Done returns to the card, which Escape then closes. Share as image:
+      the PNG lands in Downloads, the file manager opens on it, and the
+      sheet reads "Picture saved" with no box and no Copy again. Email…:
+      with no mail client the button is absent (GNOME reports no mailto:
+      handler) or, where the desktop cannot say, pressing it does nothing;
+      with one, a new message opens carrying the citation as its subject
+      and the text as its body, and on Linux the picture as an attachment.
 - [ ] Share as image: the preview modal appears BEFORE anything leaves the
       app; Regenerate cycles schemes; the native overlay must not paint
       over the modal; the same verse always opens on the same look.
@@ -397,7 +416,7 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
 - [ ] Share with note shows the note it kept, on every surface (iPhone,
       iPad, Android, macOS, the styled pane): select two verses, Share with
       note, write a line, Share. Behind the share sheet (on the styled pane,
-      beside the "Copied to the clipboard" notice) the page now shows the
+      under the "Copied — ready to paste" sheet) the page now shows the
       note's card over the selected verses, "Note from you" with one ✕ and
       no −, the verses washed, the view placed on it; Return in the desktop
       field does the same. Cancel the share sheet: the card stays, and the
