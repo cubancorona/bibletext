@@ -744,12 +744,28 @@ from it could reach Play only by uninstalling it, which deletes their notes.
 Every GitHub release still carries the APK (`docs/RELEASING.md`, stage 8) for
 devices without Google Play, and the README says so in one line; the site
 does not link it. `scripts/check-public-surfaces.py` names it in `NOT_LINKED`
-with that reason, and fails if the page links it again or no release uploads
-it; any other released asset the page does not link still fails, which its
-self-test proves with a near-miss name. `scripts/publish-site.sh` copies
-`docs/badges/` into the site and refuses a tree missing a badge the page
-shows. The checker still holds every other release asset, the Microsoft Store
-link and the macOS steps to the page.
+with that reason, and fails if the page links it again, from the latest release
+or a tagged one, or no release uploads it; any other released asset the page
+does not link still fails, which its self-test proves with a near-miss name.
+`scripts/release-status.py` expects the `NOT_LINKED` names on the latest
+release as well as every file the page links, since the APK is the one asset
+uploaded by hand and the page no longer names it. `scripts/publish-site.sh`
+copies `docs/badges/` into the site and refuses a tree missing a badge the
+page shows. The checker still holds every other release asset, the Microsoft
+Store link and the macOS steps to the page.
+
+Two things stay open. The GitHub release notes, the `NOTES` printf in
+`.github/workflows/release.yml`, link the App Store for iOS but still offer
+Android readers only the APK, with no word of Google Play, on every release
+page. A Play line there reaches readers from the next tag, and has to stay
+free of single quotes, because the checker reads that printf. And no
+Play-signed install has been asked whether App Links verified (`docs/LINKS.md`,
+section 6), though the line above the badges says store editions open shared
+links and the Play badge now sits under it. The live `assetlinks.json` serves
+the same two fingerprints as `docs/assetlinks.json` (read 30 September 2026).
+Before the site is published: install from the listing on a device, run
+`adb shell pm get-app-links uk.co.bibletext`, open a bibletext.co.uk/web/ link,
+and record the result in the LINKS.md matrix.
 
 ## Reword the Linux note on the download page — DONE 26 September 2026
 
