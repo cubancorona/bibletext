@@ -553,7 +553,10 @@ switched both ways while the app ran, a rotation to landscape and back, and
 the activity recreated in the same process by a font-size change — which
 went back to white icons in a control build without the re-apply in `init`.
 The rotation did not recreate the activity on that emulator. Held by
-`android_system_bars_test.go`.
+`android_system_bars_test.go`, and by `android_system_bars_polarity_test.go`
+for the value's sense through the Go wrapper, the C shim and `BtBridge`'s
+store and read-back: any one of them turned round brings the white icons
+back while the Go helper's tests still pass.
 
 Not seen below Android 15; no older emulator was driven for this. AOSP's
 SystemUI darkens a bar's icons only while that bar is transparent, so where

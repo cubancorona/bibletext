@@ -40,7 +40,9 @@ var (
 // THE ICONS ASKED FOR READ ON THE PAGE THEY ARE DRAWN OVER, in every variant,
 // "no preference" included (the light page, as isDark reads it). Mutations
 // guarded: a choice that ignores the variant (the white the theme gave, on
-// the light page), and the choice inverted.
+// the light page), and systemBarsLight's choice inverted. The same value
+// turned round on its way through the Go wrapper, the C shim or BtBridge is
+// android_system_bars_polarity_test.go's.
 func TestAndroidSystemBarIconsReadOnThePage(t *testing.T) {
 	for _, v := range []fyne.ThemeVariant{light, dark, 2 /* no preference */} {
 		page := paletteFor(v).Background

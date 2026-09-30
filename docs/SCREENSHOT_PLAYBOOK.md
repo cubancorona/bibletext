@@ -745,8 +745,10 @@ standing rule in [RELEASING.md](RELEASING.md)), and only then does
   header, so the 1.2.17 phone set was taken at 356. Once the app lays those
   screens out properly at 420, the phone set is taken again at 420, which
   is what most people see.
-- **Light status-bar icons on Android.** In light mode the app leaves the
-  status bar's icons white on the cream page, so the clock and battery
-  barely show in the light Play images. The app does not ask for light
-  status-bar appearance; demo mode cannot change it, and nothing is
-  composed over a capture (§2).
+- **Light status-bar icons on Android.** The 1.2.17 light Play images show
+  the status bar's icons white on the cream page, so the clock and battery
+  barely show. Builds after 1.2.17 ask for dark status-bar and
+  navigation-bar icons over the light page (`docs/BACKLOG.md`, "Android: the
+  status-bar icons were white on the light page"), so the light images are
+  retaken from a release that carries it. Demo mode cannot change the
+  icons, and nothing is composed over a capture (§2).
