@@ -211,6 +211,12 @@ type arrivalWorld struct {
 	// yet landed. nil when there is none.
 	armed   func()
 	upgrade *heldFetch
+
+	// fired counts the retries update-lands has fired. It is the one event
+	// that can reach into the app and still report that it did nothing (the
+	// retry fetched nothing), so the walk reads it to know whether an event
+	// that did nothing left the app as it found it.
+	fired int
 }
 
 // heldFetch is a fetch the app started through one of its doors, held by the
@@ -582,6 +588,7 @@ func (e arrivalEvent) apply(t *testing.T, w *arrivalWorld, st *AppState, told *b
 		}
 		fire := w.armed
 		w.armed = nil
+		w.fired++
 		fire()
 		if w.upgrade == nil {
 			return false, "" // the retry fetched nothing
@@ -834,39 +841,68 @@ func TestArrivalJourneysKeepTheirPromise(t *testing.T) {
 			sawKept, sawSpent := false, false
 			sawUpgrade, sawReaderPrevious := false, false
 
-			var walk func(path []arrivalEvent, depth int)
-			walk = func(path []arrivalEvent, depth int) {
+			// A journey is walked on a running app: the state its route left,
+			// whether the reader was told, and the facts after its last step.
+			type arrivalRun struct {
+				st    *AppState
+				told  bool
+				facts arrivalFacts
+			}
+			// start is a FRESH state on a fresh copy of the world's disk, with
+			// route replayed on it from the beginning. AppState carries an
+			// atomic, so it can never be copied to fork a journey; a branch
+			// that needs the state its parent reached gets it by replaying the
+			// parent's route. The walk reached want there the first time, so a
+			// replay that does anything else is not the same journey, and the
+			// walk stops rather than check a state it did not reach.
+			start := func(route []arrivalEvent, want arrivalFacts) *arrivalRun {
+				w.reset(t)
+				st, told := freshArrivalState(w.preferred)
+				facts := arrivalFactsOf(w, st, false, told, "")
+				for _, e := range route {
+					did, landed := e.apply(t, w, st, &told)
+					if !did {
+						t.Fatalf("%s: replaying %s, %s did nothing where it did something the first time", world, pathString(route), e)
+					}
+					facts = arrivalFactsOf(w, st, st.pendingLink != nil && !told, told, landed)
+				}
+				if facts != want {
+					t.Fatalf("%s: replaying %s reached %v, and the walk first reached %v", world, pathString(route), facts, want)
+				}
+				return &arrivalRun{st: st, told: told, facts: facts}
+			}
+
+			// walk tries every event on the state path reached, whose facts are
+			// at. run, when not nil, is that state still running: the first
+			// branch walks on from it, so a journey's own route is never
+			// replayed to take its first branch, and every later branch starts
+			// over from start. An event that does nothing leaves the app as it
+			// found it and is not walked on from, so the next event is tried on
+			// the same run — except the refresh's retry, which fires before it
+			// can know whether it fetched anything (w.fired).
+			var walk func(path []arrivalEvent, at arrivalFacts, run *arrivalRun, depth int)
+			walk = func(path []arrivalEvent, at arrivalFacts, run *arrivalRun, depth int) {
 				if depth == 0 {
 					return
 				}
 				for _, ev := range events {
-					next := append(append([]arrivalEvent(nil), path...), ev)
-
-					// A FRESH state per branch, on a fresh copy of the world's
-					// disk. AppState carries an atomic, so it can never be
-					// copied to fork a journey — every branch is replayed from
-					// the beginning instead. Every prefix of this journey was
-					// walked, and checked, as a journey of its own, so only
-					// its last step is new.
-					w.reset(t)
-					st, told := freshArrivalState(w.preferred)
-					prev := arrivalFactsOf(w, st, false, told, "")
-					var now arrivalFacts
-					did := false
-					for i, e := range next {
-						var landed string
-						if did, landed = e.apply(t, w, st, &told); !did {
-							break
-						}
-						owed := st.pendingLink != nil && !told
-						now = arrivalFactsOf(w, st, owed, told, landed)
-						if i < len(next)-1 {
-							prev = now
-						}
+					if run == nil {
+						run = start(path, at)
 					}
+					prev := run.facts
+					fired := w.fired
+					did, landed := ev.apply(t, w, run.st, &run.told)
 					if !did {
+						if w.fired != fired {
+							run = nil
+						}
 						continue
 					}
+					next := append(append([]arrivalEvent(nil), path...), ev)
+					owed := run.st.pendingLink != nil && !run.told
+					now := arrivalFactsOf(w, run.st, owed, run.told, landed)
+					// Every prefix of this journey was walked, and checked, as a
+					// journey of its own, so only its last step is new.
 					journeys++
 					steps += len(next)
 					report(world, next, prev, now, ev, checkArrivalInvariants(prev, now, ev))
@@ -879,10 +915,17 @@ func TestArrivalJourneysKeepTheirPromise(t *testing.T) {
 					sawUpgrade = sawUpgrade || now.landed == "upgrade"
 					sawReaderPrevious = sawReaderPrevious || (now.landed == "reader" && now.edition == "previous")
 					ends[pathString(next)] = arrivalEnd{path: next, facts: now}
-					walk(next, depth-1)
+					// The running app goes down this branch; the next event
+					// starts over.
+					child := &arrivalRun{st: run.st, told: run.told, facts: now}
+					run = nil
+					walk(next, now, child, depth-1)
 				}
 			}
-			walk(nil, arrivalDepth)
+			w.reset(t)
+			st, told := freshArrivalState(w.preferred)
+			root := arrivalFactsOf(w, st, false, told, "")
+			walk(nil, root, &arrivalRun{st: st, told: told, facts: root}, arrivalDepth)
 
 			for _, s := range checkArrivalLiveness(ends, arrivalDepth) {
 				stuck++
