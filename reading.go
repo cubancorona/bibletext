@@ -7,8 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -1921,19 +1923,22 @@ func groupVersesIntoParagraphs(verses []Verse) [][]Verse {
 	return paragraphs
 }
 
+// superscriptDigits is each decimal digit's superscript form, indexed by the
+// digit's value.
+var superscriptDigits = [10]rune{'⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'}
+
+// superscriptNumber spells a verse number in superscript digits, "" for zero
+// or less. The layout asks for it per verse on every relayout, so it builds
+// the string directly rather than through a map and fmt.
 func superscriptNumber(n int) string {
 	if n <= 0 {
 		return ""
 	}
-	mapper := map[rune]rune{
-		'0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴',
-		'5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹',
-	}
+	digits := strconv.Itoa(n)
 	var b strings.Builder
-	for _, d := range fmt.Sprintf("%d", n) {
-		if s, ok := mapper[d]; ok {
-			b.WriteRune(s)
-		}
+	b.Grow(len(digits) * utf8.UTFMax)
+	for i := 0; i < len(digits); i++ {
+		b.WriteRune(superscriptDigits[digits[i]-'0'])
 	}
 	return b.String()
 }

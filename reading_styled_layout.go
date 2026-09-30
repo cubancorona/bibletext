@@ -556,6 +556,10 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 					W: measure(mark, runVerseGap, false)}})
 			}
 
+			// The number the verse's first token opens with, spelled once per
+			// verse rather than once per word.
+			num := superscriptNumber(v.Verse)
+			numSp := num + " "
 			first := true
 			for ti, tok := range toks {
 				if tok == "\n" {
@@ -563,8 +567,8 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 					continue
 				}
 				var unit []styledRun
-				if num := superscriptNumber(v.Verse); first && strings.HasPrefix(tok, num+" ") {
-					word := strings.TrimPrefix(tok, num+" ")
+				if first && strings.HasPrefix(tok, numSp) {
+					word := strings.TrimPrefix(tok, numSp)
 					unit = []styledRun{
 						{Text: num, Kind: runVerseNum, Verse: v.Verse, Tint: tint,
 							W: measure(num, runVerseNum, false)},
