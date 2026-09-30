@@ -62,19 +62,25 @@ func registerFixtureScheme(t *testing.T, scheme string, command map[string]strin
 	}
 }
 
+// associationLaunchExecute is the CLSID Windows registers as the
+// DelegateExecute of packaged apps' schemes, ms-settings: among them.
+const associationLaunchExecute = "{4ED3A719-CEA8-4BD9-910D-E252F997AFC2}"
+
 // settingsDelegateExecute is the CLSID of the COM handler the Settings
 // app's ms-settings: scheme opens through, read from the machine, so the
 // packaged fixture names a handler that is really registered, on the key a
-// packaged app's scheme carries its own on; "" where there is none.
+// packaged app's scheme carries its own on. Where the machine has none it
+// is the CLSID Windows uses for packaged apps, so the packaged case always
+// runs: a skip would be invisible in CI's log.
 func settingsDelegateExecute() string {
 	k, err := registry.OpenKey(registry.CLASSES_ROOT, `ms-settings\shell\open\command`, registry.QUERY_VALUE)
 	if err != nil {
-		return ""
+		return associationLaunchExecute
 	}
 	defer k.Close()
 	clsid, _, err := k.GetStringValue("DelegateExecute")
-	if err != nil {
-		return ""
+	if err != nil || clsid == "" {
+		return associationLaunchExecute
 	}
 	return clsid
 }
@@ -93,10 +99,7 @@ func TestTheShellSaysWhetherASchemeHasAHandler(t *testing.T) {
 	}
 	registerFixtureScheme(t, "x-bibletext-fixture-live", map[string]string{"": `"` + notepad + `" "%1"`})
 	registerFixtureScheme(t, "x-bibletext-fixture-stale", map[string]string{"": `"C:\no\such\fixture-mail.exe" "%1"`})
-	packaged := settingsDelegateExecute()
-	if packaged != "" {
-		registerFixtureScheme(t, "x-bibletext-fixture-packaged", map[string]string{"DelegateExecute": packaged})
-	}
+	registerFixtureScheme(t, "x-bibletext-fixture-packaged", map[string]string{"DelegateExecute": settingsDelegateExecute()})
 	for _, c := range []struct {
 		scheme string
 		want   bool
@@ -107,9 +110,6 @@ func TestTheShellSaysWhetherASchemeHasAHandler(t *testing.T) {
 		{"x-bibletext-fixture-unregistered", false},
 	} {
 		t.Run(c.scheme, func(t *testing.T) {
-			if c.scheme == "x-bibletext-fixture-packaged" && packaged == "" {
-				t.Skip(`ms-settings has no DelegateExecute on its open verb's command key, so there is no registered handler for the packaged fixture to name`)
-			}
 			if got := schemeHandlerRegistered(c.scheme); got != c.want {
 				t.Errorf("schemeHandlerRegistered(%q) = %v, want %v", c.scheme, got, c.want)
 			}
