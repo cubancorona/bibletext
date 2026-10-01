@@ -64,9 +64,10 @@ the Store publishes `Immediate` — once certification passes there is no second
 checkpoint on either.
 
 **Console-only, per store**: the IARC age-rating questionnaire; Snap categories,
-screenshots, banner and publisher display name; promotion of Google Play beyond
-closed testing (the service account is scoped so it structurally cannot reach
-production); the Play Foreground-service declaration video.
+screenshots, banner and publisher display name; promotion of each Google Play
+release from the alpha track to Production, with its What's new text checked
+there (the service account is scoped so it structurally cannot reach
+production; stage 6); the Play Foreground-service declaration video.
 
 **The per-release judgement calls**: the privacy answer, content-rights and
 export-compliance declarations, and the accessibility labels, re-read against
@@ -257,7 +258,12 @@ checks the attached build against it.
 
 Play: `scripts/play-publish.py --dry-run --notes <file> upload <aab> alpha`
 first — it uploads into an edit it then discards — then the identical command
-without `--dry-run`, with `--status completed`.
+without `--dry-run`, with `--status completed`. That is as far as a conductor
+goes on Play: the service account cannot reach production, so the upload
+stops on the alpha track. The rest is the owner's, in the Play Console:
+promote the alpha release to Production, check its What's new text, and roll
+it out. `scripts/release-status.py` then shows production on the new
+versionCode.
 
 Play's screenshots are not part of a release: the listing keeps its images
 from one release to the next. An approved new phone and tablet set goes up
@@ -403,7 +409,8 @@ cannot catch a missing channel: a new store is not a new release asset, so
 nothing fails. It holds Google Play in all three places only because it names
 Play; it does not know the next store. Play went live on 30 September 2026,
 the page and the README linked it that day, and the release notes, which this
-stage did not then name, went on offering Android readers only the APK.
+stage did not then name, went on offering Android readers only the APK until
+the printf gained its Play line later the same day.
 
 ```
 scripts/publish-site.sh --dry-run    # drift report
@@ -452,9 +459,11 @@ not create, so a draft started in Partner Center is safe from it.
 Two limits are structural rather than missing tooling, and a release should say
 so plainly rather than look incomplete:
 
-**Google Play production is closed** until the 12-tester / 14-day requirement is
-met, and the service account is deliberately scoped so it cannot reach
-production at all. A release reaches the alpha track and stops there.
+**Google Play production is the owner's step.** Production has been open since
+30 September 2026 (1.2.17, versionCode 187), and the service account is
+deliberately scoped so it cannot reach it at all. A conductor's upload reaches
+the alpha track and stops there; the owner promotes it to Production in the
+Play Console (stage 6).
 
 **AppImageHub has no submission** and cannot get one from a conductor.
 

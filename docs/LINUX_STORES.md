@@ -8,12 +8,12 @@ the AppStream MetaInfo, the desktop entries, the icons and
 `snap/snapcraft.yaml`, and the tests in `cmd/linuxmeta` hold the committed
 files equal to a fresh render. Edit the source, never the outputs.
 
-State on 19 September 2026: everything below exists in the tree; both
-packages have been built and smoked on Linux runners, the Snap Store account
-and name exist and the publishing credential is in place, and the first
-packaged version is the next tag (the
-published 1.2.9 tarball predates the `bibletext:` scheme handler and the
-single-instance code, and one version names one tree on every channel).
+State on 1 October 2026: the snap has been on the Snap Store's `stable`
+channel since 1.2.13 (21 September 2026), and 1.2.17 is there now on both
+architectures (amd64 revision 11, arm64 revision 12), beside the 1.2.17
+tarballs and AppImages on its GitHub release. 1.2.18 is being prepared: its
+entry leads `linux/releases.toml`, and its tag's release run puts the snap on
+`edge` for promotion. AppImageHub has no submission yet.
 
 ## Decisions taken, and the ones still open
 

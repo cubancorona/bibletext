@@ -22,6 +22,11 @@ Release identity in production:
 - target SDK: Android 16 / API 36
 - upload artifact: `~/Library/Android/bibletext-dist/BibleText.aab`
 
+1.2.18, versionCode 188, is being prepared, with its release notes in the
+1.2.18 section below. A release goes up to the alpha track, as far as the
+service account can reach, and the owner promotes it to production in the
+Play Console (docs/RELEASING.md, stage 6).
+
 The version and versionCode come from `cmd/mobile/FyneApp.toml`; do not supply a
 different manual `-app-build`. Produce the AAB only with
 `scripts/build-android.sh --release`, then verify its manifest and signer as

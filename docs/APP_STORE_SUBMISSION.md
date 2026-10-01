@@ -6,36 +6,28 @@ Store Connect state.
 
 ## Current release state — verify before acting
 
-As observed against App Store Connect on 6 September 2026, with the 1.2.7
-preparation recorded on 8 September 2026:
+As recorded on 1 October 2026, with 1.2.17 live on every channel and 1.2.18
+being prepared:
 
-- **Live App Store version (iOS):** 1.2.5, READY_FOR_SALE since its 2 September
-  version record; 1.2.4 before it.
-- **Live Mac App Store version:** 1.2.5, READY_FOR_SALE; 1.2.4 was the
-  platform's first release and took no What's New, 1.2.5 is its second and does.
-- **Prepared next version:** 1.2.7. Both ledgers now read 1.2.7 — mobile build
-  177, desktop build 48 — and both review-notes files and a What's New file on
-  each platform path describe this release rather than the last (v1.2.6 is a
-  source-only tag with no ledger of its own — see docs/VERSIONING.md).
-- **Submission state:** nothing is in review on either Apple platform. 1.2.5 was
-  submitted on 3 September 2026 (iOS build 176, Mac desktop build 46) and both
-  platforms cleared; the annotated tag v1.2.5 sits at the release commit every
-  channel built from. Google Play is a separate channel and IS in review: 1.2.7
-  / versionCode 177 was sent on 8 September 2026, the app's first publication
-  anywhere on Android (see docs/PLAY_LISTING.md). The Apple 1.2.7 submissions
-  carry phone landscape reading, the desktop full-screen row, the
-  selection-under-wash fix, the macOS restore and note-placement fixes, the
-  publishers' own paragraphing, the Junicode reading face, chapter-bottom
-  footnotes, and the NKJV Psalm titles.
-  Note that `fyne package` bumps the desktop ledger's Build AFTER packaging
-  (46 became 47 in the working tree once the Mac package existed); the
-  shipped build is the committed number, so discard that bump rather than
-  commit it. The same bump runs INSIDE `release.yml`, which packages the two
-  direct-download architectures in sequence: the 1.2.5 Apple Silicon zip
-  carries CFBundleVersion 46 and the Intel zip 47 — identical code, one tree,
-  but 47 is now in the wild — so the next desktop Store upload starts at 48,
-  and the workflow should reset the ledger between its two packages (see
-  BACKLOG).
+- **Live App Store version (iOS):** 1.2.17, build 187, approved and released
+  on 29 September 2026.
+- **Live Mac App Store version:** 1.2.17, desktop build 58, released on
+  30 September 2026.
+- **Prepared next version:** 1.2.18. Both ledgers now read 1.2.18 — mobile
+  build 188, desktop build 59 — and both review-notes files and a What's New
+  file on each platform path describe this release rather than the last.
+- **Submission state:** nothing is in review on either Apple platform. 1.2.17
+  was submitted on 29 September 2026 (iOS build 187, Mac desktop build 58)
+  and both platforms cleared; the annotated tag v1.2.17 sits at the release
+  commit every channel built from. The other channels carry the same
+  version: Google Play production since 30 September 2026 (versionCode 187,
+  docs/PLAY_LISTING.md), the Microsoft Store (1.2.17.0, x64 and arm64), the
+  Snap Store's stable channel and the GitHub release.
+  `fyne package` rewrites the desktop ledger's Build after packaging; both
+  `scripts/release-mac-store.sh` and `release.yml` put the committed file
+  back afterwards, so the shipped build is the committed number. Before
+  that, 1.2.5's two direct-download zips, packaged one after the other from
+  one tree, carried builds 46 and 47.
 - **Bundle ID:** `uk.co.bibletext`; universal iPhone and iPad. Builds up to
   174 (the 1.2.3 submission) declare minimum iOS 13; the repository now
   declares iOS 15 for every FUTURE build (`iosMinimumOSVersion` in
@@ -78,17 +70,16 @@ iOS versions — which is exactly what App Store Connect seeded it from.
 
 Before producing a binary, verify that `cmd/mobile/FyneApp.toml` names the
 version being prepared and a build number nothing has been uploaded under. It
-now holds the numbers 1.2.7 is prepared as:
+now holds the numbers 1.2.18 is prepared as:
 
 ```toml
-Version = "1.2.7"
-Build = 177
+Version = "1.2.18"
+Build = 188
 ```
 
-Build 177 has been uploaded to Google Play; it has NOT been uploaded to App
-Store Connect, so it remains the correct iOS build number until an Apple upload
-succeeds under it. The desktop ledger is at build 48, above the 47 that reached
-the wild. A release after this one moves both ledgers again, along with both
+Build 188 has not been uploaded anywhere; 187 is 1.2.17's, on App Store
+Connect and Google Play alike. The desktop ledger is at build 59, above
+1.2.17's 58. A release after this one moves both ledgers again, along with both
 review-notes files and a What's New file named for the new version.
 `scripts/check-release-identity.py` holds the two ledgers to one version and to
 `appstore/review-notes.txt` — and to the tag, when the release workflow passes
@@ -143,7 +134,7 @@ Git. For the version being prepared the English (UK) set must include:
 
 - the current public description naming WEB, WEB Catholic, BSB, NKJV, shared
   notes, narration, and optional bring-your-own-key AI study;
-- a `whats-new-<version>.txt` describing this release (`whats-new-1.2.5.txt`
+- a `whats-new-<version>.txt` describing this release (`whats-new-1.2.18.txt`
   is the newest one written);
 - current name, subtitle, keywords, promotional text, support URL, marketing
   URL, and privacy URL.
@@ -277,10 +268,10 @@ independent visual review, and the ones it flagged were retaken.
 How it was taken is now the iPhone, iPad and Mac recipes in
 docs/SCREENSHOT_PLAYBOOK.md, beside the shot list and the check every set passes.
 
-Until 1.2.17 is released, the released version's images are still the eight
-iPhone 6.9-inch and eight iPad 13-inch captures made for 1.2.2: the complete
-1.2.3 replacement set was prepared and never uploaded, so App Store Connect
-carried the older images forward with each release since. That set is
+Until 1.2.17, the released version's images were the eight iPhone 6.9-inch
+and eight iPad 13-inch captures made for 1.2.2: the complete 1.2.3
+replacement set was prepared and never uploaded, so App Store Connect carried
+the older images forward with each release from 1.2.3 to 1.2.16. That set is
 prepared locally at:
 
 - `build/appstore/screenshots-iphone-1.2.3/`
@@ -379,8 +370,8 @@ Before a human submits a version:
    default run covers iOS only; add `--platform MAC_OS` for the Mac) and
    resolve every warning.
 2. Confirm the version and build being submitted against that platform's
-   ledger — 1.2.5 shipped as iOS build 176 and Mac desktop build 46, and the
-   next Mac upload starts at desktop build 48 — and the intended release mode.
+   ledger — 1.2.17 shipped as iOS build 187 and Mac desktop build 58, and
+   1.2.18 is prepared as builds 188 and 59 — and the intended release mode.
 3. Read back description, What's New, review notes, URLs, copyright, privacy
    answers, age rating, and screenshot order from App Store Connect.
 4. Inspect the selected build and archive evidence.
@@ -456,7 +447,9 @@ each step it lists.
    Play: `scripts/play-publish.py --dry-run --notes <file> upload <aab> alpha`
    first (uploads into a discarded edit), then the same without `--dry-run`.
    The notes file is the blockquote of that version's section in
-   `docs/PLAY_LISTING.md`, under 500 characters.
+   `docs/PLAY_LISTING.md`, under 500 characters. The upload stops on the
+   alpha track; the owner promotes it to Production in the Play Console
+   (docs/RELEASING.md, stage 6).
 6. Wait for each Apple build to reach VALID, then per platform, as above:
    `submit-version.py --write` to prepare the record, `push-screenshots.py
    --write` for the release's sets, `submit-version.py --write --submit`.
