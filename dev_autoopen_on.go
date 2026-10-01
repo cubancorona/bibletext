@@ -35,27 +35,36 @@ import (
 
 // devAutoOpenSheet opens the sheet named by BIBLETEXT_DEV_OPEN, once, shortly
 // after the reading view is up. The delay lets the first layout settle so the
-// capture shows the sheet at its real size rather than mid-build.
+// capture shows the sheet at its real size rather than mid-build. The names,
+// and the state each sheet opens in, are in dev_open_sheets_on.go (devSheets);
+// a name that is not among them opens nothing and says so on stderr.
+//
+// The tab BIBLETEXT_DEV_TAB names is selected first, at once, as the launch's
+// window comes up (devSelectTab, dev_open_tab_on.go), so a sheet opened with
+// it opens over that tab.
 func devAutoOpenSheet(state *AppState) {
-	name := strings.ToLower(strings.TrimSpace(os.Getenv("BIBLETEXT_DEV_OPEN")))
-	if name == "" || state == nil {
+	if state == nil {
 		return
 	}
-	time.AfterFunc(1200*time.Millisecond, func() {
+	devSelectTab(state)
+	name := strings.ToLower(strings.TrimSpace(os.Getenv("BIBLETEXT_DEV_OPEN")))
+	if name == "" {
+		return
+	}
+	devOpenAfter(1200*time.Millisecond, func() {
 		fyne.Do(func() {
-			switch name {
-			case "settings":
-				showAISettings(state)
-			case "goto":
-				showGotoPicker(state)
-			case "versions":
-				showVersionPicker(state)
-			case "votd":
-				showVerseOfDay(state)
+			if !devOpenSheet(state, name) {
+				fmt.Fprintf(os.Stderr, "bibletext: BIBLETEXT_DEV_OPEN=%q names no sheet; the names are %s\n",
+					name, devOpenSheetNames())
 			}
 		})
 	})
 }
+
+// devOpenAfter runs f once d has passed, on a timer. A variable so the host
+// test can run the launch's opening where it stands, on its own goroutine,
+// and read the delay it was given.
+var devOpenAfter = func(d time.Duration, f func()) { time.AfterFunc(d, f) }
 
 // devAutoSwitchVersion switches translation shortly after launch, so the LIVE
 // switch path can be exercised in a simulator — which cannot tap the version

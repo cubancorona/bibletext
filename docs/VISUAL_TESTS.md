@@ -17,8 +17,20 @@ invisible on the platform it was not found on.
 | Styled pane (Windows/Linux) | `BIBLETEXT_MIMIC=linux go run -tags bibletextdev ./cmd/bibletext` (or `windows`) | the dev Links tab |
 | Web reader | `go run ./cmd/websitegen -out build/site -offline`, serve `build/site` | mint links with `ShareLinkURLWithNote` (a throwaway test printing them) |
 
-More drivers for the sections below: `SIMCTL_CHILD_BIBLETEXT_DEV_OPEN=settings|goto|versions|votd`
-auto-opens a sheet on the simulator for screenshots; `BIBLETEXT_ENABLE_TESTING=1`
+More drivers for the sections below: `SIMCTL_CHILD_BIBLETEXT_DEV_OPEN=<name>`
+auto-opens a sheet on the simulator for screenshots. The names cover every
+sheet a phone or tablet opens over the page, in its tallest and shortest
+forms and its waiting states: `settings`, `goto`, `chapters`, `versions`,
+`versions-more`, `votd` (today's), `votd-one`, `votd-long`, `audio`, `note`,
+`ask`, `ai-waiting`, `xrefs-waiting`, `xrefs`, `share-image`, `note-offer`,
+`link-notice`, `version-loading` and `version-error` (`devSheets` in
+`dev_open_sheets_on.go` says what each opens, and how the waiting states are
+held without a download or an AI request).
+`SIMCTL_CHILD_BIBLETEXT_DEV_TAB=read|books|search` brings the launch up on
+that tab (`dev_open_tab_on.go`), so Books and Search, where a phone held
+sideways keeps its header and navigation, can be captured without a tap; a
+sheet named with it opens over that tab. `scripts/run-ios-sim.sh` forwards
+both. `BIBLETEXT_ENABLE_TESTING=1`
 unlocks placeholder translations (header grows a TESTING badge — its absence in
 a release-default run is itself a check); `BIBLETEXT_DESKTOP_TABS=rail|bar|sidebar`
 switches the desktop layout and announces the choice on stderr;
