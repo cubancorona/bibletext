@@ -56,9 +56,10 @@ exact situation this file exists to prevent.
 
 1. Version numbers are cheap. A one-line fix after a release is a new patch
    version everywhere, not a quiet re-cut.
-2. Cut the GitHub tag LAST, after the App Store submissions are in — Apple's
-   records can iterate build numbers under an unreleased version; a published
-   tag cannot iterate at all.
+2. Cut the GitHub tag once every store artefact has been built and read back,
+   before anything is uploaded (`docs/RELEASING.md`, stage 5): a published
+   tag cannot iterate, so it waits for the artefacts, and no longer, so the
+   GitHub release, the snaps and the Windows package do not wait on Apple.
 3. Every channel of a version builds from the tagged commit, so "v1.2.3" is
    one tree on the stores, the direct downloads, and the sideload APK alike.
 4. Tags are consistent in kind as well as in content. SETTLED at v1.2.6:

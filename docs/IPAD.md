@@ -122,12 +122,12 @@ Every release since 1.1.0 is universal (`UIDeviceFamily=[1,2]`).
 `scripts/release-ios.sh` preserves that requirement; an iPhone-only update cannot
 remove iPad support from the existing App Store record.
 
-App Store Connect requires current iPad screenshots. Until 1.2.17 is released,
-the released version's images are still the eight iPhone and eight iPad
-captures made for 1.2.2, which show the unified navigation: the replacement set
-prepared for 1.2.3 was never uploaded, and App Store Connect copied the older
-images forward with each release. The 1.2.17 version record holds new iPhone
-and iPad sets, uploaded on 29 September 2026; how they are taken is in
+App Store Connect requires current iPad screenshots. Until 1.2.17, the
+released version's images were the eight iPhone and eight iPad captures made
+for 1.2.2, which show the unified navigation: the replacement set prepared for
+1.2.3 was never uploaded, and App Store Connect copied the older images forward
+with each release. The 1.2.17 release carries new iPhone and iPad sets,
+uploaded on 29 September 2026 and live since 1.2.17 was released; how they are taken is in
 docs/SCREENSHOT_PLAYBOOK.md. The next release must read those fields back
 with `appstore/preflight.py` before submission; do not assume App Store Connect
 copied the intended set forward.

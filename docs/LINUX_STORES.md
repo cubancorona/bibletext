@@ -211,7 +211,8 @@ own publishing action recommends.
 3. Screenshots — done: `linux-screenshots.yml` captured the four scenes,
    `screenshots.ref` names their commit, and the metainfo carries them.
 4. The next release: bump the ledger, add the release to
-   `linux/releases.toml` with the tag's date, tag last; the release run
+   `linux/releases.toml` with the tag's date, tag once the store artefacts are
+   read back (`docs/RELEASING.md`, stage 5); the release run
    produces the tarball, the AppImage and its `.zsync`, and the snap on
    `edge`.
 5. A Linux desktop for an afternoon (an x86_64 machine or a cloud desktop;
