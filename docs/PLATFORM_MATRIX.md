@@ -745,14 +745,12 @@ What each proof rests on:
   09.33.08.png" there, and the sheet showed it, 21.3 KB, with its
   thumbnail; the earlier copies were
   then put back beside it. The package's `LocalCache` held only the
-  folders Windows makes for every package. This agrees with Microsoft's
-  account of a packaged desktop app's writes under AppData from Windows
-  10 1903, which redirects new files and folders made under Local,
-  Local\Microsoft, Roaming, Roaming\Microsoft and the Start menu's
-  Programs, and not the temp folder
-  (https://learn.microsoft.com/en-us/windows/msix/desktop/desktop-to-uwp-behind-the-scenes):
-  the file the sheet hands an app is where the unpackaged app keeps it
-  too. Not seen this way: the package as the Store installs it, signed by
+  folders Windows makes for every package. Why the temp folder was not
+  redirected is not established: Microsoft's account of a packaged
+  desktop app's writes under AppData
+  (https://learn.microsoft.com/en-us/windows/msix/desktop/desktop-to-uwp-behind-the-scenes)
+  does not mention the temp folder. What was seen is that the file the
+  sheet hands an app is where the unpackaged app keeps it too. Not seen this way: the package as the Store installs it, signed by
   the Store under `C:\Program Files\WindowsApps`, rather than its layout
   registered in place; x64; and what an app chosen in the sheet receives.
   The registration was removed after the run.

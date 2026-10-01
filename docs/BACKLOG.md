@@ -207,9 +207,9 @@ not redirected: it went to the user's real temp folder,
 `%LOCALAPPDATA%\Temp\bibletext-share`, not the package's `LocalCache`,
 and did so again with that folder moved aside, when the packaged app made
 it afresh (sheet: "BibleText verse 2026-10-01 09.33.08.png", 21.3 KB,
-thumbnail shown). Microsoft's account of packaged desktop apps redirects
-new files and folders made under Local, Local\Microsoft, Roaming,
-Roaming\Microsoft and the Start menu's Programs, not the temp folder.
+thumbnail shown). Why the temp folder was not redirected is not
+established; Microsoft's account of packaged desktop apps' AppData writes
+does not mention it.
 Developer Mode, the registration and its folder were removed afterwards.
 (`docs/PLATFORM_MATRIX.md`, the Windows proof note under Sharing.)
 
