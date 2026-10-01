@@ -1,0 +1,4 @@
+Share through Windows' own Share sheet.
+
+• Share now opens the Windows Share sheet for everything BibleText shares: a note, a passage with its citation, a link, a picture card and the verse of the day. Choose the app to send it to, as you would from any other Windows app. Before, a passage, note or link was copied to the clipboard with a brief notice that was easy to miss, and a picture was saved to Downloads and shown in File Explorer.
+• If Windows cannot open its Share sheet, BibleText opens its own instead, which tells you what it copied or saved.

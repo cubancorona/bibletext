@@ -171,6 +171,28 @@ Also confirm from the final AAB:
 - target audience and Families eligibility are selected from the real intended
   audience, not to avoid or trigger a policy track.
 
+## Release notes — 1.2.18
+
+> Notes that close cleanly, and a status bar you can read.
+> • Closing Add a note while the keyboard is up no longer leaves the page squashed above where the keyboard was.
+> • On the light page, the clock and icons at the top of the screen are now dark. They were white and hard to see.
+> • If the share menu cannot open, BibleText now says so instead of closing.
+> • With your phone on its side, the Add a note box now stays clear of the camera cut-out and side buttons.
+
+Suggested tester coverage:
+
+- install and confirm version 1.2.18 (188);
+- select a few words, choose Add a note, type a word so the keyboard is up,
+  then press Cancel; repeat and press Share: each time the page, and the
+  Read, Books and Search bar, come back to the full height of the screen;
+- in light mode, check the clock, battery and signal icons at the top of the
+  screen are dark and easy to read, and on a phone with three-button
+  navigation that the buttons are too; switch to dark: both turn light;
+- with the system share menu unavailable (an emulator with the chooser
+  disabled), Share with citation shows "Could not share the passage." and
+  the app stays open;
+- confirm a shared link still opens at its passage with its note.
+
 ## Closed-test release notes — 1.2.17
 
 > See which AI is working, and your note where you left it.

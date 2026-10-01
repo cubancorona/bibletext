@@ -7,6 +7,17 @@
 # tag that shipped a Linux tarball.
 
 [[release]]
+version = "1.2.18"
+date = "2026-10-01"
+head = "Every share now tells you what it did."
+bullets = [
+  "Share with note, Share with citation, Share as link and the verse of the day's Share now end in a sheet that says the share is on the clipboard, ready to paste, and shows exactly what was copied. Before, a small notice at the foot of the window said \"Copied to the clipboard\" for a moment, and was easy to miss.",
+  "The sheet offers Copy again, in case something else has used the clipboard since, and Done.",
+  "Where BibleText can hand the share to your mail app, the sheet also offers Email…, with the citation as the subject.",
+  "Share as image now saves the picture in your Downloads folder, under whatever name your desktop gives it, and opens your file manager on it. In the snap, the picture used to stay where you could not find it.",
+]
+
+[[release]]
 version = "1.2.17"
 date = "2026-09-28"
 head = "See which AI is working, and your note where you left it."
