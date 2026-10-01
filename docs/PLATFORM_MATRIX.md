@@ -253,8 +253,8 @@ place a fix on one does not reach the others.
     counterpart of the system share sheet, and the sheet Windows falls back
     to wherever its own Share sheet cannot open (28).**
     `share_other.go:1` (`//go:build !darwin && !android && !windows`) gives
-    Linux the desktop fallback: `share_other.go:20`
-    (`fallbackShareText(s)`) and `share_other.go:23`
+    Linux the desktop fallback: `share_other.go:23`
+    (`fallbackShareText(s)`) and `share_other.go:26`
     (`fallbackShareImage(path)`). `go list` for linux, amd64 and arm64, with
     and without `-tags gles`, takes the two verbs from `share_other.go` and
     `share_fallback.go` and compiles none of `reading_macos.go`,
@@ -264,27 +264,27 @@ place a fix on one does not reach the others.
     verb ends in `share.go:220` (`var shareTextOut`); the fallback copies,
     `share_fallback.go:36` (`setShareClipboard(s)`), and opens the sheet,
     `share_fallback.go:37` (`showShareCopiedSheet(state, shareDoneForText(s))`):
-    the heading, `share_sheet_desktop.go:64` (`"Copied — ready to paste"`),
+    the heading, `share_sheet_desktop.go:67` (`"Copied — ready to paste"`),
     one line saying what to do next, by verb, the clipboard's text in a
-    read-only scrolling box, `share_sheet_desktop.go:221`
+    read-only scrolling box, `share_sheet_desktop.go:226`
     (`boxScroll = container.NewVScroll(`), Email… when the desktop has a
-    mail client, `share_sheet_desktop.go:389`
+    mail client, `share_sheet_desktop.go:394`
     (`shareEmailProbe(attachment != "", func(ok bool) {`), at the row's
     left end so that its late arrival moves nothing,
-    `share_sheet_desktop.go:295`
+    `share_sheet_desktop.go:300`
     (`buttons = container.NewHBox(email, copyAgain, done)`), Copy again,
     whose "Copied again." keeps the line's height,
-    `share_sheet_desktop.go:205`
+    `share_sheet_desktop.go:210`
     (`lineSlot := container.New(heldLineLayout{held: held}, line)`), and
-    Done, with Escape and Return, `share_sheet_desktop.go:321`
+    Done, with Escape and Return, `share_sheet_desktop.go:326`
     (`cnv.SetOnTypedKey(`), and after Tab has put the caret on a button,
-    `share_sheet_desktop.go:423`
+    `share_sheet_desktop.go:428`
     (`func (b *shareSheetButton) TypedKey(`). It is modal,
-    `share_sheet_desktop.go:307` (`widget.NewModalPopUp(card, cnv)`),
+    `share_sheet_desktop.go:312` (`widget.NewModalPopUp(card, cnv)`),
     registered for the light/dark reopen and the window refit, opens below
-    the header, `share_sheet_desktop.go:358` (`room := clearOfHeader(`),
+    the header, `share_sheet_desktop.go:363` (`room := clearOfHeader(`),
     and over the verse-of-the-day card comes back with the card beneath it,
-    `share_sheet_desktop.go:379` (`under := takeReopenBeneath(state, popup)`).
+    `share_sheet_desktop.go:384` (`under := takeReopenBeneath(state, popup)`).
     Email… on Linux is the desktop portal's Email interface,
     `share_email_linux.go:174` (`portalEmailIface+".ComposeEmail"`), its
     request's answer watched, `share_email_linux.go:180`
@@ -310,9 +310,14 @@ place a fix on one does not reach the others.
     (`const mailtoMaxLen = 2000`): past that the passage or the note is cut
     at a word and ends in an ellipsis, and the citation, with a link
     share's link, is kept whole; the whole text is still on the clipboard.
-    Share as image saves the PNG to Downloads, opens the file manager on
-    it, and ends in the same sheet, "Picture saved",
-    `share_fallback.go:65` (`showShareCopiedSheet(state, shareDone{line: line`),
+    Share as image saves the PNG to the reader's Downloads folder — the XDG
+    download directory, and inside the snap the one in the reader's own
+    home, `SNAP_REAL_HOME` (`share_image_folder.go`) — asks the file manager
+    to show it, through the desktop portal's OpenDirectory inside the snap
+    (`share_reveal_linux.go`), and once the file manager has answered ends
+    in the same sheet, "Picture saved", which says the picture is shown only
+    when the file manager said so,
+    `share_fallback.go:57` (`showShareCopiedSheet(state, shareDone{line: saved.line(shown)`),
     whose Email… carries the quote and its citation as the mail's text.
 
     Until 30 September 2026 the text verbs ended instead in a 13 pt
@@ -555,7 +560,7 @@ neither is in a release yet.
 | macOS | Share picker at the selection; the note card appears beneath | Share picker at the selection | Share picker at the selection | Preview, then the share picker with the image | Probably the share picker, anchored to the hidden reading view, not the icon; not seen | `reading_macos.go` | `builds` — code reading, 29–30 September 2026 |
 | Android | The note card, then the "Sharing text" sheet with the note, citation and link | "Sharing text" sheet with the quote and citation | "Sharing text" sheet with the link | Preview, then the "Sharing image" sheet | "Sharing text" sheet, by the citation's route; not driven | `reading_android.go` | `runner` — emulator, 1.2.17, 29–30 September 2026 |
 | Windows | The Windows Share sheet over the window, headed "Share link", with the citation, the link carrying the note, a QR-code button and a link button with no label (Copy link, by its icon), which shows a check when pressed; the new note card on the page beneath. By the code the note, the citation and the link go to the chosen app as text, and the link as a web link too; not seen (28) | The Windows Share sheet over the window, headed "Share", listing the apps to share to, with no title, preview or Copy on Windows 11. By the code the quote and its citation go to the chosen app as text; not seen (28) | The Windows Share sheet over the window, headed "Share link", with the citation, the link, a QR-code button and a link button with no label (Copy link, by its icon) (28) | Preview, then the Windows Share sheet over the window with the card as a file named "BibleText verse <date> <time>.png" in local time, shown in place of a title, with its thumbnail, its size and a size picker, Edit, and a copy button with no label (28) | The Windows Share sheet, as for Share with citation (28) | `share_windows.go` | `hardware` — arm64 VM, Windows 11 build 26200, the Store package workflow's arm64 executable run unpackaged, 30 September 2026 (the proof note below) |
-| Linux | Copied; the "Copied — ready to paste" sheet over the new note card, with Email…, Copy again and Done (27) | Copied; the "Copied — ready to paste" sheet (27) | Copied; the "Copied — ready to paste" sheet (27) | Saved to ~/Downloads; the file manager opens on the folder; the "Picture saved" sheet, with Email… attaching the file only where a mail client, not a browser, handles mailto:, and never in the snap (27). In the snap, neither the save nor the reveal happens (the proof note below) | Copied; the "Copied — ready to paste" sheet over the card (27) | `share_other.go`, handing on to `share_fallback.go` | `hardware` — arm64 VM, X11, 30 September 2026 |
+| Linux | Copied; the "Copied — ready to paste" sheet over the new note card, with Email…, Copy again and Done (27) | Copied; the "Copied — ready to paste" sheet (27) | Copied; the "Copied — ready to paste" sheet (27) | Saved to the reader's Downloads folder, the XDG download directory under whatever name it has, inside the snap the one in the reader's own home (with none, the snap saves in that home); the file manager shows it, through the desktop portal inside the snap; the "Picture saved" sheet, saying the file manager shows it only when the file manager said so, with Email… attaching the file only where a mail client, not a browser, handles mailto:, and never in the snap (27) | Copied; the "Copied — ready to paste" sheet over the card (27) | `share_other.go`, handing on to `share_fallback.go` | `hardware` — arm64 VM, X11, 30 September 2026; Share as image in the snap, 1 October 2026 |
 
 What each proof rests on:
 
@@ -598,13 +603,20 @@ What each proof rests on:
   snap, packed from the same executable (its `bin/bibletext` hashed equal)
   and installed over the store's for the run: Share with citation's sheet
   had no Email…, Copy again and Done at the same pixels as in the local
-  build, and Share as image's had none either. It also showed what the
-  image share does inside the snap: `HOME` there is the snap's own
-  `~/snap/bibletext/<revision>`, which has no Downloads folder, so the PNG
-  stayed in the snap's private temp folder, which nothing outside the snap
-  can open; no file manager opened, and the sheet's line, that the picture
-  is shown in the file manager, was untrue (`docs/BACKLOG.md`, the Linux and
-  Windows share-sheet entry, Still open). A mail client's compose has not
+  build, and Share as image's had none either. It also showed that the
+  image share saved nothing the reader could find inside the snap: `HOME`
+  there is the snap's own `~/snap/bibletext/<revision>`, which has no
+  Downloads folder, so the PNG stayed in the snap's private temp folder; no
+  file manager opened, and the sheet's line, that the picture is shown in
+  the file manager, was untrue. Fixed on 1 October 2026 and seen on the same
+  VM, with the fixed tree's development build packed into the store's
+  1.2.17 snap: the picture in `~/Downloads`, Files open on it, and the line
+  saying so; in a localised download folder named by `user-dirs.dirs`; in
+  the home with no Downloads folder, the line saying only that it is shown;
+  with the portal refusing, the line saying only that it is saved in
+  Downloads; and with the home plug disconnected, in
+  `~/snap/bibletext/common`, shown (`docs/BACKLOG.md`, the Linux and Windows
+  share-sheet entry). A mail client's compose has not
   been seen. The row moves to the shipped artefact with the release that
   carries it. Not Wayland.
 - **Android, `runner`.** The 1.2.17 build on the emulator. A simulator is not

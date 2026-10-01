@@ -199,8 +199,10 @@ var realTempDir string
 // NOR DOES ANY TEST SAVE A SHARED PICTURE INTO THE MACHINE'S DOWNLOADS.
 //
 // The image preview's Share hands the card to shareImageOut. On Linux that
-// ends in fallbackShareImage, which copies the picture into the Downloads
-// folder of the home os.UserHomeDir names and opens the file manager on it;
+// ends in fallbackShareImage, which copies the picture into the reader's
+// Downloads folder — under the home os.UserHomeDir names, or SNAP_REAL_HOME
+// inside a snap, or wherever user-dirs.dirs points — and opens the file
+// manager on it;
 // on Windows in its Share sheet, with fallbackShareImage behind it; on a Mac
 // it opens the system share picker. The desktop share
 // sheet tests give each share a home of its own (redirectHome), but the
@@ -229,16 +231,30 @@ func imageSharesInTests() []string {
 
 // redirectHome makes a temp directory the test's home, set the way
 // os.UserHomeDir reads it on each platform — HOME on Linux and macOS,
-// USERPROFILE on Windows — and stops the test unless the home now resolves
-// there, before anything can be saved into the Downloads folder of the
-// machine running it.
+// USERPROFILE on Windows — with the rest of what decides where an image
+// share saves (share_image_folder.go) pointed into it or cleared: the
+// configuration folder whose user-dirs.dirs can name a Downloads folder
+// anywhere, and the snap's SNAP, SNAP_REAL_HOME and SNAP_USER_COMMON, which
+// a snap test sets for itself. It stops the test unless the home now
+// resolves there and every folder the image share would save into is inside
+// it, before anything can be saved into the Downloads folder of the machine
+// running it.
 func redirectHome(t *testing.T) string {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("SNAP", "")
+	t.Setenv("SNAP_REAL_HOME", "")
+	t.Setenv("SNAP_USER_COMMON", "")
 	if got, err := os.UserHomeDir(); err != nil || got != home {
 		t.Fatalf("the home directory resolves to %q (%v), not the test's own %q; an image share would save into the machine's Downloads", got, err, home)
+	}
+	for _, f := range shareImageFolders(shareImagePlaceNow()) {
+		if rel, err := filepath.Rel(home, f.dir); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			t.Fatalf("an image share would save into %q, outside the test's home %q", f.dir, home)
+		}
 	}
 	return home
 }

@@ -36,10 +36,11 @@ package bibletext
 // from the verse-of-the-day card it stacks over the card, and its reopen
 // brings the card back beneath it.
 //
-// Share as image keeps its save to ~/Downloads and the file-manager reveal
-// and ends in the same sheet with no clipboard box: the line says where the
-// picture went, and Email… attaches it where the platform can, with the
-// quote and its citation as the mail's text.
+// Share as image keeps its save to Downloads and the file-manager reveal and
+// ends in the same sheet with no clipboard box: the line says where the
+// picture went, and that the file manager shows it only when the file
+// manager said so (share_fallback.go), and Email… attaches it where the
+// platform can, with the quote and its citation as the mail's text.
 //
 // UI goroutine only, like every sheet.
 
@@ -54,12 +55,14 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// The sheet's words. The heading, the three verb lines, the image line and
-// Copied again are the approved wording. Two are not, and are still to be
-// settled (docs/BACKLOG.md, the Linux and Windows share-sheet entry): the
-// image share, which copies nothing, has a heading of its own, and where the
-// picture could not be saved to Downloads its line says only where it is
-// shown.
+// The sheet's words. The heading, the three verb lines, the image sheet's
+// heading and its line for a picture in Downloads, and Copied again are the
+// approved wording. Three image lines are still to be settled (docs/BACKLOG.md,
+// the Linux and Windows share-sheet entry): where the picture is not in
+// Downloads, the line that says only that it is shown in the file manager;
+// and, where the file manager did not say it showed the picture, the line
+// that says only that it is saved in Downloads, and the one that names the
+// folder it is saved in (savedImage.line, share_image_folder.go).
 const (
 	shareSheetHeading      = "Copied — ready to paste"
 	shareSheetImageHeading = "Picture saved"
@@ -67,7 +70,9 @@ const (
 	shareLineCitation      = "The verse and its citation are on the clipboard. Paste them into a message, email or document."
 	shareLineLink          = "The link is on the clipboard. Paste it into a message or email."
 	shareLineImage         = "The picture is saved in Downloads and shown in your file manager."
-	shareLineImageTemp     = "The picture is shown in your file manager."
+	shareLineImageShown    = "The picture is shown in your file manager."
+	shareLineImageSaved    = "The picture is saved in Downloads."
+	shareLineImageSavedIn  = "The picture is saved in %s."
 	shareLineCopiedAgain   = "Copied again."
 	shareButtonCopyAgain   = "Copy again"
 	shareButtonEmail       = "Email…"

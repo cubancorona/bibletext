@@ -12,9 +12,12 @@ package bibletext
 //   - the text verbs      → the composed text goes to the CLIPBOARD, and the
 //     confirmation sheet says so and shows it (share_sheet_desktop.go) —
 //     ready to paste anywhere.
-//   - Share as image      → the rendered PNG is saved to ~/Downloads (falling
-//     back to the temp copy) and revealed in the file manager, and the same
-//     sheet says where it went.
+//   - Share as image      → the rendered PNG is saved to the reader's
+//     Downloads folder (share_image_folder.go: the XDG download directory,
+//     and inside the snap the one in the reader's own home) and shown in the
+//     file manager (xdg-open, or the desktop portal inside the snap,
+//     share_reveal_linux.go), and the same sheet says where it went and
+//     whether the file manager showed it.
 
 // Each platform's share mechanism is recorded in docs/PLATFORM_MATRIX.md, Sharing.
 func nativeShareText(s string) { fallbackShareText(s) }

@@ -405,28 +405,108 @@ Wayland, and this sheet on Windows, where Windows' own Share sheet opened
 for every verb in the app (the entry above) — neither the handler check
 nor the 2,000-character link has run on Windows.
 
-**Still open.** Two strings on the sheet are outside the wording above and
-are still to be settled: the image sheet's heading, *Picture saved* — the
-text verbs' heading says *Copied*, and nothing is copied for a picture —
-and the image line where there is no Downloads folder, *The picture is
-shown in your file manager.* The keys after Tab are fixed on this sheet
-only: on every other sheet in the app, a button that Tab has given the
-caret still takes Return and Escape and answers only Space.
+**Still open.** The image sheet's heading, *Picture saved*, is kept. Three
+image lines are outside the wording above and are still to be settled:
+where the picture is not in Downloads, *The picture is shown in your file
+manager.*; and, where the file manager did not say it showed the picture
+(the fix below), *The picture is saved in Downloads.* and *The picture is
+saved in <folder>.*, the folder named by its path. The keys after Tab are
+fixed on this sheet only: on every other sheet in the app, a button that
+Tab has given the caret still takes Return and Escape and answers only
+Space.
 
-**Still open: Share as image in the snap saves nothing the reader can
-find — found 30 September 2026.** Inside the snap `HOME` is the snap's own
-`~/snap/bibletext/<revision>` (the reader's is in `SNAP_REAL_HOME`), which
-has no Downloads folder, so `fallbackShareImage` keeps the PNG in the
-snap's private temp folder, which nothing outside the snap can open; the
-file-manager reveal opens nothing, and the sheet says *Picture saved* and
-that the picture is shown in the file manager, neither of which is so.
-Seen on the arm64 VM with a snap packed from this branch; the store's
-1.2.17 snap runs the same save and reveal, with no sheet after them (from
-the code; not run). The shape of a fix:
-the reader's Downloads folder from `SNAP_REAL_HOME` or the XDG user
-directory, which the snap's home plug reaches; a reveal that goes through
-the portal (OpenURI's OpenDirectory takes a descriptor) and whose failure
-the sheet's line hears; and the same checked in the Flatpak.
+**Fixed 1 October 2026: Share as image in the snap saved nothing the
+reader could find (found 30 September 2026).** Inside the snap `HOME` is
+the snap's own `~/snap/bibletext/<revision>` (the reader's is in
+`SNAP_REAL_HOME`), which has no Downloads folder, so `fallbackShareImage`
+kept the PNG in the snap's private temp folder, which nothing outside the
+snap can open; the file-manager reveal, xdg-open, opened nothing, since
+snapd's xdg-open inside a snap hands on web links and not folders; and the
+sheet said *Picture saved* and that the picture is shown in the file
+manager, neither of which was so. Seen again on the arm64 VM with the tree
+before the fix packed into the store's 1.2.17 snap: Downloads untouched,
+the PNG only under `/tmp/snap-private-tmp/snap.bibletext/tmp`, no file
+manager, and the line claiming one.
+
+The fix, in three parts:
+
+- **Where the picture is saved** (`share_image_folder.go`). The reader's
+  Downloads folder is looked for in the reader's own home —
+  `SNAP_REAL_HOME` inside a snap — first as the XDG download directory
+  that home's `.config/user-dirs.dirs` names, read as xdg-user-dirs reads
+  it (`$HOME` is that home, a localised name such as *Téléchargements* is
+  honoured, and a line naming the home itself switches the directory off),
+  then as `~/Downloads`. The snap's desktop plug may read `user-dirs.dirs`,
+  and its home plug writes the home's folders that are not hidden. With no
+  Downloads folder the snap saves the picture in the reader's home itself,
+  and with the home plug disconnected, so that the home cannot be reached,
+  in `SNAP_USER_COMMON` (`~/snap/bibletext/common`, kept across the snap's
+  revisions); the file manager can open both. Only when none takes the copy
+  is it left in the snap's temp folder. Outside a snap the same lookup runs
+  on Linux, from `XDG_CONFIG_HOME`, so a tarball or AppImage reader whose
+  download folder has a localised name gets the picture there too; with no
+  Downloads folder the picture stays in the temp folder, as before. Windows
+  (the Share sheet's fallback) and the macOS mimic keep `~/Downloads`
+  alone.
+- **How it is shown** (`share_reveal_linux.go`). Inside the snap through
+  the desktop portal: `OpenURI.OpenDirectory`, handed the picture as a
+  read-only descriptor (the portal refuses a writable one from a sandboxed
+  app, and one whose path the host cannot see), asks the file manager to
+  show it selected (`FileManager1.ShowItems`), and the request's `Response`
+  is the answer, 0 meaning shown. Outside a sandbox, xdg-open on the folder
+  as before, its exit status now the answer; Explorer, whose exit status
+  means nothing, still counts as shown once it starts.
+- **What the sheet says** (`savedImage.line`). The sheet waits for that
+  answer, at most five seconds (on the VM the portal answered in 0.37 s
+  with the file manager not yet running), and then says *The picture is
+  saved in Downloads and shown in your file manager.* only when both are
+  so, *The picture is shown in your file manager.* for a picture shown in
+  another folder, and, where the file manager did not say it showed it,
+  *The picture is saved in Downloads.* or *The picture is saved in
+  <folder>.* with the folder's path. It never says shown and then takes it
+  back. Where xdg-open runs the file manager in the foreground, as it does
+  on a desktop it does not recognise, the sheet waits the five seconds and
+  then says only where the picture is saved, the file manager open beside
+  it.
+
+**Held by** `share_image_folder_test.go`, on every host the suite runs on
+(the Linux rules chosen through `shareImageGOOS`, the snap through the
+environment snapd sets), each check shown failing on the case it tells
+apart: the picture in the real home's Downloads and not the snap's home
+(control: `SNAP` unset); a localised download directory, in the snap and
+outside it (control: no `user-dirs.dirs`); the reader's home with no
+Downloads folder (control: `SNAP` unset, the temp copy); the common folder
+when the home cannot be reached (control: no `SNAP_USER_COMMON`); no claim
+that the file manager showed a picture it did not, in Downloads, in the
+home and in the temp folder (control: a file manager that said yes);
+outside a snap the picture still in `HOME`'s Downloads whatever
+`SNAP_REAL_HOME` says (control: `SNAP` set); the sheet waiting for the
+answer with this share's mail; `user-dirs.dirs` parsing; the folders tried
+per platform; and xdg-open's exit status believed only on a success, with a
+command that fails, cannot start or hangs past the wait (the success the
+control). `redirectHome` now points `XDG_CONFIG_HOME` into the test's home
+and clears `SNAP`, `SNAP_REAL_HOME` and `SNAP_USER_COMMON`, and stops a test
+whose image share could save outside it.
+
+**Seen** on the arm64 VM (GNOME on X11, xdg-desktop-portal 1.18.4, Files
+46), with the fixed tree's development build packed into the store's
+1.2.17 snap (its `bin/bibletext` hashed equal to the build) and the preview
+opened at launch (`BIBLETEXT_DEV_OPEN=share-image`): the picture landed in
+`~/Downloads`, Files opened on Downloads with it selected, and the sheet
+said it was saved in Downloads and shown; with `user-dirs.dirs` naming
+`$HOME/Téléchargements` it landed there, and Files opened on Téléchargements;
+with no Downloads folder it landed in the home, Files opened on Home with it
+selected, and the line said only that it is shown; with the portal refusing
+(the desktop's `disable-application-handlers` lockdown, answered NotAllowed)
+it was in Downloads and the line said only that; with the home plug
+disconnected it landed in `~/snap/bibletext/common`, which Files showed. The
+same build unconfined, the tarball's route: saved in Downloads and shown
+through xdg-open, and with no xdg-open on its `PATH` the line said only that
+it is saved in Downloads. Not seen: Wayland, KDE or another file manager,
+the AppImage itself, and a release build in the snap (the development build
+differs only by the sheets it can open at launch). The portal route serves
+any sandbox `linuxSandboxed` recognises; there is no Flatpak build to try it
+in.
 
 **Sources.**
 

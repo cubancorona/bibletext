@@ -54,7 +54,7 @@ today); and the NOTICE line for the emoji font (added, factual).
 | --- | --- |
 | AppStream id, desktop file, icon name | `uk.co.bibletext.BibleText` |
 | Desktop entry | `linux/uk.co.bibletext.BibleText.desktop`: `Exec=bibletext %u`, `MimeType=x-scheme-handler/bibletext;`, `StartupWMClass=BibleText` (the toolkit derives the window class from the title, which is the product name) |
-| Snap | name `bibletext`, entry `snap/gui/bibletext.desktop` (picked up by name, exported as `bibletext_bibletext.desktop`), the gnome extension plus `network`, `network-bind` (the loopback single-instance listener), `audio-playback`, `home` (Share as image writes to ~/Downloads) |
+| Snap | name `bibletext`, entry `snap/gui/bibletext.desktop` (picked up by name, exported as `bibletext_bibletext.desktop`), the gnome extension plus `network`, `network-bind` (the loopback single-instance listener), `audio-playback`, `home` (Share as image writes to the reader's Downloads folder, found from `SNAP_REAL_HOME` and `~/.config/user-dirs.dirs`, which the gnome extension's `desktop` plug may read; the file manager is asked to show it through the desktop portal) |
 | AppImage | `BibleText-x86_64.AppImage` and `BibleText-aarch64.AppImage`, each with its `.zsync`; update information `gh-releases-zsync\|cubancorona\|bibletext\|latest\|BibleText-*<arch>.AppImage.zsync` — the architecture is in the pattern, or both would advertise the same file |
 | Version | `cmd/bibletext/FyneApp.toml` Version, built from its tag; `linux/releases.toml` must lead with it |
 | Where data lives | snap `~/snap/bibletext/<revision>/.config` (backed up per revision, so a revert rolls notes back) and `~/snap/bibletext/common/.cache`; AppImage the XDG defaults like the tarball |

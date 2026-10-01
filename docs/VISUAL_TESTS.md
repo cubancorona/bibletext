@@ -434,10 +434,18 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       PNG lands in Downloads, the file manager opens on it, and the sheet
       reads "Picture saved" with no box and no Copy again, and comes back
       after a light/dark flip; with no Downloads folder the line says only
-      that the picture is shown in the file manager. In the snap neither
-      the save nor the reveal happens yet (docs/BACKLOG.md, the Linux and
-      Windows share-sheet entry): check that it still does not, until the
-      fix lands. Email… on the text
+      that the picture is shown in the file manager. In the snap: the PNG
+      lands in the reader's own ~/Downloads, not under ~/snap/bibletext,
+      the file manager opens on it selected, and the sheet says so; with
+      ~/.config/user-dirs.dirs naming a localised download folder it lands
+      there; with no Downloads folder it lands in the home and the line
+      says only that it is shown; and where the file manager does not open
+      (the portal refusing: gsettings org.gnome.desktop.lockdown
+      disable-application-handlers true, then reset) the line says only
+      where the picture is saved. Outside the snap, with no xdg-open on the
+      PATH, the line says only that it is saved in Downloads
+      (docs/BACKLOG.md, the Linux and Windows share-sheet entry). Email… on
+      the text
       sheets: the button shows whenever the desktop names a mailto:
       handler, and a browser counts — a stock Ubuntu desktop names the
       Firefox snap, so the button shows there with no mail client

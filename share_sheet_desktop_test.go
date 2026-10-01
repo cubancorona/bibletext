@@ -54,18 +54,20 @@ func withoutMailProbe(t *testing.T) {
 // wired as Linux and Windows wire it, the platform seams the sheet reaches
 // out through replaced — the mail probe answers at once with emailOK, a
 // compose lands on composed instead of opening a client, the file-manager
-// reveal is recorded instead of run — the sheet's timers held, and a home
-// directory of the test's own (redirectHome), with no Downloads folder
-// until homeForImage makes one, so no image share reaches the machine's.
+// reveal is recorded instead of run and answers at once with revealShown —
+// the sheet's timers held, and a home directory of the test's own
+// (redirectHome), with no Downloads folder until homeForImage makes one, so
+// no image share reaches the machine's.
 type shareSheetHarness struct {
 	*appearanceHarness
-	st       *AppState
-	emailOK  bool
-	probed   []bool // withAttachment, as each sheet asked the mail probe
-	composed chan shareCompose
-	revealed []string
-	restored int // calls to showReadingOverlay, the desktop sheet-close consume point
-	timers   *[]func()
+	st          *AppState
+	emailOK     bool
+	revealShown bool   // what the file manager answers to a reveal
+	probed      []bool // withAttachment, as each sheet asked the mail probe
+	composed    chan shareCompose
+	revealed    []string
+	restored    int // calls to showReadingOverlay, the desktop sheet-close consume point
+	timers      *[]func()
 }
 
 func newShareSheetHarness(t *testing.T) *shareSheetHarness {
@@ -77,6 +79,7 @@ func newShareSheetHarness(t *testing.T) *shareSheetHarness {
 	h := &shareSheetHarness{
 		appearanceHarness: newAppearanceHarness(t, false),
 		emailOK:           true,
+		revealShown:       true,
 		composed:          make(chan shareCompose, 8),
 	}
 	h.st = h.state
@@ -105,7 +108,10 @@ func newShareSheetHarness(t *testing.T) *shareSheetHarness {
 	}
 	t.Cleanup(func() { shareEmailCompose = prevCompose })
 	prevReveal := revealInFileManager
-	revealInFileManager = func(p string) { h.revealed = append(h.revealed, p) }
+	revealInFileManager = func(p string, report func(bool)) {
+		h.revealed = append(h.revealed, p)
+		report(h.revealShown)
+	}
 	t.Cleanup(func() { revealInFileManager = prevReveal })
 	prevShow := h.st.showReadingOverlay
 	h.st.showReadingOverlay = func() {
@@ -1155,7 +1161,10 @@ func TestNoTestSavesASharedPictureIntoTheMachinesDownloads(t *testing.T) {
 	}
 	var revealed []string
 	prevReveal, prevMail := revealInFileManager, shareImageMail
-	revealInFileManager = func(p string) { revealed = append(revealed, p) }
+	revealInFileManager = func(p string, report func(bool)) {
+		revealed = append(revealed, p)
+		report(true)
+	}
 	t.Cleanup(func() { revealInFileManager, shareImageMail = prevReveal, prevMail })
 	h := newAppearanceHarness(t, false)
 	share := func() []string {
@@ -1205,8 +1214,8 @@ func TestTheImageSheetWithoutDownloadsSaysOnlyWhereItIsShown(t *testing.T) {
 	src := h.renderedCard()
 	fallbackShareImage(src)
 	p := h.sheet()
-	if !sheetHas(p, shareLineImageTemp) || sheetHas(p, shareLineImage) {
-		t.Errorf("the sheet reads %v, want %q and not %q", sheetTexts(p), shareLineImageTemp, shareLineImage)
+	if !sheetHas(p, shareLineImageShown) || sheetHas(p, shareLineImage) {
+		t.Errorf("the sheet reads %v, want %q and not %q", sheetTexts(p), shareLineImageShown, shareLineImage)
 	}
 	if len(h.revealed) != 1 || h.revealed[0] != src {
 		t.Errorf("revealed %v, want the temp copy %q", h.revealed, src)
