@@ -1,15 +1,16 @@
 package bibletext
 
 // Mobile layout classification. Every touch device now uses one shared layout:
-// Read / Books / Search sits at the bottom in portrait and moves to a leading
-// rail on tablets and Android phones in landscape. The old compact/regular enum
-// and sizing helpers remain as an explicit record of the former split layout.
+// Read / Books / Search is a leading rail when the window is wider than it is
+// tall and a bottom bar otherwise (mobileRailWanted). The old compact/regular
+// enum and sizing helpers remain as an explicit record of the former split
+// layout.
 
 type layoutClass int
 
 const (
-	// layoutCompact is the shared touch layout. Its navigation is a bottom bar
-	// except where the platform's landscape policy selects a leading rail.
+	// layoutCompact is the shared touch layout. Its navigation is a leading
+	// rail or a bottom bar by the window's shape (mobileRailWanted).
 	layoutCompact layoutClass = iota
 	// layoutRegular is the retained former tablet sidebar + HSplit layout. The
 	// current classifier never selects it.
@@ -82,20 +83,48 @@ func (s *AppState) canvasIsLandscape() bool {
 	return sz.Width >= sz.Height
 }
 
-// mobileRailWanted is the shared mobile navigation-placement rule with the
-// platform policy and live canvas geometry stated explicitly. Tablets use a
-// rail in landscape on both mobile platforms. Android phones do too because a
-// bottom bar can consume the remaining reading height on a short landscape
-// window; iPhone keeps its existing bottom-bar convention. That is where
-// navigation is drawn at all: a phone's Read tab reads full-screen in
-// landscape by default (readingFullScreen, phone_landscape.go). An unsized
-// canvas keeps only the tablet's established initial default, avoiding a rail
-// flash on Android before its first real dimensions arrive.
-func mobileRailWanted(tablet, phoneLandscapeRail bool, w, h float32) bool {
+// mobileRailWanted is where every phone and tablet puts its navigation: a
+// leading rail when the window is wider than it is tall, the bottom bar
+// otherwise. One rule over the window's shape, the same on iOS and Android and
+// for a phone, a tablet, a Split View or Stage Manager window and a split
+// screen alike, because the trade it makes is about the shape and not the
+// device: on a wide window height is the scarce axis, and the bar spends a
+// full strip of it on a few icons, while the rail spends a narrow column of
+// the width there is to spare. A phone held sideways is where that matters
+// most, the fixed-height header and chapter toolbar leaving little height
+// below them. A square window counts as wide (w >= h), the reading
+// canvasIsLandscape and phoneLandscapeReadingWanted use.
+//
+// That decides where navigation is drawn at all. A phone's Read tab reads
+// full-screen while it is wider than tall (readingFullScreen,
+// phone_landscape.go), with no bar or rail, so the rail a phone held sideways
+// shows is the Books and Search tabs' (and the dev Links tab's).
+//
+// An unsized canvas, before the first layout, answers by the device: the
+// tablet's established first frame is the rail, and a phone's or an Android
+// window's is the bar (an Android window's idiom is its size, so before it has
+// one it reads as a phone). Taking the shape of a 0x0 canvas would answer
+// "wide" and flash a rail on an Android phone before its real size arrives.
+func mobileRailWanted(tablet bool, w, h float32) bool {
 	if w <= 0 || h <= 0 {
 		return tablet
 	}
-	return w >= h && (tablet || phoneLandscapeRail)
+	return w >= h
+}
+
+// railForWindow answers mobileRailWanted for the live window, from the
+// CANVAS's size, not a laid-out child's: the soft keyboard shrinks the
+// laid-out height and would otherwise read as a rotation. See the note on
+// layoutWatcher.Resize, which is the same trap and cost 3,000 rebuilds a
+// minute when it was got wrong. Phones and tablets ask it (compactNavRail,
+// ui_mobile.go); the desktop draws the rail whatever its shape until it takes
+// the same rule (docs/BACKLOG.md).
+func railForWindow(state *AppState) bool {
+	if state == nil || state.window == nil {
+		return mobileRailWanted(deviceIsTablet(), 0, 0)
+	}
+	sz := state.window.Canvas().Size()
+	return mobileRailWanted(deviceIsTablet(), sz.Width, sz.Height)
 }
 
 // renderedLayout is the layout as the watcher compares it: the class, whether

@@ -1,9 +1,11 @@
 # Platform matrix
 
 What BibleText can be built and shipped as, on which architecture, through
-which channel — and **how well each of those is actually proven**. One feature
-has a table of its own, [Sharing](#sharing), because Share is the verb whose
-mechanism differs on every platform.
+which channel — and **how well each of those is actually proven**. Two features
+have tables of their own: [Navigation](#navigation), the layout's one rule for
+where Read, Books and Search sit, which the desktop has yet to take, and
+[Sharing](#sharing), because Share is the verb whose mechanism differs on
+every platform.
 
 This is a capability map, not a status board. It does not track store review
 state or which version is live; the release ledger and `linux/releases.toml`
@@ -389,6 +391,16 @@ place a fix on one does not reach the others.
     platform, `share_windows_test.go` in the Windows CI job, and recorded
     in `docs/BACKLOG.md`, "Windows: use the native Share sheet".
 
+**Desktop (macOS, Windows, Linux)**
+
+29. **The navigation is the rail whatever the window's shape**, where every
+    phone and tablet takes it only while the window is wider than it is tall
+    (see [Navigation](#navigation)). A desktop window tiled to a phone's
+    shape keeps the rail down its narrow side. The desktop installs no
+    layout watcher, so nothing would notice a resize across square. To be
+    unified in 1.2.19: `docs/BACKLOG.md`, "The desktop takes the phones'
+    navigation rule".
+
 ## Deliberate exclusions
 
 Decisions, with the reason — so that none of these is ever mistaken for
@@ -457,6 +469,56 @@ The honest to-do list, in proof-level terms.
   On Windows no share target was pressed, so what an app receives from
   the sheet has not been seen, and the in-app sheet behind it, which opens
   only when the sheet cannot, has not run there.
+
+## Navigation
+
+Where the Read / Books / Search destinations sit. Every phone and tablet
+answers by one rule over the window's shape: a rail on the leading edge
+while the window is wider than it is tall, and a bottom bar otherwise,
+`layout.go:112` (`return w >= h`), a square window counting as wide. iOS and
+Android ask it of the live canvas through the same function,
+`ui_mobile.go:99` (`func compactNavRail(state *AppState) bool { return railForWindow(state) }`),
+and both install the layout watcher that rebuilds when the answer changes,
+`ui_mobile.go:77` (`return newLayoutWatcher(state, root)`). Before the canvas
+has a size the device answers, `layout.go:110` (`return tablet`): an iPad's
+first frame is the rail, an iPhone's and any Android window's the bar. The
+desktop draws the rail whatever its window's shape,
+`ui_compact_desktop.go:114` (`func compactNavRail(*AppState) bool { return desktopNav() == desktopNavRail }`),
+which is divergence 29, and takes the phones' rule in 1.2.19.
+
+A bar wider than 560 points, `ui_compact.go:1091`
+(`const tabBarSpreadMaxWidth float32 = 560`), centres its tabs at their
+designed slots, as UIKit's own tab bar does on an iPad; a narrower one
+spreads them across its width. Under the one rule only a window taller than
+wide draws a bar, so the centred dress is an upright tablet's and no phone's.
+
+The rail and the content beside it keep clear of a sideways phone's side
+insets — the Dynamic Island's side of an iPhone and the inset UIKit reports
+opposite it, an Android phone's cutout or side navigation bar as its
+canvas reports them — because both mobile drivers lay the window's tree
+inside the insets they report; nothing in the layout adds or needs a
+padding of its own (`tab_rail.go`).
+
+Recorded 1 October 2026, for 1.2.18. Held by `tab_rail_orientation_test.go`
+(the rule at every phone and tablet geometry, and the canvas it reads) and
+`tab_rail_side_insets_test.go` (the rail clear of the side insets; the
+bottom bar and its centred dress only upright). The iPhone row was also
+watched on the iOS 26.5 simulator, which is not hardware: a development
+build on an iPhone 17 Pro Max, on Books and on Search, turned each way and
+launched each way, drew the rail in all 8 sideways captures, between the
+safe area's edge 62 points in and its hairline at 122, with the Dynamic
+Island beside it or across the screen, and the bottom bar in all 10
+upright ones; the Read tab turned sideways read full-screen.
+
+| Platform | Taller than wide | Wider than tall | Read tab, wider than tall | Defined in | Proof |
+| --- | --- | --- | --- | --- | --- |
+| iOS | Bottom bar, tabs spread | Rail, beside the Dynamic Island | Full-screen reading, no bar or rail (`phone_landscape.go`) | `ui_mobile.go`, `layout.go` | `runner` — host tests, and the simulator, 1 October 2026 |
+| iPadOS | Bottom bar, tabs centred (spread in a window 560 points wide or narrower) | Rail | Rail | `ui_mobile.go`, `layout.go` | `runner` — host tests, 1 October 2026 |
+| Android, phone | Bottom bar, tabs spread | Rail, beside a cutout or side navigation bar | Full-screen reading, no bar or rail (`phone_landscape.go`) | `ui_mobile.go`, `layout.go` | `runner` — host tests, 1 October 2026 |
+| Android, tablet | Bottom bar, tabs centred (spread in a window 560 points wide or narrower) | Rail | Rail | `ui_mobile.go`, `layout.go` | `runner` — host tests, 1 October 2026 |
+| macOS | Rail (29) | Rail | Rail | `ui_compact_desktop.go` | `runner` — host tests, 1 October 2026 |
+| Windows | Rail (29) | Rail | Rail | `ui_compact_desktop.go` | `runner` — host tests, 1 October 2026 |
+| Linux | Rail (29) | Rail | Rail | `ui_compact_desktop.go` | `runner` — host tests, 1 October 2026 |
 
 ## Sharing
 

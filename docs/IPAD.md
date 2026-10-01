@@ -11,26 +11,42 @@ The destinations, state, and behaviour are shared in `ui_compact.go`:
 | Device state | Navigation placement |
 | --- | --- |
 | iPhone, portrait | bottom tab bar |
-| iPhone, landscape | bottom tab bar on Books and Search; the Read tab reads full-screen (`phone_landscape.go`, on by default) |
+| iPhone, landscape | left navigation rail on Books and Search; the Read tab reads full-screen (`phone_landscape.go`, on by default) |
 | iPad, portrait | bottom tab bar |
 | iPad, landscape | left navigation rail |
+| iPad window (Split View, Stage Manager) | left navigation rail while the window is wider than tall, bottom tab bar otherwise |
 
-Rotating an iPad moves the same three destinations; it does not switch to a
-different navigation model. Selecting a book or search result opens it on Read,
-and Search remains a normal destination for returning to results. Wide lists
-use `readableColumn` rather than stretching across the whole display.
+One rule decides every row: the rail while the window is wider than it is
+tall (a square window counts as wide), the bottom bar otherwise
+(`mobileRailWanted` in `layout.go`). Before 1.2.18 the iPhone was the
+exception and kept the bar held sideways; its Books and Search tabs drew it 874
+or 956 points wide, wider than `tabBarSpreadMaxWidth`, so the tabs sat
+bunched in the middle in the iPad's centred dress. That dress is now drawn
+only by a window taller than wide and wider than 560 points: an iPad held
+upright, or a tall iPad window that wide.
 
-`compactNavRail` in `ui_mobile.go` chooses the rail for a tablet in landscape.
-`layoutWatcher` in `ui_regular.go` coalesces resize events and rebuilds when the
-resolved bar/rail placement changes. Keyboard appearance is not treated as
-rotation because orientation is read from the canvas rather than a laid-out
-child.
+Rotating an iPad or an iPhone moves the same three destinations; it does not
+switch to a different navigation model. Selecting a book or search result opens
+it on Read, and Search remains a normal destination for returning to results.
+Wide lists use `readableColumn` rather than stretching across the whole
+display.
 
-Android tablets use the same rule. Their tablet identity follows the sw600dp
-smallest-dimension convention in `device_android.go`. Android phones also use
-the rail in landscape so fixed-height chrome cannot consume the short reading
-edge; this Android-specific policy does not change iPhone navigation. On the
-Read tab both phone platforms go further and drop the navigation altogether in
+`compactNavRail` in `ui_mobile.go` asks that rule of the live canvas
+(`railForWindow`). `layoutWatcher` in `ui_regular.go`, installed on every phone
+and tablet, coalesces resize events and rebuilds when the resolved bar/rail
+placement changes. Keyboard appearance is not treated as rotation because
+orientation is read from the canvas rather than a laid-out child.
+
+The rail keeps clear of a sideways iPhone's Dynamic Island, and of the inset
+UIKit reports opposite it, by the same rule as everything else in the window:
+the driver lays the window's tree inside the safe area, so the rail stands
+beside the inset rather than under it, and no padding of its own is added
+(`tab_rail.go`; `tab_rail_side_insets_test.go` measures it).
+
+Android phones and tablets use the same rule; an Android tablet's identity
+follows the sw600dp smallest-dimension convention in `device_android.go`, and
+matters to the layout only before the window has a size. On the Read tab
+both phone platforms go further and drop the navigation altogether in
 landscape, reading full-screen, on the book page when the width allows it;
 the entry in [BACKLOG.md](BACKLOG.md) records the mode's state.
 
@@ -91,8 +107,9 @@ Verify at least:
 - the book page at every text-size setting on a full-screen iPad, and the phone
   page in a Split View or Stage Manager window narrower than the column plus
   15pt each side; and
-- the iPhone bottom bar remains unchanged on Books and Search (the Read tab
-  reads full-screen in landscape).
+- the iPhone's Books and Search show the left rail in landscape, standing
+  beside the Dynamic Island with the phone turned either way, and the bottom
+  bar upright (the Read tab reads full-screen in landscape).
 
 `simctl io <udid> screenshot out.png` captures the simulator framebuffer. A
 landscape capture may be stored in the native portrait buffer and need lossless

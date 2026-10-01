@@ -19,10 +19,25 @@ package bibletext
 // the rail's width is measured from the labels instead (tabRailWidth below)
 // rather than taken from the slot.
 //
-// It exists because a bottom bar is a phone convention a desktop window
-// inherits rather than chooses, and because on a landscape window the scarce
-// axis is vertical: a rail trades the bar's full strip of height, which is
-// dear, for a column of width, which is not.
+// It exists because on a window wider than it is tall the scarce axis is
+// vertical: a rail trades the bar's full strip of height, which is dear, for a
+// column of width, which is not. So every phone and tablet draws it while its
+// window is wider than tall and the bar otherwise (mobileRailWanted), and the
+// desktop, where a bottom bar is a phone convention a window would inherit
+// rather than choose, draws it whatever the window's shape.
+//
+// It keeps clear of the screen's side insets — the Dynamic Island's side of an
+// iPhone held sideways, and the inset UIKit reports opposite it; an Android
+// phone's side navigation bar or camera cutout, as its canvas reports them —
+// without a rule of its own.
+// The rail is part of the window's tree, and both mobile drivers lay that tree
+// inside the canvas's safe area (the interactive area, InteractiveArea), the
+// area a phone sheet is sized to (sheetArea, sheet_fit.go), so the rail stands
+// right beside an inset and the content beside the rail. The native reading
+// panes add the same insets back to their frames (reading_ios.go, BtBridge's
+// windowContentOrigin). The two sheets that span the canvas need
+// clearOfSideInsets because a sheet is a pop-up placed on the canvas, outside
+// that tree; giving the rail the same padding would hold it twice as far in.
 
 import (
 	"fyne.io/fyne/v2"

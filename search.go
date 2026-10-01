@@ -323,15 +323,17 @@ func aiSearchingView(state *AppState) fyne.CanvasObject {
 // centred in the space the wait is given, and scrolling when that space is
 // shorter than the column. The column's height is fixed (the line, the bar on
 // the Search tab, the model, the hint, Cancel and the faster-model offer) and
-// the space is not. On a phone in landscape that keeps its bottom bar, as an
-// iPhone does, the Search tab's results area is about half the column, and a
-// column merely centred there overflowed it at both ends: "Searching with
-// AI…" under the header, Cancel under the tab bar, where nothing could bring
-// it back. In the scroll the column starts at the area's top and Cancel is a
-// scroll away; wherever there is room the scroll never engages, and the column
-// centres as it always has. The Study panel's waiting column scrolls for the
-// same reason (setThinking in ai_panel.go). Refresh on the scroll lays the
-// column out again, which is what a model line that wraps needs.
+// the space is not. On a phone held sideways the Search tab's results area is
+// shorter than the column: beside the rail a phone has there, and more so
+// above a bottom bar, which left about half of it (an iPhone's, before the
+// rail). A column merely centred there overflowed it at both ends:
+// "Searching with AI…" under the header, Cancel under the tab bar, where
+// nothing could bring it back. In the scroll the column starts at the area's
+// top and Cancel is a scroll away; wherever there is room the scroll never
+// engages, and the column centres as it always has. The Study panel's
+// waiting column scrolls for the same reason (setThinking in ai_panel.go).
+// Refresh on the scroll lays the column out again, which is what a model line
+// that wraps needs.
 func findWaitScroll(col fyne.CanvasObject) *container.Scroll {
 	return container.NewVScroll(container.NewCenter(col))
 }

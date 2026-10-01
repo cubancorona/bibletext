@@ -410,8 +410,9 @@ func buildDevLinksTab(state *AppState, switchToRead func()) fyne.CanvasObject {
 	pillMode.SetChecked(notesPillPerParagraph)
 
 	// The phone-landscape presentation (phone_landscape.go). The flip rebuilds
-	// the window, which is what re-reads layoutMayChange. Checked state is set
-	// before the handler is attached, so wiring it up does not fire a rebuild.
+	// the window, which presents the Read tab by the new setting. Checked state
+	// is set before the handler is attached, so wiring it up does not fire a
+	// rebuild.
 	landscapeMode := widget.NewCheck("Landscape reading mode (phones)", nil)
 	landscapeMode.SetChecked(phoneLandscapeReadingEnabled())
 	landscapeMode.OnChanged = func(b bool) {

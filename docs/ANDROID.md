@@ -440,14 +440,18 @@ The one mobile binary serves phones and tablets: `deviceIsTablet()` on Android
 (`device_android.go`) applies the sw600dp convention to the live canvas — a
 window whose smallest dimension is at least 600 logical units
 (`isTabletDimensions`, `layout.go`) is tablet-class. Every touch device uses the
-same Read / Books / Search composition: portrait uses the bottom bar, while
-landscape moves those destinations into a left rail on tablets and phones; a
+same Read / Books / Search composition, by the one rule iOS uses too
+(`mobileRailWanted`): the bottom bar while the window is taller than it is
+wide, and a left rail while it is wider, on tablets and phones alike; a
 phone's Read tab reads full-screen in landscape instead (`phone_landscape.go`,
 on by default, so the rail is what Books and Search get there). The
-phone case preserves reading height on the short edge. There is no tablet-only
-sidebar/split mode. Because the canvas has no size until after the first build,
-`layoutMayChange()` is always true on Android; the watcher rebuilds whenever the
-resolved bar/rail placement changes.
+phone case preserves reading height on the short edge. The rail keeps clear
+of a side inset the canvas reports, a three-button navigation bar or a
+camera cutout, because Fyne lays the window's tree inside the system window
+insets it reads; it adds no padding of its own. There is no tablet-only
+sidebar/split mode. Every phone and tablet installs the layout watcher, which
+also catches Android's real canvas size, absent until after the first build,
+and rebuilds whenever the resolved bar/rail placement changes.
 
 ## Where the Bible caches live, and why it is not files/
 

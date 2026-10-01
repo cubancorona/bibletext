@@ -158,10 +158,11 @@ func buildCompactUI(state *AppState) fyne.CanvasObject {
 	header := buildHeader(state)
 
 	// THE NAVIGATION'S PLACE. The same destinations on one of two edges,
-	// decided by compactNavRail: the bottom bar on phones and on tablets in
-	// portrait; the leading rail on tablets and Android phones in landscape and
-	// on desktop windows (BIBLETEXT_DESKTOP_TABS overrides, ui_compact_desktop.go).
-	// Only the edge they sit on differs.
+	// decided by compactNavRail: on a phone or a tablet the leading rail while
+	// the window is wider than it is tall and the bottom bar otherwise
+	// (mobileRailWanted); on a desktop window the rail, whatever its shape
+	// (BIBLETEXT_DESKTOP_TABS overrides, ui_compact_desktop.go). Only the edge
+	// they sit on differs.
 	var body fyne.CanvasObject
 	if compactNavRail(state) {
 		body = container.NewBorder(header, nil, buildTabRail(state), nil, content)
@@ -1077,7 +1078,16 @@ const (
 // 560 sits above every phone in portrait (the widest is 440) and below every
 // tablet the regular layout ever claimed (700), so no real device lands near the
 // boundary — which matters, because crossing it mid-session is a visible change
-// of dress, and the only way to do that is to resize a desktop window on purpose.
+// of dress, and the only way to do that is to resize a window on purpose.
+//
+// A phone or a tablet draws the bar only on a window taller than it is wide
+// (mobileRailWanted gives a wider one the rail), so there the centred dress is
+// an upright tablet's: an iPad or an Android tablet held upright, or a tall
+// tablet window wider than 560. No phone gets it. A phone held sideways once
+// did: an iPhone's Books and Search kept the bar there, 874 or 956 points
+// wide, and wore this dress with its tabs bunched in the middle, until the
+// rail took its place. The desktop draws a bar only when
+// BIBLETEXT_DESKTOP_TABS asks for one.
 const tabBarSpreadMaxWidth float32 = 560
 
 // tabBarGroupWidth is the width of the tabs THEMSELVES — no chrome. The pill

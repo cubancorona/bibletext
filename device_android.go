@@ -9,7 +9,9 @@ import "fyne.io/fyne/v2"
 // least ~600dp is a tablet (the classic sw600dp resource qualifier; Fyne's
 // logical units track dp on Android). Computed from the live window canvas on
 // every call, so it is correct after rotation and in split-screen. Tablet
-// identity controls the shared layout's landscape rail and readable measures.
+// identity keeps the landscape presentation to phones (phone_landscape.go) and
+// sets the readable measures; the navigation's place is the window's shape on
+// phones and tablets alike (mobileRailWanted).
 func deviceIsTablet() bool {
 	app := fyne.CurrentApp()
 	if app == nil {
@@ -22,14 +24,6 @@ func deviceIsTablet() bool {
 	sz := wins[0].Canvas().Size()
 	return isTabletDimensions(sz.Width, sz.Height)
 }
-
-// phoneLandscapeNavRail moves phone navigation to the leading edge in
-// landscape, where navigation is drawn — Books, Search and the dev Links tab;
-// the Read tab reads full-screen in landscape by default (phone_landscape.go).
-// The fixed-height app, chapter, history and bottom-navigation chrome can
-// otherwise leave no height for the reading host on a short window. Portrait
-// keeps the usual bottom bar.
-func phoneLandscapeNavRail() bool { return true }
 
 // Android phones read distraction-free in landscape too (phone_landscape.go),
 // and on the book page when the pane is wide enough for it, as every surface
@@ -44,8 +38,3 @@ func phoneLandscapeNavRail() bool { return true }
 func phoneLandscapeReadingSupported() bool { return true }
 
 func rotationRestoreNeeded() bool { return false }
-
-// layoutMayChange: always watch on Android — before the first layout the
-// canvas reports 0×0, so the watcher must catch the real size. It also owns the
-// phone bar/rail transition on rotation.
-func layoutMayChange() bool { return true }

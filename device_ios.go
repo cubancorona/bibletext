@@ -19,15 +19,12 @@ static int bibleTextIsPad(void) {
 import "C"
 
 // deviceIsTablet reports whether we're running on an iPad. The shared layout
-// uses it for the landscape rail and reporter-width reading measure.
+// uses it to keep the landscape presentation to phones (phone_landscape.go),
+// for the reporter-width reading measure, and for the navigation's place
+// before the canvas has a size (mobileRailWanted).
 func deviceIsTablet() bool {
 	return C.bibleTextIsPad() != 0
 }
-
-// iPhone keeps its bottom navigation in landscape where navigation is drawn
-// (Books and Search; the Read tab reads full-screen there by default,
-// phone_landscape.go); only iPad uses the rail.
-func phoneLandscapeNavRail() bool { return false }
 
 // The iPhone reads like the iPad in landscape (phone_landscape.go) — on the
 // book page too, because a landscape iPhone's pane is wide enough for it
@@ -37,9 +34,3 @@ func phoneLandscapeNavRail() bool { return false }
 func phoneLandscapeReadingSupported() bool { return true }
 
 func rotationRestoreNeeded() bool { return true }
-
-// layoutMayChange gates the orientation watcher. On iOS the idiom is static and
-// known at launch, so iPads need watching for bar/rail rotation — and every
-// iPhone for the landscape presentation's flip, unless the landscape reading
-// preference (phone_landscape.go) has turned the mode off.
-func layoutMayChange() bool { return deviceIsTablet() || phoneLandscapeReadingEnabled() }

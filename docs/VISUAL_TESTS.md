@@ -318,8 +318,8 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       wrapped line, and nothing paints past the card or over its footer.
       The empty line, before the name arrives, sits as close under the bar
       and over the hint as the name will, and the name moves nothing.
-- [ ] Find on a phone in landscape (iPhone SE, an iPhone Pro Max, with the
-      bottom bar; an Android phone, with the rail): ask a Find, then turn
+- [ ] Find on a phone in landscape (iPhone SE, an iPhone Pro Max and an
+      Android phone, each with the rail): ask a Find, then turn
       the phone. "Searching with AI…" and the bar sit at the top of the
       results area, just under the Find field, never under it; the rest
       scrolls, and a drag reaches Cancel and "Switch to a faster model"
@@ -363,10 +363,13 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       theme during the load and confirm scrolling stays smooth afterwards
       (the orphaned-bar 20fps repaint was a live defect); the first-run
       progress line actually advances per book.
-- [ ] Landscape, on Books and Search: Android phones and all tablets move
-      the bar to a left rail; the iPhone keeps its bottom bar. On the Read
-      tab a phone reads full-screen instead (the V16 row); raising the soft
-      keyboard must NOT flip the layout (the 3,000-rebuilds/min trap).
+- [ ] Landscape, on Books and Search: every phone and tablet moves the bar
+      to a left rail, the iPhone included, and back to the bar upright. On
+      an iPhone the rail stands beside the Dynamic Island, not under it,
+      with the phone turned either way; on an Android phone beside its
+      cutout or side navigation bar. On the Read tab a phone reads
+      full-screen instead (the V16 row); raising the soft keyboard must NOT
+      flip the layout (the 3,000-rebuilds/min trap).
 
 ## V12 — sharing and links
 

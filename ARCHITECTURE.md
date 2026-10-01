@@ -18,11 +18,11 @@ points and the two site generators:
   sidebar/HSplit remains an explicit diagnostic escape hatch.
 - `cmd/mobile/main.go` — iOS / Android; the OS owns the window size and the
   Bible loads on a background goroutine behind a spinner. Every touch device
-  uses the same Read / Books / Search layout: a bottom bar in portrait and the
-  same destinations in a left rail on tablets and Android phones in landscape
-  (see UI architecture below and [docs/IPAD.md](docs/IPAD.md)). On the Read
-  tab a phone in landscape drops that navigation and reads full-screen by
-  default (`phone_landscape.go`); Books and Search keep their bar or rail.
+  uses the same Read / Books / Search layout: a bottom bar while the window is
+  taller than it is wide and the same destinations in a left rail while it is
+  wider (see UI architecture below and [docs/IPAD.md](docs/IPAD.md)). On the
+  Read tab a phone in landscape drops that navigation and reads full-screen by
+  default (`phone_landscape.go`); Books and Search keep the rail.
 
 Per-platform behaviour is selected at compile time by **Go build tags**, not at
 runtime, so each target links only the drivers and native code it needs:
@@ -276,11 +276,13 @@ prose.
 `CreateMainUI` exists in exactly one of `ui_desktop.go` / `ui_mobile.go` per
 build — the Go build tag picks the *platform*. Both feed the shared composition
 in `ui_compact.go`. The platform seams choose the reading implementation and
-whether navigation is a bar or rail: tablets use a left rail in landscape and
-a bottom bar in portrait; Android phones also use the landscape rail to
-preserve reading height, while iPhone keeps its bottom bar. Desktop defaults to
-the left rail and can opt into the former sidebar or a bottom bar through
-`BIBLETEXT_DESKTOP_TABS` for comparison.
+whether navigation is a bar or rail: every phone and tablet uses a left rail
+while its window is wider than it is tall and a bottom bar otherwise
+(`mobileRailWanted` in `layout.go`), which gives a short landscape window its
+reading height back. Desktop draws the left rail whatever the window's shape
+and can opt into the former sidebar or a bottom bar through
+`BIBLETEXT_DESKTOP_TABS` for comparison; it is to take the phones' rule in
+1.2.19 (docs/BACKLOG.md).
 
 ## UI architecture
 

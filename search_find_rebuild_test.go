@@ -92,8 +92,8 @@ type phoneRoot struct {
 
 func (w *phoneRoot) CreateRenderer() fyne.WidgetRenderer { return widget.NewSimpleRenderer(w.content) }
 
-// wrap puts the window's content inside a phoneRoot, as every build does on
-// Android and on an iPhone that may read in landscape. rebuildWindow replaces
+// wrap puts the window's content inside a phoneRoot, as every build does on a
+// phone or a tablet. rebuildWindow replaces
 // it with the bare tree, so a test wraps again after each rebuild it wants
 // the next one to find wrapped.
 func (h *appearanceHarness) wrap() {

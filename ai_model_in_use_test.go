@@ -943,14 +943,16 @@ func columnOf(t *testing.T, area, msg fyne.CanvasObject) *fyne.Container {
 }
 
 // ON A PHONE IN LANDSCAPE THE FIND WAIT KEEPS ITS STATUS IN SIGHT AND CANCEL
-// IN REACH. An iPhone keeps its bottom bar in landscape, and between the bar
+// IN REACH. An iPhone kept its bottom bar in landscape, and between the bar
 // and the Find field the results area is about half the wait's height, the
 // model line (the longest, wrapped, here) included. The wait's column was
 // centred in that area and ran out of it at both ends: "Searching with AI…"
 // and the bar under the Find field, Cancel and the faster-model offer under
 // the tab bar, with nothing to scroll them back. It now starts at the area's
-// top, in a scroll, and all of it is in reach; an Android phone's rail leaves
-// more room, not enough. In portrait there is room, and the whole wait shows
+// top, in a scroll, and all of it is in reach. The rail every phone held
+// sideways now has leaves more room, not enough, at every iPhone's sideways
+// size and an Android phone's; the bar's cases stay for a window that draws
+// the bar at those sizes. In portrait there is room, and the whole wait shows
 // at once, centred, as it always has. Mutation: the Search tab's wait without
 // its scroll (findWaitScroll).
 func TestTheFindWaitKeepsCancelInReachOnALandscapePhone(t *testing.T) {
@@ -966,8 +968,12 @@ func TestTheFindWaitKeepsCancelInReachOnALandscapePhone(t *testing.T) {
 		{"bar", 568, 320, true},
 		{"bar", 844, 390, true},
 		{"bar", 932, 430, true},
+		{"rail", 568, 320, true},
 		{"rail", 667, 375, true},
 		{"rail", 800, 360, true},
+		{"rail", 844, 390, true},
+		{"rail", 932, 430, true},
+		{"rail", 956, 440, true},
 	} {
 		t.Run(fmt.Sprintf("%s %vx%v", sc.nav, sc.w, sc.h), func(t *testing.T) {
 			t.Setenv("BIBLETEXT_DESKTOP_TABS", sc.nav)

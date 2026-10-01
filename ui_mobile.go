@@ -17,8 +17,8 @@ func dismissKeyboard(state *AppState) {
 }
 
 // CreateMainUI (mobile) uses the shared Read / Books / Search layout. Navigation
-// sits at the bottom in portrait, and moves to a leading rail on tablets and
-// Android phones in landscape. Tapping a book or search hit selects it and
+// is a leading rail while the window is wider than it is tall and a bottom bar
+// otherwise (mobileRailWanted). Tapping a book or search hit selects it and
 // returns to Read automatically.
 //
 // Switching tabs rebuilds the window (ui_compact.go); within the Read tab,
@@ -66,19 +66,15 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 		root = buildRegularWidthUI(state)
 	}
 
-	// Tablets need the watcher so rotation moves navigation between bottom bar
-	// and rail; Android is always watched because its live dimensions arrive
-	// after the first build and its phone landscape policy also moves
-	// navigation; every iPhone needs the rotation BACK observed for the
-	// landscape presentation (unless its preference turned the mode off). The
-	// watcher wraps the full-screen tree too: an
-	// iPad in chosen full-screen still never rebuilds on rotation, because
-	// renderedLayout zeroes its rail term while full-screen and its landscape
-	// term is constant off phones — so its reading position is untouched.
-	if layoutMayChange() {
-		return newLayoutWatcher(state, root)
-	}
-	return root
+	// Every phone and tablet is watched: a rotation moves the navigation
+	// between bottom bar and rail (mobileRailWanted), whatever the landscape
+	// presentation's preference, and on a phone flips that presentation; on
+	// Android the live dimensions also arrive only after the first build.
+	// The watcher wraps the full-screen tree too: an iPad in chosen
+	// full-screen still never rebuilds on rotation, because renderedLayout
+	// zeroes its rail term while full-screen and its landscape term is
+	// constant off phones — so its reading position is untouched.
+	return newLayoutWatcher(state, root)
 }
 
 // compactReadingView is the per-platform half of the shared compact layout:
@@ -95,31 +91,9 @@ func compactReadingView(state *AppState) fyne.CanvasObject {
 	return buildReadingViewMobile(state)
 }
 
-// compactNavRail puts navigation on the leading edge when vertical room is the
-// scarcer resource: tablets in landscape on both platforms, and Android phones
-// in landscape. iPhone keeps its existing bottom bar. This decides the
-// placement where navigation is drawn — Books, Search, the dev Links tab; a
-// phone's Read tab reads full-screen in landscape by default
-// (readingFullScreen, phone_landscape.go).
-//
-// The same reasoning as the desktop's (tab_rail.go): in landscape the scarce
-// axis is vertical, and a bottom bar spends a full strip of it on three icons
-// while the horizontal axis has room to spare. Rotate back to portrait and the
-// bar returns, because there the trade runs the other way.
-//
-// Android phones need the additional case because their fixed-height header,
-// history, chapter toolbar and bottom bar can consume the whole short edge. The
-// narrow rail gives that height back while spending a small part of the long
-// edge. This is a placement change only; destinations and state are unchanged.
-//
-// Orientation comes from the CANVAS, not from a layout pass: the soft keyboard
-// shrinks the laid-out height and would otherwise read as a rotation. See the
-// note on layoutWatcher.Resize, which is the same trap and cost 3,000 rebuilds
-// a minute when it was got wrong.
-func compactNavRail(state *AppState) bool {
-	if state == nil || state.window == nil {
-		return mobileRailWanted(deviceIsTablet(), phoneLandscapeNavRail(), 0, 0)
-	}
-	sz := state.window.Canvas().Size()
-	return mobileRailWanted(deviceIsTablet(), phoneLandscapeNavRail(), sz.Width, sz.Height)
-}
+// compactNavRail is the phone's and the tablet's navigation placement: the
+// leading rail when the window is wider than it is tall, the bottom bar
+// otherwise (mobileRailWanted, read from the live canvas by railForWindow).
+// Only the edge the destinations sit on depends on it; they and the state
+// behind them are the same on either.
+func compactNavRail(state *AppState) bool { return railForWindow(state) }

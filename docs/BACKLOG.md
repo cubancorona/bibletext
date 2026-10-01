@@ -1188,10 +1188,12 @@ screen has room, and on a landscape phone the column stays in its scroll with
 Cancel in reach.
 
 Both Find waits now scroll as the Study panel's waiting column does
-(`findWaitScroll` in `search.go`). An iPhone keeps its bottom bar in
+(`findWaitScroll` in `search.go`). An iPhone kept its bottom bar in
 landscape, which leaves the Search tab's results area, between the Find
 field and the bar, less than half the wait's height (in the host layout at
-667×375, 128pt of about 297pt). The wait's column was centred there and ran out of it at both
+667×375, 128pt of about 297pt). Since 1.2.18 a phone held sideways has the
+rail, which leaves more room and still not enough at any iPhone's or an
+Android phone's sideways size, so the scroll still holds Cancel in reach. The wait's column was centred there and ran out of it at both
 ends: "Searching with AI…" and the bar under the Find field, Cancel and the
 faster-model offer under the tab bar, where nothing could bring them back;
 the model line pushed Cancel almost wholly under. The column now starts at
@@ -1340,6 +1342,122 @@ and give the canvas a device's safe insets and a raised keyboard. Pinned by
 each proved against a mutation. What only a screen can confirm is listed under
 V12 in `docs/VISUAL_TESTS.md`.
 
+## The desktop takes the phones' navigation rule — planned for 1.2.19
+
+Since 1.2.18 every phone and tablet puts Read, Books and Search on a rail
+while its window is wider than it is tall and on a bottom bar otherwise
+(`mobileRailWanted` in `layout.go`; the entry below). The desktop does not:
+`compactNavRail` in `ui_compact_desktop.go` answers the rail whatever the
+window's shape, so a window tiled to a phone's shape keeps a rail down its
+narrow side, and the desktop never installs the layout watcher, so nothing
+would notice a resize across square anyway (divergence 29 in
+`docs/PLATFORM_MATRIX.md`). One rule everywhere is simpler to explain and to
+hold, and the tiled phone-shaped window is exactly where the bar serves.
+
+The plan:
+
+- **The rule.** The desktop's `compactNavRail` asks `railForWindow`, as the
+  phones do, when `BIBLETEXT_DESKTOP_TABS` is unset; the variable stays an
+  override (`sidebar`, `bar`, and a new `rail` for the rail whatever the
+  shape), so a gallery or a comparison can still pin either.
+- **The watcher.** `layoutWatcher` moves out of the mobile-only
+  `ui_regular.go` into an untagged file, and `CreateMainUI` in
+  `ui_desktop.go` wraps its root in it, so a resize that changes the answer
+  rebuilds the window.
+- **What a rebuild keeps.** A desktop window rebuilds today for a tab
+  change, a light/dark switch and the like; one in the middle of a resize is
+  new. It must keep the reading place, an open sheet and a live selection,
+  on the macOS native pane (`reading_macos.go`: its scroll restore and the
+  note card) and on the shared Windows/Linux styled pane, and it must not
+  re-push the chapter unless the page itself changes.
+- **No flapping.** A dead zone around square, so a window a few points
+  either side of it does not change navigation (for example the rail from
+  10% wider than tall, the bar from 10% taller, and the layout as built in
+  between), and a switch only when a live resize settles (one decision some
+  250 ms after the last size change), so dragging a corner across square
+  does not rebuild on every frame. The phones keep the plain rule: their
+  rotations are discrete.
+- **Tests.** The dead zone and the settle as pure functions over a fake
+  clock; the watcher installed on the desktop; the place, the sheet and the
+  selection kept across a resize rebuild on the styled pane, and the macOS
+  pane by its desktop test recipe; the desktop rows of the Navigation table
+  in `docs/PLATFORM_MATRIX.md` brought to the rule and divergence 29
+  retired.
+- **A pass on each desktop.** The Mac, the Windows VM and the Linux VM:
+  drag a window across square both ways mid-chapter, with a sheet open and
+  a selection live, and tile a window to a phone's shape.
+
+## One navigation rule on phones and tablets — DONE 1 October 2026, for 1.2.18
+
+Read, Books and Search sit on a rail along the leading edge while the window
+is wider than it is tall, and on a bottom bar otherwise, on every phone and
+tablet, iOS and Android alike (`mobileRailWanted` in `layout.go`; a square
+window counts as wide, `w >= h`, as before). The rule used to carry an
+exception: tablets on both platforms and Android phones took the rail when
+wider than tall, and the iPhone kept the bar in every orientation
+(`phoneLandscapeNavRail`, false on iOS). The iPhone's Read tab reads
+full-screen sideways, so the exception showed on Books and Search, where the
+bar was 874 or 956 points wide, wider than `tabBarSpreadMaxWidth`, and wore
+the iPad's centred dress with its tabs bunched in the middle (the entry
+below).
+
+What changed:
+
+- **The rule.** `mobileRailWanted(tablet, w, h)` is `w >= h`. Before the
+  canvas has a size it answers by the device, as it did: the rail for an
+  iPad, the bar for an iPhone and for any Android window, whose idiom is its
+  size, so an Android phone never flashes a rail before its size arrives.
+  `railForWindow` asks it of the live canvas, which the soft keyboard does
+  not change, and the phones' `compactNavRail` is that call.
+  `phoneLandscapeNavRail` and its three platform definitions are gone.
+- **The watcher on every phone and tablet.** `layoutMayChange` is gone too.
+  It was true on Android and on an iPad, and on an iPhone only while the
+  landscape presentation's preference was on (a development switch); with
+  it off an iPhone would have kept across a rotation the navigation it was
+  built with.
+- **The side insets need nothing of their own.** Both mobile drivers lay the
+  window's tree inside the insets they report (UIKit's safe area; on Android
+  the system window insets Fyne reads), so the rail stands beside the
+  Dynamic Island and the content beside the rail keeps clear of the inset
+  opposite, as Android's rail always has beside whatever side inset its
+  canvas reports. The native reading panes add the same insets back to their
+  frames. The two sheets that span the canvas need `clearOfSideInsets` only
+  because a sheet is placed on the canvas, outside that tree; the same
+  padding on the rail would hold it 62 points further in on an iPhone 17 Pro
+  Max.
+- **The centred bar** is now drawn only by a window taller than wide and
+  wider than 560 points: an iPad or an Android tablet held upright, or a
+  tall tablet window that wide. No phone draws it.
+
+Only the iPhone changes on screen. Laid out on the host with a phone's
+insets, every object in the window was compared with the tree before the
+change on seven devices (three iPhones, an Android phone, two iPads and an
+Android tablet), upright and sideways, on Read, Books and Search: 36 of the
+42 layouts are identical object for object, every upright one among them,
+and the six that differ are the three iPhones' Books and Search held
+sideways, where the bar became the rail. On the iOS 26.5 simulator a
+development build on an iPhone 17 Pro Max drew the rail on Books and Search
+in all 8 sideways captures, turned each way and launched each way, between
+the safe area's edge 62 points in and its hairline at 122, and the bar at
+the foot in all 10 upright ones.
+
+Tests: `TestOneNavigationRuleOnEveryPhoneAndTablet` (the rule on every device
+both ways up, in iPad and Android windows, square and unsized; on the rule
+before it the three iPhones held sideways fail and nothing else),
+`TestRailForWindowReadsTheCanvas` (on the rule before it, 956x440 and
+641x641 fail), `TestTheRailKeepsClearOfTheSideInsets` (an iPhone 17 Pro Max
+and an iPhone 16 Pro held sideways with UIKit's insets, the island's side
+alone inset on the left and on the right, an Android phone's cutout and its
+three-button bar; laid across the whole canvas the check finds the tree
+under the inset, and with the rail given the sheets' padding every case
+with a left inset fails) and `TestTheCentredBarIsAnUprightTablets` (on the
+rule before it the three iPhones held sideways draw the centred bar).
+
+Left as it is: with the landscape presentation switched off, an iPhone's
+Read tab held sideways now shows the rail beside the reading pane and
+rebuilds on rotation as an iPad's does, with no Go-side anchor, which
+`captureRotationAnchor` takes only when the presentation flips.
+
 ## Phone and tablet sheets over the header — BY DESIGN, not a bug (1 October 2026)
 
 A sheet on a phone or a tablet is a pop-up: it opens over what is under it,
@@ -1360,8 +1478,15 @@ The desktop's own rule, that a sheet opens below a desktop window's header
 
 Two older layout faults the same simulator pass showed, both in 1.2.17:
 
-- On an iPhone 16 Pro launched sideways, the tab bar is sometimes laid out
-  too narrow, its items spaced as if at the upright width. Still open.
+- On an iPhone 16 Pro launched sideways, the tab bar looked laid out too
+  narrow, its items spaced as if at the upright width. Measured on
+  1 October 2026 the bar was not too narrow: on Books and Search held
+  sideways, 60 captures of 60 on an iPhone 16 Pro and an iPhone 17 Pro Max,
+  launched sideways and turned both ways, drew a bar 874 or 956 points wide,
+  wider than `tabBarSpreadMaxWidth`, in the iPad's centred dress: its tabs
+  bunched in the middle at their designed slots, which is what read as the
+  upright spacing. Superseded in 1.2.18: a phone held sideways has the
+  rail, not a bar ("One navigation rule on phones and tablets" above).
 - Sideways on an iPhone with a Dynamic Island, the note composer and Ask
   ran under the island, which hid the start of a line of their text and the
   left end of the text box. Fixed: both sheets still span the canvas, so a
@@ -1661,11 +1786,11 @@ Still open, from the same work:
 - **The tab bar's style is chosen when the window is built.** `tabBarStyleFor`
   picks the edge-to-edge or centred bar from the width at build time, and
   `layoutWatcher` rebuilds only when class, rail or landscape change. A resized
-  iPad window that crosses 560pt keeps the old style until something else
-  rebuilds. Adding the style to `renderedLayout` is one line, but it also makes
-  an iPhone rebuild on rotation on the Books and Search tabs (a landscape phone
-  is wider than 560pt), and a rebuild can reset a list's scroll; that side
-  effect has to be checked on a phone first.
+  iPad window that crosses 560pt while it stays taller than wide keeps the old
+  style until something else rebuilds. Adding the style to `renderedLayout` is
+  one line. The concern that held it back, an iPhone rebuilding on rotation on
+  Books and Search, no longer applies: a phone held sideways draws the rail,
+  never the bar, and its rotation rebuilds for the rail already (1.2.18).
 - **On a device whose nativeScale is not its scale, a Fyne unit is not a
   point.** The 12 and 13 mini, the Plus models and Display Zoom. The canvas is
   counted in `nativeScale` pixels (nativeBounds) while Fyne's canvas scale and

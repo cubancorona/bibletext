@@ -112,11 +112,12 @@ func buildRegularWidthUI(state *AppState) fyne.CanvasObject {
 	return container.NewStack(base, body)
 }
 
-// layoutWatcher wraps the shared mobile root so rotation rebuilds when the
-// navigation placement changes. That covers tablets on both mobile platforms
-// and Android phones, whose landscape rail preserves reading height. The
-// retained layout-class comparison also makes any future deliberate classifier
-// change rebuild safely. It adds no chrome; only Resize acts.
+// layoutWatcher wraps the shared mobile root on every phone and tablet so a
+// rotation rebuilds when the navigation placement changes (the rail while the
+// window is wider than tall, mobileRailWanted) or a phone's landscape
+// presentation flips. The retained layout-class comparison also makes any
+// future deliberate classifier change rebuild safely. It adds no chrome; only
+// Resize acts.
 type layoutWatcher struct {
 	widget.BaseWidget
 	state   *AppState

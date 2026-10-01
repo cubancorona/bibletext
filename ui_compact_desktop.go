@@ -106,7 +106,9 @@ func announceDesktopNav() {
 		"(BIBLETEXT_DESKTOP_TABS=%q)\n", name, set)
 }
 
-// compactNavRail reports whether the navigation draws as a left rail. Desktop
-// only — a rail is a pointer-and-window convention, not a touch one, so the
-// phones and the iPad never ask (their answer is the constant in ui_mobile.go).
+// compactNavRail reports whether the navigation draws as a left rail. The
+// desktop's answer is the rail whatever the window's shape, unless
+// BIBLETEXT_DESKTOP_TABS overrides it. Phones and tablets take the rail only
+// while the window is wider than it is tall (ui_mobile.go, mobileRailWanted);
+// the desktop is to take that rule in 1.2.19 (docs/BACKLOG.md).
 func compactNavRail(*AppState) bool { return desktopNav() == desktopNavRail }

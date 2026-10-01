@@ -165,10 +165,10 @@ root), signing, emulator use, and distribution are covered in
 - ⌨️ **Keyboard shortcuts** (desktop) — `Cmd/Ctrl+F` focuses search, `Esc` clears.
 - 📱 **Touch UI** (iOS & Android) — one Read / Books / Search layout with
   full-size touch targets and native text selection (a real `UITextView` /
-  `TextView` reading pane). Navigation sits along the bottom in portrait; a
-  tablet or Android phone in landscape moves the same three destinations to a
-  rail on the left so the short edge remains available for reading. iPhone
-  keeps its bottom bar. On the Read tab a phone in landscape reads full-screen
+  `TextView` reading pane). Navigation sits along the bottom while the window
+  is taller than it is wide; held sideways, a phone or a tablet moves the same
+  three destinations to a rail on the left so the short edge remains available
+  for reading. On the Read tab a phone in landscape reads full-screen
   instead — no bar or rail, and on iPhone the page takes the iPad typography;
   rotate back for the navigation. The reading page on iPad keeps a centred, book-like
   measure with comfortable leading and indented paragraphs, modelled on the
