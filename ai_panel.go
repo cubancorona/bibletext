@@ -184,29 +184,14 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		// Everything the panel needs that is NOT the body. Read after the
 		// SetMinSize above, so it is this panel's real chrome.
 		chrome := popup.MinSize().Height - want
-		capped := false
 		if max := ps.Height - chrome; want > max {
 			want = max
 			if want < 1 {
 				want = 1
 			}
 			sc.SetMinSize(fyne.NewSize(bodyW, want))
-			capped = true
 		}
-		// On a phone or tablet, clear of the header's controls or over
-		// them where that is open to it (touchSheetHeight). The body
-		// scrolls, and takes whatever height the panel's chrome leaves; it
-		// keeps at least two thirds of it below the header.
-		h := want + chrome
-		if t := touchSheetHeight(state, popup, ps.Width, h, capped, sc, nil); t != h {
-			want = t - chrome
-			if want < 1 {
-				want = 1
-			}
-			sc.SetMinSize(fyne.NewSize(bodyW, want))
-			h = t
-		}
-		popup.Resize(fyne.NewSize(ps.Width, h))
+		popup.Resize(fyne.NewSize(ps.Width, want+chrome))
 	}
 
 	closeBtn := widget.NewButton("Close", func() {

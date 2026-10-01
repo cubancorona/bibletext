@@ -2056,10 +2056,9 @@ func (g *denseGridWrapLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
 // a setBook(book, selected) that repopulates it for a different book IN PLACE, a
 // reselect(chapter) callback that re-highlights the selected chapter IN PLACE (just the
 // buttons' importance), and scrollToSelected() which scrolls the grid so the selected
-// chapter is visible (used when the keyboard shrinks the pane), and the grid's scroll,
-// which takes whatever height the pane has beyond its label (touchSheetHeight). setBook
-// and reselect reuse the same grid + scroll, so a book change never rebuilds them.
-func referenceChapterGrid(state *AppState, pal palette, book string, selected int, onPick func(int)) (fyne.CanvasObject, func(string, int), func(int), func(), *container.Scroll) {
+// chapter is visible (used when the keyboard shrinks the pane). setBook and reselect reuse
+// the same grid + scroll, so a book change never rebuilds them.
+func referenceChapterGrid(state *AppState, pal palette, book string, selected int, onPick func(int)) (fyne.CanvasObject, func(string, int), func(int), func()) {
 	head := canvas.NewText("", pal.TextMuted)
 	head.TextSize = 12
 
@@ -2113,7 +2112,7 @@ func referenceChapterGrid(state *AppState, pal palette, book string, selected in
 	scrollToSelected := func() { scrollChildIntoView(scroll, btns[cur]) }
 
 	obj := container.NewBorder(container.NewPadded(head), nil, nil, nil, scroll)
-	return obj, setBook, reselect, scrollToSelected, scroll
+	return obj, setBook, reselect, scrollToSelected
 }
 
 // scrollChildIntoView scrolls a VScroll so target (a descendant of its content) is

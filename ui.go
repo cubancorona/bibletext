@@ -41,12 +41,6 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 	// The title and the version line read as one two-line block, so they sit
 	// tight against each other rather than a padding apart.
 	left := container.New(layout.NewCustomPaddedVBoxLayout(0), titleRow, versionSelector(state))
-	// The version line's anchor, without the TESTING badge beside it: one of
-	// the controls a phone's sheet must cover or leave alone (headerMarks).
-	anchor := left.Objects[1]
-	if row, ok := anchor.(*fyne.Container); ok && len(row.Objects) > 0 {
-		anchor = row.Objects[0]
-	}
 
 	// Retained hook for the former regular iPad layout. The current classifier
 	// never selects it; shared mobile navigation is built by buildCompactUI.
@@ -66,15 +60,13 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 	// quiet next to the reading text.
 	gear := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() { showAISettings(state) })
 	gear.Importance = widget.LowImportance
-	sparkle := verseOfDayButton(state)
-	controls := container.NewHBox(sparkle, gear)
+	controls := container.NewHBox(verseOfDayButton(state), gear)
 	right := container.NewVBox(layout.NewSpacer(), controls, layout.NewSpacer())
 
 	// A single centered "Go to" button opens the citation popup (showGotoPopup). It
 	// sits in the Border's center slot — shorter than the title+subtitle column, so
 	// it never grows the header — instead of an inline row that reserved layout space.
-	chip := gotoButton(state)
-	center := container.NewVBox(layout.NewSpacer(), container.NewCenter(chip), layout.NewSpacer())
+	center := container.NewVBox(layout.NewSpacer(), gotoButton(state), layout.NewSpacer())
 	row := container.NewBorder(nil, nil, left, right, center)
 
 	rule := canvas.NewLine(pal.Border)
@@ -100,7 +92,6 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 	content := container.New(layout.NewCustomPaddedVBoxLayout(0), rowWrap, rule)
 	band := container.NewStack(bg, content)
 	state.header = band
-	state.headerMarks = []fyne.CanvasObject{title, anchor, chip, sparkle, gear}
 	return band
 }
 

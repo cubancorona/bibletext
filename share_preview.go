@@ -126,16 +126,7 @@ func showShareImagePreview(state *AppState, quote, cite, version string) {
 		cnv,
 	)
 	popup.Show()
-	// On a phone or tablet, clear of the header's controls or over them
-	// where that is open to it (touchSheetHeight). Nothing in it scrolls
-	// and the image keeps its side, so the least the sheet can be is what
-	// it measures.
-	resize := func() {
-		h := minF(ps.Height, side+220)
-		h = touchSheetHeight(state, popup, ps.Width, h, ps.Height <= side+220, nil, nil)
-		popup.Resize(fyne.NewSize(ps.Width, h))
-	}
-	resize()
+	popup.Resize(fyne.NewSize(ps.Width, minF(ps.Height, side+220)))
 	// Sized again, image and all, when a desktop window changes size
 	// (sheet_refit.go).
 	registerSheetRefit(state, popup, func() {
@@ -143,7 +134,7 @@ func showShareImagePreview(state *AppState, quote, cite, version string) {
 		side = shareImageSide(ps, headerClearance(state) > 0)
 		imgBox.Layout = layout.NewGridWrapLayout(fyne.NewSize(side, side))
 		imgBox.Refresh()
-		resize()
+		popup.Resize(fyne.NewSize(ps.Width, minF(ps.Height, side+220)))
 	})
 }
 

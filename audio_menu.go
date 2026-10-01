@@ -144,10 +144,6 @@ func showAudioSourceMenu(state *AppState) {
 	if c := headerClearance(state); c > y {
 		y = c
 	}
-	// On a phone or tablet 16pt under the safe area's top can be partway
-	// down the header's title: the menu opens below the header then, or
-	// over it where it would not fit below (touchSheetTop).
-	y = touchSheetTop(state, cnv, x, w, y, popup.MinSize().Height)
 	popup.ShowAtPosition(fyne.NewPos(x, y))
 	// Built from state alone (the chosen source, the chapter's recordings), so a
 	// light/dark rebuild can bring it straight back (sheet_reopen.go).

@@ -121,30 +121,13 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 	// window put its top edge inside the header. Only while the list is the
 	// body: the chrome is what the panel needs besides it.
 	listShowing := func() bool { return len(body.Objects) == 1 && body.Objects[0] == scroll }
-	// On a phone or tablet the panel stands at its cap over the header's
-	// controls where the cap would start it partway down one, or opens
-	// below the header where the list keeps enough of its height there
-	// (touchSheetHeight).
 	fitList := func() {
 		chrome := popup.MinSize().Height - scroll.MinSize().Height
-		h := touchSheetHeight(state, popup, ps.Width, ps.Height, true, scroll, nil) - chrome
+		h := ps.Height - chrome
 		if h < 1 {
 			h = 1
 		}
 		scroll.SetMinSize(fyne.NewSize(bodyW, h))
-	}
-	// resize gives the panel its height while it waits for the list or says
-	// there is none: at most 460pt, which is its cap on a short screen. On a
-	// phone or tablet, clear of the header's controls or over them where
-	// that is open to it (touchSheetHeight); only the list scrolls.
-	resize := func() {
-		h := minF(ps.Height, 460)
-		var give fyne.CanvasObject
-		if listShowing() {
-			give = scroll
-		}
-		h = touchSheetHeight(state, popup, ps.Width, h, ps.Height <= 460, give, nil)
-		popup.Resize(fyne.NewSize(ps.Width, h))
 	}
 	showRefs := func(refs []crossRef, tskErr error) {
 		stopThinking()
@@ -167,10 +150,7 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 		cnv,
 	)
 	popup.Show()
-	// Waiting, then sized: on a phone the least the panel can be is what the
-	// waiting state measures (resize).
-	setThinking()
-	resize()
+	popup.Resize(fyne.NewSize(ps.Width, minF(ps.Height, 460)))
 	// Sized again from the height a desktop window now gives it whenever the
 	// window changes size, in whichever state it is (sheet_refit.go).
 	registerSheetRefit(state, popup, func() {
@@ -178,13 +158,14 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 		if listShowing() {
 			fitList()
 		}
-		resize()
+		popup.Resize(fyne.NewSize(ps.Width, minF(ps.Height, 460)))
 	})
 	// The same selection again after a light/dark rebuild. The dataset loads
 	// once and is guarded, so a reopen mid-load waits on the same load rather
 	// than starting another (sheet_reopen.go).
 	registerSheetReopen(state, popup, func() { showCrossRefs(state, text, span) })
 
+	setThinking()
 	crossRefsRun(func() {
 		err := crossRefsLoad()
 		// crossRefsForSelection always returns the embedded Gospel parallels (offline),

@@ -230,10 +230,6 @@ type AppState struct {
 	// it shows none — full-screen reading, the loading screen. A desktop sheet
 	// reads where it ends so as to open clear of it (headerClearance).
 	header fyne.CanvasObject
-	// headerMarks are header's controls — the title, the translation line,
-	// the Go to chip, the sparkle and the gear — which a sheet on a phone or
-	// tablet must cover entirely or leave alone (touchHeaderBand).
-	headerMarks []fyne.CanvasObject
 	// surfaceReading is called when a result is opened from search (or another
 	// off-screen view) so the platform can bring the reading pane back into
 	// focus. No-op on desktop (the reading pane is always visible alongside);

@@ -129,7 +129,7 @@ func offerNoteLinkChoice(state *AppState, rawURL string, t ShareTarget) {
 	card := surface(container.NewPadded(form), pal.SurfaceAlt, pal.Border, fyne.Size{})
 	popup = widget.NewModalPopUp(card, cnv)
 	popup.Show()
-	fitTouchCard(state, popup, w, card.MinSize().Height)
+	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
 	// Undecided is the one state this card must not lose: a light/dark rebuild
 	// brings the same question back, with the same link (sheet_reopen.go).
 	registerSheetReopen(state, popup, func() { offerNoteLinkChoice(state, rawURL, t) })

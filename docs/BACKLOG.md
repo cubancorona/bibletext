@@ -612,173 +612,6 @@ And on every platform, a Share as image card that fails to render
 that cannot be written) leaves the preview empty, and its Share then closes
 the sheet and hands nothing over, without a word (`share_preview.go`).
 
-## Phones and tablets: a sheet started partway down the header's controls — FIXED 30 September 2026
-
-A sheet may cover a header control entirely or leave it alone; starting
-partway down one is the defect (`headerClearance`, `sheet_fit.go`). A
-desktop window keeps every sheet below the header. Phones and tablets sized
-their sheets to the safe area alone, so where a sheet's top edge fell
-depended on the device's insets (the divergence left open under "Recapture
-the App Store and Play screenshots" below). An Android phone at its
-default 420 dpi (1080x2410, a canvas about 360x803 units) has a 21-unit
-status bar, so its header starts 28 units down, and Settings, the listed
-cross-references, a long verse of the day and the audio source menu started
-9 to 12 units down it: the tops of the title's letters showed above them.
-At 1080x2160, the 2:1 frame the Play phone set is taken at, the translation
-picker started partway down the Go to chip and the translation line, as
-captures for the 1.2.17 Play set at 420 showed before the set was taken at
-356 instead. An iPhone's deeper status bar hides
-most of it, not all: the audio source menu cut the title's letters on every
-iPhone held upright, the listed cross-references cut the Go to chip, the
-sparkle and the gear at 440x956, and the iPhones with a 20pt status bar
-(320x568, 375x667) had eight and six sheets partway down a control. An
-iPhone on its side showing the header (Books, Search, or Read with
-landscape reading turned off) had ten or eleven, the Go to chip cut by
-nearly every centred sheet; the Android phone on its side had two, the link
-cards; an iPad on its side one, the share image preview. 78 sheet openings
-in all, over fifteen screens.
-
-Not faults, and left as they are: at 420 dpi Books shows one column,
-because the phone is about 360 units wide and two of `denseGridWrapLayout`'s
-168-unit cells do not fit (`books_grid.go`), and Settings starts Clear on a
-line of its own (`keyActionsRow`; "Settings: Clear runs past the key card at
-320pt" below) and scrolls its body (`sheet_fit.go`).
-
-**The fix** (`sheet_touch_header.go`). The header records its controls
-(`headerMarks`: the title, the translation line, the Go to chip's outline,
-the sparkle and the gear), and on a phone or tablet each sheet's size goes
-through `touchSheetHeight`, or `touchSheetTop` for the audio source menu,
-which is shown where it is put. A sheet whose top edge would land partway
-down a control it spans may move to one of the two places the iPhone's
-sheets already take. A sheet at the tallest the screen allows covers the
-header, its top at the header's top edge, as the tall sheets do on an
-iPhone: on the Android phone that is Settings, the listed
-cross-references, a long verse of the day and the translation picker with
-more translations. One sized to its content opens `sheetHeaderGap` below
-the header and scrolls inside itself, as the translation picker does on an
-iPhone, unless there is less than 240 units under the header; then it
-covers the header too. The audio source menu opens below the header
-wherever it fits. The small cards (the note-link offer, the link notices,
-the download spinner and its error) cannot be shortened, so where one
-crosses a control it can only grow to cover the header.
-
-A move has to be worth its cost, or the sheet stays exactly where it was;
-the defect is a few units of a control showing above a sheet's edge, and a
-move must not trade it for a worse one. Two costs are refused. **Height:**
-a centred sheet below the header is shorter by twice the distance its top
-moves down, and its scroll gives that up; a sheet opens below the header
-only where its scroll keeps at least two thirds of its height and at least
-120 units, or all of it if it had less (`touchSheetKeeps`), and a sheet
-that does not scroll only where its content fits. With three-button
-navigation on the 420 dpi phone, where covering would end a sheet under the
-42-unit navigation bar, Settings, a long verse of the day, the listed
-cross-references and the translation picker with more translations open
-below the header and keep about four fifths of their scroll (Settings 561
-to 450 units, the cross-references 548 to 421). On an iPhone on its side,
-whose home indicator also rules out covering, the header is a fifth of the
-screen: opening below it would leave the translation picker 36 of its 120
-units (a clipped part of one row) on a 956x440 iPhone and Settings 82 of
-its 181 on a 852x393 iPhone, and shortening a sheet as far as it could go,
-so that its top edge fell under the controls inside the header, left an AI
-answer there 32 of its 101 units with landscape reading turned off. Those
-sheets stay where they were, and nothing is shortened that way any more.
-Covering the header makes a sheet taller, so its scroll only gains, except
-where the sheet lays its content out afresh for its height: the
-translation picker pins its sentences under the rows wherever there is
-room for them. With a translation under evaluation compiled in (the `nrsv`
-and `lsb` builds), the picker on a 667x375 phone on its side stands at its
-cap from 40 units down with its sentences in the scroll; grown to cover the
-header it had room to pin them, and the scroll that shows its rows went
-from 123 units to 54. A sheet covers the header only where its scroll
-keeps what it would have to keep below it (the picker is asked how it lays
-out at the taller height), so that picker stays where it was.
-**A side edge:** a sheet is
-narrower than the header, so one grown upwards to cover it passes its
-sides through any control at the header's edge. It covers the header only
-where it then covers in part no control it left wholly alone before; a
-line of text counts as left alone when the sheet's top edge is below its
-baseline, since the rule knows where descenders could be but not which
-letters have them. So a card on a 568x320 phone, whose top edge crossed the
-Go to chip but cleared the title, stays where it was rather than cover the
-header and leave "BibleT" showing beside it; the listed cross-references on
-a 440x956 iPhone open below the header instead of covering it. The side
-edge through a control is not itself treated as the defect: a tall sheet on
-a phone held upright starts 20 units in and the title 14.8, so the title's
-first letter shows beside it, which is how the iPhone's tall sheets, the Go
-to picker and the iPad's Settings have always sat, under the scrim that
-dims what is beside a sheet. Those sheets cut the title with their top edge
-before they moved, and still show that sliver after.
-
-On the fifteen screens, 50 of the 78 sheet openings that crossed a control
-now cover the header or open below it, and 28 stay where they were, all on
-phones on their sides: seven on a 568x320 iPhone and four on a 667x375 one
-(the side edge), ten on a 852x393 iPhone and seven on a 956x440 one (the
-home indicator, then the height). Every sheet on the Android phone, upright
-or on its side, with either navigation, every iPhone held upright and every
-iPad moves. In the `nrsv` and `lsb` builds, whose translation picker
-carries the evaluation sentence, 30 stay: the picker on the 667x375 phone
-(above), and with three-button navigation on the 420 dpi Android phone the
-picker at its cap from 40 units down, across the title, since covering
-would end it under the navigation bar and below the header its rows would
-keep 223 of their 349 units. A sheet that did not start partway down a control is
-untouched. The notes questions and the model list open only over Settings
-and are left as they were. The cross-references panel is now sized after
-its waiting state is in place, so on a phone the least it can be is what
-that state measures. The header is found through the root widget a phone's
-window holds the page in (`objectInTree` now goes through
-`contentWrapper`): without that the rule found no header on Android, or on
-an iPhone that reads in landscape, which the first build on the emulator
-showed. A control's drawn part is taken from its box: a line of text below
-its upper leading, down to its baseline and its box's foot, an icon at the
-inline icon size, the chip's outline a unit past its box.
-
-Held by `sheet_touch_header_test.go` and `sheet_touch_header_matrix_test.go`
-(the second left out of runs under the race detector, where its five
-hundred sheet openings take two minutes rather than under ten seconds),
-which lay the window out as a phone's driver does (safe insets, the padded
-window, the root widget) on fifteen screens (320x568 to 440x956 with
-360x720, 360x803 and 360x803 with three-button navigation for the Android
-phone, five phones on their sides, three iPad sizes) and read the header's
-controls off a rendering at 3x: no sheet's top edge crosses a control's
-drawn pixels unless it has no better place, which the test works out from
-what it measured (covering ends under the bottom inset, passes a side
-through a control, per the pixels, that the sheet cleared, or, the sheet
-opened covering the header through the `touchSheetsAlwaysCover` seam,
-leaves its scroll less than two thirds or 120 units; below the header its
-scroll keeps less than that, or its content does not fit), and such a
-sheet is the same box as with the rule off; no
-sheet that moved shows less of its scroll than that; no sheet that moved
-covers in part a control it left alone; every sheet that did not cross a
-control is the same box with the rule on; every sheet that moved lies
-within the safe area; twenty cases go over, below or stay as described,
-the translation picker on a 375x667 iPhone over the header where it stands
-at its cap (with a translation under evaluation) and below it where it is
-sized to its content; the translation picker at 360x803 and 360x720 is at
-or below the header's bottom or at or above its top, unless it has no
-better place; the picker on a 667x375 phone with a translation under
-evaluation stays where it was, in every build (the test registers one
-where none is compiled in); the rule's idea of each control holds all
-its pixels; the floor's arithmetic holds at its edges; and no desktop sheet
-moves. Seen on the Pixel 11 Pro emulator (Android 17, 1080x2410, 420):
-Settings and the cross-references start at the header's top edge, the
-audio source menu below the header, the translation picker where it was.
-
-Left: the iPhone and iPad changes are proven on the host only, not yet on
-a simulator or a device, and three-button navigation on the host only. On
-an iPhone on its side with the header showing (Books, Search, or Read with
-landscape reading turned off), 28 sheet openings still start partway down
-the Go to chip, as in 1.2.17: fixing them would take a sheet placed off
-the centre, which Fyne's modal does not do, or a shorter header there. A
-card grown to cover the header (on the Android phone on its side) has
-space under its buttons. The cross-references panel on a 956x440 iPhone
-waits below the header and, when its list comes, stands at its cap from
-40 units down, where it was. The translation picker that stays on a
-667x375 phone with a translation under evaluation could instead cover the
-header with its sentences left in the scroll, which would then show 189
-units rather than 123; the picker pins its sentences wherever they fit,
-and that is unchanged. The Play phone set can now be taken at 420
-(`docs/SCREENSHOT_PLAYBOOK.md` §7).
-
 ## A phone sheet reopened under the keyboard ended at the keyboard's top — FIXED 29 September 2026
 
 Every phone sheet with a field — the note composer, Settings, Ask, and the
@@ -1506,6 +1339,32 @@ and give the canvas a device's safe insets and a raised keyboard. Pinned by
 `TestTheNoteSheetRefitsWhenTheCanvasChanges` (`share_note_excerpt_test.go`),
 each proved against a mutation. What only a screen can confirm is listed under
 V12 in `docs/VISUAL_TESTS.md`.
+
+## Phone and tablet sheets over the header — BY DESIGN, not a bug (1 October 2026)
+
+A sheet on a phone or a tablet is a pop-up: it opens over what is under it,
+and when it is tall enough it covers part of the header, its top edge
+sometimes crossing the Go to chip or the title. That is how a pop-up is
+meant to behave, and it stays.
+
+A rule that moved such sheets clear of the header, or grew them to cover
+it whole, was built on 30 September 2026 and taken out again on 1 October
+before any release carried it. On the iOS simulator it cost content that
+1.2.17 shows: on an iPhone SE held upright the Go to picker hid chapter 28
+of Matthew and clipped 25 to 27, the waiting AI answer pushed Cancel and
+"Switch to a faster model" out of view, and the translation list showed
+three translations instead of four; cards grown to cover the header carried
+blank space, and the audio menu, opened sideways, ended across the tab bar.
+The desktop's own rule, that a sheet opens below a desktop window's header
+(`headerClearance` in `sheet_fit.go`), predates it and is unchanged.
+
+Two older layout faults the same simulator pass showed, both in 1.2.17 and
+still open:
+
+- On an iPhone 16 Pro launched sideways, the tab bar is sometimes laid out
+  too narrow, its items spaced as if at the upright width.
+- Sideways on an iPhone with a Dynamic Island, the note composer and Ask
+  run under the island, which hides the start of a line of their text.
 
 ## The open narration card covers the phone header's controls — kept as a pop-up for now
 
@@ -3257,10 +3116,8 @@ confirm is in `docs/VISUAL_TESTS.md` V15:
   at their cap
   those start above the header's controls rather than below the header,
   and a tablet sheet a little shorter than its cap could still start
-  partway down the Go to chip. Seen on phones and fixed on 30 September
-  2026 (above, "Phones and tablets: a sheet started partway down the
-  header's controls"), but on an iPhone on its side, where no better place
-  is open to most of them. Nor are their sheets sized again when the canvas changes
+  partway down the Go to chip. Not seen in the new images; left until a
+  screen shows it. Nor are their sheets sized again when the canvas changes
   size: there the content also changes height as the soft keyboard comes
   and goes, and a sheet resized under the reader's typing is worse; a
   rotation that moves the navigation rebuilds the window and closes the

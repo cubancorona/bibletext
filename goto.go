@@ -153,7 +153,7 @@ func gotoPickerModalFrom(state *AppState, withVerse bool, seed gotoPickerSeed) {
 	// The chapter grid is built ONCE; picking a book repopulates it in place via
 	// setChapterBook. Rebuilding it would re-create its dense theme override, whose next
 	// layout pass shifts the cell metrics — the visible shrink/jump when a book is tapped.
-	gridObj, setChapterBook, reselectFn, scrollSelFn, chapterScroll := referenceChapterGrid(
+	gridObj, setChapterBook, reselectFn, scrollSelFn := referenceChapterGrid(
 		state, pal, selectedBook, highlightChapter(), func(ch int) {
 			selectedChapter = ch
 			if withVerse {
@@ -525,13 +525,8 @@ func gotoPickerModalFrom(state *AppState, withVerse bool, seed gotoPickerSeed) {
 		fit := func() {
 			w, h := pickerSplitSize(cnv)
 			// Centred, so on a short desktop window it is kept below the
-			// header like every desktop sheet (headerClearance), and on a
-			// phone or tablet clear of the header's controls or over them
-			// where that is open to it (touchSheetHeight). Its height is a
-			// share of the screen rather than its content's, and its panes
-			// scroll side by side; the chapter grid's scroll stands for both.
+			// header like every desktop sheet (headerClearance).
 			h = clearOfHeader(h, cnv.Size().Height, headerClearance(state))
-			h = touchSheetHeight(state, popup, w, h, false, chapterScroll, nil)
 			popup.Resize(fyne.NewSize(w, h))
 		}
 		fit()
@@ -799,7 +794,5 @@ func gotoButton(state *AppState) fyne.CanvasObject {
 		base = state.theme
 	}
 	chip := container.NewThemeOverride(btn, smallChipTheme{Theme: base})
-	// The outline, which the header centres: its box is what a sheet must
-	// cover or leave alone (touchHeaderBand).
-	return inputFrame(chip, pal.Border)
+	return container.NewCenter(inputFrame(chip, pal.Border))
 }

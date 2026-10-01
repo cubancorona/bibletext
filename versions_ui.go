@@ -236,40 +236,15 @@ func showVersionPickerWith(state *AppState, notice string) {
 		// last laid out at, and on opening that is the popup's minimum width,
 		// where the sentences take more lines: an opened sheet came out
 		// taller than one sized again at the same window size.
-		place := func(maxH float32) float32 {
-			placeSentences(true)
+		placeSentences(true)
+		popup.Resize(fyne.NewSize(w, 0))
+		if popup.MinSize().Height > maxH {
+			placeSentences(false)
 			popup.Resize(fyne.NewSize(w, 0))
-			if popup.MinSize().Height > maxH {
-				placeSentences(false)
-				popup.Resize(fyne.NewSize(w, 0))
-			}
-			return header.MinSize().Height + list.MinSize().Height + footer.MinSize().Height + 64
 		}
-		natural := place(maxH)
-		h := natural
+		h := header.MinSize().Height + list.MinSize().Height + footer.MinSize().Height + 64
 		if h > maxH {
 			h = maxH
-		}
-		// On a phone or tablet, clear of the header's controls or over
-		// them where that is open to it (touchSheetHeight). The rows
-		// scroll, and keep at least two thirds of their height wherever the
-		// sheet moves. The sentences are placed for the height the sheet
-		// would have, as they are for maxH: below the header they follow
-		// the rows into the scroll where the pinned part would not fit, as
-		// they do under a desktop window's header, and over it they are
-		// pinned again where it would, which can leave the rows less room
-		// than they had. Asking moves them, so they are placed again for
-		// the height the sheet ends at.
-		asked := false
-		relayout := func(t float32) (float32, float32) {
-			asked = true
-			place(t)
-			least := popup.MinSize().Height
-			return least, t - least + body.MinSize().Height
-		}
-		if t := touchSheetHeight(state, popup, w, h, natural > maxH, body, relayout); t != h || asked {
-			place(t)
-			h = t
 		}
 		popup.Resize(fyne.NewSize(w, h))
 	}
@@ -804,7 +779,7 @@ func showVersionLoading(state *AppState, name string) func() {
 			w = 264 // narrow enough for any phone, wide enough for the caption
 		}
 		popup.Resize(fyne.NewSize(w, card.MinSize().Height))
-		fitTouchCard(state, popup, w, card.MinSize().Height)
+		popup.Resize(fyne.NewSize(w, card.MinSize().Height))
 		// Only while the download runs: once dismissed, the registration is
 		// already dead with its popup, and this guard is the belt to that.
 		registerSheetReopen(state, popup, func() {
@@ -886,5 +861,5 @@ func showVersionLoadError(state *AppState, name string) {
 		w = 240
 	}
 	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
-	fitTouchCard(state, popup, w, card.MinSize().Height)
+	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
 }
