@@ -374,15 +374,20 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 	// Mobile: the same full-canvas, top-anchored, non-modal sheet promptAskQuestion
 	// uses, and for the same reason — a centered modal puts the field under the
 	// soft keyboard, and a full-canvas card means no tap lands "outside" it and
-	// leaves the reading overlay latched hidden.
+	// leaves the reading overlay latched hidden. Its card keeps clear of the
+	// side safe insets of a phone held sideways, and the native field parked
+	// over the card's slot moves with it (clearOfSideInsets).
 	body := container.NewVBox(form, layout.NewSpacer())
 	card := surface(container.NewPadded(body), pal.SurfaceAlt, pal.Border, fyne.Size{})
-	popup = widget.NewPopUp(card, cnv)
 	cw, ch := cnv.Size().Width, cnv.Size().Height
 	topY := float32(0)
-	if pos, sz := noteSheetArea(cnv); sz.Height > 0 {
+	pos, sz := noteSheetArea(cnv)
+	if sz.Height > 0 {
 		topY, ch = pos.Y, sz.Height
 	}
+	sideL, sideR := sideInsets(cw, pos, sz)
+	sheet, refitSides := clearOfSideInsets(card, sideL, sideR)
+	popup = widget.NewPopUp(sheet, cnv)
 	// What the card leaves uncovered at the canvas's foot as it opens: the
 	// home indicator's inset, the keyboard not being up yet. A refit keeps it
 	// (below).
@@ -413,12 +418,15 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 	// as it opened, and never from the interactive area again: that shrinks
 	// while the keyboard is up, and the phone sheet is not resized for the
 	// keyboard. A card fitted to it would end at the keyboard's top and stay
-	// short, the page showing beneath it, once the keyboard went down.
+	// short, the page showing beneath it, once the keyboard went down. Its
+	// side insets are read again, since a keyboard moves only the foot.
 	lastCanvas := cnv.Size()
 	refit := func() {
 		now := cnv.Size()
 		relayout := func() {
 			excerpt.setMaxLines(noteExcerptMaxLinesFor(true, now.Height))
+			apos, asz := noteSheetArea(cnv)
+			refitSides(sideInsets(now.Width, apos, asz))
 			popup.Resize(fyne.NewSize(now.Width, now.Height-topY-footGap))
 		}
 		if slot, ok := entrySlot.(*noteEntrySlot); ok {

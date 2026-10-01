@@ -145,18 +145,22 @@ func promptAskQuestionWith(state *AppState, selectedText, question string) {
 	}
 
 	// Mobile: a full-canvas, top-anchored, NON-modal sheet (see the doc comment). The
-	// trailing spacer pins the form to the top, above the soft keyboard.
+	// trailing spacer pins the form to the top, above the soft keyboard. The card
+	// keeps clear of the side safe insets of a phone held sideways (clearOfSideInsets).
 	body := container.NewVBox(form, layout.NewSpacer())
 	card := surface(container.NewPadded(body), pal.SurfaceAlt, pal.Border, fyne.Size{})
-	popup = widget.NewPopUp(card, cnv)
 
 	cw := cnv.Size().Width
 	ch := cnv.Size().Height
 	topY := float32(0)
-	if pos, sz := sheetArea(cnv); sz.Height > 0 {
+	pos, sz := sheetArea(cnv)
+	if sz.Height > 0 {
 		topY = pos.Y
 		ch = sz.Height
 	}
+	sideL, sideR := sideInsets(cw, pos, sz)
+	sheet, _ := clearOfSideInsets(card, sideL, sideR)
+	popup = widget.NewPopUp(sheet, cnv)
 	popup.Resize(fyne.NewSize(cw, ch))
 	popup.ShowAtPosition(fyne.NewPos(0, topY))
 	registerSheetReopen(state, popup, reopen)

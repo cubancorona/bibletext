@@ -846,6 +846,12 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       while a finger owns the scroll.
 - [ ] Notched devices: text starts below the header in both orientations,
       never under the Dynamic Island.
+- [ ] A phone held sideways, the Dynamic Island on either side: the note
+      composer and Ask (`note`, `ask`) keep their cards, their text and the
+      left end of the text box clear of the island and of the inset
+      opposite it, over the full-screen Read tab and over Books
+      (`BIBLETEXT_DEV_TAB=books`); the bands beside the card are the
+      sheet's own ground, and a tap there leaves the sheet open.
 - [ ] Android rotation recreates the activity: the overlay re-renders —
       a blank pane or stale sticker after rotating is the failure.
 - [ ] The old sidebar+HSplit regular layout is DEAD by policy: any iPad

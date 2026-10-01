@@ -1358,13 +1358,21 @@ blank space, and the audio menu, opened sideways, ended across the tab bar.
 The desktop's own rule, that a sheet opens below a desktop window's header
 (`headerClearance` in `sheet_fit.go`), predates it and is unchanged.
 
-Two older layout faults the same simulator pass showed, both in 1.2.17 and
-still open:
+Two older layout faults the same simulator pass showed, both in 1.2.17:
 
 - On an iPhone 16 Pro launched sideways, the tab bar is sometimes laid out
-  too narrow, its items spaced as if at the upright width.
+  too narrow, its items spaced as if at the upright width. Still open.
 - Sideways on an iPhone with a Dynamic Island, the note composer and Ask
-  run under the island, which hides the start of a line of their text.
+  ran under the island, which hid the start of a line of their text and the
+  left end of the text box. Fixed: both sheets still span the canvas, so a
+  tap beside the card closes nothing, and their cards keep clear of the
+  side safe insets (`clearOfSideInsets` in `sheet_fit.go`, pinned by
+  `sheet_side_insets_test.go`). The rule reads the side insets the canvas
+  reports, so an Android phone held sideways with its cutout or a
+  three-button navigation bar at one side gets it too; where no side is
+  inset the sheets are where they were. Their foot was already the safe
+  area's: UIKit reports a 20-point inset under the home indicator of an
+  iPhone 17 Pro Max held sideways, and the sheets end there.
 
 ## The open narration card covers the phone header's controls — kept as a pop-up for now
 

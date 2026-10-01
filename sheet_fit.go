@@ -28,7 +28,11 @@ package bibletext
 // and nothing measured it. These two functions are pure arithmetic precisely so
 // the measurement is testable without a canvas.
 
-import "fyne.io/fyne/v2"
+import (
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
+)
 
 // sheetBottomMargin is the breathing room left under a sheet, matching the 16pt
 // gap the sheets leave above themselves.
@@ -147,6 +151,48 @@ func sheetArea(c fyne.Canvas) (fyne.Position, fyne.Size) {
 		sz.Height = c.Size().Height - pos.Y - keyboardFreeFoot.foot
 	}
 	return pos, sz
+}
+
+// sideInsets is how far in from the canvas's left and right edges the safe
+// area starts, read from the area a phone sheet is sized to (sheetArea): the
+// sensor housing's side on an iPhone held sideways, the display cutout or a
+// side navigation bar on an Android phone held sideways. Zero on both sides
+// where no area is reported (a desktop window) and wherever the area spans
+// the canvas's width, which is every phone held upright and every iPad.
+func sideInsets(canvasW float32, pos fyne.Position, sz fyne.Size) (left, right float32) {
+	if sz.Width <= 0 {
+		return 0, 0
+	}
+	return max(pos.X, 0), max(canvasW-pos.X-sz.Width, 0)
+}
+
+// clearOfSideInsets holds the card of a phone sheet that spans the canvas —
+// the note composer, the Ask sheet — inside the canvas's side safe insets.
+//
+// THE BUG THIS EXISTS TO PREVENT. Those two sheets are sized to the safe
+// area's height but to the canvas's whole width, from its left edge, so on an
+// iPhone held sideways the card ran under the Dynamic Island on one side and
+// the matching inset on the other: the first characters of the composer's
+// "Optional. The note travels…" and the Ask sheet's "AI answers in its own
+// words…", and the left end of each text box, were drawn under the island.
+//
+// The sheet itself still spans the canvas, and only its card moves in. The
+// two sheets are non-modal, so a tap outside the sheet's box closes it, and
+// the composer's close takes the note being written with it; a box narrowed
+// to the safe area would have turned both side bands into places where a
+// thumb holding the phone sideways throws the note away. The bands show the
+// sheet's own ground instead, as a system sheet's background reaches under
+// the insets while its content keeps clear of them. Where there is no side
+// inset the card is laid out exactly where it was.
+//
+// refit gives the card the side insets of a canvas that has changed size,
+// for the composer's refit; the sheet's next layout places it.
+func clearOfSideInsets(card fyne.CanvasObject, left, right float32) (wrapped *fyne.Container, refit func(left, right float32)) {
+	wrapped = container.New(layout.NewCustomPaddedLayout(0, 0, left, right), card)
+	refit = func(left, right float32) {
+		wrapped.Layout = layout.NewCustomPaddedLayout(0, 0, left, right)
+	}
+	return wrapped, refit
 }
 
 // sheetMaxHeight is the tallest a sheet pinned at y=top may be and still sit
