@@ -9,7 +9,7 @@ HOW TO EXERCISE 1.2.17
 Open any chapter, press and hold to select a verse, choose Share with note: the selected words appear above the note field. Type a short note and press Share, then cancel the share sheet: the note appears on the verse. With the Go to sheet open, switch the device between light and dark in Control Centre: the sheet comes back readable in the new colours.
 
 CURRENT NAVIGATION
-Read, Books, and Search sit at the bottom on iPhone and iPad portrait. On iPad landscape the same three destinations move to a rail on the left. On iPhone landscape Books and Search keep the bottom tab bar, and the Read tab reads full-screen. Books is a grouped Old Testament / New Testament grid.
+Read, Books, and Search sit at the bottom on iPhone and iPad held upright. Held sideways, both move the same three destinations to a rail on the left; an iPad window in Split View or Stage Manager follows its own shape, with the rail while it is wider than tall. On iPhone the Read tab reads full-screen sideways, so the rail shows on Books and Search. Books is a grouped Old Testament / New Testament grid.
 
 SHARED NOTES — HOW TO TEST
 Shared notes are the one place the app displays text written by another person.

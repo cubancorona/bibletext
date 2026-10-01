@@ -949,12 +949,12 @@ func columnOf(t *testing.T, area, msg fyne.CanvasObject) *fyne.Container {
 // centred in that area and ran out of it at both ends: "Searching with AI…"
 // and the bar under the Find field, Cancel and the faster-model offer under
 // the tab bar, with nothing to scroll them back. It now starts at the area's
-// top, in a scroll, and all of it is in reach. The rail every phone held
-// sideways now has leaves more room, not enough, at every iPhone's sideways
-// size and an Android phone's; the bar's cases stay for a window that draws
-// the bar at those sizes. In portrait there is room, and the whole wait shows
-// at once, centred, as it always has. Mutation: the Search tab's wait without
-// its scroll (findWaitScroll).
+// top, in a scroll, and all of it is in reach. The rail that every phone now
+// has sideways leaves more room than the bar did, but still not enough at any
+// iPhone's or an Android phone's sideways size; the bar's cases stay for a
+// window that draws the bar at those sizes. In portrait there is room, and
+// the whole wait shows at once, centred, as it always has. Mutation: the
+// Search tab's wait without its scroll (findWaitScroll).
 func TestTheFindWaitKeepsCancelInReachOnALandscapePhone(t *testing.T) {
 	const long = "gemini-2.5-flash-lite-preview-09-2025-thinking-experimental"
 	for _, sc := range []struct {

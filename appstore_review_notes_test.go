@@ -205,6 +205,38 @@ func TestAppReviewNotesCoverTheHeadlineFeature(t *testing.T) {
 	}
 }
 
+// The iOS notes say where App Review will find Read, Books and Search, and that
+// paragraph carries from release to release: the version bump touches only the
+// first line. It said for releases that an iPhone held sideways kept the bottom
+// bar on Books and Search, and since 1.2.18 every phone held sideways has the
+// rail (mobileRailWanted, layout.go). While the rule gives a sideways phone the
+// rail, no sentence of the notes that speaks of an iPhone sideways may put its
+// navigation at the bottom, and the notes must name the rail.
+func TestAppReviewNotesPlaceTheSidewaysIPhoneNavigationByTheRule(t *testing.T) {
+	if !mobileRailWanted(false, 874, 402) {
+		t.Skip("the rule gives a sideways phone the bar, so the notes have nothing to contradict")
+	}
+	raw, err := os.ReadFile(reviewNotesPath)
+	if err != nil {
+		t.Skipf("%s missing; the release guard above already reports that", reviewNotesPath)
+	}
+	notes := strings.ToLower(strings.ReplaceAll(string(raw), "\r\n", "\n"))
+	if !strings.Contains(notes, "rail") {
+		t.Errorf("%s never names the rail, which every phone and tablet held sideways shows",
+			reviewNotesPath)
+	}
+	sideways := regexp.MustCompile(`\b(landscape|sideways)\b`)
+	atTheBottom := regexp.MustCompile(`\bbottom\b|\btab bar\b`)
+	for _, sentence := range regexp.MustCompile(`[.!?\n]+`).Split(notes, -1) {
+		if strings.Contains(sentence, "iphone") && sideways.MatchString(sentence) &&
+			atTheBottom.MatchString(sentence) {
+			t.Errorf("%s puts a sideways iPhone's navigation at the bottom:\n  %q\n"+
+				"a phone held sideways shows the rail on Books and Search (mobileRailWanted)",
+				reviewNotesPath, strings.TrimSpace(sentence))
+		}
+	}
+}
+
 // Desktop bundles take their version from cmd/bibletext/FyneApp.toml, while
 // mobile bundles use cmd/mobile/FyneApp.toml. Release artifacts must present a
 // single marketing version on every platform.

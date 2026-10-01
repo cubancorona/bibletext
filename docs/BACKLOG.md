@@ -1191,15 +1191,16 @@ Both Find waits now scroll as the Study panel's waiting column does
 (`findWaitScroll` in `search.go`). An iPhone kept its bottom bar in
 landscape, which leaves the Search tab's results area, between the Find
 field and the bar, less than half the wait's height (in the host layout at
-667×375, 128pt of about 297pt). Since 1.2.18 a phone held sideways has the
-rail, which leaves more room and still not enough at any iPhone's or an
-Android phone's sideways size, so the scroll still holds Cancel in reach. The wait's column was centred there and ran out of it at both
-ends: "Searching with AI…" and the bar under the Find field, Cancel and the
-faster-model offer under the tab bar, where nothing could bring them back;
-the model line pushed Cancel almost wholly under. The column now starts at
-the top of the area with the rest a scroll away, and wherever there is room
-the scroll never engages and the column centres as before. The desktop wait
-(`aiSearchingView`) scrolls the same way in a short window.
+667×375, 128pt of about 297pt). The wait's column was centred there and ran
+out of it at both ends: "Searching with AI…" and the bar under the Find
+field, Cancel and the faster-model offer under the tab bar, where nothing
+could bring them back; the model line pushed Cancel almost wholly under. The
+column now starts at the top of the area with the rest a scroll away, and
+wherever there is room the scroll never engages and the column centres as
+before. Since 1.2.18 a phone held sideways has the rail, which leaves more
+room than the bar did but still not enough at any iPhone's or an Android
+phone's sideways size, so the scroll still holds Cancel in reach. The
+desktop wait (`aiSearchingView`) scrolls the same way in a short window.
 
 Asking Find again while a Find was in flight left the new Find searching
 until Cancel, on both Find surfaces. The resubmit takes its session token,
@@ -1357,9 +1358,27 @@ hold, and the tiled phone-shaped window is exactly where the bar serves.
 The plan:
 
 - **The rule.** The desktop's `compactNavRail` asks `railForWindow`, as the
-  phones do, when `BIBLETEXT_DESKTOP_TABS` is unset; the variable stays an
-  override (`sidebar`, `bar`, and a new `rail` for the rail whatever the
-  shape), so a gallery or a comparison can still pin either.
+  phones do, when `BIBLETEXT_DESKTOP_TABS` is unset or unrecognised. The
+  variable stays an override, so a gallery or a comparison can still pin
+  either: `sidebar`, `bar`, and `rail`, which exists today and keeps its
+  effect, the rail whatever the shape. What changes is that `rail` stops
+  meaning the default. `desktopNav` folds unset, `rail` and an unrecognised
+  value into one answer, `desktopNavRail`, and its doc comment documents
+  `rail` as "the rail, stated explicitly (same as unset)". `desktopNav`
+  needs a fourth answer for the shape rule, and its comment and
+  `announceDesktopNav`'s names change with it. That comment warns that the
+  variable's two readers, whether the compact layout runs at all and how
+  it draws its navigation, once disagreed over `rail`;
+  `desktop_nav_preview_test.go` pins their agreement, and its table (the
+  rail for unset, `rail` and `nonsense`) and
+  `TestDesktopDefaultsToTheRailWithNoEnvironment` are rewritten for the new
+  default while `TestRailImpliesTheCompactLayoutIsOn` keeps holding for
+  every value. An unsized desktop canvas must answer the rail, the
+  desktop's first frame today; `railForWindow` as it stands gives any
+  unsized window that is not a tablet the bar. The tests that set the
+  variable to `""` for the shipped desktop navigation
+  (`fullscreen_layout_test.go`) then get the shape rule and are rechecked;
+  those that set `rail` or `bar` keep what they force.
 - **The watcher.** `layoutWatcher` moves out of the mobile-only
   `ui_regular.go` into an untagged file, and `CreateMainUI` in
   `ui_desktop.go` wraps its root in it, so a resize that changes the answer
@@ -1451,7 +1470,12 @@ alone inset on the left and on the right, an Android phone's cutout and its
 three-button bar; laid across the whole canvas the check finds the tree
 under the inset, and with the rail given the sheets' padding every case
 with a left inset fails) and `TestTheCentredBarIsAnUprightTablets` (on the
-rule before it the three iPhones held sideways draw the centred bar).
+rule before it the three iPhones held sideways draw the centred bar). The
+App Review notes (`appstore/review-notes.txt`), whose navigation paragraph
+carries from release to release, now say the same, and
+`TestAppReviewNotesPlaceTheSidewaysIPhoneNavigationByTheRule` holds them to
+the rule: the paragraph before it, which kept the bar on a sideways iPhone,
+fails, and so do notes that never name the rail.
 
 Left as it is: with the landscape presentation switched off, an iPhone's
 Read tab held sideways now shows the rail beside the reading pane and
