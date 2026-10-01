@@ -327,6 +327,13 @@ under the user's config and cache directories); new files under
 `%LocalAppData%\Packages\<package family name>\LocalCache\Local\` and
 `…\LocalCache\Roaming\`, which is where the Bible cache, the preferences
 and the notes land for a Store install and what an uninstall removes. Nothing in the app assumes otherwise.
+The temp folder is not redirected: a picture share's copy, under
+`%TEMP%\bibletext-share`, stays in the user's own temp folder, and the Share
+sheet read it there; what an app chosen in the sheet receives has not been
+seen. Folders the direct download made before are used where they are, so a
+package started on such a machine opens where the download left off. Both
+were seen on 1 October 2026 with the arm64 package registered on the Windows
+VM (docs/PLATFORM_MATRIX.md, the Windows proof note under Sharing).
 
 ## Both architectures ship — since submission 2
 

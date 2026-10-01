@@ -389,9 +389,10 @@ place a fix on one does not reach the others.
     sheet: a probe executable without it opened the sheet on Windows 11
     arm64, natively and under x64 emulation, and so did the app itself,
     for every verb: the arm64 Store package's executable, run without
-    package identity as the zip runs (the Windows proof note under
-    [Sharing](#sharing)). The installed MSIX has not yet been seen to, nor
-    the zip itself. Held by `share_session_test.go`,
+    package identity as the zip runs, and on 1 October 2026 the arm64
+    package itself, registered with package identity (the Windows proof
+    note under [Sharing](#sharing)). Neither the zip itself nor a package
+    the Store installed has been seen to. Held by `share_session_test.go`,
     `share_parts_test.go` and `share_sheet_desktop_test.go` on every
     platform, `share_windows_test.go` in the Windows CI job, and recorded
     in `docs/BACKLOG.md`, "Windows: use the native Share sheet".
@@ -463,8 +464,11 @@ The honest to-do list, in proof-level terms.
   Store package of a tree not yet released (the Microsoft Store package
   workflow, run 36720846058) was run unpackaged on the local Windows ARM
   VM and every Share verb driven there (the Windows proof note under
-  [Sharing](#sharing)). That is not the shipped artefact, and the
-  installed MSIX was not run, so the matrix rows stay where they are.
+  [Sharing](#sharing)). On 1 October 2026 the arm64 package of the next
+  tree, faae44ef1 (run 36840901241), was registered on the same VM as a
+  packaged app, with package identity, and every Share verb driven again.
+  Neither is the shipped artefact, nor installed by the Store, so the
+  matrix rows stay where they are.
 - The owner's outstanding Linux hardware pass needs **an x86_64 machine or a
   cloud desktop**: the arm64 VM explicitly cannot stand in for it.
 - **Share has been watched on three platforms of six.** Linux and Windows
@@ -550,8 +554,8 @@ calls `revealInFileManager`. Numbers in a cell are divergences.
 Recorded 29–30 September 2026: the Apple and Android rows from the share
 code as it shipped in 1.2.17, the Linux row from the desktop confirmation
 sheet built on 30 September 2026, and the Windows row from its native Share
-sheet built the same day and driven in the app on the Windows VM that day;
-neither is in a release yet.
+sheet built the same day and driven in the app on the Windows VM that day,
+and again as a packaged app on 1 October 2026; neither is in a release yet.
 
 | Platform | Share with note | Share with citation | Share as link | Share as image | Verse of the day | Defined in | Proof |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -559,7 +563,7 @@ neither is in a release yet.
 | iPadOS | Share popover; probably points mid-page rather than at the selection | Share popover at the selection | Share popover at the selection | Preview, then a share popover; probably mid-page | Probably a share popover pointing at the hidden reading view, not the icon; not seen | `reading_ios.go` | `builds` — code reading, 29–30 September 2026 |
 | macOS | Share picker at the selection; the note card appears beneath | Share picker at the selection | Share picker at the selection | Preview, then the share picker with the image | Probably the share picker, anchored to the hidden reading view, not the icon; not seen | `reading_macos.go` | `builds` — code reading, 29–30 September 2026 |
 | Android | The note card, then the "Sharing text" sheet with the note, citation and link | "Sharing text" sheet with the quote and citation | "Sharing text" sheet with the link | Preview, then the "Sharing image" sheet | "Sharing text" sheet, by the citation's route; not driven | `reading_android.go` | `runner` — emulator, 1.2.17, 29–30 September 2026 |
-| Windows | The Windows Share sheet over the window, headed "Share link", with the citation, the link carrying the note, a QR-code button and a link button with no label (Copy link, by its icon), which shows a check when pressed; the new note card on the page beneath. By the code the note, the citation and the link go to the chosen app as text, and the link as a web link too; not seen (28) | The Windows Share sheet over the window, headed "Share", listing the apps to share to, with no title, preview or Copy on Windows 11. By the code the quote and its citation go to the chosen app as text; not seen (28) | The Windows Share sheet over the window, headed "Share link", with the citation, the link, a QR-code button and a link button with no label (Copy link, by its icon) (28) | Preview, then the Windows Share sheet over the window with the card as a file named "BibleText verse <date> <time>.png" in local time, shown in place of a title, with its thumbnail, its size and a size picker, Edit, and a copy button with no label (28) | The Windows Share sheet, as for Share with citation (28) | `share_windows.go` | `hardware` — arm64 VM, Windows 11 build 26200, the Store package workflow's arm64 executable run unpackaged, 30 September 2026 (the proof note below) |
+| Windows | The Windows Share sheet over the window, headed "Share link", with the citation, the link carrying the note, a QR-code button and a link button with no label (Copy link, by its icon), which shows a check when pressed; the new note card on the page beneath. By the code the note, the citation and the link go to the chosen app as text, and the link as a web link too; not seen (28) | The Windows Share sheet over the window, headed "Share", listing the apps to share to, with no title, preview or Copy on Windows 11. By the code the quote and its citation go to the chosen app as text; not seen (28) | The Windows Share sheet over the window, headed "Share link", with the citation, the link, a QR-code button and a link button with no label (Copy link, by its icon) (28) | Preview, then the Windows Share sheet over the window with the card as a file named "BibleText verse <date> <time>.png" in local time, shown in place of a title, with its thumbnail, its size and a size picker, Edit, and a copy button with no label (28) | The Windows Share sheet, as for Share with citation (28) | `share_windows.go` | `hardware` — arm64 VM, Windows 11 build 26200, the Store package workflow's arm64 package: its executable run unpackaged, 30 September 2026, and the package registered with package identity, 1 October 2026 (the proof note below) |
 | Linux | Copied; the "Copied — ready to paste" sheet over the new note card, with Email…, Copy again and Done (27) | Copied; the "Copied — ready to paste" sheet (27) | Copied; the "Copied — ready to paste" sheet (27) | Saved to the reader's Downloads folder, the XDG download directory under whatever name it has, inside the snap the one in the reader's own home (with none, in that home); the file manager shows it, through the desktop portal inside the snap; the "Picture saved" sheet, saying the file manager shows it only when the file manager said so, and Downloads only of a folder called Downloads, and not opening for a picture no folder took that the file manager did not show, with Email… attaching the file only where a mail client, not a browser, handles mailto:, and never in the snap (27) | Copied; the "Copied — ready to paste" sheet over the card (27) | `share_other.go`, handing on to `share_fallback.go` | `hardware` — arm64 VM, X11, 30 September 2026; Share as image in the snap, 1 October 2026 |
 
 What each proof rests on:
@@ -693,12 +697,65 @@ What each proof rests on:
   text a verb hands over has been seen; what the link button put on the
   clipboard, which was not read back; the picture's copy button and the
   QR-code button, not pressed; the light theme; x64, natively or under
-  emulation; Windows 10; and the installed MSIX. What the cells describe
+  emulation; Windows 10; and the package with its identity, which the
+  next paragraph covers. What the cells describe
   is Windows 11's sheet. The app's standard error went to a file that
   held only the line written before launch, which says nothing either way
   about a fallback; the screenshots after each close are what show none
   opened. The row moves to the shipped artefact with the release that
   carries it.
+
+  The package, with package identity, was driven on 1 October 2026. The
+  Microsoft Store package workflow built faae44ef1 (run 36840901241), and
+  its artifact BibleText-1.2.17.0-arm64.msix (sha256
+  291b4210adf26f80b94e416832e61208b79ccbc6b8c0fbf978b25a5c8e6ccee7;
+  go1.24.13, windows/arm64, `-tags gles`, ANGLE beside the executable)
+  went to the same VM on an ISO. The Store's own BibleText 1.2.16 is
+  installed there under the reserved identity, so the package's layout —
+  its files without the block map and the content-types part, and with
+  the manifest's identity name changed to
+  `bibletext.co.uk.BibleText.ShareCheck`, nothing else — was registered
+  beside it with `Add-AppxPackage -Register`, Developer Mode turned on
+  for the run (`AllowDevelopmentWithoutDevLicense` under AppModelUnlock,
+  absent before and removed after), and started through the shell
+  (`shell:AppsFolder`, the package family name, `!BibleText`). Windows
+  reported the package as installed in development mode, unsigned.
+  `GetPackageFullName` on the running process answered the package's full
+  name; on an unpackaged shell it answered no package identity, and on
+  the Start menu's host a package name, so the probe tells the two apart.
+  Every verb was driven from its own entry point as before, with "loved"
+  in John 3:16 selected, in the dark theme, and each opened Windows' own
+  Share sheet over the window by the first screenshot, two seconds after
+  the tap, the same sheets as unpackaged: "Share" and the apps for Share with citation and for the
+  verse of the day (Psalm 103:2–5, shared twice); "Share link" with "John
+  3:16 (World English Bible)" and the link ending `/web/john/3/#v16` for
+  Share as link, and the note's link (`#v16&n=…`) for Share with note,
+  the "Note from you" card on the page beneath; and for the picture,
+  "BibleText verse 2026-10-01 09.27.18.png", 22.6 KB, with the card's
+  thumbnail, Edit and the copy button, so the sheet read the file. Each
+  sheet was closed with its X, and no screenshot 6–7 s after a close shows
+  an in-app sheet. No share target was pressed.
+
+  The picture's copy was not redirected. It was written to the user's own
+  temp folder, `%LOCALAPPDATA%\Temp\bibletext-share`, and nothing was
+  written under the package's private `LocalCache`. That folder already
+  held a copy from the unpackaged run, so the share was repeated with it
+  moved aside: from "Jesus" in verse 10, the packaged app made the folder
+  afresh in the real temp folder, wrote "BibleText verse 2026-10-01
+  09.33.08.png" there, and the sheet showed it, 21.3 KB, with its
+  thumbnail; the earlier copies were
+  then put back beside it. The package's `LocalCache` held only the
+  folders Windows makes for every package. This agrees with Microsoft's
+  account of a packaged desktop app's writes under AppData from Windows
+  10 1903, which redirects new files and folders made under Local,
+  Local\Microsoft, Roaming, Roaming\Microsoft and the Start menu's
+  Programs, and not the temp folder
+  (https://learn.microsoft.com/en-us/windows/msix/desktop/desktop-to-uwp-behind-the-scenes):
+  the file the sheet hands an app is where the unpackaged app keeps it
+  too. Not seen this way: the package as the Store installs it, signed by
+  the Store under `C:\Program Files\WindowsApps`, rather than its layout
+  registered in place; x64; and what an app chosen in the sheet receives.
+  The registration was removed after the run.
 
   Before the app, the mechanism was seen from a standalone probe
   executable, without package identity, on the same VM the same day, for
@@ -724,10 +781,7 @@ What each proof rests on:
   suite; it runs without `-v`, so its log does not say whether that image
   let the Windows share tests reach the sheet's step or skipped them
   where it refuses a share.
-  The Store's MSIX is still to be seen: Windows redirects a packaged
-  app's writes under AppData, the temp folder the picture is copied into
-  among them, and whether the apps the sheet hands the file to can read
-  it there is not known; unpackaged, the sheet read it. Behind the sheet
+  Behind the sheet
   it runs the Linux code — the same confirmation sheet, from the same
   files — but for these: where the image share saves, `~/Downloads` alone,
   with no lookup of the Downloads known folder, so a Downloads folder the

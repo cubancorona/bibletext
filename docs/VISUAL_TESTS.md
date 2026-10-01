@@ -407,9 +407,11 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       not an empty package. Run in part on 30 September 2026, on Windows 11
       arm64 with the arm64 Store package's executable run unpackaged, in
       dark only (the Windows proof note under Sharing in
-      docs/PLATFORM_MATRIX.md); still to run: light, the installed MSIX,
-      x64, a mail app, the clipboard after Copy link, the picture's Copy,
-      and a share while a sheet is open.
+      docs/PLATFORM_MATRIX.md), and again on 1 October 2026 with the arm64
+      package registered with package identity, also in dark; still to
+      run: light, the package as the Store installs it, x64, a mail app,
+      the clipboard after Copy link, the picture's Copy, and a share while
+      a sheet is open.
 - [ ] The desktop share confirmation, Linux, and Windows where its Share
       sheet cannot open: Share with
       citation, Share as link, Share with note and the verse of the day's

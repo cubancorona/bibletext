@@ -41,7 +41,7 @@ each wanting a dry run on a day that is not a release day:
   key and the service account in the repository's secrets, which is the
   account holder's decision, and matters only once Play grants production.
 
-## Windows: use the native Share sheet — BUILT 30 September 2026, seen in the app unpackaged the same day
+## Windows: use the native Share sheet — BUILT 30 September 2026, seen in the app unpackaged the same day and packaged on 1 October
 
 On Windows every text share (Share with note, with citation, as link, and the
 verse of the day's Share) copied to the clipboard and opened the in-app
@@ -185,15 +185,42 @@ row is `hardware` on this run, as an exception scoped to it, until a
 release carries the code (`docs/PLATFORM_MATRIX.md`, the Windows proof
 note under Sharing).
 
+**Seen as a packaged app (1 October 2026).** The Microsoft Store package
+workflow built faae44ef1 (run 36840901241). Its arm64 artifact,
+BibleText-1.2.17.0-arm64.msix (sha256
+291b4210adf26f80b94e416832e61208b79ccbc6b8c0fbf978b25a5c8e6ccee7), was
+registered on the same VM (Windows 11 arm64, build 26200) as a packaged
+app: its layout, less the block map and the content-types part, with
+`Add-AppxPackage -Register` and Developer Mode on for the run. The
+Store's own 1.2.16 is installed there under the reserved identity, so the
+manifest's identity name was changed to
+`bibletext.co.uk.BibleText.ShareCheck` and nothing else. Started through
+the shell, the running executable had package identity
+(`GetPackageFullName` answered the package's full name; an unpackaged
+shell answered none, the Start menu's host a package name). Every verb,
+from its own entry point, opened Windows' own Share sheet over the window
+by the first screenshot, two seconds after the tap, with the same sheets
+as unpackaged; no in-app sheet opened after any of the closes, and no
+target was pressed. The picture sheet named "BibleText verse 2026-10-01
+09.27.18.png", 22.6 KB, with the card's thumbnail. The picture's copy was
+not redirected: it went to the user's real temp folder,
+`%LOCALAPPDATA%\Temp\bibletext-share`, not the package's `LocalCache`,
+and did so again with that folder moved aside, when the packaged app made
+it afresh (sheet: "BibleText verse 2026-10-01 09.33.08.png", 21.3 KB,
+thumbnail shown). Microsoft's account of packaged desktop apps redirects
+new files and folders made under Local, Local\Microsoft, Roaming,
+Roaming\Microsoft and the Start menu's Programs, not the temp folder.
+Developer Mode, the registration and its folder were removed afterwards.
+(`docs/PLATFORM_MATRIX.md`, the Windows proof note under Sharing.)
+
 **Still open.**
 
-- **The installed MSIX, and its picture share.** The package has not
-  been installed and run with package identity on the VM, so neither
-  the sheet opening for a packaged app nor its picture share has been
-  seen. Windows redirects a packaged app's writes under AppData, the temp
-  folder the picture is copied into among them; whether the apps the
-  sheet hands the file to can read it from there is to be seen.
-  Unpackaged, the sheet read it.
+- **The package as the Store installs it.** The run above registered the
+  package's layout in place, unsigned, in development mode; the
+  Store-signed install under `C:\Program Files\WindowsApps` has not run
+  this code, since no release carries it. The first release that does is
+  the check: Share as image from the Store's install, and where its copy
+  lands.
 - **What a target receives.** No app in the sheet was chosen, and
   Windows 11's text sheet shows neither the quote nor its citation, so
   the text each verb hands over has not been seen arriving. What the
