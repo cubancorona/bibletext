@@ -56,6 +56,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libxkbcommon-dev libasound2-dev
 
+      # The portal tests (share_portal_linux_test.go) start a session bus of
+      # their own with dbus-daemon; in CI they fail without it. A test
+      # dependency, not a build one, so it is not on the build line.
+      - name: Install dbus-daemon for the portal tests
+        run: sudo apt-get install -y dbus
+
       - name: Release-key flow regression
         run: scripts/test-release-key-flow.sh
 

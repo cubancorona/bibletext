@@ -119,13 +119,11 @@ func composeShareEmail(subject, body, attachment string) error {
 }
 
 // composeEmailViaPortal calls org.freedesktop.portal.Email.ComposeEmail on
-// the session bus and waits for its request's Response. The request's
-// object path is known before the call from the handle token, and the
-// Response signal is matched before the call is made, so an answer that
-// arrives at once is not missed. The answer means what portalEmailResponse
-// says. Once the portal has taken the call, no answer in time ends the
-// compose too: a slow portal may yet open one, and a second from the next
-// route would make two.
+// the session bus and waits for its request's Response (portalRequest,
+// share_portal_linux.go). The answer means what portalEmailResponse says.
+// Once the portal has taken the call, no answer in time ends the compose
+// too: a slow portal may yet open one, and a second from the next route
+// would make two.
 func composeEmailViaPortal(subject, body, attachment string) error {
 	conn, err := dbus.ConnectSessionBus()
 	if err != nil {
@@ -133,27 +131,9 @@ func composeEmailViaPortal(subject, body, attachment string) error {
 	}
 	defer conn.Close()
 
-	token := fmt.Sprintf("bibletext%d", time.Now().UnixNano())
-	names := conn.Names()
-	if len(names) == 0 {
-		return errors.New("the session bus gave no unique name")
-	}
-	sender := strings.ReplaceAll(strings.TrimPrefix(names[0], ":"), ".", "_")
-	request := dbus.ObjectPath("/org/freedesktop/portal/desktop/request/" + sender + "/" + token)
-	if err := conn.AddMatchSignal(
-		dbus.WithMatchInterface(portalRequestIface),
-		dbus.WithMatchMember("Response"),
-	); err != nil {
-		return err
-	}
-	responses := make(chan *dbus.Signal, 8)
-	conn.Signal(responses)
-	defer conn.RemoveSignal(responses)
-
 	options := map[string]dbus.Variant{
-		"handle_token": dbus.MakeVariant(token),
-		"subject":      dbus.MakeVariant(subject),
-		"body":         dbus.MakeVariant(body),
+		"subject": dbus.MakeVariant(subject),
+		"body":    dbus.MakeVariant(body),
 	}
 	if attachment != "" {
 		if !conn.SupportsUnixFDs() {
@@ -166,33 +146,14 @@ func composeEmailViaPortal(subject, body, attachment string) error {
 		defer f.Close()
 		options["attachment_fds"] = dbus.MakeVariant([]dbus.UnixFD{dbus.UnixFD(f.Fd())})
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), portalAnswerWait)
-	defer cancel()
-	var handle dbus.ObjectPath
-	if err := conn.Object(portalDest, portalPath).
-		CallWithContext(ctx, portalEmailIface+".ComposeEmail", 0, "", options).
-		Store(&handle); err != nil {
+	code, taken, err := portalRequest(conn, portalEmailIface+".ComposeEmail", options, portalAnswerWait, "")
+	switch {
+	case err != nil && taken:
+		return mailRouteStop{fmt.Errorf("the Email portal: %w", err)}
+	case err != nil:
 		return err
 	}
-	for {
-		select {
-		case sig := <-responses:
-			if sig == nil || (sig.Path != handle && sig.Path != request) {
-				continue
-			}
-			code, ok := uint32(0), len(sig.Body) > 0
-			if ok {
-				code, ok = sig.Body[0].(uint32)
-			}
-			if !ok {
-				return mailRouteStop{errors.New("the Email portal answered with no response code")}
-			}
-			return portalEmailResponse(code)
-		case <-ctx.Done():
-			return mailRouteStop{errors.New("no answer from the Email portal")}
-		}
-	}
+	return portalEmailResponse(code)
 }
 
 // composeEmailViaXDGEmail runs xdg-email, which finds the desktop's mail

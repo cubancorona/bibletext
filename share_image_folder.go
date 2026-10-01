@@ -4,14 +4,16 @@ package bibletext
 
 // WHERE THE DESKTOP SAVES A SHARED PICTURE (fallbackShareImage): the
 // reader's Downloads folder, found the way the desktop finds it, and
-// otherwise a folder the file manager can open.
+// otherwise a folder the file manager can open and that keeps the picture.
 //
 // On Linux the Downloads folder is the XDG download directory,
 // XDG_DOWNLOAD_DIR in user-dirs.dirs, under whatever name the desktop's
-// language gave it (Téléchargements, Загрузки), and ~/Downloads where the
-// file names none, names the home itself (which is how a directory is
-// switched off there), or names one that is not there. Windows and macOS
-// have ~/Downloads alone.
+// language or the reader gave it (Téléchargements, Загрузки), and
+// ~/Downloads where the file names none, names the home itself (which is how
+// a directory is switched off there), or names one that is not there. The
+// sheet calls the folder Downloads only when that is its name; one with
+// another name is named by its path, or not at all when the file manager
+// shows it (savedImage.line). Windows and macOS have ~/Downloads alone.
 //
 // Inside the snap HOME is the snap's own ~/snap/bibletext/<revision>, which
 // has no Downloads folder, and the temp folder the renderer writes to is the
@@ -20,19 +22,26 @@ package bibletext
 // in it that are not hidden, so the Downloads folder is looked for there:
 // user-dirs.dirs is read from that home's .config (the desktop plug may read
 // it; XDG_CONFIG_HOME inside the snap is the snap's own), and its $HOME is
-// that home. With no Downloads folder there either, the picture is saved in
-// the reader's home itself, the folder the file manager opens on; and where
-// the home plug is disconnected, so that the reader's home cannot be reached
-// at all, in the snap's own folder that outlives its revisions
-// (SNAP_USER_COMMON, ~/snap/bibletext/common), which the file manager can
-// open too. It is left in the snap's temp folder only when none of those
-// takes it.
+// that home. A snap is a Linux one: SNAP on Windows or the macOS mimic is
+// passed over (sharePlace.inSnap).
 //
-// Outside a snap, with no Downloads folder, the picture stays where the
-// renderer wrote it, in the temp folder, which the file manager can open.
+// With no Downloads folder, the picture is saved on Linux in the reader's
+// home itself, the folder the file manager opens on, in a snap and outside
+// one alike; and inside the snap, where the home plug is disconnected, so
+// that the reader's home cannot be reached at all, in the snap's own folder
+// that outlives its revisions (SNAP_USER_COMMON, ~/snap/bibletext/common),
+// which the file manager can open too. Windows and the macOS mimic keep the
+// copy they were handed, in the temp folder.
+//
+// Where no folder takes the picture it is still the file the share was
+// handed, in the temp folder, which keeps it only until the next card is
+// rendered over it, or, inside the snap, where nothing outside the snap can
+// open it. The sheet never names that folder as the place the picture is
+// saved (savedImage.line).
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -50,7 +59,7 @@ var shareImageGOOS = runtime.GOOS
 type sharePlace struct {
 	goos       string // shareImageGOOS
 	home       string // os.UserHomeDir: inside a snap, the snap's own home
-	snap       bool   // $SNAP is set: the app runs inside a snap
+	snap       bool   // $SNAP is set (inSnap says whether that makes it a snap)
 	realHome   string // $SNAP_REAL_HOME: the reader's home, inside a snap
 	userCommon string // $SNAP_USER_COMMON: the snap's own folder for every revision
 	configHome string // $XDG_CONFIG_HOME
@@ -71,10 +80,23 @@ func shareImagePlaceNow() sharePlace {
 	return p
 }
 
+// inSnap reports whether the app runs inside a snap: SNAP is set, on Linux,
+// the one platform snaps run on. A SNAP variable on Windows or the macOS
+// mimic is a stray, and its rules are not followed there.
+func (p sharePlace) inSnap() bool {
+	return p.snap && p.goos == "linux"
+}
+
+// xdgDesktop reports whether the platform follows the XDG rules: user-dirs.dirs
+// for the Downloads folder, and the home itself where there is none.
+func (p sharePlace) xdgDesktop() bool {
+	return p.goos != "windows" && p.goos != "darwin"
+}
+
 // readerHome is the reader's own home: SNAP_REAL_HOME inside a snap, and
 // the home everywhere else.
 func (p sharePlace) readerHome() string {
-	if p.snap && p.realHome != "" {
+	if p.inSnap() && p.realHome != "" {
 		return p.realHome
 	}
 	return p.home
@@ -83,19 +105,16 @@ func (p sharePlace) readerHome() string {
 // shareFolder is a folder a shared picture may be saved into.
 type shareFolder struct {
 	dir       string
-	downloads bool // the reader's Downloads folder, which the sheet names
+	downloads bool // the reader's Downloads folder, called Downloads: the sheet names it so
 }
 
 // shareImageFolders is where the picture is saved, in the order tried: the
-// XDG download directory where the desktop has one, ~/Downloads, and inside
-// a snap the reader's home and then the snap's own common folder. A folder
-// that is not there, or takes no copy, passes to the next
-// (saveSharedImage).
+// XDG download directory where the desktop has one, ~/Downloads, then on
+// Linux the reader's home, and inside a snap the snap's own common folder. A
+// folder that is not there, or takes no copy, passes to the next
+// (saveSharedImage). A download directory with a name other than Downloads
+// is not called Downloads on the sheet.
 func shareImageFolders(p sharePlace) []shareFolder {
-	home := p.readerHome()
-	if home == "" {
-		return nil
-	}
 	var out []shareFolder
 	add := func(dir string, downloads bool) {
 		dir = filepath.Clean(dir)
@@ -106,17 +125,19 @@ func shareImageFolders(p sharePlace) []shareFolder {
 		}
 		out = append(out, shareFolder{dir: dir, downloads: downloads})
 	}
-	if p.goos != "windows" && p.goos != "darwin" {
-		if dir := xdgDownloadDir(p); dir != "" {
-			add(dir, true)
+	if home := p.readerHome(); home != "" {
+		if p.xdgDesktop() {
+			if dir := xdgDownloadDir(p); dir != "" {
+				add(dir, filepath.Base(dir) == "Downloads")
+			}
+		}
+		add(filepath.Join(home, "Downloads"), true)
+		if p.xdgDesktop() {
+			add(home, false)
 		}
 	}
-	add(filepath.Join(home, "Downloads"), true)
-	if p.snap {
-		add(home, false)
-		if p.userCommon != "" {
-			add(p.userCommon, false)
-		}
+	if p.inSnap() && p.userCommon != "" {
+		add(p.userCommon, false)
 	}
 	return out
 }
@@ -127,7 +148,7 @@ func shareImageFolders(p sharePlace) []shareFolder {
 func xdgDownloadDir(p sharePlace) string {
 	home := p.readerHome()
 	config := filepath.Join(home, ".config")
-	if !p.snap && filepath.IsAbs(p.configHome) {
+	if !p.inSnap() && filepath.IsAbs(p.configHome) {
 		config = p.configHome
 	}
 	b, err := os.ReadFile(filepath.Join(config, "user-dirs.dirs"))
@@ -193,32 +214,42 @@ func userDirIn(file, kind, home string) string {
 // savedImage is where a shared picture was saved.
 type savedImage struct {
 	file      string // the picture
-	folder    string // the folder it is in
-	downloads bool   // the folder is the reader's Downloads folder
+	folder    string // the folder that keeps it; "" when none took it and file is the one the share was handed
+	downloads bool   // the folder is the reader's Downloads folder, called Downloads
+	err       error  // why no folder took it, when none did
 }
 
 // saveSharedImage copies the rendered card at path, under the reader's name
 // for it (shareImageName), into the first of the place's folders that is
-// there and takes the copy. Where none does, the picture is the renderer's
-// own file.
+// there and takes the copy. Where none does, the picture is still the file
+// at path, in no folder that keeps it.
 func saveSharedImage(path string, p sharePlace, now time.Time) savedImage {
+	var err error
 	for _, f := range shareImageFolders(p) {
-		if st, err := os.Stat(f.dir); err != nil || !st.IsDir() {
+		st, serr := os.Stat(f.dir)
+		if serr != nil || !st.IsDir() {
 			continue
 		}
 		target := filepath.Join(f.dir, shareImageName(now))
-		if copyFileContents(path, target) == nil {
+		if err = copyFileContents(path, target); err == nil {
 			return savedImage{file: target, folder: f.dir, downloads: f.downloads}
 		}
 	}
-	return savedImage{file: path, folder: filepath.Dir(path)}
+	if err == nil {
+		err = errors.New("no folder to save the picture in")
+	}
+	return savedImage{file: path, err: err}
 }
 
 // line is what the sheet says of the picture: where it is saved, when that
 // is Downloads, and that the file manager shows it only when the file
 // manager said it did (revealInFileManager). A picture saved elsewhere whose
 // folder the file manager did not open is named by its folder's path, the
-// one way left to find it.
+// one way left to find it. A picture no folder took is not said to be saved
+// anywhere: the temp folder it is in keeps it only until the next card, and
+// inside the snap is one the reader cannot open. Unless the file manager
+// shows it there is nothing true to say of it, and line is "": the sheet
+// does not open (fallbackShareImage).
 func (s savedImage) line(shown bool) string {
 	switch {
 	case s.downloads && shown:
@@ -227,7 +258,9 @@ func (s savedImage) line(shown bool) string {
 		return shareLineImageSaved
 	case shown:
 		return shareLineImageShown
-	default:
+	case s.folder != "":
 		return fmt.Sprintf(shareLineImageSavedIn, s.folder)
+	default:
+		return ""
 	}
 }

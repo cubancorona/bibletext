@@ -13,10 +13,12 @@ package bibletext
 // picture lands in the reader's own Downloads folder — the one in
 // SNAP_REAL_HOME, under the name user-dirs.dirs gives it — or in the
 // reader's home where there is none; that the sheet says it is shown in the
-// file manager only when the file manager said so; and that outside a snap
-// it goes where it went before. Each check is shown failing on the case it
-// tells apart: run as though the app did not know it was in a snap, with no
-// user-dirs.dirs, or with a file manager that answered yes.
+// file manager only when the file manager said so, calls a folder Downloads
+// only when that is its name, and never names the temp folder as where the
+// picture is saved; and that outside a snap it goes where it went before.
+// Each check is shown failing on the case it tells apart: run as though the
+// app did not know it was in a snap, with no user-dirs.dirs, as Windows, or
+// with a file manager that answered yes.
 
 import (
 	"fmt"
@@ -123,12 +125,32 @@ func claimsShown(texts []string) bool {
 }
 
 // imageShare runs one image share and returns what the file manager was
-// asked to show and what the sheet says.
+// asked to show and what the sheet says, nil when no sheet opened.
 func imageShare(h *shareSheetHarness) (src string, revealed []string, texts []string) {
 	h.t.Helper()
 	src = h.renderedCard()
 	fallbackShareImage(src)
-	return src, h.revealed, sheetTexts(h.sheet())
+	return src, h.revealed, imageSheetTexts(h)
+}
+
+// imageSheetTexts is what the image share's sheet on top of the canvas says,
+// or nil when there is none. It does not stop the test, so that a control
+// can run a case that opens no sheet.
+func imageSheetTexts(h *shareSheetHarness) []string {
+	p := h.top()
+	if p == nil || !p.Visible() || !sheetHas(p, shareSheetImageHeading) {
+		return nil
+	}
+	return sheetTexts(p)
+}
+
+func hasText(texts []string, want string) bool {
+	for _, s := range texts {
+		if s == want {
+			return true
+		}
+	}
+	return false
 }
 
 // savedOnlyIn checks that the share left exactly one picture, in dir, that
@@ -143,11 +165,7 @@ func savedOnlyIn(dir string, revealed, texts []string, line string) (problems []
 	if len(revealed) != 1 || revealed[0] != got[0] {
 		problems = append(problems, fmt.Sprintf("the file manager was asked to show %v, want %s", revealed, got[0]))
 	}
-	found := false
-	for _, s := range texts {
-		found = found || s == line
-	}
-	if !found {
+	if !hasText(texts, line) {
 		problems = append(problems, fmt.Sprintf("the sheet reads %v, want %q", texts, line))
 	}
 	return problems
@@ -190,10 +208,15 @@ func TestTheSnapSavesThePictureInTheReadersOwnDownloads(t *testing.T) {
 }
 
 // THE DOWNLOAD DIRECTORY IS THE ONE USER-DIRS.DIRS NAMES, under the name the
-// desktop's language gave it, read from the reader's own home inside the
-// snap (with $HOME meaning that home) and from XDG_CONFIG_HOME outside it.
-// There is no Downloads folder in either home. Control: without
-// user-dirs.dirs the picture does not reach the localised folder.
+// desktop's language or the reader gave it, read from the reader's own home
+// inside the snap (with $HOME meaning that home) and from XDG_CONFIG_HOME
+// outside it. There is no ~/Downloads in either home. The sheet calls the
+// folder Downloads only when that is its name: a localised folder the file
+// manager shows is said only to be shown, and a renamed one it did not show
+// is named by its path. Controls: without user-dirs.dirs the picture does
+// not reach the localised folder; and a download directory elsewhere that is
+// called Downloads is called so on the sheet, so the name, not the file,
+// decides.
 func TestTheLocalisedDownloadDirectoryIsHonoured(t *testing.T) {
 	const french, russian = "Téléchargements", "Загрузки"
 	inSnap := func(withFile bool) func(t *testing.T) []string {
@@ -205,7 +228,7 @@ func TestTheLocalisedDownloadDirectoryIsHonoured(t *testing.T) {
 				writeUserDirs(t, realHome, "# written by xdg-user-dirs-update\nXDG_DESKTOP_DIR=\"$HOME/Bureau\"\nXDG_DOWNLOAD_DIR=\"$HOME/"+french+"\"\n")
 			}
 			_, revealed, texts := imageShare(h)
-			return savedOnlyIn(filepath.Join(realHome, french), revealed, texts, shareLineImage)
+			return savedOnlyIn(filepath.Join(realHome, french), revealed, texts, shareLineImageShown)
 		}
 	}
 	if p := runCase(t, "snap", inSnap(true)); len(p) > 0 {
@@ -214,23 +237,34 @@ func TestTheLocalisedDownloadDirectoryIsHonoured(t *testing.T) {
 	if p := runCase(t, "control: no user-dirs.dirs", inSnap(false)); len(p) == 0 {
 		t.Error("control: with no user-dirs.dirs the picture still reached the localised folder, so the check proves nothing")
 	}
-	if p := runCase(t, "outside a snap", func(t *testing.T) []string {
-		h := imageShareHarness(t, true)
-		home := redirectHome(t)
-		mkdirs(t, filepath.Join(home, russian))
-		writeUserDirs(t, home, "XDG_DOWNLOAD_DIR=\"$HOME/"+russian+"\"\n")
-		_, revealed, texts := imageShare(h)
-		return savedOnlyIn(filepath.Join(home, russian), revealed, texts, shareLineImage)
-	}); len(p) > 0 {
+	outside := func(dir string, shown bool, line func(dir string) string) func(t *testing.T) []string {
+		return func(t *testing.T) []string {
+			h := imageShareHarness(t, shown)
+			home := redirectHome(t)
+			mkdirs(t, filepath.Join(home, dir))
+			writeUserDirs(t, home, "XDG_DOWNLOAD_DIR=\"$HOME/"+filepath.ToSlash(dir)+"\"\n")
+			_, revealed, texts := imageShare(h)
+			return savedOnlyIn(filepath.Join(home, dir), revealed, texts, line(filepath.Join(home, dir)))
+		}
+	}
+	shownLine := func(string) string { return shareLineImageShown }
+	pathLine := func(dir string) string { return fmt.Sprintf(shareLineImageSavedIn, dir) }
+	if p := runCase(t, "outside a snap", outside(russian, true, shownLine)); len(p) > 0 {
 		t.Errorf("outside a snap: %v", p)
+	}
+	if p := runCase(t, "renamed, not shown", outside("Incoming", false, pathLine)); len(p) > 0 {
+		t.Errorf("a renamed download folder the file manager did not show: %v", p)
+	}
+	if p := runCase(t, "control: elsewhere, called Downloads", outside(filepath.Join("Files", "Downloads"), false, func(string) string { return shareLineImageSaved })); len(p) > 0 {
+		t.Errorf("control: a download directory called Downloads was not called so: %v", p)
 	}
 }
 
 // WITH NO DOWNLOADS FOLDER IN THE SNAP the picture is saved in the reader's
 // own home, which the file manager can open, and the sheet says only that it
 // is shown there — not in the snap's private temp folder, which nothing
-// outside the snap can open. Control: with SNAP unset it stays in the temp
-// folder, as it does outside a snap, and the check fails.
+// outside the snap can open. Control: with SNAP unset it is saved in HOME,
+// the snap's own home, as it would be outside a snap, and the check fails.
 func TestTheSnapWithNoDownloadsSavesInTheReadersHome(t *testing.T) {
 	share := func(inSnap bool) func(t *testing.T) []string {
 		return func(t *testing.T) []string {
@@ -257,8 +291,9 @@ func TestTheSnapWithNoDownloadsSavesInTheReadersHome(t *testing.T) {
 // ~/snap/bibletext/common, which outlives the snap's revisions and which the
 // file manager can open, not in the snap's private temp folder, which it
 // cannot. The reader's home is a folder that is not there, as it is to a
-// snap without the plug. Control: with no SNAP_USER_COMMON the picture stays
-// in the temp folder, and the check fails.
+// snap without the plug. Control: with no SNAP_USER_COMMON no folder takes
+// the picture (TestAPictureNoFolderTookIsNotSaidToBeSaved), and the check
+// fails.
 func TestTheSnapWithoutItsHomePlugSavesInItsOwnFolder(t *testing.T) {
 	share := func(withCommon bool) func(t *testing.T) []string {
 		return func(t *testing.T) []string {
@@ -284,8 +319,9 @@ func TestTheSnapWithoutItsHomePlugSavesInItsOwnFolder(t *testing.T) {
 
 // A FILE MANAGER THAT DID NOT SAY IT SHOWED THE PICTURE IS NOT SAID TO HAVE:
 // the sheet says where the picture is saved — Downloads, or the folder by
-// its path — and nothing about the file manager. Control: the same share
-// with a file manager that said yes, which the check must catch.
+// its path, the reader's home where there is no Downloads folder, in the
+// snap and outside it — and nothing about the file manager. Control: the
+// same share with a file manager that said yes, which the check must catch.
 func TestTheImageSheetDoesNotClaimAFailedReveal(t *testing.T) {
 	cases := []struct {
 		name string
@@ -301,8 +337,7 @@ func TestTheImageSheetDoesNotClaimAFailedReveal(t *testing.T) {
 			return realHome, false
 		}},
 		{"outside a snap without Downloads", func(t *testing.T) (string, bool) {
-			redirectHome(t)
-			return "", false // the renderer's own folder
+			return redirectHome(t), false
 		}},
 	}
 	for _, c := range cases {
@@ -310,10 +345,7 @@ func TestTheImageSheetDoesNotClaimAFailedReveal(t *testing.T) {
 			return func(t *testing.T) []string {
 				h := imageShareHarness(t, shown)
 				dir, downloads := c.lay(t)
-				src, _, texts := imageShare(h)
-				if dir == "" {
-					dir = filepath.Dir(src)
-				}
+				_, _, texts := imageShare(h)
 				want := fmt.Sprintf(shareLineImageSavedIn, dir)
 				if downloads {
 					want = shareLineImageSaved
@@ -322,7 +354,7 @@ func TestTheImageSheetDoesNotClaimAFailedReveal(t *testing.T) {
 				if claimsShown(texts) {
 					problems = append(problems, fmt.Sprintf("the sheet says the picture is shown: %v", texts))
 				}
-				if !sheetHas(h.sheet(), want) {
+				if !hasText(texts, want) {
 					problems = append(problems, fmt.Sprintf("the sheet reads %v, want %q", texts, want))
 				}
 				if len(pictures(dir)) == 0 {
@@ -342,8 +374,8 @@ func TestTheImageSheetDoesNotClaimAFailedReveal(t *testing.T) {
 
 // OUTSIDE A SNAP NOTHING MOVES: the picture is saved in HOME's Downloads
 // folder, as before, whatever SNAP_REAL_HOME says, and the sheet reads as it
-// did. (Without a Downloads folder it stays in the temp folder:
-// TestTheImageSheetWithoutDownloadsSaysOnlyWhereItIsShown.) Control: SNAP
+// did. (Without a Downloads folder it is saved in the home:
+// TestOutsideASnapWithNoDownloadsThePictureIsSavedInTheHome.) Control: SNAP
 // set takes the picture to the other home, and the check fails.
 func TestOutsideASnapThePictureGoesWhereItWent(t *testing.T) {
 	share := func(inSnap bool) func(t *testing.T) []string {
@@ -360,6 +392,87 @@ func TestOutsideASnapThePictureGoesWhereItWent(t *testing.T) {
 	}
 	if p := runCase(t, "control: SNAP set", share(true)); len(p) == 0 {
 		t.Error("control: with SNAP set the picture still went to HOME's Downloads, so the check proves nothing")
+	}
+}
+
+// OUTSIDE A SNAP, ON LINUX, WITH NO DOWNLOADS FOLDER, the picture is saved
+// in the reader's home, as it is in the snap, not left in the temp folder,
+// where the next card is rendered over it; the file manager is asked to show
+// that copy, and the sheet says it is shown. Control: Windows' rules, which
+// keep the copy they were handed, leave it in the temp folder, and the check
+// fails.
+func TestOutsideASnapWithNoDownloadsThePictureIsSavedInTheHome(t *testing.T) {
+	share := func(goos string) func(t *testing.T) []string {
+		return func(t *testing.T) []string {
+			h := imageShareHarness(t, true)
+			shareImageGOOS = goos
+			home := redirectHome(t)
+			_, revealed, texts := imageShare(h)
+			return savedOnlyIn(home, revealed, texts, shareLineImageShown)
+		}
+	}
+	if p := runCase(t, "linux", share("linux")); len(p) > 0 {
+		t.Errorf("outside a snap without Downloads: %v", p)
+	}
+	if p := runCase(t, "control: windows", share("windows")); len(p) == 0 {
+		t.Error("control: under Windows' rules the picture still reached the home, so the check cannot tell the home from the temp folder")
+	}
+}
+
+// A PICTURE NO FOLDER TOOK IS NOT SAID TO BE SAVED. It is still the file the
+// share was handed, in the temp folder, which keeps it only until the next
+// card, and inside the snap is one the reader cannot open; so the sheet never
+// names that folder, and, unless the file manager said it shows the
+// picture, does not open at all. In the snap no folder takes it when the
+// home plug is disconnected and SNAP_USER_COMMON takes no copy; outside it,
+// when the home is not there. Control: the same shares with a file manager
+// that said yes open the sheet, saying only that the picture is shown.
+func TestAPictureNoFolderTookIsNotSaidToBeSaved(t *testing.T) {
+	lays := []struct {
+		name string
+		lay  func(t *testing.T)
+	}{
+		{"snap without its home plug or common folder", func(t *testing.T) {
+			redirectHome(t)
+			t.Setenv("SNAP", "/snap/bibletext/x1")
+			t.Setenv("SNAP_REAL_HOME", filepath.Join(t.TempDir(), "unreachable"))
+		}},
+		{"outside a snap, with no home", func(t *testing.T) {
+			gone := filepath.Join(redirectHome(t), "gone")
+			t.Setenv("HOME", gone)
+			t.Setenv("USERPROFILE", gone)
+		}},
+	}
+	for _, c := range lays {
+		share := func(shown bool) func(t *testing.T) []string {
+			return func(t *testing.T) []string {
+				h := imageShareHarness(t, shown)
+				c.lay(t)
+				src, revealed, texts := imageShare(h)
+				var problems []string
+				if len(revealed) != 1 || revealed[0] != src {
+					problems = append(problems, fmt.Sprintf("the file manager was asked to show %v, want the picture as handed, %s", revealed, src))
+				}
+				for _, s := range texts {
+					if s != shareSheetImageHeading && (strings.Contains(s, filepath.Dir(src)) || strings.Contains(s, "saved")) {
+						problems = append(problems, fmt.Sprintf("the sheet says where the picture is saved: %q", s))
+					}
+				}
+				if shown && !hasText(texts, shareLineImageShown) {
+					problems = append(problems, fmt.Sprintf("the file manager showed the picture and the sheet reads %v, want %q", texts, shareLineImageShown))
+				}
+				if !shown && texts != nil {
+					problems = append(problems, fmt.Sprintf("a sheet opened with nothing true to say: %v", texts))
+				}
+				return problems
+			}
+		}
+		if p := runCase(t, c.name, share(false)); len(p) > 0 {
+			t.Errorf("%s: %v", c.name, p)
+		}
+		if p := runCase(t, c.name+", control: the file manager said yes", share(true)); len(p) > 0 {
+			t.Errorf("%s: control: %v", c.name, p)
+		}
 	}
 }
 
@@ -432,29 +545,36 @@ func TestUserDirsFileIsReadAsXDGUserDirsReadsIt(t *testing.T) {
 	}
 }
 
-// THE FOLDERS TRIED FOLLOW THE PLATFORM: user-dirs.dirs on Linux only, the
-// reader's real home inside a snap only, and Windows and macOS keep
-// ~/Downloads alone. A user-dirs.dirs naming the home switches the directory
-// off. The Linux rows are the controls for the others: the same file read.
+// THE FOLDERS TRIED FOLLOW THE PLATFORM: user-dirs.dirs and the home itself
+// on Linux only, the reader's real home and the common folder inside a snap
+// only, and Windows and macOS keep ~/Downloads alone, a SNAP variable there
+// passed over. A user-dirs.dirs naming the home switches the directory off.
+// Only a folder called Downloads is called so. The Linux and snap rows are
+// the controls for the others: the same files read, the same variables set.
 func TestShareImageFoldersFollowThePlatform(t *testing.T) {
 	home, real, common := t.TempDir(), t.TempDir(), t.TempDir()
 	writeUserDirs(t, home, "XDG_DOWNLOAD_DIR=\"$HOME/Dl\"")
 	writeUserDirs(t, real, "XDG_DOWNLOAD_DIR=\"$HOME/RealDl\"")
 	off := t.TempDir()
 	writeUserDirs(t, off, "XDG_DOWNLOAD_DIR=\"$HOME/\"")
+	named := t.TempDir()
+	writeUserDirs(t, named, "XDG_DOWNLOAD_DIR=\"$HOME/Files/Downloads\"")
+	bases := map[string]string{home: "home", real: "real", off: "off", common: "common", named: "named"}
 	dirs := func(fs []shareFolder) string {
 		var out []string
 		for _, f := range fs {
 			rel := f.dir
-			for _, base := range []string{home, real, off, common} {
+			for base, label := range bases {
 				if r, err := filepath.Rel(base, f.dir); err == nil && !strings.HasPrefix(r, "..") {
-					rel = map[string]string{home: "home", real: "real", off: "off", common: "common"}[base] + "/" + filepath.ToSlash(r)
+					rel = label + "/" + filepath.ToSlash(r)
 				}
 			}
 			out = append(out, fmt.Sprintf("%s:%v", rel, f.downloads))
 		}
 		return strings.Join(out, " ")
 	}
+	inSnap := sharePlace{home: home, snap: true, realHome: real, userCommon: common, configHome: filepath.Join(home, ".config")}
+	as := func(goos string, p sharePlace) sharePlace { p.goos = goos; return p }
 	for _, c := range []struct {
 		name string
 		p    sharePlace
@@ -462,12 +582,15 @@ func TestShareImageFoldersFollowThePlatform(t *testing.T) {
 	}{
 		{"windows", sharePlace{goos: "windows", home: home}, "home/Downloads:true"},
 		{"darwin", sharePlace{goos: "darwin", home: home}, "home/Downloads:true"},
-		{"linux", sharePlace{goos: "linux", home: home}, "home/Dl:true home/Downloads:true"},
-		{"linux, SNAP_REAL_HOME without SNAP", sharePlace{goos: "linux", home: home, realHome: real}, "home/Dl:true home/Downloads:true"},
-		{"snap", sharePlace{goos: "linux", home: home, snap: true, realHome: real, userCommon: common, configHome: filepath.Join(home, ".config")}, "real/RealDl:true real/Downloads:true real/.:false common/.:false"},
-		{"linux, SNAP_USER_COMMON without SNAP", sharePlace{goos: "linux", home: home, userCommon: common}, "home/Dl:true home/Downloads:true"},
-		{"linux, XDG_CONFIG_HOME", sharePlace{goos: "linux", home: off, configHome: filepath.Join(home, ".config")}, "off/Dl:true off/Downloads:true"},
-		{"linux, switched off", sharePlace{goos: "linux", home: off}, "off/Downloads:true"},
+		{"windows, SNAP set", as("windows", inSnap), "home/Downloads:true"},
+		{"darwin, SNAP set", as("darwin", inSnap), "home/Downloads:true"},
+		{"linux", sharePlace{goos: "linux", home: home}, "home/Dl:false home/Downloads:true home/.:false"},
+		{"linux, SNAP_REAL_HOME without SNAP", sharePlace{goos: "linux", home: home, realHome: real}, "home/Dl:false home/Downloads:true home/.:false"},
+		{"snap", as("linux", inSnap), "real/RealDl:false real/Downloads:true real/.:false common/.:false"},
+		{"linux, SNAP_USER_COMMON without SNAP", sharePlace{goos: "linux", home: home, userCommon: common}, "home/Dl:false home/Downloads:true home/.:false"},
+		{"linux, XDG_CONFIG_HOME", sharePlace{goos: "linux", home: off, configHome: filepath.Join(home, ".config")}, "off/Dl:false off/Downloads:true off/.:false"},
+		{"linux, switched off", sharePlace{goos: "linux", home: off}, "off/Downloads:true off/.:false"},
+		{"linux, a download directory called Downloads", sharePlace{goos: "linux", home: named}, "named/Files/Downloads:true named/Downloads:true named/.:false"},
 	} {
 		if got := dirs(shareImageFolders(c.p)); got != c.want {
 			t.Errorf("%s: %s, want %s", c.name, got, c.want)

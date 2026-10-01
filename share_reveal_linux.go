@@ -22,13 +22,11 @@ package bibletext
 // of it, is what lets the sheet say the picture is shown.
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -50,9 +48,9 @@ func revealFile(path string) bool {
 }
 
 // revealViaPortal calls org.freedesktop.portal.OpenURI.OpenDirectory with
-// path as a read-only descriptor and waits for its request's Response, which
-// is matched before the call is made (the request's object path is known
-// from the handle token), so an answer that comes at once is not missed.
+// path as a read-only descriptor and waits at most wait for its request's
+// Response (portalRequest, share_portal_linux.go). Anything but a Response of
+// 0 is an error.
 func revealViaPortal(path string, wait time.Duration) error {
 	f, err := os.Open(path)
 	if err != nil {
@@ -68,52 +66,12 @@ func revealViaPortal(path string, wait time.Duration) error {
 	if !conn.SupportsUnixFDs() {
 		return errors.New("the session bus does not carry file descriptors")
 	}
-
-	token := fmt.Sprintf("bibletext%d", time.Now().UnixNano())
-	names := conn.Names()
-	if len(names) == 0 {
-		return errors.New("the session bus gave no unique name")
+	code, _, err := portalRequest(conn, portalOpenURIIface+".OpenDirectory", map[string]dbus.Variant{}, wait, "", dbus.UnixFD(f.Fd()))
+	if err != nil {
+		return fmt.Errorf("the OpenURI portal: %w", err)
 	}
-	sender := strings.ReplaceAll(strings.TrimPrefix(names[0], ":"), ".", "_")
-	request := dbus.ObjectPath("/org/freedesktop/portal/desktop/request/" + sender + "/" + token)
-	if err := conn.AddMatchSignal(
-		dbus.WithMatchInterface(portalRequestIface),
-		dbus.WithMatchMember("Response"),
-	); err != nil {
-		return err
+	if code != 0 {
+		return fmt.Errorf("the OpenURI portal answered %d to OpenDirectory", code)
 	}
-	responses := make(chan *dbus.Signal, 8)
-	conn.Signal(responses)
-	defer conn.RemoveSignal(responses)
-
-	ctx, cancel := context.WithTimeout(context.Background(), wait)
-	defer cancel()
-	options := map[string]dbus.Variant{"handle_token": dbus.MakeVariant(token)}
-	var handle dbus.ObjectPath
-	if err := conn.Object(portalDest, portalPath).
-		CallWithContext(ctx, portalOpenURIIface+".OpenDirectory", 0, "", dbus.UnixFD(f.Fd()), options).
-		Store(&handle); err != nil {
-		return err
-	}
-	for {
-		select {
-		case sig := <-responses:
-			if sig == nil || (sig.Path != handle && sig.Path != request) {
-				continue
-			}
-			code, ok := uint32(0), len(sig.Body) > 0
-			if ok {
-				code, ok = sig.Body[0].(uint32)
-			}
-			if !ok {
-				return errors.New("the OpenURI portal answered with no response code")
-			}
-			if code != 0 {
-				return fmt.Errorf("the OpenURI portal answered %d to OpenDirectory", code)
-			}
-			return nil
-		case <-ctx.Done():
-			return errors.New("no answer from the OpenURI portal")
-		}
-	}
+	return nil
 }

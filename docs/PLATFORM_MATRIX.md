@@ -286,12 +286,12 @@ place a fix on one does not reach the others.
     and over the verse-of-the-day card comes back with the card beneath it,
     `share_sheet_desktop.go:384` (`under := takeReopenBeneath(state, popup)`).
     Email… on Linux is the desktop portal's Email interface,
-    `share_email_linux.go:174` (`portalEmailIface+".ComposeEmail"`), its
-    request's answer watched, `share_email_linux.go:180`
+    `share_email_linux.go:149` (`portalEmailIface+".ComposeEmail"`), its
+    request's answer watched, `share_portal_linux.go:63`
     (`case sig := <-responses:`), and only its 2 — no mail client — handing
-    on to xdg-email and a `mailto:` link, `share_email_linux.go:191`
+    on to xdg-email and a `mailto:` link, `share_email_linux.go:156`
     (`return portalEmailResponse(code)`); the image goes as a descriptor,
-    `share_email_linux.go:167` (`"attachment_fds"`), and the image's Email…
+    `share_email_linux.go:147` (`"attachment_fds"`), and the image's Email…
     is offered only outside the snap and the Flatpak, and only where the
     desktop's mailto: handler is a mail client rather than a browser,
     `share_email.go:296` (`return !f.confined && (f.portalEmail`): a
@@ -317,7 +317,7 @@ place a fix on one does not reach the others.
     (`share_reveal_linux.go`), and once the file manager has answered ends
     in the same sheet, "Picture saved", which says the picture is shown only
     when the file manager said so,
-    `share_fallback.go:57` (`showShareCopiedSheet(state, shareDone{line: saved.line(shown)`),
+    `share_fallback.go:64` (`showShareCopiedSheet(state, shareDone{line: line`),
     whose Email… carries the quote and its citation as the mail's text.
 
     Until 30 September 2026 the text verbs ended instead in a 13 pt
@@ -560,7 +560,7 @@ neither is in a release yet.
 | macOS | Share picker at the selection; the note card appears beneath | Share picker at the selection | Share picker at the selection | Preview, then the share picker with the image | Probably the share picker, anchored to the hidden reading view, not the icon; not seen | `reading_macos.go` | `builds` — code reading, 29–30 September 2026 |
 | Android | The note card, then the "Sharing text" sheet with the note, citation and link | "Sharing text" sheet with the quote and citation | "Sharing text" sheet with the link | Preview, then the "Sharing image" sheet | "Sharing text" sheet, by the citation's route; not driven | `reading_android.go` | `runner` — emulator, 1.2.17, 29–30 September 2026 |
 | Windows | The Windows Share sheet over the window, headed "Share link", with the citation, the link carrying the note, a QR-code button and a link button with no label (Copy link, by its icon), which shows a check when pressed; the new note card on the page beneath. By the code the note, the citation and the link go to the chosen app as text, and the link as a web link too; not seen (28) | The Windows Share sheet over the window, headed "Share", listing the apps to share to, with no title, preview or Copy on Windows 11. By the code the quote and its citation go to the chosen app as text; not seen (28) | The Windows Share sheet over the window, headed "Share link", with the citation, the link, a QR-code button and a link button with no label (Copy link, by its icon) (28) | Preview, then the Windows Share sheet over the window with the card as a file named "BibleText verse <date> <time>.png" in local time, shown in place of a title, with its thumbnail, its size and a size picker, Edit, and a copy button with no label (28) | The Windows Share sheet, as for Share with citation (28) | `share_windows.go` | `hardware` — arm64 VM, Windows 11 build 26200, the Store package workflow's arm64 executable run unpackaged, 30 September 2026 (the proof note below) |
-| Linux | Copied; the "Copied — ready to paste" sheet over the new note card, with Email…, Copy again and Done (27) | Copied; the "Copied — ready to paste" sheet (27) | Copied; the "Copied — ready to paste" sheet (27) | Saved to the reader's Downloads folder, the XDG download directory under whatever name it has, inside the snap the one in the reader's own home (with none, the snap saves in that home); the file manager shows it, through the desktop portal inside the snap; the "Picture saved" sheet, saying the file manager shows it only when the file manager said so, with Email… attaching the file only where a mail client, not a browser, handles mailto:, and never in the snap (27) | Copied; the "Copied — ready to paste" sheet over the card (27) | `share_other.go`, handing on to `share_fallback.go` | `hardware` — arm64 VM, X11, 30 September 2026; Share as image in the snap, 1 October 2026 |
+| Linux | Copied; the "Copied — ready to paste" sheet over the new note card, with Email…, Copy again and Done (27) | Copied; the "Copied — ready to paste" sheet (27) | Copied; the "Copied — ready to paste" sheet (27) | Saved to the reader's Downloads folder, the XDG download directory under whatever name it has, inside the snap the one in the reader's own home (with none, in that home); the file manager shows it, through the desktop portal inside the snap; the "Picture saved" sheet, saying the file manager shows it only when the file manager said so, and Downloads only of a folder called Downloads, and not opening for a picture no folder took that the file manager did not show, with Email… attaching the file only where a mail client, not a browser, handles mailto:, and never in the snap (27) | Copied; the "Copied — ready to paste" sheet over the card (27) | `share_other.go`, handing on to `share_fallback.go` | `hardware` — arm64 VM, X11, 30 September 2026; Share as image in the snap, 1 October 2026 |
 
 What each proof rests on:
 
@@ -599,7 +599,8 @@ What each proof rests on:
   descriptor (answered 0; the session's portal, which still names Firefox,
   opened Firefox as before). With no Downloads folder the image sheet said
   only that the picture is shown in the file manager, which opened on the
-  temp folder. The portal there is 1.18.4, without `SchemeSupported`. The
+  temp folder (since 1 October the picture is saved in the home instead,
+  and the file manager opens there). The portal there is 1.18.4, without `SchemeSupported`. The
   snap, packed from the same executable (its `bin/bibletext` hashed equal)
   and installed over the store's for the run: Share with citation's sheet
   had no Email…, Copy again and Done at the same pixels as in the local
@@ -611,11 +612,14 @@ What each proof rests on:
   the file manager, was untrue. Fixed on 1 October 2026 and seen on the same
   VM, with the fixed tree's development build packed into the store's
   1.2.17 snap: the picture in `~/Downloads`, Files open on it, and the line
-  saying so; in a localised download folder named by `user-dirs.dirs`; in
-  the home with no Downloads folder, the line saying only that it is shown;
-  with the portal refusing, the line saying only that it is saved in
-  Downloads; and with the home plug disconnected, in
-  `~/snap/bibletext/common`, shown (`docs/BACKLOG.md`, the Linux and Windows
+  saying so; in a localised download folder named by `user-dirs.dirs`, the
+  line saying only that it is shown; in the home with no Downloads folder,
+  the line saying only that it is shown; with the portal refusing, the line
+  saying only that it is saved in Downloads; with the home plug
+  disconnected, in `~/snap/bibletext/common`, shown; and with that folder
+  read-only as well, nothing saved and no sheet. Unconfined, with no
+  Downloads folder, the picture in the home, shown, and with no xdg-open,
+  the line naming the home (`docs/BACKLOG.md`, the Linux and Windows
   share-sheet entry). A mail client's compose has not
   been seen. The row moves to the shipped artefact with the release that
   carries it. Not Wayland.
@@ -722,8 +726,16 @@ What each proof rests on:
   among them, and whether the apps the sheet hands the file to can read
   it there is not known; unpackaged, the sheet read it. Behind the sheet
   it runs the Linux code — the same confirmation sheet, from the same
-  files — but for two things: the file manager the image share opens
-  (Explorer, with the file selected), and Email…, which opens a
+  files — but for these: where the image share saves, `~/Downloads` alone,
+  with no lookup of the Downloads known folder, so a Downloads folder the
+  reader has moved is not found and the picture stays in the copy it was
+  handed, in the temp folder, where Linux reads `user-dirs.dirs` and falls
+  back to the home (`shareImageFolders`, `share_image_folder.go`); the file
+  manager the image share opens, Explorer, with the file selected, which
+  counts as showing the picture once it starts, since Explorer's exit
+  status means nothing, where Linux waits for the file manager's own
+  answer (`share_reveal_other.go`, `share_reveal_linux.go`); and Email…,
+  which opens a
   `mailto:` link through the shell (`share_email_windows.go`) when the
   shell's association API resolves a handler for the scheme — the
   reader's own choice first, a handler whose executable is on disk or a

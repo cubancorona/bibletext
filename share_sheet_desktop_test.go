@@ -1204,12 +1204,17 @@ func TestNoTestSavesASharedPictureIntoTheMachinesDownloads(t *testing.T) {
 	}
 }
 
-// WITHOUT A DOWNLOADS FOLDER THE SHEET SAYS ONLY WHAT IS TRUE: the file
-// manager opens on the temp copy, and the line says the picture is shown
-// there, not that it was saved in Downloads. Mutation: the saved line shown
-// whatever the copy did.
+// WITHOUT A DOWNLOADS FOLDER THE SHEET SAYS ONLY WHAT IS TRUE, under
+// Windows' rules, which keep the copy they were handed (Linux saves in the
+// home instead: TestOutsideASnapWithNoDownloadsThePictureIsSavedInTheHome):
+// the file manager opens on the temp copy, and the line says the picture is
+// shown there, not that it was saved in Downloads. Mutation: the saved line
+// shown whatever the copy did.
 func TestTheImageSheetWithoutDownloadsSaysOnlyWhereItIsShown(t *testing.T) {
 	h := newShareSheetHarness(t)
+	prevGOOS := shareImageGOOS
+	shareImageGOOS = "windows"
+	t.Cleanup(func() { shareImageGOOS = prevGOOS })
 	downloads := h.homeForImage(false)
 	src := h.renderedCard()
 	fallbackShareImage(src)

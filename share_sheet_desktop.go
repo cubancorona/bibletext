@@ -58,10 +58,10 @@ import (
 // The sheet's words. The heading, the three verb lines, the image sheet's
 // heading and its line for a picture in Downloads, and Copied again are the
 // approved wording. Three image lines are still to be settled (docs/BACKLOG.md,
-// the Linux and Windows share-sheet entry): where the picture is not in
-// Downloads, the line that says only that it is shown in the file manager;
-// and, where the file manager did not say it showed the picture, the line
-// that says only that it is saved in Downloads, and the one that names the
+// the Linux and Windows share-sheet entry): where the picture is not in a
+// folder called Downloads, the line saying only that it is shown in the file
+// manager; and, where the file manager did not say it showed the picture,
+// the line saying only that it is saved in Downloads, and the one naming the
 // folder it is saved in (savedImage.line, share_image_folder.go).
 const (
 	shareSheetHeading      = "Copied — ready to paste"

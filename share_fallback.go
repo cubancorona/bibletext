@@ -44,7 +44,9 @@ func fallbackShareText(s string) {
 // can (shareImageMail): saved in Downloads, or elsewhere, and shown in the
 // file manager only when the file manager said it was (savedImage.line).
 // The sheet waits for that answer, at most revealAnswerWait, so that it
-// never says the picture is shown and then takes it back.
+// never says the picture is shown and then takes it back. A picture that no
+// folder took and the file manager did not show has nothing true to be said
+// of it, and no sheet opens; why is logged.
 // Each platform's share mechanism is recorded in docs/PLATFORM_MATRIX.md, Sharing.
 func fallbackShareImage(path string) {
 	state := activeAIState
@@ -53,8 +55,13 @@ func fallbackShareImage(path string) {
 	mail := shareImageMail
 	saved := saveSharedImage(path, shareImagePlaceNow(), time.Now())
 	revealInFileManager(saved.file, func(shown bool) {
+		line := saved.line(shown)
+		if line == "" {
+			fyne.LogError("the shared picture was saved nowhere the reader can find it", saved.err)
+			return
+		}
 		if state != nil {
-			showShareCopiedSheet(state, shareDone{line: saved.line(shown), subject: mail.subject, body: mail.body, attachment: saved.file})
+			showShareCopiedSheet(state, shareDone{line: line, subject: mail.subject, body: mail.body, attachment: saved.file})
 		}
 	})
 }

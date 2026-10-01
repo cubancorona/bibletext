@@ -407,13 +407,21 @@ nor the 2,000-character link has run on Windows.
 
 **Still open.** The image sheet's heading, *Picture saved*, is kept. Three
 image lines are outside the wording above and are still to be settled:
-where the picture is not in Downloads, *The picture is shown in your file
-manager.*; and, where the file manager did not say it showed the picture
-(the fix below), *The picture is saved in Downloads.* and *The picture is
-saved in <folder>.*, the folder named by its path. The keys after Tab are
-fixed on this sheet only: on every other sheet in the app, a button that
-Tab has given the caret still takes Return and Escape and answers only
-Space.
+where the picture is not in a folder called Downloads, *The picture is
+shown in your file manager.*; and, where the file manager did not say it
+showed the picture (the fix below), *The picture is saved in Downloads.*
+and *The picture is saved in <folder>.*, the folder named by its path. Three
+behaviours of the fix are the owner's to accept or change: a download
+folder with another name (a localised *Téléchargements*, a renamed
+*Incoming*) is not called Downloads on the sheet, so it gets the shown line
+or the path line; a picture no folder could take, which the file manager
+did not show, opens no sheet at all, its cause logged, since no approved
+line says the picture could not be saved (a short line, with a heading of
+its own, would need wording); and where xdg-open runs the file manager in
+the foreground, the sheet comes five seconds after the tap (the fix below).
+The keys after Tab are fixed on this sheet only: on every other sheet in
+the app, a button that Tab has given the caret still takes Return and
+Escape and answers only Space.
 
 **Fixed 1 October 2026: Share as image in the snap saved nothing the
 reader could find (found 30 September 2026).** Inside the snap `HOME` is
@@ -438,24 +446,31 @@ The fix, in three parts:
   honoured, and a line naming the home itself switches the directory off),
   then as `~/Downloads`. The snap's desktop plug may read `user-dirs.dirs`,
   and its home plug writes the home's folders that are not hidden. With no
-  Downloads folder the snap saves the picture in the reader's home itself,
-  and with the home plug disconnected, so that the home cannot be reached,
-  in `SNAP_USER_COMMON` (`~/snap/bibletext/common`, kept across the snap's
-  revisions); the file manager can open both. Only when none takes the copy
-  is it left in the snap's temp folder. Outside a snap the same lookup runs
-  on Linux, from `XDG_CONFIG_HOME`, so a tarball or AppImage reader whose
-  download folder has a localised name gets the picture there too; with no
-  Downloads folder the picture stays in the temp folder, as before. Windows
-  (the Share sheet's fallback) and the macOS mimic keep `~/Downloads`
-  alone.
+  Downloads folder the picture is saved in the reader's home itself, and in
+  the snap with the home plug disconnected, so that the home cannot be
+  reached, in `SNAP_USER_COMMON` (`~/snap/bibletext/common`, kept across
+  the snap's revisions); the file manager can open both. Outside a snap the
+  same lookup runs on Linux, from `XDG_CONFIG_HOME`, so a tarball or
+  AppImage reader whose download folder has a localised name gets the
+  picture there too, and one with no Downloads folder gets it in the home,
+  as in the snap: it used to stay in the temp folder, where the next card is
+  rendered over it under the same name. Only when no folder takes the copy
+  is the picture left where the share was handed it, in the temp folder,
+  which the sheet never names (below). `SNAP` counts only on Linux: a stray
+  one on Windows or the macOS mimic is passed over. Windows (the Share
+  sheet's fallback) and the macOS mimic keep `~/Downloads` alone, and with
+  none the copy they were handed (`docs/PLATFORM_MATRIX.md`, the Windows
+  proof note under Sharing).
 - **How it is shown** (`share_reveal_linux.go`). Inside the snap through
   the desktop portal: `OpenURI.OpenDirectory`, handed the picture as a
   read-only descriptor (the portal refuses a writable one from a sandboxed
   app, and one whose path the host cannot see), asks the file manager to
   show it selected (`FileManager1.ShowItems`), and the request's `Response`
-  is the answer, 0 meaning shown. Outside a sandbox, xdg-open on the folder
-  as before, its exit status now the answer; Explorer, whose exit status
-  means nothing, still counts as shown once it starts.
+  is the answer, 0 meaning shown. The request and its answer go through
+  `portalRequest` (`share_portal_linux.go`), which Email… uses too.
+  Outside a sandbox, xdg-open on the folder as before, its exit status now
+  the answer; Explorer, whose exit status means nothing, still counts as
+  shown once it starts.
 - **What the sheet says** (`savedImage.line`). The sheet waits for that
   answer, at most five seconds (on the VM the portal answered in 0.37 s
   with the file manager not yet running), and then says *The picture is
@@ -463,8 +478,11 @@ The fix, in three parts:
   so, *The picture is shown in your file manager.* for a picture shown in
   another folder, and, where the file manager did not say it showed it,
   *The picture is saved in Downloads.* or *The picture is saved in
-  <folder>.* with the folder's path. It never says shown and then takes it
-  back. Where xdg-open runs the file manager in the foreground, as it does
+  <folder>.* with the folder's path. Downloads is said only of a folder
+  called Downloads; the XDG download directory under another name is
+  another folder here. A picture no folder took is never said to be saved:
+  shown, the line says only that; not shown, no sheet opens, and why is
+  logged. It never says shown and then takes it back. Where xdg-open runs the file manager in the foreground, as it does
   on a desktop it does not recognise, the sheet waits the five seconds and
   then says only where the picture is saved, the file manager open beside
   it.
@@ -482,11 +500,31 @@ home and in the temp folder (control: a file manager that said yes);
 outside a snap the picture still in `HOME`'s Downloads whatever
 `SNAP_REAL_HOME` says (control: `SNAP` set); the sheet waiting for the
 answer with this share's mail; `user-dirs.dirs` parsing; the folders tried
-per platform; and xdg-open's exit status believed only on a success, with a
-command that fails, cannot start or hangs past the wait (the success the
-control). `redirectHome` now points `XDG_CONFIG_HOME` into the test's home
-and clears `SNAP`, `SNAP_REAL_HOME` and `SNAP_USER_COMMON`, and stops a test
-whose image share could save outside it.
+per platform, a stray `SNAP` on Windows and macOS among them (control: the
+same variables on Linux); a download folder called Downloads only when that
+is its name (controls: no `user-dirs.dirs`, and a download directory
+elsewhere called Downloads); outside a snap with no Downloads folder, the
+picture in the home (control: Windows' rules, the temp copy); a picture no
+folder took never said to be saved, and no sheet unless it is shown, in the
+snap and outside it (control: a file manager that said yes); and xdg-open's
+exit status believed only on a success, with a command that fails, cannot
+start or hangs past the wait (the success the control). With the first
+fix's `share_image_folder.go` and `share_fallback.go` put back, each of the
+review's new checks fails. `share_portal_linux_test.go`, in the
+Linux CI job (which installs `dbus` for it, and fails it without
+`dbus-daemon`), holds the portal: on a session bus of its own, a portal of
+its own answers OpenDirectory and ComposeEmail as each case chooses, and
+the reveal is believed only on 0, to this request, with the picture handed
+read-only, an answer that comes before the call's own reply not missed;
+Email… ends or hands on as its answer says. Each of five mutations — the
+check on the code inverted, the picture opened for writing, any request's
+Response taken, the Response listened for only after the call, a taken
+compose handed on — fails it. godbus cuts a message short where it reads an
+array of descriptors, so the test's portal cannot see Email…'s attachment;
+the desktop's portal, GLib's, reads it. `redirectHome` now points
+`XDG_CONFIG_HOME` into the test's home and clears `SNAP`, `SNAP_REAL_HOME`
+and `SNAP_USER_COMMON`, and stops a test whose image share could save
+outside it.
 
 **Seen** on the arm64 VM (GNOME on X11, xdg-desktop-portal 1.18.4, Files
 46), with the fixed tree's development build packed into the store's
@@ -507,6 +545,20 @@ the AppImage itself, and a release build in the snap (the development build
 differs only by the sheets it can open at launch). The portal route serves
 any sandbox `linuxSandboxed` recognises; there is no Flatpak build to try it
 in.
+
+**Seen again** on the same VM the same day, after the review's fixes, the
+same way (the build hashed equal to the snap's `bin/bibletext`): in the
+snap, the picture in `~/Downloads`, Files open on it selected, and the line
+saying it is saved in Downloads and shown; with `user-dirs.dirs` naming
+`$HOME/Téléchargements`, the picture there, Files open on Téléchargements,
+and the line saying only that it is shown; with the home plug disconnected
+and `~/snap/bibletext/common` made read-only, nothing saved, the portal
+answering 2 to the snap's private temp file (a Response, not an error), no
+sheet, and the log naming the refused copy; with the folder writable again,
+the picture in it and Files open on it. The same build unconfined, with no
+Downloads folder: the picture in the home, Files open on Home, the line
+saying only that it is shown; and with no xdg-open on its `PATH`, *The
+picture is saved in /home/dev.*
 
 **Sources.**
 
