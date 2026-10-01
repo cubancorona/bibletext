@@ -33,9 +33,9 @@ import (
 	"fyne.io/fyne/v2/test"
 )
 
-// THE IMAGE LINES STILL TO BE SETTLED (share_sheet_desktop.go), held as
-// literals so that a retyping fails here and not in front of a reader.
-func TestTheImageLinesStillToBeSettledAreTheListedOnes(t *testing.T) {
+// THE IMAGE LINES APPROVED ON 1 OCTOBER 2026 (share_sheet_desktop.go), held
+// as literals so that a retyping fails here and not in front of a reader.
+func TestTheImageLinesAreTheApprovedOnes(t *testing.T) {
 	for _, c := range []struct{ got, want string }{
 		{shareLineImageShown, "The picture is shown in your file manager."},
 		{shareLineImageSaved, "The picture is saved in Downloads."},

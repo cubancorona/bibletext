@@ -127,6 +127,10 @@ registration.
   still waiting; a reader's cancel opens nothing, as on the other
   platforms. The handler is removed as the share lets go of it, never
   inside `ShowShareUIForWindow`.
+- A package that cannot be filled fails the sheet's request with the
+  words *The share could not be prepared.* (`windowsShareFailText`,
+  `share_windows.go`), which Windows' own sheet shows, and the in-app sheet
+  opens as well. That wording was approved on 1 October 2026.
 - Tests: the session's rules, the split of a message into title, text and
   link, the picture's copy and the interface ids on every platform
   (`share_session_test.go`, `share_parts_test.go`), among them the late
@@ -432,21 +436,31 @@ Wayland, and this sheet on Windows, where Windows' own Share sheet opened
 for every verb in the app (the entry above) — neither the handler check
 nor the 2,000-character link has run on Windows.
 
-**Still open.** The image sheet's heading, *Picture saved*, is kept. Three
-image lines are outside the wording above and are still to be settled:
+**Approved 1 October 2026.** The image sheet's heading, *Picture saved*,
+is kept, and the three image lines beyond the wording above are approved:
 where the picture is not in a folder called Downloads, *The picture is
 shown in your file manager.*; and, where the file manager did not say it
 showed the picture (the fix below), *The picture is saved in Downloads.*
-and *The picture is saved in <folder>.*, the folder named by its path. Five
-behaviours of the fix are the owner's to accept or change:
+and *The picture is saved in <folder>.*, the folder named by its path. So
+are five behaviours of the fix:
 
 - A download folder with another name (a localised *Téléchargements*, a
-  renamed *Incoming*) is not called Downloads on the sheet, so it gets the
-  shown line or the path line.
-- A picture no folder could take, which the file manager did not show,
-  opens no sheet at all, its cause logged, since no approved line says the
-  picture could not be saved (a short line, with a heading of its own,
-  would need wording).
+  renamed *Incoming*) is honoured: the picture is saved there. The sheet
+  calls only a folder called Downloads by that name, so it gets the shown
+  line or the path line.
+- Where the file manager did not say it showed the picture — xdg-open
+  failed, could not start or was not there, or the portal answered
+  anything but 0 — the sheet says only that the picture is saved, in
+  Downloads or in the folder it names, and never that it is shown.
+- The sheet waits for the file manager's answer, at most five seconds, so
+  where xdg-open runs the file manager in the foreground the sheet comes
+  five seconds after the tap (the fix below).
+- Outside a snap, on Linux — the tarball and the AppImage — a reader with
+  no Downloads folder now gets the picture saved in the home itself, under
+  its *BibleText verse* name, where before it stayed in the temp folder
+  until the next card was rendered over it. That is a new place those
+  builds write to: it gives the sheet a folder to name when the file
+  manager does not open, and it is the snap's rule, so the two follow one.
 - A picture no folder took that the file manager did show opens the sheet
   under *Picture saved*, over the line saying only that it is shown, though
   the file is still the copy in the temp folder, which the next card is
@@ -454,17 +468,13 @@ behaviours of the fix are the owner's to accept or change:
   no copy; on Windows (the Share sheet's fallback) and the macOS mimic it
   is wherever there is no `~/Downloads`, as it was before the fix — a
   Windows reader whose Downloads folder has been moved, for one. The line
-  says nothing of a save; the heading does. Opening no sheet there either,
-  as for a picture the file manager did not show, would keep the heading
-  off it.
-- Outside a snap, on Linux — the tarball and the AppImage — a reader with
-  no Downloads folder now gets the picture saved in the home itself, under
-  its *BibleText verse* name, where before it stayed in the temp folder
-  until the next card was rendered over it. That is a new place those
-  builds write to: it gives the sheet a folder to name when the file
-  manager does not open, and it is the snap's rule, so the two follow one.
-- Where xdg-open runs the file manager in the foreground, the sheet comes
-  five seconds after the tap (the fix below).
+  says nothing of a save; the heading does, and is kept there rather than
+  opening no sheet, as for a picture the file manager did not show.
+
+One case stays outside the approved wording: a picture no folder could
+take, which the file manager did not show, opens no sheet at all, its
+cause logged, since no approved line says the picture could not be saved
+(a short line, with a heading of its own, would need wording).
 
 The keys after Tab are fixed on this sheet only: on every other sheet in
 the app, a button that Tab has given the caret still takes Return and
@@ -529,7 +539,7 @@ The fix, in four parts:
   called Downloads; the XDG download directory under another name is
   another folder here. No line says a picture no folder took is saved, or
   names the temp folder it is in: shown, the line says only that it is
-  shown, under the sheet's heading, *Picture saved* (Still open, above);
+  shown, under the sheet's heading, *Picture saved* (approved, above);
   not shown, no sheet opens, and why is logged. It never says shown and
   then takes it back. Where xdg-open runs the file manager in the
   foreground, as it does on a desktop it does not recognise, the sheet

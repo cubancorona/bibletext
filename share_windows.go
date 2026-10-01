@@ -116,8 +116,8 @@ const (
 // step, or to keep the sheet from opening on the machine running it.
 var windowsShareStep = func(step string, call func() int32) int32 { return call() }
 
-// windowsShareFailText is what the sheet says when its package could not be
-// filled; the in-app sheet opens as well.
+// windowsShareFailText is what the sheet says, in approved words, when its
+// package could not be filled; the in-app sheet opens as well.
 const windowsShareFailText = "The share could not be prepared."
 
 // windowsShareBusy is set while the share's calls to Windows are being made.
