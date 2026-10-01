@@ -36,8 +36,10 @@ package bibletext
 // Where no folder takes the picture it is still the file the share was
 // handed, in the temp folder, which keeps it only until the next card is
 // rendered over it, or, inside the snap, where nothing outside the snap can
-// open it. The sheet never names that folder as the place the picture is
-// saved (savedImage.line).
+// open it. The sheet's line never names that folder as the place the
+// picture is saved (savedImage.line); where the file manager shows the
+// picture there, the sheet still opens under its one heading, Picture saved
+// (docs/BACKLOG.md lists that for a decision).
 
 import (
 	"bufio"
@@ -219,11 +221,13 @@ type savedImage struct {
 	err       error  // why no folder took it, when none did
 }
 
-// saveSharedImage copies the rendered card at path, under the reader's name
-// for it (shareImageName), into the first of the place's folders that is
-// there and takes the copy. Where none does, the picture is still the file
-// at path, in no folder that keeps it.
-func saveSharedImage(path string, p sharePlace, now time.Time) savedImage {
+// saveSharedImage writes card, the rendered card read from path at the tap,
+// under the reader's name for it (shareImageName), into the first of the
+// place's folders that is there and takes the copy. Where none does, the
+// picture is still the file at path, in no folder that keeps it. It waits
+// on the disk, and inside the snap can wait on a permission prompt, so it
+// runs off the UI goroutine (fallbackShareImage).
+func saveSharedImage(card []byte, path string, p sharePlace, now time.Time) savedImage {
 	var err error
 	for _, f := range shareImageFolders(p) {
 		st, serr := os.Stat(f.dir)
@@ -231,7 +235,7 @@ func saveSharedImage(path string, p sharePlace, now time.Time) savedImage {
 			continue
 		}
 		target := filepath.Join(f.dir, shareImageName(now))
-		if err = copyFileContents(path, target); err == nil {
+		if err = writeFileContents(target, card); err == nil {
 			return savedImage{file: target, folder: f.dir, downloads: f.downloads}
 		}
 	}
@@ -245,11 +249,12 @@ func saveSharedImage(path string, p sharePlace, now time.Time) savedImage {
 // is Downloads, and that the file manager shows it only when the file
 // manager said it did (revealInFileManager). A picture saved elsewhere whose
 // folder the file manager did not open is named by its folder's path, the
-// one way left to find it. A picture no folder took is not said to be saved
-// anywhere: the temp folder it is in keeps it only until the next card, and
-// inside the snap is one the reader cannot open. Unless the file manager
-// shows it there is nothing true to say of it, and line is "": the sheet
-// does not open (fallbackShareImage).
+// one way left to find it. The line does not say a picture no folder took
+// is saved anywhere: the temp folder it is in keeps it only until the next
+// card, and inside the snap is one the reader cannot open. Shown, the line
+// says only that, under the sheet's heading; not shown, there is nothing
+// true to say of it, and line is "": the sheet does not open
+// (fallbackShareImage).
 func (s savedImage) line(shown bool) string {
 	switch {
 	case s.downloads && shown:

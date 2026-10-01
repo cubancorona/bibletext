@@ -13,7 +13,8 @@ package bibletext
 // references them (reading_macos.go's mimic branch is dead behind a
 // constant), so the linker drops them.
 //
-// All run on the Fyne UI goroutine (the share flow dispatches from menu taps).
+// All run on the Fyne UI goroutine (the share flow dispatches from menu
+// taps); the image share's save and reveal leave it (shareImageAside).
 
 import (
 	"io"
@@ -47,14 +48,31 @@ func fallbackShareText(s string) {
 // never says the picture is shown and then takes it back. A picture that no
 // folder took and the file manager did not show has nothing true to be said
 // of it, and no sheet opens; why is logged.
+//
+// The card is read here, as the tap left it, since the next card is
+// rendered over the same file; the save and the reveal then run off the UI
+// goroutine (shareImageAside), and the sheet back on it. The save can wait
+// on more than the disk: inside the snap, where AppArmor prompting is on,
+// the first write into the reader's home waits for the reader to answer a
+// permission prompt, and the window must not freeze while it does.
 // Each platform's share mechanism is recorded in docs/PLATFORM_MATRIX.md, Sharing.
 func fallbackShareImage(path string) {
 	state := activeAIState
-	// The mail is this share's: a preview opened while the file manager is
-	// answering sets its own.
+	// The mail is this share's: a preview opened while the picture is being
+	// saved or the file manager is answering sets its own.
 	mail := shareImageMail
-	saved := saveSharedImage(path, shareImagePlaceNow(), time.Now())
-	revealInFileManager(saved.file, func(shown bool) {
+	card, readErr := os.ReadFile(path)
+	place, now := shareImagePlaceNow(), time.Now()
+	var saved savedImage
+	var shown bool
+	shareImageAside(func() {
+		if readErr != nil {
+			saved = savedImage{file: path, err: readErr}
+		} else {
+			saved = saveSharedImage(card, path, place, now)
+		}
+		shown = revealInFileManager(saved.file)
+	}, func() {
 		line := saved.line(shown)
 		if line == "" {
 			fyne.LogError("the shared picture was saved nowhere the reader can find it", saved.err)
@@ -64,6 +82,37 @@ func fallbackShareImage(path string) {
 			showShareCopiedSheet(state, shareDone{line: line, subject: mail.subject, body: mail.body, attachment: saved.file})
 		}
 	})
+}
+
+// shareImageAside runs work off the UI goroutine and then done on it: the
+// image share's save and reveal, which wait on the disk, a permission prompt
+// and the file manager, and then the sheet that says how they went. A
+// variable so that a host test can run the two in place, in order, or hold
+// them.
+var shareImageAside = func(work, done func()) {
+	go func() {
+		work()
+		fyne.Do(done)
+	}()
+}
+
+// writeFileContents writes data to dst (0644), removing what it wrote when
+// the write fails, so that a folder is never left a part of a picture.
+func writeFileContents(dst string, data []byte) error {
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := out.Write(data); err != nil {
+		out.Close()
+		os.Remove(dst)
+		return err
+	}
+	if err := out.Close(); err != nil {
+		os.Remove(dst)
+		return err
+	}
+	return nil
 }
 
 // copyFileContents copies src to dst (0644), failing without side effects on a
@@ -87,16 +136,12 @@ func copyFileContents(src, dst string) error {
 }
 
 // revealInFileManager asks the desktop's file manager to show the file at
-// path, off the UI goroutine, and reports on the UI goroutine whether the
-// file manager said it did (revealFile, share_reveal_linux.go and
-// share_reveal_other.go). A variable so a host test of the image share opens
-// no window on the machine running it, and answers as the test chooses.
-var revealInFileManager = func(path string, report func(shown bool)) {
-	go func() {
-		shown := revealFile(path)
-		fyne.Do(func() { report(shown) })
-	}()
-}
+// path and reports whether the file manager said it did (revealFile,
+// share_reveal_linux.go and share_reveal_other.go). It blocks, so it runs in
+// shareImageAside's work, never on the UI goroutine. A variable so a host
+// test of the image share opens no window on the machine running it, and
+// answers as the test chooses.
+var revealInFileManager = revealFile
 
 // revealAnswerWait is how long the sheet waits for the file manager's answer
 // before it opens saying nothing of it. The portal's answer comes once the

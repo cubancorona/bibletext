@@ -447,7 +447,11 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       true, then reset) the line says only where the picture is saved.
       Outside the snap, with no xdg-open on the PATH, the line says only
       that it is saved in Downloads, or, with no Downloads folder, names the
-      home (docs/BACKLOG.md, the Linux and Windows share-sheet entry).
+      home. With ~/.config/user-dirs.dirs moved aside and a named pipe
+      (mkfifo) in its place just before Share, the window still answers
+      (Books opens) while the save waits; writing the file into the pipe
+      lets the picture land and the sheet open; then put the file back
+      (docs/BACKLOG.md, the Linux and Windows share-sheet entry).
       Email… on the text
       sheets: the button shows whenever the desktop names a mailto:
       handler, and a browser counts — a stock Ubuntu desktop names the

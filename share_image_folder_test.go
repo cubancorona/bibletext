@@ -14,8 +14,9 @@ package bibletext
 // SNAP_REAL_HOME, under the name user-dirs.dirs gives it — or in the
 // reader's home where there is none; that the sheet says it is shown in the
 // file manager only when the file manager said so, calls a folder Downloads
-// only when that is its name, and never names the temp folder as where the
-// picture is saved; and that outside a snap it goes where it went before.
+// only when that is its name, and that its line never names the temp folder
+// as where the picture is saved; and that outside a snap it goes where it
+// went before.
 // Each check is shown failing on the case it tells apart: run as though the
 // app did not know it was in a snap, with no user-dirs.dirs, as Windows, or
 // with a file manager that answered yes.
@@ -419,14 +420,18 @@ func TestOutsideASnapWithNoDownloadsThePictureIsSavedInTheHome(t *testing.T) {
 	}
 }
 
-// A PICTURE NO FOLDER TOOK IS NOT SAID TO BE SAVED. It is still the file the
-// share was handed, in the temp folder, which keeps it only until the next
-// card, and inside the snap is one the reader cannot open; so the sheet never
-// names that folder, and, unless the file manager said it shows the
-// picture, does not open at all. In the snap no folder takes it when the
-// home plug is disconnected and SNAP_USER_COMMON takes no copy; outside it,
-// when the home is not there. Control: the same shares with a file manager
-// that said yes open the sheet, saying only that the picture is shown.
+// A PICTURE NO FOLDER TOOK IS NOT SAID TO BE SAVED by the sheet's line. It
+// is still the file the share was handed, in the temp folder, which keeps
+// it only until the next card, and inside the snap is one the reader cannot
+// open; so the line never names that folder or says the picture is saved,
+// and, unless the file manager said it shows the picture, the sheet does
+// not open at all. Shown, the sheet opens under its one heading, Picture
+// saved, which every image sheet carries and which this check passes over
+// (docs/BACKLOG.md lists that case for a decision). In the snap no folder
+// takes it when the home plug is disconnected and SNAP_USER_COMMON takes no
+// copy; outside it, when the home is not there. Control: the same shares
+// with a file manager that said yes open the sheet, saying only that the
+// picture is shown.
 func TestAPictureNoFolderTookIsNotSaidToBeSaved(t *testing.T) {
 	lays := []struct {
 		name string
@@ -476,31 +481,35 @@ func TestAPictureNoFolderTookIsNotSaidToBeSaved(t *testing.T) {
 	}
 }
 
-// THE SHEET WAITS FOR THE FILE MANAGER'S ANSWER, and carries the mail of
-// the share it belongs to: no sheet opens before the answer, and a preview
-// that sets its own mail in the meantime does not change this one's.
-// Control: once the answer comes the same look finds the sheet.
+// THE SHEET WAITS FOR THE SAVE AND THE FILE MANAGER'S ANSWER, and carries
+// the mail of the share it belongs to: the share returns with the save and
+// the reveal set aside, off the UI goroutine, no sheet opens before they are
+// done, and a preview that sets its own mail in the meantime does not change
+// this one's. Control: once they are done the same look finds the sheet.
 func TestTheImageSheetWaitsForTheFileManagersAnswer(t *testing.T) {
-	h := imageShareHarness(t, true)
+	h := imageShareHarness(t, false)
 	mkdirs(t, filepath.Join(redirectHome(t), "Downloads"))
-	var answer func(bool)
-	revealInFileManager = func(p string, report func(bool)) {
-		h.revealed = append(h.revealed, p)
-		answer = report
-	}
+	var pending func()
+	shareImageAside = func(work, done func()) { pending = func() { work(); done() } }
 	isSheet := func() bool {
 		p := h.top()
 		return p != nil && p.Visible() && sheetHas(p, shareSheetImageHeading)
 	}
 	fallbackShareImage(h.renderedCard())
-	if answer == nil {
-		t.Fatal("control: the file manager was not asked")
+	if pending == nil {
+		t.Fatal("the save and the reveal were not set aside")
+	}
+	if len(h.revealed) > 0 {
+		t.Errorf("the file manager was asked before the share returned, on the UI goroutine: %v", h.revealed)
 	}
 	if isSheet() {
 		t.Error("the sheet opened before the file manager answered")
 	}
 	shareImageMail.subject, shareImageMail.body = "Psalm 23:1 (Sample)", "a later preview's mail"
-	answer(false)
+	pending()
+	if len(h.revealed) != 1 {
+		t.Fatalf("control: the file manager was asked %d times, want once", len(h.revealed))
+	}
 	if !isSheet() {
 		t.Fatalf("control: after the answer the sheet is not on top; texts %v", sheetTexts(h.top()))
 	}
@@ -515,6 +524,38 @@ func TestTheImageSheetWaitsForTheFileManagersAnswer(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("Email… composed nothing")
+	}
+}
+
+// THE SAVE AND THE REVEAL RUN OFF THE CALLER'S GOROUTINE, and the sheet
+// after them: shareImageAside returns while its work is still waiting, and
+// runs done only once the work is over. Its two mutations each fail here:
+// the work run in place, which holds the caller until it ends, and done run
+// without waiting for it. Control: the work let go, done runs.
+func TestShareImageAsideRunsTheWorkOffTheCallersGoroutine(t *testing.T) {
+	app := test.NewApp()
+	t.Cleanup(app.Quit)
+	release, finished, returned := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	go func() {
+		shareImageAside(func() { <-release }, func() { close(finished) })
+		close(returned)
+	}()
+	select {
+	case <-returned:
+	case <-time.After(3 * time.Second):
+		close(release)
+		t.Fatal("shareImageAside held its caller while the work waited")
+	}
+	select {
+	case <-finished:
+		t.Fatal("done ran while the work was still waiting")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(release)
+	select {
+	case <-finished:
+	case <-time.After(5 * time.Second):
+		t.Fatal("control: the work was let go and done never ran")
 	}
 }
 

@@ -410,15 +410,35 @@ image lines are outside the wording above and are still to be settled:
 where the picture is not in a folder called Downloads, *The picture is
 shown in your file manager.*; and, where the file manager did not say it
 showed the picture (the fix below), *The picture is saved in Downloads.*
-and *The picture is saved in <folder>.*, the folder named by its path. Three
-behaviours of the fix are the owner's to accept or change: a download
-folder with another name (a localised *Téléchargements*, a renamed
-*Incoming*) is not called Downloads on the sheet, so it gets the shown line
-or the path line; a picture no folder could take, which the file manager
-did not show, opens no sheet at all, its cause logged, since no approved
-line says the picture could not be saved (a short line, with a heading of
-its own, would need wording); and where xdg-open runs the file manager in
-the foreground, the sheet comes five seconds after the tap (the fix below).
+and *The picture is saved in <folder>.*, the folder named by its path. Five
+behaviours of the fix are the owner's to accept or change:
+
+- A download folder with another name (a localised *Téléchargements*, a
+  renamed *Incoming*) is not called Downloads on the sheet, so it gets the
+  shown line or the path line.
+- A picture no folder could take, which the file manager did not show,
+  opens no sheet at all, its cause logged, since no approved line says the
+  picture could not be saved (a short line, with a heading of its own,
+  would need wording).
+- A picture no folder took that the file manager did show opens the sheet
+  under *Picture saved*, over the line saying only that it is shown, though
+  the file is still the copy in the temp folder, which the next card is
+  rendered over. On Linux that is only where even the reader's home takes
+  no copy; on Windows (the Share sheet's fallback) and the macOS mimic it
+  is wherever there is no `~/Downloads`, as it was before the fix — a
+  Windows reader whose Downloads folder has been moved, for one. The line
+  says nothing of a save; the heading does. Opening no sheet there either,
+  as for a picture the file manager did not show, would keep the heading
+  off it.
+- Outside a snap, on Linux — the tarball and the AppImage — a reader with
+  no Downloads folder now gets the picture saved in the home itself, under
+  its *BibleText verse* name, where before it stayed in the temp folder
+  until the next card was rendered over it. That is a new place those
+  builds write to: it gives the sheet a folder to name when the file
+  manager does not open, and it is the snap's rule, so the two follow one.
+- Where xdg-open runs the file manager in the foreground, the sheet comes
+  five seconds after the tap (the fix below).
+
 The keys after Tab are fixed on this sheet only: on every other sheet in
 the app, a button that Tab has given the caret still takes Return and
 Escape and answers only Space.
@@ -436,7 +456,7 @@ before the fix packed into the store's 1.2.17 snap: Downloads untouched,
 the PNG only under `/tmp/snap-private-tmp/snap.bibletext/tmp`, no file
 manager, and the line claiming one.
 
-The fix, in three parts:
+The fix, in four parts:
 
 - **Where the picture is saved** (`share_image_folder.go`). The reader's
   Downloads folder is looked for in the reader's own home —
@@ -480,12 +500,23 @@ The fix, in three parts:
   *The picture is saved in Downloads.* or *The picture is saved in
   <folder>.* with the folder's path. Downloads is said only of a folder
   called Downloads; the XDG download directory under another name is
-  another folder here. A picture no folder took is never said to be saved:
-  shown, the line says only that; not shown, no sheet opens, and why is
-  logged. It never says shown and then takes it back. Where xdg-open runs the file manager in the foreground, as it does
-  on a desktop it does not recognise, the sheet waits the five seconds and
-  then says only where the picture is saved, the file manager open beside
-  it.
+  another folder here. No line says a picture no folder took is saved, or
+  names the temp folder it is in: shown, the line says only that it is
+  shown, under the sheet's heading, *Picture saved* (Still open, above);
+  not shown, no sheet opens, and why is logged. It never says shown and
+  then takes it back. Where xdg-open runs the file manager in the
+  foreground, as it does on a desktop it does not recognise, the sheet
+  waits the five seconds and then says only where the picture is saved,
+  the file manager open beside it.
+- **Off the UI goroutine** (`fallbackShareImage`, `shareImageAside`). The
+  save and the reveal run off the UI goroutine, and the sheet back on it.
+  snapd's home interface marks its rules for AppArmor prompting, so where
+  prompting is on (an opt-in on recent Ubuntu releases) the first write
+  into the reader's home waits until the reader answers a permission
+  prompt; made on the UI goroutine, as the save had been, it would freeze
+  the window until then. Before the fix the snap wrote only under
+  `~/snap/bibletext`, which no prompt guards. The card is read at the tap,
+  on the UI goroutine, since the next card is rendered over the same file.
 
 **Held by** `share_image_folder_test.go`, on every host the suite runs on
 (the Linux rules chosen through `shareImageGOOS`, the snap through the
@@ -505,12 +536,23 @@ same variables on Linux); a download folder called Downloads only when that
 is its name (controls: no `user-dirs.dirs`, and a download directory
 elsewhere called Downloads); outside a snap with no Downloads folder, the
 picture in the home (control: Windows' rules, the temp copy); a picture no
-folder took never said to be saved, and no sheet unless it is shown, in the
-snap and outside it (control: a file manager that said yes); and xdg-open's
+folder took never said by the line to be saved, and no sheet unless it is
+shown, in the snap and outside it (control: a file manager that said yes); and xdg-open's
 exit status believed only on a success, with a command that fails, cannot
-start or hangs past the wait (the success the control). With the first
-fix's `share_image_folder.go` and `share_fallback.go` put back, each of the
-review's new checks fails. `share_portal_linux_test.go`, in the
+start or hangs past the wait (the success the control). Each check for the
+name rule, the picture no folder took, the home outside a snap and a stray
+`SNAP` fails with `share_image_folder.go` and `share_fallback.go` as the
+snap fix first had them. `share_image_blocked_test.go` (not on Windows,
+which has no named pipes) holds the save off the UI goroutine: with
+`user-dirs.dirs` a named pipe, which keeps a read of it waiting until
+something writes to it as a prompt keeps a write into the home waiting,
+the share returns while the save waits, and the picture saved is the card
+as the tap left it, though the next card has been written over the file
+since. `TestShareImageAsideRunsTheWorkOffTheCallersGoroutine` holds that
+the work leaves the caller's goroutine and that the sheet comes only after
+it. Each of four mutations fails them: the save made before it is set
+aside, the card read only when the save runs, the work run in place, and
+the sheet not waiting for the work. `share_portal_linux_test.go`, in the
 Linux CI job (which installs `dbus` for it, and fails it without
 `dbus-daemon`), holds the portal: on a session bus of its own, a portal of
 its own answers OpenDirectory and ComposeEmail as each case chooses, and
@@ -546,8 +588,9 @@ differs only by the sheets it can open at launch). The portal route serves
 any sandbox `linuxSandboxed` recognises; there is no Flatpak build to try it
 in.
 
-**Seen again** on the same VM the same day, after the review's fixes, the
-same way (the build hashed equal to the snap's `bin/bibletext`): in the
+**Seen again** on the same VM the same day, with the name rule, the
+picture no folder took and the home outside a snap in place, the same way
+(the build hashed equal to the snap's `bin/bibletext`): in the
 snap, the picture in `~/Downloads`, Files open on it selected, and the line
 saying it is saved in Downloads and shown; with `user-dirs.dirs` naming
 `$HOME/Téléchargements`, the picture there, Files open on Téléchargements,
@@ -557,8 +600,31 @@ answering 2 to the snap's private temp file (a Response, not an error), no
 sheet, and the log naming the refused copy; with the folder writable again,
 the picture in it and Files open on it. The same build unconfined, with no
 Downloads folder: the picture in the home, Files open on Home, the line
-saying only that it is shown; and with no xdg-open on its `PATH`, *The
-picture is saved in /home/dev.*
+saying only that it is shown; and with no xdg-open on its `PATH`, the
+line naming the home by its path.
+
+**Seen a third time** on the same VM the same day, with the save and the
+reveal off the UI goroutine, the development build packed into the store's
+1.2.17 snap (its `bin/bibletext` hashed equal to the build): the picture
+in `~/Downloads`, Files open on it selected, and the line saying it is
+saved in Downloads and shown. A save made to wait —
+`~/.config/user-dirs.dirs` replaced by a named pipe just before Share was
+pressed, so that reading it waited until the pipe was written to — left
+the window answering: the preview closed, Books opened while the save
+waited, and once the pipe was written to the picture landed in Downloads
+under the name of the moment Share was pressed, Files opened on it, and
+the sheet came up over the Books page. A build from before the move,
+unconfined, the same way: the preview stayed drawn, Books did nothing,
+and GNOME said BibleText was not responding and offered to force it to
+quit; once the pipe was written to, it went on as before. The new build unconfined behaved as it did in the
+snap. Not seen: AppArmor prompting itself, which the VM's kernel and
+snapd support (`snap debug sandbox-features` lists `prompt`, and snapd's
+home rules carry the prompt marker) but which is off there and was not
+turned on; and GNOME on Wayland, which can keep a window that did not ask
+for the focus behind the one that has it: the portal is handed neither an
+activation token nor a parent window, so Files may open behind BibleText,
+with a notice that it is ready, while the portal answers 0 and the sheet
+says the picture is shown.
 
 **Sources.**
 

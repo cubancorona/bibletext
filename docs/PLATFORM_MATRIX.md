@@ -262,8 +262,8 @@ place a fix on one does not reach the others.
     takes them from `share_windows.go`, whose fallbacks are the same two
     functions. Every text
     verb ends in `share.go:220` (`var shareTextOut`); the fallback copies,
-    `share_fallback.go:36` (`setShareClipboard(s)`), and opens the sheet,
-    `share_fallback.go:37` (`showShareCopiedSheet(state, shareDoneForText(s))`):
+    `share_fallback.go:37` (`setShareClipboard(s)`), and opens the sheet,
+    `share_fallback.go:38` (`showShareCopiedSheet(state, shareDoneForText(s))`):
     the heading, `share_sheet_desktop.go:67` (`"Copied — ready to paste"`),
     one line saying what to do next, by verb, the clipboard's text in a
     read-only scrolling box, `share_sheet_desktop.go:226`
@@ -317,7 +317,7 @@ place a fix on one does not reach the others.
     (`share_reveal_linux.go`), and once the file manager has answered ends
     in the same sheet, "Picture saved", which says the picture is shown only
     when the file manager said so,
-    `share_fallback.go:64` (`showShareCopiedSheet(state, shareDone{line: line`),
+    `share_fallback.go:82` (`showShareCopiedSheet(state, shareDone{line: line`),
     whose Email… carries the quote and its citation as the mail's text.
 
     Until 30 September 2026 the text verbs ended instead in a 13 pt
@@ -619,8 +619,11 @@ What each proof rests on:
   disconnected, in `~/snap/bibletext/common`, shown; and with that folder
   read-only as well, nothing saved and no sheet. Unconfined, with no
   Downloads folder, the picture in the home, shown, and with no xdg-open,
-  the line naming the home (`docs/BACKLOG.md`, the Linux and Windows
-  share-sheet entry). A mail client's compose has not
+  the line naming the home. With the save made to wait (`user-dirs.dirs` a
+  named pipe), the window kept answering in the snap and unconfined, where
+  the build before the save left the UI goroutine was reported not
+  responding (`docs/BACKLOG.md`, the Linux and Windows share-sheet entry).
+  A mail client's compose has not
   been seen. The row moves to the shipped artefact with the release that
   carries it. Not Wayland.
 - **Android, `runner`.** The 1.2.17 build on the emulator. A simulator is not

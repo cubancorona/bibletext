@@ -54,7 +54,9 @@ func withoutMailProbe(t *testing.T) {
 // wired as Linux and Windows wire it, the platform seams the sheet reaches
 // out through replaced — the mail probe answers at once with emailOK, a
 // compose lands on composed instead of opening a client, the file-manager
-// reveal is recorded instead of run and answers at once with revealShown —
+// reveal is recorded instead of run and answers at once with revealShown,
+// and the image share's save and reveal run in place rather than off the
+// UI goroutine (shareImageAside), so the sheet is up when the share returns —
 // the sheet's timers held, and a home directory of the test's own
 // (redirectHome), with no Downloads folder until homeForImage makes one, so
 // no image share reaches the machine's.
@@ -107,12 +109,13 @@ func newShareSheetHarness(t *testing.T) *shareSheetHarness {
 		return nil
 	}
 	t.Cleanup(func() { shareEmailCompose = prevCompose })
-	prevReveal := revealInFileManager
-	revealInFileManager = func(p string, report func(bool)) {
+	prevReveal, prevAside := revealInFileManager, shareImageAside
+	revealInFileManager = func(p string) bool {
 		h.revealed = append(h.revealed, p)
-		report(h.revealShown)
+		return h.revealShown
 	}
-	t.Cleanup(func() { revealInFileManager = prevReveal })
+	shareImageAside = func(work, done func()) { work(); done() }
+	t.Cleanup(func() { revealInFileManager, shareImageAside = prevReveal, prevAside })
 	prevShow := h.st.showReadingOverlay
 	h.st.showReadingOverlay = func() {
 		h.restored++
@@ -1160,12 +1163,13 @@ func TestNoTestSavesASharedPictureIntoTheMachinesDownloads(t *testing.T) {
 		t.Fatal(err)
 	}
 	var revealed []string
-	prevReveal, prevMail := revealInFileManager, shareImageMail
-	revealInFileManager = func(p string, report func(bool)) {
+	prevReveal, prevAside, prevMail := revealInFileManager, shareImageAside, shareImageMail
+	revealInFileManager = func(p string) bool {
 		revealed = append(revealed, p)
-		report(true)
+		return true
 	}
-	t.Cleanup(func() { revealInFileManager, shareImageMail = prevReveal, prevMail })
+	shareImageAside = func(work, done func()) { work(); done() }
+	t.Cleanup(func() { revealInFileManager, shareImageAside, shareImageMail = prevReveal, prevAside, prevMail })
 	h := newAppearanceHarness(t, false)
 	share := func() []string {
 		imageSharesInTests() // drain anything an earlier test recorded
