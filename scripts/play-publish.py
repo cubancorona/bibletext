@@ -116,14 +116,21 @@ def take(argv, flag, needs):
 def read_notes(path):
     """The release notes file as Play is to show it.
 
-    Each line loses its trailing spaces and the whole loses blank lines at
-    its ends; the line breaks between them stay, so the opening line and its
+    The whole loses the whitespace at its two ends, which takes the blank
+    lines there and the first line's indent, and each line loses its
+    trailing spaces; the line breaks between lines stay, and so does the
+    indent of every line after the first, so the opening line and its
     bullets reach Play as lines, not as one paragraph with the bullets
     inline. Play caps a language's notes at 500 characters, and every line
     break is one of them.
     """
-    with open(path, encoding="utf-8") as f:
-        notes = "\n".join(line.rstrip() for line in f.read().strip().splitlines())
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except OSError as error:
+        raise SystemExit(f"--notes: cannot read {path} ({error.strerror or error}); "
+                         "nothing was changed") from None
+    notes = "\n".join(line.rstrip() for line in text.strip().splitlines())
     if not notes:
         raise SystemExit(f"--notes: {path} is empty")
     if len(notes) > NOTES_CAP:
@@ -210,10 +217,16 @@ def promotion_refusal(source, held, production, version, build):
     --confirm-version has already been held to.
     """
     for release in production.get("releases") or []:
-        if build in [str(c) for c in release.get("versionCodes") or []]:
+        codes = [str(c) for c in release.get("versionCodes") or []]
+        if build in codes:
             return (f"production already carries versionCode {build} ({describe(release)}); "
                     "there is nothing to promote. A staged rollout is raised or completed in "
                     "the Play Console.")
+        above = [c for c in codes if c.isdigit() and int(c) > int(build)]
+        if above:
+            return (f"production carries versionCode {above[0]} ({describe(release)}), above "
+                    f"the mobile ledger's Build {build}: this tree is behind production, and "
+                    "promote would put an older build there")
     releases = held.get("releases") or []
     if len(releases) != 1:
         return (f"'{source}' holds {len(releases)} releases; promote takes a track holding "
@@ -239,11 +252,21 @@ def promotion_refusal(source, held, production, version, build):
     if not any((note.get("text") or "").strip() for note in release.get("releaseNotes") or []):
         return (f"the release on '{source}' carries no release notes, so production would show "
                 "none; this script writes no notes of its own")
+    # The promotion writes production's release list whole, so whatever the
+    # track holds gives way to it. A completed release and a halted staged
+    # rollout may (a halted rollout is where a fix is promoted from); a
+    # rollout still going out, or a draft made in the Play Console, is
+    # someone's unfinished step and is settled there first.
     for other in production.get("releases") or []:
-        if other.get("status") != "completed":
-            return (f"production holds a release that is {other.get('status')} "
-                    f"({describe(other)}); finish or halt it in the Play Console first, so a "
-                    "promotion replaces nothing but the completed release")
+        status = other.get("status")
+        if status in ("completed", "halted"):
+            continue
+        if status == "draft":
+            return (f"production holds a draft release ({describe(other)}); roll it out or "
+                    "discard it in the Play Console first")
+        return (f"production holds a release that is {status} ({describe(other)}); complete "
+                "or halt its rollout in the Play Console first: promote replaces a completed "
+                "or halted release, never one still rolling out")
     return None
 
 
@@ -327,6 +350,9 @@ def promote(token, source, version, build, rollout, dry):
         call(f"{BASE}/edits/{eid}/tracks/{PRODUCTION}", token, "PUT",
              {"track": PRODUCTION, "releases": [new]})
         print(f"  assigned to production: {describe(new)}")
+        for other in current.get("releases") or []:
+            if other.get("status") == "halted":
+                print(f"  in place of production's halted release {describe(other)}")
         call(f"{BASE}/edits/{eid}:validate", token, "POST")
         print("  Play validated the edit")
         if dry:
@@ -353,8 +379,12 @@ def promote(token, source, version, build, rollout, dry):
                 "change, is still in Play's review: wait for it to clear in the Play Console, "
                 "then run the same command again.")) from None
         raise SystemExit(unknown_outcome(message, build)) from None
-    except (OSError, KeyboardInterrupt) as error:
-        raise SystemExit(unknown_outcome(str(error) or type(error).__name__, build)) from None
+    except (Exception, KeyboardInterrupt) as error:
+        # Anything else once the commit has been sent -- a lost connection, a
+        # truncated or unreadable answer, an interrupt -- leaves Play's side
+        # unknown, so every such failure gets the same advice.
+        reason = f"{type(error).__name__}: {error}" if str(error) else type(error).__name__
+        raise SystemExit(unknown_outcome(reason, build)) from None
     print(f"  committed edit {done.get('id', eid)}: production is {describe(new)}, "
           "in Play's review before readers see it")
     return 0
@@ -382,9 +412,15 @@ def main(argv):
     # accepts a release without any, so a release sent from here would
     # otherwise reach review with the field empty.
     notes_path = take(argv, "--notes", "a file path")
-    notes = read_notes(notes_path) if notes_path is not None else None
     confirm = take(argv, "--confirm-version", "the version")
     rollout_text = take(argv, "--rollout", "a fraction")
+    # Every option the script knows is out of argv by now, so anything left
+    # that looks like one is mistyped. Read as a track, or dropped, a
+    # --dryrun or a --rollout=0.2 would turn a dry run into a commit or a
+    # staged rollout into a full one.
+    stray = [a for a in argv[1:] if a.startswith("-")]
+    if stray:
+        raise SystemExit(f"unknown option {' '.join(stray)}; nothing was changed")
     cmd = argv[1] if len(argv) > 1 else "tracks"
     if cmd != "promote" and (confirm is not None or rollout_text is not None):
         raise SystemExit("--confirm-version and --rollout belong to promote")
@@ -393,12 +429,13 @@ def main(argv):
         return tracks(access_token())
 
     if cmd == "upload":
-        if len(argv) < 3:
+        if not 3 <= len(argv) <= 4:
             raise SystemExit("usage: play-publish.py [--status draft|completed] [--notes file] upload <bundle.aab> [track]")
         aab, track = argv[2], (argv[3] if len(argv) > 3 else "internal")
         if track == PRODUCTION:
             raise SystemExit("upload goes to a testing track; production is reached only by "
                              "promote, on the account holder's OK")
+        notes = read_notes(notes_path) if notes_path is not None else None
         return upload(access_token(), aab, track, status, notes, dry)
 
     if cmd == "promote":

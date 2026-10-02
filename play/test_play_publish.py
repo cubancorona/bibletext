@@ -17,6 +17,7 @@ from __future__ import annotations
 import base64  # noqa: F401
 import contextlib
 import copy
+import http.client
 import importlib.util
 import io
 import json
@@ -262,6 +263,24 @@ class UploadNotes(Harness):
         self.assertEqual(play.calls, [])
         self.assertEqual(self.tokens, 0)
 
+    def test_the_indent_of_every_line_after_the_first_is_kept(self):
+        # Only the ends of the whole lose whitespace: the 1.2.18 copy did the
+        # same, and an indented bullet stays indented on Play.
+        play = self.fake()
+        notes = self.write("notes.txt", "  Opening line.\n  • indented bullet\n\t• tabbed bullet\n")
+        self.run_script("--notes", notes, "upload", self.bundle(), "alpha")
+        self.assertEqual(self.uploaded_notes(play), [
+            {"language": "en-GB", "text": "Opening line.\n  • indented bullet\n\t• tabbed bullet"}])
+
+    def test_a_notes_file_that_cannot_be_read_is_refused_before_anything_is_sent(self):
+        play = self.fake()
+        message = self.refused("--notes", os.path.join(self.dir, "missing.txt"), "upload",
+                               self.bundle(), "alpha")
+        self.assertIn("--notes: cannot read", message)
+        self.assertIn("nothing was changed", message)
+        self.assertEqual(play.calls, [])
+        self.assertEqual(self.tokens, 0)
+
     def test_notes_of_exactly_500_characters_with_line_breaks_go_up(self):
         text = "x" * 249 + "\n\n" + "y" * 249
         notes = self.write("notes.txt", text + "\n")
@@ -288,6 +307,25 @@ class UploadNotes(Harness):
                 message = self.refused(*extra, "upload", self.bundle(), "alpha")
                 self.assertIn("belong to promote", message)
         self.assertEqual(play.calls, [])
+
+    def test_a_mistyped_dry_run_never_uploads(self):
+        # In the track's place, "--dryrun" would be taken for a track name;
+        # only the unknown-option check stops it.
+        for args in (("upload", self.bundle(), "--dryrun"), ("upload", self.bundle(), "--dry_run"),
+                     ("--dryrun", "upload", self.bundle()), ("upload", self.bundle(), "-n")):
+            with self.subTest(args=args):
+                play = self.fake()
+                message = self.refused(*args)
+                self.assertIn("unknown option", message)
+                self.assertEqual(play.calls, [])
+                self.assertEqual(self.tokens, 0)
+
+    def test_an_argument_after_the_track_is_refused(self):
+        play = self.fake()
+        message = self.refused("upload", self.bundle(), "alpha", "beta")
+        self.assertIn("usage:", message)
+        self.assertEqual(play.calls, [])
+        self.assertEqual(self.tokens, 0)
 
 
 class EditEndedMidUpload(Harness):
@@ -418,6 +456,15 @@ class Promote(Harness):
         for line in NOTES.split("\n"):
             self.assertIn(f"    | {line}\n", self.printed)
 
+    def test_every_language_of_the_notes_is_carried_exactly(self):
+        notes = [{"language": "en-GB", "text": "  Opening line.\n  • indented bullet \n"},
+                 {"language": "en-US", "text": "Other words.\n\n"}]
+        held = release()
+        held["releaseNotes"] = copy.deepcopy(notes)
+        play = self.play(held=track("alpha", held))
+        self.assertEqual(self.run_script(*self.promote()), 0)
+        self.assertEqual(play.tracks["production"], self.expected(releaseNotes=notes))
+
     def test_the_name_is_carried_only_when_the_release_has_one(self):
         for name, carried in (("Autumn release", "Autumn release"), ("", None)):
             with self.subTest(name=name):
@@ -452,11 +499,29 @@ class Promote(Harness):
 
     def test_promote_writes_no_notes_or_status_of_its_own(self):
         notes = self.write("notes.txt", "Other words.\n")
-        for extra in (("--notes", notes), ("--status", "completed")):
-            with self.subTest(extra[0]):
+        missing = os.path.join(self.dir, "missing.txt")
+        for extra in (("--notes", notes), ("--notes", missing), ("--status", "completed")):
+            with self.subTest(extra=extra):
                 play = self.play()
                 message = self.refused(*self.promote(*extra))
                 self.assert_refused_locally(play, message, "--notes and --status belong to upload")
+
+    def test_a_mistyped_option_is_refused_before_anything_is_read(self):
+        # Without the refusal, --dryrun would leave a real commit and
+        # --rollout=0.2 a release to every reader.
+        for extra in (("--dryrun",), ("--dry_run",), ("--rollout=0.2",), ("-n",)):
+            with self.subTest(extra=extra):
+                play = self.play()
+                message = self.refused(*self.promote(*extra))
+                self.assert_refused_locally(play, message, f"unknown option {extra[0]}",
+                                            "nothing was changed")
+
+    def test_promote_takes_exactly_two_tracks(self):
+        for args in (("promote", "alpha", "production", "now"), ("promote", "alpha")):
+            with self.subTest(args=args):
+                play = self.play()
+                message = self.refused(*args, "--confirm-version", VERSION)
+                self.assert_refused_locally(play, message, "usage: play-publish.py promote")
 
     # Refused after reading the two tracks; the edit is discarded.
 
@@ -511,32 +576,89 @@ class Promote(Harness):
                 message = self.refused(*self.promote())
                 self.assert_refused_and_discarded(play, message, "carries no release notes")
 
-    def test_a_production_release_that_is_not_completed_is_refused(self):
+    def test_a_production_rollout_still_going_out_is_refused(self):
         staged = release("986", name="986 (9.8.6)", status="inProgress")
         staged["userFraction"] = 0.1
         play = self.play(production=track("production", release("985", name="985 (9.8.5)"), staged))
         message = self.refused(*self.promote())
-        self.assert_refused_and_discarded(play, message, "production holds a release that is inProgress")
+        self.assert_refused_and_discarded(play, message, "production holds a release that is inProgress",
+                                          "complete or halt its rollout in the Play Console first")
+
+    def test_a_production_draft_is_refused(self):
+        draft = release("986", name="986 (9.8.6)", status="draft")
+        play = self.play(production=track("production", release("985", name="985 (9.8.5)"), draft))
+        message = self.refused(*self.promote())
+        self.assert_refused_and_discarded(play, message, "production holds a draft release",
+                                          "roll it out or discard it in the Play Console first")
+
+    def test_a_halted_production_rollout_gives_way_to_the_promotion(self):
+        # A staged rollout halted over a defect is where a fix is promoted
+        # from; the promotion writes production's releases whole.
+        halted = release("986", name="986 (9.8.6)", status="halted")
+        halted["userFraction"] = 0.2
+        for extra, status in (((), {}), (("--rollout", "0.1"), {"status": "inProgress",
+                                                                 "userFraction": 0.1})):
+            with self.subTest(extra=extra):
+                play = self.play(production=track("production",
+                                                  release("985", name="985 (9.8.5)"), halted))
+                self.assertEqual(self.run_script(*self.promote(*extra)), 0)
+                self.assertEqual(play.commits, 1)
+                self.assertEqual(play.tracks["production"], self.expected(**status))
+                self.assertIn("in place of production's halted release '986 (9.8.6)', "
+                              "versionCode 986, halted to 20% of users", self.printed)
+
+    def test_production_ahead_of_the_ledger_is_refused(self):
+        for status in ("completed", "halted"):
+            with self.subTest(status=status):
+                ahead = release("990", name="990 (9.9.0)", status=status)
+                play = self.play(production=track("production", ahead))
+                message = self.refused(*self.promote())
+                self.assert_refused_and_discarded(
+                    play, message, "production carries versionCode 990",
+                    f"above the mobile ledger's Build {BUILD}")
 
     # The commit, and an edit Play ends.
 
     def test_a_refused_commit_says_production_is_unchanged_and_discards_the_edit(self):
-        answer = ("Play API POST " + self.m.BASE + "/edits/edit-1:commit -> HTTP 400\n"
-                  '{"error": {"message": "Changes are currently in review."}}')
-        play = self.play(fail={"commit": answer})
-        message = self.refused(*self.promote())
-        self.assertTrue(message.startswith(answer), message)
-        self.assertIn("Play refused the commit, so production is unchanged", message)
-        self.assertIn("Nothing changed on Play; the edit is discarded.", message)
-        self.assertEqual(play.kinds()[-2:], ["commit", "delete"])
-        self.assertEqual(play.tracks, play.before)
+        for code, body in (("400", "Changes are currently in review."),
+                           ("403", "The caller does not have permission")):
+            with self.subTest(code=code):
+                answer = (f"Play API POST {self.m.BASE}/edits/edit-1:commit -> HTTP {code}\n"
+                          f'{{"error": {{"message": "{body}"}}}}')
+                play = self.play(fail={"commit": answer})
+                message = self.refused(*self.promote())
+                self.assertTrue(message.startswith(answer), message)
+                self.assertIn("Play refused the commit, so production is unchanged", message)
+                self.assertIn("Nothing changed on Play; the edit is discarded.", message)
+                self.assertEqual(play.kinds()[-2:], ["commit", "delete"])
+                self.assertEqual(play.tracks, play.before)
+
+    def test_an_edit_that_cannot_be_deleted_is_still_reported_unchanged(self):
+        for failure in ("Play API DELETE https://x/edits/edit-1 -> HTTP 500\nbackend error",
+                        ConnectionResetError("connection reset")):
+            with self.subTest(failure=str(failure).splitlines()[0]):
+                play = self.play(production=track("production", release(), LIVE),
+                                 fail={"delete": failure})
+                message = self.refused(*self.promote())
+                self.assertIn(f"production already carries versionCode {BUILD}", message)
+                self.assertIn("Nothing changed on Play. Edit edit-1 could not be discarded ("
+                              + str(failure).splitlines()[0] + "); it ends when the next edit opens.",
+                              message)
+                self.assertEqual(play.kinds(), ["open", "get", "get", "delete"])
+                self.assertEqual(play.commits, 0)
 
     def test_a_commit_whose_answer_is_lost_is_an_unknown_outcome(self):
         for failure in ("Play API POST https://x/edits/edit-1:commit -> HTTP 503\nbackend error",
-                        TimeoutError("timed out")):
-            with self.subTest(failure=str(failure).splitlines()[0]):
+                        TimeoutError("timed out"), KeyboardInterrupt(),
+                        http.client.IncompleteRead(b"{\"id\""),
+                        json.JSONDecodeError("Expecting value", "<html>", 0)):
+            with self.subTest(failure=repr(failure).splitlines()[0]):
                 play = self.play(fail={"commit": failure})
-                message = self.refused(*self.promote())
+                try:
+                    message = self.refused(*self.promote())
+                except KeyboardInterrupt:
+                    # Failed here, so an escaping interrupt cannot stop the run.
+                    self.fail("an interrupt during the commit escaped without the advice")
                 self.assertIn("the commit's outcome is unknown", message)
                 self.assertIn("scripts/play-publish.py tracks", message)
                 self.assertIn(f"refuses once production carries versionCode {BUILD}", message)
