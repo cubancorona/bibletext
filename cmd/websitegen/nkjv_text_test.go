@@ -146,7 +146,7 @@ func TestNKJVTextOffNeverFetchesOrReadsTheKey(t *testing.T) {
 	if strings.Contains(readSiteFile(t, out, "404.html"), "/nkjv/") {
 		t.Error("the 404 offers /nkjv/ with the switch off")
 	}
-	if strings.Contains(readSiteFile(t, out, strings.TrimPrefix(findAsset(t, out, "reader.*.js"), out+"/")), `"nkjv"`) {
+	if strings.Contains(readSiteFile(t, out, strings.TrimPrefix(filepath.ToSlash(findAsset(t, out, "reader.*.js")), filepath.ToSlash(out)+"/")), `"nkjv"`) {
 		t.Error("reader.js has an nkjv column with the switch off")
 	}
 	// The same tree, file for file, as before the switch existed.
