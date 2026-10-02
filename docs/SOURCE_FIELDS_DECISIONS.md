@@ -400,7 +400,8 @@ notes the heading skip is discarding.
 
 The NKJV did follow the BSB, and it now follows it all the way: the headings are
 captured with the publisher's own style name — 2,721 of them, 2,674 section
-heads and 47 acrostic letters — and drawn by the same block model every other
+heads and 47 acrostic letters, and 2,876 once the passage walk stopped dropping
+those after a chunk boundary inside a chapter — and drawn by the same block model every other
 edition uses. Two things about that are worth saying plainly. The epoch was
 spent, batched with the capture; drawing costs none. And the block model is
 edition-blind, so nothing in the drawing path consults this edition's licensing
