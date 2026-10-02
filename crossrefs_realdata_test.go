@@ -123,8 +123,8 @@ func TestEveryCrossReferenceRowOpensScriptureTheTextHas(t *testing.T) {
 				for _, v := range verses {
 					if ch, vs, ok := crossRefSourceRef(id, v); ok {
 						for _, p := range gospelParallelsForVerse(v.BookName, ch, vs) {
-							if p, ok := resolve(p); ok {
-								hidden[p.label()] = true
+							for _, c := range resolve(p) {
+								hidden[c.label()] = true
 							}
 						}
 					}

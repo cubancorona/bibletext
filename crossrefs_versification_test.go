@@ -15,8 +15,24 @@ package bibletext
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 )
+
+// targetIn is crossRefTargetIn for a row the translation shows as one row at
+// most, as every row but one that crosses an inserted passage is.
+func targetIn(t *testing.T, vid string, c crossRef) (crossRef, bool) {
+	t.Helper()
+	parts := crossRefTargetIn(vid, c)
+	switch len(parts) {
+	case 0:
+		return crossRef{}, false
+	case 1:
+		return parts[0], true
+	}
+	t.Errorf("%s: %s is shown as %d rows, want one", vid, c.label(), len(parts))
+	return parts[0], true
+}
 
 // THE ONE THAT SHOWED WRONG TEXT. WEB Catholic carries the Song of the Three as
 // Daniel 3:24-90, pushing the Hebrew 3:24-30 down to 3:91-97. A cross-reference
@@ -27,7 +43,7 @@ func TestDanielThreeTargetsLandOnTheRightPassageInWEBCatholic(t *testing.T) {
 	for _, tc := range []struct{ ref, want int }{
 		{24, 91}, {25, 92}, {26, 93}, {27, 94}, {28, 95}, {29, 96}, {30, 97},
 	} {
-		c, ok := crossRefTargetIn("webc", crossRef{Book: "Daniel", Chapter: 3, Verse: tc.ref})
+		c, ok := targetIn(t, "webc", crossRef{Book: "Daniel", Chapter: 3, Verse: tc.ref})
 		if !ok {
 			t.Errorf("Daniel 3:%d cannot be shown in WEB Catholic at all — it is there, at 3:%d",
 				tc.ref, tc.want)
@@ -101,13 +117,13 @@ func TestTargetsAbsentFromTheReadersTranslationAreDropped(t *testing.T) {
 	}{
 		{"Mark", 9, 44}, {"Mark", 9, 46}, {"Mark", 11, 26}, {"Matthew", 17, 21},
 	} {
-		if _, ok := crossRefTargetIn("bsb", crossRef{Book: v.book, Chapter: v.chapter, Verse: v.verse}); ok {
+		if _, ok := targetIn(t, "bsb", crossRef{Book: v.book, Chapter: v.chapter, Verse: v.verse}); ok {
 			t.Errorf("%s %d:%d is offered as a cross-reference in the BSB, which does not contain it — "+
 				"the row renders blank and its tap goes nowhere", v.book, v.chapter, v.verse)
 		}
 		// The same reference in a translation that HAS the verse must survive:
 		// dropping everything would be a different bug wearing this fix's face.
-		if _, ok := crossRefTargetIn("nkjv", crossRef{Book: v.book, Chapter: v.chapter, Verse: v.verse}); !ok {
+		if _, ok := targetIn(t, "nkjv", crossRef{Book: v.book, Chapter: v.chapter, Verse: v.verse}); !ok {
 			t.Errorf("%s %d:%d was dropped for the NKJV, which does contain it", v.book, v.chapter, v.verse)
 		}
 	}
@@ -124,7 +140,7 @@ func TestTheOverwhelminglyCommonCaseIsAnIdentity(t *testing.T) {
 			{Book: "Genesis", Chapter: 1, Verse: 1},
 			{Book: "Isaiah", Chapter: 53, Verse: 5, EndCh: 53, EndV: 6},
 		} {
-			got, ok := crossRefTargetIn(vid, c)
+			got, ok := targetIn(t, vid, c)
 			if !ok {
 				t.Errorf("%s: %s was dropped — it exists in every translation", vid, c.label())
 				continue
@@ -157,7 +173,7 @@ func TestADoxologyRangeKeepsItsEndInEveryTranslation(t *testing.T) {
 		{"web", 25, "Romans 14:24-25", "14:24-25"},
 		{"webc", 26, "Romans 14:24-26", "14:24-26"},
 	} {
-		got, ok := crossRefTargetIn(tc.vid, crossRef{Book: "Romans", Chapter: 14, Verse: 24, EndV: tc.end})
+		got, ok := targetIn(t, tc.vid, crossRef{Book: "Romans", Chapter: 14, Verse: 24, EndV: tc.end})
 		if !ok {
 			t.Errorf("%s: Romans %s was dropped; every translation has the doxology", tc.vid, tc.from)
 			continue
@@ -213,7 +229,7 @@ func TestRangesThroughReorderedVersesHoldTheirVerses(t *testing.T) {
 		{"bsb", crossRef{Book: "Matthew", Chapter: 23, Verse: 13, EndV: 14}, "Matthew 23:13"},
 		{"web", crossRef{Book: "Matthew", Chapter: 23, Verse: 13, EndV: 36}, "Matthew 23:13-36"},
 	} {
-		got, ok := crossRefTargetIn(tc.vid, tc.in)
+		got, ok := targetIn(t, tc.vid, tc.in)
 		switch {
 		case tc.want == "" && ok:
 			t.Errorf("%s: %s is offered as %q; this translation does not have it", tc.vid, tc.in.label(), got.label())
@@ -307,7 +323,7 @@ func TestARangeWhoseEndTheTranslationLacksEndsAtTheVerseBefore(t *testing.T) {
 		{"web", crossRef{Book: "Matthew", Chapter: 17, Verse: 14, EndV: 21}, "Matthew 17:14-21"},
 		{"nkjv", crossRef{Book: "Mark", Chapter: 11, Verse: 20, EndV: 26}, "Mark 11:20-26"},
 	} {
-		got, ok := crossRefTargetIn(tc.vid, tc.in)
+		got, ok := targetIn(t, tc.vid, tc.in)
 		if !ok {
 			t.Errorf("%s: %s was dropped, want %q", tc.vid, tc.in.label(), tc.want)
 			continue
@@ -329,5 +345,69 @@ func TestARangeWhoseEndTheTranslationLacksEndsAtTheVerseBefore(t *testing.T) {
 	}
 	if fmt.Sprint(parallels) != "[Matthew 17:14-20 Luke 9:37-43]" {
 		t.Errorf("BSB Mark 9:14's parallels are %q, want Matthew 17:14-20 and Luke 9:37-43", parallels)
+	}
+}
+
+// A SPAN ACROSS THE SONG OF THE THREE. WEB Catholic prints the Song as Daniel
+// 3:24-90 and the Hebrew 3:24-30 after it as 3:91-97. A row for the
+// reference's Daniel 3:19-30, the furnace and the deliverance, was shown as
+// "Daniel 3:19-97": sixty-seven verses of a prayer and a hymn the row does
+// not cite, previewed and opened as if it did. It is the passage on either
+// side of the Song, as two rows.
+func TestASpanAcrossTheSongOfTheThreeIsShownOnEitherSideOfIt(t *testing.T) {
+	for _, tc := range []struct {
+		vid  string
+		in   crossRef
+		want string
+	}{
+		{"webc", crossRef{Book: "Daniel", Chapter: 3, Verse: 19, EndV: 30}, "[Daniel 3:19-23 Daniel 3:91-97]"},
+		{"webc", crossRef{Book: "Daniel", Chapter: 3, Verse: 1, EndV: 25}, "[Daniel 3:1-23 Daniel 3:91-92]"},
+		{"webc", crossRef{Book: "Daniel", Chapter: 3, Verse: 23, EndV: 24}, "[Daniel 3:23 Daniel 3:91]"},
+		{"webc", crossRef{Book: "Daniel", Chapter: 2, Verse: 46, EndCh: 3, EndV: 30}, "[Daniel 2:46-3:23 Daniel 3:91-97]"},
+		// CONTROLS: a span wholly on one side of the Song is one row; so is
+		// the passage in a translation without the Song; and so is a span
+		// holding a verse the reference lacks that moves nothing, the NKJV's
+		// Acts 8:37.
+		{"webc", crossRef{Book: "Daniel", Chapter: 3, Verse: 24, EndV: 30}, "[Daniel 3:91-97]"},
+		{"webc", crossRef{Book: "Daniel", Chapter: 3, Verse: 13, EndV: 23}, "[Daniel 3:13-23]"},
+		{"web", crossRef{Book: "Daniel", Chapter: 3, Verse: 19, EndV: 30}, "[Daniel 3:19-30]"},
+		{"nkjv", crossRef{Book: "Acts", Chapter: 8, Verse: 36, EndV: 38}, "[Acts 8:36-38]"},
+	} {
+		var got []string
+		for _, c := range crossRefTargetIn(tc.vid, tc.in) {
+			got = append(got, c.label())
+		}
+		if fmt.Sprint(got) != tc.want {
+			t.Errorf("%s: %s is shown as %q, want %s", tc.vid, tc.in.label(), got, tc.want)
+		}
+	}
+
+	// In the panel the two rows stand together, where the row's votes put
+	// it, and take one place in the cap: the WEB Catholic reader keeps the
+	// sixteenth row every other translation shows.
+	var rows strings.Builder
+	rows.WriteString("Gen.1.1\tDan.3.19-Dan.3.30\t90\n")
+	for v := 1; v <= 16; v++ {
+		fmt.Fprintf(&rows, "Gen.1.1\tPs.1.%d\t%d\n", v, 40-v)
+	}
+	withCrossRefIndex(t, rows.String())
+	bd := xrefBible(map[string]map[int]int{"Genesis": {1: 31}, "Daniel": {3: 97}, "Psalms": {1: 16}})
+	panel := func(vid string) []string {
+		st := &AppState{Bible: bd, CurrentBook: "Genesis", CurrentChapter: 1, CurrentVersion: vid}
+		var labels []string
+		for _, c := range crossRefsForSelection(st, "", selSpan{lo: 1, hi: 1}) {
+			labels = append(labels, c.label())
+		}
+		return labels
+	}
+	web, webc := panel("web"), panel("webc")
+	// CONTROL: the WEB shows the row as one, then fifteen psalms.
+	if len(web) != maxCrossRefsPerVerse || web[0] != "Daniel 3:19-30" || web[15] != "Psalms 1:15" {
+		t.Fatalf("control: the WEB lists %q, want Daniel 3:19-30 and Psalms 1:1-15", web)
+	}
+	if len(webc) != maxCrossRefsPerVerse+1 || webc[0] != "Daniel 3:19-23" || webc[1] != "Daniel 3:91-97" ||
+		webc[16] != "Psalms 1:15" {
+		t.Errorf("WEB Catholic lists %q, want Daniel 3:19-23 and 3:91-97 together, then the same "+
+			"fifteen psalms as the WEB", webc)
 	}
 }

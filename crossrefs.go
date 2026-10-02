@@ -718,8 +718,9 @@ func normaliseSpanEnd(c crossRef) crossRef {
 }
 
 // crossRefTargetIn rewrites one reference — numbered as the reference
-// translation numbers it — into the translation on screen, and reports
-// whether it can be shown at all.
+// translation numbers it — into the translation on screen: the rows the panel
+// shows for it, none when it cannot be shown at all, and two when the
+// translation prints the passage in two places (crossRefPartsAround).
 //
 // This is the half that was producing WRONG TEXT rather than merely missing
 // text: the panel previews the target with GetVerse and the row's tap navigates
@@ -747,7 +748,7 @@ func normaliseSpanEnd(c crossRef) crossRef {
 // the same numbers — the BSB's Philippians 1:16-17, the NKJV's Matthew
 // 23:13-14 — and mapping the ends alone turned "1:16-17" into "1:17-16" and
 // left the moved verse's own text out of a span such as 1:12-17.
-func crossRefTargetIn(versionID string, c crossRef) (crossRef, bool) {
+func crossRefTargetIn(versionID string, c crossRef) []crossRef {
 	ch, vs, res := MapVerse(versificationReference, versionID, c.Book, c.Chapter, c.Verse)
 	if res == verseMapAbsent && c.EndV != 0 && c.EndBook == "" {
 		// A range whose FIRST verse this translation lacks begins at the next
@@ -765,13 +766,13 @@ func crossRefTargetIn(versionID string, c crossRef) (crossRef, bool) {
 		}
 	}
 	if res == verseMapAbsent || res == verseMapIncommensurable {
-		return crossRef{}, false
+		return nil
 	}
 	out := c
 	out.Chapter, out.Verse = ch, vs
 	out.EndBook, out.EndCh, out.EndV = "", 0, 0
 	if c.EndV == 0 {
-		return out, true
+		return []crossRef{out}
 	}
 	endBook, endCh := c.Book, c.EndCh
 	if c.EndBook != "" {
@@ -797,22 +798,24 @@ func crossRefTargetIn(versionID string, c crossRef) (crossRef, bool) {
 		ech, ev, r = MapVerse(versificationReference, versionID, endBook, endCh, endV)
 	}
 	if r == verseMapAbsent || r == verseMapIncommensurable {
-		return out, true
+		return []crossRef{out}
 	}
 	if endBook != c.Book {
 		out.EndBook, out.EndCh, out.EndV = endBook, ech, ev
-		return out, true
+		return []crossRef{out}
 	}
 	lo, hi := verseRef{c.Book, ch, vs}, verseRef{c.Book, ech, ev}
 	if verseBefore(hi, lo) {
 		lo, hi = hi, lo
 	}
 	start, end := verseRef{c.Book, c.Chapter, c.Verse}, verseRef{c.Book, endCh, endV}
+	moved := false
 	for _, m := range versificationDeltas[versionID].moved {
 		at := verseRef{m.Book, m.Chapter, m.Verse}
 		if m.Book != c.Book || verseBefore(at, start) || verseBefore(end, at) {
 			continue
 		}
+		moved = true
 		to := verseRef{m.Book, m.ToChapter, m.ToVerse}
 		if verseBefore(to, lo) {
 			lo = to
@@ -823,7 +826,71 @@ func crossRefTargetIn(versionID string, c crossRef) (crossRef, bool) {
 	}
 	out.Chapter, out.Verse = lo.Chapter, lo.Verse
 	out.EndCh, out.EndV = hi.Chapter, hi.Verse
-	return normaliseSpanEnd(out), true
+	if moved {
+		return crossRefPartsAround(versionID, out)
+	}
+	return []crossRef{normaliseSpanEnd(out)}
+}
+
+// crossRefPartsAround splits a span that a move has stretched over verses
+// this translation inserts — verses with no counterpart in the reference —
+// into the parts on either side of them.
+//
+// WEB Catholic prints the Song of the Three as Daniel 3:24-90, inside the
+// chapter, and the Hebrew 3:24-30 after it as 3:91-97. A row for the
+// reference's Daniel 3:19-30, the furnace and the deliverance, holds verses
+// on both sides of the Song: the smallest one span holding them is 3:19-97,
+// which offered the reader sixty-seven verses of a prayer and a hymn the
+// row does not cite, and previewed and opened them as if it did. It is two
+// rows, 3:19-23 and 3:91-97, the passage as this text prints it.
+//
+// Only a span a move stretched is split. A verse the reference lacks that
+// moves nothing — the NKJV's Acts 8:37, inside the reference's Acts
+// 8:36-38 — is part of the passage in the translation that prints it, and
+// the span keeps it. A block of inserted verses that begins a chapter is left
+// inside the span: where the part before it ends is the previous chapter's
+// last verse, which the table does not record. No such span exists.
+func crossRefPartsAround(versionID string, c crossRef) []crossRef {
+	c = normaliseSpanEnd(c)
+	if c.EndV == 0 || c.crossBook() {
+		return []crossRef{c}
+	}
+	endCh := c.EndCh
+	if endCh == 0 {
+		endCh = c.Chapter
+	}
+	lo, hi := verseRef{c.Book, c.Chapter, c.Verse}, verseRef{c.Book, endCh, c.EndV}
+	var inside []verseRef
+	for _, e := range versificationDeltas[versionID].extra {
+		if e.Book == c.Book && verseBefore(lo, e) && verseBefore(e, hi) {
+			inside = append(inside, e)
+		}
+	}
+	if len(inside) == 0 {
+		return []crossRef{c}
+	}
+	sort.Slice(inside, func(i, j int) bool { return verseBefore(inside[i], inside[j]) })
+	part := func(from, to verseRef) crossRef {
+		p := c
+		p.Chapter, p.Verse, p.EndCh, p.EndV = from.Chapter, from.Verse, to.Chapter, to.Verse
+		return normaliseSpanEnd(p)
+	}
+	var parts []crossRef
+	from := lo
+	for i := 0; i < len(inside); {
+		first, last := inside[i], inside[i]
+		for i++; i < len(inside) && inside[i] == (verseRef{c.Book, last.Chapter, last.Verse + 1}); i++ {
+			last = inside[i]
+		}
+		if first.Verse == 1 {
+			return []crossRef{c}
+		}
+		if before := (verseRef{c.Book, first.Chapter, first.Verse - 1}); !verseBefore(before, from) {
+			parts = append(parts, part(from, before))
+		}
+		from = verseRef{c.Book, last.Chapter, last.Verse + 1}
+	}
+	return append(parts, part(from, hi))
 }
 
 // verseBefore orders two verses of one book.
@@ -852,17 +919,15 @@ func crossRefsForSelection(state *AppState, text string, span selSpan) []crossRe
 		if !ok {
 			continue
 		}
-		for _, c := range gospelParallelsForVerse(v.BookName, srcCh, srcV) {
-			c, ok := resolve(c)
-			if !ok {
-				continue
+		for _, p := range gospelParallelsForVerse(v.BookName, srcCh, srcV) {
+			for _, c := range resolve(p) {
+				lbl := c.label()
+				if shown[lbl] {
+					continue
+				}
+				shown[lbl] = true
+				parallels = append(parallels, c)
 			}
-			lbl := c.label()
-			if shown[lbl] {
-				continue
-			}
-			shown[lbl] = true
-			parallels = append(parallels, c)
 		}
 	}
 
@@ -902,18 +967,19 @@ func crossRefsForSelection(state *AppState, text string, span selSpan) []crossRe
 }
 
 // crossRefResolver names a row's book — and a cross-book range's end book —
-// as the loaded translation does, and rewrites the row into its numbering;
-// false is a row this translation cannot show.
-func crossRefResolver(books []string, versionID string) func(crossRef) (crossRef, bool) {
-	return func(c crossRef) (crossRef, bool) {
+// as the loaded translation does, and rewrites the row into its numbering:
+// the rows the panel shows for it (crossRefTargetIn), none for a row this
+// translation cannot show.
+func crossRefResolver(books []string, versionID string) func(crossRef) []crossRef {
+	return func(c crossRef) []crossRef {
 		name, ok := resolveBookName(books, c.Book)
 		if !ok {
-			return crossRef{}, false
+			return nil
 		}
 		c.Book = name
 		if c.EndBook != "" {
 			if c.EndBook, ok = resolveBookName(books, c.EndBook); !ok {
-				return crossRef{}, false
+				return nil
 			}
 		}
 		return crossRefTargetIn(versionID, c)
@@ -925,23 +991,32 @@ func crossRefResolver(books []string, versionID string) func(crossRef) (crossRef
 // whose labels are neither hidden (shown above as a parallel) nor given
 // already. read is how far down rows it went for them — the depth the index
 // must keep (maxCrossRefsKept).
-func treasuryRowsFor(rows []tskRow, resolve func(crossRef) (crossRef, bool), hidden map[string]bool) (mine []crossRef, read int) {
+//
+// A row the translation prints in two places (crossRefPartsAround) is shown
+// as both, side by side, and takes one place in the cap: it is one citation,
+// and counting it twice would push out the verse's sixteenth row in that
+// translation alone.
+func treasuryRowsFor(rows []tskRow, resolve func(crossRef) []crossRef, hidden map[string]bool) (mine []crossRef, read int) {
 	given := map[string]bool{}
+	places := 0
 	for i, r := range rows {
-		if len(mine) == maxCrossRefsPerVerse {
+		if places == maxCrossRefsPerVerse {
 			break
 		}
-		c, ok := resolve(r.crossRef())
-		if !ok {
-			continue
+		took := false
+		for _, c := range resolve(r.crossRef()) {
+			lbl := c.label()
+			if hidden[lbl] || given[lbl] {
+				continue
+			}
+			given[lbl] = true
+			mine = append(mine, c)
+			took = true
 		}
-		lbl := c.label()
-		if hidden[lbl] || given[lbl] {
-			continue
+		if took {
+			places++
+			read = i + 1
 		}
-		given[lbl] = true
-		mine = append(mine, c)
-		read = i + 1
 	}
 	return mine, read
 }
