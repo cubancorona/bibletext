@@ -47,6 +47,38 @@ func TestAPsalmPageCarriesItsTitle(t *testing.T) {
 	}
 }
 
+// A TITLE THAT NAMES THE DIVINE NAME SETS IT IN SMALL CAPITALS, as the verses
+// under it do and as every app pane draws it (Superscription.DrawnText). The
+// stored title keeps the publisher's letters, "Lord", with the span beside
+// them; a page that printed the stored letters would set an ordinary "Lord"
+// over verses that draw "Lᴏʀᴅ". The control is the same title with no span,
+// which is drawn exactly as stored. Synthetic text throughout.
+func TestAPsalmTitleDrawsTheDivineNameInSmallCapitals(t *testing.T) {
+	const title = "A fixture psalm, sung when the Lord answered."
+	_, verses := psalmWithTitle()
+	render := func(caps []bibletext.TextSpan) string {
+		bd := &bibletext.BibleData{
+			Verses: map[string]map[int][]bibletext.Verse{"Psalms": {3: verses}},
+			Superscriptions: map[string]map[int]bibletext.Superscription{
+				"Psalms": {3: {Text: title, SmallCaps: caps}},
+			},
+		}
+		return chapterBody(bd, "nkjv", "Psalms", 3, verses)
+	}
+
+	marked := render(smallCapsSpan(title))
+	if want := `<p class="pst">A fixture psalm, sung when the Lᴏʀᴅ answered.</p>`; !strings.Contains(marked, want) {
+		t.Errorf("the title does not draw the divine name in small capitals; want %s in:\n%s", want, marked)
+	}
+	if strings.Contains(marked, "the Lord answered") {
+		t.Errorf("the title prints the stored letters, which no page of the edition shows:\n%s", marked)
+	}
+
+	if plain := render(nil); !strings.Contains(plain, `<p class="pst">`+title+`</p>`) {
+		t.Errorf("a title that marks nothing is not drawn as stored:\n%s", plain)
+	}
+}
+
 // CONTROL, and the property the existing chapterBody golden depends on: a
 // chapter with no title renders exactly as before, and a nil BibleData — which
 // nine render tests and the tint golden pass — must not panic or emit anything.
