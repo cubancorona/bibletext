@@ -313,3 +313,56 @@ func TestPublisherCrossRefRowIsOneParagraph(t *testing.T) {
 	}
 	_ = container.NewVBox
 }
+
+// A ROW'S TAP WASHES WHAT THE ROW CITES. It used to wash the first verse
+// only — "John 1:1-3" lit John 1:1 — though Go to and the verse of the day
+// already wash a whole range. A wash is one chapter, so a range that runs on
+// is washed to the end of the chapter it starts in.
+func TestFollowingARowWashesTheRangeItCites(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	bd := xrefBible(map[string]map[int]int{"John": {1: 51}, "Mark": {8: 38, 9: 50}, "Ruth": {4: 22}, "1 Samuel": {1: 28}})
+	for _, tc := range []struct {
+		c      crossRef
+		lo, hi int
+	}{
+		{crossRef{Book: "John", Chapter: 1, Verse: 1}, 1, 1},
+		{crossRef{Book: "John", Chapter: 1, Verse: 1, EndV: 3}, 1, 3},
+		{crossRef{Book: "Mark", Chapter: 8, Verse: 34, EndCh: 9, EndV: 1}, 34, 38},
+		{crossRef{Book: "Ruth", Chapter: 4, Verse: 18, EndBook: "1 Samuel", EndCh: 1, EndV: 2}, 18, 22},
+	} {
+		st := &AppState{Bible: bd, CurrentBook: "John", CurrentChapter: 1, CurrentVersion: "web"}
+		followCrossRef(st, tc.c)
+		at := st.mark.At
+		if st.CurrentBook != tc.c.Book || st.CurrentChapter != tc.c.Chapter {
+			t.Errorf("%s: landed on %s %d", tc.c.label(), st.CurrentBook, st.CurrentChapter)
+		}
+		if at.Book != tc.c.Book || at.Chapter != tc.c.Chapter || at.Lo != tc.lo || at.Hi != tc.hi {
+			t.Errorf("%s: washed %s %d:%d-%d, want %d-%d", tc.c.label(), at.Book, at.Chapter, at.Lo, at.Hi, tc.lo, tc.hi)
+		}
+	}
+}
+
+// A preview ends on a whole word, and never with a space before its ellipsis.
+func TestACrossReferencePreviewEndsOnAWord(t *testing.T) {
+	short := "In the beginning, God created the heavens and the earth."
+	if got := crossRefPreview(short); got != short {
+		t.Errorf("a verse shorter than the preview is shown whole, got %q", got)
+	}
+	// 89 runes of words, then a space at rune 90: the old cut ended "… ".
+	long := strings.Repeat("word ", 18) + "andmore text follows here"
+	got := crossRefPreview(long)
+	if strings.HasSuffix(got, " …") || !strings.HasSuffix(got, "…") {
+		t.Errorf("preview %q must end with an ellipsis straight after a word", got)
+	}
+	// A cut that falls inside a word backs off to the word before it.
+	mid := strings.Repeat("abcdefghi ", 8) + "unbreakableword and the rest of the verse"
+	if got := crossRefPreview(mid); strings.Contains(got, "unbreak") || !strings.HasSuffix(got, "abcdefghi…") {
+		t.Errorf("preview %q must not end inside a word", got)
+	}
+	for _, s := range []string{long, mid} {
+		if n := len([]rune(crossRefPreview(s))); n > crossRefPreviewRunes+1 {
+			t.Errorf("preview of %d runes is longer than the %d-rune cut", n, crossRefPreviewRunes)
+		}
+	}
+}

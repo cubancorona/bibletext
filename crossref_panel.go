@@ -7,6 +7,7 @@ package bibletext
 
 import (
 	"image/color"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -109,9 +110,7 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 	}
 	follow := func(cc crossRef) {
 		closePanel()
-		if v := state.Bible.GetVerse(cc.Book, cc.Chapter, cc.Verse); v != nil {
-			goToVerse(state, *v)
-		}
+		followCrossRef(state, cc)
 	}
 	// fitList sizes the list so the panel is exactly as tall as its cap, the
 	// list scrolling within it. The chrome around the list (header, footer,
@@ -195,6 +194,50 @@ var (
 	crossRefsLoad = ensureCrossRefs
 )
 
+// followCrossRef takes the reader to a row's passage and washes what the row
+// cites: the whole range, as Go to and the verse of the day wash theirs, not
+// only its first verse. A wash lies within one chapter (VerseSpan), so a range
+// that runs on into the next chapter or book is washed from its start to the
+// end of the chapter it starts in.
+func followCrossRef(state *AppState, c crossRef) {
+	v := state.Bible.GetVerse(c.Book, c.Chapter, c.Verse)
+	if v == nil {
+		return
+	}
+	end := v.Verse
+	switch {
+	case c.EndV == 0:
+	case !c.crossBook() && (c.EndCh == 0 || c.EndCh == c.Chapter):
+		end = c.EndV
+	default:
+		if ch := state.Bible.GetChapter(v.BookName, v.Chapter); len(ch) > 0 {
+			end = ch[len(ch)-1].Verse
+		}
+	}
+	goToVerseRange(state, v.BookName, v.Chapter, v.Verse, end)
+}
+
+// crossRefPreviewRunes is how much of a row's first verse its preview shows.
+const crossRefPreviewRunes = 90
+
+// crossRefPreview is the opening of a row's verse, cut at a word: the cut used
+// to fall wherever the 90th character did, mid-word in about half of all rows
+// and on a space in another seventh, which put a space before the ellipsis.
+func crossRefPreview(text string) string {
+	r := []rune(collapseSpaces(text))
+	if len(r) <= crossRefPreviewRunes {
+		return string(r)
+	}
+	cut := string(r[:crossRefPreviewRunes])
+	if r[crossRefPreviewRunes] != ' ' {
+		// Back to the last whole word, unless that would leave too little.
+		if i := strings.LastIndexByte(cut, ' '); i >= len(cut)/2 {
+			cut = cut[:i]
+		}
+	}
+	return strings.TrimRight(cut, " ,;:") + "…"
+}
+
 func crossRefRow(state *AppState, c crossRef, pal palette, onTap func(crossRef)) fyne.CanvasObject {
 	ref := canvas.NewText(c.label(), pal.Accent)
 	ref.TextStyle = fyne.TextStyle{Bold: true}
@@ -218,11 +261,7 @@ func crossRefRow(state *AppState, c crossRef, pal palette, onTap func(crossRef))
 
 	snippet := ""
 	if v := state.Bible.GetVerse(c.Book, c.Chapter, c.Verse); v != nil {
-		full := collapseSpaces(v.Text)
-		snippet = firstRunes(full, 90)
-		if len([]rune(full)) > 90 {
-			snippet += "…"
-		}
+		snippet = crossRefPreview(v.Text)
 	}
 	snip := widget.NewLabel(snippet)
 	snip.Wrapping = fyne.TextWrapWord
