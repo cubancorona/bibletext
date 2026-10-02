@@ -17,7 +17,7 @@ including the sixty-six faces measured and rejected. This file is the outcome.
 | | |
 |---|---|
 | **Junicode** | Latin and polytonic Greek, four real cuts. Subsetted into `assets/fonts/reading/`. |
-| **Ezra SIL** | Pointed Hebrew. Shipped unmodified — "Ezra" and "SIL" are Reserved Font Names. |
+| **Ezra SIL** | Pointed Hebrew. Shipped unmodified in the app — "Ezra" and "SIL" are Reserved Font Names, so the web's subset is renamed (below). |
 
 Two, because no single face passes. The faces that cover all three scripts have
 three cuts, or put their small capitals in the regular alone, or reuse one upright
@@ -29,6 +29,29 @@ Rebuild both with `scripts/build-reading-fonts.sh`, which checks that the subset
 kept the small capitals, the Greek Extended and the superior figures. The small
 capitals are scattered across three Unicode blocks and a subset that misses one
 loses letters from the divine name silently.
+
+### On the website
+
+The site serves the same two faces as WOFF2 subsets of the files above, so a
+shared link shows the page the app shows. The public-domain pages load Junicode's
+regular and bold (`scripts/build-reading-fonts.sh`, `WEB_RANGES`). The NKJV's
+pages load supplements on top (`scripts/build-web-nkjv-fonts.sh`, declared in
+`cmd/websitegen/nkjv_assets.go`):
+
+- the **italic**, for the supplied words and the psalm titles;
+- the 25 **small capitals in each of the regular, bold and italic cuts**. A
+  browser matches a run against faces of its own weight and style and no other,
+  so the divine name in a bold heading or an italic supplied word cannot borrow
+  the regular cut's capitals; without its own it is drawn from a system face;
+- the **Hebrew** of Psalm 119's stanza headings, in Ezra SIL as the app draws it:
+  subsetted to exactly the Hebrew the site's pages draw (`webHebrewRunes`,
+  `web_fonts.go`) and renamed **BibleText Hebrew**, because a subset is a
+  Modified Version and "Ezra" and "SIL" are Reserved Font Names. Its copyright
+  and licence records are kept and the licence is published beside it. It joins
+  the Junicode family by a `unicode-range`, declared at the regular weight and
+  the bold so that it joins a bold heading's composite and is not thickened: the
+  Apple panes' cascade draws the one Hebrew cut as it is, at the run's own size,
+  so the web does too.
 
 ---
 

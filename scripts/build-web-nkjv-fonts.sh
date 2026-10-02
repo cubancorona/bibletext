@@ -1,26 +1,41 @@
 #!/usr/bin/env bash
-# Build the two reading-face supplements the web reader's NKJV pages load, into
-# assets/fonts/reading/web/, from the reading faces this repository already
-# carries (assets/fonts/reading/Junicode-*.ttf, built by
-# build-reading-fonts.sh).
+# Build the reading-face supplements the web reader's NKJV pages load, into
+# assets/fonts/reading/web/, from the faces this repository already carries
+# (assets/fonts/reading/*.ttf, built by build-reading-fonts.sh).
 #
-#   Junicode-SmallCaps.woff2  the Unicode small capitals the app draws the
-#                             divine name with (smallCapitals,
-#                             small_caps_draw.go) and nothing else. The web
-#                             subset the public-domain pages load carries none
-#                             of them, because no edition the site publishes
-#                             without the NKJV marks a divine name. The list is
-#                             read from the Go table here, so the face and the
-#                             app cannot disagree about which letters exist.
-#   Junicode-Italic.woff2     the italic cut over the web subset's own ranges,
-#                             for the words the translators supplied and the
-#                             psalm titles, which the NKJV pages set in italic
-#                             and would otherwise get as a slanted regular.
+#   Junicode-SmallCaps.woff2        the Unicode small capitals the app draws the
+#   Junicode-BoldSmallCaps.woff2    divine name with (smallCapitals,
+#   Junicode-ItalicSmallCaps.woff2  small_caps_draw.go) and nothing else, from
+#                                   the regular, bold and italic cuts: the
+#                                   name in a verse, in a section heading (set
+#                                   bold) and in supplied words and psalm
+#                                   titles (set italic). A browser matches a
+#                                   bold or italic run against faces of that
+#                                   weight and style only, so each cut needs
+#                                   its own. The web subsets the public-domain
+#                                   pages load carry none of them, because no
+#                                   edition the site publishes without the NKJV
+#                                   marks a divine name. The list is read from
+#                                   the Go table here, so the faces and the app
+#                                   cannot disagree about which letters exist.
+#   Junicode-Italic.woff2           the italic cut over the web subset's own
+#                                   ranges, for the words the translators
+#                                   supplied and the psalm titles, which would
+#                                   otherwise get a slanted regular.
+#   BibleTextHebrew.woff2           the app's Hebrew face, Ezra SIL, subsetted
+#                                   to exactly the Hebrew the site's pages draw
+#                                   (webHebrewRunes, web_fonts.go, read here),
+#                                   with its layout tables whole so the marks
+#                                   still attach. "Ezra" and "SIL" are Reserved
+#                                   Font Names and a subset is a Modified
+#                                   Version, so it is RENAMED: every name
+#                                   record that names the font says "BibleText
+#                                   Hebrew", and the copyright and licence
+#                                   records are kept as they are.
 #
-# Only the pages under /nkjv/ link them (cmd/websitegen/nkjv_assets.go), and
-# only while the NKJV's text is published (cmd/websitegen/nkjv_text.go). The
-# Regular and Bold web subsets are NOT rebuilt here and must not change: their
-# bytes are hashed into every page of the public-domain editions.
+# The stylesheets that load them say where (cmd/websitegen). The Regular and
+# Bold web subsets are NOT rebuilt here and must not change: their bytes are
+# hashed into every page of the public-domain editions.
 #
 # Requires fontTools and brotli:  pip3 install --user fonttools brotli
 set -euo pipefail
@@ -52,30 +67,87 @@ WEB_RANGES='U+0020-007E,U+00A0-00FF,U+0100-017F,U+2013-2014,U+2018-201D,U+2026,U
 WEB_FEATURES='kern,liga,calt,onum,ccmp,locl'
 
 mkdir -p assets/fonts/reading/web
-"$PYFTSUBSET" assets/fonts/reading/Junicode-Regular.ttf --flavor=woff2 \
-  --output-file=assets/fonts/reading/web/Junicode-SmallCaps.woff2 \
-  --unicodes="$SMALL_CAPS" --layout-features+="$WEB_FEATURES" --no-hinting --desubroutinize
+for pair in Regular:SmallCaps Bold:BoldSmallCaps Italic:ItalicSmallCaps; do
+  "$PYFTSUBSET" "assets/fonts/reading/Junicode-${pair%%:*}.ttf" --flavor=woff2 \
+    --output-file="assets/fonts/reading/web/Junicode-${pair##*:}.woff2" \
+    --unicodes="$SMALL_CAPS" --layout-features+="$WEB_FEATURES" --no-hinting --desubroutinize
+done
 "$PYFTSUBSET" assets/fonts/reading/Junicode-Italic.ttf --flavor=woff2 \
   --output-file=assets/fonts/reading/web/Junicode-Italic.woff2 \
   --unicodes="$WEB_RANGES" --layout-features+="$WEB_FEATURES" --no-hinting --desubroutinize
-for f in SmallCaps Italic; do
-  printf '  %-50s %5s KB\n' "assets/fonts/reading/web/Junicode-$f.woff2" \
-    "$(( $(wc -c < "assets/fonts/reading/web/Junicode-$f.woff2") / 1024 ))"
+
+# The Hebrew, through the fontTools API rather than pyftsubset: the subset is
+# renamed before it is written. Every name record is kept (pyftsubset's default
+# drops the licence's), then the ones that NAME the font are replaced. The
+# timestamp is not touched, so the same inputs give the same bytes.
+python3 - <<'PY'
+import re, sys
+from fontTools import subset
+from fontTools.ttLib import TTFont
+src = open("web_fonts.go", encoding="utf-8").read()
+block = re.search(r"var webHebrewRunes = \[\]rune\{(.*?)\n\}", src, re.S)
+if not block:
+    sys.exit("webHebrewRunes not found in web_fonts.go")
+runes = [int(h, 16) for h in re.findall(r"'\\u([0-9A-Fa-f]{4})'", block.group(1))]
+if not runes or len(set(runes)) != len(runes):
+    sys.exit("webHebrewRunes is empty or repeats a code point")
+opts = subset.Options()
+opts.layout_features = ["*"]
+opts.name_IDs = ["*"]
+opts.name_languages = ["*"]
+opts.name_legacy = True
+opts.hinting = False
+opts.notdef_outline = True
+font = TTFont("assets/fonts/reading/EzraSIL-Regular.ttf", recalcTimestamp=False)
+sub = subset.Subsetter(opts)
+sub.populate(unicodes=runes)
+sub.subset(font)
+FAMILY, POSTSCRIPT = "BibleText Hebrew", "BibleTextHebrew"
+RENAMED = {1: FAMILY, 3: FAMILY + " 2.51 web subset", 4: FAMILY, 6: POSTSCRIPT, 16: FAMILY, 18: FAMILY}
+for rec in font["name"].names:
+    if rec.nameID in RENAMED:
+        rec.string = RENAMED[rec.nameID]
+font.flavor = "woff2"
+font.save("assets/fonts/reading/web/BibleTextHebrew.woff2")
+PY
+for f in Junicode-SmallCaps Junicode-BoldSmallCaps Junicode-ItalicSmallCaps Junicode-Italic BibleTextHebrew; do
+  printf '  %-50s %5s KB\n' "assets/fonts/reading/web/$f.woff2" \
+    "$(( $(wc -c < "assets/fonts/reading/web/$f.woff2") / 1024 ))"
 done
 
 echo
 echo "Verifying the supplements kept what the pages draw:"
 SMALL_CAPS="$SMALL_CAPS" python3 - <<'PY'
-import os, sys
+import os, re, sys
 from fontTools.ttLib import TTFont
 want = [int(u[2:], 16) for u in os.environ["SMALL_CAPS"].split(",")]
 bad = False
-f = TTFont("assets/fonts/reading/web/Junicode-SmallCaps.woff2", lazy=True)
-cm = set(f.getBestCmap()); f.close()
-missing = [hex(c) for c in want if c not in cm]
-print(f"  Junicode-SmallCaps  small capitals {len(want)-len(missing)}/{len(want)}  "
-      f"{'OK' if not missing else 'INCOMPLETE ' + ','.join(missing)}")
-bad = bad or bool(missing)
+for cut in ("SmallCaps", "BoldSmallCaps", "ItalicSmallCaps"):
+    f = TTFont(f"assets/fonts/reading/web/Junicode-{cut}.woff2", lazy=True)
+    cm = set(f.getBestCmap()); f.close()
+    missing = [hex(c) for c in want if c not in cm]
+    print(f"  Junicode-{cut:15} small capitals {len(want)-len(missing)}/{len(want)}  "
+          f"{'OK' if not missing else 'INCOMPLETE ' + ','.join(missing)}")
+    bad = bad or bool(missing)
+# The Hebrew: exactly the list, every mark still attached through GPOS, and no
+# name record that names the font carrying a Reserved Font Name.
+src = open("web_fonts.go", encoding="utf-8").read()
+block = re.search(r"var webHebrewRunes = \[\]rune\{(.*?)\n\}", src, re.S)
+heb = {int(h, 16) for h in re.findall(r"'\\u([0-9A-Fa-f]{4})'", block.group(1))}
+f = TTFont("assets/fonts/reading/web/BibleTextHebrew.woff2")
+cm = set(f.getBestCmap())
+marks = {c for c in heb if 0x0591 <= c <= 0x05C7}
+gpos = {r.FeatureTag for r in f["GPOS"].table.FeatureList.FeatureRecord} if "GPOS" in f else set()
+naming = {r.nameID: r.toUnicode() for r in f["name"].names if r.nameID in (1, 3, 4, 6, 16, 17, 18)}
+reserved = sorted({i for i, v in naming.items() if "Ezra" in v or "SIL" in v})
+licence = any(r.nameID == 13 and "Open Font License" in r.toUnicode() for r in f["name"].names)
+ok = cm == heb and (not marks or "mark" in gpos) and not reserved and licence
+print(f"  BibleTextHebrew          code points {len(cm & heb)}/{len(heb)}"
+      f"{' +' + str(len(cm - heb)) + ' extra' if cm - heb else ''}  mark attachment "
+      f"{'kept' if 'mark' in gpos else 'LOST'}  reserved names {reserved or 'none'}  "
+      f"licence {'kept' if licence else 'LOST'}  {'OK' if ok else 'WRONG'}")
+f.close()
+bad = bad or not ok
 f = TTFont("assets/fonts/reading/web/Junicode-Italic.woff2", lazy=True)
 cm = set(f.getBestCmap()); f.close()
 basic = [c for c in range(0x20, 0x7F)] + [0x2018, 0x2019, 0x201C, 0x201D, 0x2014]

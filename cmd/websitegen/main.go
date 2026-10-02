@@ -451,22 +451,32 @@ func writeSite(site *siteWriter, versions []loadedVersion, noticed []noticeVersi
 	if err := site.write(noticeJSName, noticeJS); err != nil {
 		return err
 	}
-	// The licensed text's own stylesheet and its two faces, only when a
-	// licensed edition is loaded: with the NKJV's text off the tree gains no
-	// file at all.
+	// The licensed text's own stylesheet and its faces, only when a licensed
+	// edition is loaded: with the NKJV's text off the tree gains no file at
+	// all.
 	nkjvCSSName = ""
 	if anyLicensed(versions) {
-		smallCaps := bibletext.WebScriptureFontSmallCaps()
-		italic := bibletext.WebScriptureFontItalic()
-		smallCapsFile := "Junicode-SmallCaps." + contentHash(string(smallCaps)) + ".woff2"
-		italicFile := "Junicode-Italic." + contentHash(string(italic)) + ".woff2"
-		if err := site.write("assets/"+smallCapsFile, string(smallCaps)); err != nil {
+		var nf nkjvFonts
+		for _, face := range []struct {
+			name string
+			data []byte
+			file *string
+		}{
+			{"Junicode-SmallCaps", bibletext.WebScriptureFontSmallCaps(), &nf.smallCaps},
+			{"Junicode-BoldSmallCaps", bibletext.WebScriptureFontBoldSmallCaps(), &nf.boldSmallCaps},
+			{"Junicode-ItalicSmallCaps", bibletext.WebScriptureFontItalicSmallCaps(), &nf.italicSmallCaps},
+			{"Junicode-Italic", bibletext.WebScriptureFontItalic(), &nf.italic},
+			{"BibleTextHebrew", bibletext.WebHebrewFont(), &nf.hebrew},
+		} {
+			*face.file = face.name + "." + contentHash(string(face.data)) + ".woff2"
+			if err := site.write("assets/"+*face.file, string(face.data)); err != nil {
+				return err
+			}
+		}
+		if err := site.write("assets/hebrew-OFL.txt", string(bibletext.WebHebrewFontLicense())); err != nil {
 			return err
 		}
-		if err := site.write("assets/"+italicFile, string(italic)); err != nil {
-			return err
-		}
-		css := nkjvCSS(smallCapsFile, italicFile)
+		css := nkjvCSS(nf)
 		nkjvCSSName = "assets/nkjv." + contentHash(css) + ".css"
 		if err := site.write(nkjvCSSName, css); err != nil {
 			return err

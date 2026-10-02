@@ -493,35 +493,87 @@ func TestRetrievedLineIsTheLondonCivilDate(t *testing.T) {
 	}
 }
 
-// The small-capital face's unicode-range is exactly the app's small capitals:
-// one missing is a letter of the divine name set in the fallback serif, one
-// extra is a download for a page that does not need it.
-func TestNKJVCSSCoversEverySmallCapital(t *testing.T) {
-	css := nkjvCSS("sc.woff2", "it.woff2")
-	m := regexp.MustCompile(`url\(sc\.woff2\) format\("woff2"\);\s*unicode-range:([^;]+);`).FindStringSubmatch(css)
-	if m == nil {
-		t.Fatalf("no unicode-range on the small-capital face:\n%s", css)
+// Every face nkjv.css declares, with the descriptors that decide which runs it
+// can serve. A supplement joins the composite of a run only when its weight and
+// style are the run's exactly, so each is pinned here: the small capitals in
+// the regular, bold and italic cuts, the italic itself, and the Hebrew at both
+// weights a page sets it in. The unicode-ranges are exactly the app's tables:
+// one code point missing is a letter set in a system face, one extra is a
+// download for a page that does not need it. And a supplement must come AFTER
+// the face it supplements, or the browser asks the base face first.
+func TestNKJVCSSDeclaresEveryFaceTheNKJVPagesDraw(t *testing.T) {
+	css := nkjvCSS(nkjvFonts{smallCaps: "sc.woff2", boldSmallCaps: "bsc.woff2",
+		italicSmallCaps: "isc.woff2", italic: "it.woff2", hebrew: "heb.woff2"})
+	type face struct {
+		style, weight, src string
+		ranges           map[rune]bool
 	}
-	got := map[rune]bool{}
-	for _, p := range strings.Split(m[1], ",") {
-		n, err := strconv.ParseInt(strings.TrimPrefix(strings.TrimSpace(p), "U+"), 16, 32)
-		if err != nil {
-			t.Fatalf("unparseable range entry %q", p)
+	var faces []face
+	re := regexp.MustCompile(`@font-face\{([^}]*)\}`)
+	field := func(body, name string) string {
+		m := regexp.MustCompile(name + `:\s*([^;]+);`).FindStringSubmatch(body)
+		if m == nil {
+			return ""
 		}
-		got[rune(n)] = true
+		return strings.TrimSpace(m[1])
 	}
-	runes := bibletext.WebSmallCapitalRunes()
-	for _, r := range runes {
-		if !got[r] {
-			t.Errorf("the range lacks %U", r)
+	for _, m := range re.FindAllStringSubmatch(css, -1) {
+		f := face{style: field(m[1], "font-style"), weight: field(m[1], "font-weight")}
+		if src := regexp.MustCompile(`url\(([^)]+)\)`).FindStringSubmatch(m[1]); src != nil {
+			f.src = src[1]
 		}
+		if fam := field(m[1], "font-family"); fam != `"Junicode"` {
+			t.Errorf("%s joins family %s, not the scripture stack's Junicode", f.src, fam)
+		}
+		if r := field(m[1], "unicode-range"); r != "" {
+			f.ranges = map[rune]bool{}
+			for _, p := range strings.Split(r, ",") {
+				n, err := strconv.ParseInt(strings.TrimPrefix(strings.TrimSpace(p), "U+"), 16, 32)
+				if err != nil {
+					t.Fatalf("unparseable range entry %q", p)
+				}
+				f.ranges[rune(n)] = true
+			}
+		}
+		faces = append(faces, f)
 	}
-	if len(got) != len(runes) {
-		t.Errorf("the range has %d code points, the app draws %d", len(got), len(runes))
+	exactly := func(got map[rune]bool, want []rune) bool {
+		if len(got) != len(want) {
+			return false
+		}
+		for _, r := range want {
+			if !got[r] {
+				return false
+			}
+		}
+		return true
 	}
-	if !strings.Contains(css, `font-style:italic; font-weight:400;
-  font-display:swap; src:url(it.woff2)`) {
-		t.Error("the italic face is not declared")
+	smallCaps, hebrew := bibletext.WebSmallCapitalRunes(), bibletext.WebHebrewRunes()
+	want := []struct {
+		src, style, weight string
+		ranges             []rune
+	}{
+		{"sc.woff2", "normal", "400", smallCaps},
+		{"bsc.woff2", "normal", "700", smallCaps},
+		{"it.woff2", "italic", "400", nil},
+		{"isc.woff2", "italic", "400", smallCaps},
+		{"heb.woff2", "normal", "400", hebrew},
+		{"heb.woff2", "normal", "700", hebrew},
+	}
+	if len(faces) != len(want) {
+		t.Fatalf("nkjv.css declares %d faces, want %d:\n%s", len(faces), len(want), css)
+	}
+	for i, w := range want {
+		f := faces[i]
+		if f.src != w.src || f.style != w.style || f.weight != w.weight {
+			t.Errorf("face %d is %s %s %s, want %s %s %s", i, f.src, f.style, f.weight, w.src, w.style, w.weight)
+		}
+		if w.ranges == nil && f.ranges != nil {
+			t.Errorf("%s is limited to a unicode-range; it is a whole cut", f.src)
+		}
+		if w.ranges != nil && !exactly(f.ranges, w.ranges) {
+			t.Errorf("%s's unicode-range has %d code points and is not the app's %d", f.src, len(f.ranges), len(w.ranges))
+		}
 	}
 	if !strings.Contains(css, "@media print{.foot{display:block}") {
 		t.Error("the notice would not print")

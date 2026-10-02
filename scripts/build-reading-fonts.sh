@@ -57,9 +57,10 @@ done
 # Tighter than the app's: no small capitals, because none of the public-domain
 # editions marks a divine name, and no Greek or Hebrew, because its notes are
 # set in the UI face. 26 KB against 87 for the app's range. The NKJV's pages
-# load two supplements on top — its small capitals and an italic — which
-# build-web-nkjv-fonts.sh makes from the faces this script writes, so that
-# these two files, hashed into every public-domain page, never change for it.
+# load supplements on top — its small capitals in three cuts, an italic and the
+# Hebrew of its stanza headings — which build-web-nkjv-fonts.sh makes from the
+# faces this script writes, so that these two files, hashed into every
+# public-domain page, never change for it.
 WEB_RANGES='U+0020-007E,U+00A0-00FF,U+0100-017F,U+2013-2014,U+2018-201D,U+2026,U+00B2,U+00B3,U+00B9,U+2070,U+2074-2079'
 WEB_FEATURES='kern,liga,calt,onum,ccmp,locl'
 mkdir -p assets/fonts/reading/web

@@ -44,6 +44,34 @@ var webScriptureFontSmallCaps []byte
 //go:embed assets/fonts/reading/web/Junicode-Italic.woff2
 var webScriptureFontItalic []byte
 
+//go:embed assets/fonts/reading/web/Junicode-BoldSmallCaps.woff2
+var webScriptureFontBoldSmallCaps []byte
+
+//go:embed assets/fonts/reading/web/Junicode-ItalicSmallCaps.woff2
+var webScriptureFontItalicSmallCaps []byte
+
+//go:embed assets/fonts/reading/web/BibleTextHebrew.woff2
+var webHebrewFont []byte
+
+//go:embed assets/fonts/reading/EzraSIL-Licenses.txt
+var webHebrewFontLicense []byte
+
+// webHebrewRunes are the Hebrew code points the site's pages draw, and exactly
+// what the web Hebrew face (WebHebrewFont) carries. Measured over every page of
+// all four editions on 2 October 2026: the twenty-two letters of Psalm 119's
+// stanza headings in the NKJV, and the letters, vowels and cantillation marks
+// of the WEB's and WEB Catholic's notes on the divine name. A page that comes
+// to draw any other Hebrew needs it added here and the face rebuilt
+// (scripts/build-web-nkjv-fonts.sh reads this list).
+var webHebrewRunes = []rune{
+	// Marks: etnahta, tevir; hataf segol, hiriq, tsere, holam, dagesh.
+	'\u0591', '\u059B', '\u05B1', '\u05B4', '\u05B5', '\u05B9', '\u05BC',
+	// Letters: alef to tav without the final forms, and final mem.
+	'\u05D0', '\u05D1', '\u05D2', '\u05D3', '\u05D4', '\u05D5', '\u05D6', '\u05D7',
+	'\u05D8', '\u05D9', '\u05DB', '\u05DC', '\u05DD', '\u05DE', '\u05E0', '\u05E1',
+	'\u05E2', '\u05E4', '\u05E6', '\u05E7', '\u05E8', '\u05E9', '\u05EA',
+}
+
 // WebScriptureFontRegular is the subsetted reading face (WOFF2). Built from the
 // SAME file the app embeds, so the site and the app can never drift to
 // different releases of it. Narrower than the app's subset: none of the
@@ -65,6 +93,36 @@ func WebScriptureFontSmallCaps() []byte { return webScriptureFontSmallCaps }
 // translators supplied and its psalm titles. Only the site's NKJV pages load
 // it; the public-domain pages keep the synthesised slant they have always had.
 func WebScriptureFontItalic() []byte { return webScriptureFontItalic }
+
+// WebScriptureFontBoldSmallCaps is the bold cut's Unicode small capitals and
+// nothing else (WOFF2, scripts/build-web-nkjv-fonts.sh), for the divine name in
+// the NKJV's section headings, which are set bold. The bold web subset carries
+// none, and a bold heading would otherwise draw them from a system face.
+func WebScriptureFontBoldSmallCaps() []byte { return webScriptureFontBoldSmallCaps }
+
+// WebScriptureFontItalicSmallCaps is the italic cut's Unicode small capitals
+// and nothing else (WOFF2), for the divine name inside the words the NKJV's
+// translators supplied and in its psalm titles, both set in italic. A browser
+// matches an italic run against italic faces only, so the upright supplement
+// is never consulted there.
+func WebScriptureFontItalicSmallCaps() []byte { return webScriptureFontItalicSmallCaps }
+
+// WebHebrewFont is the Hebrew face of the site's NKJV pages (WOFF2): the app's
+// Ezra SIL (assets/fonts/reading/EzraSIL-Regular.ttf, the face every app pane
+// draws Hebrew in) subsetted to WebHebrewRunes. "Ezra" and "SIL" are Reserved
+// Font Names, so the subset is renamed "BibleText Hebrew"; its copyright and
+// licence strings are kept, and WebHebrewFontLicense is published beside it.
+func WebHebrewFont() []byte { return webHebrewFont }
+
+// WebHebrewFontLicense is the Hebrew face's licence (the SIL Open Font License
+// and the MIT licence of its layout tables), published beside the face.
+func WebHebrewFontLicense() []byte { return webHebrewFontLicense }
+
+// WebHebrewRunes is what WebHebrewFont carries, sorted: the unicode-range the
+// stylesheet declares it with.
+func WebHebrewRunes() []rune {
+	return append([]rune(nil), webHebrewRunes...)
+}
 
 // WebScriptureFontBold is the subsetted reading face, bold. Required, and not
 // obviously so: the only bold inside the reading column is the verse number,

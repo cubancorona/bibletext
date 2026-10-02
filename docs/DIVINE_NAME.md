@@ -238,13 +238,19 @@ the positional path. `TestChapterProseAndShareStructureAgree` and the tests in
   at all, so those pages contain ordinary capitals and nothing to render —
   verified on the live site, zero small-capital codepoints across those
   chapters. The NKJV, the one edition that needs them, is published only behind
-  the switch in `cmd/websitegen/nkjv_text.go`. While it is on, its pages load a
-  supplementary face holding exactly the 25 small capitals
-  (`assets/fonts/reading/web/Junicode-SmallCaps.woff2`, 3 KB, built by
+  the switch in `cmd/websitegen/nkjv_text.go`. While it is on, its pages load
+  supplementary faces holding exactly the 25 small capitals, one per cut the
+  name is set in — `Junicode-SmallCaps.woff2` for a verse,
+  `Junicode-BoldSmallCaps.woff2` for a section heading and
+  `Junicode-ItalicSmallCaps.woff2` for supplied words and psalm titles (2 to
+  3 KB each, in `assets/fonts/reading/web/`, built by
   `scripts/build-web-nkjv-fonts.sh` from the app's own table and checked 25 of
-  25), declared after the regular face with a `unicode-range` of those code
-  points, so only a page that draws one downloads it. While it is off, the
-  `/nkjv/` path serves notices with no text to render.
+  25). A browser matches a bold or italic run against faces of that weight and
+  style only, so before the bold and italic cuts shipped, the name inside a
+  supplied word was drawn from a system italic. Each is declared after the face
+  it supplements with a `unicode-range` of those code points, so only a page
+  that draws one downloads it. While the switch is off, the `/nkjv/` path serves
+  notices with no text to render.
 - **Secondary surfaces.** Search result cards and cross-reference snippets show
   the edition's stored mixed-case form, not small capitals. Only the reading
   pane substitutes. Whether that is a defect or a deliberate one-line-of-text
