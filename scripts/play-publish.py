@@ -20,6 +20,15 @@ testing-track releases, tester lists and store presence - deliberately NOT
   play-publish.py --dry-run upload <b> [track] everything except the commit
   --status draft|completed                     draft is REQUIRED until the app
                                                has been published once
+  --notes <file>                               the en-GB release notes, line
+                                               breaks kept, at most 500 characters
+
+ONE PLAY STEP AT A TIME. Every command here opens an edit as the one service
+account, and Play lets each user hold one open edit: a new edit ends the one
+that user already has open, and a commit, or any change in the Play Console,
+ends every other edit for the app. An upload whose edit is ended that way
+says so (`EDIT_DELETED`). So uploads, `tracks`, `scripts/release-status.py`
+and `play/push-screenshots.py` run one at a time.
 """
 import base64, json, os, sys, time, urllib.parse, urllib.request
 from cryptography.hazmat.primitives import hashes, serialization
@@ -31,6 +40,12 @@ PKG = "uk.co.bibletext"
 BASE = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications/" + PKG
 UPLOAD = "https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications/" + PKG
 b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b"=")
+NOTES_CAP = 500
+
+# Play's answer, HTTP 400 FAILED_PRECONDITION, to a request on an edit that
+# another edit, a commit or a Play Console change has ended. On 2 October 2026
+# a status read opened beside an upload ended the upload's edit this way.
+EDIT_DELETED = "this edit has been deleted"
 
 
 def access_token():
@@ -64,6 +79,45 @@ def call(url, token, method="GET", payload=None, raw=None, content_type="applica
         raise SystemExit(f"Play API {method} {url.split('?')[0]} -> HTTP {e.code}\n{e.read().decode()[:600]}")
 
 
+def read_notes(path):
+    """The release notes file as Play is to show it.
+
+    Each line loses its trailing spaces and the whole loses blank lines at
+    its ends; the line breaks between them stay, so the opening line and its
+    bullets reach Play as lines, not as one paragraph with the bullets
+    inline. Play caps a language's notes at 500 characters, and every line
+    break is one of them.
+    """
+    with open(path, encoding="utf-8") as f:
+        notes = "\n".join(line.rstrip() for line in f.read().strip().splitlines())
+    if not notes:
+        raise SystemExit(f"--notes: {path} is empty")
+    if len(notes) > NOTES_CAP:
+        raise SystemExit(f"--notes: {len(notes)} characters, line breaks included; "
+                         f"Play caps release notes at {NOTES_CAP}")
+    return notes
+
+
+def lost_edit(stop, doing, unused=""):
+    """`stop` as call() raised it, explained when Play had ended the edit.
+
+    call()'s message is kept whole and only added to: it is shared, and
+    play/push-screenshots.py reads Play's status back out of its
+    "-> HTTP <code>" text.
+    """
+    message = str(stop.code)
+    if EDIT_DELETED not in message.lower():
+        return stop
+    return SystemExit(
+        f"{message}\n\n"
+        f"Play ended this edit while {doing}. Play lets one account hold one open edit, so an "
+        "edit opened as the same service account (scripts/release-status.py, play-publish.py "
+        "tracks, play/push-screenshots.py, another upload) takes its place, and a commit or a "
+        "change in the Play Console ends every other edit. Nothing in this edit reached "
+        f"Play{unused}. Run the same command again once nothing else is touching Play: Play "
+        "steps go one at a time.")
+
+
 def main(argv):
     dry = "--dry-run" in argv
     argv = [a for a in argv if a != "--dry-run"]
@@ -85,12 +139,7 @@ def main(argv):
         i = argv.index("--notes")
         if i + 1 >= len(argv):
             raise SystemExit("--notes needs a file path")
-        with open(argv[i + 1], encoding="utf-8") as f:
-            notes = " ".join(f.read().split())
-        if not notes:
-            raise SystemExit(f"--notes: {argv[i + 1]} is empty")
-        if len(notes) > 500:
-            raise SystemExit(f"--notes: {len(notes)} characters; Play caps release notes at 500")
+        notes = read_notes(argv[i + 1])
         del argv[i:i + 2]
     cmd = argv[1] if len(argv) > 1 else "tracks"
     token = access_token()
@@ -114,27 +163,30 @@ def main(argv):
         print(f"  {aab}: {len(blob):,} bytes -> track '{track}'")
         _, edit = call(BASE + "/edits", token, "POST", {})
         eid = edit["id"]
-        _, b = call(f"{UPLOAD}/edits/{eid}/bundles?uploadType=media", token, "POST",
-                    raw=blob, content_type="application/octet-stream")
-        code = b["versionCode"]
-        print(f"  uploaded versionCode {code} (sha1 {b.get('sha1')})")
-        # An app that has never been published is a DRAFT app, and Play refuses
-        # any release on it whose status is not "draft" ("Only releases with
-        # status draft may be created on draft app"). The first release of a new
-        # app therefore has to be created as a draft here and sent for review
-        # from the console; every release after the app is live is "completed".
-        release = {"status": status, "versionCodes": [str(code)]}
-        if notes:
-            release["releaseNotes"] = [{"language": "en-GB", "text": notes}]
-        call(f"{BASE}/edits/{eid}/tracks/{track}", token, "PUT",
-             {"track": track, "releases": [release]})
-        print(f"  assigned {code} to '{track}' with status '{status}'"
-              + (f", notes {len(notes)} chars" if notes else ", no release notes"))
-        if dry:
-            call(f"{BASE}/edits/{eid}", token, "DELETE")
-            print("  --dry-run: edit discarded, nothing changed on Play")
-            return 0
-        _, done = call(f"{BASE}/edits/{eid}:commit", token, "POST")
+        try:
+            _, b = call(f"{UPLOAD}/edits/{eid}/bundles?uploadType=media", token, "POST",
+                        raw=blob, content_type="application/octet-stream")
+            code = b["versionCode"]
+            print(f"  uploaded versionCode {code} (sha1 {b.get('sha1')})")
+            # An app that has never been published is a DRAFT app, and Play refuses
+            # any release on it whose status is not "draft" ("Only releases with
+            # status draft may be created on draft app"). The first release of a new
+            # app therefore has to be created as a draft here and sent for review
+            # from the console; every release after the app is live is "completed".
+            release = {"status": status, "versionCodes": [str(code)]}
+            if notes:
+                release["releaseNotes"] = [{"language": "en-GB", "text": notes}]
+            call(f"{BASE}/edits/{eid}/tracks/{track}", token, "PUT",
+                 {"track": track, "releases": [release]})
+            print(f"  assigned {code} to '{track}' with status '{status}'"
+                  + (f", notes {len(notes)} chars" if notes else ", no release notes"))
+            if dry:
+                call(f"{BASE}/edits/{eid}", token, "DELETE")
+                print("  --dry-run: edit discarded, nothing changed on Play")
+                return 0
+            _, done = call(f"{BASE}/edits/{eid}:commit", token, "POST")
+        except SystemExit as stop:
+            raise lost_edit(stop, "the upload was in flight", ", and the versionCode is still unused") from None
         print(f"  committed edit {done.get('id', eid)}")
         return 0
 

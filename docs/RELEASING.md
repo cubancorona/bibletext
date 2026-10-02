@@ -25,10 +25,12 @@ those disagree, the specific document is right and this one needs fixing.
 scripts/release-status.py
 ```
 
-Read-only, creates nothing, safe at any moment. It prints what this tree
-declares and what each of the five store fronts is actually serving, asked of
-the stores themselves. A store it cannot reach is printed as `UNREACHABLE` and
-the exit code is non-zero — it never reports a network failure as up to date.
+Read-only and creates nothing; safe at any moment except beside another
+Google Play step, because its Play read opens an edit and ends the one an
+upload has open (stage 6). It prints what this tree declares and
+what each of the five store fronts is actually serving, asked of the stores
+themselves. A store it cannot reach is printed as `UNREACHABLE` and the exit
+code is non-zero — it never reports a network failure as up to date.
 
 **Do this before believing any note, including this one.** Written state goes
 stale between releases; a release decision made against a stale note is how a
@@ -130,7 +132,8 @@ Eight coupled surfaces have to name the same version, each test-enforced:
    on, including for a release the Store is not sent
    (`docs/WINDOWS_STORE_LISTING.md`, "What's new")
 
-Plus the Play notes blockquote in `docs/PLAY_LISTING.md`, under 500 characters.
+Plus the Play notes blockquote in `docs/PLAY_LISTING.md`, under 500 characters
+with its line breaks counted.
 
 ### 2 — Push and wait for green
 
@@ -258,12 +261,21 @@ checks the attached build against it.
 
 Play: `scripts/play-publish.py --dry-run --notes <file> upload <aab> alpha`
 first — it uploads into an edit it then discards — then the identical command
-without `--dry-run`, with `--status completed`. That is as far as a conductor
-goes on Play: the service account cannot reach production, so the upload
-stops on the alpha track. The rest is the owner's, in the Play Console:
-promote the alpha release to Production, check its What's new text, and roll
-it out. `scripts/release-status.py` then shows production on the new
-versionCode.
+without `--dry-run`, with `--status completed`. The notes file keeps its line
+breaks, so the opening line and each bullet reach Play as lines. That is as
+far as a conductor goes on Play: the service account cannot reach
+production, so the upload stops on the alpha track. The rest is the owner's,
+in the Play Console: promote the alpha release to Production, check its
+What's new text, and roll it out. `scripts/release-status.py` then shows
+production on the new versionCode.
+
+**Play steps run one at a time.** Every Play command opens an edit as the one
+service account, and Play lets that account hold one open edit: a new edit
+ends the one already open, and a commit or a change in the Play Console ends
+every other. So uploads, `tracks`, `release-status.py` reads and
+`play/push-screenshots.py` go in turn, never as parallel steps. An upload whose
+edit was ended that way says so; nothing reached Play, and the same command
+runs again once nothing else is touching it.
 
 Play's screenshots are not part of a release: the listing keeps its images
 from one release to the next. An approved new phone and tablet set goes up
@@ -432,7 +444,7 @@ Re-running from the top is usually wrong. These steps are not idempotent:
 | step | re-running does | recovery |
 | --- | --- | --- |
 | `altool --upload-app` | rejects a duplicate build number | bump Build, rebuild |
-| `play-publish.py upload` | rejects a used versionCode | bump Build, rebuild |
+| `play-publish.py upload` | rejects a used versionCode once a run has committed; a run whose edit Play ended ("This Edit has been deleted") committed nothing | after a commit, bump Build and rebuild; after an ended edit, run the same command again on its own |
 | `submit-version.py --submit` | 409 — already in review | remove from review in the console |
 | `push-screenshots.py --write` | leaves a set that holds the files, reorders one that holds them out of order, replaces the rest | re-run once a FAILED image or a refusal is understood |
 | `play/push-screenshots.py --write` | leaves a type that holds the files, replaces the rest | a run stopped before the commit deleted its edit and changed nothing; one that reports the commit's outcome unknown may have committed, so run it read-only first; re-run once the reason is understood |
@@ -452,6 +464,7 @@ not create, so a draft started in Partner Center is safe from it.
   what they are for.
 - Deleting a pending store submission it did not create.
 - `--submit` or `commit` as part of an unattended sweep.
+- Two Google Play steps at once.
 - Reporting a store as up to date that it could not actually reach.
 
 ## Where "all stores" stops being true
