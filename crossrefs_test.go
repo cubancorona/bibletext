@@ -238,3 +238,37 @@ func TestACrossBookRangeKeepsItsEndBook(t *testing.T) {
 		}
 	}
 }
+
+// THE CAP COUNTS ROWS A READER CAN SEE. A verse shows its sixteen best
+// Treasury rows. The sixteen used to be chosen when the dataset was read,
+// before the rows this translation cannot show were dropped and the rows a
+// parallel already shows were hidden, so each of those left an empty place
+// instead of handing it to the seventeenth: WEB Catholic's Genesis 41:42
+// showed 10, and Matthew 10:1 showed 14 in every translation.
+func TestTheCapCountsOnlyRowsTheReaderCanSee(t *testing.T) {
+	var rows strings.Builder
+	// The two best rows point into Esther, which WEB Catholic's Greek Esther
+	// cannot receive (versification: incommensurable).
+	rows.WriteString("Gen.41.42\tEsth.6.8\t90\nGen.41.42\tEsth.8.15\t80\n")
+	for v := 1; v <= 16; v++ {
+		fmt.Fprintf(&rows, "Gen.41.42\tDan.5.%d\t%d\n", v, 40-v)
+	}
+	withCrossRefIndex(t, rows.String())
+	bd := xrefBible(map[string]map[int]int{"Genesis": {41: 57}, "Esther": {6: 14, 8: 17}, "Daniel": {5: 31}})
+	count := func(vid string) (n int, last string) {
+		st := &AppState{Bible: bd, CurrentBook: "Genesis", CurrentChapter: 41, CurrentVersion: vid}
+		for _, c := range crossRefsForSelection(st, "", selSpan{lo: 42, hi: 42}) {
+			n, last = n+1, c.label()
+		}
+		return n, last
+	}
+	// CONTROL: the WEB has Esther, so its sixteen are the top sixteen, and the
+	// sixteenth is Daniel 5:14.
+	if n, last := count("web"); n != maxCrossRefsPerVerse || last != "Daniel 5:14" {
+		t.Fatalf("control: the WEB lists %d rows ending %q, want 16 ending \"Daniel 5:14\"", n, last)
+	}
+	if n, last := count("webc"); n != maxCrossRefsPerVerse || last != "Daniel 5:16" {
+		t.Errorf("WEB Catholic lists %d rows ending %q, want 16 ending \"Daniel 5:16\": the two "+
+			"rows into Greek Esther must hand their places to the next two", n, last)
+	}
+}

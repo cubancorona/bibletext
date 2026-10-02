@@ -285,13 +285,16 @@ func parseCrossRefRows(r io.Reader) (map[string][]crossRef, error) {
 		return nil, fmt.Errorf("scan cross-references: %w", err)
 	}
 
-	// Keep the top-voted few per verse, highest first.
-	for key, refs := range idx {
+	// Highest-voted first, ties in the dataset's order. Every row is kept: the
+	// per-verse cap (maxCrossRefsPerVerse) is applied when a verse's rows are
+	// shown, AFTER the rows the reader's translation cannot show are dropped
+	// and the ones a parallel already shows are hidden. Capping here, before
+	// either, left those places empty: WEB Catholic's Genesis 41:42 showed 10
+	// of a possible 16 because six of its top sixteen point into Greek
+	// Esther, and Matthew 10:1 showed 14 in every translation because two of
+	// its top sixteen are the parallels listed above them.
+	for _, refs := range idx {
 		sort.SliceStable(refs, func(i, j int) bool { return refs[i].Votes > refs[j].Votes })
-		if len(refs) > maxCrossRefsPerVerse {
-			refs = refs[:maxCrossRefsPerVerse]
-		}
-		idx[key] = refs
 	}
 	return idx, nil
 }
@@ -390,9 +393,6 @@ func bookAbbrev(name string) string {
 	return name
 }
 
-// crossRefsForSelection aggregates the cross-references for the verse(s) the
-// selection spans, resolving target book names against the loaded translation
-// and merging duplicates (keeping the highest vote). Highest-voted first.
 // crossRefSourceRef maps a verse the reader has selected — numbered in whatever
 // translation is on screen — into the numbering the dataset is keyed by.
 //
@@ -564,6 +564,9 @@ func verseBefore(a, b verseRef) bool {
 	return a.Chapter < b.Chapter || (a.Chapter == b.Chapter && a.Verse < b.Verse)
 }
 
+// crossRefsForSelection aggregates the cross-references for the verse(s) the
+// selection spans, resolving target book names against the loaded translation
+// and merging duplicates (keeping the highest vote). Highest-voted first.
 func crossRefsForSelection(state *AppState, text string, span selSpan) []crossRef {
 	if state == nil || state.Bible == nil {
 		return nil
@@ -612,7 +615,10 @@ func crossRefsForSelection(state *AppState, text string, span selSpan) []crossRe
 	}
 
 	// Treasury-of-Scripture-Knowledge cross-references, highest-voted first, minus
-	// anything already shown as a parallel.
+	// anything already shown as a parallel. Each selected verse gives its
+	// maxCrossRefsPerVerse best rows among the ones this translation can SHOW:
+	// the cap is counted after the drops and the hiding, so a row the reader
+	// cannot be shown hands its place to the next one down.
 	var tsk []crossRef
 	if crossRefIndex != nil {
 		seen := map[string]int{} // label -> index into tsk
@@ -621,15 +627,20 @@ func crossRefsForSelection(state *AppState, text string, span selSpan) []crossRe
 			if !ok {
 				continue
 			}
+			mine := map[string]bool{} // labels this verse has given
 			for _, c := range crossRefIndex[crossRefKey(v.BookName, srcCh, srcV)] {
+				if len(mine) == maxCrossRefsPerVerse {
+					break
+				}
 				c, ok := resolve(c)
 				if !ok {
 					continue
 				}
 				lbl := c.label()
-				if shown[lbl] {
+				if shown[lbl] || mine[lbl] {
 					continue
 				}
+				mine[lbl] = true
 				if i, dup := seen[lbl]; dup {
 					if c.Votes > tsk[i].Votes {
 						tsk[i].Votes = c.Votes
