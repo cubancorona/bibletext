@@ -19,10 +19,13 @@ var versificationDeltas = map[string]versificationDelta{
 			{"Mark", 15, 28},
 			{"Matthew", 17, 21},
 			{"Matthew", 18, 11},
-			{"Matthew", 23, 14},
+			{"Matthew", 23, 13},
 			{"Romans", 16, 24},
 		},
 		moved: []verseMove{
+			{"Matthew", 23, 14, 23, 13},
+			{"Philippians", 1, 16, 1, 17},
+			{"Philippians", 1, 17, 1, 16},
 			{"Romans", 14, 24, 16, 25},
 			{"Romans", 14, 25, 16, 26},
 			{"Romans", 14, 26, 16, 27},
@@ -33,6 +36,8 @@ var versificationDeltas = map[string]versificationDelta{
 	"nkjv": {
 		absent: []verseRef{},
 		moved: []verseMove{
+			{"Matthew", 23, 13, 23, 14},
+			{"Matthew", 23, 14, 23, 13},
 			{"Romans", 14, 24, 16, 25},
 			{"Romans", 14, 25, 16, 26},
 			{"Romans", 14, 26, 16, 27},

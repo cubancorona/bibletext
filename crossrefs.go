@@ -182,22 +182,55 @@ func parseCrossRefZip(zipBytes []byte) (map[string][]crossRef, error) {
 // BSB's: it reaches the last verse of every chapter the BSB has, it numbers the
 // Romans doxology 16:25-27, 3 John runs to verse 15, and not one row starts at
 // or points to any of the sixteen Textus Receptus verses (Matthew 17:21, Acts
-// 8:37 …).
+// 8:37 …). Its CONTENT, though, keeps the KJV's ORDER where two verses stand
+// in different orders under the same numbers: its Philippians 1:16 rows are
+// about the preachers of selfish ambition and its 1:17 rows about the defence
+// of the gospel, as in the KJV and the WEB and the reverse of the BSB.
 //
-// Its differences from the reference are written out here, measured from the
-// dataset itself, rather than borrowed from a shipped translation's profile:
-// the BSB's stood in for it, and shares its doxology but not its 3 John 1:15,
-// which no shipped text has.
+// So no shipped translation's profile describes it, and its differences from
+// the reference are written out here, measured from the dataset itself. The
+// BSB's profile stood in for it once; it shares the doxology but not 3 John
+// 1:15, and it records the BSB's reordered Philippians 1:16-17, which would
+// move every one of the dataset's rows there onto the wrong verse.
 //
 //   - the doxology, 16:25-27 here and 14:24-26 in the reference;
 //   - 3 John 1:15, the closing greeting, which every shipped text prints as
 //     the end of 1:14. Its one row — the friends greeted "by name", to John
-//     10:3 — was keyed to a verse nothing looks up.
+//     10:3 — was keyed to a verse nothing looks up;
+//   - Matthew 23:13 as a SOURCE (crossRefDatasetSourceMoves).
 var crossRefDatasetMoves = map[verseRef]verseRef{
 	{"Romans", 16, 25}: {"Romans", 14, 24},
 	{"Romans", 16, 26}: {"Romans", 14, 25},
 	{"Romans", 16, 27}: {"Romans", 14, 26},
 	{"3 John", 1, 15}:  {"3 John", 1, 14},
+}
+
+// crossRefDatasetSourceMoves are the dataset's differences that hold for the
+// verse a row comes FROM and not for the verses rows point TO.
+//
+// The dataset's Matthew 23:13 is the kingdom woe, "you shut up the Kingdom of
+// Heaven", as the KJV's and the ESV's 23:13 are: all 23 of its rows fit it,
+// led by Luke 11:52 (the key of knowledge taken away). The reference — the WEB
+// — has the two woes the other way round, and that woe is its 23:14. As a
+// TARGET the dataset's 23:13 also holds the references the Treasury gives the
+// KJV's 23:14, the widows' woe, because its verse set has no 23:14 to hold
+// them: Mark 12:40, Luke 20:47, Isaiah 10:2 and 1 Timothy 5:3 are among them,
+// and they are most of its 70. A row pointing at 23:13 therefore keeps the
+// reference's 23:13, the widows' woe, and so does a range that starts there
+// ("Matthew 23:13-36", the woes), which begins at the first woe in the WEB's
+// order as in the KJV's.
+var crossRefDatasetSourceMoves = map[verseRef]verseRef{
+	{"Matthew", 23, 13}: {"Matthew", 23, 14},
+}
+
+// crossRefDatasetRowSources re-files the rows whose own content contradicts
+// the verse the dataset files them under, keyed by the row's two columns.
+// There is one: "Do nothing through rivalry or through conceit" (Philippians
+// 2:3) is filed under 1:17 in the ESV's order, among rows that follow the
+// KJV's, and belongs with the preachers "of selfish ambition" — the dataset's
+// and the reference's 1:16.
+var crossRefDatasetRowSources = map[[2]string]string{
+	{"Phil.1.17", "Phil.2.3"}: "Phil.1.16",
 }
 
 // parseCrossRefRows reads the dataset's TSV and returns the index, NORMALISED
@@ -230,7 +263,11 @@ func parseCrossRefRows(r io.Reader) (map[string][]crossRef, error) {
 		if len(cols) < 3 {
 			continue
 		}
-		fromBook, fromCh, fromV, ok := parseOSISStart(cols[0])
+		from := cols[0]
+		if moved, ok := crossRefDatasetRowSources[[2]string{from, cols[1]}]; ok {
+			from = moved
+		}
+		fromBook, fromCh, fromV, ok := parseOSISStart(from)
 		if !ok {
 			continue
 		}
@@ -239,7 +276,7 @@ func parseCrossRefRows(r io.Reader) (map[string][]crossRef, error) {
 			continue
 		}
 		ref.Votes, _ = strconv.Atoi(strings.TrimSpace(cols[2]))
-		fromCh, fromV = crossRefToReference(fromBook, fromCh, fromV)
+		fromCh, fromV = crossRefSourceToReference(fromBook, fromCh, fromV)
 		ref = crossRefTargetToReference(ref)
 		key := crossRefKey(fromBook, fromCh, fromV)
 		idx[key] = append(idx[key], ref)
@@ -379,6 +416,14 @@ func crossRefToReference(book string, ch, v int) (int, int) {
 	return ch, v
 }
 
+// crossRefSourceToReference does the same for the verse a row comes from.
+func crossRefSourceToReference(book string, ch, v int) (int, int) {
+	if to, ok := crossRefDatasetSourceMoves[verseRef{book, ch, v}]; ok {
+		return to.Chapter, to.Verse
+	}
+	return crossRefToReference(book, ch, v)
+}
+
 // crossRefTargetToReference does the same for a target, span end included,
 // each end in its own book and its own chapter.
 func crossRefTargetToReference(c crossRef) crossRef {
@@ -422,8 +467,9 @@ func normaliseSpanEnd(c crossRef) crossRef {
 	return c
 }
 
-// crossRefTargetIn rewrites one dataset reference into the translation on
-// screen, and reports whether it can be shown at all.
+// crossRefTargetIn rewrites one reference — numbered as the reference
+// translation numbers it — into the translation on screen, and reports
+// whether it can be shown at all.
 //
 // This is the half that was producing WRONG TEXT rather than merely missing
 // text: the panel previews the target with GetVerse and the row's tap navigates
@@ -442,28 +488,80 @@ func normaliseSpanEnd(c crossRef) crossRef {
 // end's chapter from that put it in the wrong chapter wherever the start moved
 // chapter: the doxology's "Romans 14:24-25" became "16:25-25" in the BSB and
 // the NKJV instead of 16:25-26, and its 14:24-26 became 16:25-26.
+//
+// Within one book the span is the smallest that holds every verse the
+// reference's span names that this translation has: its ends and any verse
+// inside it the table moves. Two verses can stand in the opposite order under
+// the same numbers — the BSB's Philippians 1:16-17, the NKJV's Matthew
+// 23:13-14 — and mapping the ends alone turned "1:16-17" into "1:17-16" and
+// left the moved verse's own text out of a span such as 1:12-17.
 func crossRefTargetIn(versionID string, c crossRef) (crossRef, bool) {
 	ch, vs, res := MapVerse(versificationReference, versionID, c.Book, c.Chapter, c.Verse)
+	if res == verseMapAbsent && c.EndV != 0 && c.EndBook == "" {
+		// A range whose FIRST verse this translation lacks begins at the next
+		// verse of the range it has. The BSB lacks the WEB's Matthew 23:13 —
+		// the widows' woe — and prints the woe after it as its own 23:13, so
+		// "Matthew 23:13-36", the woes, is still the BSB's 23:13-36; dropping
+		// the row would lose a passage the reader's text holds in full. Absent
+		// verses are listed one by one in the table, so the walk is short.
+		for steps := len(versificationDeltas[versionID].absent); res == verseMapAbsent && steps >= 0; steps-- {
+			c.Verse++
+			if (c.EndCh == 0 || c.EndCh == c.Chapter) && c.Verse > c.EndV {
+				break
+			}
+			ch, vs, res = MapVerse(versificationReference, versionID, c.Book, c.Chapter, c.Verse)
+		}
+	}
 	if res == verseMapAbsent || res == verseMapIncommensurable {
 		return crossRef{}, false
 	}
-	refCh := c.Chapter
-	c.Chapter, c.Verse = ch, vs
-	if c.EndV != 0 {
-		endBook, endCh := c.Book, c.EndCh
-		if c.EndBook != "" {
-			endBook = c.EndBook // a range that runs on into the next book
+	out := c
+	out.Chapter, out.Verse = ch, vs
+	out.EndBook, out.EndCh, out.EndV = "", 0, 0
+	if c.EndV == 0 {
+		return out, true
+	}
+	endBook, endCh := c.Book, c.EndCh
+	if c.EndBook != "" {
+		endBook = c.EndBook // a range that runs on into the next book
+	}
+	if endCh == 0 {
+		endCh = c.Chapter // the reference's chapter, not the rewritten one
+	}
+	ech, ev, r := MapVerse(versificationReference, versionID, endBook, endCh, c.EndV)
+	if r == verseMapAbsent || r == verseMapIncommensurable {
+		return out, true
+	}
+	if endBook != c.Book {
+		out.EndBook, out.EndCh, out.EndV = endBook, ech, ev
+		return out, true
+	}
+	lo, hi := verseRef{c.Book, ch, vs}, verseRef{c.Book, ech, ev}
+	if verseBefore(hi, lo) {
+		lo, hi = hi, lo
+	}
+	start, end := verseRef{c.Book, c.Chapter, c.Verse}, verseRef{c.Book, endCh, c.EndV}
+	for _, m := range versificationDeltas[versionID].moved {
+		at := verseRef{m.Book, m.Chapter, m.Verse}
+		if m.Book != c.Book || verseBefore(at, start) || verseBefore(end, at) {
+			continue
 		}
-		if endCh == 0 {
-			endCh = refCh
+		to := verseRef{m.Book, m.ToChapter, m.ToVerse}
+		if verseBefore(to, lo) {
+			lo = to
 		}
-		if ech, ev, r := MapVerse(versificationReference, versionID, endBook, endCh, c.EndV); r != verseMapAbsent && r != verseMapIncommensurable {
-			c.EndCh, c.EndV = ech, ev
-		} else {
-			c.EndBook, c.EndCh, c.EndV = "", 0, 0
+		if verseBefore(hi, to) {
+			hi = to
 		}
 	}
-	return normaliseSpanEnd(c), true
+	out.Chapter, out.Verse = lo.Chapter, lo.Verse
+	out.EndCh, out.EndV = hi.Chapter, hi.Verse
+	return normaliseSpanEnd(out), true
+}
+
+// verseBefore orders two verses of one book.
+func verseBefore(a, b verseRef) bool {
+	return a.Chapter < b.Chapter || (a.Chapter == b.Chapter && a.Verse < b.Verse)
 }
 
 func crossRefsForSelection(state *AppState, text string, span selSpan) []crossRef {

@@ -28,8 +28,29 @@ version of it was wrong when measured:
           and has not moved anywhere. A genuine relocation lands in a NEW slot,
           which is exactly what Romans 16:25-27 is in the BSB and the NKJV.
 
-  absent  Everything else the reference has and the target lacks: the eleven
+  absent  Everything else the reference has and the target lacks: the
           textual-critical omissions, plus Romans 16:24.
+
+  reordered
+          Two ADJACENT verses that stand in the opposite order in the two texts
+          while keeping their numbers, which a comparison of verse-number sets
+          cannot see at all. Matthew 23:13-14 holds the two woes "you devour
+          widows' houses" and "you shut up the Kingdom" in one order in the WEB
+          and the other in the NKJV and the BSB, and the BSB's Philippians
+          1:16-17 reverses the WEB's ("in love" / "selfish ambition"); both
+          editions footnote it. Recorded as two moves when each verse's text
+          matches the OTHER number better than its own, by a clear margin.
+
+          The same evidence decides a verse that SHIFTED into a neighbour's
+          number: the BSB omits the widows' woe and prints the kingdom woe as
+          23:13, so the verse it lacks is the WEB's 23:13 — not, as the
+          numbering alone says, 23:14. The WEB's 23:14 moved to the BSB's 23:13.
+
+          Measured over every chapter of the BSB, the NKJV and the WEB
+          Catholic against the WEB: the three real cases cross-score 0.41-0.80
+          against 0.05-0.18 for their own numbers (margin 0.32 or more), and no
+          other adjacent pair's crossed score beats its own at all (refrains
+          such as Psalm 67:3/5 tie). REORDER_MIN_MARGIN sits between the two.
 
   incommensurable
           A whole book whose verse numbers do not correspond at all. Only
@@ -54,6 +75,7 @@ SAME_TEXT_AS_REFERENCE = {"webc"}
 MOVE_MIN_SIMILARITY = 0.30          # cross-translation wording varies a lot
 RETARGET_MIN_SIMILARITY = 0.90      # same translation: near-identical or nothing
 DIFFERENT_TEXT_FRACTION = 0.50      # over half the shared verses disagreeing
+REORDER_MIN_MARGIN = 0.20           # crossed score must beat the own-number score by this
 
 STOPWORDS = set(
     "the and of to a in that he it his him for is was with as they i you not be but".split()
@@ -107,6 +129,42 @@ def delta(reference, target, target_id):
                 )
                 continue
 
+        # Same numbers, opposite order: an adjacent pair whose texts each match
+        # the other number. Decided before anything else, so the verses are
+        # not also read as same-number disagreements below.
+        reordered = set()
+        for c, v in sorted(shared):
+            a, b = (c, v), (c, v + 1)
+            if b not in shared or a in reordered or b in reordered:
+                continue
+            own = max(similarity(ref[a], tgt[a]), similarity(ref[b], tgt[b]))
+            crossed = min(similarity(ref[a], tgt[b]), similarity(ref[b], tgt[a]))
+            if crossed >= MOVE_MIN_SIMILARITY and crossed - own >= REORDER_MIN_MARGIN:
+                moved.append((book, c, v, c, v + 1))
+                moved.append((book, c, v + 1, c, v))
+                reordered |= {a, b}
+
+        # A verse the target lacks BY NUMBER whose text the target prints at a
+        # neighbouring number, in place of that number's own: the verse moved
+        # into the slot, and the passage the target really lacks is the one the
+        # reference prints there. That passage then goes through the ordinary
+        # move-or-absent decision below in place of the number that was empty.
+        for key in sorted(only_ref):
+            c, v = key
+            best, margin = None, 0.0
+            for n in ((c, v - 1), (c, v + 1)):
+                if n not in shared or n in reordered:
+                    continue
+                here = similarity(ref[key], tgt[n])
+                gain = here - similarity(ref[n], tgt[n])
+                if here >= MOVE_MIN_SIMILARITY and gain >= REORDER_MIN_MARGIN and gain > margin:
+                    best, margin = n, gain
+            if best:
+                moved.append((book, c, v, best[0], best[1]))
+                only_ref.discard(key)
+                only_ref.add(best)
+                reordered.add(best)
+
         for key in sorted(only_ref):
             best, score = None, 0.0
             for candidate in only_tgt:
@@ -123,7 +181,7 @@ def delta(reference, target, target_id):
         # may be one of the new slots further down the chapter.
         if target_id in SAME_TEXT_AS_REFERENCE:
             for key in sorted(shared):
-                if similarity(ref[key], tgt[key]) >= 0.5:
+                if key in reordered or similarity(ref[key], tgt[key]) >= 0.5:
                     continue
                 best, score = None, 0.0
                 for candidate in only_tgt:
@@ -142,7 +200,7 @@ def delta(reference, target, target_id):
                     extra.append((book, key[0], key[1]))
 
         extra.extend((book, k[0], k[1]) for k in sorted(only_tgt))
-    return absent, sorted(moved), extra, incommensurable
+    return sorted(absent), sorted(moved), extra, incommensurable
 
 
 def go_source(deltas):

@@ -121,13 +121,30 @@ def holes(path, incommensurable):
 
 
 def absent_from_versification(edition):
-    """The verses versification_data.go says this edition lacks."""
+    """The holes versification_data.go says this edition has, in its OWN numbering.
+
+    The table records a verse the edition lacks by the REFERENCE's number. That
+    is the edition's hole only while nothing moved into the number: the BSB
+    lacks the WEB's Matthew 23:13 and prints the WEB's 23:14 as its 23:13, so
+    its hole is 23:14, the number the moved verse vacated. Follow the moves.
+    """
     src = open("versification_data.go", encoding="utf-8").read()
-    m = re.search(r'"%s": \{\s*absent: \[\]verseRef\{(.*?)\},\s*moved' % edition, src, re.S)
+    m = re.search(r'"%s": \{\s*absent: \[\]verseRef\{(.*?)\},\s*moved: \[\]verseMove\{(.*?)\},\s*extra' % edition,
+                  src, re.S)
     if not m:
         return []
-    return [(b, int(c), int(v)) for b, c, v in
-            re.findall(r'\{"([^"]+)", (\d+), (\d+)\}', m.group(1))]
+    moved = {(b, int(tc), int(tv)): (int(c), int(v)) for b, c, v, tc, tv in
+             re.findall(r'\{"([^"]+)", (\d+), (\d+), (\d+), (\d+)\}', m.group(2))}
+    holes = []
+    for b, c, v in re.findall(r'\{"([^"]+)", (\d+), (\d+)\}', m.group(1)):
+        hole = (int(c), int(v))
+        for _ in range(len(moved)):
+            came_from = moved.get((b,) + hole)
+            if came_from is None or came_from == hole:
+                break
+            hole = came_from
+        holes.append((b,) + hole)
+    return holes
 
 
 def main():
@@ -150,7 +167,8 @@ def main():
         print(f"{edition}: {len(found)} omitted verses ({noted} carry a note)"
               + (f"; skipped incommensurable {', '.join(skipped)}" if skipped else ""))
 
-        # Every verse the reference has and this edition does not must be here.
+        # Every verse the reference has and this edition does not must leave a
+        # hole here.
         missing = [r for r in absent_from_versification(edition) if r not in found]
         if missing:
             sys.exit(f"ERROR: {edition}: versification_data.go records {missing} as absent, "

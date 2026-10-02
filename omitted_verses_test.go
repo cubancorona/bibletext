@@ -3,8 +3,6 @@ package bibletext
 import (
 	"encoding/json"
 	"os"
-	"regexp"
-	"strconv"
 	"testing"
 )
 
@@ -101,32 +99,28 @@ func TestGreekEsthersGapsAreNotCalledOmissions(t *testing.T) {
 }
 
 // The second derivation. versification_data.go records, independently, the
-// verses the reference has that an edition lacks; every one must be a hole
+// verses the reference has that an edition lacks; every one must leave a hole
 // here. Two routes to the same fact, and a disagreement means one is wrong.
+//
+// The hole is in the EDITION's numbering and the absent verse is in the
+// reference's, and they are the same number only while nothing moved into
+// it. The BSB lacks the WEB's Matthew 23:13 (the widows' woe) and prints the
+// WEB's 23:14 (the kingdom woe) as its own 23:13, so its hole is at 23:14: the
+// number the moved verse vacated. holeFor follows those moves.
 func TestTheTableAgreesWithTheVersificationData(t *testing.T) {
-	src, err := os.ReadFile("versification_data.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	block := regexp.MustCompile(`(?s)"(\w+)": \{\s*absent: \[\]verseRef\{(.*?)\},\s*moved`)
-	ref := regexp.MustCompile(`\{"([^"]+)", (\d+), (\d+)\}`)
 	checked := 0
-	for _, m := range block.FindAllStringSubmatch(string(src), -1) {
-		edition := m[1]
-		for _, r := range ref.FindAllStringSubmatch(m[2], -1) {
-			book := r[1]
-			ch, err := strconv.Atoi(r[2])
-			if err != nil {
-				t.Fatal(err)
-			}
-			v, err := strconv.Atoi(r[3])
-			if err != nil {
-				t.Fatal(err)
-			}
+	for _, edition := range []string{"bsb", "nkjv", "webc"} {
+		d, ok := versificationDeltas[edition]
+		if !ok {
+			t.Fatalf("no versification delta for %s", edition)
+		}
+		for _, a := range d.absent {
 			checked++
-			if !omitsVerse(edition, book, ch, v) {
-				t.Errorf("versification_data.go says %s lacks %s %d:%d, but the omission "+
-					"table does not record it", edition, book, ch, v)
+			ch, v := holeFor(d, a)
+			if !omitsVerse(edition, a.Book, ch, v) {
+				t.Errorf("versification_data.go says %s lacks %s %d:%d, which leaves its "+
+					"own number %d:%d empty, but the omission table does not record it",
+					edition, a.Book, a.Chapter, a.Verse, ch, v)
 			}
 		}
 	}
@@ -134,6 +128,37 @@ func TestTheTableAgreesWithTheVersificationData(t *testing.T) {
 		t.Fatal("no absent verses were read from versification_data.go; this test proves nothing")
 	}
 	t.Logf("cross-checked %d verses against the versification data", checked)
+
+	// CONTROL: the move-following must matter, or the case above it was
+	// written for is not being exercised. Read naively, the BSB's absent
+	// Matthew 23:13 names a verse the BSB prints.
+	bsb := versificationDeltas["bsb"]
+	if omitsVerse("bsb", "Matthew", 23, 13) {
+		t.Fatal("control: the BSB prints a Matthew 23:13, so a hole there would be wrong")
+	}
+	if ch, v := holeFor(bsb, verseRef{"Matthew", 23, 13}); ch != 23 || v != 14 {
+		t.Errorf("the BSB's hole for the WEB's Matthew 23:13 is at %d:%d, want 23:14", ch, v)
+	}
+}
+
+// holeFor is the number an absent reference verse leaves empty in the
+// edition: its own, unless a moved verse took that number, in which case the
+// hole is wherever THAT verse came from.
+func holeFor(d versificationDelta, a verseRef) (int, int) {
+	ch, v := a.Chapter, a.Verse
+	for range d.moved { // a chain cannot be longer than the moves there are
+		next := false
+		for _, m := range d.moved {
+			if m.Book == a.Book && m.ToChapter == ch && m.ToVerse == v && (m.Chapter != ch || m.Verse != v) {
+				ch, v, next = m.Chapter, m.Verse, true
+				break
+			}
+		}
+		if !next {
+			break
+		}
+	}
+	return ch, v
 }
 
 // And against the feeds themselves, where they are available: the table must

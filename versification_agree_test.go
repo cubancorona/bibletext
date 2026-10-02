@@ -100,6 +100,15 @@ func TestChapterNumberingDifferenceNamesTheRightKind(t *testing.T) {
 		{"bsb", "Mark", 9, 50, NumberingAbsent},   // the BSB omits 9:44 and 9:46
 		{"webc", "Daniel", 3, 30, NumberingMoved}, // the Song of the Three pushes 24-30 to 91-97
 		{"webc", "Esther", 1, 22, NumberingIncommensurable},
+		// Same numbers, opposite order: the two woes of Matthew 23:13-14, and
+		// the BSB's Philippians 1:16-17. A carried verse number there opens
+		// the other half of the pair.
+		{"web", "Matthew", 23, 39, NumberingMoved},
+		{"webc", "Matthew", 23, 39, NumberingMoved},
+		{"bsb", "Philippians", 1, 30, NumberingMoved},
+		// The NKJV's widows' woe is the verse the BSB lacks; its kingdom woe
+		// is the BSB's own 23:13.
+		{"bsb", "Matthew", 23, 39, NumberingAbsent},
 	} {
 		got := ChapterNumberingDifference("nkjv", tc.to, tc.book, tc.chapter, tc.span)
 		if got != tc.want {

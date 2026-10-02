@@ -63,13 +63,15 @@ Measured against the WEB as reference **[measured]**:
 
 | edition | absent | moved | present here but not in WEB | incommensurable |
 | --- | --- | --- | --- | --- |
-| BSB | 12 | 3 | 0 | — |
-| NKJV | 0 | 3 | 4 | — |
+| BSB | 12 | 6 | 0 | — |
+| NKJV | 0 | 5 | 4 | — |
 | WEBC | 0 | 7 | 173 | Esther |
 
-**The twelve the BSB lacks** **[measured]**: Matthew 17:21, 18:11, 23:14;
+**The twelve the BSB lacks** **[measured]**: Matthew 17:21, 18:11, 23:13;
 Mark 7:16, 9:44, 9:46, 11:26, 15:28; Luke 23:17; John 5:4; Acts 28:29; and
-Romans 16:24.
+Romans 16:24 — numbered as the WEB numbers them. Matthew 23 is the one where
+the number and the passage part company: the BSB's chapter skips the *number*
+14, but the passage it lacks is the WEB's 23:13 (next paragraph).
 
 The first eleven are the passages usually called the "missing verses" of modern
 translations. They are present in the Byzantine tradition and therefore in the
@@ -85,6 +87,21 @@ reference here — its numbering is a superset for this class.
 **The four the NKJV has and the WEB does not** **[measured]**: Acts 8:37,
 Acts 15:34, Acts 24:7, Luke 17:36. Same story from the other side: Textus
 Receptus verses **[standard]**.
+
+**Two verses in the opposite order, under the same numbers** **[measured,
+source]**. Matthew 23:13-14 carries two woes: "you shut up the Kingdom of
+Heaven" and "you devour widows' houses". The WEB and WEB Catholic number the
+widows' woe 13 and the kingdom woe 14; the NKJV, with the KJV, has them the
+other way round; the BSB, with the critical text, has only the kingdom woe, as
+its 23:13. Each edition footnotes it: the WEB at 23:14 ("Some Greek texts
+reverse the order of verses 13 and 14, and some omit verse 13, numbering verse
+14 as 13"), the BSB at 23:13. And the BSB's
+Philippians 1:16 ("the latter do so in love") and 1:17 ("the former … out of
+selfish ambition") are the WEB's, the WEB Catholic's and the NKJV's 1:17 and
+1:16; the BSB footnotes that the Byzantine text and the TR reverse them. The
+table records both as moves. A comparison of verse-number SETS cannot see
+either — every number is present on both sides — which is why the table
+lacked them until rule 3 of §2.3.
 
 **The Romans doxology** **[measured]**: the WEB places it at Romans 14:24-26; the
 BSB and the NKJV place it at 16:25-27. This is the one genuine *relocation* in
@@ -160,10 +177,21 @@ and found wrong:
    of the Three; the WEB's 3:24 is Nebuchadnezzar's astonishment, now at 3:91.
    Without recording that the number was reoccupied, mapping WEBC 3:24 back
    answers "3:24, exact" and a round trip silently fails to close.
+3. **Same numbers can hide a different order.** Comparing which verse numbers
+   each edition has finds omissions and relocations, and nothing else: two
+   adjacent verses in the opposite order leave both numbers present on both
+   sides. The generator now compares each adjacent pair's texts across as well
+   as along, and records a reordering when each verse matches the *other*
+   number better than its own by a clear margin; the same test decides a verse
+   that slid into a neighbour's number, as the BSB's kingdom woe did into
+   23:13. Measured over every chapter of the BSB, the NKJV and WEB Catholic,
+   the three real cases cross-score 0.41-0.80 against 0.05-0.18 for their own
+   numbers, and no other adjacent pair's crossed score beats its own at all —
+   refrains such as Psalm 67:3/5 tie.
 
 ### 2.4 Validation performed
 
-- **[measured]** All 202 table entries checked against the actual verse text:
+- **[measured]** All 207 table entries checked against the actual verse text:
   every *moved* pair must be textually the same passage (≥0.85 token similarity
   within an edition, ≥0.30 across editions), every *absent* verse really missing,
   every *extra* verse really present. 0 problems.

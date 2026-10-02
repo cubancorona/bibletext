@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -169,12 +170,13 @@ func withCrossRefIndex(t *testing.T, rows string) {
 // 1..n, so a panel can be built without a downloaded translation.
 func xrefBible(chapters map[string]map[int]int) *BibleData {
 	bd := &BibleData{Verses: map[string]map[int][]Verse{}}
-	for _, book := range []string{"Genesis", "Leviticus", "Numbers", "2 Chronicles", "Ezra",
-		"Matthew", "Philippians", "Acts", "2 John", "3 John"} {
-		chs, ok := chapters[book]
-		if !ok {
-			continue
-		}
+	var books []string
+	for book := range chapters {
+		books = append(books, book)
+	}
+	sort.Strings(books)
+	for _, book := range books {
+		chs := chapters[book]
 		bd.Books = append(bd.Books, book)
 		bd.Verses[book] = map[int][]Verse{}
 		for ch, n := range chs {

@@ -98,6 +98,13 @@ func TestWebAndBSBVersificationDiverges(t *testing.T) {
 	// Ten chapters where the BSB omits a verse WEB carries (textual-critical
 	// omissions). Numbering is otherwise intact, so only a reference landing ON
 	// the omitted verse finds nothing.
+	//
+	// These are verse NUMBERS, and a number comparison sees only numbers. In
+	// Matthew 23 the number the BSB skips is 14, but the passage it lacks is
+	// the WEB's 23:13 ("you devour widows' houses"): the BSB prints the WEB's
+	// 23:14 as its own 23:13. versification_data.go records the passage, and
+	// TestMapVerseKnownDivergences pins it; this test cannot see it, nor the
+	// BSB's Philippians 1:16-17, which keep both numbers in the other order.
 	omissions := map[string][]int{
 		"Matthew 17": {21},
 		"Matthew 18": {11},

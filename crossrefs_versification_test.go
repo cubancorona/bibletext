@@ -13,7 +13,10 @@ package bibletext
 // Bible and a downloaded dataset, so what can be pinned here is the translation
 // of an address, which is the half that was missing.
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 // THE ONE THAT SHOWED WRONG TEXT. WEB Catholic carries the Song of the Three as
 // Daniel 3:24-90, pushing the Hebrew 3:24-30 down to 3:91-97. A cross-reference
@@ -173,6 +176,111 @@ func TestARangeEndingOnItsStartIsLabelledAsOneVerse(t *testing.T) {
 	} {
 		if got := c.label(); got != "Romans 16:25" {
 			t.Errorf("%+v is labelled %q, want \"Romans 16:25\"", c, got)
+		}
+	}
+}
+
+// TWO VERSES IN THE OPPOSITE ORDER UNDER THE SAME NUMBERS. The BSB's
+// Philippians 1:16 is "the latter do so in love" and its 1:17 "the former …
+// out of selfish ambition"; the WEB, WEB Catholic and the NKJV number them the
+// other way round. The NKJV's Matthew 23:13 is the kingdom woe and its 23:14
+// the widows' woe; the WEB's are the other way round, and the BSB has only
+// the kingdom woe, as 23:13. A span that crosses such a pair must still be a
+// span, and hold the verses it names.
+func TestRangesThroughReorderedVersesHoldTheirVerses(t *testing.T) {
+	for _, tc := range []struct {
+		vid  string
+		in   crossRef
+		want string // "" = dropped
+	}{
+		{"bsb", crossRef{Book: "Philippians", Chapter: 1, Verse: 16}, "Philippians 1:17"},
+		{"bsb", crossRef{Book: "Philippians", Chapter: 1, Verse: 17}, "Philippians 1:16"},
+		{"bsb", crossRef{Book: "Philippians", Chapter: 1, Verse: 16, EndV: 17}, "Philippians 1:16-17"},
+		{"bsb", crossRef{Book: "Philippians", Chapter: 1, Verse: 12, EndV: 17}, "Philippians 1:12-17"},
+		{"bsb", crossRef{Book: "Philippians", Chapter: 1, Verse: 13, EndV: 16}, "Philippians 1:13-17"},
+		{"web", crossRef{Book: "Philippians", Chapter: 1, Verse: 13, EndV: 16}, "Philippians 1:13-16"},
+		{"nkjv", crossRef{Book: "Matthew", Chapter: 23, Verse: 13}, "Matthew 23:14"},
+		{"nkjv", crossRef{Book: "Matthew", Chapter: 23, Verse: 13, EndV: 14}, "Matthew 23:13-14"},
+		{"nkjv", crossRef{Book: "Matthew", Chapter: 23, Verse: 14, EndV: 39}, "Matthew 23:13-39"},
+		{"nkjv", crossRef{Book: "Matthew", Chapter: 23, Verse: 1, EndV: 13}, "Matthew 23:1-14"},
+		// The BSB does not have the widows' woe at all: a row to it is
+		// dropped, as a row to Mark 9:44 is. A range that STARTS on it still
+		// holds every verse after it, and begins at the BSB's 23:13 — the
+		// kingdom woe, which is the reference's 23:14.
+		{"bsb", crossRef{Book: "Matthew", Chapter: 23, Verse: 13}, ""},
+		{"bsb", crossRef{Book: "Matthew", Chapter: 23, Verse: 14}, "Matthew 23:13"},
+		{"bsb", crossRef{Book: "Matthew", Chapter: 23, Verse: 13, EndV: 36}, "Matthew 23:13-36"},
+		{"bsb", crossRef{Book: "Matthew", Chapter: 23, Verse: 13, EndV: 14}, "Matthew 23:13"},
+		{"web", crossRef{Book: "Matthew", Chapter: 23, Verse: 13, EndV: 36}, "Matthew 23:13-36"},
+	} {
+		got, ok := crossRefTargetIn(tc.vid, tc.in)
+		switch {
+		case tc.want == "" && ok:
+			t.Errorf("%s: %s is offered as %q; this translation does not have it", tc.vid, tc.in.label(), got.label())
+		case tc.want != "" && !ok:
+			t.Errorf("%s: %s was dropped, want %q", tc.vid, tc.in.label(), tc.want)
+		case ok && got.label() != tc.want:
+			t.Errorf("%s: %s reads %q, want %q", tc.vid, tc.in.label(), got.label(), tc.want)
+		}
+	}
+}
+
+// The dataset's rows land on the right verse in every translation. Its
+// Philippians 1:16 and 1:17 follow the KJV's order, the WEB's; its Matthew
+// 23:13 as a source is the kingdom woe, the WEB's 23:14, while its rows
+// pointing at 23:13 are mostly the widows' woe that its verse set has no
+// 23:14 for; and its one row from 1:17 in the ESV's order, Philippians 2:3,
+// belongs to the selfish-ambition verse.
+func TestTheDatasetsRowsLandOnTheSamePassageInEveryTranslation(t *testing.T) {
+	withCrossRefIndex(t, "Phil.1.16\t2Cor.2.17\t9\n"+
+		"Phil.1.17\tActs.22.1\t9\n"+
+		"Phil.1.17\tPhil.2.3\t4\n"+
+		"Matt.23.13\tLuke.11.52\t20\n"+
+		"Mark.12.40\tMatt.23.13\t5\n"+
+		"Ezek.34.7\tMatt.23.13-Matt.23.36\t3\n")
+	bd := xrefBible(map[string]map[int]int{
+		"Philippians": {1: 30, 2: 30}, "2 Corinthians": {2: 17}, "Acts": {22: 30},
+		"Matthew": {23: 39}, "Luke": {11: 54}, "Mark": {12: 44}, "Ezekiel": {34: 31},
+	})
+	for _, tc := range []struct {
+		vid, book string
+		ch, v     int
+		want      []string
+	}{
+		// The selfish-ambition verse.
+		{"web", "Philippians", 1, 16, []string{"2 Corinthians 2:17", "Philippians 2:3"}},
+		{"nkjv", "Philippians", 1, 16, []string{"2 Corinthians 2:17", "Philippians 2:3"}},
+		{"bsb", "Philippians", 1, 17, []string{"2 Corinthians 2:17", "Philippians 2:3"}},
+		// The love-and-defence verse.
+		{"web", "Philippians", 1, 17, []string{"Acts 22:1"}},
+		{"bsb", "Philippians", 1, 16, []string{"Acts 22:1"}},
+		// The kingdom woe.
+		{"web", "Matthew", 23, 14, []string{"Luke 11:52"}},
+		{"webc", "Matthew", 23, 14, []string{"Luke 11:52"}},
+		{"nkjv", "Matthew", 23, 13, []string{"Luke 11:52"}},
+		{"bsb", "Matthew", 23, 13, []string{"Luke 11:52"}},
+		// The widows' woe has no rows of its own in the dataset.
+		{"web", "Matthew", 23, 13, nil},
+		{"nkjv", "Matthew", 23, 14, nil},
+		// A row pointing at the widows' woe opens it, and the BSB, which does
+		// not have it, does not offer it.
+		{"web", "Mark", 12, 40, []string{"Matthew 23:13"}},
+		{"nkjv", "Mark", 12, 40, []string{"Matthew 23:14"}},
+		{"bsb", "Mark", 12, 40, nil},
+		// The woes as a passage.
+		{"web", "Ezekiel", 34, 7, []string{"Matthew 23:13-36"}},
+		{"nkjv", "Ezekiel", 34, 7, []string{"Matthew 23:13-36"}},
+		{"bsb", "Ezekiel", 34, 7, []string{"Matthew 23:13-36"}},
+	} {
+		st := &AppState{Bible: bd, CurrentBook: tc.book, CurrentChapter: tc.ch, CurrentVersion: tc.vid}
+		var got []string
+		for _, c := range crossRefsForSelection(st, "", selSpan{lo: tc.v, hi: tc.v}) {
+			if !c.Parallel {
+				got = append(got, c.label())
+			}
+		}
+		if fmt.Sprint(got) != fmt.Sprint(tc.want) {
+			t.Errorf("%s %s %d:%d lists %q, want %q", tc.vid, tc.book, tc.ch, tc.v, got, tc.want)
 		}
 	}
 }

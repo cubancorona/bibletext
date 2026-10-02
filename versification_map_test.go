@@ -48,6 +48,28 @@ func TestMapVerseKnownDivergences(t *testing.T) {
 		{"and back again", "webc", "web", "Daniel", 3, 91, 3, 24, verseMapMoved},
 		{"Daniel 1:1 is untouched", "web", "webc", "Daniel", 1, 1, 1, 1, verseMapExact},
 
+		// Two adjacent verses in the opposite order under the same numbers —
+		// invisible to any comparison of verse-number sets, which is how the
+		// table missed them. The WEB's Matthew 23:13 is "you devour widows'
+		// houses" and its 23:14 "you shut up the Kingdom"; the NKJV has them
+		// the other way round, and the BSB has only the kingdom woe, as 23:13.
+		{"the widows' woe into the NKJV", "web", "nkjv", "Matthew", 23, 13, 23, 14, verseMapMoved},
+		{"the kingdom woe into the NKJV", "web", "nkjv", "Matthew", 23, 14, 23, 13, verseMapMoved},
+		{"the NKJV's kingdom woe back into the WEB", "nkjv", "web", "Matthew", 23, 13, 23, 14, verseMapMoved},
+		{"WEB Catholic follows the WEB", "webc", "nkjv", "Matthew", 23, 14, 23, 13, verseMapMoved},
+		{"the kingdom woe into the BSB", "web", "bsb", "Matthew", 23, 14, 23, 13, verseMapMoved},
+		{"the widows' woe is not in the BSB", "web", "bsb", "Matthew", 23, 13, 0, 0, verseMapAbsent},
+		{"the BSB's 23:13 is the WEB's 23:14", "bsb", "web", "Matthew", 23, 13, 23, 14, verseMapMoved},
+		{"BSB and NKJV agree on the kingdom woe", "bsb", "nkjv", "Matthew", 23, 13, 23, 13, verseMapExact},
+		{"the NKJV's widows' woe is not in the BSB", "nkjv", "bsb", "Matthew", 23, 14, 0, 0, verseMapAbsent},
+		// The BSB's Philippians 1:16 is "the latter do so in love", which the
+		// WEB, the NKJV and WEB Catholic number 1:17, and its 1:17 is their
+		// 1:16, "out of selfish ambition".
+		{"the love verse into the BSB", "web", "bsb", "Philippians", 1, 17, 1, 16, verseMapMoved},
+		{"the ambition verse into the BSB", "web", "bsb", "Philippians", 1, 16, 1, 17, verseMapMoved},
+		{"the BSB's love verse in the NKJV", "bsb", "nkjv", "Philippians", 1, 16, 1, 17, verseMapMoved},
+		{"NKJV and WEB agree there", "nkjv", "web", "Philippians", 1, 16, 1, 16, verseMapExact},
+
 		// Greek Esther is a different book, not a renumbering.
 		{"Esther cannot be mapped into WEBC", "web", "webc", "Esther", 4, 1, 0, 0, verseMapIncommensurable},
 		{"nor back out of it", "webc", "web", "Esther", 1, 1, 0, 0, verseMapIncommensurable},
@@ -80,6 +102,7 @@ func TestMapVerseRoundTrips(t *testing.T) {
 		{"Genesis", 1, 1}, {"Psalms", 23, 1}, {"Isaiah", 53, 5},
 		{"Matthew", 5, 3}, {"John", 3, 16}, {"Romans", 8, 28},
 		{"Romans", 14, 23}, {"Romans", 16, 23}, {"Daniel", 3, 24}, {"Mark", 9, 43},
+		{"Matthew", 23, 13}, {"Matthew", 23, 14}, {"Philippians", 1, 16}, {"Philippians", 1, 17},
 		{"Revelation", 22, 21},
 	}
 	const from = "web"
