@@ -395,17 +395,30 @@ func TestAnIndexRowUnpacksToTheRowParsed(t *testing.T) {
 	}
 }
 
+// crossRefTargetMoveRows is every row crossRefTargetMoves moves, as the copy
+// it was made for files it, for a synthetic copy of that dataset.
+func crossRefTargetMoveRows() string {
+	var b strings.Builder
+	for _, m := range crossRefTargetMoves {
+		for _, src := range strings.Fields(m.rows) {
+			fmt.Fprintf(&b, "%s\t%s\t2\n", src, m.from)
+		}
+	}
+	return b.String()
+}
+
 // THE CORRECTIONS WERE MADE TO ONE COPY OF THE DATASET. The app downloads
 // whatever copy OpenBible serves, with no version or checksum to pin it, and
 // the hand-made corrections — Philippians 2:3 re-filed under 1:16, Matthew
-// 23:13's rows filed under the reference's 23:14 — are right only while the
-// rows they correct are as they were in the 2026-08-31 copy. Each checks
-// that first. Where the rows have changed it corrects nothing, which leaves
-// them where the dataset files them rather than somewhere a guess put them,
-// and says so; the numbering moves (the doxology, 3 John 1:15) say so when
-// the dataset stops naming the verse they move.
+// 23:13's rows filed under the reference's 23:14, the rows moved to a verse
+// the dataset lacks — are right only while the rows they correct are as they
+// were in the 2026-08-31 copy. Each checks that first. Where the rows have
+// changed it corrects nothing, which leaves them where the dataset files them
+// rather than somewhere a guess put them, and says so; the numbering moves
+// (the doxology, 3 John 1:15) say so when the dataset stops naming the verse
+// they move.
 func TestACorrectionLeavesRowsThatHaveChangedAlone(t *testing.T) {
-	const asMade = "Phil.1.16\t2Cor.2.17\t9\n" +
+	asMade := "Phil.1.16\t2Cor.2.17\t9\n" +
 		"Phil.1.17\tActs.22.1\t9\n" +
 		"Phil.1.17\tPhil.2.3\t4\n" +
 		"Matt.23.13\tLuke.11.52\t20\n" +
@@ -413,7 +426,8 @@ func TestACorrectionLeavesRowsThatHaveChangedAlone(t *testing.T) {
 		"Rom.16.25\tEph.3.20\t30\n" +
 		"Rom.16.26\tRom.1.5\t10\n" +
 		"Rom.16.27\tJude.1.25\t10\n" +
-		"3John.1.15\tJohn.10.3\t1\n"
+		"3John.1.15\tJohn.10.3\t1\n" +
+		crossRefTargetMoveRows()
 	read := func(rows string) (map[string][]string, []string) {
 		t.Helper()
 		idx, drift, err := parseCrossRefRows(strings.NewReader("From Verse\tTo Verse\tVotes\n" + rows))
@@ -444,53 +458,81 @@ func TestACorrectionLeavesRowsThatHaveChangedAlone(t *testing.T) {
 	if !has(labels, "Matthew|23|14", "Luke 11:52") || len(labels["Matthew|23|13"]) != 0 {
 		t.Fatalf("control: Matthew 23:13's rows are not filed under 23:14: %q", labels)
 	}
+	if !has(labels, "Luke|11|52", "Matthew 23:14") || has(labels, "Luke|11|52", "Matthew 23:13") {
+		t.Fatalf("control: Luke 11:52's row does not point at Matthew 23:14: %q", labels)
+	}
 
 	for _, tc := range []struct {
-		name, rows, report string
-		left               func(map[string][]string) bool
+		name, rows string
+		reports    []string
+		left       func(map[string][]string) bool
 	}{
 		{
 			"1:16 has its own row to 2:3",
-			asMade + "Phil.1.16\tPhil.2.3\t2\n", "Philippians 2:3 under 1:16",
+			asMade + "Phil.1.16\tPhil.2.3\t2\n", []string{"Philippians 2:3 under 1:16"},
 			func(l map[string][]string) bool {
 				return has(l, "Philippians|1|17", "Philippians 2:3") && slices.Equal(l["Philippians|1|16"], []string{"2 Corinthians 2:17", "Philippians 2:3"})
 			},
 		},
 		{
 			"Philippians 1:16-17 in the ESV's order, so 1:17 is no longer the defence",
-			strings.Replace(asMade, "Phil.1.17\tActs.22.1\t9\n", "Phil.1.16\tActs.22.1\t9\n", 1), "Philippians 2:3 under 1:16",
+			strings.Replace(asMade, "Phil.1.17\tActs.22.1\t9\n", "Phil.1.16\tActs.22.1\t9\n", 1), []string{"Philippians 2:3 under 1:16"},
 			func(l map[string][]string) bool {
 				return has(l, "Philippians|1|17", "Philippians 2:3") && !has(l, "Philippians|1|16", "Philippians 2:3")
 			},
 		},
 		{
 			"a Matthew 23:14 of the dataset's own",
-			asMade + "Matt.23.14\tMark.12.40\t5\n", "Matthew 23:13 as a source",
+			asMade + "Matt.23.14\tMark.12.40\t5\n", []string{"Matthew 23:13 as a source", "names Matthew 23:14 itself"},
 			func(l map[string][]string) bool {
 				return has(l, "Matthew|23|13", "Luke 11:52") && slices.Equal(l["Matthew|23|14"], []string{"Mark 12:40"})
 			},
 		},
 		{
 			"23:13's rows no longer the kingdom woe's",
-			strings.Replace(asMade, "Matt.23.13\tLuke.11.52\t20\n", "Matt.23.13\tMark.12.40\t20\n", 1), "Matthew 23:13 as a source",
+			strings.Replace(asMade, "Matt.23.13\tLuke.11.52\t20\n", "Matt.23.13\tMark.12.40\t20\n", 1), []string{"Matthew 23:13 as a source"},
 			func(l map[string][]string) bool {
 				return has(l, "Matthew|23|13", "Mark 12:40") && len(l["Matthew|23|14"]) == 0
 			},
 		},
 		{
 			"3 John ends at 1:14",
-			strings.Replace(asMade, "3John.1.15\tJohn.10.3\t1\n", "", 1), "3 John 1:15",
+			strings.Replace(asMade, "3John.1.15\tJohn.10.3\t1\n", "", 1), []string{"3 John 1:15"},
 			func(l map[string][]string) bool { return len(l["3 John|1|14"]) == 0 },
 		},
 		{
 			"the doxology without its 16:26",
-			strings.Replace(asMade, "Rom.16.26\tRom.1.5\t10\n", "", 1), "Romans 16:26",
+			strings.Replace(asMade, "Rom.16.26\tRom.1.5\t10\n", "", 1), []string{"Romans 16:26"},
 			func(l map[string][]string) bool { return has(l, "Romans|14|24", "Ephesians 3:20") },
+		},
+		{
+			"a row to Matthew 23:14 of the dataset's own",
+			asMade + "Mark.12.38\tMatt.23.14\t3\n", []string{"names Matthew 23:14 itself"},
+			func(l map[string][]string) bool {
+				return has(l, "Luke|11|52", "Matthew 23:13") && has(l, "Matthew|7|13", "Matthew 23:13") &&
+					has(l, "Mark|12|38", "Matthew 23:14")
+			},
+		},
+		{
+			"a row the move was made for is gone",
+			strings.Replace(asMade, "Luke.11.52\tMatt.23.13\t2\n", "", 1), []string{"Matthew 23:14: the dataset no longer has the row to Matthew 23:13 from Luke 11:52"},
+			func(l map[string][]string) bool {
+				return len(l["Luke|11|52"]) == 0 && has(l, "Matthew|7|13", "Matthew 23:14") && !has(l, "Matthew|7|13", "Matthew 23:13")
+			},
 		},
 	} {
 		labels, drift := read(tc.rows)
-		if len(drift) != 1 || !strings.Contains(drift[0], tc.report) {
-			t.Errorf("%s: reported %q, want one report naming %q", tc.name, drift, tc.report)
+		matched := 0
+		for _, want := range tc.reports {
+			for _, d := range drift {
+				if strings.Contains(d, want) {
+					matched++
+					break
+				}
+			}
+		}
+		if len(drift) != len(tc.reports) || matched != len(tc.reports) {
+			t.Errorf("%s: reported %q, want one report naming each of %q", tc.name, drift, tc.reports)
 		}
 		if !tc.left(labels) {
 			t.Errorf("%s: the rows were not left as the dataset files them: %q", tc.name, labels)
@@ -504,7 +546,7 @@ func TestACorrectionThatNoLongerAppliesIsLoggedOnce(t *testing.T) {
 	t.Setenv("BIBLETEXT_CACHE_PATH", filepath.Join(t.TempDir(), cacheFileName))
 	rows := "Phil.1.16\tPhil.2.3\t2\nPhil.1.17\tPhil.2.3\t4\nPhil.1.17\tActs.22.1\t9\n" +
 		"Matt.23.13\tLuke.11.52\t20\nRom.16.25\tEph.3.20\t30\nRom.16.26\tRom.1.5\t10\n" +
-		"Rom.16.27\tJude.1.25\t10\n3John.1.15\tJohn.10.3\t1\n"
+		"Rom.16.27\tJude.1.25\t10\n3John.1.15\tJohn.10.3\t1\n" + crossRefTargetMoveRows()
 	if err := os.WriteFile(crossRefCachePath(), makeCrossRefZip(t, rows), 0o644); err != nil {
 		t.Fatal(err)
 	}

@@ -245,18 +245,21 @@ func TestRangesThroughReorderedVersesHoldTheirVerses(t *testing.T) {
 // Philippians 1:16 and 1:17 follow the KJV's order, the WEB's; its Matthew
 // 23:13 as a source is the kingdom woe, the WEB's 23:14, while its rows
 // pointing at 23:13 are mostly the widows' woe that its verse set has no
-// 23:14 for; and its one row from 1:17 in the ESV's order, Philippians 2:3,
-// belongs to the selfish-ambition verse.
+// 23:14 for, and the rest, such as Luke 11:52's, the kingdom woe's; and its
+// one row from 1:17 in the ESV's order, Philippians 2:3, belongs to the
+// selfish-ambition verse.
 func TestTheDatasetsRowsLandOnTheSamePassageInEveryTranslation(t *testing.T) {
 	withCrossRefIndex(t, "Phil.1.16\t2Cor.2.17\t9\n"+
 		"Phil.1.17\tActs.22.1\t9\n"+
 		"Phil.1.17\tPhil.2.3\t4\n"+
 		"Matt.23.13\tLuke.11.52\t20\n"+
 		"Mark.12.40\tMatt.23.13\t5\n"+
+		"Isa.3.12\tMatt.23.13\t6\n"+
+		"Luke.11.52\tMatt.23.13\t15\n"+
 		"Ezek.34.7\tMatt.23.13-Matt.23.36\t3\n")
 	bd := xrefBible(map[string]map[int]int{
 		"Philippians": {1: 30, 2: 30}, "2 Corinthians": {2: 17}, "Acts": {22: 30},
-		"Matthew": {23: 39}, "Luke": {11: 54}, "Mark": {12: 44}, "Ezekiel": {34: 31},
+		"Matthew": {23: 39}, "Luke": {11: 54}, "Mark": {12: 44}, "Ezekiel": {34: 31}, "Isaiah": {3: 26},
 	})
 	for _, tc := range []struct {
 		vid, book string
@@ -283,6 +286,14 @@ func TestTheDatasetsRowsLandOnTheSamePassageInEveryTranslation(t *testing.T) {
 		{"web", "Mark", 12, 40, []string{"Matthew 23:13"}},
 		{"nkjv", "Mark", 12, 40, []string{"Matthew 23:14"}},
 		{"bsb", "Mark", 12, 40, nil},
+		{"web", "Isaiah", 3, 12, []string{"Matthew 23:13"}},
+		{"nkjv", "Isaiah", 3, 12, []string{"Matthew 23:14"}},
+		{"bsb", "Isaiah", 3, 12, nil},
+		// A row pointing at the kingdom woe opens it, in the BSB too.
+		{"web", "Luke", 11, 52, []string{"Matthew 23:14"}},
+		{"webc", "Luke", 11, 52, []string{"Matthew 23:14"}},
+		{"nkjv", "Luke", 11, 52, []string{"Matthew 23:13"}},
+		{"bsb", "Luke", 11, 52, []string{"Matthew 23:13"}},
 		// The woes as a passage.
 		{"web", "Ezekiel", 34, 7, []string{"Matthew 23:13-36"}},
 		{"nkjv", "Ezekiel", 34, 7, []string{"Matthew 23:13-36"}},

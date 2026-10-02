@@ -287,16 +287,16 @@ func crossRefTSV(zipBytes []byte) (io.ReadCloser, error) {
 //   - 3 John 1:15, the closing greeting, which every shipped text prints as
 //     the end of 1:14. Its one row — the friends greeted "by name", to John
 //     10:3 — was keyed to a verse nothing looks up;
-//   - Matthew 23:13 as a SOURCE, and the one row filed under the wrong
-//     Philippians verse (crossRefCorrections).
+//   - Matthew 23:13 as a SOURCE, the one row filed under the wrong
+//     Philippians verse, and the rows filed beside a verse its verse set
+//     lacks that belong to that verse (crossRefCorrections).
 //
 // The first two are numbering, written out below, and cannot go wrong on
 // another copy of the file: a row that names Romans 16:25 or 3 John 1:15
 // names that passage whatever else changed, so they are always applied. What
 // can change is that the dataset stops naming one, and that is reported as a
-// correction that no longer applies (crossRefMovesDrift). The last two
-// depend on what the rows say, and are applied only to rows that still say
-// it.
+// correction that no longer applies (crossRefMovesDrift). The rest depend on
+// what the rows say, and are applied only to rows that still say it.
 var crossRefDatasetMoves = map[verseRef]verseRef{
 	{"Romans", 16, 25}: {"Romans", 14, 24},
 	{"Romans", 16, 26}: {"Romans", 14, 25},
@@ -342,15 +342,20 @@ func (r datasetRow) pointsAt(book string, ch, v int) bool {
 // A correction applied to rows that have since changed would be a
 // mis-correction no reader could see, so each first checks that the rows it
 // corrects still have the shape they had in that copy, and corrects nothing
-// if they do not. apply returns what it found instead, "" when it applied;
-// the app logs that once, when it builds the index, and the opt-in walk of
-// the downloaded texts fails on it.
+// if they do not. apply returns what it found instead, nothing when it
+// applied; the app logs each finding once, when it builds the index, and the
+// opt-in walk of the downloaded texts fails on it.
 type crossRefCorrection struct {
 	name  string
-	apply func(rows []datasetRow) (notApplied string)
+	apply func(rows []datasetRow) (notApplied []string)
 }
 
+// crossRefCorrections are applied in order, each to the rows as the ones
+// before it left them. The target moves go first: they ask whether the
+// dataset names a verse it lacks, and the source correction files rows under
+// one of them, the reference's Matthew 23:14.
 var crossRefCorrections = []crossRefCorrection{
+	{"rows for a verse the dataset lacks", correctTargetMoves},
 	{"Matthew 23:13 as a source", correctMatthew23v13},
 	{"Philippians 2:3 under 1:16", correctPhilippians2v3},
 }
@@ -362,25 +367,26 @@ var crossRefCorrections = []crossRefCorrection{
 // The reference — the WEB — has the two woes the other way round, and that
 // woe is its 23:14.
 //
-// As a TARGET the dataset's 23:13 also holds the references the Treasury
-// gives the KJV's 23:14, the widows' woe, because its verse set has no 23:14
-// to hold them: Mark 12:40, Luke 20:47, Isaiah 10:2 and 1 Timothy 5:3 are
-// among them, and they are most of its 70. A row pointing at 23:13 therefore
-// keeps the reference's 23:13, the widows' woe, and so does a range that
-// starts there ("Matthew 23:13-36", the woes), which begins at the first woe
-// in the WEB's order as in the KJV's.
+// As a TARGET the dataset's 23:13 holds both woes' references, because its
+// verse set has no 23:14 to hold either: the Treasury's references for the
+// KJV's 23:14, the widows' woe — Mark 12:40, Luke 20:47, Isaiah 10:2 and 1
+// Timothy 5:3 among them — are most of its 70. A row pointing at 23:13
+// therefore keeps the reference's 23:13, the widows' woe, and so does a range
+// that starts there ("Matthew 23:13-36", the woes), which begins at the first
+// woe in the WEB's order as in the KJV's. The nineteen that are the kingdom
+// woe's are moved to the reference's 23:14 by crossRefTargetMoves.
 //
 // The shape it was made for: no row is filed under 23:14, and 23:13's rows
 // include Luke 11:52. A dataset that gained a 23:14 would have rows of its
 // own for the reference's 23:14 to merge with, and one whose 23:13 lost Luke
 // 11:52 may no longer be the kingdom woe.
-func correctMatthew23v13(rows []datasetRow) string {
+func correctMatthew23v13(rows []datasetRow) []string {
 	var at []int
 	key := false
 	for i, r := range rows {
 		switch {
 		case r.filedUnder("Matthew", 23, 14):
-			return "the dataset files rows under Matthew 23:14, a verse it did not have"
+			return []string{"the dataset files rows under Matthew 23:14, a verse it did not have"}
 		case r.filedUnder("Matthew", 23, 13):
 			at = append(at, i)
 			key = key || r.pointsAt("Luke", 11, 52)
@@ -388,14 +394,14 @@ func correctMatthew23v13(rows []datasetRow) string {
 	}
 	switch {
 	case len(at) == 0:
-		return "the dataset files no rows under Matthew 23:13"
+		return []string{"the dataset files no rows under Matthew 23:13"}
 	case !key:
-		return "Matthew 23:13's rows no longer include Luke 11:52, so they may no longer be the kingdom woe's"
+		return []string{"Matthew 23:13's rows no longer include Luke 11:52, so they may no longer be the kingdom woe's"}
 	}
 	for _, i := range at {
 		rows[i].from.v = 14
 	}
-	return ""
+	return nil
 }
 
 // correctPhilippians2v3 re-files one row whose own content contradicts the
@@ -409,13 +415,13 @@ func correctMatthew23v13(rows []datasetRow) string {
 // Acts 22:1 ("hear my defence") among them. A dataset that had put its
 // Philippians 1:16-17 into the ESV's order would have 2:3 rightly under 1:17,
 // and that is the change the last check is there to see.
-func correctPhilippians2v3(rows []datasetRow) string {
+func correctPhilippians2v3(rows []datasetRow) []string {
 	var at []int
 	defence := false
 	for i, r := range rows {
 		switch {
 		case r.filedUnder("Philippians", 1, 16) && r.pointsAt("Philippians", 2, 3):
-			return "Philippians 1:16 has a row to 2:3 of its own"
+			return []string{"Philippians 1:16 has a row to 2:3 of its own"}
 		case r.filedUnder("Philippians", 1, 17) && r.pointsAt("Philippians", 2, 3):
 			at = append(at, i)
 		case r.filedUnder("Philippians", 1, 17) && r.pointsAt("Acts", 22, 1):
@@ -424,14 +430,149 @@ func correctPhilippians2v3(rows []datasetRow) string {
 	}
 	switch {
 	case len(at) == 0:
-		return "the dataset no longer files Philippians 2:3 under 1:17"
+		return []string{"the dataset no longer files Philippians 2:3 under 1:17"}
 	case !defence:
-		return "Philippians 1:17's rows no longer include Acts 22:1, so the dataset may have taken the ESV's order"
+		return []string{"Philippians 1:17's rows no longer include Acts 22:1, so the dataset may have taken the ESV's order"}
 	}
 	for _, i := range at {
 		rows[i].from.v = 16
 	}
-	return ""
+	return nil
+}
+
+// crossRefTargetMove re-points rows the dataset files beside the verse they
+// belong to. The dataset's verse set has no verse for some passages that the
+// reference prints, and the references the Treasury gives such a passage are
+// filed at the verse beside it instead, among that verse's own. Which rows
+// are which is decided by what each row cites, so they are listed one by one,
+// as the dataset spells them: the verses they are filed under (rows), the
+// target the dataset gives them (from), and the target they belong to (to).
+// lacks is the verse the dataset has no rows for, by which the move knows the
+// dataset has not since gained it: a dataset that names it has refiled its
+// references itself.
+type crossRefTargetMove struct {
+	lacks, from, to string
+	rows            string
+}
+
+var crossRefTargetMoves = []crossRefTargetMove{
+	// The kingdom woe, "you shut up the Kingdom of Heaven against men", which
+	// the WEB numbers 23:14. Luke's telling of it (11:52); the narrow gate
+	// that is to be entered (7:13); "the Kingdom of Heaven is at hand" (3:2,
+	// 10:7); those who hinder others from entering — Elymas (Acts 13:10),
+	// the agitators who followed Paul to Berea (17:13), the jealous crowd
+	// that contradicted him (13:45), the spies' evil report (Numbers 13:32),
+	// the strong sheep that foul the water the rest must drink (Ezekiel
+	// 34:18), the rulers sending to arrest Jesus (John 7:32), plotting his
+	// death (Matthew 27:1) and bidding him silence his disciples (Luke
+	// 19:39); and those the Treasury itself files under the kingdom woe
+	// (Ezra 7:11, Nehemiah 8:1, Matthew 16:3, Mark 10:2, Luke 11:42, 13:15,
+	// Zechariah 11:17). Isaiah 3:12 and the rest of 23:13's rows are the
+	// widows' woe's, and stay.
+	{
+		lacks: "Matt.23.14", from: "Matt.23.13", to: "Matt.23.14",
+		rows: "Luke.11.52 Matt.7.13 Matt.10.7 Matt.3.2 Acts.13.10 Acts.17.13 John.7.32 Luke.19.39 " +
+			"Num.13.32 Matt.27.1 Ezek.34.18 Acts.13.45 Ezra.7.11 Neh.8.1 Matt.16.3 Mark.10.2 " +
+			"Luke.11.42 Luke.13.15 Zech.11.17",
+	},
+}
+
+// correctTargetMoves applies crossRefTargetMoves, each row only while the
+// dataset still has it as the move expects — filed under its verse, pointing
+// at from — and each move only while the dataset still names nowhere the
+// verse it lacks. It reads the rows once for all of them.
+func correctTargetMoves(rows []datasetRow) []string {
+	type at struct{ book, ch, v uint8 }
+	verse := func(s string) (at, bool) {
+		book, ch, v, ok := parseOSISRef(s)
+		if !ok {
+			return at{}, false
+		}
+		r, ok := packTSKRow(crossRef{Book: book, Chapter: ch, Verse: v})
+		return at{r.book, r.ch, r.v}, ok
+	}
+	label := func(a at) string { return fmt.Sprintf("%s %d:%d", tskBooks[a.book], a.ch, a.v) }
+
+	var why []string
+	type move struct {
+		lacks, from at
+		to          tskRow
+		rows        []at
+	}
+	var moves []move
+	for _, m := range crossRefTargetMoves {
+		lacks, ok1 := verse(m.lacks)
+		from, ok2 := verse(m.from)
+		target, ok3 := parseOSISTarget(m.to)
+		to, ok4 := packTSKRow(crossRefTargetToReference(target))
+		mv := move{lacks: lacks, from: from, to: to}
+		ok := ok1 && ok2 && ok3 && ok4
+		for _, s := range strings.Fields(m.rows) {
+			a, ok5 := verse(s)
+			ok = ok && ok5
+			mv.rows = append(mv.rows, a)
+		}
+		if !ok {
+			why = append(why, fmt.Sprintf("the move to %s does not parse", m.to))
+			continue
+		}
+		moves = append(moves, mv)
+	}
+
+	lacking := map[at]bool{}
+	for _, m := range moves {
+		lacking[m.lacks] = true
+	}
+	named := map[at]bool{}     // the verses the moves lack that the dataset names
+	found := map[[2]at][]int{} // a row's verse and its one-verse target -> where it is
+	for i, r := range rows {
+		start := at{r.to.book, r.to.ch, r.to.v}
+		for _, a := range []at{{r.from.book, r.from.ch, r.from.v}, start} {
+			if lacking[a] {
+				named[a] = true
+			}
+		}
+		if r.to.endV == 0 {
+			key := [2]at{{r.from.book, r.from.ch, r.from.v}, start}
+			found[key] = append(found[key], i)
+			continue
+		}
+		end := at{r.to.endBook, r.to.endCh, r.to.endV}
+		if end.book == 0 {
+			end.book = r.to.book
+		}
+		if end.ch == 0 {
+			end.ch = r.to.ch
+		}
+		if lacking[end] {
+			named[end] = true
+		}
+	}
+
+	for _, m := range moves {
+		if named[m.lacks] {
+			why = append(why, fmt.Sprintf("the dataset now names %s itself, so the rows it filed for it at %s were left there",
+				label(m.lacks), label(m.from)))
+			continue
+		}
+		var gone []string
+		for _, src := range m.rows {
+			idx := found[[2]at{src, m.from}]
+			if len(idx) == 0 {
+				gone = append(gone, label(src))
+			}
+			for _, i := range idx {
+				votes := rows[i].to.votes
+				rows[i].to = m.to
+				rows[i].to.votes = votes
+			}
+		}
+		if len(gone) > 0 {
+			why = append(why, fmt.Sprintf("%s: the dataset no longer has the row to %s from %s",
+				label(m.lacks), label(m.from), strings.Join(gone, ", ")))
+		}
+	}
+	return why
 }
 
 // parseCrossRefRows reads the dataset's TSV and returns the index, NORMALISED
@@ -512,7 +653,7 @@ func readCrossRefRows(r io.Reader, keep int) (map[string][]tskRow, []string, err
 
 	drift := crossRefMovesDrift(named)
 	for _, c := range crossRefCorrections {
-		if why := c.apply(filed); why != "" {
+		for _, why := range c.apply(filed) {
 			drift = append(drift, c.name+" not corrected: "+why)
 		}
 	}
