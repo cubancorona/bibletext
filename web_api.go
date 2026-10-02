@@ -60,6 +60,14 @@ func ChapterBlocks(bd *BibleData, book string, chapter int, verses []Verse) []Ch
 	return out
 }
 
+// VerseSharedText is a verse as a reader's share carries it from the app: drawn
+// as the page draws it — the divine name in small capitals — with nothing of
+// the page's own typography (verseSharedText, outbound_text.go). The site's
+// link previews are written in it, so the text a messenger shows under a
+// shared chapter is the text a verse shared from the app shows. For a verse
+// that marks nothing it is the verse's own text.
+func VerseSharedText(v Verse) string { return verseSharedText(v) }
+
 // IsWordsOfChrist reports whether a verse falls in a red-letter range.
 //
 // DEPRECATED FOR RENDERING. This is the WEB's verse-level judgement and it is

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"html/template"
 	"strings"
+	"unicode/utf8"
 
 	bibletext "github.com/cubancorona/bibletext"
 )
@@ -296,6 +297,13 @@ func paragraphBody(versionID, book string, verses []bibletext.Verse, gaps map[in
 
 // chapterPreview is the unfurl text: the opening of the chapter, trimmed to a
 // sentence-ish length so a shared link reads well in a message thread.
+//
+// In the form the app shares a verse in (bibletext.VerseSharedText): the divine
+// name in the small capitals the page draws it with, which is what the account
+// holder chose for every verse a reader sends. The stored "Lord" would be a
+// spelling no page of the edition shows, and the one that erases the
+// distinction the small capitals carry (docs/DIVINE_NAME.md). A verse that
+// marks nothing — every verse of the public-domain editions — is unchanged.
 func chapterPreview(verses []bibletext.Verse) string {
 	var b strings.Builder
 	for _, v := range verses {
@@ -305,14 +313,20 @@ func chapterPreview(verses []bibletext.Verse) string {
 		if b.Len() > 0 {
 			b.WriteByte(' ')
 		}
-		b.WriteString(strings.Join(strings.Fields(v.Text), " "))
+		b.WriteString(strings.Join(strings.Fields(bibletext.VerseSharedText(v)), " "))
 	}
 	s := b.String()
 	if len(s) > 200 {
 		if cut := strings.LastIndexByte(s[:200], ' '); cut > 0 {
 			s = s[:cut]
 		} else {
-			s = s[:200]
+			// No space to cut at: back off to a whole character, so a small
+			// capital (two or three bytes) is never split.
+			cut = 200
+			for cut > 0 && !utf8.RuneStart(s[cut]) {
+				cut--
+			}
+			s = s[:cut]
 		}
 		s += "…"
 	}
