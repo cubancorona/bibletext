@@ -41,6 +41,380 @@ each wanting a dry run on a day that is not a release day:
   key and the service account in the repository's secrets, which is the
   account holder's decision, and matters only once Play grants production.
 
+What 1.2.18 (1–2 October 2026) adds:
+
+- **Play steps one at a time.** Every Play step opens an edit, all of them
+  as the one service account, and Play lets each user hold one open edit:
+  a new edit invalidates the one that user already has open. So a status
+  read beside an upload cost the upload its edit ("A Play status read
+  during an upload deletes the upload's edit", below). Uploads,
+  `release-status.py` and screenshot pushes go in turn, never as parallel
+  steps.
+- **The arm64 snap build can fail before it builds anything.** On 1 October
+  2026 the Linux stores workflow's `snap (arm64)` job, on the push of the
+  release commit (e6fa1b6cc), failed inside `snapcore/action-build@v1`
+  while its build instance was being set up ("Launching managed ubuntu
+  24.04 instance... Failed to read instance config in environment at
+  /etc/craft-instance.conf"), before any of the project was built;
+  `gh run rerun <id> --failed` passed with nothing changed. That workflow
+  (`.github/workflows/linux-stores.yml`) only verifies, but `release.yml`'s
+  `build snap (arm64)` job runs the same action on the same runner image
+  and publishes to edge, and stage 10's promotion takes every architecture
+  or none, so the same failure in a tag's run holds the snap until the job
+  is rerun. The tag's own run built both snaps first time. Either retry the
+  build step once on that error, in both workflows, or name the rerun in
+  stage 10 of `docs/RELEASING.md`.
+- **Apple's processing was quick.** It took about three minutes for 1.2.18,
+  so the wait for `VALID` in stage 7 need not be planned as a long one.
+
+## macOS 12 and 13: an open note card calls a macOS 14 method — found 2 October 2026
+
+`btMacLayoutNote` gives the note card its shape from
+`btMacNoteBubblePath(w, h).CGPath` (`reading_macos.go:2783`). AppKit
+declares `NSBezierPath`'s `CGPath` property `API_AVAILABLE(macos(14.0))`
+(`NSBezierPath.h`), and the Mac's floor is macOS 12.0
+(`macMinimumOSVersion` in `config/product.json`), which both Mac builds
+compile and stamp with (`-mmacosx-version-min` and `LSMinimumSystemVersion`
+in `scripts/release-mac-store.sh` and in the macOS job of
+`.github/workflows/release.yml`). Nothing guards the call: there is no
+`@available` or `respondsToSelector:` anywhere in `reading_macos.go`, and
+no fallback. Built for the release's 12.0 target, the compiler says so at
+that line: "'CGPath' is only available on macOS 14.0 or newer
+[-Wunguarded-availability-new]". A one-line file using the property warns
+the same way at a 12.0 target and not at 14.0 (checked 2 October 2026).
+
+It is on the path of ordinary reading. Every note card shown open on the
+native pane is laid out there — a note opened from the notes browser or a
+shared link, and a note just sent — and only a pill (a minimised note, or
+one with no text: `btMacNotePill`, line 1969) returns before that line. On
+macOS 12 or 13, unless AppKit answers the selector privately, that is an
+unrecognised-selector exception the moment such a card is laid out. The
+line came in v1.2.0 (b8fcceb0b, 14 August 2026), but until v1.2.4
+(fe569cc20, 27 August) the binary carried the SDK's version as its minimum
+and launched only on the newest macOS, so the exposure dates from 1.2.4.
+Not seen: the app has not been tested on macOS 12 or 13, and no crash
+report showing this is known, though both Mac builds are offered there. A
+run on either, opening any note, would show it.
+
+The fix: build the `CGPath` by walking the bezier path's elements
+(`elementAtIndex:associatedPoints:` into a `CGMutablePath`, the usual way
+before macOS 14), or use the property under `@available(macOS 14, *)` with
+that walk as the fallback; and make the availability warning an error in
+the Mac builds' compiler flags, so the next such call fails the build.
+
+## Share as image says "Picture saved" for a card it could not read — found 1 October 2026
+
+On the desktop, when the rendered card cannot be read at the Share tap, the
+image share still asks the file manager to show it, and can then open the
+sheet under *Picture saved* saying that it is shown. `fallbackShareImage`
+(`share_fallback.go:59-85`) reads the renderer's file at the tap (line 64);
+on a read error it records that path as the picture, in no folder (lines
+69-70), and runs the reveal on it all the same (line 74). `savedImage.line`
+(`share_image_folder.go:258-271`) gives a picture in no folder that the
+file manager showed *The picture is shown in your file manager.* (lines
+264-265), and the sheet opens with that line and the missing file as
+Email…'s attachment (line 82). Whether the file manager says yes decides
+it:
+
+- **Linux, the tarball and the AppImage.** xdg-open on the picture's folder
+  (`share_reveal_linux.go:47`), which is the temp folder and is there.
+  Where xdg-open exits 0 within the five-second wait (`revealByCommand`,
+  `share_fallback.go:156-170`; `revealAnswerWait`, line 150), the sheet
+  opens. Where it runs the file manager in the foreground, as it does on a
+  desktop it does not recognise, the wait passes, the picture counts as
+  not shown, and a picture in no folder gets no line and no sheet
+  (`share_image_folder.go:268-269`) — that wait is recorded in "Linux and
+  Windows: an in-app share sheet in place of the 1.4-second notice",
+  below. Where the sheet does open and offers Email… (outside a sandbox,
+  with a mail client as the mailto: handler) the compose has no file to
+  attach and fails without a word (the entry below).
+- **The snap.** The portal route opens the file before it asks the portal
+  (`revealViaPortal`, `share_reveal_linux.go:55-58`); the open fails,
+  nothing is shown, and no sheet opens — the approved rule for a picture
+  nothing true can be said of.
+- **Windows, only where its Share sheet falls back to the in-app one.** The
+  copy for the Share sheet is made at the tap (`takeSharedImage`,
+  `share_parts.go:96-104`); with the renderer's file gone the copy fails,
+  `shareImageFile` ends the share at once (`share_windows.go:410-412`), and
+  the fallback hands `fallbackShareImage` the missing file. Explorer counts
+  as shown once it starts (`share_reveal_other.go:24-30`), so the sheet
+  opens. Windows' image sheet offers no Email….
+
+Very hard to reach: the renderer's file has to go between the preview
+drawing it and the tap, by a temp-folder cleaner for instance. Read from
+the code; not seen.
+
+The fix: when the card cannot be read, skip the save and the reveal and
+open no *Picture saved* sheet, logging why, as for a picture no folder took
+that the file manager did not show; or, if the reader is to be told, a line
+of its own — *The share could not be prepared.*, already approved for
+Windows' own sheet (`windowsShareFailText`, `share_windows.go:121`), under
+a heading still to be worded. Either way, no Email… for a file that is not
+there. A host test: a card path that does not exist, the reveal stubbed to
+say yes, and no sheet (control: the file present).
+
+## Email… on the desktop share sheet fails without a word — found 1 October 2026
+
+Email… on the in-app share sheet (Linux, and Windows where its own Share
+sheet cannot open) hands the share to the mail client on a goroutine and,
+when that fails, writes a log line and nothing else
+(`share_sheet_desktop.go:280-287`; the comment above it, lines 274-279,
+says as much). Nothing comes back to the sheet, which stays as it was: the
+button is pressed and nothing opens. The share itself has already
+succeeded — the text is on the clipboard, the picture saved — so this is a
+dead button, not a false message; but by the rule the share fixes have kept
+since 20 September 2026, a share the reader started does not end in silence
+("Android: a text share has no failure path", below).
+
+The routes (`composeShareEmail`): on Linux the Email portal, then
+`xdg-email`, then a `mailto:` link through xdg-open
+(`share_email_linux.go:113-119`); on Windows a `mailto:` link through
+Fyne's `OpenURL` (`share_email_windows.go:77-82`), which runs `rundll32
+url.dll,FileProtocolHandler` and has only that command's exit status to
+report.
+
+A second fault rides on the Linux order. `composeEmailViaXDGEmail`
+(`share_email_linux.go:162-172`) runs `xdg-email` to its end, and any
+non-zero exit is an ordinary error, which `composeByRoutes`
+(`share_email.go:157-171`) takes to mean nothing was reached, handing on to
+the `mailto:` route. But `xdg-email` waits on what it starts: in current
+xdg-utils, with Thunderbird as the handler it runs Thunderbird's `-compose`
+itself, which stays in the foreground when Thunderbird was not already
+running, and otherwise it ends with xdg-open's status. So the call can last
+until the mail client exits, and for a text share a client that then
+exits non-zero is followed by a `mailto:` link: a second compose for one
+press. A picture share cannot reach that route, because
+`composeEmailViaMailto` refuses an attachment at once
+(`share_email_linux.go:177-180`). Not seen; no
+mail client is installed on the Linux VM.
+
+The fix: post the outcome back to the sheet — a line under the buttons when
+the compose fails, its wording to be approved — and stop at the first route
+that started a compose, rather than handing on after any non-zero exit.
+
+## A dropped session bus spins a core until the portal wait ends (Linux) — found 1 October 2026
+
+`portalRequest` (`share_portal_linux.go:34-79`) waits for the portal's
+Response on a channel registered with godbus, in a loop that passes over a
+nil signal: `case sig := <-responses: if sig == nil || ... { continue }`
+(lines 62-66). godbus v5.1.0 closes every registered signal channel when
+the connection ends: a read error in `inWorker` closes the connection
+(`conn.go:387-397`), and the default signal handler's `Terminate` closes
+each channel (`default_handler.go:271-284`). A closed channel answers every
+receive at once with nil, so if the session bus drops after the portal has
+taken the call, the loop spins on a core until the request's deadline: five
+seconds for the image share's reveal (`revealAnswerWait`,
+`share_fallback.go:150`) and fifteen for Email… (`portalAnswerWait`,
+`share_email_linux.go:43`). It is bounded, off the UI goroutine, and ends
+as "no answer from the portal", as a portal that never answered does, so
+the reader is told nothing wrong. Not seen: a session bus drops when the
+desktop session is ending.
+
+The fix: receive with `sig, ok := <-responses` and, on a closed channel,
+return an error at once (the connection closed), with `taken` true, since
+the portal had the call.
+
+## A sheet turned from one landscape to the other keeps its side padding on the old side (Android) — found 1 October 2026
+
+Since 1.2.18 the note composer and Ask hold their card clear of the side
+safe insets of a phone held sideways (`clearOfSideInsets`,
+`sheet_fit.go:190-196`; the second fault under "Phone and tablet sheets
+over the header", below). The insets are read as the sheet opens. The
+composer reads them again only in its refit (`share_note_ui.go:428-429`),
+and its watch runs the refit only when the canvas's size has changed
+(`share_note_ui.go:452`). Ask never reads them again: it throws its refit
+away (`sheet, _ := clearOfSideInsets(card, sideL, sideR)`, `ai_ask.go:162`),
+and its watch looks only for the sheet closing.
+
+A phone turned straight from landscape to the other landscape keeps the
+canvas's size, so nothing refits, and nothing rebuilds the window, since
+the navigation's answer (the rail) has not changed; but the inset moves: an
+Android phone's display cutout, and its three-button navigation bar, go to
+the other side. The card keeps its padding on the side that no longer needs
+it and runs under the inset on the side that does, until the sheet is
+closed and opened again. Cosmetic, and no worse on the inset's side than
+1.2.17, where the card always ran under it. The iPhone is not affected:
+UIKit reports the same inset at each side of a phone held sideways (62
+points on an iPhone 17 Pro Max, `sheet_side_insets_test.go`), and an iPad's
+side insets are 0. Read from the code; not seen on a device.
+
+The fix: refit when the safe area changes, not only the size — the
+composer's watch comparing the sheet area's position and width as well as
+`cnv.Size()` — and give Ask its refit and the same watch.
+
+## A Play status read during an upload deletes the upload's edit — found 2 October 2026
+
+On 2 October 2026 a `scripts/play-publish.py upload` of the 1.2.18 bundle,
+about 88 MB posted into an edit (`play-publish.py:115-118`), failed with
+HTTP 400 FAILED_PRECONDITION, "This Edit has been deleted.", because
+`scripts/release-status.py` ran at the same moment from a parallel step and
+opened an edit of its own to read the tracks (`play()`,
+`release-status.py:90-115`: the edit opened at line 93 and discarded at
+line 108). Google's Edits documentation
+(developers.google.com/android-publisher/edits) lets each user hold one
+open edit at a time, and a new edit invalidates the one that user already
+has open. The status read signs in as the same service account as the
+upload (`play-publish.py`'s `access_token()`, line 36, which
+`release-status.py` calls at line 92), so its edit took the upload's place.
+The same page gives a second way to lose one: a commit by anyone, or any
+change to the app in the Play Console, invalidates every other edit for the
+app. Nothing changed on Play and the versionCode was not used: the
+identical command, run again on its own, succeeded. Every Play step opens
+an edit as that one account — `play-publish.py upload` and `tracks` (line
+99), `release-status.py`, `play/push-screenshots.py` (line 311, its token
+from `play-publish.py` too) — so any two at once can do this, as can a
+screenshot push's commit or a change in the Play Console while an upload
+is in flight; and `release-status.py`'s docstring, which calls it safe to
+run at any point in a release or outside one (lines 8-9), is wrong for Play
+while an upload is in flight.
+
+The fix: say so in `docs/RELEASING.md` stage 6 — Play steps one at a time,
+the status read never beside an upload — and in its "When a stage fails"
+table, whose row for `play-publish.py upload` assumes a re-run meets a used
+versionCode (not yet changed); name the exception in `release-status.py`'s
+docstring; and have `play-publish.py upload` recognise the error in the
+upload command itself (lines 108-139), at whichever of its calls on the
+edit meets it — the bundle post (lines 117-118) on 2 October — and say that
+the edit was invalidated during the upload, by another edit, a commit or a
+Play Console change, and to run it again once nothing else is touching
+Play. Not in `call()` (lines 54-64), which today exits with the bare HTTP
+text: it is shared. `release-status.py`'s `play()` uses it,
+`play/push-screenshots.py` runs every request through it (`Client._call`,
+lines 224-231) and reads Play's status back out of its exit text
+(`HTTP_STATUS`, line 100) to tell a refused commit from one whose outcome
+is unknown (`commit()`, line 429), and `play/test_push_screenshots.py` pins
+its signature (`test_the_token_and_the_call_are_play_publishs_own`). Any
+change to its message must keep the `-> HTTP <code>` text.
+
+## Play release notes reach Play as one paragraph — found 2 October 2026
+
+`--notes` in `scripts/play-publish.py` reads the file and folds all of its
+whitespace into single spaces (`notes = " ".join(f.read().split())`, line
+89), so the line breaks between the opening line and its bullets are lost
+and Play shows one run-on paragraph with the bullets inline. It has done so
+since the option arrived (2aa2a2abb, 10 September 2026). 1.2.17's alpha
+release notes on Play, read back on 2 October 2026, are folded that way.
+1.2.18's went up through a copy of the script whose one change kept the
+lines — trailing spaces stripped from each line, and the whole stripped at
+its ends — and Play stored the five lines of the 1.2.18 notes in
+`docs/PLAY_LISTING.md` intact (read back the same day).
+
+The fix: make that the script's behaviour, with a test that a notes file
+of several lines reaches the track release's `releaseNotes` text with its
+line breaks, and that the 500-character cap (lines 92-93) counts them.
+Nothing tests `--notes`, or anything else `play-publish.py` does itself:
+`play/test_push_screenshots.py` only checks that the script defines
+`access_token()` and `call()` with the signature `push-screenshots.py`
+relies on (`test_the_token_and_the_call_are_play_publishs_own`), and its
+`PlayClient` tests use a stand-in for `call()`. A test of the notes under
+`play/` would run with the Python tests CI already discovers there
+(`docs/RELEASING.md`, stage 2).
+
+## The App Review notes guard reads only the first line — found 1 October 2026
+
+The checks on the tracked App Review notes that look for a release's
+version read the heading alone. `TestAppReviewNotesAreForThisRelease` takes
+the first line (`appstore_review_notes_test.go:76`) and fails on any x.y.z
+in it other than the packaged version (lines 81-86); `load_notes` in
+`appstore/push-review-notes.py` requires the first line to open with
+`VERSION <TARGET_VERSION>` (lines 140-145) and reads nothing else for a
+version. `scripts/check-release-identity.py` (lines 45-47) only requires
+the iOS file to start with `VERSION <mobile version>`. Notes whose heading
+was bumped over the last release's body pass all three, and would go to
+App Review describing the wrong release. The Mac's notes are the open case:
+1.2.17's `appstore/review-notes-macos.txt` with
+only its first line made `VERSION 1.2.18 (macOS)`, and
+`WHAT IS NEW IN 1.2.17` and `HOW TO EXERCISE 1.2.17` below it, passes
+every check on that file — the review-notes Go tests and `load_notes`, run
+on 2 October 2026 on an exported copy of the tree holding it. The iPhone's
+notes have a partial net:
+`TestAppReviewNotesPlaceTheSidewaysIPhoneNavigationByTheRule`
+(`appstore_review_notes_test.go:215-238`), which reads only
+`appstore/review-notes.txt`, fails 1.2.17's body there under a bumped
+heading (run the same way), because its navigation paragraph keeps the
+bottom tab bar on an iPhone held sideways. That checks one paragraph; a
+stale iOS body that does not trip it passes as the Mac's does. Not hit:
+1.2.18's notes were rewritten whole, and today the only x.y.z in either
+file is 1.2.18.
+
+The fix: in both, refuse any x.y.z anywhere in the notes other than the
+packaged version, with an allow-list for one a release means to name (none
+today). The test's control: the 1.2.17 macOS notes under a bumped heading,
+which pass every check on that file as they stand and fail only the new
+version check.
+
+## linux/releases.toml dates a release the day before its tag — found 1 October 2026
+
+The file's header says each entry carries its annotated tag's date
+(`linux/releases.toml:1-3`), and `cmd/linuxmeta` renders that date into the
+AppStream metainfo's `<release>` lines. Three entries are a day early:
+1.2.13 is dated 2026-09-20 and was tagged on 21 September, 1.2.17 2026-09-28
+and tagged on 29 September, and 1.2.18 2026-10-01 and tagged at 05:45 on
+2 October (`git for-each-ref --format='%(refname:short) %(taggerdate:short)'
+refs/tags`). Every other annotated tag agrees with its entry. The cause is
+the order of a release (`docs/RELEASING.md`): the entry is written in stage
+1, the store artefacts are built from that tree in stage 3, and the tag
+comes in stage 5, after them, so the tree cannot know the tag's date, and
+correcting it afterwards would move the tree off artefacts already built.
+`TestNewestReleaseIsTheLedgerVersionAndDatesDescend`
+(`cmd/linuxmeta/main_test.go:79-106`) checks the dates only for being in
+the past and descending (lines 91-101); otherwise it holds the newest entry
+to the ledger version and checks the bullets.
+
+The fix, one of two: date the entry the day the artefacts are built and
+say so in the header and in stage 1 — what the tree can know, and the one
+to take; or have stage 0 or stage 5 check that the newest date is within a
+day of the tag. The past entries can stand, each within a day of its tag.
+
+## msstore/submit.py keeps the last release's commit status in a new submission's state — found 2 October 2026
+
+`save_state` merges what it is given into `build/msstore/run-state.json`
+(`msstore/submit.py:213-219`). `create` writes the new submission's id with
+`committed` and `verified` cleared (lines 612-615) but leaves
+`commitStatus`, which only `commit` (line 852) and `poll` (line 878) write,
+and `abort` (line 932) leaves it too. After 1.2.18's `create` on
+2 October 2026 the file named the new submission and still said
+`"commitStatus": "CommitStarted"` from the previous release, while the
+server called the submission PendingCommit. Nothing reads `commitStatus`:
+`commit` goes by `committed`, `verified` and the server's own status (lines
+832, 840 and 845), and `poll` by the server, so `commit` and `poll` were
+unaffected. Only someone reading the file on its own would be misled.
+
+The fix: `create` starts a fresh state for its submission — writing the
+whole state rather than merging into the last, or clearing `commitStatus`
+with the other flags — with a test in `msstore/test_submit.py` that a
+create after a committed run leaves no `commitStatus` behind.
+
+## scripts/run-ios-device.sh: a locked phone costs a full rebuild — found 2 October 2026
+
+The developer install to a physical iPhone fails at `xcrun devicectl device
+install app` (`scripts/run-ios-device.sh:276`) when the phone is locked,
+with CoreDevice error 12040 or 10003, or "Failed to acquire assertion"
+(seen on 2 October 2026). The script stops there (`set -e`), and its `EXIT`
+trap (line 96) removes the work directory, which holds the signed
+`BibleText.app` (lines 196-197), so each retry patches Fyne, builds the
+fyne CLI, packages, cross-compiles and signs again — minutes each — to
+repeat the one step that wanted an unlocked phone. The removal is
+deliberate: the executable is linked with the project's bundled key (lines
+109-111), so a kept bundle has to stay private and go once installed.
+
+It must also be run from inside the module. The other steps that need the
+repository either change directory in a subshell (lines 106, 113 and 192)
+or run a script that finds its own root, but the cross-compile runs
+`go build ... "$REPO_ROOT/cmd/mobile"` from the caller's directory (lines
+203-207), and Go takes the main module from the working directory, not from
+the package's path: from outside any module the build fails with "go.mod
+file not found in current directory or any parent directory", and from
+inside another module with "outside main module or its selected
+dependencies" (both checked 2 October 2026) — after the slow steps before
+it have run.
+
+The fix: retry the install a few times on those errors, asking for the
+phone to be unlocked; on a failed install keep the signed bundle in its
+private directory and say how to install it again, removing it once an
+install succeeds; and run the cross-compile as `go -C "$REPO_ROOT" build`,
+so the module is the script's own.
+
 ## Windows: use the native Share sheet — BUILT 30 September 2026, seen in the app unpackaged the same day and packaged on 1 October
 
 On Windows every text share (Share with note, with citation, as link, and the
@@ -1716,6 +2090,25 @@ Left as it is: with the landscape presentation switched off, an iPhone's
 Read tab held sideways now shows the rail beside the reading pane and
 rebuilds on rotation as an iPad's does, with no Go-side anchor, which
 `captureRotationAnchor` takes only when the presentation flips.
+
+**Follow-up, found 1 October 2026: a sideways launch draws the bar first.**
+An iPhone launched while already held sideways draws the bottom bar for
+about 0.4 s before what its shape calls for (seen on the iOS simulator
+while the rule was built): the rail on Books and Search, and on the Read
+tab the full-screen page, not a rail. The first layout runs before the
+canvas has a size. `mobileRailWanted` answers an unsized canvas by the
+device (`layout.go:103-113`, reached through `railForWindow`, lines
+122-128): the rail for an iPad, the bar for an iPhone. On the Read tab
+`readingFullScreen` (`phone_landscape.go:90-92`) is false until then too,
+since `phoneLandscapeReadingWanted` needs a sized canvas
+(`w > 0 && h > 0`, line 58), so the Read tab gets the bar as well. When
+the size arrives the watcher finds the rail, or the full-screen page,
+wanted and rebuilds. Minor, and at launch only. The fix: answer the first
+layout's two decisions, rail and full-screen page, from the size or
+orientation the window scene reports at launch, or hold the first layout
+until the canvas has a size; either way an Android phone must still not
+flash a rail before its size arrives, which is why the unsized answer is
+the bar.
 
 ## Phone and tablet sheets over the header — BY DESIGN, not a bug (1 October 2026)
 
