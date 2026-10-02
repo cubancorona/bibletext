@@ -72,6 +72,55 @@ func parseUSFMRefID(id string) (crossRef, bool) {
 	return out, true
 }
 
+// parseUSFMChapterID reads a citation of whole chapters — "LEV.11", or the
+// range "2KI.18-2KI.20" — as its book and first and last chapter. The NKJV
+// tags 117 of its citations so ("Lev. 11", "Ps. 22", "Is. 36–39"), and
+// parseUSFMRefID, which needs a verse, rejected every one: the citation
+// stayed words while its neighbours were links.
+func parseUSFMChapterID(id string) (book string, from, to int, ok bool) {
+	parts := strings.Split(strings.TrimSpace(id), "-")
+	if len(parts) > 2 {
+		return "", 0, 0, false
+	}
+	chapterOf := func(s string) (string, int, bool) {
+		f := strings.Split(strings.TrimSpace(s), ".")
+		if len(f) != 2 {
+			return "", 0, false
+		}
+		b := apiBibleBookName(strings.ToUpper(f[0]))
+		ch, err := strconv.Atoi(f[1])
+		if b == "" || err != nil || ch < 1 {
+			return "", 0, false
+		}
+		return b, ch, true
+	}
+	book, from, ok = chapterOf(parts[0])
+	if !ok {
+		return "", 0, 0, false
+	}
+	to = from
+	if len(parts) == 2 {
+		if eb, ec, ok := chapterOf(parts[1]); ok && eb == book && ec > from {
+			to = ec
+		}
+	}
+	return book, from, to, true
+}
+
+// chapterTarget resolves a whole-chapter citation against the loaded text:
+// from the first verse of its first chapter to the last verse of its last.
+func chapterTarget(bd *BibleData, id string) (crossRef, bool) {
+	book, from, to, ok := parseUSFMChapterID(id)
+	if !ok {
+		return crossRef{}, false
+	}
+	first, last := bd.GetChapter(book, from), bd.GetChapter(book, to)
+	if len(first) == 0 || len(last) == 0 {
+		return crossRef{}, false
+	}
+	return normaliseSpanEnd(crossRef{Book: book, Chapter: from, Verse: first[0].Verse, EndCh: to, EndV: last[len(last)-1].Verse}), true
+}
+
 // parseUSFMRef reads one "BOOK.chapter.verse" id.
 func parseUSFMRef(s string) (book string, ch, v int, ok bool) {
 	f := strings.Split(strings.TrimSpace(s), ".")
@@ -129,6 +178,9 @@ func publisherCrossRefsFor(bd *BibleData, book string, chapter int, selected []V
 				continue // a span that does not fit the text it claims to index
 			}
 			ref, ok := parseUSFMRefID(r.ID)
+			if !ok {
+				ref, ok = chapterTarget(bd, r.ID)
+			}
 			if !ok || bd.GetVerse(ref.Book, ref.Chapter, ref.Verse) == nil {
 				continue // words only: the passage is not in the loaded text
 			}

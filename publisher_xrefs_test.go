@@ -198,3 +198,45 @@ func TestPublisherCrossRefsDropSpansThatDoNotFit(t *testing.T) {
 		t.Errorf("a fitting span was dropped: %+v", rows)
 	}
 }
+
+// A citation of whole chapters is a link to them. The NKJV tags 117 of its
+// citations by chapter alone ("LEV.11", "2KI.18-2KI.20"), and the parser,
+// which needs a verse, left every one as words.
+func TestPublisherCrossRefsLinkWholeChapters(t *testing.T) {
+	for _, tc := range []struct {
+		id       string
+		book     string
+		from, to int
+		ok       bool
+	}{
+		{"LEV.11", "Leviticus", 11, 11, true},
+		{"2KI.18-2KI.20", "2 Kings", 18, 20, true},
+		{"PSA.22", "Psalms", 22, 22, true},
+		{"PSA.22-PSA.21", "Psalms", 22, 22, true}, // backwards: the first chapter alone
+		{"JHN.7.50", "", 0, 0, false},             // a verse id is parseUSFMRefID's
+		{"ZZZ.1", "", 0, 0, false},
+		{"JHN.0", "", 0, 0, false},
+	} {
+		book, from, to, ok := parseUSFMChapterID(tc.id)
+		if ok != tc.ok || book != tc.book || from != tc.from || to != tc.to {
+			t.Errorf("parseUSFMChapterID(%q) = %q %d-%d %v, want %q %d-%d %v",
+				tc.id, book, from, to, ok, tc.book, tc.from, tc.to, tc.ok)
+		}
+	}
+
+	bd := publisherFixture()
+	v := &bd.Verses["John"][3][1]
+	v.Footnotes[0].Refs = []NoteRef{{"JHN.7", 0, 9}}
+	rows := publisherCrossRefsFor(bd, "John", 3, bd.GetChapter("John", 3)[1:2])
+	if len(rows) != 2 || len(rows[0].Targets) != 1 {
+		t.Fatalf("a whole-chapter citation did not become a target: %+v", rows)
+	}
+	if got := rows[0].Targets[0].Ref; got != (crossRef{Book: "John", Chapter: 7, Verse: 50}) {
+		t.Errorf("John 7 resolved to %+v, want the chapter's verses as loaded (7:50 alone)", got)
+	}
+	// CONTROL: a chapter the text does not have stays words.
+	v.Footnotes[0].Refs = []NoteRef{{"JHN.8", 0, 9}}
+	if rows := publisherCrossRefsFor(bd, "John", 3, bd.GetChapter("John", 3)[1:2]); len(rows[0].Targets) != 0 {
+		t.Errorf("a chapter the text lacks became a target: %+v", rows[0].Targets)
+	}
+}
