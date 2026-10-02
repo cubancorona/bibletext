@@ -10,8 +10,9 @@ so it is safe to run at any point in a release or outside one -- except
 beside another Google Play step. Its Play read opens an edit as the same
 service account as scripts/play-publish.py and play/push-screenshots.py,
 and Play lets one account hold one open edit, so the read ends the edit of
-an upload or a screenshot push in flight; on 2 October 2026 it cost an
-upload its edit. Run it before or after a Play step, never during one.
+an upload, a promotion or a screenshot push in flight; on 2 October 2026 it
+cost an upload its edit. Run it before or after a Play step, never during
+one.
 
 WHY THIS EXISTS. The version a store is serving is not written down anywhere
 that stays true -- the repo's notes go stale between releases, and a release

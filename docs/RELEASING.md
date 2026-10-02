@@ -27,10 +27,11 @@ scripts/release-status.py
 
 Read-only and creates nothing; safe at any moment except beside another
 Google Play step, because its Play read opens an edit and ends the one an
-upload has open (stage 6). It prints what this tree declares and
-what each of the five store fronts is actually serving, asked of the stores
-themselves. A store it cannot reach is printed as `UNREACHABLE` and the exit
-code is non-zero — it never reports a network failure as up to date.
+upload or a promotion has open (stage 6). It prints what this tree declares
+and what each of the five store fronts is actually serving, asked of the
+stores themselves. A store it cannot reach is printed as `UNREACHABLE` and
+the exit code is non-zero — it never reports a network failure as up to
+date.
 
 **Do this before believing any note, including this one.** Written state goes
 stale between releases; a release decision made against a stale note is how a
@@ -59,17 +60,24 @@ was never read is not.
 permission. That covers the `main` push, the tag push and the `gh-pages` push,
 each separately.
 
-**The two irreversible acts**: `--submit` in `appstore/submit-version.py`, and
-`commit` in `msstore/submit.py`. Both are mechanically automatable and both are
-deliberately left as their own step, because Apple releases `AFTER_APPROVAL` and
-the Store publishes `Immediate` — once certification passes there is no second
-checkpoint on either.
+**The three irreversible acts**: `--submit` in `appstore/submit-version.py`,
+`commit` in `msstore/submit.py`, and `promote` in `scripts/play-publish.py`.
+All three are mechanically automatable and each is deliberately left as its
+own step, run only on the account holder's OK, because Apple releases
+`AFTER_APPROVAL`, the Store publishes `Immediate`, and Play sends a promotion
+to production straight into its review — once certification passes there is
+no second checkpoint on any of them.
+
+**Google Play's promotion to production** is one of those three: the account
+holder's OK, then the script (stage 7). Until 2 October 2026 it was a Play
+Console step, because the service account was scoped so it could not reach
+production; that day it was granted "release to production", for this app
+only. The What's new text production shows is the alpha release's, carried
+unchanged, and the dry run prints it line by line for that OK.
 
 **Console-only, per store**: the IARC age-rating questionnaire; Snap categories,
-screenshots, banner and publisher display name; promotion of each Google Play
-release from the alpha track to Production, with its What's new text checked
-there (the service account is scoped so it structurally cannot reach
-production; stage 6); the Play Foreground-service declaration video.
+screenshots, banner and publisher display name; raising, completing or halting
+a staged Google Play rollout; the Play Foreground-service declaration video.
 
 **The per-release judgement calls**: the privacy answer, content-rights and
 export-compliance declarations, and the accessibility labels, re-read against
@@ -262,17 +270,14 @@ checks the attached build against it.
 Play: `scripts/play-publish.py --dry-run --notes <file> upload <aab> alpha`
 first — it uploads into an edit it then discards — then the identical command
 without `--dry-run`, with `--status completed`. The notes file keeps its line
-breaks, so the opening line and each bullet reach Play as lines. That is as
-far as a conductor goes on Play: the service account cannot reach
-production, so the upload stops on the alpha track. The rest is the owner's,
-in the Play Console: promote the alpha release to Production, check its
-What's new text, and roll it out. `scripts/release-status.py` then shows
-production on the new versionCode.
+breaks, so the opening line and each bullet reach Play as lines. That is where
+stage 6 ends on Play: the release is on the alpha track, `upload` refuses the
+production track, and production waits for the promotion in stage 7.
 
 **Play steps run one at a time.** Every Play command opens an edit as the one
 service account, and Play lets that account hold one open edit: a new edit
 ends the one already open, and a commit or a change in the Play Console ends
-every other. So uploads, `tracks`, `release-status.py` reads and
+every other. So uploads, `promote`, `tracks`, `release-status.py` reads and
 `play/push-screenshots.py` go in turn, never as parallel steps. An upload whose
 edit was ended that way says so; nothing reached Play, and the same command
 runs again once nothing else is touching it.
@@ -282,10 +287,11 @@ from one release to the next. An approved new phone and tablet set goes up
 with `play/push-screenshots.py` — read-only first, then `--rehearse`, then
 `--write --confirm-version <v>` (docs/SCREENSHOT_PLAYBOOK.md, §6).
 
-### 7 — Submit to Apple
+### 7 — Submit to Apple, promote on Play
 
-Wait for each build to reach `VALID`, then per platform, three commands in
-this order:
+Two of the three irreversible acts, each on the account holder's OK (the
+third is the Microsoft Store's `commit`, stage 9). Apple: wait for each build
+to reach `VALID`, then per platform, three commands in this order:
 
 ```
 python3 appstore/submit-version.py --platform IOS --build N --delivery-uuid U \
@@ -312,6 +318,32 @@ knowingly inherit, and saying so explicitly is how that stays a decision
 rather than an oversight. Apple takes **one version per platform** into
 review at a time, so check nothing else is in review on that platform first —
 `release-status.py` prints it.
+
+Play's promotion waits on nothing of Apple's, only on an OK that names Play:
+the dry run first, and the same command without `--dry-run` once its output
+has been read.
+
+```
+scripts/play-publish.py promote alpha production --confirm-version <v> --dry-run
+scripts/play-publish.py promote alpha production --confirm-version <v>
+```
+
+The dry run reads the alpha and production tracks in a fresh edit, prints
+both, prints the release notes line by line, writes production in the edit,
+has Play validate it, and deletes the edit: nothing changes. Those notes are
+the What's new text production will show, carried from the alpha release
+unchanged; the script writes none of its own. The second command does the
+same and commits, asking Play to refuse rather than cancel and restart a
+review already in progress. Both refuse, changing nothing, unless `<v>` is
+the mobile ledger's Version and alpha holds exactly one release — completed,
+with notes, and with one versionCode, the ledger's Build — and they refuse
+once production carries that versionCode in any state, or holds a release
+that is not completed. `--rollout 0.2` stages the release to a fifth of
+readers instead; raising or completing a staged rollout is done in the Play
+Console. A commit refused over changes in review — Play reviews the alpha
+upload too — is run again once that review clears. After the commit,
+`scripts/release-status.py`, run on its own, shows production on the new
+versionCode.
 
 ### 8 — Finish the GitHub release
 
@@ -445,6 +477,7 @@ Re-running from the top is usually wrong. These steps are not idempotent:
 | --- | --- | --- |
 | `altool --upload-app` | rejects a duplicate build number | bump Build, rebuild |
 | `play-publish.py upload` | rejects a used versionCode once a run has committed; a run whose edit Play ended ("This Edit has been deleted") committed nothing | after a commit, bump Build and rebuild; after an ended edit, run the same command again on its own |
+| `play-publish.py promote` | refuses, printing what production holds, once production carries the versionCode | a run stopped before its commit changed nothing and deleted its edit; one that reports the commit's outcome unknown may have committed, so run `play-publish.py tracks` on its own first; a commit refused over a review in progress runs again once the review clears |
 | `submit-version.py --submit` | 409 — already in review | remove from review in the console |
 | `push-screenshots.py --write` | leaves a set that holds the files, reorders one that holds them out of order, replaces the rest | re-run once a FAILED image or a refusal is understood |
 | `play/push-screenshots.py --write` | leaves a type that holds the files, replaces the rest | a run stopped before the commit deleted its edit and changed nothing; one that reports the commit's outcome unknown may have committed, so run it read-only first; re-run once the reason is understood |
@@ -463,22 +496,25 @@ not create, so a draft started in Partner Center is safe from it.
   value. Sourcing a credential script into its own process is fine; that is
   what they are for.
 - Deleting a pending store submission it did not create.
-- `--submit` or `commit` as part of an unattended sweep.
+- `--submit`, `commit` or `play-publish.py promote` as part of an unattended
+  sweep.
 - Two Google Play steps at once.
 - Reporting a store as up to date that it could not actually reach.
 
 ## Where "all stores" stops being true
 
-Two limits are structural rather than missing tooling, and a release should say
+One limit is structural rather than missing tooling, and a release should say
 so plainly rather than look incomplete:
-
-**Google Play production is the owner's step.** Production has been open since
-30 September 2026 (1.2.17, versionCode 187), and the service account is
-deliberately scoped so it cannot reach it at all. A conductor's upload reaches
-the alpha track and stops there; the owner promotes it to Production in the
-Play Console (stage 6).
 
 **AppImageHub has no submission** and cannot get one from a conductor.
 
+**Google Play production was a second, until 2 October 2026.** Production
+has been open since 30 September 2026 (1.2.17, versionCode 187); until the
+service account was granted "release to production" for this app on
+2 October, an upload stopped on the alpha track and the promotion was made in
+the Play Console. It is now `scripts/play-publish.py promote`, on the account
+holder's OK like Apple's `--submit` and the Microsoft Store's `commit`
+(stage 7); only raising or completing a staged rollout stays in the console.
+
 Everything else — GitHub, Snap, the App Store, the Mac App Store, the Microsoft
-Store — is reachable in one pass.
+Store and Google Play — is reachable in one pass.

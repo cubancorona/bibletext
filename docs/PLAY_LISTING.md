@@ -23,9 +23,13 @@ Release identity in production:
 - upload artifact: `~/Library/Android/bibletext-dist/BibleText.aab`
 
 1.2.18, versionCode 188, is being prepared, with its release notes in the
-1.2.18 section below. A release goes up to the alpha track, as far as the
-service account can reach, and the owner promotes it to production in the
-Play Console (docs/RELEASING.md, stage 6).
+1.2.18 section below. A release goes up to the alpha track with
+`scripts/play-publish.py upload`, and on the account holder's OK
+`scripts/play-publish.py promote` takes that release to production, its
+release notes unchanged (docs/RELEASING.md, stages 6 and 7). The service
+account was granted "release to production" on 2 October 2026, for this app
+only; until then it could not reach production, and the promotion was made
+in the Play Console.
 
 The version and versionCode come from `cmd/mobile/FyneApp.toml`; do not supply a
 different manual `-app-build`. Produce the AAB only with

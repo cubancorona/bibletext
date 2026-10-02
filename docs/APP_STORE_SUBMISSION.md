@@ -448,8 +448,10 @@ each step it lists.
    first (uploads into a discarded edit), then the same without `--dry-run`.
    The notes file is the blockquote of that version's section in
    `docs/PLAY_LISTING.md`, under 500 characters with its line breaks, which
-   the upload keeps. The upload stops on the alpha track; the owner promotes
-   it to Production in the Play Console (docs/RELEASING.md, stage 6).
+   the upload keeps. The upload stops on the alpha track; on the account
+   holder's OK, `scripts/play-publish.py promote alpha production
+   --confirm-version <v>`, with `--dry-run` first, takes it to production
+   (docs/RELEASING.md, stage 7).
 6. Wait for each Apple build to reach VALID, then per platform, as above:
    `submit-version.py --write` to prepare the record, `push-screenshots.py
    --write` for the release's sets, `submit-version.py --write --submit`.
