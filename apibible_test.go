@@ -419,8 +419,24 @@ func TestDecodeAPIBiblePassageMultiChapter(t *testing.T) {
 // take the 404-then-advance-a-chapter path, and merge chunks.
 func apiBiblePassageFixture(t *testing.T) *httptest.Server {
 	t.Helper()
-	genChapters := 3
-	genVerses := 100 // per chapter
+	return apiBiblePassageFixtureShaped(t, passageFixtureShape{chapters: 3, versesPer: 100})
+}
+
+// passageFixtureShape is the one long book of apiBiblePassageFixtureShaped,
+// Genesis: how many chapters, how many verses in each, and above which verses
+// the publisher sets a heading (nil: none). A heading is its own "s1" block, as
+// the feed sends one, and it is served above EVERY verse it stands over —
+// including a chunk's first, which is how the walk's one-verse overlap brings
+// a heading back a second time.
+type passageFixtureShape struct {
+	chapters, versesPer int
+	headingBefore       func(ch, v int) bool
+}
+
+func apiBiblePassageFixtureShaped(t *testing.T, shape passageFixtureShape) *httptest.Server {
+	t.Helper()
+	genChapters := shape.chapters
+	genVerses := shape.versesPer // per chapter
 	mux := http.NewServeMux()
 	mux.HandleFunc("/bibles/pass-bible/books", func(w http.ResponseWriter, r *http.Request) {
 		type ch struct {
@@ -480,14 +496,25 @@ func apiBiblePassageFixture(t *testing.T) *httptest.Server {
 				v0 = startV
 			}
 			var items []string
+			flush := func() {
+				if len(items) > 0 {
+					blocks = append(blocks, `{"name":"para","type":"tag","attrs":{"style":"p"},"items":[`+strings.Join(items, ",")+`]}`)
+					items = nil
+				}
+			}
 			for v := v0; v <= versesPer && served < apiBiblePassageCap; v++ {
+				if usfm == "GEN" && shape.headingBefore != nil && shape.headingBefore(ch, v) {
+					flush()
+					blocks = append(blocks, fmt.Sprintf(
+						`{"name":"para","type":"tag","attrs":{"style":"s1"},"items":[{"type":"text","text":"Heading above %d:%d"}]}`, ch, v))
+				}
 				items = append(items, fmt.Sprintf(
 					`{"name":"verse","type":"tag","attrs":{"style":"v","number":"%d","sid":"%s %d:%d"},"items":[{"type":"text","text":"%d"}]},{"type":"text","text":"Verse %d of chapter %d.","attrs":{"verseId":"%s.%d.%d"}}`,
 					v, usfm, ch, v, v, v, ch, usfm, ch, v))
 				served++
 				endCh, endV = ch, v
 			}
-			blocks = append(blocks, `{"name":"para","type":"tag","attrs":{"style":"p"},"items":[`+strings.Join(items, ",")+`]}`)
+			flush()
 		}
 		id := fmt.Sprintf("%s.%d.%d-%s.%d.%d", usfm, startCh, startV, usfm, endCh, endV)
 		fmt.Fprintf(w, `{"data":{"id":%q,"verseCount":%d,"content":[%s]}}`, id, served, strings.Join(blocks, ","))
@@ -535,4 +562,43 @@ func TestFetchAPIBibleByPassages(t *testing.T) {
 		t.Errorf("passage fetch used %d calls — the range walk is not batching", calls)
 	}
 	t.Logf("passage fetch calls: %d", calls)
+}
+
+// A chapter cut by a passage chunk keeps the headings of both parts. The walk
+// takes at most 200 verses at a time, so any chapter a boundary falls inside —
+// Psalm 119, or wherever the count happens to land — arrives in two chunks, and
+// the merge used to keep the first chunk's headings for the chapter and drop
+// the rest of them. Genesis is three chapters of 150 verses here, so the
+// boundaries fall at 2:50 and 3:99, inside chapters 2 and 3, with a heading
+// above verses 1, 50, 99 and 148 of every chapter: both boundaries sit on a
+// headed verse, which the overlap serves twice.
+func TestFetchAPIBibleByPassagesKeepsHeadingsAcrossChunks(t *testing.T) {
+	srv := apiBiblePassageFixtureShaped(t, passageFixtureShape{
+		chapters: 3, versesPer: 150,
+		headingBefore: func(ch, v int) bool { return v%49 == 1 },
+	})
+	defer srv.Close()
+	prev := apiBibleBaseURL
+	apiBibleBaseURL = srv.URL
+	t.Cleanup(func() { apiBibleBaseURL = prev })
+
+	data, err := fetchAPIBible("NKJV", "pass-bible", "test-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for ch := 1; ch <= 3; ch++ {
+		if n := len(data.Verses["Genesis"][ch]); n != 150 {
+			t.Fatalf("Genesis %d has %d verses, want 150 — the fixture is not the shape this test needs", ch, n)
+		}
+		var before []int
+		for _, h := range data.Headings["Genesis"][ch] {
+			before = append(before, h.BeforeVerse)
+			if want := fmt.Sprintf("Heading above %d:%d", ch, h.BeforeVerse); h.Text != want || h.Style != "s1" {
+				t.Errorf("Genesis %d: heading above verse %d is %q (%s), want %q (s1)", ch, h.BeforeVerse, h.Text, h.Style, want)
+			}
+		}
+		if got := fmt.Sprint(before); got != "[1 50 99 148]" {
+			t.Errorf("Genesis %d has headings above verses %s, want [1 50 99 148] — each once, in order", ch, got)
+		}
+	}
 }

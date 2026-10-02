@@ -429,11 +429,7 @@ func fetchAPIBibleBookByPassages(ctx context.Context, client *http.Client, apiKe
 			if heads == nil {
 				heads = make(map[int][]Heading)
 			}
-			// A chunk boundary can re-serve a chapter's headings; keep the
-			// first decode, exactly as sortVersesDedupe keeps the first verse.
-			if _, seen := heads[ch]; !seen {
-				heads[ch] = hs
-			}
+			heads[ch] = mergeChunkHeadings(heads[ch], hs)
 		}
 		for ch, fns := range chunkOrphans {
 			if orphans == nil {
@@ -547,6 +543,33 @@ func sortVersesDedupe(vs []Verse) []Verse {
 		out = append(out, v)
 	}
 	return out
+}
+
+// mergeChunkHeadings adds one passage chunk's headings for a chapter to those
+// the earlier chunks gave it. A chapter can straddle a chunk boundary, so its
+// headings can arrive in two parts, and both are the chapter's: keeping only
+// the first chunk's dropped every heading after the cut — Psalm 119's acrostic
+// letters after Daleth, the second and third heads of Exodus 15. The chunks
+// follow the document, so appending keeps the publisher's order. The overlap
+// verse can bring the heading above it back a second time; one already held
+// for the same verse, in the same style and words, is that heading, and the
+// first decode is kept, as sortVersesDedupe keeps the first verse. Only the
+// earlier chunks are compared against, so a chunk's own headings all stand.
+func mergeChunkHeadings(held, chunk []Heading) []Heading {
+	earlier := len(held)
+	for _, h := range chunk {
+		again := false
+		for _, g := range held[:earlier] {
+			if g.BeforeVerse == h.BeforeVerse && g.Style == h.Style && g.Text == h.Text {
+				again = true
+				break
+			}
+		}
+		if !again {
+			held = append(held, h)
+		}
+	}
+	return held
 }
 
 // apiBibleGet performs one authenticated GET and decodes the JSON body. One
