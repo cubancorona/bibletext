@@ -16,12 +16,12 @@ Shared notes are the one place the app displays text written by another person.
 
 To send: open any chapter, press and hold to select a verse, choose Share with note, type a short message, and share it through any app. The result is an ordinary https://bibletext.co.uk link.
 
-To receive: tap the link. The app opens the passage with the message beside it. Opening a public-domain link in a browser shows the passage and note; an NKJV link shows a no-text licensing notice, the note, public-domain parallels, and a route into the app.
+To receive: tap the link. The app opens the passage with the message beside it. Opened in a browser, the link shows the passage and note on bibletext.co.uk; where the website does not carry a translation's text, it shows the note with the reference, public-domain parallels, and a route into the app.
 
 PRIVACY: the message is encoded in the URL fragment and travels only through the sender's chosen messaging app. There is no server, account, user directory, or developer copy. The fragment is not sent to the website host. A received message is rendered as plain text with neutral attribution, never as markup or in the app's voice. The recipient can delete one note, delete all notes in Settings, or disable notes entirely.
 
 KEYS AND TRANSLATIONS
-The App Store binary intentionally contains an obfuscated, link-time-injected API.Bible fallback used only to fetch the licensed New King James Version. A reader can replace it with their own API.Bible key. The NKJV text itself is fetched from API.Bible and is not packaged in the app or published on the website.
+The App Store binary intentionally contains an obfuscated, link-time-injected API.Bible fallback used only to fetch the licensed New King James Version. A reader can replace it with their own API.Bible key. The NKJV text itself is fetched from API.Bible and is not packaged in the app.
 
 No AI-provider key is bundled. Optional Study with AI and Find features remain off until the reader enters their own provider key in Settings → Assistant. That key is stored in the device Keychain and requests go directly to the selected provider. No AI setup is required for review.
 

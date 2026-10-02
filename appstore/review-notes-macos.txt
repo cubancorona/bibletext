@@ -11,7 +11,7 @@ APP SANDBOX AND THE ONE-TIME MIGRATION
 The Store edition runs in the App Sandbox. On the first launch that creates its container, macOS moves an existing direct-download install's preferences (notes, settings, reading position) into it via the bundled container-migration manifest — a local file move; nothing is transmitted. With no prior install the app simply starts fresh, so the migration is not visible during review.
 
 KEYS AND TRANSLATIONS
-The App Store binary intentionally contains an obfuscated, link-time-injected API.Bible fallback used only to fetch the licensed New King James Version; a reader can replace it with their own key. The NKJV text is fetched from API.Bible, not packaged in the app or published on the website.
+The App Store binary intentionally contains an obfuscated, link-time-injected API.Bible fallback used only to fetch the licensed New King James Version; a reader can replace it with their own key. The NKJV text is fetched from API.Bible, not packaged in the app.
 
 No AI-provider key is bundled. The optional Study with AI features stay off until the reader enters their own provider key in Settings → Assistant. The Store edition keeps that key (and any API.Bible key the reader adds) in the login Keychain rather than the preferences file; a key saved by an earlier release moves across once. Requests go directly to the selected provider.
 
