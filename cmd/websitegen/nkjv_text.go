@@ -14,9 +14,12 @@ package main
 //
 // ON FETCHES AFRESH, EVERY TIME. Each build downloads the whole NKJV from
 // API.Bible (about two hundred requests) into memory, renders from it and
-// drops it. Nothing is cached on disk, so there is no stale copy to expire and
-// no licensed file for an interrupted build to leave behind; the price is that
-// a dry run spends the same quota a publish does.
+// drops it. The fetch is never cached, so there is no stale copy to expire; the
+// price is that a dry run spends the same quota a publish does. The rendered
+// pages are files, though, in the output directory: a write refused part-way
+// removes them (run), and scripts/publish-site.sh removes them, with every
+// other copy of the tree it made, when it exits — published, dry run, refused
+// or interrupted. Only a run killed outright can leave them until the next.
 //
 // WHY A CONSTANT. It is how this repository gates a capability that ships
 // dormant (senderNamesEnabled in notes_byline.go, readingJustifyProse in

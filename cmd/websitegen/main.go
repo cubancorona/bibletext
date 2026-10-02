@@ -207,7 +207,10 @@ type runOptions struct {
 
 // run builds the site. Everything that can refuse does so before the output
 // directory is touched: a switched-on build without a key, or whose fetch
-// fails or comes back incomplete, leaves the previous build where it was.
+// fails or comes back incomplete, leaves the output directory as it was. A
+// write refused part-way — the writer found the key in a page, say — removes
+// the whole output directory rather than leave half a site, which with the
+// NKJV's text on would be licensed text that no finished build stands behind.
 func run(o runOptions) error {
 	start := time.Now()
 	if o.nkjvText && o.offline {
@@ -247,6 +250,9 @@ func run(o runOptions) error {
 
 	site := &siteWriter{root: o.out, secret: key}
 	if err := writeSite(site, append(loaded, licensed...), noticedVersionsFor(o.nkjvText)); err != nil {
+		if rmErr := os.RemoveAll(o.out); rmErr != nil {
+			return fmt.Errorf("write: %w (and the part written could not be removed: %v)", err, rmErr)
+		}
 		return fmt.Errorf("write: %w", err)
 	}
 	log.Printf("wrote %d files to %s in %s", site.files, o.out, time.Since(start).Round(time.Millisecond))

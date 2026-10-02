@@ -232,6 +232,28 @@ func TestNKJVTextOnAbortsOnFetchError(t *testing.T) {
 	}
 }
 
+// A write refused part-way leaves no tree at all. The writer refuses the page
+// that carries the key only after the public-domain editions are on disk, and
+// half a site is not kept: with the text on, its NKJV pages would be licensed
+// text that no finished build stands behind.
+func TestNKJVTextOnRefusedWriteLeavesNoTree(t *testing.T) {
+	published := goldenFixtureVersions()
+	standIn(t, published, func(string) (bibletext.LicensedEdition, error) {
+		ed := richLicensedEdition(t, referenceOf(t, published))
+		ed.Bible.Verses["John"][3][4].Text = "A fixture verse that carries " + testSiteKey + "."
+		return ed, nil
+	})
+	t.Setenv(siteKeyEnv, testSiteKey)
+	out := filepath.Join(t.TempDir(), "site")
+	err := run(runOptions{out: out, cache: t.TempDir(), nkjvText: true, now: fixedNow})
+	if err == nil || !strings.Contains(err.Error(), "contains the API.Bible key") || strings.Contains(err.Error(), testSiteKey) {
+		t.Fatalf("a page carrying the key gave %v", err)
+	}
+	if _, statErr := os.Stat(out); !os.IsNotExist(statErr) {
+		t.Errorf("a refused write left %s behind (%v)", out, statErr)
+	}
+}
+
 // The key is read, taken out of the environment before the fetch runs, handed
 // to the fetch, and written into no file.
 func TestNKJVTextOnTakesTheKeyOutOfTheEnvironment(t *testing.T) {

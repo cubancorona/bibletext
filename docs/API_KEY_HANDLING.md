@@ -69,7 +69,12 @@ same dedicated key:
    generator process: never exported to the shell, never an argument;
 2. the generator takes it out of its environment before anything else runs,
    sends it only in the `api-key` header, and keeps the fetched text in memory:
-   nothing is cached on disk, so every publish is fresh;
+   the fetch is never cached, so every publish is fresh. The pages rendered
+   from it are files, and `publish-site.sh` removes them, with its copy of the
+   live branch and its gh-pages checkout, when the run ends — published, dry
+   run, refused or interrupted; a write the generator refuses part-way removes
+   what it had written. Only a run killed outright can leave them until the
+   next run;
 3. it is never compiled in, so no Go build cache or binary holds it;
 4. the site writer refuses any file containing it, and the assembled tree is
    scanned for it in every encoded form the hygiene check knows

@@ -95,7 +95,9 @@ jobs:
 
       # The publish guards for each state of the NKJV switch
       # (cmd/websitegen/nkjv_text.go) and the built-tree key scan, on synthetic
-      # trees: each passes a good tree and refuses the other state's.
+      # trees: each passes a good tree and refuses the other state's. Also the
+      # publish's exit path, which removes every tree holding the text however
+      # a run with it on ends.
       - name: Site NKJV guards regression
         run: scripts/test-site-nkjv-guards.sh
 

@@ -3,6 +3,9 @@
 # scripts/check-repository-hygiene.py — the publish guards for each state of
 # the NKJV switch (cmd/websitegen/nkjv_text.go).
 #
+# And the exit path publish-site.sh arms (arm_site_cleanup), which removes every
+# tree that holds the text however a run with it on ends.
+#
 # Every tree here is synthetic MARKUP: the shapes the generator writes, with no
 # scripture in them. Every key is a synthetic string, and the key scan runs
 # with no `security` on its PATH, so no developer Keychain is ever consulted.
@@ -144,5 +147,51 @@ key = sys.stdin.buffer.read(); mask = b"bibletext-nkjv"
 sys.stdout.write(base64.b64encode(bytes(b ^ mask[i % len(mask)] for i, b in enumerate(key))).decode())' >> "$o/web/john/3/index.html"
 refuses "the key in the release linker's form" "appears in release-linker encoding form" scan "$KEY" "$o"
 refuses "a scan with no key to look for" "the API.Bible key was not found" scan "" "$(fresh on on)"
+
+# --- the exit path ------------------------------------------------------------------
+# A child shell arms the cleanup as publish-site.sh does, holds the three trees a
+# run makes, and leaves the way under test. It runs in a repository of its own,
+# so the gh-pages prune never touches this one.
+ROOT="$PWD"
+git init -q "$T/repo"
+leave() {
+  local state="$1" how="$2" status=0
+  rm -rf "$T/repo/build" "$T/live"
+  mkdir -p "$T/repo/build/site/nkjv" "$T/repo/build/gh-pages" "$T/live"
+  bash -c '
+    set -euo pipefail
+    cd "$1"
+    . "$2/scripts/site-nkjv-guards.sh"
+    OUT=build/site
+    WORKTREE=build/gh-pages
+    arm_site_cleanup
+    NKJV_TEXT="$3"
+    LIVE_TREE="$4"
+    PAGES_CHECKOUT=true
+    case "$5" in
+      done) exit 0 ;;
+      refused) exit 1 ;;
+      failed) false ;;
+      interrupted) kill -INT $$; sleep 5 ;;
+      terminated) kill -TERM $$; sleep 5 ;;
+    esac
+  ' _ "$T/repo" "$ROOT" "$state" "$T/live" "$how" >"$T/out" 2>&1 || status=$?
+  echo "$status"
+}
+gone() { [[ ! -e "$T/$1" ]] || fail "$2 left $1 behind"; }
+kept() { [[ -d "$T/$1" ]] || fail "$2 removed $1"; }
+for how in done:0 refused:1 failed:1 interrupted:130 terminated:143; do
+  [[ "$(leave on "${how%%:*}")" == "${how##*:}" ]] || fail "a run with the text on, ${how%%:*}, did not keep its exit status ${how##*:}"
+  gone repo/build/site "a run with the text on, ${how%%:*},"
+  gone live "a run with the text on, ${how%%:*},"
+  gone repo/build/gh-pages "a run with the text on, ${how%%:*},"
+  grep -Fq "removed build/site: it held the NKJV's text" "$T/out" || fail "a run with the text on did not say it removed build/site"
+done
+for how in done:0 interrupted:130; do
+  [[ "$(leave off "${how%%:*}")" == "${how##*:}" ]] || fail "a run with the text off, ${how%%:*}, did not keep its exit status ${how##*:}"
+  kept repo/build/site "a run with the text off, ${how%%:*},"
+  gone live "a run with the text off, ${how%%:*},"
+  gone repo/build/gh-pages "a run with the text off, ${how%%:*},"
+done
 
 echo "site NKJV guards: OK"

@@ -25,10 +25,12 @@
 #   off  /nkjv/ is notice pages. No request to API.Bible, no key read.
 #   on   /nkjv/ is the text, fetched whole and fresh from API.Bible by THIS run
 #        (a --dry-run included: it spends the same ~200 requests of quota) with
-#        the key from the login Keychain (release-bible-key.sh), never cached.
-#        A missing key or a failed or incomplete fetch stops the publish; nothing
-#        falls back to notice pages. The assembled tree is scanned for the key
-#        in every encoded form before anything is compared or pushed.
+#        the key from the login Keychain (release-bible-key.sh). The fetch is
+#        never cached, and the rendered pages are removed when the run ends,
+#        however it ends (arm_site_cleanup, below). A missing key or a failed or
+#        incomplete fetch stops the publish; nothing falls back to notice pages.
+#        The assembled tree is scanned for the key in every encoded form before
+#        anything is compared or pushed.
 #
 # This script is now the ONLY publisher. Before it existed, the landing pages
 # were hand-copied onto gh-pages; doing that again would delete the reader (and
@@ -64,6 +66,17 @@ fail() { echo "PUBLISH ABORTED: $*" >&2; exit 1; }
 . scripts/site-drift.sh
 . scripts/site-nkjv-guards.sh
 . scripts/release-bible-key.sh
+
+# --- What a run leaves on disk -------------------------------------------------
+# One exit path for every way out — published, dry run, refusal or interrupt —
+# armed before anything is built (arm_site_cleanup, site-nkjv-guards.sh). With
+# the NKJV's text on, three trees hold it: the built tree ($OUT), the copy of
+# the live branch the drift report reads, and the gh-pages checkout a publish
+# commits from. None of them outlives the run. With it off, $OUT stays for a
+# look after a dry run, as it always has. Only a run killed outright (SIGKILL,
+# power loss) can leave one behind, and the next run clears $OUT before it
+# writes.
+arm_site_cleanup
 
 # --- The repo state, before anything is built or fetched ----------------------
 # Publishing from any dirty generator, renderer, template, or configuration
@@ -299,14 +312,15 @@ fi
 
 # --- Drift: how the tree about to be published differs from what is live ---
 # Reported in both modes, so "is the web current?" is one dry run. The live
-# tree is read from origin/gh-pages as an archive (no worktree, no trap: the
-# publish path below installs its own).
+# tree is read from origin/gh-pages as an archive, into a directory the exit
+# path removes however the run ends.
 echo "==> drift against origin/gh-pages"
 if git fetch --quiet origin gh-pages 2>/dev/null; then
   LIVE_TREE=$(mktemp -d)
   git archive origin/gh-pages | tar -x -C "$LIVE_TREE"
   if site_drift "$LIVE_TREE" "$OUT"; then SITE_CURRENT=true; else SITE_CURRENT=false; fi
   rm -rf "$LIVE_TREE"
+  LIVE_TREE=""
 else
   echo "    origin/gh-pages could not be fetched; drift unknown"
   SITE_CURRENT=false
@@ -328,8 +342,9 @@ git fetch origin gh-pages --quiet
 git worktree remove --force "$WORKTREE" 2>/dev/null || true
 rm -rf "$WORKTREE"
 git worktree prune
-# Armed BEFORE the add so an interrupt mid-checkout still cleans up.
-trap 'git worktree remove --force "$WORKTREE" 2>/dev/null || true; rm -rf "$WORKTREE"; git worktree prune' EXIT
+# Armed BEFORE the add so an interrupt mid-checkout still cleans up
+# (arm_site_cleanup, at the top).
+PAGES_CHECKOUT=true
 git worktree add --quiet "$WORKTREE" origin/gh-pages
 
 rsync -a --delete --exclude '.git' "$OUT"/ "$WORKTREE"/

@@ -21,6 +21,14 @@
 #
 # Each prints what failed (paths only — never page text) and returns 1, or
 # returns 0 silently.
+#
+#   arm_site_cleanup
+#       the one exit path of publish-site.sh, armed before anything is built.
+#       However the run ends — published, dry run, refused, interrupted — it
+#       removes the copy of the live branch (LIVE_TREE, while set), the gh-pages
+#       checkout (WORKTREE, once PAGES_CHECKOUT is true) and, while the NKJV's
+#       text is on (NKJV_TEXT), the built tree (OUT), keeping the run's exit
+#       status. The caller sets OUT and WORKTREE; the other three start empty.
 
 nkjv_text_state() {
   local bin="$1" state
@@ -119,4 +127,30 @@ nkjv_guard_on() {
     [[ -s "$out/assets/$f" ]] || { echo "$(basename "$css") names $f, which is not in the tree"; return 1; }
   done
   return 0
+}
+
+arm_site_cleanup() {
+  NKJV_TEXT=""
+  LIVE_TREE=""
+  PAGES_CHECKOUT=false
+  # bash runs an EXIT trap when an interrupt, TERM or HUP ends the script too,
+  # with the signal's status (test-site-nkjv-guards.sh proves INT and TERM).
+  trap site_cleanup EXIT
+}
+
+site_cleanup() {
+  if [[ -n "$LIVE_TREE" ]]; then
+    rm -rf "$LIVE_TREE"
+  fi
+  if $PAGES_CHECKOUT; then
+    # rm -rf alone leaves git's registration behind, so a single crashed run
+    # would block every future publish with "already exists". Remove, then prune.
+    git worktree remove --force "$WORKTREE" 2>/dev/null || true
+    rm -rf "$WORKTREE"
+    git worktree prune
+  fi
+  if [[ "$NKJV_TEXT" == on ]]; then
+    rm -rf "$OUT"
+    echo "==> removed $OUT: it held the NKJV's text"
+  fi
 }
