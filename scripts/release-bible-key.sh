@@ -14,6 +14,9 @@
 #
 # This helper never reads .env.local. That file may contain unrelated personal
 # provider keys which must not enter a release process.
+#
+# run_with_site_bible_key, at the end, hands the same Keychain item — and only
+# that — to one run of the web reader's generator, for publish-site.sh.
 
 # Remove both any inherited value and its export attribute. A plain assignment
 # to an imported variable would otherwise leave the reversible linker value in
@@ -137,4 +140,56 @@ clear_release_bible_key() {
   unset BIBLE_KEY_LDFLAGS
   BIBLE_KEY_LDFLAGS=""
   unset BIBLE_API_KEY BIBLETEXT_BUNDLED_KEY_ENC
+}
+
+# run_with_site_bible_key COMMAND [ARGS...] runs one command with the API.Bible
+# key in BIBLETEXT_SITE_NKJV_KEY: the web reader's generator while the NKJV's
+# text is switched on (cmd/websitegen/nkjv_text.go), which takes it out of its
+# environment at once.
+#
+# The key comes from the dedicated login-Keychain item ONLY. Not from
+# BIBLE_API_KEY, which a development shell may hold for the app, and not from
+# .env.local. It is set on that one command's environment and never exported
+# into this shell, never echoed, and never passed as an argument. The return
+# status is the command's own.
+run_with_site_bible_key() {
+  local key=""
+  local status=0
+
+  case "$-" in
+    *x*)
+      echo "ERROR: disable shell tracing before loading the site credential." >&2
+      return 1
+      ;;
+  esac
+  if [ "$#" -eq 0 ]; then
+    echo "ERROR: run_with_site_bible_key needs a command to run." >&2
+    return 1
+  fi
+
+  if command -v security >/dev/null 2>&1; then
+    key="$(security find-generic-password \
+      -a release -s uk.co.bibletext.apibible-release -w 2>/dev/null || true)"
+  fi
+  if [ -z "$key" ]; then
+    echo "ERROR: site API.Bible key unavailable." >&2
+    echo "Add the dedicated login-Keychain item; the site does not read BIBLE_API_KEY." >&2
+    return 1
+  fi
+  if [ "${#key}" -lt 16 ] || [ "${#key}" -gt 512 ]; then
+    unset key
+    echo "ERROR: site API.Bible key has an invalid length." >&2
+    return 1
+  fi
+  case "$key" in
+    *[[:space:]]*)
+      unset key
+      echo "ERROR: site API.Bible key contains whitespace." >&2
+      return 1
+      ;;
+  esac
+
+  BIBLETEXT_SITE_NKJV_KEY="$key" "$@" || status=$?
+  unset key
+  return "$status"
 }

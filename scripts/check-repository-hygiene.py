@@ -448,6 +448,35 @@ def scan_current(secrets: list[tuple[str, bytes]]) -> list[str]:
     return failures
 
 
+# The sources a credential must come from for --require-release-key: the key
+# the publish script hands the site generator is the Keychain item, and an
+# operator may export it instead. A key found only in .env.local does not count.
+RELEASE_KEY_SOURCES = (
+    "BIBLE_API_KEY from the process environment",
+    "BIBLE_API_KEY from the dedicated Keychain item",
+)
+
+
+def scan_built_tree(root: Path, secrets: list[tuple[str, bytes]]) -> list[str]:
+    """Every file under root, against every local secret in every encoded form.
+
+    For a GENERATED tree about to be published (publish-site.sh), so only the
+    credential forms apply: the provenance patterns, the generic secret
+    patterns and the decoded-payload heuristics would all misfire on
+    scripture, fonts and minified assets, and none of them is what this scan
+    is for.
+    """
+    failures: list[str] = []
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        data = path.read_bytes()
+        rel = path.relative_to(root).as_posix()
+        for source, secret in secrets:
+            for form_name, form in secret_forms(secret, include_release_form=True):
+                if form and form in data:
+                    failures.append(f"{rel}: {source} appears in {form_name} form")
+    return failures
+
+
 def changed_paths(commit: str) -> list[str]:
     raw = git("diff-tree", "--root", "-m", "--no-commit-id", "--name-only", "-r", "-z", commit)
     return [p.decode("utf-8", "surrogateescape") for p in raw.split(b"\0") if p]
@@ -545,7 +574,42 @@ def main() -> int:
         action="store_true",
         help="run synthetic positive and negative tests for process-provenance patterns",
     )
+    parser.add_argument(
+        "--scan-built-tree",
+        metavar="DIR",
+        help="scan every file of a generated tree for local credentials in every encoded form, and exit",
+    )
+    parser.add_argument(
+        "--require-release-key",
+        action="store_true",
+        help="with --scan-built-tree: fail unless the API.Bible key was found to scan for",
+    )
     args = parser.parse_args()
+
+    if args.require_release_key and not args.scan_built_tree:
+        parser.error("--require-release-key needs --scan-built-tree")
+    if args.scan_built_tree:
+        root = Path(args.scan_built_tree)
+        if not root.is_dir():
+            print(f"{root}: not a directory", file=sys.stderr)
+            return 1
+        secrets = local_secrets()
+        if args.require_release_key and not any(src in RELEASE_KEY_SOURCES for src, _ in secrets):
+            print("Built-tree scan refused: the API.Bible key was not found (neither BIBLE_API_KEY "
+                  "nor the dedicated Keychain item), so a clean result would prove nothing.",
+                  file=sys.stderr)
+            return 1
+        failures = scan_built_tree(root, secrets)
+        files = sum(1 for p in root.rglob("*") if p.is_file())
+        if failures:
+            print("Built-tree credential scan failed:", file=sys.stderr)
+            for failure in sorted(set(failures)):
+                print(f"  - {failure}", file=sys.stderr)
+            print("Values are intentionally omitted; inspect only the named location.", file=sys.stderr)
+            return 1
+        print(f"Built-tree credential scan passed ({files} files, {len(secrets)} credentials "
+              "in every encoded form).")
+        return 0
 
     pattern_failures = process_pattern_test_failures()
     if args.message_file:

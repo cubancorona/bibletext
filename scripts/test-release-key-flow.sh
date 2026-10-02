@@ -443,6 +443,69 @@ assert_contains "$TEST_TMP/helper-xtrace.log" "disable shell tracing"
 assert_absent "$TEST_TMP/helper-xtrace.log" "$fixture_key"
 assert_absent "$TEST_TMP/helper-xtrace.log" "$marker"
 
+# The web reader's key helper. The Keychain item — the shadowed utility here —
+# and nothing else reaches the one command it runs, in BIBLETEXT_SITE_NKJV_KEY;
+# the key reaches no log and no later environment, and the command's own status
+# comes back. BIBLE_API_KEY is never a substitute: the site fetches with the key
+# it is handed for the purpose.
+site_key="fixture-site-key-not-a-real-credential"
+security() {
+  [ "${1:-}" = find-generic-password ] || return 1
+  printf '%s\n' "$site_key"
+}
+SITE_PROBE="$TEST_TMP/site-probe.sh"
+cat >"$SITE_PROBE" <<'SH'
+#!/usr/bin/env bash
+[ "${BIBLETEXT_SITE_NKJV_KEY:-}" = "${SITE_EXPECTED:-}" ] || { echo "probe: wrong or missing key"; exit 9; }
+echo "probe: key present"
+exit "${1:-0}"
+SH
+chmod +x "$SITE_PROBE"
+export SITE_EXPECTED="$site_key"
+run_with_site_bible_key "$SITE_PROBE" >"$TEST_TMP/site-ok.log" 2>&1 ||
+  fail "site helper did not hand the Keychain key to its command"
+assert_contains "$TEST_TMP/site-ok.log" "probe: key present"
+assert_absent "$TEST_TMP/site-ok.log" "$site_key"
+if [ "${BIBLETEXT_SITE_NKJV_KEY+x}" = "x" ] || env | grep -q '^BIBLETEXT_SITE_NKJV_KEY='; then
+  fail "site helper left the key in the calling shell"
+fi
+status=0
+run_with_site_bible_key "$SITE_PROBE" 7 >"$TEST_TMP/site-status.log" 2>&1 || status=$?
+[ "$status" -eq 7 ] || fail "site helper returned $status, not its command's status 7"
+if run_with_site_bible_key >"$TEST_TMP/site-nocommand.log" 2>&1; then
+  fail "site helper accepted no command"
+fi
+unset SITE_EXPECTED
+
+security() { return 1; }
+if BIBLE_API_KEY="$fixture_key" run_with_site_bible_key "$SITE_PROBE" >"$TEST_TMP/site-missing.log" 2>&1; then
+  fail "site helper ran without the Keychain item (BIBLE_API_KEY must not stand in)"
+fi
+assert_contains "$TEST_TMP/site-missing.log" "site API.Bible key unavailable"
+assert_absent "$TEST_TMP/site-missing.log" "probe:"
+assert_absent "$TEST_TMP/site-missing.log" "$fixture_key"
+
+security() { printf '%s\n' "short"; }
+if run_with_site_bible_key "$SITE_PROBE" >"$TEST_TMP/site-short.log" 2>&1; then
+  fail "site helper accepted a short key"
+fi
+assert_contains "$TEST_TMP/site-short.log" "invalid length"
+security() { printf '%s\n' "fixture site key with spaces in it"; }
+if run_with_site_bible_key "$SITE_PROBE" >"$TEST_TMP/site-space.log" 2>&1; then
+  fail "site helper accepted a key with whitespace"
+fi
+assert_contains "$TEST_TMP/site-space.log" "contains whitespace"
+assert_absent "$TEST_TMP/site-space.log" "fixture site key with spaces"
+unset -f security
+
+# Tracing must fail before the site helper reads the Keychain at all.
+if bash -x -c 'security() { printf "%s\n" fixture-site-key-not-a-real-credential; }; source "$1"; run_with_site_bible_key true' \
+  _ "$HELPER" >"$TEST_TMP/site-xtrace.log" 2>&1; then
+  fail "site helper accepted shell tracing"
+fi
+assert_contains "$TEST_TMP/site-xtrace.log" "disable shell tracing"
+assert_absent "$TEST_TMP/site-xtrace.log" "$site_key"
+
 # Fyne may supply either supported Go -ldflags spelling. The wrapper must merge
 # the release assignment exactly once while preserving every other argument.
 BIBLETEXT_TEST_CAPTURE=1 \

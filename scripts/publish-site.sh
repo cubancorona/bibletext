@@ -13,9 +13,22 @@
 #   .nojekyll  turns off Jekyll. Without it GitHub rebuilds ~5,500 files through
 #              Jekyll on every push, slowly and for no reason.
 #
-# The reader lives at the ROOT (/web/, /bsb/, /webc/), sharing the namespace with
-# those hand-written pages — which is why this script writes the whole tree at
-# once and why the generator refuses to emit their filenames.
+# The reader lives at the ROOT (/web/, /bsb/, /webc/, /nkjv/), sharing the
+# namespace with those hand-written pages — which is why this script writes the
+# whole tree at once and why the generator refuses to emit their filenames.
+#
+# THE NKJV IS ONE SWITCH, committed in cmd/websitegen/nkjv_text.go. This script
+# asks the generator it builds which state that is, prints it, and holds the
+# tree to that state's guards (scripts/site-nkjv-guards.sh), so neither state
+# can publish the other's tree:
+#
+#   off  /nkjv/ is notice pages. No request to API.Bible, no key read.
+#   on   /nkjv/ is the text, fetched whole and fresh from API.Bible by THIS run
+#        (a --dry-run included: it spends the same ~200 requests of quota) with
+#        the key from the login Keychain (release-bible-key.sh), never cached.
+#        A missing key or a failed or incomplete fetch stops the publish; nothing
+#        falls back to notice pages. The assembled tree is scanned for the key
+#        in every encoded form before anything is compared or pushed.
 #
 # This script is now the ONLY publisher. Before it existed, the landing pages
 # were hand-copied onto gh-pages; doing that again would delete the reader (and
@@ -30,6 +43,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 DRY_RUN=false
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=true
+# The site's key reaches the generator from the Keychain or not at all.
+unset BIBLETEXT_SITE_NKJV_KEY
 
 OUT=build/site
 WORKTREE=build/gh-pages
@@ -45,10 +60,51 @@ print(base.removeprefix("https://"), end="")
 ')
 [[ -n "$DOMAIN" ]] || { echo "could not derive DOMAIN from config/product.json" >&2; exit 1; }
 
+fail() { echo "PUBLISH ABORTED: $*" >&2; exit 1; }
+. scripts/site-drift.sh
+. scripts/site-nkjv-guards.sh
+. scripts/release-bible-key.sh
+
+# --- The repo state, before anything is built or fetched ----------------------
+# Publishing from any dirty generator, renderer, template, or configuration
+# would make the live site differ from every known revision. Require the whole
+# tracked/untracked source tree to be clean; ignored build output is unaffected.
+# Checked FIRST because a run with the NKJV's text on spends API.Bible quota,
+# and a run that was always going to be refused should not.
+echo "==> checking the repo state"
+branch=$(git rev-parse --abbrev-ref HEAD)
+if [[ "$branch" != "main" && "${ALLOW_BRANCH:-0}" != "1" ]]; then
+  fail "on branch '$branch', not main. The live site should be published from main; set ALLOW_BRANCH=1 to override deliberately."
+fi
+if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
+  fail "the repository has uncommitted changes — commit them first so the live site matches a known revision"
+fi
+
 echo "==> checking the public support configuration"
 python3 scripts/check-support-contact.py
+
+# --- Which NKJV this run publishes ---------------------------------------------
+# The generator is built once and asked; the same binary then generates, so the
+# state printed here is the state of the tree.
+echo "==> building the reader generator"
+go build -o build/websitegen ./cmd/websitegen
+NKJV_TEXT=$(nkjv_text_state build/websitegen) || fail "$NKJV_TEXT"
+case "$NKJV_TEXT" in
+  on)  echo "==> NKJV text: on (fetched fresh from API.Bible)"; NKJV_PAGES=1328 ;;
+  off) echo "==> NKJV text: off (notice pages)"; NKJV_PAGES=1189 ;;
+esac
+
 echo "==> generating the reader"
-go run ./cmd/websitegen -out "$OUT"
+if [[ "$NKJV_TEXT" == on ]]; then
+  # The London date on both sides of the fetch: the pages must state one of
+  # them, which proves this run fetched the text they carry.
+  RUN_DATE_BEFORE=$(TZ=Europe/London date +%F)
+  run_with_site_bible_key build/websitegen -out "$OUT" ||
+    fail "the reader did not build. With the NKJV's text on, a missing key or a failed or incomplete fetch stops the publish; nothing falls back to notice pages."
+  RUN_DATE_AFTER=$(TZ=Europe/London date +%F)
+else
+  build/websitegen -out "$OUT"
+fi
 echo "==> rendering the project pages"
 go run ./cmd/sitepages -source docs -out "$OUT"
 
@@ -57,7 +113,6 @@ go run ./cmd/sitepages -source docs -out "$OUT"
 # per version so adding or removing a translation forces a deliberate edit here,
 # rather than silently sliding under one global threshold.
 echo "==> verifying the build"
-fail() { echo "PUBLISH ABORTED: $*" >&2; exit 1; }
 
 # EXACT counts at chapter depth. -mindepth/-maxdepth 3 is load-bearing: a
 # -path '*/[0-9]*/*' glob crosses slashes, so it also matches every
@@ -75,11 +130,13 @@ fail() { echo "PUBLISH ABORTED: $*" >&2; exit 1; }
 #              which the Greek Daniel has and these editions do not)
 #   webc 1328  all scripture — WEB Catholic is the widest canon, so it has no
 #              gaps and its total is what the other two now match
-#   nkjv 1189  all notices. Every chapter the app can build a /nkjv/ share link
-#              for, and nothing else. This tree carries NO text, and the check
-#              below proves that as well as its size — a fourth tree slipping
-#              in unverified is exactly what this guard is for.
-for spec in "web:1328" "bsb:1328" "webc:1328" "nkjv:1189"; do
+#   nkjv 1189  text off: all notices. Every chapter the app can build a /nkjv/
+#              share link for, and nothing else. This tree carries NO text, and
+#              nkjv_guard_off proves that as well as its size.
+#   nkjv 1328  text on: 1189 chapters of the NKJV + the same 139 canon-gap
+#              notices as the WEB and BSB. nkjv_guard_on proves which is which,
+#              and that the text is all there.
+for spec in "web:1328" "bsb:1328" "webc:1328" "nkjv:$NKJV_PAGES"; do
   id="${spec%%:*}"; want="${spec##*:}"
   got=$(find "$OUT/$id" -mindepth 3 -maxdepth 3 -name index.html | wc -l | tr -d ' ')
   [[ "$got" -eq "$want" ]] || fail "$id has $got chapter pages, expected exactly $want — generation looks truncated (or a book was added: update this list deliberately)"
@@ -92,18 +149,18 @@ done
 [[ -s "$OUT/web/john/3/index.html" ]] || fail "smoke page /web/john/3/ is missing"
 grep -q 'id="v16"' "$OUT/web/john/3/index.html" || fail "John 3 has no verse anchors — deep links would not highlight"
 
-# The notice pages, both placements. The licensed one gets the strongest check
-# this script can make: it must name the translation, offer the app AND the
-# parallel passage, and carry NO verse markup. paragraphBody is the only thing
-# that writes a verse anchor or a red-letter span, so either appearing under
-# /nkjv/ means scripture reached a tree that must never hold any.
-[[ -s "$OUT/nkjv/john/3/index.html" ]] || fail "/nkjv/john/3/ is missing — NKJV share links would 404 again"
-grep -q 'New King James Version' "$OUT/nkjv/john/3/index.html" || fail "/nkjv/john/3/ does not name the translation"
-grep -q 'id="openapp"' "$OUT/nkjv/john/3/index.html" || fail "/nkjv/john/3/ has no open-in-app affordance"
-grep -q 'href="../../../web/john/3/"' "$OUT/nkjv/john/3/index.html" || fail "/nkjv/john/3/ offers no parallel passage"
-leak=$(find "$OUT/nkjv" -name index.html -print0 |
-  xargs -0 grep -lE 'class="v" id="v|class="wj"|<sup class="n"' | head -3 || true)
-[[ -z "$leak" ]] || fail "pages under /nkjv/ carry verse markup — LICENSED TEXT IS ABOUT TO BE PUBLISHED: $leak"
+# The NKJV tree, held to the state it was built in: the notice-only guard when
+# the text is off, the completeness, notice and date guards when it is on. The
+# total of 31,102 verses is the WEB's 31,098 plus the four the NKJV has and the
+# WEB does not (versification_data.go); the generator has already held every
+# chapter to its exact verse numbers, and this recounts the pages it wrote.
+if [[ "$NKJV_TEXT" == on ]]; then
+  guard=$(nkjv_guard_on "$OUT" 1189 31102 "$RUN_DATE_BEFORE" "$RUN_DATE_AFTER") || fail "$guard"
+  echo "    nkjv: 1189 chapters of text, 31102 verses, the notice and this run's date on every page"
+else
+  guard=$(nkjv_guard_off "$OUT") || fail "$guard"
+  echo "    nkjv: notice pages only, no verse markup"
+fi
 [[ -s "$OUT/web/tobit/1/index.html" ]] || fail "/web/tobit/1/ is missing — the deuterocanonical gap is a 404 again"
 [[ -s "$OUT/web/daniel/13/index.html" ]] || fail "/web/daniel/13/ is missing — the Greek Daniel gap is a 404 again"
 # Assets are content-hashed (reader.<hash>.css), so this checks the pair exists
@@ -120,13 +177,14 @@ for asset in "$css" "$js"; do
 done
 # The notice pages carry their OWN hashed pair, on top of the reader's, so that
 # adding a rule for them can never rewrite the 3,906 pages that carry scripture.
-# Same check, and one more: no page that carries scripture may request them.
+# Same check, on the canon-gap page every state has, and one more: no page that
+# carries scripture may request them.
 ncss=$(find "$OUT/assets" -name 'notice.*.css' | head -1)
 njs=$(find "$OUT/assets" -name 'notice.*.js' | head -1)
 [[ -s "$ncss" ]] || fail "notice stylesheet missing"
 [[ -s "$njs" ]] || fail "notice script missing"
 for asset in "$ncss" "$njs"; do
-  grep -q "assets/$(basename "$asset")" "$OUT/nkjv/john/3/index.html" ||
+  grep -q "assets/$(basename "$asset")" "$OUT/web/tobit/1/index.html" ||
     fail "notice pages do not reference $(basename "$asset") — the build linked an asset it did not write"
   if grep -q "assets/$(basename "$asset")" "$OUT/web/john/3/index.html"; then
     fail "a scripture page links $(basename "$asset") — the reader's assets must stay untouched by it"
@@ -135,18 +193,6 @@ done
 [[ -s "$OUT/404.html" ]] || fail "404.html missing"
 
 # --- Assemble the FULL tree (reader + the hand-written page templates) -------
-# Publishing from any dirty generator, renderer, template, or configuration
-# would make the live site differ from every known revision. Require the whole
-# tracked/untracked source tree to be clean; ignored build output is unaffected.
-echo "==> checking the repo state"
-branch=$(git rev-parse --abbrev-ref HEAD)
-if [[ "$branch" != "main" && "${ALLOW_BRANCH:-0}" != "1" ]]; then
-  fail "on branch '$branch', not main. The live site should be published from main; set ALLOW_BRANCH=1 to override deliberately."
-fi
-if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
-  fail "the repository has uncommitted changes — commit them first so the live site matches a known revision"
-fi
-
 echo "==> assembling the site tree"
 for page in index.html privacy.html support.html; do
   [[ -s "docs/$page" ]] || fail "docs/$page is missing or empty — it is the source template for the live site"
@@ -242,11 +288,19 @@ sys.exit(0 if "/privacy.html" in e["excludePaths"] and "/privacy.html" not in e[
 PY
 echo "    CNAME, .nojekyll, all three association files and all three root pages present"
 
+# With the NKJV's text on, the generator held the key in memory while it wrote
+# every file. Prove no file carries it, in any encoding the hygiene check knows
+# (plaintext, base64 and its variants, hex, percent, UTF-16, reversed, and the
+# release linker's form) — and refuse a scan that found no key to look for.
+if [[ "$NKJV_TEXT" == on ]]; then
+  python3 scripts/check-repository-hygiene.py --scan-built-tree "$OUT" --require-release-key ||
+    fail "the tree about to be published failed the API.Bible key scan (above)"
+fi
+
 # --- Drift: how the tree about to be published differs from what is live ---
 # Reported in both modes, so "is the web current?" is one dry run. The live
 # tree is read from origin/gh-pages as an archive (no worktree, no trap: the
 # publish path below installs its own).
-. scripts/site-drift.sh
 echo "==> drift against origin/gh-pages"
 if git fetch --quiet origin gh-pages 2>/dev/null; then
   LIVE_TREE=$(mktemp -d)
