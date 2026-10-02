@@ -725,13 +725,7 @@ const readerJSTemplate = `
     return out;
   }
 
-  function verseSpan() {
-    var m = /^(\d+)(?:-(\d+))?$/.exec(fragKeys().v || '');
-    if (!m) return null;
-    var lo = parseInt(m[1], 10), hi = m[2] ? parseInt(m[2], 10) : lo;
-    if (!(lo > 0) || hi < lo) return null;
-    return [lo, hi];
-  }
+  function verseSpan() { return spanOf(fragKeys().v); }
 
   // 1) Verse RANGES (#v16-18). A single verse needs no help — :target has it.
   // THE JOINING SPACE BETWEEN TWO VERSES BELONGS TO THE BAND.
@@ -1748,20 +1742,89 @@ const readerJSTemplate = `
   // time), so without this a reader who followed a shared John 3:16 link and
   // tapped "BSB" to compare would land at the top of the chapter with no idea
   // which verse was shared — on the page that exists to show that one verse.
-  function carryVerse() {
-    // Carry the whole fragment, not just the verse: a reader who followed a
-    // link with a note and taps BSB to compare is still reading the same
-    // message about the same passage, so the note travels with them.
-    var keys = fragKeys();
-    var parts = [];
-    if (verseSpan()) parts.push('v' + keys.v);
-    if (keys.n) parts.push('n=' + keys.n);
-    var hash = parts.length ? '#' + parts.join('&') : '';
-    document.querySelectorAll('.vpick').forEach(function (a) {
-      var base = (a.getAttribute('href') || '').split('#')[0];
-      a.setAttribute('href', base + hash);
-    });
+  //
+  // A verse number is not an address, though. Where the other translation
+  // numbers this chapter differently, its pill carries data-vmap, written at
+  // build time from the versification tables: every verse of this chapter
+  // the other translation has, as "verse:chapter.verse.place" — where it
+  // lands there, and its place among that chapter's verses, counted from 0.
+  // A verse the map does not list is not in the other translation. A pill
+  // without the attribute is a chapter numbered the same, and the fragment
+  // travels as it is.
+  /*__VERSE_CARRY_BEGIN__*/
+  function spanOf(v) {
+    var m = /^(\d+)(?:-(\d+))?$/.exec(v || '');
+    if (!m) return null;
+    var lo = parseInt(m[1], 10), hi = m[2] ? parseInt(m[2], 10) : lo;
+    if (!(lo > 0) || hi < lo) return null;
+    return [lo, hi];
   }
+
+  // Where the span lands through the map, or null when it does not land as
+  // one passage. The verses of the span the other translation has must all
+  // land in one chapter there and fill a run of its verses with nothing of
+  // its own between them: WEB Daniel 3:23-24 is WEBC 3:23 and 3:91, with the
+  // Song of the Three between, and a range drawn across that would show the
+  // reader sixty-seven verses nobody sent. Order inside the run does not
+  // matter, for a pair a translation numbers the other way about. Verses the
+  // other translation lacks drop out, as the omitted Mark 9:44 does from a
+  // BSB range, and a span with none left lands nowhere.
+  function mappedSpan(vmap, span) {
+    var ch = 0, lo = 0, hi = 0, first = -1, last = -1, count = 0;
+    var toks = vmap ? vmap.split(' ') : [];
+    for (var i = 0; i < toks.length; i++) {
+      var m = /^(\d+):(\d+)\.(\d+)\.(\d+)$/.exec(toks[i]);
+      if (!m) return null;
+      var n = parseInt(m[1], 10);
+      if (n < span[0] || n > span[1]) continue;
+      var c = parseInt(m[2], 10), v = parseInt(m[3], 10), at = parseInt(m[4], 10);
+      if (count && c !== ch) return null;
+      ch = c;
+      if (first < 0 || at < first) { first = at; lo = v; }
+      if (at > last) { last = at; hi = v; }
+      count++;
+    }
+    if (!count || last - first !== count - 1) return null;
+    return { ch: ch, lo: lo, hi: hi };
+  }
+
+  // The href a pill should carry: base is its own chapter link, vmap its
+  // data-vmap or null, keys the fragment. The whole fragment travels, not
+  // just the verse: a reader who followed a link with a note and taps BSB to
+  // compare is still reading the same message about the same passage. When
+  // the verse cannot land, the note still travels and the link opens the
+  // chapter, as on the notice pages.
+  function carriedHref(base, vmap, keys) {
+    var parts = [];
+    var span = spanOf(keys.v);
+    if (span && vmap === null) {
+      parts.push('v' + keys.v);
+    } else if (span) {
+      var got = mappedSpan(vmap, span);
+      if (got) {
+        base = base.replace(/[0-9]+\/$/, got.ch + '/');
+        parts.push('v' + got.lo + (got.hi > got.lo ? '-' + got.hi : ''));
+      }
+    }
+    if (keys.n) parts.push('n=' + keys.n);
+    return base + (parts.length ? '#' + parts.join('&') : '');
+  }
+
+  // Each pill's own chapter link, read once: a carried verse can move the
+  // href to another chapter, so the next fragment must start from the link
+  // the page was built with, not from the last rewrite.
+  var picks;
+  function carryVerse() {
+    if (!picks) {
+      picks = [];
+      document.querySelectorAll('.vpick').forEach(function (a) {
+        picks.push({ a: a, base: (a.getAttribute('href') || '').split('#')[0], vmap: a.getAttribute('data-vmap') });
+      });
+    }
+    var keys = fragKeys();
+    picks.forEach(function (p) { p.a.setAttribute('href', carriedHref(p.base, p.vmap, keys)); });
+  }
+  /*__VERSE_CARRY_END__*/
   carryVerse();
   window.addEventListener('hashchange', carryVerse);
 

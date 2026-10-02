@@ -255,23 +255,20 @@ func (n noticeSpec) verLine() string {
 
 // noticeNav is the trail and the translation pills.
 //
-// TWO THINGS ARE DELIBERATELY ABSENT, both because reader.js is FROZEN — its
-// bytes are in the content-hashed filename every one of the 3,906 published
-// pages links, so changing it would change all of them and the three published
-// trees would no longer be byte-identical:
+// TWO THINGS ARE DELIBERATELY ABSENT:
 //
 //  1. No "Go to" row. reader.js builds its picker from a book table filtered by
 //     b.ch[<version from the path>]; there is no nkjv column, so on /nkjv/ the
 //     picker would open empty — a dead end, which is the one thing this page
-//     exists to not be. Giving it a column means regenerating reader.js.
-//  2. The pills are `.npick`, not `.vpick`. reader.js's carryVerse() appends the
-//     whole fragment to every `.vpick` href unconditionally; on the 28 chapters
-//     where the numbering does not agree that would hand the reader a confident
-//     link to the wrong verse. Fragment carrying on these pages is notice.js's
-//     single job, so nothing else may do half of it.
-//
-// Both are worth folding in the day someone accepts a one-time asset-hash churn
-// across the whole site.
+//     exists to not be. Giving it a column means regenerating reader.js, whose
+//     bytes are in the content-hashed filename every scripture page links.
+//  2. The pills are `.npick`, not `.vpick`. reader.js's carryVerse() rewrites
+//     every `.vpick` href from the fragment, through the verse map a scripture
+//     page writes onto each pill (switcherVerseMap, render.go). This page
+//     writes none, and fragment carrying on it is notice.js's single job, so
+//     nothing else may do half of it. (The comment in notice.css that says
+//     reader.js carries the whole fragment to every .vpick predates the map,
+//     and is left as written because it ships inside that file.)
 func noticeNav(n noticeSpec) string {
 	var b strings.Builder
 	up := strings.Repeat("../", n.Scope.depth())

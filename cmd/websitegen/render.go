@@ -362,7 +362,10 @@ func chapterDescription(preview string) string {
 // to the same book and chapter in each other version, and reader.js appends the
 // current verse fragment at runtime (carryVerse) so switching keeps your place —
 // matching the app. The fragment cannot be baked in here: it is not known until
-// someone opens the page with a verse in the URL.
+// someone opens the page with a verse in the URL. What can be baked in is where
+// each verse of this chapter lands in the other version, for a chapter the two
+// number differently (switcherVerseMap), so the carried verse is the same
+// passage rather than the same number.
 func navBar(v loadedVersion, all []loadedVersion, book, slug string, chapter int) string {
 	var b strings.Builder
 	b.WriteString(`<nav class="top"><a class="home" href="../../../">BibleText</a><span class="crumbs">`)
@@ -374,12 +377,15 @@ func navBar(v loadedVersion, all []loadedVersion, book, slug string, chapter int
 			continue
 		}
 		cls := "vpick"
+		vmap := ""
 		if other.ID == v.ID {
 			cls = "vpick on"
+		} else if m, ok := switcherVerseMap(v, other, all, book, chapter); ok {
+			vmap = ` data-vmap="` + m + `"`
 		}
 		otherSlug, _ := bibletext.BookSlug(book)
-		fmt.Fprintf(&b, `<a class="%s" title="%s" href="../../../%s/%s/%d/">%s</a>`,
-			cls, template.HTMLEscapeString(other.Name), other.ID, otherSlug, chapter,
+		fmt.Fprintf(&b, `<a class="%s" title="%s"%s href="../../../%s/%s/%d/">%s</a>`,
+			cls, template.HTMLEscapeString(other.Name), vmap, other.ID, otherSlug, chapter,
 			template.HTMLEscapeString(strings.ToUpper(other.ID)))
 	}
 	b.WriteString(`</span></nav>`)
@@ -389,6 +395,48 @@ func navBar(v loadedVersion, all []loadedVersion, book, slug string, chapter int
 	// into a reference type-ahead.
 	b.WriteString(`<div class="gotorow"><a class="goto" id="gotobtn" href="../../">Go to</a></div>`)
 	return b.String()
+}
+
+// switcherVerseMap is where each verse of this chapter of v lands in other,
+// for reader.js to carry a shared verse across the switch (carryVerse), and
+// false when the two number the chapter alike and the verse travels as it is.
+//
+// Whether they do is the question the notice pages ask of their offers,
+// numberingDiff over bibletext.ChapterNumberingDifference, so both kinds of
+// page agree on which chapters differ. Where they do, every verse of this
+// chapter goes through bibletext.MapVerse — the versification tables, never a
+// list kept here — and each one other really has is written as
+// "verse:chapter.verse.place": its chapter and number there, and its place
+// among that chapter's verses, counted from 0, which is what lets reader.js
+// tell a range that lands as one passage from one that would take in verses
+// nobody sent. A verse other lacks, or a book whose numbering does not
+// correspond at all (WEBC's Greek Esther), is left out, so an empty map is a
+// chapter no verse of which can be carried.
+func switcherVerseMap(v, other loadedVersion, all []loadedVersion, book string, chapter int) (string, bool) {
+	if numberingDiff(v.ID, other.ID, book, chapter, all) == bibletext.NumberingSame {
+		return "", false
+	}
+	var toks []string
+	for _, verse := range v.bible.Verses[book][chapter] {
+		ch, n, _ := bibletext.MapVerse(v.ID, other.ID, book, chapter, verse.Verse)
+		if ch == 0 {
+			continue
+		}
+		place, has := 0, false
+		for _, there := range other.bible.Verses[book][ch] {
+			switch {
+			case there.Verse < n:
+				place++
+			case there.Verse == n:
+				has = true
+			}
+		}
+		if !has {
+			continue
+		}
+		toks = append(toks, fmt.Sprintf("%d:%d.%d.%d", verse.Verse, ch, n, place))
+	}
+	return strings.Join(toks, " "), true
 }
 
 // arrowLink is one chapter arrow. A missing neighbour stays in the layout as a
