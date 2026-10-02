@@ -210,9 +210,18 @@ g=$(gcopy); sub 's/<span class="v" id="v1">/<span class="v" id="v1">→ /' "$g/w
 refuses "an arrow in scripture" "U+2192 RIGHTWARDS ARROW" site_guard_glyphs "$g"
 grep -q 'class="arrow"' "$T/glyph-on/web/john/3/index.html" ||
   fail "the fixture has no chapter arrows, so the pass above did not cover the chrome's arrows"
+# The font shorthand is read: Scripture moved into the chrome face by one loses
+# the Hebrew of its headings.
+g=$(gcopy); printf '.text{font:1em "Atkinson Hyperlegible",sans-serif}' >> "$(ls "$g"/assets/reader.*.css)"
+refuses "Scripture set in the chrome face by the font shorthand" "U+05D0 HEBREW LETTER ALEF" site_guard_glyphs "$g"
+# A hand-written page that asks for the system's face first, as the landing
+# pages do, has chosen it: nothing of ours covers it, and nothing is refused.
+g=$(gcopy); printf '<!doctype html><style>body{font: 17px/1.6 -apple-system, "Segoe UI", serif}</style><body><p>Ж → %s</p>' \
+  "$(printf '\xd7\x90')" > "$g/privacy.html"
+passes "a page set in the system face by its own choice" site_guard_glyphs "$g"
 # What the guard cannot evaluate, it refuses rather than guesses.
-g=$(gcopy); printf '.text{font:italic 1em serif}' >> "$(ls "$g"/assets/reader.*.css)"
-refuses "the font shorthand" "could not judge the tree" site_guard_glyphs "$g"
+g=$(gcopy); printf '.text{font:small-caps 1em "Junicode"}' >> "$(ls "$g"/assets/reader.*.css)"
+refuses "a small-caps shorthand" "could not judge the tree" site_guard_glyphs "$g"
 g=$(gcopy); printf '.text:hover{font-weight:700}' >> "$(ls "$g"/assets/reader.*.css)"
 refuses "a font rule behind :hover" "could not judge the tree" site_guard_glyphs "$g"
 

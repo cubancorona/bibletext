@@ -30,10 +30,11 @@ to the system sans by design (ALLOWED; cmd/websitegen/assets.go, .arrow), and
 the chrome face's italic, which is served as a slanted regular (ALLOWED_FAKES).
 
 FAIL CLOSED. The guard models the CSS this site writes, not all of CSS. A font
-property it cannot evaluate statically — the `font` shorthand, a weight range,
-a font rule behind :hover or inside @media, an unresolvable var() — stops it
-with status 2 rather than letting it guess, so a stylesheet change that moves
-past the model is a publish that stops, not one that is waved through.
+property it cannot evaluate statically — a weight range, a small-caps variant,
+font-synthesis, a font rule behind :hover or inside @media, generated text, an
+unresolvable var(), a shorthand it cannot parse — stops it with status 2 rather
+than letting it guess, so a stylesheet change that moves past the model is a
+publish that stops, not one that is waved through.
 
 Prints code points, character names, the element's selector path and page
 paths. NEVER page text: the tree may hold licensed Scripture.
@@ -202,6 +203,43 @@ def parse_range(text):
             lo = hi = int(part, 16)
         cps.update(range(lo, hi + 1))
     return frozenset(cps)
+
+
+SYSTEM_FONTS = {"caption", "icon", "menu", "message-box", "small-caption", "status-bar"}
+SIZE_KEYWORDS = {"xx-small", "x-small", "small", "medium", "large", "x-large", "xx-large",
+                 "xxx-large", "larger", "smaller"}
+STRETCH = {"ultra-condensed", "extra-condensed", "condensed", "semi-condensed",
+           "semi-expanded", "expanded", "extra-expanded", "ultra-expanded"}
+
+
+def expand_font(value):
+    """The font shorthand as the three longhands this guard reads: it sets the
+    style, the weight and the family, and resets whichever it leaves out."""
+    v = value.strip()
+    low = v.lower()
+    if low in SYSTEM_FONTS or low.startswith("-apple-system-"):
+        return [("font-family", "system-ui"), ("font-weight", "400"), ("font-style", "normal")]
+    if low == "inherit":
+        return [("font-family", "inherit"), ("font-weight", "inherit"), ("font-style", "inherit")]
+    style, weight = "normal", "400"
+    tokens = re.sub(r"\s*/\s*", "/", v).split()
+    for i, tok in enumerate(tokens):
+        t = tok.lower()
+        size = t.split("/")[0]
+        if size in SIZE_KEYWORDS or re.fullmatch(r"[\d.]+(px|em|rem|%|pt|pc|in|cm|mm|ex|ch|vw|vh|vmin|vmax|q)", size):
+            family = " ".join(tokens[i + 1:])
+            if not family:
+                break
+            return [("font-family", family), ("font-weight", weight), ("font-style", style)]
+        if t in ("italic", "oblique"):
+            style = t
+        elif t in ("bold", "bolder", "lighter") or re.fullmatch(r"\d{3}", t):
+            weight = t
+        elif t == "small-caps":
+            raise CannotJudge(f"a small-caps variant the guard does not model: {value!r}")
+        elif t != "normal" and t not in STRETCH:
+            break
+    raise CannotJudge(f"a font shorthand the guard cannot read: {value!r}")
 
 
 def family_names(value):
@@ -376,9 +414,16 @@ class Sheets:
                 if prelude.lower().startswith("@font-face"):
                     self._face(decls, base, conditional)
                     continue
-                font_decls = [(p, v, imp) for p, v, imp in decls if p in FONT_PROPS]
-                if any(p == "font" or p.startswith("font-synthesis") for p, _, _ in decls):
-                    raise CannotJudge(f"the font shorthand or font-synthesis at {prelude!r}")
+                font_decls = []
+                for p, v, imp in decls:
+                    if p == "font":
+                        font_decls += [(lp, lv, imp) for lp, lv in expand_font(v)]
+                    elif p in FONT_PROPS:
+                        font_decls.append((p, v, imp))
+                    elif p.startswith("font-synthesis"):
+                        raise CannotJudge(f"font-synthesis at {prelude!r}")
+                    elif p in ("font-variant", "font-variant-caps") and "small-caps" in v.lower():
+                        raise CannotJudge(f"a small-caps variant at {prelude!r}")
                 if any(p == "content" and re.search(r"(\"[^\"]+\"|'[^']+')", v) for p, v, _ in decls):
                     raise CannotJudge(f"generated text the guard does not draw: {prelude!r}")
                 for sel_text in [s for s in prelude.split(",") if s.strip()]:
@@ -552,10 +597,10 @@ def computed(el, parent, sheets):
                 winners[prop] = (rank, value)
     if "style" in el.attrs:
         for prop, value, important in declarations(el.attrs["style"]):
-            if prop == "font":
-                raise CannotJudge("an inline font shorthand")
-            if prop in FONT_PROPS:
-                winners[prop] = ((2 if important else 1, (9, 9, 9), 0), value)
+            longhands = expand_font(value) if prop == "font" else [(prop, value)]
+            for lp, lv in longhands:
+                if lp in FONT_PROPS:
+                    winners[lp] = ((2 if important else 1, (9, 9, 9), 0), lv)
     if "font-family" in winners:
         v = sheets.resolve(winners["font-family"][1])
         if v.strip().lower() != "inherit":
