@@ -119,7 +119,9 @@ else
   build/websitegen -out "$OUT"
 fi
 echo "==> rendering the project pages"
-go run ./cmd/sitepages -source docs -out "$OUT"
+# In the generator's state: a sentence true of one state only is marked in the
+# page and kept or dropped to match (cmd/sitepages).
+go run ./cmd/sitepages -source docs -out "$OUT" -nkjv-text "$NKJV_TEXT"
 
 # --- Verify the BUILD before it goes anywhere near the live branch -----------
 # A truncated or half-generated site must never reach the branch. Counts are
