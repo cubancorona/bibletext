@@ -19,8 +19,17 @@
 #       DATE (this run's London dates, so the text was fetched by this build),
 #       none of it anywhere else, and every face its stylesheet names present.
 #
-# Each prints what failed (paths only — never page text) and returns 1, or
-# returns 0 silently.
+#   site_guard_glyphs TREE
+#       the type, in BOTH states: every character a page sets in a web face is
+#       drawn by a face its stylesheets declare, and no run is set in a cut the
+#       browser must fake (scripts/check-site-glyphs.py, which reads the built
+#       stylesheets and the faces' own character maps). Psalm 119's stanza
+#       letters in a system Hebrew, a small capital of the divine name in a
+#       system italic, a psalm title as a slanted regular: each stops the
+#       publish. A tree the guard cannot judge stops it too.
+#
+# Each prints what failed (paths and code points only — never page text) and
+# returns 1, or returns 0 silently.
 #
 #   arm_site_cleanup
 #       the one exit path of publish-site.sh, armed before anything is built.
@@ -127,6 +136,24 @@ nkjv_guard_on() {
     [[ -s "$out/assets/$f" ]] || { echo "$(basename "$css") names $f, which is not in the tree"; return 1; }
   done
   return 0
+}
+
+site_guard_glyphs() {
+  local out="$1" report status=0
+  report=$(python3 scripts/check-site-glyphs.py "$out" 2>&1) || status=$?
+  case "$status" in
+    0) return 0 ;;
+    1)
+      echo "pages set characters no face they declare carries, or in a cut the browser must fake:"
+      echo "$report"
+      return 1
+      ;;
+    *)
+      echo "the glyph guard could not judge the tree, so it refuses it:"
+      echo "$report"
+      return 1
+      ;;
+  esac
 }
 
 arm_site_cleanup() {

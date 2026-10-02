@@ -6,9 +6,14 @@
 # And the exit path publish-site.sh arms (arm_site_cleanup), which removes every
 # tree that holds the text however a run with it on ends.
 #
-# Every tree here is synthetic MARKUP: the shapes the generator writes, with no
-# scripture in them. Every key is a synthetic string, and the key scan runs
-# with no `security` on its PATH, so no developer Keychain is ever consulted.
+# And the glyph guard (site_guard_glyphs, scripts/check-site-glyphs.py), on a
+# whole site the generator writes in each state from SYNTHETIC text, because
+# that guard reads real stylesheets and real faces. It needs Go and fontTools.
+#
+# Every other tree here is synthetic MARKUP: the shapes the generator writes,
+# with no scripture in them. Every key is a synthetic string, and the key scan
+# runs with no `security` on its PATH, so no developer Keychain is ever
+# consulted.
 #
 # Each guard is shown passing on a good tree and failing on each fault it
 # exists for, including the other state's tree — the guard that would let
@@ -128,6 +133,88 @@ o=$(fresh on on); rm "$o/assets/Junicode-SmallCaps.0123456789.woff2"
 refuses "a face the stylesheet names, missing" "which is not in the tree" nkjv_guard_on "$o" 3 19 "$DATE"
 o=$(fresh on on); sub 's/nkjv\.abcdef0123\.css/nkjv.0000000000.css/' "$o/nkjv/john/3/index.html"
 refuses "the stylesheet not linked" "does not link nkjv.abcdef0123.css" nkjv_guard_on "$o" 3 19 "$DATE"
+
+# --- the type: every character in a face the page declares -----------------------
+# Real trees this time, because the guard reads real stylesheets and real faces:
+# the generator writes each state through run() with the network replaced and
+# SYNTHETIC text (cmd/websitegen/glyph_fixture_test.go) carrying every character
+# the reading face's supplements exist for — each Hebrew letter and mark, the
+# notes' Greek, the divine name in small capitals in a verse, a bold heading, an
+# italic title and an italic supplied word. Each control then takes one thing
+# away and the guard must name it.
+glyph_tree() {
+  rm -rf "$T/glyph-$1"
+  BIBLETEXT_GLYPH_FIXTURE_OUT="$T/glyph-$1" BIBLETEXT_GLYPH_FIXTURE_STATE="$1" \
+    go test -count=1 -run '^TestWriteGlyphFixtureSite$' ./cmd/websitegen >"$T/out" 2>&1 ||
+    fail "the generator did not write the $1 glyph fixture: $(tail -5 "$T/out")"
+  [[ -s "$T/glyph-$1/nkjv/john/3/index.html" ]] || fail "the $1 glyph fixture has no /nkjv/john/3/"
+}
+glyph_tree on
+glyph_tree off
+passes "the text-on site, every face in place" site_guard_glyphs "$T/glyph-on"
+passes "the notice-only site, every face in place" site_guard_glyphs "$T/glyph-off"
+gcopy() { rm -rf "$T/g"; cp -R "$T/glyph-on" "$T/g"; echo "$T/g"; }
+# without CP FONT drops one code point from a copy of a face, keeping its name.
+without() {
+  "$PY" - "$1" "$2" <<'PY'
+import sys
+from fontTools import subset
+from fontTools.ttLib import TTFont
+cp, path = int(sys.argv[1], 16), sys.argv[2]
+font = TTFont(path)
+keep = [c for c in font.getBestCmap() if c != cp]
+opts = subset.Options(); opts.layout_features = ["*"]; opts.name_IDs = ["*"]; opts.notdef_outline = True
+sub = subset.Subsetter(opts); sub.populate(unicodes=keep); sub.subset(font)
+font.flavor = "woff2"; font.save(path)
+PY
+}
+# The Hebrew face without alef: Psalm 119's first stanza letter falls to a system Hebrew.
+g=$(gcopy); without 05D0 "$(ls "$g"/assets/BibleTextHebrew.*.woff2)"
+refuses "the Hebrew face without alef" "U+05D0 HEBREW LETTER ALEF" site_guard_glyphs "$g"
+grep -Fq "h2.sec" "$T/out" || fail "the missing alef was not traced to the heading: $(cat "$T/out")"
+# The italic small capitals undeclared: the divine name in a supplied word falls
+# to a system italic, as it did before the italic supplement shipped.
+g=$(gcopy); css=$(ls "$g"/assets/nkjv.*.css)
+"$PY" - "$css" <<'PY'
+import re, sys
+p = sys.argv[1]; s = open(p, encoding="utf-8").read()
+s, n = re.subn(r"@font-face\{[^}]*Junicode-ItalicSmallCaps[^}]*\}", "", s)
+assert n == 1, n
+open(p, "w", encoding="utf-8").write(s)
+PY
+refuses "the italic small capitals undeclared" "U+1D0F LATIN LETTER SMALL CAPITAL O" site_guard_glyphs "$g"
+grep -Fq "400 italic" "$T/out" || fail "the italic small capitals were not traced to an italic run: $(cat "$T/out")"
+# The bold small capitals' file missing: a declared face that is not in the tree.
+g=$(gcopy); rm "$g"/assets/Junicode-BoldSmallCaps.*.woff2
+refuses "a declared face missing from the tree" "which is not in the tree" site_guard_glyphs "$g"
+# The true italic undeclared: every psalm title becomes a slanted regular.
+g=$(gcopy); css=$(ls "$g"/assets/reader.*.css)
+"$PY" - "$css" <<'PY'
+import re, sys
+p = sys.argv[1]; s = open(p, encoding="utf-8").read()
+s, n = re.subn(r"@font-face\{[^}]*font-style:italic[^}]*\}", "", s)
+assert n == 1, n
+open(p, "w", encoding="utf-8").write(s)
+PY
+refuses "the true italic undeclared" "as a slanted regular (no italic cut)" site_guard_glyphs "$g"
+# The Greek supplement without its range: the notes' Greek falls to Georgia.
+g=$(gcopy); without 03B1 "$(ls "$g"/assets/Junicode-Greek.*.woff2)"
+refuses "the Greek supplement without alpha" "U+03B1 GREEK SMALL LETTER ALPHA" site_guard_glyphs "$g"
+# A character no face carries, in a verse; and an arrow, which the chrome may
+# leave to the system, in scripture, where it may not.
+g=$(gcopy); sub 's/<span class="v" id="v1">/<span class="v" id="v1">Ж /' "$g/nkjv/john/3/index.html"
+refuses "a Cyrillic letter in a verse" "U+0416 CYRILLIC CAPITAL LETTER ZHE" site_guard_glyphs "$g"
+# A report names code points, contexts and paths, and never a page's words.
+grep -Fq "fixture verse" "$T/out" && fail "the glyph guard printed page text: $(cat "$T/out")"
+g=$(gcopy); sub 's/<span class="v" id="v1">/<span class="v" id="v1">→ /' "$g/web/john/3/index.html"
+refuses "an arrow in scripture" "U+2192 RIGHTWARDS ARROW" site_guard_glyphs "$g"
+grep -q 'class="arrow"' "$T/glyph-on/web/john/3/index.html" ||
+  fail "the fixture has no chapter arrows, so the pass above did not cover the chrome's arrows"
+# What the guard cannot evaluate, it refuses rather than guesses.
+g=$(gcopy); printf '.text{font:italic 1em serif}' >> "$(ls "$g"/assets/reader.*.css)"
+refuses "the font shorthand" "could not judge the tree" site_guard_glyphs "$g"
+g=$(gcopy); printf '.text:hover{font-weight:700}' >> "$(ls "$g"/assets/reader.*.css)"
+refuses "a font rule behind :hover" "could not judge the tree" site_guard_glyphs "$g"
 
 # --- the key, in the tree about to be published ---------------------------------
 # PATH holds no `security`, so the scan sees exactly the synthetic key given to

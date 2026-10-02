@@ -312,6 +312,12 @@ sys.exit(0 if "/privacy.html" in e["excludePaths"] and "/privacy.html" not in e[
 PY
 echo "    CNAME, .nojekyll, all three association files and all three root pages present"
 
+# The type, in both states: every character a page sets in a web face is drawn
+# by a face it declares, in a real cut (site_guard_glyphs). Needs fontTools and
+# brotli (pip3 install --user fonttools brotli).
+guard=$(site_guard_glyphs "$OUT") || fail "$guard"
+echo "    glyphs: every character a page sets in a web face is in a face it declares"
+
 # With the NKJV's text on, the generator held the key in memory while it wrote
 # every file. Prove no file carries it, in any encoding the hygiene check knows
 # (plaintext, base64 and its variants, hex, percent, UTF-16, reversed, and the

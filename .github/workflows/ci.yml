@@ -93,11 +93,17 @@ jobs:
       - name: Site drift report regression
         run: scripts/test-site-drift.sh
 
+      # The glyph guard (scripts/check-site-glyphs.py) reads the web faces'
+      # character maps with fontTools, and brotli decodes WOFF2.
+      - name: Install fontTools for the site glyph guard
+        run: sudo apt-get install -y python3-fonttools python3-brotli
+
       # The publish guards for each state of the NKJV switch
       # (cmd/websitegen/nkjv_text.go) and the built-tree key scan, on synthetic
       # trees: each passes a good tree and refuses the other state's. Also the
       # publish's exit path, which removes every tree holding the text however
-      # a run with it on ends.
+      # a run with it on ends, and the glyph guard on a generated tree in each
+      # state, with a control for every face it exists for.
       - name: Site NKJV guards regression
         run: scripts/test-site-nkjv-guards.sh
 

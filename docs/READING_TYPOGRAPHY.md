@@ -62,6 +62,14 @@ and style and no other, so the divine name in a bold heading or an italic
 supplied word cannot borrow the regular cut's capitals; without its own it is
 drawn from a system face.
 
+`scripts/check-site-glyphs.py` holds every page of a publish to this, in both
+states of the NKJV switch (`site_guard_glyphs`, `scripts/site-nkjv-guards.sh`):
+a character a page sets in a web face that no face it declares carries, or a
+run set in a cut the browser would have to fake, stops the publish. It reads the
+built stylesheets and the faces' own character maps, and refuses a stylesheet it
+cannot evaluate rather than guess. Its one exception is the interface's: the
+chapter arrows and the chrome's italic.
+
 ---
 
 ## Four numbers

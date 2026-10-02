@@ -62,8 +62,9 @@ var webScriptureFontGreek []byte
 // page on 2 October 2026. The app sets it in Junicode, which carries the whole
 // script in every cut; the web regular subset carries none of it, so a note
 // drew basic Greek from one system face and polytonic from another, inside one
-// word. A page that comes to draw any other Greek needs it added here and the
-// supplement rebuilt (scripts/build-web-nkjv-fonts.sh reads this list).
+// word. A page that comes to draw any other Greek is refused at publish
+// (scripts/check-site-glyphs.py); add it here and rebuild the supplement
+// (scripts/build-web-nkjv-fonts.sh reads this list).
 var webGreekRunes = []rune{
 	'\u039C', '\u03AC', '\u03AD', '\u03AF', '\u03B1', '\u03B2', '\u03B3', '\u03B4',
 	'\u03B5', '\u03B7', '\u03B8', '\u03B9', '\u03BA', '\u03BB', '\u03BC', '\u03BD',
@@ -81,8 +82,9 @@ var webHebrewFontLicense []byte
 // all four editions on 2 October 2026: the twenty-two letters of Psalm 119's
 // stanza headings in the NKJV, and the letters, vowels and cantillation marks
 // of the WEB's and WEB Catholic's notes on the divine name. A page that comes
-// to draw any other Hebrew needs it added here and the face rebuilt
-// (scripts/build-web-nkjv-fonts.sh reads this list).
+// to draw any other Hebrew is refused at publish (scripts/check-site-glyphs.py);
+// add it here and rebuild the face (scripts/build-web-nkjv-fonts.sh reads this
+// list).
 var webHebrewRunes = []rune{
 	// Marks: etnahta, tevir; hataf segol, hiriq, tsere, holam, dagesh.
 	'\u0591', '\u059B', '\u05B1', '\u05B4', '\u05B5', '\u05B9', '\u05BC',
