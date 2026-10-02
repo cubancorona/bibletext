@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"unsafe"
 )
 
 func TestParseOSISTarget(t *testing.T) {
@@ -61,8 +62,8 @@ func TestParseCrossRefZipAndRank(t *testing.T) {
 		t.Fatalf("want 3 refs, got %d", len(got))
 	}
 	// Highest votes first: John 1:1-3 (369).
-	if got[0].Book != "John" || got[0].Votes != 369 {
-		t.Errorf("top ref = %+v, want John 1:1-3 (369)", got[0])
+	if top := got[0].crossRef(); top.Book != "John" || top.Votes != 369 {
+		t.Errorf("top ref = %+v, want John 1:1-3 (369)", top)
 	}
 }
 
@@ -111,7 +112,7 @@ func TestCrossRefDatasetNumberingIsNormalised(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("expected one row from Ephesians 3:20, got %+v", rows)
 	}
-	tgt := rows[0]
+	tgt := rows[0].crossRef()
 	if tgt.Book != "Romans" || tgt.Chapter != 14 || tgt.Verse != 24 {
 		t.Errorf("target start must be the reference number Romans 14:24, got %s %d:%d",
 			tgt.Book, tgt.Chapter, tgt.Verse)
@@ -136,13 +137,13 @@ func TestTheDatasetsThirdJohnFifteenIsTheReferencesFourteen(t *testing.T) {
 	if len(idx) == 0 {
 		t.Fatal("control: the parser produced no rows; the assertions below are vacuous")
 	}
-	if got := idx[crossRefKey("3 John", 1, 14)]; len(got) != 1 || got[0].Book != "John" {
+	if got := idx[crossRefKey("3 John", 1, 14)]; len(got) != 1 || got[0].crossRef().Book != "John" {
 		t.Errorf("3 John 1:15's row must be keyed at 3 John 1:14, got %+v", got)
 	}
 	if got := idx[crossRefKey("3 John", 1, 15)]; len(got) != 0 {
 		t.Errorf("nothing may stay keyed at a 3 John 1:15 no translation has: %+v", got)
 	}
-	if got := idx[crossRefKey("John", 10, 3)]; len(got) != 1 || got[0].label() != "3 John 1:14" {
+	if got := idx[crossRefKey("John", 10, 3)]; len(got) != 1 || got[0].crossRef().label() != "3 John 1:14" {
 		t.Errorf("a row pointing at 3 John 1:15 must point at 1:14, got %+v", got)
 	}
 }
@@ -308,5 +309,83 @@ func TestTheCapCountsOnlyRowsTheReaderCanSee(t *testing.T) {
 	if n, last := len(treasury), treasury[len(treasury)-1]; n != maxCrossRefsPerVerse || last != "Daniel 5:16" {
 		t.Errorf("Matthew 10:1 lists %d Treasury rows ending %q, want 16 ending \"Daniel 5:16\": "+
 			"the two rows its parallels already show must hand their places to the next two", n, last)
+	}
+}
+
+// THE INDEX KEEPS EACH VERSE'S BEST maxCrossRefsKept ROWS, EIGHT BYTES EACH.
+// It is held for as long as the app runs, on every platform. As crossRefs,
+// every row kept, it came to some 53 MB; the panel never reads past a
+// verse's twentieth row (crossRefDeepestRead), so the rest need not be kept,
+// and a row needs only its books, numbers and votes.
+func TestTheIndexKeepsEachVersesBestRows(t *testing.T) {
+	var rows strings.Builder
+	n := maxCrossRefsKept + 8
+	for v := 1; v <= n; v++ {
+		// Votes fall in pairs, so ties must keep the dataset's order.
+		fmt.Fprintf(&rows, "Gen.1.1\tPs.119.%d\t%d\n", v, (n-v)/2)
+	}
+	rows.WriteString("Gen.1.2\tPs.104.30\t9\nGen.1.2\tJob.26.13\t8\n")
+	tsv := "From Verse\tTo Verse\tVotes\n" + rows.String()
+	// CONTROL: read without the cap, every row is there.
+	every, err := readCrossRefRows(strings.NewReader(tsv), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(every[crossRefKey("Genesis", 1, 1)]); got != n {
+		t.Fatalf("control: the uncapped index holds %d rows, want %d", got, n)
+	}
+	idx, err := parseCrossRefRows(strings.NewReader(tsv))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := idx[crossRefKey("Genesis", 1, 1)]
+	if len(got) != maxCrossRefsKept {
+		t.Fatalf("the index keeps %d of the verse's %d rows, want its best %d", len(got), n, maxCrossRefsKept)
+	}
+	for i, r := range got {
+		if want := fmt.Sprintf("Psalms 119:%d", i+1); r.crossRef().label() != want {
+			t.Fatalf("row %d is %q, want %q: the best rows, ties in the dataset's order", i, r.crossRef().label(), want)
+		}
+	}
+	for key, rows := range idx {
+		if cap(rows) != len(rows) {
+			t.Errorf("%s's %d rows have capacity %d: an append to them would write over another verse's", key, len(rows), cap(rows))
+		}
+	}
+	if size := unsafe.Sizeof(tskRow{}); size > 8 {
+		t.Errorf("an index row takes %d bytes, want at most 8", size)
+	}
+	// The cap must clear the measured worst case with room to spare.
+	if maxCrossRefsKept < crossRefDeepestRead+maxCrossRefsPerVerse/2 {
+		t.Errorf("the index keeps %d rows a verse, too close to the %d a panel has been measured to read",
+			maxCrossRefsKept, crossRefDeepestRead)
+	}
+}
+
+// A row's books, numbers and votes survive packing, and a row naming a
+// number past any verse is not kept.
+func TestAnIndexRowUnpacksToTheRowParsed(t *testing.T) {
+	for _, c := range []crossRef{
+		{Book: "Genesis", Chapter: 1, Verse: 1, Votes: 369},
+		{Book: "Psalms", Chapter: 150, Verse: 6, Votes: -86},
+		{Book: "Psalms", Chapter: 119, Verse: 1, EndV: 176, Votes: 1290},
+		{Book: "Romans", Chapter: 14, Verse: 24, EndCh: 0, EndV: 26},
+		{Book: "Ruth", Chapter: 1, Verse: 22, EndCh: 2, EndV: 3},
+		{Book: "2 John", Chapter: 1, Verse: 1, EndBook: "3 John", EndCh: 1, EndV: 14, Votes: 4},
+	} {
+		r, ok := packTSKRow(c)
+		if !ok {
+			t.Errorf("%s was not packed", c.label())
+			continue
+		}
+		if got := r.crossRef(); got != c {
+			t.Errorf("%+v unpacked as %+v", c, got)
+		}
+	}
+	if _, ok := packTSKRow(crossRef{Book: "Genesis", Chapter: 1, Verse: 300}); ok {
+		t.Error("a row naming verse 300 was kept")
+	}
+	if r, _ := packTSKRow(crossRef{Book: "Genesis", Chapter: 1, Verse: 1, Votes: 1 << 20}); r.votes != 1<<15-1 {
+		t.Errorf("votes past an int16 packed as %d, want them held at %d", r.votes, 1<<15-1)
 	}
 }

@@ -49,6 +49,20 @@ import (
 const (
 	crossRefURL          = "https://a.openbible.info/data/cross-references.zip"
 	maxCrossRefsPerVerse = 16
+
+	// maxCrossRefsKept is how many of a verse's rows the index keeps, best
+	// first. The panel shows maxCrossRefsPerVerse of them, counted after the
+	// rows the reader's translation cannot show are dropped and the rows a
+	// Gospel parallel already shows are hidden, so it can read past the
+	// sixteenth. Measured over the 2026-08-31 dataset in all four
+	// translations, with every parallel of the verse's chapter hidden (the
+	// most any selection can hide), the deepest it reads is the twentieth
+	// row: WEB Catholic's Genesis 41:42, whose twenty rows include eight
+	// into Greek Esther, which that translation cannot show. Thirty-two
+	// leaves room for a dataset that drops or hides more; the opt-in walk of
+	// the downloaded texts measures the depth again and fails if a panel
+	// ever reads past it (crossRefDeepestRead).
+	maxCrossRefsKept = 32
 )
 
 // crossRef is one related passage: a verse, or a range of verses.
@@ -65,6 +79,73 @@ type crossRef struct {
 	Votes          int    // TSK agreement count (0 for parallels)
 	Parallel       bool   // true = a Gospel-synopsis parallel (parallels.go), not a TSK cross-ref
 	Title          string // synopsis pericope title, for parallels (e.g. "The Beatitudes")
+}
+
+// tskRow is one Treasury row as the index holds it, in eight bytes. The index
+// keeps some 337,000 rows for as long as the app runs, on every platform. As
+// crossRefs, 96 bytes each, they and the spare capacity of the slices they
+// were appended to took 53 MB of live heap; packed, and copied into one array,
+// the whole index takes under 7 MB. A row is unpacked into a crossRef only
+// when a panel reads it.
+//
+// The books are places in tskBooks, endBook 0 when the range ends in the book
+// it starts in. A chapter or verse number fits in a byte: no book has more
+// than 150 chapters or a chapter more than 176 verses, and a row naming a
+// larger number names no verse at all and is not kept. Votes are held to the
+// range of an int16; the dataset's run from -86 to 1,290.
+type tskRow struct {
+	book, endBook      uint8
+	ch, v, endCh, endV uint8
+	votes              int16
+}
+
+// tskBooks numbers the books a row can name, from 1; 0 is "no book".
+var tskBooks, tskBookNumbers = func() ([]string, map[string]uint8) {
+	names := make([]string, 0, len(osisBookNames))
+	for _, name := range osisBookNames {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	names = append([]string{""}, names...)
+	numbers := make(map[string]uint8, len(names))
+	for i, name := range names[1:] {
+		numbers[name] = uint8(i + 1)
+	}
+	return names, numbers
+}()
+
+// packTSKRow packs a parsed row, reporting false for one that names no verse.
+func packTSKRow(c crossRef) (tskRow, bool) {
+	book, ok := tskBookNumbers[c.Book]
+	if !ok {
+		return tskRow{}, false
+	}
+	var endBook uint8
+	if c.EndBook != "" {
+		if endBook, ok = tskBookNumbers[c.EndBook]; !ok {
+			return tskRow{}, false
+		}
+	}
+	for _, n := range []int{c.Chapter, c.Verse, c.EndCh, c.EndV} {
+		if n < 0 || n > 255 {
+			return tskRow{}, false
+		}
+	}
+	votes := min(max(c.Votes, -1<<15), 1<<15-1)
+	return tskRow{
+		book: book, endBook: endBook,
+		ch: uint8(c.Chapter), v: uint8(c.Verse), endCh: uint8(c.EndCh), endV: uint8(c.EndV),
+		votes: int16(votes),
+	}, true
+}
+
+// crossRef unpacks the row.
+func (r tskRow) crossRef() crossRef {
+	return crossRef{
+		Book: tskBooks[r.book], Chapter: int(r.ch), Verse: int(r.v),
+		EndBook: tskBooks[r.endBook], EndCh: int(r.endCh), EndV: int(r.endV),
+		Votes: int(r.votes),
+	}
 }
 
 // crossBook reports whether the range ends in a different book from the one it
@@ -88,7 +169,7 @@ func (c crossRef) label() string {
 
 var (
 	crossRefMu      sync.Mutex
-	crossRefIndex   map[string][]crossRef
+	crossRefIndex   map[string][]tskRow
 	crossRefLoaded  bool
 	crossRefLoadErr error
 )
@@ -154,26 +235,27 @@ func readOrFetchCrossRefZip() ([]byte, error) {
 	return b, nil
 }
 
-func parseCrossRefZip(zipBytes []byte) (map[string][]crossRef, error) {
+func parseCrossRefZip(zipBytes []byte) (map[string][]tskRow, error) {
+	tsv, err := crossRefTSV(zipBytes)
+	if err != nil {
+		return nil, err
+	}
+	defer tsv.Close()
+	return parseCrossRefRows(tsv)
+}
+
+// crossRefTSV opens the dataset's table inside the downloaded zip.
+func crossRefTSV(zipBytes []byte) (io.ReadCloser, error) {
 	zr, err := zip.NewReader(bytes.NewReader(zipBytes), int64(len(zipBytes)))
 	if err != nil {
 		return nil, fmt.Errorf("open cross-references zip: %w", err)
 	}
-	var tsv io.ReadCloser
 	for _, f := range zr.File {
 		if strings.HasSuffix(f.Name, ".txt") {
-			tsv, err = f.Open()
-			if err != nil {
-				return nil, err
-			}
-			break
+			return f.Open()
 		}
 	}
-	if tsv == nil {
-		return nil, fmt.Errorf("cross-references zip has no .txt entry")
-	}
-	defer tsv.Close()
-	return parseCrossRefRows(tsv)
+	return nil, fmt.Errorf("cross-references zip has no .txt entry")
 }
 
 // THE DATASET'S OWN NUMBERING. OpenBible's Treasury of Scripture Knowledge is
@@ -248,8 +330,14 @@ var crossRefDatasetRowSources = map[[2]string]string{
 // moves above are applied, so no row is lost here: a row the reader's
 // translation cannot show is dropped later, by crossRefTargetIn, for that
 // translation alone.
-func parseCrossRefRows(r io.Reader) (map[string][]crossRef, error) {
-	idx := make(map[string][]crossRef, 32000)
+func parseCrossRefRows(r io.Reader) (map[string][]tskRow, error) {
+	return readCrossRefRows(r, maxCrossRefsKept)
+}
+
+// readCrossRefRows is parseCrossRefRows keeping each verse's best keep rows,
+// or all of them when keep is 0.
+func readCrossRefRows(r io.Reader, keep int) (map[string][]tskRow, error) {
+	idx := make(map[string][]tskRow, 32000)
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	first := true
@@ -277,24 +365,43 @@ func parseCrossRefRows(r io.Reader) (map[string][]crossRef, error) {
 		}
 		ref.Votes, _ = strconv.Atoi(strings.TrimSpace(cols[2]))
 		fromCh, fromV = crossRefSourceToReference(fromBook, fromCh, fromV)
-		ref = crossRefTargetToReference(ref)
+		row, ok := packTSKRow(crossRefTargetToReference(ref))
+		if !ok {
+			continue
+		}
 		key := crossRefKey(fromBook, fromCh, fromV)
-		idx[key] = append(idx[key], ref)
+		idx[key] = append(idx[key], row)
 	}
 	if err := sc.Err(); err != nil {
 		return nil, fmt.Errorf("scan cross-references: %w", err)
 	}
 
-	// Highest-voted first, ties in the dataset's order. Every row is kept: the
-	// per-verse cap (maxCrossRefsPerVerse) is applied when a verse's rows are
-	// shown, AFTER the rows the reader's translation cannot show are dropped
-	// and the ones a parallel already shows are hidden. Capping here, before
+	// Highest-voted first, ties in the dataset's order, and the best keep of
+	// them. The per-verse cap the reader sees (maxCrossRefsPerVerse) is NOT
+	// applied here: it is counted when a verse's rows are shown, AFTER the
+	// rows the reader's translation cannot show are dropped and the ones a
+	// parallel already shows are hidden. Capping at sixteen here, before
 	// either, left those places empty: WEB Catholic's Genesis 41:42 showed 10
 	// of a possible 16 because six of its top sixteen point into Greek
 	// Esther, and Matthew 10:1 showed 14 in every translation because two of
-	// its top sixteen are the parallels listed above them.
-	for _, refs := range idx {
-		sort.SliceStable(refs, func(i, j int) bool { return refs[i].Votes > refs[j].Votes })
+	// its top sixteen are the parallels listed above them. The app keeps
+	// maxCrossRefsKept, well past the deepest row any panel reads.
+	//
+	// The rows kept are copied into one array, so the index holds no spare
+	// capacity left over from appending.
+	total := 0
+	for key, rows := range idx {
+		sort.SliceStable(rows, func(i, j int) bool { return rows[i].votes > rows[j].votes })
+		if keep > 0 && len(rows) > keep {
+			idx[key] = rows[:keep]
+		}
+		total += len(idx[key])
+	}
+	all := make([]tskRow, 0, total)
+	for key, rows := range idx {
+		start := len(all)
+		all = append(all, rows...)
+		idx[key] = all[start:len(all):len(all)]
 	}
 	return idx, nil
 }
@@ -573,23 +680,8 @@ func crossRefsForSelection(state *AppState, text string, span selSpan) []crossRe
 	}
 	verses := selectionVerses(state, text, span)
 	shown := map[string]bool{} // label -> already emitted
-
-	// resolve names a row's book — and a cross-book range's end book — as the
-	// loaded translation does, and rewrites the row into its numbering.
 	vid := state.currentVersion().ID
-	resolve := func(c crossRef) (crossRef, bool) {
-		name, ok := resolveBookName(state.Bible.Books, c.Book)
-		if !ok {
-			return crossRef{}, false
-		}
-		c.Book = name
-		if c.EndBook != "" {
-			if c.EndBook, ok = resolveBookName(state.Bible.Books, c.EndBook); !ok {
-				return crossRef{}, false
-			}
-		}
-		return crossRefTargetIn(vid, c)
-	}
+	resolve := crossRefResolver(state.Bible.Books, vid)
 
 	// Gospel synopsis parallels first (parallels.go): the same event in the other
 	// Gospels, tagged. Embedded, so these appear even when the TSK cross-references
@@ -627,20 +719,9 @@ func crossRefsForSelection(state *AppState, text string, span selSpan) []crossRe
 			if !ok {
 				continue
 			}
-			mine := map[string]bool{} // labels this verse has given
-			for _, c := range crossRefIndex[crossRefKey(v.BookName, srcCh, srcV)] {
-				if len(mine) == maxCrossRefsPerVerse {
-					break
-				}
-				c, ok := resolve(c)
-				if !ok {
-					continue
-				}
+			mine, _ := treasuryRowsFor(crossRefIndex[crossRefKey(v.BookName, srcCh, srcV)], resolve, shown)
+			for _, c := range mine {
 				lbl := c.label()
-				if shown[lbl] || mine[lbl] {
-					continue
-				}
-				mine[lbl] = true
 				if i, dup := seen[lbl]; dup {
 					if c.Votes > tsk[i].Votes {
 						tsk[i].Votes = c.Votes
@@ -658,6 +739,51 @@ func crossRefsForSelection(state *AppState, text string, span selSpan) []crossRe
 	}
 
 	return append(parallels, tsk...)
+}
+
+// crossRefResolver names a row's book — and a cross-book range's end book —
+// as the loaded translation does, and rewrites the row into its numbering;
+// false is a row this translation cannot show.
+func crossRefResolver(books []string, versionID string) func(crossRef) (crossRef, bool) {
+	return func(c crossRef) (crossRef, bool) {
+		name, ok := resolveBookName(books, c.Book)
+		if !ok {
+			return crossRef{}, false
+		}
+		c.Book = name
+		if c.EndBook != "" {
+			if c.EndBook, ok = resolveBookName(books, c.EndBook); !ok {
+				return crossRef{}, false
+			}
+		}
+		return crossRefTargetIn(versionID, c)
+	}
+}
+
+// treasuryRowsFor is what one selected verse gives the panel: the first
+// maxCrossRefsPerVerse of its rows, best first, that resolve can show and
+// whose labels are neither hidden (shown above as a parallel) nor given
+// already. read is how far down rows it went for them — the depth the index
+// must keep (maxCrossRefsKept).
+func treasuryRowsFor(rows []tskRow, resolve func(crossRef) (crossRef, bool), hidden map[string]bool) (mine []crossRef, read int) {
+	given := map[string]bool{}
+	for i, r := range rows {
+		if len(mine) == maxCrossRefsPerVerse {
+			break
+		}
+		c, ok := resolve(r.crossRef())
+		if !ok {
+			continue
+		}
+		lbl := c.label()
+		if hidden[lbl] || given[lbl] {
+			continue
+		}
+		given[lbl] = true
+		mine = append(mine, c)
+		read = i + 1
+	}
+	return mine, read
 }
 
 // selectionVerses returns the verses of the current chapter that the selection
