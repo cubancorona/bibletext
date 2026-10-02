@@ -16,7 +16,15 @@ package bibletext
 // AppKit's bottom-left coordinate space) to the NSScrollView frame.
 
 /*
-#cgo CFLAGS: -x objective-c -fobjc-arc
+// The Mac builds compile at the floor in config/product.json
+// (macMinimumOSVersion, passed as -mmacosx-version-min), and an API newer
+// than that floor, called without an @available check, is an error there
+// rather than a warning: on an older macOS it can be an unrecognised selector
+// or a missing symbol the moment it runs. cgo joins every file's CFLAGS for
+// the package, so this holds every preamble a Mac build compiles. A build
+// without the floor targets the macOS it runs on and cannot see such a call;
+// the release builds can. Held by mac_floor_availability_contract_test.go.
+#cgo CFLAGS: -x objective-c -fobjc-arc -Werror=unguarded-availability-new
 #cgo LDFLAGS: -framework AppKit -framework Foundation -framework QuartzCore
 
 #import <AppKit/AppKit.h>
@@ -2041,6 +2049,40 @@ static NSBezierPath *btMacNoteBubblePath(CGFloat w, CGFloat h) {
     return p;
 }
 
+// The bubble as the CGPath its shape layer draws. NSBezierPath's own CGPath
+// property exists only from macOS 14 (API_AVAILABLE(macos(14.0)) in
+// NSBezierPath.h), and the app is offered from macOS 12. So the path is
+// copied element by element — every point as the bezier path holds it, the
+// arcs already cubic curves, nothing re-approximated — which is the outline
+// the property gives on macOS 14 and later, element for element. The caller
+// owns the result.
+static CGPathRef btMacCGPathCreate(NSBezierPath *p) CF_RETURNS_RETAINED;
+static CGPathRef btMacCGPathCreate(NSBezierPath *p) {
+    CGMutablePathRef m = CGPathCreateMutable();
+    NSPoint pts[3];
+    for (NSInteger i = 0, n = p.elementCount; i < n; i++) {
+        switch ([p elementAtIndex:i associatedPoints:pts]) {
+        case NSBezierPathElementMoveTo:
+            CGPathMoveToPoint(m, NULL, pts[0].x, pts[0].y);
+            break;
+        case NSBezierPathElementLineTo:
+            CGPathAddLineToPoint(m, NULL, pts[0].x, pts[0].y);
+            break;
+        case NSBezierPathElementCubicCurveTo:
+            CGPathAddCurveToPoint(m, NULL, pts[0].x, pts[0].y, pts[1].x, pts[1].y,
+                                  pts[2].x, pts[2].y);
+            break;
+        case NSBezierPathElementQuadraticCurveTo:   // only made by macOS 14's API
+            CGPathAddQuadCurveToPoint(m, NULL, pts[0].x, pts[0].y, pts[1].x, pts[1].y);
+            break;
+        case NSBezierPathElementClosePath:
+            CGPathCloseSubpath(m);
+            break;
+        }
+    }
+    return m;
+}
+
 // The height of the CARD at this width. The view is this plus the tail, and the
 // reserved band is the view plus the gap. Measured BEFORE the band is reserved,
 // because the band's height IS this number.
@@ -2780,7 +2822,9 @@ static void btMacLayoutNote(void) {
 
     gMacNoteView.frame = NSMakeRect(x, y, w, h + btMacNoteShapeExtra());
     gMacNoteCard.frame = gMacNoteView.bounds;
-    gMacNoteCard.path = btMacNoteBubblePath(w, h).CGPath;
+    CGPathRef outline = btMacCGPathCreate(btMacNoteBubblePath(w, h));
+    gMacNoteCard.path = outline;   // the layer keeps its own reference
+    CGPathRelease(outline);
 
     NSView *who  = [gMacNoteView viewWithTag:902];
     NSView *body = [gMacNoteView viewWithTag:903];

@@ -180,6 +180,16 @@ release scripts) holds the declaration to its lower bounds and every build
 file to the declaration. To raise the floor, edit `config/product.json`;
 nothing else needs touching.
 
+Compiling at the floor is also what catches a call newer than it. The
+package's Mac cgo carries `-Werror=unguarded-availability-new` (in
+`reading_macos.go`; cgo joins a package's CFLAGS, so it covers every
+preamble a Mac build compiles), so an AppKit or Foundation API introduced
+after the floor and called without an `@available` check fails both release
+builds rather than shipping as an unrecognised selector on the older macOS.
+A build without the floor — a development build, CI's macOS job — targets
+the macOS it runs on and cannot see such a call;
+`mac_floor_availability_contract_test.go` holds the flag at the source.
+
 ## Building a submission
 
 ```bash

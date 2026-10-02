@@ -67,7 +67,7 @@ What 1.2.18 (1–2 October 2026) adds:
 - **Apple's processing was quick.** It took about three minutes for 1.2.18,
   so the wait for `VALID` in stage 7 need not be planned as a long one.
 
-## macOS 12 and 13: an open note card calls a macOS 14 method — found 2 October 2026
+## macOS 12 and 13: an open note card calls a macOS 14 method — FIXED 2 October 2026
 
 `btMacLayoutNote` gives the note card its shape from
 `btMacNoteBubblePath(w, h).CGPath` (`reading_macos.go:2783`). AppKit
@@ -101,6 +101,36 @@ The fix: build the `CGPath` by walking the bezier path's elements
 before macOS 14), or use the property under `@available(macOS 14, *)` with
 that walk as the fallback; and make the availability warning an error in
 the Mac builds' compiler flags, so the next such call fails the build.
+
+**FIXED 2 October 2026.** The card's outline is copied from the bezier path
+element by element (`btMacCGPathCreate`, `reading_macos.go`): each move,
+line, curve and close as `NSBezierPath` holds it, read with
+`elementAtIndex:associatedPoints:` into a `CGMutablePath`, which needs
+nothing newer than the floor. Building the outline afresh with
+`CGPathAddArc` was the other way, and was not taken: Core Graphics makes its
+own curves for an arc, whose control points differ from AppKit's by some
+3e-10 of a point (17 elements against 18 on the card with its tail), so the
+card would have been near the old one rather than the same. The walk is
+the same. Against the macOS 14 property on macOS 26, 84 card sizes (seven
+widths, six heights, with the tail and without) gave the same elements to
+the last bit, the same bounding boxes and, drawn at 2x by a `CAShapeLayer`
+set up as the card's is, the same pixels: none of 21 million painted pixels
+differed, where a copy moved a quarter of a point differed in 913. Both
+slices of the built app no longer name the `CGPath` selector; the tree
+before the fix did.
+
+The package's Mac cgo now carries `-Werror=unguarded-availability-new`
+(`reading_macos.go`; cgo joins a package's CFLAGS, so it covers every
+preamble a Mac build compiles). At the release builds' 12.0 target the old
+line put back fails the build ("'CGPath' is only available on macOS 14.0 or
+newer"), and so does a macOS 14 Foundation call put in
+`ai_secure_store_darwin.go`, a file with no CFLAGS line of its own. With the
+fix the package compiles at 12.0 with no availability warning, for arm64 and
+amd64, with and without the `bibletextdev` tag: the card was the only
+unguarded call. A build without the floor, which is a development build and
+CI's macOS job, targets the macOS it runs on and cannot see such a call, so
+`mac_floor_availability_contract_test.go` holds the flag, and the card's use
+of the walk, at the source. Not run on macOS 12 or 13.
 
 ## Share as image says "Picture saved" for a card it could not read — found 1 October 2026
 
