@@ -157,7 +157,7 @@ func readGolden(t *testing.T) []string {
 // the NKJV's text off and compares every file with the pinned digests.
 func TestNKJVTextOffSiteIsByteIdenticalToTheBase(t *testing.T) {
 	site := &siteWriter{root: filepath.Join(t.TempDir(), "site")}
-	if err := writeSite(site, goldenFixtureVersions()); err != nil {
+	if err := writeSite(site, goldenFixtureVersions(), noticedVersionsFor(false)); err != nil {
 		t.Fatalf("writeSite: %v", err)
 	}
 	got := siteDigests(t, site.root)

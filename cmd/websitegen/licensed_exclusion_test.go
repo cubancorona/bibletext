@@ -1,11 +1,13 @@
 package main
 
-// Licensed-text exclusion. The web reader is published, cached by search
-// engines and unfurled into strangers' message threads — it must NEVER emit a
-// licensed translation's TEXT. The public-domain three (web/bsb/webc) are the
-// only translations this site carries words of, forever, unless a human
-// deliberately decides otherwise, and these tests are the tripwire that makes
-// that decision loud.
+// Licensed-text exclusion, in both states of the NKJV switch (nkjv_text.go).
+// The web reader is published, cached by search engines and unfurled into
+// strangers' message threads, so a licensed translation's TEXT may reach it in
+// exactly one way: the committed switch, turned on. With it off the
+// public-domain three (web/bsb/webc) are the only translations this site
+// carries words of, and these tests are the tripwire that keeps it so; with it
+// on the NKJV's text is published under /nkjv/ and nowhere else, and the NRSV
+// and LSB stay as absent as ever.
 //
 // WHAT CHANGED, AND WHY. This file used to walk every emitted file and fail on
 // the case-insensitive substring "nkjv" anywhere in it. That was a PROXY for the
@@ -31,13 +33,22 @@ package main
 //	   pages must not advertise a translation they do not carry, and it doubles
 //	   as the canary for the byte-identity of those three trees.
 //
+// THE SWITCH MOVES THE NKJV BETWEEN TWO LISTS, not into publishedVersions. Off,
+// it is noticed (a tree of notice pages); on, it is licensed (its text, fetched
+// fresh by loadLicensed with a key on every build). publishedVersions, which
+// carries a decoder and a key-less download URL, is the public-domain three in
+// both states. Each test below says which state it proves, and the ones that
+// hold in both run in both.
+//
 // Everything here is hermetic: publishedVersions is a static literal and the
 // site is built from in-memory fixture data, so no network and no real key are
 // ever touched.
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -86,8 +97,8 @@ func TestPublishedVersionsExcludeLicensedEvenWhenConfigured(t *testing.T) {
 		ids = append(ids, pv.ID)
 	}
 	if len(ids) != len(publicDomainWebIDs) {
-		t.Fatalf("publishedVersions = %v, want exactly the public-domain ids %v — "+
-			"the web reader must never grow a version without a deliberate licensing decision",
+		t.Fatalf("publishedVersions = %v, want exactly the public-domain ids %v — it carries a key-less "+
+			"download, and a licensed edition's text reaches the site only through the switch in nkjv_text.go",
 			ids, publicDomainWebIDs)
 	}
 	for i, want := range publicDomainWebIDs {
@@ -98,7 +109,8 @@ func TestPublishedVersionsExcludeLicensedEvenWhenConfigured(t *testing.T) {
 	for _, pv := range got {
 		for _, lic := range licensedVersionIDs {
 			if pv.ID == lic {
-				t.Errorf("publishedVersions contains licensed id %q — licensed text must NEVER reach the web reader", lic)
+				t.Errorf("publishedVersions contains licensed id %q — licensed text reaches the web reader "+
+					"only through the switch in nkjv_text.go, fetched fresh with a key", lic)
 			}
 		}
 	}
@@ -116,31 +128,51 @@ func TestPublishedVersionsExcludeLicensedEvenWhenConfigured(t *testing.T) {
 }
 
 // TestOnlyNoticedLicensedIDsMayBeRoots is the URL-namespace half. A licensed id
-// reaches the root in one of three ways: publishedVersions (pinned above),
-// noticedVersions (allowed, and text-free by construction — noticeVersion has
-// no decoder and no data), or a book slug colliding with it under a future canon
-// change (never allowed). This pins which licensed ids are noticed, so adding
-// /nrsv/ or /lsb/ signposts is a deliberate edit here and not a side effect.
+// reaches the root in one of four ways: publishedVersions (pinned above), the
+// noticed list (text-free by construction — noticeVersion has no decoder and no
+// data), the licensed list (its text, only while the switch is on), or a book
+// slug colliding with it under a future canon change (never allowed). The
+// switch moves the NKJV from the second list to the third and nothing else
+// moves: the /nkjv/ root exists in both states, and adding /nrsv/ or /lsb/ is a
+// deliberate edit here and not a side effect.
 func TestOnlyNoticedLicensedIDsMayBeRoots(t *testing.T) {
-	noticed := map[string]bool{}
-	for _, nv := range noticedVersions() {
-		noticed[nv.ID] = true
+	ids := func(list []noticeVersion) map[string]bool {
+		m := map[string]bool{}
+		for _, nv := range list {
+			m[nv.ID] = true
+			// A noticed or licensed entry carries a name and NOTHING that could
+			// hold scripture — the structural guarantee behind the walks below.
+			if nv.Name == "" {
+				t.Errorf("licensed version %q has no display name — the page could not say what it is", nv.ID)
+			}
+		}
+		return m
 	}
-	if len(noticed) != 1 || !noticed["nkjv"] {
-		t.Errorf("noticedVersions = %v, want exactly {nkjv} — a new signpost root must be a deliberate edit here", noticed)
-	}
-	// A noticed version carries a name and NOTHING that could hold scripture.
-	// This is the structural guarantee behind the sentinel walk below.
-	for _, nv := range noticedVersions() {
-		if nv.Name == "" {
-			t.Errorf("noticed version %q has no display name — the page could not say what it is", nv.ID)
+	for _, tc := range []struct {
+		on                bool
+		noticed, licensed []string
+	}{
+		{on: false, noticed: []string{"nkjv"}},
+		{on: true, licensed: []string{"nkjv"}},
+	} {
+		noticed, licensed := ids(noticedVersionsFor(tc.on)), ids(licensedVersionsFor(tc.on))
+		if fmt.Sprint(sortedKeys(noticed)) != fmt.Sprint(tc.noticed) ||
+			fmt.Sprint(sortedKeys(licensed)) != fmt.Sprint(tc.licensed) {
+			t.Errorf("switch %s: noticed %v, licensed %v; want noticed %v, licensed %v",
+				nkjvTextState(tc.on), sortedKeys(noticed), sortedKeys(licensed), tc.noticed, tc.licensed)
+		}
+		for id := range noticed {
+			if licensed[id] {
+				t.Errorf("switch %s: %q is both noticed and licensed — one root, two trees", nkjvTextState(tc.on), id)
+			}
 		}
 	}
+	rooted := ids(siteLicensedVersions())
 	for _, id := range licensedVersionIDs {
 		if book, ok := bibletext.BookFromSlug(id); ok {
 			t.Errorf("book %q owns the slug %q — a licensed version id must never double as a book path segment", book, id)
 		}
-		if noticed[id] {
+		if rooted[id] {
 			continue
 		}
 		for reserved := range reservedRootNames {
@@ -159,11 +191,28 @@ func TestOnlyNoticedLicensedIDsMayBeRoots(t *testing.T) {
 	}
 }
 
-// fixtureSite builds the real site — real writeSite, real publishedVersions,
-// real renderers — from in-memory scripture, with the NKJV environment fully
-// configured. WEB Catholic gets a book and a chapter the other two lack, so the
-// canon-gap pages are exercised too.
+func sortedKeys(m map[string]bool) []string {
+	out := []string{}
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// fixtureSite is the site with the NKJV's text off.
 func fixtureSite(t *testing.T) *siteWriter {
+	t.Helper()
+	return fixtureSiteState(t, false)
+}
+
+// fixtureSiteState builds the real site — real writeSite, real
+// publishedVersions, real renderers — from in-memory scripture, with the NKJV
+// environment fully configured, in one state of the switch. WEB Catholic gets
+// a book and a chapter the other two lack, so the canon-gap pages are
+// exercised too. On, a synthetic NKJV of the Protestant canon is loaded as the
+// switch loads it, carrying the sentinel like every other edition.
+func fixtureSiteState(t *testing.T, on bool) *siteWriter {
 	t.Helper()
 	setLicensedEnv(t)
 
@@ -193,12 +242,23 @@ func fixtureSite(t *testing.T) *siteWriter {
 		}
 		loaded = append(loaded, loadedVersion{webVersion: pv, bible: bible})
 	}
+	if on {
+		loaded = append(loaded, licensedFixtureVersion(syntheticLicensedText(t, protestant,
+			func(book string, ch, n int) string { return fixtureVerseText(book, ch, n) + " " + scriptureSentinel })))
+	}
 
 	site := &siteWriter{root: filepath.Join(t.TempDir(), "site")}
-	if err := writeSite(site, loaded); err != nil {
+	if err := writeSite(site, loaded, noticedVersionsFor(on)); err != nil {
 		t.Fatalf("writeSite: %v", err)
 	}
 	return site
+}
+
+// bothStates runs fn once with the NKJV's text off and once with it on.
+func bothStates(t *testing.T, fn func(t *testing.T, on bool)) {
+	for _, on := range []bool{false, true} {
+		t.Run("nkjv text "+nkjvTextState(on), func(t *testing.T) { fn(t, on) })
+	}
 }
 
 // walkSite calls fn for every emitted text file, with its slash-separated path
@@ -231,17 +291,21 @@ func walkSite(t *testing.T, site *siteWriter, fn func(rel string, body string)) 
 }
 
 // TestGeneratedSiteRootsAreOnlyPublishedOrNoticed: the root namespace is
-// frozen to the three published translations, the noticed signposts, assets/
-// and 404.html — nothing else, and nothing missing (so no later walk can pass
-// vacuously on a truncated build).
+// frozen to the three published translations, the licensed ones (noticed or
+// published as text, by the switch), assets/ and 404.html — nothing else, and
+// nothing missing (so no later walk can pass vacuously on a truncated build).
 func TestGeneratedSiteRootsAreOnlyPublishedOrNoticed(t *testing.T) {
-	site := fixtureSite(t)
+	bothStates(t, testGeneratedSiteRoots)
+}
+
+func testGeneratedSiteRoots(t *testing.T, on bool) {
+	site := fixtureSiteState(t, on)
 
 	allowed := map[string]bool{"assets": true, "404.html": true}
 	for _, id := range publicDomainWebIDs {
 		allowed[id] = true
 	}
-	for _, nv := range noticedVersions() {
+	for _, nv := range append(noticedVersionsFor(on), licensedVersionsFor(on)...) {
 		allowed[nv.ID] = true
 	}
 	entries, err := os.ReadDir(site.root)
@@ -262,10 +326,11 @@ func TestGeneratedSiteRootsAreOnlyPublishedOrNoticed(t *testing.T) {
 	}
 }
 
-// TestNoLicensedRootCarriesScripture is the tripwire proper, and the one that
-// replaced the "nkjv" substring check. The sentinel rides in every fixture
-// verse: it MUST appear under the published roots (or this test is measuring
-// nothing) and MUST NOT appear anywhere under a noticed root.
+// TestNoLicensedRootCarriesScripture is the tripwire proper with the NKJV's
+// text off, and the one that replaced the "nkjv" substring check. The sentinel
+// rides in every fixture verse: it MUST appear under the published roots (or
+// this test is measuring nothing) and MUST NOT appear anywhere under a noticed
+// root.
 //
 // This goes red the moment anyone hands renderNotice real verse text — which is
 // exactly what it is for, since the structural defence (noticeSpec has no field
@@ -274,7 +339,7 @@ func TestNoLicensedRootCarriesScripture(t *testing.T) {
 	site := fixtureSite(t)
 
 	noticed := map[string]bool{}
-	for _, nv := range noticedVersions() {
+	for _, nv := range noticedVersionsFor(false) {
 		noticed[nv.ID] = true
 	}
 	published, sentinelSeen := 0, 0
@@ -301,14 +366,54 @@ func TestNoLicensedRootCarriesScripture(t *testing.T) {
 	}
 }
 
+// TestALicensedRootCarriesScriptureOnlyWhenSwitchedOn is the counterpart with
+// the text on: the sentinel IS on the /nkjv/ chapter pages, because the
+// switch's whole purpose is to put it there — and it is on no /nkjv/ page that
+// stands in for a chapter the edition does not have.
+func TestALicensedRootCarriesScriptureOnlyWhenSwitchedOn(t *testing.T) {
+	site := fixtureSiteState(t, true)
+	read := func(rel string) string {
+		b, err := os.ReadFile(filepath.Join(site.root, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatalf("%s: %v", rel, err)
+		}
+		return string(b)
+	}
+	if !strings.Contains(read("nkjv/john/3/index.html"), scriptureSentinel) {
+		t.Error("/nkjv/john/3/ carries no text with the switch on")
+	}
+	for _, gap := range []string{"nkjv/tobit/1/index.html", "nkjv/tobit/index.html", "nkjv/daniel/13/index.html"} {
+		if strings.Contains(read(gap), scriptureSentinel) {
+			t.Errorf("/%s carries scripture; it names a passage the NKJV does not have", gap)
+		}
+	}
+	// And still never off: the same fixture with the switch off has none.
+	off := fixtureSiteState(t, false)
+	b, err := os.ReadFile(filepath.Join(off.root, "nkjv", "john", "3", "index.html"))
+	if err != nil {
+		t.Fatalf("/nkjv/john/3/ with the switch off: %v", err)
+	}
+	if strings.Contains(string(b), scriptureSentinel) {
+		t.Error("/nkjv/john/3/ carries scripture with the switch off")
+	}
+}
+
 // TestCanonGapPagesCarryNoScripture is the same rule for the OTHER placement of
 // the notice page. /web/tobit/1/ lives under a published root, so the walk above
 // deliberately lets it through; it still must not show WEB Catholic's Tobit.
 func TestCanonGapPagesCarryNoScripture(t *testing.T) {
-	site := fixtureSite(t)
+	bothStates(t, testCanonGapPagesCarryNoScripture)
+}
 
+func testCanonGapPagesCarryNoScripture(t *testing.T, on bool) {
+	site := fixtureSiteState(t, on)
+
+	gaps := []string{"web/tobit/1", "bsb/tobit/1", "web/tobit", "web/daniel/13"}
+	if on {
+		gaps = append(gaps, "nkjv/tobit/1", "nkjv/tobit", "nkjv/daniel/13")
+	}
 	checked := 0
-	for _, gap := range []string{"web/tobit/1", "bsb/tobit/1", "web/tobit", "web/daniel/13"} {
+	for _, gap := range gaps {
 		body, err := os.ReadFile(filepath.Join(site.root, filepath.FromSlash(gap), "index.html"))
 		if err != nil {
 			t.Errorf("%s: %v — the canon-gap page is missing, so the gap is still a 404", gap, err)
@@ -325,13 +430,22 @@ func TestCanonGapPagesCarryNoScripture(t *testing.T) {
 }
 
 // TestPublishedPagesNeverMentionALicensedTranslation is the OLD assertion, kept
-// exactly where it still holds. The three published trees carry scripture and
-// nothing else may creep into them: no NKJV pill in their nav, no NKJV entry in
-// reader.js's book table, no NKJV line in reader.css. It is also the canary for
-// the byte-identity those three trees are required to keep — anything that
-// changed one of those files would almost certainly trip this first.
+// exactly where it still holds. With the NKJV's text off the three published
+// trees carry scripture and nothing else may creep into them: no NKJV pill in
+// their nav, no NKJV entry in reader.js's book table, no NKJV line in
+// reader.css. It is also the canary for the byte-identity those three trees are
+// required to keep — anything that changed one of those files would almost
+// certainly trip this first.
+//
+// With the text on, the NKJV pill and the NKJV column are right — the site
+// carries the translation and the switcher offers it — so only the NRSV and the
+// LSB, which the site never carries, stay forbidden.
 func TestPublishedPagesNeverMentionALicensedTranslation(t *testing.T) {
-	site := fixtureSite(t)
+	bothStates(t, testPublishedPagesNeverMentionALicensedTranslation)
+}
+
+func testPublishedPagesNeverMentionALicensedTranslation(t *testing.T, on bool) {
+	site := fixtureSiteState(t, on)
 
 	published := map[string]bool{}
 	for _, id := range publicDomainWebIDs {
@@ -345,6 +459,9 @@ func TestPublishedPagesNeverMentionALicensedTranslation(t *testing.T) {
 	}
 
 	names := []string{"nkjv", "new king james", "nrsv", "new revised standard", "lsb", "legacy standard"}
+	if on {
+		names = []string{"nrsv", "new revised standard", "lsb", "legacy standard"}
+	}
 	scanned := 0
 	walkSite(t, site, func(rel, body string) {
 		root := strings.SplitN(rel, "/", 2)[0]
@@ -371,15 +488,24 @@ func TestPublishedPagesNeverMentionALicensedTranslation(t *testing.T) {
 // either appears on a page that is supposed to carry no scripture, scripture is
 // what got onto it.
 func TestNoticePagesCarryNoVerseMarkup(t *testing.T) {
-	site := fixtureSite(t)
+	bothStates(t, testNoticePagesCarryNoVerseMarkup)
+}
+
+func testNoticePagesCarryNoVerseMarkup(t *testing.T, on bool) {
+	site := fixtureSiteState(t, on)
 
 	noticed := map[string]bool{}
-	for _, nv := range noticedVersions() {
+	for _, nv := range noticedVersionsFor(on) {
 		noticed[nv.ID] = true
 	}
 	gaps := map[string]bool{
 		"web/tobit/index.html": true, "web/tobit/1/index.html": true,
 		"bsb/tobit/1/index.html": true, "web/daniel/13/index.html": true,
+	}
+	if on {
+		gaps["nkjv/tobit/index.html"] = true
+		gaps["nkjv/tobit/1/index.html"] = true
+		gaps["nkjv/daniel/13/index.html"] = true
 	}
 	checked := 0
 	walkSite(t, site, func(rel, body string) {

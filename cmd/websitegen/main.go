@@ -20,14 +20,22 @@
 //	404.html                             site-wide, at the root (see writeNotFound)
 //
 // AND, at exactly the same paths, the pages that name a passage this site does
-// not carry the words of (notice.go) — the licensed translation the app links
-// to but the site does not publish (/nkjv/…), and the canon gaps inside the
-// published translations (/web/tobit/1/, /web/daniel/13/). They are the same
-// shape and the same URL contract as everything above; they simply say where
-// the passage can be read instead. Their own stylesheet and script:
+// not carry the words of (notice.go) — the canon gaps inside the published
+// translations (/web/tobit/1/, /web/daniel/13/), and, while the NKJV's text is
+// switched off, the licensed translation the app links to (/nkjv/…). They are
+// the same shape and the same URL contract as everything above; they simply
+// say where the passage can be read instead. Their own stylesheet and script:
 //
 //	assets/notice.css                    the extra rules those pages need
 //	assets/notice.js                     the fragment-aware parallel links
+//
+// THE NKJV IS ONE SWITCH (nkjv_text.go). Off, /nkjv/ is the notice tree above
+// and nothing here talks to API.Bible. On, every build fetches the whole NKJV
+// afresh and writes /nkjv/ exactly as it writes the public-domain editions,
+// with the rights holder's notice and the retrieval date at the foot of every
+// page, plus the supplementary faces and rules those pages load:
+//
+//	assets/nkjv.css                      small capitals, italic, the notice
 //
 // The reader lives at the ROOT, not under a /read/ prefix, so a shared link is
 // as short as possible. The site root is therefore shared with the hand-written
@@ -51,6 +59,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -125,44 +134,41 @@ func publishedVersions() []webVersion {
 
 const defaultVersionID = "web"
 
-// noticeVersion is a translation this site publishes PAGES for and no TEXT of.
+// noticeVersion is a licensed translation as the site names it: an id and a
+// display name, and nothing that could hold scripture.
 type noticeVersion struct {
 	ID   string
 	Name string
 }
 
-// noticedVersions are the translations the app emits share links for and the
-// site does not carry the words of. Today that is the NKJV alone.
+// The licensed translations live in nkjv_text.go (siteLicensedVersions), which
+// says whether each is published as text or as notice pages.
 //
-// THIS IS NOT publishedVersions AND MUST NOT BECOME IT. publishedVersions
-// carries a decoder and a URL to fetch scripture from; this list carries an id
-// and a display name and nothing else, because there is nothing else a notice
-// page is allowed to know. Adding an id here publishes a signpost. Adding one
-// to publishedVersions publishes a translation, which is a licensing decision
-// with a rights holder behind it — licensed_exclusion_test.go keeps the two
-// apart.
+// THEY ARE NOT publishedVersions AND MUST NOT BECOME IT. publishedVersions
+// carries a decoder and a URL to fetch scripture from, with no key and no
+// terms; a licensed translation's text reaches the site only through
+// loadLicensed, which only the switch reaches, and which fetches it fresh with
+// a key on every build. licensed_exclusion_test.go keeps the two apart.
 //
-// It exists because /nkjv/john/3/ was a live 404 while the app was emitting
-// exactly that URL: the link was dead for every recipient without the app, and
-// its preview was a bare URL in every message thread (B_WEB_404 and
-// B_UNFURL_NKJV in docs/NKJV_FLOW.md). The settled remedy is that every NKJV
-// path the site serves carries a licensing message and a link to download the
-// app. It is deliberately a stopgap — enough to make the URLs stable and
-// coherent — not the final shape of the site's NKJV story.
-func noticedVersions() []noticeVersion {
-	return []noticeVersion{{ID: "nkjv", Name: "New King James Version"}}
-}
+// The notice tree exists because /nkjv/john/3/ was a live 404 while the app was
+// emitting exactly that URL: the link was dead for every recipient without the
+// app, and its preview was a bare URL in every message thread (B_WEB_404 and
+// B_UNFURL_NKJV in docs/NKJV_FLOW.md). With the switch off every NKJV path the
+// site serves carries a licensing message and a link to download the app; with
+// it on, the same paths carry the text.
 
 // noticeCanonSourceID names the loaded translation whose book and chapter list
 // stands in for a noticed translation's own.
 //
-// WHY A STAND-IN AT ALL. The site holds no NKJV data — that is the point — so
-// the generator cannot ask it how many chapters Jude has. What it can rely on
-// is that the NKJV is the ordinary 66-book Protestant canon, chapter for
-// chapter, with the WEB: 66 books, 1,189 chapters, and versification.go's delta
-// for the NKJV records not a single chapter-count difference (only four extra
-// verses and the Romans doxology's move). So the WEB's shape is not an
-// approximation of the NKJV's canon; it is the same canon.
+// WHY A STAND-IN AT ALL. With the NKJV's text off the site holds no NKJV data —
+// that is the point — so the generator cannot ask it how many chapters Jude
+// has. What it can rely on is that the NKJV is the ordinary 66-book Protestant
+// canon, chapter for chapter, with the WEB: 66 books, 1,189 chapters, and
+// versification.go's delta for the NKJV records not a single chapter-count
+// difference (only four extra verses and the Romans doxology's move). So the
+// WEB's shape is not an approximation of the NKJV's canon; it is the same
+// canon. (With the text on, checkLicensedComplete holds the fetched edition to
+// exactly that shape before a page is written.)
 //
 // If that ever stops being true the failure is a 404 on a chapter the app can
 // link to, which is why the count is asserted in the tests and pinned by an
@@ -173,35 +179,103 @@ func main() {
 	out := flag.String("out", "build/site", "directory to write the site into")
 	cache := flag.String("cache", "build/biblecache", "directory for downloaded translation JSON")
 	offline := flag.Bool("offline", false, "fail rather than download; use only the cache")
+	printState := flag.Bool("print-nkjv-text", false,
+		"print whether this build publishes the NKJV's text (on or off) and exit")
 	flag.Parse()
 
+	// The switch is read here, once, and handed down. Nothing else in this
+	// program consults it, and nothing can override it (nkjv_text.go).
+	state := nkjvSiteText
+	if *printState {
+		fmt.Println(nkjvTextState(state))
+		return
+	}
+	if err := run(runOptions{out: *out, cache: *cache, offline: *offline, nkjvText: state, now: time.Now}); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// runOptions is one build: where it writes, where the public-domain feeds are
+// cached, whether it may download, the state of the NKJV switch, and the clock
+// the retrieval date is read from.
+type runOptions struct {
+	out, cache string
+	offline    bool
+	nkjvText   bool
+	now        func() time.Time
+}
+
+// run builds the site. Everything that can refuse does so before the output
+// directory is touched: a switched-on build without a key, or whose fetch
+// fails or comes back incomplete, leaves the previous build where it was.
+func run(o runOptions) error {
 	start := time.Now()
-	site := &siteWriter{root: *out}
-	if err := os.MkdirAll(*cache, 0o755); err != nil {
-		log.Fatalf("cache dir: %v", err)
+	if o.nkjvText && o.offline {
+		return errors.New("the NKJV's text is switched on (cmd/websitegen/nkjv_text.go) and is fetched fresh " +
+			"on every build, so -offline cannot build this site")
+	}
+	// The key first, before any download, so a build that cannot finish says so
+	// at once — and out of the environment before anything else runs.
+	var key string
+	if o.nkjvText {
+		k, err := takeSiteKey()
+		if err != nil {
+			return err
+		}
+		key = k
+	}
+	if err := os.MkdirAll(o.cache, 0o755); err != nil {
+		return fmt.Errorf("cache dir: %w", err)
+	}
+	loaded, err := loadPublished(o.cache, o.offline)
+	if err != nil {
+		return err
+	}
+	var ref *bibletext.BibleData
+	for _, v := range loaded {
+		if v.ID == versificationReferenceID {
+			ref = v.bible
+		}
+	}
+	licensed, err := loadLicensed(o.nkjvText, o.offline, key, ref, o.now)
+	if err != nil {
+		return err
+	}
+	if !o.nkjvText {
+		log.Printf("nkjv  text off: notice pages, no request to API.Bible")
 	}
 
+	site := &siteWriter{root: o.out, secret: key}
+	if err := writeSite(site, append(loaded, licensed...), noticedVersionsFor(o.nkjvText)); err != nil {
+		return fmt.Errorf("write: %w", err)
+	}
+	log.Printf("wrote %d files to %s in %s", site.files, o.out, time.Since(start).Round(time.Millisecond))
+	return nil
+}
+
+// loadPublished downloads (or reads from the cache) and decodes the
+// public-domain editions. A variable so the tests can stand in for the
+// network; nothing else assigns it.
+var loadPublished = loadPublishedVersions
+
+func loadPublishedVersions(cache string, offline bool) ([]loadedVersion, error) {
 	var loaded []loadedVersion
 	for _, v := range publishedVersions() {
-		body, err := fetchWithCache(v, *cache, *offline)
+		body, err := fetchWithCache(v, cache, offline)
 		if err != nil {
-			log.Fatalf("%s: %v", v.ID, err)
+			return nil, fmt.Errorf("%s: %w", v.ID, err)
 		}
 		bible, err := v.decode(body)
 		if err != nil {
-			log.Fatalf("%s: decode: %v", v.ID, err)
+			return nil, fmt.Errorf("%s: decode: %w", v.ID, err)
 		}
 		if err := checkDecoded(v, bible); err != nil {
-			log.Fatal(err)
+			return nil, err
 		}
 		loaded = append(loaded, loadedVersion{webVersion: v, bible: bible})
 		log.Printf("%-5s %d books, %d headings", v.ID, len(bible.Books), headingCount(bible))
 	}
-
-	if err := writeSite(site, loaded); err != nil {
-		log.Fatalf("write: %v", err)
-	}
-	log.Printf("wrote %d files to %s in %s", site.files, *out, time.Since(start).Round(time.Millisecond))
+	return loaded, nil
 }
 
 // cssName/jsName are the content-hashed asset paths for this build; pageShell
@@ -216,6 +290,10 @@ func contentHash(s string) string {
 type loadedVersion struct {
 	webVersion
 	bible *bibletext.BibleData
+	// licence is set for a licensed edition published as text (nkjv_text.go),
+	// and nil for the public-domain editions — whose pages are therefore
+	// exactly what they were before licensed text could be published.
+	licence *webLicence
 }
 
 // fetchWithCache downloads a translation once and reuses it thereafter, so
@@ -254,6 +332,9 @@ func fetchWithCache(v webVersion, cacheDir string, offline bool) ([]byte, error)
 type siteWriter struct {
 	root  string
 	files int
+	// secret is the API.Bible key while the NKJV's text is being published,
+	// and "" otherwise. No file the site writes may contain it.
+	secret string
 }
 
 // reservedRootNames are files at the site root that the HAND-WRITTEN site owns.
@@ -270,6 +351,9 @@ func (s *siteWriter) write(relPath, content string) error {
 	if reservedRootNames[relPath] {
 		return fmt.Errorf("refusing to write %q: the hand-written site owns that file at the root", relPath)
 	}
+	if s.secret != "" && strings.Contains(content, s.secret) {
+		return fmt.Errorf("refusing to write %q: it contains the API.Bible key", relPath)
+	}
 	full := filepath.Join(s.root, filepath.FromSlash(relPath))
 	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 		return err
@@ -281,7 +365,19 @@ func (s *siteWriter) write(relPath, content string) error {
 	return nil
 }
 
-func writeSite(site *siteWriter, versions []loadedVersion) error {
+// writeSite writes the whole tree: the published editions in versions (the
+// public-domain three, and any licensed edition the switch loaded), and a
+// notice tree for each of noticed.
+func writeSite(site *siteWriter, versions []loadedVersion, noticed []noticeVersion) error {
+	// One root, one tree: a translation published as text cannot also be
+	// written as notices over it, whichever list a caller got wrong.
+	for _, nv := range noticed {
+		for _, v := range versions {
+			if v.ID == nv.ID {
+				return fmt.Errorf("%s is both published and noticed; the switch gives each root one tree", nv.ID)
+			}
+		}
+	}
 	if err := os.RemoveAll(site.root); err != nil {
 		return err
 	}
@@ -349,6 +445,27 @@ func writeSite(site *siteWriter, versions []loadedVersion) error {
 	if err := site.write(noticeJSName, noticeJS); err != nil {
 		return err
 	}
+	// The licensed text's own stylesheet and its two faces, only when a
+	// licensed edition is loaded: with the NKJV's text off the tree gains no
+	// file at all.
+	nkjvCSSName = ""
+	if anyLicensed(versions) {
+		smallCaps := bibletext.WebScriptureFontSmallCaps()
+		italic := bibletext.WebScriptureFontItalic()
+		smallCapsFile := "Junicode-SmallCaps." + contentHash(string(smallCaps)) + ".woff2"
+		italicFile := "Junicode-Italic." + contentHash(string(italic)) + ".woff2"
+		if err := site.write("assets/"+smallCapsFile, string(smallCaps)); err != nil {
+			return err
+		}
+		if err := site.write("assets/"+italicFile, string(italic)); err != nil {
+			return err
+		}
+		css := nkjvCSS(smallCapsFile, italicFile)
+		nkjvCSSName = "assets/nkjv." + contentHash(css) + ".css"
+		if err := site.write(nkjvCSSName, css); err != nil {
+			return err
+		}
+	}
 	if err := writeNotFound(site, versions); err != nil {
 		return err
 	}
@@ -357,12 +474,22 @@ func writeSite(site *siteWriter, versions []loadedVersion) error {
 			return fmt.Errorf("%s: %w", v.ID, err)
 		}
 	}
-	for _, nv := range noticedVersions() {
+	for _, nv := range noticed {
 		if err := writeNoticeVersion(site, nv, versions); err != nil {
 			return fmt.Errorf("%s: %w", nv.ID, err)
 		}
 	}
 	return nil
+}
+
+// anyLicensed reports whether any loaded edition is licensed text.
+func anyLicensed(versions []loadedVersion) bool {
+	for _, v := range versions {
+		if v.licence != nil {
+			return true
+		}
+	}
+	return false
 }
 
 // canonUnion is every (book, chapter) ANY published translation carries, which
@@ -540,7 +667,8 @@ func writeVersion(site *siteWriter, v loadedVersion, all []loadedVersion) error 
 			spec := noticeSpec{
 				Reason: reasonAbsent, Scope: scopeBook,
 				VersionID: v.ID, VersionName: v.Name, Book: book, Slug: slug,
-				Offers: offersForBook(v.ID, all, book, slug, scopeBook.depth()),
+				Offers:  offersForBook(v.ID, all, book, slug, scopeBook.depth()),
+				Licence: v.licence,
 			}
 			if err := site.write(base+"/index.html", renderNotice(spec)); err != nil {
 				return err
@@ -556,7 +684,8 @@ func writeVersion(site *siteWriter, v loadedVersion, all []loadedVersion) error 
 				Reason: reasonAbsent, Scope: scopeChapter,
 				VersionID: v.ID, VersionName: v.Name, Book: book, Slug: slug,
 				Chapter: ch, Prev: prev, Next: next, OwnLastChapter: lastChapter(chapters),
-				Offers: offersForChapter(v.ID, all, book, slug, ch, scopeChapter.depth()),
+				Offers:  offersForChapter(v.ID, all, book, slug, ch, scopeChapter.depth()),
+				Licence: v.licence,
 			}
 			if err := site.write(base+"/"+strconv.Itoa(ch)+"/index.html", renderNotice(spec)); err != nil {
 				return err

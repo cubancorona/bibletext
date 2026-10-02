@@ -22,11 +22,19 @@ import (
 	bibletext "github.com/cubancorona/bibletext"
 )
 
-// noticeFixture builds the real site from a canon with several books, chapter
-// counts that differ between translations, and the two chapters whose
-// versification actually diverges — so the coverage walks below have something
-// to be wrong about.
+// noticeFixture builds the real site, with the NKJV's text off, from a canon
+// with several books, chapter counts that differ between translations, and the
+// two chapters whose versification actually diverges — so the coverage walks
+// below have something to be wrong about.
 func noticeFixture(t *testing.T) (*siteWriter, []loadedVersion) {
+	t.Helper()
+	return noticeFixtureState(t, false)
+}
+
+// noticeFixtureState is noticeFixture in either state of the switch. On, a
+// synthetic NKJV of the Protestant canon is loaded as the switch loads it;
+// the returned versions include it.
+func noticeFixtureState(t *testing.T, on bool) (*siteWriter, []loadedVersion) {
 	t.Helper()
 
 	verses := func(book string, ch, n int) []bibletext.Verse {
@@ -76,8 +84,11 @@ func noticeFixture(t *testing.T) (*siteWriter, []loadedVersion) {
 		}
 		loaded = append(loaded, loadedVersion{webVersion: pv, bible: bible})
 	}
+	if on {
+		loaded = append(loaded, licensedFixtureVersion(syntheticLicensedText(t, protestant(), fixtureVerseText)))
+	}
 	site := &siteWriter{root: filepath.Join(t.TempDir(), "site")}
-	if err := writeSite(site, loaded); err != nil {
+	if err := writeSite(site, loaded, noticedVersionsFor(on)); err != nil {
 		t.Fatalf("writeSite: %v", err)
 	}
 	return site, loaded
@@ -132,8 +143,18 @@ func emittedChapters(t *testing.T, root, versionID string) map[string]bool {
 // scripts/publish-site.sh, which refuses to publish a tree with any other
 // number, so the two halves together cover it: this proves the rule, the guard
 // proves the arithmetic on the real data.
+//
+// With the NKJV's text on, every one of those chapters is a page of text, and
+// /nkjv/ gains the canon-gap pages every published edition has (the
+// deuterocanon, which WEB Catholic serves next door) — and nothing else.
 func TestEveryLinkableNKJVChapterHasAPage(t *testing.T) {
-	site, all := noticeFixture(t)
+	for _, on := range []bool{false, true} {
+		t.Run("nkjv text "+nkjvTextState(on), func(t *testing.T) { testEveryLinkableNKJVChapterHasAPage(t, on) })
+	}
+}
+
+func testEveryLinkableNKJVChapterHasAPage(t *testing.T, on bool) {
+	site, all := noticeFixtureState(t, on)
 	canon := canonSource(t, all)
 
 	want := map[string]bool{}
@@ -154,10 +175,33 @@ func TestEveryLinkableNKJVChapterHasAPage(t *testing.T) {
 	for ref := range want {
 		if !got[ref] {
 			t.Errorf("/nkjv/%s/ was not written — the app can share that link and it would 404", ref)
+			continue
+		}
+		page, err := os.ReadFile(filepath.Join(site.root, "nkjv", filepath.FromSlash(ref), "index.html"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if isText := strings.Contains(string(page), `class="v" id="v`); isText != on {
+			t.Errorf("/nkjv/%s/ carries text: %v, with the switch %s", ref, isText, nkjvTextState(on))
+		}
+	}
+	gaps := map[string]bool{}
+	if on {
+		union := unionCanon(all)
+		for _, book := range union.books {
+			slug, _ := bibletext.BookSlug(book)
+			for _, ch := range union.chapters[book] {
+				if ref := slug + "/" + strconv.Itoa(ch); !want[ref] {
+					gaps[ref] = true
+				}
+			}
+		}
+		if len(gaps) == 0 {
+			t.Fatal("the fixture has no canon gaps under /nkjv/; the gap half proves nothing")
 		}
 	}
 	for ref := range got {
-		if !want[ref] {
+		if !want[ref] && !gaps[ref] {
 			t.Errorf("/nkjv/%s/ was written but is not in the canon — no share link can name it", ref)
 		}
 	}
@@ -469,7 +513,13 @@ func TestPublishedPagesDoNotLinkTheNoticeAssets(t *testing.T) {
 // three: the path the generator writes must be exactly the path the app's share
 // link points at, or every /nkjv/ link sent from the app 404s again.
 func TestNoticeURLsMatchTheAppsLinks(t *testing.T) {
-	site, all := noticeFixture(t)
+	for _, on := range []bool{false, true} {
+		t.Run("nkjv text "+nkjvTextState(on), func(t *testing.T) { testNoticeURLsMatchTheAppsLinks(t, on) })
+	}
+}
+
+func testNoticeURLsMatchTheAppsLinks(t *testing.T, on bool) {
+	site, all := noticeFixtureState(t, on)
 	canon := canonSource(t, all)
 
 	tried := 0

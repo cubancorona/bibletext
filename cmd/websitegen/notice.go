@@ -7,9 +7,10 @@ package main
 // words aren't here, now what?" — and only the reason and the route out differ:
 //
 //	/nkjv/john/3/   the text is licensed and this site does not publish it
-//	                (B_WEB_404, B_UNFURL_NKJV in docs/NKJV_FLOW.md)
+//	                (B_WEB_404, B_UNFURL_NKJV in docs/NKJV_FLOW.md) — the
+//	                state while the NKJV's text is switched off (nkjv_text.go)
 //	/web/tobit/1/   the book is not in this translation's canon
-//	                (B_DEUTERO_WEB_404)
+//	                (B_DEUTERO_WEB_404); /nkjv/tobit/1/ too, with it on
 //
 // Before this, the first was a bare 404 for every recipient without the app and
 // a bare URL in every message thread; the second was a bare 404 that
@@ -26,8 +27,9 @@ package main
 // these pages — not in the body, not in og:description, not in the title beyond
 // the reference itself. The structural guarantee is that noticeSpec has no
 // field that can hold scripture and renderNotice is handed no BibleData at all;
-// the site holds no NKJV text to leak in the first place. licensed_exclusion_test.go
-// re-proves it over the emitted files.
+// with the NKJV's text off the site holds no NKJV text to leak in the first
+// place. licensed_exclusion_test.go re-proves it over the emitted files, in
+// both states of the switch.
 //
 // WHAT THE SERVER CANNOT KNOW. The verse and the sender's note ride in the URL
 // FRAGMENT (share_link.go), which never reaches any server — so a
@@ -114,6 +116,11 @@ type noticeSpec struct {
 	// Offers are the routes out, in the published-version order. At least one,
 	// always — see the I1 note at the top of this file.
 	Offers []noticeOffer
+	// Licence is set on a canon-gap page under a licensed edition published as
+	// text (/nkjv/tobit/1/ with the NKJV's text on), so that page carries the
+	// same footer as every other page of that edition. Never set on a page that
+	// stands in for the text itself.
+	Licence *webLicence
 }
 
 var (
@@ -223,6 +230,10 @@ func renderNotice(n noticeSpec) string {
 		robots: "noindex,follow",
 		css:    []string{noticeCSSName},
 		js:     []string{noticeJSName},
+	}
+	if n.Licence != nil {
+		head.css = append(head.css, nkjvCSSName)
+		head.foot = licenceFoot(n.Licence)
 	}
 	if n.Reason == reasonLicensed {
 		// APPLE'S SMART APP BANNER — see openInApp for why this is here and not
@@ -340,7 +351,9 @@ func chapterOnlyPassage(ref string) string {
 // NO © LINE. The publisher's attribution belongs with the publisher's TEXT, and
 // there is none here — a copyright notice on a page carrying no scripture is
 // noise that reads as a complaint. versions.go's LicenseNotice travels with the
-// text in the app, which is where it is owed.
+// text in the app, and on the site's NKJV pages while the text is published
+// (nkjv_text.go), which is where it is owed. (A canon-gap page under /nkjv/
+// carries it in the footer then too, as every page of that tree does.)
 func (n noticeSpec) lede() string {
 	if n.Reason == reasonAbsent {
 		return n.absentLede()

@@ -13,9 +13,10 @@ import (
 	bibletext "github.com/cubancorona/bibletext"
 )
 
-// pageHead carries the OPTIONAL parts of the document head. Its zero value
-// emits exactly what pageShell has always emitted, which is load-bearing: the
-// three published trees must stay byte-identical across this change, and every
+// pageHead carries the OPTIONAL parts of the document — the head, and the
+// footer's extra lines. Its zero value emits exactly what pageShell has always
+// emitted, which is load-bearing: the public-domain trees must stay
+// byte-identical whatever the notice pages or the licensed text add, and every
 // field below is written only when non-empty.
 type pageHead struct {
 	// robots is the <meta name="robots"> content. Only the notice pages set it.
@@ -29,6 +30,20 @@ type pageHead struct {
 	// the site root; the shell prefixes them with the page's own "../" run.
 	css []string
 	js  []string
+	// foot is HTML set at the very end of the shared footer, after the app link
+	// and the platform row: a licensed edition's copyright notice and the date
+	// its text was retrieved (licenceFoot, nkjv_text.go).
+	foot string
+}
+
+// headFor is the optional part of a published edition's pages: nothing for a
+// public-domain edition, and for a licensed one its stylesheet and the notice
+// in the footer.
+func headFor(v loadedVersion) pageHead {
+	if v.licence == nil {
+		return pageHead{}
+	}
+	return pageHead{css: []string{nkjvCSSName}, foot: licenceFoot(v.licence)}
 }
 
 // pageShell wraps body content in the common document. ogDesc is plain text.
@@ -69,7 +84,7 @@ func pageShellHead(title, ogTitle, ogDesc, canonical, body string, depth int, he
 	// href is the all-platforms landing page, so it is correct with JS off; the
 	// script only narrows it to the App Store on an Apple device.
 	b.WriteString(`<footer class="foot"><a id="getapp" href="https://bibletext.co.uk/">Get the BibleText app</a>` +
-		platformIcons + `</footer>`)
+		platformIcons + head.foot + `</footer>`)
 	fmt.Fprintf(&b, `<script src="%s%s" defer></script>`, up, jsName)
 	// Deferred scripts run in document order, so anything here runs AFTER
 	// reader.js has finished — which is what lets notice.js assume the sender's
@@ -141,8 +156,8 @@ func renderChapter(v loadedVersion, all []loadedVersion, book, slug string, chap
 
 	title := fmt.Sprintf("%s — %s | BibleText", ref, v.Name)
 	canonical := fmt.Sprintf("https://bibletext.co.uk/%s/%s/%d/", v.ID, slug, chapter)
-	return pageShell(title, fmt.Sprintf("%s (%s)", ref, v.Name), chapterPreview(verses), canonical,
-		b.String(), 3)
+	return pageShellHead(title, fmt.Sprintf("%s (%s)", ref, v.Name), chapterPreview(verses), canonical,
+		b.String(), 3, headFor(v))
 }
 
 // chapterBody renders verses into paragraphs using the app's own rules: a join
@@ -373,8 +388,8 @@ func renderBookList(v loadedVersion, all []loadedVersion) string {
 		fmt.Fprintf(&b, `<li><a href="%s/">%s</a></li>`, slug, template.HTMLEscapeString(book))
 	}
 	b.WriteString(`</ul></div>`)
-	return pageShell(v.Name+" | BibleText", v.Name, "Read the "+v.Name+" — free, no ads, no account.",
-		"https://bibletext.co.uk/"+v.ID+"/", b.String(), 1)
+	return pageShellHead(v.Name+" | BibleText", v.Name, "Read the "+v.Name+" — free, no ads, no account.",
+		"https://bibletext.co.uk/"+v.ID+"/", b.String(), 1, headFor(v))
 }
 
 func renderChapterList(v loadedVersion, book, slug string, chapters []int) string {
@@ -389,38 +404,44 @@ func renderChapterList(v loadedVersion, book, slug string, chapters []int) strin
 	}
 	b.WriteString(`</ul></div>`)
 	title := book + " — " + v.Name + " | BibleText"
-	return pageShell(title, book+" ("+v.Name+")",
+	return pageShellHead(title, book+" ("+v.Name+")",
 		fmt.Sprintf("%s has %d chapters. Read it free in the %s.", book, len(chapters), v.Name),
-		"https://bibletext.co.uk/"+v.ID+"/"+slug+"/", b.String(), 2)
+		"https://bibletext.co.uk/"+v.ID+"/"+slug+"/", b.String(), 2, headFor(v))
 }
 
 // writeNotFound emits the SITE-WIDE 404 at the root. GitHub Pages serves it for
 // any unknown path, which is the only server-side hook a static host offers —
 // so it is where a mistyped or aging link gets rescued rather than dead-ending.
-// Today that rescue is only the three whole-Bible links below: the body is
-// fixed, the `versions` argument is unused, and the #guess paragraph is left
-// empty — nothing populates it. Any per-book or per-version guessing (and the
-// care that would need, so a Catholic-only book is never offered under a version
-// lacking it) remains to be written.
+// Today that rescue is only the whole-Bible links below: the body is fixed
+// apart from the licensed editions `versions` carries, and the #guess paragraph
+// is left empty — nothing populates it. Any per-book or per-version guessing
+// (and the care that would need, so a Catholic-only book is never offered
+// under a version lacking it) remains to be written.
 //
-// THE NOTICE VERSIONS ARE DELIBERATELY NOT IN THIS LIST, and the `versions`
-// argument stays unused rather than being widened to include them. The sentence
-// above the links is "That page isn't here — but the whole Bible is", and every
-// item under it has to make that true. /nkjv/ does not: it is a signpost, not a
-// Bible, and a reader who has just failed to find a page would be sent to
-// another page with no words on it. The three that follow are the three that
-// can actually finish the sentence.
+// THE NOTICE VERSIONS ARE DELIBERATELY NOT IN THIS LIST. The sentence above the
+// links is "That page isn't here — but the whole Bible is", and every item
+// under it has to make that true. /nkjv/ with the NKJV's text off does not: it
+// is a signpost, not a Bible, and a reader who has just failed to find a page
+// would be sent to another page with no words on it. With the text on it can
+// finish the sentence, so it joins the list — after the three, which keep the
+// bytes they have always had.
 //
 // (The canon-gap pages are a different matter and need no entry here: they live
 // at real paths under the published versions, so they are reached directly
 // rather than through the 404.)
 func writeNotFound(site *siteWriter, versions []loadedVersion) error {
+	licensed := ""
+	for _, v := range versions {
+		if v.licence != nil {
+			licensed += fmt.Sprintf(`<li><a href="/%s/">%s</a></li>`, v.ID, template.HTMLEscapeString(v.Name))
+		}
+	}
 	body := `<div class="wrap"><h1 class="ref">Not found</h1>` +
 		`<p class="ver">That page isn't here — but the whole Bible is.</p>` +
 		`<p id="guess" class="guess"></p>` +
 		`<ul class="grid"><li><a href="/web/">World English Bible</a></li>` +
 		`<li><a href="/bsb/">Berean Standard Bible</a></li>` +
-		`<li><a href="/webc/">WEB Catholic</a></li></ul></div>`
+		`<li><a href="/webc/">WEB Catholic</a></li>` + licensed + `</ul></div>`
 	page := pageShell("Not found | BibleText", "BibleText",
 		"Read the Bible online — free, no ads, no account.", "", body, 0)
 	// The 404 lives at the site root, so its asset paths must be absolute.
@@ -446,9 +467,10 @@ func writeNotFound(site *siteWriter, versions []loadedVersion) error {
 // Ordering, keying and the cross-reference exclusion all come from
 // bibletext.ChapterFootnoteEntries rather than being worked out again here, so
 // the page cannot drift from the app. That exclusion is why the NKJV
-// contributes nothing — its entire apparatus is cross-references — and it would
-// contribute nothing anyway, since a licensed chapter has no page here at all
-// (notice.go, which never calls chapterBody).
+// contributes nothing when its text is published (nkjv_text.go) — its entire
+// apparatus is cross-references, whose display is an open licensing question —
+// and with its text off a licensed chapter has no page here at all (notice.go,
+// which never calls chapterBody).
 func chapterNotes(bd *bibletext.BibleData, book string, chapter int, verses []bibletext.Verse) string {
 	entries := bibletext.ChapterFootnoteEntries(bd, book, chapter, verses)
 	if len(entries) == 0 {
