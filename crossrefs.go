@@ -475,6 +475,74 @@ var crossRefTargetMoves = []crossRefTargetMove{
 			"Num.13.32 Matt.27.1 Ezek.34.18 Acts.13.45 Ezra.7.11 Neh.8.1 Matt.16.3 Mark.10.2 " +
 			"Luke.11.42 Luke.13.15 Zech.11.17",
 	},
+
+	// THE VERSES SOME MANUSCRIPTS LACK. Not one of the dataset's rows points
+	// at Matthew 17:21, Acts 8:37 or the rest of the sixteen, and the
+	// Treasury's references for them are filed at the verse before. A
+	// translation that prints the verse opens it; in one that lacks it the
+	// rows stay at the verse before (crossRefFootnotedVerses).
+
+	// "This kind can come out by nothing but by prayer and fasting" is 17:21's
+	// saying, not 17:20's mustard seed.
+	{lacks: "Matt.17.21", from: "Matt.17.20", to: "Matt.17.21", rows: "Mark.9.29"},
+	// "The Son of Man came to save that which was lost": the rows that say
+	// why he came, to save the lost, not 18:10's angels of the little ones.
+	{
+		lacks: "Matt.18.11", from: "Matt.18.10", to: "Matt.18.11",
+		rows: "Luke.19.10 John.10.10 Luke.9.56 John.3.17 Mark.2.17 Luke.5.32 John.3.15 1Tim.1.15 " +
+			"Matt.10.6 Ps.72.13 John.12.47",
+	},
+	// "If anyone has ears to hear, let him hear!"
+	{lacks: "Mark.7.16", from: "Mark.7.15", to: "Mark.7.16", rows: "Rev.2.7 Matt.11.15"},
+	// "Where their worm doesn't die", which the Treasury cites at 9:46.
+	{lacks: "Mark.9.46", from: "Mark.9.45", to: "Mark.9.46", rows: "Luke.16.25"},
+	// "If you do not forgive, neither will your Father."
+	{lacks: "Mark.11.26", from: "Mark.11.25", to: "Mark.11.26", rows: "Matt.18.35"},
+	// "The Scripture was fulfilled which says, 'He was counted with
+	// transgressors.'"
+	{lacks: "Mark.15.28", from: "Mark.15.27", to: "Mark.15.28", rows: "Isa.53.12 Jas.2.23 John.9.24"},
+	// The governor's custom of releasing one prisoner at the feast. The
+	// Treasury cites 23:16-17, and 23:16 alone is where the BSB has it.
+	{lacks: "Luke.23.17", from: "Luke.23.16", to: "Luke.23.16-Luke.23.17", rows: "Matt.27.15"},
+	// The confession, "I believe that Jesus Christ is the Son of God", and
+	// believing with all the heart. The WEB and WEB Catholic print 8:37 only
+	// in a footnote, so there the rows stay at 8:36.
+	{
+		lacks: "Acts.8.37", from: "Acts.8.36", to: "Acts.8.37",
+		rows: "Rom.10.9 Matt.16.16 Luke.1.35 John.3.15 John.20.31 Luke.9.20 Acts.16.31 2Cor.1.19 " +
+			"Gal.2.20 1Kgs.8.48 Ezek.44.5 Matt.14.33 Mark.5.7 Mark.8.29 Mark.9.7 John.6.69 John.9.35 " +
+			"Acts.9.20 Rom.1.3 Ps.86.12 John.11.27 Jer.29.13 Rev.2.18 Ps.2.7 1John.5.1",
+	},
+	// Lysias the commanding officer, who came and took Paul by force; the WEB
+	// and WEB Catholic print 24:7 only in a footnote.
+	{lacks: "Acts.24.7", from: "Acts.24.6", to: "Acts.24.7", rows: "Acts.21.31 Acts.21.32 Acts.23.27 Acts.24.22"},
+	// The benediction, "The grace of our Lord Jesus Christ be with you all.
+	// Amen.", not 16:23's greetings from Gaius and Erastus.
+	{
+		lacks: "Rom.16.24", from: "Rom.16.23", to: "Rom.16.24",
+		rows: "Phlm.1.25 1Cor.16.23 2Cor.13.14 1Tim.6.21 Rom.15.33 Col.4.18 1Thess.5.28 2Thess.3.18 " +
+			"Phil.4.23 Heb.13.25 Gal.6.18 Rom.16.20 Rev.22.21",
+	},
+}
+
+// crossRefFootnotedVerses are the verses crossRefTargetMoves points rows at
+// that some translations print only in a footnote, each with the verse
+// before it, where the dataset filed the rows. A translation that lacks one
+// (crossRefPrintedIn) shows the row there, as the dataset did, rather than
+// not at all. The BSB lacks every one of them, and prints each in a footnote
+// on that verse; the WEB and WEB Catholic lack Acts 8:37 and 24:7, and print
+// them in the chapter's footnotes under the missing number, which follows
+// that verse.
+var crossRefFootnotedVerses = map[verseRef]verseRef{
+	{"Matthew", 17, 21}: {"Matthew", 17, 20},
+	{"Matthew", 18, 11}: {"Matthew", 18, 10},
+	{"Mark", 7, 16}:     {"Mark", 7, 15},
+	{"Mark", 9, 46}:     {"Mark", 9, 45},
+	{"Mark", 11, 26}:    {"Mark", 11, 25},
+	{"Mark", 15, 28}:    {"Mark", 15, 27},
+	{"Acts", 8, 37}:     {"Acts", 8, 36},
+	{"Acts", 24, 7}:     {"Acts", 24, 6},
+	{"Romans", 16, 24}:  {"Romans", 16, 23},
 }
 
 // correctTargetMoves applies crossRefTargetMoves, each row only while the
@@ -590,7 +658,9 @@ func correctTargetMoves(rows []datasetRow) []string {
 // Every verse the dataset names has a counterpart in the reference once the
 // moves above are applied, so no row is lost here: a row the reader's
 // translation cannot show is dropped later, by crossRefTargetIn, for that
-// translation alone.
+// translation alone. The rows crossRefTargetMoves points at Acts 8:37 and
+// 24:7, which the reference prints only in footnotes, are shown in it at the
+// verses before them, where the dataset filed them (crossRefFootnotedVerses).
 func parseCrossRefRows(r io.Reader) (map[string][]tskRow, []string, error) {
 	return readCrossRefRows(r, maxCrossRefsKept)
 }
@@ -890,7 +960,13 @@ func normaliseSpanEnd(c crossRef) crossRef {
 // 23:13-14 — and mapping the ends alone turned "1:16-17" into "1:17-16" and
 // left the moved verse's own text out of a span such as 1:12-17.
 func crossRefTargetIn(versionID string, c crossRef) []crossRef {
-	ch, vs, res := MapVerse(versificationReference, versionID, c.Book, c.Chapter, c.Verse)
+	ch, vs, res := crossRefPrintedIn(versionID, c.Book, c.Chapter, c.Verse)
+	if home, ok := crossRefFootnotedVerses[verseRef{c.Book, c.Chapter, c.Verse}]; ok && res == verseMapAbsent && c.EndV == 0 {
+		// A row moved to a verse this translation prints only in a footnote
+		// stays at the verse before it, where the dataset filed it.
+		c.Chapter, c.Verse = home.Chapter, home.Verse
+		ch, vs, res = crossRefPrintedIn(versionID, c.Book, c.Chapter, c.Verse)
+	}
 	if res == verseMapAbsent && c.EndV != 0 && c.EndBook == "" {
 		// A range whose FIRST verse this translation lacks begins at the next
 		// verse of the range it has. The BSB lacks the WEB's Matthew 23:13 —
@@ -903,7 +979,7 @@ func crossRefTargetIn(versionID string, c crossRef) []crossRef {
 			if (c.EndCh == 0 || c.EndCh == c.Chapter) && c.Verse > c.EndV {
 				break
 			}
-			ch, vs, res = MapVerse(versificationReference, versionID, c.Book, c.Chapter, c.Verse)
+			ch, vs, res = crossRefPrintedIn(versionID, c.Book, c.Chapter, c.Verse)
 		}
 	}
 	if res == verseMapAbsent || res == verseMapIncommensurable {
@@ -923,7 +999,7 @@ func crossRefTargetIn(versionID string, c crossRef) []crossRef {
 		endCh = c.Chapter // the reference's chapter, not the rewritten one
 	}
 	endV := c.EndV
-	ech, ev, r := MapVerse(versificationReference, versionID, endBook, endCh, endV)
+	ech, ev, r := crossRefPrintedIn(versionID, endBook, endCh, endV)
 	// A range whose LAST verse this translation lacks ends at the last verse
 	// before it that the translation has. The BSB lacks Matthew 17:21 and Mark
 	// 11:26, so the parallels "Matthew 17:14-21" and "Mark 11:20-26" are its
@@ -936,7 +1012,7 @@ func crossRefTargetIn(versionID string, c crossRef) []crossRef {
 		if endV < 1 || (endBook == c.Book && endCh == c.Chapter && endV <= c.Verse) {
 			break
 		}
-		ech, ev, r = MapVerse(versificationReference, versionID, endBook, endCh, endV)
+		ech, ev, r = crossRefPrintedIn(versionID, endBook, endCh, endV)
 	}
 	if r == verseMapAbsent || r == verseMapIncommensurable {
 		return []crossRef{out}
@@ -1032,6 +1108,23 @@ func crossRefPartsAround(versionID string, c crossRef) []crossRef {
 		from = verseRef{c.Book, last.Chapter, last.Verse + 1}
 	}
 	return append(parts, part(from, hi))
+}
+
+// crossRefPrintedIn maps a verse of the reference into versionID, as MapVerse
+// does, and reports absent as well a verse the translation's own numbering
+// skips (omittedVerses). The versification table records how a translation
+// differs from the reference, and has nothing to say of a verse the
+// reference does not have either: it carries Acts 8:37, which the NKJV
+// prints and the reference does not, into the WEB, the WEB Catholic and the
+// BSB unchanged, as an exact match, and all three print 8:37 only in a
+// footnote, so a row to it there would show a blank preview and a tap that
+// goes nowhere.
+func crossRefPrintedIn(versionID, book string, ch, v int) (int, int, verseMapResult) {
+	ch, v, res := MapVerse(versificationReference, versionID, book, ch, v)
+	if (res == verseMapExact || res == verseMapMoved) && omitsVerse(versionID, book, ch, v) {
+		return 0, 0, verseMapAbsent
+	}
+	return ch, v, res
 }
 
 // verseBefore orders two verses of one book.

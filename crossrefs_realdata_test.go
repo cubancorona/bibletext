@@ -131,7 +131,9 @@ func TestEveryCrossReferenceRowOpensScriptureTheTextHas(t *testing.T) {
 		walked++
 		if id == versificationReference {
 			// The index speaks the reference's numbering, so every verse it
-			// names must be one the reference prints.
+			// names must be one the reference prints, or one a move points
+			// rows at that it prints only in a footnote, on a verse it prints
+			// (crossRefFootnotedVerses).
 			for key, rows := range every {
 				f := strings.Split(key, "|")
 				var ch, v int
@@ -142,9 +144,14 @@ func TestEveryCrossReferenceRowOpensScriptureTheTextHas(t *testing.T) {
 				}
 				for _, r := range rows {
 					c := r.crossRef()
-					if bd.GetVerse(c.Book, c.Chapter, c.Verse) == nil {
-						t.Errorf("a row from %s %d:%d points at %s, whose start the reference does not print", f[0], ch, v, c.label())
+					if bd.GetVerse(c.Book, c.Chapter, c.Verse) != nil {
+						continue
 					}
+					if home, ok := crossRefFootnotedVerses[verseRef{c.Book, c.Chapter, c.Verse}]; ok && c.EndV == 0 &&
+						bd.GetVerse(home.Book, home.Chapter, home.Verse) != nil {
+						continue
+					}
+					t.Errorf("a row from %s %d:%d points at %s, whose start the reference does not print", f[0], ch, v, c.label())
 				}
 			}
 		}

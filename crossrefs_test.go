@@ -514,6 +514,21 @@ func TestACorrectionLeavesRowsThatHaveChangedAlone(t *testing.T) {
 			},
 		},
 		{
+			"a verse the dataset lacks, filed under now",
+			asMade + "Acts.8.37\tRom.10.9\t3\n", []string{"names Acts 8:37 itself"},
+			func(l map[string][]string) bool {
+				return has(l, "Romans|10|9", "Acts 8:36") && !has(l, "Romans|10|9", "Acts 8:37") &&
+					has(l, "Mark|9|29", "Matthew 17:21")
+			},
+		},
+		{
+			"a verse the dataset lacks, the end of a range now",
+			asMade + "Isa.53.7\tActs.8.32-Acts.8.37\t3\n", []string{"names Acts 8:37 itself"},
+			func(l map[string][]string) bool {
+				return has(l, "Romans|10|9", "Acts 8:36") && has(l, "Isaiah|53|7", "Acts 8:32-37")
+			},
+		},
+		{
 			"a row the move was made for is gone",
 			strings.Replace(asMade, "Luke.11.52\tMatt.23.13\t2\n", "", 1), []string{"Matthew 23:14: the dataset no longer has the row to Matthew 23:13 from Luke 11:52"},
 			func(l map[string][]string) bool {

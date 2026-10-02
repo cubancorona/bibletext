@@ -15,6 +15,7 @@ package bibletext
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -108,14 +109,16 @@ func TestTheRomansDoxologyIsReachableFromEveryTranslation(t *testing.T) {
 
 // THE ONE THAT SHOWED A BLANK ROW. Where a translation omits a verse the dataset
 // references, the panel rendered the label with empty space under it and a tap
-// that closed the panel and went nowhere. Such a row is now dropped.
+// that closed the panel and went nowhere. Such a row is now dropped — unless
+// it is one the dataset filed at the verse before, which stays there
+// (TestARowForAVerseSomeTextsLack).
 func TestTargetsAbsentFromTheReadersTranslationAreDropped(t *testing.T) {
 	// Verses the BSB omits as later additions; the NKJV keeps them.
 	for _, v := range []struct {
 		book           string
 		chapter, verse int
 	}{
-		{"Mark", 9, 44}, {"Mark", 9, 46}, {"Mark", 11, 26}, {"Matthew", 17, 21},
+		{"Mark", 9, 44}, {"John", 5, 4}, {"Acts", 28, 29},
 	} {
 		if _, ok := targetIn(t, "bsb", crossRef{Book: v.book, Chapter: v.chapter, Verse: v.verse}); ok {
 			t.Errorf("%s %d:%d is offered as a cross-reference in the BSB, which does not contain it — "+
@@ -420,5 +423,124 @@ func TestASpanAcrossTheSongOfTheThreeIsShownOnEitherSideOfIt(t *testing.T) {
 		webc[16] != "Psalms 1:15" {
 		t.Errorf("WEB Catholic lists %q, want Daniel 3:19-23 and 3:91-97 together, then the same "+
 			"fifteen psalms as the WEB", webc)
+	}
+}
+
+// A ROW FOR A VERSE SOME TEXTS LACK. The dataset has no rows for Matthew
+// 17:21, Acts 8:37 and the rest of the sixteen verses some manuscripts lack,
+// and files the Treasury's references for them at the verse before. Those
+// rows now point at the verse they cite where the reader's text prints it,
+// and stay at the verse before where it does not — the BSB prints the
+// missing verse in a footnote on that verse, the WEB and WEB Catholic in the
+// chapter's footnotes — never a blank row.
+//
+// Acts 8:37 is the hard case. The reference, the WEB, prints it only in a
+// footnote, so the versification table has nothing to say about it and
+// carries it into the WEB Catholic and the BSB unchanged; only the NKJV
+// prints it.
+func TestARowForAVerseSomeTextsLack(t *testing.T) {
+	for _, tc := range []struct {
+		in   crossRef
+		want map[string]string // translation -> label
+	}{
+		{crossRef{Book: "Matthew", Chapter: 17, Verse: 21}, map[string]string{
+			"web": "Matthew 17:21", "webc": "Matthew 17:21", "nkjv": "Matthew 17:21", "bsb": "Matthew 17:20"}},
+		{crossRef{Book: "Romans", Chapter: 16, Verse: 24}, map[string]string{
+			"web": "Romans 16:24", "webc": "Romans 16:24", "nkjv": "Romans 16:24", "bsb": "Romans 16:23"}},
+		{crossRef{Book: "Acts", Chapter: 8, Verse: 37}, map[string]string{
+			"web": "Acts 8:36", "webc": "Acts 8:36", "nkjv": "Acts 8:37", "bsb": "Acts 8:36"}},
+		{crossRef{Book: "Acts", Chapter: 24, Verse: 7}, map[string]string{
+			"web": "Acts 24:6", "webc": "Acts 24:6", "nkjv": "Acts 24:7", "bsb": "Acts 24:6"}},
+	} {
+		for vid, want := range tc.want {
+			got, ok := targetIn(t, vid, tc.in)
+			if !ok || got.label() != want {
+				t.Errorf("%s: a row to %s reads %q (shown %v), want %q", vid, tc.in.label(), got.label(), ok, want)
+			}
+		}
+	}
+
+	// Through the dataset as it is filed, into the panel.
+	withCrossRefIndex(t, "Mark.9.29\tMatt.17.20\t16\n"+
+		"Rom.10.9\tActs.8.36\t15\n"+
+		"Matt.27.15\tLuke.23.16\t2\n"+
+		"Luke.16.25\tMark.9.45\t7\n")
+	bd := xrefBible(map[string]map[int]int{
+		"Mark": {9: 50}, "Matthew": {17: 27, 27: 66}, "Romans": {10: 21}, "Acts": {8: 40},
+		"Luke": {16: 31, 23: 56},
+	})
+	for _, tc := range []struct {
+		vid, book string
+		ch, v     int
+		want      string
+	}{
+		{"web", "Mark", 9, 29, "Matthew 17:21"},
+		{"webc", "Mark", 9, 29, "Matthew 17:21"},
+		{"nkjv", "Mark", 9, 29, "Matthew 17:21"},
+		{"bsb", "Mark", 9, 29, "Matthew 17:20"},
+		{"web", "Romans", 10, 9, "Acts 8:36"},
+		{"webc", "Romans", 10, 9, "Acts 8:36"},
+		{"nkjv", "Romans", 10, 9, "Acts 8:37"},
+		{"bsb", "Romans", 10, 9, "Acts 8:36"},
+		{"web", "Matthew", 27, 15, "Luke 23:16-17"},
+		{"nkjv", "Matthew", 27, 15, "Luke 23:16-17"},
+		{"bsb", "Matthew", 27, 15, "Luke 23:16"},
+		{"web", "Luke", 16, 25, "Mark 9:46"},
+		{"bsb", "Luke", 16, 25, "Mark 9:45"},
+	} {
+		st := &AppState{Bible: bd, CurrentBook: tc.book, CurrentChapter: tc.ch, CurrentVersion: tc.vid}
+		var got []string
+		for _, c := range crossRefsForSelection(st, "", selSpan{lo: tc.v, hi: tc.v}) {
+			if !c.Parallel {
+				got = append(got, c.label())
+			}
+		}
+		if fmt.Sprint(got) != fmt.Sprint([]string{tc.want}) {
+			t.Errorf("%s %s %d:%d lists %q, want %q", tc.vid, tc.book, tc.ch, tc.v, got, tc.want)
+		}
+	}
+}
+
+// The verses a moved row stays beside are the ones the moves were made from,
+// and each is a verse some translation does not print, so the stay is one
+// that can happen; and every move to a single verse some translation does
+// not print has one.
+func TestEveryFootnotedVerseIsAMovesOwn(t *testing.T) {
+	type move struct{ from, to verseRef }
+	var moves []move
+	for _, m := range crossRefTargetMoves {
+		fb, fc, fv, ok1 := parseOSISRef(m.from)
+		to, ok2 := parseOSISTarget(m.to)
+		if !ok1 || !ok2 {
+			t.Fatalf("the move from %s to %s does not parse", m.from, m.to)
+		}
+		if to.EndV == 0 {
+			moves = append(moves, move{verseRef{fb, fc, fv}, verseRef{to.Book, to.Chapter, to.Verse}})
+		}
+	}
+	skipped := func(at verseRef) bool {
+		for _, vid := range []string{"web", "webc", "bsb", "nkjv"} {
+			if _, _, res := crossRefPrintedIn(vid, at.Book, at.Chapter, at.Verse); res == verseMapAbsent {
+				return true
+			}
+		}
+		return false
+	}
+	for at, home := range crossRefFootnotedVerses {
+		if !slices.Contains(moves, move{home, at}) {
+			t.Errorf("%s %d:%d stays at %d:%d, which no move was made from", at.Book, at.Chapter, at.Verse, home.Chapter, home.Verse)
+		}
+		if !skipped(at) {
+			t.Errorf("%s %d:%d is a footnoted verse no translation skips", at.Book, at.Chapter, at.Verse)
+		}
+	}
+	for _, m := range moves {
+		if home, ok := crossRefFootnotedVerses[m.to]; skipped(m.to) && (!ok || home != m.from) {
+			t.Errorf("rows moved to %s %d:%d, which a translation skips, have nowhere to stay", m.to.Book, m.to.Chapter, m.to.Verse)
+		}
+	}
+	// CONTROL: the kingdom woe's move is to a verse every translation has.
+	if !slices.ContainsFunc(moves, func(m move) bool { return m.to == verseRef{"Matthew", 23, 14} }) || skipped(verseRef{"Matthew", 23, 14}) {
+		t.Error("control: the move to Matthew 23:14 is missing, or a translation skips the kingdom woe")
 	}
 }
