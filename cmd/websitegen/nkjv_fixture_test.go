@@ -62,15 +62,17 @@ func syntheticLicensedText(t *testing.T, ref *bibletext.BibleData, text func(boo
 }
 
 // licensedFixtureVersion is the edition above as the generator loads it, with
-// the licence the switch attaches: the registry's notice and fixedRetrieval.
+// the licence the switch attaches: the registry's notice as the site prints it
+// and fixedRetrieval.
 func licensedFixtureVersion(bd *bibletext.BibleData) loadedVersion {
+	notice, err := siteNotice("nkjv", bibletext.VersionLicenseNotice("nkjv"))
+	if err != nil {
+		panic(err)
+	}
 	return loadedVersion{
 		webVersion: webVersion{ID: "nkjv", Name: "New King James Version", headings: true},
 		bible:      bd,
-		licence: &webLicence{
-			Notice:    bibletext.VersionLicenseNotice("nkjv"),
-			Retrieved: londonDate(fixedRetrieval),
-		},
+		licence:    &webLicence{Notice: notice, Retrieved: londonDate(fixedRetrieval)},
 	}
 }
 

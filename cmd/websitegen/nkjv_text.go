@@ -131,10 +131,36 @@ func takeSiteKey() (string, error) {
 }
 
 // webLicence is what a page of licensed text must say about it: the rights
-// holder's notice, and the London civil date this build retrieved the text.
+// holder's notice as the site prints it (siteNotice), and the London civil date
+// this build retrieved the text.
 type webLicence struct {
 	Notice    string
 	Retrieved time.Time
+}
+
+// registryCredit is the last sentence of the registry's NKJV notice
+// (BibleVersion.LicenseNotice, versions.go): the visible API.Bible credit the
+// app prints with the text, and goes on printing.
+//
+// The site prints the provider in a line of its own, the retrieval line, which
+// also says when this build fetched the text. So the notice above that line
+// stops before this sentence rather than credit the provider twice, and every
+// NKJV page ends with the rights holder's notice and that one line.
+const registryCredit = " Text provided via API.Bible (api.bible)."
+
+// siteNotice is the registry's notice as the site prints it: without
+// registryCredit, which the retrieval line replaces. A notice that does not end
+// with that sentence is refused rather than printed whole, because the footer
+// would then credit the provider twice, or the registry's wording has changed
+// and the two lines need reading together again before a publish.
+func siteNotice(id, notice string) (string, error) {
+	trimmed, ok := strings.CutSuffix(notice, registryCredit)
+	if !ok || strings.TrimSpace(trimmed) == "" {
+		return "", fmt.Errorf("%s: the registry's licence notice does not end with %q, the credit the site's "+
+			"retrieval line replaces; read the notice and retrievedLineFormat together before this can publish",
+			id, strings.TrimSpace(registryCredit))
+	}
+	return trimmed, nil
 }
 
 // london is the zone the retrieval date is stated in. time/tzdata is imported
@@ -154,11 +180,16 @@ func londonDate(t time.Time) time.Time {
 }
 
 // retrievedLineFormat is the provenance line at the foot of every NKJV page:
-// when this build fetched the text, and from where. Held in this one constant
-// so the wording is a one-line change. %s is the date, written as
-// <time datetime="2026-10-02">2 October 2026</time>; the link carries no
-// tracking parameters.
-const retrievedLineFormat = `Text retrieved from <a href="https://api.bible">API.Bible</a> on %s.`
+// who provided the text, and when this build fetched it. It is the site's
+// API.Bible credit, in place of the registry's (registryCredit). Held in this
+// one constant so the wording is a one-line change; scripts/site-nkjv-guards.sh
+// holds every /nkjv/ page to it. %s is the date, written as
+// <time datetime="2026-10-02">2 October 2026</time>, so a page reads
+//
+//	Text provided by API.Bible (api.bible), retrieved 2 October 2026.
+//
+// with "api.bible" the link. The link carries no tracking parameters.
+const retrievedLineFormat = `Text provided by API.Bible (<a href="https://api.bible">api.bible</a>), retrieved %s.`
 
 // licenceFoot is the copyright notice and the retrieval line, set in the page
 // footer (pageHead.foot) in the footer's own small, muted type
@@ -217,6 +248,10 @@ func loadLicensed(on, offline bool, key string, ref *bibletext.BibleData, now fu
 		notice := bibletext.VersionLicenseNotice(lv.ID)
 		if notice == "" {
 			return nil, fmt.Errorf("%s: the registry has no licence notice to print with the text", lv.ID)
+		}
+		notice, err = siteNotice(lv.ID, notice)
+		if err != nil {
+			return nil, err
 		}
 		retrieved := londonDate(now())
 		chapters, verses := 0, 0

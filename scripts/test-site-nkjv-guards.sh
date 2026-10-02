@@ -40,7 +40,7 @@ DATE=2026-10-02
 NOTICE='Scripture taken from the New King James Version®. Copyright © 1982 by Thomas Nelson.'
 foot() {
   printf '<footer class="foot"><a id="getapp" href="/">app</a><p class="lic">%s</p>' "$NOTICE"
-  printf '<p class="retrieved">Text retrieved from <a href="https://api.bible">API.Bible</a> on <time datetime="%s">%s</time>.</p></footer>' "$1" "$1"
+  printf '<p class="retrieved">Text provided by API.Bible (<a href="https://api.bible">api.bible</a>), retrieved <time datetime="%s">%s</time>.</p></footer>' "$1" "$1"
 }
 
 # The text-on tree: three chapters of text (John 3's sixteen verses, John 1's
@@ -120,6 +120,10 @@ o=$(fresh on on); sub 's/Scripture taken from the New King James Version/Scriptu
 refuses "the copyright notice stripped from one page" "lack the copyright notice" nkjv_guard_on "$o" 3 19 "$DATE"
 o=$(fresh on on); sub 's|https://api.bible|https://example.invalid|' "$o/nkjv/tobit/1/index.html"
 refuses "the retrieval line stripped from one page" "lack the retrieval line" nkjv_guard_on "$o" 3 19 "$DATE"
+o=$(fresh on on); sub 's|Text provided by API.Bible (<a href="https://api.bible">api.bible</a>), retrieved |Text retrieved from <a href="https://api.bible">API.Bible</a> on |' "$o/nkjv/john/1/index.html"
+refuses "the earlier wording of the retrieval line on one page" "lack the retrieval line" nkjv_guard_on "$o" 3 19 "$DATE"
+o=$(fresh on on); sub 's|Thomas Nelson\.</p>|Thomas Nelson. Text provided via API.Bible (api.bible).</p>|' "$o/nkjv/john/index.html"
+refuses "the registry's credit kept in one page's notice" "as well as the retrieval line" nkjv_guard_on "$o" 3 19 "$DATE"
 refuses "yesterday's text" "not on this run's date" nkjv_guard_on "$(fresh on on)" 3 19 2026-10-01
 o=$(fresh on on); sub "s/$DATE/2026-09-30/" "$o/nkjv/jude/1/index.html"
 refuses "one page with a different date" "different retrieval date" nkjv_guard_on "$o" 3 19 "$DATE"

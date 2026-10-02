@@ -15,9 +15,12 @@
 #   nkjv_guard_on TREE SCRIPTURE_PAGES VERSES DATE...
 #       the text: exactly SCRIPTURE_PAGES chapter pages of text and the rest
 #       canon-gap notices, exactly VERSES verse anchors, the copyright notice
-#       and the retrieval line on every /nkjv/ page with a date that is one of
-#       DATE (this run's London dates, so the text was fetched by this build),
-#       none of it anywhere else, and every face its stylesheet names present.
+#       and the retrieval line ("Text provided by API.Bible (api.bible),
+#       retrieved <date>.", retrievedLineFormat in cmd/websitegen/nkjv_text.go)
+#       on every /nkjv/ page with a date that is one of DATE (this run's London
+#       dates, so the text was fetched by this build), the provider credited by
+#       that line alone, none of it anywhere else, and every face its
+#       stylesheet names present.
 #
 #   site_guard_glyphs TREE
 #       the type, in BOTH states: every character a page sets in a web face is
@@ -114,8 +117,13 @@ nkjv_guard_on() {
     xargs -0 -r grep -L 'Scripture taken from the New King James Version' | head -3 || true)
   [[ -z "$bad" ]] || { echo "pages under /nkjv/ lack the copyright notice: $bad"; return 1; }
   bad=$(find "$out/nkjv" -name '*.html' -print0 |
-    xargs -0 -r grep -L 'href="https://api.bible"' | head -3 || true)
+    xargs -0 -r grep -L -F 'Text provided by API.Bible (<a href="https://api.bible">api.bible</a>), retrieved ' |
+    head -3 || true)
   [[ -z "$bad" ]] || { echo "pages under /nkjv/ lack the retrieval line: $bad"; return 1; }
+  # The line is the site's API.Bible credit; the registry's own, which the app
+  # prints at the end of the notice, is dropped from the site's copy of it.
+  bad=$(grep -rl --include='*.html' -F 'Text provided via API.Bible' "$out" | head -3 || true)
+  [[ -z "$bad" ]] || { echo "pages carry the registry's API.Bible credit as well as the retrieval line: $bad"; return 1; }
   date=$(grep -o '<time datetime="[0-9-]*">' "$page" | head -1 | sed 's/.*datetime="\([0-9-]*\)".*/\1/' || true)
   for d in "$@"; do
     [[ -n "$d" && "$date" == "$d" ]] && dated=true

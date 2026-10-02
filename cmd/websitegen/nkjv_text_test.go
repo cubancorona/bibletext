@@ -6,6 +6,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -397,8 +398,8 @@ func TestNKJVTextOnPages(t *testing.T) {
 	}
 	cssRel := strings.TrimPrefix(filepath.ToSlash(findAsset(t, out, "nkjv.*.css")), filepath.ToSlash(out)+"/")
 	const lic = `<p class="lic">Scripture taken from the New King James Version`
-	const retrieved = `<p class="retrieved">Text retrieved from <a href="https://api.bible">API.Bible</a> on ` +
-		`<time datetime="2026-10-02">2 October 2026</time>.</p>`
+	const retrieved = `<p class="retrieved">Text provided by API.Bible (<a href="https://api.bible">api.bible</a>), ` +
+		`retrieved <time datetime="2026-10-02">2 October 2026</time>.</p>`
 
 	john := readSiteFile(t, out, "nkjv/john/3/index.html")
 	for _, want := range []string{
@@ -414,9 +415,16 @@ func TestNKJVTextOnPages(t *testing.T) {
 			t.Errorf("/nkjv/john/3/ carries %s, which belongs to a notice page", unwanted)
 		}
 	}
-	// The notice sits at the very foot, after the app link and the platforms.
+	// The notice sits at the very foot, after the app link and the platforms,
+	// and the page ends with the rights holder's notice and the one line: the
+	// notice stops before the registry's own API.Bible credit, which the line
+	// replaces (siteNotice).
 	if strings.Index(john, `id="getapp"`) > strings.Index(john, lic) || !strings.Contains(john, retrieved+`</footer>`) {
 		t.Error("the notice is not at the foot of the footer")
+	}
+	if want := `<p class="lic">` + strings.TrimSuffix(bibletext.VersionLicenseNotice("nkjv"), registryCredit) + `</p>` +
+		retrieved + `</footer>`; !strings.Contains(john, want) {
+		t.Errorf("the page does not end with the notice and the one line:\n want %s", want)
 	}
 	if !strings.Contains(readSiteFile(t, out, "nkjv/psalms/3/index.html"), `<p class="pst">A licensed fixture title.</p>`) {
 		t.Error("/nkjv/psalms/3/ lacks its title")
@@ -434,7 +442,7 @@ func TestNKJVTextOnPages(t *testing.T) {
 			t.Errorf("/nkjv/tobit/1/ lacks %s", want)
 		}
 	}
-	// Every /nkjv/ page, and no other.
+	// Every /nkjv/ page, and no other; and no page credits the provider twice.
 	walkSite(t, &siteWriter{root: out}, func(rel, body string) {
 		if !strings.HasSuffix(rel, ".html") {
 			return
@@ -442,6 +450,9 @@ func TestNKJVTextOnPages(t *testing.T) {
 		under := strings.HasPrefix(rel, "nkjv/")
 		if has := strings.Contains(body, retrieved); has != under {
 			t.Errorf("%s: retrieval line present %v, under /nkjv/ %v", rel, has, under)
+		}
+		if strings.Contains(body, "provided via API.Bible") {
+			t.Errorf("%s carries the registry's API.Bible credit as well as the retrieval line", rel)
 		}
 	})
 	web := readSiteFile(t, out, "web/john/3/index.html")
@@ -477,7 +488,7 @@ func TestRetrievedLineIsTheLondonCivilDate(t *testing.T) {
 		{time.Date(2026, 3, 29, 0, 30, 0, 0, time.UTC), "2026-03-29", "29 March 2026"},      // the spring change
 	} {
 		foot := licenceFoot(&webLicence{Notice: "N", Retrieved: londonDate(tc.at)})
-		want := `<p class="retrieved">Text retrieved from <a href="https://api.bible">API.Bible</a> on ` +
+		want := `<p class="retrieved">Text provided by API.Bible (<a href="https://api.bible">api.bible</a>), retrieved ` +
 			`<time datetime="` + tc.iso + `">` + tc.words + `</time>.</p>`
 		if !strings.Contains(foot, want) {
 			t.Errorf("%s renders as %s, want %s", tc.at, foot, want)
@@ -490,6 +501,39 @@ func TestRetrievedLineIsTheLondonCivilDate(t *testing.T) {
 	if foot := licenceFoot(&webLicence{Notice: "a <b> & c", Retrieved: londonDate(fixedRetrieval)}); !strings.Contains(foot,
 		`<p class="lic">a &lt;b&gt; &amp; c</p>`) {
 		t.Errorf("the notice is not escaped: %s", foot)
+	}
+}
+
+// THE SITE'S FOOTER CREDITS API.BIBLE ONCE. The registry's notice ends with the
+// app's API.Bible credit, and the app keeps printing it; the site prints the
+// notice without that sentence, because its retrieval line names the provider
+// (and the date) instead. A notice that does not end with the credit is refused
+// rather than printed whole.
+func TestTheSiteNoticeLeavesTheCreditToTheRetrievalLine(t *testing.T) {
+	registry := bibletext.VersionLicenseNotice("nkjv")
+	if !strings.HasSuffix(registry, "All rights reserved. Text provided via API.Bible (api.bible).") {
+		t.Fatalf("the registry's notice, which the app prints, no longer ends with its API.Bible credit: %q", registry)
+	}
+	got, err := siteNotice("nkjv", registry)
+	if err != nil {
+		t.Fatalf("siteNotice: %v", err)
+	}
+	if want := "Scripture taken from the New King James Version®. Copyright © 1982 by Thomas Nelson. " +
+		"Used by permission. All rights reserved."; got != want {
+		t.Errorf("the site prints the notice as %q, want %q", got, want)
+	}
+	for _, notice := range []string{
+		"A fixture notice. All rights reserved.",                     // no credit to drop
+		"A fixture notice. Text provided via API.Bible (api.bible)",  // the credit without its full stop
+		" Text provided via API.Bible (api.bible).",                  // the credit alone
+		"Text provided via API.Bible (api.bible). A fixture notice.", // the credit, not last
+	} {
+		if got, err := siteNotice("nkjv", notice); err == nil {
+			t.Errorf("%q was printed as %q, not refused", notice, got)
+		}
+	}
+	if line := fmt.Sprintf(retrievedLineFormat, "D"); !strings.HasPrefix(line, "Text provided by API.Bible (") {
+		t.Errorf("the retrieval line no longer names the provider: %s", line)
 	}
 }
 
