@@ -259,9 +259,16 @@ func crossRefRow(state *AppState, c crossRef, pal palette, onTap func(crossRef))
 		lines = append(lines, t)
 	}
 
+	// The preview carries the divine name's small capitals as the page draws
+	// them (small_caps_draw.go): in the NKJV they are the whole difference
+	// between "Lᴏʀᴅ", the Tetragrammaton, and "Lord", Adonai, and the raw text
+	// the preview used to show has the same letters for both. They are
+	// characters, so the 90-character cut is unchanged; the chrome face has no
+	// small capitals and the toolkit draws them from its own fallback face, as
+	// a shared verse's are drawn wherever it is pasted.
 	snippet := ""
 	if v := state.Bible.GetVerse(c.Book, c.Chapter, c.Verse); v != nil {
-		snippet = crossRefPreview(v.Text)
+		snippet = crossRefPreview(smallCapsText(*v))
 	}
 	snip := widget.NewLabel(snippet)
 	snip.Wrapping = fyne.TextWrapWord

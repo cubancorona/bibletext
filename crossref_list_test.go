@@ -366,3 +366,23 @@ func TestACrossReferencePreviewEndsOnAWord(t *testing.T) {
 		}
 	}
 }
+
+// THE PREVIEW KEEPS THE DIVINE NAME'S SMALL CAPITALS. In the NKJV they are the
+// only difference between the Tetragrammaton and Adonai, and the preview showed
+// the raw text, which spells both "Lord".
+func TestACrossReferencePreviewKeepsTheSmallCapitals(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	const text = "Thus says the Lord God: the Lord is my shepherd."
+	bd := &BibleData{Books: []string{"Psalms"}, Verses: map[string]map[int][]Verse{"Psalms": {23: {{
+		BookName: "Psalms", Book: "Psalms", Chapter: 23, Verse: 1, Text: text,
+		// "Lord God" is Adonai YHWH: the second word alone is in small capitals.
+		SmallCaps: []TextSpan{{Start: 19, End: 22}, {Start: 28, End: 32}},
+	}}}}}
+	st := &AppState{Bible: bd, CurrentBook: "Psalms", CurrentChapter: 23, CurrentVersion: "nkjv"}
+	row := crossRefRow(st, crossRef{Book: "Psalms", Chapter: 23, Verse: 1}, st.pal(), func(crossRef) {})
+	got := strings.Join(textsIn(row), "\n")
+	if !strings.Contains(got, "the Lord Gᴏᴅ: the Lᴏʀᴅ is my shepherd.") {
+		t.Errorf("the preview reads %q; it must keep the small capitals the page draws", got)
+	}
+}
