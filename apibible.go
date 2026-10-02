@@ -32,9 +32,11 @@ package bibletext
 // enquiry).
 //
 // FUMS: API.Bible's usage tracker is required for web apps only — "if you only
-// use API.Bible for your mobile app … you can skip this section" — and the web
-// reader never carries licensed ids (share_link falls back to a public-domain
-// version), so no FUMS integration is needed here.
+// use API.Bible for your mobile app … you can skip this section". The app has
+// no FUMS integration. The web reader carries the NKJV's text only while the
+// switch in cmd/websitegen/nkjv_text.go is on; its pages are static files
+// rendered at publish time from one fresh fetch, load no API.Bible script, and
+// so have no FUMS integration either.
 
 import (
 	"context"

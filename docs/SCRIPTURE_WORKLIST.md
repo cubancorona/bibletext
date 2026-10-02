@@ -930,8 +930,10 @@ fingerprint tripped — silently, since the licensed text is not in this
 repository. Where Christ quotes the Old Testament and the quotation carries the
 divine name, the narration was printed as his. Seven read wrongly — Matthew 4:7,
 4:10, 21:42, 22:37, Mark 12:29, Luke 4:8 and 4:12 — seven differed only in
-whitespace already black, and two improved. The website was never affected, since
-it never publishes this edition. The epoch assertion that caught it still stands
+whitespace already black, and two improved. The website was not affected, since
+it did not then publish this edition; with its NKJV switch on
+(`cmd/websitegen/nkjv_text.go`) it renders through the same table and would be.
+The epoch assertion that caught it still stands
 and still fails the build on any drift; the table has been regenerated against
 the decoder that removed the case change, and the two agree at NKJV cache epoch
 7.

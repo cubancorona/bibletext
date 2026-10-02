@@ -33,14 +33,16 @@ package bibletext
 //     :target do the highlight.
 //   - Lowercase ASCII only. Pages serves case-sensitively, and the citation's
 //     en dash (John 3:16–18) must never reach a URL: messengers mangle it.
-//   - The path may name a translation whose TEXT the website does not publish.
+//   - The path may name a translation whose TEXT the website may not publish.
 //     It named only the three web-readable editions until NKJV links had to
 //     behave like every other link, and the rule that kept it that way was
 //     mis-stated: what a licence protects is the TEXT, and a translation id is
-//     a name, not text. The site now serves /nkjv/ signpost pages containing no
-//     licensed text; the app can open the licensed passage, while a browser can
-//     continue in a public-domain parallel. See linkPathVersionIDs for the two
-//     sets this split into. An id nothing recognises still falls back to WEB.
+//     a name, not text. The site serves /nkjv/ either way: the text while the
+//     switch in cmd/websitegen/nkjv_text.go is on, and signpost pages
+//     containing no licensed text while it is off, from which the app can open
+//     the licensed passage and a browser can continue in a public-domain
+//     parallel. See linkPathVersionIDs for the two sets this split into. An id
+//     nothing recognises still falls back to WEB.
 //   - The version id is the FIRST path segment — there is no /read/ prefix. That
 //     makes a shared link as short as it can be, at the cost of reserving those
 //     ids at the site root: no future root page may be called web, bsb, webc or
@@ -54,26 +56,27 @@ import (
 
 var shareLinkBase = product.SiteBase
 
-// webPublishedVersionIDs are the three versions whose TEXT the web reader
-// publishes. Kept as its own set (rather than reading PublicDomain
-// off the registry) so that adding a version to the app is a deliberate,
-// separate decision from publishing its text on the web.
+// webPublishedVersionIDs are the three public-domain versions whose TEXT the web
+// reader always publishes. Kept as its own set (rather than reading
+// PublicDomain off the registry) so that adding a version to the app is a
+// deliberate, separate decision from publishing its text on the web.
 //
 // cmd/websitegen keeps its own hardcoded copy (publishedVersions) and does not
 // read this one: the generator's list is guarded by
 // cmd/websitegen/licensed_exclusion_test.go, and a licensed translation must
-// never reach the site because a shared set drifted. Publishing NKJV pages is a
-// separate decision; the NKJV signpost pages deliberately contain no NKJV text.
+// never reach the site because a shared set drifted. The NKJV's text reaches
+// the site only through the one switch in cmd/websitegen/nkjv_text.go, which
+// this set does not follow: it is the same whichever way the switch is set.
 var webPublishedVersionIDs = map[string]bool{"web": true, "bsb": true, "webc": true}
 
 // linkPathVersionIDs are the ids a share-link PATH may name — the grammar both
 // ShareLinkURLWithNote and ParseShareLink are gated on.
 //
 // It USED to be the same set as webPublishedVersionIDs, and one name served
-// both questions. It cannot any more: /nkjv/ is a link the app emits and opens,
-// while the site serves only a no-text signpost page for the path. Conflating
-// them again is how someone concludes NKJV text is published and either points
-// the generator at it or relaxes the licensed-exclusion tests.
+// both questions. It cannot any more: /nkjv/ is a link the app emits and opens
+// whether the site serves the text for that path or a no-text signpost page.
+// Conflating them again is how someone concludes NKJV text is published
+// unconditionally, or relaxes the licensed-exclusion tests.
 //
 // Enumerated, never derived from the registry: canSelect() is true for every
 // registered version under BIBLETEXT_ENABLE_TESTING, so a registry-wide set
@@ -85,8 +88,9 @@ var linkPathVersionIDs = func() map[string]bool {
 		m[id] = true
 	}
 	// nkjv is app-readable: the app emits it, the AASA and Android manifest
-	// claim it, and the website serves only a no-text notice for it
-	// (docs/apple-app-site-association, cmd/mobile/AndroidManifest.xml).
+	// claim it, and the website serves the text or a no-text notice for it by
+	// its switch (docs/apple-app-site-association, cmd/mobile/AndroidManifest.xml,
+	// cmd/websitegen/nkjv_text.go).
 	m["nkjv"] = true
 	return m
 }()

@@ -208,23 +208,25 @@ the positional path. `TestChapterProseAndShareStructureAgree` and the tests in
 - **Android below API 29.** Font coverage for the Latin small-capital block is
   not guaranteed on the older platform serif. What such a device renders has not
   been measured on hardware.
-- **The website — deliberately subset, and latent rather than live.** The site
-  ships the SAME typeface as the app — Junicode, same source file, same four
-  cuts — but a tighter subset: `scripts/build-reading-fonts.sh` gives the app
-  `U+1D00-1D7F` and `U+A700-A7FF` and withholds both from `WEB_RANGES`, saying
-  why in the script ("no small capitals, because the site publishes no" edition
-  that uses them). Measured: the desktop Junicode carries 25 of 25, the web
-  woff2 carries 0 of 25 and is 27 KB against 409 KB. The script already checks
-  the APP's subset kept all 25, because they are scattered across three Unicode
-  blocks and a subset missing one loses letters from the divine name silently.
-  It does not matter today and the reason is worth knowing: the
-  reader publishes only `/web/`, `/bsb/` and `/webc/`, and those three editions
-  carry no small-caps spans at all, so the pages contain ordinary capitals and
-  nothing to render. Verified on the live site — zero small-capital codepoints
-  across those chapters. The NKJV, the one edition that would need them, is
-  licensed and its path serves a notice instead of text. This becomes real the
-  day the reader publishes an edition that marks the divine name, and not
-  before.
+- **The website — subset for the public-domain pages, supplemented for the
+  NKJV's.** The site ships the SAME typeface as the app — Junicode, same source
+  file — but a tighter subset: `scripts/build-reading-fonts.sh` gives the app
+  `U+1D00-1D7F` and `U+A700-A7FF` and withholds both from `WEB_RANGES`, because
+  none of the public-domain editions uses them. Measured: the desktop Junicode
+  carries 25 of 25, the web woff2 carries 0 of 25 and is 27 KB against 409 KB.
+  The script checks the APP's subset kept all 25, because they are scattered
+  across three Unicode blocks and a subset missing one loses letters from the
+  divine name silently. `/web/`, `/bsb/` and `/webc/` carry no small-caps spans
+  at all, so those pages contain ordinary capitals and nothing to render —
+  verified on the live site, zero small-capital codepoints across those
+  chapters. The NKJV, the one edition that needs them, is published only behind
+  the switch in `cmd/websitegen/nkjv_text.go`. While it is on, its pages load a
+  supplementary face holding exactly the 25 small capitals
+  (`assets/fonts/reading/web/Junicode-SmallCaps.woff2`, 3 KB, built by
+  `scripts/build-web-nkjv-fonts.sh` from the app's own table and checked 25 of
+  25), declared after the regular face with a `unicode-range` of those code
+  points, so only a page that draws one downloads it. While it is off, the
+  `/nkjv/` path serves notices with no text to render.
 - **Secondary surfaces.** Search result cards and cross-reference snippets show
   the edition's stored mixed-case form, not small capitals. Only the reading
   pane substitutes. Whether that is a defect or a deliberate one-line-of-text

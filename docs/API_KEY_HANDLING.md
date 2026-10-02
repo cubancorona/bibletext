@@ -56,6 +56,29 @@ its saved fingerprint proves that the copy was app-seeded; a reader-owned value
 is left untouched. Clearing the project fallback remains persistent without
 storing the project credential.
 
+## The web reader's NKJV text
+
+While the NKJV's text is switched on for the website (`nkjvSiteText` in
+`cmd/websitegen/nkjv_text.go`), every run of `scripts/publish-site.sh` —
+`--dry-run` included — fetches the whole translation from API.Bible with the
+same dedicated key:
+
+1. `run_with_site_bible_key` (`scripts/release-bible-key.sh`) reads it from the
+   login-Keychain item only — never `BIBLE_API_KEY`, never `.env.local` —
+   refuses shell tracing, and sets it as `BIBLETEXT_SITE_NKJV_KEY` on the one
+   generator process: never exported to the shell, never an argument;
+2. the generator takes it out of its environment before anything else runs,
+   sends it only in the `api-key` header, and keeps the fetched text in memory:
+   nothing is cached on disk, so every publish is fresh;
+3. it is never compiled in, so no Go build cache or binary holds it;
+4. the site writer refuses any file containing it, and the assembled tree is
+   scanned for it in every encoded form the hygiene check knows
+   (`check-repository-hygiene.py --scan-built-tree --require-release-key`)
+   before anything is compared or pushed; and
+5. each run spends about 200 requests of the plan's monthly quota.
+
+Switched off, the publish neither reads the key nor calls API.Bible.
+
 ## Security boundary
 
 An application key embedded in a public client is recoverable. The link-time

@@ -109,7 +109,7 @@ real files; `*_test.go` files are omitted.
 | --- | --- |
 | `cmd/bibletext/main.go` | Desktop entry — calls `bibletext.Run()` |
 | `cmd/mobile/main.go` | Mobile entry — `app.NewWithID`, show window + spinner, `StartBackgroundLoad`; packaged via the iOS scripts (`scripts/run-ios-*.sh` / `release-ios.sh`) and `scripts/build-android.sh` |
-| `cmd/websitegen/` | Third entry point: generates the static web reader for bibletext.co.uk through the app's own decoders and poem-line rule (public-domain versions only — licensed ids are excluded by test); published solely via `scripts/publish-site.sh` |
+| `cmd/websitegen/` | Third entry point: generates the static web reader for bibletext.co.uk through the app's own decoders and poem-line rule (the public-domain versions always; the NKJV's text only behind the one committed switch in `nkjv_text.go`, fetched fresh from API.Bible on every build, with notice pages in its place while it is off — tests hold both states); published solely via `scripts/publish-site.sh` |
 
 ### Data layer (no UI deps; compile everywhere)
 

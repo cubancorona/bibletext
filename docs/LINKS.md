@@ -36,8 +36,11 @@ its platform provides.
 **The link a reader receives is always `https`, never `bibletext:`.** The custom
 scheme exists only as a browser-to-app bridge on the two desktops that have no
 domain-verification system, and it is emitted in exactly one place on the web —
-the Windows/Linux branch of the notice page's button, which rewrites its own
-href to `bibletext://` + the current host, path and fragment.
+the Windows/Linux branch of the `/nkjv/` notice page's button, which rewrites
+its own href to `bibletext://` + the current host, path and fragment. Those
+pages exist only while the site's NKJV text is switched off
+(`cmd/websitegen/nkjv_text.go`); with it on, no page on the site emits the
+scheme at all.
 
 There is **no custom URL scheme on Apple at all.** No `CFBundleURLTypes` exists
 anywhere in the tree. `cmd/bibletext/FyneApp.toml`'s `[CanOpen]` block looks
@@ -85,6 +88,10 @@ The association file is an **allow-list**, not a domain claim. It claims
 - `/` and `/index.html` — the landing and download page
 - `/404.html`, `/assets/*`
 
+`/nkjv/*` is claimed in both states of the site's NKJV switch
+(`cmd/websitegen/nkjv_text.go`): the app opens the passage natively whether the
+site shows the text or a notice page, so the files do not change with it.
+
 Widening this to `/*` would look harmless in review and would bounce a reviewer
 tapping the privacy URL into the app. `applinks_test.go` is the tripwire, and
 `scripts/publish-site.sh` re-validates the app id and the privacy/support
@@ -104,12 +111,17 @@ own button reads OPEN when the app is installed. The reasoning is set out at
 length in `cmd/websitegen/notice.go`.
 
 **The "Open in BibleText" button exists only on the ~1,200 `/nkjv/` notice
-pages.** The ~3,900 published scripture pages under `/web/`, `/bsb/` and
-`/webc/` have no button, no Smart App Banner, no `intent://` and no
-`bibletext://` — only a quiet footer link that becomes the App Store on an
-Apple device. That is a deliberate asymmetry, not an oversight: the notice pages
-exist *because* the licensed text cannot be shown, so getting the reader into
-the app is their whole purpose.
+pages, which the site writes only while its NKJV text is switched off**
+(`nkjvSiteText`, `cmd/websitegen/nkjv_text.go`). The ~3,900 published
+scripture pages under `/web/`, `/bsb/` and `/webc/` have no button, no Smart App
+Banner, no `intent://` and no `bibletext://` — only a quiet footer link that
+becomes the App Store on an Apple device — and with the switch on the `/nkjv/`
+pages are scripture pages of the same kind. That is a deliberate asymmetry, not
+an oversight: the notice pages exist *because* the licensed text is not shown,
+so getting the reader into the app is their whole purpose. One consequence: the
+browser-to-app checks that need the button (step 3 of the Windows smoke in
+`docs/WINDOWS_STORE_LISTING.md`) have no page to run against while the switch is
+on.
 
 ---
 
@@ -156,9 +168,10 @@ validated as they are published, never as they are served.
 
 ## Related
 
-- `docs/NKJV_FLOW.md` — the per-platform handoff narrative (H4) and the binding
-  invariants; the most complete prose account, inside a document about NKJV
-  licensing
+- `docs/NKJV_FLOW.md` — the per-platform handoff narrative (H4, the notice
+  pages' button, which exists while the site's NKJV text is switched off) and
+  the binding invariants; the most complete prose account, inside a document
+  about NKJV licensing
 - `docs/WEB_READER_PLAN.md` — the frozen URL contract the links are built from
 - `docs/LINUX_STORES.md` — per-channel Linux packaging, including which
   channels register the scheme

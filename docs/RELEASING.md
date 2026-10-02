@@ -476,7 +476,9 @@ scripts/publish-site.sh
 ```
 
 Owner machine only — the reader is generated from the app's own decoder and the
-local translation caches, which CI does not have. It refuses a dirty tree, so
+local translation caches, which CI does not have. While the NKJV's text is
+switched on (`cmd/websitegen/nkjv_text.go`) it also needs the API.Bible key in
+the login Keychain, and the dry run fetches the NKJV live, as the publish does. It refuses a dirty tree, so
 the site always matches a known revision. A Microsoft Store What's New
 corrected after the tag (stage 9) is stashed across this stage, not committed
 into it.

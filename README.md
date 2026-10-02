@@ -231,9 +231,10 @@ root), signing, emulator use, and distribution are covered in
   paragraphs, but never line breaks caused only by screen wrapping. **Share as
   link** sends a `bibletext.co.uk` URL that opens the chapter in the static web
   reader with the shared verses highlighted — no app needed on the receiving end.
-  Public-domain translations show the passage; an NKJV link shows the reference,
-  attached note, public-domain parallels, and a route into the app without
-  publishing licensed text. All open your device's native share sheet.
+  Public-domain translations show the passage. An NKJV link shows it too while
+  the site carries the NKJV's text, and otherwise the reference, attached note,
+  public-domain parallels, and a route into the app. All open your device's
+  native share sheet.
 - 📚 **Multiple translations** — read three public-domain translations: the **World
   English Bible** (WEB), the **Berean Standard Bible** (BSB), and the **World English
   Bible (Catholic)** with the 73-book deuterocanon — switchable from the header.

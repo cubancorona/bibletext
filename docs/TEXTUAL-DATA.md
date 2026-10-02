@@ -24,7 +24,7 @@ by repeating a plausible thing nobody checked. So each claim carries its status.
 | `web` | World English Bible | bible.helloao.org | public domain |
 | `webc` | World English Bible, Catholic edition | bible.helloao.org | public domain |
 | `bsb` | Berean Standard Bible | bible.helloao.org | free use, see the BSB's own terms |
-| `nkjv` | New King James Version | api.scripture.api.bible | © 1982 Thomas Nelson; licensed, never redistributed by us |
+| `nkjv` | New King James Version | api.scripture.api.bible | © 1982 Thomas Nelson; licensed. The app fetches it per reader; the website republishes it only while its switch (`cmd/websitegen/nkjv_text.go`) is on, fetched afresh on every publish |
 
 The *derived tables* in this repository are built from the publishers' own
 files (§6), not from the runtime supplier, because a publisher's USFM carries

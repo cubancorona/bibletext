@@ -18,9 +18,12 @@ package bibletext
 //     refusing to open scripture because of a licence would be a worse answer
 //     than any wording. applyShareTarget opens it first and this card goes up
 //     over it, so the reader sees the passage and the explanation together.
-//   - It does not offer the browser. The website's /nkjv/ route is a no-text
-//     signpost, not the requested translation, so it cannot solve this card's
-//     problem. The reader already has a public edition open underneath.
+//   - It does not offer the browser. While the site's NKJV text is switched off
+//     (cmd/websitegen/nkjv_text.go) its /nkjv/ route is a no-text signpost, not
+//     the requested translation, so it cannot solve this card's problem; with
+//     it on the browser could, and this card does not yet offer it — that is a
+//     change to the app, not to the site. The reader already has a public
+//     edition open underneath.
 //   - It does not promise the translation is obtainable. It may be one key away
 //     (the NKJV unlocks with an API.Bible key in Settings) or it may not be, and
 //     this card cannot tell. It names the translation and stops.

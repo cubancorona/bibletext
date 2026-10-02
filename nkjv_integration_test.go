@@ -236,11 +236,13 @@ func TestWebLinksAreByteStable(t *testing.T) {
 
 // TestLinkPathVersionIDsIsNotThePublishedSet pins the split itself. The two
 // answered the same question until /nkjv/ arrived, under one name; re-merging
-// them is how someone concludes the site publishes the NKJV and either points
-// cmd/websitegen at it or relaxes its licensed-exclusion tests.
+// them is how someone concludes the site publishes the NKJV unconditionally,
+// or relaxes cmd/websitegen's licensed-exclusion tests. The NKJV's text reaches
+// the site only through the switch in cmd/websitegen/nkjv_text.go, which these
+// sets do not follow.
 func TestLinkPathVersionIDsIsNotThePublishedSet(t *testing.T) {
 	if webPublishedVersionIDs["nkjv"] {
-		t.Error("the web reader must NOT publish nkjv — that half is deliberately deferred")
+		t.Error("webPublishedVersionIDs is the public-domain set; the NKJV's text is published only by its switch")
 	}
 	if !linkPathVersionIDs["nkjv"] {
 		t.Error("a share-link path must be able to name nkjv")

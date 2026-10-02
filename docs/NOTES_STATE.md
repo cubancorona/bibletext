@@ -476,8 +476,9 @@ in the browser (the then-live `/nkjv/` 404, `B_NOTE_OFFER_404`, dropped the note
 (the note is dropped, not stored), or turn notes back on and read it here (the
 only branch that keeps it).
 
-The current site serves an NKJV no-text notice route and renders the note from
-the fragment; `B_NOTE_OFFER_404` is therefore fixed.
+The site serves `/nkjv/` — a no-text notice route while its NKJV switch
+(`cmd/websitegen/nkjv_text.go`) is off, the text while it is on — and renders
+the note from the fragment either way; `B_NOTE_OFFER_404` is therefore fixed.
 
 **`PARKED`** — a link is held because the data is not ready, the translation is
 loading, or the book is not in the four-book seed. The note lives ONLY in

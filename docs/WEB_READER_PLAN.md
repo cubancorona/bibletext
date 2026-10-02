@@ -19,7 +19,8 @@ Sharing a verse gains a third option, **Share as link**, producing a URL like
     https://bibletext.co.uk/web/john/3/#v16-18
 
 that opens a fast, elegant, static web reader: navigate versions (WEB / WEB
-Catholic / BSB only — never licensed versions), books, chapters; verse
+Catholic / BSB; the NKJV only while its one switch, `cmd/websitegen/nkjv_text.go`,
+is on — fetched fresh from API.Bible on every publish), books, chapters; verse
 deep-links highlight and scroll; the app's look (parchment/serif/Gelasio,
 light+dark, poetry lines, red letters); **no AI**; a quiet platform-aware
 "Get the app" link (iOS → App Store, otherwise the landing page). Hosted free
@@ -92,8 +93,10 @@ publish of either one would do.
 
     https://bibletext.co.uk/<version>/<book-slug>/<chapter>/#v<lo>[-<hi>]
 
-- `<version>` ∈ {`web`, `webc`, `bsb`} — exactly the app's version ids; the
-  builder hard-falls-back anything else to `web`; licensed ids never emitted.
+- `<version>` ∈ {`web`, `webc`, `bsb`, `nkjv`} — exactly the app's version ids;
+  the builder hard-falls-back anything else to `web`. `/nkjv/` serves the text
+  while the site's NKJV switch is on and notice pages while it is off; no other
+  licensed id is ever emitted.
 - `<book-slug>`: lowercase-hyphen from canonical book names (`1-corinthians`,
   `song-of-solomon`; deuterocanon incl. `wisdom`, `sirach`, `1-maccabees` —
   the real `catholic.go` names; Greek Esther/Daniel share `esther`/`daniel`
@@ -119,7 +122,8 @@ publish of either one would do.
 
 - `share_link.go`: pure `ShareLinkURL(versionID, book, chapter, lo, hi)` with
   golden tests (every book round-trips; lowercase invariant; deuterocanon →
-  webc; unknown/licensed version → web; frozen full-URL goldens).
+  webc; unknown version, or a licensed one other than the NKJV → web; frozen
+  full-URL goldens).
 - `shareVerseLink` reuses the existing selection→span provenance
   (`normalizeShareSelection`) so **the link and the citation can never
   disagree**; chapter-only URL as the fallback tier.

@@ -653,7 +653,9 @@ step 4 below.
    front un-minimised, one process in Task Manager
    (`AllowSetForegroundWindow`, `SW_RESTORE`).
 3. The notice page's "Open in BibleText" button (any `/nkjv/…` chapter on
-   the site) in Edge, Chrome and Firefox, twice: (a) with the app installed
+   the site while its NKJV text is switched off, `cmd/websitegen/nkjv_text.go`;
+   with it on, no page emits `bibletext:` and this step has nothing to run
+   against) in Edge, Chrome and Firefox, twice: (a) with the app installed
    — each browser's own prompt for an unknown scheme, whether it offers
    "always allow", then the app; (b) after `-Uninstall` — whether the
    browser shows nothing at all, which is what the hidden "Get BibleText"
