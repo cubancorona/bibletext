@@ -3,6 +3,7 @@ package bibletext
 import (
 	"encoding/json"
 	"os"
+	"sort"
 	"testing"
 )
 
@@ -101,6 +102,8 @@ func TestGreekEsthersGapsAreNotCalledOmissions(t *testing.T) {
 // The second derivation. versification_data.go records, independently, the
 // verses the reference has that an edition lacks; every one must leave a hole
 // here. Two routes to the same fact, and a disagreement means one is wrong.
+// Every edition the data records is checked, read from the data itself, so
+// an edition added by the generator is checked the day it lands.
 //
 // The hole is in the EDITION's numbering and the absent verse is in the
 // reference's, and they are the same number only while nothing moved into
@@ -108,12 +111,14 @@ func TestGreekEsthersGapsAreNotCalledOmissions(t *testing.T) {
 // WEB's 23:14 (the kingdom woe) as its own 23:13, so its hole is at 23:14: the
 // number the moved verse vacated. holeFor follows those moves.
 func TestTheTableAgreesWithTheVersificationData(t *testing.T) {
+	editions := make([]string, 0, len(versificationDeltas))
+	for edition := range versificationDeltas {
+		editions = append(editions, edition)
+	}
+	sort.Strings(editions)
 	checked := 0
-	for _, edition := range []string{"bsb", "nkjv", "webc"} {
-		d, ok := versificationDeltas[edition]
-		if !ok {
-			t.Fatalf("no versification delta for %s", edition)
-		}
+	for _, edition := range editions {
+		d := versificationDeltas[edition]
 		for _, a := range d.absent {
 			checked++
 			ch, v := holeFor(d, a)
