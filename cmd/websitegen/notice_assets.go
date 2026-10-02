@@ -56,9 +56,10 @@ const noticeCSS = `
 .btnapp{font-size:.95rem; padding:.6rem 1.4rem}
 .opensub{margin:.55rem 0 0; color:var(--muted); font-size:.8rem}
 /* The translation pills. A near-copy of .vpick on purpose: these are NOT
-   .vpick, because reader.js rewrites every .vpick href with the whole fragment
-   and these links must only carry the verse where the numbering agrees. Same
-   look, different link behaviour. */
+   .vpick, because reader.js rewrites every .vpick href from the fragment,
+   through a verse map only a scripture page writes, and on this page notice.js
+   alone carries the verse, and only where the numbering agrees. Same look,
+   different link behaviour. */
 .npick{
   color:var(--muted); text-decoration:none; font-size:.7rem; letter-spacing:.04em;
   border:1px solid var(--border); border-radius:999px; padding:.15rem .5rem;

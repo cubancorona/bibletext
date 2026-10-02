@@ -266,9 +266,7 @@ func (n noticeSpec) verLine() string {
 //     every `.vpick` href from the fragment, through the verse map a scripture
 //     page writes onto each pill (switcherVerseMap, render.go). This page
 //     writes none, and fragment carrying on it is notice.js's single job, so
-//     nothing else may do half of it. (The comment in notice.css that says
-//     reader.js carries the whole fragment to every .vpick predates the map,
-//     and is left as written because it ships inside that file.)
+//     nothing else may do half of it.
 func noticeNav(n noticeSpec) string {
 	var b strings.Builder
 	up := strings.Repeat("../", n.Scope.depth())
