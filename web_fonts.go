@@ -38,13 +38,33 @@ var webScriptureFontBold []byte
 //go:embed assets/fonts/reading/Junicode-OFL.txt
 var webScriptureFontLicense []byte
 
+//go:embed assets/fonts/reading/web/Junicode-SmallCaps.woff2
+var webScriptureFontSmallCaps []byte
+
+//go:embed assets/fonts/reading/web/Junicode-Italic.woff2
+var webScriptureFontItalic []byte
+
 // WebScriptureFontRegular is the subsetted reading face (WOFF2). Built from the
 // SAME file the app embeds, so the site and the app can never drift to
-// different releases of it. Narrower than the app's subset: the site publishes
-// no edition that marks a divine name, so it needs no small capitals, and its
-// note chrome is set in the UI face, so its scripture face never draws Greek or
+// different releases of it. Narrower than the app's subset: none of the
+// public-domain editions marks a divine name, so it carries no small capitals
+// (the NKJV's pages add them from WebScriptureFontSmallCaps), and its note
+// chrome is set in the UI face, so its scripture face never draws Greek or
 // Hebrew.
 func WebScriptureFontRegular() []byte { return webScriptureFontRegular }
+
+// WebScriptureFontSmallCaps is the reading face's Unicode small capitals and
+// nothing else (WOFF2, scripts/build-web-nkjv-fonts.sh): the letters the app
+// draws the NKJV's divine name with (smallCapitals). Only the site's NKJV pages
+// load it, through a unicode-range declared after the regular face, so a page
+// that draws no small capital never downloads it.
+func WebScriptureFontSmallCaps() []byte { return webScriptureFontSmallCaps }
+
+// WebScriptureFontItalic is the reading face's italic over the web subset's
+// ranges (WOFF2, scripts/build-web-nkjv-fonts.sh), for the words the NKJV's
+// translators supplied and its psalm titles. Only the site's NKJV pages load
+// it; the public-domain pages keep the synthesised slant they have always had.
+func WebScriptureFontItalic() []byte { return webScriptureFontItalic }
 
 // WebScriptureFontBold is the subsetted reading face, bold. Required, and not
 // obviously so: the only bold inside the reading column is the verse number,

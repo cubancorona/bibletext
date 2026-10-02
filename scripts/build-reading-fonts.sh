@@ -49,15 +49,17 @@ for cut in Regular Italic Bold BoldItalic; do
     "$(( $(wc -c < "assets/fonts/reading/Junicode-$cut.ttf") / 1024 ))"
 done
 
-# THE WEB FACES ARE A NARROWER SUBSET, and deliberately so. The generated site
-# publishes only the three public-domain editions, and its note chrome is set
-# in the UI face — so the scripture face there never draws Greek or Hebrew, and
-# carrying them would put 130 KB on a page whose entire type budget is one
-# 15 KB webfont. Regular and bold only: the sole bold inside the reading column
-# is the verse number, and the site sets no scripture in italic.
-# Tighter than the app's: no small capitals, because the site publishes no
-# edition that marks a divine name, and no Greek or Hebrew, because its notes
-# are set in the UI face. 26 KB against 87 for the app's range.
+# THE WEB FACES ARE A NARROWER SUBSET, and deliberately so. The generated site's
+# note chrome is set in the UI face — so the scripture face there never draws
+# Greek or Hebrew, and carrying them would put 130 KB on a page whose entire
+# type budget is one 15 KB webfont. Regular and bold only: the sole bold inside
+# the reading column is the verse number.
+# Tighter than the app's: no small capitals, because none of the public-domain
+# editions marks a divine name, and no Greek or Hebrew, because its notes are
+# set in the UI face. 26 KB against 87 for the app's range. The NKJV's pages
+# load two supplements on top — its small capitals and an italic — which
+# build-web-nkjv-fonts.sh makes from the faces this script writes, so that
+# these two files, hashed into every public-domain page, never change for it.
 WEB_RANGES='U+0020-007E,U+00A0-00FF,U+0100-017F,U+2013-2014,U+2018-201D,U+2026,U+00B2,U+00B3,U+00B9,U+2070,U+2074-2079'
 WEB_FEATURES='kern,liga,calt,onum,ccmp,locl'
 mkdir -p assets/fonts/reading/web
