@@ -413,21 +413,30 @@ func writeSite(site *siteWriter, versions []loadedVersion, noticed []noticeVersi
 	// The reading face, the same way and for the same reasons. Scripture is set
 	// in it here exactly as it is in the app, so a shared link shows a reader
 	// the page they already know.
-	scrip := bibletext.WebScriptureFontRegular()
-	scripBold := bibletext.WebScriptureFontBold()
-	fonts := webFonts{
-		uiRegular:        regularFile,
-		uiBold:           boldFile,
-		scriptureRegular: "Junicode-Regular." + contentHash(string(scrip)) + ".woff2",
-		scriptureBold:    "Junicode-Bold." + contentHash(string(scripBold)) + ".woff2",
-	}
-	if err := site.write("assets/"+fonts.scriptureRegular, string(scrip)); err != nil {
-		return err
-	}
-	if err := site.write("assets/"+fonts.scriptureBold, string(scripBold)); err != nil {
-		return err
+	// With its supplements: the true italic for the psalm titles, the notes'
+	// Greek, and the Hebrew of the notes and the NKJV's stanza letters, each a
+	// file of its own that only a page drawing it downloads.
+	fonts := webFonts{uiRegular: regularFile, uiBold: boldFile}
+	for _, face := range []struct {
+		name string
+		data []byte
+		file *string
+	}{
+		{"Junicode-Regular", bibletext.WebScriptureFontRegular(), &fonts.scriptureRegular},
+		{"Junicode-Bold", bibletext.WebScriptureFontBold(), &fonts.scriptureBold},
+		{"Junicode-Italic", bibletext.WebScriptureFontItalic(), &fonts.scriptureItalic},
+		{"Junicode-Greek", bibletext.WebScriptureFontGreek(), &fonts.scriptureGreek},
+		{"BibleTextHebrew", bibletext.WebHebrewFont(), &fonts.hebrew},
+	} {
+		*face.file = face.name + "." + contentHash(string(face.data)) + ".woff2"
+		if err := site.write("assets/"+*face.file, string(face.data)); err != nil {
+			return err
+		}
 	}
 	if err := site.write("assets/junicode-OFL.txt", string(bibletext.WebScriptureFontLicense())); err != nil {
+		return err
+	}
+	if err := site.write("assets/hebrew-OFL.txt", string(bibletext.WebHebrewFontLicense())); err != nil {
 		return err
 	}
 
@@ -465,16 +474,11 @@ func writeSite(site *siteWriter, versions []loadedVersion, noticed []noticeVersi
 			{"Junicode-SmallCaps", bibletext.WebScriptureFontSmallCaps(), &nf.smallCaps},
 			{"Junicode-BoldSmallCaps", bibletext.WebScriptureFontBoldSmallCaps(), &nf.boldSmallCaps},
 			{"Junicode-ItalicSmallCaps", bibletext.WebScriptureFontItalicSmallCaps(), &nf.italicSmallCaps},
-			{"Junicode-Italic", bibletext.WebScriptureFontItalic(), &nf.italic},
-			{"BibleTextHebrew", bibletext.WebHebrewFont(), &nf.hebrew},
 		} {
 			*face.file = face.name + "." + contentHash(string(face.data)) + ".woff2"
 			if err := site.write("assets/"+*face.file, string(face.data)); err != nil {
 				return err
 			}
-		}
-		if err := site.write("assets/hebrew-OFL.txt", string(bibletext.WebHebrewFontLicense())); err != nil {
-			return err
 		}
 		css := nkjvCSS(nf)
 		nkjvCSSName = "assets/nkjv." + contentHash(css) + ".css"

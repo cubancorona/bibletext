@@ -20,6 +20,7 @@ func TestWebScriptureSupplementsAreWOFF2(t *testing.T) {
 		{"italic small capitals", WebScriptureFontItalicSmallCaps(), 1 << 10, 8 << 10},
 		{"italic", WebScriptureFontItalic(), 16 << 10, 48 << 10},
 		{"Hebrew", WebHebrewFont(), 4 << 10, 24 << 10},
+		{"Greek", WebScriptureFontGreek(), 1 << 10, 12 << 10},
 	} {
 		if !bytes.HasPrefix(tc.data, []byte("wOF2")) {
 			t.Errorf("the %s face is not a WOFF2 file", tc.name)
@@ -46,25 +47,34 @@ func TestWebScriptureSupplementsAreWOFF2(t *testing.T) {
 	}
 }
 
-// The Hebrew face's code points are the unicode-range the stylesheet declares,
-// so they must be Hebrew, sorted and each listed once; the build script reads
-// the same list (scripts/build-web-nkjv-fonts.sh) and checks the face carries
-// exactly it.
-func TestWebHebrewRunesAreTheHebrewBlockSortedOnce(t *testing.T) {
-	runes := WebHebrewRunes()
-	if len(runes) == 0 {
-		t.Fatal("no Hebrew code points")
-	}
-	for i, r := range runes {
-		if r < 0x0590 || r > 0x05FF {
-			t.Errorf("%U is not in the Hebrew block", r)
+// The Hebrew and Greek supplements' code points are the unicode-ranges the
+// stylesheet declares, so each list must be its own script, sorted and each
+// code point listed once; the build script reads the same lists
+// (scripts/build-web-nkjv-fonts.sh) and checks the faces carry exactly them.
+func TestWebSupplementRunesAreTheirScriptSortedOnce(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		runes  func() []rune
+		inside func(rune) bool
+	}{
+		{"Hebrew", WebHebrewRunes, func(r rune) bool { return r >= 0x0590 && r <= 0x05FF }},
+		{"Greek", WebGreekRunes, func(r rune) bool { return (r >= 0x0370 && r <= 0x03FF) || (r >= 0x1F00 && r <= 0x1FFF) }},
+	} {
+		runes := tc.runes()
+		if len(runes) == 0 {
+			t.Fatalf("no %s code points", tc.name)
 		}
-		if i > 0 && r <= runes[i-1] {
-			t.Errorf("%U follows %U: the list is not sorted and unique", r, runes[i-1])
+		for i, r := range runes {
+			if !tc.inside(r) {
+				t.Errorf("%U is not %s", r, tc.name)
+			}
+			if i > 0 && r <= runes[i-1] {
+				t.Errorf("%s: %U follows %U: the list is not sorted and unique", tc.name, r, runes[i-1])
+			}
 		}
-	}
-	runes[0] = 'x'
-	if WebHebrewRunes()[0] == 'x' {
-		t.Error("WebHebrewRunes hands out the table itself")
+		runes[0] = 'x'
+		if tc.runes()[0] == 'x' {
+			t.Errorf("Web%sRunes hands out the table itself", tc.name)
+		}
 	}
 }

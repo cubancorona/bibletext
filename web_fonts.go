@@ -53,6 +53,26 @@ var webScriptureFontItalicSmallCaps []byte
 //go:embed assets/fonts/reading/web/BibleTextHebrew.woff2
 var webHebrewFont []byte
 
+//go:embed assets/fonts/reading/web/Junicode-Greek.woff2
+var webScriptureFontGreek []byte
+
+// webGreekRunes are the Greek code points the site's pages draw, and exactly
+// what the web Greek supplement (WebScriptureFontGreek) carries: the Greek of
+// the WEB's and WEB Catholic's notes, basic and polytonic, measured over every
+// page on 2 October 2026. The app sets it in Junicode, which carries the whole
+// script in every cut; the web regular subset carries none of it, so a note
+// drew basic Greek from one system face and polytonic from another, inside one
+// word. A page that comes to draw any other Greek needs it added here and the
+// supplement rebuilt (scripts/build-web-nkjv-fonts.sh reads this list).
+var webGreekRunes = []rune{
+	'\u039C', '\u03AC', '\u03AD', '\u03AF', '\u03B1', '\u03B2', '\u03B3', '\u03B4',
+	'\u03B5', '\u03B7', '\u03B8', '\u03B9', '\u03BA', '\u03BB', '\u03BC', '\u03BD',
+	'\u03BF', '\u03C0', '\u03C1', '\u03C2', '\u03C3', '\u03C4', '\u03C5', '\u03C7',
+	'\u03C9',
+	// Greek Extended: the breathings, accents and iota subscripts.
+	'\u1F04', '\u1F10', '\u1F30', '\u1F7A', '\u1FB3', '\u1FC6', '\u1FE5', '\u1FE6',
+}
+
 //go:embed assets/fonts/reading/EzraSIL-Licenses.txt
 var webHebrewFontLicense []byte
 
@@ -76,9 +96,10 @@ var webHebrewRunes = []rune{
 // SAME file the app embeds, so the site and the app can never drift to
 // different releases of it. Narrower than the app's subset: none of the
 // public-domain editions marks a divine name, so it carries no small capitals
-// (the NKJV's pages add them from WebScriptureFontSmallCaps), and its note
-// chrome is set in the UI face, so its scripture face never draws Greek or
-// Hebrew.
+// (the NKJV's pages add them from WebScriptureFontSmallCaps), and the Greek and
+// Hebrew a page's notes draw come from supplements declared beside it
+// (WebScriptureFontGreek, WebHebrewFont), so a page without them downloads
+// neither.
 func WebScriptureFontRegular() []byte { return webScriptureFontRegular }
 
 // WebScriptureFontSmallCaps is the reading face's Unicode small capitals and
@@ -89,9 +110,10 @@ func WebScriptureFontRegular() []byte { return webScriptureFontRegular }
 func WebScriptureFontSmallCaps() []byte { return webScriptureFontSmallCaps }
 
 // WebScriptureFontItalic is the reading face's italic over the web subset's
-// ranges (WOFF2, scripts/build-web-nkjv-fonts.sh), for the words the NKJV's
-// translators supplied and its psalm titles. Only the site's NKJV pages load
-// it; the public-domain pages keep the synthesised slant they have always had.
+// ranges (WOFF2, scripts/build-web-nkjv-fonts.sh), for the psalm titles of
+// every edition and the words the NKJV's translators supplied. The app sets
+// both in this true italic; the site used to give the public-domain titles a
+// slanted regular. A page with no italic never downloads it.
 func WebScriptureFontItalic() []byte { return webScriptureFontItalic }
 
 // WebScriptureFontBoldSmallCaps is the bold cut's Unicode small capitals and
@@ -107,7 +129,8 @@ func WebScriptureFontBoldSmallCaps() []byte { return webScriptureFontBoldSmallCa
 // is never consulted there.
 func WebScriptureFontItalicSmallCaps() []byte { return webScriptureFontItalicSmallCaps }
 
-// WebHebrewFont is the Hebrew face of the site's NKJV pages (WOFF2): the app's
+// WebHebrewFont is the Hebrew face of the site's pages (WOFF2), for Psalm 119's
+// stanza letters in the NKJV and the WEB's notes on the divine name: the app's
 // Ezra SIL (assets/fonts/reading/EzraSIL-Regular.ttf, the face every app pane
 // draws Hebrew in) subsetted to WebHebrewRunes. "Ezra" and "SIL" are Reserved
 // Font Names, so the subset is renamed "BibleText Hebrew"; its copyright and
@@ -122,6 +145,17 @@ func WebHebrewFontLicense() []byte { return webHebrewFontLicense }
 // stylesheet declares it with.
 func WebHebrewRunes() []rune {
 	return append([]rune(nil), webHebrewRunes...)
+}
+
+// WebScriptureFontGreek is the reading face's regular cut over WebGreekRunes
+// and nothing else (WOFF2, scripts/build-web-nkjv-fonts.sh): the Greek of the
+// notes, in the face the app sets it in.
+func WebScriptureFontGreek() []byte { return webScriptureFontGreek }
+
+// WebGreekRunes is what WebScriptureFontGreek carries, sorted: the
+// unicode-range the stylesheet declares it with.
+func WebGreekRunes() []rune {
+	return append([]rune(nil), webGreekRunes...)
 }
 
 // WebScriptureFontBold is the subsetted reading face, bold. Required, and not

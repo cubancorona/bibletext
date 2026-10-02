@@ -33,25 +33,34 @@ loses letters from the divine name silently.
 ### On the website
 
 The site serves the same two faces as WOFF2 subsets of the files above, so a
-shared link shows the page the app shows. The public-domain pages load Junicode's
-regular and bold (`scripts/build-reading-fonts.sh`, `WEB_RANGES`). The NKJV's
-pages load supplements on top (`scripts/build-web-nkjv-fonts.sh`, declared in
-`cmd/websitegen/nkjv_assets.go`):
+shared link shows the page the app shows. Every page's stylesheet (`reader.css`,
+`cmd/websitegen/assets.go`) declares Junicode's regular and bold
+(`scripts/build-reading-fonts.sh`, `WEB_RANGES`) and, beside them, supplements a
+page downloads only when it draws from one (`scripts/build-web-nkjv-fonts.sh`):
 
-- the **italic**, for the supplied words and the psalm titles;
-- the 25 **small capitals in each of the regular, bold and italic cuts**. A
-  browser matches a run against faces of its own weight and style and no other,
-  so the divine name in a bold heading or an italic supplied word cannot borrow
-  the regular cut's capitals; without its own it is drawn from a system face;
-- the **Hebrew** of Psalm 119's stanza headings, in Ezra SIL as the app draws it:
-  subsetted to exactly the Hebrew the site's pages draw (`webHebrewRunes`,
-  `web_fonts.go`) and renamed **BibleText Hebrew**, because a subset is a
-  Modified Version and "Ezra" and "SIL" are Reserved Font Names. Its copyright
-  and licence records are kept and the licence is published beside it. It joins
-  the Junicode family by a `unicode-range`, declared at the regular weight and
-  the bold so that it joins a bold heading's composite and is not thickened: the
-  Apple panes' cascade draws the one Hebrew cut as it is, at the run's own size,
-  so the web does too.
+- the **true italic**, for the psalm titles (and the NKJV's supplied words). The
+  public-domain titles were a slanted regular until 2 October 2026;
+- the **Greek** of the WEB's notes, exactly the code points the pages draw
+  (`webGreekRunes`, `web_fonts.go`), from the regular cut: the app sets it in
+  Junicode, and the web subset has none, so a note drew basic Greek from one
+  system face and polytonic from another inside one word;
+- the **Hebrew**, of the WEB's notes on the divine name and the NKJV's Psalm 119
+  stanza letters, in Ezra SIL as the app draws it: subsetted to exactly the
+  Hebrew the pages draw (`webHebrewRunes`) and renamed **BibleText Hebrew**,
+  because a subset is a Modified Version and "Ezra" and "SIL" are Reserved Font
+  Names. Its copyright and licence records are kept and the licence is published
+  beside it (`assets/hebrew-OFL.txt`). It joins the Junicode family by a
+  `unicode-range`, declared at the regular weight and the bold so that it joins a
+  bold heading's composite and is not thickened: the Apple panes' cascade draws
+  the one Hebrew cut as it is, at the run's own size (measured, the same ink in
+  a bold and a regular run), so the web does too.
+
+The NKJV's pages add one stylesheet more (`nkjv.css`,
+`cmd/websitegen/nkjv_assets.go`): the 25 **small capitals in each of the regular,
+bold and italic cuts**. A browser matches a run against faces of its own weight
+and style and no other, so the divine name in a bold heading or an italic
+supplied word cannot borrow the regular cut's capitals; without its own it is
+drawn from a system face.
 
 ---
 

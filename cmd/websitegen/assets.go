@@ -25,14 +25,17 @@ import (
 
 // readerCSS fills in the webfont URLs. They are content-hashed like the
 // stylesheet itself, and since both live in assets/ the src is a bare filename.
-// webFonts names the four hashed font files the stylesheet references. A struct
-// rather than four positional strings, because four filenames in a row are four
-// chances to swap two of them and get a page that loads and looks wrong.
+// webFonts names the hashed font files the stylesheet references. A struct
+// rather than positional strings, because filenames in a row are chances to
+// swap two of them and get a page that loads and looks wrong.
 type webFonts struct {
 	uiRegular        string
 	uiBold           string
 	scriptureRegular string
 	scriptureBold    string
+	scriptureItalic  string
+	scriptureGreek   string
+	hebrew           string
 }
 
 // The web's tail is a square turned 45°: its side is TailWidth/√2, and half of
@@ -53,6 +56,11 @@ func readerCSS(f webFonts) string {
 		"__FONT_BOLD__", f.uiBold,
 		"__SCRIPTURE_REGULAR__", f.scriptureRegular,
 		"__SCRIPTURE_BOLD__", f.scriptureBold,
+		"__SCRIPTURE_ITALIC__", f.scriptureItalic,
+		"__SCRIPTURE_GREEK__", f.scriptureGreek,
+		"__SCRIPTURE_HEBREW__", f.hebrew,
+		"__GREEK_RANGE__", unicodeRange(bibletext.WebGreekRunes()),
+		"__HEBREW_RANGE__", unicodeRange(bibletext.WebHebrewRunes()),
 		"__LIGHT_PALETTE__", readerPaletteCSS(light, "  "),
 		"__DARK_PALETTE__", readerPaletteCSS(dark, "    "),
 		"__NOTE_LEAD__", strconv.Itoa(bibletext.WebNoteArrivalLeadPx()),
@@ -171,8 +179,9 @@ const readerCSSTemplate = `
    these files as assets/junicode-OFL.txt. Scripture is set in it here exactly
    as it is in the app, so a shared link shows a reader the page they know.
    Built from the same file the app embeds and subsetted more tightly: no small
-   capitals, since the site publishes no edition that marks a divine name, and
-   no Greek or Hebrew, since the note chrome below is set in the UI face. */
+   capitals, since no edition published with this sheet alone marks a divine
+   name, and the notes' Greek in a supplement of its own, so only a page that
+   draws it downloads it. The italic is the true cut, for the psalm titles. */
 @font-face{
   font-family:"Junicode"; font-style:normal; font-weight:400;
   font-display:swap; src:url(__SCRIPTURE_REGULAR__) format("woff2");
@@ -180,6 +189,33 @@ const readerCSSTemplate = `
 @font-face{
   font-family:"Junicode"; font-style:normal; font-weight:700;
   font-display:swap; src:url(__SCRIPTURE_BOLD__) format("woff2");
+}
+@font-face{
+  font-family:"Junicode"; font-style:italic; font-weight:400;
+  font-display:swap; src:url(__SCRIPTURE_ITALIC__) format("woff2");
+}
+@font-face{
+  font-family:"Junicode"; font-style:normal; font-weight:400;
+  font-display:swap; src:url(__SCRIPTURE_GREEK__) format("woff2");
+  unicode-range:__GREEK_RANGE__;
+}
+/* BibleText Hebrew: Ezra SIL (c) SIL International, subsetted and renamed,
+   because "Ezra" and "SIL" are Reserved Font Names — SIL Open Font License
+   1.1, published beside these files as assets/hebrew-OFL.txt. The face the
+   app draws Hebrew in: the notes' Hebrew, and an acrostic psalm's stanza
+   letters. It joins the Junicode family by its own unicode-range at the
+   regular weight and the bold, because a face joins a run's composite only
+   when its weight matches, and a bold heading must not thicken it: the app's
+   panes draw the one Hebrew cut as it is, at the run's own size. */
+@font-face{
+  font-family:"Junicode"; font-style:normal; font-weight:400;
+  font-display:swap; src:url(__SCRIPTURE_HEBREW__) format("woff2");
+  unicode-range:__HEBREW_RANGE__;
+}
+@font-face{
+  font-family:"Junicode"; font-style:normal; font-weight:700;
+  font-display:swap; src:url(__SCRIPTURE_HEBREW__) format("woff2");
+  unicode-range:__HEBREW_RANGE__;
 }
 :root{
 __LIGHT_PALETTE__
@@ -410,9 +446,8 @@ body{
    indent. Leading is inherited deliberately: on all four app panes the title
    sets at the body's own rhythm, so naming a line-height here would make the
    web the one surface that differs. The gap below is the same 0.45 of a line
-   the panes measure. The face ships no italic cut, so this is a synthesised
-   oblique — accepted, because the alternative is a fifth hashed font asset for
-   one line per psalm.
+   the panes measure. It is set in the face's true italic, as every app pane
+   sets it; a page with no title never downloads the cut.
    It is set ragged, as the Apple panes (reading.go, p.pst) and the Windows
    and Linux pane (reading_styled_super.go) set it, and unhyphenated, as the
    Windows and Linux pane sets it. The title is a <p> inside .text, so without

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Build the reading-face supplements the web reader's NKJV pages load, into
-# assets/fonts/reading/web/, from the faces this repository already carries
-# (assets/fonts/reading/*.ttf, built by build-reading-fonts.sh).
+# Build the reading-face supplements the web reader loads on top of the two
+# public-domain subsets, into assets/fonts/reading/web/, from the faces this
+# repository already carries (assets/fonts/reading/*.ttf, built by
+# build-reading-fonts.sh). Named for the NKJV, whose pages needed the first of
+# them; the italic, the Greek and the Hebrew serve every edition now.
 #
 #   Junicode-SmallCaps.woff2        the Unicode small capitals the app draws the
 #   Junicode-BoldSmallCaps.woff2    divine name with (smallCapitals,
@@ -19,9 +21,12 @@
 #                                   the Go table here, so the faces and the app
 #                                   cannot disagree about which letters exist.
 #   Junicode-Italic.woff2           the italic cut over the web subset's own
-#                                   ranges, for the words the translators
-#                                   supplied and the psalm titles, which would
-#                                   otherwise get a slanted regular.
+#                                   ranges, for the psalm titles of every
+#                                   edition and the NKJV's supplied words,
+#                                   which would otherwise get a slanted regular.
+#   Junicode-Greek.woff2            the regular cut over exactly the Greek the
+#                                   site's pages draw (webGreekRunes,
+#                                   web_fonts.go, read here): the WEB's notes.
 #   BibleTextHebrew.woff2           the app's Hebrew face, Ezra SIL, subsetted
 #                                   to exactly the Hebrew the site's pages draw
 #                                   (webHebrewRunes, web_fonts.go, read here),
@@ -33,9 +38,10 @@
 #                                   Hebrew", and the copyright and licence
 #                                   records are kept as they are.
 #
-# The stylesheets that load them say where (cmd/websitegen). The Regular and
-# Bold web subsets are NOT rebuilt here and must not change: their bytes are
-# hashed into every page of the public-domain editions.
+# The stylesheets that load them say where (cmd/websitegen): reader.css the
+# italic, the Greek and the Hebrew, nkjv.css the small capitals. Each is a file
+# of its own with a unicode-range or a style of its own, so a page downloads
+# only what it draws. The Regular and Bold web subsets are NOT rebuilt here.
 #
 # Requires fontTools and brotli:  pip3 install --user fonttools brotli
 set -euo pipefail
@@ -76,6 +82,20 @@ done
   --output-file=assets/fonts/reading/web/Junicode-Italic.woff2 \
   --unicodes="$WEB_RANGES" --layout-features+="$WEB_FEATURES" --no-hinting --desubroutinize
 
+# The Greek, as U+XXXX, from the Go list.
+GREEK=$(python3 - <<'PY'
+import re, sys
+src = open("web_fonts.go", encoding="utf-8").read()
+block = re.search(r"var webGreekRunes = \[\]rune\{(.*?)\n\}", src, re.S)
+if not block:
+    sys.exit("webGreekRunes not found in web_fonts.go")
+print(",".join("U+" + h.upper() for h in re.findall(r"'\\u([0-9A-Fa-f]{4})'", block.group(1))))
+PY
+)
+"$PYFTSUBSET" assets/fonts/reading/Junicode-Regular.ttf --flavor=woff2 \
+  --output-file=assets/fonts/reading/web/Junicode-Greek.woff2 \
+  --unicodes="$GREEK" --layout-features+="$WEB_FEATURES" --no-hinting --desubroutinize
+
 # The Hebrew, through the fontTools API rather than pyftsubset: the subset is
 # renamed before it is written. Every name record is kept (pyftsubset's default
 # drops the licence's), then the ones that NAME the font are replaced. The
@@ -110,7 +130,7 @@ for rec in font["name"].names:
 font.flavor = "woff2"
 font.save("assets/fonts/reading/web/BibleTextHebrew.woff2")
 PY
-for f in Junicode-SmallCaps Junicode-BoldSmallCaps Junicode-ItalicSmallCaps Junicode-Italic BibleTextHebrew; do
+for f in Junicode-SmallCaps Junicode-BoldSmallCaps Junicode-ItalicSmallCaps Junicode-Italic Junicode-Greek BibleTextHebrew; do
   printf '  %-50s %5s KB\n' "assets/fonts/reading/web/$f.woff2" \
     "$(( $(wc -c < "assets/fonts/reading/web/$f.woff2") / 1024 ))"
 done
@@ -147,6 +167,13 @@ print(f"  BibleTextHebrew          code points {len(cm & heb)}/{len(heb)}"
       f"{'kept' if 'mark' in gpos else 'LOST'}  reserved names {reserved or 'none'}  "
       f"licence {'kept' if licence else 'LOST'}  {'OK' if ok else 'WRONG'}")
 f.close()
+bad = bad or not ok
+block = re.search(r"var webGreekRunes = \[\]rune\{(.*?)\n\}", src, re.S)
+greek = {int(h, 16) for h in re.findall(r"'\\u([0-9A-Fa-f]{4})'", block.group(1))}
+f = TTFont("assets/fonts/reading/web/Junicode-Greek.woff2", lazy=True)
+cm = set(f.getBestCmap()); f.close()
+ok = greek <= cm and not {c for c in cm - greek if c > 0x7E}
+print(f"  Junicode-Greek           code points {len(cm & greek)}/{len(greek)}  {'OK' if ok else 'WRONG'}")
 bad = bad or not ok
 f = TTFont("assets/fonts/reading/web/Junicode-Italic.woff2", lazy=True)
 cm = set(f.getBestCmap()); f.close()

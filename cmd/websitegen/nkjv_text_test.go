@@ -137,7 +137,7 @@ func TestNKJVTextOffNeverFetchesOrReadsTheKey(t *testing.T) {
 			}
 		}
 	})
-	for _, pattern := range []string{"nkjv.*.css", "Junicode-SmallCaps.*", "Junicode-Italic.*"} {
+	for _, pattern := range []string{"nkjv.*.css", "Junicode-SmallCaps.*", "Junicode-BoldSmallCaps.*", "Junicode-ItalicSmallCaps.*"} {
 		if m, _ := filepath.Glob(filepath.Join(out, "assets", pattern)); len(m) > 0 {
 			t.Errorf("assets/%s was written with the switch off", pattern)
 		}
@@ -493,23 +493,15 @@ func TestRetrievedLineIsTheLondonCivilDate(t *testing.T) {
 	}
 }
 
-// Every face nkjv.css declares, with the descriptors that decide which runs it
-// can serve. A supplement joins the composite of a run only when its weight and
-// style are the run's exactly, so each is pinned here: the small capitals in
-// the regular, bold and italic cuts, the italic itself, and the Hebrew at both
-// weights a page sets it in. The unicode-ranges are exactly the app's tables:
-// one code point missing is a letter set in a system face, one extra is a
-// download for a page that does not need it. And a supplement must come AFTER
-// the face it supplements, or the browser asks the base face first.
-func TestNKJVCSSDeclaresEveryFaceTheNKJVPagesDraw(t *testing.T) {
-	css := nkjvCSS(nkjvFonts{smallCaps: "sc.woff2", boldSmallCaps: "bsc.woff2",
-		italicSmallCaps: "isc.woff2", italic: "it.woff2", hebrew: "heb.woff2"})
-	type face struct {
-		style, weight, src string
-		ranges           map[rune]bool
-	}
-	var faces []face
-	re := regexp.MustCompile(`@font-face\{([^}]*)\}`)
+// declaredFace is one @font-face as the browser reads it for matching.
+type declaredFace struct {
+	family, style, weight, src string
+	ranges                     map[rune]bool // nil: the whole face
+}
+
+// declaredFaces reads every @font-face out of a stylesheet, in order.
+func declaredFaces(t *testing.T, css string) []declaredFace {
+	t.Helper()
 	field := func(body, name string) string {
 		m := regexp.MustCompile(name + `:\s*([^;]+);`).FindStringSubmatch(body)
 		if m == nil {
@@ -517,13 +509,12 @@ func TestNKJVCSSDeclaresEveryFaceTheNKJVPagesDraw(t *testing.T) {
 		}
 		return strings.TrimSpace(m[1])
 	}
-	for _, m := range re.FindAllStringSubmatch(css, -1) {
-		f := face{style: field(m[1], "font-style"), weight: field(m[1], "font-weight")}
+	var faces []declaredFace
+	for _, m := range regexp.MustCompile(`@font-face\{([^}]*)\}`).FindAllStringSubmatch(css, -1) {
+		f := declaredFace{family: field(m[1], "font-family"), style: field(m[1], "font-style"),
+			weight: field(m[1], "font-weight")}
 		if src := regexp.MustCompile(`url\(([^)]+)\)`).FindStringSubmatch(m[1]); src != nil {
 			f.src = src[1]
-		}
-		if fam := field(m[1], "font-family"); fam != `"Junicode"` {
-			t.Errorf("%s joins family %s, not the scripture stack's Junicode", f.src, fam)
 		}
 		if r := field(m[1], "unicode-range"); r != "" {
 			f.ranges = map[rune]bool{}
@@ -537,47 +528,84 @@ func TestNKJVCSSDeclaresEveryFaceTheNKJVPagesDraw(t *testing.T) {
 		}
 		faces = append(faces, f)
 	}
-	exactly := func(got map[rune]bool, want []rune) bool {
-		if len(got) != len(want) {
-			return false
-		}
-		for _, r := range want {
-			if !got[r] {
-				return false
-			}
-		}
-		return true
-	}
-	smallCaps, hebrew := bibletext.WebSmallCapitalRunes(), bibletext.WebHebrewRunes()
-	want := []struct {
-		src, style, weight string
-		ranges             []rune
-	}{
-		{"sc.woff2", "normal", "400", smallCaps},
-		{"bsc.woff2", "normal", "700", smallCaps},
-		{"it.woff2", "italic", "400", nil},
-		{"isc.woff2", "italic", "400", smallCaps},
-		{"heb.woff2", "normal", "400", hebrew},
-		{"heb.woff2", "normal", "700", hebrew},
-	}
+	return faces
+}
+
+// wantFace is a face a stylesheet must declare, at its place in the order.
+type wantFace struct {
+	src, style, weight string
+	ranges             []rune // nil: the whole face
+}
+
+// checkFaces holds a stylesheet's faces to want, in order. A supplement joins
+// the composite of a run only when its weight and style are the run's exactly,
+// so each is pinned; its unicode-range must be exactly the app's table (one
+// code point missing is a letter set in a system face, one extra a download
+// for a page that does not need it); and a supplement must come AFTER the face
+// it supplements, or the browser asks the base face first.
+func checkFaces(t *testing.T, name, css string, want []wantFace) {
+	t.Helper()
+	faces := declaredFaces(t, css)
 	if len(faces) != len(want) {
-		t.Fatalf("nkjv.css declares %d faces, want %d:\n%s", len(faces), len(want), css)
+		t.Fatalf("%s declares %d faces, want %d:\n%s", name, len(faces), len(want), css)
 	}
 	for i, w := range want {
 		f := faces[i]
+		if f.family != `"Junicode"` && !strings.HasPrefix(w.src, "ui") {
+			t.Errorf("%s: %s joins family %s, not the scripture stack's Junicode", name, f.src, f.family)
+		}
 		if f.src != w.src || f.style != w.style || f.weight != w.weight {
-			t.Errorf("face %d is %s %s %s, want %s %s %s", i, f.src, f.style, f.weight, w.src, w.style, w.weight)
+			t.Errorf("%s: face %d is %s %s %s, want %s %s %s", name, i, f.src, f.style, f.weight, w.src, w.style, w.weight)
 		}
 		if w.ranges == nil && f.ranges != nil {
-			t.Errorf("%s is limited to a unicode-range; it is a whole cut", f.src)
+			t.Errorf("%s: %s is limited to a unicode-range; it is a whole cut", name, f.src)
 		}
-		if w.ranges != nil && !exactly(f.ranges, w.ranges) {
-			t.Errorf("%s's unicode-range has %d code points and is not the app's %d", f.src, len(f.ranges), len(w.ranges))
+		if w.ranges != nil {
+			ok := len(f.ranges) == len(w.ranges)
+			for _, r := range w.ranges {
+				ok = ok && f.ranges[r]
+			}
+			if !ok {
+				t.Errorf("%s: %s's unicode-range has %d code points and is not the app's %d", name, f.src, len(f.ranges), len(w.ranges))
+			}
 		}
 	}
+}
+
+// The NKJV pages' stylesheet: the small capitals in each cut the divine name is
+// set in, each after the base face reader.css declares for that cut.
+func TestNKJVCSSDeclaresEveryFaceTheNKJVPagesDraw(t *testing.T) {
+	css := nkjvCSS(nkjvFonts{smallCaps: "sc.woff2", boldSmallCaps: "bsc.woff2", italicSmallCaps: "isc.woff2"})
+	sc := bibletext.WebSmallCapitalRunes()
+	checkFaces(t, "nkjv.css", css, []wantFace{
+		{"sc.woff2", "normal", "400", sc},
+		{"bsc.woff2", "normal", "700", sc},
+		{"isc.woff2", "italic", "400", sc},
+	})
 	if !strings.Contains(css, "@media print{.foot{display:block}") {
 		t.Error("the notice would not print")
 	}
+}
+
+// The reader's stylesheet, which every page loads: the regular and bold cuts,
+// the true italic for the psalm titles, the notes' Greek, and the Hebrew at
+// both weights it is set in — the notes' at the regular, the NKJV's stanza
+// letters in a bold heading — so neither is drawn from a system face nor
+// thickened.
+func TestReaderCSSDeclaresTheScriptureFacesAndTheirSupplements(t *testing.T) {
+	css := readerCSS(webFonts{uiRegular: "ui-r.woff2", uiBold: "ui-b.woff2", scriptureRegular: "r.woff2",
+		scriptureBold: "b.woff2", scriptureItalic: "i.woff2", scriptureGreek: "gr.woff2", hebrew: "heb.woff2"})
+	heb := bibletext.WebHebrewRunes()
+	checkFaces(t, "reader.css", css, []wantFace{
+		{"ui-r.woff2", "normal", "400", nil},
+		{"ui-b.woff2", "normal", "700", nil},
+		{"r.woff2", "normal", "400", nil},
+		{"b.woff2", "normal", "700", nil},
+		{"i.woff2", "italic", "400", nil},
+		{"gr.woff2", "normal", "400", bibletext.WebGreekRunes()},
+		{"heb.woff2", "normal", "400", heb},
+		{"heb.woff2", "normal", "700", heb},
+	})
 }
 
 func TestSiteWriterRefusesTheKey(t *testing.T) {

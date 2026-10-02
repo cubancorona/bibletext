@@ -49,18 +49,17 @@ for cut in Regular Italic Bold BoldItalic; do
     "$(( $(wc -c < "assets/fonts/reading/Junicode-$cut.ttf") / 1024 ))"
 done
 
-# THE WEB FACES ARE A NARROWER SUBSET, and deliberately so. The generated site's
-# note chrome is set in the UI face — so the scripture face there never draws
-# Greek or Hebrew, and carrying them would put 130 KB on a page whose entire
-# type budget is one 15 KB webfont. Regular and bold only: the sole bold inside
-# the reading column is the verse number.
-# Tighter than the app's: no small capitals, because none of the public-domain
-# editions marks a divine name, and no Greek or Hebrew, because its notes are
-# set in the UI face. 26 KB against 87 for the app's range. The NKJV's pages
-# load supplements on top — its small capitals in three cuts, an italic and the
-# Hebrew of its stanza headings — which build-web-nkjv-fonts.sh makes from the
-# faces this script writes, so that these two files, hashed into every
-# public-domain page, never change for it.
+# THE WEB FACES ARE A NARROWER SUBSET, and deliberately so: Latin and the
+# punctuation and superior figures Scripture uses, regular and bold, 26 KB
+# against 87 for the app's range. Everything else a page sets in this face comes
+# from a SUPPLEMENT of its own, declared beside these two with a unicode-range
+# or a style of its own, so a page downloads only what it draws:
+# build-web-nkjv-fonts.sh makes them from the faces this script writes — the
+# true italic for the psalm titles, the Greek and the Hebrew of the notes (set
+# in the scripture face, as the app sets them; an earlier note here said the UI
+# face, and the Greek and Hebrew fell to system fonts), and the small capitals
+# the NKJV's pages add. These two files are hashed into every page of the
+# public-domain editions and never change for a supplement.
 WEB_RANGES='U+0020-007E,U+00A0-00FF,U+0100-017F,U+2013-2014,U+2018-201D,U+2026,U+00B2,U+00B3,U+00B9,U+2070,U+2074-2079'
 WEB_FEATURES='kern,liga,calt,onum,ccmp,locl'
 mkdir -p assets/fonts/reading/web
