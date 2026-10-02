@@ -133,3 +133,46 @@ func TestTheOverwhelminglyCommonCaseIsAnIdentity(t *testing.T) {
 		}
 	}
 }
+
+// A RANGE WHOSE START MOVES CHAPTER. The doxology's ranges are 14:24-25 and
+// 14:24-26 in the reference and 16:25-26 and 16:25-27 in the BSB and the
+// NKJV. The end used to be looked up in the start's REWRITTEN chapter —
+// "Romans 16:25" in the reference, which the reference does not have and the
+// table therefore passes through unchanged — so the rows read "Romans
+// 16:25-25" and "16:25-26", one verse short, on Matthew 24:14, Colossians
+// 1:26, Jude 1:24 and fourteen other verses.
+func TestADoxologyRangeKeepsItsEndInEveryTranslation(t *testing.T) {
+	for _, tc := range []struct {
+		vid        string
+		end        int
+		want, from string
+	}{
+		{"bsb", 25, "Romans 16:25-26", "14:24-25"},
+		{"bsb", 26, "Romans 16:25-27", "14:24-26"},
+		{"nkjv", 25, "Romans 16:25-26", "14:24-25"},
+		{"nkjv", 26, "Romans 16:25-27", "14:24-26"},
+		{"web", 25, "Romans 14:24-25", "14:24-25"},
+		{"webc", 26, "Romans 14:24-26", "14:24-26"},
+	} {
+		got, ok := crossRefTargetIn(tc.vid, crossRef{Book: "Romans", Chapter: 14, Verse: 24, EndV: tc.end})
+		if !ok {
+			t.Errorf("%s: Romans %s was dropped; every translation has the doxology", tc.vid, tc.from)
+			continue
+		}
+		if got.label() != tc.want {
+			t.Errorf("%s: Romans %s reads %q, want %q", tc.vid, tc.from, got.label(), tc.want)
+		}
+	}
+}
+
+// And a range that collapses to one verse is labelled as one.
+func TestARangeEndingOnItsStartIsLabelledAsOneVerse(t *testing.T) {
+	for _, c := range []crossRef{
+		{Book: "Romans", Chapter: 16, Verse: 25, EndV: 25},
+		{Book: "Romans", Chapter: 16, Verse: 25, EndCh: 16, EndV: 25},
+	} {
+		if got := c.label(); got != "Romans 16:25" {
+			t.Errorf("%+v is labelled %q, want \"Romans 16:25\"", c, got)
+		}
+	}
+}

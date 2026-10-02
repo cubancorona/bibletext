@@ -63,7 +63,9 @@ type crossRef struct {
 
 func (c crossRef) label() string {
 	switch {
-	case c.EndV == 0 || (c.EndCh == c.Chapter && c.EndV == c.Verse):
+	case c.EndV == 0 || ((c.EndCh == 0 || c.EndCh == c.Chapter) && c.EndV == c.Verse):
+		// A range whose end is its start is one verse, however it was spelled:
+		// "Romans 16:25-25" is not a citation anyone writes.
 		return fmt.Sprintf("%s %d:%d", c.Book, c.Chapter, c.Verse)
 	case c.EndCh == 0 || c.EndCh == c.Chapter:
 		return fmt.Sprintf("%s %d:%d-%d", c.Book, c.Chapter, c.Verse, c.EndV)
@@ -393,16 +395,23 @@ func crossRefTargetToReference(c crossRef) (crossRef, bool) {
 // verse that exists and run past one that does not. When the end cannot be
 // mapped the row keeps its start and becomes a single-verse reference, which is
 // honest — it points at scripture the reader can actually see.
+//
+// The end is read in the REFERENCE's chapter. By the time it is mapped the
+// start's chapter has been rewritten into the translation's, and taking the
+// end's chapter from that put it in the wrong chapter wherever the start moved
+// chapter: the doxology's "Romans 14:24-25" became "16:25-25" in the BSB and
+// the NKJV instead of 16:25-26, and its 14:24-26 became 16:25-26.
 func crossRefTargetIn(versionID string, c crossRef) (crossRef, bool) {
 	ch, vs, res := MapVerse(versificationReference, versionID, c.Book, c.Chapter, c.Verse)
 	if res == verseMapAbsent || res == verseMapIncommensurable {
 		return crossRef{}, false
 	}
+	refCh := c.Chapter
 	c.Chapter, c.Verse = ch, vs
 	if c.EndV != 0 {
 		endCh := c.EndCh
 		if endCh == 0 {
-			endCh = c.Chapter
+			endCh = refCh
 		}
 		if ech, ev, r := MapVerse(versificationReference, versionID, c.Book, endCh, c.EndV); r != verseMapAbsent && r != verseMapIncommensurable {
 			c.EndCh, c.EndV = ech, ev
