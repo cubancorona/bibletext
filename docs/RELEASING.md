@@ -272,7 +272,18 @@ first — it uploads into an edit it then discards — then the identical comman
 without `--dry-run`, with `--status completed`. The notes file keeps its line
 breaks, so the opening line and each bullet reach Play as lines. That is where
 stage 6 ends on Play: the release is on the alpha track, `upload` refuses the
-production track, and production waits for the promotion in stage 7.
+production track, and production waits for the promotion in stage 7. The
+script refuses an option it does not know, such as `--dryrun`, before it
+reads the key, so a mistyped dry run never commits.
+
+**An upload's commit restarts a review already in progress.** It takes
+Play's default for changes in review, which cancels that review and sends
+everything again, so an upload committed while a production release or a
+listing change is still in Play's review sends that review back to the
+start. Before the real upload, check that the Play Console's Publishing
+overview shows nothing in review, or accept the restart. `promote` and
+`play/push-screenshots.py` ask Play to refuse instead (docs/BACKLOG.md, "A
+Play upload's commit restarts a review in progress").
 
 **Play steps run one at a time.** Every Play command opens an edit as the one
 service account, and Play lets that account hold one open edit: a new edit
@@ -337,13 +348,16 @@ same and commits, asking Play to refuse rather than cancel and restart a
 review already in progress. Both refuse, changing nothing, unless `<v>` is
 the mobile ledger's Version and alpha holds exactly one release — completed,
 with notes, and with one versionCode, the ledger's Build — and they refuse
-once production carries that versionCode in any state, or holds a release
-that is not completed. `--rollout 0.2` stages the release to a fifth of
-readers instead; raising or completing a staged rollout is done in the Play
-Console. A commit refused over changes in review — Play reviews the alpha
-upload too — is run again once that review clears. After the commit,
-`scripts/release-status.py`, run on its own, shows production on the new
-versionCode.
+once production carries that versionCode in any state, or a higher one. A
+halted staged rollout on production gives way to the promotion, since that
+is where a fix is promoted from, and the dry run names it; a rollout still
+going out is completed or halted in the Play Console first, and a draft
+there is rolled out or discarded, and until then both commands refuse.
+`--rollout 0.2` stages the release to a fifth of readers instead; raising,
+completing or halting a staged rollout is done in the Play Console. A commit
+refused over changes in review — Play reviews the alpha upload too — is run
+again once that review clears. After the commit, `scripts/release-status.py`,
+run on its own, shows production on the new versionCode.
 
 ### 8 — Finish the GitHub release
 
@@ -477,7 +491,7 @@ Re-running from the top is usually wrong. These steps are not idempotent:
 | --- | --- | --- |
 | `altool --upload-app` | rejects a duplicate build number | bump Build, rebuild |
 | `play-publish.py upload` | rejects a used versionCode once a run has committed; a run whose edit Play ended ("This Edit has been deleted") committed nothing | after a commit, bump Build and rebuild; after an ended edit, run the same command again on its own |
-| `play-publish.py promote` | refuses, printing what production holds, once production carries the versionCode | a run stopped before its commit changed nothing and deleted its edit; one that reports the commit's outcome unknown may have committed, so run `play-publish.py tracks` on its own first; a commit refused over a review in progress runs again once the review clears |
+| `play-publish.py promote` | refuses, printing what production holds, once production carries the versionCode, and while production holds a rollout still going out or a draft | a run stopped before its commit changed nothing and deleted its edit; one that reports the commit's outcome unknown may have committed, so run `play-publish.py tracks` on its own first; a commit refused over a review in progress runs again once the review clears; a rollout still going out is completed or halted in the Play Console, and a draft rolled out or discarded there, before a re-run (a halted rollout gives way to the promotion) |
 | `submit-version.py --submit` | 409 — already in review | remove from review in the console |
 | `push-screenshots.py --write` | leaves a set that holds the files, reorders one that holds them out of order, replaces the rest | re-run once a FAILED image or a refusal is understood |
 | `play/push-screenshots.py --write` | leaves a type that holds the files, replaces the rest | a run stopped before the commit deleted its edit and changed nothing; one that reports the commit's outcome unknown may have committed, so run it read-only first; re-run once the reason is understood |
@@ -514,7 +528,8 @@ service account was granted "release to production" for this app on
 2 October, an upload stopped on the alpha track and the promotion was made in
 the Play Console. It is now `scripts/play-publish.py promote`, on the account
 holder's OK like Apple's `--submit` and the Microsoft Store's `commit`
-(stage 7); only raising or completing a staged rollout stays in the console.
+(stage 7); only raising, completing or halting a staged rollout stays in the
+console.
 
 Everything else — GitHub, Snap, the App Store, the Mac App Store, the Microsoft
 Store and Google Play — is reachable in one pass.

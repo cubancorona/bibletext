@@ -65,8 +65,14 @@ What 1.2.18 (1–2 October 2026) adds:
   anything but this ledger's release on alpha, carries its name and notes
   unchanged, refuses a release production already carries, and commits so
   that Play refuses rather than restarts a review in progress; `upload`
-  refuses the production track. A staged rollout is raised or completed in
-  the Play Console. Not yet run against Play: held by stand-in tests
+  refuses the production track. It refuses a production versionCode above
+  the ledger's Build, and a production rollout still going out or a draft,
+  which are settled in the Play Console first; a halted staged rollout
+  gives way to the promotion, since that is where a fix is promoted from.
+  An option the script does not know, such as `--dryrun` or
+  `--rollout=0.2`, is refused before anything is read (de8ef27e2). A
+  staged rollout is raised, completed or halted in the Play Console. Not
+  yet run against Play: held by stand-in tests
   (`play/test_play_publish.py`, `Promote`), and the first live dry run
   waits for Play's review of the 1.2.18 production release to finish.
 - **The arm64 snap build can fail before it builds anything.** On 1 October
@@ -261,6 +267,33 @@ The fix: refit when the safe area changes, not only the size — the
 composer's watch comparing the sheet area's position and width as well as
 `cnv.Size()` — and give Ask its refit and the same watch.
 
+## A Play upload's commit restarts a review in progress — found 2 October 2026
+
+`scripts/play-publish.py upload` commits its edit with Play's default for
+changes in review (`upload()`, the `:commit` call with no query).
+edits.commit's `changesInReviewBehavior` defaults to
+CANCEL_IN_REVIEW_AND_SUBMIT: a commit made while other changes are in
+review cancels that review and sends everything again. So an alpha upload
+committed while a production release, or a listing change, is in Play's
+review sends that review back to the start. `promote` (efb3e092e) and
+`play/push-screenshots.py` commit with ERROR_IF_IN_REVIEW, so Play refuses
+them instead; the upload is the one Play commit that still restarts a
+review. With the upload and the promotion one after the other, the case is
+an upload for the next release made before the last production release has
+cleared review: 1.2.18's production release was in review when this was
+written. Stage 6 of `docs/RELEASING.md` says to check the Play Console's
+Publishing overview first.
+
+The fix: commit the upload with `IN_REVIEW_QUERY` too, and on Play's
+refusal say that the bundle is not on the track, the versionCode is still
+unused and the edit is discarded, and to run the same command once the
+review clears, as `promote` says of its own refused commit; a test in
+`play/test_play_publish.py` pins the query on the upload's commit and the
+refusal's message. It changes what an upload does while anything is in
+review — it waits instead of restarting the review — so it goes in as a
+change of its own, with stage 6's check then reading as the reason a
+refusal can happen.
+
 ## A Play status read during an upload deletes the upload's edit — FIXED 2 October 2026
 
 On 2 October 2026 a `scripts/play-publish.py upload` of the 1.2.18 bundle,
@@ -347,9 +380,10 @@ relies on (`test_the_token_and_the_call_are_play_publishs_own`), and its
 (`docs/RELEASING.md`, stage 2).
 
 **The fix** (7ed341878). `--notes` does what the 1.2.18 copy did
-(`read_notes()`): each line loses its trailing spaces, the whole loses
-blank lines at its ends, and the line breaks stay, so Play stores the
-lines; the 500-character cap counts them. Held by
+(`read_notes()`): the whole loses the whitespace at its two ends, which
+takes the blank lines there and the first line's indent, each line loses
+its trailing spaces, and the line breaks stay, so Play stores the lines;
+the 500-character cap counts them. Held by
 `play/test_play_publish.py`, `UploadNotes`, which drives the script
 through stand-ins for `access_token()` and `call()`: a notes file of
 several lines, with trailing spaces or CRLF ends, reaches the track
