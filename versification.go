@@ -27,6 +27,11 @@ package bibletext
 // That keeps adding a translation to one delta rather than one per existing
 // pair, and it means the reference's own numbering never needs a table.
 
+import (
+	"fmt"
+	"sort"
+)
+
 // verseRef is a verse in some translation's numbering.
 type verseRef struct {
 	Book    string
@@ -299,6 +304,77 @@ func IncommensurableBook(vid, book string) string {
 		return ""
 	}
 	return d.incommensurable[book]
+}
+
+// ExpectedVerseNumbers is the verse numbers translation id should carry in
+// every chapter, worked out from the reference translation's own text (ref)
+// and id's measured delta: every reference verse that maps exactly or moves is
+// kept under its number in id, every verse id lacks is dropped, and every
+// verse id has that the reference lacks is added. Numbers only, sorted.
+//
+// It is what makes a licensed edition's COMPLETENESS checkable. The web reader
+// fetches the NKJV whole on every build and must refuse a fetch that came back
+// short — a book missing, a chapter cut off, a verse a decoder dropped — and
+// the only statement of "whole" that does not come from the fetch itself is
+// the reference's text plus the delta, which scripts/gen-versification.py
+// measured from the editions the app ships.
+//
+// An id with no delta is an error rather than an assumption that it numbers
+// like the reference, and so is a book in ref whose numbering does not
+// correspond at all: neither can promise anything about a chapter's verses.
+func ExpectedVerseNumbers(id string, ref *BibleData) (map[string]map[int][]int, error) {
+	if ref == nil {
+		return nil, fmt.Errorf("no reference text to derive %q's verses from", id)
+	}
+	var d versificationDelta
+	if id != versificationReference {
+		delta, ok := versificationDeltas[id]
+		if !ok {
+			return nil, fmt.Errorf("no versification delta for %q", id)
+		}
+		d = delta
+	}
+	sets := map[string]map[int]map[int]bool{}
+	add := func(book string, chapter, verse int) {
+		if sets[book] == nil {
+			sets[book] = map[int]map[int]bool{}
+		}
+		if sets[book][chapter] == nil {
+			sets[book][chapter] = map[int]bool{}
+		}
+		sets[book][chapter][verse] = true
+	}
+	for _, book := range ref.Books {
+		if why := d.incommensurable[book]; why != "" {
+			return nil, fmt.Errorf("%s's %s does not correspond verse by verse: %s", id, book, why)
+		}
+		for chapter, verses := range ref.Verses[book] {
+			for _, v := range verses {
+				toCh, toV, res := fromReference(id, book, chapter, v.Verse)
+				if res == verseMapExact || res == verseMapMoved {
+					add(book, toCh, toV)
+				}
+			}
+		}
+	}
+	for _, e := range d.extra {
+		if len(ref.Verses[e.Book]) > 0 {
+			add(e.Book, e.Chapter, e.Verse)
+		}
+	}
+	out := make(map[string]map[int][]int, len(sets))
+	for book, chapters := range sets {
+		out[book] = make(map[int][]int, len(chapters))
+		for chapter, verses := range chapters {
+			nums := make([]int, 0, len(verses))
+			for n := range verses {
+				nums = append(nums, n)
+			}
+			sort.Ints(nums)
+			out[book][chapter] = nums
+		}
+	}
+	return out, nil
 }
 
 // versificationReference is the translation every delta is measured against.
