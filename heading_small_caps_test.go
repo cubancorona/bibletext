@@ -21,8 +21,10 @@ import (
 // A titled chapter as the API.Bible chapter endpoint shapes it: a "d" title
 // naming the divine name in an nd span, a section heading doing the same, a
 // heading whose capitals-only span is the shape the feed sends for "GOD", an
-// acrostic letter, a heading carrying a supplied-word span (which a heading
-// keeps as plain words), and a verse with its own nd span as the control.
+// acrostic letter, and one whose name the publisher sets in small capitals
+// with an sc span (the NKJV marks each of Psalm 119's stanza names so), a
+// heading carrying a supplied-word span (which a heading keeps as plain
+// words), and a verse with its own nd span as the control.
 const smallCapsHeadedChapter = `[
   {"name":"para","type":"tag","attrs":{"style":"d"},"items":[
     {"type":"text","text":"A fixture song, when the ","attrs":{"verseId":"PSA.150.1"}},
@@ -46,6 +48,8 @@ const smallCapsHeadedChapter = `[
     {"type":"text","text":" Is Fixed"}
   ]},
   {"name":"para","type":"tag","attrs":{"style":"qa"},"items":[{"type":"text","text":"א Aleph"}]},
+  {"name":"para","type":"tag","attrs":{"style":"qa"},"items":[{"type":"text","text":"ב "},
+    {"name":"char","type":"tag","attrs":{"style":"sc"},"items":[{"type":"text","text":"Beth"}]}]},
   {"name":"para","type":"tag","attrs":{"style":"s2"},"items":[
     {"type":"text","text":"A Heading "},
     {"name":"char","type":"tag","attrs":{"style":"it"},"items":[{"type":"text","text":"with"}]},
@@ -84,8 +88,8 @@ func TestDecodeAPIBibleKeepsTheSmallCapitalsInHeadingsAndTitles(t *testing.T) {
 		t.Errorf("title drawn = %q, want %q", sup.DrawnText(), want)
 	}
 
-	if len(heads) != 4 {
-		t.Fatalf("got %d headings, want 4: %+v", len(heads), heads)
+	if len(heads) != 5 {
+		t.Fatalf("got %d headings, want 5: %+v", len(heads), heads)
 	}
 	for _, h := range heads {
 		noSentinels(t, "heading "+h.Style, h.Text)
@@ -100,6 +104,8 @@ func TestDecodeAPIBibleKeepsTheSmallCapitalsInHeadingsAndTitles(t *testing.T) {
 		{"The Lord GOD Is Fixed", "The Lord Gᴏᴅ Is Fixed", []TextSpan{{Start: 10, End: 12}}},
 		// Nothing marked: the letter and its name, unchanged.
 		{"א Aleph", "א Aleph", nil},
+		// The publisher's own small capitals on a letter's name.
+		{"ב Beth", "ב Bᴇᴛʜ", []TextSpan{{Start: 2, End: 6}}},
 		// A supplied-word span in a heading is read as plain words, as before.
 		{"A Heading with Supplied Words", "A Heading with Supplied Words", nil},
 	}

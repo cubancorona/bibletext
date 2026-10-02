@@ -149,7 +149,13 @@ the heading and the title through `DrawnText`, which runs the same
 `applySmallCaps`. Search and speech still read the stored letters; the share
 pipeline's heading repair looks for a heading as it is DRAWN, because the
 selection it is matching came off the page. A supplied-word span inside a heading
-is still read as plain words. An installed app picks this up when its copy of
+is still read as plain words. The bracket is the `sc` style's as well as `nd`'s,
+so a heading's other small capitals are drawn too: the NKJV sets the name of
+each Hebrew letter heading Psalm 119's stanzas in small capitals, and the
+twenty-two names are drawn so on every surface, after the letter in the Hebrew
+face. Measured on the fresh fetch of 2 October 2026: 74 section headings carry
+the divine name (64 `Lord`, 10 `Lord's`), 4 titles carry it 6 times, and those
+22 stanza names are the only other small capitals in a heading. An installed app picks this up when its copy of
 the NKJV is next decoded — at its next fetch, within the 30-day recency window —
 or at once if the NKJV's `cacheEpoch` is bumped, which has deliberately not been
 done (`versions.go`). The website fetches afresh on every build and has it at
