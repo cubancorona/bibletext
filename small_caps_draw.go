@@ -137,6 +137,30 @@ func smallCapsText(v Verse) string {
 	return applySmallCaps(v, []verseRun{{Text: v.Text}})[0].Text
 }
 
+// DrawnText is the heading as every surface sets it: the publisher's words with
+// the divine name in small capitals where the edition sets it so. Text stays
+// the publisher's own letters for search, sharing and speech, exactly as a
+// verse's does; this is the form for the page.
+//
+// It is the verse's own rule (applySmallCaps), run over the heading's words, so
+// "The Lord Is My Shepherd" is drawn with the letters the verse beneath it
+// draws its divine name with. A heading the edition marks nothing in — every
+// heading of the public-domain editions — is returned unchanged.
+func (h Heading) DrawnText() string { return drawSmallCaps(h.Text, h.SmallCaps) }
+
+// DrawnText is the psalm's title as every surface sets it, by the rule a
+// heading's DrawnText follows.
+func (s Superscription) DrawnText() string { return drawSmallCaps(s.Text, s.SmallCaps) }
+
+// drawSmallCaps is text with the small-capital spans drawn, through the one
+// substitution every verse goes through.
+func drawSmallCaps(text string, spans []TextSpan) string {
+	if len(spans) == 0 {
+		return text
+	}
+	return smallCapsText(Verse{Text: text, SmallCaps: spans})
+}
+
 // finishRuns is the LAST thing every path through redLetterRuns does, and the
 // one place a surface-independent decision about a verse's typography is
 // applied. Both of the things it does are the edition's own judgement about a

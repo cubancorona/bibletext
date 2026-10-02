@@ -155,9 +155,12 @@ var registeredVersions = []BibleVersion{
 		// the feed's own paragraph blocks, with the passage walk overlapping one
 		// verse so a chunk boundary cannot invent one.
 		// Carried by the next epoch, not given one of its own: the headings a
-		// chapter has after a passage-chunk boundary (mergeChunkHeadings). Every
-		// licensed copy is re-fetched, and so re-decoded, within
-		// licensedRecencyWindow, and an epoch costs every reader a download.
+		// chapter has after a passage-chunk boundary (mergeChunkHeadings), and
+		// the small capitals the edition sets the divine name in inside a
+		// heading or a psalm's title (Heading.SmallCaps,
+		// Superscription.SmallCaps). Every licensed copy is re-fetched, and so
+		// re-decoded, within licensedRecencyWindow, and an epoch costs every
+		// reader a download.
 		cacheEpoch: 7,
 		source:     newBYOKLicensedSource("nkjv", nkjvProviderBibleID),
 	},

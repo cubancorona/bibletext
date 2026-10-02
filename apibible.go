@@ -770,7 +770,7 @@ func decodeAPIBiblePassageChecked(raw json.RawMessage, bookName string, defaultC
 		if titleBuf == nil {
 			return
 		}
-		text, anchors := stripFootnoteSentinels(normalizeVerseSpaces(titleBuf.String()))
+		text, anchors, smallCaps := settleMarkedText(titleBuf.String())
 		notes := titleNotes
 		if len(anchors) != len(notes) {
 			notes = nil // see the same guard on verses below
@@ -780,7 +780,7 @@ func decodeAPIBiblePassageChecked(raw json.RawMessage, bookName string, defaultC
 			}
 		}
 		if text != "" && saneRef(ch) != 0 {
-			supers[ch] = Superscription{Text: text, Footnotes: notes}
+			supers[ch] = Superscription{Text: text, Footnotes: notes, SmallCaps: smallCaps}
 		}
 		titleBuf, titleNotes, titleIDCh = nil, nil, 0
 	}
@@ -941,6 +941,24 @@ func decodeAPIBiblePassageChecked(raw json.RawMessage, bookName string, defaultC
 				// nothing is added to the verse and nothing taken from it.
 				style := strings.ToLower(n.Attrs.Style)
 				cen.char(style)
+				// A heading or a psalm's title is not a verse, but the edition
+				// sets the divine name in small capitals there too — "The
+				// LORD Is My Shepherd", "A Psalm of David" titles that name
+				// Him — and those were read as plain words, so every surface
+				// drew the stored lower case where the page prints small
+				// capitals. Only the small capitals are bracketed on that
+				// side: the supplied-word italics belong to Scripture's own
+				// words, and the title is set in italic whole.
+				if openRune, closeRune, marked := spanSentinels(style); marked && openRune == smallCapsOpen && (inHeading || inTitle) {
+					buf := titleBuf
+					if inHeading {
+						buf = headBuf
+					}
+					buf.WriteRune(openRune)
+					walk(n.Items)
+					buf.WriteRune(closeRune)
+					continue
+				}
 				if openRune, closeRune, marked := spanSentinels(style); marked && !inTitle && !inHeading {
 					bracket := func(r rune) {
 						key := pack(currentCh, current)
@@ -1002,8 +1020,8 @@ func decodeAPIBiblePassageChecked(raw json.RawMessage, bookName string, defaultC
 			inHeading = true
 			walk(block.Items)
 			inHeading = false
-			if text := strings.TrimSpace(normalizeVerseSpaces(headBuf.String())); text != "" {
-				pendingHeads = append(pendingHeads, Heading{Text: text, Style: style, Footnotes: headNotes})
+			if text, smallCaps := settleHeadingText(headBuf.String()); text != "" {
+				pendingHeads = append(pendingHeads, Heading{Text: text, Style: style, Footnotes: headNotes, SmallCaps: smallCaps})
 			}
 			headBuf, headNotes = nil, nil
 			continue
@@ -1118,6 +1136,35 @@ func decodeAPIBiblePassageChecked(raw json.RawMessage, bookName string, defaultC
 		return nil, nil, nil, nil, fmt.Errorf("no verse text decoded")
 	}
 	return out, orphans, supers, headings, nil
+}
+
+// settleMarkedText settles the words of a heading or a psalm's title once they
+// are all read: the spacing normalised, the sentinels taken out, and what they
+// marked returned as rune offsets into what is left — the notes' anchors and
+// the small capitals the edition sets the divine name in.
+//
+// A small-capital bracket is written tight against the words it marks, and the
+// feed sends it so. One that stood apart from them would leave a stray space
+// where it stood; the words are then kept as the publisher spaced them and the
+// small capitals let go, because a span that no longer lines up with its
+// letters would shrink the wrong ones. Words with no small capitals in them
+// come out exactly as they always have.
+func settleMarkedText(raw string) (string, []int, []TextSpan) {
+	text, anchors, _, smallCaps := stripSentinels(normalizeVerseSpaces(raw))
+	if len(smallCaps) > 0 && text != normalizeVerseSpaces(text) {
+		unbracketed := strings.NewReplacer(string(smallCapsOpen), "", string(smallCapsClose), "").Replace(raw)
+		text, anchors, _, _ = stripSentinels(normalizeVerseSpaces(unbracketed))
+		smallCaps = nil
+	}
+	return text, anchors, smallCaps
+}
+
+// settleHeadingText is a publisher's heading as it is kept: its words, and the
+// small capitals inside them. A heading carries no note sentinels (its notes
+// are held beside it, headNotes), so it has no anchors to return.
+func settleHeadingText(raw string) (string, []TextSpan) {
+	text, _, smallCaps := settleMarkedText(raw)
+	return text, smallCaps
 }
 
 // apiBibleSkipPara reports whether a paragraph style carries headings rather

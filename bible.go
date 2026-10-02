@@ -192,6 +192,13 @@ type Heading struct {
 	// verse after it, which the sources do not do but the decoders do not
 	// assume.
 	BeforeVerse int `json:"before_verse,omitempty"`
+
+	// SmallCaps are the runes of Text the edition sets in small capitals —
+	// the divine name in "The LORD Is My Shepherd" — kept as offsets for the
+	// reason Verse.SmallCaps is: Text stays the publisher's own letters, and
+	// the surfaces draw it through DrawnText. Only the API.Bible decoder
+	// records them; the helloao feeds print LORD in capitals and mark nothing.
+	SmallCaps []TextSpan `json:"small_caps,omitempty"`
 }
 
 type Superscription struct {
@@ -201,6 +208,10 @@ type Superscription struct {
 	// Footnotes are the title's notes; Anchor is a rune offset into Text
 	// (stored for a future in-title marker, unrendered today).
 	Footnotes []Footnote `json:"footnotes,omitempty"`
+	// SmallCaps are the runes of Text the edition sets in small capitals,
+	// as on Heading: the divine name in a title such as Psalm 18's. The
+	// surfaces draw the title through DrawnText.
+	SmallCaps []TextSpan `json:"small_caps,omitempty"`
 }
 
 // BibleData holds all Bible verses organized by book and chapter

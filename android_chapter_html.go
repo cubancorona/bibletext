@@ -80,9 +80,9 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 		// this page's blank lines are all gone (COMPACT), so the air is put
 		// back as an empty line inside the title's own block.
 		if reporter {
-			fmt.Fprintf(&b, `<p><i>%s</i><br></p>`, htmlEscape(super.Text))
+			fmt.Fprintf(&b, `<p><i>%s</i><br></p>`, htmlEscape(super.DrawnText()))
 		} else {
-			fmt.Fprintf(&b, `<p><i>%s</i></p>`, htmlEscape(super.Text))
+			fmt.Fprintf(&b, `<p><i>%s</i></p>`, htmlEscape(super.DrawnText()))
 		}
 	}
 	// Blocks, not paragraphs — see the note in reading.go. Bold in its own
@@ -90,7 +90,7 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 	// fromHtml maps <b> to a StyleSpan the text system draws.
 	for _, blk := range chapterBlocksFor(state.Bible, state.CurrentBook, state.CurrentChapter, verses) {
 		if blk.IsHeading() {
-			fmt.Fprintf(&b, "<p><b>%s</b></p>", htmlEscape(blk.Heading.Text))
+			fmt.Fprintf(&b, "<p><b>%s</b></p>", htmlEscape(blk.Heading.DrawnText()))
 			continue
 		}
 		para := blk.Verses

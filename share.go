@@ -1002,7 +1002,9 @@ func stripHeadings(state *AppState, book string, chapter int, s string) string {
 		return s
 	}
 	for _, h := range state.Bible.Headings[book][chapter] {
-		text := collapseSpaces(h.Text)
+		// As DRAWN: the selection is taken from the page, where the heading's
+		// divine name is set in small capitals.
+		text := collapseSpaces(h.DrawnText())
 		if text == "" || h.BeforeVerse <= 0 {
 			continue
 		}
@@ -1054,7 +1056,8 @@ func headingOnlySelectionVerse(state *AppState, book string, chapter int, s stri
 		return 0, false
 	}
 	for _, h := range state.Bible.Headings[book][chapter] {
-		text := collapseSpaces(h.Text)
+		// As drawn, for the reason stripHeadings gives.
+		text := collapseSpaces(h.DrawnText())
 		if text == "" || h.BeforeVerse <= 0 {
 			continue
 		}

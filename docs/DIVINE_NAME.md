@@ -137,6 +137,24 @@ DRAW        applySmallCaps substitutes Unicode small-capital CHARACTERS.
                      AI study.
 ```
 
+**Headings and psalm titles carry the span too.** The publisher's section
+headings ("The LORD Is My Shepherd") and the psalm titles that name the divine
+name mark it with the same `nd`/`sc` span. Until 2 October 2026 the decoder
+bracketed the span only inside a verse and read it as plain words in a heading or
+a title, so every surface — the four app panes and the website — drew the
+stored lower-case `Lord` there, under verses that drew `Lᴏʀᴅ`. They are kept now
+as `Heading.SmallCaps` and `Superscription.SmallCaps`, offsets into the
+publisher's own letters exactly as `Verse.SmallCaps` is, and every surface draws
+the heading and the title through `DrawnText`, which runs the same
+`applySmallCaps`. Search and speech still read the stored letters; the share
+pipeline's heading repair looks for a heading as it is DRAWN, because the
+selection it is matching came off the page. A supplied-word span inside a heading
+is still read as plain words. An installed app picks this up when its copy of
+the NKJV is next decoded — at its next fetch, within the 30-day recency window —
+or at once if the NKJV's `cacheEpoch` is bumped, which has deliberately not been
+done (`versions.go`). The website fetches afresh on every build and has it at
+once.
+
 Three things about the way out matter more than they look.
 
 **It is characters, not a font feature.** The app substitutes real codepoints

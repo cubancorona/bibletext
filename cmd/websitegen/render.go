@@ -198,7 +198,9 @@ func chapterBody(bd *bibletext.BibleData, versionID, book string, chapter int, v
 	// there. A nil BibleData yields an empty title and skips the line, which is
 	// what keeps the existing chapterBody golden (chapter_tint_test.go) byte
 	// identical.
-	if title := strings.TrimSpace(bd.SuperscriptionFor(book, chapter).Text); title != "" {
+	// Drawn as the panes draw it (Superscription.DrawnText): a title that
+	// names the divine name sets it in small capitals, as the verses do.
+	if title := strings.TrimSpace(bd.SuperscriptionFor(book, chapter).DrawnText()); title != "" {
 		fmt.Fprintf(&b, `<p class="pst">%s</p>`, template.HTMLEscapeString(title))
 	}
 	// Paragraphs come from the APP's rule, not a web-specific one, so the page

@@ -222,7 +222,7 @@ func newStyledReadingPaneAt(state *AppState, verses []Verse, width float32) *sty
 	// The Psalm title renders regardless of the footnotes toggle — it is
 	// text; only its notes ride the toggle with the section's entries.
 	super := state.Bible.SuperscriptionFor(state.CurrentBook, state.CurrentChapter)
-	p.superText = super.Text
+	p.superText = super.DrawnText()
 	// The footnote section's entries, read once for the same reason: the
 	// toggle lives in Settings, and closing that sheet rebuilds the pane.
 	if footnotesEnabled() {

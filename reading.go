@@ -861,11 +861,11 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 		if len(blocks) > 0 && blocks[0].IsHeading() {
 			cls = "pst pre-sec"
 		}
-		fmt.Fprintf(&b, `<p class="%s">%s</p>`, cls, htmlEscape(super.Text))
+		fmt.Fprintf(&b, `<p class="%s">%s</p>`, cls, htmlEscape(super.DrawnText()))
 	}
 	for bi, blk := range blocks {
 		if blk.IsHeading() {
-			fmt.Fprintf(&b, `<p class="sec">%s</p>`, htmlEscape(blk.Heading.Text))
+			fmt.Fprintf(&b, `<p class="sec">%s</p>`, htmlEscape(blk.Heading.DrawnText()))
 			continue
 		}
 		para := blk.Verses

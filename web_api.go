@@ -36,7 +36,9 @@ func GroupVersesIntoParagraphs(verses []Verse) [][]Verse {
 // publisher's section heading, or a paragraph of verses. The exported shape of
 // what every reading surface now walks.
 type ChapterBlock struct {
-	// HeadingText is the heading, or "" when this block is a paragraph.
+	// HeadingText is the heading as the reading pane draws it (Heading.
+	// DrawnText: the divine name in small capitals where the edition sets
+	// it so), or "" when this block is a paragraph.
 	HeadingText string
 	// Verses is the paragraph's verses, nil when this block is a heading.
 	Verses []Verse
@@ -50,7 +52,7 @@ func ChapterBlocks(bd *BibleData, book string, chapter int, verses []Verse) []Ch
 	out := make([]ChapterBlock, 0, len(blocks))
 	for _, b := range blocks {
 		if b.IsHeading() {
-			out = append(out, ChapterBlock{HeadingText: b.Heading.Text})
+			out = append(out, ChapterBlock{HeadingText: b.Heading.DrawnText()})
 			continue
 		}
 		out = append(out, ChapterBlock{Verses: b.Verses})

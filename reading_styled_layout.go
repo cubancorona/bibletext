@@ -310,7 +310,7 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 	afterHeading := false
 	for _, blk := range chapterBlocksFor(state.Bible, state.CurrentBook, state.CurrentChapter, verses) {
 		if blk.IsHeading() {
-			y = appendHeadingLines(lay, blk.Heading.Text, y, p, measure, offset)
+			y = appendHeadingLines(lay, blk.Heading.DrawnText(), y, p, measure, offset)
 			afterHeading = true
 			continue
 		}
