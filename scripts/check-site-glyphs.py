@@ -22,31 +22,64 @@ design, in the middle of a word — and that is what this refuses:
 
 Only text whose stack OPENS with a web font is checked. A page that asks for a
 system face first (the hand-written landing pages) has chosen the reader's
-system on purpose, and there is nothing of ours to cover it with.
+system on purpose, and there is nothing of ours to cover it with: a generic, or
+a system face SYSTEM_FACES names. A stack that opens with any other name is
+refused, below.
 
 TWO DELIBERATE EXCEPTIONS, both in the interface's type and not the reading
 face's: the chapter arrows, which the chrome face does not carry and which fall
 to the system sans by design (ALLOWED; cmd/websitegen/assets.go, .arrow), and
 the chrome face's italic, which is served as a slanted regular (ALLOWED_FAKES).
 
-FAIL CLOSED. The guard models the CSS this site writes, not all of CSS. A font
-property it cannot evaluate statically — a weight range, a small-caps variant,
-font-synthesis, a font rule behind :hover or inside @media, generated text, an
-unresolvable var(), a shorthand it cannot parse — stops it with status 2 rather
-than letting it guess, so a stylesheet change that moves past the model is a
-publish that stops, not one that is waved through.
+FAIL CLOSED. The guard models the CSS this site writes, not all of CSS, and
+whatever lies outside that model stops it with status 2 rather than letting it
+guess, so a stylesheet change that moves past the model is a publish that
+stops, not one that is waved through. Outside the model:
 
-Custom properties are the sharpest case. The guard reads a var() from the
-custom properties set on plain :root outside any @media, @supports, @layer or
-@container, and from nowhere else: it does not cascade them per element. So a
-font value that reads a custom property set ANYWHERE else as well — on another
-selector (.text{--scripture:...}), on :root inside @media, in an @property
-rule, in a page's style attribute — is refused, however the cascade would
-resolve it, because the browser may draw that element in a face the guard never
-looked at. A custom property no font value reads may be set anywhere (the
-palette's dark colours are set on :root inside @media). An at-rule the guard
-does not descend into (@scope, @starting-style, @keyframes and the like) that
-sets a custom property or a font property is refused too.
+  - syntax the guard does not decode: a backslash escape anywhere in a
+    stylesheet or a style attribute (a property or a custom property's name
+    spelt with one), a rule nested inside a style rule (body{.text{...}},
+    .text{@media ...{...}}), a comment wedged between two tokens, a stray
+    semicolon before a rule, an @import, and any at-rule but the few it reads;
+  - values it does not evaluate: a CSS-wide keyword other than inherit and
+    unset on a font property (initial, revert, revert-layer), all, a weight
+    range, a text-transform other than upper-, lower- and capitalize, a
+    font-family list the browser would drop as invalid (a trailing comma), a
+    stack that opens with a family that is neither a declared face, a
+    generic nor a system face named below (a typo, "Junicod", included);
+  - faces the browser makes up: font-synthesis, a small-caps, petite-caps,
+    unicase or titling-caps variant, a sub- or superscript position;
+  - generated text: content other than an empty string, a list marker other
+    than none, disc, circle, square or decimal, text-emphasis marks, a
+    text-overflow string or ellipsis, a hyphenate-character, <font face>;
+  - a font rule behind :hover or inside @media, @supports, @layer or
+    @container, or on a pseudo-element;
+  - faces whose file is not what their @font-face says: a src other than one
+    woff2 url(), a descriptor the guard does not read or one given twice, and
+    a file whose own family, italic flag or weight class disagrees with the
+    rule (the one deliberate alias is FACE_ALIASES);
+  - stylesheets the browser may not apply: an alternate or titled sheet, one
+    with a media query or a type, one inside <noscript> or <template>, and a
+    <base> that would move every relative link.
+
+Custom properties are the sharpest case. The guard reads a var() (any case of
+the name var) from the custom properties set on plain :root, a rule whose whole
+selector is :root, outside any @media, @supports, @layer or @container, and
+from nowhere else: it does not cascade them per element. So a font value that
+reads a custom property set ANYWHERE else as well — on another selector
+(.text{--scripture:...}), on :root inside @media, in an @property rule, in a
+page's style attribute — is refused, however the cascade would resolve it,
+because the browser may draw that element in a face the guard never looked at.
+So is one that reads a custom property set empty. A custom property no font
+value reads may be set anywhere (the palette's dark colours are set on :root
+inside @media). An at-rule the guard does not descend into (@scope,
+@starting-style, @keyframes, @page) that sets a custom property, a font
+property or generated text is refused too.
+
+The cascade it does model follows CSS: the browser's own sheet, then the
+author's normal declarations by specificity and order with a style attribute's
+above them all, then the author's !important ones with a style attribute's
+!important last; stylesheets are read in the order the page names them.
 
 Prints code points, character names, the element's selector path and page
 paths. NEVER page text: the tree may hold licensed Scripture.
@@ -105,7 +138,42 @@ GENERIC = {"serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui"
            "ui-serif", "ui-sans-serif", "ui-monospace", "ui-rounded", "math",
            "emoji", "fangsong", "-apple-system", "blinkmacsystemfont"}
 
+# The system faces a page may open its stack with, by name: the hand-written
+# landing page is set in Georgia (docs/index.html). Any other family a stack
+# opens with must be a face the page declares or a generic, or the guard
+# cannot say what draws the text — a misspelt "Junicod" falls straight to
+# whatever comes next — and refuses the tree.
+SYSTEM_FACES = {"georgia"}
+
+# A face declared under another family's name on purpose: (the family the
+# rule declares, the family the file names itself). The Hebrew face joins the
+# reading face's family by its own unicode-range, at the regular weight and
+# the bold, from its one regular file (cmd/websitegen/assets.go), so it is
+# exempt from the weight check and must carry a unicode-range.
+FACE_ALIASES = {("junicode", "bibletext hebrew")}
+
 FONT_PROPS = {"font-family", "font-weight", "font-style", "text-transform"}
+CSS_WIDE = {"initial", "inherit", "unset", "revert", "revert-layer"}
+TRANSFORMS = {"none", "uppercase", "lowercase", "capitalize"}
+LIST_MARKERS = {"none", "disc", "circle", "square", "decimal", "inside", "outside"}
+SYNTH_VARIANTS = {"small-caps", "all-small-caps", "petite-caps", "all-petite-caps", "unicase",
+                  "titling-caps", "sub", "super"}
+# The descriptors an @font-face may carry: any other (font-stretch,
+# size-adjust, font-feature-settings ...) is outside the model.
+FACE_DESCRIPTORS = {"font-family", "src", "font-style", "font-weight", "font-display", "unicode-range"}
+# At-rules: those whose rules the guard reads as conditional, those whose
+# bodies it only searches for what they must not set, and the statements it
+# lets pass. Any other at-rule is refused.
+DESCEND = {"@media", "@supports", "@layer", "@container"}
+UNREAD = {"@scope", "@starting-style", "@keyframes", "@-webkit-keyframes", "@page"}
+STATEMENTS = {"@charset", "@layer"}
+# An identifier, as CSS writes one: the shape a class, an id, an attribute
+# name and an unquoted family name must have, or the browser drops the rule.
+IDENT = r"(?:--|-?[_a-zA-Z\u0080-\U0010FFFF])[-\w\u0080-\U0010FFFF]*"
+IDENT_RE = re.compile(IDENT)
+# Where an element sits makes the stylesheets inside it inert, or not
+# reliably applied.
+INERT = {"noscript", "template", "textarea", "title", "xmp", "iframe", "noembed", "noframes", "object"}
 DYNAMIC = {"hover", "focus", "active", "target", "visited", "focus-visible",
            "focus-within", "checked", "link", "any-link", "enabled", "disabled",
            "placeholder-shown", "invalid", "valid", "default", "indeterminate"}
@@ -128,8 +196,71 @@ UA_CONTROL = {"button", "input", "select", "textarea"}
 
 # --- CSS -----------------------------------------------------------------------
 
-def strip_comments(css):
-    return re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+# A comment between these and anything, or anything and these, separates
+# nothing that was not separate already, so taking it out changes no token.
+_SEPARATORS = set("{};:,>+~()[]!=")
+
+
+def strip_comments(css, where="a stylesheet"):
+    """The CSS with its comments taken out as the tokenizer takes them: never
+    inside a string, so a "/*" in a string value does not hide the rules after
+    it. A comment wedged between two tokens (Juni/**/code, .a/**/.b) separates
+    them without being white space, which no text substitution can model, so
+    it is refused."""
+    out, i, n, last, quote = [], 0, len(css), 0, None
+    while i < n:
+        c = css[i]
+        if quote:
+            if c == "\\":
+                i += 2
+                continue
+            if c == quote or c == "\n":
+                quote = None
+        elif c in "\"'":
+            quote = c
+        elif c == "/" and css.startswith("*", i + 1):
+            end = css.find("*/", i + 2)
+            end = n if end < 0 else end + 2
+            before = css[i - 1] if i else " "
+            after = css[end] if end < n else " "
+            if not (before.isspace() or after.isspace() or before in _SEPARATORS or after in _SEPARATORS):
+                raise CannotJudge(f"a comment between two tokens in {where}, which the guard cannot place")
+            out.append(css[last:i])
+            last = i = end
+            continue
+        i += 1
+    out.append(css[last:])
+    return "".join(out)
+
+
+def unquoted(text):
+    """text with every string's contents blanked, leaving only its syntax."""
+    return re.sub(r'"[^"\n]*"|\'[^\'\n]*\'', '""', text)
+
+
+def at_name(prelude):
+    m = re.match(r"@[-\w]+", prelude.strip().lower())
+    return m.group(0) if m else ""
+
+
+def statements(text, closed):
+    """Refuse what stands between rules unless it is a statement at-rule the
+    guard may pass (@charset, @layer a, b). An @import is not followed, and a
+    stray semicolon is refused: the browser reads it as the start of the next
+    rule's selector and drops that rule, which the guard would have read.
+    closed: text ends where a rule begins, so every part of it must have been
+    a statement ended by its semicolon."""
+    parts = text.split(";")
+    for n, s in enumerate(parts):
+        s = s.strip()
+        if not s and not closed and n == len(parts) - 1:
+            continue  # white space after the last statement
+        name = at_name(s)
+        if name == "@import":
+            raise CannotJudge("an @import the guard does not follow")
+        if name not in STATEMENTS:
+            raise CannotJudge(f"{s[:40]!r} between rules, where the browser does not read what the guard would"
+                              if s else "a stray semicolon, which makes the browser drop the rule after it")
 
 
 def blocks(css, conditional=False):
@@ -139,12 +270,14 @@ def blocks(css, conditional=False):
     while i < n:
         j = css.find("{", i)
         if j < 0:
+            statements(css[i:], False)
             return
         prelude = css[i:j]
-        # A statement at-rule (@import, @charset) ends in a semicolon before
-        # the next block opens; keep only what follows the last one.
+        # A statement at-rule (@charset, @layer a, b) ends in a semicolon
+        # before the next block opens; anything else there is refused.
         if ";" in prelude:
-            prelude = prelude[prelude.rfind(";") + 1:]
+            head, _, prelude = prelude.rpartition(";")
+            statements(head, True)
         depth, k, quote = 1, j + 1, None
         while k < n and depth:
             c = css[k]
@@ -160,17 +293,24 @@ def blocks(css, conditional=False):
             elif c == "}":
                 depth -= 1
             k += 1
+        if depth:
+            raise CannotJudge("a rule that is never closed")
         body = css[j + 1:k - 1]
         prelude = prelude.strip()
-        low = prelude.lower()
-        if low.startswith(("@media", "@container", "@supports", "@layer", "@document")):
+        name = at_name(prelude) if prelude.startswith("@") else None
+        if name in DESCEND:
             yield from blocks(body, True)
-        elif low.startswith("@import"):
-            raise CannotJudge("an @import the guard does not follow")
-        else:
-            # A style rule, an @font-face, or another at-rule, which the
-            # caller reads for what it sets (Sheets).
-            yield prelude, body, conditional
+            i = k
+            continue
+        if name is not None and name not in UNREAD and name not in ("@font-face", "@property"):
+            raise CannotJudge(f"an at-rule the guard does not know: {name or prelude[:40]!r}")
+        if name not in UNREAD and "{" in unquoted(body):
+            # CSS nesting: the browser applies the inner rule, which the guard
+            # would read as a declaration named ".text{--scripture".
+            raise CannotJudge(f"a rule nested inside {prelude[:60]!r}, which the guard does not read")
+        # A style rule, an @font-face, an @property, or an at-rule the caller
+        # searches for what it sets (Sheets).
+        yield prelude, body, conditional
         i = k
 
 
@@ -211,13 +351,16 @@ def parse_range(text):
         if not part.startswith("U+"):
             raise CannotJudge(f"a unicode-range entry the guard cannot read: {part!r}")
         part = part[2:]
-        if "?" in part:
-            lo, hi = int(part.replace("?", "0"), 16), int(part.replace("?", "F"), 16)
-        elif "-" in part:
-            a, b = part.split("-")
-            lo, hi = int(a, 16), int(b, 16)
-        else:
-            lo = hi = int(part, 16)
+        try:
+            if "?" in part:
+                lo, hi = int(part.replace("?", "0"), 16), int(part.replace("?", "F"), 16)
+            elif "-" in part:
+                a, b = part.split("-")
+                lo, hi = int(a, 16), int(b, 16)
+            else:
+                lo = hi = int(part, 16)
+        except ValueError:
+            raise CannotJudge(f"a unicode-range entry the guard cannot read: U+{part!r}") from None
         cps.update(range(lo, hi + 1))
     return frozenset(cps)
 
@@ -236,7 +379,7 @@ def expand_font(value):
     low = v.lower()
     if low in SYSTEM_FONTS or low.startswith("-apple-system-"):
         return [("font-family", "system-ui"), ("font-weight", "400"), ("font-style", "normal")]
-    if low == "inherit":
+    if low in ("inherit", "unset"):
         return [("font-family", "inherit"), ("font-weight", "inherit"), ("font-style", "inherit")]
     style, weight = "normal", "400"
     tokens = re.sub(r"\s*/\s*", "/", v).split()
@@ -259,16 +402,59 @@ def expand_font(value):
     raise CannotJudge(f"a font shorthand the guard cannot read: {value!r}")
 
 
-def family_names(value):
-    out = []
-    for part in re.findall(r'"[^"]*"|\'[^\']*\'|[^,]+', value):
-        name = part.strip().strip("\"'").strip()
-        if name:
-            out.append(name.lower())
-    return out
+def family_list(value):
+    """The families of a font-family value, lowercased, as the browser reads
+    them: each a quoted string or a run of identifiers, never empty. A value the
+    browser would drop as invalid (a trailing comma, a keyword among the names)
+    is refused, because the browser would keep an earlier declaration the guard
+    never weighed. So is a generic in quotes, which names a font called
+    "serif" rather than the generic."""
+    entries, cur, quote = [], [], None
+    for c in value.strip() + ",":
+        if quote:
+            cur.append(c)
+            if c == quote:
+                quote = None
+        elif c in "\"'":
+            quote = c
+            cur.append(c)
+        elif c == ",":
+            entries.append("".join(cur).strip())
+            cur = []
+        else:
+            cur.append(c)
+    if quote:
+        raise CannotJudge(f"a font-family with an unclosed string: {value!r}")
+    names = []
+    for e in entries:
+        m = re.fullmatch(r'"([^"]*)"|\'([^\']*)\'', e)
+        if m:
+            name = (m.group(1) if m.group(1) is not None else m.group(2)).lower()
+            if name in GENERIC or name in CSS_WIDE:
+                raise CannotJudge(f"a generic or keyword in quotes in a font-family: {value!r}")
+            names.append(name)
+            continue
+        idents = [i.lower() for i in e.split()]
+        if not idents or not all(IDENT_RE.fullmatch(i) for i in idents) or \
+                any(i in CSS_WIDE or i == "default" for i in idents):
+            raise CannotJudge(f"a font-family the browser would drop as invalid: {value!r}")
+        names.append(" ".join(idents))
+    return tuple(names)
 
 
-_SIMPLE = re.compile(r"(#[-\w]+|\.[-\w]+|\[[^\]]*\]|::?[-\w]+(?:\([^)]*\))?)")
+def keyword(value, prop):
+    """A font property's value with inherit and unset read as inheriting, which
+    for these inherited properties they are; the other CSS-wide keywords are
+    refused."""
+    v = value.strip().lower()
+    if v in ("inherit", "unset"):
+        return "inherit"
+    if v in CSS_WIDE:
+        raise CannotJudge(f"{prop}:{v}, a keyword the guard does not evaluate")
+    return value
+
+
+_SIMPLE = re.compile(r"(#" + IDENT + r"|\." + IDENT + r"|\[[^\]]*\]|::?[-\w]+(?:\([^)]*\))?)")
 
 
 class Compound:
@@ -294,10 +480,14 @@ class Compound:
             elif s.startswith("."):
                 self.classes.append(s[1:]); b += 1
             elif s.startswith("["):
-                am = re.match(r"\[\s*([-\w]+)\s*(?:([~|^$*]?=)\s*[\"']?([^\"'\]]*)[\"']?\s*)?\]", s)
+                am = re.fullmatch(r"\[\s*(" + IDENT + r")\s*(?:([~|^$*]?=)\s*(\"[^\"]*\"|'[^']*'|" + IDENT +
+                                  r")\s*)?\]", s)
                 if not am:
                     raise CannotJudge(f"an attribute selector the guard cannot read: {s!r}")
-                self.attrs.append((am.group(1).lower(), am.group(2), am.group(3)))
+                val = am.group(3)
+                if val is not None and val[:1] in "\"'":
+                    val = val[1:-1]
+                self.attrs.append((am.group(1).lower(), am.group(2), val))
                 b += 1
             elif s.startswith("::") or s.lower() in (":before", ":after", ":first-letter", ":first-line"):
                 self.pseudo_element = s.lstrip(":").lower(); c += 1
@@ -415,10 +605,44 @@ class Face:
         self.family, self.style, self.weight, self.urange, self.path = family, style, weight, urange, path
 
 
+# A custom property's name, as var() reads it.
+VAR_NAME = r"--[-\w\u0080-\U0010FFFF]*"
+VAR_RE = re.compile(r"var\(\s*(" + VAR_NAME + r")\s*(?:,([^)]*))?\)", re.I)
+
 # What the body of an at-rule the guard does not read (@scope, @starting-style,
-# @keyframes and the like) must not set: a custom property or a font property,
-# either of which could change the face a page is drawn in.
-AT_RULE_SETS = re.compile(r"(?:^|[{;\s])(--[-\w]+|font(?:-family|-weight|-style)?|text-transform)\s*:", re.I)
+# @keyframes, @page) must not set: a custom property, a font property or
+# generated text, any of which could change the face a page is drawn in or the
+# characters it draws.
+AT_RULE_SETS = re.compile(r"(?:^|[{;\s])((?:-[a-z]+-)?(?:--[-\w]+|font[-\w]*|text-transform|all|content|"
+                          r"list-style[-\w]*|text-emphasis[-\w]*|text-overflow|hyphenate-character))\s*:", re.I)
+
+
+def refuse_unmodelled(prop, value, where):
+    """FAIL CLOSED on a declaration that resets the font properties, makes the
+    browser fake a face, or draws characters that are not in the page's text,
+    in a way the guard does not model. Checked for every rule and every style
+    attribute, whether or not it matches an element."""
+    base = prop if prop.startswith("--") else re.sub(r"^-[a-z]+-", "", prop)
+    v = value.strip().lower()
+    words = set(re.split(r"[\s,]+", v)) - {""}
+    if base == "all":
+        raise CannotJudge(f"all:{v} at {where}, which resets the font properties the guard reads")
+    if base.startswith("font-synthesis"):
+        raise CannotJudge(f"font-synthesis at {where}")
+    if base in ("font-variant", "font-variant-caps", "font-variant-position") and (words & SYNTH_VARIANTS or "(" in v):
+        raise CannotJudge(f"{prop}:{v} at {where}, a variant the browser may synthesise")
+    if base == "content" and v not in ("none", "normal", '""', "''"):
+        raise CannotJudge(f"generated text the guard does not draw: content at {where}")
+    if base in ("list-style", "list-style-type") and not words <= LIST_MARKERS:
+        raise CannotJudge(f"generated text the guard does not draw: {prop}:{v} at {where}")
+    if base in ("text-emphasis", "text-emphasis-style") and v != "none":
+        raise CannotJudge(f"generated text the guard does not draw: {prop} at {where}")
+    if base == "text-overflow" and v != "clip":
+        raise CannotJudge(f"generated text the guard does not draw: text-overflow at {where}")
+    if base == "hyphenate-character" and v != "auto":
+        raise CannotJudge(f"generated text the guard does not draw: hyphenate-character at {where}")
+    if base == "text-security" and v != "none":
+        raise CannotJudge(f"generated text the guard does not draw: {prop} at {where}")
 
 
 class Sheets:
@@ -432,37 +656,41 @@ class Sheets:
         self.elsewhere = {}   # name -> where else it is set
         self.index = collections.defaultdict(list)
         order = 0
-        for css, base in sources:
-            for prelude, body, conditional in blocks(strip_comments(css)):
-                low = prelude.lower()
-                if low.startswith("@font-face"):
+        for css, base, origin in sources:
+            css = strip_comments(css, origin)
+            if "\\" in css:
+                raise CannotJudge(f"a backslash escape in {origin}; the guard does not decode escapes, so it cannot "
+                                  f"say what a name or value written with one is")
+            for prelude, body, conditional in blocks(css):
+                name = at_name(prelude) if prelude.startswith("@") else None
+                if name == "@font-face":
                     self._face(declarations(body), base, conditional)
                     continue
-                if low.startswith("@property"):
-                    name = prelude.split(None, 1)[1].strip() if len(prelude.split()) > 1 else ""
-                    self.elsewhere.setdefault(name, f"an {prelude.strip()!r} rule")
+                if name == "@property":
+                    prop = prelude.split(None, 1)[1].strip() if len(prelude.split()) > 1 else ""
+                    self.elsewhere.setdefault(prop, f"an {prelude.strip()!r} rule")
                     continue
-                if low.startswith("@"):
+                if name is not None:
                     m = AT_RULE_SETS.search(body)
                     if m:
-                        raise CannotJudge(f"{m.group(1)} set inside {prelude.split()[0]}, an at-rule the guard does not read")
+                        raise CannotJudge(f"{m.group(1)} set inside {name}, an at-rule the guard does not read")
                     continue
                 decls = declarations(body)
                 font_decls = []
                 for p, v, imp in decls:
+                    refuse_unmodelled(p, v, repr(prelude))
                     if p == "font":
                         font_decls += [(lp, lv, imp) for lp, lv in expand_font(v)]
                     elif p in FONT_PROPS:
                         font_decls.append((p, v, imp))
-                    elif p.startswith("font-synthesis"):
-                        raise CannotJudge(f"font-synthesis at {prelude!r}")
-                    elif p in ("font-variant", "font-variant-caps") and "small-caps" in v.lower():
-                        raise CannotJudge(f"a small-caps variant at {prelude!r}")
-                if any(p == "content" and re.search(r"(\"[^\"]+\"|'[^']+')", v) for p, v, _ in decls):
-                    raise CannotJudge(f"generated text the guard does not draw: {prelude!r}")
-                for sel_text in [s for s in prelude.split(",") if s.strip()]:
-                    plain_root = sel_text.strip() == ":root" and not conditional
-                    where = sel_text.strip() + (" inside a conditional at-rule" if conditional else "")
+                selectors = [s.strip() for s in prelude.split(",") if s.strip()]
+                # Plain :root is a rule whose whole selector is :root: one that
+                # lists another selector beside it is dropped whole by the
+                # browser if that one is invalid, which the guard cannot see.
+                plain_root = prelude.strip() == ":root" and not conditional
+                for sel_text in selectors:
+                    where = sel_text if len(selectors) == 1 else f"{sel_text} in {prelude.strip()!r}"
+                    where += " inside a conditional at-rule" if conditional else ""
                     for p, v, imp in decls:
                         if not p.startswith("--"):
                             continue
@@ -476,11 +704,11 @@ class Sheets:
                         continue
                     sel = Selector(sel_text)
                     if conditional:
-                        raise CannotJudge(f"a font rule inside @media/@container: {sel_text.strip()!r}")
+                        raise CannotJudge(f"a font rule inside @media/@container: {sel_text!r}")
                     if sel.dynamic or sel.unknown:
-                        raise CannotJudge(f"a font rule behind a state the guard cannot see: {sel_text.strip()!r}")
+                        raise CannotJudge(f"a font rule behind a state the guard cannot see: {sel_text!r}")
                     if sel.pseudo_element:
-                        raise CannotJudge(f"a font rule on generated content: {sel_text.strip()!r}")
+                        raise CannotJudge(f"a font rule on generated content: {sel_text!r}")
                     order += 1
                     self.index[sel.parts[-1][1].key()].append((sel, order, font_decls))
         # Statically, for every font value in every rule, whether or not a page
@@ -489,15 +717,20 @@ class Sheets:
             for _, _, decls in rules:
                 for _, value, _ in decls:
                     self.refuse_set_elsewhere(value)
+        # And every face, used or not: its file is in the tree and is what the
+        # rule says it is.
+        for faces in self.faces.values():
+            for face in faces:
+                check_face_file(face)
 
     def refuse_set_elsewhere(self, value, inline=None):
         """FAIL CLOSED on a font value that reads a custom property set anywhere
         but plain :root outside a conditional at-rule — directly, through
-        another custom property's value or in a var() fallback. inline is the
-        custom properties a page's style attributes set."""
+        another custom property's value or in a var() fallback — or one set
+        empty. inline is the custom properties a page's style attributes set."""
         todo, seen = [value], set()
         while todo:
-            for name in re.findall(r"var\(\s*(--[-\w]+)", todo.pop()):
+            for name, _ in VAR_RE.findall(todo.pop()):
                 if name in seen:
                     continue
                 seen.add(name)
@@ -506,16 +739,31 @@ class Sheets:
                     raise CannotJudge(f"a font value reads {name}, which is set at {where}; the guard reads custom "
                                       f"properties from plain :root alone, so it cannot say which face draws it")
                 if name in self.vars:
+                    if not self.vars[name][1].strip():
+                        raise CannotJudge(f"a font value reads {name}, which is set empty")
                     todo.append(self.vars[name][1])
 
     def _face(self, decls, base, conditional):
         if conditional:
             raise CannotJudge("an @font-face inside @media/@supports")
+        props = [p for p, _, _ in decls]
+        if len(set(props)) != len(props) or any(imp for _, _, imp in decls):
+            raise CannotJudge(f"an @font-face with a descriptor given twice or marked !important: {props}")
         d = {p: v for p, v, _ in decls}
-        family = family_names(d.get("font-family", ""))
-        src = re.search(r"url\(\s*['\"]?([^'\")]+)['\"]?\s*\)", d.get("src", ""))
-        if len(family) != 1 or not src:
-            raise CannotJudge(f"an @font-face the guard cannot read: {d}")
+        other = set(d) - FACE_DESCRIPTORS
+        if other:
+            raise CannotJudge(f"an @font-face descriptor the guard does not model: {sorted(other)}")
+        family = family_list(d.get("font-family", ""))
+        if len(family) != 1 or family[0] in GENERIC:
+            raise CannotJudge(f"an @font-face family the guard cannot read: {d.get('font-family')!r}")
+        # One woff2 file and nothing else. A list lets the browser skip an
+        # entry (a format it does not take, a local() font the reader may
+        # have) and load another, so the file the guard reads would not be
+        # the one that draws.
+        src = re.fullmatch(r"url\(\s*(\"|'|)([^\"'()\s]+)\1\s*\)(?:\s*format\(\s*(\"|'|)woff2\3\s*\))?",
+                           d.get("src", "").strip(), re.I)
+        if not src:
+            raise CannotJudge(f"an @font-face src other than one woff2 url(): {d.get('src', '')!r}")
         weight = d.get("font-weight", "400").strip().lower()
         weight = {"normal": "400", "bold": "700"}.get(weight, weight)
         if not re.fullmatch(r"\d+", weight):
@@ -523,8 +771,8 @@ class Sheets:
         style = d.get("font-style", "normal").strip().lower()
         if style not in ("normal", "italic", "oblique"):
             raise CannotJudge(f"an @font-face style the guard does not model: {style!r}")
-        url = src.group(1)
-        if re.match(r"[a-z]+:", url):
+        url = src.group(2)
+        if re.match(r"[a-z]+:", url, re.I) or url.startswith("//"):
             raise CannotJudge(f"a face served from elsewhere: {url}")
         path = os.path.normpath(os.path.join(base, url))
         urange = parse_range(d["unicode-range"]) if "unicode-range" in d else None
@@ -545,7 +793,7 @@ class Sheets:
         if inline:
             self.refuse_set_elsewhere(value, inline)
         for _ in range(8):
-            m = re.search(r"var\(\s*(--[-\w]+)\s*(?:,([^)]*))?\)", value)
+            m = VAR_RE.search(value)
             if not m:
                 return value
             if m.group(1) in self.vars:
@@ -554,6 +802,8 @@ class Sheets:
                 repl = m.group(2)
             else:
                 raise CannotJudge(f"a font value naming an unset property: {m.group(1)}")
+            if not repl.strip():
+                raise CannotJudge(f"a font value reads {m.group(1)}, which comes out empty")
             value = value[:m.start()] + repl + value[m.end():]
         raise CannotJudge(f"a font value the guard cannot resolve: {value!r}")
 
@@ -561,16 +811,27 @@ class Sheets:
 # --- HTML -----------------------------------------------------------------------
 
 class Element:
-    __slots__ = ("tag", "attrs", "classes", "parent", "children", "elements", "index")
+    __slots__ = ("tag", "attrs", "classes", "parent", "children", "elements", "index", "decls")
 
     def __init__(self, tag, attrs, parent):
         self.tag, self.attrs, self.parent = tag, attrs, parent
         self.classes = set((attrs.get("class") or "").split())
-        self.children, self.elements, self.index = [], [], 0
+        self.children, self.elements, self.index, self.decls = [], [], 0, []
         if parent is not None:
             self.index = len(parent.elements)
             parent.elements.append(self)
             parent.children.append(self)
+
+
+def style_declarations(text, where):
+    """A style attribute's declarations, read as a stylesheet's are: comments
+    out, and refused if it carries an escape or a rule."""
+    css = strip_comments(text, where)
+    if "\\" in css:
+        raise CannotJudge(f"a backslash escape in {where}; the guard does not decode escapes")
+    if "{" in unquoted(css):
+        raise CannotJudge(f"a rule inside {where}")
+    return declarations(css)
 
 
 class Page(html.parser.HTMLParser):
@@ -578,23 +839,50 @@ class Page(html.parser.HTMLParser):
         super().__init__(convert_charrefs=True)
         self.doc = Element("#document", {}, None)
         self.open = [self.doc]
-        self.links, self.styles = [], []
+        self.sheets = []  # ("link", href) or ("style", css), in the order the page has them
         self.inline_vars = {}
         self._style = None
 
+    def applied(self, tag, a):
+        """FAIL CLOSED on a stylesheet the browser may not apply: the guard
+        reads every one it is given as applied, so one the browser skips could
+        carry the good value that hides a bad one."""
+        inert = [e.tag for e in self.open if e.tag in INERT]
+        if inert:
+            raise CannotJudge(f"a <{tag}> stylesheet inside <{inert[0]}>, which the browser may not apply")
+        rel = a.get("rel", "").lower().split()
+        media = a.get("media", "all").strip().lower()
+        kind = a.get("type", "text/css").strip().lower()
+        if "alternate" in rel or "title" in a or "disabled" in a or media != "all" or kind != "text/css":
+            raise CannotJudge(f"a <{tag}> stylesheet the browser may not apply: alternate, titled, disabled, "
+                              f"or with a media query or a type")
+
     def handle_starttag(self, tag, attrs):
-        a = {k.lower(): (v if v is not None else "") for k, v in attrs}
+        a = {}
+        for k, v in attrs:
+            # Of two attributes with one name, the browser keeps the first.
+            a.setdefault(k.lower(), v if v is not None else "")
+        if tag == "base":
+            raise CannotJudge("a <base>, which moves every relative link the guard resolves")
+        if tag == "font":
+            raise CannotJudge("a <font> element, whose face attribute sets a family the guard does not read")
         top = self.open[-1]
         while top.tag in IMPLIED_END and tag in IMPLIED_END[top.tag]:
             self.open.pop()
             top = self.open[-1]
         el = Element(tag, a, top)
-        for p, _, _ in declarations(a.get("style", "")):
-            if p.startswith("--"):
-                self.inline_vars.setdefault(p, f"a style attribute on <{tag}>")
+        if "style" in a:
+            where = f"a style attribute on <{tag}>"
+            el.decls = style_declarations(a["style"], where)
+            for p, v, _ in el.decls:
+                refuse_unmodelled(p, v, where)
+                if p.startswith("--"):
+                    self.inline_vars.setdefault(p, where)
         if tag == "link" and "stylesheet" in a.get("rel", "").lower().split():
-            self.links.append(a.get("href", ""))
+            self.applied(tag, a)
+            self.sheets.append(("link", a.get("href", "")))
         if tag == "style":
+            self.applied(tag, a)
             self._style = []
         if tag not in VOID:
             self.open.append(el)
@@ -606,7 +894,7 @@ class Page(html.parser.HTMLParser):
 
     def handle_endtag(self, tag):
         if tag == "style" and self._style is not None:
-            self.styles.append("".join(self._style))
+            self.sheets.append(("style", "".join(self._style)))
             self._style = None
         for i in range(len(self.open) - 1, 0, -1):
             if self.open[i].tag == tag:
@@ -650,40 +938,48 @@ def weight_of(value, parent):
 def computed(el, parent, sheets, inline=None):
     family, weight, style, transform = parent
     winners = {}
-    # The browser's own sheet first, then the author's by importance,
-    # specificity and order.
+    # The browser's own sheet first; then the author's normal declarations by
+    # specificity and order, with a style attribute's above every selector;
+    # then the author's !important ones, a style attribute's last. A rank is
+    # (importance, from a style attribute, specificity, order).
+    ua = (-1, 0, (0, 0, 0), 0)
     if el.tag in UA_WEIGHT:
-        winners["font-weight"] = ((-1, (0, 0, 0), 0), UA_WEIGHT[el.tag])
+        winners["font-weight"] = (ua, UA_WEIGHT[el.tag])
     if el.tag in UA_ITALIC:
-        winners["font-style"] = ((-1, (0, 0, 0), 0), "italic")
+        winners["font-style"] = (ua, "italic")
     if el.tag in UA_MONO:
-        winners["font-family"] = ((-1, (0, 0, 0), 0), "monospace")
+        winners["font-family"] = (ua, "monospace")
     if el.tag in UA_CONTROL:
-        winners["font-family"] = ((-1, (0, 0, 0), 0), "system-ui")
-        winners["font-weight"] = ((-1, (0, 0, 0), 0), "400")
-        winners["font-style"] = ((-1, (0, 0, 0), 0), "normal")
+        winners["font-family"] = (ua, "system-ui")
+        winners["font-weight"] = (ua, "400")
+        winners["font-style"] = (ua, "normal")
     for sel, order, decls in sheets.rules_for(el):
         if not sel.matches(el):
             continue
         for prop, value, important in decls:
-            rank = (1 if important else 0, sel.spec, order)
+            rank = (1 if important else 0, 0, sel.spec, order)
             if prop not in winners or rank >= winners[prop][0]:
                 winners[prop] = (rank, value)
-    if "style" in el.attrs:
-        for prop, value, important in declarations(el.attrs["style"]):
-            longhands = expand_font(value) if prop == "font" else [(prop, value)]
-            for lp, lv in longhands:
-                if lp in FONT_PROPS:
-                    sheets.refuse_set_elsewhere(lv, inline)
-                    winners[lp] = ((2 if important else 1, (9, 9, 9), 0), lv)
+    for prop, value, important in el.decls:
+        longhands = expand_font(value) if prop == "font" else [(prop, value)]
+        for lp, lv in longhands:
+            if lp in FONT_PROPS:
+                sheets.refuse_set_elsewhere(lv, inline)
+                rank = (1 if important else 0, 1, (0, 0, 0), 0)
+                if lp not in winners or rank >= winners[lp][0]:
+                    winners[lp] = (rank, lv)
     if "font-family" in winners:
-        v = sheets.resolve(winners["font-family"][1], inline)
-        if v.strip().lower() != "inherit":
-            family = tuple(family_names(v))
+        v = keyword(sheets.resolve(winners["font-family"][1], inline), "font-family")
+        if v != "inherit":
+            family = family_list(v)
+            first = family[0]
+            if first not in sheets.faces and first not in GENERIC and first not in SYSTEM_FACES:
+                raise CannotJudge(f"a font stack that opens with {first!r}, which is not a face the page declares, "
+                                  f"a generic or a system face the guard knows, so it cannot say what draws the text")
     if "font-weight" in winners:
-        weight = weight_of(sheets.resolve(winners["font-weight"][1], inline), weight)
+        weight = weight_of(keyword(sheets.resolve(winners["font-weight"][1], inline), "font-weight"), weight)
     if "font-style" in winners:
-        v = sheets.resolve(winners["font-style"][1], inline).strip().lower()
+        v = keyword(sheets.resolve(winners["font-style"][1], inline), "font-style").strip().lower()
         if v != "inherit":
             if v.startswith("oblique"):
                 v = "oblique"
@@ -691,8 +987,10 @@ def computed(el, parent, sheets, inline=None):
                 raise CannotJudge(f"a font-style the guard does not model: {v!r}")
             style = v
     if "text-transform" in winners:
-        v = sheets.resolve(winners["text-transform"][1], inline).strip().lower()
+        v = keyword(sheets.resolve(winners["text-transform"][1], inline), "text-transform").strip().lower()
         if v != "inherit":
+            if v not in TRANSFORMS:
+                raise CannotJudge(f"a text-transform the guard does not model: {v!r}")
             transform = v
     return family, weight, style, transform
 
@@ -723,17 +1021,50 @@ def match(faces, style, weight):
             weight >= 600 and w < 600)
 
 
-_CMAPS = {}
+_FILES = {}
+
+
+def font_file(path):
+    """(character map, family, italic, weight class) of a face file, read once."""
+    if path not in _FILES:
+        if not os.path.isfile(path):
+            raise CannotJudge(f"a stylesheet names {os.path.basename(path)}, which is not in the tree")
+        try:
+            font = TTFont(path, lazy=True)
+            names = font["name"]
+            family = (names.getDebugName(16) or names.getDebugName(1) or "").strip().lower()
+            os2 = font["OS/2"]
+            italic = bool(os2.fsSelection & 0x201 or font["head"].macStyle & 2 or font["post"].italicAngle)
+            _FILES[path] = (frozenset(font.getBestCmap() or ()), family, italic, os2.usWeightClass)
+            font.close()
+        except Exception as e:
+            raise CannotJudge(f"{os.path.basename(path)} is not a face the guard can read "
+                              f"({type(e).__name__})") from None
+    return _FILES[path]
 
 
 def cmap(path):
-    if path not in _CMAPS:
-        if not os.path.isfile(path):
-            raise CannotJudge(f"a stylesheet names {os.path.basename(path)}, which is not in the tree")
-        font = TTFont(path, lazy=True)
-        _CMAPS[path] = frozenset(font.getBestCmap() or ())
-        font.close()
-    return _CMAPS[path]
+    return font_file(path)[0]
+
+
+def check_face_file(face):
+    """FAIL CLOSED on a face whose file is not what its @font-face says. The
+    browser believes the descriptors: an upright file declared as the italic is
+    drawn upright where the page asks for italic, and another family's file
+    declared under the reading face's name draws the reading text in that other
+    design. The Hebrew face is the one alias (FACE_ALIASES)."""
+    _, family, italic, weight = font_file(face.path)
+    name = os.path.basename(face.path)
+    alias = (face.family, family) in FACE_ALIASES
+    if family != face.family and not alias:
+        raise CannotJudge(f"an @font-face declares {name} as {face.family!r}, but the file's family is {family!r}")
+    if alias and face.urange is None:
+        raise CannotJudge(f"{name} joins {face.family!r} with no unicode-range, so it would draw every character")
+    if italic != (face.style != "normal"):
+        raise CannotJudge(f"an @font-face declares {name} as {face.style}, but the file is "
+                          f"{'italic' if italic else 'upright'}")
+    if not alias and (weight >= 600) != (face.weight >= 600):
+        raise CannotJudge(f"an @font-face declares {name} at weight {face.weight}, but its weight class is {weight}")
 
 
 def transformed(text, transform):
@@ -742,7 +1073,10 @@ def transformed(text, transform):
     if transform == "lowercase":
         return text.lower()
     if transform == "capitalize":
-        return text.title()
+        # CSS raises the first letter of each word and leaves the others as
+        # they are; the guard checks every letter in both forms rather than
+        # model where a word begins.
+        return text + text.upper()
     return text
 
 
@@ -766,28 +1100,33 @@ def check_page(tree, path):
     with open(path, encoding="utf-8") as f:
         page.feed(f.read())
     page.close()
+    # The stylesheets in the order the page names them, which is the order of
+    # the cascade: a <style> before a <link> loses to it.
     sources, key = [], []
-    for href in page.links:
-        if re.match(r"[a-z]+:", href) or href.startswith("//"):
-            raise CannotJudge(f"{rel} links a stylesheet from elsewhere: {href}")
-        target = os.path.join(tree, href.lstrip("/")) if href.startswith("/") else \
-            os.path.join(os.path.dirname(path), href)
+    for i, (kind, ref) in enumerate(page.sheets):
+        if kind == "style":
+            key.append(f"{rel}#style{i}")
+            sources.append((ref, os.path.dirname(path), f"a <style> in {rel}"))
+            continue
+        if re.match(r"[a-z]+:", ref, re.I) or ref.startswith("//"):
+            raise CannotJudge(f"{rel} links a stylesheet from elsewhere: {ref}")
+        target = os.path.join(tree, ref.lstrip("/")) if ref.startswith("/") else \
+            os.path.join(os.path.dirname(path), ref)
         target = os.path.normpath(target.split("?")[0].split("#")[0])
         if not os.path.isfile(target):
-            raise CannotJudge(f"{rel} links {href}, which is not in the tree")
+            raise CannotJudge(f"{rel} links {ref}, which is not in the tree")
         key.append(target)
-    for i, css in enumerate(page.styles):
-        key.append(f"{rel}#style{i}")
+        sources.append((target, os.path.dirname(target), os.path.relpath(target, tree)))
     key = tuple(key)
     if key not in _SHEETS:
-        for target in key:
-            if "#style" in target:
-                css = page.styles[int(target.rsplit("#style", 1)[1])]
-                sources.append((css, os.path.dirname(path)))
+        read = []
+        for src, base, origin in sources:
+            if origin.startswith("a <style>"):
+                read.append((src, base, origin))
             else:
-                with open(target, encoding="utf-8") as f:
-                    sources.append((f.read(), os.path.dirname(target)))
-        _SHEETS[key] = Sheets(sources)
+                with open(src, encoding="utf-8") as f:
+                    read.append((f.read(), base, origin))
+        _SHEETS[key] = Sheets(read)
     sheets = _SHEETS[key]
 
     gaps, fakes = collections.Counter(), collections.Counter()

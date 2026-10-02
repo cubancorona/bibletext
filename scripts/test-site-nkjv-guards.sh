@@ -248,6 +248,111 @@ grep -Fq -- "reads --scripture, which is set at a style attribute on <article>" 
 g=$(gcopy); printf '@scope (.wrap){.text{font-family:"Atkinson Hyperlegible",sans-serif}}' >> "$(ls "$g"/assets/reader.*.css)"
 refuses "a font rule inside an at-rule the guard does not read" "font-family set inside @scope" site_guard_glyphs "$g"
 
+# FAIL CLOSED, route by route. Each control below makes one change that, in a
+# browser, draws Scripture in the chrome face (which has no Hebrew) or in a face
+# the guard never read, and the guard must refuse it: as a gap where it now
+# models what the browser does, or as a tree it cannot judge where it does not.
+# The guard as it stood before these controls passed every one of them.
+ATK='"Atkinson Hyperlegible",sans-serif'
+# repl OLD NEW FILE... replaces the first OLD in each FILE, which must hold it.
+repl() {
+  "$PY" - "$@" <<'PY'
+import sys
+old, new = sys.argv[1:3]
+for path in sys.argv[3:]:
+    s = open(path, encoding="utf-8").read()
+    assert old in s, f"{old!r} is not in {path}"
+    open(path, "w", encoding="utf-8").write(s.replace(old, new, 1))
+PY
+}
+# css_refused WHAT WANT CSS: CSS appended to the reader's stylesheet in a copy
+# of the text-on site is refused, for the reason WANT.
+css_refused() {
+  local g; g=$(gcopy)
+  printf '\n%s\n' "$3" >> "$(ls "$g"/assets/reader.*.css)"
+  refuses "$1" "$2" site_guard_glyphs "$g"
+}
+# page_refused WHAT WANT OLD NEW: /nkjv/john/3/ with OLD made NEW is refused.
+page_refused() {
+  local g; g=$(gcopy)
+  repl "$3" "$4" "$g/nkjv/john/3/index.html"
+  refuses "$1" "$2" site_guard_glyphs "$g"
+}
+ALEF="U+05D0 HEBREW LETTER ALEF"
+# Syntax the guard does not decode: CSS nesting, escapes, comments.
+css_refused "the scripture stack reset in a rule nested in body" "a rule nested inside 'body'" "body{.text{--scripture:$ATK}}"
+css_refused "the scripture stack reset in a rule nested in :root" "a rule nested inside ':root'" ":root{& .text{--scripture:$ATK}}"
+css_refused "a font rule nested in a style rule" "a rule nested inside '.text'" ".text{@media all{font-family:$ATK}}"
+css_refused "the scripture stack reset under an escaped name" "a backslash escape" ".text{--scr\\69pture:$ATK}"
+css_refused "the scripture stack reset under an escaped name on :root in @media" "a backslash escape" \
+  "@media (prefers-color-scheme:dark){:root{--scr\\69pture:$ATK}}"
+css_refused "an escaped property name" "a backslash escape" ".text{font-f\\61mily:$ATK}"
+page_refused "an escaped custom property in a style attribute" "a backslash escape in a style attribute" \
+  '<article class="text">' "<article class=\"text\" style=\"--scr\\69pture:serif\">"
+page_refused "a comment before a custom property in a style attribute" \
+  "reads --scripture, which is set at a style attribute on <article>" \
+  '<article class="text">' '<article class="text" style="/**/--scripture:serif">'
+css_refused "a comment opener in a string, hiding the rule after it" "$ALEF" \
+  ".zz1{grid-template-areas:\"/*\"} .text{font-family:$ATK} .zz2{grid-template-areas:\"*/\"}"
+css_refused "a comment between two tokens" "a comment between two tokens" ".text{font-family:Juni/**/code,serif}"
+css_refused "a stray semicolon that drops the rule after it" "a stray semicolon" \
+  ".text{font-family:$ATK} ;.text{font-family:var(--scripture)}"
+css_refused "an @import statement" "an @import the guard does not follow" "@import url(more.css);"
+css_refused "an at-rule the guard does not know" "an at-rule the guard does not know" '@counter-style x{system:cyclic;symbols:"x"}'
+# Values the guard reads now as the browser does, or refuses.
+css_refused "var() written in capitals" "$ALEF" ".text{font-family:VAR(--ui)}"
+css_refused "font-family:unset, which inherits the chrome face" "$ALEF" ".text{font-family:unset}"
+css_refused "font-family:revert-layer" "a keyword the guard does not evaluate" ".text{font-family:revert-layer}"
+css_refused "font-family:initial" "a keyword the guard does not evaluate" ".text{font-family:initial}"
+css_refused "all:unset" "which resets the font properties" ".text{all:unset}"
+css_refused "an empty custom property on plain :root" "which is set empty" ":root{--scripture:}"
+css_refused "a later declaration the browser drops (a trailing comma)" "would drop as invalid" \
+  ".text{font-family:$ATK} .text{font-family:\"Junicode\",serif,}"
+css_refused "a generic in quotes" "a generic or keyword in quotes" ".text{font-family:\"serif\",$ATK}"
+g=$(gcopy); repl '--scripture:"Junicode"' '--scripture:"Junicod"' "$(ls "$g"/assets/reader.*.css)"
+refuses "a misspelt scripture family" "opens with 'junicod'" site_guard_glyphs "$g"
+css_refused "text-transform:full-width" "a text-transform the guard does not model" ".text{text-transform:full-width}"
+css_refused "a petite-caps variant" "a variant the browser may synthesise" ".text{font-variant-caps:petite-caps}"
+css_refused "a superscript position" "a variant the browser may synthesise" ".text{font-variant-position:super}"
+css_refused "a list marker string" "generated text the guard does not draw" '.text{display:list-item;list-style-type:"x"}'
+# The cascade: a style attribute's normal declaration loses to a stylesheet's
+# !important one, and stylesheets apply in the order the page names them.
+g=$(gcopy); printf '\n.text{font-family:%s !important}\n' "$ATK" >> "$(ls "$g"/assets/reader.*.css)"
+repl '<article class="text">' '<article class="text" style="font-family:Junicode">' \
+  $(grep -rl --include=index.html '<article class="text">' "$g")
+refuses "a stylesheet's !important over a style attribute" "$ALEF" site_guard_glyphs "$g"
+g=$(gcopy); printf '.text{font-family:%s}' "$ATK" > "$g/assets/late.css"
+repl '<link rel="stylesheet"' '<style>.text{font-family:var(--scripture)}</style><link rel="stylesheet"' "$g/nkjv/john/3/index.html"
+repl '</head>' '<link rel="stylesheet" href="/assets/late.css"></head>' "$g/nkjv/john/3/index.html"
+refuses "a <style> before a <link> that overrides it" "nkjv/john/3/index.html" site_guard_glyphs "$g"
+# Faces whose file is not what the rule says.
+REG=$(basename "$(ls "$T"/glyph-on/assets/Junicode-Regular.*.woff2)")
+ATKREG=$(basename "$(ls "$T"/glyph-on/assets/AtkinsonHyperlegible-Regular.*.woff2)")
+HEB=$(basename "$(ls "$T"/glyph-on/assets/BibleTextHebrew.*.woff2)")
+face() { printf '@font-face{font-family:"Junicode";font-style:%s;font-weight:%s;src:%s}' "$1" "$2" "$3"; }
+css_refused "a local() font before the file" "src other than one woff2 url()" \
+  "$(face normal 400 "local(\"Georgia\"),url($REG) format(\"woff2\")")"
+css_refused "a second src the browser may load instead" "src other than one woff2 url()" \
+  "$(face normal 400 "url($REG) format(\"embedded-opentype\"),url($ATKREG) format(\"woff2\")")"
+css_refused "the chrome face's file declared as the scripture italic" "the file's family is 'atkinson hyperlegible'" \
+  "$(face italic 400 "url($ATKREG) format(\"woff2\")")"
+css_refused "the upright file declared as the italic" "but the file is upright" "$(face italic 400 "url($REG)")"
+css_refused "the regular file declared as the bold" "but its weight class is 400" "$(face normal 700 "url($REG)")"
+css_refused "the Hebrew face joining the family with no range" "with no unicode-range" "$(face normal 400 "url($HEB)")"
+css_refused "a descriptor the guard does not read" "descriptor the guard does not model" \
+  '@font-face{font-family:"Junicode";font-stretch:condensed;src:url('"$REG"')}'
+# Stylesheets the browser may not apply, which could hide a bad value.
+for link in '<link rel="alternate stylesheet" title="x" href="/assets/x.css">' \
+  '<link rel="stylesheet" media="not all" href="/assets/x.css">'; do
+  g=$(gcopy); printf ':root{--x:0}' > "$g/assets/x.css"
+  repl '</head>' "$link</head>" "$g/nkjv/john/3/index.html"
+  refuses "a stylesheet the browser may not apply: $link" "a <link> stylesheet the browser may not apply" site_guard_glyphs "$g"
+done
+page_refused "a <style> inside <noscript>" "inside <noscript>" \
+  '</head>' '<noscript><style>:root{--scripture:serif}</style></noscript></head>'
+page_refused "a <base>" "a <base>" '</head>' '<base href="/web/"></head>'
+page_refused "a <font face>" "a <font> element" '<article class="text">' '<article class="text"><font face="x">'
+
 # --- the key, in the tree about to be published ---------------------------------
 # PATH holds no `security`, so the scan sees exactly the synthetic key given to
 # it in BIBLE_API_KEY and never a Keychain.
