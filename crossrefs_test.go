@@ -3,6 +3,7 @@ package bibletext
 import (
 	"archive/zip"
 	"bytes"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -142,5 +143,96 @@ func TestTheDatasetsThirdJohnFifteenIsTheReferencesFourteen(t *testing.T) {
 	}
 	if got := idx[crossRefKey("John", 10, 3)]; len(got) != 1 || got[0].label() != "3 John 1:14" {
 		t.Errorf("a row pointing at 3 John 1:15 must point at 1:14, got %+v", got)
+	}
+}
+
+// withCrossRefIndex installs a Treasury index parsed from a synthetic TSV for
+// the test's duration, in place of the downloaded one.
+func withCrossRefIndex(t *testing.T, rows string) {
+	t.Helper()
+	idx, err := parseCrossRefRows(strings.NewReader("From Verse\tTo Verse\tVotes\n" + rows))
+	if err != nil {
+		t.Fatal(err)
+	}
+	crossRefMu.Lock()
+	was := crossRefIndex
+	crossRefIndex = idx
+	crossRefMu.Unlock()
+	t.Cleanup(func() {
+		crossRefMu.Lock()
+		crossRefIndex = was
+		crossRefMu.Unlock()
+	})
+}
+
+// xrefBible is a synthetic text holding the named chapters, each with verses
+// 1..n, so a panel can be built without a downloaded translation.
+func xrefBible(chapters map[string]map[int]int) *BibleData {
+	bd := &BibleData{Verses: map[string]map[int][]Verse{}}
+	for _, book := range []string{"Genesis", "Leviticus", "Numbers", "2 Chronicles", "Ezra",
+		"Matthew", "Philippians", "Acts", "2 John", "3 John"} {
+		chs, ok := chapters[book]
+		if !ok {
+			continue
+		}
+		bd.Books = append(bd.Books, book)
+		bd.Verses[book] = map[int][]Verse{}
+		for ch, n := range chs {
+			for v := 1; v <= n; v++ {
+				bd.Verses[book][ch] = append(bd.Verses[book][ch], Verse{
+					BookName: book, Book: book, Chapter: ch, Verse: v,
+					Text: fmt.Sprintf("Synthetic text of %s %d:%d.", book, ch, v),
+				})
+			}
+		}
+	}
+	return bd
+}
+
+// A RANGE THAT RUNS INTO THE NEXT BOOK. Eighteen Treasury rows end in a
+// different book from the one they start in, and the end's book was thrown
+// away, so the end was read as a verse of the START book: "Leviticus
+// 27:34-1:1" ran backwards, and "2 John 1:1-15" named a verse 2 John does not
+// have — the dataset means 2 John 1:1 to 3 John 1:15, the greeting every
+// shipped text prints at 3 John 1:14.
+func TestACrossBookRangeKeepsItsEndBook(t *testing.T) {
+	r, ok := parseOSISTarget("Lev.27.34-Num.1.1")
+	if !ok || r.Book != "Leviticus" || r.EndBook != "Numbers" || r.EndCh != 1 || r.EndV != 1 {
+		t.Fatalf("parsed %+v (ok=%v)", r, ok)
+	}
+	if got := r.label(); got != "Leviticus 27:34-Numbers 1:1" {
+		t.Errorf("label %q, want \"Leviticus 27:34-Numbers 1:1\"", got)
+	}
+
+	withCrossRefIndex(t, "Num.3.1\tLev.27.34-Num.1.1\t5\n"+
+		"Acts.11.30\t2John.1.1-3John.1.15\t4\n")
+	bd := xrefBible(map[string]map[int]int{
+		"Leviticus": {27: 34}, "Numbers": {1: 3, 3: 1},
+		"Acts": {11: 30}, "2 John": {1: 13}, "3 John": {1: 14},
+	})
+	for _, tc := range []struct {
+		book    string
+		ch, v   int
+		want    string
+		version string
+	}{
+		{"Numbers", 3, 1, "Leviticus 27:34-Numbers 1:1", "web"},
+		{"Numbers", 3, 1, "Leviticus 27:34-Numbers 1:1", "bsb"},
+		{"Acts", 11, 30, "2 John 1:1-3 John 1:14", "web"},
+		{"Acts", 11, 30, "2 John 1:1-3 John 1:14", "nkjv"},
+	} {
+		st := &AppState{Bible: bd, CurrentBook: tc.book, CurrentChapter: tc.ch, CurrentVersion: tc.version}
+		refs := crossRefsForSelection(st, "", selSpan{lo: tc.v, hi: tc.v})
+		var labels []string
+		for _, c := range refs {
+			labels = append(labels, c.label())
+		}
+		// CONTROL: the panel was built at all, or a missing label proves nothing.
+		if len(refs) == 0 {
+			t.Fatalf("%s %s %d:%d: the panel is empty", tc.version, tc.book, tc.ch, tc.v)
+		}
+		if labels[0] != tc.want {
+			t.Errorf("%s %s %d:%d lists %q, want %q first", tc.version, tc.book, tc.ch, tc.v, labels, tc.want)
+		}
 	}
 }

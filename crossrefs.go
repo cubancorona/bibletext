@@ -51,18 +51,30 @@ const (
 	maxCrossRefsPerVerse = 16
 )
 
-// crossRef is one related passage (a verse or a verse range within one book).
+// crossRef is one related passage: a verse, or a range of verses.
+//
+// A range almost always lies within one book. The Treasury has eighteen that
+// do not — "Leviticus 27:34-Numbers 1:1", "2 Chronicles 36:22-Ezra 1:3",
+// "2 John 1:1-3 John 1:14" — and EndBook names the end's book for those. It is
+// empty for every other row, which is how a range within one book is spelled.
 type crossRef struct {
 	Book           string
 	Chapter, Verse int
-	EndCh, EndV    int    // 0 when it's a single verse
+	EndBook        string // the end's book when it is not Book; "" otherwise
+	EndCh, EndV    int    // 0 when it's a single verse; EndCh 0 also means "Chapter"
 	Votes          int    // TSK agreement count (0 for parallels)
 	Parallel       bool   // true = a Gospel-synopsis parallel (parallels.go), not a TSK cross-ref
 	Title          string // synopsis pericope title, for parallels (e.g. "The Beatitudes")
 }
 
+// crossBook reports whether the range ends in a different book from the one it
+// starts in.
+func (c crossRef) crossBook() bool { return c.EndV != 0 && c.EndBook != "" && c.EndBook != c.Book }
+
 func (c crossRef) label() string {
 	switch {
+	case c.crossBook():
+		return fmt.Sprintf("%s %d:%d-%s %d:%d", c.Book, c.Chapter, c.Verse, c.EndBook, c.EndCh, c.EndV)
 	case c.EndV == 0 || ((c.EndCh == 0 || c.EndCh == c.Chapter) && c.EndV == c.Verse):
 		// A range whose end is its start is one verse, however it was spelled:
 		// "Romans 16:25-25" is not a citation anyone writes.
@@ -257,7 +269,9 @@ func parseOSISStart(s string) (book string, ch, v int, ok bool) {
 }
 
 // parseOSISTarget parses the target side, which may be "Book.C.V" or a range
-// "Book.C.V-Book.C2.V2".
+// "Book.C.V-Book2.C2.V2". The end's book is kept when it differs: eighteen
+// ranges run from the end of one book into the next, and reading their end as
+// a verse of the START book gave "Leviticus 27:34-1:1" and "2 John 1:1-15".
 func parseOSISTarget(s string) (crossRef, bool) {
 	startStr, endStr := s, ""
 	if i := strings.IndexByte(s, '-'); i >= 0 {
@@ -269,8 +283,11 @@ func parseOSISTarget(s string) (crossRef, bool) {
 	}
 	ref := crossRef{Book: book, Chapter: ch, Verse: v}
 	if endStr != "" {
-		if _, ec, ev, ok2 := parseOSISRef(endStr); ok2 {
+		if eb, ec, ev, ok2 := parseOSISRef(endStr); ok2 {
 			ref.EndCh, ref.EndV = ec, ev
+			if eb != book {
+				ref.EndBook = eb
+			}
 		}
 	}
 	return ref, true
@@ -362,19 +379,45 @@ func crossRefToReference(book string, ch, v int) (int, int) {
 	return ch, v
 }
 
-// crossRefTargetToReference does the same for a target, span end included.
+// crossRefTargetToReference does the same for a target, span end included,
+// each end in its own book and its own chapter.
 func crossRefTargetToReference(c crossRef) crossRef {
 	startCh := c.Chapter
 	c.Chapter, c.Verse = crossRefToReference(c.Book, c.Chapter, c.Verse)
-	if c.EndV != 0 {
-		endCh := c.EndCh
-		if endCh == 0 {
-			endCh = startCh // the END's chapter in the DATASET's numbering
-		}
-		c.EndCh, c.EndV = crossRefToReference(c.Book, endCh, c.EndV)
-		if c.EndCh == c.Chapter {
-			c.EndCh = 0
-		}
+	if c.EndV == 0 {
+		return c
+	}
+	endBook, endCh := c.Book, c.EndCh
+	if c.EndBook != "" {
+		endBook = c.EndBook
+	}
+	if endCh == 0 {
+		endCh = startCh // the END's chapter in the DATASET's numbering
+	}
+	c.EndCh, c.EndV = crossRefToReference(endBook, endCh, c.EndV)
+	return normaliseSpanEnd(c)
+}
+
+// normaliseSpanEnd puts a range's end in its canonical form: a same-chapter
+// end carries EndCh 0, an end that is the start makes the row one verse, and an
+// end BEFORE the start — which no citation means — keeps only the start.
+func normaliseSpanEnd(c crossRef) crossRef {
+	if c.EndV == 0 {
+		c.EndBook, c.EndCh = "", 0
+		return c
+	}
+	if c.crossBook() {
+		return c
+	}
+	c.EndBook = ""
+	if c.EndCh == 0 {
+		c.EndCh = c.Chapter
+	}
+	switch {
+	case c.EndCh < c.Chapter || (c.EndCh == c.Chapter && c.EndV <= c.Verse):
+		c.EndCh, c.EndV = 0, 0
+	case c.EndCh == c.Chapter:
+		c.EndCh = 0
 	}
 	return c
 }
@@ -407,20 +450,20 @@ func crossRefTargetIn(versionID string, c crossRef) (crossRef, bool) {
 	refCh := c.Chapter
 	c.Chapter, c.Verse = ch, vs
 	if c.EndV != 0 {
-		endCh := c.EndCh
+		endBook, endCh := c.Book, c.EndCh
+		if c.EndBook != "" {
+			endBook = c.EndBook // a range that runs on into the next book
+		}
 		if endCh == 0 {
 			endCh = refCh
 		}
-		if ech, ev, r := MapVerse(versificationReference, versionID, c.Book, endCh, c.EndV); r != verseMapAbsent && r != verseMapIncommensurable {
+		if ech, ev, r := MapVerse(versificationReference, versionID, endBook, endCh, c.EndV); r != verseMapAbsent && r != verseMapIncommensurable {
 			c.EndCh, c.EndV = ech, ev
-			if c.EndCh == c.Chapter {
-				c.EndCh = 0
-			}
 		} else {
-			c.EndCh, c.EndV = 0, 0
+			c.EndBook, c.EndCh, c.EndV = "", 0, 0
 		}
 	}
-	return c, true
+	return normaliseSpanEnd(c), true
 }
 
 func crossRefsForSelection(state *AppState, text string, span selSpan) []crossRef {
@@ -430,23 +473,34 @@ func crossRefsForSelection(state *AppState, text string, span selSpan) []crossRe
 	verses := selectionVerses(state, text, span)
 	shown := map[string]bool{} // label -> already emitted
 
+	// resolve names a row's book — and a cross-book range's end book — as the
+	// loaded translation does, and rewrites the row into its numbering.
+	vid := state.currentVersion().ID
+	resolve := func(c crossRef) (crossRef, bool) {
+		name, ok := resolveBookName(state.Bible.Books, c.Book)
+		if !ok {
+			return crossRef{}, false
+		}
+		c.Book = name
+		if c.EndBook != "" {
+			if c.EndBook, ok = resolveBookName(state.Bible.Books, c.EndBook); !ok {
+				return crossRef{}, false
+			}
+		}
+		return crossRefTargetIn(vid, c)
+	}
+
 	// Gospel synopsis parallels first (parallels.go): the same event in the other
 	// Gospels, tagged. Embedded, so these appear even when the TSK cross-references
 	// failed to load (offline). Kept in synopsis order, not sorted by votes.
 	var parallels []crossRef
-	vid := state.currentVersion().ID
 	for _, v := range verses {
 		srcCh, srcV, ok := crossRefSourceRef(vid, v)
 		if !ok {
 			continue
 		}
 		for _, c := range gospelParallelsForVerse(v.BookName, srcCh, srcV) {
-			name, ok := resolveBookName(state.Bible.Books, c.Book)
-			if !ok {
-				continue
-			}
-			c.Book = name
-			c, ok = crossRefTargetIn(vid, c)
+			c, ok := resolve(c)
 			if !ok {
 				continue
 			}
@@ -470,12 +524,7 @@ func crossRefsForSelection(state *AppState, text string, span selSpan) []crossRe
 				continue
 			}
 			for _, c := range crossRefIndex[crossRefKey(v.BookName, srcCh, srcV)] {
-				name, ok := resolveBookName(state.Bible.Books, c.Book)
-				if !ok {
-					continue
-				}
-				c.Book = name
-				c, ok = crossRefTargetIn(vid, c)
+				c, ok := resolve(c)
 				if !ok {
 					continue
 				}
