@@ -132,6 +132,15 @@ nkjv_guard_on() {
   bad=$(find "$out/nkjv" -name '*.html' -print0 |
     xargs -0 -r grep -L "<time datetime=\"$date\">" | head -3 || true)
   [[ -z "$bad" ]] || { echo "pages under /nkjv/ state a different retrieval date from /nkjv/john/3/: $bad"; return 1; }
+  # And the whole line, as retrievedLineFormat writes it: the date in words
+  # inside the <time>, and the line closed after it, in its own paragraph.
+  local months=(January February March April May June July August September October November December) words m
+  m=${date#*-}; m=${m%-*}
+  words="$((10#${date##*-})) ${months[$((10#$m - 1))]} ${date%%-*}"
+  bad=$(find "$out/nkjv" -name '*.html' -print0 |
+    xargs -0 -r grep -L -F "<p class=\"retrieved\">Text provided by API.Bible (<a href=\"https://api.bible\">api.bible</a>), retrieved <time datetime=\"$date\">$words</time>.</p>" |
+    head -3 || true)
+  [[ -z "$bad" ]] || { echo "pages under /nkjv/ do not carry the retrieval line as it is written, dated $words: $bad"; return 1; }
   bad=$(grep -rl --include='*.html' 'class="retrieved"' "$out" | grep -v "^$out/nkjv/" | head -3 || true)
   [[ -z "$bad" ]] || { echo "pages outside /nkjv/ carry the NKJV's retrieval line: $bad"; return 1; }
 
