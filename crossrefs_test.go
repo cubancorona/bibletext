@@ -64,8 +64,8 @@ func TestParseCrossRefZipAndRank(t *testing.T) {
 	}
 }
 
-// The cross-reference dataset (OpenBible's TSK) is numbered as the KJV is:
-// the Romans doxology sits at 16:25-27. The app's reference versification is
+// The cross-reference dataset (OpenBible's TSK) numbers the Romans doxology
+// 16:25-27, as the BSB and the ESV do. The app's reference versification is
 // the WEB, which numbers it 14:24-26. Nothing normalised between the two, so
 // both halves of the feature failed on that passage:
 //
@@ -116,5 +116,31 @@ func TestCrossRefDatasetNumberingIsNormalised(t *testing.T) {
 	}
 	if tgt.EndV != 26 || (tgt.EndCh != 0 && tgt.EndCh != 14) {
 		t.Errorf("target span end must map to 14:26, got EndCh=%d EndV=%d", tgt.EndCh, tgt.EndV)
+	}
+}
+
+// The dataset's 3 John runs to verse 15, as the ESV's does; every shipped
+// text ends the letter at 14, with the closing greeting inside it. The
+// dataset's one row from 3 John 1:15 — the friends greeted "by name", to John
+// 10:3 — was keyed to a verse no translation has, so no reader ever saw it.
+func TestTheDatasetsThirdJohnFifteenIsTheReferencesFourteen(t *testing.T) {
+	const tsv = "From Verse\tTo Verse\tVotes\n" +
+		"3John.1.15\tJohn.10.3\t1\n" +
+		"John.10.3\t3John.1.15\t1\n"
+	idx, err := parseCrossRefRows(strings.NewReader(tsv))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(idx) == 0 {
+		t.Fatal("control: the parser produced no rows; the assertions below are vacuous")
+	}
+	if got := idx[crossRefKey("3 John", 1, 14)]; len(got) != 1 || got[0].Book != "John" {
+		t.Errorf("3 John 1:15's row must be keyed at 3 John 1:14, got %+v", got)
+	}
+	if got := idx[crossRefKey("3 John", 1, 15)]; len(got) != 0 {
+		t.Errorf("nothing may stay keyed at a 3 John 1:15 no translation has: %+v", got)
+	}
+	if got := idx[crossRefKey("John", 10, 3)]; len(got) != 1 || got[0].label() != "3 John 1:14" {
+		t.Errorf("a row pointing at 3 John 1:15 must point at 1:14, got %+v", got)
 	}
 }
