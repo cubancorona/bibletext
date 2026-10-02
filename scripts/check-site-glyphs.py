@@ -36,6 +36,18 @@ unresolvable var(), a shorthand it cannot parse — stops it with status 2 rathe
 than letting it guess, so a stylesheet change that moves past the model is a
 publish that stops, not one that is waved through.
 
+Custom properties are the sharpest case. The guard reads a var() from the
+custom properties set on plain :root outside any @media, @supports, @layer or
+@container, and from nowhere else: it does not cascade them per element. So a
+font value that reads a custom property set ANYWHERE else as well — on another
+selector (.text{--scripture:...}), on :root inside @media, in an @property
+rule, in a page's style attribute — is refused, however the cascade would
+resolve it, because the browser may draw that element in a face the guard never
+looked at. A custom property no font value reads may be set anywhere (the
+palette's dark colours are set on :root inside @media). An at-rule the guard
+does not descend into (@scope, @starting-style, @keyframes and the like) that
+sets a custom property or a font property is refused too.
+
 Prints code points, character names, the element's selector path and page
 paths. NEVER page text: the tree may hold licensed Scripture.
 
@@ -155,7 +167,9 @@ def blocks(css, conditional=False):
             yield from blocks(body, True)
         elif low.startswith("@import"):
             raise CannotJudge("an @import the guard does not follow")
-        elif not low.startswith("@") or low.startswith("@font-face"):
+        else:
+            # A style rule, an @font-face, or another at-rule, which the
+            # caller reads for what it sets (Sheets).
             yield prelude, body, conditional
         i = k
 
@@ -183,7 +197,10 @@ def declarations(body):
             value = value.strip()
             important = bool(re.search(r"!\s*important\s*$", value, re.I))
             value = re.sub(r"!\s*important\s*$", "", value, flags=re.I).strip()
-            out.append((prop.strip().lower(), value, important))
+            # A custom property's name is case-sensitive (--Scripture is not
+            # --scripture); every other property's is not.
+            prop = prop.strip()
+            out.append((prop if prop.startswith("--") else prop.lower(), value, important))
     return out
 
 
@@ -398,22 +415,39 @@ class Face:
         self.family, self.style, self.weight, self.urange, self.path = family, style, weight, urange, path
 
 
+# What the body of an at-rule the guard does not read (@scope, @starting-style,
+# @keyframes and the like) must not set: a custom property or a font property,
+# either of which could change the face a page is drawn in.
+AT_RULE_SETS = re.compile(r"(?:^|[{;\s])(--[-\w]+|font(?:-family|-weight|-style)?|text-transform)\s*:", re.I)
+
+
 class Sheets:
     """Everything the pages linking one set of stylesheets share: the faces, the
-    custom properties on :root, and the font rules indexed by the key of their
-    last compound."""
+    custom properties on plain :root, where else any custom property is set, and
+    the font rules indexed by the key of their last compound."""
 
     def __init__(self, sources):
         self.faces = collections.defaultdict(list)
-        self.vars = {}
+        self.vars = {}        # name -> (important, value), from plain :root
+        self.elsewhere = {}   # name -> where else it is set
         self.index = collections.defaultdict(list)
         order = 0
         for css, base in sources:
             for prelude, body, conditional in blocks(strip_comments(css)):
-                decls = declarations(body)
-                if prelude.lower().startswith("@font-face"):
-                    self._face(decls, base, conditional)
+                low = prelude.lower()
+                if low.startswith("@font-face"):
+                    self._face(declarations(body), base, conditional)
                     continue
+                if low.startswith("@property"):
+                    name = prelude.split(None, 1)[1].strip() if len(prelude.split()) > 1 else ""
+                    self.elsewhere.setdefault(name, f"an {prelude.strip()!r} rule")
+                    continue
+                if low.startswith("@"):
+                    m = AT_RULE_SETS.search(body)
+                    if m:
+                        raise CannotJudge(f"{m.group(1)} set inside {prelude.split()[0]}, an at-rule the guard does not read")
+                    continue
+                decls = declarations(body)
                 font_decls = []
                 for p, v, imp in decls:
                     if p == "font":
@@ -427,10 +461,17 @@ class Sheets:
                 if any(p == "content" and re.search(r"(\"[^\"]+\"|'[^']+')", v) for p, v, _ in decls):
                     raise CannotJudge(f"generated text the guard does not draw: {prelude!r}")
                 for sel_text in [s for s in prelude.split(",") if s.strip()]:
-                    if sel_text.strip() == ":root" and not conditional:
-                        for p, v, _ in decls:
-                            if p.startswith("--"):
-                                self.vars[p] = v
+                    plain_root = sel_text.strip() == ":root" and not conditional
+                    where = sel_text.strip() + (" inside a conditional at-rule" if conditional else "")
+                    for p, v, imp in decls:
+                        if not p.startswith("--"):
+                            continue
+                        if not plain_root:
+                            self.elsewhere.setdefault(p, where)
+                        elif p not in self.vars or imp or not self.vars[p][0]:
+                            # Every plain :root rule has the same specificity:
+                            # the later wins, unless the earlier is !important.
+                            self.vars[p] = (imp, v)
                     if not font_decls:
                         continue
                     sel = Selector(sel_text)
@@ -442,6 +483,30 @@ class Sheets:
                         raise CannotJudge(f"a font rule on generated content: {sel_text.strip()!r}")
                     order += 1
                     self.index[sel.parts[-1][1].key()].append((sel, order, font_decls))
+        # Statically, for every font value in every rule, whether or not a page
+        # has an element it matches.
+        for rules in self.index.values():
+            for _, _, decls in rules:
+                for _, value, _ in decls:
+                    self.refuse_set_elsewhere(value)
+
+    def refuse_set_elsewhere(self, value, inline=None):
+        """FAIL CLOSED on a font value that reads a custom property set anywhere
+        but plain :root outside a conditional at-rule — directly, through
+        another custom property's value or in a var() fallback. inline is the
+        custom properties a page's style attributes set."""
+        todo, seen = [value], set()
+        while todo:
+            for name in re.findall(r"var\(\s*(--[-\w]+)", todo.pop()):
+                if name in seen:
+                    continue
+                seen.add(name)
+                where = self.elsewhere.get(name) or (inline or {}).get(name)
+                if where:
+                    raise CannotJudge(f"a font value reads {name}, which is set at {where}; the guard reads custom "
+                                      f"properties from plain :root alone, so it cannot say which face draws it")
+                if name in self.vars:
+                    todo.append(self.vars[name][1])
 
     def _face(self, decls, base, conditional):
         if conditional:
@@ -473,13 +538,18 @@ class Sheets:
             for rule in self.index.get(k, ()):
                 yield rule
 
-    def resolve(self, value):
+    def resolve(self, value, inline=None):
+        # The stylesheets' own font values were checked when they were read;
+        # what a page's style attributes set is checked here, element by
+        # element, against every value that reaches one.
+        if inline:
+            self.refuse_set_elsewhere(value, inline)
         for _ in range(8):
             m = re.search(r"var\(\s*(--[-\w]+)\s*(?:,([^)]*))?\)", value)
             if not m:
                 return value
             if m.group(1) in self.vars:
-                repl = self.vars[m.group(1)]
+                repl = self.vars[m.group(1)][1]
             elif m.group(2) is not None:
                 repl = m.group(2)
             else:
@@ -509,6 +579,7 @@ class Page(html.parser.HTMLParser):
         self.doc = Element("#document", {}, None)
         self.open = [self.doc]
         self.links, self.styles = [], []
+        self.inline_vars = {}
         self._style = None
 
     def handle_starttag(self, tag, attrs):
@@ -518,6 +589,9 @@ class Page(html.parser.HTMLParser):
             self.open.pop()
             top = self.open[-1]
         el = Element(tag, a, top)
+        for p, _, _ in declarations(a.get("style", "")):
+            if p.startswith("--"):
+                self.inline_vars.setdefault(p, f"a style attribute on <{tag}>")
         if tag == "link" and "stylesheet" in a.get("rel", "").lower().split():
             self.links.append(a.get("href", ""))
         if tag == "style":
@@ -573,7 +647,7 @@ def weight_of(value, parent):
     raise CannotJudge(f"a font-weight the guard does not model: {value!r}")
 
 
-def computed(el, parent, sheets):
+def computed(el, parent, sheets, inline=None):
     family, weight, style, transform = parent
     winners = {}
     # The browser's own sheet first, then the author's by importance,
@@ -600,15 +674,16 @@ def computed(el, parent, sheets):
             longhands = expand_font(value) if prop == "font" else [(prop, value)]
             for lp, lv in longhands:
                 if lp in FONT_PROPS:
+                    sheets.refuse_set_elsewhere(lv, inline)
                     winners[lp] = ((2 if important else 1, (9, 9, 9), 0), lv)
     if "font-family" in winners:
-        v = sheets.resolve(winners["font-family"][1])
+        v = sheets.resolve(winners["font-family"][1], inline)
         if v.strip().lower() != "inherit":
             family = tuple(family_names(v))
     if "font-weight" in winners:
-        weight = weight_of(sheets.resolve(winners["font-weight"][1]), weight)
+        weight = weight_of(sheets.resolve(winners["font-weight"][1], inline), weight)
     if "font-style" in winners:
-        v = sheets.resolve(winners["font-style"][1]).strip().lower()
+        v = sheets.resolve(winners["font-style"][1], inline).strip().lower()
         if v != "inherit":
             if v.startswith("oblique"):
                 v = "oblique"
@@ -616,7 +691,7 @@ def computed(el, parent, sheets):
                 raise CannotJudge(f"a font-style the guard does not model: {v!r}")
             style = v
     if "text-transform" in winners:
-        v = sheets.resolve(winners["text-transform"][1]).strip().lower()
+        v = sheets.resolve(winners["text-transform"][1], inline).strip().lower()
         if v != "inherit":
             transform = v
     return family, weight, style, transform
@@ -721,7 +796,7 @@ def check_page(tree, path):
     stack = [(page.doc, root_style, False)]
     while stack:
         el, inherited, hidden = stack.pop()
-        style = inherited if el.tag == "#document" else computed(el, inherited, sheets)
+        style = inherited if el.tag == "#document" else computed(el, inherited, sheets, page.inline_vars)
         hidden = hidden or el.tag in NOT_TEXT
         text = []
         for child in el.children:

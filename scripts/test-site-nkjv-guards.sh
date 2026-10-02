@@ -224,6 +224,25 @@ g=$(gcopy); printf '.text{font:small-caps 1em "Junicode"}' >> "$(ls "$g"/assets/
 refuses "a small-caps shorthand" "could not judge the tree" site_guard_glyphs "$g"
 g=$(gcopy); printf '.text:hover{font-weight:700}' >> "$(ls "$g"/assets/reader.*.css)"
 refuses "a font rule behind :hover" "could not judge the tree" site_guard_glyphs "$g"
+# The font stacks read their families from custom properties, and the guard
+# reads those from plain :root alone. Set one anywhere else and the browser may
+# draw Scripture in a face the guard never looked at — here the chrome face,
+# which has no Hebrew — so the guard refuses the tree rather than judge it by
+# :root's value. The passes above hold the other half: the palette's colours,
+# set on :root inside @media and read by no font value, are no reason to refuse.
+g=$(gcopy); printf '.text{--scripture:"Atkinson Hyperlegible",sans-serif}' >> "$(ls "$g"/assets/reader.*.css)"
+refuses "the scripture stack reset on .text" "could not judge the tree" site_guard_glyphs "$g"
+grep -Fq -- "reads --scripture, which is set at .text" "$T/out" || fail "the reset on .text was not named: $(cat "$T/out")"
+g=$(gcopy); printf '@media (prefers-color-scheme:dark){:root{--scripture:"Atkinson Hyperlegible",sans-serif}}' >> "$(ls "$g"/assets/reader.*.css)"
+refuses "the scripture stack reset on :root inside @media" "could not judge the tree" site_guard_glyphs "$g"
+grep -Fq -- "reads --scripture, which is set at :root inside a conditional at-rule" "$T/out" ||
+  fail "the reset inside @media was not named: $(cat "$T/out")"
+g=$(gcopy); sub 's/<article class="text">/<article class="text" style="--scripture:serif">/' "$g/nkjv/john/3/index.html"
+refuses "the scripture stack reset in a style attribute" "could not judge the tree" site_guard_glyphs "$g"
+grep -Fq -- "reads --scripture, which is set at a style attribute on <article>" "$T/out" ||
+  fail "the reset in a style attribute was not named: $(cat "$T/out")"
+g=$(gcopy); printf '@scope (.wrap){.text{font-family:"Atkinson Hyperlegible",sans-serif}}' >> "$(ls "$g"/assets/reader.*.css)"
+refuses "a font rule inside an at-rule the guard does not read" "font-family set inside @scope" site_guard_glyphs "$g"
 
 # --- the key, in the tree about to be published ---------------------------------
 # PATH holds no `security`, so the scan sees exactly the synthetic key given to
