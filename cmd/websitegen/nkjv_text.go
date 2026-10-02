@@ -53,7 +53,7 @@ import (
 // generator which state it is publishing (-print-nkjv-text) and its guards
 // follow the answer. There is deliberately no environment variable or flag
 // that overrides it: the committed value is the state the site is in.
-const nkjvSiteText = false
+const nkjvSiteText = true
 
 // nkjvTextState is the switch as scripts/publish-site.sh reads it.
 func nkjvTextState(on bool) string {
