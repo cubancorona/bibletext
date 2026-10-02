@@ -284,3 +284,50 @@ func TestTheDatasetsRowsLandOnTheSamePassageInEveryTranslation(t *testing.T) {
 		}
 	}
 }
+
+// A RANGE WHOSE LAST VERSE THE TRANSLATION LACKS. The synopsis gives the
+// healing of the epileptic boy as Matthew 17:14-21 and the fig tree's lesson
+// as Mark 11:20-26; the BSB has neither 17:21 nor 11:26. The row used to keep
+// only its start, so a BSB reader of Mark 9 or Matthew 21 was offered
+// "Matthew 17:14" and "Mark 11:20" as the parallel, the first verse of a
+// passage the text prints in full up to the verse before the missing one.
+func TestARangeWhoseEndTheTranslationLacksEndsAtTheVerseBefore(t *testing.T) {
+	for _, tc := range []struct {
+		vid  string
+		in   crossRef
+		want string
+	}{
+		{"bsb", crossRef{Book: "Matthew", Chapter: 17, Verse: 14, EndV: 21}, "Matthew 17:14-20"},
+		{"bsb", crossRef{Book: "Mark", Chapter: 11, Verse: 20, EndV: 26}, "Mark 11:20-25"},
+		// Past two missing verses, to the one before both.
+		{"bsb", crossRef{Book: "Mark", Chapter: 9, Verse: 42, EndV: 46}, "Mark 9:42-45"},
+		{"bsb", crossRef{Book: "Mark", Chapter: 9, Verse: 43, EndV: 44}, "Mark 9:43"},
+		{"bsb", crossRef{Book: "Luke", Chapter: 23, Verse: 16, EndV: 17}, "Luke 23:16"},
+		// CONTROL: the translations that have the last verse keep it.
+		{"web", crossRef{Book: "Matthew", Chapter: 17, Verse: 14, EndV: 21}, "Matthew 17:14-21"},
+		{"nkjv", crossRef{Book: "Mark", Chapter: 11, Verse: 20, EndV: 26}, "Mark 11:20-26"},
+	} {
+		got, ok := crossRefTargetIn(tc.vid, tc.in)
+		if !ok {
+			t.Errorf("%s: %s was dropped, want %q", tc.vid, tc.in.label(), tc.want)
+			continue
+		}
+		if got.label() != tc.want {
+			t.Errorf("%s: %s reads %q, want %q", tc.vid, tc.in.label(), got.label(), tc.want)
+		}
+	}
+
+	// And in the panel: a BSB reader of Mark 9:14 is offered Matthew's
+	// telling of the healing as far as the BSB prints it.
+	bd := xrefBible(map[string]map[int]int{"Matthew": {17: 27}, "Mark": {9: 50}, "Luke": {9: 62}})
+	st := &AppState{Bible: bd, CurrentBook: "Mark", CurrentChapter: 9, CurrentVersion: "bsb"}
+	var parallels []string
+	for _, c := range crossRefsForSelection(st, "", selSpan{lo: 14, hi: 14}) {
+		if c.Parallel {
+			parallels = append(parallels, c.label())
+		}
+	}
+	if fmt.Sprint(parallels) != "[Matthew 17:14-20 Luke 9:37-43]" {
+		t.Errorf("BSB Mark 9:14's parallels are %q, want Matthew 17:14-20 and Luke 9:37-43", parallels)
+	}
+}

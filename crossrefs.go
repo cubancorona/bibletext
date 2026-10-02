@@ -729,9 +729,11 @@ func normaliseSpanEnd(c crossRef) crossRef {
 // and a tap that goes nowhere.
 //
 // The END of a span is mapped too, and independently: a span may begin in a
-// verse that exists and run past one that does not. When the end cannot be
-// mapped the row keeps its start and becomes a single-verse reference, which is
-// honest — it points at scripture the reader can actually see.
+// verse that exists and run past one that does not. When this translation
+// lacks the end, the span ends at the last verse before it that it has; when
+// the end cannot be mapped at all, or no verse after the start is left, the
+// row keeps its start and becomes a single-verse reference, which is honest —
+// it points at scripture the reader can actually see.
 //
 // The end is read in the REFERENCE's chapter. By the time it is mapped the
 // start's chapter has been rewritten into the translation's, and taking the
@@ -778,7 +780,22 @@ func crossRefTargetIn(versionID string, c crossRef) (crossRef, bool) {
 	if endCh == 0 {
 		endCh = c.Chapter // the reference's chapter, not the rewritten one
 	}
-	ech, ev, r := MapVerse(versificationReference, versionID, endBook, endCh, c.EndV)
+	endV := c.EndV
+	ech, ev, r := MapVerse(versificationReference, versionID, endBook, endCh, endV)
+	// A range whose LAST verse this translation lacks ends at the last verse
+	// before it that the translation has. The BSB lacks Matthew 17:21 and Mark
+	// 11:26, so the parallels "Matthew 17:14-21" and "Mark 11:20-26" are its
+	// 17:14-20 and 11:20-25, the whole of each passage it prints; keeping only
+	// the start offered the first verse of the healing and of the fig tree's
+	// lesson as if it were the passage. A walk that reaches the start leaves
+	// the start alone.
+	for steps := len(versificationDeltas[versionID].absent); r == verseMapAbsent && steps >= 0; steps-- {
+		endV--
+		if endV < 1 || (endBook == c.Book && endCh == c.Chapter && endV <= c.Verse) {
+			break
+		}
+		ech, ev, r = MapVerse(versificationReference, versionID, endBook, endCh, endV)
+	}
 	if r == verseMapAbsent || r == verseMapIncommensurable {
 		return out, true
 	}
@@ -790,7 +807,7 @@ func crossRefTargetIn(versionID string, c crossRef) (crossRef, bool) {
 	if verseBefore(hi, lo) {
 		lo, hi = hi, lo
 	}
-	start, end := verseRef{c.Book, c.Chapter, c.Verse}, verseRef{c.Book, endCh, c.EndV}
+	start, end := verseRef{c.Book, c.Chapter, c.Verse}, verseRef{c.Book, endCh, endV}
 	for _, m := range versificationDeltas[versionID].moved {
 		at := verseRef{m.Book, m.Chapter, m.Verse}
 		if m.Book != c.Book || verseBefore(at, start) || verseBefore(end, at) {
