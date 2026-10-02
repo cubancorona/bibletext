@@ -131,10 +131,11 @@ DRAW        applySmallCaps substitutes Unicode small-capital CHARACTERS.
             — notes, highlights, red letter — is measured in those runes.
   │
   ├──▶ TO A READER   sharedText keeps them as drawn.        "Lᴏʀᴅ"
-  │                  Share, image card, verse of the day, Copy.
+  │                  Share, image card, verse of the day, Copy;
+  │                  the website's link preview (og:description).
   │
   └──▶ TO A MACHINE  outboundText resolves them to CAPITALS. "LORD"
-                     AI study.
+                     AI study; the website's <meta name="description">.
 ```
 
 **Headings and psalm titles carry the span too.** The publisher's section
@@ -198,6 +199,15 @@ publisher "GOD"   ──drawn──►  "Gᴏᴅ"   ──to a machine──► 
 
 Capitals are the plain-text convention every other edition uses, and they keep
 the divine name distinct from an ordinary "Lord".
+
+The website writes a chapter's opening twice, once for each. Its
+`og:description` is the preview a messenger shows a person under a shared link,
+and keeps the small capitals, as a share from the app does; its
+`<meta name="description">` is what a search engine reads, and takes the
+capitals through outboundText (`cmd/websitegen/render.go`, `chapterPreview` and
+`chapterDescription`). They are the same words, cut at the same place. The
+public-domain editions mark nothing and spell the name in literal capitals, so
+their two tags are identical.
 
 ### Why the form reaches the share pipeline
 

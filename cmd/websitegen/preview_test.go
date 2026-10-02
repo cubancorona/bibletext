@@ -1,6 +1,8 @@
 package main
 
 import (
+	"html"
+	"regexp"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -51,5 +53,80 @@ func TestChapterPreviewNeverSplitsACharacter(t *testing.T) {
 		if !strings.HasSuffix(got, "…") || len(got) > 200+len("…") {
 			t.Errorf("lead %d: the preview is %d bytes and not cut", lead, len(got))
 		}
+	}
+}
+
+// metaContent is the content of the one <meta ATTR> tag a page carries.
+func metaContent(t *testing.T, page, attr string) string {
+	t.Helper()
+	m := regexp.MustCompile(`<meta `+regexp.QuoteMeta(attr)+` content="([^"]*)">`).FindAllStringSubmatch(page, -1)
+	if len(m) != 1 {
+		t.Fatalf("the page has %d <meta %s> tags", len(m), attr)
+	}
+	return html.UnescapeString(m[0][1])
+}
+
+// psalmPage renders Psalm 3 of a one-chapter edition through renderChapter.
+func psalmPage(id string, verses []bibletext.Verse, licence *webLicence) string {
+	lv := loadedVersion{
+		webVersion: webVersion{ID: id, Name: "Fixture Edition"},
+		bible: &bibletext.BibleData{Books: []string{"Psalms"},
+			Verses: map[string]map[int][]bibletext.Verse{"Psalms": {3: verses}}},
+		licence: licence,
+	}
+	return renderChapter(lv, []loadedVersion{lv}, "Psalms", "psalms", 3, 2, 4)
+}
+
+// A PERSON READS THE SMALL CAPITALS; A MACHINE READS CAPITALS. A chapter page
+// carries its opening twice. og:description is what a messenger shows a person
+// under a shared link, and keeps the divine name in the small capitals a share
+// sends. <meta name="description"> is what a search engine reads, and text for
+// a machine takes the name in CAPITALS through outboundText, as an AI request
+// does (docs/DIVINE_NAME.md). Both are read off the page renderChapter writes,
+// for a licensed edition's chapter with its footer and stylesheet. The control
+// is a public-domain chapter, which marks nothing and spells the name in
+// literal capitals: both tags carry the stored text, unchanged.
+func TestAChapterDescribesTheDivineNameToAPersonAndToAMachine(t *testing.T) {
+	text := "A fixture verse in which the Lord answers \"soon\"."
+	marked := bibletext.Verse{BookName: "Psalms", Book: "Psalms", Chapter: 3, Verse: 1, Text: text,
+		SmallCaps: smallCapsSpan(text)}
+	page := psalmPage("nkjv", []bibletext.Verse{marked},
+		&webLicence{Notice: "A fixture notice.", Retrieved: londonDate(fixedRetrieval)})
+	if got, want := metaContent(t, page, `property="og:description"`), `A fixture verse in which the Lᴏʀᴅ answers "soon".`; got != want {
+		t.Errorf("og:description = %q, want %q: the preview a person reads keeps the small capitals", got, want)
+	}
+	if got, want := metaContent(t, page, `name="description"`), `A fixture verse in which the LORD answers "soon".`; got != want {
+		t.Errorf("the meta description = %q, want %q: text for a machine takes capitals", got, want)
+	}
+	if !strings.Contains(page, `<p class="lic">A fixture notice.</p>`) || !strings.Contains(page, nkjvCSSName) {
+		t.Error("the licensed chapter lost its footer or its stylesheet to the description")
+	}
+
+	stored := "A fixture verse in which the LORD answers."
+	page = psalmPage("web", []bibletext.Verse{{BookName: "Psalms", Book: "Psalms", Chapter: 3, Verse: 1, Text: stored}}, nil)
+	for _, attr := range []string{`property="og:description"`, `name="description"`} {
+		if got := metaContent(t, page, attr); got != stored {
+			t.Errorf("a public-domain chapter's %s = %q, want the stored %q", attr, got, stored)
+		}
+	}
+}
+
+// The description is the preview's own words, cut where the preview is cut:
+// capitals are fewer bytes than small capitals, so a description cut on its own
+// would run on past the word the preview ends with.
+func TestTheDescriptionIsCutWhereThePreviewIs(t *testing.T) {
+	var verses []bibletext.Verse
+	for n := 1; n <= 12; n++ {
+		text := "The fixture Lord speaks in verse " + strings.Repeat("x", n) + "."
+		verses = append(verses, bibletext.Verse{BookName: "Psalms", Book: "Psalms", Chapter: 3, Verse: n,
+			Text: text, SmallCaps: smallCapsSpan(text)})
+	}
+	page := psalmPage("nkjv", verses, nil)
+	og, desc := metaContent(t, page, `property="og:description"`), metaContent(t, page, `name="description"`)
+	if !strings.HasSuffix(og, "…") || !strings.Contains(og, "Lᴏʀᴅ") {
+		t.Fatalf("the fixture preview was not cut or names nothing, so this test proves nothing: %q", og)
+	}
+	if want := strings.ReplaceAll(og, "Lᴏʀᴅ", "LORD"); desc != want {
+		t.Errorf("the description is not the preview's own words in capitals:\n preview %q\n    desc %q\n    want %q", og, desc, want)
 	}
 }

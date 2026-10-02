@@ -68,6 +68,16 @@ func ChapterBlocks(bd *BibleData, book string, chapter int, verses []Verse) []Ch
 // that marks nothing it is the verse's own text.
 func VerseSharedText(v Verse) string { return verseSharedText(v) }
 
+// OutboundText is text as the app hands it to a machine (outboundText,
+// outbound_text.go): the page's own typography taken off and the divine name's
+// small capitals resolved to CAPITALS, the plain-text convention of every other
+// edition (docs/DIVINE_NAME.md). The site writes a chapter's
+// <meta name="description">, which search engines read, in it; the link preview
+// a person reads (og:description) keeps the small capitals, as a share does.
+// Text with no small capitals and none of the page's typography is returned as
+// it came.
+func OutboundText(s string) string { return outboundText(s) }
+
 // IsWordsOfChrist reports whether a verse falls in a red-letter range.
 //
 // DEPRECATED FOR RENDERING. This is the WEB's verse-level judgement and it is

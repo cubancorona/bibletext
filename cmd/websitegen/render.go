@@ -35,6 +35,10 @@ type pageHead struct {
 	// and the platform row: a licensed edition's copyright notice and the date
 	// its text was retrieved (licenceFoot, nkjv_text.go).
 	foot string
+	// description is the <meta name="description"> content where it differs
+	// from og:description: a chapter's preview in the form text for a machine
+	// takes (chapterDescription). Empty, the description is og:description.
+	description string
 }
 
 // headFor is the optional part of a published edition's pages: nothing for a
@@ -63,7 +67,11 @@ func pageShellHead(title, ogTitle, ogDesc, canonical, body string, depth int, he
 	// possible because every chapter is its own pre-rendered file.
 	fmt.Fprintf(&b, `<meta property="og:title" content="%s">`, template.HTMLEscapeString(ogTitle))
 	fmt.Fprintf(&b, `<meta property="og:description" content="%s">`, template.HTMLEscapeString(ogDesc))
-	fmt.Fprintf(&b, `<meta name="description" content="%s">`, template.HTMLEscapeString(ogDesc))
+	desc := ogDesc
+	if head.description != "" {
+		desc = head.description
+	}
+	fmt.Fprintf(&b, `<meta name="description" content="%s">`, template.HTMLEscapeString(desc))
 	b.WriteString(`<meta property="og:type" content="article">`)
 	b.WriteString(`<meta property="og:site_name" content="BibleText">`)
 	if head.robots != "" {
@@ -157,8 +165,11 @@ func renderChapter(v loadedVersion, all []loadedVersion, book, slug string, chap
 
 	title := fmt.Sprintf("%s — %s | BibleText", ref, v.Name)
 	canonical := fmt.Sprintf("https://bibletext.co.uk/%s/%s/%d/", v.ID, slug, chapter)
-	return pageShellHead(title, fmt.Sprintf("%s (%s)", ref, v.Name), chapterPreview(verses), canonical,
-		b.String(), 3, headFor(v))
+	preview := chapterPreview(verses)
+	head := headFor(v)
+	head.description = chapterDescription(preview)
+	return pageShellHead(title, fmt.Sprintf("%s (%s)", ref, v.Name), preview, canonical,
+		b.String(), 3, head)
 }
 
 // chapterBody renders verses into paragraphs using the app's own rules: a join
@@ -296,7 +307,8 @@ func paragraphBody(versionID, book string, verses []bibletext.Verse, gaps map[in
 }
 
 // chapterPreview is the unfurl text: the opening of the chapter, trimmed to a
-// sentence-ish length so a shared link reads well in a message thread.
+// sentence-ish length so a shared link reads well in a message thread. It is
+// the page's og:description, which a messenger shows a PERSON under the link.
 //
 // In the form the app shares a verse in (bibletext.VerseSharedText): the divine
 // name in the small capitals the page draws it with, which is what the account
@@ -331,6 +343,19 @@ func chapterPreview(verses []bibletext.Verse) string {
 		s += "…"
 	}
 	return s
+}
+
+// chapterDescription is the same opening for a MACHINE: the page's
+// <meta name="description">, which search engines read and show. Text for a
+// machine takes the divine name in CAPITALS (bibletext.OutboundText), as an AI
+// request does — "LORD", the plain-text convention of every other edition —
+// because a small capital has no Unicode equivalence to the letter it is drawn
+// for, so text matched against "LORD" or "Lord" does not match "Lᴏʀᴅ"
+// (docs/DIVINE_NAME.md). It is the preview's own words, cut where the preview
+// is cut; for a preview with no small capitals, every public-domain chapter's,
+// it is the preview.
+func chapterDescription(preview string) string {
+	return bibletext.OutboundText(preview)
 }
 
 // navBar carries the version switcher and the trail back up. The switcher links
