@@ -4,6 +4,9 @@ import (
 	"archive/zip"
 	"bytes"
 	"fmt"
+	"os"
+	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -53,7 +56,7 @@ func TestParseCrossRefZipAndRank(t *testing.T) {
 	rows := "Gen.1.1\tHeb.1.2\t64\n" +
 		"Gen.1.1\tJohn.1.1-John.1.3\t369\n" +
 		"Gen.1.1\tPs.90.2\t61\n"
-	idx, err := parseCrossRefZip(makeCrossRefZip(t, rows))
+	idx, _, err := parseCrossRefZip(makeCrossRefZip(t, rows))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +89,7 @@ func TestCrossRefDatasetNumberingIsNormalised(t *testing.T) {
 		"Rom.16.25\tEph.3.20\t30\n" +
 		"Eph.3.20\tRom.16.25-Rom.16.27\t70\n"
 
-	idx, err := parseCrossRefRows(strings.NewReader(tsv))
+	idx, _, err := parseCrossRefRows(strings.NewReader(tsv))
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
@@ -130,7 +133,7 @@ func TestTheDatasetsThirdJohnFifteenIsTheReferencesFourteen(t *testing.T) {
 	const tsv = "From Verse\tTo Verse\tVotes\n" +
 		"3John.1.15\tJohn.10.3\t1\n" +
 		"John.10.3\t3John.1.15\t1\n"
-	idx, err := parseCrossRefRows(strings.NewReader(tsv))
+	idx, _, err := parseCrossRefRows(strings.NewReader(tsv))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +155,7 @@ func TestTheDatasetsThirdJohnFifteenIsTheReferencesFourteen(t *testing.T) {
 // the test's duration, in place of the downloaded one.
 func withCrossRefIndex(t *testing.T, rows string) {
 	t.Helper()
-	idx, err := parseCrossRefRows(strings.NewReader("From Verse\tTo Verse\tVotes\n" + rows))
+	idx, _, err := parseCrossRefRows(strings.NewReader("From Verse\tTo Verse\tVotes\n" + rows))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -327,14 +330,14 @@ func TestTheIndexKeepsEachVersesBestRows(t *testing.T) {
 	rows.WriteString("Gen.1.2\tPs.104.30\t9\nGen.1.2\tJob.26.13\t8\n")
 	tsv := "From Verse\tTo Verse\tVotes\n" + rows.String()
 	// CONTROL: read without the cap, every row is there.
-	every, err := readCrossRefRows(strings.NewReader(tsv), 0)
+	every, _, err := readCrossRefRows(strings.NewReader(tsv), 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := len(every[crossRefKey("Genesis", 1, 1)]); got != n {
 		t.Fatalf("control: the uncapped index holds %d rows, want %d", got, n)
 	}
-	idx, err := parseCrossRefRows(strings.NewReader(tsv))
+	idx, _, err := parseCrossRefRows(strings.NewReader(tsv))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -387,5 +390,149 @@ func TestAnIndexRowUnpacksToTheRowParsed(t *testing.T) {
 	}
 	if r, _ := packTSKRow(crossRef{Book: "Genesis", Chapter: 1, Verse: 1, Votes: 1 << 20}); r.votes != 1<<15-1 {
 		t.Errorf("votes past an int16 packed as %d, want them held at %d", r.votes, 1<<15-1)
+	}
+}
+
+// THE CORRECTIONS WERE MADE TO ONE COPY OF THE DATASET. The app downloads
+// whatever copy OpenBible serves, with no version or checksum to pin it, and
+// the hand-made corrections — Philippians 2:3 re-filed under 1:16, Matthew
+// 23:13's rows filed under the reference's 23:14 — are right only while the
+// rows they correct are as they were in the 2026-08-31 copy. Each checks
+// that first. Where the rows have changed it corrects nothing, which leaves
+// them where the dataset files them rather than somewhere a guess put them,
+// and says so; the numbering moves (the doxology, 3 John 1:15) say so when
+// the dataset stops naming the verse they move.
+func TestACorrectionLeavesRowsThatHaveChangedAlone(t *testing.T) {
+	const asMade = "Phil.1.16\t2Cor.2.17\t9\n" +
+		"Phil.1.17\tActs.22.1\t9\n" +
+		"Phil.1.17\tPhil.2.3\t4\n" +
+		"Matt.23.13\tLuke.11.52\t20\n" +
+		"Matt.23.13\tMatt.23.23\t9\n" +
+		"Rom.16.25\tEph.3.20\t30\n" +
+		"Rom.16.26\tRom.1.5\t10\n" +
+		"Rom.16.27\tJude.1.25\t10\n" +
+		"3John.1.15\tJohn.10.3\t1\n"
+	read := func(rows string) (map[string][]string, []string) {
+		t.Helper()
+		idx, drift, err := parseCrossRefRows(strings.NewReader("From Verse\tTo Verse\tVotes\n" + rows))
+		if err != nil {
+			t.Fatal(err)
+		}
+		labels := map[string][]string{}
+		for key, rs := range idx {
+			for _, r := range rs {
+				labels[key] = append(labels[key], r.crossRef().label())
+			}
+		}
+		return labels, drift
+	}
+	has := func(labels map[string][]string, key, label string) bool {
+		return slices.Contains(labels[key], label)
+	}
+
+	// CONTROL: the copy they were made for takes every correction, and
+	// reports nothing.
+	labels, drift := read(asMade)
+	if len(drift) != 0 {
+		t.Fatalf("control: the copy the corrections were made for reports %q", drift)
+	}
+	if !has(labels, "Philippians|1|16", "Philippians 2:3") || has(labels, "Philippians|1|17", "Philippians 2:3") {
+		t.Fatalf("control: Philippians 2:3 is not re-filed under 1:16: %q", labels)
+	}
+	if !has(labels, "Matthew|23|14", "Luke 11:52") || len(labels["Matthew|23|13"]) != 0 {
+		t.Fatalf("control: Matthew 23:13's rows are not filed under 23:14: %q", labels)
+	}
+
+	for _, tc := range []struct {
+		name, rows, report string
+		left               func(map[string][]string) bool
+	}{
+		{
+			"1:16 has its own row to 2:3",
+			asMade + "Phil.1.16\tPhil.2.3\t2\n", "Philippians 2:3 under 1:16",
+			func(l map[string][]string) bool {
+				return has(l, "Philippians|1|17", "Philippians 2:3") && slices.Equal(l["Philippians|1|16"], []string{"2 Corinthians 2:17", "Philippians 2:3"})
+			},
+		},
+		{
+			"Philippians 1:16-17 in the ESV's order, so 1:17 is no longer the defence",
+			strings.Replace(asMade, "Phil.1.17\tActs.22.1\t9\n", "Phil.1.16\tActs.22.1\t9\n", 1), "Philippians 2:3 under 1:16",
+			func(l map[string][]string) bool {
+				return has(l, "Philippians|1|17", "Philippians 2:3") && !has(l, "Philippians|1|16", "Philippians 2:3")
+			},
+		},
+		{
+			"a Matthew 23:14 of the dataset's own",
+			asMade + "Matt.23.14\tMark.12.40\t5\n", "Matthew 23:13 as a source",
+			func(l map[string][]string) bool {
+				return has(l, "Matthew|23|13", "Luke 11:52") && slices.Equal(l["Matthew|23|14"], []string{"Mark 12:40"})
+			},
+		},
+		{
+			"23:13's rows no longer the kingdom woe's",
+			strings.Replace(asMade, "Matt.23.13\tLuke.11.52\t20\n", "Matt.23.13\tMark.12.40\t20\n", 1), "Matthew 23:13 as a source",
+			func(l map[string][]string) bool {
+				return has(l, "Matthew|23|13", "Mark 12:40") && len(l["Matthew|23|14"]) == 0
+			},
+		},
+		{
+			"3 John ends at 1:14",
+			strings.Replace(asMade, "3John.1.15\tJohn.10.3\t1\n", "", 1), "3 John 1:15",
+			func(l map[string][]string) bool { return len(l["3 John|1|14"]) == 0 },
+		},
+		{
+			"the doxology without its 16:26",
+			strings.Replace(asMade, "Rom.16.26\tRom.1.5\t10\n", "", 1), "Romans 16:26",
+			func(l map[string][]string) bool { return has(l, "Romans|14|24", "Ephesians 3:20") },
+		},
+	} {
+		labels, drift := read(tc.rows)
+		if len(drift) != 1 || !strings.Contains(drift[0], tc.report) {
+			t.Errorf("%s: reported %q, want one report naming %q", tc.name, drift, tc.report)
+		}
+		if !tc.left(labels) {
+			t.Errorf("%s: the rows were not left as the dataset files them: %q", tc.name, labels)
+		}
+	}
+}
+
+// A correction that no longer applies is logged when the app builds the
+// index, once: the index is built once a run.
+func TestACorrectionThatNoLongerAppliesIsLoggedOnce(t *testing.T) {
+	t.Setenv("BIBLETEXT_CACHE_PATH", filepath.Join(t.TempDir(), cacheFileName))
+	rows := "Phil.1.16\tPhil.2.3\t2\nPhil.1.17\tPhil.2.3\t4\nPhil.1.17\tActs.22.1\t9\n" +
+		"Matt.23.13\tLuke.11.52\t20\nRom.16.25\tEph.3.20\t30\nRom.16.26\tRom.1.5\t10\n" +
+		"Rom.16.27\tJude.1.25\t10\n3John.1.15\tJohn.10.3\t1\n"
+	if err := os.WriteFile(crossRefCachePath(), makeCrossRefZip(t, rows), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var logged []string
+	crossRefMu.Lock()
+	was := struct {
+		loaded bool
+		err    error
+		index  map[string][]tskRow
+		logf   func(string, ...any)
+	}{crossRefLoaded, crossRefLoadErr, crossRefIndex, crossRefLogf}
+	crossRefLoaded, crossRefLoadErr, crossRefIndex = false, nil, nil
+	crossRefLogf = func(format string, args ...any) { logged = append(logged, fmt.Sprintf(format, args...)) }
+	crossRefMu.Unlock()
+	t.Cleanup(func() {
+		crossRefMu.Lock()
+		crossRefLoaded, crossRefLoadErr, crossRefIndex, crossRefLogf = was.loaded, was.err, was.index, was.logf
+		crossRefMu.Unlock()
+	})
+
+	for range 2 {
+		if err := ensureCrossRefs(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(logged) != 1 || !strings.Contains(logged[0], "Philippians 2:3 under 1:16") {
+		t.Errorf("logged %q, want one line about Philippians 2:3", logged)
+	}
+	// CONTROL: the index was built from this copy, so the log is about it.
+	if got := crossRefIndex[crossRefKey("Matthew", 23, 14)]; len(got) != 1 {
+		t.Errorf("control: the index holds %d rows at Matthew 23:14, want the one filed at 23:13", len(got))
 	}
 }

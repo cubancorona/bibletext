@@ -26,12 +26,14 @@ const crossRefDeepestRead = 20
 // "Romans 16:25-25", "Leviticus 27:34-1:1" and "2 John 1:1-15", which no
 // synthetic fixture had thought to contain.
 //
-// It also holds the index's cap to the panels. The index keeps each verse's
-// best maxCrossRefsKept rows; every panel must be the one an index keeping
-// every row builds, and no selection may need a row past the cap. A
-// selection lies within one chapter, so the most it can hide behind parallels
-// is every parallel of every verse in that chapter, and that is what the
-// depth is measured against.
+// It fails, first, if a hand-made correction to the dataset no longer
+// applies to the copy the machine downloaded (crossRefCorrection). And it
+// holds the index's cap to the panels. The index keeps each verse's best
+// maxCrossRefsKept rows; every panel must be the one an index keeping every
+// row builds, and no selection may need a row past the cap. A selection lies
+// within one chapter, so the most it can hide behind parallels is every
+// parallel of every verse in that chapter, and that is what the depth is
+// measured against.
 //
 // Opt-in, and read-only: it reads the machine's own caches through
 // realCachePath (open the panel once in the app for the Treasury zip), and
@@ -48,15 +50,23 @@ func TestEveryCrossReferenceRowOpensScriptureTheTextHas(t *testing.T) {
 	if err != nil {
 		t.Skipf("no Treasury zip in the machine's cache: %v", err)
 	}
-	idx, err := parseCrossRefZip(zipBytes)
+	idx, drift, err := parseCrossRefZip(zipBytes)
 	if err != nil {
 		t.Fatal(err)
+	}
+	// The hand-made corrections were made to one copy of the file, and the
+	// app downloads whatever copy OpenBible serves. Each correction checks
+	// that the rows it corrects are still as they were, and leaves them alone
+	// if not; that is safe for the reader but leaves the rows as the dataset
+	// files them, so here it fails.
+	for _, d := range drift {
+		t.Errorf("a correction to the dataset no longer applies: %s", d)
 	}
 	tsv, err := crossRefTSV(zipBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
-	every, err := readCrossRefRows(tsv, 0)
+	every, _, err := readCrossRefRows(tsv, 0)
 	tsv.Close()
 	if err != nil {
 		t.Fatal(err)
