@@ -271,4 +271,42 @@ func TestTheCapCountsOnlyRowsTheReaderCanSee(t *testing.T) {
 		t.Errorf("WEB Catholic lists %d rows ending %q, want 16 ending \"Daniel 5:16\": the two "+
 			"rows into Greek Esther must hand their places to the next two", n, last)
 	}
+
+	// The other half: a row the panel hides because a Gospel parallel listed
+	// above it already shows that passage. Matthew 10:1's two best rows are
+	// Luke 9:1-6 and Mark 6:7-13, which are its parallels (the commissioning
+	// of the Twelve), so its sixteen Treasury rows are the sixteen after them.
+	rows.Reset()
+	rows.WriteString("Matt.10.1\tLuke.9.1-Luke.9.6\t90\nMatt.10.1\tMark.6.7-Mark.6.13\t80\n")
+	for v := 1; v <= 16; v++ {
+		fmt.Fprintf(&rows, "Matt.10.1\tDan.5.%d\t%d\n", v, 40-v)
+	}
+	withCrossRefIndex(t, rows.String())
+	gospel := xrefBible(map[string]map[int]int{"Matthew": {10: 42}, "Mark": {6: 56}, "Luke": {9: 62}, "Daniel": {5: 31}})
+	st := &AppState{Bible: gospel, CurrentBook: "Matthew", CurrentChapter: 10, CurrentVersion: "web"}
+	var parallels, treasury []string
+	for _, c := range crossRefsForSelection(st, "", selSpan{lo: 1, hi: 1}) {
+		if c.Parallel {
+			parallels = append(parallels, c.label())
+		} else {
+			treasury = append(treasury, c.label())
+		}
+	}
+	// CONTROL: the two rows really are hidden behind the parallels, or the
+	// count below is not about hiding at all.
+	if strings.Join(parallels, "; ") != "Mark 6:7-13; Luke 9:1-6" {
+		t.Fatalf("control: Matthew 10:1's parallels are %q, want Mark 6:7-13 and Luke 9:1-6", parallels)
+	}
+	for _, lbl := range treasury {
+		if lbl == "Mark 6:7-13" || lbl == "Luke 9:1-6" {
+			t.Fatalf("control: the Treasury rows repeat the parallel %q", lbl)
+		}
+	}
+	if len(treasury) == 0 {
+		t.Fatal("Matthew 10:1 lists no Treasury rows")
+	}
+	if n, last := len(treasury), treasury[len(treasury)-1]; n != maxCrossRefsPerVerse || last != "Daniel 5:16" {
+		t.Errorf("Matthew 10:1 lists %d Treasury rows ending %q, want 16 ending \"Daniel 5:16\": "+
+			"the two rows its parallels already show must hand their places to the next two", n, last)
+	}
 }
