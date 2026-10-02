@@ -505,9 +505,14 @@ func (p *styledReadingPane) measure(text string, kind runKind, italic bool) floa
 	var face fyne.Resource
 	size := p.textSize
 	if kind == runHeading {
-		// Measured in the cut it is DRAWN in, or the heading wraps to a width
-		// it does not occupy.
-		face = p.headingFace()
+		// Measured in the cuts it is DRAWN in, piece by piece, or the heading
+		// wraps to a width it does not occupy.
+		var w float32
+		for _, seg := range headingSegments(text) {
+			sz, _ := fyne.CurrentApp().Driver().RenderedTextSize(seg, size, fyne.TextStyle{}, p.headingFaceFor(seg))
+			w += sz.Width
+		}
+		return w
 	} else {
 		// A run is measured as drawnAs sets it, so the width it wraps at is
 		// the width of its own ink. The spaces between runs are the layout's.
@@ -578,6 +583,63 @@ func (p *styledReadingPane) headingFace() fyne.Resource {
 		return f.bold
 	}
 	return p.font
+}
+
+// headingFaceFor is the face a piece of a heading is set in: the bold cut, or
+// the Hebrew face for Hebrew — Psalm 119's stanza letters stand at the head of
+// a heading line in the NKJV. The Apple panes reach the Hebrew face through
+// their cascade and Android through its fallback family; this pane, which
+// draws a heading line as text objects of its own, has to choose it, or the
+// letter falls to whatever the platform supplies. The Hebrew face has one cut,
+// and the bold heading draws it as it is, unthickened, as the Apple cascade
+// does.
+func (p *styledReadingPane) headingFaceFor(text string) fyne.Resource {
+	if hasHebrew(text) {
+		if heb := hebrewReadingFont(); heb != nil {
+			return heb
+		}
+	}
+	return p.headingFace()
+}
+
+// headingSegments cuts a heading line where its script changes, so each piece
+// is set in its own face (headingFaceFor). A line with no Hebrew is one piece,
+// the line itself.
+//
+// The spaces at a change of script go with the Latin piece, never the Hebrew:
+// a Hebrew piece is drawn right to left, so a space inside it at its end is set
+// at its LEFT, and "א Aleph" came out as a gap before the letter and none
+// after it. The spaces between two Hebrew words stay inside the Hebrew piece,
+// which is what keeps a Hebrew phrase in its own order.
+func headingSegments(text string) []string {
+	if !hasHebrew(text) {
+		return []string{text}
+	}
+	var out []string
+	start, prevHeb := 0, false
+	for _, r := range text {
+		if r != ' ' {
+			prevHeb = hasHebrew(string(r))
+			break
+		}
+	}
+	for i, r := range text {
+		if r == ' ' {
+			continue
+		}
+		heb := hasHebrew(string(r))
+		if heb == prevHeb {
+			continue
+		}
+		cut := i
+		if prevHeb {
+			// Leaving Hebrew: its trailing spaces belong to the Latin after.
+			cut = start + len(strings.TrimRight(text[start:i], " "))
+		}
+		out = append(out, text[start:cut])
+		start, prevHeb = cut, heb
+	}
+	return append(out, text[start:])
 }
 
 // faceFor is the ONE place a run's face is decided, and every ruler and every
@@ -812,10 +874,12 @@ type styledPaneRenderer struct {
 	fnTexts []*canvas.Text
 	// The superscription's lines — own slice, same reason.
 	superTexts []*canvas.Text
-	// headTexts is one object per publisher's-heading LINE, built from the
-	// layout's heading lines and index-parallel to them.
+	// headTexts is one object per piece of a publisher's-heading line — a
+	// line is one piece unless its script changes (headingSegments) — with
+	// the line it stands on and its offset along it, index-parallel.
 	headTexts []*canvas.Text
 	headLines []int
+	headX     []float32
 }
 
 // rebuild recreates the canvas objects from the pane's current draw runs.
@@ -894,16 +958,22 @@ func (r *styledPaneRenderer) rebuild() {
 	// out of the selection model.
 	r.headTexts = r.headTexts[:0]
 	r.headLines = r.headLines[:0]
+	r.headX = r.headX[:0]
 	for li, ln := range p.lay.Lines {
 		if ln.Heading == "" {
 			continue
 		}
-		t := canvas.NewText(ln.Heading, p.pal.Text)
-		t.FontSource = p.headingFace()
-		t.TextSize = p.textSize
-		r.headTexts = append(r.headTexts, t)
-		r.headLines = append(r.headLines, li)
-		r.objects = append(r.objects, t)
+		x := float32(0)
+		for _, seg := range headingSegments(ln.Heading) {
+			t := canvas.NewText(seg, p.pal.Text)
+			t.FontSource = p.headingFaceFor(seg)
+			t.TextSize = p.textSize
+			r.headTexts = append(r.headTexts, t)
+			r.headLines = append(r.headLines, li)
+			r.headX = append(r.headX, x)
+			r.objects = append(r.objects, t)
+			x += t.MinSize().Width
+		}
 	}
 	r.superTexts = r.superTexts[:0]
 	if p.superGeom.present {
@@ -1064,11 +1134,17 @@ func (r *styledPaneRenderer) position() {
 		r.texts[i].Move(fyne.NewPos(p.insetX()+dr.X, y))
 	}
 
-	// The headings, from the lines they were laid out on.
+	// The headings, from the lines they were laid out on: the bold cut's box
+	// centred on the line, and every piece of the line on that cut's
+	// baseline — a Hebrew piece's face has a box of its own, and centring
+	// each piece by its own box would set the letter above or below the words
+	// beside it.
+	headS, headBase := drv.RenderedTextSize("Ag", p.textSize, fyne.TextStyle{}, p.headingFace())
 	for i, t := range r.headTexts {
-		if i < len(r.headLines) && r.headLines[i] < len(p.lay.Lines) {
+		if i < len(r.headLines) && i < len(r.headX) && r.headLines[i] < len(p.lay.Lines) {
 			ln := p.lay.Lines[r.headLines[i]]
-			t.Move(fyne.NewPos(p.insetX(), ln.Y+(ln.H-t.MinSize().Height)/2))
+			_, base := drv.RenderedTextSize(t.Text, t.TextSize, fyne.TextStyle{}, t.FontSource)
+			t.Move(fyne.NewPos(p.insetX()+r.headX[i], ln.Y+(ln.H-headS.Height)/2+headBase-base))
 			t.Show()
 		} else {
 			t.Hide()

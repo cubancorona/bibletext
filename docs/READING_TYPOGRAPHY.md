@@ -184,10 +184,15 @@ Two decisions that look like oversights and are not:
   non-monospace style — so scaling it would make it 15% too large.
 
 **Hebrew takes the scale too, and should.** Ezra SIL is only ever reached for
-Hebrew glyphs, through a cascade on Apple and a custom fallback on Android, so a
-uniform scale leaves Hebrew's size relative to the Latin around it exactly where
-it was. Do not "correct" it by comparing Ezra's Latin `x` against the reference —
-that glyph never draws.
+Hebrew glyphs, through a cascade on Apple, a custom fallback on Android, the face
+chosen per run on the Windows and Linux pane (`faceFor`, and `headingFaceFor` for
+a heading line, which that pane draws as text objects of its own) and a
+unicode-range on the web, so a uniform scale leaves Hebrew's size relative to the
+Latin around it exactly where it was. Do not "correct" it by comparing Ezra's
+Latin `x` against the reference — that glyph never draws. In a bold heading the
+one Hebrew cut is drawn as it is, not thickened, on the Apple panes, the Windows
+and Linux pane and the web alike; Android's fallback has not been measured on
+that point.
 
 ---
 
