@@ -314,7 +314,10 @@ WEB's, which is what it used before. 2,054 verses, every span located, no misses
 `~/.cache/bibletext-nkjv-html` and never re-fetches: 174 chapters cost 174 calls
 once, and a warm cache costs none. **The account's monthly allowance is small —
 do not point this at a cold cache casually.** The generated Go file holds
-OFFSETS ONLY; no NKJV text is stored anywhere in this repository.
+OFFSETS ONLY; no NKJV text is stored on any source branch of this repository.
+The website is the one place it can be: once `scripts/publish-site.sh` has
+published with the NKJV's text switched on, the public `gh-pages` branch holds
+the rendered pages, and its history keeps them after the switch goes off again.
 
 An absent NKJV table entry is authoritative black letter. This matters for nine
 verses the WEB marks but the NKJV source does not: 1 Timothy 5:18; Matthew 8:32;

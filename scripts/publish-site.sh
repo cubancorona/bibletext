@@ -32,6 +32,15 @@
 #        The assembled tree is scanned for the key in every encoded form before
 #        anything is compared or pushed.
 #
+# WHAT SWITCHING OFF CANNOT UNDO. A publish commits the whole tree to gh-pages,
+# and this repository is public. Once a run with the text on has published, the
+# NKJV's pages are in the history of that branch, and a later run with it off
+# removes them from the live site only: every earlier commit still holds them
+# for anyone who fetches the branch. Taking them out of the history is a rewrite
+# of gh-pages, which this script never does. And while it is on, a publish on a
+# new day rewrites every /nkjv/ page, because each states the date it was
+# retrieved.
+#
 # This script is now the ONLY publisher. Before it existed, the landing pages
 # were hand-copied onto gh-pages; doing that again would delete the reader (and
 # a reader publish would delete the landing pages), because each would write a

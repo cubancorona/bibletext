@@ -82,7 +82,10 @@ same dedicated key:
    before anything is compared or pushed; and
 5. each run spends about 200 requests of the plan's monthly quota.
 
-Switched off, the publish neither reads the key nor calls API.Bible.
+Switched off, the publish neither reads the key nor calls API.Bible. Switching
+off removes the NKJV's pages from the live site, not from the public `gh-pages`
+branch's history: every commit a publish with it on made keeps them, short of a
+rewrite of that branch, which `publish-site.sh` never does.
 
 ## Security boundary
 

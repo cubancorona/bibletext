@@ -54,7 +54,9 @@ import (
 //
 // Flip it here and nowhere else. scripts/publish-site.sh asks the built
 // generator which state it is publishing (-print-nkjv-text) and its guards
-// follow the answer. There is deliberately no environment variable or flag
+// follow the answer. Back to false restores the live site, not the history of
+// the public gh-pages branch, which keeps every page a publish with it on
+// committed (publish-site.sh, "What switching off cannot undo"). There is deliberately no environment variable or flag
 // that overrides it: the committed value is the state the site is in.
 const nkjvSiteText = true
 
