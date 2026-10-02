@@ -112,6 +112,11 @@ const siteKeyEnv = "BIBLETEXT_SITE_NKJV_KEY"
 // API.Bible; nothing else assigns it.
 var fetchLicensedEdition = bibletext.FetchLicensedEdition
 
+// licenceNotice is the registry's notice for a licensed translation
+// (BibleVersion.LicenseNotice). A variable so the tests can stand in a wording
+// the site cannot print, and show it stops the build before the fetch.
+var licenceNotice = bibletext.VersionLicenseNotice
+
 // takeSiteKey reads the key and takes it out of the environment straight away,
 // so no later child process could inherit it. Its errors describe the value and
 // never contain it.
@@ -226,6 +231,16 @@ func loadLicensed(on, offline bool, key string, ref *bibletext.BibleData, now fu
 	}
 	var out []loadedVersion
 	for _, lv := range licensedVersionsFor(on) {
+		// The notice before the fetch: a registry wording the site cannot
+		// print stops the build before it spends the fetch's requests.
+		notice := licenceNotice(lv.ID)
+		if notice == "" {
+			return nil, fmt.Errorf("%s: the registry has no licence notice to print with the text", lv.ID)
+		}
+		notice, err := siteNotice(lv.ID, notice)
+		if err != nil {
+			return nil, err
+		}
 		start := time.Now()
 		ed, err := fetchLicensedEdition(lv.ID, key)
 		if err != nil {
@@ -243,14 +258,6 @@ func loadLicensed(on, offline bool, key string, ref *bibletext.BibleData, now fu
 			return nil, fmt.Errorf("%s: decoded no publisher headings; the feed or the decoder has changed", lv.ID)
 		}
 		if err := checkLicensedComplete(lv.ID, bd, ref); err != nil {
-			return nil, err
-		}
-		notice := bibletext.VersionLicenseNotice(lv.ID)
-		if notice == "" {
-			return nil, fmt.Errorf("%s: the registry has no licence notice to print with the text", lv.ID)
-		}
-		notice, err = siteNotice(lv.ID, notice)
-		if err != nil {
 			return nil, err
 		}
 		retrieved := londonDate(now())

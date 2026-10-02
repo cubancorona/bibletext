@@ -383,6 +383,36 @@ func TestLoadLicensedRefusesWhatCannotBePublished(t *testing.T) {
 	}
 }
 
+// A registry notice the site cannot print stops the build before the fetch,
+// so a change to its wording costs none of the fetch's requests.
+func TestLoadLicensedReadsTheNoticeBeforeTheFetch(t *testing.T) {
+	prevFetch, prevNotice := fetchLicensedEdition, licenceNotice
+	t.Cleanup(func() { fetchLicensedEdition, licenceNotice = prevFetch, prevNotice })
+	fetches := 0
+	fetchLicensedEdition = func(string, string) (bibletext.LicensedEdition, error) {
+		fetches++
+		return bibletext.LicensedEdition{}, errors.New("the fixture fetch failed")
+	}
+	for _, tc := range []struct{ notice, want string }{
+		{"", "no licence notice"},
+		{"A fixture notice. All rights reserved.", "does not end with"},
+	} {
+		licenceNotice = func(string) string { return tc.notice }
+		if _, err := loadLicensed(true, false, testSiteKey, nil, fixedNow); err == nil || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("notice %q: %v, want an error saying %q", tc.notice, err, tc.want)
+		}
+	}
+	if fetches != 0 {
+		t.Errorf("the fetch ran %d times for a notice the site cannot print", fetches)
+	}
+	// The registry's own notice goes on to the fetch.
+	licenceNotice = prevNotice
+	if _, err := loadLicensed(true, false, testSiteKey, nil, fixedNow); err == nil ||
+		!strings.Contains(err.Error(), "the fixture fetch failed") || fetches != 1 {
+		t.Errorf("with the registry's notice: %v after %d fetches, want the fetch's own error after one", err, fetches)
+	}
+}
+
 // --- on: the pages ---------------------------------------------------------------
 
 // The text on, end to end through run(): what every kind of page carries.
