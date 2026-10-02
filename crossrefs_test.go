@@ -407,6 +407,227 @@ func crossRefTargetMoveRows() string {
 	return b.String()
 }
 
+// crossRefDecidedMoves is every row crossRefTargetMoves re-points, written out
+// apart from it, as the list the moves were decided from gives them, each
+// checked against the printed Treasury: the verse whose panel shows the row,
+// where the dataset points it, and where it belongs, in the reference's
+// numbering. Nineteen are the kingdom woe's, Matthew 23:14; sixty-two belong
+// to a verse some manuscripts lack.
+var crossRefDecidedMoves = []string{
+	"Luke 11:52 | Matthew 23:13 | Matthew 23:14",
+	"Matthew 7:13 | Matthew 23:13 | Matthew 23:14",
+	"Matthew 10:7 | Matthew 23:13 | Matthew 23:14",
+	"Matthew 3:2 | Matthew 23:13 | Matthew 23:14",
+	"Acts 13:10 | Matthew 23:13 | Matthew 23:14",
+	"Acts 17:13 | Matthew 23:13 | Matthew 23:14",
+	"John 7:32 | Matthew 23:13 | Matthew 23:14",
+	"Luke 19:39 | Matthew 23:13 | Matthew 23:14",
+	"Numbers 13:32 | Matthew 23:13 | Matthew 23:14",
+	"Matthew 27:1 | Matthew 23:13 | Matthew 23:14",
+	"Ezekiel 34:18 | Matthew 23:13 | Matthew 23:14",
+	"Acts 13:45 | Matthew 23:13 | Matthew 23:14",
+	"Ezra 7:11 | Matthew 23:13 | Matthew 23:14",
+	"Nehemiah 8:1 | Matthew 23:13 | Matthew 23:14",
+	"Matthew 16:3 | Matthew 23:13 | Matthew 23:14",
+	"Mark 10:2 | Matthew 23:13 | Matthew 23:14",
+	"Luke 11:42 | Matthew 23:13 | Matthew 23:14",
+	"Luke 13:15 | Matthew 23:13 | Matthew 23:14",
+	"Zechariah 11:17 | Matthew 23:13 | Matthew 23:14",
+	"Mark 9:29 | Matthew 17:20 | Matthew 17:21",
+	"Luke 19:10 | Matthew 18:10 | Matthew 18:11",
+	"John 10:10 | Matthew 18:10 | Matthew 18:11",
+	"Luke 9:56 | Matthew 18:10 | Matthew 18:11",
+	"John 3:17 | Matthew 18:10 | Matthew 18:11",
+	"Mark 2:17 | Matthew 18:10 | Matthew 18:11",
+	"Luke 5:32 | Matthew 18:10 | Matthew 18:11",
+	"John 3:15 | Matthew 18:10 | Matthew 18:11",
+	"1 Timothy 1:15 | Matthew 18:10 | Matthew 18:11",
+	"Matthew 10:6 | Matthew 18:10 | Matthew 18:11",
+	"Psalms 72:13 | Matthew 18:10 | Matthew 18:11",
+	"John 12:47 | Matthew 18:10 | Matthew 18:11",
+	"Revelation 2:7 | Mark 7:15 | Mark 7:16",
+	"Matthew 11:15 | Mark 7:15 | Mark 7:16",
+	"Matthew 18:35 | Mark 11:25 | Mark 11:26",
+	"Isaiah 53:12 | Mark 15:27 | Mark 15:28",
+	"James 2:23 | Mark 15:27 | Mark 15:28",
+	"John 9:24 | Mark 15:27 | Mark 15:28",
+	"Matthew 27:15 | Luke 23:16 | Luke 23:16-17",
+	"Philemon 1:25 | Romans 16:23 | Romans 16:24",
+	"1 Corinthians 16:23 | Romans 16:23 | Romans 16:24",
+	"2 Corinthians 13:14 | Romans 16:23 | Romans 16:24",
+	"1 Timothy 6:21 | Romans 16:23 | Romans 16:24",
+	"Romans 15:33 | Romans 16:23 | Romans 16:24",
+	"Colossians 4:18 | Romans 16:23 | Romans 16:24",
+	"1 Thessalonians 5:28 | Romans 16:23 | Romans 16:24",
+	"2 Thessalonians 3:18 | Romans 16:23 | Romans 16:24",
+	"Philippians 4:23 | Romans 16:23 | Romans 16:24",
+	"Hebrews 13:25 | Romans 16:23 | Romans 16:24",
+	"Galatians 6:18 | Romans 16:23 | Romans 16:24",
+	"Romans 16:20 | Romans 16:23 | Romans 16:24",
+	"Revelation 22:21 | Romans 16:23 | Romans 16:24",
+	"Romans 10:9 | Acts 8:36 | Acts 8:37",
+	"Matthew 16:16 | Acts 8:36 | Acts 8:37",
+	"Luke 1:35 | Acts 8:36 | Acts 8:37",
+	"John 3:15 | Acts 8:36 | Acts 8:37",
+	"John 20:31 | Acts 8:36 | Acts 8:37",
+	"Luke 9:20 | Acts 8:36 | Acts 8:37",
+	"Acts 16:31 | Acts 8:36 | Acts 8:37",
+	"2 Corinthians 1:19 | Acts 8:36 | Acts 8:37",
+	"Galatians 2:20 | Acts 8:36 | Acts 8:37",
+	"1 Kings 8:48 | Acts 8:36 | Acts 8:37",
+	"Ezekiel 44:5 | Acts 8:36 | Acts 8:37",
+	"Matthew 14:33 | Acts 8:36 | Acts 8:37",
+	"Mark 5:7 | Acts 8:36 | Acts 8:37",
+	"Mark 8:29 | Acts 8:36 | Acts 8:37",
+	"Mark 9:7 | Acts 8:36 | Acts 8:37",
+	"John 6:69 | Acts 8:36 | Acts 8:37",
+	"John 9:35 | Acts 8:36 | Acts 8:37",
+	"Acts 9:20 | Acts 8:36 | Acts 8:37",
+	"Romans 1:3 | Acts 8:36 | Acts 8:37",
+	"Psalms 86:12 | Acts 8:36 | Acts 8:37",
+	"John 11:27 | Acts 8:36 | Acts 8:37",
+	"Jeremiah 29:13 | Acts 8:36 | Acts 8:37",
+	"Revelation 2:18 | Acts 8:36 | Acts 8:37",
+	"Psalms 2:7 | Acts 8:36 | Acts 8:37",
+	"1 John 5:1 | Acts 8:36 | Acts 8:37",
+	"Acts 21:31 | Acts 24:6 | Acts 24:7",
+	"Acts 21:32 | Acts 24:6 | Acts 24:7",
+	"Acts 23:27 | Acts 24:6 | Acts 24:7",
+	"Acts 24:22 | Acts 24:6 | Acts 24:7",
+	"Luke 16:25 | Mark 9:45 | Mark 9:46",
+}
+
+// crossRefDecidedStays are rows filed beside a moved verse that were decided
+// to stay: the widows' woe's, as the Treasury files them.
+var crossRefDecidedStays = []string{
+	"Isaiah 3:12 | Matthew 23:13",
+	"1 Corinthians 6:10 | Matthew 23:13",
+}
+
+// THE MOVES ARE EXACTLY THE ROWS DECIDED, NO MORE AND NO FEWER. Each of
+// crossRefTargetMoves' rows was decided one by one, by what it cites, and the
+// table is a list of verses in the dataset's spelling, where a verse can be
+// dropped or added without any other test noticing: the walk of the real
+// dataset checks that a row opens a verse the text has, not that it is the
+// verse it was decided to open. So the table is held to the list, and the
+// list is run through the parser: every row decided to move opens the verse
+// it was decided to open, and the widows' woe's rows stay.
+func TestTheTargetMovesAreExactlyTheRowsDecided(t *testing.T) {
+	if len(crossRefDecidedMoves) != 81 {
+		t.Fatalf("the decided list has %d rows, want the 19 of the kingdom woe and the 62 of the verses some manuscripts lack", len(crossRefDecidedMoves))
+	}
+	osis := map[string]string{}
+	for abbr, name := range osisBookNames {
+		osis[name] = abbr
+	}
+	// toOSIS spells a label as the dataset does: "Luke 23:16-17" is
+	// Luke.23.16-Luke.23.17.
+	toOSIS := func(label string) string {
+		t.Helper()
+		sp := strings.LastIndexByte(label, ' ')
+		abbr, ok := osis[label[:sp]]
+		if !ok {
+			t.Fatalf("no OSIS name for the book of %q", label)
+		}
+		ch, vs, _ := strings.Cut(label[sp+1:], ":")
+		start, end, isRange := strings.Cut(vs, "-")
+		s := abbr + "." + ch + "." + start
+		if isRange {
+			s += "-" + abbr + "." + ch + "." + end
+		}
+		return s
+	}
+	split := func(row string) []string {
+		parts := strings.Split(row, " | ")
+		for i := range parts {
+			parts[i] = strings.TrimSpace(parts[i])
+		}
+		return parts
+	}
+
+	// The table, spelled as the list is.
+	var table []string
+	for _, m := range crossRefTargetMoves {
+		from, ok1 := parseOSISTarget(m.from)
+		to, ok2 := parseOSISTarget(m.to)
+		if !ok1 || !ok2 {
+			t.Fatalf("the move from %s to %s does not parse", m.from, m.to)
+		}
+		for _, s := range strings.Fields(m.rows) {
+			src, ok := parseOSISTarget(s)
+			if !ok {
+				t.Fatalf("the row from %s does not parse", s)
+			}
+			table = append(table, src.label()+" | "+from.label()+" | "+to.label())
+		}
+	}
+	want := slices.Clone(crossRefDecidedMoves)
+	slices.Sort(want)
+	slices.Sort(table)
+	for _, r := range table {
+		if _, found := slices.BinarySearch(want, r); !found {
+			t.Errorf("crossRefTargetMoves moves a row that was not decided: %s", r)
+		}
+	}
+	for _, r := range want {
+		if _, found := slices.BinarySearch(table, r); !found {
+			t.Errorf("crossRefTargetMoves does not move a row that was decided: %s", r)
+		}
+	}
+	if len(table) != len(want) {
+		t.Errorf("crossRefTargetMoves moves %d rows, want %d", len(table), len(want))
+	}
+
+	// The list through the parser, with the rows the other corrections
+	// expect, so nothing is reported.
+	var b strings.Builder
+	b.WriteString("From Verse\tTo Verse\tVotes\n" +
+		"Phil.1.17\tActs.22.1\t9\n" +
+		"Phil.1.17\tPhil.2.3\t4\n" +
+		"Matt.23.13\tLuke.11.52\t20\n" +
+		"Rom.16.25\tEph.3.20\t30\n" +
+		"Rom.16.26\tRom.1.5\t10\n" +
+		"Rom.16.27\tJude.1.25\t10\n" +
+		"3John.1.15\tJohn.10.3\t1\n")
+	for _, r := range crossRefDecidedMoves {
+		p := split(r)
+		fmt.Fprintf(&b, "%s\t%s\t2\n", toOSIS(p[0]), toOSIS(p[1]))
+	}
+	for _, r := range crossRefDecidedStays {
+		p := split(r)
+		fmt.Fprintf(&b, "%s\t%s\t2\n", toOSIS(p[0]), toOSIS(p[1]))
+	}
+	idx, drift, err := parseCrossRefRows(strings.NewReader(b.String()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(drift) != 0 {
+		t.Fatalf("the decided rows report %q", drift)
+	}
+	labels := func(source string) []string {
+		sp := strings.LastIndexByte(source, ' ')
+		ch, v, _ := strings.Cut(source[sp+1:], ":")
+		var out []string
+		for _, r := range idx[source[:sp]+"|"+ch+"|"+v] {
+			out = append(out, r.crossRef().label())
+		}
+		return out
+	}
+	for _, r := range crossRefDecidedMoves {
+		p := split(r)
+		got := labels(p[0])
+		if !slices.Contains(got, p[2]) || slices.Contains(got, p[1]) {
+			t.Errorf("%s: the row opens %q, want %s and not %s", p[0], got, p[2], p[1])
+		}
+	}
+	for _, r := range crossRefDecidedStays {
+		p := split(r)
+		if got := labels(p[0]); !slices.Equal(got, []string{p[1]}) {
+			t.Errorf("%s: the row opens %q, want it to stay at %s", p[0], got, p[1])
+		}
+	}
+}
+
 // THE CORRECTIONS WERE MADE TO ONE COPY OF THE DATASET. The app downloads
 // whatever copy OpenBible serves, with no version or checksum to pin it, and
 // the hand-made corrections — Philippians 2:3 re-filed under 1:16, Matthew
