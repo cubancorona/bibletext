@@ -239,3 +239,58 @@ func TestTheSupportPageInBothNKJVStates(t *testing.T) {
 		t.Error("on: the sentence the exception followed is not closed where it was")
 	}
 }
+
+// The home page in both states. Its "Notes from friends" line says a note opens
+// in the app, or in the browser; while the NKJV's text is off it adds that the
+// browser serves the public-domain translations only, and while it is on that
+// qualification is gone, because NKJV links then open in the browser too. Off,
+// the page is exactly the page as it was before the switch: the source with
+// the two markers taken out, and nothing else. On, it differs from that in the
+// bracketed words and the space after them alone, so the sentence reads
+// "...in the app if you have it, or right in the browser." with the source's
+// own line wrap.
+func TestTheHomePageInBothNKJVStates(t *testing.T) {
+	const qualifier = "(for the public-domain translations) "
+	src, err := os.ReadFile(filepath.Join("..", "..", "docs", "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	marked := "<!--nkjv-text:off-->" + qualifier + "<!--/nkjv-text:off-->"
+	if !bytes.Contains(src, []byte(marked)) {
+		t.Fatal("docs/index.html does not mark the public-domain qualifier for the switch")
+	}
+	render := func(state string) string {
+		t.Helper()
+		out := t.TempDir()
+		if err := renderSitePages(filepath.Join("..", "..", "docs"), out,
+			bibletext.SupportEmail(), bibletext.SupportMailtoRecipient(), state); err != nil {
+			t.Fatalf("%s: %v", state, err)
+		}
+		b, err := os.ReadFile(filepath.Join(out, "index.html"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bytes.Contains(b, []byte("nkjv-text")) {
+			t.Errorf("%s: a marker reached the page", state)
+		}
+		return string(b)
+	}
+	off, on := render("off"), render("on")
+
+	unmarked := strings.NewReplacer("<!--nkjv-text:off-->", "", "<!--/nkjv-text:off-->", "").Replace(string(src))
+	if off != unmarked {
+		t.Error("off: the page is not the source with its markers taken out")
+	}
+	if !strings.Contains(off, "the passage, in the\n        app if you have it, or "+qualifier+"right in the browser. No\n") {
+		t.Error("off: the sentence no longer reads as it did before the switch")
+	}
+	if !strings.Contains(on, "the passage, in the\n        app if you have it, or right in the browser. No\n") {
+		t.Error("on: the sentence does not read \"...in the app if you have it, or right in the browser.\"")
+	}
+	if strings.Contains(on, "public-domain translations") {
+		t.Error("on: the page still limits the browser to the public-domain translations")
+	}
+	if on != strings.Replace(off, qualifier, "", 1) {
+		t.Error("on: the page differs from the off page by more than the qualifier")
+	}
+}
