@@ -254,7 +254,7 @@ func (n noticeSpec) verLine() string {
 //     picker would open empty — a dead end, which is the one thing this page
 //     exists to not be. Giving it a column means regenerating reader.js.
 //  2. The pills are `.npick`, not `.vpick`. reader.js's carryVerse() appends the
-//     whole fragment to every `.vpick` href unconditionally; on the ~23 chapters
+//     whole fragment to every `.vpick` href unconditionally; on the 28 chapters
 //     where the numbering does not agree that would hand the reader a confident
 //     link to the wrong verse. Fragment carrying on these pages is notice.js's
 //     single job, so nothing else may do half of it.
