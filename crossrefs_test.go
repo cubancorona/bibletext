@@ -322,10 +322,11 @@ func TestTheCapCountsOnlyRowsTheReaderCanSee(t *testing.T) {
 // and a row needs only its books, numbers and votes.
 func TestTheIndexKeepsEachVersesBestRows(t *testing.T) {
 	var rows strings.Builder
-	n := maxCrossRefsKept + 8
+	n := maxCrossRefsKept + 8 // even, so the rows pair off
 	for v := 1; v <= n; v++ {
-		// Votes fall in pairs, so ties must keep the dataset's order.
-		fmt.Fprintf(&rows, "Gen.1.1\tPs.119.%d\t%d\n", v, (n-v)/2)
+		// Votes RISE in pairs: the best rows come last, so the index must
+		// reorder them, and each tied pair must keep the dataset's order.
+		fmt.Fprintf(&rows, "Gen.1.1\tPs.119.%d\t%d\n", v, (v-1)/2)
 	}
 	rows.WriteString("Gen.1.2\tPs.104.30\t9\nGen.1.2\tJob.26.13\t8\n")
 	tsv := "From Verse\tTo Verse\tVotes\n" + rows.String()
@@ -346,13 +347,14 @@ func TestTheIndexKeepsEachVersesBestRows(t *testing.T) {
 		t.Fatalf("the index keeps %d of the verse's %d rows, want its best %d", len(got), n, maxCrossRefsKept)
 	}
 	for i, r := range got {
-		if want := fmt.Sprintf("Psalms 119:%d", i+1); r.crossRef().label() != want {
+		// Best pair first: 119:39 and 119:40, then 119:37 and 119:38, and so on.
+		if want := fmt.Sprintf("Psalms 119:%d", n-1-2*(i/2)+i%2); r.crossRef().label() != want {
 			t.Fatalf("row %d is %q, want %q: the best rows, ties in the dataset's order", i, r.crossRef().label(), want)
 		}
 	}
 	for key, rows := range idx {
 		if cap(rows) != len(rows) {
-			t.Errorf("%s's %d rows have capacity %d: an append to them would write over another verse's", key, len(rows), cap(rows))
+			t.Errorf("%s's %d rows are held with capacity for %d: the index must hold no spare capacity", key, len(rows), cap(rows))
 		}
 	}
 	if size := unsafe.Sizeof(tskRow{}); size > 8 {
