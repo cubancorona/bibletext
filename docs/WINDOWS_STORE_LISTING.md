@@ -121,7 +121,7 @@ guide ("Add and edit Store listing info for MSIX app") gives it a limit of
 first submission, 1.2.10, went through the console blank, as it should. So
 did 1.2.13 and 1.2.14, through `msstore/submit.py`: it sent the cloned listing
 unchanged, and the clone's field was empty. From 1.2.16 on, `submit.py` sends
-each release's own text, and 1.2.16 and 1.2.17 went out with theirs.
+each release's own text, and 1.2.16, 1.2.17 and 1.2.18 went out with theirs.
 
 It is written for each release, like the App Store's What's New, in its own
 file:
@@ -421,9 +421,9 @@ the appearance fix is Android's and the universal build is the macOS direct
 download — and the Store had published hours earlier. The next change that
 touches Windows carries the number.
 
-As of 1 October 2026 the Store serves 1.2.17.0, x64 and arm64, published on
-29 September 2026. 1.2.18 is being prepared; its What's New is
-`msstore/metadata/en-gb/whats-new-1.2.18.txt`.
+As of 3 October 2026 the Store serves 1.2.18.0, x64 and arm64, published on
+2 October 2026. 1.2.19 is prepared; its What's New is
+`msstore/metadata/en-gb/whats-new-1.2.19.txt`.
 
 ## Submission 1 — what is filled and what is not
 

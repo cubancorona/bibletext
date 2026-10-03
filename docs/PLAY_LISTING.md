@@ -16,17 +16,17 @@ to Play.
 Release identity in production:
 
 - package: `uk.co.bibletext`
-- version: 1.2.17
-- versionCode: 187
+- version: 1.2.18
+- versionCode: 188
 - minimum SDK: Android 5.0 / API 21
 - target SDK: Android 16 / API 36
 - upload artifact: `~/Library/Android/bibletext-dist/BibleText.aab`
 
-1.2.18, versionCode 188, was in Play's review for production on 2 October
-2026, with its release notes in the 1.2.18 section below; the production
-identity above stays 1.2.17 until Play approves it. A release goes up to the
-alpha track with `scripts/play-publish.py upload`, and on the account
-holder's OK `scripts/play-publish.py promote` takes that release to
+1.2.18, versionCode 188, has been in production since 2 October 2026, when
+Play approved it the day it was promoted. 1.2.19, versionCode 189, is
+prepared, with its release notes in the 1.2.19 section below. A release goes
+up to the alpha track with `scripts/play-publish.py upload`, and on the
+account holder's OK `scripts/play-publish.py promote` takes that release to
 production, its release notes unchanged (docs/RELEASING.md, stages 6 and 7).
 The service account was granted "release to production" on 2 October 2026,
 for this app only; until then it could not reach production, and the
