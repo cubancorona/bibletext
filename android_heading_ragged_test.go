@@ -181,31 +181,164 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 		}
 	}
 
+	// The functions the rule rests on are held WHOLE: every code line of each
+	// (codeLines, comments aside), in order, and nothing more. Lines picked
+	// out of a function leave the lines between them free, and each of these
+	// passed every check that picked lines: readerText's early return made to
+	// return every selection as it stands, or with its && turned to ||; its
+	// walk back to the paragraph's start dropped, so a selection that starts
+	// inside the title copies its gaps; either bound of its loop moved;
+	// keepHeadingsRagged starting each paragraph on the '\n' before it, so no
+	// heading after the first is swapped; isHeadingParagraph asking for
+	// italic where a heading is bold; the title's trailing whitespace
+	// counted; copyAsRead's selection ends left unsorted; setStyle's two
+	// justification modes swapped. A change made on purpose to one of these
+	// functions changes its lines here with it.
+	type wholeFn struct {
+		head string
+		body []string
+	}
+	headingFn := wholeFn{"private static boolean isHeadingParagraph(", []string{
+		"private static boolean isHeadingParagraph(Spanned sp, int ps, int pe) {",
+		"int e = pe;",
+		"while (e > ps && Character.isWhitespace(sp.charAt(e - 1))) e--;",
+		"if (e <= ps) return false;",
+		"android.text.style.StyleSpan[] spans = sp.getSpans(ps, e, android.text.style.StyleSpan.class);",
+		"if (spans == null) return false;",
+		"for (android.text.style.StyleSpan st : spans) {",
+		"if (st.getStyle() == android.graphics.Typeface.BOLD",
+		"&& sp.getSpanStart(st) <= ps && sp.getSpanEnd(st) >= e) return true;",
+		"}",
+		"return false;",
+		"}",
+	}}
+	titleFn := wholeFn{"private static boolean isTitleParagraph(", []string{
+		"private static boolean isTitleParagraph(Spanned sp, int ps, int pe) {",
+		"int e = pe;",
+		"while (e > ps && Character.isWhitespace(sp.charAt(e - 1))) e--;",
+		"if (e <= ps) return false;",
+		"android.text.style.StyleSpan[] spans = sp.getSpans(ps, e, android.text.style.StyleSpan.class);",
+		"if (spans == null) return false;",
+		"for (android.text.style.StyleSpan st : spans) {",
+		"if (st.getStyle() == android.graphics.Typeface.ITALIC",
+		"&& sp.getSpanStart(st) <= ps && sp.getSpanEnd(st) >= e) return true;",
+		"}",
+		"return false;",
+		"}",
+	}}
+	styleFn := wholeFn{"private static boolean justifiesInterWord()", []string{
+		"private static boolean justifiesInterWord() {",
+		"return android.os.Build.VERSION.SDK_INT >= 35;",
+		"}",
+	}}
+	raggedFn := wholeFn{"private static boolean isRaggedParagraph(", []string{
+		"private static boolean isRaggedParagraph(Spanned sp, int ps, int pe) {",
+		"return isHeadingParagraph(sp, ps, pe) || (ps == 0 && isTitleParagraph(sp, ps, pe));",
+		"}",
+	}}
+	keepFn := wholeFn{"private static void keepHeadingsRagged(", []string{
+		"private static void keepHeadingsRagged(android.text.SpannableStringBuilder ssb) {",
+		"int ps = 0;",
+		"for (int i = 0; i <= ssb.length(); i++) {",
+		`if (i < ssb.length() && ssb.charAt(i) != '\n') continue;`,
+		"if (isRaggedParagraph(ssb, ps, i)) {",
+		"for (int j = ps; j < i; j++) {",
+		"if (ssb.charAt(j) == ' ') ssb.replace(j, j + 1, String.valueOf(HEADING_GAP));",
+		"}",
+		"}",
+		"ps = i + 1;",
+		"}",
+		"}",
+	}}
+	readFn := wholeFn{"readerText(CharSequence cs, int s0, int s1)", []string{
+		"readerText(CharSequence cs, int s0, int s1) {",
+		"String raw = cs.subSequence(s0, s1).toString();",
+		"if (!(cs instanceof Spanned)",
+		"|| (raw.indexOf(HEADING_GAP) < 0 && raw.indexOf(PARA_LTR_MARK) < 0)) return raw;",
+		"Spanned sp = (Spanned) cs;",
+		"android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder(cs, s0, s1);",
+		"int gone = 0;",
+		"int p = s0;",
+		`while (p > 0 && cs.charAt(p - 1) != '\n') p--;`,
+		"while (p < s1) {",
+		"int pe = p;",
+		`while (pe < cs.length() && cs.charAt(pe) != '\n') pe++;`,
+		"boolean ragged = isRaggedParagraph(sp, p, pe);",
+		`int end = Math.min(pe, s1);   // the paragraph's own '\n' is no helper`,
+		"for (int i = Math.max(p, s0); i < end; i++) {",
+		"char c = cs.charAt(i);",
+		"int at = i - s0 - gone;",
+		"if (i == p && c == PARA_LTR_MARK) {",
+		"sb.delete(at, at + 1);",
+		"gone++;",
+		"} else if (ragged && c == HEADING_GAP) {",
+		`sb.replace(at, at + 1, " ");`,
+		"}",
+		"}",
+		"p = pe + 1;",
+		"}",
+		"return sb;",
+		"}",
+	}}
+	copyFn := wholeFn{"private static boolean copyAsRead()", []string{
+		"private static boolean copyAsRead() {",
+		"if (text == null) return false;",
+		"int a = text.getSelectionStart(), b = text.getSelectionEnd();",
+		"if (a < 0 || b < 0 || a == b) return false;",
+		"int s0 = Math.min(a, b), s1 = Math.max(a, b);",
+		"CharSequence cs = text.getText();",
+		"CharSequence read = readerText(cs, s0, s1);",
+		"if (android.text.TextUtils.equals(read, cs.subSequence(s0, s1))) return false;",
+		"android.content.ClipboardManager cm = (android.content.ClipboardManager)",
+		"text.getContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE);",
+		"if (cm == null) return false;",
+		"try {",
+		"cm.setPrimaryClip(android.content.ClipData.newPlainText(null, read));",
+		"} catch (Throwable t) {",
+		"return false;",
+		"}",
+		"if (selectionMode != null) selectionMode.finish();",
+		"return true;",
+		"}",
+	}}
+	menuFn := wholeFn{"@Override public boolean onTextContextMenuItem(int id)", []string{
+		"@Override public boolean onTextContextMenuItem(int id) {",
+		"if (id == android.R.id.copy && copyAsRead()) return true;",
+		"return super.onTextContextMenuItem(id);",
+		"}",
+	}}
+	heldWhole := func(src string, fns ...wholeFn) bool {
+		for _, f := range fns {
+			if !slices.Equal(codeLines(javaBlockAfter(t, src, f.head)), f.body) {
+				return false
+			}
+		}
+		return true
+	}
+	// Which function moved, and what it now reads, so the failures below
+	// can be read without diffing the bridge by hand.
+	for _, f := range []wholeFn{headingFn, titleFn, styleFn, raggedFn, keepFn, readFn, copyFn, menuFn} {
+		if got := codeLines(javaBlockAfter(t, java, f.head)); !slices.Equal(got, f.body) {
+			t.Errorf("%s is held whole here and no longer reads as held; it now reads:\n%s",
+				f.head, strings.Join(got, "\n"))
+		}
+	}
+
 	// The swap, on the justified page only, before the text reaches the view,
 	// and in a heading's or the title's paragraph only. Each line is read as
 	// it stands: the same pass with its test turned round sets every verse's
 	// spaces as gaps, and the justified page then justifies no verse at all.
 	swaps := func(src string) bool {
 		set := javaBlockAfter(t, src, "public static void setHtml(")
-		keep := javaBlockAfter(t, src, "private static void keepHeadingsRagged(")
-		ragged := javaBlockAfter(t, src, "private static boolean isRaggedParagraph(")
-		title := javaBlockAfter(t, src, "private static boolean isTitleParagraph(")
-		style := javaBlockAfter(t, src, "private static boolean justifiesInterWord()")
 		return hasLinesInOrder(set,
 			"if (s instanceof android.text.SpannableStringBuilder && justifiesInterWord()) {",
 			"keepHeadingsRagged((android.text.SpannableStringBuilder) s);",
 			"text.setText(s, TextView.BufferType.SPANNABLE);") &&
-			hasLinesInOrder(keep,
-				"if (isRaggedParagraph(ssb, ps, i)) {",
-				"for (int j = ps; j < i; j++) {",
-				"if (ssb.charAt(j) == ' ') ssb.replace(j, j + 1, String.valueOf(HEADING_GAP));") &&
-			hasLinesInOrder(ragged,
-				"return isHeadingParagraph(sp, ps, pe) || (ps == 0 && isTitleParagraph(sp, ps, pe));") &&
-			hasLinesInOrder(title,
-				"if (st.getStyle() == android.graphics.Typeface.ITALIC",
-				"&& sp.getSpanStart(st) <= ps && sp.getSpanEnd(st) >= e) return true;") &&
-			hasLinesInOrder(style, "return android.os.Build.VERSION.SDK_INT >= 35;") &&
-			strings.Contains(src, "text.setJustificationMode(justifiesInterWord()")
+			heldWhole(src, keepFn, raggedFn, headingFn, titleFn, styleFn) &&
+			hasLinesInOrder(src,
+				"text.setJustificationMode(justifiesInterWord()",
+				"? android.text.Layout.JUSTIFICATION_MODE_INTER_WORD",
+				": android.text.Layout.JUSTIFICATION_MODE_NONE);")
 	}
 	if !swaps(java) {
 		t.Error("setHtml must swap the spaces of a heading and of the title for HEADING_GAP " +
@@ -220,20 +353,9 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 	// round, or a Copy line that never reaches copyAsRead's answer, fails
 	// here and not only in a control.
 	givesBack := func(src string) bool {
-		read := javaBlockAfter(t, src, "readerText(CharSequence cs, int s0, int s1)")
 		copyAs := javaBlockAfter(t, src, "private static boolean copyAsRead()")
-		menu := javaBlockAfter(t, src, "@Override public boolean onTextContextMenuItem(int id)")
-		return hasLinesInOrder(read,
-			"boolean ragged = isRaggedParagraph(sp, p, pe);",
-			"} else if (ragged && c == HEADING_GAP) {",
-			`sb.replace(at, at + 1, " ");`) &&
+		return heldWhole(src, readFn, raggedFn, menuFn) &&
 			inSequence(copyAs, "readerText(", "setPrimaryClip(") &&
-			slices.Equal(codeLines(menu), []string{
-				"@Override public boolean onTextContextMenuItem(int id) {",
-				"if (id == android.R.id.copy && copyAsRead()) return true;",
-				"return super.onTextContextMenuItem(id);",
-				"}",
-			}) &&
 			hasLinesInOrder(src, "final String sel = readerText(text.getText(), s0, s1).toString();") &&
 			!strings.Contains(src, "getText().subSequence(s0, s1).toString()")
 	}
@@ -306,7 +428,7 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 			"cm.setPrimaryClip(android.content.ClipData.newPlainText(null, read));",
 			"} catch (Throwable t) {", "return false;", "}",
 			"if (selectionMode != null) selectionMode.finish();",
-			"return true;")
+			"return true;") && heldWhole(src, copyFn)
 	}
 	if !copies(java) {
 		t.Error("copyAsRead must say true once it has set the reader's text on the clipboard, and " +
@@ -353,6 +475,31 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 		{"the comparison turned round",
 			"if (android.text.TextUtils.equals(read, cs.subSequence(s0, s1))) return false;",
 			"if (!android.text.TextUtils.equals(read, cs.subSequence(s0, s1))) return false;", copies},
+		// The lines between the picked ones, which held whole now fail.
+		{"a heading read as italic", "if (st.getStyle() == android.graphics.Typeface.BOLD",
+			"if (st.getStyle() == android.graphics.Typeface.ITALIC", swaps},
+		{"each paragraph started on its '\\n'", "            }\n            ps = i + 1;",
+			"            }\n            ps = i;", swaps},
+		{"the title's trailing whitespace counted",
+			"isTitleParagraph(Spanned sp, int ps, int pe) {\n        int e = pe;\n        while (e > ps && Character.isWhitespace(sp.charAt(e - 1))) e--;\n",
+			"isTitleParagraph(Spanned sp, int ps, int pe) {\n        int e = pe;\n", swaps},
+		{"the justified and ragged modes swapped",
+			"? android.text.Layout.JUSTIFICATION_MODE_INTER_WORD\n                            : android.text.Layout.JUSTIFICATION_MODE_NONE);",
+			"? android.text.Layout.JUSTIFICATION_MODE_NONE\n                            : android.text.Layout.JUSTIFICATION_MODE_INTER_WORD);", swaps},
+		{"every selection returned as it stands",
+			"|| (raw.indexOf(HEADING_GAP) < 0 && raw.indexOf(PARA_LTR_MARK) < 0)) return raw;",
+			"|| true) return raw;", givesBack},
+		{"returned as it stands without both helpers",
+			"(raw.indexOf(HEADING_GAP) < 0 && raw.indexOf(PARA_LTR_MARK) < 0)",
+			"(raw.indexOf(HEADING_GAP) < 0 || raw.indexOf(PARA_LTR_MARK) < 0)", givesBack},
+		{"no walk back to the paragraph's start",
+			"        while (p > 0 && cs.charAt(p - 1) != '\\n') p--;\n", "", givesBack},
+		{"each paragraph read from the selection's start",
+			"for (int i = Math.max(p, s0); i < end; i++) {", "for (int i = s0; i < end; i++) {", givesBack},
+		{"the selection's last character left out", "int end = Math.min(pe, s1);", "int end = s1 - 1;", givesBack},
+		{"the selection's ends unsorted",
+			"int s0 = Math.min(a, b), s1 = Math.max(a, b);\n        CharSequence cs = text.getText();",
+			"int s0 = a, s1 = b;\n        CharSequence cs = text.getText();", copies},
 	} {
 		if k := strings.Count(java, c.from); k != 1 {
 			t.Fatalf("control %q: the bridge contains %q %d times, not once", c.name, c.from, k)
