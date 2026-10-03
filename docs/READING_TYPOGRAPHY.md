@@ -261,8 +261,14 @@ and they differ:
   sets ragged and whole (below).
 - **Android** from API 35 justifies by the line: every line that is not the
   text's last and does not end at a hard break, whatever its paragraph — the
-  rows of a wrapped poem line too, and a heading or Psalm title that wraps. It
-  hyphenates. Below API 35 it is ragged (docs/ANDROID.md).
+  rows of a wrapped poem line too, and a Psalm title that wraps. It
+  hyphenates. Below API 35 it is ragged (docs/ANDROID.md). A heading is set
+  ragged, as every surface sets it: no span can exempt a line from the text
+  view's justification, but a line with no U+0020 in it is not spread, so the
+  bridge sets a heading's word gaps as four-per-em spaces in the view (250
+  units to the reading face's 243 for a space) and turns them back into spaces
+  in the text a selection hands on and in Copy (`keepHeadingsRagged`,
+  `readerText`, `android/BtBridge.java`).
 - **The Apple panes** leave any paragraph holding a poem line ragged (below),
   and their stylesheet asks for hyphenation, the Psalm title's included.
 - **The Windows and Linux pane** (`readingJustifyProse`) justifies a paragraph

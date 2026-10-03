@@ -2463,7 +2463,9 @@ What the spec work left, each one a known difference rather than a guess:
   the Apple panes and the Windows and Linux pane set it ragged. Its
   justification is scoped to the line: every line that does not end at a hard
   break is spread, whatever its paragraph (docs/READING_TYPOGRAPHY.md,
-  "Justified prose").
+  "Justified prose"). A heading is set ragged there since 1.2.19
+  (`keepHeadingsRagged`, `android/BtBridge.java`); the same swap applied to the
+  paragraph `isTitleParagraph` finds would set the title ragged too.
 - **The Apple panes and Android hyphenate a Psalm title that wraps,** where the
   web and the Windows and Linux pane leave its words whole. The Apple `p.pst`
   (`reading.go`) sets no hyphenation, so it keeps the `hyphens: auto` of the
