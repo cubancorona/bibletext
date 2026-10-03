@@ -38,21 +38,38 @@ func TestAndroidSetsAParagraphOpeningOnHebrewLeftToRight(t *testing.T) {
 		t.Errorf("a heading that opens on a Hebrew letter must open on a left-to-right mark, "+
 			"or the pane sets it right to left against the right edge; the page came out as:\n%s", html)
 	}
-	// The Psalm title is written by the same rule.
+	// The Psalm title is written by the same rule, on the phone page and on
+	// the book page a wide pane takes, which write it on two different lines:
+	// the book page's title keeps its own air as an empty line inside the
+	// block (<br> before </p>). Each page is pinned, so neither line rests on
+	// the width of the host the test runs on.
 	st.CurrentBook, st.CurrentChapter = "Psalms", 150
 	st.Bible.Verses["Psalms"] = map[int][]Verse{150: {{BookName: "Psalms", Chapter: 150, Verse: 1, Text: "A fixture verse."}}}
-	st.Bible.Superscriptions = map[string]map[int]Superscription{"Psalms": {150: {Text: "א fixture title."}}}
-	if html := buildChapterHTMLAndroid(st, st.Bible.GetChapter("Psalms", 150)); !strings.Contains(html, "<i>"+mark+"א fixture title.</i>") {
-		t.Errorf("a Psalm title that opens on a Hebrew letter must open on a left-to-right mark:\n%s", html)
+	pages := map[bool]string{false: "phone", true: "book"}
+	withTitle := func(text string, book bool) (html string) {
+		st.Bible.Superscriptions = map[string]map[int]Superscription{"Psalms": {150: {Text: text}}}
+		withReporterLayout(book, func() { html = buildChapterHTMLAndroid(st, st.Bible.GetChapter("Psalms", 150)) })
+		if book != strings.Contains(html, "</i><br></p>") {
+			t.Fatalf("the title was not written on the %s page's line, so that line goes unchecked:\n%s", pages[book], html)
+		}
+		return html
+	}
+	for _, book := range []bool{false, true} {
+		if html := withTitle("א fixture title.", book); !strings.Contains(html, "<i>"+mark+"א fixture title.</i>") {
+			t.Errorf("on the %s page, a Psalm title that opens on a Hebrew letter must open on a "+
+				"left-to-right mark:\n%s", pages[book], html)
+		}
+		// The control: a title that opens on a Latin letter is written
+		// exactly as before, even with Hebrew later in the line.
+		if html := withTitle("A fixture title, א.", book); strings.Contains(html, mark) {
+			t.Errorf("on the %s page, a title that opens on a Latin letter was given a direction mark:\n%s",
+				pages[book], html)
+		}
 	}
 
-	// The controls: a heading or title that opens on a Latin letter, and
-	// every verse, is written exactly as before — no mark anywhere — even
-	// with Hebrew later in the line.
-	st.Bible.Superscriptions = map[string]map[int]Superscription{"Psalms": {150: {Text: "A fixture title, א."}}}
-	if html := buildChapterHTMLAndroid(st, st.Bible.GetChapter("Psalms", 150)); strings.Contains(html, mark) {
-		t.Errorf("a title that opens on a Latin letter was given a direction mark:\n%s", html)
-	}
+	// The control for a heading: one that opens on a Latin letter, and every
+	// verse, is written exactly as before — no mark anywhere — even with
+	// Hebrew later in the line.
 	st = sampleState()
 	ch = st.Bible.GetChapter(st.CurrentBook, st.CurrentChapter)
 	if html := withHeading("A Fixture א Heading"); !strings.Contains(html, "<p><b>A Fixture א Heading</b></p>") ||

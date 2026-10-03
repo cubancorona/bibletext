@@ -1474,9 +1474,12 @@ public final class BtBridge {
                 // (Copy, Select all) and the Share submenu header must fall
                 // through to the TextView's default handling FIRST — a
                 // `return true` on any of them consumes the click and the
-                // verb silently dies. The system Copy therefore copies the
-                // RAW selection, apparatus included, exactly as the Apple
-                // panes leave the system verbs unclamped.
+                // verb silently dies. Copy is therefore not clamped: it takes
+                // the whole selection, apparatus included, exactly as the
+                // Apple panes leave the system verbs unclamped, and takes it
+                // as read — the view's onTextContextMenuItem hands it to
+                // copyAsRead, which gives a heading's gaps back as spaces and
+                // leaves a paragraph's direction mark behind (readerText).
                 int id = item.getItemId();
                 boolean appItem = id == 200 || (id >= 105 && id <= 109);
                 if (!appItem) return false;

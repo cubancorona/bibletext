@@ -2,6 +2,7 @@ package bibletext
 
 import (
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -77,13 +78,19 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 			gap, w>>6, space>>6)
 	}
 
-	// The swap, on the justified page only, before the text reaches the view.
+	// The swap, on the justified page only, before the text reaches the view,
+	// and in a heading's paragraph only. The guard is read as it stands: the
+	// same pass with its test turned round sets every verse's spaces as gaps,
+	// and the justified page then justifies no verse at all.
 	swaps := func(src string) bool {
 		set := javaBlockAfter(t, src, "public static void setHtml(")
 		keep := javaBlockAfter(t, src, "private static void keepHeadingsRagged(")
 		style := javaBlockAfter(t, src, "private static boolean justifiesInterWord()")
 		return inSequence(set, "justifiesInterWord()", "keepHeadingsRagged(", "text.setText(s") &&
-			inSequence(keep, "isHeadingParagraph(", "== ' '", "HEADING_GAP") &&
+			inSequence(keep,
+				"if (isHeadingParagraph(ssb, ps, i)) {",
+				"for (int j = ps; j < i; j++) {",
+				"if (ssb.charAt(j) == ' ') ssb.replace(j, j + 1, String.valueOf(HEADING_GAP));") &&
 			strings.Contains(style, "android.os.Build.VERSION.SDK_INT >= 35") &&
 			strings.Contains(src, "text.setJustificationMode(justifiesInterWord()")
 	}
@@ -109,6 +116,42 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 			"four-per-em spaces in it")
 	}
 
+	// copyAsRead says false only where it has not copied, and true once it
+	// has. A copyAsRead that set the reader's text on the clipboard and still
+	// said false would hand Copy on to the platform, which sets the view's
+	// text over it; one whose comparison was turned round would take Copy
+	// over only for a selection with nothing to give back. So its ways out
+	// are read as they stand, in order, with the one that says true after
+	// the clipboard is set.
+	copies := func(src string) bool {
+		copyAs := javaBlockAfter(t, src, "private static boolean copyAsRead()")
+		var exits []string
+		for _, l := range strings.Split(copyAs, "\n") {
+			if l = strings.TrimSpace(l); strings.Contains(l, "return ") && !strings.HasPrefix(l, "//") {
+				exits = append(exits, l)
+			}
+		}
+		return slices.Equal(exits, []string{
+			"if (text == null) return false;",
+			"if (a < 0 || b < 0 || a == b) return false;",
+			"if (read.contentEquals(cs.subSequence(s0, s1))) return false;",
+			"if (cm == null) return false;",
+			"return false;", // the clipboard threw
+			"return true;",
+		}) && inSequence(copyAs,
+			"String read = readerText(cs, s0, s1);",
+			"if (read.contentEquals(cs.subSequence(s0, s1))) return false;",
+			"cm.setPrimaryClip(android.content.ClipData.newPlainText(null, read));",
+			"} catch (Throwable t) {", "return false;", "}",
+			"return true;")
+	}
+	if !copies(java) {
+		t.Error("copyAsRead must say true once it has set the reader's text on the clipboard, and " +
+			"false only where it has not — no view, no selection, nothing readerText changes, no " +
+			"clipboard, a clipboard that threw — or the platform's Copy runs after it and the " +
+			"view's text is what pastes")
+	}
+
 	// The controls: each check fails a bridge that lost the piece it holds.
 	for _, c := range []struct {
 		name, from, to string
@@ -117,9 +160,17 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 		{"no swap in setHtml", "keepHeadingsRagged((android.text.SpannableStringBuilder) s);", "", swaps},
 		{"justified on its own predicate", "text.setJustificationMode(justifiesInterWord()",
 			"text.setJustificationMode(android.os.Build.VERSION.SDK_INT >= 35", swaps},
+		{"every paragraph but a heading", "if (isHeadingParagraph(ssb, ps, i)) {",
+			"if (!isHeadingParagraph(ssb, ps, i)) {", swaps},
 		{"raw selection text", "final String sel = readerText(text.getText(), s0, s1);",
 			"final String sel = text.getText().subSequence(s0, s1).toString();", givesBack},
 		{"the platform's Copy", "if (id == android.R.id.copy && copyAsRead()) return true;", "", givesBack},
+		{"false once copied", "selectionMode.finish();\n        return true;",
+			"selectionMode.finish();\n        return false;", copies},
+		{"false before copying", "private static boolean copyAsRead() {",
+			"private static boolean copyAsRead() {\n        if (true) return false;", copies},
+		{"the comparison turned round", "if (read.contentEquals(cs.subSequence(s0, s1))) return false;",
+			"if (!read.contentEquals(cs.subSequence(s0, s1))) return false;", copies},
 	} {
 		mutated := strings.Replace(java, c.from, c.to, 1)
 		if mutated == java {
