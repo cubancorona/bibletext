@@ -51,6 +51,18 @@ palette-coloured Material list placed below the selection's line, or above it
 when the tab bar leaves no room (a `PopupMenu` on an anchor view shrank and
 scrolled against the bottom instead).
 
+**Every reading paragraph is set left to right.** The reading `TextView` gives
+each paragraph the direction of its first strong character, and set the NKJV's
+Psalm 119 stanza headings, which open on a Hebrew letter, right to left against
+the right edge. `setTextDirection` cannot change that here: a `View` resolves
+any text direction to `FIRST_STRONG` unless the application declares
+`supportsRtl`, which this one does not (declaring it would also mirror the
+native views on a right-to-left system language). So the dialect opens a
+heading or a Psalm title whose first letter is right to left with a
+LEFT-TO-RIGHT MARK (`androidDirectionMark`, `android_chapter_html.go`), and
+`BtBridge.readerText` drops it from the text a selection hands on and from
+Copy. Hebrew inside a line is still drawn right to left within it.
+
 **The chapter wash is a line background (2026-09-03).** `Html.fromHtml` turns
 the tint table's `background-color` into an opaque `BackgroundColorSpan`, which
 `TextLine` fills in the text pass — above the selection path `Layout.draw`

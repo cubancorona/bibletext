@@ -433,6 +433,65 @@ public final class BtBridge {
         return false;
     }
 
+    // The LEFT-TO-RIGHT MARK the dialect opens a paragraph with when the
+    // paragraph's first letter is right to left (androidDirectionMark,
+    // android_chapter_html.go). The view gives each paragraph the direction of
+    // its first strong character, and setTextDirection cannot overrule that
+    // here: a View resolves any text direction to FIRST_STRONG unless the
+    // application declares supportsRtl, which this one does not. readerText
+    // drops the mark again.
+    static final char PARA_LTR_MARK = '\u200E';
+
+    // readerText is [s0, s1) of the pane's text as the reader reads it: a
+    // paragraph's opening direction mark is gone. Everything else is returned
+    // as it is.
+    private static String readerText(CharSequence cs, int s0, int s1) {
+        String raw = cs.subSequence(s0, s1).toString();
+        if (raw.indexOf(PARA_LTR_MARK) < 0) return raw;
+        StringBuilder sb = new StringBuilder(raw.length());
+        int p = s0;
+        while (p > 0 && cs.charAt(p - 1) != '\n') p--;
+        while (p < s1) {
+            int pe = p;
+            while (pe < cs.length() && cs.charAt(pe) != '\n') pe++;
+            int end = Math.min(pe + 1, s1);   // the paragraph's own '\n' included
+            for (int i = Math.max(p, s0); i < end; i++) {
+                char c = cs.charAt(i);
+                if (i == p && c == PARA_LTR_MARK) continue;
+                sb.append(c);
+            }
+            p = pe + 1;
+        }
+        return sb.toString();
+    }
+
+    // The floating toolbar's ActionMode while it is up, so a Copy this bridge
+    // performs itself can close it as the platform's own Copy does.
+    private static ActionMode selectionMode;
+
+    // copyAsRead performs Copy with readerText's answer when that differs from
+    // the text in the view — a paragraph's direction mark — and otherwise
+    // reports false, leaving the platform's own Copy to run.
+    private static boolean copyAsRead() {
+        if (text == null) return false;
+        int a = text.getSelectionStart(), b = text.getSelectionEnd();
+        if (a < 0 || b < 0 || a == b) return false;
+        int s0 = Math.min(a, b), s1 = Math.max(a, b);
+        CharSequence cs = text.getText();
+        String read = readerText(cs, s0, s1);
+        if (read.contentEquals(cs.subSequence(s0, s1))) return false;
+        android.content.ClipboardManager cm = (android.content.ClipboardManager)
+                text.getContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE);
+        if (cm == null) return false;
+        try {
+            cm.setPrimaryClip(android.content.ClipData.newPlainText(null, read));
+        } catch (Throwable t) {
+            return false;
+        }
+        if (selectionMode != null) selectionMode.finish();
+        return true;
+    }
+
     // applyParagraphAir attaches the air spans for one chapter's Spanned. Runs
     // after the indent markers are resolved and before the text is set, so the
     // view receives its final spans in one assignment.
@@ -1303,6 +1362,14 @@ public final class BtBridge {
                     throw e;
                 }
             }
+            // Copy, from the floating toolbar or a keyboard shortcut, gives the
+            // reader the text as read (readerText): a paragraph's direction
+            // mark is left behind (PARA_LTR_MARK). Any other selection is left
+            // to the platform's own Copy, untouched.
+            @Override public boolean onTextContextMenuItem(int id) {
+                if (id == android.R.id.copy && copyAsRead()) return true;
+                return super.onTextContextMenuItem(id);
+            }
         };
         text.setFocusable(true);
         text.setFocusableInTouchMode(true);
@@ -1351,6 +1418,7 @@ public final class BtBridge {
                 // tablets), and it leads the custom items when AI is off — both
                 // consistent with the iOS ordering.
                 menu.add(0, 105, aiOn ? 102 : 100, "Cross-references");
+                selectionMode = mode;
                 return true;
             }
             @Override public boolean onPrepareActionMode(ActionMode mode, Menu menu) { return false; }
@@ -1388,7 +1456,7 @@ public final class BtBridge {
                 if (s1 <= contentStart) { mode.finish(); return true; }
                 s0 = Math.max(s0, contentStart);
                 if (s1 <= s0) { mode.finish(); return true; }
-                final String sel = text.getText().subSequence(s0, s1).toString();
+                final String sel = readerText(text.getText(), s0, s1);
                 // The verse span, resolved NOW from the same offsets the text was
                 // captured from (the popup below may collapse the selection).
                 final int selLo = verseAtOffset(s0);
@@ -1414,7 +1482,9 @@ public final class BtBridge {
                 nativeSelectionAction(action, sel, selLo, selHi);
                 return true;
             }
-            @Override public void onDestroyActionMode(ActionMode mode) {}
+            @Override public void onDestroyActionMode(ActionMode mode) {
+                if (selectionMode == mode) selectionMode = null;
+            }
             @Override public void onGetContentRect(ActionMode mode, View view, Rect outRect) {
                 super.onGetContentRect(mode, view, outRect);
             }

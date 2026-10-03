@@ -8,6 +8,7 @@ package bibletext
 import (
 	"fmt"
 	"strings"
+	"unicode"
 )
 
 // buildChapterHTMLAndroid emits the Html.fromHtml-safe dialect of the chapter:
@@ -26,6 +27,40 @@ import (
 // with anything the publisher sent; BtBridge.setHtml removes it during the
 // import and turns it into a leading margin.
 const androidIndentMarker = "&#xE010;"
+
+// androidDirectionMark opens a paragraph whose first letter is right to left
+// with a LEFT-TO-RIGHT MARK, so the paragraph is set left to right, flush left,
+// as the web, the Apple panes and the Windows and Linux pane set every one.
+//
+// The reading TextView gives each paragraph the direction of its first strong
+// character (FIRST_STRONG), and the view's own setting cannot change that in
+// this app: a View resolves any text direction to FIRST_STRONG unless the
+// application declares supportsRtl, and declaring it would also mirror every
+// native view on a right-to-left system language. So the NKJV's Psalm 119
+// stanza headings, a Hebrew letter and then its name, were set right to left:
+// against the right edge, the letter to the right of the name. The mark is a
+// strong left-to-right character with no width, so the letter stays first and
+// draws as it did; BtBridge's readerText drops it from the text a selection
+// hands on and from Copy (PARA_LTR_MARK there). Only a heading or a Psalm
+// title is ever marked, and only one that opens on a right-to-left letter, so
+// the dialect is unchanged for every other paragraph.
+func androidDirectionMark(text string) string {
+	for _, r := range text {
+		switch {
+		case r == '\u200e':
+			return ""
+		case r == '\u200f':
+			return "&#x200E;"
+		case unicode.IsLetter(r):
+			if unicode.In(r, unicode.Hebrew, unicode.Arabic, unicode.Syriac, unicode.Thaana,
+				unicode.Nko, unicode.Samaritan, unicode.Mandaic) {
+				return "&#x200E;"
+			}
+			return ""
+		}
+	}
+	return ""
+}
 
 func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 	pal := state.pal()
@@ -79,10 +114,11 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 		// Apple page keeps 14px under it even in reporter mode (p.pst), and
 		// this page's blank lines are all gone (COMPACT), so the air is put
 		// back as an empty line inside the title's own block.
+		title := super.DrawnText()
 		if reporter {
-			fmt.Fprintf(&b, `<p><i>%s</i><br></p>`, htmlEscape(super.DrawnText()))
+			fmt.Fprintf(&b, `<p><i>%s%s</i><br></p>`, androidDirectionMark(title), htmlEscape(title))
 		} else {
-			fmt.Fprintf(&b, `<p><i>%s</i></p>`, htmlEscape(super.DrawnText()))
+			fmt.Fprintf(&b, `<p><i>%s%s</i></p>`, androidDirectionMark(title), htmlEscape(title))
 		}
 	}
 	// Blocks, not paragraphs — see the note in reading.go. Bold in its own
@@ -90,7 +126,10 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 	// fromHtml maps <b> to a StyleSpan the text system draws.
 	for _, blk := range chapterBlocksFor(state.Bible, state.CurrentBook, state.CurrentChapter, verses) {
 		if blk.IsHeading() {
-			fmt.Fprintf(&b, "<p><b>%s</b></p>", htmlEscape(blk.Heading.DrawnText()))
+			// Inside the <b>, so the bridge still finds the paragraph wholly
+			// bold (isHeadingParagraph) with the mark at its head.
+			head := blk.Heading.DrawnText()
+			fmt.Fprintf(&b, "<p><b>%s%s</b></p>", androidDirectionMark(head), htmlEscape(head))
 			continue
 		}
 		para := blk.Verses
