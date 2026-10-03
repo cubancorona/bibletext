@@ -14,8 +14,9 @@
    these files as assets/junicode-OFL.txt. Scripture is set in it here exactly
    as it is in the app, so a shared link shows a reader the page they know.
    Built from the same file the app embeds and subsetted more tightly: no small
-   capitals, since the site publishes no edition that marks a divine name, and
-   no Greek or Hebrew, since the note chrome below is set in the UI face. */
+   capitals, since no edition published with this sheet alone marks a divine
+   name, and the notes' Greek in a supplement of its own, so only a page that
+   draws it downloads it. The italic is the true cut, for the psalm titles. */
 @font-face{
   font-family:"Junicode"; font-style:normal; font-weight:400;
   font-display:swap; src:url(Junicode-Regular.6f687473b4.woff2) format("woff2");
@@ -23,6 +24,33 @@
 @font-face{
   font-family:"Junicode"; font-style:normal; font-weight:700;
   font-display:swap; src:url(Junicode-Bold.c8727419d3.woff2) format("woff2");
+}
+@font-face{
+  font-family:"Junicode"; font-style:italic; font-weight:400;
+  font-display:swap; src:url(Junicode-Italic.9c74034359.woff2) format("woff2");
+}
+@font-face{
+  font-family:"Junicode"; font-style:normal; font-weight:400;
+  font-display:swap; src:url(Junicode-Greek.34250a9b15.woff2) format("woff2");
+  unicode-range:U+039C,U+03AC,U+03AD,U+03AF,U+03B1,U+03B2,U+03B3,U+03B4,U+03B5,U+03B7,U+03B8,U+03B9,U+03BA,U+03BB,U+03BC,U+03BD,U+03BF,U+03C0,U+03C1,U+03C2,U+03C3,U+03C4,U+03C5,U+03C7,U+03C9,U+1F04,U+1F10,U+1F30,U+1F7A,U+1FB3,U+1FC6,U+1FE5,U+1FE6;
+}
+/* BibleText Hebrew: Ezra SIL (c) SIL International, subsetted and renamed,
+   because "Ezra" and "SIL" are Reserved Font Names — SIL Open Font License
+   1.1, published beside these files as assets/hebrew-OFL.txt. The face the
+   app draws Hebrew in: the notes' Hebrew, and an acrostic psalm's stanza
+   letters. It joins the Junicode family by its own unicode-range at the
+   regular weight and the bold, because a face joins a run's composite only
+   when its weight matches, and a bold heading must not thicken it: the app's
+   panes draw the one Hebrew cut as it is, at the run's own size. */
+@font-face{
+  font-family:"Junicode"; font-style:normal; font-weight:400;
+  font-display:swap; src:url(BibleTextHebrew.000312c31a.woff2) format("woff2");
+  unicode-range:U+0591,U+059B,U+05B1,U+05B4,U+05B5,U+05B9,U+05BC,U+05D0,U+05D1,U+05D2,U+05D3,U+05D4,U+05D5,U+05D6,U+05D7,U+05D8,U+05D9,U+05DB,U+05DC,U+05DD,U+05DE,U+05E0,U+05E1,U+05E2,U+05E4,U+05E6,U+05E7,U+05E8,U+05E9,U+05EA;
+}
+@font-face{
+  font-family:"Junicode"; font-style:normal; font-weight:700;
+  font-display:swap; src:url(BibleTextHebrew.000312c31a.woff2) format("woff2");
+  unicode-range:U+0591,U+059B,U+05B1,U+05B4,U+05B5,U+05B9,U+05BC,U+05D0,U+05D1,U+05D2,U+05D3,U+05D4,U+05D5,U+05D6,U+05D7,U+05D8,U+05D9,U+05DB,U+05DC,U+05DD,U+05DE,U+05E0,U+05E1,U+05E2,U+05E4,U+05E6,U+05E7,U+05E8,U+05E9,U+05EA;
 }
 :root{
   --bg:#ede9e0; --surface:#fdfcf8; --text:#25221d; --muted:#6b6456;
@@ -257,9 +285,8 @@ body{
    indent. Leading is inherited deliberately: on all four app panes the title
    sets at the body's own rhythm, so naming a line-height here would make the
    web the one surface that differs. The gap below is the same 0.45 of a line
-   the panes measure. The face ships no italic cut, so this is a synthesised
-   oblique — accepted, because the alternative is a fifth hashed font asset for
-   one line per psalm.
+   the panes measure. It is set in the face's true italic, as every app pane
+   sets it; a page with no title never downloads the cut.
    It is set ragged, as the Apple panes (reading.go, p.pst) and the Windows
    and Linux pane (reading_styled_super.go) set it, and unhyphenated, as the
    Windows and Linux pane sets it. The title is a <p> inside .text, so without

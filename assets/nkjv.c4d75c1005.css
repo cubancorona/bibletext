@@ -1,0 +1,28 @@
+
+/* Junicode (c) Peter S. Baker — SIL Open Font License 1.1, published beside
+   these files as assets/junicode-OFL.txt. The small capitals the divine name
+   is drawn with, and nothing else, in the regular, bold and italic cuts. */
+@font-face{
+  font-family:"Junicode"; font-style:normal; font-weight:400;
+  font-display:swap; src:url(Junicode-SmallCaps.8e021f3d51.woff2) format("woff2");
+  unicode-range:U+0262,U+026A,U+0274,U+0280,U+028F,U+0299,U+029C,U+029F,U+1D00,U+1D04,U+1D05,U+1D07,U+1D0A,U+1D0B,U+1D0D,U+1D0F,U+1D18,U+1D1B,U+1D1C,U+1D20,U+1D21,U+1D22,U+A730,U+A731,U+A7AF;
+}
+@font-face{
+  font-family:"Junicode"; font-style:normal; font-weight:700;
+  font-display:swap; src:url(Junicode-BoldSmallCaps.3b3dffce77.woff2) format("woff2");
+  unicode-range:U+0262,U+026A,U+0274,U+0280,U+028F,U+0299,U+029C,U+029F,U+1D00,U+1D04,U+1D05,U+1D07,U+1D0A,U+1D0B,U+1D0D,U+1D0F,U+1D18,U+1D1B,U+1D1C,U+1D20,U+1D21,U+1D22,U+A730,U+A731,U+A7AF;
+}
+@font-face{
+  font-family:"Junicode"; font-style:italic; font-weight:400;
+  font-display:swap; src:url(Junicode-ItalicSmallCaps.7258836164.woff2) format("woff2");
+  unicode-range:U+0262,U+026A,U+0274,U+0280,U+028F,U+0299,U+029C,U+029F,U+1D00,U+1D04,U+1D05,U+1D07,U+1D0A,U+1D0B,U+1D0D,U+1D0F,U+1D18,U+1D1B,U+1D1C,U+1D20,U+1D21,U+1D22,U+A730,U+A731,U+A7AF;
+}
+/* The rights holder's notice and when this text was retrieved, under the app
+   link and the platform row at the very foot of the page: small and muted, in
+   the footer's own colour. The link is underlined, because in a sentence it
+   would otherwise be invisible. */
+.foot .lic,.foot .retrieved{max-width:34rem; margin:.7rem auto 0; color:var(--muted);
+  font-size:.72rem; line-height:1.5}
+.foot .lic + .retrieved{margin-top:.2rem}
+.foot .retrieved a{font-size:inherit; text-decoration:underline}
+@media print{.foot{display:block} .foot #getapp,.foot .plats{display:none}}

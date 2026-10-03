@@ -21,13 +21,7 @@
     return out;
   }
 
-  function verseSpan() {
-    var m = /^(\d+)(?:-(\d+))?$/.exec(fragKeys().v || '');
-    if (!m) return null;
-    var lo = parseInt(m[1], 10), hi = m[2] ? parseInt(m[2], 10) : lo;
-    if (!(lo > 0) || hi < lo) return null;
-    return [lo, hi];
-  }
+  function verseSpan() { return spanOf(fragKeys().v); }
 
   // 1) Verse RANGES (#v16-18). A single verse needs no help — :target has it.
   // THE JOINING SPACE BETWEEN TWO VERSES BELONGS TO THE BAND.
@@ -317,7 +311,7 @@
   // letter it files under, and its chapter count PER version — the canons
   // differ (Greek Daniel has 14 chapters under webc, 12 elsewhere) and the grid
   // must never offer a page that was not generated.
-  var BOOKS = [{"name":"Acts","slug":"acts","l":"A","ch":{"bsb":28,"web":28,"webc":28}},{"name":"Amos","slug":"amos","l":"A","ch":{"bsb":9,"web":9,"webc":9}},{"name":"Baruch","slug":"baruch","l":"B","ch":{"webc":6}},{"name":"1 Chronicles","slug":"1-chronicles","l":"C","ch":{"bsb":29,"web":29,"webc":29}},{"name":"2 Chronicles","slug":"2-chronicles","l":"C","ch":{"bsb":36,"web":36,"webc":36}},{"name":"Colossians","slug":"colossians","l":"C","ch":{"bsb":4,"web":4,"webc":4}},{"name":"1 Corinthians","slug":"1-corinthians","l":"C","ch":{"bsb":16,"web":16,"webc":16}},{"name":"2 Corinthians","slug":"2-corinthians","l":"C","ch":{"bsb":13,"web":13,"webc":13}},{"name":"Daniel","slug":"daniel","l":"D","ch":{"bsb":12,"web":12,"webc":14}},{"name":"Deuteronomy","slug":"deuteronomy","l":"D","ch":{"bsb":34,"web":34,"webc":34}},{"name":"Ecclesiastes","slug":"ecclesiastes","l":"E","ch":{"bsb":12,"web":12,"webc":12}},{"name":"Ephesians","slug":"ephesians","l":"E","ch":{"bsb":6,"web":6,"webc":6}},{"name":"Esther","slug":"esther","l":"E","ch":{"bsb":10,"web":10,"webc":10}},{"name":"Exodus","slug":"exodus","l":"E","ch":{"bsb":40,"web":40,"webc":40}},{"name":"Ezekiel","slug":"ezekiel","l":"E","ch":{"bsb":48,"web":48,"webc":48}},{"name":"Ezra","slug":"ezra","l":"E","ch":{"bsb":10,"web":10,"webc":10}},{"name":"Galatians","slug":"galatians","l":"G","ch":{"bsb":6,"web":6,"webc":6}},{"name":"Genesis","slug":"genesis","l":"G","ch":{"bsb":50,"web":50,"webc":50}},{"name":"Habakkuk","slug":"habakkuk","l":"H","ch":{"bsb":3,"web":3,"webc":3}},{"name":"Haggai","slug":"haggai","l":"H","ch":{"bsb":2,"web":2,"webc":2}},{"name":"Hebrews","slug":"hebrews","l":"H","ch":{"bsb":13,"web":13,"webc":13}},{"name":"Hosea","slug":"hosea","l":"H","ch":{"bsb":14,"web":14,"webc":14}},{"name":"Isaiah","slug":"isaiah","l":"I","ch":{"bsb":66,"web":66,"webc":66}},{"name":"James","slug":"james","l":"J","ch":{"bsb":5,"web":5,"webc":5}},{"name":"Jeremiah","slug":"jeremiah","l":"J","ch":{"bsb":52,"web":52,"webc":52}},{"name":"Job","slug":"job","l":"J","ch":{"bsb":42,"web":42,"webc":42}},{"name":"Joel","slug":"joel","l":"J","ch":{"bsb":3,"web":3,"webc":3}},{"name":"John","slug":"john","l":"J","ch":{"bsb":21,"web":21,"webc":21}},{"name":"1 John","slug":"1-john","l":"J","ch":{"bsb":5,"web":5,"webc":5}},{"name":"2 John","slug":"2-john","l":"J","ch":{"bsb":1,"web":1,"webc":1}},{"name":"3 John","slug":"3-john","l":"J","ch":{"bsb":1,"web":1,"webc":1}},{"name":"Jonah","slug":"jonah","l":"J","ch":{"bsb":4,"web":4,"webc":4}},{"name":"Joshua","slug":"joshua","l":"J","ch":{"bsb":24,"web":24,"webc":24}},{"name":"Jude","slug":"jude","l":"J","ch":{"bsb":1,"web":1,"webc":1}},{"name":"Judges","slug":"judges","l":"J","ch":{"bsb":21,"web":21,"webc":21}},{"name":"Judith","slug":"judith","l":"J","ch":{"webc":16}},{"name":"1 Kings","slug":"1-kings","l":"K","ch":{"bsb":22,"web":22,"webc":22}},{"name":"2 Kings","slug":"2-kings","l":"K","ch":{"bsb":25,"web":25,"webc":25}},{"name":"Lamentations","slug":"lamentations","l":"L","ch":{"bsb":5,"web":5,"webc":5}},{"name":"Leviticus","slug":"leviticus","l":"L","ch":{"bsb":27,"web":27,"webc":27}},{"name":"Luke","slug":"luke","l":"L","ch":{"bsb":24,"web":24,"webc":24}},{"name":"1 Maccabees","slug":"1-maccabees","l":"M","ch":{"webc":16}},{"name":"2 Maccabees","slug":"2-maccabees","l":"M","ch":{"webc":15}},{"name":"Malachi","slug":"malachi","l":"M","ch":{"bsb":4,"web":4,"webc":4}},{"name":"Mark","slug":"mark","l":"M","ch":{"bsb":16,"web":16,"webc":16}},{"name":"Matthew","slug":"matthew","l":"M","ch":{"bsb":28,"web":28,"webc":28}},{"name":"Micah","slug":"micah","l":"M","ch":{"bsb":7,"web":7,"webc":7}},{"name":"Nahum","slug":"nahum","l":"N","ch":{"bsb":3,"web":3,"webc":3}},{"name":"Nehemiah","slug":"nehemiah","l":"N","ch":{"bsb":13,"web":13,"webc":13}},{"name":"Numbers","slug":"numbers","l":"N","ch":{"bsb":36,"web":36,"webc":36}},{"name":"Obadiah","slug":"obadiah","l":"O","ch":{"bsb":1,"web":1,"webc":1}},{"name":"1 Peter","slug":"1-peter","l":"P","ch":{"bsb":5,"web":5,"webc":5}},{"name":"2 Peter","slug":"2-peter","l":"P","ch":{"bsb":3,"web":3,"webc":3}},{"name":"Philemon","slug":"philemon","l":"P","ch":{"bsb":1,"web":1,"webc":1}},{"name":"Philippians","slug":"philippians","l":"P","ch":{"bsb":4,"web":4,"webc":4}},{"name":"Proverbs","slug":"proverbs","l":"P","ch":{"bsb":31,"web":31,"webc":31}},{"name":"Psalms","slug":"psalms","l":"P","ch":{"bsb":150,"web":150,"webc":150}},{"name":"Revelation","slug":"revelation","l":"R","ch":{"bsb":22,"web":22,"webc":22}},{"name":"Romans","slug":"romans","l":"R","ch":{"bsb":16,"web":16,"webc":16}},{"name":"Ruth","slug":"ruth","l":"R","ch":{"bsb":4,"web":4,"webc":4}},{"name":"1 Samuel","slug":"1-samuel","l":"S","ch":{"bsb":31,"web":31,"webc":31}},{"name":"2 Samuel","slug":"2-samuel","l":"S","ch":{"bsb":24,"web":24,"webc":24}},{"name":"Sirach","slug":"sirach","l":"S","ch":{"webc":51}},{"name":"Song of Solomon","slug":"song-of-solomon","l":"S","ch":{"bsb":8,"web":8,"webc":8}},{"name":"1 Thessalonians","slug":"1-thessalonians","l":"T","ch":{"bsb":5,"web":5,"webc":5}},{"name":"2 Thessalonians","slug":"2-thessalonians","l":"T","ch":{"bsb":3,"web":3,"webc":3}},{"name":"1 Timothy","slug":"1-timothy","l":"T","ch":{"bsb":6,"web":6,"webc":6}},{"name":"2 Timothy","slug":"2-timothy","l":"T","ch":{"bsb":4,"web":4,"webc":4}},{"name":"Titus","slug":"titus","l":"T","ch":{"bsb":3,"web":3,"webc":3}},{"name":"Tobit","slug":"tobit","l":"T","ch":{"webc":14}},{"name":"Wisdom","slug":"wisdom","l":"W","ch":{"webc":19}},{"name":"Zechariah","slug":"zechariah","l":"Z","ch":{"bsb":14,"web":14,"webc":14}},{"name":"Zephaniah","slug":"zephaniah","l":"Z","ch":{"bsb":3,"web":3,"webc":3}}];
+  var BOOKS = [{"name":"Acts","slug":"acts","l":"A","ch":{"bsb":28,"nkjv":28,"web":28,"webc":28}},{"name":"Amos","slug":"amos","l":"A","ch":{"bsb":9,"nkjv":9,"web":9,"webc":9}},{"name":"Baruch","slug":"baruch","l":"B","ch":{"webc":6}},{"name":"1 Chronicles","slug":"1-chronicles","l":"C","ch":{"bsb":29,"nkjv":29,"web":29,"webc":29}},{"name":"2 Chronicles","slug":"2-chronicles","l":"C","ch":{"bsb":36,"nkjv":36,"web":36,"webc":36}},{"name":"Colossians","slug":"colossians","l":"C","ch":{"bsb":4,"nkjv":4,"web":4,"webc":4}},{"name":"1 Corinthians","slug":"1-corinthians","l":"C","ch":{"bsb":16,"nkjv":16,"web":16,"webc":16}},{"name":"2 Corinthians","slug":"2-corinthians","l":"C","ch":{"bsb":13,"nkjv":13,"web":13,"webc":13}},{"name":"Daniel","slug":"daniel","l":"D","ch":{"bsb":12,"nkjv":12,"web":12,"webc":14}},{"name":"Deuteronomy","slug":"deuteronomy","l":"D","ch":{"bsb":34,"nkjv":34,"web":34,"webc":34}},{"name":"Ecclesiastes","slug":"ecclesiastes","l":"E","ch":{"bsb":12,"nkjv":12,"web":12,"webc":12}},{"name":"Ephesians","slug":"ephesians","l":"E","ch":{"bsb":6,"nkjv":6,"web":6,"webc":6}},{"name":"Esther","slug":"esther","l":"E","ch":{"bsb":10,"nkjv":10,"web":10,"webc":10}},{"name":"Exodus","slug":"exodus","l":"E","ch":{"bsb":40,"nkjv":40,"web":40,"webc":40}},{"name":"Ezekiel","slug":"ezekiel","l":"E","ch":{"bsb":48,"nkjv":48,"web":48,"webc":48}},{"name":"Ezra","slug":"ezra","l":"E","ch":{"bsb":10,"nkjv":10,"web":10,"webc":10}},{"name":"Galatians","slug":"galatians","l":"G","ch":{"bsb":6,"nkjv":6,"web":6,"webc":6}},{"name":"Genesis","slug":"genesis","l":"G","ch":{"bsb":50,"nkjv":50,"web":50,"webc":50}},{"name":"Habakkuk","slug":"habakkuk","l":"H","ch":{"bsb":3,"nkjv":3,"web":3,"webc":3}},{"name":"Haggai","slug":"haggai","l":"H","ch":{"bsb":2,"nkjv":2,"web":2,"webc":2}},{"name":"Hebrews","slug":"hebrews","l":"H","ch":{"bsb":13,"nkjv":13,"web":13,"webc":13}},{"name":"Hosea","slug":"hosea","l":"H","ch":{"bsb":14,"nkjv":14,"web":14,"webc":14}},{"name":"Isaiah","slug":"isaiah","l":"I","ch":{"bsb":66,"nkjv":66,"web":66,"webc":66}},{"name":"James","slug":"james","l":"J","ch":{"bsb":5,"nkjv":5,"web":5,"webc":5}},{"name":"Jeremiah","slug":"jeremiah","l":"J","ch":{"bsb":52,"nkjv":52,"web":52,"webc":52}},{"name":"Job","slug":"job","l":"J","ch":{"bsb":42,"nkjv":42,"web":42,"webc":42}},{"name":"Joel","slug":"joel","l":"J","ch":{"bsb":3,"nkjv":3,"web":3,"webc":3}},{"name":"John","slug":"john","l":"J","ch":{"bsb":21,"nkjv":21,"web":21,"webc":21}},{"name":"1 John","slug":"1-john","l":"J","ch":{"bsb":5,"nkjv":5,"web":5,"webc":5}},{"name":"2 John","slug":"2-john","l":"J","ch":{"bsb":1,"nkjv":1,"web":1,"webc":1}},{"name":"3 John","slug":"3-john","l":"J","ch":{"bsb":1,"nkjv":1,"web":1,"webc":1}},{"name":"Jonah","slug":"jonah","l":"J","ch":{"bsb":4,"nkjv":4,"web":4,"webc":4}},{"name":"Joshua","slug":"joshua","l":"J","ch":{"bsb":24,"nkjv":24,"web":24,"webc":24}},{"name":"Jude","slug":"jude","l":"J","ch":{"bsb":1,"nkjv":1,"web":1,"webc":1}},{"name":"Judges","slug":"judges","l":"J","ch":{"bsb":21,"nkjv":21,"web":21,"webc":21}},{"name":"Judith","slug":"judith","l":"J","ch":{"webc":16}},{"name":"1 Kings","slug":"1-kings","l":"K","ch":{"bsb":22,"nkjv":22,"web":22,"webc":22}},{"name":"2 Kings","slug":"2-kings","l":"K","ch":{"bsb":25,"nkjv":25,"web":25,"webc":25}},{"name":"Lamentations","slug":"lamentations","l":"L","ch":{"bsb":5,"nkjv":5,"web":5,"webc":5}},{"name":"Leviticus","slug":"leviticus","l":"L","ch":{"bsb":27,"nkjv":27,"web":27,"webc":27}},{"name":"Luke","slug":"luke","l":"L","ch":{"bsb":24,"nkjv":24,"web":24,"webc":24}},{"name":"1 Maccabees","slug":"1-maccabees","l":"M","ch":{"webc":16}},{"name":"2 Maccabees","slug":"2-maccabees","l":"M","ch":{"webc":15}},{"name":"Malachi","slug":"malachi","l":"M","ch":{"bsb":4,"nkjv":4,"web":4,"webc":4}},{"name":"Mark","slug":"mark","l":"M","ch":{"bsb":16,"nkjv":16,"web":16,"webc":16}},{"name":"Matthew","slug":"matthew","l":"M","ch":{"bsb":28,"nkjv":28,"web":28,"webc":28}},{"name":"Micah","slug":"micah","l":"M","ch":{"bsb":7,"nkjv":7,"web":7,"webc":7}},{"name":"Nahum","slug":"nahum","l":"N","ch":{"bsb":3,"nkjv":3,"web":3,"webc":3}},{"name":"Nehemiah","slug":"nehemiah","l":"N","ch":{"bsb":13,"nkjv":13,"web":13,"webc":13}},{"name":"Numbers","slug":"numbers","l":"N","ch":{"bsb":36,"nkjv":36,"web":36,"webc":36}},{"name":"Obadiah","slug":"obadiah","l":"O","ch":{"bsb":1,"nkjv":1,"web":1,"webc":1}},{"name":"1 Peter","slug":"1-peter","l":"P","ch":{"bsb":5,"nkjv":5,"web":5,"webc":5}},{"name":"2 Peter","slug":"2-peter","l":"P","ch":{"bsb":3,"nkjv":3,"web":3,"webc":3}},{"name":"Philemon","slug":"philemon","l":"P","ch":{"bsb":1,"nkjv":1,"web":1,"webc":1}},{"name":"Philippians","slug":"philippians","l":"P","ch":{"bsb":4,"nkjv":4,"web":4,"webc":4}},{"name":"Proverbs","slug":"proverbs","l":"P","ch":{"bsb":31,"nkjv":31,"web":31,"webc":31}},{"name":"Psalms","slug":"psalms","l":"P","ch":{"bsb":150,"nkjv":150,"web":150,"webc":150}},{"name":"Revelation","slug":"revelation","l":"R","ch":{"bsb":22,"nkjv":22,"web":22,"webc":22}},{"name":"Romans","slug":"romans","l":"R","ch":{"bsb":16,"nkjv":16,"web":16,"webc":16}},{"name":"Ruth","slug":"ruth","l":"R","ch":{"bsb":4,"nkjv":4,"web":4,"webc":4}},{"name":"1 Samuel","slug":"1-samuel","l":"S","ch":{"bsb":31,"nkjv":31,"web":31,"webc":31}},{"name":"2 Samuel","slug":"2-samuel","l":"S","ch":{"bsb":24,"nkjv":24,"web":24,"webc":24}},{"name":"Sirach","slug":"sirach","l":"S","ch":{"webc":51}},{"name":"Song of Solomon","slug":"song-of-solomon","l":"S","ch":{"bsb":8,"nkjv":8,"web":8,"webc":8}},{"name":"1 Thessalonians","slug":"1-thessalonians","l":"T","ch":{"bsb":5,"nkjv":5,"web":5,"webc":5}},{"name":"2 Thessalonians","slug":"2-thessalonians","l":"T","ch":{"bsb":3,"nkjv":3,"web":3,"webc":3}},{"name":"1 Timothy","slug":"1-timothy","l":"T","ch":{"bsb":6,"nkjv":6,"web":6,"webc":6}},{"name":"2 Timothy","slug":"2-timothy","l":"T","ch":{"bsb":4,"nkjv":4,"web":4,"webc":4}},{"name":"Titus","slug":"titus","l":"T","ch":{"bsb":3,"nkjv":3,"web":3,"webc":3}},{"name":"Tobit","slug":"tobit","l":"T","ch":{"webc":14}},{"name":"Wisdom","slug":"wisdom","l":"W","ch":{"webc":19}},{"name":"Zechariah","slug":"zechariah","l":"Z","ch":{"bsb":14,"nkjv":14,"web":14,"webc":14}},{"name":"Zephaniah","slug":"zephaniah","l":"Z","ch":{"bsb":3,"nkjv":3,"web":3,"webc":3}}];
   var VERSION = (location.pathname.split('/')[1] || 'web');
   // Books present in THIS translation, still in the app's order.
   var CANON = BOOKS.filter(function (b) { return b.ch[VERSION] > 0; });
@@ -1044,20 +1038,89 @@
   // time), so without this a reader who followed a shared John 3:16 link and
   // tapped "BSB" to compare would land at the top of the chapter with no idea
   // which verse was shared — on the page that exists to show that one verse.
-  function carryVerse() {
-    // Carry the whole fragment, not just the verse: a reader who followed a
-    // link with a note and taps BSB to compare is still reading the same
-    // message about the same passage, so the note travels with them.
-    var keys = fragKeys();
-    var parts = [];
-    if (verseSpan()) parts.push('v' + keys.v);
-    if (keys.n) parts.push('n=' + keys.n);
-    var hash = parts.length ? '#' + parts.join('&') : '';
-    document.querySelectorAll('.vpick').forEach(function (a) {
-      var base = (a.getAttribute('href') || '').split('#')[0];
-      a.setAttribute('href', base + hash);
-    });
+  //
+  // A verse number is not an address, though. Where the other translation
+  // numbers this chapter differently, its pill carries data-vmap, written at
+  // build time from the versification tables: every verse of this chapter
+  // the other translation has, as "verse:chapter.verse.place" — where it
+  // lands there, and its place among that chapter's verses, counted from 0.
+  // A verse the map does not list is not in the other translation. A pill
+  // without the attribute is a chapter numbered the same, and the fragment
+  // travels as it is.
+  /*__VERSE_CARRY_BEGIN__*/
+  function spanOf(v) {
+    var m = /^(\d+)(?:-(\d+))?$/.exec(v || '');
+    if (!m) return null;
+    var lo = parseInt(m[1], 10), hi = m[2] ? parseInt(m[2], 10) : lo;
+    if (!(lo > 0) || hi < lo) return null;
+    return [lo, hi];
   }
+
+  // Where the span lands through the map, or null when it does not land as
+  // one passage. The verses of the span the other translation has must all
+  // land in one chapter there and fill a run of its verses with nothing of
+  // its own between them: WEB Daniel 3:23-24 is WEBC 3:23 and 3:91, with the
+  // Song of the Three between, and a range drawn across that would show the
+  // reader sixty-seven verses nobody sent. Order inside the run does not
+  // matter, for a pair a translation numbers the other way about. Verses the
+  // other translation lacks drop out, as the omitted Mark 9:44 does from a
+  // BSB range, and a span with none left lands nowhere.
+  function mappedSpan(vmap, span) {
+    var ch = 0, lo = 0, hi = 0, first = -1, last = -1, count = 0;
+    var toks = vmap ? vmap.split(' ') : [];
+    for (var i = 0; i < toks.length; i++) {
+      var m = /^(\d+):(\d+)\.(\d+)\.(\d+)$/.exec(toks[i]);
+      if (!m) return null;
+      var n = parseInt(m[1], 10);
+      if (n < span[0] || n > span[1]) continue;
+      var c = parseInt(m[2], 10), v = parseInt(m[3], 10), at = parseInt(m[4], 10);
+      if (count && c !== ch) return null;
+      ch = c;
+      if (first < 0 || at < first) { first = at; lo = v; }
+      if (at > last) { last = at; hi = v; }
+      count++;
+    }
+    if (!count || last - first !== count - 1) return null;
+    return { ch: ch, lo: lo, hi: hi };
+  }
+
+  // The href a pill should carry: base is its own chapter link, vmap its
+  // data-vmap or null, keys the fragment. The whole fragment travels, not
+  // just the verse: a reader who followed a link with a note and taps BSB to
+  // compare is still reading the same message about the same passage. When
+  // the verse cannot land, the note still travels and the link opens the
+  // chapter, as on the notice pages.
+  function carriedHref(base, vmap, keys) {
+    var parts = [];
+    var span = spanOf(keys.v);
+    if (span && vmap === null) {
+      parts.push('v' + keys.v);
+    } else if (span) {
+      var got = mappedSpan(vmap, span);
+      if (got) {
+        base = base.replace(/[0-9]+\/$/, got.ch + '/');
+        parts.push('v' + got.lo + (got.hi > got.lo ? '-' + got.hi : ''));
+      }
+    }
+    if (keys.n) parts.push('n=' + keys.n);
+    return base + (parts.length ? '#' + parts.join('&') : '');
+  }
+
+  // Each pill's own chapter link, read once: a carried verse can move the
+  // href to another chapter, so the next fragment must start from the link
+  // the page was built with, not from the last rewrite.
+  var picks;
+  function carryVerse() {
+    if (!picks) {
+      picks = [];
+      document.querySelectorAll('.vpick').forEach(function (a) {
+        picks.push({ a: a, base: (a.getAttribute('href') || '').split('#')[0], vmap: a.getAttribute('data-vmap') });
+      });
+    }
+    var keys = fragKeys();
+    picks.forEach(function (p) { p.a.setAttribute('href', carriedHref(p.base, p.vmap, keys)); });
+  }
+  /*__VERSE_CARRY_END__*/
   carryVerse();
   window.addEventListener('hashchange', carryVerse);
 
