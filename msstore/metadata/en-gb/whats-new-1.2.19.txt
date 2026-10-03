@@ -1,0 +1,11 @@
+Cross-references that open the passage they name.
+
+• Cross-references now name and open the passage each one cites, in every translation. Before, Numbers 3:1's cross-references listed "Leviticus 27:34-1:1", the New King James Version and the Berean Standard Bible showed "Romans 16:25-25", and references to the two woes of Matthew 23:13-14 could open the wrong one.
+• A reference to a verse some manuscripts leave out, such as Matthew 17:21, now opens that verse in a translation that prints it, not the previous verse.
+• In the BSB, a parallel that ends on a verse it leaves out no longer shrinks to one verse: Mark 9:29 now offers Matthew 17:14-20.
+• In the World English Bible Catholic edition, a reference to Daniel 3 no longer runs through the Song of the Three.
+• Opening a reference to several verses now highlights them all, not only the first.
+• Cross-references take about 85% less memory.
+• In the NKJV, headings missing from 62 chapters now appear, among them Psalm 119's stanza headings, where only the first four showed. Headings and psalm titles now set LORD in small capitals, as the verses do. A new download has these at once; a copy already on your PC gains them when BibleText next refreshes it, within 30 days.
+• In the NKJV, the Hebrew letter in Psalm 119's stanza headings is now set in BibleText's own Hebrew type. Before, it came from whatever font Windows supplied.
+• Cross-reference previews in the NKJV now set LORD in small capitals too.

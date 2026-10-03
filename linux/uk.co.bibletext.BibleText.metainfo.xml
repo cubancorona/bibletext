@@ -75,6 +75,22 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.2.19" date="2026-10-03">
+      <description>
+        <p>Cross-references that open the passage they name.</p>
+        <ul>
+          <li>Cross-references now name the passage each one cites, in every translation. Before, a reference running from the end of one book into the next lost the second book's name, so Numbers 3:1's cross-references listed &quot;Leviticus 27:34-1:1&quot;; and in the New King James Version and the Berean Standard Bible, a reference to the close of Romans read &quot;Romans 16:25-25&quot;. They now read &quot;Leviticus 27:34-Numbers 1:1&quot; and &quot;Romans 16:25-26&quot;.</li>
+          <li>Cross-references now open the verse they cite. Matthew 23:13 and 23:14 hold two woes, which translations number differently. Selecting the woe &quot;you shut up the Kingdom of Heaven&quot; now lists its own references, and a reference to either woe opens it wherever your translation has it. Before, some of these were listed under or opened the other woe, and some were left out. A reference to a verse some manuscripts leave out, such as Matthew 17:21, now opens that verse in a translation that prints it. Before, it opened the previous verse.</li>
+          <li>In the Berean Standard Bible, a parallel passage that ends on a verse the BSB leaves out no longer shrinks to its first verse: Mark 9:29 now offers Matthew 17:14-20, where it offered Matthew 17:14.</li>
+          <li>In the World English Bible Catholic edition, a reference to Daniel 3 no longer runs through the Song of the Three: Daniel 1:7 now lists Daniel 3:12-23 and Daniel 3:91-97, where it listed Daniel 3:12-97, the whole Song included.</li>
+          <li>Opening a reference to several verses now highlights them all. Before, only the first was highlighted. A reference that runs on into the next chapter is highlighted to the end of the chapter it starts in.</li>
+          <li>Cross-references now take about 85% less memory.</li>
+          <li>In the New King James Version, headings missing from 62 chapters now appear, among them the headings of Psalm 119's stanzas, of which only the first four showed. Headings and psalm titles now set LORD in small capitals, as the verses beneath them do; before, they printed &quot;Lord&quot;. A new download of the NKJV has all of this at once. If the NKJV is already on your computer, all of this arrives when BibleText next refreshes its copy, within 30 days.</li>
+          <li>In the NKJV, the Hebrew letter in Psalm 119's stanza headings is now set in BibleText's own Hebrew type. Before, it came from whatever font your system supplied.</li>
+          <li>In the NKJV, the preview under each cross-reference now sets LORD in small capitals as the page does. Before, it read &quot;Lord&quot;, the spelling the NKJV keeps for a different word.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.18" date="2026-10-01">
       <description>
         <p>Every share now tells you what it did.</p>

@@ -181,6 +181,29 @@ Also confirm from the final AAB:
 - target audience and Families eligibility are selected from the real intended
   audience, not to avoid or trigger a policy track.
 
+## Release notes — 1.2.19
+
+> Cross-references that open the passage they name.
+> • Cross-references now open and name the verses they cite, in every translation.
+> • BSB parallels no longer shrink to one verse, and WEB Catholic's Daniel 3 references skip the Song of the Three.
+> • Cross-references use about 85% less memory.
+> • NKJV: missing headings now show, Psalm 119's among them, with LORD in small capitals in headings and psalm titles. A copy already downloaded gets them at its next refresh, within 30 days.
+
+Suggested tester coverage:
+
+- install and confirm version 1.2.19 (189);
+- in the World English Bible, select Numbers 3:1 and choose Cross-references:
+  the list includes "Leviticus 27:34-Numbers 1:1", not "Leviticus 27:34-1:1";
+- on Matthew 23:14 the list includes Luke 11:52; on Genesis 1:1, tap
+  "John 1:1-3" and all three verses are highlighted;
+- in the Berean Standard Bible, Cross-references on Mark 9:29 offers
+  Matthew 17:14-20 first; in the World English Bible Catholic edition,
+  Daniel 1:7 lists Daniel 3:12-23 and Daniel 3:91-97, not Daniel 3:12-97;
+- on a fresh install, choose the New King James Version: Psalm 119 has a
+  heading over every stanza, Psalm 23's heading sets LORD in small capitals,
+  and on Genesis 1:1 the cross-reference preview of Isaiah 45:18 does too;
+- confirm a shared link still opens at its passage with its note.
+
 ## Release notes — 1.2.18
 
 > Notes that close cleanly, and a status bar you can read.
