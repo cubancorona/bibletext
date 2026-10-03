@@ -79,8 +79,10 @@ external provider, the desktop pane's Copy put its superscript verse numbers
 on the clipboard, and the website joined every number to its verse with a
 no-break space that a browser copy carried away. One cleaner now serves every
 outbound path, and the native panes no longer put a no-break space in the text
-at all, since the system's own Copy reads the storage directly and cannot be
-reached.
+at all, since the system's own Copy reads the storage directly: on the Apple
+panes it cannot be reached, and Android's reading view takes it over only for
+a selection holding a character that pane writes for layout (`copyAsRead`,
+`android/BtBridge.java`).
 
 THE LAST LEAK could not be fixed by stripping, and was not. In the presented
 reporter layout a paragraph opened with an em-space and an en-space, written as

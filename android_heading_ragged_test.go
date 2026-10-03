@@ -364,9 +364,10 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 }
 
 // THE DOCUMENTS SAY WHAT THE ANDROID BRIDGE DOES WITH THE TITLE AND WITH COPY.
-// Two claims went stale with the code. docs/ADDITIONS_AND_DROPS.md said the
-// system's Copy reads the text storage and cannot be intercepted, while
-// Android's reading view hands its Copy to copyAsRead; and
+// Two claims went stale with the code. docs/ADDITIONS_AND_DROPS.md and
+// docs/SCRIPTURE_WORKLIST.md said the system's Copy reads the text storage
+// and cannot be intercepted, while Android's reading view hands its Copy to
+// copyAsRead; and
 // docs/READING_TYPOGRAPHY.md and docs/BACKLOG.md said Android from API 35
 // justifies a Psalm title, which the bridge sets ragged. Each is read against
 // the bridge, so the documents move when it does.
@@ -380,15 +381,32 @@ func TestAndroidDocsSayWhatTheBridgeDoesWithTheTitleAndCopy(t *testing.T) {
 	flat := func(path string) string { return strings.Join(strings.Fields(readRepoFile(t, path)), " ") }
 
 	// Copy. A sentence saying the system's Copy cannot be reached is true
-	// of the Apple panes, and must say so.
-	for _, sentence := range strings.SplitAfter(flat("docs/ADDITIONS_AND_DROPS.md"), ". ") {
-		if (strings.Contains(sentence, "cannot be intercepted") || strings.Contains(sentence, "no cleaner can be reached")) &&
-			!strings.Contains(sentence, "Apple") {
-			t.Errorf("docs/ADDITIONS_AND_DROPS.md says the system's Copy cannot be intercepted without "+
-				"confining it to the Apple panes; Android's reading view takes Copy over (copyAsRead):\n%s", sentence)
+	// of the Apple panes, and must say so. docs/SCRIPTURE_WORKLIST.md made
+	// the same claim for "the native panes" as docs/ADDITIONS_AND_DROPS.md.
+	unconfined := func(doc string) []string {
+		var out []string
+		for _, sentence := range strings.SplitAfter(doc, ". ") {
+			if (strings.Contains(sentence, "cannot be intercepted") || strings.Contains(sentence, "cannot be reached") ||
+				strings.Contains(sentence, "no cleaner can be reached")) && !strings.Contains(sentence, "Apple") {
+				out = append(out, sentence)
+			}
+		}
+		return out
+	}
+	for _, path := range []string{"docs/ADDITIONS_AND_DROPS.md", "docs/SCRIPTURE_WORKLIST.md"} {
+		for _, sentence := range unconfined(flat(path)) {
+			t.Errorf("%s says the system's Copy cannot be intercepted without confining it to the "+
+				"Apple panes; Android's reading view takes Copy over (copyAsRead):\n%s", path, sentence)
 		}
 	}
-	for _, path := range []string{"docs/ADDITIONS_AND_DROPS.md", "docs/ANDROID.md", "docs/READING_TYPOGRAPHY.md"} {
+	// The control: the worklist's sentence as it stood.
+	if len(unconfined("One cleaner now serves every outbound path, and the native panes no longer put a "+
+		"no-break space in the text at all, since the system's own Copy reads the storage directly and "+
+		"cannot be reached. ")) != 1 {
+		t.Fatal("control: the check passes the worklist's old sentence, so it proves nothing")
+	}
+	for _, path := range []string{"docs/ADDITIONS_AND_DROPS.md", "docs/ANDROID.md", "docs/READING_TYPOGRAPHY.md",
+		"docs/SCRIPTURE_WORKLIST.md"} {
 		if !strings.Contains(flat(path), "copyAsRead") {
 			t.Errorf("%s describes Android's Copy and does not name copyAsRead, which performs it "+
 				"for a selection holding a heading's or the title's gap or a direction mark", path)
