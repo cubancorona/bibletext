@@ -69,6 +69,14 @@ word gaps as four-per-em spaces, which the layout neither spreads nor shrinks
 (`keepHeadingsRagged`, `isRaggedParagraph`; docs/READING_TYPOGRAPHY.md,
 "Justified prose").
 
+**Copy takes the text as read, with its formatting.** The gap and the mark are
+there for layout alone, so the reading view hands Copy to `copyAsRead`, and
+when the selection holds either it sets the clip itself: the selection with its
+spans, each helper put back in place (`readerText`), under
+`ClipData.newPlainText`, as the platform's own Copy sets the view's text. A
+heading still pastes bold and the title italic in an app that keeps
+formatting. Any other selection is left to the platform's Copy, untouched.
+
 **The chapter wash is a line background (2026-09-03).** `Html.fromHtml` turns
 the tint table's `background-color` into an opaque `BackgroundColorSpan`, which
 `TextLine` fills in the text pass — above the selection path `Layout.draw`

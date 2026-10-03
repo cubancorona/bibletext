@@ -497,29 +497,43 @@ public final class BtBridge {
 
     // readerText is [s0, s1) of the pane's text as the reader reads it: the
     // gaps of a heading or the title are spaces again, and a paragraph's
-    // opening direction mark is gone. Everything else is returned as it is.
-    private static String readerText(CharSequence cs, int s0, int s1) {
+    // opening direction mark is gone. Everything else is returned as it is,
+    // spans included. The platform's Copy puts the view's own text on the
+    // clipboard with its spans (TextView: ClipData.newPlainText over
+    // mTransformed.subSequence), so a heading pastes bold and the title
+    // italic into an app that keeps formatting; this keeps them as well, by
+    // copying the selection with its spans and putting each helper right
+    // where it stands. SpannableStringBuilder's replace and delete leave every
+    // span around the character in place.
+    private static CharSequence readerText(CharSequence cs, int s0, int s1) {
         String raw = cs.subSequence(s0, s1).toString();
         if (!(cs instanceof Spanned)
                 || (raw.indexOf(HEADING_GAP) < 0 && raw.indexOf(PARA_LTR_MARK) < 0)) return raw;
         Spanned sp = (Spanned) cs;
-        StringBuilder sb = new StringBuilder(raw.length());
+        android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder(cs, s0, s1);
+        // The marks deleted so far: the character at i in cs is at
+        // i - s0 - gone in sb.
+        int gone = 0;
         int p = s0;
         while (p > 0 && cs.charAt(p - 1) != '\n') p--;
         while (p < s1) {
             int pe = p;
             while (pe < cs.length() && cs.charAt(pe) != '\n') pe++;
             boolean ragged = isRaggedParagraph(sp, p, pe);
-            int end = Math.min(pe + 1, s1);   // the paragraph's own '\n' included
+            int end = Math.min(pe, s1);   // the paragraph's own '\n' is no helper
             for (int i = Math.max(p, s0); i < end; i++) {
                 char c = cs.charAt(i);
-                if (i == p && c == PARA_LTR_MARK) continue;
-                if (ragged && c == HEADING_GAP) c = ' ';
-                sb.append(c);
+                int at = i - s0 - gone;
+                if (i == p && c == PARA_LTR_MARK) {
+                    sb.delete(at, at + 1);
+                    gone++;
+                } else if (ragged && c == HEADING_GAP) {
+                    sb.replace(at, at + 1, " ");
+                }
             }
             p = pe + 1;
         }
-        return sb.toString();
+        return sb;
     }
 
     // The floating toolbar's ActionMode while it is up, so a Copy this bridge
@@ -529,15 +543,17 @@ public final class BtBridge {
     // copyAsRead performs Copy with readerText's answer when that differs from
     // the text in the view — the gaps of a heading or the title, a
     // paragraph's direction mark — and otherwise reports false, leaving the
-    // platform's own Copy to run.
+    // platform's own Copy to run. It sets the clip as that Copy does, the
+    // styled text under ClipData.newPlainText, so bold and italic paste where
+    // the platform's would.
     private static boolean copyAsRead() {
         if (text == null) return false;
         int a = text.getSelectionStart(), b = text.getSelectionEnd();
         if (a < 0 || b < 0 || a == b) return false;
         int s0 = Math.min(a, b), s1 = Math.max(a, b);
         CharSequence cs = text.getText();
-        String read = readerText(cs, s0, s1);
-        if (read.contentEquals(cs.subSequence(s0, s1))) return false;
+        CharSequence read = readerText(cs, s0, s1);
+        if (android.text.TextUtils.equals(read, cs.subSequence(s0, s1))) return false;
         android.content.ClipboardManager cm = (android.content.ClipboardManager)
                 text.getContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE);
         if (cm == null) return false;
@@ -1424,8 +1440,9 @@ public final class BtBridge {
             // reader the text as read (readerText): the word gaps of a heading
             // or the title come back as the spaces they are
             // (keepHeadingsRagged), and a paragraph's direction mark is left
-            // behind (PARA_LTR_MARK). Any other selection is left to the
-            // platform's own Copy, untouched.
+            // behind (PARA_LTR_MARK), with the bold and italic kept as the
+            // platform's Copy keeps them (copyAsRead). Any other selection is
+            // left to the platform's own Copy, untouched.
             @Override public boolean onTextContextMenuItem(int id) {
                 if (id == android.R.id.copy && copyAsRead()) return true;
                 return super.onTextContextMenuItem(id);
@@ -1496,7 +1513,7 @@ public final class BtBridge {
                 // as read — the view's onTextContextMenuItem hands it to
                 // copyAsRead, which gives the gaps of a heading or the title
                 // back as spaces and leaves a paragraph's direction mark
-                // behind (readerText).
+                // behind (readerText), keeping the bold and italic.
                 int id = item.getItemId();
                 boolean appItem = id == 200 || (id >= 105 && id <= 109);
                 if (!appItem) return false;
@@ -1520,7 +1537,7 @@ public final class BtBridge {
                 if (s1 <= contentStart) { mode.finish(); return true; }
                 s0 = Math.max(s0, contentStart);
                 if (s1 <= s0) { mode.finish(); return true; }
-                final String sel = readerText(text.getText(), s0, s1);
+                final String sel = readerText(text.getText(), s0, s1).toString();
                 // The verse span, resolved NOW from the same offsets the text was
                 // captured from (the popup below may collapse the selection).
                 final int selLo = verseAtOffset(s0);

@@ -84,15 +84,25 @@ func TestAndroidSetsAParagraphOpeningOnHebrewLeftToRight(t *testing.T) {
 		!strings.EqualFold("&#x"+m[1]+";", mark) {
 		t.Errorf("the bridge's PARA_LTR_MARK is not the dialect's %s (found %v)", mark, m)
 	}
+	// It is deleted from the copy of the selection in place, so the spans
+	// around it, a heading's bold, stay where they were (readerText).
 	drops := func(src string) bool {
-		read := javaBlockAfter(t, src, "private static String readerText(")
-		return inSequence(read, "if (i == p && c == PARA_LTR_MARK) continue;", "sb.append(c);")
+		read := javaBlockAfter(t, src, "readerText(CharSequence cs, int s0, int s1)")
+		return hasLinesInOrder(read, "if (i == p && c == PARA_LTR_MARK) {", "sb.delete(at, at + 1);", "gone++;")
 	}
 	if !drops(java) {
 		t.Error("readerText must drop a paragraph's opening direction mark, or it leaves the page " +
 			"in the text a selection hands on and in Copy")
 	}
-	if drops(strings.Replace(java, "if (i == p && c == PARA_LTR_MARK) continue;", "", 1)) {
-		t.Fatal("control: the check passes a bridge that keeps the mark, so it proves nothing")
+	for _, c := range [][2]string{
+		{"sb.delete(at, at + 1);", ""},
+		{"if (i == p && c == PARA_LTR_MARK) {", "if (i != p && c == PARA_LTR_MARK) {"},
+	} {
+		if strings.Count(java, c[0]) != 1 {
+			t.Fatalf("control: the bridge does not contain %q exactly once", c[0])
+		}
+		if drops(strings.Replace(java, c[0], c[1], 1)) {
+			t.Errorf("control: the check passes a bridge with %q for %q, so it proves nothing", c[1], c[0])
+		}
 	}
 }

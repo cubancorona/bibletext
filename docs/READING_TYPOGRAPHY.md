@@ -266,12 +266,12 @@ and they differ:
   surface sets them: no span can exempt a line from the text view's
   justification, but a line with no U+0020 in it is not spread, so the bridge
   sets their word gaps as four-per-em spaces in the view and turns them back
-  into spaces in the text a selection hands on and in Copy
-  (`keepHeadingsRagged`, `isRaggedParagraph`, `readerText`,
-  `android/BtBridge.java`). The gap is 250 units to the space's 243 in the bold
-  cut a heading is set in; the italic cut the title is set in has a 278-unit
-  space, so the title's gaps are 28 units narrower than on the other surfaces
-  (docs/BACKLOG.md).
+  into spaces, the bold and italic kept, in the text a selection hands on and
+  in Copy (`keepHeadingsRagged`, `isRaggedParagraph`, `readerText`,
+  `copyAsRead`, `android/BtBridge.java`). The gap is 250 units to the space's
+  243 in the bold cut a heading is set in; the italic cut the title is set in
+  has a 278-unit space, so the title's gaps are 28 units narrower than on the
+  other surfaces (docs/BACKLOG.md).
 - **The Apple panes** leave any paragraph holding a poem line ragged (below),
   and their stylesheet asks for hyphenation, the Psalm title's included.
 - **The Windows and Linux pane** (`readingJustifyProse`) justifies a paragraph

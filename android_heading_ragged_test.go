@@ -55,7 +55,8 @@ func hasLinesInOrder(block string, want ...string) bool {
 // (TextLine.justify sets the word spacing after the spans have set the
 // paint); a line with no U+0020 is the one it leaves alone. So the bridge sets
 // the gaps of a heading and of the title as another space in the view and
-// gives the reader the spaces back in the text that leaves the page.
+// gives the reader the spaces back, bold and italic kept, in the text that
+// leaves the page.
 //
 // The pane is Java behind JNI, so this holds the bridge's source to the rule
 // line by line, checks the gap character against the platform's rules and the
@@ -224,7 +225,8 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 		menu := javaBlockAfter(t, src, "@Override public boolean onTextContextMenuItem(int id)")
 		return hasLinesInOrder(read,
 			"boolean ragged = isRaggedParagraph(sp, p, pe);",
-			"if (ragged && c == HEADING_GAP) c = ' ';") &&
+			"} else if (ragged && c == HEADING_GAP) {",
+			`sb.replace(at, at + 1, " ");`) &&
 			inSequence(copyAs, "readerText(", "setPrimaryClip(") &&
 			slices.Equal(codeLines(menu), []string{
 				"@Override public boolean onTextContextMenuItem(int id) {",
@@ -232,7 +234,7 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 				"return super.onTextContextMenuItem(id);",
 				"}",
 			}) &&
-			hasLinesInOrder(src, "final String sel = readerText(text.getText(), s0, s1);") &&
+			hasLinesInOrder(src, "final String sel = readerText(text.getText(), s0, s1).toString();") &&
 			!strings.Contains(src, "getText().subSequence(s0, s1).toString()")
 	}
 	if !givesBack(java) {
@@ -240,6 +242,40 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 			"Copy (onTextContextMenuItem -> copyAsRead) — with the gaps of exactly the paragraphs " +
 			"the swap set them in turned back, or a heading or a title leaves the page with " +
 			"four-per-em spaces in it")
+	}
+
+	// Copy keeps the formatting the platform's own Copy keeps. That Copy puts
+	// the view's text on the clipboard with its spans (TextView, ID_COPY:
+	// ClipData.newPlainText over the selected subSequence), so a heading
+	// pastes bold and the title italic into an app that keeps formatting.
+	// readerText therefore copies the selection with its spans and puts each
+	// helper right in place — a builder's replace and delete keep the spans
+	// around the character, counting the marks it has deleted so each later
+	// offset still lands — and copyAsRead hands the clipboard that styled
+	// text. A String anywhere on the way is plain text on the clipboard.
+	keepsStyle := func(src string) bool {
+		read := javaBlockAfter(t, src, "readerText(CharSequence cs, int s0, int s1)")
+		copyAs := javaBlockAfter(t, src, "private static boolean copyAsRead()")
+		return hasLinesInOrder(src, "private static CharSequence readerText(CharSequence cs, int s0, int s1) {") &&
+			hasLinesInOrder(read,
+				"android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder(cs, s0, s1);",
+				"int gone = 0;",
+				"int at = i - s0 - gone;",
+				"if (i == p && c == PARA_LTR_MARK) {",
+				"sb.delete(at, at + 1);",
+				"gone++;",
+				"} else if (ragged && c == HEADING_GAP) {",
+				`sb.replace(at, at + 1, " ");`,
+				"return sb;") &&
+			!strings.Contains(read, "append(") && !strings.Contains(read, "sb.toString()") &&
+			hasLinesInOrder(copyAs,
+				"CharSequence read = readerText(cs, s0, s1);",
+				"cm.setPrimaryClip(android.content.ClipData.newPlainText(null, read));")
+	}
+	if !keepsStyle(java) {
+		t.Error("Copy must put the selection on the clipboard as styled text, as the platform's " +
+			"Copy does: readerText builds it on the selection with its spans, replacing each " +
+			"helper in place, and copyAsRead sets that text, not a String of it")
 	}
 
 	// copyAsRead says false only where it has not copied, and true once it
@@ -260,15 +296,16 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 		return slices.Equal(exits, []string{
 			"if (text == null) return false;",
 			"if (a < 0 || b < 0 || a == b) return false;",
-			"if (read.contentEquals(cs.subSequence(s0, s1))) return false;",
+			"if (android.text.TextUtils.equals(read, cs.subSequence(s0, s1))) return false;",
 			"if (cm == null) return false;",
 			"return false;", // the clipboard threw
 			"return true;",
-		}) && inSequence(copyAs,
-			"String read = readerText(cs, s0, s1);",
-			"if (read.contentEquals(cs.subSequence(s0, s1))) return false;",
+		}) && hasLinesInOrder(copyAs,
+			"CharSequence read = readerText(cs, s0, s1);",
+			"if (android.text.TextUtils.equals(read, cs.subSequence(s0, s1))) return false;",
 			"cm.setPrimaryClip(android.content.ClipData.newPlainText(null, read));",
 			"} catch (Throwable t) {", "return false;", "}",
+			"if (selectionMode != null) selectionMode.finish();",
 			"return true;")
 	}
 	if !copies(java) {
@@ -297,18 +334,25 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 			"boolean ragged = !isRaggedParagraph(sp, p, pe);", givesBack},
 		{"readerText for headings alone", "boolean ragged = isRaggedParagraph(sp, p, pe);",
 			"boolean ragged = isHeadingParagraph(sp, p, pe);", givesBack},
-		{"raw selection text", "final String sel = readerText(text.getText(), s0, s1);",
+		{"raw selection text", "final String sel = readerText(text.getText(), s0, s1).toString();",
 			"final String sel = text.getText().subSequence(s0, s1).toString();", givesBack},
 		{"the platform's Copy", "if (id == android.R.id.copy && copyAsRead()) return true;", "", givesBack},
 		{"a Copy never taken over", "copyAsRead()) return true;", "copyAsRead() && false) return true;", givesBack},
 		{"the Copy test turned round", "if (id == android.R.id.copy && copyAsRead()) return true;",
 			"if (id != android.R.id.copy && copyAsRead()) return true;", givesBack},
+		{"a plain-text clip", "newPlainText(null, read));", "newPlainText(null, read.toString()));", keepsStyle},
+		{"readerText a String", "private static CharSequence readerText(", "private static String readerText(", keepsStyle},
+		{"spans dropped on the way out", "return sb;", "return sb.toString();", keepsStyle},
+		{"a copy without the spans", "new android.text.SpannableStringBuilder(cs, s0, s1);",
+			"new android.text.SpannableStringBuilder(raw);", keepsStyle},
+		{"a deleted mark left uncounted", "gone++;", "", keepsStyle},
 		{"false once copied", "selectionMode.finish();\n        return true;",
 			"selectionMode.finish();\n        return false;", copies},
 		{"false before copying", "private static boolean copyAsRead() {",
 			"private static boolean copyAsRead() {\n        if (true) return false;", copies},
-		{"the comparison turned round", "if (read.contentEquals(cs.subSequence(s0, s1))) return false;",
-			"if (!read.contentEquals(cs.subSequence(s0, s1))) return false;", copies},
+		{"the comparison turned round",
+			"if (android.text.TextUtils.equals(read, cs.subSequence(s0, s1))) return false;",
+			"if (!android.text.TextUtils.equals(read, cs.subSequence(s0, s1))) return false;", copies},
 	} {
 		if k := strings.Count(java, c.from); k != 1 {
 			t.Fatalf("control %q: the bridge contains %q %d times, not once", c.name, c.from, k)
@@ -319,17 +363,38 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 	}
 }
 
-// THE DOCUMENTS SAY WHAT THE ANDROID BRIDGE DOES WITH THE PSALM TITLE.
+// THE DOCUMENTS SAY WHAT THE ANDROID BRIDGE DOES WITH THE TITLE AND WITH COPY.
+// Two claims went stale with the code. docs/ADDITIONS_AND_DROPS.md said the
+// system's Copy reads the text storage and cannot be intercepted, while
+// Android's reading view hands its Copy to copyAsRead; and
 // docs/READING_TYPOGRAPHY.md and docs/BACKLOG.md said Android from API 35
-// justifies a Psalm title, which the bridge sets ragged. The claim is read
-// against the bridge, so the documents move when it does.
-func TestAndroidDocsSayWhatTheBridgeDoesWithTheTitle(t *testing.T) {
+// justifies a Psalm title, which the bridge sets ragged. Each is read against
+// the bridge, so the documents move when it does.
+func TestAndroidDocsSayWhatTheBridgeDoesWithTheTitleAndCopy(t *testing.T) {
 	java := readNativeSource(t, "android/BtBridge.java")
-	if !strings.Contains(java, "|| (ps == 0 && isTitleParagraph(sp, ps, pe))") {
-		t.Fatal("the bridge no longer sets the title ragged; the documents checked here say it " +
-			"does, so they and this test change with it")
+	if !strings.Contains(java, "if (id == android.R.id.copy && copyAsRead()) return true;") ||
+		!strings.Contains(java, "|| (ps == 0 && isTitleParagraph(sp, ps, pe))") {
+		t.Fatal("the bridge no longer takes Copy over or no longer sets the title ragged; " +
+			"the documents checked here say it does, so they and this test change with it")
 	}
 	flat := func(path string) string { return strings.Join(strings.Fields(readRepoFile(t, path)), " ") }
+
+	// Copy. A sentence saying the system's Copy cannot be reached is true
+	// of the Apple panes, and must say so.
+	for _, sentence := range strings.SplitAfter(flat("docs/ADDITIONS_AND_DROPS.md"), ". ") {
+		if (strings.Contains(sentence, "cannot be intercepted") || strings.Contains(sentence, "no cleaner can be reached")) &&
+			!strings.Contains(sentence, "Apple") {
+			t.Errorf("docs/ADDITIONS_AND_DROPS.md says the system's Copy cannot be intercepted without "+
+				"confining it to the Apple panes; Android's reading view takes Copy over (copyAsRead):\n%s", sentence)
+		}
+	}
+	for _, path := range []string{"docs/ADDITIONS_AND_DROPS.md", "docs/ANDROID.md", "docs/READING_TYPOGRAPHY.md"} {
+		if !strings.Contains(flat(path), "copyAsRead") {
+			t.Errorf("%s describes Android's Copy and does not name copyAsRead, which performs it "+
+				"for a selection holding a heading's or the title's gap or a direction mark", path)
+		}
+	}
+
 	// The title.
 	for _, c := range []struct{ path, stale string }{
 		{"docs/READING_TYPOGRAPHY.md", "the rows of a wrapped poem line too, and a Psalm title that wraps"},
