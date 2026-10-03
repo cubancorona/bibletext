@@ -12,6 +12,36 @@ import (
 	"golang.org/x/image/math/fixed"
 )
 
+// codeLines is block's statements one per line, trimmed, with blank lines and
+// comment lines left out, so a check can hold a line as it stands rather than
+// as a substring a changed line still contains: "isX(a)" is a substring of
+// "if (!isX(a)) {" and of "if (isX(a) && false) {", and neither line is
+// "if (isX(a)) {".
+func codeLines(block string) []string {
+	var out []string
+	for _, l := range strings.Split(block, "\n") {
+		l = strings.TrimSpace(l)
+		if l == "" || strings.HasPrefix(l, "//") {
+			continue
+		}
+		out = append(out, l)
+	}
+	return out
+}
+
+// hasLinesInOrder reports whether each of want is a whole line of block, in
+// that order.
+func hasLinesInOrder(block string, want ...string) bool {
+	lines := codeLines(block)
+	i := 0
+	for _, l := range lines {
+		if i < len(want) && l == want[i] {
+			i++
+		}
+	}
+	return i == len(want)
+}
+
 // A HEADING IS SET RAGGED ON ANDROID'S JUSTIFIED PAGE, as the web, the Apple
 // panes and the Windows and Linux pane set it.
 //
@@ -25,9 +55,9 @@ import (
 // a heading's gaps as another space in the view and gives the reader the
 // spaces back in the text that leaves the page.
 //
-// The pane is Java behind JNI, so this holds the bridge's source to the rule,
-// checks the gap character against the platform's rules and the reading face,
-// and proves on copies that each check can fail.
+// The pane is Java behind JNI, so this holds the bridge's source to the rule
+// line by line, checks the gap character against the platform's rules and the
+// reading face, and proves on copies that each check can fail.
 func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 	java := readNativeSource(t, "android/BtBridge.java")
 
@@ -86,12 +116,15 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 		set := javaBlockAfter(t, src, "public static void setHtml(")
 		keep := javaBlockAfter(t, src, "private static void keepHeadingsRagged(")
 		style := javaBlockAfter(t, src, "private static boolean justifiesInterWord()")
-		return inSequence(set, "justifiesInterWord()", "keepHeadingsRagged(", "text.setText(s") &&
-			inSequence(keep,
+		return hasLinesInOrder(set,
+			"if (s instanceof android.text.SpannableStringBuilder && justifiesInterWord()) {",
+			"keepHeadingsRagged((android.text.SpannableStringBuilder) s);",
+			"text.setText(s, TextView.BufferType.SPANNABLE);") &&
+			hasLinesInOrder(keep,
 				"if (isHeadingParagraph(ssb, ps, i)) {",
 				"for (int j = ps; j < i; j++) {",
 				"if (ssb.charAt(j) == ' ') ssb.replace(j, j + 1, String.valueOf(HEADING_GAP));") &&
-			strings.Contains(style, "android.os.Build.VERSION.SDK_INT >= 35") &&
+			hasLinesInOrder(style, "return android.os.Build.VERSION.SDK_INT >= 35;") &&
 			strings.Contains(src, "text.setJustificationMode(justifiesInterWord()")
 	}
 	if !swaps(java) {
@@ -99,21 +132,34 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 			"before setText, on the page setStyle justifies — one predicate, justifiesInterWord, for both")
 	}
 
-	// And the reader gets the spaces back: the app's own verbs and Copy.
+	// And the reader gets the spaces back, from the paragraphs the swap set
+	// them in: the app's own verbs, and Copy, which the view hands to
+	// copyAsRead for every copy and which takes it over when readerText
+	// changes anything. Each line is read as it stands, so a test turned
+	// round, or a Copy line that never reaches copyAsRead's answer, fails
+	// here and not only in a control.
 	givesBack := func(src string) bool {
-		read := javaBlockAfter(t, src, "private static String readerText(")
+		read := javaBlockAfter(t, src, "readerText(CharSequence cs, int s0, int s1)")
 		copyAs := javaBlockAfter(t, src, "private static boolean copyAsRead()")
 		menu := javaBlockAfter(t, src, "@Override public boolean onTextContextMenuItem(int id)")
-		return inSequence(read, "isHeadingParagraph(", "== HEADING_GAP", "' '") &&
+		return hasLinesInOrder(read,
+			"boolean heading = isHeadingParagraph(sp, p, pe);",
+			"if (heading && c == HEADING_GAP) c = ' ';") &&
 			inSequence(copyAs, "readerText(", "setPrimaryClip(") &&
-			inSequence(menu, "android.R.id.copy", "copyAsRead()", "super.onTextContextMenuItem(id)") &&
-			strings.Contains(src, "final String sel = readerText(text.getText(), s0, s1);") &&
+			slices.Equal(codeLines(menu), []string{
+				"@Override public boolean onTextContextMenuItem(int id) {",
+				"if (id == android.R.id.copy && copyAsRead()) return true;",
+				"return super.onTextContextMenuItem(id);",
+				"}",
+			}) &&
+			hasLinesInOrder(src, "final String sel = readerText(text.getText(), s0, s1);") &&
 			!strings.Contains(src, "getText().subSequence(s0, s1).toString()")
 	}
 	if !givesBack(java) {
 		t.Error("a selection's text must come through readerText — the app's verbs (sel) and " +
-			"Copy (onTextContextMenuItem -> copyAsRead) — or a heading leaves the page with " +
-			"four-per-em spaces in it")
+			"Copy (onTextContextMenuItem -> copyAsRead) — with the gaps of exactly the paragraphs " +
+			"the swap set them in turned back, or a heading leaves the page with four-per-em " +
+			"spaces in it")
 	}
 
 	// copyAsRead says false only where it has not copied, and true once it
@@ -126,8 +172,8 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 	copies := func(src string) bool {
 		copyAs := javaBlockAfter(t, src, "private static boolean copyAsRead()")
 		var exits []string
-		for _, l := range strings.Split(copyAs, "\n") {
-			if l = strings.TrimSpace(l); strings.Contains(l, "return ") && !strings.HasPrefix(l, "//") {
+		for _, l := range codeLines(copyAs) {
+			if strings.Contains(l, "return ") {
 				exits = append(exits, l)
 			}
 		}
@@ -152,19 +198,26 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 			"view's text is what pastes")
 	}
 
-	// The controls: each check fails a bridge that lost the piece it holds.
+	// The controls: each check fails a bridge that lost the piece it holds,
+	// on its own and not by the control failing to find its line.
 	for _, c := range []struct {
 		name, from, to string
 		check          func(string) bool
 	}{
 		{"no swap in setHtml", "keepHeadingsRagged((android.text.SpannableStringBuilder) s);", "", swaps},
+		{"swapped below API 35", "&& justifiesInterWord()) {", "&& !justifiesInterWord()) {", swaps},
 		{"justified on its own predicate", "text.setJustificationMode(justifiesInterWord()",
 			"text.setJustificationMode(android.os.Build.VERSION.SDK_INT >= 35", swaps},
 		{"every paragraph but a heading", "if (isHeadingParagraph(ssb, ps, i)) {",
 			"if (!isHeadingParagraph(ssb, ps, i)) {", swaps},
+		{"readerText's test turned round", "boolean heading = isHeadingParagraph(sp, p, pe);",
+			"boolean heading = !isHeadingParagraph(sp, p, pe);", givesBack},
 		{"raw selection text", "final String sel = readerText(text.getText(), s0, s1);",
 			"final String sel = text.getText().subSequence(s0, s1).toString();", givesBack},
 		{"the platform's Copy", "if (id == android.R.id.copy && copyAsRead()) return true;", "", givesBack},
+		{"a Copy never taken over", "copyAsRead()) return true;", "copyAsRead() && false) return true;", givesBack},
+		{"the Copy test turned round", "if (id == android.R.id.copy && copyAsRead()) return true;",
+			"if (id != android.R.id.copy && copyAsRead()) return true;", givesBack},
 		{"false once copied", "selectionMode.finish();\n        return true;",
 			"selectionMode.finish();\n        return false;", copies},
 		{"false before copying", "private static boolean copyAsRead() {",
@@ -172,11 +225,10 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 		{"the comparison turned round", "if (read.contentEquals(cs.subSequence(s0, s1))) return false;",
 			"if (!read.contentEquals(cs.subSequence(s0, s1))) return false;", copies},
 	} {
-		mutated := strings.Replace(java, c.from, c.to, 1)
-		if mutated == java {
-			t.Fatalf("control %q: the bridge no longer contains %q", c.name, c.from)
+		if k := strings.Count(java, c.from); k != 1 {
+			t.Fatalf("control %q: the bridge contains %q %d times, not once", c.name, c.from, k)
 		}
-		if c.check(mutated) {
+		if c.check(strings.Replace(java, c.from, c.to, 1)) {
 			t.Errorf("control %q: the check passes a bridge without it, so it proves nothing", c.name)
 		}
 	}
