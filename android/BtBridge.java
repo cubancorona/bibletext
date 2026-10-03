@@ -439,31 +439,45 @@ public final class BtBridge {
         return android.os.Build.VERSION.SDK_INT >= 35;
     }
 
-    // A HEADING IS SET RAGGED, as the web, the Apple panes and the Windows and
-    // Linux pane set it. Justification belongs to the whole TextView, and the
-    // layout spreads every line that does not end at a hard break
-    // (Layout.isJustificationRequired), so a heading that wraps had its first
-    // line spread to the measure. No span can exempt one: TextLine.justify
-    // sets the word spacing after the spans have set the paint. What it does
-    // skip is a line with no stretchable space, and U+0020 is the only one
+    // isRaggedParagraph: a paragraph the justified page sets ragged, which is
+    // a heading, or the Psalm title: the text's first paragraph, wholly
+    // italic (isTitleParagraph, found at the head as applyParagraphAir finds
+    // it). One answer for the pass that sets the gaps (keepHeadingsRagged)
+    // and for the text that leaves the page (readerText), so the two cannot
+    // disagree on a paragraph.
+    private static boolean isRaggedParagraph(Spanned sp, int ps, int pe) {
+        return isHeadingParagraph(sp, ps, pe) || (ps == 0 && isTitleParagraph(sp, ps, pe));
+    }
+
+    // A HEADING, AND THE PSALM TITLE, IS SET RAGGED, as the web, the Apple
+    // panes and the Windows and Linux pane set them. Justification belongs to
+    // the whole TextView, and the layout spreads every line that does not end
+    // at a hard break (Layout.isJustificationRequired), so a heading or a
+    // title that wraps had its lines but the last spread to the measure. No
+    // span can exempt one: TextLine.justify sets the word spacing after the
+    // spans have set the paint. What it does skip is a line with no
+    // stretchable space, and U+0020 is the only one
     // (TextLine.isStretchableWhitespace) — the only one Minikin's breaker lets
     // a justified line shrink, too (isWordSpace).
     //
-    // So in a heading each space is a FOUR-PER-EM SPACE in the view. A line
-    // breaks after one as after a space (line-break class BA), and the layout
-    // drops one that ends a line as it drops a space, but a line of them is
-    // neither spread nor allowed past the measure on the promise of shrinking.
-    // In the reading face it is 250 units to the space's 243, under half a
-    // pixel per gap. One character for one, so every offset the verse index,
-    // the wash and the note band keep is unchanged; readerText and copyAsRead
-    // give the reader the spaces back.
+    // So in either paragraph each space is a FOUR-PER-EM SPACE in the view. A
+    // line breaks after one as after a space (line-break class BA), and the
+    // layout drops one that ends a line as it drops a space, but a line of
+    // them is neither spread nor allowed past the measure on the promise of
+    // shrinking. In the bold reading face a heading is set in it is 250 units
+    // to the space's 243, under half a pixel per gap. The italic face the
+    // title is set in has a wider space, 278, that no breaking space comes
+    // within a hundredth of an em of, and this one leaves a title's gaps 28
+    // units narrower than it. One character for one, so every offset the verse
+    // index, the wash and the note band keep is unchanged; readerText and
+    // copyAsRead give the reader the spaces back.
     static final char HEADING_GAP = '\u2005';
 
     private static void keepHeadingsRagged(android.text.SpannableStringBuilder ssb) {
         int ps = 0;
         for (int i = 0; i <= ssb.length(); i++) {
             if (i < ssb.length() && ssb.charAt(i) != '\n') continue;
-            if (isHeadingParagraph(ssb, ps, i)) {
+            if (isRaggedParagraph(ssb, ps, i)) {
                 for (int j = ps; j < i; j++) {
                     if (ssb.charAt(j) == ' ') ssb.replace(j, j + 1, String.valueOf(HEADING_GAP));
                 }
@@ -481,9 +495,9 @@ public final class BtBridge {
     // drops the mark again.
     static final char PARA_LTR_MARK = '\u200E';
 
-    // readerText is [s0, s1) of the pane's text as the reader reads it: a
-    // heading's gaps are spaces again, and a paragraph's opening direction
-    // mark is gone. Everything else is returned as it is.
+    // readerText is [s0, s1) of the pane's text as the reader reads it: the
+    // gaps of a heading or the title are spaces again, and a paragraph's
+    // opening direction mark is gone. Everything else is returned as it is.
     private static String readerText(CharSequence cs, int s0, int s1) {
         String raw = cs.subSequence(s0, s1).toString();
         if (!(cs instanceof Spanned)
@@ -495,12 +509,12 @@ public final class BtBridge {
         while (p < s1) {
             int pe = p;
             while (pe < cs.length() && cs.charAt(pe) != '\n') pe++;
-            boolean heading = isHeadingParagraph(sp, p, pe);
+            boolean ragged = isRaggedParagraph(sp, p, pe);
             int end = Math.min(pe + 1, s1);   // the paragraph's own '\n' included
             for (int i = Math.max(p, s0); i < end; i++) {
                 char c = cs.charAt(i);
                 if (i == p && c == PARA_LTR_MARK) continue;
-                if (heading && c == HEADING_GAP) c = ' ';
+                if (ragged && c == HEADING_GAP) c = ' ';
                 sb.append(c);
             }
             p = pe + 1;
@@ -513,8 +527,9 @@ public final class BtBridge {
     private static ActionMode selectionMode;
 
     // copyAsRead performs Copy with readerText's answer when that differs from
-    // the text in the view — a heading's gaps, a paragraph's direction mark —
-    // and otherwise reports false, leaving the platform's own Copy to run.
+    // the text in the view — the gaps of a heading or the title, a
+    // paragraph's direction mark — and otherwise reports false, leaving the
+    // platform's own Copy to run.
     private static boolean copyAsRead() {
         if (text == null) return false;
         int a = text.getSelectionStart(), b = text.getSelectionEnd();
@@ -1406,10 +1421,11 @@ public final class BtBridge {
                 }
             }
             // Copy, from the floating toolbar or a keyboard shortcut, gives the
-            // reader the text as read (readerText): a heading's word gaps come
-            // back as the spaces they are (keepHeadingsRagged), and a
-            // paragraph's direction mark is left behind (PARA_LTR_MARK). Any
-            // other selection is left to the platform's own Copy, untouched.
+            // reader the text as read (readerText): the word gaps of a heading
+            // or the title come back as the spaces they are
+            // (keepHeadingsRagged), and a paragraph's direction mark is left
+            // behind (PARA_LTR_MARK). Any other selection is left to the
+            // platform's own Copy, untouched.
             @Override public boolean onTextContextMenuItem(int id) {
                 if (id == android.R.id.copy && copyAsRead()) return true;
                 return super.onTextContextMenuItem(id);
@@ -1478,8 +1494,9 @@ public final class BtBridge {
                 // the whole selection, apparatus included, exactly as the
                 // Apple panes leave the system verbs unclamped, and takes it
                 // as read — the view's onTextContextMenuItem hands it to
-                // copyAsRead, which gives a heading's gaps back as spaces and
-                // leaves a paragraph's direction mark behind (readerText).
+                // copyAsRead, which gives the gaps of a heading or the title
+                // back as spaces and leaves a paragraph's direction mark
+                // behind (readerText).
                 int id = item.getItemId();
                 boolean appItem = id == 200 || (id >= 105 && id <= 109);
                 if (!appItem) return false;

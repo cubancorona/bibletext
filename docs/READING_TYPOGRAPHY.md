@@ -261,14 +261,17 @@ and they differ:
   sets ragged and whole (below).
 - **Android** from API 35 justifies by the line: every line that is not the
   text's last and does not end at a hard break, whatever its paragraph — the
-  rows of a wrapped poem line too, and a Psalm title that wraps. It
-  hyphenates. Below API 35 it is ragged (docs/ANDROID.md). A heading is set
-  ragged, as every surface sets it: no span can exempt a line from the text
-  view's justification, but a line with no U+0020 in it is not spread, so the
-  bridge sets a heading's word gaps as four-per-em spaces in the view (250
-  units to the reading face's 243 for a space) and turns them back into spaces
-  in the text a selection hands on and in Copy (`keepHeadingsRagged`,
-  `readerText`, `android/BtBridge.java`).
+  rows of a wrapped poem line too. It hyphenates. Below API 35 it is ragged
+  (docs/ANDROID.md). A heading and the Psalm title are set ragged, as every
+  surface sets them: no span can exempt a line from the text view's
+  justification, but a line with no U+0020 in it is not spread, so the bridge
+  sets their word gaps as four-per-em spaces in the view and turns them back
+  into spaces in the text a selection hands on and in Copy
+  (`keepHeadingsRagged`, `isRaggedParagraph`, `readerText`,
+  `android/BtBridge.java`). The gap is 250 units to the space's 243 in the bold
+  cut a heading is set in; the italic cut the title is set in has a 278-unit
+  space, so the title's gaps are 28 units narrower than on the other surfaces
+  (docs/BACKLOG.md).
 - **The Apple panes** leave any paragraph holding a poem line ragged (below),
   and their stylesheet asks for hyphenation, the Psalm title's included.
 - **The Windows and Linux pane** (`readingJustifyProse`) justifies a paragraph
@@ -291,22 +294,23 @@ everything to edit. A dev build compares the two on one pane: the Links tab's
 launch.
 
 The Psalm title is not prose, and it is set ragged, as print sets it: on the
-web (`.text p.pst`), on the Apple panes (`p.pst`) and on the Windows and Linux
-pane, which wraps it greedily (`reading_styled_super.go`). Android from API 35
-justifies it, because its justification is scoped to the line and not the
-paragraph: a title that wraps has every line but its last spread to the
-measure. Its hyphenation differs as well. The web turns hyphenation off for the
-title and the Windows and Linux pane hyphenates nothing, so on both it is
-whole; the Apple panes and Android hyphenate it. The Apple `p.pst` sets no
-hyphenation of its own, so it keeps the `hyphens: auto` of their `p` rule: the
-macOS pane's imported title carries a hyphenation factor of 1 and breaks words
-in a 260-point column (the iPhone and iPad pane import the same stylesheet the
-same way, not measured there). Android sets hyphenation on the whole text view,
-the title included. Both are known differences (docs/BACKLOG.md). The site's
-generator justified and hyphenated the title as well until 25 September 2026,
-and the published site does until it is next published: the title is a `<p>`
-inside `.text`, and its rule said nothing of alignment or hyphenation, so a
-title that wraps, such as Psalm 18's, took the prose paragraph's.
+web (`.text p.pst`), on the Apple panes (`p.pst`), on the Windows and Linux
+pane, which wraps it greedily (`reading_styled_super.go`), and on Android,
+whose justification is scoped to the line and not the paragraph, so from API 35
+the bridge sets the title's word gaps as four-per-em spaces, which the layout
+does not spread (`isRaggedParagraph`, above). Its hyphenation differs. The web
+turns hyphenation off for the title and the Windows and Linux pane hyphenates
+nothing, so on both it is whole; the Apple panes and Android hyphenate it. The
+Apple `p.pst` sets no hyphenation of its own, so it keeps the `hyphens: auto`
+of their `p` rule: the macOS pane's imported title carries a hyphenation factor
+of 1 and breaks words in a 260-point column (the iPhone and iPad pane import
+the same stylesheet the same way, not measured there). Android sets hyphenation
+on the whole text view, the title included. Both are known differences
+(docs/BACKLOG.md). The site's generator justified and hyphenated the title as
+well until 25 September 2026, and the published site does until it is next
+published: the title is a `<p>` inside `.text`, and its rule said nothing of
+alignment or hyphenation, so a title that wraps, such as Psalm 18's, took the
+prose paragraph's.
 
 ### Where each surface stands
 

@@ -2459,13 +2459,19 @@ What the spec work left, each one a known difference rather than a guess:
   would give both.
 - **A note pill under a heading on Android's book page** sits 7px higher than
   on the phone page (the entry below).
-- **Android from API 35 justifies a Psalm title that wraps,** where the web,
-  the Apple panes and the Windows and Linux pane set it ragged. Its
-  justification is scoped to the line: every line that does not end at a hard
-  break is spread, whatever its paragraph (docs/READING_TYPOGRAPHY.md,
-  "Justified prose"). A heading is set ragged there since 1.2.19
-  (`keepHeadingsRagged`, `android/BtBridge.java`); the same swap applied to the
-  paragraph `isTitleParagraph` finds would set the title ragged too.
+- **Android sets a Psalm title's word gaps 28 units narrower than its space.**
+  From API 35 a title is set ragged there as everywhere, since 1.2.19, by the
+  swap that sets a heading ragged: its spaces are four-per-em spaces in the
+  view, which the justified layout does not spread (`keepHeadingsRagged`,
+  `isRaggedParagraph`, `android/BtBridge.java`; docs/READING_TYPOGRAPHY.md,
+  "Justified prose"). That gap is 250 units in both cuts, and the italic cut
+  the title is set in has a 278-unit space, so each gap is about 1.5 px
+  narrower on a 420-dpi phone than on the other surfaces (in the bold cut a
+  heading is set in, the space is 243). No breaking space matches 278 in
+  Junicode Italic; the punctuation space (254) is 4 units nearer there and 4
+  further in the bold cut. A `ScaleXSpan` of 278/250 over each of the title's
+  gaps would close it, at the cost of a span per gap, which `readerText` would
+  have to drop so a pasted title does not carry widened spaces.
 - **The Apple panes and Android hyphenate a Psalm title that wraps,** where the
   web and the Windows and Linux pane leave its words whole. The Apple `p.pst`
   (`reading.go`) sets no hyphenation, so it keeps the `hyphens: auto` of the

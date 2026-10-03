@@ -1,6 +1,7 @@
 package bibletext
 
 import (
+	"fmt"
 	"regexp"
 	"slices"
 	"strconv"
@@ -42,22 +43,23 @@ func hasLinesInOrder(block string, want ...string) bool {
 	return i == len(want)
 }
 
-// A HEADING IS SET RAGGED ON ANDROID'S JUSTIFIED PAGE, as the web, the Apple
-// panes and the Windows and Linux pane set it.
+// A HEADING, AND THE PSALM TITLE, IS SET RAGGED ON ANDROID'S JUSTIFIED PAGE,
+// as the web, the Apple panes and the Windows and Linux pane set them.
 //
 // THE DEFECT THIS EXISTS FOR. From Android 15 the pane justifies INTER_WORD,
 // and that is a property of the whole TextView: the layout spreads every line
 // that does not end at a hard break, whatever its paragraph. A heading that
 // wraps — the NKJV's over Psalm 3, on a phone — had its first line spread to
-// the measure, its words pushed apart. No span can exempt a line
+// the measure, its words pushed apart, and a Psalm title that wraps had every
+// line but its last spread the same way. No span can exempt a line
 // (TextLine.justify sets the word spacing after the spans have set the
 // paint); a line with no U+0020 is the one it leaves alone. So the bridge sets
-// a heading's gaps as another space in the view and gives the reader the
-// spaces back in the text that leaves the page.
+// the gaps of a heading and of the title as another space in the view and
+// gives the reader the spaces back in the text that leaves the page.
 //
 // The pane is Java behind JNI, so this holds the bridge's source to the rule
 // line by line, checks the gap character against the platform's rules and the
-// reading face, and proves on copies that each check can fail.
+// reading faces, and proves on copies that each check can fail.
 func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 	java := readNativeSource(t, "android/BtBridge.java")
 
@@ -83,53 +85,131 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 		// wrapping at all.
 		t.Errorf("HEADING_GAP U+%04X is not a breaking space the layout drops at a line end", gap)
 	}
-	// It must be as wide as the space it stands for, in the face that draws a
-	// heading (the reading family's bold cut), or the heading's words move.
-	f, err := sfnt.Parse(readingFontBold)
-	if err != nil {
-		t.Fatalf("parse the bold reading face: %v", err)
-	}
-	var buf sfnt.Buffer
-	upm := fixed.Int26_6(f.UnitsPerEm()) << 6
-	advance := func(r rune) (fixed.Int26_6, bool) {
+
+	// It must be as wide as the space it stands for, in the faces that draw
+	// it: the reading family's bold cut for a heading, its italic cut for the
+	// title, or the words move.
+	advance := func(f *sfnt.Font, r rune) (fixed.Int26_6, bool) {
+		var buf sfnt.Buffer
 		i, err := f.GlyphIndex(&buf, r)
 		if err != nil || i == 0 {
 			return 0, false
 		}
-		a, err := f.GlyphAdvance(&buf, i, upm, 0)
+		a, err := f.GlyphAdvance(&buf, i, fixed.Int26_6(f.UnitsPerEm())<<6, 0)
 		return a, err == nil
 	}
-	space, _ := advance(' ')
-	if w, ok := advance(gap); !ok {
-		t.Errorf("the bold reading face has no U+%04X, so a heading's gaps would come from a fallback face", gap)
-	} else if d := w - space; d > upm/100 || d < -upm/100 {
-		t.Errorf("U+%04X is %d units wide in the bold reading face and the space %d; more than "+
-			"a hundredth of an em apart, a heading's words would visibly move",
-			gap, w>>6, space>>6)
+	parse := func(name string, data []byte) *sfnt.Font {
+		f, err := sfnt.Parse(data)
+		if err != nil {
+			t.Fatalf("parse the %s reading face: %v", name, err)
+		}
+		return f
+	}
+	bold, italic := parse("bold", readingFontBold), parse("italic", readingFontItalic)
+	abs := func(v fixed.Int26_6) fixed.Int26_6 {
+		if v < 0 {
+			return -v
+		}
+		return v
+	}
+	widthProblems := func(r rune) []string {
+		var out []string
+		// The bold cut: within a hundredth of an em of its space.
+		upm := fixed.Int26_6(bold.UnitsPerEm()) << 6
+		space, _ := advance(bold, ' ')
+		if w, ok := advance(bold, r); !ok {
+			out = append(out, fmt.Sprintf("the bold reading face has no U+%04X, so a heading's gaps "+
+				"would come from a fallback face", r))
+		} else if d := abs(w - space); d > upm/100 {
+			out = append(out, fmt.Sprintf("U+%04X is %d units wide in the bold reading face and the "+
+				"space %d; more than a hundredth of an em apart, a heading's words would visibly move",
+				r, w>>6, space>>6))
+		}
+		// The italic cut's space is wider (278 units to the bold cut's 243)
+		// and no breaking space comes within a hundredth of an em of it, so
+		// the gap must be within a hundredth of an em of the nearest one
+		// there: no other choice would set the title's words much closer to
+		// where its spaces set them.
+		upm = fixed.Int26_6(italic.UnitsPerEm()) << 6
+		space, _ = advance(italic, ' ')
+		w, ok := advance(italic, r)
+		if !ok {
+			return append(out, fmt.Sprintf("the italic reading face has no U+%04X, so a title's gaps "+
+				"would come from a fallback face", r))
+		}
+		best := abs(w - space)
+		for c := rune(0x2000); c <= 0x200A; c++ {
+			if cw, ok := advance(italic, c); ok && c != 0x2007 && abs(cw-space) < best {
+				best = abs(cw - space)
+			}
+		}
+		if abs(w-space)-best > upm/100 {
+			out = append(out, fmt.Sprintf("U+%04X is %d units wide in the italic reading face and the "+
+				"space %d, more than a hundredth of an em further from it than the nearest breaking "+
+				"space; a title's words would move further than they need to", r, w>>6, space>>6))
+		}
+		return out
+	}
+	for _, p := range widthProblems(gap) {
+		t.Error(p)
+	}
+	// The control: a three-per-em space (333 units) is a breaking space too,
+	// and it fails both faces.
+	if len(widthProblems(0x2004)) < 2 {
+		t.Fatal("control: the width check passes U+2004 in a face, so it proves nothing there")
+	}
+
+	// The paragraph the bridge takes for the title is the one the dialect
+	// writes for it: the chapter's first, wholly in <i>, on the phone page and
+	// on the book page. Anything written ahead of it would leave the title to
+	// justify again.
+	st := sampleState()
+	st.CurrentBook, st.CurrentChapter = "Psalms", 150
+	st.Bible.Verses["Psalms"] = map[int][]Verse{150: {{BookName: "Psalms", Chapter: 150, Verse: 1, Text: "A fixture verse."}}}
+	st.Bible.Superscriptions = map[string]map[int]Superscription{"Psalms": {150: {Text: "A fixture title that runs on."}}}
+	for _, book := range []bool{false, true} {
+		var html string
+		withReporterLayout(book, func() { html = buildChapterHTMLAndroid(st, st.Bible.GetChapter("Psalms", 150)) })
+		want := "<p><i>A fixture title that runs on.</i></p>"
+		if book {
+			want = "<p><i>A fixture title that runs on.</i><br></p>"
+		}
+		if !strings.HasPrefix(html, want) {
+			t.Errorf("the Psalm title must open the chapter as %q (book page %v), the first paragraph "+
+				"isRaggedParagraph takes for the title; the page came out as:\n%s", want, book, html)
+		}
 	}
 
 	// The swap, on the justified page only, before the text reaches the view,
-	// and in a heading's paragraph only. The guard is read as it stands: the
-	// same pass with its test turned round sets every verse's spaces as gaps,
-	// and the justified page then justifies no verse at all.
+	// and in a heading's or the title's paragraph only. Each line is read as
+	// it stands: the same pass with its test turned round sets every verse's
+	// spaces as gaps, and the justified page then justifies no verse at all.
 	swaps := func(src string) bool {
 		set := javaBlockAfter(t, src, "public static void setHtml(")
 		keep := javaBlockAfter(t, src, "private static void keepHeadingsRagged(")
+		ragged := javaBlockAfter(t, src, "private static boolean isRaggedParagraph(")
+		title := javaBlockAfter(t, src, "private static boolean isTitleParagraph(")
 		style := javaBlockAfter(t, src, "private static boolean justifiesInterWord()")
 		return hasLinesInOrder(set,
 			"if (s instanceof android.text.SpannableStringBuilder && justifiesInterWord()) {",
 			"keepHeadingsRagged((android.text.SpannableStringBuilder) s);",
 			"text.setText(s, TextView.BufferType.SPANNABLE);") &&
 			hasLinesInOrder(keep,
-				"if (isHeadingParagraph(ssb, ps, i)) {",
+				"if (isRaggedParagraph(ssb, ps, i)) {",
 				"for (int j = ps; j < i; j++) {",
 				"if (ssb.charAt(j) == ' ') ssb.replace(j, j + 1, String.valueOf(HEADING_GAP));") &&
+			hasLinesInOrder(ragged,
+				"return isHeadingParagraph(sp, ps, pe) || (ps == 0 && isTitleParagraph(sp, ps, pe));") &&
+			hasLinesInOrder(title,
+				"if (st.getStyle() == android.graphics.Typeface.ITALIC",
+				"&& sp.getSpanStart(st) <= ps && sp.getSpanEnd(st) >= e) return true;") &&
 			hasLinesInOrder(style, "return android.os.Build.VERSION.SDK_INT >= 35;") &&
 			strings.Contains(src, "text.setJustificationMode(justifiesInterWord()")
 	}
 	if !swaps(java) {
-		t.Error("setHtml must swap a heading's spaces for HEADING_GAP (keepHeadingsRagged) " +
-			"before setText, on the page setStyle justifies — one predicate, justifiesInterWord, for both")
+		t.Error("setHtml must swap the spaces of a heading and of the title for HEADING_GAP " +
+			"(keepHeadingsRagged, isRaggedParagraph) before setText, on the page setStyle " +
+			"justifies — one predicate, justifiesInterWord, for both")
 	}
 
 	// And the reader gets the spaces back, from the paragraphs the swap set
@@ -143,8 +223,8 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 		copyAs := javaBlockAfter(t, src, "private static boolean copyAsRead()")
 		menu := javaBlockAfter(t, src, "@Override public boolean onTextContextMenuItem(int id)")
 		return hasLinesInOrder(read,
-			"boolean heading = isHeadingParagraph(sp, p, pe);",
-			"if (heading && c == HEADING_GAP) c = ' ';") &&
+			"boolean ragged = isRaggedParagraph(sp, p, pe);",
+			"if (ragged && c == HEADING_GAP) c = ' ';") &&
 			inSequence(copyAs, "readerText(", "setPrimaryClip(") &&
 			slices.Equal(codeLines(menu), []string{
 				"@Override public boolean onTextContextMenuItem(int id) {",
@@ -158,8 +238,8 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 	if !givesBack(java) {
 		t.Error("a selection's text must come through readerText — the app's verbs (sel) and " +
 			"Copy (onTextContextMenuItem -> copyAsRead) — with the gaps of exactly the paragraphs " +
-			"the swap set them in turned back, or a heading leaves the page with four-per-em " +
-			"spaces in it")
+			"the swap set them in turned back, or a heading or a title leaves the page with " +
+			"four-per-em spaces in it")
 	}
 
 	// copyAsRead says false only where it has not copied, and true once it
@@ -208,10 +288,15 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 		{"swapped below API 35", "&& justifiesInterWord()) {", "&& !justifiesInterWord()) {", swaps},
 		{"justified on its own predicate", "text.setJustificationMode(justifiesInterWord()",
 			"text.setJustificationMode(android.os.Build.VERSION.SDK_INT >= 35", swaps},
-		{"every paragraph but a heading", "if (isHeadingParagraph(ssb, ps, i)) {",
-			"if (!isHeadingParagraph(ssb, ps, i)) {", swaps},
-		{"readerText's test turned round", "boolean heading = isHeadingParagraph(sp, p, pe);",
-			"boolean heading = !isHeadingParagraph(sp, p, pe);", givesBack},
+		{"every paragraph but a heading or the title", "if (isRaggedParagraph(ssb, ps, i)) {",
+			"if (!isRaggedParagraph(ssb, ps, i)) {", swaps},
+		{"the title left to justify", " || (ps == 0 && isTitleParagraph(sp, ps, pe));", ";", swaps},
+		{"any paragraph wholly in italic", "(ps == 0 && isTitleParagraph(sp, ps, pe))",
+			"isTitleParagraph(sp, ps, pe)", swaps},
+		{"readerText's test turned round", "boolean ragged = isRaggedParagraph(sp, p, pe);",
+			"boolean ragged = !isRaggedParagraph(sp, p, pe);", givesBack},
+		{"readerText for headings alone", "boolean ragged = isRaggedParagraph(sp, p, pe);",
+			"boolean ragged = isHeadingParagraph(sp, p, pe);", givesBack},
 		{"raw selection text", "final String sel = readerText(text.getText(), s0, s1);",
 			"final String sel = text.getText().subSequence(s0, s1).toString();", givesBack},
 		{"the platform's Copy", "if (id == android.R.id.copy && copyAsRead()) return true;", "", givesBack},
@@ -230,6 +315,35 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 		}
 		if c.check(strings.Replace(java, c.from, c.to, 1)) {
 			t.Errorf("control %q: the check passes a bridge without it, so it proves nothing", c.name)
+		}
+	}
+}
+
+// THE DOCUMENTS SAY WHAT THE ANDROID BRIDGE DOES WITH THE PSALM TITLE.
+// docs/READING_TYPOGRAPHY.md and docs/BACKLOG.md said Android from API 35
+// justifies a Psalm title, which the bridge sets ragged. The claim is read
+// against the bridge, so the documents move when it does.
+func TestAndroidDocsSayWhatTheBridgeDoesWithTheTitle(t *testing.T) {
+	java := readNativeSource(t, "android/BtBridge.java")
+	if !strings.Contains(java, "|| (ps == 0 && isTitleParagraph(sp, ps, pe))") {
+		t.Fatal("the bridge no longer sets the title ragged; the documents checked here say it " +
+			"does, so they and this test change with it")
+	}
+	flat := func(path string) string { return strings.Join(strings.Fields(readRepoFile(t, path)), " ") }
+	// The title.
+	for _, c := range []struct{ path, stale string }{
+		{"docs/READING_TYPOGRAPHY.md", "the rows of a wrapped poem line too, and a Psalm title that wraps"},
+		{"docs/READING_TYPOGRAPHY.md", "Android from API 35 justifies it"},
+		{"docs/BACKLOG.md", "Android from API 35 justifies a Psalm title"},
+	} {
+		if strings.Contains(flat(c.path), c.stale) {
+			t.Errorf("%s still says %q; the bridge sets the Psalm title ragged (isRaggedParagraph)", c.path, c.stale)
+		}
+	}
+	for _, path := range []string{"docs/READING_TYPOGRAPHY.md", "docs/ANDROID.md", "docs/BACKLOG.md"} {
+		if !strings.Contains(flat(path), "isRaggedParagraph") {
+			t.Errorf("%s does not name isRaggedParagraph, the one predicate for the paragraphs "+
+				"Android sets ragged on its justified page", path)
 		}
 	}
 }

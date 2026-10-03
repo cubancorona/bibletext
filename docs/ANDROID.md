@@ -63,6 +63,12 @@ LEFT-TO-RIGHT MARK (`androidDirectionMark`, `android_chapter_html.go`), and
 `BtBridge.readerText` drops it from the text a selection hands on and from
 Copy. Hebrew inside a line is still drawn right to left within it.
 
+**A heading and the Psalm title are set ragged from Android 15.** The
+`INTER_WORD` justification belongs to the whole view, so the bridge sets their
+word gaps as four-per-em spaces, which the layout neither spreads nor shrinks
+(`keepHeadingsRagged`, `isRaggedParagraph`; docs/READING_TYPOGRAPHY.md,
+"Justified prose").
+
 **The chapter wash is a line background (2026-09-03).** `Html.fromHtml` turns
 the tint table's `background-color` into an opaque `BackgroundColorSpan`, which
 `TextLine` fills in the text pass — above the selection path `Layout.draw`
