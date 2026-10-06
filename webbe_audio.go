@@ -3,13 +3,14 @@ package bibletext
 // Recorded audio for the WEB-Catholic's Greek books. The WEB-Catholic shares the
 // WEB text — and David Williams's narration of it — for its protocanon, but three
 // kinds of chapter are left over: the nine deuterocanonical books the WEB has no
-// recording for at all, the GREEK Esther (a different book from the Hebrew Esther
-// Williams read), and the Greek Daniel's chapters 3, 13 and 14 (the Prayer of
-// Azariah and the Song of the Three inside chapter 3, plus Susanna and Bel and the
-// Dragon). Those 150 chapters are served by eBible.org's WEBBE narration, which is
-// SYNTHETIC — a computer voice, not a person, which is why it is credited as one.
-// It is public domain ("Copy freely") with no separate recording copyright, and its
-// text was verified to match the WEB-Catholic's verse for verse before adoption.
+// recording for at all, the GREEK Esther (translated from a different text than the
+// Hebrew Esther Williams read), and the Greek Daniel's chapters 3, 13 and 14 (the
+// Prayer of Azariah and the Song of the Three inside chapter 3, plus Susanna and
+// Bel and the Dragon). Those 150 chapters are served by eBible.org's WEBBE
+// narration, which is SYNTHETIC — a computer voice, not a person, which is why it
+// is credited as one. It is public domain ("Copy freely") with no separate
+// recording copyright, and its text was verified to match the WEB-Catholic's verse
+// for verse before adoption.
 //
 // File scheme (eBible's original names, kept verbatim on our mirror, as the BSB set
 // keeps openbible's):

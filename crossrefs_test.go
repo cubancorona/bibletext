@@ -251,14 +251,16 @@ func TestACrossBookRangeKeepsItsEndBook(t *testing.T) {
 // showed 10, and Matthew 10:1 showed 14 in every translation.
 func TestTheCapCountsOnlyRowsTheReaderCanSee(t *testing.T) {
 	var rows strings.Builder
-	// The two best rows point into Esther, which WEB Catholic's Greek Esther
-	// cannot receive (versification: incommensurable).
-	rows.WriteString("Gen.41.42\tEsth.6.8\t90\nGen.41.42\tEsth.8.15\t80\n")
+	// The two best rows point at Esther 4:6 and 9:5, which WEB Catholic
+	// cannot show: the shipping build cannot map its Greek Esther at all
+	// (versification: incommensurable), and in the next major release, where
+	// it maps verse for verse, those are verses it has nothing at (absent).
+	rows.WriteString("Gen.41.42\tEsth.4.6\t90\nGen.41.42\tEsth.9.5\t80\n")
 	for v := 1; v <= 16; v++ {
 		fmt.Fprintf(&rows, "Gen.41.42\tDan.5.%d\t%d\n", v, 40-v)
 	}
 	withCrossRefIndex(t, rows.String())
-	bd := xrefBible(map[string]map[int]int{"Genesis": {41: 57}, "Esther": {6: 14, 8: 17}, "Daniel": {5: 31}})
+	bd := xrefBible(map[string]map[int]int{"Genesis": {41: 57}, "Esther": {4: 17, 9: 32}, "Daniel": {5: 31}})
 	count := func(vid string) (n int, last string) {
 		st := &AppState{Bible: bd, CurrentBook: "Genesis", CurrentChapter: 41, CurrentVersion: vid}
 		for _, c := range crossRefsForSelection(st, "", selSpan{lo: 42, hi: 42}) {
@@ -273,7 +275,7 @@ func TestTheCapCountsOnlyRowsTheReaderCanSee(t *testing.T) {
 	}
 	if n, last := count("webc"); n != maxCrossRefsPerVerse || last != "Daniel 5:16" {
 		t.Errorf("WEB Catholic lists %d rows ending %q, want 16 ending \"Daniel 5:16\": the two "+
-			"rows into Greek Esther must hand their places to the next two", n, last)
+			"rows to verses the Greek Esther lacks must hand their places to the next two", n, last)
 	}
 
 	// The other half: a row the panel hides because a Gospel parallel listed

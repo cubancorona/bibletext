@@ -247,14 +247,14 @@ func TestNoteBannerShowsTheWholeSet(t *testing.T) {
 
 	// Three notes on one chapter: two placed under different translations
 	// (web = native and open, bsb = a followed chip with its label) and one
-	// whose numbering cannot land here at all (webc's Greek Esther — the R4
-	// unplaced group).
+	// that cannot land here at all (a Greek addition only WEB Catholic's
+	// Esther has — the R4 unplaced group).
 	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Esther", Chapter: 4,
 		VerseLo: 1, Text: "the words that are open"})
 	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "bsb", Book: "Esther", Chapter: 4,
 		VerseLo: 2, Text: "the followed body"})
 	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "webc", Book: "Esther", Chapter: 4,
-		VerseLo: 3, Text: "the greek esther body"})
+		VerseLo: 20, Text: "the greek esther body"})
 
 	st := planTestState(t)
 	st.Bible.Verses["Esther"] = map[int][]Verse{4: {
@@ -268,11 +268,11 @@ func TestNoteBannerShowsTheWholeSet(t *testing.T) {
 	size := fyne.NewSize(700, 700)
 	got := seenText(t, buildNoteBanner(st), size)
 	for _, want := range []string{
-		"the words that are open",     // the open bubble's body
-		"from friend",                 // the byline, outside the bubble
-		"esther 4:2 (bsb)",            // the followed note's chip, with its label
-		"esther 4:3 (webc)",           // the unplaced note's chip, with its label
-		"the numbering here does not", // the R4 sentence beneath it
+		"the words that are open", // the open bubble's body
+		"from friend",             // the byline, outside the bubble
+		"esther 4:2 (bsb)",        // the followed note's chip, with its label
+		"esther 4:20 (webc)",      // the unplaced note's chip, with its label
+		greekAdditionUnplacedSeen, // the R4 sentence beneath it
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the reader cannot see %q on the banner.\nseen:\n%s", want, got)
@@ -297,7 +297,7 @@ func TestNoteBannerShowsTheWholeSet(t *testing.T) {
 	if strings.Contains(got, "the words that are open") {
 		t.Errorf("suppressed, yet a note is still open:\n%s", got)
 	}
-	for _, want := range []string{"esther 4:1", "esther 4:2 (bsb)", "esther 4:3 (webc)"} {
+	for _, want := range []string{"esther 4:1", "esther 4:2 (bsb)", "esther 4:20 (webc)"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("suppression lost a chip (%q) — stand down means chips, not absence.\nseen:\n%s", want, got)
 		}

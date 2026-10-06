@@ -197,7 +197,9 @@ func (s *AppState) markSpan() (VerseSpan, bool) {
 // On anything but a CLEAN landing the mark is cleared rather than left
 // lighting the wrong text: the book absent from the new translation, the
 // numbering incommensurable (WEBC's Greek Esther), the verses absent (the
-// BSB's omissions), a partial landing (a span crossing one of those holes),
+// BSB's omissions; in the next major release, where the Greek Esther maps
+// verse for verse, also its additions read in a Hebrew Esther and the three
+// Hebrew verses it lacks), a partial landing (a span crossing one of those holes),
 // or a landing split across more than one run. A highlight is a pointer, not
 // a message — nothing is lost by taking it down, and the one thing it must
 // never do is point at the wrong verse.

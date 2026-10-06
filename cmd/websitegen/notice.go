@@ -524,6 +524,16 @@ func parallelSection(n noticeSpec) string {
 	return b.String()
 }
 
+// incommensurableCaveat is the next major release's sentence for a link into
+// a book whose verse numbers do not correspond to this page's anywhere
+// (bibletext.NextRelease, docs/NEXT.md), worded for any book: the
+// translations, whether they number or numbers, the book, that link or those
+// links, opens or open, and the chapter. A draft awaiting approval: in that
+// release no book of the published translations is one, since the WEB
+// Catholic's Greek Esther keeps the Hebrew numbers, so no page prints it. The
+// shipping build keeps 1.2.19's sentence, which its Esther pages print.
+const incommensurableCaveat = "%s %s the whole of %s differently, so %s %s %s rather than the verse."
+
 // caveat is the one sentence that explains a chapter-level link. It says what
 // is actually true of each kind: a move is a move, a missing verse is missing,
 // and a book that does not correspond at all is neither.
@@ -536,6 +546,9 @@ func (n noticeSpec) caveat(kind string, names []string) string {
 	}
 	switch kind {
 	case bibletext.NumberingIncommensurable:
+		if bibletext.NextRelease {
+			return fmt.Sprintf(incommensurableCaveat, list, pick(plural, "number", "numbers"), n.Book, those, opens, n.ref())
+		}
 		return fmt.Sprintf("%s in %s is a different text whose verses don't correspond to these, so %s "+
 			"opens the chapter.", n.Book, lower(list), those)
 	case bibletext.NumberingAbsent:

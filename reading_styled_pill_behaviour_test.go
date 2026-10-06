@@ -319,9 +319,10 @@ func TestTheSinglePillStillDisclosesUnplacedNotes(t *testing.T) {
 		addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web",
 			Book: "Esther", Chapter: 4, VerseLo: p[0].Verse, Text: fmt.Sprintf("placed %d", i)})
 	}
-	// Greek Esther: webc's numbering does not correspond — the unplaced arm.
+	// A note on Mordecai's prayer, which only the Greek Esther has — the
+	// unplaced arm in both states of the next switch.
 	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "webc",
-		Book: "Esther", Chapter: 4, VerseLo: 1, Text: "greek esther"})
+		Book: "Esther", Chapter: 4, VerseLo: 20, Text: "greek esther"})
 	for _, n := range allNotesForBrowsing(appPrefs()) {
 		setNoteMinimizedByID(appPrefs(), n.ID, true)
 	}
@@ -1112,9 +1113,10 @@ func TestTheTopPillDisclosesUnplacedNotes(t *testing.T) {
 			Book: "Esther", Chapter: 4, VerseLo: p[0].Verse, Text: fmt.Sprintf("placed %d", i)})
 		setNoteMinimizedByID(appPrefs(), n.ID, true)
 	}
-	// Greek Esther: webc's numbering does not correspond — the unplaced arm.
+	// A note on Mordecai's prayer, which only the Greek Esther has — the
+	// unplaced arm in both states of the next switch.
 	n, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "webc",
-		Book: "Esther", Chapter: 4, VerseLo: 1, Text: "greek esther"})
+		Book: "Esther", Chapter: 4, VerseLo: 20, Text: "greek esther"})
 	setNoteMinimizedByID(appPrefs(), n.ID, true)
 	applyNoteForCurrentChapter(st)
 

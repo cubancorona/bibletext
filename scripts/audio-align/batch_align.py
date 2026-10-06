@@ -69,8 +69,9 @@ def williams_manifest():
 
 # eBible's book codes for the WEBBE deuterocanon → the app's own book names. The
 # Greek Daniel is DAG in the audio filenames (the same text eBible's verse-per-line
-# export calls DNG), and the Greek Esther is ESG — a different book from the Hebrew
-# EST, which is why the WEB-Catholic cannot use the Williams Esther recording.
+# export calls DNG), and the Greek Esther is ESG — translated from a different text
+# than the Hebrew EST, which is why the WEB-Catholic cannot use the Williams Esther
+# recording.
 WEBBE_BOOKS = {
     "TOB": "Tobit", "JDT": "Judith", "ESG": "Esther", "WIS": "Wisdom",
     "SIR": "Sirach", "BAR": "Baruch", "1MA": "1 Maccabees", "2MA": "2 Maccabees",

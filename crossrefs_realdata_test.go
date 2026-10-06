@@ -8,14 +8,9 @@ import (
 	"testing"
 )
 
-// crossRefDeepestRead is the furthest down a verse's rows any panel reads,
-// measured by the walk below over the 2026-08-31 dataset in all four
-// translations, for every selection that can hold the verse
-// (crossRefDeepestReadable): the twentieth row, for WEB Catholic's Genesis
-// 41:42, whose twenty rows include eight into Greek Esther.
-// maxCrossRefsKept is set well above it, and the walk fails if the dataset
-// ever reads deeper, so the margin is re-judged rather than assumed.
-const crossRefDeepestRead = 20
+// crossRefDeepestRead, the furthest down a verse's rows any panel reads, is
+// measured by the walk below and declared for each state of the next switch:
+// greek_esther_current_test.go and greek_esther_next_test.go.
 
 // crossRefDeepestReadable is the furthest down a verse's rows any selection
 // holding the verse can read. Every such selection hides at least own, the

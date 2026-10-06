@@ -22,7 +22,8 @@ func TestTheOmissionTableIsNotEmpty(t *testing.T) {
 			}
 		}
 	}
-	// 58 across three editions when generated. A table that silently emptied
+	// 58 across three editions when generated, 61 in the next major release's
+	// table (omitted_verses_data_next.go). A table that silently emptied
 	// would make every lookup answer "nothing is omitted", which is the failure
 	// this whole item exists to prevent.
 	if total < 50 {
@@ -82,20 +83,6 @@ func TestThePresentVersesAreNotReportedAsOmitted(t *testing.T) {
 	}
 	if got := omittedVersesIn("bsb", "NotABook", 1); got != nil {
 		t.Errorf("an unknown book returned %v", got)
-	}
-}
-
-// Greek Esther's numbering corresponds to nothing, so its gaps are not
-// omissions and must never be marked as such.
-func TestGreekEsthersGapsAreNotCalledOmissions(t *testing.T) {
-	for _, v := range []int{6} {
-		if omitsVerse("webc", "Esther", 4, v) {
-			t.Errorf("Esther 4:%d is recorded as omitted; Greek Esther is incommensurable "+
-				"and a gap in it is not an omission", v)
-		}
-	}
-	if got := omittedVersesIn("webc", "Esther", 9); got != nil {
-		t.Errorf("Greek Esther chapter 9 reports omissions %v", got)
 	}
 }
 

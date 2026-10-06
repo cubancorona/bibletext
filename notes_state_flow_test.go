@@ -1610,8 +1610,12 @@ func TestArrivingNoteSurvivesItsOwnSaveOnAFullStore(t *testing.T) {
 //     wrong verse lit, beside a note that WAS renumbered.
 //   - the identity case: the numbering agrees, the mark survives untouched
 //     (same numbers, new frame).
-//   - an absent verse (a BSB omission), Greek Esther (incommensurable), and a
-//     book the new translation does not contain: cleared, every one.
+//   - an absent verse (a BSB omission), a book whose numbering does not
+//     correspond (incommensurable), and a book the new translation does not
+//     contain: cleared, every one.
+//
+// The Greek Esther's own cases are the switch's: greek_esther_current_test.go
+// and greek_esther_next_test.go.
 func TestHighlightRenumberedAcrossVersionSwitch(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -1619,14 +1623,7 @@ func TestHighlightRenumberedAcrossVersionSwitch(t *testing.T) {
 	deleteAllNotes(appPrefs())
 	defer deleteAllNotes(appPrefs())
 
-	switchTo := func(t *testing.T, st *AppState, id string, data *BibleData) {
-		t.Helper()
-		v, ok := versionByID(id)
-		if !ok {
-			t.Fatalf("%s is not registered", id)
-		}
-		applyLoadedVersion(st, v, data, modeReal, byReader)
-	}
+	switchTo := applyVersionSwitchForTest
 
 	t.Run("doxology moved cross-chapter", func(t *testing.T) {
 		ch, v, res := MapVerse("web", "bsb", "Romans", 14, 24)
@@ -1709,23 +1706,16 @@ func TestHighlightRenumberedAcrossVersionSwitch(t *testing.T) {
 		}
 	})
 
-	t.Run("incommensurable clears (Greek Esther)", func(t *testing.T) {
-		if _, _, res := MapVerse("webc", "web", "Esther", 1, 1); res != verseMapIncommensurable {
+	t.Run("incommensurable clears", func(t *testing.T) {
+		// The shipping table records the Greek Esther as incommensurable and
+		// the next major release's records no book, so it is marked so for
+		// the subtest, which then holds in both.
+		withIncommensurableBook(t, "webc", "Esther")
+		if _, _, res := MapVerse("webc", "web", "Esther", 4, 17); res != verseMapIncommensurable {
 			t.Fatalf("precondition: webc Esther should be INCOMMENSURABLE with web, got %v", res)
 		}
-		bd := NewBibleData()
-		bd.PopulateWithSampleVerses()
-		st := &AppState{
-			Bible: bd, CurrentBook: "Esther", CurrentChapter: 1,
-			CurrentVersion: "webc", loadPhase: loadReady,
-			loadedVersions: map[string]*BibleData{"webc": bd},
-		}
-		goToVerseRange(st, "Esther", 1, 1, 1)
-
-		web := NewBibleData()
-		web.PopulateWithSampleVerses()
-		switchTo(t, st, "web", web)
-
+		st := markedInGreekEsther(t, 17)
+		switchTo(t, st, "web", estherFourBible(17, 0))
 		if sp, ok := st.markSpan(); ok {
 			t.Errorf("an incommensurable mark must clear, still lights %d:%d", sp.Chapter, sp.Lo)
 		}
@@ -1753,6 +1743,49 @@ func TestHighlightRenumberedAcrossVersionSwitch(t *testing.T) {
 			t.Errorf("a mark on a book the new translation lacks must clear, still lights %s %d:%d", sp.Book, sp.Chapter, sp.Lo)
 		}
 	})
+}
+
+// applyVersionSwitchForTest switches st to translation id with data loaded, as a
+// reader's switch does.
+func applyVersionSwitchForTest(t *testing.T, st *AppState, id string, data *BibleData) {
+	t.Helper()
+	v, ok := versionByID(id)
+	if !ok {
+		t.Fatalf("%s is not registered", id)
+	}
+	applyLoadedVersion(st, v, data, modeReal, byReader)
+}
+
+// estherFourBible is the sample canon with Esther 4 as an edition prints it:
+// verses 1 to last, less skip. The Hebrew Esther is (17, 0); the Greek Esther
+// WEB Catholic prints is (47, 6), its forty-seven less the 4:6 it has nothing
+// at.
+func estherFourBible(last, skip int) *BibleData {
+	bd := NewBibleData()
+	bd.PopulateWithSampleVerses()
+	for v := 1; v <= last; v++ {
+		if v != skip {
+			bd.Verses["Esther"][4] = append(bd.Verses["Esther"][4], Verse{BookName: "Esther", Chapter: 4, Verse: v, Text: "esther"})
+		}
+	}
+	return bd
+}
+
+// markedInGreekEsther is a reader on WEB Catholic's Esther 4 with verse lo
+// marked.
+func markedInGreekEsther(t *testing.T, lo int) *AppState {
+	t.Helper()
+	bd := estherFourBible(47, 6)
+	st := &AppState{
+		Bible: bd, CurrentBook: "Esther", CurrentChapter: 4,
+		CurrentVersion: "webc", loadPhase: loadReady,
+		loadedVersions: map[string]*BibleData{"webc": bd},
+	}
+	goToVerseRange(st, "Esther", 4, lo, lo)
+	if _, ok := st.markSpan(); !ok {
+		t.Fatalf("precondition: no mark on the Greek Esther's 4:%d", lo)
+	}
+	return st
 }
 
 // The other half of the X11 fix, pinned: an hlNote mark is NOT renumbered by

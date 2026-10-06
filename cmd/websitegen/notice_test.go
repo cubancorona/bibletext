@@ -59,10 +59,14 @@ func noticeFixtureState(t *testing.T, on bool) (*siteWriter, []loadedVersion) {
 				"Acts":   chapters("Acts", map[int]int{8: 40}),
 				"Romans": chapters("Romans", map[int]int{14: 26, 15: 33, 16: 24}),
 				"Daniel": chapters("Daniel", map[int]int{11: 45, 12: 13}),
-				"Esther": chapters("Esther", map[int]int{1: 22}),
+				"Esther": chapters("Esther", map[int]int{1: 22, 4: 17}),
 			},
 		}
 	}
+	// The Greek Esther keeps the Hebrew numbers, has nothing at 4:6, and
+	// numbers Mordecai's and Esther's prayers 4:18-47.
+	greekEsther := chapters("Esther", map[int]int{1: 22, 4: 47})
+	greekEsther[4] = append(greekEsther[4][:5:5], greekEsther[4][6:]...)
 	catholic := &bibletext.BibleData{
 		Books: []string{"John", "Acts", "Romans", "Daniel", "Esther", "Tobit", "Judith"},
 		Verses: map[string]map[int][]bibletext.Verse{
@@ -70,7 +74,7 @@ func noticeFixtureState(t *testing.T, on bool) (*siteWriter, []loadedVersion) {
 			"Acts":   chapters("Acts", map[int]int{8: 40}),
 			"Romans": chapters("Romans", map[int]int{14: 23, 15: 33, 16: 27}),
 			"Daniel": chapters("Daniel", map[int]int{11: 45, 12: 13, 13: 64, 14: 42}),
-			"Esther": chapters("Esther", map[int]int{1: 22}),
+			"Esther": greekEsther,
 			"Tobit":  chapters("Tobit", map[int]int{1: 22, 2: 14}),
 			"Judith": chapters("Judith", map[int]int{1: 16}),
 		},
@@ -398,9 +402,8 @@ func TestVersificationCaveatsSayWhichKindOfDifference(t *testing.T) {
 	if !strings.Contains(read("nkjv/romans/16"), "number this chapter differently") {
 		t.Error("Romans 16 differs because the doxology MOVED; the page does not say so")
 	}
-	if !strings.Contains(read("nkjv/esther/1"), "different text whose verses don&#39;t correspond") {
-		t.Error("WEBC's Esther is a different book, not a renumbering; the page does not say so")
-	}
+	// The Greek Esther's caveats are the switch's: greek_esther_current_test.go
+	// and greek_esther_next_test.go.
 }
 
 // A canon-gap page is not about a licence, so it must not offer the app: the app

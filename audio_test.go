@@ -116,9 +116,10 @@ func TestAudioForChapter(t *testing.T) {
 }
 
 func TestWEBCTextMismatchExclusions(t *testing.T) {
-	// The WEB-Catholic displays the GREEK Esther (a different underlying book —
-	// no verse correspondence with the Hebrew Esther the Williams recording
-	// narrates) and a Greek Daniel 3 carrying the Prayer of Azariah and the Song
+	// The WEB-Catholic displays the GREEK Esther (translated from a different
+	// text: it keeps the Hebrew verse numbers, but not the words of the Hebrew
+	// Esther the Williams recording narrates, and it adds verses of its own)
+	// and a Greek Daniel 3 carrying the Prayer of Azariah and the Song
 	// of the Three as verses 24–90. Offering the Williams recording there would play
 	// different words than the screen shows and highlight the wrong verses, so webc
 	// routes those chapters away from him — to the synthetic recording of the Greek

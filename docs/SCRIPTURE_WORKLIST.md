@@ -585,6 +585,13 @@ Greek Esther is excluded. Its numbering corresponds to nothing —
 `versification.go` already records the book as incommensurable — so its three
 gaps are not omissions and are not reported as any.
 
+In the next major release (`docs/NEXT.md`) they are: **61 verses**, WEB
+Catholic 41, in `omitted_verses_data_next.go`. The Greek Esther's three gaps —
+4:6, 9:5 and 9:30 — are holes like any other there. It is translated from a
+different text from the Hebrew Esther, but it keeps the Hebrew book's verse
+numbers and has nothing at those three, which `versification_data_next.go`
+records as absent (15 absent verses for the generator's check, not 12).
+
 Two independent checks, because one derivation checking itself proves nothing.
 The generator refuses to write the table unless every verse
 `versification_data.go` records as absent appears as a hole (12 of them, derived

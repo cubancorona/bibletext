@@ -634,9 +634,11 @@ func noteForChapter(p prefStore, versionID, book string, chapter int, bible *Bib
 	// note goes with it — mapped, not copied, because chapter and verse
 	// numbers do not mean the same thing across translations (the Romans
 	// doxology moves). The unplaced arms are the cases where the honest thing
-	// is to show nothing: Greek Esther is a different book, not a renumbering,
-	// and a book this translation does not contain has nowhere to show a note
-	// however confidently the table maps it.
+	// is to show nothing: Greek Esther is a different book, not a renumbering
+	// (in the next major release it maps verse for verse, and only a verse
+	// one Esther has and the other lacks stays put), and a book this
+	// translation does not contain has nowhere to show a note however
+	// confidently the table maps it.
 	for _, n := range candidates {
 		if strings.EqualFold(n.VersionID, versionID) || n.Book != book {
 			continue

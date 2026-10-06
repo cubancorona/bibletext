@@ -1,11 +1,17 @@
 package bibletext
 
-import "testing"
+import (
+	"maps"
+	"testing"
+)
 
 // The cases below are the ones a reader can actually reach, and each is a real
 // passage rather than a synthetic reference: the Romans doxology, the eleven
 // textual-critical omissions, the Textus Receptus verses the NKJV carries, the
-// Song of the Three pushing Daniel 3's tail down, and Greek Esther.
+// Song of the Three pushing Daniel 3's tail down, and the Greek Esther, which
+// the shipping build cannot map at all and the next major release maps verse
+// for verse, since it keeps the Hebrew numbers and adds verses of its own
+// (greek_esther_current_test.go, greek_esther_next_test.go).
 //
 // They are pinned here rather than left to the generator because a regeneration
 // (a translation's cache epoch bumps, a translation is added) must not be able
@@ -70,9 +76,8 @@ func TestMapVerseKnownDivergences(t *testing.T) {
 		{"the BSB's love verse in the NKJV", "bsb", "nkjv", "Philippians", 1, 16, 1, 17, verseMapMoved},
 		{"NKJV and WEB agree there", "nkjv", "web", "Philippians", 1, 16, 1, 16, verseMapExact},
 
-		// Greek Esther is a different book, not a renumbering.
-		{"Esther cannot be mapped into WEBC", "web", "webc", "Esther", 4, 1, 0, 0, verseMapIncommensurable},
-		{"nor back out of it", "webc", "web", "Esther", 1, 1, 0, 0, verseMapIncommensurable},
+		// The Greek Esther's cases are the switch's: greek_esther_current_test.go
+		// and greek_esther_next_test.go.
 
 		// The ordinary case, which is ~31,000 verses.
 		{"John 3:16 is John 3:16 everywhere", "web", "bsb", "John", 3, 16, 3, 16, verseMapExact},
@@ -102,6 +107,7 @@ func TestMapVerseRoundTrips(t *testing.T) {
 		{"Genesis", 1, 1}, {"Psalms", 23, 1}, {"Isaiah", 53, 5},
 		{"Matthew", 5, 3}, {"John", 3, 16}, {"Romans", 8, 28},
 		{"Romans", 14, 23}, {"Romans", 16, 23}, {"Daniel", 3, 24}, {"Mark", 9, 43},
+		{"Esther", 1, 1}, {"Esther", 4, 17}, {"Esther", 8, 13}, {"Esther", 10, 3},
 		{"Matthew", 23, 13}, {"Matthew", 23, 14}, {"Philippians", 1, 16}, {"Philippians", 1, 17},
 		{"Revelation", 22, 21},
 	}
@@ -168,10 +174,56 @@ func TestVerseExistsIn(t *testing.T) {
 		{"bsb", "Mark", 9, 44, false},
 		{"nkjv", "Mark", 9, 44, true},
 		{"bsb", "John", 3, 16, true},
-		{"webc", "Esther", 4, 1, false}, // no correspondence, so nothing to offer
+		// The Greek Esther's: greek_esther_current_test.go, greek_esther_next_test.go.
 	} {
 		if got := VerseExistsIn(tc.vid, tc.book, tc.ch, tc.v); got != tc.want {
 			t.Errorf("VerseExistsIn(%s, %s %d:%d) = %v, want %v", tc.vid, tc.book, tc.ch, tc.v, got, tc.want)
 		}
+	}
+}
+
+// withIncommensurableBook records book as incommensurable between the
+// reference and vid until the test ends. The shipping table has one book that
+// is (the Greek Esther) and the next major release's none, so the arms that
+// answer for one are exercised, in both states, on a book marked here.
+func withIncommensurableBook(t *testing.T, vid, book string) {
+	t.Helper()
+	was, had := versificationDeltas[vid]
+	d := was
+	d.incommensurable = maps.Clone(was.incommensurable)
+	if d.incommensurable == nil {
+		d.incommensurable = map[string]string{}
+	}
+	d.incommensurable[book] = "verse numbers do not correspond"
+	versificationDeltas[vid] = d
+	t.Cleanup(func() {
+		if had {
+			versificationDeltas[vid] = was
+		} else {
+			delete(versificationDeltas, vid)
+		}
+	})
+}
+
+// A BOOK THAT DOES NOT CORRESPOND maps nowhere, either way, and says why.
+func TestAnIncommensurableBookMapsNowhere(t *testing.T) {
+	// CONTROL: the book maps before it is marked.
+	if _, _, res := MapVerse("web", "bsb", "Ruth", 1, 16); res != verseMapExact {
+		t.Fatalf("control: Ruth 1:16 maps %s into the BSB before it is marked", res)
+	}
+	withIncommensurableBook(t, "bsb", "Ruth")
+	for _, pair := range [][2]string{{"web", "bsb"}, {"bsb", "web"}, {"bsb", "nkjv"}} {
+		if ch, v, res := MapVerse(pair[0], pair[1], "Ruth", 1, 16); res != verseMapIncommensurable || ch != 0 || v != 0 {
+			t.Errorf("%s->%s Ruth 1:16 = %d:%d (%s), want 0:0 (incommensurable)", pair[0], pair[1], ch, v, res)
+		}
+	}
+	if VerseExistsIn("bsb", "Ruth", 1, 16) {
+		t.Error("VerseExistsIn offers a verse of a book that does not correspond")
+	}
+	if IncommensurableBook("bsb", "Ruth") == "" {
+		t.Error("IncommensurableBook gives no reason for a book that does not correspond")
+	}
+	if got := ChapterNumberingDifference("nkjv", "bsb", "Ruth", 1, 22); got != NumberingIncommensurable {
+		t.Errorf("nkjv->bsb Ruth 1: got %q, want %q", got, NumberingIncommensurable)
 	}
 }

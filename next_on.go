@@ -14,3 +14,7 @@ package bibletext
 // refused by scripts/verify-not-next.sh.
 
 const nextRelease = true
+
+// NextRelease is the same switch for the commands built beside this package
+// (cmd/websitegen), which cannot read nextRelease.
+const NextRelease = nextRelease

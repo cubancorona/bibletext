@@ -91,6 +91,12 @@ func webAudioURL(book string, chapter int) (string, bool) {
 // of different words than the screen shows breaks the contract at the top of
 // this file, so those chapters report false and fall back to TTS, which always
 // reads the on-screen text exactly.
+//
+// In the next major release (docs/NEXT.md) the versification maps the Greek
+// Esther verse for verse, since it keeps the Hebrew numbers. Its words are
+// still not the words he read in any chapter, and it adds verses he never read
+// (4:18-47, 10:4-14), so the recording would read one text while the screen
+// shows another: Esther stays excluded in both states.
 func webcAudioURL(book string, chapter int) (string, bool) {
 	if book == "Esther" || (book == "Daniel" && chapter == 3) {
 		return "", false

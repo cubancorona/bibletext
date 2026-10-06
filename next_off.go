@@ -21,3 +21,7 @@ package bibletext
 // whose recorded build tags include it.
 
 const nextRelease = false
+
+// NextRelease is the same switch for the commands built beside this package
+// (cmd/websitegen), which cannot read nextRelease.
+const NextRelease = nextRelease

@@ -3,11 +3,12 @@
 # batch_align.py --audio webbe expects them.
 #
 # These are the chapters the David Williams WEB narration cannot serve: the seven
-# deuterocanonical books, the GREEK Esther (ESG — a different book from the Hebrew
-# Esther he read), and the Greek Daniel's chapters 3, 13 and 14 (Daniel 1-2 and
-# 4-12 are the same text Williams read and keep his human narration). 150 files,
-# ~150 MB, public domain, from eBible.org's World English Bible British Edition
-# with Deuterocanon. Idempotent: an existing non-empty file is left alone.
+# deuterocanonical books, the GREEK Esther (ESG — translated from a different text
+# than the Hebrew Esther he read), and the Greek Daniel's chapters 3, 13 and 14
+# (Daniel 1-2 and 4-12 are the same text Williams read and keep his human
+# narration). 150 files, ~150 MB, public domain, from eBible.org's World English
+# Bible British Edition with Deuterocanon. Idempotent: an existing non-empty file
+# is left alone.
 #
 # The numeric prefixes and three-letter codes are eBible's own, and its audio
 # filenames call the Greek Daniel DAG (its verse-per-line text export calls the

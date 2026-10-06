@@ -12,10 +12,12 @@ package main
 //
 // The fixture below numbers its chapters as the real editions do, as the
 // tables record them: the doxology, the Song of the Three, the BSB's omitted
-// Mark 9:44 and 9:46, the NKJV's Acts 8:37, and the Greek Esther. The cases
-// run the shipped bytes between reader.js's VERSE_CARRY markers, under node
-// or JavaScriptCore as highlight_band_test.go does, with the data-vmap and
-// href each page was really built with, in both states of the NKJV switch.
+// Mark 9:44 and 9:46, the NKJV's Acts 8:37, and the Greek Esther (which the
+// shipping build cannot map and the next major release maps verse for verse).
+// The cases run the shipped bytes between reader.js's VERSE_CARRY markers,
+// under node or JavaScriptCore as highlight_band_test.go does, with the
+// data-vmap and href each page was really built with, in both states of the
+// NKJV switch.
 
 import (
 	"encoding/json"
@@ -75,17 +77,19 @@ func switcherFixtureVersions() []loadedVersion {
 		return bd
 	}
 	web := []chapter{
-		{"Esther", 1, run(1, 22)}, {"Daniel", 3, run(1, 30)}, {"Mark", 9, run(1, 50)},
+		{"Esther", 1, run(1, 22)}, {"Esther", 4, run(1, 17)}, {"Daniel", 3, run(1, 30)}, {"Mark", 9, run(1, 50)},
 		{"John", 3, run(1, 36)}, {"Acts", 8, run(1, 40, 37)},
 		{"Romans", 14, run(1, 26)}, {"Romans", 16, run(1, 24)},
 	}
 	bsb := []chapter{
-		{"Esther", 1, run(1, 22)}, {"Daniel", 3, run(1, 30)}, {"Mark", 9, run(1, 50, 44, 46)},
+		{"Esther", 1, run(1, 22)}, {"Esther", 4, run(1, 17)}, {"Daniel", 3, run(1, 30)}, {"Mark", 9, run(1, 50, 44, 46)},
 		{"John", 3, run(1, 36)}, {"Acts", 8, run(1, 40, 37)},
 		{"Romans", 14, run(1, 23)}, {"Romans", 16, run(1, 27, 24)},
 	}
+	// The Greek Esther: the Hebrew numbers less 4:6, then the prayers as
+	// 4:18-47.
 	webc := []chapter{
-		{"Esther", 1, run(1, 22)}, {"Daniel", 3, run(1, 97)}, {"Mark", 9, run(1, 50)},
+		{"Esther", 1, run(1, 22)}, {"Esther", 4, run(1, 47, 6)}, {"Daniel", 3, run(1, 97)}, {"Mark", 9, run(1, 50)},
 		{"John", 3, run(1, 36)}, {"Acts", 8, run(1, 40, 37)},
 		{"Romans", 14, run(1, 26)}, {"Romans", 16, run(1, 24)},
 	}
@@ -306,14 +310,9 @@ func publicDomainCarryCases(t *testing.T, root string) []carryCase {
 	add(casesOn(t, root, "bsb/mark/9/index.html", "web",
 		[3]string{"43-45", "", "../../../web/mark/9/#v43-45"},
 	))
-	// The Greek Esther: no verse corresponds, and the note still travels.
-	add(casesOn(t, root, "webc/esther/1/index.html", "web",
-		[3]string{"3", "NOTE", "../../../web/esther/1/#n=NOTE"},
-		[3]string{"3", "", "../../../web/esther/1/"},
-	))
-	add(casesOn(t, root, "web/esther/1/index.html", "webc",
-		[3]string{"3", "", "../../../webc/esther/1/"},
-	))
+	// The Greek Esther's are the switch's: greek_esther_current_test.go and
+	// greek_esther_next_test.go.
+	add(greekEstherCarryCases(t, root))
 	// A chapter every edition numbers alike.
 	add(casesOn(t, root, "web/john/3/index.html", "bsb",
 		[3]string{"16", "NOTE", "../../../bsb/john/3/#v16&n=NOTE"},

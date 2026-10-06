@@ -101,18 +101,14 @@ func TestResolveNoteAnchorMeasuredCases(t *testing.T) {
 			note: note("esv", "Romans", 16, 25, 0), reading: "bsb",
 			want: placement{Kind: placedExact, Here: []anchorRun{{Chapter: 16, Lo: 25, Hi: 25}}},
 		},
-		{
-			// Greek Esther is a different book, not a renumbering.
-			name: "Greek Esther incommensurable",
-			note: note("web", "Esther", 4, 1, 0), reading: "webc",
-			want: placement{Kind: unplacedIncommensurable},
-		},
+		// The Greek Esther's cases are the switch's: greek_esther_current_test.go
+		// and greek_esther_next_test.go.
 		{
 			// The reading translation IS the note's own: home, byte-exact, no
-			// mapping — even where the tables would call the book
-			// incommensurable from anywhere else. Existence against the TEXT
-			// is still honoured (the verse is on it here), and the walk
-			// normalises the open-ended Hi:0 run to the verse it lands on.
+			// mapping — even where the tables are wrong about it. Existence
+			// against the TEXT is still honoured (the verse is on it here),
+			// and the walk normalises the open-ended Hi:0 run to the verse it
+			// lands on.
 			name: "same version is native",
 			note: note("web", "Esther", 4, 1, 0), reading: "web",
 			want: placement{Kind: placedNative, Here: []anchorRun{{Chapter: 4, Lo: 1, Hi: 1}}},
@@ -156,6 +152,17 @@ func TestResolveNoteAnchorMeasuredCases(t *testing.T) {
 		got := resolveNoteAnchor(tc.note, tc.reading, bible)
 		if !reflect.DeepEqual(got, tc.want) {
 			t.Errorf("%s:\n got %v %+v\nwant %v %+v", tc.name, got.Kind, got, tc.want.Kind, tc.want)
+		}
+	}
+
+	// A book whose numbering does not correspond: the shipping table's one is
+	// the Greek Esther and the next major release's has none, so one is
+	// marked for the rest of this test. A verse note and a chapter note both
+	// have nowhere to land, and say why.
+	withIncommensurableBook(t, "bsb", "John")
+	for _, n := range []StoredNote{note("web", "John", 3, 16, 0), note("web", "John", 3, 0, 0)} {
+		if got := resolveNoteAnchor(n, "bsb", bible); got.Kind != unplacedIncommensurable || len(got.Here) != 0 {
+			t.Errorf("John 3:%d in a book that does not correspond: got %v %+v", n.VerseLo, got.Kind, got)
 		}
 	}
 }

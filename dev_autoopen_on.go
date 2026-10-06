@@ -175,8 +175,9 @@ func devAutoReadAlong(state *AppState) {
 //	           in this chapter" with the words alone in the bubble
 //	s9pill     three arrivals, then the reader's minimize → the pill reads
 //	           "Notes · 3" instead of hiding the set
-//	s9unplaced a WEB Esther note, then a switch to WEBC (Greek Esther, the
-//	           incommensurable numbering) → the unplaced-only pill: "1 note
+//	s9unplaced a WEB note on Esther 4:6, then a switch to WEBC (the Greek
+//	           Esther: incommensurable numbering, or with the next tag a text
+//	           that has nothing at 4:6) → the unplaced-only pill: "1 note
 //	           cannot be shown in this translation", no empty bubble
 //	s9suppress an arrival, then a foreign mark on the same chapter (goToVerse,
 //	           the verse-of-day/Go-to writer) → the sticker stands down to
@@ -445,7 +446,7 @@ func devAutoNotesS8(state *AppState) {
 		}
 	case "s9unplaced":
 		at(1500*time.Millisecond, func() {
-			HandleShareLink(state, ShareLinkURLWithNote("web", "Esther", 4, 1, 1,
+			HandleShareLink(state, ShareLinkURLWithNote("web", "Esther", 4, 6, 6,
 				"Fixture unplaced message alpha."))
 		})
 		at(8*time.Second, func() { switchVersion(state, "webc", byReader) })

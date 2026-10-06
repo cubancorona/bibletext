@@ -218,9 +218,11 @@ func TestPlanOrderAndTheUnplacedGroup(t *testing.T) {
 		VerseLo: 1, Text: "older"})
 	newer, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "bsb", Book: "Esther", Chapter: 4,
 		VerseLo: 1, Text: "newer"})
-	// Greek Esther: webc's numbering does not correspond — the unplaced arm.
+	// A note on Mordecai's prayer, which only the Greek Esther has — the
+	// unplaced arm in both states of the next switch, for different reasons
+	// (greekAdditionUnplacedSentence).
 	unpl, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "webc", Book: "Esther", Chapter: 4,
-		VerseLo: 1, Text: "greek esther"})
+		VerseLo: 20, Text: "greek esther"})
 
 	st := planTestState(t)
 	// The sample canon has no Esther text; give it the chapter, or the book
@@ -238,9 +240,9 @@ func TestPlanOrderAndTheUnplacedGroup(t *testing.T) {
 			plan.Notes[0].Label, plan.Notes[1].Label)
 	}
 	if len(plan.Unplaced) != 1 || plan.Unplaced[0].Note.ID != unpl.ID {
-		t.Fatalf("the incommensurable note belongs in Unplaced: %+v", planIDs(plan.Unplaced))
+		t.Fatalf("the note on a Greek addition belongs in Unplaced: %+v", planIDs(plan.Unplaced))
 	}
-	if s := plan.Unplaced[0].sentence(); s != "The numbering here does not correspond to the note's." {
+	if s := plan.Unplaced[0].sentence(); s != greekAdditionUnplacedSentence {
 		t.Errorf("the R4 sentence is placementCopy's, verbatim: %q", s)
 	}
 }
@@ -494,7 +496,8 @@ func TestAppleStickerPushComposition(t *testing.T) {
 
 	// Three placed notes plus one the translation cannot show. The reading
 	// book must be one the sample bible carries; the unplaced note rides on
-	// the same BOOK under a version whose numbering does not correspond.
+	// the same BOOK, on a verse only the Greek Esther has, which no Hebrew
+	// Esther can show in either state of the next switch.
 	st := planTestState(t)
 	st.Bible.Verses["Esther"] = map[int][]Verse{4: {{BookName: "Esther", Chapter: 4, Verse: 1, Text: "esther"}}}
 	st.CurrentBook, st.CurrentChapter = "Esther", 4
@@ -503,7 +506,7 @@ func TestAppleStickerPushComposition(t *testing.T) {
 			VerseLo: 1, Text: text})
 	}
 	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "webc", Book: "Esther", Chapter: 4,
-		VerseLo: 1, Text: "greek esther"})
+		VerseLo: 20, Text: "greek esther"})
 	applyNoteForCurrentChapter(st)
 
 	text, who, pill, next := appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible))
@@ -538,9 +541,9 @@ func TestAppleStickerPushComposition(t *testing.T) {
 	// pill presentation with the sentence — never an empty sender bubble.
 	deleteAllNotes(appPrefs())
 	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "webc", Book: "Esther", Chapter: 4,
-		VerseLo: 1, Text: "greek esther"})
-	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "webc", Book: "Esther", Chapter: 5,
-		VerseLo: 1, Text: "greek esther again"})
+		VerseLo: 20, Text: "greek esther"})
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "webc", Book: "Esther", Chapter: 10,
+		VerseLo: 5, Text: "greek esther again"})
 	applyNoteForCurrentChapter(st)
 	text, who, pill, next = appleStickerPush(st, buildChapterPlan(st, appPrefs(), st.Bible))
 	if text != "" {

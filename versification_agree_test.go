@@ -36,7 +36,6 @@ func TestChapterNumberingDisagreesWhereTheDeltasSayItShould(t *testing.T) {
 		{"bsb", "Romans", 14, 26, "the WEB's 14:24-26 are the BSB's 16:25-27"},
 		{"bsb", "Mark", 9, 50, "the BSB omits 9:44 and 9:46"},
 		{"bsb", "Matthew", 17, 27, "the BSB omits 17:21"},
-		{"webc", "Esther", 1, 22, "WEBC's Esther is the Greek Esther — incommensurable"},
 		{"webc", "Daniel", 3, 30, "WEBC inserts the Song of the Three, pushing 24-30 to 91-97"},
 	} {
 		if ChapterNumberingAgrees("nkjv", tc.to, tc.book, tc.chapter, tc.span) {
@@ -99,7 +98,7 @@ func TestChapterNumberingDifferenceNamesTheRightKind(t *testing.T) {
 		{"web", "Luke", 17, 37, NumberingAbsent},  // 17:36
 		{"bsb", "Mark", 9, 50, NumberingAbsent},   // the BSB omits 9:44 and 9:46
 		{"webc", "Daniel", 3, 30, NumberingMoved}, // the Song of the Three pushes 24-30 to 91-97
-		{"webc", "Esther", 1, 22, NumberingIncommensurable},
+		// The Greek Esther's: greek_esther_current_test.go, greek_esther_next_test.go.
 		// Same numbers, opposite order: the two woes of Matthew 23:13-14, and
 		// the BSB's Philippians 1:16-17. A carried verse number there opens
 		// the other half of the pair.

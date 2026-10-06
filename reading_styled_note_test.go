@@ -1008,7 +1008,7 @@ func TestStyledStickerUnplacedOnly(t *testing.T) {
 		{BookName: "Esther", Book: "Esther", Chapter: 4, Verse: 1, Text: "esther one two three four"}}}
 	st.CurrentBook, st.CurrentChapter = "Esther", 4
 	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "webc",
-		Book: "Esther", Chapter: 4, VerseLo: 1, Text: "greek esther words"})
+		Book: "Esther", Chapter: 4, VerseLo: 20, Text: "greek esther words"})
 	applyNoteForCurrentChapter(st)
 
 	p := newStyledReadingPane(st, st.Bible.GetChapter("Esther", 4))
@@ -1059,17 +1059,20 @@ func TestBannerKeepsWhatTheStickerCannot(t *testing.T) {
 	}
 	st.NoteNotice = ""
 
-	// The R4 group keeps the banner: its sentence ("The numbering here does not
-	// correspond to the note's") does not fit a one-band sticker without
+	// The R4 group keeps the banner: its sentence (greekAdditionUnplacedSentence,
+	// "The numbering here does not correspond to the note's" or, in the next
+	// major release, "These verses are not in the translation being read")
+	// does not fit a one-band sticker without
 	// doubling its height, so those rows survive as the banner's whole residue.
-	// Greek Esther is the incommensurable arm (notes_plan_test.go's recipe).
+	// A note on a Greek addition to Esther is the unplaced arm
+	// (notes_plan_test.go's recipe).
 	deleteAllNotes(appPrefs())
 	st.Bible.Books = append(st.Bible.Books, "Esther")
 	st.Bible.Verses["Esther"] = map[int][]Verse{4: {
 		{BookName: "Esther", Book: "Esther", Chapter: 4, Verse: 1, Text: "esther one"}}}
 	st.CurrentBook, st.CurrentChapter = "Esther", 4
 	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "webc",
-		Book: "Esther", Chapter: 4, VerseLo: 1, Text: "greek esther words"})
+		Book: "Esther", Chapter: 4, VerseLo: 20, Text: "greek esther words"})
 	applyNoteForCurrentChapter(st)
 	plan := buildChapterPlan(st, appPrefs(), st.Bible)
 	if len(plan.Unplaced) != 1 {
@@ -1080,7 +1083,7 @@ func TestBannerKeepsWhatTheStickerCannot(t *testing.T) {
 		t.Fatal("the R4 sentences lost their only surface")
 	}
 	seen := seenText(t, b, fyne.NewSize(560, 300))
-	if !strings.Contains(seen, "esther 4:1") || !strings.Contains(seen, "does not correspond") {
+	if !strings.Contains(seen, "esther 4:20") || !strings.Contains(seen, greekAdditionUnplacedSeen) {
 		t.Errorf("the unplaced note has no visible trace: %s", seen)
 	}
 	if strings.Contains(seen, "greek esther words") {

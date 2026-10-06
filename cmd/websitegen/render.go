@@ -410,8 +410,9 @@ func navBar(v loadedVersion, all []loadedVersion, book, slug string, chapter int
 // among that chapter's verses, counted from 0, which is what lets reader.js
 // tell a range that lands as one passage from one that would take in verses
 // nobody sent. A verse other lacks, or a book whose numbering does not
-// correspond at all (WEBC's Greek Esther), is left out, so an empty map is a
-// chapter no verse of which can be carried.
+// correspond at all (WEBC's Greek Esther; in the next major release, where it
+// maps verse for verse, no book), is left out, so an empty map is a chapter no
+// verse of which can be carried.
 func switcherVerseMap(v, other loadedVersion, all []loadedVersion, book string, chapter int) (string, bool) {
 	if numberingDiff(v.ID, other.ID, book, chapter, all) == bibletext.NumberingSame {
 		return "", false

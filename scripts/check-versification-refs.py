@@ -78,7 +78,7 @@ KNOWN = {
     # if you want a meaningful number; lxx.vrs even states the Daniel mapping
     # outright ("DAG 3:91-97 = DAN 3:24-30"), which is the one our table derived.
     ("Daniel", 3): "WEBC has Greek Daniel: the Song of the Three occupies 3:24-90",
-    ("Esther", 4): "WEBC has Greek Esther: Addition B falls inside chapter 4",
+    ("Esther", 4): "WEBC has Greek Esther: Addition C, the prayers, is numbered 4:18-47",
     ("Esther", 10): "WEBC has Greek Esther: Addition F extends chapter 10",
 }
 

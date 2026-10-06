@@ -7,6 +7,15 @@
         --webc ~/Library/Caches/bibletext/bibletext-webc-v2.json \
         --nkjv /path/to/bibletext-nkjv.json      # optional; licensed, never committed
 
+    python3 scripts/gen-versification.py --next ...   # the same inputs
+
+Without --next it writes the shipping table, versification_data.go. With it, it
+writes the next major release's, versification_data_next.go, built only with the
+next tag (docs/NEXT.md): the same inputs read by the same rules, except that a
+different text whose verse numbers line up is mapped verse for verse instead of
+recorded as incommensurable (see "a different text" below). Run both whenever
+either is run, so the two tables never describe different caches.
+
 The inputs are the app's OWN cache files, so the table always describes the text
 the app actually ships rather than a published versification standard that may
 differ from it in detail. Run this whenever a translation's cache epoch is bumped
@@ -52,14 +61,48 @@ version of it was wrong when measured:
           other adjacent pair's crossed score beats its own at all (refrains
           such as Psalm 67:3/5 tie). REORDER_MIN_MARGIN sits between the two.
 
+  a different text
+          Only decidable when the two are the SAME translation (WEB vs WEB
+          Catholic), where differing text at the same number means something
+          real: over half the shared verses disagreeing is a book translated
+          from a different source. WEBC's Esther is the Greek Esther, translated
+          from the Greek where the WEB's is from the Hebrew: its 1:1 opens with
+          Mordecai's dream, the WEB's with Ahasuerus. Daniel by contrast differs
+          only in wording ("some of" vs "part of"), so it is read like any other
+          book, with its tail genuinely moved by the Song of the Three.
+
+          The shipping table records a different text as incommensurable, the
+          whole book, without asking more of it.
+
+          The next release's (--next) asks whether its numbers line up. A
+          different text can still keep the reference's verse numbers, and the
+          Greek Esther does: its additions are numbered after the Hebrew verses
+          (4:18-47, 10:4-14) or set inside one (1:1, 3:13, 5:1-2, 8:13), so
+          every number the two share names the same passage, and a number only
+          one has is a verse only one has. Whether the numbers line up is
+          measured, not assumed: a shared verse lines up when its text matches
+          the target's verse of the same number at least as well as the
+          target's verse either side of it. Measured on Esther: 151 of the 164
+          shared verses (0.92). Renumbering the Greek Esther one verse later or
+          earlier drops that to 0.06 and 0.12, and shuffling its verses to 0.42.
+          An unrelated book scores more than a shuffled one, because a tie
+          counts as lined up: about a quarter of its verses match their own
+          number best by chance, and about a quarter more tie, nearly all of
+          them sharing no word with any of the three. Tobit, Judith, Ruth,
+          Nehemiah and 1 Maccabees, each under its own numbers, score 0.48 to
+          0.58 against the WEB's Esther. ALIGNED_MIN_FRACTION sits above every
+          control and below the Greek Esther. Where the numbers line up, the
+          book maps verse for verse: what only the reference has is absent, what
+          only the target has is extra, and nothing is looked for as a move,
+          because text similarity between two different texts says nothing about
+          where a verse went.
+
   incommensurable
-          A whole book whose verse numbers do not correspond at all. Only
-          decidable when the two are the SAME translation (WEB vs WEB Catholic),
-          where differing text at the same number means something real. WEBC's
-          Esther is Greek Esther — a different book, not a renumbering: its 1:1
-          is Mordecai's dream, the WEB's is Ahasuerus. Daniel by contrast differs
-          only in wording ("some of" vs "part of"), so it stays mappable, with
-          its tail genuinely moved by the Song of the Three.
+          A whole book whose verse numbers do not correspond at all, so no
+          verse can be mapped either way. In the shipping table, every different
+          text: WEBC's Esther. In the next release's, a different text whose
+          verse numbers do NOT line up; no book in the shipped translations is
+          one, and the rule is kept for one that would be.
 """
 
 import argparse
@@ -76,6 +119,7 @@ MOVE_MIN_SIMILARITY = 0.30          # cross-translation wording varies a lot
 RETARGET_MIN_SIMILARITY = 0.90      # same translation: near-identical or nothing
 DIFFERENT_TEXT_FRACTION = 0.50      # over half the shared verses disagreeing
 REORDER_MIN_MARGIN = 0.20           # crossed score must beat the own-number score by this
+ALIGNED_MIN_FRACTION = 0.75         # --next: a different text's shared verses best matched by their own number
 
 STOPWORDS = set(
     "the and of to a in that he it his him for is was with as they i you not be but".split()
@@ -107,7 +151,21 @@ def verses_of(bible, book):
     return out
 
 
-def delta(reference, target, target_id):
+def aligned_fraction(ref, tgt, shared):
+    """How many shared verses match the target's verse of their own number at
+    least as well as the target's verse either side of it, as a fraction."""
+    if not shared:
+        return 0.0
+    lined_up = 0
+    for c, v in shared:
+        own = similarity(ref[(c, v)], tgt[(c, v)])
+        either_side = [similarity(ref[(c, v)], tgt[n]) for n in ((c, v - 1), (c, v + 1)) if n in tgt]
+        if not either_side or own >= max(either_side):
+            lined_up += 1
+    return lined_up / len(shared)
+
+
+def delta(reference, target, target_id, next_release=False):
     absent, moved, extra, incommensurable = [], [], [], []
     for book in sorted(set(reference) | set(target)):
         ref, tgt = verses_of(reference, book), verses_of(target, book)
@@ -124,9 +182,26 @@ def delta(reference, target, target_id):
         if target_id in SAME_TEXT_AS_REFERENCE and len(shared) > 5:
             disagreeing = [k for k in shared if similarity(ref[k], tgt[k]) < 0.5]
             if len(disagreeing) > len(shared) * DIFFERENT_TEXT_FRACTION:
-                incommensurable.append(
-                    (book, "different underlying text; verse numbers do not correspond")
+                if not next_release:
+                    incommensurable.append(
+                        (book, "different underlying text; verse numbers do not correspond")
+                    )
+                    continue
+                # A different text. Its numbers either line up with the
+                # reference's or they do not; there is no partial answer.
+                lined_up = aligned_fraction(ref, tgt, shared)
+                print(
+                    f"{target_id} {book}: a different text; {lined_up:.2f} of its "
+                    f"{len(shared)} shared verses line up with their own number",
+                    file=sys.stderr,
                 )
+                if lined_up < ALIGNED_MIN_FRACTION:
+                    incommensurable.append(
+                        (book, "different underlying text; verse numbers do not correspond")
+                    )
+                    continue
+                absent.extend((book, c, v) for c, v in sorted(only_ref))
+                extra.extend((book, c, v) for c, v in sorted(only_tgt))
                 continue
 
         # Same numbers, opposite order: an adjacent pair whose texts each match
@@ -203,18 +278,43 @@ def delta(reference, target, target_id):
     return sorted(absent), sorted(moved), extra, incommensurable
 
 
-def go_source(deltas):
-    out = [
-        "package bibletext",
-        "",
-        "// Code generated by scripts/gen-versification.py. DO NOT EDIT BY HAND.",
-        "//",
-        "// How each translation's verse numbers relate to the WEB's. Derived from the",
-        "// app's own cache files, so it describes the text actually shipped. Regenerate",
-        "// when a translation's cache epoch changes or a translation is added.",
-        "",
-        "var versificationDeltas = map[string]versificationDelta{",
-    ]
+def go_source(deltas, next_release=False):
+    if not next_release:
+        out = [
+            "package bibletext",
+            "",
+            "// Code generated by scripts/gen-versification.py. DO NOT EDIT BY HAND.",
+            "//",
+            "// How each translation's verse numbers relate to the WEB's. Derived from the",
+            "// app's own cache files, so it describes the text actually shipped. Regenerate",
+            "// when a translation's cache epoch changes or a translation is added.",
+            "",
+            "var versificationDeltas = map[string]versificationDelta{",
+        ]
+    else:
+        out = [
+            "//go:build next",
+            "",
+            "package bibletext",
+            "",
+            "// Code generated by scripts/gen-versification.py --next. DO NOT EDIT BY HAND.",
+            "//",
+            "// How each translation's verse numbers relate to the WEB's in the next major",
+            "// release (docs/NEXT.md). Derived from the same cache files as",
+            "// versification_data.go, by the same rules, except that a different text whose",
+            "// verse numbers line up with the WEB's maps verse for verse instead of being",
+            "// recorded as incommensurable: WEB Catholic's Greek Esther. Regenerate with",
+            "// versification_data.go, never apart from it.",
+            "//",
+            "// Its init installs it in place of versification_data.go's table before main or",
+            "// any test runs, so every reader of versificationDeltas reads it; no",
+            "// package-level variable is initialised from the table. Without the next tag",
+            "// this file is not compiled at all.",
+            "",
+            "func init() { versificationDeltas = nextVersificationDeltas }",
+            "",
+            "var nextVersificationDeltas = map[string]versificationDelta{",
+        ]
     for vid in sorted(deltas):
         absent, moved, extra, incommensurable = deltas[vid]
         out.append(f'\t{vid!r}: {{'.replace("'", '"'))
@@ -246,8 +346,12 @@ def main():
     ap.add_argument("--bsb")
     ap.add_argument("--webc")
     ap.add_argument("--nkjv")
-    ap.add_argument("--out", default="versification_data.go")
+    ap.add_argument("--next", action="store_true",
+                    help="write the next major release's table (docs/NEXT.md)")
+    ap.add_argument("--out")
     args = ap.parse_args()
+    if not args.out:
+        args.out = "versification_data_next.go" if args.next else "versification_data.go"
 
     reference = load(args.web)
     deltas = {}
@@ -256,7 +360,7 @@ def main():
         if not path:
             print(f"note: no --{vid}, leaving it out of the table", file=sys.stderr)
             continue
-        deltas[vid] = delta(reference, load(path), vid)
+        deltas[vid] = delta(reference, load(path), vid, args.next)
         absent, moved, extra, incomm = deltas[vid]
         print(
             f"{vid}: {len(absent)} absent, {len(moved)} moved, {len(extra)} extra, "
@@ -265,7 +369,7 @@ def main():
         )
 
     with open(args.out, "w") as f:
-        f.write(go_source(deltas))
+        f.write(go_source(deltas, args.next))
     print(f"wrote {args.out}", file=sys.stderr)
 
 

@@ -35,8 +35,8 @@ func notesXState(t *testing.T) *AppState {
 // reader actually met was a note that disappeared when they changed
 // translation, leaving the highlight it had placed behind with nothing to
 // explain it. The passage is the same passage in both, so the note goes with
-// it; where the numbering genuinely does not correspond, the derive declines
-// (see the Greek Esther case in notes_store_test.go).
+// it; where the verse is not there, the derive declines (see the Greek Esther
+// cases in greek_esther_current_test.go and greek_esther_next_test.go).
 func TestSwitchingTranslationCarriesTheNoteOver(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -202,9 +202,11 @@ var errOfflineForTest = errors.New("offline")
 // A note that goes away must take ITS highlight with it. Clearing the note
 // alone left the passage marked with nothing to explain the mark — the reader
 // sees their verse highlighted and the message gone, which reads as data loss.
-// It shows up when switching translation, and is reached here through the one
-// case where a note genuinely cannot follow: Greek Esther, whose numbering does
-// not correspond.
+// It shows up when switching translation, and is reached here through a note
+// that genuinely cannot follow: one on Esther 4:6, which WEB Catholic's Greek
+// Esther cannot show in either state of the next switch. The shipping build
+// cannot map the book at all, and in the next major release, where it maps
+// verse for verse, 4:6 is a verse the Greek text has nothing at.
 func TestLosingANoteAlsoClearsItsHighlight(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -215,7 +217,10 @@ func TestLosingANoteAlsoClearsItsHighlight(t *testing.T) {
 	st := notesXState(t)
 	st.CurrentVersion = "web"
 	st.CurrentBook, st.CurrentChapter = "Esther", 4
-	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Esther", Chapter: 4, VerseLo: 1,
+	for v := 1; v <= 17; v++ {
+		st.Bible.Verses["Esther"][4] = append(st.Bible.Verses["Esther"][4], Verse{BookName: "Esther", Chapter: 4, Verse: v, Text: "esther"})
+	}
+	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "web", Book: "Esther", Chapter: 4, VerseLo: 6,
 		Text: "fixture translation message alpha"})
 	applyNoteForCurrentChapter(st)
 	if st.ActiveNote == "" || !st.hlOn() {
@@ -223,12 +228,13 @@ func TestLosingANoteAlsoClearsItsHighlight(t *testing.T) {
 			st.ActiveNote, st.hlOn())
 	}
 
-	// The Catholic edition carries Greek Esther, so this note has nowhere to go.
+	// The Catholic edition carries the Greek Esther, so this note has nowhere
+	// to go.
 	st.CurrentVersion = "webc"
 	applyNoteForCurrentChapter(st)
 
 	if st.ActiveNote != "" {
-		t.Errorf("the note survived into a book its numbering does not describe: %q", st.ActiveNote)
+		t.Errorf("the note survived into a text that cannot show its verse: %q", st.ActiveNote)
 	}
 	if st.hlOn() {
 		t.Error("the note's highlight was left behind — a marked verse with nothing explaining it")

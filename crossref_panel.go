@@ -132,7 +132,11 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 		stopThinking()
 		lst := buildCrossRefList(state, selectionVerses(state, text, span), refs, tskErr, pal, follow)
 		if len(lst.Objects) == 0 {
-			setMessage("No cross-references for this selection.")
+			msg := crossRefNoneLine
+			if lst.CoverageNote != "" {
+				msg += "\n" + lst.CoverageNote
+			}
+			setMessage(msg)
 			return
 		}
 		listBox.Objects = lst.Objects
@@ -163,6 +167,18 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 	// once and is guarded, so a reopen mid-load waits on the same load rather
 	// than starting another (sheet_reopen.go).
 	registerSheetReopen(state, popup, func() { showCrossRefs(state, text, span) })
+
+	// A selection the cross-references cannot cover at all is answered
+	// before anything loads: the answer cannot change, and a reader who is
+	// offline must not be told to check the connection for it. The next
+	// major release's (crossRefCoverage); the shipping build loads first.
+	if nextRelease {
+		book, _ := readerChapter(state)
+		if note, none := crossRefCoverage(state.currentVersion().ID, book, selectionVerses(state, text, span)); none {
+			setMessage(crossRefNoneLine + "\n" + note)
+			return
+		}
+	}
 
 	setThinking()
 	crossRefsRun(func() {

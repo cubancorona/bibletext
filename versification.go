@@ -11,6 +11,12 @@ package bibletext
 // passage. And WEBC's Esther is GREEK Esther: not a renumbering of the WEB's
 // Esther but a different book, where no verse-to-verse correspondence exists.
 //
+// In the next major release (docs/NEXT.md) the Greek Esther maps verse for
+// verse. It is translated from a different text, but keeps the Hebrew book's
+// verse numbers: its additions are numbered after them (4:18-47, 10:4-14) or
+// set inside one (1:1, 3:13, 5:1-2, 8:13), and it lacks three (4:6, 9:5,
+// 9:30), so every number the two share names the same passage.
+//
 // Anything that carries a reference ACROSS translations has to consult this:
 // shared links, notes and highlights stored under one translation and read in
 // another, and any future "compare translations" view. Red-letter data is not
@@ -20,7 +26,9 @@ package bibletext
 //
 // The data lives in versification_data.go, generated from the app's OWN cache
 // files by scripts/gen-versification.py, so it describes the text actually
-// shipped rather than a published standard that may differ from it.
+// shipped rather than a published standard that may differ from it. The next
+// major release's table is versification_data_next.go, from the same script
+// with --next, which takes its place in a build with the next tag.
 //
 // WEB is the reference. Every other translation is stored as a delta against
 // it, and a map between two non-reference translations is composed through it.
@@ -79,7 +87,8 @@ const (
 	// caller should offer the surrounding passage, not silently pick a neighbour.
 	verseMapAbsent
 	// verseMapIncommensurable — the two translations' versions of this BOOK do
-	// not correspond verse by verse (WEBC's Greek Esther). Nothing can be mapped;
+	// not correspond verse by verse (WEBC's Greek Esther; in the next major
+	// release's table, no book). Nothing can be mapped;
 	// the honest move is to say so rather than to guess.
 	verseMapIncommensurable
 )
@@ -197,7 +206,8 @@ const (
 	// is one would be false.
 	NumberingAbsent = "absent"
 	// NumberingIncommensurable — the two translations' versions of this BOOK do
-	// not correspond verse by verse at all (WEBC's Greek Esther).
+	// not correspond verse by verse at all (WEBC's Greek Esther; in the next
+	// major release's table, no book).
 	NumberingIncommensurable = "incommensurable"
 )
 

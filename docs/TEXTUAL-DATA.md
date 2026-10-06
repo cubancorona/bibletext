@@ -55,7 +55,8 @@ application has.
 - **moved** — the same passage, a different number.
 - **absent** — the target edition does not contain this verse at all.
 - **incommensurable** — the two editions' versions of this *book* do not
-  correspond verse by verse, and no mapping is possible.
+  correspond verse by verse, and no mapping is possible. WEBC's Esther; in the
+  next major release's table, no book (§2.2).
 
 ### 2.1 What we found, per edition
 
@@ -66,6 +67,11 @@ Measured against the WEB as reference **[measured]**:
 | BSB | 12 | 6 | 0 | — |
 | NKJV | 0 | 5 | 4 | — |
 | WEBC | 0 | 7 | 173 | Esther |
+| WEBC, next major release | 3 | 7 | 214 | — |
+
+The last row is `versification_data_next.go`, the table a build with the
+`next` tag uses (`docs/NEXT.md`): the same caches read by the same rules, except
+that the Greek Esther maps verse for verse (§2.2, §2.3 rule 4).
 
 **The twelve the BSB lacks** **[measured]**: Matthew 17:21, 18:11, 23:13;
 Mark 7:16, 9:44, 9:46, 11:26, 15:28; Luke 23:17; John 5:4; Acts 28:29; and
@@ -162,10 +168,47 @@ dream, which is Addition A **[standard]**. There is no honest verse mapping
 between them, so the table marks the book *incommensurable* and the app is
 expected to say so rather than guess.
 
+**In the next major release** (`docs/NEXT.md`) the Greek Esther maps verse for
+verse. Measured more closely, the wording differs in every chapter because it
+is translated from the Greek text rather than the Hebrew **[measured]**, and
+its additions are interleaved rather than appended, but it keeps the Hebrew
+book's verse numbers **[measured]**:
+
+- **164 of the WEB's 167 verses are there under their own numbers.** A shared
+  verse's text matches the WEBC verse of the same number at least as well as
+  the WEBC verse either side of it for 151 of the 164 (0.92); renumbering the
+  Greek Esther one verse later or earlier drops that to 0.06 and 0.12,
+  shuffling its verses to 0.42, and an unrelated book under its own numbers
+  scores 0.48 to 0.58 (§2.3, rule 4).
+- **Three are absent**: 4:6, 9:5 and 9:30, where the Greek text has nothing.
+  They are holes in its numbering like any other, and that release's omission
+  table (`omitted_verses_data_next.go`) records them.
+- **Forty-one are its own.** Addition C, the prayers of Mordecai and Esther, is
+  numbered 4:18-47, after the Hebrew chapter's seventeen verses, and Addition F,
+  the reading of Mordecai's dream, is 10:4-14 **[standard]**.
+- **The other additions sit inside a verse both have**, which maps exactly:
+  Addition A, Mordecai's dream, opens 1:1 before the Hebrew verse; Addition B,
+  the king's first letter, closes 3:13; Addition D, Esther before the king, is
+  5:1-2; and Addition E, the second letter, stands inside 8:13.
+
+The opening verse in full shows the first of these: the Hebrew sentence follows
+the addition inside the same verse.
+
+| | Esther 1:1 |
+| --- | --- |
+| WEBC | "[In the second year of the reign of Ahasuerus the great king, on the first day of Nisan, Mordecai… ] And it came to pass after these things in the days of Ahasuerus, —(this Ahasuerus ruled over one hundred twenty-seven provinces from India)—" |
+
+A reference carried between the two therefore lands on the same passage, and
+that table records the three absent and forty-one extra verses as it records the
+Song of the Three's. Read-along narration is another matter, in both states: the
+words differ, so the WEB's recording is not offered for WEBC's Esther
+(`webcAudioURL`).
+
 ### 2.3 How the table is derived, and why the obvious rules were wrong
 
 `scripts/gen-versification.py` builds `versification_data.go` from the app's own
-cache files. Two of its rules exist only because the naive version was measured
+cache files, and with `--next` the next major release's `versification_data_next.go`
+from the same files. Two of its rules exist only because the naive version was measured
 and found wrong:
 
 1. **A move requires a destination the reference does not have.** Matching on
@@ -188,10 +231,28 @@ and found wrong:
    the three real cases cross-score 0.41-0.80 against 0.05-0.18 for their own
    numbers, and no other adjacent pair's crossed score beats its own at all —
    refrains such as Psalm 67:3/5 tie.
+4. **A different text is not a different numbering** (the next major release's
+   table, `--next`; the shipping table records a different text as
+   incommensurable without asking more). Within one translation a book whose
+   shared verses mostly disagree is translated from a different source —
+   WEBC's Esther, from the Greek — and its text cannot say where a verse
+   moved. Whether its numbers line up is measured instead: a shared verse lines
+   up when its text matches the target's verse of the same number at least as
+   well as the target's verse either side of it. Where three-quarters or more
+   do, the book maps verse for verse, absent and extra by number alone; below
+   that it would be *incommensurable*. The Greek Esther scores 0.92, the same
+   book renumbered one verse later or earlier 0.06 and 0.12, and shuffled
+   0.42. An unrelated book scores higher than a shuffled one, because a tie
+   counts as lined up: about a quarter of its verses match their own number
+   best by chance, and about a quarter more tie, nearly all of them sharing no
+   word with any of the three. Tobit, Judith, Ruth, Nehemiah and 1 Maccabees,
+   each under its own numbers, score 0.48 to 0.58 against the WEB's Esther
+   **[measured]**. The threshold sits above all of them.
 
 ### 2.4 Validation performed
 
-- **[measured]** All 207 table entries checked against the actual verse text:
+- **[measured]** All 207 table entries (251 in the next major release's)
+  checked against the actual verse text:
   every *moved* pair must be textually the same passage (≥0.85 token similarity
   within an edition, ≥0.30 across editions), every *absent* verse really missing,
   every *extra* verse really present. 0 problems.

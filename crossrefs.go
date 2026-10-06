@@ -56,10 +56,12 @@ const (
 	// rows the reader's translation cannot show are dropped and the rows a
 	// Gospel parallel already shows are hidden, so it can read past the
 	// sixteenth. Measured over the 2026-08-31 dataset in all four
-	// translations, with every parallel of the verse's chapter hidden (the
-	// most any selection can hide), the deepest it reads is the twentieth
-	// row: WEB Catholic's Genesis 41:42, whose twenty rows include eight
-	// into Greek Esther, which that translation cannot show. Thirty-two
+	// translations, for every selection that can hold the verse, the deepest
+	// it reads is the twentieth row: WEB Catholic's Genesis 41:42, whose
+	// twenty rows include eight into Greek Esther, which that translation
+	// cannot show. In the next major release (docs/NEXT.md), where the Greek
+	// Esther maps verse for verse, it is the eighteenth, first at the WEB's
+	// Matthew 10:1, whose two best rows are its own parallels. Thirty-two
 	// leaves room for a dataset that drops or hides more; the opt-in walk of
 	// the downloaded texts measures the depth again and fails if a panel
 	// ever reads past it (crossRefDeepestRead).
@@ -745,9 +747,10 @@ func readCrossRefRows(r io.Reader, keep int) (map[string][]tskRow, []string, err
 	// parallel already shows are hidden. Capping at sixteen here, before
 	// either, left those places empty: WEB Catholic's Genesis 41:42 showed 10
 	// of the 12 rows it can show, because six of its top sixteen point into
-	// Greek Esther, and Matthew 10:1 showed 14 in every translation because
-	// two of its top sixteen are the parallels listed above them. The app keeps
-	// maxCrossRefsKept, well past the deepest row any panel reads.
+	// Greek Esther (in the shipping build, which cannot map it), and Matthew
+	// 10:1 showed 14 in every translation because two of its top sixteen are
+	// the parallels listed above them. The app keeps maxCrossRefsKept, well
+	// past the deepest row any panel reads.
 	//
 	// The rows kept are copied into one array, so the index holds no spare
 	// capacity left over from appending.

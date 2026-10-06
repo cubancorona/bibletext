@@ -20,6 +20,13 @@ package main
 // says the same thing. A change to the licensed path alone must never need it:
 //
 //	go test ./cmd/websitegen -run TestNKJVTextOffSiteIsByteIdenticalToTheBase -update
+//
+// TWO PINNED TREES, ONE PER STATE OF THE NEXT SWITCH (docs/NEXT.md). The next
+// major release changes what the generator writes, so its tree is pinned in a
+// file of its own (offGoldenPath), rewritten by the same command with
+// -tags next. The shipping tree's file is never touched by a next-release
+// change, and TestTheNextReleaseSiteDiffersOnlyWhereItsPiecesSay holds the
+// two to the pages those pieces are meant to change.
 
 import (
 	"bufio"
@@ -36,9 +43,31 @@ import (
 	bibletext "github.com/cubancorona/bibletext"
 )
 
-var updateGolden = flag.Bool("update", false, "rewrite testdata/nkjv_off_site.sha256 from this build")
+var updateGolden = flag.Bool("update", false, "rewrite this state's pinned digests (offGoldenPath) from this build")
 
-const offGoldenPath = "testdata/nkjv_off_site.sha256"
+// offGoldenPath is the digests pinned for the state of the next switch this
+// build is in: the shipping site's, or the next major release's.
+var offGoldenPath = goldenPathFor(bibletext.NextRelease)
+
+func goldenPathFor(next bool) string {
+	if next {
+		return "testdata/nkjv_off_site_next.sha256"
+	}
+	return "testdata/nkjv_off_site.sha256"
+}
+
+// nextReleaseSitePages are the fixture's pages the next major release writes
+// differently from the shipping build, each for the piece behind the switch
+// that changes it (docs/NEXT.md).
+var nextReleaseSitePages = map[string]string{
+	// The Greek Esther maps verse for verse: the NKJV's notice page needs no
+	// caveat for Esther 1, and the switcher carries the verse between WEB
+	// Catholic's Esther and the WEB's and the BSB's.
+	"bsb/esther/1/index.html":  "the Greek Esther",
+	"nkjv/esther/1/index.html": "the Greek Esther",
+	"web/esther/1/index.html":  "the Greek Esther",
+	"webc/esther/1/index.html": "the Greek Esther",
+}
 
 // goldenFixtureVersions is the canon the golden site is built from: the three
 // published editions over a handful of books, with the Catholic edition's
@@ -135,9 +164,14 @@ func siteDigests(t *testing.T, root string) []string {
 
 func readGolden(t *testing.T) []string {
 	t.Helper()
-	f, err := os.Open(offGoldenPath)
+	return readGoldenAt(t, offGoldenPath)
+}
+
+func readGoldenAt(t *testing.T, path string) []string {
+	t.Helper()
+	f, err := os.Open(path)
 	if err != nil {
-		t.Fatalf("read %s: %v (regenerate with -update only if the change is meant to alter the site)", offGoldenPath, err)
+		t.Fatalf("read %s: %v (regenerate with -update only if the change is meant to alter the site)", path, err)
 	}
 	defer f.Close()
 	var lines []string
@@ -196,6 +230,43 @@ func TestNKJVTextOffSiteIsByteIdenticalToTheBase(t *testing.T) {
 		"nkjv/index.html", "404.html", "webc/daniel/14/index.html"} {
 		if _, ok := g[must]; !ok {
 			t.Errorf("the fixture wrote no %s; the golden would not cover it", must)
+		}
+	}
+}
+
+// THE NEXT RELEASE'S TREE DIFFERS FROM THE SHIPPING ONE ONLY WHERE ITS PIECES
+// SAY. Read in both states of the switch, from the two pinned files: a page
+// the next release writes differently that no piece names, or a named page it
+// writes the same, fails here, so a change meant for one state cannot quietly
+// rewrite the other's pages.
+func TestTheNextReleaseSiteDiffersOnlyWhereItsPiecesSay(t *testing.T) {
+	byPath := func(lines []string) map[string]string {
+		m := map[string]string{}
+		for _, l := range lines {
+			m[l[66:]] = l[:64]
+		}
+		return m
+	}
+	current, next := byPath(readGoldenAt(t, goldenPathFor(false))), byPath(readGoldenAt(t, goldenPathFor(true)))
+	differ := map[string]bool{}
+	for path, sum := range current {
+		if next[path] != sum {
+			differ[path] = true
+		}
+	}
+	for path := range next {
+		if _, ok := current[path]; !ok {
+			differ[path] = true
+		}
+	}
+	for path := range differ {
+		if _, ok := nextReleaseSitePages[path]; !ok {
+			t.Errorf("%s differs in the next release's tree, and no piece behind the switch names it", path)
+		}
+	}
+	for path, piece := range nextReleaseSitePages {
+		if !differ[path] {
+			t.Errorf("%s is named for %s but is the same in both trees", path, piece)
 		}
 	}
 }
