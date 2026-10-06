@@ -393,7 +393,9 @@ type shareRelease struct {
 	file, lines string
 }
 
-var iosRelease = shareRelease{"scripts/release-ios.sh", `\bGOOS=ios GOARCH=arm64 .*\bgo build\b.*/cmd/mobile"?$`}
+// The cross-compile names its module with go -C (it is run from wherever the
+// script is started), so the build verb may follow -C and its directory.
+var iosRelease = shareRelease{"scripts/release-ios.sh", `\bGOOS=ios GOARCH=arm64 .*\bgo (?:-C \S+ )?build\b.*/cmd/mobile"?$`}
 
 const windowsReleaseLines = `\bgo build\b.* -o BibleText\.exe \.$|\bpackage -os windows\b`
 

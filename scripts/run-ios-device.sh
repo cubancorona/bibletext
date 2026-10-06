@@ -26,6 +26,12 @@
 #
 # After that: just run this script. A paid-team development profile is valid for
 # ~1 year (vs a free team's 7 days) — re-run any time to reinstall.
+#
+# A locked phone refuses the install. The script tries again a few times while
+# you unlock it, and if the bundle still did not go on it keeps the signed
+# bundle in build/ios-device-kept (private: it holds the project key) and stops;
+# then `scripts/run-ios-device.sh --install-kept` installs it without building
+# again, and removes it once it is on the phone.
 set -euo pipefail
 umask 077
 
@@ -48,15 +54,45 @@ builtin cd -P -- "$script_dir_part"
 SCRIPT_DIR="$PWD"
 builtin cd -- "$original_dir"
 unset original_dir script_dir_part
+APP_NAME="BibleText.app"
+APP_ID="${BIBLETEXT_APP_ID:-uk.co.bibletext}"
+source "${SCRIPT_DIR}/ios-device-install.sh"
+note() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
+fail() { printf '\n\033[31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
+launch() {
+    note "launching (unlock the phone if it refuses)"
+    xcrun devicectl device process launch --device "$1" "$APP_ID" 2>&1 | grep -iE 'launched|error|Locked' || true
+}
+
+# --install-kept: install the bundle an earlier run kept when the phone would
+# not take it, with nothing built. It needs no key, since the bundle already
+# holds one, so any raw key in the environment is dropped before devicectl
+# runs; and the repository root is taken from the script's own directory,
+# with no subshell, for the same reason.
+for arg in "$@"; do
+    case "$arg" in --install-kept) ;; *) continue ;; esac
+    unset BIBLE_API_KEY
+    KEPT_DIR="${SCRIPT_DIR%/*}/build/ios-device-kept"
+    [ -d "$KEPT_DIR/$APP_NAME" ] || fail "No kept bundle in $KEPT_DIR. Build and install with scripts/run-ios-device.sh."
+    DEVICE_ID="$(ios_find_device)"
+    [ -n "$DEVICE_ID" ] || { xcrun devicectl list devices 2>&1 | sed 's/^/  /'; fail "No connected iPhone. Plug it in, unlock, Trust, enable Developer Mode."; }
+    note "installing the kept bundle on $DEVICE_ID"
+    ios_install_with_retries "$DEVICE_ID" "$KEPT_DIR/$APP_NAME" \
+        || fail "The install still did not finish. The bundle stays in $KEPT_DIR; unlock the phone and run scripts/run-ios-device.sh --install-kept again."
+    rm -rf "$KEPT_DIR"
+    launch "$DEVICE_ID"
+    printf '\n✓ Done. BibleText is on the iPhone, and the kept bundle is removed.\n'
+    exit 0
+done
+
 source "${SCRIPT_DIR}/release-bible-key.sh"
 load_release_bible_key
 
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+KEPT_DIR="$REPO_ROOT/build/ios-device-kept"
 python3 "$REPO_ROOT/scripts/check-support-contact.py"
 python3 "$REPO_ROOT/scripts/check-repository-hygiene.py"
 APP_DIR="${REPO_ROOT}/cmd/mobile"
-APP_NAME="BibleText.app"
-APP_ID="${BIBLETEXT_APP_ID:-uk.co.bibletext}"
 TEAM_ID="${BIBLETEXT_TEAM_ID:-R8PC7239T2}"   # paid Apple Developer Program team
 # The app's declared floor, shared with release-ios.sh through
 # config/product.json so device builds exercise the same one the Store gets.
@@ -86,8 +122,6 @@ done
 WORK="$(mktemp -d /tmp/bibletext-device.XXXXXX)"
 
 export PATH="$(go env GOPATH)/bin:$PATH"
-note() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
-fail() { printf '\n\033[31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 
 # ── 0. apply the iOS-only Fyne scroll-lag patch for this build ───────────────
 # go.mod ships STOCK (so `go build` / `go run ./cmd/bibletext` stay one-line); the
@@ -112,7 +146,9 @@ export PATH="$REPO_ROOT/build/fyne-cli:$PATH"
 
 # The Fyne-produced bundle is keyless and supplies only resources. The final
 # executable below is linked with the externally sourced project fallback,
-# verified, signed, installed, and then removed with the private workspace.
+# verified, signed, installed, and then removed with the private workspace; or,
+# when the phone would not take it, kept in the private build/ios-device-kept
+# until --install-kept installs it.
 
 ( cd "$REPO_ROOT" && go mod edit -replace fyne.io/fyne/v2=./third_party/fyne )
 
@@ -131,15 +167,11 @@ done < <(security find-identity -v -p codesigning 2>/dev/null | grep 'Apple Deve
 note "signing identity: $CERT_NAME  (team $TEAM_ID)"
 
 # ── 2. reachable device ─────────────────────────────────────────────────────
-# devicectl reports a usable phone as "connected" (USB) OR "available (paired)"
-# (CoreDevice network tunnel) — install works in either state. Match any reachable
-# iPhone/iPad and pull the UDID by its UUID shape, not column position (the State
-# column is one or two words, which shifts the positional fields).
-# The identifier column carries EITHER a CoreDevice UUID (8-4-4-4-12 hex, what
-# Xcode 26 printed) OR the hardware UDID (8-16 hex, what Xcode 27 prints for a
-# phone); devicectl accepts both, so accept both here — the UUID-only match
-# reported "no connected iPhone" against a paired, reachable phone.
-DEVICE_ID="${BIBLETEXT_DEVICE_ID:-$(xcrun devicectl list devices 2>/dev/null | awk '/(iPhone|iPad)/ && !/unavailable/ && !/simulated/ && (/connected/ || /available/ || /paired/) { for (i=1; i<=NF; i++) if ($i ~ /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/ || $i ~ /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{16}$/) { print $i; exit } }')}"
+# ios_find_device (ios-device-install.sh) takes a connected or paired iPhone or
+# iPad by its identifier's shape, CoreDevice UUID or hardware UDID; the
+# UUID-only match once reported "no connected iPhone" against a paired,
+# reachable phone.
+DEVICE_ID="$(ios_find_device)"
 [ -n "$DEVICE_ID" ] || { xcrun devicectl list devices 2>&1 | sed 's/^/  /'; fail "No connected iPhone. Plug it in, unlock, Trust, enable Developer Mode."; }
 note "target device: $DEVICE_ID"
 
@@ -207,8 +239,8 @@ CC="$(xcrun --sdk iphoneos -f clang)"
 CGO_ENABLED=1 GOOS=ios GOARCH=arm64 CC="$CC" \
     CGO_CFLAGS="-isysroot $SDK -arch arm64 -miphoneos-version-min=$IOS_MIN" \
     CGO_LDFLAGS="-isysroot $SDK -arch arm64 -miphoneos-version-min=$IOS_MIN" \
-    go build -trimpath -ldflags "$BIBLE_KEY_LDFLAGS -s -w" \
-      ${DEV_TAG:+-tags "${DEV_TAG#,}"} -o "$WORK/bibletext-ios-arm64" "$REPO_ROOT/cmd/mobile"
+    go -C "$REPO_ROOT" build -trimpath -ldflags "$BIBLE_KEY_LDFLAGS -s -w" \
+      ${DEV_TAG:+-tags "${DEV_TAG#,}"} -o "$WORK/bibletext-ios-arm64" ./cmd/mobile
 BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
   python3 "$REPO_ROOT/scripts/verify-release-key.py" "$WORK/bibletext-ios-arm64"
 EXE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")"
@@ -276,10 +308,15 @@ fi
 codesign -f -s "$CERT_HASH" --entitlements "$WORK/bt_ent.plist" --generate-entitlement-der "$APP"
 
 # ── 7. install + launch ─────────────────────────────────────────────────────
+# Tried again while the phone is locked; a bundle that still did not go on is
+# kept rather than built again (ios-device-install.sh).
 note "installing on device"
-xcrun devicectl device install app --device "$DEVICE_ID" "$APP"
-note "launching (unlock the phone if it refuses)"
-xcrun devicectl device process launch --device "$DEVICE_ID" "$APP_ID" 2>&1 | grep -iE 'launched|error|Locked' || true
+if ! ios_install_with_retries "$DEVICE_ID" "$APP"; then
+    ios_keep_bundle "$APP" "$KEPT_DIR"
+    fail "The install did not finish. The signed bundle is kept in $KEPT_DIR, private because it holds the project key. Unlock the phone and run: scripts/run-ios-device.sh --install-kept"
+fi
+rm -rf "$KEPT_DIR"   # an earlier run's kept bundle is superseded
+launch "$DEVICE_ID"
 
 cat <<EOF
 

@@ -150,8 +150,8 @@ CGO_ENABLED=1 GOOS=ios GOARCH=arm64 CC="$CC" \
     GOCACHE="$WORK/go-cache" GOTMPDIR="$WORK/go-tmp" \
     CGO_CFLAGS="-isysroot $SDK -arch arm64 -miphoneos-version-min=$IOS_MIN" \
     CGO_LDFLAGS="-isysroot $SDK -arch arm64 -miphoneos-version-min=$IOS_MIN" \
-    go build -trimpath -ldflags "$BIBLE_KEY_LDFLAGS -s -w" \
-      -o "$WORK/bibletext-arm64" "$REPO_ROOT/cmd/mobile"
+    go -C "$REPO_ROOT" build -trimpath -ldflags "$BIBLE_KEY_LDFLAGS -s -w" \
+      -o "$WORK/bibletext-arm64" ./cmd/mobile
 BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
   python3 "$REPO_ROOT/scripts/verify-release-key.py" "$WORK/bibletext-arm64"
 # The next major release stays out of the store build (docs/NEXT.md).

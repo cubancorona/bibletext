@@ -590,9 +590,7 @@ against the previous script, which kept `"commitStatus": "CommitStarted"`.
 The test that the id is on disk before the response is judged now reads the
 file back instead of watching `save_state`.
 
-## scripts/run-ios-device.sh: a locked phone costs a full rebuild — found 2 October 2026
-
-Planned for: 1.2.20 — see docs/ROADMAP.md.
+## scripts/run-ios-device.sh: a locked phone costs a full rebuild — FIXED 6 October 2026, for 1.2.20
 
 The developer install to a physical iPhone fails at `xcrun devicectl device
 install app` (`scripts/run-ios-device.sh:276`) when the phone is locked,
@@ -621,6 +619,33 @@ phone to be unlocked; on a failed install keep the signed bundle in its
 private directory and say how to install it again, removing it once an
 install succeeds; and run the cross-compile as `go -C "$REPO_ROOT" build`,
 so the module is the script's own.
+
+**The fix.** The install goes through `scripts/ios-device-install.sh`, which
+`run-ios-device.sh` sources. It tries again while devicectl answers 12040,
+10003, "Failed to acquire assertion" or "Locked": five tries, ten seconds
+apart, asking for the phone to be unlocked. Any other failure is not tried
+again. A bundle that still did not go on is moved into `build/ios-device-kept`,
+made afresh with mode 0700, and the script stops saying so.
+`scripts/run-ios-device.sh --install-kept` then installs it with nothing
+built and no key loaded. It drops any raw key in the environment before
+devicectl runs, and is handled before the key is read. It removes the kept
+bundle once it is on the phone; so does the next successful build. The
+cross-compile is `go -C "$REPO_ROOT" build ... ./cmd/mobile` in
+`run-ios-device.sh` and in `release-ios.sh`, which had the same flaw.
+`release-ios.sh` had one more: `scripts/check-version-not-spent.sh`, which it
+runs first, asked whatever repository the caller stood in. From outside one
+it failed, and from inside another it compared that repository's HEAD with
+that repository's origin, so it could pass a spent number. It now runs git
+with `-C` at its own repository root. Held by `ios_device_tools_test.go`.
+`TestALockedPhoneIsTriedAgainAndItsBundleKept` drives the helper with a
+stand-in for xcrun: a phone locked for two tries installs on the third, one
+locked throughout is tried four times of four, a refused signature once,
+and the kept folder is 0700 and holds the moved bundle.
+`TestRunIOSDeviceKeepsTheBundleItCouldNotInstall` and
+`TestTheIOSBuildsCompileTheirOwnModule` read the two scripts.
+`TestTheVersionCheckReadsItsOwnRepository` runs the check from another
+repository, with its own as the control. Each fails against the previous
+scripts. Not run against a phone: no device was attached for this change.
 
 ## Windows: use the native Share sheet — BUILT 30 September 2026, seen in the app unpackaged the same day and packaged on 1 October
 
