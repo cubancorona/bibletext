@@ -485,14 +485,28 @@ tag, it ships under the next number; the tag keeps the text that was refused.
 
 ### 10 — Snap
 
-On a Linux host (snapcraft runs nowhere else; the Ubuntu arm64 VM serves, over
-SSH):
+Both snaps reach edge from the tag's run of `release.yml`, one job per
+architecture: `build snap (amd64)` and `build snap (arm64)`. Check that both
+passed before promoting. The arm64 job can fail before it has built
+anything, inside `snapcore/action-build` while it sets up its build instance
+("Failed to read instance config in environment at
+/etc/craft-instance.conf"). On 1 October 2026 the same failure in the Linux
+stores workflow's arm64 snap passed when rerun with nothing changed. Rerun
+the failed job, which publishes to edge as the first attempt would have:
+
+```
+gh run rerun <run-id> --failed
+```
+
+Then, on a Linux host (snapcraft runs nowhere else; the Ubuntu arm64 VM
+serves, over SSH):
 
 ```
 snapcraft promote bibletext --from-channel edge --to-channel stable
 ```
 
-One action covers every architecture and refuses a partial set.
+One action covers every architecture and refuses a partial set, which is why
+a failed arm64 job holds the snap until it is rerun.
 
 ### 11 — Link anything newly live, then publish the site
 

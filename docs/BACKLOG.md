@@ -16,8 +16,8 @@ not here.
 
 ## The release pipeline: what still waits on something it need not
 
-Planned for: stays, a standing entry; 1.2.20 names the arm64 snap rerun in
-stage 10 — see docs/ROADMAP.md.
+Planned for: stays, a standing entry — see docs/ROADMAP.md. Stage 10 names
+the arm64 snap rerun from 1.2.20.
 
 A standing entry, not a one-off: every release is the moment to ask what
 sat idle waiting on a step it did not depend on, in the release itself and
@@ -98,7 +98,12 @@ What 1.2.18 (1–2 October 2026) adds:
   or none, so the same failure in a tag's run holds the snap until the job
   is rerun. The tag's own run built both snaps first time. Either retry the
   build step once on that error, in both workflows, or name the rerun in
-  stage 10 of `docs/RELEASING.md`.
+  stage 10 of `docs/RELEASING.md`. Stage 10 names it (6 October 2026, for
+  1.2.20): check both snap jobs passed, and rerun a failed one with
+  `gh run rerun <run-id> --failed` before promoting.
+  `TestStage10NamesTheArm64SnapRerun` (`releasing_doc_test.go`) holds the
+  stage to that while `release.yml` builds the arm64 snap with
+  `snapcore/action-build`. A retry in the workflows is still open.
 - **Apple's processing was quick.** It took about three minutes for 1.2.18,
   so the wait for `VALID` in stage 7 need not be planned as a long one.
 

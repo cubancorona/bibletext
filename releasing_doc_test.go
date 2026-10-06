@@ -297,6 +297,34 @@ func TestStage2NamesEveryCheckInTheHygieneStep(t *testing.T) {
 	}
 }
 
+// Stage 10 promotes every architecture's snap or none, and release.yml builds
+// the arm64 one with snapcore/action-build, which has failed before building
+// anything while it set up its build instance, and passed when rerun. While
+// the workflow builds that snap that way, the stage must name the job and the
+// rerun, or a release stops at a promotion that refuses with no next step.
+func TestStage10NamesTheArm64SnapRerun(t *testing.T) {
+	workflow := readRepoFile(t, ".github/workflows/release.yml")
+	job := strings.Index(workflow, "name: build snap (arm64)")
+	if job < 0 {
+		t.Skip("release.yml has no `build snap (arm64)` job; stage 10's rerun names nothing")
+	}
+	rest := workflow[job:]
+	if next := regexp.MustCompile(`\n  [a-z0-9_-]+:\n`).FindStringIndex(rest); next != nil {
+		rest = rest[:next[0]]
+	}
+	if !strings.Contains(rest, "snapcore/action-build") {
+		t.Skip("release.yml's arm64 snap is no longer built by snapcore/action-build")
+	}
+	stage := strings.Join(strings.Fields(releasingStage(t, "10")), " ")
+	for _, want := range []string{"`build snap (arm64)`", "gh run rerun <run-id> --failed",
+		"Failed to read instance config"} {
+		if !strings.Contains(stage, want) {
+			t.Errorf("stage 10 of docs/RELEASING.md does not name %s; the arm64 snap job can fail "+
+				"before it builds, and the promotion refuses until it is rerun", want)
+		}
+	}
+}
+
 // CONTROL: the filter matcher must have GitHub's semantics and the parsers
 // must see the real files, or the tests above pass by checking nothing.
 func TestTheWorkflowParsersSeeTheRealFiles(t *testing.T) {
