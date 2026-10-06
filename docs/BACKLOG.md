@@ -1764,8 +1764,9 @@ before.
 
 `OnStopped` still stops the audio and flushes the reading position on every
 activity destroy. Whether an activity destroy should stop the audio is a
-separate question, recorded as open under "Android: an activity destroyed with
-the process alive stops the narration" below.
+separate question, recorded under "Android: an activity destroyed with the
+process alive stops the narration" below; since 6 October 2026 it does not, on
+Android.
 
 The host tests (`activity_life_test.go`) run the hooks as installed, in each
 driver's order: the next activity starts not stopping and follows a light/dark

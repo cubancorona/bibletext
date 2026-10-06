@@ -53,8 +53,8 @@ package bibletext
 // the stop hook for its own activity, carrying the activity's generation. The
 // driver takes the hook as the stage crosses to Dead, so the hook it queues
 // names the activity that ended; a stop for an activity older than the one
-// started last flushes the reading position and stops the audio as ever
-// (nothing about those changes here), and leaves stopping clear.
+// started last flushes the reading position as ever, and leaves stopping
+// clear. (On Android no stop stops the audio: activityStopEndsAudio, below.)
 //
 // WHAT THE NEW ACTIVITY PICKS UP. Between a stop and the next start every
 // consumer of stopping refuses, and each is picked up as follows:
