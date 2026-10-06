@@ -425,16 +425,16 @@ place a fix on one does not reach the others.
 
 **Android before 15**
 
-30. **The reading page is ragged on Android 13 and 14**, as on every release
-    before Android 15 (API 21 to 34), and justified on Android 15 and later
-    and on every other platform. The pane is a selectable `TextView`, laid
+30. **The reading page is ragged before Android 15**, on every release from
+    Android 5 to 14 (API 21 to 34), and justified on Android 15 and later and
+    on every other platform. The pane is a selectable `TextView`, laid
     out by a `DynamicLayout`, which before Android 15 breaks a line as if to
     justify it and never shrinks its spaces, so a justified line ran past
     the right edge. `justifiesInterWord`
     (`android/BtBridge.java`) turns justification on only from API 35, and
     older releases read ragged but whole. Closed as by design on 6 October
     2026: each platform gets the best page it can draw, rather than every
-    platform the page the weakest can (`docs/BACKLOG.md`, "Android 13/14: the
+    platform the page the weakest can (`docs/BACKLOG.md`, "Android before 15: the
     reading text cannot be justified while it stays selectable").
 
 31. **A Psalm title that wraps can still break a word with a hyphen** from

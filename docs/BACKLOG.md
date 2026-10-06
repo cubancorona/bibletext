@@ -5963,7 +5963,7 @@ confirms at zero differing pixels.
 The selection popup's anchor had the same blind measurement and is routed through
 the same helper.
 
-## Android 13/14: the reading text cannot be justified while it stays selectable — BY DESIGN (8 September 2026)
+## Android before 15: the reading text cannot be justified while it stays selectable — BY DESIGN (8 September 2026)
 
 The native reading pane is a selectable `TextView`, which Android lays out
 with a `DynamicLayout`. Before Android 15 that layout never hands the
@@ -5977,7 +5977,7 @@ The app now justifies only on API 35+, and older releases read ragged but
 whole. Non-selectable text (`StaticLayout`) justifies on every release, but
 selection is the native feature the pane exists for.
 
-Ways back, if ragged text on Android 13/14 ever matters enough: a custom
+Ways back, if ragged text before Android 15 ever matters enough: a custom
 `TextView` that draws its own justified lines from a `StaticLayout` while
 keeping a selectable `DynamicLayout` for hit-testing (two layouts, one text);
 or reflection on the protected `Layout.setJustificationMode`, which the
