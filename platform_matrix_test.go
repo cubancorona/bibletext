@@ -921,6 +921,39 @@ func TestTheMatrixRecordsTheRaggedAndroidPage(t *testing.T) {
 	}
 }
 
+// A DIVERGENCE IS CITED BY ITS NUMBER, SO THE PAGE MUST SHOW THAT NUMBER.
+// The tests, the BACKLOG and the matrix itself cite "divergence 30". Markdown
+// takes the number of a list's first item only and counts on from it, so an
+// item written as 30 straight after 13 in the same list is shown as 14, the
+// number the Windows list then starts at too. Numbering every divergence in
+// order, 1 to N down the section, is what makes each shown number the one
+// written: a list's first item keeps its own, and every later one is one more.
+func TestTheDivergencesAreNumberedInPageOrder(t *testing.T) {
+	doc := readRepoFile(t, "docs/PLATFORM_MATRIX.md")
+	start, end := strings.Index(doc, "\n## Divergences"), strings.Index(doc, "\n## Deliberate exclusions")
+	if start < 0 || end < start {
+		t.Fatal("docs/PLATFORM_MATRIX.md has no Divergences section before its Deliberate exclusions")
+	}
+	item := regexp.MustCompile(`(?m)^([0-9]+)\. `)
+	var numbers []int
+	for _, m := range item.FindAllStringSubmatch(doc[start:end], -1) {
+		n, _ := strconv.Atoi(m[1])
+		numbers = append(numbers, n)
+	}
+	if len(numbers) < 30 {
+		t.Fatalf("found %d numbered divergences; the section is not being read (%v)", len(numbers), numbers)
+	}
+	for i, n := range numbers {
+		if n != i+1 {
+			t.Fatalf("divergence %d is numbered item %d of the section; Markdown shows an item that "+
+				"continues a list as one more than the item before it, whatever it is written as, so "+
+				"number the divergences 1 to %d in the order they stand, and give one that belongs "+
+				"under an earlier platform its own heading after the last (%v)",
+				n, i+1, len(numbers), numbers)
+		}
+	}
+}
+
 // A LINE NUMBER IN A DOCUMENT IS A CLAIM ABOUT CODE THAT MOVES.
 //
 // The matrix cites the cause of a divergence down to the line, in the form

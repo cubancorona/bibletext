@@ -145,16 +145,6 @@ place a fix on one does not reach the others.
 13. Android's only CI was a target-SDK text check until 19 September 2026;
     `scripts/check-android-pane.sh` now cross-compiles android/arm64 beside
     the iOS gate. Building is still the whole of it — nothing runs an APK.
-30. **The reading page is ragged on Android 13 and 14**, and justified on
-    Android 15 and later and on every other platform. The pane is a
-    selectable `TextView`, laid out by a `DynamicLayout`, which before
-    Android 15 breaks a line as if to justify it and never shrinks its
-    spaces, so a justified line ran past the right edge. `justifiesInterWord`
-    (`android/BtBridge.java`) turns justification on only from API 35, and
-    older releases read ragged but whole. Closed as by design on 6 October
-    2026: each platform gets the best page it can draw, rather than every
-    platform the page the weakest can (`docs/BACKLOG.md`, "Android 13/14: the
-    reading text cannot be justified while it stays selectable").
 
 **Windows**
 
@@ -418,6 +408,19 @@ place a fix on one does not reach the others.
     layout watcher, so nothing would notice a resize across square. To be
     unified in 1.2.21: `docs/BACKLOG.md`, "The desktop takes the phones'
     navigation rule".
+
+**Android**
+
+30. **The reading page is ragged on Android 13 and 14**, and justified on
+    Android 15 and later and on every other platform. The pane is a
+    selectable `TextView`, laid out by a `DynamicLayout`, which before
+    Android 15 breaks a line as if to justify it and never shrinks its
+    spaces, so a justified line ran past the right edge. `justifiesInterWord`
+    (`android/BtBridge.java`) turns justification on only from API 35, and
+    older releases read ragged but whole. Closed as by design on 6 October
+    2026: each platform gets the best page it can draw, rather than every
+    platform the page the weakest can (`docs/BACKLOG.md`, "Android 13/14: the
+    reading text cannot be justified while it stays selectable").
 
 ## Deliberate exclusions
 
