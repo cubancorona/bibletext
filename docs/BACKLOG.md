@@ -3548,9 +3548,9 @@ supplement on those pages too.
 
 ## What we ship has largely never been run
 
-Planned for: 1.2.21+; its cheap halves, `UIDeviceFamily` read back and the
-preferences writer's marker on every release path, in 1.2.20 — see
-docs/ROADMAP.md.
+Planned for: 1.2.21+ — see docs/ROADMAP.md. Its cheap halves, `UIDeviceFamily`
+read back and the preferences writer's marker on every release path, are
+FIXED 6 October 2026, for 1.2.20 (end of this entry).
 
 Found by a five-platform survey on 18 September 2026, each platform's claims
 then checked by an adversarial reader that refuted 48 of them. The full picture
@@ -3599,6 +3599,45 @@ The cheap wins are probably the compile checks (a `GOOS=android` gate costs
 nothing) and launching the packaged macOS artefact rather than a development
 rebuild. The expensive one is deciding what "tested" should mean for a store
 binary we cannot run in CI at all.
+
+**The two cheap halves — FIXED 6 October 2026, for 1.2.20.**
+
+- *The atomic preferences writer on every release path.* Only
+  `release-mac-store.sh` looked for the patched writer's message in what it
+  built. `scripts/verify-atomic-prefs.py` now does it everywhere, with the
+  same control string. It checks each slice of a universal binary on its
+  own and each native library in an .apk or .aab, and fails closed on a
+  package with none. It runs after the last compile of every path:
+  `release-ios.sh` on the cross-compiled binary, and `build-android.sh
+  --release` on the AAB and on the APK. `release-mac-store.sh` runs it on
+  both slices, in place of its own loop. `build-windows-exe.sh`, which
+  `msstore.yml` builds through, runs it after the packager's rebuild, and
+  `check-linux-package.sh` on the tarball's executable. In `release.yml` it
+  runs on the Mac's universal binary, on each AppImage's extracted
+  executable and on each Windows executable. In `linux-stores.yml` it runs
+  on the binary its packages share. It was left out of
+  `verify-release-package.sh`, whose regression test
+  (`scripts/test-release-key-flow.sh`) runs it on a test binary built
+  without the Fyne patches. Built from this tree, `cmd/bibletext` with stock
+  Fyne is refused and the same build with `setup-fyne-patch.sh` applied
+  passes.
+- *`UIDeviceFamily` read back.* `scripts/check-ios-device-family.py` reads
+  the key with plistlib and requires exactly iPhone and iPad, or iPhone
+  alone for a `BIBLETEXT_IPAD=0` build. `release-ios.sh` runs it on the
+  archived app, the bundle the upload path sends, and on the exported .ipa
+  before it is published.
+
+Held by `atomic_prefs_release_test.go` and `ios_device_family_test.go`.
+`TestEveryReleasePathChecksTheAtomicPreferencesWriter` reads every path and
+every compiling workflow job for the check after its last compile.
+`TestVerifyAtomicPrefsRefusesAStockWriter` runs the verifier on made files:
+a stock binary, one with no control string, a universal binary with one
+stock slice, an .aab with one stock library, and an .apk with none.
+`TestReleaseIOSReadsItsDeviceFamiliesBack` and `TestCheckIOSDeviceFamily`
+cover the read-back. The path checks fail against the previous scripts and
+workflows, and each made-file case fails with its rule taken out of the
+verifier. Neither check has run on a real store build yet; the first will
+be 1.2.20's.
 
 ## Headings: quoting, notes and links need one deliberate pass
 

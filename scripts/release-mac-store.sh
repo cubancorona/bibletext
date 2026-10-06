@@ -161,17 +161,9 @@ note "confirming the atomic preferences writer is in both slices"
 # each slice must carry the patched writer's marker. The control proves the
 # probe can find anything at all, so a zero means absence rather than a broken
 # search.
-# grep -c, never grep -q: -q exits on the first match, strings then dies of
-# SIGPIPE, and under `set -o pipefail` that non-zero status fails the pipeline
-# even though the string was found. The first run of this guard refused a
-# perfectly good build for exactly that reason.
-for slice in "$WORK/BibleText-arm64" "$WORK/BibleText-amd64"; do
-  [ "$(strings -a "$slice" | grep -cF "Preferences save not published")" -gt 0 ] ||
-    fail "$(basename "$slice") lacks the atomic preferences writer — the Fyne patch did not reach this build"
-  [ "$(strings -a "$slice" | grep -cF "World English Bible")" -gt 0 ] ||
-    fail "$(basename "$slice") is missing a string every build has; the marker probe cannot be trusted"
-done
-echo "  both slices carry the patched writer"
+# Every release path runs the same check (scripts/verify-atomic-prefs.py).
+python3 scripts/verify-atomic-prefs.py "$WORK/BibleText-arm64" "$WORK/BibleText-amd64" ||
+  fail "a slice lacks the atomic preferences writer — the Fyne patch did not reach this build"
 
 note "joining them into one universal binary"
 # The Store expects a single app, not one upload per architecture.

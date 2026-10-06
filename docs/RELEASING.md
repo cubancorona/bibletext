@@ -247,9 +247,13 @@ Version, build number, minimum OS — from the artefact, not the ledger. An
 artefact that was never read back is an assumption.
 
 The iOS and Mac scripts do this themselves: `release-ios.sh` reads the signed
-`.ipa` back in its final step, and `release-mac-store.sh` checks the signed
-`.pkg` after signing and fails if the entitlement did not survive. The AAB is
-read with `bundletool dump manifest`. Record what each one printed.
+`.ipa` back in its final step, its device families included (iPhone and iPad,
+`scripts/check-ios-device-family.py`), and `release-mac-store.sh` checks the
+signed `.pkg` after signing and fails if the entitlement did not survive. The
+AAB is read with `bundletool dump manifest`. Record what each one printed.
+Every path, these three and the workflows, has also checked that the patched
+Fyne preferences writer reached what it built (`scripts/verify-atomic-prefs.py`):
+without it a death mid-save empties every note.
 
 `scripts/verify-release-package.sh` is **not** this step. It checks how a
 desktop package's executable was built — trimpath, the release key, no

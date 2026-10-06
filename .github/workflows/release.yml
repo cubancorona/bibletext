@@ -147,6 +147,9 @@ jobs:
             [ "$m" = "$MAC_MIN" ] || { echo "a slice is linked for macOS $m, not $MAC_MIN" >&2; exit 1; }
           done
           BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" ../../scripts/verify-release-package.sh BibleText.app/Contents/MacOS/BibleText BibleText.app
+          # The patched Fyne preferences writer, in both slices: without it a
+          # death mid-save empties every note.
+          python3 ../../scripts/verify-atomic-prefs.py BibleText.app/Contents/MacOS/BibleText
           ditto -c -k --keepParent BibleText.app ../../BibleText-macOS.zip
           rm -rf BibleText.app
           cp "$RUNNER_TEMP/FyneApp.toml.original" FyneApp.toml
@@ -221,6 +224,7 @@ jobs:
           grep -q '^Exec=bibletext %u$' squashfs-root/uk.co.bibletext.BibleText.desktop
           grep -q '^MimeType=x-scheme-handler/bibletext;' squashfs-root/uk.co.bibletext.BibleText.desktop
           BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" scripts/verify-release-package.sh squashfs-root/usr/bin/bibletext squashfs-root
+          python3 scripts/verify-atomic-prefs.py squashfs-root/usr/bin/bibletext
           rm -rf squashfs-root
           # The snap job packages this same executable.
           install -Dm755 cmd/bibletext/bibletext build/snap-stage/bin/bibletext
@@ -328,6 +332,7 @@ jobs:
           grep -q '^Exec=bibletext %u$' squashfs-root/uk.co.bibletext.BibleText.desktop
           grep -q '^MimeType=x-scheme-handler/bibletext;' squashfs-root/uk.co.bibletext.BibleText.desktop
           BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" scripts/verify-release-package.sh squashfs-root/usr/bin/bibletext squashfs-root
+          python3 scripts/verify-atomic-prefs.py squashfs-root/usr/bin/bibletext
           rm -rf squashfs-root
           install -Dm755 cmd/bibletext/bibletext build/snap-stage/bin/bibletext
           install -Dm644 linux/asound.conf build/snap-stage/etc/asound.conf
@@ -455,6 +460,7 @@ jobs:
           # and the tag must be repeated or that rebuild drops the ES path.
           GOFLAGS="-trimpath -ldflags=-s -ldflags=-w -ldflags=$BIBLE_KEY_LDFLAGS" "$(go env GOPATH)/bin/fyne" package -os windows --tags gles --app-id uk.co.bibletext --executable BibleText.exe
           BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" ../../scripts/verify-release-package.sh BibleText.exe BibleText.exe
+          python3 ../../scripts/verify-atomic-prefs.py BibleText.exe
           cd ../..
       - name: ANGLE beside the executable (the app renders through Direct3D)
         shell: pwsh

@@ -240,6 +240,9 @@ if [ "${1:-}" = "--release" ]; then
   # The next major release stays out of the store build (docs/NEXT.md). The
   # real toolchain is named because `go` on PATH is the linker wrapper here.
   BIBLETEXT_REAL_GO="$REAL_GO" "$REPO_ROOT/scripts/verify-not-next.sh" "$AAB_STAGE"
+  # The patched preferences writer reached every native library; without it a
+  # death mid-save empties every note (scripts/verify-atomic-prefs.py).
+  python3 "$REPO_ROOT/scripts/verify-atomic-prefs.py" "$AAB_STAGE"
 
   note "injecting classes2.dex into the AAB (base/dex/) + re-signing"
   mkdir -p "$WORK/aab/base/dex"
@@ -280,6 +283,7 @@ if [ "${1:-}" = "--release" ]; then
     python3 "$REPO_ROOT/scripts/verify-release-key.py" "$AAB_STAGE"
   BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
     python3 "$REPO_ROOT/scripts/verify-release-key.py" "$APK_STAGE"
+  python3 "$REPO_ROOT/scripts/verify-atomic-prefs.py" "$APK_STAGE"
 
   # Publish only verified packages. Copy to hidden names in the destination,
   # then atomically rename each into its canonical release path.
