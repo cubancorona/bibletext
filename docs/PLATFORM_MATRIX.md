@@ -570,11 +570,12 @@ code as it shipped in 1.2.17, the Linux row from the desktop confirmation
 sheet built on 30 September 2026, and the Windows row from its native Share
 sheet built the same day and driven in the app on the Windows VM that day,
 and again as a packaged app on 1 October 2026; neither is in a release yet.
+The iPadOS row was seen in the simulator on 6 October 2026.
 
 | Platform | Share with note | Share with citation | Share as link | Share as image | Verse of the day | Defined in | Proof |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | iOS | System share sheet, over the new note card | System share sheet | System share sheet | Preview, then the system share sheet | System share sheet | `reading_ios.go` | `builds` — code reading, 29–30 September 2026 |
-| iPadOS | Share popover; probably points mid-page rather than at the selection | Share popover at the selection | Share popover at the selection | Preview, then a share popover; probably mid-page | Probably a share popover pointing at the hidden reading view, not the icon; not seen | `reading_ios.go` | `builds` — code reading, 29–30 September 2026 |
+| iPadOS | Share popover beside where the selection was, the new note card now there | Share popover at the selection | Share popover at the selection | Preview, then a share popover beside where the selection was | A share popover pointing at the middle of the screen, over the card, not at its icon | `reading_ios.go` | `runner` — simulator, iPad Pro 13-inch (M5), iPadOS 26.5, a development build of 1db51a02b, 6 October 2026 |
 | macOS | Share picker at the selection; the note card appears beneath | Share picker at the selection | Share picker at the selection | Preview, then the share picker with the image | Probably the share picker, anchored to the hidden reading view, not the icon; not seen | `reading_macos.go` | `builds` — code reading, 29–30 September 2026 |
 | Android | The note card, then the "Sharing text" sheet with the note, citation and link | "Sharing text" sheet with the quote and citation | "Sharing text" sheet with the link | Preview, then the "Sharing image" sheet | "Sharing text" sheet, by the citation's route; not driven | `reading_android.go` | `runner` — emulator, 1.2.17, 29–30 September 2026 |
 | Windows | The Windows Share sheet over the window, headed "Share link", with the citation, the link carrying the note, a QR-code button and a link button with no label (Copy link, by its icon), which shows a check when pressed; the new note card on the page beneath. By the code the note, the citation and the link go to the chosen app as text, and the link as a web link too; not seen (28) | The Windows Share sheet over the window, headed "Share", listing the apps to share to, with no title, preview or Copy on Windows 11. By the code the quote and its citation go to the chosen app as text; not seen (28) | The Windows Share sheet over the window, headed "Share link", with the citation, the link, a QR-code button and a link button with no label (Copy link, by its icon) (28) | Preview, then the Windows Share sheet over the window with the card as a file named "BibleText verse <date> <time>.png" in local time, shown in place of a title, with its thumbnail, its size and a size picker, Edit, and a copy button with no label (28) | The Windows Share sheet, as for Share with citation (28) | `share_windows.go` | `hardware` — arm64 VM, Windows 11 build 26200, the Store package workflow's arm64 package: its executable run unpackaged, 30 September 2026, and the package registered with package identity, 1 October 2026 (the proof note below) |
@@ -655,12 +656,19 @@ What each proof rests on:
 - **Android, `runner`.** The 1.2.17 build on the emulator. A simulator is not
   hardware (divergence 9), and an emulator is not either. Every verb but the
   verse of the day was driven to its share sheet; no share target was tapped.
-- **macOS, iOS and iPadOS, `builds`.** Read from the code; nothing was
-  launched for this table. The cells marked "probably" — the iPad's Share
-  with note and Share as image, and the verse of the day on iPad and Mac —
-  are recorded in `docs/BACKLOG.md` to be seen on a device. On the Mac it is
-  not even known that the picker shows while the view it is anchored to is
-  hidden.
+- **macOS and iOS, `builds`.** Read from the code; nothing was launched
+  for these two rows. The Mac's verse-of-the-day cell, marked "probably",
+  is recorded in `docs/BACKLOG.md` to be seen: it is not even known that the
+  picker shows while the view it is anchored to is hidden.
+- **iPadOS, `runner`.** A development build of `main` at 1db51a02b on the
+  iPad Pro 13-inch (M5) simulator, iPadOS 26.5, portrait, 6 October 2026;
+  a simulator is not hardware (divergence 9). The simulator takes no taps,
+  so a trigger compiled into that build alone made the selection, ran the
+  selection menu's handler and pressed each sheet's own Share; the
+  popover's anchor was read back from the presented controller and each
+  popover was screenshotted (`docs/BACKLOG.md`, "iPad and Mac: where the
+  share popover points"). Not seen: landscape, Split View, and a selection
+  made by touch.
 - **Windows, `hardware`, as an exception to the rule that the artefact
   must be the shipped one.** This code is not yet in a release. The
   Microsoft Store package workflow built a tree that carries it,

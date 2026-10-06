@@ -95,6 +95,8 @@ The order:
 - Also in 1.2.21, once their decisions are taken: shares that cannot finish
   (row 2), the WEB Catholic Daniel 3 heading (row 15), and the Greek Esther
   if it is decided to leave the switch then (Next major version, row 3).
+- Also in 1.2.21, the fix 1.2.20's popover look found (its row 9): the
+  iPad's verse-of-the-day popover (row 24).
 - The small native fixes (rows 17 to 22) can fill any minor release.
 - The rest follow as their decisions arrive.
 
@@ -123,6 +125,7 @@ The order:
 | 21 | Android: the night-mode patch races a foreground light/dark change (in the same entry) | Switching between light and dark while the app is in front always takes effect at once, instead of sometimes waiting for the next redraw. | S / low | Android | None | `patches/fyne-2.7.4-android-night-mode.patch` compares `currentSize.DarkMode != darkMode` before `updateTheme` writes it. Reading the night bit from the configuration the branch already builds (`AConfiguration_getUiModeNight`) removes the race. A toolkit patch, so with its patch test. |
 | 22 | The narration card's ✕: a double tap opens full screen (in "The open narration card covers the phone header's controls") | A double tap on the open card's ✕ only closes the card; today the second tap opens full screen in 45 of 48 phone layouts measured. | S / low | iPhone, Android phones | Open: a `fyne.DoubleTappable` ✕, which closes on either tap at the cost of the double-tap interval on every close, or a shield over the card's place for that interval, which leaves the controls it covered unreachable for that time. | Separable from the narration bar (Next major version, row 6), and need not wait for it. |
 | 23 | A reader who cleared their key on purpose is told at every launch that the NKJV could not be opened (VERSION_STATES.md, *Open decisions*) | A reader who deliberately cleared their key in Settings stops being told, at every launch, that the NKJV could not be opened. | S / low | All six | Open: skip the record when the store's negative is deliberate; the launch cells `L-A` and `L-D` then fire on `key-cleared` and have to say the reader gave the translation up, which needs wording. | Safe as it stands. Small once decided; the version-state walks already hold the cell. The other two version-state questions stay in the backlog (row 19 there). |
+| 24 | iPad: the verse of the day's Share points at the middle of the screen (in "iPad and Mac: where the share popover points") | On the iPad, the share popover for the verse of the day points at the card's Share icon instead of at the middle of the screen, over the card's text. | S / low | iPad; the Mac as well if its look (1.2.20, row 9) finds the same | None | Seen in the simulator on 6 October 2026 (1.2.20, row 9). `bibleTextPresentShare` (`reading_ios.go`) anchors the popover to the reading view, hidden while the card is up, and falls back to its middle; anchor it to the icon's rectangle, which the Fyne side knows. The selection verbs point at the selection and need nothing. |
 
 ---
 
