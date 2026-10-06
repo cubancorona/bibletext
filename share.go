@@ -740,9 +740,12 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 	}
 	// locate is the one search, for the selection before it is placed. anchor
 	// is where its verse number puts it (-1 for none), taken when the corpus
-	// has the selection there.
+	// has the selection there and the span, when there is one, agrees: a drag
+	// begun on the second digit of 29 arrives as "9 He said to", which the
+	// strip reads as verse 9's number when verse 9 opens with those words
+	// too, and the span, 29 to 29, is what says it is not.
 	locate := func(s string, anchor int) int {
-		if anchor >= 0 && strings.HasPrefix(corpus[anchor:], s) {
+		if anchor >= 0 && (!haveRegion || (anchor >= rStart && anchor < rEnd)) && strings.HasPrefix(corpus[anchor:], s) {
 			return anchor
 		}
 		if haveRegion {

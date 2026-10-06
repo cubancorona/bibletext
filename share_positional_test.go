@@ -275,3 +275,46 @@ func TestADragAcrossAVerseNumberIsPlacedWhereTheNumberSays(t *testing.T) {
 		t.Errorf("placed at %d, want %d: the words that run into verse 24's number", at, want)
 	}
 }
+
+// A verse number is only the page's word for where a verse begins when the
+// span agrees with it. A drag begun on the second digit of Mark 7:29's
+// number arrives as "9 He said to", spanned 29–29, and verse 9 opens with
+// the same words, so the marker strip takes the "9 " as verse 9's number.
+// Placed where that number says, the words were cited 7:9, a verse the
+// reader never touched; the span puts them in 29, where they are. The same
+// in Matthew 4, where 4:1 and 4:11 both open "Then". The controls are the
+// same words dragged from the whole number.
+func TestADragBegunOnAVerseNumbersLaterDigitStaysInItsSpan(t *testing.T) {
+	bd, err := loadSeedGospels()
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	for _, c := range []struct {
+		book            string
+		chapter, verse  int
+		whole, fromLast string
+		want            string
+	}{
+		{"Mark", 7, 29, "29 He said to", "9 He said to", "He said to"},
+		{"Matthew", 4, 11, "11 Then", "1 Then", "Then"},
+	} {
+		st := &AppState{Bible: bd, CurrentBook: c.book, CurrentChapter: c.chapter}
+		wantCite := verseRangeCitation(c.book, c.chapter, c.verse, c.verse)
+		_, spans := chapterProse(st)
+		start := -1
+		for _, sp := range spans {
+			if sp.verse == c.verse {
+				start = sp.start
+			}
+		}
+		span := selSpanFromNative(c.verse, c.verse)
+		if text, cite, at, _ := prepareShareQuote(st, c.whole, span); text != c.want || cite != wantCite || at != start {
+			t.Fatalf("control %q: shared (%q, %q) at %d, want (%q, %s) at %d", c.whole, text, cite, at, c.want, wantCite, start)
+		}
+		text, cite, at, _ := prepareShareQuote(st, c.fromLast, span)
+		if text != c.want || cite != wantCite || at != start {
+			t.Errorf("%q, span %d–%d: shared (%q, %q) at %d, want (%q, %s) at %d",
+				c.fromLast, c.verse, c.verse, text, cite, at, c.want, wantCite, start)
+		}
+	}
+}

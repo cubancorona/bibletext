@@ -3377,22 +3377,38 @@ hermetic, committed first with the rates below as the before.
   sweep found the same slide in the first search, with no repair involved:
   "this world. 24 I" in John 8, whose verse 23 says "this world. I" twice, was
   placed at the copy inside verse 23 and cited 8:23 alone. Five of the 11,067
-  drags that begin on the previous verse's last word did this.
+  drags that begin on the previous verse's last word did this. The number's
+  place is taken only inside the span's verses: a drag begun on the second
+  digit of Mark 7:29's number hands over "9 He said to", which the strip reads
+  as verse 9's number because verse 9 opens with the same words, and placed
+  there it was cited 7:9. The sweep's `digit` family, drags begun on a later
+  digit of a verse's number, had 141 of its 8,931 drags cited from the verse
+  the digit names until the span had to agree, and has none since
+  (`TestADragBegunOnAVerseNumbersLaterDigitStaysInItsSpan`).
 
 After it every drag in the sweep is cited from the verses its words came from
-and placed inside the drag. Over 1.2 million spanned drags of a wider scratch
-sweep (the same boundaries with drags begun up to three words back, and drags
-inside verses begun and ended mid-word), the 1,369 that cited the wrong verses
-cite the right ones and none that was right changed its citation. What moved
-otherwise: words placed at an earlier copy in the same verse now placed where
-they were dragged (the citation was already right), and selections that fell
-back to the legacy path now located. A drag that holds no whole word, "ou," out
-of "you,", now falls back verbatim as every such drag does
-(`TestShareSelectionSubWordFragment`) instead of being placed on the start of
-another word. One drag with no verse number in it can still be placed at an
-earlier copy of its words inside its own verse; the citation is the same, but
-the completion and the line-break restore read that copy's surroundings. The
-panes report the verse, not the place in it.
+and placed inside the drag, but for the digit drags the pipeline cannot place,
+which are shared as they came and cited by their span (below). A wider scratch
+sweep compared it with 1.2.19's code: 1,602,762 spanned drags, at every third
+boundary, from every character from 30 bytes before the verse's number
+through the number, to every word end up to 45 bytes into the verse. No drag
+that was right changed in any way. 6,253 that were placed outside the drag
+and cited the wrong verses cite the right ones; 21,099 placed outside the
+drag with the right citation, and 6,096 that fell back to the legacy path,
+are placed where they were dragged; 146 that fell back are placed outside the
+drag, the citation the same. 699 drags that hold no whole word of verse text
+now fall back verbatim, as a drag of part of one word already did
+(`TestShareSelectionSubWordFragment`): a piece of one word, "ou," out of
+"you,", or pieces of two either side of a mark or a verse number, "an, 38
+th". 695 of them had been placed on another copy of a word outside the drag,
+the citation the same, and four cited the wrong verse; they were junk before
+and are junk now. A drag whose words have no verse number before them, none
+at all or only one it stopped on ("above all. 32" in John 3, whose verse 31
+says "above all" twice), is still placed at the first copy of its words in
+the span's verses, which can be an earlier copy inside its own verse (5,534
+of the wider sweep's drags); the citation is the same, but the completion and
+the line-break restore read that copy's surroundings. The panes report the
+verse, not the place in it.
 
 The original finding:
 
@@ -3491,6 +3507,24 @@ on someone else's behalf.
 a proper saved-note test. It checks that an old note's record round-trips
 byte for byte through the current codec, which is worth keeping under a
 name that says so.
+
+## A drag begun inside a verse number shares the digit — found 6 October 2026
+
+Planned for: not yet placed; found in the 1.2.20 review, after the plan was
+made, for the owner to place in docs/ROADMAP.md.
+
+A drag that begins on the second digit of a two-digit verse number hands over
+"0 Hezekiah" for Matthew 1:10. Unless the verse whose number is that digit
+opens with the same words, the marker strip leaves the digit, nothing
+locates, and the legacy path shares the selection as it came: the citation is
+right, by the span, and the quotation carries the stray "0". The spanned
+sweep's `digit` family (`share_cut_sweep_test.go`) holds the count: 8,769 of
+its 8,931 drags, 98%, and the other 162 share the words alone. A verse number
+with only a mark before it or only part of the first word after it does the
+same: "? 39" on its own shares "? 39", and "39 Wh" shares both. Readers see a
+digit, never a wrong verse. A fix would drop a leading run of digits that the
+span says is the end of its first verse's number; it is a change to what is
+quoted, so it wants its own sweep.
 
 ## The web reader cannot render small capitals — DONE 2 October 2026, before it served an edition that uses them
 

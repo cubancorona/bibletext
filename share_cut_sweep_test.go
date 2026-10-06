@@ -435,7 +435,7 @@ func TestRaggedCutSweepPoetry(t *testing.T) {
 // span is what the panes compute: the verse whose number is the last at or
 // before the drag's first character, and the same for its last character
 // (btIOSVerseAtIndex, btMacVerseSpanForRange, BtBridge.verseAtOffset; the
-// styled pane's runs give the same answer). Three kinds of drag start at each
+// styled pane's runs give the same answer). Four kinds of drag start at each
 // boundary between verse N−1 and verse N, and each runs on to the end of the
 // k-th word from the start of verse N:
 //
@@ -446,7 +446,11 @@ func TestRaggedCutSweepPoetry(t *testing.T) {
 //	cross  begins on verse N−1's last word, so the shared words run across
 //	       the boundary. k runs to 3;
 //	number begins on verse N's own number, the control: the span starts at N,
-//	       and nothing is cut from the front. k runs to 3.
+//	       and nothing is cut from the front. k runs to 3;
+//	digit  begins on a later digit of verse N's number, the "9" of 29. The span
+//	       still starts at N, but what the drag hands over opens "9 He said
+//	       to", which reads as verse 9's number wherever verse 9 opens with
+//	       the same words. k runs to 3.
 //
 // The truth for a drag is where its shared words stand inside the drag: the
 // verses that stretch of the chapter overlaps. A shared text that does not
@@ -454,6 +458,9 @@ func TestRaggedCutSweepPoetry(t *testing.T) {
 // one of these drags carries a verse number, the pipeline must place its words
 // inside the drag too (prepareShareQuote's at): the completion, the original
 // terminal and the line-break restore all read the chapter around that place.
+// The one exception is a digit drag the pipeline cannot place, which it
+// shares as it came, stray digit and all, cited by the span: that is not
+// wrong about the verse, and is counted apart.
 type spannedPage struct {
 	st       *AppState
 	corpus   string
@@ -534,10 +541,12 @@ func (p *spannedPage) citeOf(at, n int) string {
 
 // spannedDrag is one drag's outcome: whether its citation names the verses
 // its shared words came from and its words were placed inside the drag, and
-// the detail to print when not.
+// the detail to print when not. verbatim is a drag the pipeline did not place
+// at all (at < 0), shared as it came and cited by exactly the drag's verses.
 type spannedDrag struct {
-	right  bool
-	detail string
+	right    bool
+	verbatim bool
+	detail   string
 }
 
 func (p *spannedPage) drag(t *testing.T, from, to int) spannedDrag {
@@ -571,13 +580,17 @@ func (p *spannedPage) drag(t *testing.T, from, to int) spannedDrag {
 	}
 	detail := fmt.Sprintf("%s %d: drag %q span %d–%d shared %q cited %s", p.st.CurrentBook, p.st.CurrentChapter,
 		raw, span.lo, span.hi, text, cite)
+	if at < 0 {
+		whole := p.citeOf(lo, hi-lo)
+		return spannedDrag{verbatim: cite == whole, detail: detail + ", not placed; the drag is " + whole}
+	}
 	if truth == "" {
-		return spannedDrag{false, detail + ", words that are not in the drag"}
+		return spannedDrag{detail: detail + ", words that are not in the drag"}
 	}
 	if at < lo || at+baseLen > hi {
-		return spannedDrag{false, fmt.Sprintf("%s, placed at %d outside the drag's %d–%d", detail, at, lo, hi)}
+		return spannedDrag{detail: fmt.Sprintf("%s, placed at %d outside the drag's %d–%d", detail, at, lo, hi)}
 	}
-	return spannedDrag{cite == truth, detail + ", want " + truth}
+	return spannedDrag{right: cite == truth, detail: detail + ", want " + truth}
 }
 
 func TestSpannedBoundaryDragSweep(t *testing.T) {
@@ -593,9 +606,10 @@ func TestSpannedBoundaryDragSweep(t *testing.T) {
 		name     string
 		maxWords int
 	}
-	families := []family{{"punct", 12}, {"cross", 3}, {"number", 3}}
+	families := []family{{"punct", 12}, {"cross", 3}, {"number", 3}, {"digit", 3}}
 	drags := map[string][]int{}
 	wrong := map[string][]int{}
+	verbatim := 0 // digit drags shared as they came, cited by their span
 	for _, f := range families {
 		drags[f.name] = make([]int, f.maxWords+1)
 		wrong[f.name] = make([]int, f.maxWords+1)
@@ -632,11 +646,20 @@ func TestSpannedBoundaryDragSweep(t *testing.T) {
 						starts = []int{lastWord}
 					case "number":
 						starts = []int{p.number[vi]}
+					case "digit":
+						starts = nil
+						for at := p.number[vi] + 1; at < p.text[vi]-1; at++ {
+							starts = append(starts, at)
+						}
 					}
 					for k := 1; k <= f.maxWords && first[vi]+k-1 < len(ends); k++ {
 						for _, from := range starts {
 							d := p.drag(t, from, ends[first[vi]+k-1])
 							drags[f.name][k]++
+							if !d.right && f.name == "digit" && d.verbatim {
+								verbatim++
+								continue
+							}
 							if !d.right {
 								wrong[f.name][k]++
 								if shown < 5 {
@@ -665,7 +688,7 @@ func TestSpannedBoundaryDragSweep(t *testing.T) {
 		total += n
 		t.Logf("%s: %d of %d drags wrong (%s)", f.name, totalWrong[f.name], n, strings.Join(line, ", "))
 	}
-	t.Logf("%d drags", total)
+	t.Logf("%d drags; %d digit drags shared as they came", total, verbatim)
 
 	// None may be wrong. Before the selection was placed by its verse number
 	// and kept in place through the repairs (normalizeShareSelection), a drag
@@ -675,11 +698,23 @@ func TestSpannedBoundaryDragSweep(t *testing.T) {
 	// verse's last word were placed at an earlier copy of the same words
 	// inside that verse and cited it alone. Those that begin on the verse's
 	// number were right.
+	//
+	// A drag begun on a later digit of a verse's number was placed where the
+	// digit says, as if it were a number of its own, in 141 of these 8,931
+	// drags when that placing was first made, before the span had to agree:
+	// Mark 7's "9 He said to", spanned 29, cited 7:9.
 	for _, f := range families {
 		if totalWrong[f.name] != 0 {
 			t.Errorf("%s: %d drags cite verses their words did not come from, or place the words outside the drag",
 				f.name, totalWrong[f.name])
 		}
+	}
+	// The rest of the digit drags are shared as they came, the stray digit
+	// in the quotation and the citation right: "0 Hezekiah" for Matthew 1:10.
+	// Held exactly so that a change shows; the backlog has it (BACKLOG.md,
+	// "A drag begun inside a verse number shares the digit").
+	if !testing.Short() && verbatim != 8769 {
+		t.Errorf("%d digit drags shared as they came, stray digit and all; recorded 8,769", verbatim)
 	}
 }
 
