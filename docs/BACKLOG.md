@@ -5373,6 +5373,32 @@ must bring the fix with it:
 - `reading.go:~209` (`flashIcon`): the one arming test passes `time.Hour`
   and drives the restore synchronously — a deliberate crutch. A test that
   taps a real copy button (1200ms flash) needs the arm gated.
+- `state.go` (160ms repaint of the whole window after a search arrival,
+  `openSearchResultRange`) — FIXED 6 October 2026. The audit missed it, and
+  it was the cause of the verse-of-the-day card test's occasional failures
+  (`TestTheCardSetsThePassageInTheReadingFace`, 30 September and 2 October,
+  each a nil dereference inside Fyne: once in `theme.Padding`, once in a
+  button's `MinSize`). `TestFullUIBuildsAndExercisesPaths` opens a search
+  result on a real test window, and 160ms later the timer laid that window
+  out on its own goroutine while the card test, the first heavy layout after
+  it, laid out the card. Fyne keeps the theme a `ThemeOverride` lays out in
+  on one global stack with no lock (`internal/theme`'s `PushRenderingTheme`
+  and `PopRenderingTheme`). A pop sets the top entry to nil and then shortens
+  the stack, so a read between those two writes takes a nil theme, and a
+  method call on it faults at address 0x30, both crashes' address. The race
+  run never saw it because `ui_render_test.go` is `!race`. A probe with that
+  test's body and no tag, run with the card test under `-race -count=30`,
+  reported 51 races between the timer's goroutine and the card test's, on
+  that stack and on Fyne's font caches, and failed 7 of the 30 card runs. The
+  repaint now goes through `arrivalRepaintAfter`, which TestMain shuts so it
+  only counts arms (`arrivalRepaintsArmed`), as it does `upgradeRetryAfter`.
+  The same probe is clean. One full run with a Fyne copy that logged every
+  override theme pushed off a test goroutine found no other timer laying out
+  during another test; the only other such pushes came from the API.Bible
+  key test's request goroutine, inside the test that waits for it. `TestASearchArrivalRepaintsThroughItsDoor` holds the
+  arm and runs the repaint on the test's goroutine, and
+  `TestTheSuiteHoldsEveryArrivalRepaint` shows nothing repaints on a timer;
+  both fail with the arm put back on `time.AfterFunc`.
 
 The audit's rule, kept: a gate lands only with a demonstrated race (a
 `-race -count=30` loop that fails before and is clean after) — no
