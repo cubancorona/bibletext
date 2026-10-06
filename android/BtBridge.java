@@ -481,8 +481,44 @@ public final class BtBridge {
                 for (int j = ps; j < i; j++) {
                     if (ssb.charAt(j) == ' ') ssb.replace(j, j + 1, String.valueOf(HEADING_GAP));
                 }
+                if (ps == 0 && isTitleParagraph(ssb, ps, i)) keepTitleUnhyphenated(ssb, ps, i);
             }
             ps = i + 1;
+        }
+    }
+
+    // A PSALM TITLE IS NEVER HYPHENATED, as the web and the Windows and Linux
+    // pane leave its words whole (decided 6 October 2026). The view
+    // hyphenates its whole text (HYPHENATION_FREQUENCY_NORMAL, setStyle), so
+    // a title that wrapped could break a word, "over-whelmed" in Psalm 102 on
+    // the API 35 emulator. The no-hyphenation span that API 35 brought turns
+    // hyphenation off for the title's paragraph alone, and the selectable
+    // view's layout honours it. Android 13 and 14 have no such span and can
+    // still hyphenate a title that wraps, a recorded divergence
+    // (docs/PLATFORM_MATRIX.md); the pass that calls this runs only from
+    // API 35, and this checks again.
+    // The span shapes the page, not the words, and it is a framework
+    // ParcelableSpan that Copy would carry into another app's editor, so the
+    // text that leaves the page drops it (readerText, copyAsRead).
+    private static void keepTitleUnhyphenated(android.text.SpannableStringBuilder ssb, int ps, int pe) {
+        if (android.os.Build.VERSION.SDK_INT < 35 || pe <= ps) return;
+        ssb.setSpan(android.text.style.LineBreakConfigSpan.createNoHyphenationSpan(), ps, pe,
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+    }
+
+    // holdsPageOnlySpan reports whether [s0, s1) of the pane's text carries a
+    // span that belongs to the page's layout alone (keepTitleUnhyphenated's),
+    // which the text that leaves the page must not carry.
+    private static boolean holdsPageOnlySpan(CharSequence cs, int s0, int s1) {
+        if (android.os.Build.VERSION.SDK_INT < 35 || !(cs instanceof Spanned)) return false;
+        return ((Spanned) cs).getSpans(s0, s1, android.text.style.LineBreakConfigSpan.class).length > 0;
+    }
+
+    // dropPageOnlySpans removes those spans from a copy of the pane's text.
+    private static void dropPageOnlySpans(android.text.SpannableStringBuilder sb) {
+        if (android.os.Build.VERSION.SDK_INT < 35) return;
+        for (Object o : sb.getSpans(0, sb.length(), android.text.style.LineBreakConfigSpan.class)) {
+            sb.removeSpan(o);
         }
     }
 
@@ -496,9 +532,10 @@ public final class BtBridge {
     static final char PARA_LTR_MARK = '\u200E';
 
     // readerText is [s0, s1) of the pane's text as the reader reads it: the
-    // gaps of a heading or the title are spaces again, and a paragraph's
-    // opening direction mark is gone. Everything else is returned as it is,
-    // spans included. The platform's Copy puts the view's own text on the
+    // gaps of a heading or the title are spaces again, a paragraph's opening
+    // direction mark is gone, and so is the title's no-hyphenation span
+    // (dropPageOnlySpans). Everything else is returned as it is, spans
+    // included. The platform's Copy puts the view's own text on the
     // clipboard with its spans (TextView: ClipData.newPlainText over
     // mTransformed.subSequence), so a heading pastes bold and the title
     // italic into an app that keeps formatting; this keeps them as well, by
@@ -508,9 +545,11 @@ public final class BtBridge {
     private static CharSequence readerText(CharSequence cs, int s0, int s1) {
         String raw = cs.subSequence(s0, s1).toString();
         if (!(cs instanceof Spanned)
-                || (raw.indexOf(HEADING_GAP) < 0 && raw.indexOf(PARA_LTR_MARK) < 0)) return raw;
+                || (raw.indexOf(HEADING_GAP) < 0 && raw.indexOf(PARA_LTR_MARK) < 0
+                    && !holdsPageOnlySpan(cs, s0, s1))) return raw;
         Spanned sp = (Spanned) cs;
         android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder(cs, s0, s1);
+        dropPageOnlySpans(sb);
         // The marks deleted so far: the character at i in cs is at
         // i - s0 - gone in sb.
         int gone = 0;
@@ -542,7 +581,8 @@ public final class BtBridge {
 
     // copyAsRead performs Copy with readerText's answer when that differs from
     // the text in the view — the gaps of a heading or the title, a
-    // paragraph's direction mark — and otherwise reports false, leaving the
+    // paragraph's direction mark, the title's no-hyphenation span, which the
+    // characters alone do not show — and otherwise reports false, leaving the
     // platform's own Copy to run. It sets the clip as that Copy does, the
     // styled text under ClipData.newPlainText, so bold and italic paste where
     // the platform's would.
@@ -553,7 +593,8 @@ public final class BtBridge {
         int s0 = Math.min(a, b), s1 = Math.max(a, b);
         CharSequence cs = text.getText();
         CharSequence read = readerText(cs, s0, s1);
-        if (android.text.TextUtils.equals(read, cs.subSequence(s0, s1))) return false;
+        if (android.text.TextUtils.equals(read, cs.subSequence(s0, s1))
+                && !holdsPageOnlySpan(cs, s0, s1)) return false;
         android.content.ClipboardManager cm = (android.content.ClipboardManager)
                 text.getContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE);
         if (cm == null) return false;

@@ -67,12 +67,18 @@ Copy. Hebrew inside a line is still drawn right to left within it.
 `INTER_WORD` justification belongs to the whole view, so the bridge sets their
 word gaps as four-per-em spaces, which the layout neither spreads nor shrinks
 (`keepHeadingsRagged`, `isRaggedParagraph`; docs/READING_TYPOGRAPHY.md,
-"Justified prose").
+"Justified prose"). The same pass sets the title's paragraph unhyphenated
+(`keepTitleUnhyphenated`): the view hyphenates its whole text, and the
+no-hyphenation span API 35 brought turns that off for the title alone. Android
+13 and 14 lack the span and can still hyphenate a title that wraps
+(docs/PLATFORM_MATRIX.md, divergence 30).
 
-**Copy takes the text as read, with its formatting.** The gap and the mark are
-there for layout alone, so the reading view hands Copy to `copyAsRead`, and
-when the selection holds either it sets the clip itself: the selection with its
-spans, each helper put back in place (`readerText`), under
+**Copy takes the text as read, with its formatting.** The gap, the mark and the
+title's no-hyphenation span are there for layout alone, so the reading view
+hands Copy to `copyAsRead`, and when the selection holds any of them it sets
+the clip itself: the selection with its
+spans, each helper put back in place and the no-hyphenation span dropped
+(`readerText`; it is a framework span that would otherwise travel), under
 `ClipData.newPlainText`, as the platform's own Copy sets the view's text. A
 heading still pastes bold and the title italic in an app that keeps
 formatting. Any other selection is left to the platform's Copy, untouched.

@@ -261,7 +261,8 @@ and they differ:
   sets ragged and whole (below).
 - **Android** from API 35 justifies by the line: every line that is not the
   text's last and does not end at a hard break, whatever its paragraph — the
-  rows of a wrapped poem line too. It hyphenates. Below API 35 it is ragged
+  rows of a wrapped poem line too. It hyphenates, the Psalm title apart
+  (`keepTitleUnhyphenated`, below). Below API 35 it is ragged
   (docs/ANDROID.md). A heading and the Psalm title are set ragged, as every
   surface sets them: no span can exempt a line from the text view's
   justification, but a line with no U+0020 in it is not spread, so the bridge
@@ -300,13 +301,18 @@ whose justification is scoped to the line and not the paragraph, so from API 35
 the bridge sets the title's word gaps as four-per-em spaces, which the layout
 does not spread (`isRaggedParagraph`, above). Its hyphenation differs. The web
 turns hyphenation off for the title and the Windows and Linux pane hyphenates
-nothing, so on both it is whole; the Apple panes and Android hyphenate it. The
+nothing, so on both it is whole; the Apple panes hyphenate it, and Android
+below API 35. The
 Apple `p.pst` sets no hyphenation of its own, so it keeps the `hyphens: auto`
 of their `p` rule: the macOS pane's imported title carries a hyphenation factor
 of 1 and breaks words in a 260-point column (the iPhone and iPad pane import
 the same stylesheet the same way, not measured there). Android sets hyphenation
-on the whole text view, the title included. Both are known differences
-(docs/BACKLOG.md). The site's generator justified and hyphenated the title as
+on the whole text view, and from API 35 turns it off for the title alone with
+the no-hyphenation span that release brought (`keepTitleUnhyphenated`,
+`android/BtBridge.java`, since 6 October 2026), so there the title is whole;
+Android 13 and 14 have no such span and can still break a word in a title that
+wraps, a divergence docs/PLATFORM_MATRIX.md records. These are known
+differences (docs/BACKLOG.md). The site's generator justified and hyphenated the title as
 well until 25 September 2026, and the published site does until it is next
 published: the title is a `<p>` inside `.text`, and its rule said nothing of
 alignment or hyphenation, so a title that wraps, such as Psalm 18's, took the

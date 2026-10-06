@@ -2615,6 +2615,21 @@ What the spec work left, each one a known difference rather than a guess:
   and Android 15+, recording Android 13–14 as a divergence. On Android it is
   `LineBreakConfigSpan.createNoHyphenationSpan()` over each title, a span
   API 35 brought, which Android 13 and 14 lack.
+  **Android: FIXED 6 October 2026** (for 1.2.20). From API 35 the pass
+  that sets the title's gaps (`keepHeadingsRagged`) sets that span over the
+  title's paragraph (`keepTitleUnhyphenated`, `android/BtBridge.java`), and
+  the selectable, justified view honours it: on the API 35 emulator WEB
+  Psalm 102's title, which broke "over-whelmed" at the default size on a
+  phone held upright, breaks between words, while the body still
+  hyphenates ("be-came", "Ammi-nadab" in Matthew 1). The span shapes the
+  page and is a framework ParcelableSpan, so the text that leaves the page
+  drops it: `readerText`, and `copyAsRead`, which takes Copy over whenever a
+  selection holds one. On the API 33 emulator nothing changes, the phone
+  page's Psalm 102 pixel-identical to the base build: Android 13 and 14 can
+  still hyphenate a title that wraps, a divergence docs/PLATFORM_MATRIX.md
+  records. `TestAndroidPsalmTitleIsNotHyphenatedFromAPI35`
+  (`android_title_hyphenation_test.go`) holds the bridge to it, with
+  controls.
 - **A paragraph that opens in prose and turns to poetry** is indented on the
   web, Android and the Windows and Linux pane (justified where those surfaces
   justify — whole on the web and Android from API 35, its prose only on the
