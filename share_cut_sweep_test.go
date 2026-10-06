@@ -27,6 +27,7 @@ package bibletext
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -718,6 +719,28 @@ func TestSpannedBoundaryDragSweep(t *testing.T) {
 	}
 }
 
+// wordToken is a word as a double-click takes it: letters and digits, with
+// an apostrophe between two of them ("man’s", "Isn’t") inside the word.
+var wordToken = regexp.MustCompile(`[\p{L}\p{Nd}]+(?:['’][\p{L}\p{Nd}]+)*`)
+
+// wholeWordCopy is the first offset of sub in s at which a double-click, or a
+// drag from word to word, could have taken it: neither end of the copy falls
+// inside a word of s (wordToken). -1 if there is none.
+func wholeWordCopy(s, sub string) int {
+	inside := make([]bool, len(s)+1)
+	for _, m := range wordToken.FindAllStringIndex(s, -1) {
+		for i := m[0] + 1; i < m[1]; i++ {
+			inside[i] = true
+		}
+	}
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if strings.HasPrefix(s[i:], sub) && !inside[i] && !inside[i+len(sub)] {
+			return i
+		}
+	}
+	return -1
+}
+
 // TestPsalmTitleDragSweep drags from every character of a psalm's title to
 // every character boundary through it, a heading set under it, verse 1 and
 // into verse 2, on a page drawn as the Apple and Android panes draw it: the
@@ -726,13 +749,20 @@ func TestSpannedBoundaryDragSweep(t *testing.T) {
 // verse geometry, the plain-text fallback of the Mac and the iPhone and
 // iPad, does. The span is what a verse lookup on that page would give
 // (nothing at or before the start, so no span until the drag reaches verse
-// 1's number, then 1 to the verse at its end). Two answers are possible, and
-// the drag's own verse words say which:
+// 1's number, then 1 to the verse at its end). Three answers are possible,
+// and the drag's own verse words say which:
 //
 //   - it holds at least one whole word of the psalm: those words are shared,
 //     from verse 1's start, and cited by the verses they span. No piece of
 //     the title or the heading is ever in the quotation;
-//   - it holds none, only the title or the heading, perhaps with verse 1's
+//   - it stays inside the title, with no span, and the psalm has the same
+//     letters as whole words: they are quoted from the first such copy and
+//     cited by its verse, since nothing tells them from the same letters
+//     selected there. The fixture's verses hold "a" and "is" as words, which
+//     the title has inside "David" and "his", so the sweep meets this; a
+//     psalm that shares whole words with its title is
+//     TestPsalmTitleWordsWithNoSpanSweep's;
+//   - otherwise, only the title or the heading, perhaps with verse 1's
 //     number or part of its first word: nothing is quoted and verse 1 is
 //     cited, as for a heading selected on its own.
 func TestPsalmTitleDragSweep(t *testing.T) {
@@ -780,8 +810,17 @@ func TestPsalmTitleDragSweep(t *testing.T) {
 			}
 			return c
 		}
+		verseOf := func(off int) int { // the verse holding corpus offset off
+			for _, sp := range spans {
+				if off >= sp.start && off < sp.end {
+					return sp.verse
+				}
+			}
+			return 0
+		}
+		title := page[:titleEnd]
 		limit := text[1] + len("Many there are")
-		drags := 0
+		drags, psalmCopies := 0, 0
 		// Every drag begins in the title. One begun in the heading under it is
 		// a heading's, whose rules are the heading tests' (a piece of a word
 		// there that is also in the psalm is found in the psalm, as anywhere
@@ -815,6 +854,19 @@ func TestPsalmTitleDragSweep(t *testing.T) {
 				hasWord := strings.IndexFunc(took, isWordRune) >= 0
 
 				label := fmt.Sprintf("heading=%v: drag %q span %d–%d", withHeading, raw, span.lo, span.hi)
+				if sel := collapseSpaces(raw); !span.valid() && strings.Contains(title, sel) && strings.IndexFunc(sel, isWordRune) >= 0 {
+					if copyAt := wholeWordCopy(corpus, sel); copyAt >= 0 {
+						psalmCopies++
+						start := copyAt + strings.IndexFunc(sel, isWordRune)
+						end := copyAt + len(strings.TrimRight(sel, ",;:—"))
+						want := verseRangeCitation("Psalms", 3, verseOf(start), verseOf(end-1))
+						if quote == "" || at != start || baseLen != end-start || cite != want {
+							t.Fatalf("%s is letters the psalm has as words, but shared (%q, %q) placed at %d; want %q from %d, cited %s",
+								label, quote, cite, at, corpus[start:end], start, want)
+						}
+						continue
+					}
+				}
 				if !hasWord {
 					if quote != "" || cite != "Psalms 3:1" {
 						t.Fatalf("%s holds no word of the psalm, but shared (%q, %q); want (\"\", Psalms 3:1)", label, quote, cite)
@@ -838,7 +890,10 @@ func TestPsalmTitleDragSweep(t *testing.T) {
 				}
 			}
 		}
-		t.Logf("heading=%v: %d drags", withHeading, drags)
+		if psalmCopies == 0 {
+			t.Fatalf("heading=%v: no drag inside the title is letters the psalm has as words, so that rule is not swept", withHeading)
+		}
+		t.Logf("heading=%v: %d drags, %d of them inside the title and quoted from the psalm", withHeading, drags, psalmCopies)
 	}
 }
 
@@ -847,19 +902,23 @@ func TestPsalmTitleDragSweep(t *testing.T) {
 // with no verse geometry hands a selection over (the plain-text fallback the
 // Mac and the iPhone and iPad show when a chapter fails to import). The
 // psalm shares words with its title (psalmWordsState), and with no span
-// nothing tells the title's copy of a word from the psalm's. Two answers are
-// possible:
+// nothing tells the title's letters from the same letters in the psalm. Two
+// answers are possible:
 //
-//   - whole words of the title, perhaps with the punctuation beside them,
-//     that the psalm holds as whole words: quoted from the first such copy
-//     in the psalm, past any punctuation the selection opens with, and
-//     cited by the verses that copy spans;
-//   - anything else, the title whole, a phrase only the title has, a piece
-//     of a title's word, punctuation alone: nothing quoted and verse 1
+//   - letters the psalm holds as whole words (wholeWordCopy), whether the
+//     title has them as words ("Yahweh") or inside longer ones ("his" in
+//     "this"), perhaps with the punctuation beside them: quoted from the
+//     first such copy in the psalm, past any punctuation the selection
+//     opens with, and cited by the verses that copy spans;
+//   - anything else, the title whole, a phrase only the title has, letters
+//     the psalm has only inside longer words ("s" and "’s" of "Saul’s"
+//     against "king’s"), punctuation alone: nothing quoted and verse 1
 //     cited, as for a title selected on its own.
 //
 // Each of the first kind was cited as verse 1 with nothing quoted while the
-// title was answered before the psalm was searched.
+// title was answered before the psalm was searched, and those the title has
+// inside longer words still were while only whole words of the title were
+// looked for there; "’s" was quoted as the "s" of "king’s".
 func TestPsalmTitleWordsWithNoSpanSweep(t *testing.T) {
 	st := psalmWordsState()
 	corpus, spans := chapterProse(st)
@@ -872,29 +931,9 @@ func TestPsalmTitleWordsWithNoSpanSweep(t *testing.T) {
 		}
 		return 0
 	}
-	// wholeCopy is the first offset of sub in s that begins and ends where a
-	// selection of whole words can: not after a letter or digit when sub
-	// opens with one, not before one when it closes with one.
-	wholeCopy := func(s, sub string) int {
-		head, _ := utf8.DecodeRuneInString(sub)
-		tail, _ := utf8.DecodeLastRuneInString(sub)
-		for i := 0; i+len(sub) <= len(s); i++ {
-			if !strings.HasPrefix(s[i:], sub) {
-				continue
-			}
-			if before, _ := utf8.DecodeLastRuneInString(s[:i]); i > 0 && isWordRune(head) && isWordRune(before) {
-				continue
-			}
-			if after, _ := utf8.DecodeRuneInString(s[i+len(sub):]); i+len(sub) < len(s) && isWordRune(tail) && isWordRune(after) {
-				continue
-			}
-			return i
-		}
-		return -1
-	}
 
 	seen := map[string]bool{}
-	words := 0
+	words, inside := 0, 0
 	for from := 0; from < len(title); from++ {
 		if !utf8.RuneStart(title[from]) {
 			continue
@@ -911,8 +950,8 @@ func TestPsalmTitleWordsWithNoSpanSweep(t *testing.T) {
 			quote, cite, at, baseLen := prepareShareQuote(st, sel, selSpan{})
 
 			copyAt := -1
-			if strings.IndexFunc(sel, isWordRune) >= 0 && wholeCopy(title, sel) >= 0 {
-				copyAt = wholeCopy(corpus, sel)
+			if strings.IndexFunc(sel, isWordRune) >= 0 {
+				copyAt = wholeWordCopy(corpus, sel)
 			}
 			if copyAt < 0 {
 				if quote != "" || cite != "Psalms 18:1" {
@@ -921,6 +960,9 @@ func TestPsalmTitleWordsWithNoSpanSweep(t *testing.T) {
 				continue
 			}
 			words++
+			if wholeWordCopy(title, sel) < 0 {
+				inside++
+			}
 			start := copyAt + strings.IndexFunc(sel, isWordRune)
 			end := copyAt + len(strings.TrimRight(sel, ",;:—"))
 			want := verseRangeCitation("Psalms", 18, verseAt(start), verseAt(end-1))
@@ -930,8 +972,8 @@ func TestPsalmTitleWordsWithNoSpanSweep(t *testing.T) {
 			}
 		}
 	}
-	if words == 0 {
-		t.Fatal("the psalm holds no word of the title, so the sweep tests nothing")
+	if words == 0 || inside == 0 {
+		t.Fatalf("the psalm holds %d of the title's selections as words, %d of them inside the title's longer words; the sweep needs both kinds", words, inside)
 	}
-	t.Logf("%d selections, %d of them words of the title the psalm holds too", len(seen), words)
+	t.Logf("%d selections, %d of them letters the psalm holds as words, %d of those inside a longer word of the title", len(seen), words, inside)
 }

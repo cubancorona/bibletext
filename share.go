@@ -620,33 +620,52 @@ func isWordRune(r rune) bool {
 }
 
 // wordAlignedIndex is the offset of the first copy of sub in s that splits no
-// word of s, or -1. Where sub opens with a word rune the rune before the copy
-// must not be one, and where it closes with one the rune after it must not
-// be: "he" is found in "and he heard" and not in "there".
+// word of s, or -1: the copy neither begins nor ends between two runes of one
+// word. "he" is found in "and he heard" and not in "there", and neither "s"
+// nor "’s" nor "man" is found in "man’s".
 func wordAlignedIndex(s, sub string) int {
 	if sub == "" {
 		return -1
 	}
-	head, _ := utf8.DecodeRuneInString(sub)
-	tail, _ := utf8.DecodeLastRuneInString(sub)
 	for from := 0; from+len(sub) <= len(s); {
 		i := strings.Index(s[from:], sub)
 		if i < 0 {
 			return -1
 		}
 		i += from
-		end := i + len(sub)
-		before, _ := utf8.DecodeLastRuneInString(s[:i])
-		after, _ := utf8.DecodeRuneInString(s[end:])
-		splitsHead := isWordRune(head) && i > 0 && isWordRune(before)
-		splitsTail := isWordRune(tail) && end < len(s) && isWordRune(after)
-		if !splitsHead && !splitsTail {
+		if !splitsWord(s, i) && !splitsWord(s, i+len(sub)) {
 			return i
 		}
 		_, size := utf8.DecodeRuneInString(s[i:])
 		from = i + size
 	}
 	return -1
+}
+
+// splitsWord reports whether offset i of s falls between two runes of one
+// word.
+func splitsWord(s string, i int) bool {
+	if i <= 0 || i >= len(s) {
+		return false
+	}
+	_, size := utf8.DecodeLastRuneInString(s[:i])
+	return inWordAt(s, i-size) && inWordAt(s, i)
+}
+
+// inWordAt reports whether the rune at offset i of s belongs to a word: a
+// letter or a digit, or an apostrophe with one on each side, as in "man’s"
+// and "Isn’t". A double-click takes such a word whole.
+func inWordAt(s string, i int) bool {
+	r, size := utf8.DecodeRuneInString(s[i:])
+	if isWordRune(r) {
+		return true
+	}
+	if (r != '’' && r != '\'') || i == 0 || i+size >= len(s) {
+		return false
+	}
+	before, _ := utf8.DecodeLastRuneInString(s[:i])
+	after, _ := utf8.DecodeRuneInString(s[i+size:])
+	return isWordRune(before) && isWordRune(after)
 }
 
 // normalizeShareSelection cleans a raw selection for sharing and attributes it
@@ -726,23 +745,26 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 	// with no verse geometry: the plain-text fallback the Mac and the iPhone
 	// and iPad show when the chapter fails to import (gMacContentStart is 0
 	// there, as btIOSContentStart is with its verse index emptied, and
-	// nothing has a span), and the dead legacy pane. For those, two drags are
-	// answered here:
+	// nothing has a span), and the dead legacy pane. For those pages, two
+	// drags are answered here:
 	//
-	//   - a selection with no span that is the title or a piece of it,
-	//     perhaps on through a heading under it, is answered as a heading
-	//     selected on its own: verse 1, no quotation, unless the psalm has
-	//     it. Nothing tells the title's words from the same words selected
-	//     in a verse, so whole words of the title, as a double-click or a
-	//     drag from word to word takes them, are looked for in the psalm
-	//     first, as whole words there too, and quoted from the first such
-	//     copy, as any selection with no span is placed at its first copy:
-	//     "Yahweh" in a psalm whose title names him is the psalm's word. The
-	//     title answers only for what the psalm does not have that way, the
-	//     title whole or a phrase of its own, or has nothing quotable of, a
-	//     lone full stop. A piece of a title's word ("is" in "his") is not
-	//     words of the title, and stays the title's even where the psalm
-	//     has those letters as a word of its own;
+	//   - a selection with no span inside the title is the title's only
+	//     where the psalm does not have it. Every selection on those pages
+	//     comes with no span, so nothing tells the title's letters from the
+	//     same letters selected in a verse, and a double-click on a verse's
+	//     word is far likelier there than a drag begun inside a word of the
+	//     title. So the psalm is searched first, for a copy that splits no
+	//     word, and the selection is quoted from the first such copy, as any
+	//     selection with no span is placed at its first copy: "Yahweh" in a
+	//     psalm whose title names him is the psalm's word, and so is "is" in
+	//     one whose title says "his". A selection of verse numbers the psalm
+	//     does not have as words is then answered by the verse it labels, as
+	//     a verse number is below ("12" under a title that says "12,000").
+	//     Anything else, the title whole, a phrase of its own, letters the
+	//     psalm has only inside longer words, or what holds nothing
+	//     quotable, a lone full stop, is answered as a heading selected on
+	//     its own: verse 1, no quotation. So is the title run on into a
+	//     heading under it, or to verse 1's number;
 	//   - a drag from the title on into the psalm carries the title, or the
 	//     end of it, then verse 1's number. Confirmed by that number, the
 	//     title comes off, and what follows is the selection. Just the
@@ -751,12 +773,12 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 	// A heading between the title and verse 1 takes the heading repair below,
 	// which removes the title with it.
 	editorial := false // the selection carried a heading or a psalm title, now removed
-	titleVerse := 0    // whole words of the title, with no span: the verse cited if the psalm does not quote them
+	titleVerse := 0    // a selection with no span inside the title: the verse cited if the psalm does not answer it
 	if title, first, ok := chapterTitle(state, book, chapter); ok {
 		if !span.valid() {
 			if _, ok := afterTitle(flat, title); ok {
 				if v, ok := headingOnlySelectionVerse(state, book, chapter, flat, span); ok {
-					if wordAlignedIndex(title, flat) < 0 {
+					if !strings.Contains(title, flat) {
 						return "", v, v, -1, true
 					}
 					titleVerse = v
@@ -774,7 +796,7 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 		}
 	}
 	text, lo, hi, at, ok = locateShareSelection(state, book, chapter, corpus, spans, flat, out, span, editorial, titleVerse > 0)
-	if titleVerse > 0 && text == "" {
+	if titleVerse > 0 && !ok {
 		return "", titleVerse, titleVerse, -1, true
 	}
 	return text, lo, hi, at, ok
@@ -784,18 +806,28 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 // verses' words and the repairs that follow it. out is the selection in the
 // shared form, with a psalm title it opened with already taken off, and flat
 // the selection as it came, which the heading test reads. wholeWords looks
-// for out only where it splits no word of the psalm, at the first such copy:
-// it is set for a selection with no span that is whole words of the title,
-// which the psalm has only if it has them as whole words.
+// for out only where it splits no word of the psalm, at the first such copy,
+// and answers a selection the psalm does not have that way only if it is
+// nothing but verse numbers: it is set for a selection with no span inside
+// the title, which is the psalm's only if the psalm has it so.
 func locateShareSelection(state *AppState, book string, chapter int, corpus string, spans []verseSpan, flat, out string, span selSpan, editorial, wholeWords bool) (text string, lo, hi, at int, ok bool) {
 	s, anchor := stripVerseMarkersAnchored(corpus, spans, out)
 	if s == "" || corpus == "" {
 		return "", 0, 0, -1, false
 	}
+	validNum := make(map[string]bool, len(spans))
+	for _, sp := range spans {
+		validNum[strconv.Itoa(sp.verse)] = true
+	}
 	if wholeWords {
 		// With no span there is no region, so locate takes this place as it
 		// stands, and nothing after it searches again.
 		if anchor = wordAlignedIndex(corpus, s); anchor < 0 {
+			// Verse numbers alone, which the page draws and the psalm's
+			// words need not hold: the rule for them below.
+			if lo, hi := verseNumberTokenRange(s); lo > 0 && allVerseNumbers(s, validNum) {
+				return "", lo, hi, -1, true
+			}
 			return "", 0, 0, -1, false
 		}
 	}
@@ -833,12 +865,9 @@ func locateShareSelection(state *AppState, book string, chapter int, corpus stri
 	// A trailing bare verse-number token (the selection stopped right after a
 	// superscript marker) never appears in the prose corpus — drop it so the
 	// locate below can succeed. Verified against the chapter's real verse
-	// numbers so a legitimate number inside verse text is never touched (that
-	// one locates fine WITH the number, so this branch is skipped).
-	validNum := make(map[string]bool, len(spans))
-	for _, sp := range spans {
-		validNum[strconv.Itoa(sp.verse)] = true
-	}
+	// numbers (validNum) so a legitimate number inside verse text is never
+	// touched (that one locates fine WITH the number, so this branch is
+	// skipped).
 	numbers := s
 	for locate(s, anchor) < 0 {
 		i := strings.LastIndexByte(strings.TrimSpace(s), ' ')
@@ -1280,6 +1309,18 @@ func headingOnlySelectionVerse(state *AppState, book string, chapter int, s stri
 		}
 	}
 	return 0, false
+}
+
+// allVerseNumbers reports whether every word of s is one of the chapter's
+// verse numbers (valid).
+func allVerseNumbers(s string, valid map[string]bool) bool {
+	fields := strings.Fields(s)
+	for _, f := range fields {
+		if !valid[f] {
+			return false
+		}
+	}
+	return len(fields) > 0
 }
 
 // verseNumberTokenRange is the lowest and highest of the verse numbers s is

@@ -20,6 +20,7 @@ package bibletext
 // is what identifies the cause rather than merely recording the symptom.
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -602,8 +603,12 @@ func TestAPsalmTitleSelectedOnItsOwnCitesTheFirstVerse(t *testing.T) {
 // shares his name with the psalm under it. The wording is invented, in the
 // shape of Psalm 18 in the World English Bible, and set so that a word's
 // first copy in the psalm can be inside a longer word ("the" in "there",
-// "he" in "there", "all" in "called") or in a later verse than the first.
-const psalmWordsTitle = "For the choir leader. A song of David, the servant of Yahweh, which he sang to Yahweh in the day that Yahweh kept him from the hand of all who hated him. He said:"
+// "he" in "there", "all" in "called") or in a later verse than the first;
+// so that the psalm has as words letters the title has only inside longer
+// ones ("his" and "is" in "this", "and" in "hand", "word" in "words"); and so
+// that a possessive's ending in the title ("’s" of "Saul’s") is in the psalm
+// only inside other possessives.
+const psalmWordsTitle = "For the choir leader. A song of David, the servant of Yahweh, which he sang to Yahweh, the words of this song, in the day that Yahweh kept him from the hand of all who hated him, and from Saul’s hand. He said:"
 
 func psalmWordsState() *AppState {
 	text := []string{
@@ -613,6 +618,7 @@ func psalmWordsState() *AppState {
 		"He kept me from all who hated me, for they were too strong for me.",
 		"The servant of Yahweh sang to Yahweh, and those who hated him were put to shame.",
 		"Great deliverance he gives to his king, and loving kindness to David and to his offspring forever.",
+		"The king’s strength is in Yahweh’s name; his word is tried.",
 	}
 	verses := make([]Verse, len(text))
 	for i, s := range text {
@@ -628,21 +634,27 @@ func psalmWordsState() *AppState {
 	}
 }
 
-// A word of the title that the psalm also holds, selected with no span, is
-// the psalm's word: quoted from its first copy there, and cited by that
-// verse. Nothing tells it from the same word selected in the title, which on
-// its own would quote nothing and cite verse 1; answered that way first, it
-// took the word from the psalm, and "Yahweh" was cited as verse 1 with
-// nothing quoted wherever it had been selected. The controls are the
-// title's alone: a phrase only the title has, and a piece of a title's word
-// whose letters the psalm has only inside a longer word.
+// Letters of the title that the psalm holds as a word, selected with no
+// span, are the psalm's word: quoted from its first copy there, and cited by
+// that verse. Nothing tells them from the same letters selected in the title,
+// which on their own would quote nothing and cite verse 1; answered that way
+// first, the title took the word from the psalm, and "Yahweh" was cited as
+// verse 1 with nothing quoted wherever it had been selected. The title may
+// have the letters as a word of its own or inside a longer one ("his" in
+// "this"): a double-click on "his" in a verse gives the same three letters
+// either way. The controls are the title's alone: a phrase only the title
+// has, and letters the psalm has only inside longer words, among them a
+// possessive's ending, which a double-click takes with its word.
 func TestAWordInBothAPsalmsTitleAndItsVersesIsQuotedFromTheVerses(t *testing.T) {
 	st := psalmWordsState()
 	corpus, _ := chapterProse(st)
 
-	for _, sel := range []string{"the choir leader", "ahweh"} {
+	for _, sel := range []string{"the choir leader", "ahweh", "’s", "s", "Saul’s", "’s hand"} {
 		if quote, cite, _, _ := prepareShareQuote(st, sel, selSpan{}); quote != "" || cite != "Psalms 18:1" {
-			t.Fatalf("control: %q shared (%q, %q), want (\"\", Psalms 18:1)", sel, quote, cite)
+			t.Errorf("control: %q shared (%q, %q), want (\"\", Psalms 18:1)", sel, quote, cite)
+		}
+		if lo, hi := linkVersesForSelection(st, sel, selSpan{}); lo != 1 || hi != 1 {
+			t.Errorf("control: %q: the link names verses %d–%d, want 1–1", sel, lo, hi)
 		}
 	}
 
@@ -655,12 +667,53 @@ func TestAWordInBothAPsalmsTitleAndItsVersesIsQuotedFromTheVerses(t *testing.T) 
 		{"the", "and the hand", 2},
 		{"he", "and he heard", 3},
 		{"all who hated", "from all who hated", 4},
+		// Inside a longer word of the title.
+		{"his", "from his temple", 3},
+		{"is", "there is none", 1},
+		{"and", "strength and my", 1},
+		{"word", "his word is", 7},
 	} {
 		quote, cite, at, baseLen := prepareShareQuote(st, c.sel, selSpan{})
 		want := strings.Index(corpus, c.inVerse) + strings.Index(c.inVerse, c.sel)
 		wantCite := verseRangeCitation("Psalms", 18, c.verse, c.verse)
 		if quote != c.sel || cite != wantCite || at != want || baseLen != len(c.sel) {
 			t.Errorf("%q shared (%q, %q) placed at %d, want (%q, %s) at %d", c.sel, quote, cite, at, c.sel, wantCite, want)
+		}
+		if lo, hi := linkVersesForSelection(st, c.sel, selSpan{}); lo != c.verse || hi != c.verse {
+			t.Errorf("%q: the link names verses %d–%d, want %d–%d", c.sel, lo, hi, c.verse, c.verse)
+		}
+	}
+}
+
+// A verse number selected on its own, with no span, quotes nothing and cites
+// the verse it labels (TestAVerseNumberSelectedOnItsOwnQuotesNothing), and a
+// title with the same figures in it does not take the number over: "2" and
+// "3" under a title that says "2,300" are the numbers of verses 2 and 3,
+// which the psalm's words do not hold, and were cited as verse 1. The title's
+// own figures, whole or a piece the verses do not number, are still the
+// title's.
+func TestAVerseNumberATitleAlsoHoldsCitesItsVerse(t *testing.T) {
+	st := psalmTitleState(false)
+	// The control: the same numbers under a title without figures.
+	for _, n := range []int{2, 3} {
+		if quote, cite, _, _ := prepareShareQuote(st, strconv.Itoa(n), selSpan{}); quote != "" || cite != verseRangeCitation("Psalms", 3, n, n) {
+			t.Fatalf("control: %d with no span shared (%q, %q)", n, quote, cite)
+		}
+	}
+	st.Bible.Superscriptions["Psalms"][3] = Superscription{Text: "A Psalm by David, when 2,300 fled from Absalom his son."}
+	for _, c := range []struct {
+		sel   string
+		verse int
+	}{
+		{"2", 2}, // a word of the title
+		{"3", 3}, // inside one
+		{"2,300", 1},
+		{"300", 1},
+		{"0", 1},
+	} {
+		quote, cite, _, _ := prepareShareQuote(st, c.sel, selSpan{})
+		if want := verseRangeCitation("Psalms", 3, c.verse, c.verse); quote != "" || cite != want {
+			t.Errorf("%q with no span shared (%q, %q), want (\"\", %s)", c.sel, quote, cite, want)
 		}
 		if lo, hi := linkVersesForSelection(st, c.sel, selSpan{}); lo != c.verse || hi != c.verse {
 			t.Errorf("%q: the link names verses %d–%d, want %d–%d", c.sel, lo, hi, c.verse, c.verse)

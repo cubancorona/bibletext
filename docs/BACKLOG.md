@@ -3729,14 +3729,19 @@ title at all, which may be what is wanted. The pages that do hand a title
 over are the plain-text fallbacks the Mac and the iPhone and iPad show when a
 chapter fails to import as HTML (`gMacContentStart` is 0 on the Mac's, and
 the iPhone and iPad's empties its verse index, so `btIOSContentStart` is 0 as
-well; no selection on either has a span), with the dead legacy pane. That is what the
-change below serves. With no span, a selection that was a piece of the title
-was answered as the title, and so were the same words selected in a later
-verse ("Yahweh" in Psalm 18, whose title names him): no quotation, verse 1,
-where before they were quoted from their first copy in the psalm. That is
-fixed: whole words of the title are looked for in the psalm first (below). On
-every pane, the change's visible effect is on headings, as the paragraph on
-headings below says, and that wider effect was not part of the decision.
+well; no selection on either has a span), with the dead legacy pane. That is
+what the change below serves. With no span, a selection inside the title was
+answered as the title, and so were the same letters selected in a later
+verse ("Yahweh" in Psalm 18, whose title names him, or "is", which that
+title has inside "his" and "this"): no quotation, verse 1, where before they
+were quoted from their first copy in the psalm. Double-clicking every word
+of every titled psalm with no span, 29,618 words in the WEB and 28,670 in
+the BSB, 2,581 and 2,817 quoted nothing at `4db93bf64`, and 758 and 727 at
+`69d176b7c`, which looked in the psalm only for whole words of the title;
+none did at `1db51a02b`, and none do now, the psalm being searched first
+(below). On every pane, the change's visible effect is on headings, as the
+paragraph on headings below says, and that wider effect was not part of the
+decision.
 
 What was done: fixed in `normalizeShareSelectionProse` and `stripHeadings`
 (`share.go`), which every verb resolves a selection through. A drag from the
@@ -3744,24 +3749,35 @@ title into the psalm shares the psalm's words alone, cited by the verses they
 span: the title, or its end, comes off when verse 1's number confirms it, and
 with a heading between them the heading repair takes both. A title selected
 on its own, or run on to verse 1's number or into part of its first word,
-quotes nothing and cites verse 1, as decided; a selection with no span that
-is whole words of the title, as a double-click or a drag from word to word
-takes them, is looked for in the psalm first, as whole words there too, and
-quoted from its first such copy, cited by its verse, as any selection with no
-span is placed at its first copy; only the title whole, a phrase only the
-title has, a piece of a title's word, or what holds nothing quotable, a lone
-full stop, is answered as the title. A piece of a title's word stays the
-title's even where the psalm has the same letters as a word ("is" in "his",
-against "There is"), which `TestPsalmTitleDragSweep` requires; with no span
-nothing tells the two apart. `TestPsalmTitleWordsWithNoSpanSweep`
-(`share_cut_sweep_test.go`) selects every piece of an invented title that
-shares words with its psalm, 8,220 selections: of the 43 words and phrases
-of the title the psalm also holds as whole words, all 43 had been cited as
-verse 1 with nothing quoted, and all 43 are now quoted from their first copy
-in the psalm; before the title was answered at all (`1db51a02b`), 40 were,
-and "the", "he" and "all", whose first letters in the psalm stand inside a
-longer word, were shared verbatim under the chapter. The link's verses,
-which a sent note is kept against, agree.
+quotes nothing and cites verse 1, as decided. A selection with no span inside
+the title is looked for in the psalm first, at a copy that splits no word
+there, and quoted from the first such copy, cited by its verse, as any
+selection with no span is placed at its first copy: nothing tells the
+title's letters from the same letters double-clicked in a verse, whether the
+title has them as a word ("Yahweh") or inside a longer one ("is" in "his").
+An apostrophe between letters is part of its word, so "’s" or "s" selected
+from "Saul’s" is not found in "king’s". Verse numbers the psalm's words do
+not hold are answered as a verse number is, by the verse each labels ("12"
+under the BSB's title of Psalm 60, which says "12,000";
+`TestAVerseNumberATitleAlsoHoldsCitesItsVerse`). Only the title whole, a
+phrase only the title has, letters the psalm has only inside longer words,
+or what holds nothing quotable, a lone full stop, is answered as the title.
+`TestPsalmTitleWordsWithNoSpanSweep` (`share_cut_sweep_test.go`) selects
+every piece of an invented title that shares words with its psalm, 13,791
+selections. The psalm holds 44 of them as words, 3 of those inside longer
+words of the title ("his", "is", "word"), and all 44 are quoted from their
+first such copy. At `4db93bf64` all 44 were cited as verse 1 with nothing
+quoted; at `69d176b7c` the 3 still were, and "’s" was quoted as the "s" of
+"king’s"; at `1db51a02b`, before the title was answered at all, 38 were
+quoted from that copy, and "the", "he", "all" and "is", whose first letters
+in the psalm stand inside a longer word, were shared verbatim under the
+chapter. Over every piece of every title in the WEB, the BSB and the WEBC
+with no span, against `69d176b7c`: 1,116 pieces cited as verse 1 are now
+quoted from the psalm; 30 that the psalm has only inside a possessive or a
+contraction ("’s", "’t", "David" against "David’s"), which had been quoted
+from inside that word, are now cited as verse 1; 4 move to a later copy that
+splits no word; and 3 verse numbers cite their verse. No answer with a span
+changes. The link's verses, which a sent note is kept against, agree.
 `TestPsalmTitleDragSweep` (`share_cut_sweep_test.go`) drags from every
 character of a title to every boundary through a heading, verse 1 and into
 verse 2, 14,124 drags, and `share_heading_selection_test.go` pins the shapes.
