@@ -2,27 +2,27 @@ package main
 
 // The web reader's half of the shared-note conformance corpus.
 //
-// testdata/note_vectors.txt (at the repo root) is APPEND-ONLY and is walked by
-// BOTH decoders — the app's (share_note.go, tested beside it) and reader.js's
+// testdata/note_vectors.txt (at the repo root) is append-only and is walked by
+// both decoders — the app's (share_note.go, tested beside it) and reader.js's
 // decodeNotePayload, tested here — because a rule that lives only in one
 // implementation's behaviour is the rule the second implementation silently
-// breaks. The two had ALREADY diverged once, over invalid UTF-8: the page's
+// breaks. The two had already diverged once, over invalid UTF-8: the page's
 // TextDecoder({fatal:false}) rendered U+FFFD where the app showed nothing
 // (docs/NOTE_WIRE_FORMAT.md, "Conformance corpus").
 //
-// HOW TestNoteVectorCorpusAgainstReaderJS EXECUTES THE JS, in order of
+// How TestNoteVectorCorpusAgainstReaderJS runs the JS, in order of
 // preference; the test log says which ran:
 //
 //  1. node, when it is on PATH: the decoder span is extracted from
 //     readerJSTemplate between its two markers — the span is pure by contract,
-//     no DOM — and node runs the REAL shipped code over every vector.
+//     no DOM — and node runs the real shipped code over every vector.
 //  2. osascript -l JavaScript (JavaScriptCore, present on every macOS): the
-//     SAME shipped span, with test-only polyfills for the two browser
+//     same shipped span, with test-only polyfills for the two browser
 //     primitives JSC lacks (atob, TextDecoder). The inflate, the record walk
 //     and the outcome logic are the real bytes; only base64 and UTF-8
 //     primitives are stand-ins.
 //  3. jsDecodeNotePayload below, the last resort on a machine with neither: a
-//     deliberately line-by-line Go re-implementation OF THE JAVASCRIPT (not of
+//     deliberately line-by-line Go re-implementation of the JavaScript (not of
 //     share_note.go — porting the Go decoder again would only prove Go agrees
 //     with itself).
 //
@@ -37,8 +37,8 @@ package main
 //   - TestNoteVectorCorpusAgainstGoMirrorOfReaderJS walks the corpus through
 //     the mirror whatever runtimes the machine has.
 //   - TestGoMirrorOfReaderJSAgreesWithNode, wherever node is on PATH, decodes
-//     the corpus, hand-built boundary payloads and seeded mutations of the
-//     corpus with both the shipped span and the mirror, and requires the same
+//     the corpus, hand-built boundary payloads, and seeded mutations of
+//     both, with the shipped span and with the mirror, and requires the same
 //     outcome and text from each. The corpus pins only what it has lines for;
 //     the probes also reach the rules it has no line for, and every bound in
 //     the span from both sides. Without node it skips, except in CI, where it
@@ -308,16 +308,17 @@ TextDecoder.prototype.decode = function (bytes) {
 `
 
 // ---------------------------------------------------------------------------
-// The Go re-implementation OF THE JAVASCRIPT, function for function and check
+// The Go re-implementation of the JavaScript, function for function and check
 // for check, in the span's order. Keep it in lockstep with the span between
-// the markers: TestGoMirrorOfReaderJSAgreesWithNode fails when it is not.
+// the markers: TestGoMirrorOfReaderJSAgreesWithNode fails when a probe reaches a
+// difference.
 //
 // Where a browser primitive or a language built-in decides an outcome, the
 // port models that primitive, not the nearest Go library call: atob is the
 // WHATWG forgiving-base64 decode (jsAtob), String.prototype.trim strips
 // ECMAScript's white space and line terminators (jsTrim), and TextDecoder
 // drops a leading byte-order mark (jsUTF8). Go's base64.StdEncoding and
-// strings.TrimSpace each disagree with the JS on payloads the JS accepts.
+// strings.TrimSpace each disagree with the JS, in both directions.
 //
 // Two differences are deliberate and cannot change a result: where the JS
 // uses floats the port uses uint64, equivalent over every length a 4 KB
