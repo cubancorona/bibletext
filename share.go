@@ -899,7 +899,11 @@ func locateShareSelection(state *AppState, book string, chapter int, corpus stri
 	// "The" of "Then"), a verse number selected on its own, a piece of a
 	// heading. A whole copy elsewhere in the chapter is no likelier the
 	// reader's, and preferring it moved such a drag to a verse it never
-	// touched (2 Chronicles 20:13's "the LORD.\nThe" cited 20:32–33).
+	// touched (2 Chronicles 20:13's "the LORD.\nThe" cited 20:32–33). The
+	// first copy of any kind is no likelier either for a drag that runs on
+	// into the heading below the region, which is placed by that heading
+	// instead when this search does not find it in the region
+	// (verseEndBeforeHeading).
 	locate := func(s string, anchor int) int {
 		if anchor >= 0 && (!haveRegion || (anchor >= rStart && anchor < rEnd)) && strings.HasPrefix(corpus[anchor:], s) {
 			return anchor
@@ -974,6 +978,25 @@ func locateShareSelection(state *AppState, book string, chapter int, corpus stri
 	}
 
 	idx := locate(s, anchor)
+	// A drag that runs on past the end of the span's last verse stops in the
+	// heading the page draws below that verse: "gold.\nT" from the BSB's 2
+	// Chronicles 3:4, which ends "pure gold." above a heading that opens
+	// "The", spanned 4 to 4. The region does not hold that, and the chapter's
+	// first copy of it ran from verse 8's "fine gold." into verse 9's first
+	// word, which the end repair cut back to verse 8's "gold." and cited. So
+	// where the region does not hold the selection, the front of the heading
+	// comes off its end first, and what is left, when it is how the region
+	// ends, is placed there: the words a drag carried into a heading are the
+	// last words of the verse above it. It is the selection as the drag ended
+	// it that ends with the heading, before the loop above took a number off:
+	// a drag to the number of the verse below a heading named "Saying 10"
+	// ends "Saying 10 9", and with both numbers taken off, "Saying" also opens
+	// the next verse's heading, "Saying 11", which that drag never reached.
+	if haveRegion && (idx < rStart || idx+len(s) > rEnd) {
+		if r, at, ok := verseEndBeforeHeading(state, book, chapter, corpus, spans, rStart, rEnd, numbers); ok {
+			s, idx, editorial = r, at, true
+		}
+	}
 	if idx < 0 {
 		// A selection that will not locate may be carrying a publisher's
 		// heading, which is drawn between verses but is in no verse and so is
@@ -1502,6 +1525,59 @@ func trimTrailingHeading(s, text string) string {
 		}
 	}
 	return s
+}
+
+// verseEndBeforeHeading takes off the end of s the front of the heading the
+// page draws below the verse whose text ends the region [start, end) of the
+// corpus, or, where the page stacks more than one heading there, the
+// headings before it whole and then its front, as trimTrailingHeading takes
+// off any heading's. It reports what is left and where that stands, at, only
+// when what is left holds a word and is how the region ends: the drag ran
+// from those words on into the heading, so they end where the verse does.
+// Anything else, ok false, leaves the selection to the search.
+func verseEndBeforeHeading(state *AppState, book string, chapter int, corpus string, spans []verseSpan, start, end int, s string) (rest string, at int, ok bool) {
+	above, below := 0, 0
+	for k, sp := range spans {
+		if sp.end == end {
+			above = sp.verse
+			if k+1 < len(spans) {
+				below = spans[k+1].verse
+			}
+			break
+		}
+	}
+	if above == 0 || below == 0 {
+		return "", -1, false
+	}
+	var heads []string
+	for _, h := range state.Bible.Headings[book][chapter] {
+		if h.BeforeVerse > above && h.BeforeVerse <= below {
+			if text := sharedText(collapseSpaces(h.DrawnText())); text != "" {
+				heads = append(heads, text)
+			}
+		}
+	}
+	region := corpus[start:end]
+	for k := len(heads) - 1; k >= 0; k-- {
+		whole := strings.Join(heads[:k], " ")
+		for n := len(heads[k]); n > 0; n-- {
+			piece := strings.TrimSpace(heads[k][:n])
+			if piece == "" {
+				continue
+			}
+			if whole != "" {
+				piece = whole + " " + piece
+			}
+			if !strings.HasSuffix(s, " "+piece) {
+				continue
+			}
+			rest = strings.TrimSpace(s[:len(s)-len(piece)-1])
+			if strings.IndexFunc(rest, isWordRune) >= 0 && strings.HasSuffix(region, rest) {
+				return rest, end - len(rest), true
+			}
+		}
+	}
+	return "", -1, false
 }
 
 // removeWholeHeadings removes complete headings wherever they sit in the
