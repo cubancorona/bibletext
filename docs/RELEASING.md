@@ -319,7 +319,9 @@ listing change is still in Play's review sends that review back to the
 start. Before the real upload, check that the Play Console's Publishing
 overview shows nothing in review, or accept the restart. `promote` and
 `play/push-screenshots.py` ask Play to refuse instead (docs/BACKLOG.md, "A
-Play upload's commit restarts a review in progress").
+Play upload's commit restarts a review in progress"). Planned for 1.2.20: the
+upload waits for a review in progress instead of restarting it
+(docs/ROADMAP.md). Until that change lands, the check above is the procedure.
 
 **Play steps run one at a time.** Every Play command opens an edit as the one
 service account, and Play lets that account hold one open edit: a new edit

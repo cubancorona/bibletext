@@ -16,6 +16,9 @@ not here.
 
 ## The release pipeline: what still waits on something it need not
 
+Planned for: stays, a standing entry; 1.2.20 names the arm64 snap rerun in
+stage 10 — see docs/ROADMAP.md.
+
 A standing entry, not a one-off: every release is the moment to ask what
 sat idle waiting on a step it did not depend on, in the release itself and
 in the testing and deployment around it. Two reorderings landed on
@@ -101,6 +104,11 @@ What 1.2.18 (1–2 October 2026) adds:
 
 ## macOS 12 and 13: an open note card calls a macOS 14 method — FIXED 2 October 2026
 
+Still open: the walk's `switch` names two element constants AppKit marks
+macOS 14 (`NSBezierPathElementCubicCurveTo`,
+`NSBezierPathElementQuadraticCurveTo`) — planned for 1.2.20; see
+docs/ROADMAP.md.
+
 `btMacLayoutNote` gives the note card its shape from
 `btMacNoteBubblePath(w, h).CGPath` (`reading_macos.go:2783`). AppKit
 declares `NSBezierPath`'s `CGPath` property `API_AVAILABLE(macos(14.0))`
@@ -166,6 +174,9 @@ of the walk, at the source. Not run on macOS 12 or 13.
 
 ## Share as image says "Picture saved" for a card it could not read — found 1 October 2026
 
+Planned for: 1.2.20, no sheet and the cause logged; a line telling the
+reader in 1.2.21+ — see docs/ROADMAP.md.
+
 On the desktop, when the rendered card cannot be read at the Share tap, the
 image share still asks the file manager to show it, and can then open the
 sheet under *Picture saved* saying that it is shown. `fallbackShareImage`
@@ -217,6 +228,9 @@ say yes, and no sheet (control: the file present).
 
 ## Email… on the desktop share sheet fails without a word — found 1 October 2026
 
+Planned for: 1.2.21+, with the other shares that cannot finish — see
+docs/ROADMAP.md.
+
 Email… on the in-app share sheet (Linux, and Windows where its own Share
 sheet cannot open) hands the share to the mail client on a goroutine and,
 when that fails, writes a log line and nothing else
@@ -256,6 +270,8 @@ that started a compose, rather than handing on after any non-zero exit.
 
 ## A dropped session bus spins a core until the portal wait ends (Linux) — found 1 October 2026
 
+Planned for: 1.2.20 — see docs/ROADMAP.md.
+
 `portalRequest` (`share_portal_linux.go:34-79`) waits for the portal's
 Response on a channel registered with godbus, in a loop that passes over a
 nil signal: `case sig := <-responses: if sig == nil || ... { continue }`
@@ -277,6 +293,9 @@ return an error at once (the connection closed), with `taken` true, since
 the portal had the call.
 
 ## A sheet turned from one landscape to the other keeps its side padding on the old side (Android) — found 1 October 2026
+
+Planned for: 1.2.20, the composer; Ask's half when Ask returns to the menus
+— see docs/ROADMAP.md.
 
 Since 1.2.18 the note composer and Ask hold their card clear of the side
 safe insets of a phone held sideways (`clearOfSideInsets`,
@@ -306,6 +325,8 @@ composer's watch comparing the sheet area's position and width as well as
 
 ## A Play upload's commit restarts a review in progress — found 2 October 2026
 
+Planned for: 1.2.20 — see docs/ROADMAP.md.
+
 `scripts/play-publish.py upload` commits its edit with Play's default for
 changes in review (`upload()`, the `:commit` call with no query).
 edits.commit's `changesInReviewBehavior` defaults to
@@ -330,6 +351,11 @@ refusal's message. It changes what an upload does while anything is in
 review — it waits instead of restarting the review — so it goes in as a
 change of its own, with stage 6's check then reading as the reason a
 refusal can happen.
+
+**Decided 6 October 2026** — Play uploads: wait for a review already in
+progress instead of restarting it. The fix above goes in as its own change
+in 1.2.20, and stage 6 of `docs/RELEASING.md` is rewritten with it, not
+before.
 
 ## A Play status read during an upload deletes the upload's edit — FIXED 2 October 2026
 
@@ -431,6 +457,8 @@ breaks into spaces. 1.2.17's alpha notes on Play stay folded.
 
 ## The App Review notes guard reads only the first line — found 1 October 2026
 
+Planned for: 1.2.20 — see docs/ROADMAP.md.
+
 The checks on the tracked App Review notes that look for a release's
 version read the heading alone. `TestAppReviewNotesAreForThisRelease` takes
 the first line (`appstore_review_notes_test.go:76`) and fails on any x.y.z
@@ -462,7 +490,14 @@ today). The test's control: the 1.2.17 macOS notes under a bumped heading,
 which pass every check on that file as they stand and fail only the new
 version check.
 
+**Decided 6 October 2026** — notes for Apple's reviewers: stop naming old
+versions in them. So the check needs no allow-list: any x.y.z in the notes
+other than the packaged version fails. 1.2.19's iPhone notes name 1.2.18
+twice, in comparisons; the 1.2.20 notes leave them out.
+
 ## linux/releases.toml dates a release the day before its tag — found 1 October 2026
+
+Planned for: 1.2.20 — see docs/ROADMAP.md.
 
 The file's header says each entry carries its annotated tag's date
 (`linux/releases.toml:1-3`), and `cmd/linuxmeta` renders that date into the
@@ -485,7 +520,13 @@ say so in the header and in stage 1 — what the tree can know, and the one
 to take; or have stage 0 or stage 5 check that the newest date is within a
 day of the tag. The past entries can stand, each within a day of its tag.
 
+**Decided 6 October 2026** — Linux release date: the day the store files
+are built. The header of `linux/releases.toml` and stage 1 of
+`docs/RELEASING.md` say so in 1.2.20.
+
 ## msstore/submit.py keeps the last release's commit status in a new submission's state — found 2 October 2026
+
+Planned for: 1.2.20 — see docs/ROADMAP.md.
 
 `save_state` merges what it is given into `build/msstore/run-state.json`
 (`msstore/submit.py:213-219`). `create` writes the new submission's id with
@@ -505,6 +546,8 @@ with the other flags — with a test in `msstore/test_submit.py` that a
 create after a committed run leaves no `commitStatus` behind.
 
 ## scripts/run-ios-device.sh: a locked phone costs a full rebuild — found 2 October 2026
+
+Planned for: 1.2.20 — see docs/ROADMAP.md.
 
 The developer install to a physical iPhone fails at `xcrun devicectl device
 install app` (`scripts/run-ios-device.sh:276`) when the phone is locked,
@@ -535,6 +578,9 @@ install succeeds; and run the cross-compile as `go -C "$REPO_ROOT" build`,
 so the module is the script's own.
 
 ## Windows: use the native Share sheet — BUILT 30 September 2026, seen in the app unpackaged the same day and packaged on 1 October
+
+Planned for: 1.2.20, a check from the Store install on the Windows virtual
+machine, after which this entry is marked shipped — see docs/ROADMAP.md.
 
 On Windows every text share (Share with note, with citation, as link, and the
 verse of the day's Share) copied to the clipboard and opened the in-app
@@ -766,6 +812,10 @@ Developer Mode, the registration and its folder were removed afterwards.
   https://github.com/gioui-plugins/gio-plugins/tree/main/share
 
 ## Linux and Windows: an in-app share sheet in place of the 1.4-second notice — FIXED 30 September 2026
+
+Still open: a picture no folder could take ends without a word (1.2.21+,
+with the other shares that cannot finish), and GNOME on Wayland may open
+Files behind the window (stays); see docs/ROADMAP.md.
 
 On Linux and Windows the text shares copied to the clipboard and showed
 "Copied to the clipboard" for 1.4 seconds: a 13 pt pill at the window's
@@ -1230,6 +1280,8 @@ request commented out fails it as a missing one does. Device check:
 
 ## iPad and Mac: where the share popover points — probable from the code, 30 September 2026, not seen
 
+Planned for: 1.2.20, a look only; any fix in 1.2.21+ — see docs/ROADMAP.md.
+
 Read from the code; no simulator was booted and the Mac app was not launched.
 
 - **iPad, Share with note and Share as image.** `bibleTextPresentShare`
@@ -1256,6 +1308,9 @@ Sharing table in `docs/PLATFORM_MATRIX.md` marks the four cells above
 the day on iPad and on Mac.
 
 ## Android: the status-bar icons were white on the light page — FIXED 30 September 2026
+
+Still open: the three-button bar's white buttons after a navigation-mode
+change — stays, watch only; see docs/ROADMAP.md.
 
 In the light theme the clock, battery and signal icons were white on the
 cream paper, 1.19:1 on the Android 16 emulator, and a three-button
@@ -1298,6 +1353,10 @@ missing the appearance; not investigated further. The light Play images of
 fix (`docs/SCREENSHOT_PLAYBOOK.md`, §7).
 
 ## Android: a text share has no failure path — FIXED 30 September 2026
+
+Still open: a presentation iOS refuses and a card that fails to render end
+without a word — 1.2.21+, with the other shares that cannot finish; see
+docs/ROADMAP.md.
 
 `BtBridge.shareText` (`android/BtBridge.java`) calls `startActivity` with
 no try/catch, so a failure to start the chooser goes uncaught on the UI
@@ -1424,6 +1483,10 @@ focused number pad cannot be put away, so the two states never diverged
 there. Held by `TestAppearanceChangeDropsTheCaretAndPutsItBack`.
 
 ## A light/dark change with a sheet open left the app half in each theme — FIXED 27 September 2026
+
+Still open: the Mac's follow-scroll with the pane hidden and the Android
+night-mode patch's race (1.2.21+), and the iOS fallback's old colour
+(stays); see docs/ROADMAP.md.
 
 With a sheet open — Go to, Verse of the day, the translation list, Settings —
 a system switch between light and dark left the app in both at once. The sheet
@@ -1716,6 +1779,8 @@ confirm is in `docs/VISUAL_TESTS.md` under V15 and V9.
 
 ## Android: an activity destroyed with the process alive stops the narration
 
+Planned for: 1.2.20 — see docs/ROADMAP.md.
+
 From the code, found while tracing the stop above; not run on a device.
 `OnStopped` calls `nativeAudioStop()` on every activity destroy, not only when
 the process is ending (`InstallReadingStateFlush`, `app.go`). On Android that
@@ -1745,7 +1810,15 @@ the activity and the process (see the entry above), so V9's rotation check
 does not reach this path. Confirm first on a device: with Developer options >
 "Don't keep activities" on, press Home mid-narration and wait (V9).
 
+**Decided 6 October 2026** — Android narration when the system reclaims
+the screen: don't stop the audio, matching iPhone. Of the two candidates,
+the first: on Android, `OnStopped` stops no audio.
+
 ## Rework the download page — DONE 26 September 2026; Google Play filled its slot, the release notes followed, and the APK row returned, 30 September 2026
+
+Still open: the public-surfaces check does not require the App Store and
+Snap Store links in the release notes — planned for 1.2.20; see
+docs/ROADMAP.md.
 
 The page had store buttons by platform at the top and a separate "Desktop —
 direct downloads" half with its own sections, three button styles, and the
@@ -2071,7 +2144,9 @@ and give the canvas a device's safe insets and a raised keyboard. Pinned by
 each proved against a mutation. What only a screen can confirm is listed under
 V12 in `docs/VISUAL_TESTS.md`.
 
-## The desktop takes the phones' navigation rule — planned for 1.2.19
+## The desktop takes the phones' navigation rule — planned for 1.2.21
+
+Planned for: 1.2.21, its headline — see docs/ROADMAP.md.
 
 Since 1.2.18 every phone and tablet puts Read, Books and Search on a rail
 while its window is wider than it is tall and on a bottom bar otherwise
@@ -2135,6 +2210,9 @@ The plan:
   a selection live, and tile a window to a phone's shape.
 
 ## One navigation rule on phones and tablets — DONE 1 October 2026, for 1.2.18
+
+Still open: a sideways launch draws the bar first (the follow-up below) —
+planned for 1.2.21+; see docs/ROADMAP.md.
 
 Read, Books and Search sit on a rail along the leading edge while the window
 is wider than it is tall, and on a bottom bar otherwise, on every phone and
@@ -2271,6 +2349,9 @@ Two older layout faults the same simulator pass showed, both in 1.2.17:
   iPhone 17 Pro Max held sideways, and the sheets end there.
 
 ## The open narration card covers the phone header's controls — kept as a pop-up for now
+
+Planned for: next major, the bar on phones behind `next`; the double tap on
+the ✕ in 1.2.21+ — see docs/ROADMAP.md.
 
 On a phone the open narration card lies over the next-chapter arrow and the
 full-screen button, and with a long heading or on the narrowest phones over the
@@ -2429,6 +2510,12 @@ a card, flush right under the header, that pushed the text down.
 
 ## The reading page: what is left after 24 September 2026
 
+Planned for: the Psalm title's hyphenation and the pill under a heading on
+Android's book page in 1.2.20; the Windows and Linux footnote section,
+Android's centring and the prose-into-poetry rule in 1.2.21+; hyphenation on
+Windows and Linux in the next major; the Android title gaps and the other
+kept differences stay — see docs/ROADMAP.md.
+
 Every surface takes its page from `reading_page.go` since 24 September 2026
 (docs/READING_TYPOGRAPHY.md, "The reading page", keeps the per-surface list).
 What the spec work left, each one a known difference rather than a guess:
@@ -2487,6 +2574,10 @@ What the spec work left, each one a known difference rather than a guess:
   to `p.pst` gives the imported title a hyphenation factor of 0 and breaks no
   word in it, so the Apple half is one rule, but it changes the Apple panes and
   wants its own check on them, iOS included (scripts/check-ios-pane.sh).
+  **Decided 6 October 2026** — Psalm titles: no hyphenation on the Apple apps
+  and Android 15+, recording Android 13–14 as a divergence. On Android it is
+  `LineBreakConfigSpan.createNoHyphenationSpan()` over each title, a span
+  API 35 brought, which Android 13 and 14 lack.
 - **A paragraph that opens in prose and turns to poetry** is indented on the
   web, Android and the Windows and Linux pane (justified where those surfaces
   justify — whole on the web and Android from API 35, its prose only on the
@@ -2512,6 +2603,10 @@ What the spec work left, each one a known difference rather than a guess:
   at that size beneath it (docs/READING_TYPOGRAPHY.md).
 
 ## iOS 27: after the scene life-cycle fix — FIXED 23 September 2026
+
+Still open: the tab bar's style and the scale on iPhones whose nativeScale
+is not their scale (1.2.21+); the iPadOS window buttons, an external
+display's scale and Android's cancelled touch (stay); see docs/ROADMAP.md.
 
 The launch failure itself (an Xcode 27 build refused at launch on every iOS 27
 device) is fixed by `patches/fyne-2.7.4-ios-scene-lifecycle.patch` and
@@ -2590,6 +2685,9 @@ Still open, from the same work:
 
 ## A note link that opened the chapter and stayed at the top — FIXED 23 September 2026
 
+Still open: a reader who scrolled away from a note they arrived at is taken
+back by the next width change — planned for 1.2.21+; see docs/ROADMAP.md.
+
 Reported on iOS three times: 10 August (a note tapped in the dev Links tab
 while on its chapter), 18 September (a note link from Messages, the app
 backgrounded) and 23 September (once in several tries, the reader's own note).
@@ -2666,6 +2764,9 @@ render can overwrite.
 
 ## The NKJV's missing spaces: report upstream, and decide on a correction list
 
+Planned for: 1.2.21+ once decided; the upstream report needs no release —
+see docs/ROADMAP.md.
+
 The licensed feed runs two words together at 286 places in 275 verses
 (re-counted 22 September 2026, `scripts/nkjv-upstream-joins.py`; the method and
 the exclusions are in docs/SOURCE_FIELDS.md). Every surface shows them
@@ -2692,6 +2793,8 @@ Two actions, independent:
 
 ## One way to turn a verse into drawn words, not two
 
+Planned for: 1.2.21+ — see docs/ROADMAP.md.
+
 Found 22 September 2026 by the spacing audit (`spacing_audit_test.go`). Two
 surfaces draw a verse word by word on a canvas rather than handing text to an
 engine: the styled desktop pane and the verse-of-the-day card. They tokenise
@@ -2712,6 +2815,8 @@ whole-token rule, or two BSB verses (Mark 7:34, Acts 20:35) change colour on
 the card. Keep the audit as the cross-surface guard either way.
 
 ## More share-card typefaces with true small capitals
+
+Planned for: next major, behind `next` — see docs/ROADMAP.md.
 
 Surveyed 23 September 2026, and optional: since `cardText` (share_image.go)
 every one of the seven card faces already draws the divine name, six of them
@@ -2749,6 +2854,8 @@ has run once), and call `renderVerseImage`. The four `share_image_smallcaps`
 tests cover any new face automatically, since they iterate the typeface list.
 
 ## Fyne's RichText breaks a word mid-word at the start of a segment
+
+Planned for: 1.2.21+ — see docs/ROADMAP.md.
 
 Found 22 September 2026, same audit. When a segment begins partway along a
 line and its first word does not fit what is left, `lineBounds` (Fyne 2.7.4,
@@ -2847,7 +2954,10 @@ packager still rewrites `Build` and the verification reads it back; what
 went is the two-packages-one-checkout hazard that stamped 1.2.5 with two
 different builds.
 
-## The first frame is laid out for a window the app did not get
+## The first frame is laid out for a window the app did not get — FIXED 18 September 2026
+
+Still open: the first window's position on Windows ("Still uncovered by
+either", below) — stays; see docs/ROADMAP.md.
 
 `app.go:548` asks for a fixed window size and never reconciles it with what the
 desktop actually granted:
@@ -3007,6 +3117,16 @@ CW_USEDEFAULT cascade, the app never calls `CenterOnScreen`, and
 `doCenterOnScreen` (`window_desktop.go:155-177`) centres against `GetVideoMode`
 rather than the work area, so a clamped window is still a cascaded one.
 
+**Closed 6 October 2026, verified end to end.** The fix (7371b1a92,
+18 September 2026) has shipped in every release since 1.2.12, and the
+check this entry was waiting for has run: on the 1.2.19 release commit
+(8a135f998, 3 October 2026) the Microsoft Store workflow's centring gate
+refused the committed failure and passed the live render on both
+architectures, its margins 190 and 188 px on x64 and 128 and 93 px on
+arm64, inside the 15% limit. The four triggers above stay as the watch
+list for the tabled patch. The window's position, which neither covers,
+stays in the backlog (docs/ROADMAP.md).
+
 ## FIXED: Windows arm64
 
 Attempted, withdrawn and fixed on 19 September 2026. The `windows-11-arm` image
@@ -3031,7 +3151,7 @@ tag already pinned, and the compiler was solvable by shipping one.
 Still `runner`, not `field` — nobody has run it on a real Windows ARM machine.
 The local VM is the obvious next step.
 
-## The site must not be published before the release that first ships ARM
+## The site must not be published before the release that first ships ARM — NO LONGER TRUE 6 October 2026
 
 `docs/index.html` now offers **Linux — ARM** and **Windows — ARM** downloads,
 pointing at `releases/latest/download/BibleText-Linux-arm64.tar.xz` and
@@ -3052,6 +3172,14 @@ So: **cut the release first, confirm both assets are attached, then publish the
 site.** Worth a check in publish-site.sh that every
 `releases/latest/download/<name>` the page links actually exists on the latest
 release — that would close it permanently rather than relying on remembering.
+
+**No longer true, 6 October 2026.** v1.2.12 was the first release with
+both ARM assets, and v1.2.19, the latest release, carries
+`BibleText-Linux-arm64.tar.xz` and `BibleText-Windows-arm64.zip`, so both
+links on the download page resolve. The lasting guard, a check in
+`scripts/publish-site.sh` that every `releases/latest/download/` link the
+page carries exists, stays a candidate for the release pipeline
+(docs/ROADMAP.md, "Stays in the backlog").
 
 ## FIXED: `make install` on the Linux tarball
 
@@ -3086,6 +3214,9 @@ now requires all of that on every packaged tarball — proven to pass the fixed
 tarball and fail the old one.
 
 ## FIXED: the executable was named after `cmd/desktop`, not after the app — 19 September 2026
+
+Still open: iOS ships `CFBundleExecutable: main` (below) — stays; see
+docs/ROADMAP.md.
 
 `fyne package` names the executable after its SOURCE DIRECTORY. Ours was
 `cmd/desktop`, so every channel that did not override the name shipped a binary
@@ -3202,6 +3333,9 @@ not observed on a built bundle.
 
 ## Verse attribution: three findings from measuring it, 21 September 2026
 
+Planned for: 1.2.20, all three findings and the test litter — see
+docs/ROADMAP.md.
+
 Prompted by a plain question — does the app really work out verse numbers by
 matching text, and what about verses that repeat? The short answer is that
 position is authoritative and the matching is a fenced fallback, and the
@@ -3260,6 +3394,9 @@ The heading path deliberately returns reference-only for exactly this case;
 superscriptions were simply missed when it was written. Related to the open
 "quoting, notes and links" heading pass.
 
+**Decided 6 October 2026** — a psalm title selected on its own: cite
+verse 1 with no quotation, as a heading does.
+
 ### 3. The omitted-verse strip rests on an untested assumption
 
 `outboundText` strips a `[digits]` token by SHAPE, justified by a comment
@@ -3278,7 +3415,12 @@ translations.
 throwaway probe someone committed by accident. Left alone rather than deleted
 on someone else's behalf.
 
-## The web reader cannot render small capitals — latent until it serves an edition that uses them
+**Decided 6 October 2026** — the oddly named probe test file: rename it as
+a proper saved-note test. It checks that an old note's record round-trips
+byte for byte through the current codec, which is worth keeping under a
+name that says so.
+
+## The web reader cannot render small capitals — DONE 2 October 2026, before it served an edition that uses them
 
 Recorded because it reads like a live defect and is not one, and because the
 condition that would make it real is easy to meet by accident.
@@ -3320,7 +3462,25 @@ small, and that is the trade the current ranges were chosen to make.
 Note that Unicode provides no small-capital `x`, so a subset can never be
 complete — see `docs/DIVINE_NAME.md`.
 
+**Done before it was needed.** The site began serving an edition that
+uses them, the NKJV, on 3 October 2026, and its pages draw the divine name
+in small capitals: 6f35bdcab and 63d7556cc (both in v1.2.19) add a
+small-capital supplement holding exactly the 25 letters of the app's
+table, for the regular, bold and italic cuts, which the NKJV pages'
+stylesheet loads by that table's unicode-range (checked on the live site
+on 6 October 2026). It took a different route from the two ranges
+proposed above: a separate supplement leaves the Regular and Bold web
+subsets, whose bytes are hashed into every public-domain page, as they
+were, and those pages still carry no small capitals, since none of their
+editions marks the name. The other two conditions above, shared-note text
+on a page and a page echoing text the app drew, would need the
+supplement on those pages too.
+
 ## What we ship has largely never been run
+
+Planned for: 1.2.21+; its cheap halves, `UIDeviceFamily` read back and the
+preferences writer's marker on every release path, in 1.2.20 — see
+docs/ROADMAP.md.
 
 Found by a five-platform survey on 18 September 2026, each platform's claims
 then checked by an adversarial reader that refuted 48 of them. The full picture
@@ -3371,6 +3531,8 @@ rebuild. The expensive one is deciding what "tested" should mean for a store
 binary we cannot run in CI at all.
 
 ## Headings: quoting, notes and links need one deliberate pass
+
+Planned for: next major, behind `next` — see docs/ROADMAP.md.
 
 **FIXED 23 September 2026: a heading belonged to the verse above it.** On the
 native panes a verse's character range ran from its own number to the next
@@ -3472,6 +3634,9 @@ differs by style, and it decides the rest.
 
 ## The Windows audio smoke is probably testing a silent sink
 
+Planned for: 1.2.20, step 3 rerun on the Windows virtual machine, after
+which this entry closes — see docs/ROADMAP.md.
+
 `windows-audio-smoke.yml` has failed repeatedly at the natural-end step, and
 the investigation has been looking for a defect in the app. The likelier
 explanation is that the test's central premise does not hold on the machine it
@@ -3511,6 +3676,8 @@ Until 1 is done, a red run of this workflow says nothing about whether Windows
 audio works, and the repeated failures should not be read as a shipping risk.
 
 ## The direct downloads do not register `bibletext:` links
+
+Planned for: stays — see docs/ROADMAP.md.
 
 Three channels hand a shared link back to the browser because nothing has put
 a handler in front of the system. The packaged builds are fine: the Linux
@@ -3588,6 +3755,9 @@ page as it stands.
 
 ## Age ratings: aim for all ages in every market
 
+Planned for: stays, console work after 1.2.20 clears both stores — see
+docs/ROADMAP.md.
+
 The IARC questionnaire answered for the Microsoft Store on 17 September 2026
 mirrors the answers Google Play already carries, so the two stores say the same
 thing. It yields IARC 3+, PEGI 3, Microsoft 3+, ClassInd L (all ages), CCC 8+,
@@ -3618,6 +3788,9 @@ Play's is under App content -> Content ratings -> Start new questionnaire. A
 retake replaces the certificate, so do it while no submission is in review.
 
 ## Verse of the day: possible later additions
+
+Planned for: next major, the daily notification behind `next` — see
+docs/ROADMAP.md.
 
 The 10 Sep 2026 rework (branch verse-of-day: civil-date key with the device
 zone on phones, frozen hash order, passages with alternates for the Catholic
@@ -3659,6 +3832,8 @@ rework's proposal for the design (calendar triggers carrying the full date,
 re-issued on foreground, the passage computed with the fixed day key).
 
 ## Android's compact page: a pill under a heading stands down
+
+Planned for: 1.2.20 — see docs/ROADMAP.md.
 
 The one surface left out of the pill rule (below). On Android's compact page
 — the book page, which since 24 September 2026 is any pane wide enough for it:
@@ -3712,6 +3887,9 @@ in place when it lands. `TestAPreviousEditionIsUpdatedWhileTheAppRuns`,
 the record. This entry was left open by mistake when that change landed.
 
 ## Microsoft Store: from the reserved name to the first submission — DONE
+
+Still open: the three checks of step 5 that need a Windows client — planned
+for 1.2.20; see docs/ROADMAP.md.
 
 **Closed 21 September 2026.** Submission 1 published on 17 September (1.2.10,
 x64) and submission 2 was committed on the 21st through `msstore/submit.py`,
@@ -3807,6 +3985,10 @@ is due by mid-December 2026. Left to do, in order:
 
 ## Linux stores: from the listing source to two live channels — SNAP DONE
 
+Planned for: the AppImageHub PR, the snap listing's fields and the snap
+preferences stay; oto 3.5 in the next major, on a branch — see
+docs/ROADMAP.md.
+
 **The snap half closed 21 September 2026**: `linux-stores.yml` has run on both
 architectures, the name was registered on 18 September, the credential is set,
 four releases have shipped the AppImage, and the snap reached `latest/stable`
@@ -3850,6 +4032,10 @@ channels are the tarball, the AppImage and the snap; the
 and the 1.2.10 release note that promised a Flatpak stands as shipped.
 
 ## Recapture the App Store and Play screenshots — App Store sets RECAPTURED 28 September 2026 and uploaded 29 September; Play being retaken
+
+Planned for: 1.2.21+, the Play phone set once its shape is decided and after
+1.2.20 clears Play's review; the short desktop window stays — see
+docs/ROADMAP.md.
 
 1.2.7 shipped with the screenshot set inherited from 1.2.5, which in turn
 inherits from the last captured set (build/appstore/screenshots-1.2.3/). Those
@@ -4157,6 +4343,8 @@ the key row as an HBox and on any switch as a widget.Check. What only a
 screen can confirm is in `docs/VISUAL_TESTS.md` V15.
 
 ## NKJV cross references: the panel's second pass — PAUSED 10 September 2026
+
+Planned for: stays, gated on the licensing reply — see docs/ROADMAP.md.
 
 The edition's own cross-reference apparatus is captured, resolved and drawn
 in the cross-references panel behind the `nkjvxrefs` build tag (commits
@@ -4485,6 +4673,9 @@ host, so the measurements are the evidence.
 
 ## Bible version states: transition diagram + comprehensive tests — DONE
 
+Still open: three questions in docs/VERSION_STATES.md — a key cleared on
+purpose in 1.2.21+ once decided, the other two stay; see docs/ROADMAP.md.
+
 Both halves are in docs/VERSION_STATES.md: the storage diagram (M1–M3) and,
 since 2026-09-05, a second diagram for M4, the launch space and the arrivals
 layer drawn as the enumerations drive them, with a table of every space's
@@ -4658,6 +4849,8 @@ translation whose canon holds the saved place.
 
 ## CI runs with the race detector, so 14 tests never run there
 
+Planned for: stays; retitled in 1.2.20 — see docs/ROADMAP.md.
+
 DONE for the cheap half. The Linux job now runs the suite a second time
 without the race detector, so those 14 tests compile and run on every push;
 they cover focus order, render output, wrap layout, the download-status row,
@@ -4669,7 +4862,7 @@ Still true, and still untested anywhere: no CI job builds or tests the Android
 app. The only Android-named step checks the target SDK. With a physical device
 now available that gap is worth closing separately.
 
-## Source fields: three defects and a decision list
+## Source fields: three defects and a decision list — DONE, closed 6 October 2026
 
 Tracked in `docs/SCRIPTURE_WORKLIST.md`, not here. That file is the worklist
 for work on the TEXT — what the decoders read from each source and what
@@ -4700,7 +4893,14 @@ node and style shapes, and the words-of-Jesus cross-check), and sequences the
 larger questions: source paragraph boundaries, section headings, and the
 NKJV's italics for supplied words.
 
-## NKJV Psalm superscriptions
+**Closed 6 October 2026.** `docs/SCRIPTURE_WORKLIST.md` records the three
+defects and the decode-time checks as finished: S1 and S2 done, S3 closed
+as not a defect, S4 to S9 done. What remains of the larger questions is
+tracked there and in docs/ROADMAP.md: the WEB Catholic Daniel 3 heading
+(S15's shape guard), a setting to turn section headings off (S15), and
+in-text footnote markers (S22).
+
+## NKJV Psalm superscriptions — DONE 5 September 2026
 
 DONE. decodeAPIBiblePassage reads the `d` (descriptive title) paragraph into
 BibleData.Superscriptions instead of skipping it: text and notes go through
@@ -4720,6 +4920,11 @@ TestLiveAPIBibleProbe checks Psalm 3 and the 3→4 passage boundary, and
 TestLiveAPIBibleFullCanon (opt-in, ~200 requests) downloads the whole
 canon and reproduces the 2026-08-23 text byte for byte with 116 titles
 added. What every source carries and what is kept: docs/SOURCE_FIELDS.md.
+
+**Closed 6 October 2026.** The text above already said DONE; only the
+heading lacked the mark. The decoder still reads the `d` paragraph into
+`BibleData.Superscriptions` (`apibible.go`, 83e9bca55), and
+apibible_superscription_test.go passes.
 
 ## Show a note you just sent, the way opening one from the browser does — DONE 27 September 2026
 
@@ -4816,6 +5021,8 @@ own-note row now names the send.
 
 ## A reader cannot tell why a verse is lit
 
+Planned for: next major, behind `next` — see docs/ROADMAP.md.
+
 The report that raised the item above was a misreading worth recording,
 because the app invited it. A highlight was still standing after a send with
 no note beside it, which read as a note that had lost its text; it was a
@@ -4890,6 +5097,8 @@ confirm is in `docs/VISUAL_TESTS.md` V12.
 
 ## One pill, several noted paragraphs: what the count says and where it points
 
+Planned for: stays — see docs/ROADMAP.md.
+
 With more than one note on a chapter, the native reading pane draws ONE
 anchored sticker — `planOpenLimit` is 1 — over the focused note's verse, and
 puts the rest behind a counter that rotates focus and scrolls to the next one
@@ -4946,6 +5155,9 @@ stood down, and a pressed pill opened its own paragraph's group. What remains
 open here is (3) alone, and it is a choice rather than a defect.
 
 ## Candidate: a neutral graphite wash for the dark-mode highlight
+
+Planned for: stays, decided with the next major's highlight work — see
+docs/ROADMAP.md.
 
 The dark highlight is `#3A326F`, a violet. Held against seven alternatives on a
 real screenshot, graphite `#2C343E` was the one worth keeping in mind: the
@@ -5073,6 +5285,8 @@ closed by it. The dev toggle's off value remains the one-line reversion.
 
 ## Deferred-UI timers under the test driver (audited 2026-09-02, no live races)
 
+Planned for: stays — see docs/ROADMAP.md.
+
 `verse_of_day.go`'s re-measure timer is the precedent: under Fyne's TEST
 driver `fyne.Do` runs its closure on the timer's own goroutine — there is no
 UI thread to marshal to — so a pending `time.AfterFunc` races the test
@@ -5129,7 +5343,7 @@ The audit's rule, kept: a gate lands only with a demonstrated race (a
 prophylactic gates over dead code.
 
 
-## `fyne package` bumps the desktop Build ledger after every package
+## `fyne package` bumps the desktop Build ledger after every package — DONE 6 September 2026
 
 DONE. Both packaging paths now save the ledger before packaging and restore it
 afterwards, which is the pattern `build-android.sh` already used. The store
@@ -5140,6 +5354,11 @@ carry the committed Build rather than the second one carrying a number nobody
 chose, and it then unzips both and checks their CFBundleVersion against the
 ledger rather than trusting the restore. `test-release-key-flow.sh` asserts all
 of it and fails if a restore is removed.
+
+**Closed 6 October 2026.** The text above already said DONE; only the
+heading lacked the mark. The fix is a2ad17881 (6 September 2026), and
+`scripts/test-release-key-flow.sh` still asserts the save and both
+restores, in `release.yml` and in the store script's trap, and passes.
 
 ## The verse wash was measured in two conventions — FIXED 2026-09-08
 
@@ -5166,7 +5385,7 @@ confirms at zero differing pixels.
 The selection popup's anchor had the same blind measurement and is routed through
 the same helper.
 
-## Android 13/14: the reading text cannot be justified while it stays selectable
+## Android 13/14: the reading text cannot be justified while it stays selectable — BY DESIGN (8 September 2026)
 
 The native reading pane is a selectable `TextView`, which Android lays out
 with a `DynamicLayout`. Before Android 15 that layout never hands the
@@ -5206,6 +5425,14 @@ what the gate already expresses.
 
 So: the gate is correct, neither workaround above should be built, and the
 inconsistency between fleet bands is accepted rather than overlooked.
+
+**Closed 6 October 2026 as by design,** on the 8 September decision
+above (4a3b3de68). The gate stands: `justifiesInterWord`
+(`android/BtBridge.java`) justifies only from API 35. A deliberate
+difference between platforms is recorded where the platforms are
+compared, and the Divergences of docs/PLATFORM_MATRIX.md do not list
+this one yet; adding it is in 1.2.20's documentation row
+(docs/ROADMAP.md).
 
 ## Tag 1.2.6 so `go install` and `go run …@latest` resolve the module — DONE
 
@@ -5298,6 +5525,8 @@ both the outgoing text and that the selection was located rather than fell back.
 
 ## Three comments that describe code that changed under them
 
+Planned for: 1.2.20 — see docs/ROADMAP.md.
+
 Each verified against the source; all are comments, none change behaviour.
 
 - `outbound_text.go:61-62` says the small-capital branch maps "Back to the
@@ -5319,6 +5548,8 @@ Each verified against the source; all are comments, none change behaviour.
 
 ## docs/ANDROID.md and reading_android.go disagree about the note sticker
 
+Planned for: 1.2.20 — see docs/ROADMAP.md.
+
 docs/ANDROID.md:183-185 says the Android shared-note sticker "is gated to
 `IsFullScreen` in Go (`pushNoteToOverlay`, reading_android.go) precisely so the
 reader never sees the note twice." The function it cites opens by saying the
@@ -5332,6 +5563,8 @@ draw — and whether that concern is now handled by the banner standing down, or
 was simply overtaken, is worth confirming before rewriting it.
 
 ## Target audience is 13+, and it was meant to include 9-12
+
+Planned for: stays; its recovery breadcrumb in 1.2.21+ — see docs/ROADMAP.md.
 
 The Play target-audience declaration was saved as **13-15, 16-17, 18 and over**.
 That is not the intended answer. The intent was to include **9-12** so the app
