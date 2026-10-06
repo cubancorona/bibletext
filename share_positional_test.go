@@ -218,3 +218,60 @@ func TestShareLinkKeepsSpanVersesWhenNormalizeDeclines(t *testing.T) {
 		t.Errorf("zero span link verses = %d-%d, want 0-0", lo, hi)
 	}
 }
+
+// A drag that opens on the question mark ending Matthew 25:38 and runs into
+// 25:39 is honestly spanned 38–39. The mark is rightly dropped from the
+// quotation, and what is left is verse 39's opening, "When did we see you" —
+// which is verse 38's opening too. Searched for again from the start of the
+// span's region after the mark came off, the words were found in verse 38 and
+// cited there. The control is the same words dragged from verse 39's number.
+func TestADragOpenedOnThePreviousVersesMarkCitesTheVerseDragged(t *testing.T) {
+	bd, err := loadSeedGospels()
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	st := &AppState{Bible: bd, CurrentBook: "Matthew", CurrentChapter: 25}
+	const words = "When did we see you"
+
+	text, cite, _, _ := prepareShareQuote(st, "39 "+words, selSpanFromNative(39, 39))
+	if text != words || cite != "Matthew 25:39" {
+		t.Fatalf("control: dragged from verse 39's number, shared (%q, %q)", text, cite)
+	}
+	for _, sel := range []string{"? 39 " + words, "? 39 " + words + " si"} {
+		text, cite, at, _ := prepareShareQuote(st, sel, selSpanFromNative(38, 39))
+		if text != words || cite != "Matthew 25:39" {
+			t.Errorf("%q, span 38–39: shared (%q, %q), want (%q, Matthew 25:39)", sel, text, cite, words)
+		}
+		corpus, spans := chapterProse(st)
+		if v39 := spans[38]; v39.verse != 39 || at != v39.start {
+			t.Errorf("%q: placed at %d, want verse 39's start %d (%q)", sel, at, v39.start, corpus[v39.start:v39.start+len(words)])
+		}
+	}
+}
+
+// The same slide in the first search, before any repair: John 8:23 says
+// "this world. I" twice, and a drag from its last words across verse 24's
+// number shares "this world. I" too. Found first in the span's region, the
+// words were placed at the copy inside verse 23 and cited 8:23 alone, though
+// the reader dragged into verse 24. The verse number in the selection says
+// where the words are, and the citation takes both verses.
+func TestADragAcrossAVerseNumberIsPlacedWhereTheNumberSays(t *testing.T) {
+	bd, err := loadSeedGospels()
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	st := &AppState{Bible: bd, CurrentBook: "John", CurrentChapter: 8}
+
+	// The control: the words of verse 23 alone, with no number, stay in 23.
+	if _, cite, _, _ := prepareShareQuote(st, "of this world.", selSpanFromNative(23, 23)); cite != "John 8:23" {
+		t.Fatalf("control: verse 23's own words cited %q", cite)
+	}
+	text, cite, at, _ := prepareShareQuote(st, "this world. 24 I", selSpanFromNative(23, 24))
+	if text != "this world. I" || cite != "John 8:23–24" {
+		t.Errorf("shared (%q, %q), want (%q, John 8:23–24)", text, cite, "this world. I")
+	}
+	_, spans := chapterProse(st)
+	if want := spans[23].start - len("this world. "); at != want {
+		t.Errorf("placed at %d, want %d: the words that run into verse 24's number", at, want)
+	}
+}

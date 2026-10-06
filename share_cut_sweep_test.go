@@ -450,7 +450,10 @@ func TestRaggedCutSweepPoetry(t *testing.T) {
 //
 // The truth for a drag is where its shared words stand inside the drag: the
 // verses that stretch of the chapter overlaps. A shared text that does not
-// occur inside the drag at all is wrong whatever it cites.
+// occur inside the drag at all is wrong whatever it cites. And because every
+// one of these drags carries a verse number, the pipeline must place its words
+// inside the drag too (prepareShareQuote's at): the completion, the original
+// terminal and the line-break restore all read the chapter around that place.
 type spannedPage struct {
 	st       *AppState
 	corpus   string
@@ -530,7 +533,8 @@ func (p *spannedPage) citeOf(at, n int) string {
 }
 
 // spannedDrag is one drag's outcome: whether its citation names the verses
-// its shared words came from, and the detail to print when it does not.
+// its shared words came from and its words were placed inside the drag, and
+// the detail to print when not.
 type spannedDrag struct {
 	right  bool
 	detail string
@@ -569,6 +573,9 @@ func (p *spannedPage) drag(t *testing.T, from, to int) spannedDrag {
 		raw, span.lo, span.hi, text, cite)
 	if truth == "" {
 		return spannedDrag{false, detail + ", words that are not in the drag"}
+	}
+	if at < lo || at+baseLen > hi {
+		return spannedDrag{false, fmt.Sprintf("%s, placed at %d outside the drag's %d–%d", detail, at, lo, hi)}
 	}
 	return spannedDrag{cite == truth, detail + ", want " + truth}
 }
@@ -656,22 +663,22 @@ func TestSpannedBoundaryDragSweep(t *testing.T) {
 			line = append(line, fmt.Sprintf("%d words %d/%d", k, wrong[f.name][k], drags[f.name][k]))
 		}
 		total += n
-		t.Logf("%s: %d of %d drags cite the wrong verses (%s)", f.name, totalWrong[f.name], n, strings.Join(line, ", "))
+		t.Logf("%s: %d of %d drags wrong (%s)", f.name, totalWrong[f.name], n, strings.Join(line, ", "))
 	}
 	t.Logf("%d drags", total)
 
-	// The rates as they stand, held exactly so that any change shows. A drag
-	// that opens on the previous verse's punctuation is cited from an earlier
-	// copy of its words in 974 of 59,199 drags: one in seven at one word, 2.8%
-	// at two, none from ten. Five drags that begin on the previous verse's
-	// last word are located at an earlier copy of the same words that does
-	// not cross the boundary, and cite the one verse. Every drag that begins
-	// on the verse's number is right.
-	if testing.Short() {
-		return
-	}
-	if totalWrong["punct"] != 974 || totalWrong["cross"] != 5 || totalWrong["number"] != 0 {
-		t.Errorf("wrong citations: punct %d, cross %d, number %d; recorded 974, 5 and 0",
-			totalWrong["punct"], totalWrong["cross"], totalWrong["number"])
+	// None may be wrong. Before the selection was placed by its verse number
+	// and kept in place through the repairs (normalizeShareSelection), a drag
+	// that opens on the previous verse's punctuation was cited from an earlier
+	// copy of its words in 974 of these 59,199 drags: one in seven at one
+	// word, 2.8% at two, none from ten. Five that begin on the previous
+	// verse's last word were placed at an earlier copy of the same words
+	// inside that verse and cited it alone. Those that begin on the verse's
+	// number were right.
+	for _, f := range families {
+		if totalWrong[f.name] != 0 {
+			t.Errorf("%s: %d drags cite verses their words did not come from, or place the words outside the drag",
+				f.name, totalWrong[f.name])
+		}
 	}
 }

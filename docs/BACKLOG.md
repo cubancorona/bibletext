@@ -3351,7 +3351,44 @@ time, which is what the span is buying.)
 
 Three things did turn up.
 
-### 1. A drag that opens on the previous verse's punctuation can cite the wrong verse
+### 1. A drag that opens on the previous verse's punctuation can cite the wrong verse — DONE 6 October 2026, for 1.2.20
+
+Fixed in `normalizeShareSelectionProse` (`share.go`), which the share, the
+link, the note and the cross-references all resolve a selection through, so
+all six platforms take it. Two changes, both measured by the spanned sweep
+(`TestSpannedBoundaryDragSweep`, `share_cut_sweep_test.go`), which drags
+across every verse boundary of the 89 embedded WEB gospel chapters with the
+verse numbers in the selection and the span the panes report: 81,333 drags,
+hermetic, committed first with the rates below as the before.
+
+- **Once placed, a selection is never searched for again.** Each repair only
+  cuts it shorter, so where the shorter text stands follows from the cut. This
+  is the slide described below: 974 of the sweep's 59,199 drags that open on a
+  mark ending the previous verse were cited from an earlier copy (one in seven
+  at one word, 2.8% at two, none from ten).
+- **A selection that carries a verse number is placed where the number says**
+  (`stripVerseMarkersAnchored`), before the span's region is searched. The
+  sweep found the same slide in the first search, with no repair involved:
+  "this world. 24 I" in John 8, whose verse 23 says "this world. I" twice, was
+  placed at the copy inside verse 23 and cited 8:23 alone. Five of the 11,067
+  drags that begin on the previous verse's last word did this.
+
+After it every drag in the sweep is cited from the verses its words came from
+and placed inside the drag. Over 1.2 million spanned drags of a wider scratch
+sweep (the same boundaries with drags begun up to three words back, and drags
+inside verses begun and ended mid-word), the 1,369 that cited the wrong verses
+cite the right ones and none that was right changed its citation. What moved
+otherwise: words placed at an earlier copy in the same verse now placed where
+they were dragged (the citation was already right), and selections that fell
+back to the legacy path now located. A drag that holds no whole word, "ou," out
+of "you,", now falls back verbatim as every such drag does
+(`TestShareSelectionSubWordFragment`) instead of being placed on the start of
+another word. One drag with no verse number in it can still be placed at an
+earlier copy of its words inside its own verse; the citation is the same, but
+the completion and the line-break restore read that copy's surroundings. The
+panes report the verse, not the place in it.
+
+The original finding:
 
 The real residual risk, and it is NOT the fallback. A `selSpan` narrows the
 search REGION — `[start of verse lo, end of verse hi]` — which is always wider
