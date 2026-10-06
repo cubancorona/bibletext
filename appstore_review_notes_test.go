@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -47,6 +48,55 @@ func marketingVersion(t *testing.T) string {
 	return packagedVersion(t, "cmd/mobile/FyneApp.toml")
 }
 
+// App Review notes name no release but their own, anywhere in them. Notes
+// whose heading was bumped over the last release's body name that release
+// below the heading, and a comparison with an earlier release ("(1.0.0: ...)")
+// names it too; either would go to App Review describing a release it is not
+// reviewing. There is no allow-list: an x.y.z that is not the packaged version
+// fails wherever it stands, the version of an operating system included.
+// appstore/push-review-notes.py refuses the same notes before it sends them.
+//
+// Until 1.2.19 only the heading was read, and the notes up to then were
+// written and sent under that rule; 1.2.19's iPhone notes compare two results
+// with 1.2.18's. The whole notes are read from 1.2.20, the first release
+// whose notes are written under this rule, so the tracked tree stays green
+// while it still holds 1.2.19's, and the version bump to 1.2.20 is what makes
+// those comparisons fail.
+const reviewNotesWholeTextFrom = "1.2.20"
+
+var reviewNotesVersion = regexp.MustCompile(`\b[0-9]+\.[0-9]+\.[0-9]+\b`)
+
+// reviewNotesOtherVersions returns every x.y.z in text other than want, in
+// the order they appear.
+func reviewNotesOtherVersions(text, want string) []string {
+	var others []string
+	for _, v := range reviewNotesVersion.FindAllString(text, -1) {
+		if v != want {
+			others = append(others, v)
+		}
+	}
+	return others
+}
+
+// versionAtLeast compares two dotted versions number by number, so 1.2.100
+// is after 1.2.20. A part that is not a number compares as 0.
+func versionAtLeast(version, floor string) bool {
+	a, b := strings.Split(version, "."), strings.Split(floor, ".")
+	for i := 0; i < len(a) || i < len(b); i++ {
+		var x, y int
+		if i < len(a) {
+			x, _ = strconv.Atoi(a[i])
+		}
+		if i < len(b) {
+			y, _ = strconv.Atoi(b[i])
+		}
+		if x != y {
+			return x > y
+		}
+	}
+	return true
+}
+
 // TestAppReviewNotesAreForThisRelease guards the version-specific review field
 // on both platforms.
 func TestAppReviewNotesAreForThisRelease(t *testing.T) {
@@ -72,17 +122,23 @@ func TestAppReviewNotesAreForThisRelease(t *testing.T) {
 					"caps the field at 4,000. Remove %d characters.", file.path, n, n-4000)
 			}
 
-			// The heading must name the packaged release and no other version.
+			// The heading must name the packaged release, and the notes no
+			// other version anywhere (reviewNotesWholeTextFrom).
 			first := strings.TrimSpace(strings.SplitN(notes, "\n", 2)[0])
 			if !strings.Contains(first, want) {
 				t.Errorf("%s opens with %q but the app ships as %s; rewrite the notes for "+
 					"%s before submitting", file.path, first, want, want)
 			}
-			for _, stale := range regexp.MustCompile(`\b[0-9]+\.[0-9]+\.[0-9]+\b`).FindAllString(first, -1) {
-				if stale != want {
-					t.Errorf("%s's first line also names version %s; the notes must describe %s alone",
-						file.path, stale, want)
-				}
+			read, where := notes, "names"
+			if !versionAtLeast(want, reviewNotesWholeTextFrom) {
+				read, where = first, "names in its first line"
+				t.Logf("%s is for %s, before %s: only its first line is held to the version",
+					file.path, want, reviewNotesWholeTextFrom)
+			}
+			for _, stale := range reviewNotesOtherVersions(read, want) {
+				t.Errorf("%s %s version %s; App Review notes name no release but %s, the one "+
+					"they are for: rewrite a body carried over from another release, and leave "+
+					"out comparisons with one", file.path, where, stale, want)
 			}
 
 			// The notes must give App Review a path through the feature.
@@ -107,6 +163,56 @@ func TestAppReviewNotesAreForThisRelease(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// CONTROL for the version rule above, on notes made for it: the guard must
+// read past the heading, or a body bumped under a new heading passes.
+func TestTheReviewNotesVersionRuleReadsTheWholeNotes(t *testing.T) {
+	const want = "9.9.9"
+	for _, c := range []struct {
+		name, notes string
+		others      []string
+	}{
+		{"last release's body under a bumped heading",
+			"VERSION 9.9.9 (macOS)\n\nWHAT IS NEW IN 9.9.8\nA change.\n\nHOW TO EXERCISE 9.9.8\nOpen it.\n",
+			[]string{"9.9.8", "9.9.8"}},
+		{"a comparison with an earlier release",
+			"VERSION 9.9.9\n\nThe list includes \"A 1:2\" (9.9.8: \"A 1:1\").\n",
+			[]string{"9.9.8"}},
+		{"an operating system's version", "VERSION 9.9.9\n\nOn macOS 14.0.1, open it.\n",
+			[]string{"14.0.1"}},
+		{"the release's own version alone", "VERSION 9.9.9\n\nWHAT IS NEW IN 9.9.9\nA change.\n", nil},
+		{"verse references and two-part numbers", "VERSION 9.9.9\n\nGenesis 1:1 and Psalm 119:1, in 2.5 seconds.\n", nil},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got := reviewNotesOtherVersions(c.notes, want)
+			if strings.Join(got, ",") != strings.Join(c.others, ",") {
+				t.Errorf("reviewNotesOtherVersions found %q, want %q", got, c.others)
+			}
+		})
+	}
+	// The heading alone, which is all the guard read before 1.2.20, passes the
+	// bumped body: the case the whole-text rule exists for.
+	if got := reviewNotesOtherVersions("VERSION 9.9.9 (macOS)", want); len(got) != 0 {
+		t.Errorf("the bumped heading alone names %q", got)
+	}
+	for _, c := range []struct {
+		version, floor string
+		want           bool
+	}{
+		{"1.2.19", "1.2.20", false},
+		{"1.2.20", "1.2.20", true},
+		{"1.2.21", "1.2.20", true},
+		{"1.2.100", "1.2.20", true},
+		{"1.2.9", "1.2.20", false},
+		{"1.10.0", "1.2.20", true},
+		{"2.0.0", "1.2.20", true},
+		{"0.9.99", "1.2.20", false},
+	} {
+		if got := versionAtLeast(c.version, c.floor); got != c.want {
+			t.Errorf("versionAtLeast(%q, %q) = %v, want %v", c.version, c.floor, got, c.want)
+		}
 	}
 }
 

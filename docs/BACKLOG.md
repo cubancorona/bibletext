@@ -471,9 +471,7 @@ counting both breaks of a blank line are refused before anything is sent,
 and 500 go up. Each fails against the previous script, which folded the
 breaks into spaces. 1.2.17's alpha notes on Play stay folded.
 
-## The App Review notes guard reads only the first line — found 1 October 2026
-
-Planned for: 1.2.20 — see docs/ROADMAP.md.
+## The App Review notes guard reads only the first line — FIXED 6 October 2026, for 1.2.20; the 1.2.20 notes must drop 1.2.19's comparisons
 
 The checks on the tracked App Review notes that look for a release's
 version read the heading alone. `TestAppReviewNotesAreForThisRelease` takes
@@ -510,6 +508,28 @@ version check.
 versions in them. So the check needs no allow-list: any x.y.z in the notes
 other than the packaged version fails. 1.2.19's iPhone notes name 1.2.18
 twice, in comparisons; the 1.2.20 notes leave them out.
+
+**The fix.** Both checks read the whole notes. `load_notes` in
+`appstore/push-review-notes.py` refuses any x.y.z other than
+`TARGET_VERSION`, wherever it stands, with no allow-list. Run on today's
+tree with `--local-only`, it refuses 1.2.19's iPhone notes for naming
+1.2.18. `TestAppReviewNotesAreForThisRelease` applies the same rule to the
+tracked files from 1.2.20 on (`reviewNotesWholeTextFrom`). For 1.2.19 and
+earlier it still reads the heading alone, because 1.2.19's notes were
+written and sent under that rule, and the tree keeps them until the bump.
+So the suite stays green now, and the bump to 1.2.20 is what makes the
+comparisons fail. **The 1.2.20 preparation must rewrite those two
+"(1.2.18: …)" comparisons in `appstore/review-notes.txt`**, which this fix
+leaves untouched since the notes are the account holder's copy. On a copy of
+the tree bumped to 1.2.20, today's notes with every 1.2.19 changed to 1.2.20
+fail on 1.2.18, and the Mac's with only the heading bumped fail on 1.2.19;
+both passed the previous checks. `TestTheReviewNotesVersionRuleReadsTheWholeNotes`
+is the control on made notes: a bumped heading over the last release's body,
+a comparison, and an operating system's version are caught, while verse
+references and two-part numbers are not. `appstore/test_push_review_notes.py`
+holds `load_notes` to the same cases, and to the same pattern as the Go test.
+`scripts/check-release-identity.py` still checks only the iPhone notes'
+first line, and needs no more with these two in place.
 
 ## linux/releases.toml dates a release the day before its tag — found 1 October 2026
 

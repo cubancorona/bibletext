@@ -50,6 +50,14 @@ REPOSITORY_HYGIENE_CHECK = os.path.join(REPO, "scripts", "check-repository-hygie
 APP_ID = "6784567351"
 TARGET_VERSION = "1.2.19"
 
+# Any x.y.z in the notes. The notes name no release but TARGET_VERSION,
+# anywhere in them: a body carried over from the last release under a bumped
+# heading names that release, and so does a comparison with one, and either
+# would reach App Review describing a release it is not reviewing. There is
+# no allow-list; appstore_review_notes_test.go holds the tracked files to the
+# same rule.
+VERSION_PATTERN = re.compile(r"\b[0-9]+\.[0-9]+\.[0-9]+\b")
+
 # Review notes may be changed only while App Store Connect considers the
 # version editable.
 EDITABLE_STATES = {
@@ -142,6 +150,14 @@ def load_notes(notes_path):
         fail(
             f"{notes_path} must open with VERSION {TARGET_VERSION}; "
             f"found {heading!r}"
+        )
+    others = [v for v in VERSION_PATTERN.findall(notes) if v != TARGET_VERSION]
+    if others:
+        named = ", ".join(dict.fromkeys(others))
+        fail(
+            f"{notes_path} names {named}; App Review notes name no release but "
+            f"{TARGET_VERSION}: rewrite a body carried over from another release, "
+            "and leave out comparisons with one"
         )
     return notes
 

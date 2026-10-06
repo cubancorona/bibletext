@@ -148,7 +148,8 @@ Eight coupled surfaces have to name the same version, each test-enforced:
 
 1. `cmd/mobile/FyneApp.toml` — Version and Build
 2. `cmd/bibletext/FyneApp.toml` — Version and Build
-3. `appstore/review-notes.txt` — first line `VERSION <v>`
+3. `appstore/review-notes.txt` — first line `VERSION <v>`, and no other
+   x.y.z anywhere in it: not the last release's, not in a comparison
 4. `appstore/review-notes-macos.txt` — same
 5. `TARGET_VERSION` in `appstore/push-review-notes.py`
 6. `build/appstore/metadata/en-GB/whats-new-<v>.txt` **and**
