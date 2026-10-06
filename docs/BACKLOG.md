@@ -1278,11 +1278,17 @@ Go seam reaches it; the contract matches the request as a whole line, so a
 request commented out fails it as a missing one does. Device check:
 `docs/VISUAL_TESTS.md`, V12 (the note composer) and regression pin 20.
 
-## iPad and Mac: where the share popover points — probable from the code, 30 September 2026, not seen
+## iPad and Mac: where the share popover points — the iPad seen in the simulator 6 October 2026; the Mac not seen
 
 Planned for: 1.2.20, a look only; any fix in 1.2.21+ — see docs/ROADMAP.md.
+The iPad half was looked at on 6 October 2026 (below): every selection verb
+points at the selection, and the verse of the day's Share points at the
+middle of the screen, not at its icon, which is the fix for 1.2.21. The Mac
+half needs the Mac app driven by hand and has not been seen.
 
-Read from the code; no simulator was booted and the Mac app was not launched.
+Read from the code on 30 September 2026; no simulator was booted and the Mac
+app was not launched. The first bullet's guess did not hold (the simulator,
+below).
 
 - **iPad, Share with note and Share as image.** `bibleTextPresentShare`
   (`reading_ios.go`) anchors the popover to the reading view's selected
@@ -1303,9 +1309,57 @@ Read from the code; no simulator was booted and the Mac app was not launched.
 
 Share with citation and Share as link keep the selection and are expected to
 point at it on both. See each on a device before changing anything; the
-Sharing table in `docs/PLATFORM_MATRIX.md` marks the four cells above
+Sharing table in `docs/PLATFORM_MATRIX.md` marked the four cells above
 "probably": the iPad's Share with note and Share as image, and the verse of
-the day on iPad and on Mac.
+the day on iPad and on Mac. The Mac's is still marked so.
+
+**Seen on the iPad simulator, 6 October 2026.** iPad Pro 13-inch (M5),
+iPadOS 26.5, portrait, the World English Bible at Psalm 82, a development
+build of `main` at 1db51a02b. The simulator takes no taps, so a throwaway
+trigger compiled into that build alone, and never committed, stood in for
+the reader's hand: it made the reading view first responder and selected 14
+characters in verse 3, as a reader's selection leaves it; ran the body of
+the selection menu's handler for the verb (`bibleTextStudyMenuTapped` with
+the text and verse span the menu computes); and then pressed the Share
+button of the preview, the composer or the verse-of-the-day card itself
+(`Tapped` on the widget each had built). The presented
+`UIActivityViewController`'s source view and rectangle were read back and
+logged, and each popover was screenshotted.
+
+- **Share with citation and Share as link.** Beside the selection, the arrow
+  at its right end: the source rectangle is the selection's first rectangle.
+  As expected.
+- **Share as image and Share with note.** Also beside where the selection
+  was, not mid-page. Giving up first responder hides the selection but
+  leaves the text view's `selectedRange` set, and the reading view is shown
+  again before the share is presented, so `firstRectForRange` answers the
+  selection's rectangle; the comment in `bibleTextDismissMenu` that it
+  "clears the selection" holds for what is drawn, not for the range. With a
+  note written, the "Note from you" card is put on the page above the verse
+  after the rectangle is taken, so the arrow points at the new card, where
+  the selected words had been, with the verse one card lower. Nothing to
+  fix as seen.
+- **The verse of the day.** The popover's arrow points at the middle of the
+  hidden reading view — the middle of the screen, over the lower half of the
+  card — and not at the card's Share icon at its top right, and the popover
+  covers the card's text and its Close and Read in context row. The same
+  with no selection and with one made before the card opened: the hidden
+  text view answers no rectangle for the range it keeps, and the fallback,
+  the middle of the view, is taken. This is the case predicted above; the fix is
+  the icon's rectangle, for 1.2.21.
+
+Not seen on the iPad: landscape, where the reading view is the right-hand
+pane beside the sidebar; Split View and Slide Over widths; and a selection
+made by touch rather than set on the view.
+
+**The Mac, still to see**, by hand, since nothing drives the Mac app without
+host input: in BibleText for the Mac, select a few words, and from the
+selection's menu (Control-click or right-click on it) choose Share as
+image, then Share in the preview; then
+Share with note, with a word typed, then Share; then the verse of the day
+(the sparkle in the header) and the Share icon on its card. For each, where
+the share picker appears — beside the selection, elsewhere, or for the card
+at all.
 
 ## Android: the status-bar icons were white on the light page — FIXED 30 September 2026
 
