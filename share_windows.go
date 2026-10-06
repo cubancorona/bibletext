@@ -19,10 +19,10 @@ package bibletext
 // Whatever keeps the sheet from taking the share — no native window, a
 // Windows without the interface, a thread already in the other kind of
 // apartment, an HRESULT from any step, a sheet that never asks, a package
-// that will not fill — ends the share in the verb's in-app confirmation
-// sheet (share_fallback.go, share_sheet_desktop.go), the one Linux shares
-// through, so a share the reader started never ends in silence
-// (shareSession, share_session.go).
+// that will not fill — ends the share, once (shareSession, share_session.go),
+// in the verb's in-app confirmation sheet (share_fallback.go,
+// share_sheet_desktop.go), the one Linux shares through, which opens for
+// any share but a picture it has nothing true to say of (fallbackShareImage).
 //
 // Threads. Every call is made on the window's thread. That is the Fyne UI
 // goroutine's, which the toolkit locks to the main thread and makes the

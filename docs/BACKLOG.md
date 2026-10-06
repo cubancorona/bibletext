@@ -172,10 +172,10 @@ CI's macOS job, targets the macOS it runs on and cannot see such a call, so
 `mac_floor_availability_contract_test.go` holds the flag, and the card's use
 of the walk, at the source. Not run on macOS 12 or 13.
 
-## Share as image says "Picture saved" for a card it could not read — found 1 October 2026
+## Share as image says "Picture saved" for a card it could not read — FIXED 6 October 2026, for 1.2.20
 
-Planned for: 1.2.20, no sheet and the cause logged; a line telling the
-reader in 1.2.21+ — see docs/ROADMAP.md.
+Still open: a line telling the reader, planned for 1.2.21+ with the other
+shares that cannot finish — see docs/ROADMAP.md.
 
 On the desktop, when the rendered card cannot be read at the Share tap, the
 image share still asks the file manager to show it, and can then open the
@@ -226,6 +226,31 @@ a heading still to be worded. Either way, no Email… for a file that is not
 there. A host test: a card path that does not exist, the reveal stubbed to
 say yes, and no sheet (control: the file present).
 
+**FIXED 6 October 2026, for 1.2.20.** `fallbackShareImage`
+(`share_fallback.go`) now ends the share at the read: a card that cannot
+be read at the tap is neither saved nor shown, the file manager is not
+asked, no sheet opens, and the cause is logged ("the shared picture's card
+could not be read, so it was neither saved nor shown", with the read's
+error). It is the desktop's rule for a picture nothing true can be said
+of, which the snap already followed, and it uses no new words. It covers
+the tarball and the AppImage, the Windows fallback (whose own Share sheet
+hands it the renderer's file when the copy at the tap fails), and the
+macOS mimic. `TestACardThatCouldNotBeReadOpensNoSheet`
+(`share_image_folder_test.go`) holds it under Linux's rules and Windows':
+the card's file absent and the file manager answering yes, no sheet, no
+reveal, nothing in Downloads, and the cause in the log. With the old
+function put back it fails on both, the sheet reading *Picture saved*,
+*The picture is shown in your file manager.*, Email… and Done; the
+control, the card there, is saved, shown and confirmed. Seen on the Linux
+VM (GNOME, X11) with development builds of the tree before and after, the
+image preview opened at launch (`BIBLETEXT_DEV_OPEN=share-image`) and its
+card deleted before Share was pressed: before, Files opened on the empty
+temp folder and the sheet said the picture was shown; after, nothing
+opened and the cause was logged; and with the card left in place, the
+fixed build saved the picture in Downloads, showed it, and said so.
+iOS and Android say *Could not share the card.* on the same case; the
+Mac's share picker is handed the missing file's address (not seen).
+
 ## Email… on the desktop share sheet fails without a word — found 1 October 2026
 
 Planned for: 1.2.21+, with the other shares that cannot finish — see
@@ -268,9 +293,7 @@ The fix: post the outcome back to the sheet — a line under the buttons when
 the compose fails, its wording to be approved — and stop at the first route
 that started a compose, rather than handing on after any non-zero exit.
 
-## A dropped session bus spins a core until the portal wait ends (Linux) — found 1 October 2026
-
-Planned for: 1.2.20 — see docs/ROADMAP.md.
+## A dropped session bus spins a core until the portal wait ends (Linux) — FIXED 6 October 2026, for 1.2.20
 
 `portalRequest` (`share_portal_linux.go:34-79`) waits for the portal's
 Response on a channel registered with godbus, in a loop that passes over a
@@ -291,6 +314,20 @@ desktop session is ending.
 The fix: receive with `sig, ok := <-responses` and, on a closed channel,
 return an error at once (the connection closed), with `taken` true, since
 the portal had the call.
+
+**FIXED 6 October 2026, for 1.2.20.** `portalRequest` receives with
+`sig, open := <-responses` and, on a closed channel, returns at once with
+`taken` true and the error "the session bus closed before the portal
+answered", which Email… takes as the end of its compose, as it does any
+error once the portal has the call, and the reveal as a picture not
+shown. `TestADroppedSessionBusEndsThePortalWaitAtOnce`
+(`share_portal_linux_test.go`) has the test's portal take the call and
+never answer, then kills the private bus's dbus-daemon: the request must
+return within a second of the drop, as the bus closing; the control, the
+bus left up, is still waiting then. On the Linux VM, with the old loop
+put back, it returned as "no answer from the portal" 3.9 s after the drop
+of a 4 s wait, using 3.92 s of CPU in 4.02 s; fixed, it returned at once,
+using none.
 
 ## A sheet turned from one landscape to the other keeps its side padding on the old side (Android) — found 1 October 2026
 

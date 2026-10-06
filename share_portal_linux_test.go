@@ -42,6 +42,15 @@ import (
 // portal calls reach the test's portal and nothing of the desktop's.
 func privateSessionBus(t *testing.T) string {
 	t.Helper()
+	addr, _ := droppableSessionBus(t)
+	return addr
+}
+
+// droppableSessionBus is privateSessionBus with a way to drop the bus: drop
+// kills its dbus-daemon, which ends every connection to it, as the end of a
+// desktop session does.
+func droppableSessionBus(t *testing.T) (addr string, drop func()) {
+	t.Helper()
 	daemon, err := exec.LookPath("dbus-daemon")
 	if err != nil {
 		if os.Getenv("CI") != "" {
@@ -81,17 +90,21 @@ func privateSessionBus(t *testing.T) string {
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() {
-		cmd.Process.Kill()
-		cmd.Wait()
-	})
+	var once sync.Once
+	drop = func() {
+		once.Do(func() {
+			cmd.Process.Kill()
+			cmd.Wait()
+		})
+	}
+	t.Cleanup(drop)
 	line, err := bufio.NewReader(out).ReadString('\n')
-	addr := strings.TrimSpace(line)
+	addr = strings.TrimSpace(line)
 	if err != nil || addr == "" {
 		t.Fatalf("the test's dbus-daemon gave no address (%q, %v)", line, err)
 	}
 	t.Setenv("DBUS_SESSION_BUS_ADDRESS", addr)
-	return addr
+	return addr, drop
 }
 
 // fakeAnswer is how the test's portal answers a call.
@@ -312,6 +325,86 @@ func TestThePortalTellsAWritableDescriptor(t *testing.T) {
 	}
 	if calls := portal.taken(); len(calls) != 1 || len(calls[0].readOnly) != 1 || calls[0].readOnly[0] {
 		t.Errorf("the portal saw %+v, want one descriptor open for writing", calls)
+	}
+}
+
+// A SESSION BUS THAT DROPS WHILE THE ANSWER IS AWAITED ENDS THE WAIT AT
+// ONCE, as an error once the portal has taken the call (portalRequest).
+// godbus closes every signal channel when its connection ends, and a closed
+// channel answers each receive at once; a loop that passed over what it
+// read spun on a core until the wait ran out, five seconds for the image
+// share's reveal and fifteen for Email…. The test's portal takes the call
+// and never answers, and then the bus's dbus-daemon is killed, which ends
+// the app's connection as the end of a desktop session does. A drop that
+// comes before the call's own reply has nothing to say about the wait, and
+// is run again. Control: the same request with the bus left up is still
+// waiting at the bound the drop is held to, so the quick return is the
+// drop's doing.
+func TestADroppedSessionBusEndsThePortalWaitAtOnce(t *testing.T) {
+	const wait, bound = 4 * time.Second, time.Second
+	type outcome struct {
+		taken bool
+		err   error
+		after time.Duration // from the drop, or from when it would have come
+	}
+	request := func(t *testing.T, dropBus bool) outcome {
+		addr, drop := droppableSessionBus(t)
+		portal := startFakePortal(t, addr)
+		portal.set(fakeAnswer{silent: true})
+		conn, err := dbus.ConnectSessionBus()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer conn.Close()
+		done := make(chan outcome, 1)
+		go func() {
+			_, taken, err := portalRequest(conn, portalEmailIface+".ComposeEmail", map[string]dbus.Variant{}, wait, "")
+			done <- outcome{taken: taken, err: err}
+		}()
+		deadline := time.Now().Add(wait)
+		for len(portal.taken()) == 0 {
+			if time.Now().After(deadline) {
+				t.Fatal("control: the test's portal never took the call")
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		// Time for the call's reply to reach the app, so that it is
+		// waiting for the answer when the bus drops.
+		time.Sleep(100 * time.Millisecond)
+		dropped := time.Now()
+		if dropBus {
+			drop()
+		}
+		select {
+		case o := <-done:
+			o.after = time.Since(dropped)
+			return o
+		case <-time.After(wait + 5*time.Second):
+			t.Fatal("the request never returned")
+			return outcome{}
+		}
+	}
+
+	var got outcome
+	for attempt := 0; attempt < 3 && !got.taken; attempt++ {
+		t.Run("dropped", func(t *testing.T) { got = request(t, true) })
+	}
+	if !got.taken {
+		t.Fatalf("the bus dropped before the call's reply on every attempt (%v), so the wait was never reached", got.err)
+	}
+	if got.err == nil {
+		t.Error("a dropped bus was taken for an answer")
+	} else if !strings.Contains(got.err.Error(), "session bus closed") {
+		t.Errorf("a dropped bus ended as %q, not as the bus closing", got.err)
+	}
+	if got.after > bound {
+		t.Errorf("the request returned %v after the bus dropped, past %v: it waited out the closed channel", got.after, bound)
+	}
+
+	var up outcome
+	t.Run("control: the bus left up", func(t *testing.T) { up = request(t, false) })
+	if !up.taken || up.err == nil || up.after <= bound {
+		t.Errorf("control: with the bus up and no answer the request ended %v after the drop would have come (taken %v, %v), not at its wait, so the bound cannot tell a drop", up.after, up.taken, up.err)
 	}
 }
 
