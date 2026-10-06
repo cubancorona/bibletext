@@ -10,11 +10,20 @@
 # a typo in a cgo preamble could survive indefinitely on every other machine and
 # every CI run.
 #
-#   scripts/check-android-pane.sh
+#   scripts/check-android-pane.sh           the shipping build
+#   scripts/check-android-pane.sh --next    with the next-release switch on
+#                                           (next_on.go, docs/NEXT.md)
 #
 # Output is thrown away; nothing is signed, packaged or installed.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+
+TAGS=""
+case "${1:-}" in
+  "") ;;
+  --next) TAGS=next ;;
+  *) echo "usage: scripts/check-android-pane.sh [--next]" >&2; exit 2 ;;
+esac
 
 # minSdkVersion 21 is asserted twice in scripts/build-android.sh against the
 # built package; the compile must target the same floor or it can accept code
@@ -60,8 +69,8 @@ CC="$NDK/toolchains/llvm/prebuilt/$HOST_TAG/bin/aarch64-linux-android$API-clang"
 # Portable: `mktemp -t PREFIX` is BSD-only and fails on the Linux runner.
 log="$(mktemp)"
 if CGO_ENABLED=1 GOOS=android GOARCH=arm64 CC="$CC" \
-     go build -o /dev/null ./cmd/mobile >"$log" 2>&1; then
-  echo "android/arm64 pane compiles (NDK $(basename "$NDK"), API $API)"
+     go build ${TAGS:+-tags "$TAGS"} -o /dev/null ./cmd/mobile >"$log" 2>&1; then
+  echo "android/arm64 pane compiles (NDK $(basename "$NDK"), API $API${TAGS:+, -tags $TAGS})"
   rm -f "$log"
 else
   echo "the android/arm64 pane does NOT compile:" >&2

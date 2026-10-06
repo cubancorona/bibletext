@@ -75,7 +75,9 @@ jobs:
       # none at all, on any machine or runner. The GitHub Linux image ships an
       # NDK, and the script fails rather than skips when it cannot find one.
       - name: Android cross-compile (android/arm64, no packaging)
-        run: scripts/check-android-pane.sh
+        run: |
+          scripts/check-android-pane.sh
+          scripts/check-android-pane.sh --next
 
       # And the JAVA on the other side of that boundary, which the step above
       # does not reach: BtBridge and BtAudio are compiled only by a full
@@ -145,11 +147,29 @@ jobs:
           # (docs/BACKLOG.md item 1 of the Microsoft Store section); vetting it
           # here is the only place outside a Windows job that compiles it.
           go vet -tags gles ./...
+          # The next major release (docs/NEXT.md), alone and with each tag set
+          # it is built beside: the dev page on a test device, the Windows
+          # renderer, the evaluation translations.
+          go vet -tags next ./...
+          go vet -tags next,bibletextdev ./...
+          go vet -tags next,gles ./...
+          go vet -tags next,nrsv,lsb ./...
 
       - name: go test (build tags)
         run: |
           go test -tags nrsv,lsb ./...
           go test -tags bibletextdev ./...
+
+      # Both states of the next-release switch pass on every push: the runs
+      # above are the shipping build, these are the next major release
+      # (docs/NEXT.md). Once under the race detector, because gated work can
+      # add concurrency the shipping run never sees, and once without it, with
+      # the dev page: the `!race` files, and the build a test device gets from
+      # --dev --next. -timeout as on the runs above.
+      - name: go test (next release)
+        run: |
+          go test -race -timeout 30m -tags next ./...
+          go test -timeout 20m -tags next,bibletextdev ./...
 
   # The Linux job never compiles the darwin-tagged cgo (the native NSTextView
   # reading overlay + the macOS audio engine) or the ios-tagged files — i.e. the
@@ -167,7 +187,9 @@ jobs:
           cache: true
 
       - name: go vet
-        run: go vet ./...
+        run: |
+          go vet ./...
+          go vet -tags next ./...
 
       # -timeout guards against a hung test; it is not a time budget. The
       # root package is the longest race run: about 430 s measured locally
@@ -179,7 +201,14 @@ jobs:
       # The same script a developer runs locally after touching reading_ios.go
       # (under a minute), so the check here and the check there cannot drift.
       - name: iOS cross-compile (ios/arm64, no signing)
-        run: scripts/check-ios-pane.sh
+        run: |
+          scripts/check-ios-pane.sh
+          scripts/check-ios-pane.sh --next
+
+      # The darwin-tagged native pane and its tests in the next major release
+      # (docs/NEXT.md); the linux job cannot compile them.
+      - name: go test (next release)
+        run: go test -timeout 20m -tags next ./...
 
   # Windows is a supported desktop target (the Fyne fallback reading pane, not the
   # native overlay). This job builds + runs the full suite on real Windows; the
@@ -200,7 +229,9 @@ jobs:
           cache: true
 
       - name: go vet
-        run: go vet ./...
+        run: |
+          go vet ./...
+          go vet -tags next ./...
 
       # -timeout guards against a hung test; it is not a time budget. The
       # root package is the longest race run: about 430 s measured locally

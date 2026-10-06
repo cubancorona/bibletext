@@ -21,10 +21,21 @@
 # This is the SAME cross-compile the macOS CI job runs, factored out so the two
 # cannot drift and so it can be run in the local loop. Output is thrown away;
 # nothing is signed and no simulator is touched.
+#
+#   scripts/check-ios-pane.sh           the shipping build
+#   scripts/check-ios-pane.sh --next    with the next-release switch on
+#                                       (next_on.go, docs/NEXT.md)
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
+
+TAGS=""
+case "${1:-}" in
+  "") ;;
+  --next) TAGS=next ;;
+  *) echo "usage: scripts/check-ios-pane.sh [--next]" >&2; exit 2 ;;
+esac
 
 IOS_MIN="$(python3 -c 'import json;print(json.load(open("config/product.json"))["iosMinimumOSVersion"],end="")')"
 SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
@@ -43,7 +54,7 @@ compile() { # <label> [extra go flags...]
   local log="$scratch/$label.log"
   if CGO_ENABLED=1 GOOS=ios GOARCH=arm64 CC="$CC" \
        CGO_CFLAGS="$COMMON" CGO_LDFLAGS="$COMMON" \
-       go build "$@" -o /dev/null ./cmd/mobile >"$log" 2>&1; then
+       go build ${TAGS:+-tags "$TAGS"} "$@" -o /dev/null ./cmd/mobile >"$log" 2>&1; then
     return 0
   fi
   # Keep the log before anything else can fail: the EXIT trap removes $scratch.
@@ -67,4 +78,4 @@ cp go.mod go.sum "$scratch/"
 go mod edit -modfile="$scratch/go.mod" -replace "fyne.io/fyne/v2=$ROOT/$PATCHED"
 compile patched -modfile="$scratch/go.mod"
 
-echo "OK: the iOS pane compiles against the stock and the patched toolkit."
+echo "OK: the iOS pane compiles against the stock and the patched toolkit${TAGS:+ (-tags $TAGS)}."

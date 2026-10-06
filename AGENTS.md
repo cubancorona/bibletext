@@ -63,6 +63,18 @@ fetches.
 Format changed Go files with `gofmt -w <files>`. Use `git diff --check` to catch
 whitespace errors and inspect `git status --short` before handing work off.
 
+Work meant for the next major version goes on `main` behind the `next` build
+tag, never on a long-lived branch, and without the tag the app must behave
+exactly as the current release does. Test both states:
+
+```bash
+go test ./...
+go test -tags next ./...
+```
+
+[docs/NEXT.md](docs/NEXT.md) has the seams to use, what is behind the switch,
+and the guards that keep it out of every release build.
+
 Launch the desktop application during UI work with:
 
 ```bash
@@ -84,8 +96,8 @@ scripts/check-ios-pane.sh
 ```
 
 ```bash
-scripts/run-ios-sim.sh          # add --dev for the BIBLETEXT_DEV_NOTES scenarios
-scripts/run-ios-device.sh
+scripts/run-ios-sim.sh          # add --dev for the BIBLETEXT_DEV_NOTES scenarios, --next for the next major release
+scripts/run-ios-device.sh       # the same --dev and --next
 scripts/release-ios.sh
 scripts/build-android.sh
 scripts/build-android.sh --release

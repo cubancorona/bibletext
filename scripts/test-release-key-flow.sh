@@ -418,6 +418,9 @@ BIBLETEXT_RELEASE_LDFLAGS="$release_flags" \
   "$PACKAGE_VERIFIER" "$LINKED_TEST" "$LINKED_TEST" \
   >"$TEST_TMP/package-verifier.log"
 assert_contains "$TEST_TMP/package-verifier.log" "Verified keyed release value"
+# The package verifier also holds every desktop package to the shipping state
+# of the next-release switch (scripts/verify-not-next.sh, docs/NEXT.md).
+assert_contains "$TEST_TMP/package-verifier.log" "Not a next build"
 assert_absent "$TEST_TMP/package-verifier.log" "$marker"
 
 # Shadow the macOS utility so the missing-key case cannot inspect a real login

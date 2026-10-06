@@ -71,7 +71,10 @@ trap cleanup EXIT
 DEV_TAG=""
 for arg in "$@"; do
     case "$arg" in
-        --dev) DEV_TAG=",bibletextdev" ;;
+        --dev) DEV_TAG="$DEV_TAG,bibletextdev" ;;
+        # The next major release (next_on.go, docs/NEXT.md): everything gated
+        # for it, in the simulator. Combines with --dev.
+        --next) DEV_TAG="$DEV_TAG,next" ;;
     esac
 done
 

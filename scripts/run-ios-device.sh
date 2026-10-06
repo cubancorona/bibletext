@@ -76,6 +76,10 @@ for arg in "$@"; do
         # The NKJV's own cross references in the panel (versions_nkjvxrefs.go):
         # a device build for looking, never a store build.
         --nkjvxrefs) DEV_TAG="$DEV_TAG,nkjvxrefs" ;;
+        # The next major release (next_on.go, docs/NEXT.md): everything gated
+        # for it, on a phone. Combines with --dev. Never a store build:
+        # release-ios.sh refuses a binary that carries the tag.
+        --next) DEV_TAG="$DEV_TAG,next" ;;
     esac
 done
 

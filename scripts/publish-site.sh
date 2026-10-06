@@ -110,6 +110,11 @@ python3 scripts/check-support-contact.py
 # state printed here is the state of the tree.
 echo "==> building the reader generator"
 go build -o build/websitegen ./cmd/websitegen
+# The next major release stays off the live site (docs/NEXT.md). The pages
+# below come from the same Go environment, so a tag that reached this build
+# would have reached them too.
+scripts/verify-not-next.sh build/websitegen ||
+  fail "the reader generator was built with the next-release switch"
 NKJV_TEXT=$(nkjv_text_state build/websitegen) || fail "$NKJV_TEXT"
 case "$NKJV_TEXT" in
   on)  echo "==> NKJV text: on (fetched fresh from API.Bible)"; NKJV_PAGES=1328 ;;

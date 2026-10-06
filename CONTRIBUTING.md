@@ -51,6 +51,8 @@ release script rewrites them.
 
 - Format changed Go files with `gofmt -w <files>`, then run `go vet ./...`.
 - Keep the suite green: `go test ./...` (and `go test -race ./...`)
+- Work meant for the next major version goes behind the `next` build tag
+  ([docs/NEXT.md](docs/NEXT.md)); keep `go test -tags next ./...` green too.
 - One logical change per commit, with a clear message. CI runs the above on every push.
 
 ## Platform build tags (the non-obvious bit)

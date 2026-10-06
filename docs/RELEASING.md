@@ -172,6 +172,14 @@ scripts/release-mac-store.sh    # -> build/mac-store/BibleText.pkg
 scripts/build-android.sh --release
 ```
 
+Each refuses a binary built with the next-release switch
+(`scripts/verify-not-next.sh`, [NEXT.md](NEXT.md)), however the tag reached
+the build. None of them passes it, and each empties `GOFLAGS` in its own
+environment, which does not reach a value saved with `go env -w`: Go reads
+the saved one whenever the variable is empty. So a refusal means a saved
+`GOFLAGS` carries build tags. `go env GOFLAGS` shows it, `go env -u GOFLAGS`
+clears it; then build again.
+
 The Windows Store package needs nothing from this machine: the push of stage 2
 builds it. `msstore.yml` runs on a push of `main` that touches its inputs, and
 the release bump touches one of them, `cmd/bibletext/FyneApp.toml` — the
@@ -219,8 +227,9 @@ The iOS and Mac scripts do this themselves: `release-ios.sh` reads the signed
 read with `bundletool dump manifest`. Record what each one printed.
 
 `scripts/verify-release-package.sh` is **not** this step. It is the CI-only
-check on the GitHub release assets — trimpath, the release key, and that no
-runner workspace path leaked into the package — and it refuses to run without
+check on the GitHub release assets — trimpath, the release key, no
+next-release switch, and that no runner workspace path leaked into the
+package — and it refuses to run without
 `GITHUB_WORKSPACE` set. It reads no version and no build number.
 
 ### 5 — Tag, once every artefact exists

@@ -31,6 +31,11 @@ fi
 [[ "$build_info" == *$'build\t-trimpath=true'* ]] || \
   fail "packaged executable is not a trimpath build"
 
+# The next major release stays out of every desktop package, however the tag
+# would have reached the build (docs/NEXT.md).
+bash "$script_dir/verify-not-next.sh" "$binary_path" || \
+  fail "packaged executable was built with the next-release switch"
+
 # Normalize GitHub's Windows form before removing the checkout's two
 # repository-specific components. Both separator forms are scanned because Go
 # and native tools can record Windows paths differently.

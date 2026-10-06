@@ -237,6 +237,9 @@ if [ "${1:-}" = "--release" ]; then
   chmod 600 "$AAB_STAGE"
   BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
     python3 "$REPO_ROOT/scripts/verify-release-key.py" "$AAB_STAGE"
+  # The next major release stays out of the store build (docs/NEXT.md). The
+  # real toolchain is named because `go` on PATH is the linker wrapper here.
+  BIBLETEXT_REAL_GO="$REAL_GO" "$REPO_ROOT/scripts/verify-not-next.sh" "$AAB_STAGE"
 
   note "injecting classes2.dex into the AAB (base/dex/) + re-signing"
   mkdir -p "$WORK/aab/base/dex"

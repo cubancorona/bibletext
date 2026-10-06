@@ -34,6 +34,15 @@
       "problemMatcher": ["$go"]
     },
     {
+      "label": "Run Desktop (next release)",
+      "detail": "go run with the next tag — the next major release (docs/NEXT.md)",
+      "type": "shell",
+      "command": "go run -tags next ./cmd/bibletext",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "problemMatcher": ["$go"]
+    },
+    {
       "label": "Run Desktop MIMIC (Linux)",
       "detail": "The Mac wears the Linux build: styled pane, Fyne note banner, no TTS, DejaVu→Gelasio fonts. Header shows the MIMIC badge. docs/PLATFORM_MIMIC.md says what this proves.",
       "type": "shell",
@@ -83,6 +92,15 @@
       "detail": "run-ios-sim.sh --dev — the Links tab + dev scenarios build",
       "type": "shell",
       "command": "./scripts/run-ios-sim.sh --dev",
+      "options": { "cwd": "${workspaceFolder}" },
+      "group": "build",
+      "problemMatcher": ["$go"]
+    },
+    {
+      "label": "Run on iOS Simulator (next release)",
+      "detail": "run-ios-sim.sh --next — the next major release (docs/NEXT.md)",
+      "type": "shell",
+      "command": "./scripts/run-ios-sim.sh --next",
       "options": { "cwd": "${workspaceFolder}" },
       "group": "build",
       "problemMatcher": ["$go"]
@@ -145,7 +163,7 @@
     {
       "label": "Vet",
       "type": "shell",
-      "command": "go vet ./... && go vet -tags bibletextdev ./...",
+      "command": "go vet ./... && go vet -tags bibletextdev ./... && go vet -tags next ./...",
       "options": { "cwd": "${workspaceFolder}" },
       "group": "test",
       "problemMatcher": ["$go"]

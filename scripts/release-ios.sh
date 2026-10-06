@@ -154,6 +154,8 @@ CGO_ENABLED=1 GOOS=ios GOARCH=arm64 CC="$CC" \
       -o "$WORK/bibletext-arm64" "$REPO_ROOT/cmd/mobile"
 BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" \
   python3 "$REPO_ROOT/scripts/verify-release-key.py" "$WORK/bibletext-arm64"
+# The next major release stays out of the store build (docs/NEXT.md).
+"$REPO_ROOT/scripts/verify-not-next.sh" "$WORK/bibletext-arm64"
 EXE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")"
 mv -f "$WORK/bibletext-arm64" "$APP/$EXE"; chmod +x "$APP/$EXE"
 note "binary arch: $(lipo -archs "$APP/$EXE")"
