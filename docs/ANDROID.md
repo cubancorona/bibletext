@@ -69,9 +69,10 @@ word gaps as four-per-em spaces, which the layout neither spreads nor shrinks
 (`keepHeadingsRagged`, `isRaggedParagraph`; docs/READING_TYPOGRAPHY.md,
 "Justified prose"). The same pass sets the title's paragraph unhyphenated
 (`keepTitleUnhyphenated`): the view hyphenates its whole text, and the
-no-hyphenation span API 35 brought turns that off for the title alone. Android
-13 and 14 lack the span and can still hyphenate a title that wraps
-(docs/PLATFORM_MATRIX.md, divergence 30).
+no-hyphenation span API 35 brought turns that off for the title alone. Earlier
+releases lack the span, so from API 23, where the view starts hyphenating, to
+API 34 a title that wraps can still break a word (docs/PLATFORM_MATRIX.md,
+divergence 30).
 
 **Copy takes the text as read, with its formatting.** The gap, the mark and the
 title's no-hyphenation span are there for layout alone, so the reading view

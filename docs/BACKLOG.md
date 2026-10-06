@@ -2620,7 +2620,7 @@ What the spec work left, each one a known difference rather than a guess:
   **Decided 6 October 2026** — Psalm titles: no hyphenation on the Apple apps
   and Android 15+, recording Android 13–14 as a divergence. On Android it is
   `LineBreakConfigSpan.createNoHyphenationSpan()` over each title, a span
-  API 35 brought, which Android 13 and 14 lack.
+  API 35 brought, which earlier releases lack.
   **Android: FIXED 6 October 2026** (for 1.2.20). From API 35 the pass
   that sets the title's gaps (`keepHeadingsRagged`) sets that span over the
   title's paragraph (`keepTitleUnhyphenated`, `android/BtBridge.java`), and
@@ -2631,9 +2631,11 @@ What the spec work left, each one a known difference rather than a guess:
   page and is a framework ParcelableSpan, so the text that leaves the page
   drops it: `readerText`, and `copyAsRead`, which takes Copy over whenever a
   selection holds one. On the API 33 emulator nothing changes, the phone
-  page's Psalm 102 pixel-identical to the base build: Android 13 and 14 can
-  still hyphenate a title that wraps, a divergence docs/PLATFORM_MATRIX.md
-  records. `TestAndroidPsalmTitleIsNotHyphenatedFromAPI35`
+  page's Psalm 102 pixel-identical to the base build: without the span,
+  Android can still hyphenate a title that wraps from API 23, where the view
+  starts hyphenating, to API 34 (the decision named 13 and 14; the same
+  holds back to 6), a divergence docs/PLATFORM_MATRIX.md records.
+  `TestAndroidPsalmTitleIsNotHyphenatedFromAPI35`
   (`android_title_hyphenation_test.go`) holds the bridge to it, with
   controls.
 - **A paragraph that opens in prose and turns to poetry** is indented on the
@@ -3921,7 +3923,10 @@ emulators, WEB Psalm 102, a phone held sideways).
 - The title's gap. The book page's title writes two line breaks
   (`android_chapter_html.go`), so its text is the title, a blank line and
   verse 1, as on the phone page, and the bridge sets that line to
-  `TITLE_GAP_EM` on both pages. On both emulators the title now stands the
+  `TITLE_GAP_EM` on both pages (from API 24: below it the import is LEGACY
+  and the bridge collapses every blank line of the book page, the title's
+  with them, so there the title still sits on verse 1, as it always has).
+  On both emulators the title now stands the
   title gap above verse 1 on the book page. `TestAndroidPsalmTitleKeepsItsGapOnTheBookPage`
   (`android_compact_page_air_test.go`) holds it through a model of the
   importer's newline rule, which `TestTheAndroidImportModelMatchesTheEmulator`

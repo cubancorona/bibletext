@@ -124,7 +124,8 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 		// verse 1 with no gap at all (androidImportedText models the rule).
 		// With two, the text is the title, a blank line and verse 1, as on
 		// the phone page, and the bridge gives that blank line the title gap
-		// on both pages.
+		// on both pages. From API 24, that is: below it the import is LEGACY
+		// and the bridge collapses the book page's blank lines, this one too.
 		title := super.DrawnText()
 		if reporter {
 			fmt.Fprintf(&b, `<p><i>%s%s</i><br><br></p>`, androidDirectionMark(title), htmlEscape(title))

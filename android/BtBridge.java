@@ -493,8 +493,9 @@ public final class BtBridge {
     // a title that wrapped could break a word, "over-whelmed" in Psalm 102 on
     // the API 35 emulator. The no-hyphenation span that API 35 brought turns
     // hyphenation off for the title's paragraph alone, and the selectable
-    // view's layout honours it. Android 13 and 14 have no such span and can
-    // still hyphenate a title that wraps, a recorded divergence
+    // view's layout honours it. Earlier releases have no such span, and from
+    // API 23, where the view starts hyphenating, to 34 a title that wraps can
+    // still break a word, a recorded divergence
     // (docs/PLATFORM_MATRIX.md); the pass that calls this runs only from
     // API 35, and this checks again.
     // The span shapes the page, not the words, and it is a framework

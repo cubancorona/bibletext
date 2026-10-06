@@ -407,21 +407,23 @@ place a fix on one does not reach the others.
     unified in 1.2.19: `docs/BACKLOG.md`, "The desktop takes the phones'
     navigation rule".
 
-**Android 13 and 14**
+**Android before 15**
 
-30. **A Psalm title that wraps can still break a word with a hyphen**, where
-    Android 15 and later leave its words whole, as the web and the Windows
-    and Linux pane do (decided 6 October 2026). The reading view hyphenates
+30. **A Psalm title that wraps can still break a word with a hyphen** from
+    Android 6 to 14 (API 23 to 34; below API 23 the view hyphenates nothing),
+    where Android 15 and later leave its words whole, as the web and the
+    Windows and Linux pane do (decided 6 October 2026, which named Android 13
+    and 14; the same holds back to Android 6). The reading view hyphenates
     its whole text (`HYPHENATION_FREQUENCY_NORMAL`), and the one way to turn
     that off for a single paragraph is the no-hyphenation span that API 35
     brought (`LineBreakConfigSpan`, set over the title by
-    `keepTitleUnhyphenated` in `android/BtBridge.java`), which 13 and 14 do
-    not have. On the API 35 emulator WEB Psalm 102's title stopped breaking
-    "over-whelmed"; on the API 33 emulator the page is unchanged. *Risk:*
-    small and cosmetic: those releases set the whole page ragged
-    (justification needs API 35, docs/ANDROID.md), where a hyphen is rarer
-    and a title reads like the lines around it. It closes only if the app's
-    minimum Android version reaches 15.
+    `keepTitleUnhyphenated` in `android/BtBridge.java`), which earlier
+    releases do not have. On the API 35 emulator WEB Psalm 102's title
+    stopped breaking "over-whelmed"; on the API 33 emulator the page is
+    unchanged. *Risk:* small and cosmetic: those releases set the whole page
+    ragged (justification needs API 35, docs/ANDROID.md), where a hyphen is
+    rarer and a title reads like the lines around it. It closes only if the
+    app's minimum Android version reaches 15.
 
 ## Deliberate exclusions
 

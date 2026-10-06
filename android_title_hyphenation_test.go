@@ -15,8 +15,9 @@ import (
 // on a phone held upright. Hyphenation belongs to the whole TextView, and the
 // one way to turn it off for one paragraph is the no-hyphenation span API 35
 // brought (LineBreakConfigSpan), which the selectable view's layout honours
-// there. Android 13 and 14 have no such span: they keep hyphenating a title
-// that wraps, a divergence docs/PLATFORM_MATRIX.md records.
+// there. Earlier releases have no such span: from API 23, where the view
+// starts hyphenating, to 34 they keep hyphenating a title that wraps, a
+// divergence docs/PLATFORM_MATRIX.md records.
 //
 // The span shapes the page, not the words, and it is a framework
 // ParcelableSpan, which Copy would carry into another app's editor with the

@@ -302,7 +302,7 @@ the bridge sets the title's word gaps as four-per-em spaces, which the layout
 does not spread (`isRaggedParagraph`, above). Its hyphenation differs. The web
 turns hyphenation off for the title and the Windows and Linux pane hyphenates
 nothing, so on both it is whole; the Apple panes hyphenate it, and Android
-below API 35. The
+from API 23 to 34. The
 Apple `p.pst` sets no hyphenation of its own, so it keeps the `hyphens: auto`
 of their `p` rule: the macOS pane's imported title carries a hyphenation factor
 of 1 and breaks words in a 260-point column (the iPhone and iPad pane import
@@ -310,8 +310,8 @@ the same stylesheet the same way, not measured there). Android sets hyphenation
 on the whole text view, and from API 35 turns it off for the title alone with
 the no-hyphenation span that release brought (`keepTitleUnhyphenated`,
 `android/BtBridge.java`, since 6 October 2026), so there the title is whole;
-Android 13 and 14 have no such span and can still break a word in a title that
-wraps, a divergence docs/PLATFORM_MATRIX.md records. These are known
+earlier releases have no such span, and from API 23 to 34 can still break a
+word in a title that wraps, a divergence docs/PLATFORM_MATRIX.md records. These are known
 differences (docs/BACKLOG.md). The site's generator justified and hyphenated the title as
 well until 25 September 2026, and the published site does until it is next
 published: the title is a `<p>` inside `.text`, and its rule said nothing of
@@ -485,7 +485,7 @@ came to on the two surfaces that reckoned it that way).
 |---|---|---|---|---|
 | **Apple panes** | `reading.go`: `p { margin: 0 0 <readingParaGapEm> }` (gapped) / `margin: 0` + `bibleTextSetReporterIndent(reporterIndentEm × readingGlyphPx())` | `p.sec` (0.35em below) and **`p.pre-sec { margin-bottom: 1.1em }` on the paragraph or title BEFORE the heading**, set by the block loop | `p.pst { margin: 0 0 <readingTitleGapEm> }` | **The native sweeps zero `paragraphSpacingBefore` on every paragraph** (to remove the phantom the importer injects on the first), so a `margin-top` never reaches the page. Space above anything must be the bottom margin of what precedes it. |
 | **Fyne pane** | `reading_styled_pane.go`: `paraGap = readingParaGapEm × textSize`, 0 on the reporter page; `indent = reporterIndentEm × textSize` | `reading_styled_layout.go` `appendHeadingLines`: `readingHeadLeadEm`/`readingHeadTailEm` × `styledLayoutParams.TextSize`; the paragraph after a heading skips its own gap | `reading_styled_super.go`: `readingTitleGapEm × size` | **The reporter page's paragraph gap is zero**, so anything figured "from the paragraph gap" vanishes on a wide window. Figure air from the text size. |
-| **Android** | `BtBridge.java` `applyParagraphAir`: the importer's blank separator line takes an exact height (`PARA_GAP_EM`); the compact page has no blank line, `INDENT_MARKER` → `LeadingMarginSpan` `INDENT_EM` × text | same sweep: `HEAD_LEAD_EM` / `HEAD_TAIL_EM` on the separator either side; on the compact page an `AirSpan` in the heading line's ascent and the next line's | the blank line after the title takes `TITLE_GAP_EM`, on both pages: the book page's title writes two `<br>`, since the COMPACT import counts one as the block's own end | **`Html.fromHtml` separates paragraphs with a blank LINE** whose height is the pane's pitch plus `setLineHeight`'s extra — not a margin. A `LineHeightSpan` runs for every line of its paragraph over one reused `FontMetricsInt`: inflate only the line named, and put the metrics back on the next call (see `NoteBandSpan`). The wash paints full line boxes, so reserved air must be subtracted from wash rects. |
+| **Android** | `BtBridge.java` `applyParagraphAir`: the importer's blank separator line takes an exact height (`PARA_GAP_EM`); the compact page has no blank line, `INDENT_MARKER` → `LeadingMarginSpan` `INDENT_EM` × text | same sweep: `HEAD_LEAD_EM` / `HEAD_TAIL_EM` on the separator either side; on the compact page an `AirSpan` in the heading line's ascent and the next line's | the blank line after the title takes `TITLE_GAP_EM`, on both pages: the book page's title writes two `<br>`, since the COMPACT import counts one as the block's own end (from API 24; below it the import is LEGACY and the bridge collapses the book page's blank lines, the title's too, so the title sits on verse 1 there) | **`Html.fromHtml` separates paragraphs with a blank LINE** whose height is the pane's pitch plus `setLineHeight`'s extra — not a margin. A `LineHeightSpan` runs for every line of its paragraph over one reused `FontMetricsInt`: inflate only the line named, and put the metrics back on the next call (see `NoteBandSpan`). The wash paints full line boxes, so reserved air must be subtracted from wash rects. |
 | **web** | `cmd/websitegen/assets.go`: `--pgap` = `__PARA_GAP__` × body; `0rem` + `text-indent:__INDENT__` from 46rem up | `.text .sec`: `font-size:1em`, `margin:__HEAD_LEAD__ 0 __HEAD_TAIL__` | `p.pst{margin:0 0 __TITLE_GAP__}` | **The heading is an `<h2>`** for the outline, whose browser default is `font-size:1.5em`: leaving the size out is not inheriting. Margins figured from `--pgap` are zero on the reporter page. |
 
 ### To change one thing, touch these
