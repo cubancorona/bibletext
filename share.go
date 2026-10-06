@@ -692,13 +692,20 @@ func inWordAt(s string, i int) bool {
 // cited as Matthew 25:38 when the reader dragged into 25:39.
 //
 // Since nothing searches again, the one search has to find the copy a drag
-// from word to word could have made: in the region, and then in the chapter,
-// it takes the first copy that splits no word (wordAlignedIndex) before the
-// first copy of any kind. Placed at the first copy of any kind, "the wicked"
-// stood inside "the wickedness", the end repair cut it to "the", and the
-// reader's last word was lost; with no span, the verse of that copy was cited
-// too. A copy that splits a word is still taken where there is no other, as a
-// drag begun or ended inside a word needs.
+// from word to word could have made: in the region, or in the chapter when
+// there is no span, it takes the first copy that splits no word
+// (wordAlignedIndex) before the first copy of any kind. Placed at the first
+// copy of any kind, "the wicked" stood inside "the wickedness", the end
+// repair cut it to "the", and the reader's last word was lost; with no span,
+// the verse of that copy was cited too. A copy that splits a word is still
+// taken where there is no other, as a drag begun or ended inside a word
+// needs; but the text alone cannot tell such a drag from a phrase whose first
+// copy stands inside a longer word, so a drag begun or ended inside a word
+// whose letters also stand as whole words later in the region is quoted from
+// that later copy ("leavened bread shall", begun two letters into Exodus
+// 13:7's "Unleavened", quotes "leavened bread shall" from later in the
+// verse). With a span the citation is the same verse; the panes hand over the
+// selection's text and its verses, not its place in them.
 func normalizeShareSelection(state *AppState, raw string, span selSpan) (text string, lo, hi, at int, ok bool) {
 	book, chapter := readerChapter(state)
 	return normalizeShareSelectionIn(state, book, chapter, raw, span)
@@ -880,8 +887,19 @@ func locateShareSelection(state *AppState, book string, chapter int, corpus stri
 	// begun on the second digit of 29 arrives as "9 He said to", which the
 	// strip reads as verse 9's number when verse 9 opens with those words
 	// too, and the span, 29 to 29, is what says it is not. Without an anchor
-	// a copy that splits no word comes first, in the region and then in the
-	// chapter (see normalizeShareSelection).
+	// a copy that splits no word comes first: in the region when there is
+	// one, and in the chapter when there is none (see
+	// normalizeShareSelection).
+	//
+	// With a region, a selection the region does not hold is found in the
+	// chapter at its first copy of any kind, as before the region preferred
+	// a copy that splits no word. Such a selection is not a phrase of the
+	// span's verses: a drag that runs on past the region into the first
+	// letters of the next verse's word or of a heading ("the LORD. The",
+	// "The" of "Then"), a verse number selected on its own, a piece of a
+	// heading. A whole copy elsewhere in the chapter is no likelier the
+	// reader's, and preferring it moved such a drag to a verse it never
+	// touched (2 Chronicles 20:13's "the LORD.\nThe" cited 20:32–33).
 	locate := func(s string, anchor int) int {
 		if anchor >= 0 && (!haveRegion || (anchor >= rStart && anchor < rEnd)) && strings.HasPrefix(corpus[anchor:], s) {
 			return anchor
@@ -893,11 +911,36 @@ func locateShareSelection(state *AppState, book string, chapter int, corpus stri
 			if i := strings.Index(corpus[rStart:rEnd], s); i >= 0 {
 				return rStart + i
 			}
-		}
-		if i := wordAlignedIndex(corpus, s); i >= 0 {
+		} else if i := wordAlignedIndex(corpus, s); i >= 0 {
 			return i
 		}
 		return strings.Index(corpus, s)
+	}
+	// dropNumber is called when a drag's trailing number has come off, with
+	// what is left, s: that number's verse had nothing in the drag but its
+	// number, so where the verses before it hold s, the region ends before
+	// it. The words before the number end where that verse begins, and the
+	// region's preference for a copy that splits no word would otherwise take
+	// a whole copy in that verse over the reader's: "in Christ 9", begun two
+	// letters into Philippians 3:8's "gain", was quoted from 3:9's "in Christ"
+	// and cited there. Where they do not hold s, the words are not the end of
+	// a verse, a heading's last word say, and the region stays as it was.
+	dropNumber := func(num, s string) {
+		if !haveRegion {
+			return
+		}
+		n, err := strconv.Atoi(num)
+		if err != nil {
+			return
+		}
+		for k, sp := range spans {
+			if sp.verse == n && k > 0 && sp.start > rStart && sp.start < rEnd {
+				if end := spans[k-1].end; strings.Contains(corpus[rStart:end], s) {
+					rEnd = end
+				}
+				return
+			}
+		}
 	}
 
 	// A trailing bare verse-number token (the selection stopped right after a
@@ -927,6 +970,7 @@ func locateShareSelection(state *AppState, book string, chapter int, corpus stri
 			return "", lo, hi, -1, true
 		}
 		s = strings.TrimSpace(strings.TrimSpace(s)[:i])
+		dropNumber(last, s)
 	}
 
 	idx := locate(s, anchor)
