@@ -348,6 +348,10 @@ var (
 	nextJobKeyRE  = regexp.MustCompile(`^    ([A-Za-z_-]+):\s*(.*)$`)
 	nextStepRE    = regexp.MustCompile(`^      - (.*)$`)
 	nextStepKeyRE = regexp.MustCompile(`^([A-Za-z_-]+):\s*(.*)$`)
+	// Fyne's packager, which rebuilds the executable it is given.
+	nextFynePackageRE = regexp.MustCompile(`fyne"? (package|release)\b`)
+	// The race detector, as a flag of its own.
+	nextRaceFlagRE = regexp.MustCompile(`(^|\s)-race(\s|$)`)
 )
 
 // nextWorkflowJobs reads a workflow's jobs by indentation, the layout every
@@ -436,7 +440,7 @@ func nextCompilesApp(cmd string) bool {
 	if strings.Contains(cmd, "go build") && !strings.Contains(cmd, "third_party/") {
 		return true
 	}
-	return regexp.MustCompile(`fyne"? (package|release)\b`).MatchString(cmd)
+	return nextFynePackageRE.MatchString(cmd)
 }
 
 // nextIndexAfter is the index of want in code at or after from, or -1.
@@ -835,7 +839,7 @@ func nextCICommand(cmd string) string {
 	if tool == "" {
 		return strings.TrimSpace(cmd)
 	}
-	if regexp.MustCompile(`(^|\s)-race(\s|$)`).MatchString(cmd) {
+	if nextRaceFlagRE.MatchString(cmd) {
 		tool += " -race"
 	}
 	var tags []string
