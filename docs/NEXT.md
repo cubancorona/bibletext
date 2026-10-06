@@ -66,8 +66,10 @@ against a planted control, stop one that would.
   both states, reads `release-ios.sh`, `release-mac-store.sh`,
   `build-android.sh`, `build-windows-exe.sh`, `build-appimage.sh`,
   `go-release-wrapper.sh`, `publish-site.sh` and the `release`, `msstore` and
-  `linux-stores` workflows. Any tag list that names `next`, directly or
-  through a variable it expands, fails, and so does one it cannot resolve.
+  `linux-stores` workflows. Any tag list that names `next`, directly, through
+  a variable it expands, or behind quoting the shell removes (`ne""xt`),
+  fails, and so does one it cannot resolve. It reads text for mistakes, not
+  against someone set on hiding the tag; the second check reads the binary.
   `BT_ANDROID_TAGS` is tolerated only while `build-android.sh --release`
   refuses it.
 - **What each path built.** `scripts/verify-not-next.sh` reads the build tags
@@ -79,7 +81,8 @@ against a planted control, stop one that would.
   Mac App Store, Microsoft Store, Snap Store); `release-ios.sh` on the App
   Store binary; `build-android.sh --release` on the Play bundle's libraries;
   `publish-site.sh` on the site generator. The guard test asserts each of
-  those calls is in place, and builds probe binaries to show the verifier
+  those calls is in place, in each workflow job that compiles the app and
+  after its last compile, and builds probe binaries to show the verifier
   refuses the tag each way it can arrive: on the command line, from `GOFLAGS`
   or a saved `go env -w`, inside an Android bundle, and in either slice of a
   universal binary.
@@ -175,7 +178,12 @@ CI runs all of these on every push (`.github/workflows/ci.yml`): `go vet` with
 `next` under the race detector and once more with `next,bibletextdev`; the
 suite with `next` on macOS for the darwin-only files; `go vet -tags next` on
 Windows; and the iOS and Android pane compiles with `--next`.
-`next_release_guard_test.go` fails if a cleanup drops any of them.
+`next_release_guard_test.go` holds each job to its own list, the shipping
+runs beside the next ones, and fails if a cleanup drops any of them: a run
+kept in one job does not stand in for the same run dropped from another,
+since each job alone compiles its platform's files. It also fails a Windows
+step that runs more than one command, because PowerShell answers only for a
+step's last command.
 
 An editor sees the shipping state by default and greys out `//go:build next`
 files. To work in them, give gopls `"buildFlags": ["-tags=next"]` in your own

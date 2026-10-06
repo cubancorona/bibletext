@@ -63,10 +63,11 @@ var nextToleratedTagVars = map[string]struct{ path, refusal string }{
 }
 
 var (
-	// A tag list: -tags or --tags, then = or blanks, then one quoted or bare
-	// word. The character before the flag may not be a word character or a
-	// hyphen, so --tags is read once, and a word ending in "tags" never is.
-	nextTagListRE = regexp.MustCompile(`(?:^|[^\w-])--?tags(?:=|[ \t]+)("[^"]*"|'[^']*'|[^\s;|&)]+)`)
+	// A tag list: -tags or --tags, then = or blanks, then one shell word,
+	// quoted and bare parts joined as the shell joins them. The character
+	// before the flag may not be a word character or a hyphen, so --tags is
+	// read once, and a word ending in "tags" never is.
+	nextTagListRE = regexp.MustCompile(`(?:^|[^\w-])--?tags(?:=|[ \t]+)((?:"[^"]*"|'[^']*'|[^\s;|&)"'])+)`)
 	// NAME=value in a shell, with an optional export/local/readonly.
 	nextShellAssignRE = regexp.MustCompile(`(?:^|[\s;("'{])(?:export[ \t]+|local[ \t]+|readonly[ \t]+)?([A-Za-z_]\w*)\+?=("[^"]*"|'[^']*'|\S*)`)
 	// NAME: value in a workflow's env block.
@@ -76,10 +77,13 @@ var (
 	// A variable a value expands: $NAME, ${NAME…}, $env:NAME.
 	nextVarRefRE = regexp.MustCompile(`\$\{?(?:env:)?([A-Za-z_]\w*)`)
 	// What is left of a value once its variables are taken out.
-	nextExprRE       = regexp.MustCompile(`\$\{\{[^}]*\}\}`)
-	nextBracedRefRE  = regexp.MustCompile(`\$\{[^}]*\}`)
-	nextPlainRefRE   = regexp.MustCompile(`\$(?:env:)?\w+`)
-	nextTagSplitRE   = regexp.MustCompile(`[^A-Za-z0-9_.]+`)
+	nextExprRE      = regexp.MustCompile(`\$\{\{[^}]*\}\}`)
+	nextBracedRefRE = regexp.MustCompile(`\$\{[^}]*\}`)
+	nextPlainRefRE  = regexp.MustCompile(`\$(?:env:)?\w+`)
+	nextTagSplitRE  = regexp.MustCompile(`[^A-Za-z0-9_.]+`)
+	// What the shell removes from a word before the build sees it: quotes,
+	// and the backslash that escapes a plain letter.
+	nextShellQuoting = strings.NewReplacer(`"`, "", "'", "", `\`, "")
 	nextTrailingNote = regexp.MustCompile(`\s#.*$`)
 )
 
@@ -136,12 +140,13 @@ func newNextTagScan(text string, allowed map[string]bool) *nextTagScan {
 }
 
 // nextLiteralTags splits what is left of a value, once its variables are taken
-// out, into the words a tag list would read.
+// out and its quoting removed as the shell removes it, into the words a tag
+// list would read: ne""xt and n\ext are both next.
 func nextLiteralTags(value string) []string {
 	v := nextExprRE.ReplaceAllString(value, " ")
 	v = nextBracedRefRE.ReplaceAllString(v, " ")
 	v = nextPlainRefRE.ReplaceAllString(v, " ")
-	return nextTagSplitRE.Split(v, -1)
+	return nextTagSplitRE.Split(nextShellQuoting.Replace(v), -1)
 }
 
 // check reports why a value could put next into a tag list, if it could:
@@ -288,6 +293,10 @@ func TestNextTagScanCatchesPlantedTags(t *testing.T) {
 		{"command substitution", "T=$(cat tags.txt)\ngo build -tags \"$T\" .\n", nil, true},
 		{"positional parameter", "go build -tags \"$1\" .\n", nil, true},
 		{"environment variable not shown refused", "fyne package ${BT_ANDROID_TAGS:+--tags \"$BT_ANDROID_TAGS\"}\n", nil, true},
+		{"quotes inside the word", "go build -tags ne\"\"xt .\n", nil, true},
+		{"a quoted part joined to a bare one", "go run -tags \"ne\"xt ./cmd/sitepages\n", nil, true},
+		{"a backslash inside the word", "go build -tags n\\ext .\n", nil, true},
+		{"quotes inside a variable's value", "T=ne''xt\ngo build -tags \"ios,$T\" .\n", nil, true},
 
 		{"another tag", "go build -tags gles -trimpath .\n", nil, false},
 		{"several other tags", "go build -tags \"ios,bibletextdev\" .\n", nil, false},
@@ -310,6 +319,124 @@ func TestNextTagScanCatchesPlantedTags(t *testing.T) {
 			}
 		})
 	}
+}
+
+// nextWorkflowStep is one step of a workflow job: the shell it names, if any,
+// and the commands it runs, comments taken out and continued lines joined.
+type nextWorkflowStep struct {
+	shell string
+	run   []string
+}
+
+// nextWorkflowJob is one job of a workflow: the runner it names and its steps.
+type nextWorkflowJob struct {
+	runsOn string
+	steps  []*nextWorkflowStep
+}
+
+// commands is every command the job runs, in order.
+func (j *nextWorkflowJob) commands() []string {
+	var out []string
+	for _, s := range j.steps {
+		out = append(out, s.run...)
+	}
+	return out
+}
+
+var (
+	nextJobRE     = regexp.MustCompile(`^  ([A-Za-z0-9_-]+):\s*$`)
+	nextJobKeyRE  = regexp.MustCompile(`^    ([A-Za-z_-]+):\s*(.*)$`)
+	nextStepRE    = regexp.MustCompile(`^      - (.*)$`)
+	nextStepKeyRE = regexp.MustCompile(`^([A-Za-z_-]+):\s*(.*)$`)
+)
+
+// nextWorkflowJobs reads a workflow's jobs by indentation, the layout every
+// workflow here keeps: jobs at two spaces, a job's keys at four, its steps at
+// six, a step's keys at eight, and a run block deeper still. It reads only
+// what the guards need: each job's runner, and each step's shell and
+// commands.
+func nextWorkflowJobs(text string) map[string]*nextWorkflowJob {
+	jobs := map[string]*nextWorkflowJob{}
+	var job *nextWorkflowJob
+	var step *nextWorkflowStep
+	var block []string
+	inJobs, inBlock := false, false
+	for _, line := range strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n") {
+		trimmed := strings.TrimSpace(line)
+		indent := len(line) - len(strings.TrimLeft(line, " "))
+		if inBlock {
+			if trimmed == "" || indent > 8 {
+				block = append(block, line)
+				continue
+			}
+			step.run = nextCodeLines(strings.Join(block, "\n"))
+			inBlock = false
+		}
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if indent == 0 {
+			inJobs, job, step = trimmed == "jobs:", nil, nil
+			continue
+		}
+		if !inJobs {
+			continue
+		}
+		if m := nextJobRE.FindStringSubmatch(line); m != nil {
+			job, step = &nextWorkflowJob{}, nil
+			jobs[m[1]] = job
+			continue
+		}
+		if job == nil {
+			continue
+		}
+		if m := nextJobKeyRE.FindStringSubmatch(line); m != nil {
+			if m[1] == "runs-on" {
+				job.runsOn = m[2]
+			}
+			step = nil
+			continue
+		}
+		var key string
+		switch m := nextStepRE.FindStringSubmatch(line); {
+		case m != nil:
+			step = &nextWorkflowStep{}
+			job.steps = append(job.steps, step)
+			key = m[1]
+		case indent == 8 && step != nil:
+			key = trimmed
+		default:
+			continue
+		}
+		m := nextStepKeyRE.FindStringSubmatch(key)
+		if m == nil {
+			continue
+		}
+		value := strings.TrimSpace(nextTrailingNote.ReplaceAllString(m[2], ""))
+		switch m[1] {
+		case "shell":
+			step.shell = value
+		case "run":
+			if strings.HasPrefix(value, "|") || strings.HasPrefix(value, ">") {
+				inBlock, block = true, nil
+			} else {
+				step.run = nextCodeLines(value)
+			}
+		}
+	}
+	if inBlock {
+		step.run = nextCodeLines(strings.Join(block, "\n"))
+	}
+	return jobs
+}
+
+// nextCompilesApp reports whether a workflow command compiles the app: a go
+// build of anything but a vendored tool, or fyne packaging, which rebuilds.
+func nextCompilesApp(cmd string) bool {
+	if strings.Contains(cmd, "go build") && !strings.Contains(cmd, "third_party/") {
+		return true
+	}
+	return regexp.MustCompile(`fyne"? (package|release)\b`).MatchString(cmd)
 }
 
 // nextIndexAfter is the index of want in code at or after from, or -1.
@@ -349,18 +476,59 @@ func TestReleasePathsVerifyTheirArtifactsAreNotNext(t *testing.T) {
 	inOrder("scripts/verify-release-package.sh",
 		`go version -m "$binary_path"`,
 		`verify-not-next.sh" "$binary_path"`)
-	for _, path := range []string{
-		"scripts/release-mac-store.sh",
-		"scripts/build-windows-exe.sh",
-		".github/workflows/release.yml",
-		".github/workflows/linux-stores.yml",
-	} {
-		if !strings.Contains(code(path), "verify-release-package.sh") {
-			t.Errorf("%s builds a desktop package and no longer runs scripts/verify-release-package.sh", path)
-		}
-	}
+	// The Mac App Store package: both architectures, joined, packaged, then
+	// checked slice by slice.
+	inOrder("scripts/release-mac-store.sh",
+		`GOARCH=arm64 go build`,
+		`lipo -create -output "$WORK/BibleText"`,
+		`package -os darwin`,
+		`verify-release-package.sh "$APP/Contents/MacOS/BibleText"`)
+	// The Microsoft Store's executable, which msstore.yml builds through it.
+	inOrder("scripts/build-windows-exe.sh",
+		`go build -tags gles`,
+		`package -os windows`,
+		`verify-release-package.sh BibleText.exe`)
 	if !strings.Contains(code(".github/workflows/msstore.yml"), "scripts/build-windows-exe.sh") {
 		t.Errorf(".github/workflows/msstore.yml no longer builds through scripts/build-windows-exe.sh")
+	}
+	// Every workflow job that compiles the app checks what it compiled, after
+	// its last compile. One check per file would pass with a job's dropped,
+	// so each job answers for its own. The jobs named are the ones known to
+	// compile, which shows the scan can see a compile at all.
+	for path, known := range map[string][]string{
+		".github/workflows/release.yml":      {"macos", "linux", "linux-arm64", "windows"},
+		".github/workflows/linux-stores.yml": {"binary"},
+		".github/workflows/msstore.yml":      nil,
+	} {
+		compiles := map[string]bool{}
+		for name, job := range nextWorkflowJobs(nextReadFile(t, path)) {
+			cmds := job.commands()
+			last := -1
+			for i, c := range cmds {
+				if nextCompilesApp(c) {
+					last = i
+				}
+			}
+			if last < 0 {
+				continue
+			}
+			compiles[name] = true
+			checked := false
+			for _, c := range cmds[last+1:] {
+				if strings.Contains(c, "verify-release-package.sh") || strings.Contains(c, "verify-not-next.sh") {
+					checked = true
+				}
+			}
+			if !checked {
+				t.Errorf("%s: job %s compiles the app and does not run scripts/verify-release-package.sh on it afterwards", path, name)
+			}
+		}
+		for _, name := range known {
+			if !compiles[name] {
+				t.Errorf("%s: the scan finds no compile in job %s, which builds a release package; "+
+					"the per-job check cannot see it", path, name)
+			}
+		}
 	}
 
 	// The App Store build: the cross-compiled binary, before it is signed.
@@ -654,39 +822,92 @@ func TestNextSwitchFilesDeclareOppositeStates(t *testing.T) {
 	}
 }
 
+// nextCICommand names a go vet or go test run over the whole module by what
+// distinguishes one from another: the tool, the race detector, and the tags,
+// sorted. Anything else is named by its own text.
+func nextCICommand(cmd string) string {
+	tool := ""
+	for _, t := range []string{"go vet", "go test"} {
+		if strings.Contains(cmd, t+" ") && strings.HasSuffix(cmd, "./...") {
+			tool = t
+		}
+	}
+	if tool == "" {
+		return strings.TrimSpace(cmd)
+	}
+	if regexp.MustCompile(`(^|\s)-race(\s|$)`).MatchString(cmd) {
+		tool += " -race"
+	}
+	var tags []string
+	if m := nextTagListRE.FindStringSubmatch(cmd); m != nil {
+		for _, w := range nextLiteralTags(m[1]) {
+			if w != "" {
+				tags = append(tags, w)
+			}
+		}
+	}
+	if len(tags) > 0 {
+		sort.Strings(tags)
+		tool += " -tags " + strings.Join(tags, ",")
+	}
+	return tool
+}
+
 // Both states must keep being built and tested on every push, or the next
-// build rots unseen between now and its release.
+// build rots unseen between now and its release. Each job answers for its own
+// runs, the shipping state's and the next release's: a run dropped from one
+// job is not made up for by the same run in another, since each job is the
+// only one that compiles its platform's files.
 func TestCIBuildsBothStatesOfTheNextSwitch(t *testing.T) {
-	lines := nextCodeLines(nextReadFile(t, ".github/workflows/ci.yml"))
-	tagged := func(cmd string) bool {
-		for _, line := range lines {
-			if !strings.Contains(line, cmd) {
-				continue
+	jobs := nextWorkflowJobs(nextReadFile(t, ".github/workflows/ci.yml"))
+	for name, want := range map[string][]string{
+		// Linux: the next release beside every tag set it is built with, the
+		// race detector over gated work, and the dev page's !race files.
+		"build-test": {
+			"go vet", "go vet -tags next",
+			"go vet -tags bibletextdev,next", "go vet -tags gles,next", "go vet -tags lsb,next,nrsv",
+			"go test -race", "go test -race -tags next", "go test -tags bibletextdev,next",
+			"scripts/check-android-pane.sh", "scripts/check-android-pane.sh --next",
+		},
+		// macOS: the darwin-only files, and the iOS pane.
+		"build-test-macos": {
+			"go vet", "go vet -tags next",
+			"go test -race", "go test -tags next",
+			"scripts/check-ios-pane.sh", "scripts/check-ios-pane.sh --next",
+		},
+		// Windows: the Windows-only files.
+		"build-test-windows": {
+			"go vet", "go vet -tags next",
+			"go test -race",
+		},
+	} {
+		job, ok := jobs[name]
+		if !ok {
+			t.Errorf(".github/workflows/ci.yml has no job %s", name)
+			continue
+		}
+		have := map[string]bool{}
+		for _, c := range job.commands() {
+			have[nextCICommand(c)] = true
+		}
+		for _, w := range want {
+			if !have[w] {
+				t.Errorf(".github/workflows/ci.yml: job %s no longer runs %s ./...", name, w)
 			}
-			for _, m := range nextTagListRE.FindAllStringSubmatch(line, -1) {
-				for _, w := range nextLiteralTags(m[1]) {
-					if w == "next" {
-						return true
-					}
-				}
+		}
+	}
+	// A Windows step runs under PowerShell unless it names another shell, and
+	// PowerShell answers only for a block's last command: a failure before it
+	// passes the step. So each such step runs one command.
+	for name, job := range jobs {
+		if !strings.Contains(job.runsOn, "windows") {
+			continue
+		}
+		for _, step := range job.steps {
+			if len(step.run) > 1 && step.shell != "bash" && step.shell != "sh" {
+				t.Errorf(".github/workflows/ci.yml: job %s runs %d commands in one PowerShell step, "+
+					"which fails only if the last does: %q", name, len(step.run), step.run)
 			}
 		}
-		return false
-	}
-	var missing []string
-	for _, cmd := range []string{"go vet", "go test -race", "go test -timeout"} {
-		if !tagged(cmd) {
-			missing = append(missing, cmd+" with -tags next")
-		}
-	}
-	code := strings.Join(lines, "\n")
-	for _, want := range []string{"scripts/check-ios-pane.sh --next", "scripts/check-android-pane.sh --next"} {
-		if !strings.Contains(code, want) {
-			missing = append(missing, want)
-		}
-	}
-	sort.Strings(missing)
-	for _, m := range missing {
-		t.Errorf(".github/workflows/ci.yml no longer runs %s", m)
 	}
 }

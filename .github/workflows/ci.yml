@@ -228,10 +228,14 @@ jobs:
           go-version: "1.24"
           cache: true
 
+      # One command per step: a Windows step runs under PowerShell, which
+      # answers only for a block's last command, so a failure before it would
+      # pass the step (next_release_guard_test.go holds this job to that).
       - name: go vet
-        run: |
-          go vet ./...
-          go vet -tags next ./...
+        run: go vet ./...
+
+      - name: go vet (next release)
+        run: go vet -tags next ./...
 
       # -timeout guards against a hung test; it is not a time budget. The
       # root package is the longest race run: about 430 s measured locally
