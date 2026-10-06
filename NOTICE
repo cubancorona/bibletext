@@ -26,8 +26,18 @@ own terms:
   used under the Creative Commons Attribution (CC BY) license
   (https://www.openbible.info/labs/cross-references/).
 - Gospel parallels: a synopsis (harmony) of the four Gospels compiled for this
-  app from the Gospels' own text (assets/parallels/), not taken from a
-  published synopsis; first-party content under this repository's licence.
+  app from the Gospels' own text (assets/parallels/gospel_parallels.json), not
+  taken from a published synopsis; first-party content under this repository's
+  licence. Its list of sayings recorded on more than one occasion
+  (assets/parallels/gospel_occasions.json) takes its verse pairings, and no
+  text, from William Arnold Stevens and Ernest DeWitt Burton, A Harmony of the
+  Gospels for Historical Study, third edition (Charles Scribner's Sons, 1904),
+  checked against A. T. Robertson, A Harmony of the Gospels for Students of the
+  Life of Christ (Harper & Brothers, 1922), both public domain; the same
+  harmony is where assets/parallels/gospel_parallels_next.json places the
+  twenty-two verses the synopsis has in no set. Both files are also
+  first-party content under this repository's licence (docs/TEXTUAL-DATA.md,
+  section 9).
 - UI typeface: Atkinson Hyperlegible by the Braille Institute of America, Inc.,
   used under the SIL Open Font License 1.1 (see assets/fonts/atkinson/OFL.txt).
 - Reading typefaces: Scripture is set in Junicode by Peter S. Baker, used under

@@ -8,24 +8,44 @@ import (
 	"testing"
 )
 
-// crossRefDeepestRead, the furthest down a verse's rows any panel reads, is
-// measured by the walk below and declared for each state of the next switch:
-// greek_esther_current_test.go and greek_esther_next_test.go.
+// crossRefDeepestRead is the furthest down a verse's rows any panel reads,
+// measured by the walk below over the 2026-08-31 dataset in all four
+// translations, for every selection that can hold the verse
+// (crossRefDeepestReadable). maxCrossRefsKept is set well above it, and the
+// walk fails if the dataset ever reads deeper, so the margin is re-judged
+// rather than assumed.
+//
+// In the shipping build it is the twentieth row, for WEB Catholic's Genesis
+// 41:42, whose twenty rows include eight into Greek Esther, which that
+// translation cannot show.
+//
+// In the next major release (docs/NEXT.md) it is the twenty-first, for
+// Matthew 10:17 in all four: five of its best rows lie inside passages its
+// chapter lists as the same saying on another occasion (parallels.go), two
+// of them its own, and a selection of the whole chapter hides all five.
+// Genesis 41:42 no longer reads so deep there, because the Greek Esther maps
+// verse for verse; with that alone, before the other-occasion rows, the
+// deepest was the eighteenth, first at the WEB's Matthew 10:1.
+var crossRefDeepestRead = func() int {
+	if nextRelease {
+		return 21
+	}
+	return 20
+}()
 
 // crossRefDeepestReadable is the furthest down a verse's rows any selection
-// holding the verse can read. Every such selection hides at least own, the
-// labels of the verse's own parallels, and at most chapter, those of every
-// parallel in the verse's chapter, since a selection lies within one chapter.
+// holding the verse can read. Every such selection hides at least own and at
+// most chapter (crossRefSelectionsHide).
 //
 // The panel built with every parallel of the chapter hidden is not the
 // deepest. Hiding more reads deeper while sixteen rows are still to be found,
 // but where fewer than sixteen are left to show, the deepest row read is the
 // last one shown, and hiding a neighbour's parallel can hide exactly that
 // row. So a row counts here when it can be shown at all, that is when only
-// the verse's own parallels are hidden, and fewer than sixteen rows above it
-// are shown when every parallel of the chapter is: no selection shows fewer
+// what every selection hides is hidden, and fewer than sixteen rows above it
+// are shown when the most any selection hides is: no selection shows fewer
 // above it, and none hides less.
-func crossRefDeepestReadable(rows []tskRow, resolve func(crossRef) []crossRef, own, chapter map[string]bool) int {
+func crossRefDeepestReadable(rows []tskRow, resolve func(crossRef) []crossRef, own, chapter crossRefHidden) int {
 	deepest, above := 0, 0
 	seen := map[string]bool{} // labels of the rows above, which no selection shows twice
 	for i, r := range rows {
@@ -39,8 +59,8 @@ func crossRefDeepestReadable(rows []tskRow, resolve func(crossRef) []crossRef, o
 				continue
 			}
 			seen[lbl] = true
-			shown = shown || !own[lbl]
-			counted = counted || !chapter[lbl]
+			shown = shown || !own.hides(c)
+			counted = counted || !chapter.hides(c)
 		}
 		if shown {
 			deepest = i + 1
@@ -50,6 +70,67 @@ func crossRefDeepestReadable(rows []tskRow, resolve func(crossRef) []crossRef, o
 		}
 	}
 	return deepest
+}
+
+// crossRefSelectionsHide is, for each verse of a chapter, what every
+// selection holding the verse hides from its Treasury rows (own), and what
+// the selection that hides most hides (chapter); a selection lies within one
+// chapter. Every selection hides the labels of the verse's own same-occasion
+// parallels, and at most those of every parallel in the chapter.
+//
+// In the next major release the same saying on another occasion hides too,
+// every Treasury row inside its passage (crossRefHidden). At most, that is
+// every such row of every verse in the chapter. At least, it is the verse's
+// own such rows, but not one that a same-occasion row of the chapter covers:
+// a selection that holds that row's verse lists the same-occasion row
+// instead, which hides by its label alone. A row left out because an earlier
+// one covers it, or put in the place of rows it covers, only hides more.
+func crossRefSelectionsHide(verses []Verse, id string, resolve func(crossRef) []crossRef) (own map[int]crossRefHidden, chapter crossRefHidden) {
+	own = map[int]crossRefHidden{}
+	chapter = crossRefHidden{labels: map[string]bool{}}
+	occasions := map[int][]crossRef{}
+	for _, v := range verses {
+		mine := crossRefHidden{labels: map[string]bool{}}
+		if ch, vs, ok := crossRefSourceRef(id, v); ok {
+			for _, p := range gospelParallelsForVerse(v.BookName, ch, vs) {
+				for _, c := range resolve(p) {
+					chapter.labels[c.label()] = true
+					mine.labels[c.label()] = true
+				}
+			}
+			if nextRelease {
+				for _, o := range gospelOccasionsForVerse(v.BookName, ch, vs) {
+					for _, c := range resolve(o) {
+						chapter.covers = append(chapter.covers, c)
+						occasions[v.Verse] = append(occasions[v.Verse], c)
+					}
+				}
+			}
+		}
+		own[v.Verse] = mine
+	}
+	var parallels []crossRef
+	for _, v := range verses {
+		if ch, vs, ok := crossRefSourceRef(id, v); ok {
+			for _, p := range gospelParallelsForVerse(v.BookName, ch, vs) {
+				parallels = append(parallels, resolve(p)...)
+			}
+		}
+	}
+	for v, rows := range occasions {
+		mine := own[v]
+	row:
+		for _, c := range rows {
+			for _, p := range parallels {
+				if p.covers(c) {
+					continue row
+				}
+			}
+			mine.covers = append(mine.covers, c)
+		}
+		own[v] = mine
+	}
+	return own, chapter
 }
 
 // THE WHOLE TREASURY AGAINST THE DOWNLOADED TEXTS. The tests beside this one
@@ -66,9 +147,9 @@ func crossRefDeepestReadable(rows []tskRow, resolve func(crossRef) []crossRef, o
 // holds the index's cap to the panels. The index keeps each verse's best
 // maxCrossRefsKept rows; every panel must be the one an index keeping every
 // row builds, and no selection may need a row past the cap: the depth is
-// measured for every selection that can hold the verse, from the one that
-// hides only the verse's own parallels to the one that hides every parallel
-// of its chapter (crossRefDeepestReadable).
+// measured for every selection that can hold the verse, from what every one
+// of them hides to the most any of them hides (crossRefDeepestReadable,
+// crossRefSelectionsHide).
 //
 // Opt-in, and read-only: it reads the machine's own caches through
 // realCachePath (open the panel once in the app for the Treasury zip), and
@@ -161,19 +242,7 @@ func TestEveryCrossReferenceRowOpensScriptureTheTextHas(t *testing.T) {
 		for _, book := range bd.Books {
 			for _, chapter := range bd.GetChapterNumbersForBook(book) {
 				verses := bd.GetChapter(book, chapter)
-				hidden := map[string]bool{}      // every parallel of the chapter
-				own := map[int]map[string]bool{} // each verse's own
-				for _, v := range verses {
-					own[v.Verse] = map[string]bool{}
-					if ch, vs, ok := crossRefSourceRef(id, v); ok {
-						for _, p := range gospelParallelsForVerse(v.BookName, ch, vs) {
-							for _, c := range resolve(p) {
-								hidden[c.label()] = true
-								own[v.Verse][c.label()] = true
-							}
-						}
-					}
-				}
+				own, hidden := crossRefSelectionsHide(verses, id, resolve)
 				for _, v := range verses {
 					st := &AppState{Bible: bd, CurrentBook: book, CurrentChapter: chapter, CurrentVersion: id}
 					panels++
@@ -256,8 +325,8 @@ func TestTheWalksDepthHoldsForEverySelection(t *testing.T) {
 		rows = append(rows, r)
 	}
 	resolve := func(c crossRef) []crossRef { return []crossRef{c} }
-	own := map[string]bool{"Mark 6:1": true}
-	chapter := map[string]bool{"Mark 6:1": true, "Luke 9:11": true, "Luke 9:12": true}
+	own := crossRefHidden{labels: map[string]bool{"Mark 6:1": true}}
+	chapter := crossRefHidden{labels: map[string]bool{"Mark 6:1": true, "Luke 9:11": true, "Luke 9:12": true}}
 
 	// Every selection hides own and something of the rest of the chapter.
 	deepestOf := 0
@@ -266,7 +335,7 @@ func TestTheWalksDepthHoldsForEverySelection(t *testing.T) {
 		for _, lbl := range extra {
 			hidden[lbl] = true
 		}
-		if _, read := treasuryRowsFor(rows, resolve, hidden); read > deepestOf {
+		if _, read := treasuryRowsFor(rows, resolve, crossRefHidden{labels: hidden}); read > deepestOf {
 			deepestOf = read
 		}
 	}

@@ -251,18 +251,28 @@ func TestRangesThroughReorderedVersesHoldTheirVerses(t *testing.T) {
 // 23:14 for, and the rest, such as Luke 11:52's, the kingdom woe's; and its
 // one row from 1:17 in the ESV's order, Philippians 2:3, belongs to the
 // selfish-ambition verse.
+//
+// In the next major release the kingdom woe and Luke 11:52 are each other's
+// same saying on another occasion (parallels.go). That row stands above the
+// Treasury and hides the Treasury's row for the same passage, so the reader is
+// offered the same passage under the other label, and got reads both kinds: a
+// row the Treasury maps to the wrong verse would not be hidden, and would show
+// beside it. The kingdom woe is given a second row, Isaiah 22:22, which
+// nothing hides, so that its rows as a SOURCE are the Treasury's own in both
+// states.
 func TestTheDatasetsRowsLandOnTheSamePassageInEveryTranslation(t *testing.T) {
 	withCrossRefIndex(t, "Phil.1.16\t2Cor.2.17\t9\n"+
 		"Phil.1.17\tActs.22.1\t9\n"+
 		"Phil.1.17\tPhil.2.3\t4\n"+
 		"Matt.23.13\tLuke.11.52\t20\n"+
+		"Matt.23.13\tIsa.22.22\t10\n"+
 		"Mark.12.40\tMatt.23.13\t5\n"+
 		"Isa.3.12\tMatt.23.13\t6\n"+
 		"Luke.11.52\tMatt.23.13\t15\n"+
 		"Ezek.34.7\tMatt.23.13-Matt.23.36\t3\n")
 	bd := xrefBible(map[string]map[int]int{
 		"Philippians": {1: 30, 2: 30}, "2 Corinthians": {2: 17}, "Acts": {22: 30},
-		"Matthew": {23: 39}, "Luke": {11: 54}, "Mark": {12: 44}, "Ezekiel": {34: 31}, "Isaiah": {3: 26},
+		"Matthew": {23: 39}, "Luke": {11: 54}, "Mark": {12: 44}, "Ezekiel": {34: 31}, "Isaiah": {3: 26, 22: 25},
 	})
 	for _, tc := range []struct {
 		vid, book string
@@ -277,10 +287,10 @@ func TestTheDatasetsRowsLandOnTheSamePassageInEveryTranslation(t *testing.T) {
 		{"web", "Philippians", 1, 17, []string{"Acts 22:1"}},
 		{"bsb", "Philippians", 1, 16, []string{"Acts 22:1"}},
 		// The kingdom woe.
-		{"web", "Matthew", 23, 14, []string{"Luke 11:52"}},
-		{"webc", "Matthew", 23, 14, []string{"Luke 11:52"}},
-		{"nkjv", "Matthew", 23, 13, []string{"Luke 11:52"}},
-		{"bsb", "Matthew", 23, 13, []string{"Luke 11:52"}},
+		{"web", "Matthew", 23, 14, []string{"Luke 11:52", "Isaiah 22:22"}},
+		{"webc", "Matthew", 23, 14, []string{"Luke 11:52", "Isaiah 22:22"}},
+		{"nkjv", "Matthew", 23, 13, []string{"Luke 11:52", "Isaiah 22:22"}},
+		{"bsb", "Matthew", 23, 13, []string{"Luke 11:52", "Isaiah 22:22"}},
 		// The widows' woe has no rows of its own in the dataset.
 		{"web", "Matthew", 23, 13, nil},
 		{"nkjv", "Matthew", 23, 14, nil},
@@ -305,7 +315,7 @@ func TestTheDatasetsRowsLandOnTheSamePassageInEveryTranslation(t *testing.T) {
 		st := &AppState{Bible: bd, CurrentBook: tc.book, CurrentChapter: tc.ch, CurrentVersion: tc.vid}
 		var got []string
 		for _, c := range crossRefsForSelection(st, "", selSpan{lo: tc.v, hi: tc.v}) {
-			if !c.Parallel {
+			if !c.Parallel || c.otherOccasion() {
 				got = append(got, c.label())
 			}
 		}

@@ -29,15 +29,6 @@ const (
 	greekAdditionUnplacedSeen     = "these verses are not in the trans"
 )
 
-// crossRefDeepestRead is the furthest down a verse's rows any panel reads,
-// measured by the walk in crossrefs_realdata_test.go over the 2026-08-31
-// dataset in all four translations, for every selection that can hold the
-// verse (crossRefDeepestReadable): the eighteenth row, first at the WEB's
-// Matthew 10:1, whose two best rows are its own parallels. maxCrossRefsKept
-// is set well above it, and the walk fails if the dataset ever reads deeper,
-// so the margin is re-judged rather than assumed.
-const crossRefDeepestRead = 18
-
 // The next release's tables are the ones in force: each generated file's init
 // puts its table in place of the shipping one before any test runs.
 func TestTheTablesInForceAreTheNextReleases(t *testing.T) {

@@ -1,13 +1,14 @@
 package bibletext
 
 // The cross-references panel's list, assembled from the three sources that
-// can appear in it — the Gospel synopsis parallels, the publisher's own
-// apparatus (publisher_xrefs.go: the NKJV's, and only in a build that shows
-// it), and the Treasury of Scripture Knowledge — each under its own heading
-// and its own credit, never interleaved: a licensed publisher's citations
-// mixed into a list credited to OpenBible.info would misattribute both
-// (docs/SOURCE_FIELDS_DECISIONS.md). Kept apart from the popup that mounts it
-// so the composition can be tested without a window.
+// can appear in it — the Gospel parallels (the synopsis's same-event rows,
+// and in the next major release the same saying on another occasion after
+// them), the publisher's own apparatus (publisher_xrefs.go: the NKJV's, and
+// only in a build that shows it), and the Treasury of Scripture Knowledge —
+// each under its own heading and its own credit, never interleaved: a
+// licensed publisher's citations mixed into a list credited to OpenBible.info
+// would misattribute both (docs/SOURCE_FIELDS_DECISIONS.md). Kept apart from
+// the popup that mounts it so the composition can be tested without a window.
 //
 // With the publisher's apparatus showing, its block is the panel's primary
 // content and the Treasury moves into a disclosure beneath it: closed when
@@ -121,7 +122,8 @@ func verseRunsPhrase(chapter int, verses []int) string {
 // for the tests that pin the composition.
 type crossRefList struct {
 	Objects        []fyne.CanvasObject
-	Parallels      int
+	Parallels      int // same-occasion rows
+	OtherOccasions int // the same saying on another occasion (next major release)
 	PublisherRows  int
 	TSKRows        int
 	PublisherBlock bool              // the edition's block was rendered (rows or its empty state)
@@ -136,7 +138,8 @@ type crossRefList struct {
 // crossRefsForSelection's answer (parallels first, then the Treasury rows);
 // tskErr is the Treasury's load error when it has none, which a list with a
 // publisher block reports in the Treasury's own place rather than instead of
-// everything else.
+// everything else. The same-occasion parallels lead and the other-occasion
+// rows follow them, whatever order refs hands them over in.
 func buildCrossRefList(state *AppState, selected []Verse, refs []crossRef, tskErr error, pal palette, onTap func(crossRef)) crossRefList {
 	out := composeCrossRefList(state, selected, refs, tskErr, pal, onTap)
 	if !nextRelease {
@@ -153,14 +156,21 @@ func buildCrossRefList(state *AppState, selected []Verse, refs []crossRef, tskEr
 // composeCrossRefList is the list without the coverage note.
 func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tskErr error, pal palette, onTap func(crossRef)) crossRefList {
 	var out crossRefList
-	var tsk []crossRef
+	var others, tsk []crossRef
 	for _, c := range refs {
-		if c.Parallel {
+		switch {
+		case c.otherOccasion():
+			others = append(others, c)
+		case c.Parallel:
 			out.Parallels++
 			out.Objects = append(out.Objects, crossRefRow(state, c, pal, onTap))
-			continue
+		default:
+			tsk = append(tsk, c)
 		}
-		tsk = append(tsk, c)
+	}
+	out.OtherOccasions = len(others)
+	for _, c := range others {
+		out.Objects = append(out.Objects, crossRefRow(state, c, pal, onTap))
 	}
 	out.TSKRows = len(tsk)
 

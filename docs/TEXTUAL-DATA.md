@@ -663,7 +663,9 @@ under the same discipline:
 | `scripts/data/nkjv-wj-verses.json` | retired BSB derivation input | — | historical verse numbers; no longer used by BSB generation |
 | `assets/timings/bsb.json`, `web.json` | per-verse read-along alignment; verse 0 is the Psalm's superscription (116 per narration) | `scripts/audio-align` | timing only; no claim about the text |
 | `assets/timings/webbe.json` | per-verse read-along alignment | `scripts/audio-align` | timing, **and** the coverage claim in §8 — a chapter's presence here is what makes the app offer its recording |
-| `assets/parallels` | Gospel synopsis: 267 pericopes, each an event with its passage in whichever Gospels tell it | — | compiled for this app (commit fff5e4091, 2026-06-23) from the four Gospels' own text; not transcribed from a published synopsis — its 17 section names and its divisions match none of the standard outlines (Aland, Robertson, Huck, the Wikipedia harmony), and it carries divisions of its own (six Lukan doublets kept apart, two John passages placed twice). First-party content under the repository's licence; the app credits it as "synopsis" |
+| `assets/parallels/gospel_parallels.json` | Gospel synopsis: 267 pericopes, each an event with its passage in whichever Gospels tell it | — | compiled for this app (commit fff5e4091, 2026-06-23) from the four Gospels' own text; not transcribed from a published synopsis — its 17 section names and its divisions match none of the standard outlines (Aland, Robertson, Huck, the Wikipedia harmony), and it carries divisions of its own (six Lukan doublets kept apart, two John passages placed twice). First-party content under the repository's licence; the app credits it as "synopsis" |
+| `assets/parallels/gospel_parallels_next.json` | the next major release's synopsis: 271 pericopes | — | `gospel_parallels.json` with the twenty-two Gospel verses that are in no pericope placed where Stevens and Burton's harmony (1904, public domain) prints them: three pericopes extended, four of one Gospel each added (§9.4) |
+| `assets/parallels/gospel_occasions.json` | the next major release's same saying on another occasion: 102 groups, 297 passages, 274 pairs | — | verse pairings taken from Stevens and Burton's harmony (1904) and checked against Robertson's (1922), both public domain; references only, never their text (§9) |
 
 All active span tables now have committed generators. Regeneration is fail-closed:
 an unlocatable publisher marker stops generation instead of being replaced by a
@@ -724,3 +726,142 @@ copyright and no named narrator; the app therefore credits it as a synthetic voi
 rather than as a person, and NOTICE records the same. eBible also states that
 "World English Bible" is a trademark, which is why the mirrored files keep eBible's
 own names and the app does not present the recording as its own production.
+
+---
+
+## 9. The Gospel parallels: the same event, and the same saying on another occasion
+
+Everything in this section is the next major release's (`docs/NEXT.md`, the
+third piece): the shipping build embeds `gospel_parallels.json` as 1.2.19 did and
+has no other-occasion data at all. `parallels_next.go` embeds
+`gospel_parallels_next.json` and `gospel_occasions.json` and puts them in place
+with the `next` build tag.
+
+### 9.1 Two kinds, two files
+
+The synopsis (`gospel_parallels.json`; `gospel_parallels_next.json` in the next
+release) answers one question: where do the other Gospels tell **this event**?
+Its pericopes deliberately keep apart passages that
+share words but not an occasion — Luke's Beelzebul controversy, return of the
+unclean spirit, sign of Jonah, light of the body, teaching on anxiety, and
+mustard seed and leaven (Luke 11:14-13:21) stand in sets of their own, apart from
+Matthew's — because the harmonies place them on another occasion. A pericope row
+would have told the reader they are one event.
+
+`gospel_occasions.json` holds the other kind: **the same saying on another
+occasion**. Each group is one saying; each pair joins two of its passages that the
+harmonies place on different occasions. The pairs are listed one by one rather
+than every passage with every other, because some passages of a group are one
+occasion — Matthew 13:9 and Mark 4:9 are both the parable of the sower — and no
+row under this label may join those. The panel lists these rows after the
+synopsis rows and before the Treasury, each under the label `otherOccasionLabel`
+(crossref_panel.go) with the saying's title, and maps every passage through the
+versification tables (§2) exactly as it maps the synopsis and the Treasury.
+
+### 9.2 Sources [source]
+
+- **Primary:** William Arnold Stevens and Ernest DeWitt Burton, *A Harmony of the
+  Gospels for Historical Study*, third edition (New York: Charles Scribner's Sons,
+  1904), public domain. Scan: Internet Archive item `aharmonygospels01burtgoog`.
+  Appendix II, the table of sayings the evangelists assign to more than one
+  occasion, pp. 262-271 (page images n281-n290), and the harmony pages cited below.
+- **Second witness:** A. T. Robertson, *A Harmony of the Gospels for Students of
+  the Life of Christ* (New York: Harper & Brothers, 1922), public domain; Project
+  Gutenberg #36264. His list "Similar Incidents and Chief Repeated Sayings", his
+  section outline, and his notes.
+- **Taken:** verse pairings only. No printed text of either harmony is in the
+  repository; the group titles were written for the app in the WEB's wording.
+- **Not used:** Aland's *Synopsis*, the Wikipedia harmony and other licensed
+  harmonies were never the source of a pair.
+
+### 9.3 How the list was made
+
+1. Every row of Appendix II (229 rows) was transcribed and then read again against
+   the page images, row by row; the scan's OCR garbles digits (8/3, 6/5, 1/2), so
+   no row rests on OCR alone.
+2. Rows printing the same saying under several sections were merged into one
+   group; a pair is two passages Stevens and Burton place in different sections.
+   Two passages they place in one section are not paired, nor are two passages a
+   synopsis pericope already joins (`TestNoOtherOccasionPairIsOneSynopsisSet`).
+3. References were converted to WEB numbering. In the Gospels the Revised Version
+   that Stevens and Burton print keeps the KJV's verse numbers, which the WEB
+   shares everywhere but one place: their Matthew 23:13, the woe on shutting
+   people out of the Kingdom, is the WEB's 23:14 (group S84).
+4. 100 groups come from Appendix II. **S33** comes from the harmony page p. 139
+   (§94, n158), where Matthew 12:22-32 and Mark 3:22-30 are printed in brackets
+   beside Luke 11:14: the charge of casting out demons by Beelzebul, which the
+   appendix, a table of Jesus's own sayings, does not list. **R01** is Robertson's
+   alone — his "Blasphemous Accusation" (Sects. 61, 68, 106) adds Matthew
+   9:32-34 to that charge — and says so in its `source` field.
+5. Each group's `source` field names its pages and Robertson's verdict. Across
+   the 102: he agrees at verse level for 17, at section level (his list of
+   repeated sayings or a section heading) for 36, in general for 11 (his note
+   that Luke 12 repeats favourite sayings), and is silent on 38; for every pair
+   he places the two passages in different sections, so he never contradicts
+   "another occasion".
+6. Every passage was checked to exist in the WEB and to carry the saying.
+
+Mark 16:16 and 16:18 (S01, S76) are in the longer ending of Mark, which Stevens
+and Burton print in smaller type; the WEB and the BSB include it. Four pairs
+appear in two groups (one passage carrying two sayings, or the charge in both
+S33 and R01); the panel shows such a passage once.
+
+### 9.4 The verses that were in no pericope
+
+Twenty-two Gospel verses belong to no set of the shipping synopsis. In
+`gospel_parallels_next.json` they are placed by Stevens and Burton's harmony,
+with Robertson noted; every other set is the shipping file's, byte for byte
+(`parallels_states_test.go`):
+
+| verses | placed in | Stevens and Burton | Robertson |
+| --- | --- | --- | --- |
+| Matthew 4:23 | Preaching tour of Galilee (Matthew column added) | §40, p. 49, opposite Mark 1:39 and Luke 4:44 | agrees (Sect. 44) |
+| Matthew 4:24-25 | Healing the multitudes by the sea (Matthew column now 4:24-25, 12:15-21) | §47, p. 56 | places them in his Sect. 44 |
+| Luke 6:17-19 | Healing the multitudes by the sea (Luke column added) | §47, pp. 56-57 | places them with the Sermon (Sect. 54) |
+| Luke 6:43-45 | A tree and its fruit (Luke column added) | §49, pp. 69-70, opposite Matthew 7:16-21 | agrees (Sect. 54) |
+| Luke 6:24-26 | Woes on the rich and the satisfied (new, Luke only) | §49, p. 59: no parallel | no verse parallel |
+| Luke 21:37-38 | Teaching daily in the Temple (new, Luke only) | §131, p. 195: "Cf. Mark 11:19" only | sets it level with Mark 11:19 |
+| John 11:55-57 | The Passover draws near (new, John only) | §118, pp. 166-167: no parallel | Sect. 128a, John only |
+| John 13:31-35 | The new commandment (new, John only) | §134, p. 203: no parallel | Sect. 147, John only |
+
+`TestTheGospelVersesInNoSynopsisSet` holds every WEB Gospel verse to a set in
+the next release, and the shipping build to exactly these twenty-two outside one;
+`TestTheTwentyTwoVersesArePlacedWhereTheHarmonyPrintsThem` holds the placements.
+The new sets hold one Gospel each and so show no rows; they place the verses.
+
+### 9.5 What was left out
+
+- **The pounds and the talents** (Luke 19:12-27, Matthew 25:14-30): two similar
+  parables in both harmonies, given by Stevens and Burton only as "Cf." (p. 165);
+  their shared saying is in S43.
+- **John 17:2** with "all things delivered to me" (S31), **Luke 12:46** with the
+  weeping-and-gnashing refrain (S26), **Luke 19:41-44** as a third lament over
+  Jerusalem, and **Mark 11:19** with Luke 21:37-38: a "Cf.", a theme, or a passage
+  that does not carry the saying.
+- Robertson's wider ranges (Matthew 6:34, Mark 10:12), verses the RV and the BSB
+  lack (Mark 7:16, 11:26), the Baptist's recollection of the baptism (John
+  1:29-34), and Robertson's thematic echoes and similar incidents.
+- **Same-occasion pairs.** Inside these groups, 8 pairs across Gospels and 9
+  within one Gospel are passages Stevens and Burton place in one section (a
+  refrain repeated within a discourse, or Matthew placing a saying elsewhere in
+  the same discourse) that no synopsis set joins. They are not under the
+  other-occasion label, which would misdescribe them.
+
+Two Luke verses of the six doublet sets pair with nothing in either harmony: the
+request for a sign (11:16), answered at 11:29, and "Don't be afraid, little
+flock" (12:32). Every other verse of those sets now reaches Matthew
+(`TestTheSixLukanDoubletsAreLinked`).
+
+### 9.6 Validation [measured]
+
+```
+go test -tags next -run 'Occasion|LukanDoublets|TwentyTwo|GospelVerses|GospelParallels|Synopsis' -v .
+# every row against the downloaded texts, both kinds of parallel included
+BIBLETEXT_XREF_REALDATA=1 go test -tags next -run TestEveryCrossReferenceRowOpensScriptureTheTextHas -v .
+```
+
+The first loads the file whole (no group, passage or pair dropped; 102, 297 and
+274 pinned), holds every pair outside every synopsis set, maps every passage into
+the WEB, WEB Catholic, BSB and NKJV numbering without shortening a range, and pins
+the order, label and de-duplication of the rows. The second opens every row of
+every panel in each downloaded translation.

@@ -128,7 +128,7 @@ real files; `*_test.go` files are omitted.
 | `versions.go` | `BibleVersion` registry + `bibleSource` interface (web/BSB/licensed), `canSelect`, switching |
 | `annotation.go` | Verse-anchored annotation store (foundation for notes/highlights) |
 | `crossrefs.go` | OpenBible.info TSK cross-references: fetch-once/cache zip, OSIS parsing, per-verse index |
-| `parallels.go` | Embedded Gospel synopsis (`assets/parallels/gospel_parallels.json`); parallel-passage lookup |
+| `parallels.go` | Embedded Gospel synopsis (`assets/parallels/gospel_parallels.json`); parallel-passage lookup; reader of the sayings on another occasion (`gospel_occasions.json`), which `parallels_next.go` embeds in the next major release only |
 | `red_letter.go`, `red_letter_{web,bsb,nkjv}_data.go` | Per-edition publisher-marked words-of-Christ spans + red-letter toggle |
 | `verse_of_day.go` | Daily-rotating Christ-centred verse + jump-to-context |
 
@@ -512,7 +512,14 @@ app stop / window-close (raw `nativeAudioStop()` from the lifecycle hooks — ne
 - **Gospel parallels** ([parallels.go](parallels.go)) — an **embedded** synopsis
   (`assets/parallels/gospel_parallels.json`, `//go:embed`). For a Gospel verse,
   the same event in the other Gospels is surfaced first, tagged **Parallel**
-  (`crossRef.Parallel = true`), so it works without any network.
+  (`crossRef.Parallel = true`), so it works without any network. In the next
+  major release ([docs/NEXT.md](docs/NEXT.md)), `parallels_next.go` embeds a
+  second file, `gospel_occasions.json`, which pairs passages that carry the
+  same saying on another occasion (the Lord's Prayer in Matthew 6 and Luke
+  11); its rows follow the synopsis rows, ahead of the Treasury, under their
+  own label (`crossRef.OtherOccasion`, `otherOccasionLabel`), and hide any
+  Treasury row inside their passage. Provenance:
+  [docs/TEXTUAL-DATA.md](docs/TEXTUAL-DATA.md) §9.
 - **Red-letter mode** ([red_letter.go](red_letter.go),
   `red_letter_{web,bsb,nkjv}_data.go`) — publisher-marked spans for each edition;
   toggle persisted in preferences and folded into the reading fingerprint.

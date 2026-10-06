@@ -5,10 +5,25 @@ package bibletext
 // offered in the cross-references panel, tagged as a "parallel" (distinct from the
 // Treasury-of-Scripture-Knowledge cross-references in crossrefs.go). The dataset is
 // embedded in the binary (no network, works offline), parsed once on first use.
+//
+// The next major release (docs/NEXT.md) adds a second kind, in a file of its
+// own, gospel_occasions.json: the same saying on another occasion. The synopsis
+// keeps apart what the harmonies treat as two occasions — Luke's Lord's Prayer
+// is not the Sermon on the Mount's, nor his lament over Jerusalem the one
+// Matthew sets in the Temple — and a pericope row would claim they are one
+// event. So these are pairs of passages, each pair two occasions of one
+// saying, never a pericope, and their rows say so (otherOccasionLabel). The
+// pairings are taken from Stevens and Burton's harmony (1904), almost all from
+// its table of sayings assigned to more than one occasion, and checked against
+// Robertson's (1922); docs/TEXTUAL-DATA.md section 9 has the provenance. The
+// same release places the twenty-two Gospel verses that are in no synopsis set
+// (gospel_parallels_next.json). parallels_next.go embeds both files and puts
+// them in place; without the next tag neither is in the binary.
 
 import (
 	_ "embed"
 	"encoding/json"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,6 +31,10 @@ import (
 
 //go:embed assets/parallels/gospel_parallels.json
 var gospelParallelsJSON []byte
+
+// gospelOccasionsJSON is gospel_occasions.json in the next major release
+// (parallels_next.go), and nil in the shipping build, which lists no such rows.
+var gospelOccasionsJSON []byte
 
 // gospelColumns are the four Gospels in canonical (synopsis-column) order, mapping
 // the JSON's lowercase keys to the app's canonical book names.
@@ -206,4 +225,161 @@ func spanToCrossRef(book string, s gSpan, title string) crossRef {
 		c.EndCh, c.EndV = s.ch2, s.v2
 	}
 	return c
+}
+
+// gPassage is one passage of one Gospel.
+type gPassage struct {
+	book  string
+	spans []gSpan
+}
+
+// gOccasionGroup is one saying the Gospels record on more than one occasion:
+// the passages that carry it, and the pairs of them that are two occasions.
+// The pairs are explicit rather than every passage with every other because
+// some passages of a group are ONE occasion — Matthew 13:9 and Mark 4:9 are
+// the parable of the sower in both, already a synopsis parallel — and a row
+// under the other-occasion label must not join those.
+type gOccasionGroup struct {
+	title    string
+	passages []gPassage
+	pairs    [][2]int // indexes into passages
+}
+
+var (
+	occasionOnce   sync.Once
+	occasionGroups []gOccasionGroup
+)
+
+// rawOccasions mirrors gospel_occasions.json (id, source and about are for
+// the reader of the file; the panel reads the rest).
+type rawOccasions struct {
+	Groups []struct {
+		ID       string      `json:"id"`
+		Title    string      `json:"title"`
+		Passages []string    `json:"passages"`
+		Pairs    [][2]string `json:"pairs"`
+	} `json:"groups"`
+}
+
+func loadGospelOccasions() {
+	occasionGroups = parseGospelOccasions(gospelOccasionsJSON)
+}
+
+// parseGospelOccasions reads the other-occasion groups. A passage that does
+// not parse, or a pair naming a passage the group does not list, is dropped
+// rather than guessed at; a group left with no pair is dropped whole. The
+// tests hold the embedded file to dropping nothing.
+func parseGospelOccasions(data []byte) []gOccasionGroup {
+	var raw rawOccasions
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil
+	}
+	var out []gOccasionGroup
+	for _, rg := range raw.Groups {
+		g := gOccasionGroup{title: strings.TrimSpace(rg.Title)}
+		index := map[string]int{}
+		for _, ref := range rg.Passages {
+			p, ok := parseGospelPassage(ref)
+			if !ok {
+				continue
+			}
+			index[ref] = len(g.passages)
+			g.passages = append(g.passages, p)
+		}
+		for _, pr := range rg.Pairs {
+			a, okA := index[pr[0]]
+			b, okB := index[pr[1]]
+			if okA && okB && a != b {
+				g.pairs = append(g.pairs, [2]int{a, b})
+			}
+		}
+		if len(g.pairs) > 0 {
+			out = append(out, g)
+		}
+	}
+	return out
+}
+
+// parseGospelPassage reads "Matthew 6:9-13": a Gospel's canonical name, then a
+// reference in parseGospelRef's grammar.
+func parseGospelPassage(s string) (gPassage, bool) {
+	s = strings.TrimSpace(s)
+	i := strings.LastIndexByte(s, ' ')
+	if i <= 0 {
+		return gPassage{}, false
+	}
+	book := s[:i]
+	if !isGospelBook(book) {
+		return gPassage{}, false
+	}
+	spans := parseGospelRef(s[i+1:])
+	if len(spans) == 0 {
+		return gPassage{}, false
+	}
+	return gPassage{book: book, spans: spans}, true
+}
+
+// gospelOccasionsForVerse returns the passages that carry the same saying as
+// the verse on another occasion, each tagged Parallel and OtherOccasion and
+// carrying the saying's title. The verse's own Gospel is NOT skipped, as the
+// synopsis skips it: Luke tells the lamp under a basket at 8:16 and again at
+// 11:33, and that pair is the point. Only a passage holding the verse itself
+// is left out. Within a group the passages come in Gospel order; groups come
+// in file order. Numbered in the reference (WEB); the caller maps them. None
+// in the shipping build, which has no such data.
+func gospelOccasionsForVerse(book string, ch, v int) []crossRef {
+	occasionOnce.Do(loadGospelOccasions)
+	if len(occasionGroups) == 0 || !isGospelBook(book) {
+		return nil
+	}
+	var out []crossRef
+	for i := range occasionGroups {
+		g := &occasionGroups[i]
+		var partners []int
+		taken := map[int]bool{}
+		for _, pr := range g.pairs {
+			for side := 0; side < 2; side++ {
+				here, there := g.passages[pr[side]], g.passages[pr[1-side]]
+				if here.book != book || !spansContain(here.spans, ch, v) {
+					continue
+				}
+				if there.book == book && spansContain(there.spans, ch, v) {
+					continue
+				}
+				if !taken[pr[1-side]] {
+					taken[pr[1-side]] = true
+					partners = append(partners, pr[1-side])
+				}
+			}
+		}
+		sort.SliceStable(partners, func(a, b int) bool {
+			return passageBefore(g.passages[partners[a]], g.passages[partners[b]])
+		})
+		for _, p := range partners {
+			for _, s := range g.passages[p].spans {
+				c := spanToCrossRef(g.passages[p].book, s, g.title)
+				c.OtherOccasion = true
+				out = append(out, c)
+			}
+		}
+	}
+	return out
+}
+
+// passageBefore orders passages by Gospel, then by where they start.
+func passageBefore(a, b gPassage) bool {
+	if ga, gb := gospelOrder(a.book), gospelOrder(b.book); ga != gb {
+		return ga < gb
+	}
+	sa, sb := a.spans[0], b.spans[0]
+	return sa.ch1 < sb.ch1 || (sa.ch1 == sb.ch1 && sa.v1 < sb.v1)
+}
+
+func gospelOrder(book string) int {
+	for i, g := range gospelColumns {
+		if g.book == book {
+			return i
+		}
+	}
+	return len(gospelColumns)
 }

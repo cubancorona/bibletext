@@ -48,10 +48,12 @@ Use the smallest seam that keeps both states readable:
    The next state's is a generated `<name>_next.go` with `//go:build next`
    that declares its own table and installs it in place of the current one
    in an `init` function, so every reader of the table reads it and nothing
-   else changes (`versification_data_next.go`); or, for an embedded asset, a
-   second asset beside the first. A test reads both generated files and
-   fails if they differ anywhere the piece does not say they should
-   (`versification_states_test.go`).
+   else changes (`versification_data_next.go`). An embedded asset no
+   generator owns gets a second asset beside the first, embedded by a
+   `//go:build next` file whose `init` puts it in place the same way
+   (`parallels_next.go`). A test reads both files and fails if they differ
+   anywhere the piece does not say they should (`versification_states_test.go`,
+   `parallels_states_test.go`), so a fix made to one and not the other fails.
 5. **Tests.** A test that holds in both states stays untagged. One that pins
    current behaviour the next release changes gets `//go:build !next`, and its
    counterpart for the next release goes in a `_next_test.go` file with
@@ -131,11 +133,17 @@ Two checks, and each is tested against a planted control:
    each `_current.go` file is deleted and its `_next.go` partner loses its
    constraint; each generator's next rule becomes its only rule, its shipping
    file is regenerated from it and its `_next.go` file deleted, with the test
-   that compares the two (`versification_states_test.go`); each pinned file
+   that compares the two (`versification_states_test.go`); each next asset
+   replaces the shipping one under its name (`gospel_parallels_next.json`
+   becomes `gospel_parallels.json`), an asset the shipping build lacks is
+   embedded where the rest are (`gospel_occasions.json`, in `parallels.go`),
+   and the file that put them in place is deleted with the test that compares
+   them (`parallels_next.go`, `parallels_states_test.go`); each pinned file
    kept per state (`nkjv_off_site_next.sha256`) replaces the shipping one and
    stays as its copy, and the register of pages it may differ on
    (`nextReleaseSitePages`) empties; `!next` tests are deleted and `next`
-   tests lose their constraint.
+   tests lose their constraint, and a value chosen in a test by the switch
+   (`crossRefDeepestRead`) keeps its next one.
 3. `grep -rni 'nextrelease\|go:build.*next' --include='*.go' .` finds the
    switch files, the release guard (`next_release_guard_test.go`) and the
    site guard with its empty register (`cmd/websitegen/site_off_golden_test.go`)
@@ -151,7 +159,7 @@ the next major version starts filling it.
 
 Three pieces were reviewed and parked while 1.2.19 was prepared. Each is
 ported as a change, not merged: `main` already holds earlier work from the same
-lines under different commits. The first two are ported; the third comes next.
+lines under different commits. All three are ported.
 
 ### 1. Every reader's NKJV refreshed at cache epoch 8, with an offline bridge
 
@@ -276,8 +284,9 @@ next one differs only on the four Esther 1 pages the piece names.
 
 The deepest cross-reference row a panel reads (`crossRefDeepestRead`) is the
 twentieth in the shipping build, WEB Catholic's Genesis 41:42, whose rows into
-the Greek Esther it cannot show, and the eighteenth in the next release, first
-at the WEB's Matthew 10:1. The notice pages leave the verse off 28 chapters'
+the Greek Esther it cannot show. With the Greek Esther mapped it was the
+eighteenth, first at the WEB's Matthew 10:1; with the third piece too it is
+the twenty-first (below). The notice pages leave the verse off 28 chapters'
 links in the shipping build and 20 in the next release. On the real site the
 next release rewrites the forty Esther chapter pages, ten in each of the four
 editions, and no other.
@@ -301,21 +310,138 @@ Open decisions:
 
 ### 3. "Same saying, another occasion" among the Gospel parallels
 
-A new group of rows in the parallels panel for passages that share a saying
-but, by the harmonies, not an occasion (Luke's Lord's Prayer beside
-Matthew's, among others), from Stevens and Burton's Harmony of the Gospels
-(1904, public domain); and a set for each of the 22 Gospel verses that belong
-to no synopsis set today.
+**Ported, behind the switch.** The synopsis answers one question: where do
+the other Gospels tell this event? It deliberately keeps apart passages that
+share words but, by the harmonies, not an occasion: Luke's Lord's Prayer,
+lost sheep, faithful servant and lament over Jerusalem, and six Lukan sets
+beside Matthew's Beelzebul controversy, sign of Jonah and teaching on anxiety.
+A reader on either side is offered nothing. In the next release the
+cross-references panel lists, after the synopsis rows and before the
+Treasury, the passages that carry the same saying on another occasion, each
+under its own label and the saying's title; and the twenty-two Gospel verses
+that belong to no synopsis set are placed. The sources are Stevens and
+Burton's *Harmony of the Gospels for Historical Study* (1904), checked
+against Robertson's harmony (1922), both public domain; only verse pairings
+are taken (`TEXTUAL-DATA.md` §9).
+
+The data, both chosen by the switch (seam 4):
+
+- `assets/parallels/gospel_occasions.json`: 102 groups, one saying each,
+  with 297 passages and 274 pairs, each pair two passages placed on
+  different occasions. Only the next release embeds it.
+- `assets/parallels/gospel_parallels_next.json`: the synopsis with the
+  twenty-two verses placed. Matthew 4:23 joins the preaching tour of
+  Galilee; Matthew 4:24-25 and Luke 6:17-19 join the healing of the
+  multitudes by the sea; Luke 6:43-45 joins a tree and its fruit. Luke
+  6:24-26, 21:37-38, John 11:55-57 and 13:31-35, which have no parallel in
+  the harmony, become four sets of one Gospel each, which show no rows but
+  place the verses.
+- `gospel_parallels.json` is byte for byte 1.2.19's. `parallels_next.go`
+  embeds the two next files and puts them in place in its `init`.
+  `parallels_states_test.go` fails unless the two synopses differ in exactly
+  those three sets and four new ones.
+
+Where the switch is read:
+
+- `crossRefsForSelection` (`crossrefs.go`) looks up the other-occasion rows
+  only `if nextRelease`. Without the tag there is no data to look up either.
+- `crossRef.otherOccasion()` is the one test of a row's kind, read by the
+  list (`composeCrossRefList`) and the row (`crossRefRow`). Without the tag
+  it is false, so the label and its badge are compiled out.
+
+The shared code, which does what 1.2.19 does when there are no
+other-occasion rows:
+
+- The reader of the occasions file and its lookup (`parallels.go`).
+- `addOtherOccasionRow`, which lists a passage once, at its widest, and
+  never one a row above it covers.
+- `crossRefHidden`, what the rows above the Treasury hide. A synopsis row
+  hides a Treasury row with its own label, as before; an other-occasion row
+  hides every Treasury row inside its passage. Without the tag it holds
+  labels alone.
+- `treasuryRowsFor`, which now takes a `crossRefHidden` rather than a set of
+  labels.
+
+The label is one constant, `otherOccasionLabel` (`crossref_panel.go`), drawn
+as an outlined tag where the synopsis's is filled.
+
+The tests:
+
+- `parallels_occasions_test.go` and `parallels_states_test.go` hold in both
+  states: the file reader, the de-duplication and the hiding on synthetic
+  rows, and the two synopses' difference.
+- `parallels_next_test.go` holds the reviewed behaviour:
+  - the file loads whole;
+  - no pair lies inside one synopsis set;
+  - the rows' order, label and de-duplication;
+  - the kingdom woe mapped in every translation;
+  - every passage mapped whole in every translation;
+  - the six Lukan doublets and the named pairs;
+  - the twenty-two verses where the harmony prints them;
+  - the depth walk's bounds over every Gospel selection of up to six verses
+    and every whole chapter.
+- `parallels_current_test.go` pins the shipping build: no other-occasion
+  data or rows, the twenty-two verses in no set, and a row marked as another
+  occasion still drawn as the synopsis's.
+- The kingdom woe test (`crossrefs_versification_test.go`) reads both kinds
+  of row, so it holds in both states. In the next release Luke 11:52 is the
+  kingdom woe's other occasion and hides the Treasury's copy of it, so the
+  test gives the kingdom woe a second Treasury row (Isaiah 22:22) that
+  nothing hides.
+
+Measured over the real texts, in all four editions, every single-verse panel
+is identical to 1.2.19's without the tag. With it, every panel lists exactly
+the reviewed branch's 3,174 other-occasion rows, and only 2,042 panels
+change. Where a panel differs from the branch beyond that, the cause is a
+cross-reference fix made on `main` since the branch was cut, or the Greek
+Esther:
+
+- The kingdom woe's Treasury row from Luke 11:52 now opens the kingdom woe,
+  so the other-occasion row hides it.
+- Matthew 18:35's row to Mark 11:25 now opens Mark 11:26, which no
+  other-occasion row covers.
+- A range now ends at the last verse a translation has.
+
+The deepest Treasury row a panel reads (`crossRefDeepestRead`) is the
+twenty-first, Matthew 10:17 in every edition. Five of its best rows lie
+inside passages its chapter lists as the same saying on another occasion: two
+are Matthew 10:17's own, three its neighbours'. That is inside the 32 the
+index keeps. The walk measures the depth between what every selection
+holding a verse hides and the most any selection hides
+(`crossRefSelectionsHide`). The narrower bound now leaves out an
+other-occasion row that a synopsis row of the chapter covers. A selection
+holding both verses lists the synopsis row instead, which hides by label
+alone; the only verse this affects is Luke 4:24.
+
+Trying it: a build with the switch on writes nothing new. The verse a
+reader selects and the rows shown are not stored.
+
+On the day the major version ships, `NOTICE`'s sentence about
+`gospel_parallels_next.json` moves to `gospel_parallels.json`, which that
+file becomes, and `TEXTUAL-DATA.md` §9 loses its note that it is the next
+release's.
 
 Open decisions:
 
-- The label: drafted as "Same saying, another occasion"; the alternatives are
-  "Said on another occasion" and "Repeated on another occasion".
-- Leave out the one group taken from Robertson's harmony (1922) alone.
-- Place the 22 verses as new sets rather than changing three existing sets.
-- Keep the five pairings the harmony marks only "Cf." out.
-
-When ported: the change meets the cross-reference code that has moved on since
-(the Treasury row lookup's signature, the panel depth measurement, the kingdom
-woe test), and the deepest cross-reference read is measured again with the
-switch on.
+- **The label.** Drafted as "Same saying, another occasion"; the
+  alternatives are "Said on another occasion" and "Repeated on another
+  occasion". Two groups (S33, R01) are a charge made by Jesus's opponents,
+  not his own saying, so the label must not say "Jesus said".
+- **Robertson's group.** R01, the one group taken from Robertson's harmony
+  alone, is in the file; leave it out or keep it.
+- **Where the twenty-two verses go.** Ported as reviewed, which extends three
+  sets (39, 49 and 71) and adds four. The alternative is to leave every
+  existing set as 1.2.19 has it and place all twenty-two in new sets.
+- **The "Cf." pairings.** Keep out the five the harmony marks only "Cf.".
+  These are the pounds and the talents, John 17:2, Luke 12:46, Luke 19:41-44
+  and Mark 11:19 beside Luke 21:37-38 (`TEXTUAL-DATA.md` §9.5).
+- **The credit and the README.** The panel's footer still reads "Gospel
+  parallels: synopsis". The harmonies, both public domain, are credited in
+  `NOTICE` and `TEXTUAL-DATA.md` §9; whether the footer names them too, and
+  how the README describes the second kind, waits on the label.
+- **Two hiding rules.** One rule for both kinds would hide verse-level
+  Treasury rows inside whole pericopes. If it is wanted, `crossRefDeepestRead`
+  is measured again with the real-data walk.
+- **On a device.** It has been seen only in `TestRenderCrossRefPanel`'s
+  phone-sized renders (Matthew 12:25, Luke 11:2), not yet on a device:
+  `scripts/run-ios-device.sh --next`.

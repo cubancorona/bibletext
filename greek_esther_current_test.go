@@ -27,15 +27,6 @@ const (
 	greekAdditionUnplacedSeen     = "the numbering here does not"
 )
 
-// crossRefDeepestRead is the furthest down a verse's rows any panel reads,
-// measured by the walk in crossrefs_realdata_test.go over the 2026-08-31
-// dataset in all four translations, for every selection that can hold the
-// verse (crossRefDeepestReadable): the twentieth row, for WEB Catholic's
-// Genesis 41:42, whose twenty rows include eight into Greek Esther.
-// maxCrossRefsKept is set well above it, and the walk fails if the dataset
-// ever reads deeper, so the margin is re-judged rather than assumed.
-const crossRefDeepestRead = 20
-
 // No verse of the Greek Esther maps into the Hebrew Esther or back.
 func TestTheGreekEstherCannotBeMapped(t *testing.T) {
 	for _, tc := range []struct {

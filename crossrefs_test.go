@@ -320,8 +320,9 @@ func TestTheCapCountsOnlyRowsTheReaderCanSee(t *testing.T) {
 // THE INDEX KEEPS EACH VERSE'S BEST maxCrossRefsKept ROWS, EIGHT BYTES EACH.
 // It is held for as long as the app runs, on every platform. As crossRefs,
 // every row kept, it came to some 53 MB; the panel never reads past a
-// verse's twentieth row (crossRefDeepestRead), so the rest need not be kept,
-// and a row needs only its books, numbers and votes.
+// verse's twentieth row in the shipping build, or its twenty-first in the next
+// major release (crossRefDeepestRead), so the rest need not be kept, and a row
+// needs only its books, numbers and votes.
 func TestTheIndexKeepsEachVersesBestRows(t *testing.T) {
 	var rows strings.Builder
 	n := maxCrossRefsKept + 8 // even, so the rows pair off

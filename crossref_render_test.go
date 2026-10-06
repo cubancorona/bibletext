@@ -116,13 +116,18 @@ func TestRenderCrossRefPanel(t *testing.T) {
 		if err := png.Encode(f, img); err != nil {
 			t.Fatal(err)
 		}
-		t.Logf("%s: parallels=%d publisher=%d treasury=%d objects=%d", name, lst.Parallels, lst.PublisherRows, lst.TSKRows, len(lst.Objects))
+		t.Logf("%s: parallels=%d other-occasion=%d publisher=%d treasury=%d objects=%d", name, lst.Parallels, lst.OtherOccasions, lst.PublisherRows, lst.TSKRows, len(lst.Objects))
 	}
 	render("john3-16-off", "John", 3, 16, 16, false, false) // the control: today's panel
 	render("john3-16-on", "John", 3, 16, 16, true, false)
 	render("john3-16-on-open", "John", 3, 16, 16, true, true)
 	render("john3-1to3-on", "John", 3, 1, 3, true, false)
 	render("matt3-1-on", "Matthew", 3, 1, 1, true, false) // parallels + publisher + Treasury
+	// With the next tag (docs/NEXT.md), both kinds of parallel and the
+	// Treasury, and the same saying on another occasion alone; without it,
+	// the shipping build's panels for the same verses.
+	render("matt12-25-off", "Matthew", 12, 25, 25, false, false)
+	render("luke11-2-off", "Luke", 11, 2, 2, false, false)
 	render("psalm3-1-on", "Psalms", 3, 1, 1, true, false) // a title note
 	render("psalm3-2-on", "Psalms", 3, 2, 2, true, false) // the empty state
 }

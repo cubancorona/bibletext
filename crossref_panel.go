@@ -260,14 +260,21 @@ func crossRefRow(state *AppState, c crossRef, pal palette, onTap func(crossRef))
 	ref.TextSize = 16
 
 	// The reference line, with a "Parallel" tag for Gospel-synopsis entries.
+	// A row of the same saying on another occasion is not the same event and
+	// does not wear that tag: it carries its own label, on a line of its own
+	// because the label is longer than the tag and a phone has no room for it
+	// beside a long reference.
 	var refLine fyne.CanvasObject = ref
-	if c.Parallel {
+	if c.Parallel && !c.otherOccasion() {
 		refLine = container.NewHBox(container.NewCenter(ref), container.NewCenter(parallelBadge(pal)))
 	}
 	lines := []fyne.CanvasObject{refLine}
+	if c.otherOccasion() {
+		lines = append(lines, container.NewHBox(otherOccasionBadge(pal)))
+	}
 
 	// For a parallel, the pericope title ("The Beatitudes") is the useful context,
-	// so show it above the verse preview.
+	// so show it above the verse preview; for another occasion, the saying's.
 	if c.Parallel && c.Title != "" {
 		t := canvas.NewText(c.Title, pal.TextMuted)
 		t.TextSize = 12
@@ -301,6 +308,25 @@ func parallelBadge(pal palette) fyne.CanvasObject {
 	t.TextStyle = fyne.TextStyle{Bold: true}
 	t.TextSize = 9
 	bg := canvas.NewRectangle(pal.Accent)
+	bg.CornerRadius = 5
+	return container.NewStack(bg, container.New(layout.NewCustomPaddedLayout(2, 2, 7, 7), t))
+}
+
+// otherOccasionLabel is the label on a row of the second kind of Gospel
+// parallel (parallels.go): the same saying, recorded on an occasion other
+// than the verse's. Reader-facing wording, in one place. The next major
+// release's (docs/NEXT.md), where its wording is an open decision.
+const otherOccasionLabel = "Same saying, another occasion"
+
+// otherOccasionBadge marks such a row: the accent's outline where the
+// parallel tag is filled, so the two kinds read as related and different.
+func otherOccasionBadge(pal palette) fyne.CanvasObject {
+	t := canvas.NewText(otherOccasionLabel, pal.Accent)
+	t.TextStyle = fyne.TextStyle{Bold: true}
+	t.TextSize = 10
+	bg := canvas.NewRectangle(color.Transparent)
+	bg.StrokeColor = pal.Accent
+	bg.StrokeWidth = 1
 	bg.CornerRadius = 5
 	return container.NewStack(bg, container.New(layout.NewCustomPaddedLayout(2, 2, 7, 7), t))
 }
