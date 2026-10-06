@@ -21,6 +21,8 @@ package bibletext
 
 import (
 	"archive/zip"
+	"debug/macho"
+	"encoding/binary"
 	"go/ast"
 	"go/build/constraint"
 	"go/parser"
@@ -380,6 +382,53 @@ func TestReleasePathsVerifyTheirArtifactsAreNotNext(t *testing.T) {
 		`build/websitegen -out "$OUT"`)
 }
 
+// nextUniversal joins Mach-O executables into one universal binary the way
+// lipo does: a big-endian header naming each slice's cputype, offset and size,
+// then the slices, each at a 16 KiB boundary. fat64 writes the 64-bit form
+// (lipo -fat64). The verifier reads the header itself, so this needs no lipo
+// and runs on every CI runner.
+func nextUniversal(t *testing.T, out string, fat64 bool, slices ...string) string {
+	t.Helper()
+	const align = 14
+	be := binary.BigEndian
+	magic, entry := uint32(macho.MagicFat), 20
+	if fat64 {
+		magic, entry = macho.MagicFat+1, 32
+	}
+	header := be.AppendUint32(be.AppendUint32(nil, magic), uint32(len(slices)))
+	var body []byte
+	offset := (8 + entry*len(slices) + 1<<align - 1) &^ (1<<align - 1)
+	for _, path := range slices {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f, err := macho.Open(path)
+		if err != nil {
+			t.Fatalf("%s is not a Mach-O executable: %v", path, err)
+		}
+		header = be.AppendUint32(header, uint32(f.Cpu))
+		header = be.AppendUint32(header, f.SubCpu)
+		f.Close()
+		if fat64 {
+			header = be.AppendUint64(be.AppendUint64(header, uint64(offset)), uint64(len(b)))
+			header = be.AppendUint32(be.AppendUint32(header, align), 0)
+		} else {
+			header = be.AppendUint32(be.AppendUint32(header, uint32(offset)), uint32(len(b)))
+			header = be.AppendUint32(header, align)
+		}
+		start := offset - 8 - entry*len(slices)
+		body = append(body, make([]byte, start-len(body))...)
+		body = append(body, b...)
+		offset = (offset + len(b) + 1<<align - 1) &^ (1<<align - 1)
+	}
+	header = append(header, make([]byte, 8+entry*len(slices)-len(header))...)
+	if err := os.WriteFile(out, append(header, body...), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
 // The verifier itself, against binaries built with the tag each way it can
 // arrive, plus packages and files it must refuse because it cannot read them.
 func TestVerifyNotNextRefusesTaggedBuilds(t *testing.T) {
@@ -469,11 +518,30 @@ func TestVerifyNotNextRefusesTaggedBuilds(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, tc := range []struct {
+	// The Mac builds join two architectures built one at a time, so the tag
+	// can reach one and not the other, and `go version -m` reads only the
+	// first slice it finds.
+	macIntel := build("mac-amd64", []string{"GOOS=darwin", "GOARCH=amd64"}, "-trimpath")
+	macArm := build("mac-arm64", []string{"GOOS=darwin", "GOARCH=arm64"}, "-trimpath")
+	macIntelNext := build("mac-amd64-next", []string{"GOOS=darwin", "GOARCH=amd64"}, "-tags", "next")
+	macArmNext := build("mac-arm64-next", []string{"GOOS=darwin", "GOARCH=arm64", "GOFLAGS=-tags=next"})
+	universal := func(name string, fat64 bool, slices ...string) string {
+		return nextUniversal(t, filepath.Join(dir, name), fat64, slices...)
+	}
+	plainUniversal := universal("universal-plain", false, macIntel, macArm)
+	truncated := filepath.Join(dir, "universal-truncated")
+	if b, err := os.ReadFile(plainUniversal); err != nil {
+		t.Fatal(err)
+	} else if err := os.WriteFile(truncated, b[:len(b)-1], 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	type verifierCase struct {
 		name     string
 		artifact string
 		refusal  string // empty: must pass
-	}{
+	}
+	cases := []verifierCase{
 		{"a plain build", plain, ""},
 		{"other tags, one of them starting with next", otherTags, ""},
 		{"a bundle of a plain build", pack("plain.aab", "base/lib/arm64-v8a/libBibleText.so", plain), ""},
@@ -484,7 +552,31 @@ func TestVerifyNotNextRefusesTaggedBuilds(t *testing.T) {
 		{"an APK carrying it", pack("next.apk", "lib/arm64-v8a/libBibleText.so", fromEnv), "built with the next tag"},
 		{"a package with no native library", pack("empty.aab", "", ""), "no native library"},
 		{"a file Go did not build", notGo, "no Go build information"},
-	} {
+		{"a universal binary of plain builds", plainUniversal, ""},
+		{"a 64-bit universal binary of plain builds", universal("universal64-plain", true, macIntel, macArm), ""},
+		{"a universal binary whose second slice carries it", universal("universal-arm-next", false, macIntel, macArmNext), "(arm64 slice) was built with the next tag"},
+		{"a universal binary whose first slice carries it", universal("universal-intel-next", false, macIntelNext, macArm), "(x86_64 slice) was built with the next tag"},
+		{"a 64-bit universal binary carrying it", universal("universal64-arm-next", true, macIntel, macArmNext), "(arm64 slice) was built with the next tag"},
+		{"a universal binary cut short", truncated, "slice lies outside the file"},
+	}
+	// Where lipo is installed (the macOS runner, a Mac), the binaries the
+	// release paths actually ship are made by it: the same cases from its
+	// output, so the hand-made header above cannot drift from the real one.
+	if lipo, err := exec.LookPath("lipo"); err == nil {
+		join := func(name string, slices ...string) string {
+			out := filepath.Join(dir, name)
+			if b, err := exec.Command(lipo, append([]string{"-create", "-output", out}, slices...)...).CombinedOutput(); err != nil {
+				t.Fatalf("lipo: %v\n%s", err, b)
+			}
+			return out
+		}
+		cases = append(cases,
+			verifierCase{"lipo: plain builds", join("lipo-plain", macIntel, macArm), ""},
+			verifierCase{"lipo: the second slice carries it", join("lipo-arm-next", macIntel, macArmNext), "(arm64 slice) was built with the next tag"},
+			verifierCase{"lipo: the first slice carries it", join("lipo-intel-next", macIntelNext, macArm), "(x86_64 slice) was built with the next tag"},
+		)
+	}
+	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			cmd := exec.Command("bash", "scripts/verify-not-next.sh", tc.artifact)
 			cmd.Env = append(baseEnv(), "BIBLETEXT_REAL_GO="+goBin)

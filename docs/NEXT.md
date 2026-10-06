@@ -73,12 +73,16 @@ against a planted control, stop one that would.
 - **What each path built.** `scripts/verify-not-next.sh` reads the build tags
   Go records inside a binary, so it also sees the tag arriving through
   `GOFLAGS` in the environment or saved with `go env -w`, which no script
-  shows. `verify-release-package.sh` runs it on every desktop package (GitHub,
+  shows. A universal Mac binary is two builds joined, and Go reads only the
+  first, so the verifier cuts out each architecture and reads it on its own.
+  `verify-release-package.sh` runs it on every desktop package (GitHub,
   Mac App Store, Microsoft Store, Snap Store); `release-ios.sh` on the App
   Store binary; `build-android.sh --release` on the Play bundle's libraries;
   `publish-site.sh` on the site generator. The guard test asserts each of
   those calls is in place, and builds probe binaries to show the verifier
-  refuses the tag each way it can arrive.
+  refuses the tag each way it can arrive: on the command line, from `GOFLAGS`
+  or a saved `go env -w`, inside an Android bundle, and in either slice of a
+  universal binary.
 
 `RELEASING.md` runs the first in stage 0's suite and says, in stage 3, what a
 refusal from the second means: a `GOFLAGS` saved with `go env -w` carries
