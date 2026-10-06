@@ -22,11 +22,14 @@ package bibletext
 // with a file manager that answered yes.
 
 import (
+	"bytes"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -477,6 +480,88 @@ func TestAPictureNoFolderTookIsNotSaidToBeSaved(t *testing.T) {
 		}
 		if p := runCase(t, c.name+", control: the file manager said yes", share(true)); len(p) > 0 {
 			t.Errorf("%s: control: %v", c.name, p)
+		}
+	}
+}
+
+// logLines collects what the standard logger, which fyne.LogError writes
+// to, prints while a test runs.
+type logLines struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (l *logLines) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.buf.Write(p)
+}
+
+func (l *logLines) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.buf.String()
+}
+
+// captureLog points the standard logger at a collector of the test's own
+// until the test ends.
+func captureLog(t *testing.T) *logLines {
+	t.Helper()
+	l := &logLines{}
+	prev := log.Writer()
+	log.SetOutput(l)
+	t.Cleanup(func() { log.SetOutput(prev) })
+	return l
+}
+
+// A CARD THAT COULD NOT BE READ AT THE TAP IS NEITHER SAVED NOR SHOWN, AND
+// NO SHEET OPENS — the desktop's rule for a picture nothing true can be said
+// of — and why is logged. The renderer's file is gone between the preview
+// and the tap, and the file manager answers yes, as xdg-open does on the
+// temp folder, which is there, and Explorer once it starts: before, the
+// file manager was asked to show the missing file, and the Picture saved
+// sheet opened saying it was shown, with Email… attaching a file that is
+// not there. Under Linux's rules, and under Windows', whose own Share sheet
+// hands its fallback the renderer's file when the copy it makes at the tap
+// fails. Control: the same share with the card there is saved, shown and
+// confirmed, and logs no such cause, so every check here fails on it.
+func TestACardThatCouldNotBeReadOpensNoSheet(t *testing.T) {
+	share := func(goos string, present bool) func(t *testing.T) []string {
+		return func(t *testing.T) []string {
+			h := imageShareHarness(t, true)
+			shareImageGOOS = goos
+			downloads := filepath.Join(redirectHome(t), "Downloads")
+			mkdirs(t, downloads)
+			card := filepath.Join(t.TempDir(), "card.png")
+			if present {
+				if err := os.WriteFile(card, []byte("not a real png"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			logged := captureLog(t)
+			fallbackShareImage(card)
+			var problems []string
+			if texts := imageSheetTexts(h); texts != nil {
+				problems = append(problems, fmt.Sprintf("a sheet opened for a card that could not be read: %v", texts))
+			}
+			if len(h.revealed) > 0 {
+				problems = append(problems, fmt.Sprintf("the file manager was asked to show %v", h.revealed))
+			}
+			if saved := pictures(downloads); len(saved) > 0 {
+				problems = append(problems, fmt.Sprintf("a picture was saved: %v", saved))
+			}
+			if !strings.Contains(logged.String(), "could not be read") {
+				problems = append(problems, fmt.Sprintf("the cause was not logged; the log reads %q", logged.String()))
+			}
+			return problems
+		}
+	}
+	for _, goos := range []string{"linux", "windows"} {
+		if p := runCase(t, goos, share(goos, false)); len(p) > 0 {
+			t.Errorf("%s: %v", goos, p)
+		}
+		if p := runCase(t, goos+", control: the card there", share(goos, true)); len(p) < 4 {
+			t.Errorf("%s: control: with the card there only %d of the 4 checks failed (%v), so they cannot tell the two apart", goos, len(p), p)
 		}
 	}
 }

@@ -172,10 +172,10 @@ CI's macOS job, targets the macOS it runs on and cannot see such a call, so
 `mac_floor_availability_contract_test.go` holds the flag, and the card's use
 of the walk, at the source. Not run on macOS 12 or 13.
 
-## Share as image says "Picture saved" for a card it could not read — found 1 October 2026
+## Share as image says "Picture saved" for a card it could not read — FIXED 6 October 2026, for 1.2.20
 
-Planned for: 1.2.20, no sheet and the cause logged; a line telling the
-reader in 1.2.21+ — see docs/ROADMAP.md.
+Still open: a line telling the reader, planned for 1.2.21+ with the other
+shares that cannot finish — see docs/ROADMAP.md.
 
 On the desktop, when the rendered card cannot be read at the Share tap, the
 image share still asks the file manager to show it, and can then open the
@@ -225,6 +225,31 @@ Windows' own sheet (`windowsShareFailText`, `share_windows.go:121`), under
 a heading still to be worded. Either way, no Email… for a file that is not
 there. A host test: a card path that does not exist, the reveal stubbed to
 say yes, and no sheet (control: the file present).
+
+**FIXED 6 October 2026, for 1.2.20.** `fallbackShareImage`
+(`share_fallback.go`) now ends the share at the read: a card that cannot
+be read at the tap is neither saved nor shown, the file manager is not
+asked, no sheet opens, and the cause is logged ("the shared picture's card
+could not be read, so it was neither saved nor shown", with the read's
+error). It is the desktop's rule for a picture nothing true can be said
+of, which the snap already followed, and it uses no new words. It covers
+the tarball and the AppImage, the Windows fallback (whose own Share sheet
+hands it the renderer's file when the copy at the tap fails), and the
+macOS mimic. `TestACardThatCouldNotBeReadOpensNoSheet`
+(`share_image_folder_test.go`) holds it under Linux's rules and Windows':
+the card's file absent and the file manager answering yes, no sheet, no
+reveal, nothing in Downloads, and the cause in the log. With the old
+function put back it fails on both, the sheet reading *Picture saved*,
+*The picture is shown in your file manager.*, Email… and Done; the
+control, the card there, is saved, shown and confirmed. Seen on the Linux
+VM (GNOME, X11) with development builds of the tree before and after, the
+image preview opened at launch (`BIBLETEXT_DEV_OPEN=share-image`) and its
+card deleted before Share was pressed: before, Files opened on the empty
+temp folder and the sheet said the picture was shown; after, nothing
+opened and the cause was logged; and with the card left in place, the
+fixed build saved the picture in Downloads, showed it, and said so.
+iOS and Android say *Could not share the card.* on the same case; the
+Mac's share picker is handed the missing file's address (not seen).
 
 ## Email… on the desktop share sheet fails without a word — found 1 October 2026
 

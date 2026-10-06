@@ -55,22 +55,30 @@ func fallbackShareText(s string) {
 // on more than the disk: inside the snap, where AppArmor prompting is on,
 // the first write into the reader's home waits for the reader to answer a
 // permission prompt, and the window must not freeze while it does.
+//
+// A card that cannot be read at the tap — gone from the temp folder between
+// the preview drawing it and the tap — is neither saved nor shown, and no
+// sheet opens; why is logged. There is no picture to say anything true of:
+// the file manager would be asked to show a file that is not there, and on
+// a desktop where it answers yes regardless, the sheet would say the picture
+// is shown and offer Email… for it. The snap already ended so, its portal
+// route opening the file before it asks.
 // Each platform's share mechanism is recorded in docs/PLATFORM_MATRIX.md, Sharing.
 func fallbackShareImage(path string) {
 	state := activeAIState
 	// The mail is this share's: a preview opened while the picture is being
 	// saved or the file manager is answering sets its own.
 	mail := shareImageMail
-	card, readErr := os.ReadFile(path)
+	card, err := os.ReadFile(path)
+	if err != nil {
+		fyne.LogError("the shared picture's card could not be read, so it was neither saved nor shown", err)
+		return
+	}
 	place, now := shareImagePlaceNow(), time.Now()
 	var saved savedImage
 	var shown bool
 	shareImageAside(func() {
-		if readErr != nil {
-			saved = savedImage{file: path, err: readErr}
-		} else {
-			saved = saveSharedImage(card, path, place, now)
-		}
+		saved = saveSharedImage(card, path, place, now)
 		shown = revealInFileManager(saved.file)
 	}, func() {
 		line := saved.line(shown)
