@@ -292,10 +292,10 @@ The fix: receive with `sig, ok := <-responses` and, on a closed channel,
 return an error at once (the connection closed), with `taken` true, since
 the portal had the call.
 
-## A sheet turned from one landscape to the other keeps its side padding on the old side (Android) — found 1 October 2026
+## A sheet turned from one landscape to the other keeps its side padding on the old side (Android) — found 1 October 2026; the composer FIXED 6 October 2026
 
-Planned for: 1.2.20, the composer; Ask's half when Ask returns to the menus
-— see docs/ROADMAP.md.
+Still open: Ask's half, when Ask returns to the menus — see docs/ROADMAP.md.
+The note composer's half is fixed for 1.2.20 (below).
 
 Since 1.2.18 the note composer and Ask hold their card clear of the side
 safe insets of a phone held sideways (`clearOfSideInsets`,
@@ -322,6 +322,19 @@ side insets are 0. Read from the code; not seen on a device.
 The fix: refit when the safe area changes, not only the size — the
 composer's watch comparing the sheet area's position and width as well as
 `cnv.Size()` — and give Ask its refit and the same watch.
+
+**The composer, FIXED 6 October 2026** (for 1.2.20). Its watch
+(`share_note_ui.go`) now refits when the sheet area starts somewhere else or
+changes width, as well as when the canvas changes size; never on the area's
+height, which a keyboard changes. `TestTheComposerFollowsTheSideInsetsAcrossALandscapeTurn`
+(`sheet_side_insets_test.go`) turns a phone over three ways at an unchanged
+canvas size — the cutout alone, whose area keeps its width and only starts
+elsewhere; the cutout with a three-button bar opposite it; and a bar that
+appears with the turn — and fails on the tree before the change, where the
+card stayed padded on the old side and ran under the new inset, the native
+field with it. A host test is the proof, since the emulator cannot turn a
+phone through 180 degrees in one step. Ask is unchanged: it still throws its
+refit away, and waits until Ask returns to the menus.
 
 ## A Play upload's commit restarts a review in progress — found 2 October 2026
 
