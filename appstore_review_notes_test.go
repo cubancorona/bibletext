@@ -78,6 +78,18 @@ func reviewNotesOtherVersions(text, want string) []string {
 	return others
 }
 
+// reviewNotesStaleVersions is the version rule as the tracked notes are held
+// to it: every x.y.z in notes other than want, read from the whole notes for
+// a release from reviewNotesWholeTextFrom on and from the first line before
+// it, with what was read, for the message.
+func reviewNotesStaleVersions(notes, want string) (stale []string, where string) {
+	first := strings.TrimSpace(strings.SplitN(notes, "\n", 2)[0])
+	if !versionAtLeast(want, reviewNotesWholeTextFrom) {
+		return reviewNotesOtherVersions(first, want), "names in its first line"
+	}
+	return reviewNotesOtherVersions(notes, want), "names"
+}
+
 // versionAtLeast compares two dotted versions number by number, so 1.2.100
 // is after 1.2.20. A part that is not a number compares as 0.
 func versionAtLeast(version, floor string) bool {
@@ -129,13 +141,12 @@ func TestAppReviewNotesAreForThisRelease(t *testing.T) {
 				t.Errorf("%s opens with %q but the app ships as %s; rewrite the notes for "+
 					"%s before submitting", file.path, first, want, want)
 			}
-			read, where := notes, "names"
 			if !versionAtLeast(want, reviewNotesWholeTextFrom) {
-				read, where = first, "names in its first line"
 				t.Logf("%s is for %s, before %s: only its first line is held to the version",
 					file.path, want, reviewNotesWholeTextFrom)
 			}
-			for _, stale := range reviewNotesOtherVersions(read, want) {
+			others, where := reviewNotesStaleVersions(notes, want)
+			for _, stale := range others {
 				t.Errorf("%s %s version %s; App Review notes name no release but %s, the one "+
 					"they are for: rewrite a body carried over from another release, and leave "+
 					"out comparisons with one", file.path, where, stale, want)
@@ -196,6 +207,33 @@ func TestTheReviewNotesVersionRuleReadsTheWholeNotes(t *testing.T) {
 	// bumped body: the case the whole-text rule exists for.
 	if got := reviewNotesOtherVersions("VERSION 9.9.9 (macOS)", want); len(got) != 0 {
 		t.Errorf("the bumped heading alone names %q", got)
+	}
+	// The rule as the tracked files meet it, through the version gate. The
+	// tree holds 1.2.19's notes until the bump, so the tracked files take the
+	// heading-only branch, and only notes made at 1.2.20 and after show the
+	// whole notes are read where they must be. Mutation: the gated branch
+	// reading the first line again.
+	bumped := func(v, before string) string {
+		return "VERSION " + v + " (macOS)\n\nWHAT IS NEW IN " + before + "\nA change.\n\n" +
+			"HOW TO EXERCISE IT\nOpen it (" + before + ": closed).\n"
+	}
+	for _, c := range []struct {
+		version, notes string
+		stale          []string
+		where          string
+	}{
+		{"1.2.20", bumped("1.2.20", "1.2.19"), []string{"1.2.19", "1.2.19"}, "names"},
+		{"1.2.21", bumped("1.2.21", "1.2.20"), []string{"1.2.20", "1.2.20"}, "names"},
+		{"1.10.0", bumped("1.10.0", "1.9.9"), []string{"1.9.9", "1.9.9"}, "names"},
+		{"1.2.20", "VERSION 1.2.20\n\nWHAT IS NEW IN 1.2.20\nA change.\n", nil, "names"},
+		{"1.2.19", bumped("1.2.19", "1.2.18"), nil, "names in its first line"},
+		{"1.2.19", "VERSION 1.2.19, after 1.2.18\n\nA change.\n", []string{"1.2.18"}, "names in its first line"},
+	} {
+		stale, where := reviewNotesStaleVersions(c.notes, c.version)
+		if strings.Join(stale, ",") != strings.Join(c.stale, ",") || where != c.where {
+			t.Errorf("notes for %s, %q: reviewNotesStaleVersions found %q (%s), want %q (%s)",
+				c.version, c.notes, stale, where, c.stale, c.where)
+		}
 	}
 	for _, c := range []struct {
 		version, floor string
