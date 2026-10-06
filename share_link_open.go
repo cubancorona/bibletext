@@ -752,8 +752,11 @@ func switchToLinkVersion(state *AppState, t ShareTarget) bool {
 	// A link is neither, and the record it would spend is the only copy of
 	// what the reader actually chose (D13). So both routes hand the load
 	// byArrival, and the load carries it to its own landing (D19).
+	// The licensed bridge's copy in memory does not count (next major release
+	// only): a link to it loads it, and so asks the provider first
+	// (bridgeInMemory).
 	_, inMem := state.loadedVersions[want]
-	if inMem || v.isTesting() {
+	if (inMem && !bridgeInMemory(state, v)) || v.isTesting() {
 		switchVersion(state, want, byArrival) // synchronous; fall through and apply
 		return false
 	}

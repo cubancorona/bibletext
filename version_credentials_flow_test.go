@@ -280,12 +280,16 @@ func TestTransientStoreFailureIsNotADeauthorization(t *testing.T) {
 	}
 }
 
-// A licensed superseded epoch can never be served — the licensed branch of
-// loadVersionFromCacheOnly returns before the superseded walk — and the §11
-// recency machinery only ever age-checks the CURRENT epoch. So such a file is
-// licensed text on the reader's device with an unbounded lifetime that
-// nothing will ever read or check again. The startup sweep now removes them.
-// See D2 in docs/VERSION_STATES.md.
+// A licensed superseded epoch beside a current epoch that loads can never be
+// served — the startup fast path returns before the superseded walk; the
+// shipping build has no other way to it, and the bridge a failed fetch may
+// fall back to in the next major release serves one only while no current
+// epoch loads — and the §11 recency machinery age-checks a copy only when it
+// loads it. So such a file is licensed text on the reader's device with an
+// unbounded lifetime that nothing will ever read or check again. The startup
+// sweep removes it. See D2 in docs/VERSION_STATES.md; the copy the next
+// release's sweep keeps while no current epoch loads is
+// licensed_epoch_bridge_next_test.go's.
 func TestSupersededLicensedEpochsAreNotRetained(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -322,15 +326,25 @@ func TestSupersededLicensedEpochsAreNotRetained(t *testing.T) {
 		t.Fatal("control: a licensed version must NOT serve a superseded epoch — " +
 			"if it can, deleting these files is not safe and this test is wrong")
 	}
-	if err := saveBibleToCache(current, fullValidBible(), currentUTCTime); err != nil {
+	if err := saveBibleToCache(current, stampedBible("current"), currentUTCTime); err != nil {
 		t.Fatal(err)
+	}
+	// And beside a current epoch that loads, neither does the fallback a
+	// failed fetch takes, the read that could serve one in the next release.
+	if data, _, err := loadVersionFallback(nk); err != nil || bibleStamp(data) != "current" {
+		t.Fatalf("control: beside a current epoch the fallback must serve that epoch (err %v) — "+
+			"if it serves a superseded one, deleting these files is not safe and this test is wrong", err)
+	}
+	if _, err := loadLicensedBridge(nk); err == nil {
+		t.Fatal("control: the bridge must refuse while a current epoch loads — " +
+			"if it does not, deleting these files is not safe and this test is wrong")
 	}
 
 	purgeSupersededLicensedCaches()
 
 	for _, p := range superseded {
 		if _, err := os.Stat(p); err == nil {
-			t.Errorf("D2: a superseded licensed epoch survived the startup sweep (%s). "+
+			t.Errorf("D2: a superseded licensed epoch beside a current one survived the startup sweep (%s). "+
 				"It can never be served and is never age-checked, so nothing else "+
 				"will ever remove it.", filepath.Base(p))
 		}

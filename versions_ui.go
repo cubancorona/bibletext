@@ -590,8 +590,10 @@ func switchVersionInteractive(state *AppState, id string, cause switchCause) {
 		return
 	}
 	// Loaded earlier this session, or an instant base-derived placeholder → swap
-	// synchronously; neither touches the network.
-	if _, inMem := state.loadedVersions[id]; inMem || v.isTesting() {
+	// synchronously; neither touches the network. Not the licensed bridge's
+	// copy (next major release only): choosing it loads it, and so asks the
+	// provider first (bridgeInMemory).
+	if _, inMem := state.loadedVersions[id]; (inMem && !bridgeInMemory(state, v)) || v.isTesting() {
 		switchVersion(state, id, cause)
 		return
 	}
@@ -655,8 +657,14 @@ func finishVersionLoad(state *AppState, v BibleVersion, cause switchCause, data 
 		// Offline after a cacheEpoch bump, this version's previous-epoch
 		// cache is still a complete canon — switching to it worked in
 		// 1.1.5 and must keep working. Fall back to it rather than showing
-		// "couldn't load"; the refresh then owes it the current edition.
-		if old, oldMode, cerr := loadVersionFromCacheOnly(v); cerr == nil {
+		// "couldn't load"; the refresh then owes it the current edition. A
+		// licensed translation's previous epoch serves only in the next major
+		// release, inside that copy's own recency window, with no current
+		// epoch on disk (loadLicensedBridge), and the refresh never owes it: a
+		// later load asks for the current epoch first — the next launch that
+		// restores it, or the reader's next choice of it, which never takes
+		// this copy from memory (bridgeInMemory).
+		if old, oldMode, cerr := loadVersionFallback(v); cerr == nil {
 			stale := !versionCacheIsCurrent(v)
 			if stale {
 				markVersionStale(state, v.ID) // D3: say so, do not serve it silently
@@ -669,6 +677,16 @@ func finishVersionLoad(state *AppState, v BibleVersion, cause switchCause, data 
 				ensureUpgradeScheduled(state)
 			}
 			return false
+		}
+		// A choice of the licensed bridge's copy that could neither fetch nor
+		// be served the bridge again — its window has ended since it was
+		// served — leaves no previous edition of the translation that may be
+		// shown. The decode goes with its mark, so nothing holds it and the
+		// picker no longer names it as showing a previous edition (V-E). Next
+		// major release only: bridgeInMemory is false in the shipping build.
+		if v.ID != state.CurrentVersion && bridgeInMemory(state, v) {
+			delete(state.loadedVersions, v.ID)
+			clearVersionStale(state, v.ID)
 		}
 		// CLOSE THE PROMISE WITH THE LOAD. A shared link that named
 		// this translation parked its target here and let this load

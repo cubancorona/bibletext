@@ -29,6 +29,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
@@ -75,15 +76,23 @@ func (c savedChoice) id() string {
 type choiceFate int
 
 const (
-	fateLoads          choiceFate = iota // it loads normally
-	fateLoadFails                        // offline, no usable cache
-	fateSupersededOnly                   // current epoch gone, previous epoch on disk
-	fateUnselectable                     // canSelect() is false this launch
-	fateKeyCleared                       // the reader cleared their key: a definitive, deliberate no
+	fateLoads             choiceFate = iota // it loads normally
+	fateLoadFails                           // offline, no usable cache
+	fateSupersededOnly                      // current epoch gone, previous epoch on disk
+	fateUnselectable                        // canSelect() is false this launch
+	fateKeyCleared                          // the reader cleared their key: a definitive, deliberate no
+	fateSupersededExpired                   // current epoch gone, previous epoch on disk past its own recency window
 )
 
 func (f choiceFate) String() string {
-	return [...]string{"loads", "load-fails", "superseded-only", "unselectable", "key-cleared"}[f]
+	return [...]string{"loads", "load-fails", "superseded-only", "unselectable", "key-cleared", "superseded-expired"}[f]
+}
+
+// fateIsLicensedOnly reports the fates that exist only for the licensed
+// translation: a key is a licensed translation's, and so is a recency
+// window — a public-domain previous epoch serves at any age.
+func fateIsLicensedOnly(f choiceFate) bool {
+	return f == fateKeyCleared || f == fateSupersededExpired
 }
 
 // --- what the launch produced, and whether it told the truth -----------------
@@ -102,7 +111,9 @@ type launchObs struct {
 	told     bool   // does any surface say the chosen translation is not the one shown?
 	previous bool   // is the text on screen a previous edition of the chosen translation?
 	saidEd   bool   // does the picker footer say the edition on screen is a previous one?
-	owed     bool   // does the refresh owe the translation on screen its upgrade?
+	owed     bool   // is the upgrade of the translation on screen on its way (L-F)?
+	licensed bool   // is the previous edition on screen a licensed translation's (the bridge)?
+	inWindow bool   // ...and was the copy it came from inside its own recency window?
 
 	trail []ChapterVisit // the trail the reader is left with
 }
@@ -133,8 +144,18 @@ var knownLaunchIncoherent = []pinnedLaunchDefect{}
 //	L-C  The version named on screen is the version whose text is on screen.
 //	L-D  A reader who did not get the translation they chose is told so.
 //	L-E  A previous edition on screen at launch is said (D3's launch site).
-//	L-F  ...and the refresh owes it its upgrade, so it is not the text for
-//	     the rest of the session (D17).
+//	L-F  ...and its upgrade is on its way. The refresh owes a public-domain
+//	     one, so it is not the text for the rest of the session (D17). A
+//	     licensed one the app never fetches on its own initiative: the
+//	     restore that served it asked the provider first, and the reader's
+//	     next choice of it asks again, rather than taking the copy from
+//	     memory (bridgeInMemory), as the next launch's restore will.
+//	L-G  A licensed previous edition on screen came from a copy inside its
+//	     own recency window, measured from that copy's saved-at stamp (V-E).
+//
+// Only the licensed bridge puts a licensed previous edition on screen, and it
+// is the next major release's (loadLicensedBridge, docs/NEXT.md). In the
+// shipping build no cell may, and the enumeration asks that instead.
 func checkLaunchInvariants(o launchObs) []string {
 	var bad []string
 	if o.aborted {
@@ -156,7 +177,10 @@ func checkLaunchInvariants(o launchObs) []string {
 		bad = append(bad, "L-E: a previous edition is on screen at launch and the picker does not say so")
 	}
 	if o.previous && !o.owed {
-		bad = append(bad, "L-F: a previous edition is on screen at launch and the refresh does not owe it an upgrade")
+		bad = append(bad, "L-F: a previous edition is on screen at launch and nothing has its upgrade on the way")
+	}
+	if o.previous && o.licensed && !o.inWindow {
+		bad = append(bad, "L-G: a licensed previous edition is on screen from a copy past its own recency window")
 	}
 	return bad
 }
@@ -169,12 +193,13 @@ func TestVersionLaunchStateSpace(t *testing.T) {
 
 	var unexplained []string
 	seen := map[string]bool{}
-	cells, previousCells := 0, 0
+	cells, previousCells, licensedPreviousCells := 0, 0, 0
 
 	for choice := savedDefault; choice <= savedLicensed; choice++ {
-		for fate := fateLoads; fate <= fateKeyCleared; fate++ {
-			// Only the licensed translation turns on a key.
-			if fate == fateKeyCleared && choice != savedLicensed {
+		for fate := fateLoads; fate <= fateSupersededExpired; fate++ {
+			// Only the licensed translation turns on a key or has a
+			// recency window.
+			if fateIsLicensedOnly(fate) && choice != savedLicensed {
 				continue
 			}
 			for _, book := range []string{"Genesis", "Tobit"} {
@@ -194,6 +219,9 @@ func TestVersionLaunchStateSpace(t *testing.T) {
 					cells++
 					if obs.previous {
 						previousCells++
+					}
+					if obs.licensed {
+						licensedPreviousCells++
 					}
 					for _, bad := range checkLaunchInvariants(obs) {
 						explained := false
@@ -218,10 +246,17 @@ func TestVersionLaunchStateSpace(t *testing.T) {
 		t.Errorf("%d launch cells; %d incoherent states with no entry in the register:\n  %v",
 			cells, len(unexplained), unexplained)
 	}
-	// L-E and L-F ask about a previous edition on screen; a space with none
-	// would pass them without asking anything.
+	// L-E and L-F ask about a previous edition on screen, and L-G about a
+	// licensed one; a space with none would pass them without asking anything.
 	if previousCells == 0 {
 		t.Error("control: no launch cell put a previous edition on screen, so L-E and L-F were never put to it")
+	}
+	if nextRelease && licensedPreviousCells == 0 {
+		t.Error("control: no launch cell put a licensed previous edition on screen, so L-G and L-F's licensed arm were never put to it")
+	}
+	if !nextRelease && licensedPreviousCells != 0 {
+		t.Errorf("%d launch cells put a licensed previous edition on screen in the shipping build, which has no bridge "+
+			"(loadLicensedBridge is the next major release's)", licensedPreviousCells)
 	}
 	// Set equality: a fix that leaves its pin behind fails here.
 	for _, d := range knownLaunchIncoherent {
@@ -229,7 +264,8 @@ func TestVersionLaunchStateSpace(t *testing.T) {
 			t.Errorf("%s is pinned as reachable but no cell reached it — if it is fixed, strike it from knownLaunchIncoherent and from docs/VERSION_STATES.md: %s", d.name, d.what)
 		}
 	}
-	t.Logf("%d launch cells enumerated, %d with a previous edition on screen; %d pinned incoherent states reached", cells, previousCells, len(seen))
+	t.Logf("%d launch cells enumerated, %d with a previous edition on screen (%d of them licensed); %d pinned incoherent states reached",
+		cells, previousCells, licensedPreviousCells, len(seen))
 }
 
 // runLaunchCell drives ONE launch through the app's real restore, then through
@@ -283,6 +319,15 @@ func launchCell(t *testing.T, rs readingState, choice savedChoice, fate choiceFa
 
 	// The fate, applied to the real code paths.
 	restoreVersionFate(t, choice, fate, wide)
+	// Which translations the restore asked to load before anything fell
+	// back: for the licensed one, a request to the provider.
+	asked := map[string]int{}
+	fated := loadVersionForRestore
+	loadVersionForRestore = func(v BibleVersion, base *BibleData) (*BibleData, dataMode, error) {
+		asked[v.ID]++
+		return fated(v, base)
+	}
+	t.Cleanup(func() { loadVersionForRestore = fated })
 
 	state := &AppState{
 		Bible:          base,
@@ -323,12 +368,45 @@ func launchCell(t *testing.T, rs readingState, choice savedChoice, fate choiceFa
 	// superseded file and the restore served the chosen translation from it.
 	// The default is left out: its restore has nothing to load, and its own
 	// edition is the refresh machine's cells.
-	obs.previous = fate == fateSupersededOnly && live.CurrentVersion == choice.id() && choice != savedDefault
+	obs.previous = (fate == fateSupersededOnly || fate == fateSupersededExpired) &&
+		live.CurrentVersion == choice.id() && choice != savedDefault
 	obs.saidEd = strings.Contains(notice, "previous edition")
 	for _, v := range owedUpgrades(live) {
 		obs.owed = obs.owed || v.ID == live.CurrentVersion
 	}
+	// A licensed previous edition is the bridge (loadLicensedBridge). The
+	// refresh never owes it. Its upgrade is on its way when nothing hands the
+	// copy out again without asking the provider first: the restore that
+	// served it asked, and the reader's next choice of it asks again. The one
+	// copy the fate wrote is the one it can have come from. Asked last: the
+	// choice moves the reader.
+	if v, ok := versionByID(live.CurrentVersion); ok && obs.previous && isLicensedSource(v) {
+		obs.licensed = true
+		obs.inWindow = licensedCopyInsideWindow(supersededCachePaths(v)[0])
+		obs.owed = obs.owed || (asked[v.ID] > 0 && choiceLoadsAgain(live, v))
+	}
 	return obs
+}
+
+// choiceLoadsAgain reports whether the reader, leaving v for the default and
+// choosing v again, has it loaded — which for a licensed translation asks the
+// provider first — rather than taken from memory. The load is held at its
+// door and never lands.
+func choiceLoadsAgain(live *AppState, v BibleVersion) bool {
+	loads := 0
+	prev := startVersionLoad
+	startVersionLoad = func(lv BibleVersion, _ *BibleData, _ func(*BibleData, dataMode, error)) {
+		if lv.ID == v.ID {
+			loads++
+		}
+	}
+	defer func() { startVersionLoad = prev }()
+	switchVersionInteractive(live, defaultVersionID, byReader)
+	if live.CurrentVersion != defaultVersionID {
+		return false
+	}
+	switchVersionInteractive(live, v.ID, byReader)
+	return loads == 1
 }
 
 // restoreVersionFate makes the chosen translation meet the given fate, through
@@ -385,17 +463,22 @@ func restoreVersionFate(t *testing.T, choice savedChoice, fate choiceFate, wide 
 		loadVersionForRestore = func(v BibleVersion, base *BibleData) (*BibleData, dataMode, error) {
 			return nil, modeReal, errors.New("offline")
 		}
-	case fateSupersededOnly:
+	case fateSupersededOnly, fateSupersededExpired:
 		// The current epoch is missing and the PREVIOUS one is on disk — the
-		// offline epoch-bump upgrade. loadVersionFromCacheOnly is not
-		// indirected, so this is driven by writing the real file.
+		// offline epoch-bump upgrade. loadVersionFallback is not indirected,
+		// so this is driven by writing the real file: stamped now, or, for
+		// the licensed translation's expired fate, an hour past its window.
 		loadVersionForRestore = func(v BibleVersion, base *BibleData) (*BibleData, dataMode, error) {
 			return nil, modeReal, errors.New("offline")
+		}
+		stamp := currentUTCTime
+		if fate == fateSupersededExpired {
+			stamp = func() time.Time { return currentUTCTime().Add(-licensedRecencyWindow - time.Hour) }
 		}
 		if v, ok := versionByID(choice.id()); ok {
 			paths := supersededCachePaths(v)
 			if len(paths) > 0 {
-				if err := saveBibleToCache(paths[0], data, currentUTCTime); err != nil {
+				if err := saveBibleToCache(paths[0], data, stamp); err != nil {
 					t.Fatalf("seed the superseded epoch: %v", err)
 				}
 			}

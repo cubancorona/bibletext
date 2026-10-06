@@ -3,8 +3,10 @@ package bibletext
 // Licensed-cache compliance edges, complementing the happy-path gates in
 // apibible_test.go: the recency window's exact boundary, malformed and
 // clock-skewed saved_at stamps, the §10 startup purge under hostile
-// filesystem conditions, and the no-superseded-fallback guarantee licensed
-// versions carry (their epoch-migration stale-serve is PD-only by design).
+// filesystem conditions, and the guarantee that the startup fast path never
+// serves a licensed superseded epoch (in the next major release only a failed
+// fetch's fallback may, inside the copy's own window:
+// licensed_epoch_bridge_next_test.go).
 // Nothing here ever fetches — only the cache-only load paths run — so the
 // licence env trio holds fixture values and no server is needed.
 
@@ -224,10 +226,14 @@ func TestPurgeSurvivesBadCacheDir(t *testing.T) {
 }
 
 // (g) The epoch-migration fallback (serve a superseded-epoch cache when the
-// current one is missing) is a deliberate stale-serve — right for public
-// domain, forbidden for licensed text. Give nkjv an epoch so a superseded
-// path exists, plant a fresh, fully valid cache there, and pin that the
-// licensed cache-only path still reports a miss rather than serving it.
+// current one is missing) is a deliberate stale-serve on the startup fast path
+// — right for public domain, forbidden there for licensed text, because that
+// path runs before any fetch. In the shipping build a licensed superseded copy
+// is never served at all; in the next major release only after the fetch
+// failed (loadVersionFallback, licensed_epoch_bridge_next_test.go). Give nkjv
+// an epoch so a superseded path exists, plant a fresh, fully valid cache
+// there, and pin that the licensed cache-only path still reports a miss
+// rather than serving it.
 func TestLicensedCacheOnlyIgnoresSupersededEpochs(t *testing.T) {
 	setNKJVLicence(t)
 	dir := t.TempDir()

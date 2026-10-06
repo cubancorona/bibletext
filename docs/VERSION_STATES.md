@@ -179,13 +179,18 @@ the translation on screen first, then the default, then the rest in registry
 order. `fullPending` is still computed for the default alone; the stale mark
 is the rest of the list, and before `D17` only the picker and `D11`'s re-read
 in `switchVersion` read it. Two kinds of translation are never owed. A
-licensed one is never served stale (V-E), and a fetch of it spends the
-API.Bible monthly quota, which the app never spends on its own initiative: a
-remembered NKJV comes back only at a launch that can revalidate it, or when
-the reader taps its row or a link to it (`D24` makes the picker say so). A
-placeholder has nothing to fetch. One fetch runs at a time (`fullDownloading`)
-and one backoff serves the whole list (`fullRetryDelay`: 20 s, doubling,
-capped at 10 minutes, and zero when nothing is owed).
+licensed one is never served past its window (V-E), and a fetch of it spends
+the API.Bible monthly quota, which the app never spends on its own
+initiative: a remembered NKJV comes back only at a launch that can revalidate
+it, or when the reader taps its row or a link to it (`D24` makes the picker
+say so). In the next major release an NKJV recorded stale because it is
+serving the **Licensed bridge** is not owed either: it is replaced by the next
+load of it that can fetch, a launch that restores it or the reader's choice
+of it or a link to it, which never takes the bridge's copy from memory
+(`bridgeInMemory`). A placeholder has nothing to fetch. One fetch runs at a
+time (`fullDownloading`) and one backoff serves the whole list
+(`fullRetryDelay`: 20 s, doubling, capped at 10 minutes, and zero when nothing
+is owed).
 
 ## The states
 
@@ -202,7 +207,33 @@ than dropping to a 4-book seed. It is legal **only because** it is announced
 and repaired: `versionCacheIsCurrent` is false, so `fullPending` is set for
 the default; any other public-domain translation is recorded stale, which the
 refresh owes (`D17`). The background upgrade runs, and the picker says an
-update is waiting.
+update is waiting. Public-domain translations only, at any age. A licensed
+translation's superseded epoch is never served in the shipping build, and the
+startup sweep deletes it (`D2`); in the next major release it serves only as
+the **Licensed bridge**.
+
+**Licensed bridge.** *The next major release only: the `next` build tag,
+`docs/NEXT.md`. The shipping build has no such state.* A licensed
+translation's current epoch does not load — after a `cacheEpoch` bump it is
+not on disk at all — the fetch of it has just failed (offline, the key
+refused, the quota spent), and the copy the reader held under the previous
+epoch is inside `licensedRecencyWindow` measured from its own saved-at stamp.
+That copy serves (`loadVersionFallback` → `loadLicensedBridge`), recorded
+stale and said by the picker in the existing previous-edition sentence
+(`D3`). It is the edition the reader already had, inside the window it could
+have served in under its old name, so the serve is the one the app would have
+made had the epoch not moved. Nothing writes to it, so its window ends when it
+would have ended. The startup fast path (`loadVersionFromCacheOnly`) never
+serves it, so a fetch that can succeed always wins, and the refresh never
+fetches it (the quota). What asks for the current epoch is a load of the
+translation, as for every licensed one: the next launch that restores it and,
+in the session, the reader's choice of it or a link to it. A switch never
+takes the bridge's decode from memory (`bridgeInMemory`), so each choice asks
+the provider again and comes back to the copy only through the bridge, which
+measures the window again; a choice that finds the window over drops the
+decode and its mark. While the translation stays on screen nothing asks
+(*Open decisions*), and a copy on screen when its window ends stays there
+until the reader leaves it or the app quits, as a current copy does (`V-E`).
 
 **Unusable-current.** A file exists at the current epoch and cannot be served.
 Before the fix this state *pretended to be Current* — see `V1`.
@@ -221,7 +252,11 @@ load path revalidates. This is the §11 obligation and the one place where
 |---|---|---|---|
 | any | launch | `loadStartupBible` (`app.go`) | cache hit → **Current**/**Superseded-serving**; miss + saved reading → full load; miss, no history → **Seed** |
 | **Absent** | full download lands | `applyFullDownload` (`app.go`) | **Current**, `fullPending` cleared |
-| **Current** | `cacheEpoch` bump | registry edit + release | **Superseded-serving** at the next launch |
+| public-domain **Current** | `cacheEpoch` bump | registry edit + release | **Superseded-serving** at the next launch |
+| licensed **Current** | `cacheEpoch` bump | registry edit + release; `purgeSupersededLicensedCaches` at the next launch (`D2`) | no current epoch on disk. Restored at launch, the translation is fetched again (**Current**), or, where it cannot be (offline, key refused, quota spent), the default translation shows and the choice stays in `preferredVersion` (`D9`); not on screen, it is fetched when the reader next chooses it (`D24`). The shipping build deletes the previous copy at that launch. The next major release keeps it while it is inside its own window, and where a launch's or a choice's fetch fails it serves as the **Licensed bridge** |
+| **Licensed bridge** (next release) | a launch that restores it, or the reader's choice of it or a link to it in any session, and the fetch succeeds | `loadVersionData` → `purgeSupersededCaches`; a choice loads rather than taking the bridge's decode from memory (`bridgeInMemory`) | **Current**, the copy deleted, nothing marked stale |
+| **Licensed bridge** (next release) | the reader's choice of it or a link to it, and the fetch fails | `finishVersionLoad` → `loadVersionFallback` → `loadLicensedBridge` | inside the copy's window, the bridge again from disk, still marked; past it, the reader stays where they were with the error card, and the decode and its mark are dropped |
+| **Licensed bridge** (next release) | the copy's window ends | `loadLicensedBridge` refuses it at any load from then; `purgeSupersededLicensedCaches` deletes it at the next launch | at the next load, as if no copy were held: fetched, or at a launch the default translation with the choice kept (`D9`), or on a choice the reader left where they were. A copy on screen stays there until the reader leaves it or the app quits (`V-E`) |
 | **Superseded-serving** | upgrade lands | `loadVersionData` → `purgeSupersededCaches` | **Current**, old epochs removed |
 | **Superseded-serving** | fetch fails | `upgradeLanded`, `triggerFullDownload`'s tail | **Backoff** (20 s doubling, capped), notice says "waiting for a connection" |
 | non-default **Superseded-serving** | fetch fails in session | `finishVersionLoad` → `ensureUpgradeScheduled` | **Backoff** |
@@ -231,13 +266,24 @@ load path revalidates. This is the §11 obligation and the one place where
 | **Placeholder** | a key arrives | `keyStore` write → picker re-derive | **Current**/**Absent** for that version, `modeReal` |
 | **Licensed-stale** | any load | `licensedCacheStale` → `os.Remove` → refetch | **Current**, or an error — never a stale serve |
 | any | purge | `purgeSupersededCaches`, only from inside a *successful* load that put the current epoch on disk (`D23`) | previous epochs removed; the current one never touched |
+| licensed, any | launch | `purgeSupersededLicensedCaches`, through `sweepLicensedCachesAtLaunch` (`app.go`) (`D2`) | previous epochs removed: in the shipping build every one, unconditionally; in the next major release every one except each whose saved-at stamp is inside its own window while no current epoch loads (the **Licensed bridge**). That sweep reads the stamp, not the text, so it can keep a copy the bridge then cannot decode, never past that window. Nothing servable is lost, because a licensed superseded copy is never served in the shipping build, and in the next release never past its window or beside a current epoch that loads |
 
 The purge's precondition is the important one, and it is why the enumeration
 drives it through `loadVersionData` rather than calling it: purging first, and
 discovering the network was down second, is how a reader lost their only copy
 once already. Calling the purge directly in a test invents states the app does
 not have — and an enumeration that invents states reports defects that are not
-real.
+real. The licensed sweep needs no such precondition, because what it removes
+can never be served. In the shipping build that is every licensed superseded
+epoch, and the cost falls on the reader instead: a licensed `cacheEpoch` bump
+leaves an upgrader whose first launch is offline on the default translation
+until the edition can be fetched again, where a public-domain bump would have
+served the previous epoch. The next major release removes only a superseded
+copy past its own window, or one beside a current epoch that loads, and keeps
+what the bridge may serve, a copy inside its own window, measuring it again at
+every launch. There the bump costs that upgrader nothing while the copy they
+hold is inside its window; past it they read the default translation until the
+edition can be fetched again.
 
 ## Invariants
 
@@ -249,18 +295,34 @@ is a regression even if every existing test stays green.
   would reject. *Was violated by `V1`; fixed.*
 - **V-B — A superseded serve is always scheduled for upgrade.** If what
   reaches the reader came from a previous epoch, the refresh owes it an
-  upgrade (`fullPending` for the default, the stale mark otherwise).
-  *Was violated by `V1`, and by `D17` for every translation but the default;
-  fixed.*
+  upgrade (`fullPending` for the default, the stale mark otherwise). The
+  **Licensed bridge** of the next major release is the exception the quota
+  makes: the refresh never fetches a licensed translation. Its upgrade comes
+  with the next load of it, which asks for the current epoch before anything
+  else: a launch that restores it, or the reader's next choice of it or a link
+  to it, which never takes the bridge's copy from memory. While it stays on
+  screen nothing asks (*Open decisions*). *Was violated by `V1`, and by `D17`
+  for every translation but the default; fixed.*
 - **V-C — A stale-serving state is never silent.** Every state in which the
   reader is not looking at the best available text has a notice that says so
   — the picker footer, or the seed banner. *Was violated by `V1`; fixed.*
 - **V-D — A purge never removes the only readable copy.** Superseded epochs
   are deleted only after a verified successful load of the current one, and
   only once that load has put it on disk. *Was violated by `D23`, for a fetch
-  that landed and could not be written; fixed.*
+  that landed and could not be written; fixed.* The licensed startup sweep
+  removes superseded epochs without such a load, but only ones that can never
+  be served: in the shipping build every licensed one; in the next major
+  release those past their own window, or beside a current epoch that loads.
 - **V-E — Licensed text is never served past its window.** The recency check
-  governs the serve, not merely the refresh.
+  governs the serve, not merely the refresh, and it is measured at every load.
+  Licensed text on screen when its window ends stays there until the reader
+  leaves it or the app quits, and a current copy in memory is taken from
+  memory by a switch without being measured again, so in a session that
+  outlives its window it can be shown again after the window has ended. In the
+  next major release a superseded copy's window (the **Licensed bridge**) is
+  measured from its own saved-at stamp, and nothing restamps it; a switch to
+  the bridge's copy is a load, never taken from memory, so no switch hands it
+  out past its window.
 
 ## Incoherent states
 
@@ -384,6 +446,18 @@ superseded epochs of licensed versions unconditionally. The test carries the
 control that makes that safe — it proves the file cannot be served before
 deleting it — and its twin proves the **public-domain** lane is untouched,
 because there the superseded epoch is the offline upgrader's whole canon.
+
+The next major release (`docs/NEXT.md`) keeps a licensed superseded copy whose
+saved-at stamp is inside its own recency window while no current epoch loads,
+which a failed fetch may serve (the **Licensed bridge**), so that a licensed
+`cacheEpoch` bump does not put an offline upgrader on the default
+translation. Its lifetime is bounded by that window and measured again at
+every launch, so `D2` does not return. The test's control proves, in both
+states, that no read serves a copy beside a current epoch before it deletes
+it (`TestSupersededLicensedEpochsAreNotRetained`);
+`licensed_epoch_bridge_next_test.go` proves what the next release keeps, what
+it serves and what replaces it, and `licensed_epoch_bridge_current_test.go`
+that the shipping build keeps and serves none of it.
 
 `D3` is a **coupling** defect, and the reason the map matters. M1 knows a
 version is serving a superseded epoch; M3 computes `fullPending` from the
@@ -1017,6 +1091,26 @@ already holds, and each is safe as it stands.
   whose canon holds the place and whose copy is on disk — the WEBC in Tobit —
   and say it is shown instead, as it says the WEB is now.
 
+Verifying the **Licensed bridge** (2026-10-02, next major release) raised a
+fourth, also safe as it stands.
+
+- **A licensed previous edition on screen.** The bridge's copy on screen is
+  said in the existing sentence, "is showing a previous edition until the
+  update can be downloaded". For a public-domain translation the refresh
+  downloads it while the app runs (`D17`). For the NKJV nothing in the
+  running app asks while it stays on screen: the refresh never spends the
+  API.Bible quota on its own, and tapping its checked row does nothing
+  (`switchVersionInteractive` returns at once for the translation on
+  screen). The update comes with the next launch that restores it, or when
+  the reader leaves it and chooses it again, or follows a link to it from
+  another translation. Each of those asks the provider, because a switch
+  never takes the bridge's copy from memory (`bridgeInMemory`), and none
+  serves the copy past its window. The sentence could say so for a licensed
+  translation, or a tap on the checked row of a translation recorded stale
+  could load it: a reader's tap, spending the quota as any choice of it
+  does. Either changes what the reader sees, which the bridge was built not
+  to do.
+
 ## The whole machine — what a complete model must cover
 
 This document began as the storage question and grew into the map below,
@@ -1115,7 +1209,7 @@ not named in its register, and each test logs its own count when run with
 | **M2** credentials | `version_credentials_flow_test.go` | 10 cells — five knowledge states (absent, held, unreadable, legacy-only, unreadable-with-legacy) × two events, including the irreversible one |
 | **M3** refresh | `version_refresh_flow_test.go` | 160 cells across pending × seed × downloading × backoff × active version, and **310 journeys** to depth 4 from the two starting states a launch can produce; `R-D` asked after every step since 2026-09-25, and the picker's retry the real `noticeOnPickerOpen`, its fetch held at the door `TestMain` shuts |
 | **M4** selection | `version_selection_flow_test.go` | 8 cells — memory (absent, current epoch, previous epoch) × disk (absent, current, previous), one unserveable combination skipped |
-| **M5 × M6 × M7** launch | `version_launch_flow_test.go` | 22 cells — the saved choice (default, wider canon, licensed) × its fate at launch (loads, load fails, superseded only, unselectable, and for the licensed translation its key cleared on purpose) × the saved book (Genesis, or Tobit under the wider canon or beside the remembered licensed translation, `D22`) — through the real tail (`startAtDefault`) and observed on the live state, through the hand-off `adoptLaunch` (`D18`), with `L-E`/`L-F` asked of the two cells that put a previous edition on screen |
+| **M5 × M6 × M7** launch | `version_launch_flow_test.go` | 24 cells — the saved choice (default, wider canon, licensed) × its fate at launch (loads, load fails, superseded only, unselectable, and for the licensed translation its key cleared on purpose and its superseded copy past its own window) × the saved book (Genesis, or Tobit under the wider canon or beside the remembered licensed translation, `D22`) — through the real tail (`startAtDefault`) and observed on the live state, through the hand-off `adoptLaunch` (`D18`), with `L-E`/`L-F` asked of the cells that put a previous edition on screen: two in the shipping build, which asks besides that no cell puts a licensed one there; four in the next major release, where `L-G`, the window, is asked of the two that are the **Licensed bridge**, and `L-F` asks that the restore asked the provider before the copy served and that the reader's next choice of the translation loads it again |
 | **Arrivals** | `version_arrivals_flow_test.go` | **1142 journeys / 4780 steps** to depth 5 over nine events — a link naming another translation, its fetch failing with nothing to fall back on or with the previous edition serving, the load in flight landing, the reader picking that translation or a different one, the reader picking either while it is still loading at the next step, and the refresh's owed upgrade landing — in six worlds: three disks for the link's translation (its current edition: 107 journeys / 420 steps; only the previous one: 198 / 826; none: 266 / 1144), each with nothing remembered and with the reader's licensed translation remembered. Every event goes through the app's own entry point, and what the app starts on a goroutine — a translation's load, the refresh's fetch, its retry timer — is held at its door and landed through the tail the app built (`D17`, `D19`). The invariants are asserted after every step and liveness over the walk. A journey is a sequence of events that each did something; the walk used to count events that could not happen in the state they met, such as a fetch failing with nothing loading, which walked the same states again, and that is why 4662 journeys at depth 4 became fewer at depth 5 |
 
 The cells found `V1`, `V2`, `D1`–`D3`, `D6`–`D11`; the journeys found `D4`,

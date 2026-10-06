@@ -156,11 +156,17 @@ each Hebrew letter heading Psalm 119's stanzas in small capitals, and the
 twenty-two names are drawn so on every surface, after the letter in the Hebrew
 face. Measured on the fresh fetch of 2 October 2026: 74 section headings carry
 the divine name (64 `Lord`, 10 `Lord's`), 4 titles carry it 6 times, and those
-22 stanza names are the only other small capitals in a heading. An installed app picks this up when its copy of
-the NKJV is next decoded — at its next fetch, within the 30-day recency window —
-or at once if the NKJV's `cacheEpoch` is bumped, which has deliberately not been
-done (`versions.go`). The website fetches afresh on every build and has it at
-once.
+22 stanza names are the only other small capitals in a heading. An installed app
+picks this up when its copy of the NKJV is next decoded — at its next fetch,
+within the 30-day recency window. The shipping build has deliberately not
+bumped the NKJV's `cacheEpoch` for it. The next major release does, to epoch 8
+(`versions.go`, `docs/NEXT.md`), which it shares with the headings the passage
+walk used to drop after a chunk boundary: there the first launch that can reach
+API.Bible fetches the edition again rather than serving the copy it has, and a
+launch that cannot goes on serving that copy, inside its own 30-day window,
+until a later launch, or the reader choosing the NKJV again, can
+(`docs/VERSION_STATES.md`, the licensed bridge). The website fetches afresh on
+every build and has it at once.
 
 Three things about the way out matter more than they look.
 

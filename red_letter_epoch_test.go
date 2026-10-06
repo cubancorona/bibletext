@@ -18,22 +18,31 @@ import "testing"
 // the failure is a red build rather than fifteen mis-attributed verses.
 //
 // When this fails: regenerate with scripts/gen-nkjv-redletter.py against a
-// cache written by the NEW decoder, then raise this constant. The script reads
-// the cached HTML it already has, so it costs no API quota beyond one fresh
-// download of the edition.
-const nkjvRedLetterTableEpoch = 7
+// cache written by the NEW decoder, then raise the epoch below. The script
+// reads the cached HTML it already has, so it costs no API quota beyond one
+// fresh download of the edition.
+func nkjvRedLetterTableEpoch() int {
+	if nextRelease {
+		// Raised from 7 to 8 for the next major release (docs/NEXT.md) with
+		// the table unchanged: regenerated against a fresh download decoded at
+		// epoch 8, it came out byte for byte the same, because that epoch
+		// changes the headings and the psalm titles and no verse's text.
+		return 8
+	}
+	return 7
+}
 
 func TestNKJVRedLetterTableMatchesTheDecoderThatMadeIt(t *testing.T) {
 	v, ok := versionByID("nkjv")
 	if !ok {
 		t.Fatal("no nkjv version registered")
 	}
-	if v.cacheEpoch != nkjvRedLetterTableEpoch {
+	if v.cacheEpoch != nkjvRedLetterTableEpoch() {
 		t.Fatalf(
 			"the NKJV red-letter table was fingerprinted at cache epoch %d and the decoder is now at %d.\n"+
 				"A verse whose text changed no longer matches its fingerprint, and a verse that fails to match\n"+
 				"is painted red from end to end — the narrator's words attributed to Christ. Regenerate\n"+
 				"red_letter_nkjv_data.go against the new decoder and raise nkjvRedLetterTableEpoch.",
-			nkjvRedLetterTableEpoch, v.cacheEpoch)
+			nkjvRedLetterTableEpoch(), v.cacheEpoch)
 	}
 }

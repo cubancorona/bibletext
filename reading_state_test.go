@@ -487,8 +487,10 @@ func TestWriteReadingStateSeqLatestWins(t *testing.T) {
 //
 // This is the failure the bundled-key release makes reachable: the NKJV cache is
 // deleted before its refetch (§11 — stale licensed text is revalidated, not
-// served) and the cache-only path refuses stale/superseded licensed copies for
-// the same reason. So offline — or with the shared key's monthly quota spent,
+// served) and the fallback refuses a stale licensed copy for the same reason,
+// and a superseded one too, or in the next major release serves one only
+// inside its own window, and here there is none. So offline — or with the
+// shared key's monthly quota spent,
 // which looks identical from the device — BOTH routes fail. Before this fix the
 // error aborted the whole launch to a Retry button that could never succeed,
 // and the reader could not even switch translations to escape, because the app

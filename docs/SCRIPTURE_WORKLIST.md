@@ -66,6 +66,10 @@ edition's epoch should ship together in one release, not one at a time.
 Items S2 and S14 both need the helloao editions. S16's NKJV half was to wait
 for another NKJV decoder change to travel with; it needed no epoch of its own
 in the end, because capture had already spent one and drawing spends none.
+NKJV epoch 8, in the next major release (`docs/NEXT.md`), is two fixes
+travelling together: the headings the passage walk dropped after a chunk
+boundary, and the small capitals in headings and psalm titles. The shipping
+build keeps epoch 7, and each reader's copy takes both at its next fetch.
 
 **Checks before changes.** The decode-time checks in stage 2 cost no epoch
 and no reader-visible change, and every later item is safer with them in

@@ -403,7 +403,10 @@ captured with the publisher's own style name — 2,721 of them, 2,674 section
 heads and 47 acrostic letters, and 2,876 once the passage walk stopped dropping
 those after a chunk boundary inside a chapter — and drawn by the same block model every other
 edition uses. Two things about that are worth saying plainly. The epoch was
-spent, batched with the capture; drawing costs none. And the block model is
+spent, batched with the capture; drawing costs none. (The 155 recovered
+headings take a second one in the next major release, epoch 8, batched with
+the small capitals in headings and titles; the shipping build leaves them to
+each copy's next fetch. See `docs/NEXT.md`.) And the block model is
 edition-blind, so nothing in the drawing path consults this edition's licensing
 at all — the sequencing this recommendation asked for is not enforced anywhere
 in the code, and holds only for as long as someone remembers it. The probe was

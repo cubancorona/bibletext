@@ -160,13 +160,12 @@ func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
 	go func() {
 		// Licensed translations whose licence configuration is gone must not
 		// keep their on-device copies (the removal obligation that comes with
-		// content held under terms). Cheap no-op for everyone else.
-		purgeUnavailableLicensedCaches()
-		// And every superseded epoch of a licensed translation, licence or
-		// not: those files can never be served (the licensed branch returns
-		// before the superseded walk) and are never age-checked, so nothing
-		// else would ever remove them.
-		purgeSupersededLicensedCaches()
+		// content held under terms), and a licensed superseded epoch that can
+		// never be served would otherwise never be removed: in the shipping
+		// build every one; in the next major release every one that can no
+		// longer bridge an epoch bump, past its own recency window or beside
+		// a current epoch that loads. Cheap no-op for everyone else.
+		sweepLicensedCachesAtLaunch()
 		// Show per-book download progress on the loading spinner during a first-run fetch.
 		loadProgressFn = func(book string, bookNum, totalBooks, chapter int) {
 			ref := book
@@ -304,10 +303,14 @@ var startUpgradeFetch = func(v BibleVersion, land func(*BibleData, dataMode, err
 // owedUpgrades is what the refresh owes, in the order it fetches: the
 // translation on screen, then the default, then the rest in registry order.
 // The default is owed while fullPending; any other translation while it is
-// RECORDED as showing its previous edition (D3). Never a licensed one: it is
-// never served stale (V-E), and a fetch of it spends the API.Bible monthly
-// quota, which the app never spends on its own initiative. Never a
-// placeholder: it has nothing to fetch.
+// RECORDED as showing its previous edition (D3). Never a licensed one, even
+// one recorded as showing its previous edition from the bridge
+// (loadLicensedBridge, next major release only): a fetch of it spends the
+// API.Bible monthly quota, which the app never spends on its own initiative.
+// A later load of it asks for the current epoch first, as every licensed load
+// does: the next launch that restores it, or the reader's next choice of it
+// or a link to it, which never takes the bridge's copy from memory
+// (bridgeInMemory). Never a placeholder: it has nothing to fetch.
 func owedUpgrades(state *AppState) []BibleVersion {
 	if state == nil {
 		return nil
@@ -799,6 +802,10 @@ func defaultStartBook(bd *BibleData) string {
 	return "Matthew"
 }
 
-func currentUTCTime() time.Time {
+// currentUTCTime is the clock the cache stamps are written with and the
+// licensed recency window is measured by. A var so the suite can hold it
+// still, and test a window's edge exactly rather than an hour either side of
+// the wall clock.
+var currentUTCTime = func() time.Time {
 	return time.Now().UTC()
 }

@@ -132,26 +132,70 @@ the next major version starts filling it.
 
 ## What is behind the switch
 
-Nothing has been ported yet. Three pieces were reviewed and parked while 1.2.19
-was prepared, and come next. Each is ported as a change, not merged: `main` already
-holds earlier work from the same lines under different commits.
+Three pieces were reviewed and parked while 1.2.19 was prepared. Each is
+ported as a change, not merged: `main` already holds earlier work from the same
+lines under different commits. The first is ported; the other two come next.
 
 ### 1. Every reader's NKJV refreshed at cache epoch 8, with an offline bridge
 
-The NKJV's cache epoch rises from 7 to 8, so the first launch of the release
-fetches the edition again (about 13 MB once): two decoder fixes change the
-headings a reader holds after a 200-verse passage boundary, and the divine
-name in small capitals inside headings and psalm titles. A reader offline at
-that launch keeps reading the previous epoch's copy while it is inside its
-30-day window, instead of the WEB. The verse-of-the-day snapshot's sources
-line records the epochs it was checked against.
+**Ported, behind the switch.** The NKJV's cache epoch rises from 7 to 8, so
+the first launch of the release that can reach API.Bible fetches the edition
+again (about 13 MB once). Two decoder fixes that the shipping decoder already
+has change what a reader holds: the headings after a 200-verse passage
+boundary, and the divine name in small capitals inside headings and psalm
+titles. Without the epoch each copy takes them at its next fetch, within its
+30-day window, which is what the shipping build does. A reader offline at
+that first launch keeps reading the previous epoch's copy while it is inside
+its own 30-day window, instead of the WEB: the **Licensed bridge** in
+`VERSION_STATES.md`, where its states and transitions are written out.
 
-With the switch off, the NKJV's epoch is 7.
+Where the switch is read, all in `versions.go`:
+
+- `nkjvCacheEpoch`: 7 off, 8 on.
+- `loadLicensedBridge`, `bridgeInMemory`, and the rule in
+  `purgeSupersededLicensedCaches` that keeps a copy the bridge may serve.
+  Off, the bridge serves nothing, no copy in memory is the bridge's, and the
+  sweep deletes every licensed superseded epoch, as 1.2.19 does.
+
+The rest of the change is shared and, off, does what 1.2.19 does:
+`loadVersionFallback` (the cache-only read, off), `sweepLicensedCachesAtLaunch`
+(the two startup purges in their old order), the call sites in
+`reading_state.go`, `versions_ui.go` and `share_link_open.go`, and
+`currentUTCTime`, now a var so the tests can hold the clock still.
+
+The tests: `licensed_epoch_bridge_test.go` holds the device the others launch
+and what holds in both states. `licensed_epoch_bridge_next_test.go` and
+`nkjv_epoch_next_test.go` hold the next release's behaviour, and
+`licensed_epoch_bridge_current_test.go` and `nkjv_epoch_current_test.go` the
+shipping build's, so a bridge or an epoch that reaches it fails there. The
+launch enumeration asks for a licensed previous edition on screen with the
+switch on and for none with it off. The red-letter table's recorded epoch is 7
+or 8 to match: regenerated against an epoch-8 download, the table came out
+byte for byte the same, because the epoch changes headings and titles and no
+verse's text.
+
+Trying it: a build with the switch on, at its first launch that can reach
+API.Bible with the NKJV chosen, fetches `bibletext-nkjv-v8.json` and deletes
+the epoch-7 copy, which spends the provider's quota once. A build
+without it on the same data afterwards (the store build reinstalled, or
+`go run ./cmd/bibletext` after `go run -tags next ./cmd/bibletext`, which share
+one cache folder) finds no epoch-7 copy and fetches the NKJV again, and
+neither reads nor removes the epoch-8 file. That file stays until a build with
+the switch on runs again, the system clears the cache folder, or it is
+deleted from that folder by hand.
+
+The verse-of-the-day snapshot (`testdata/verse_of_day_snapshot.json`) holds in
+both states: regenerated from an epoch-8 download when this was built, all 329
+entries in all four editions came out as they were. Its `sources` block, which
+names the cache files the last generation read, is left as it is; it already
+names older public-domain epochs than the shipping build's, and is rewritten
+when the snapshot is next regenerated.
 
 Open decision: while the bridged copy stays on screen nothing asks for the
 update, but the picker's sentence, "showing a previous edition until the
 update can be downloaded", promises one within the session. Either the words
-change, or a tap on its checked row fetches.
+change, or a tap on its checked row fetches (`VERSION_STATES.md`, *Open
+decisions*).
 
 ### 2. The Greek Esther mapped verse for verse, like Daniel 3
 

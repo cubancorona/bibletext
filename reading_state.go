@@ -417,8 +417,12 @@ func restoreReadingState(state *AppState, rs readingState, base *BibleData) (boo
 				// network the whole launch aborted to Retry even though this
 				// version's own previous-epoch cache is a complete, valid canon
 				// sitting on disk. Serve that instead of refusing to open; a
-				// later online launch re-fetches and upgrades in place.
-				old, oldMode, cerr := loadVersionFromCacheOnly(v)
+				// later online launch re-fetches and upgrades in place. A
+				// licensed translation's previous epoch serves only in the
+				// next major release, inside that copy's own recency window,
+				// with no current epoch on disk (loadLicensedBridge, through
+				// loadVersionFallback); in the shipping build, never.
+				old, oldMode, cerr := loadVersionFallback(v)
 				// If that succeeded it may be the SUPERSEDED epoch — a
 				// complete canon from the previous decoder. Record it so the
 				// picker can say so; nothing else would (D3).
@@ -427,20 +431,22 @@ func restoreReadingState(state *AppState, rs readingState, base *BibleData) (boo
 				}
 				if cerr != nil {
 					// A LICENSED translation that cannot be revalidated must not
-					// abort the launch. Its cache was DELETED before the refetch
-					// (versions.go: §11 says stale licensed text is revalidated,
-					// not served) and the cache-only path refuses a stale or
-					// superseded copy for the same reason — so offline, or with
-					// the shared key's quota spent, both routes fail and the
-					// reader was left staring at a Retry button that could not
-					// succeed, locked out of the WHOLE app because their last
-					// translation happened to be the licensed one.
+					// abort the launch. A cache past its window was DELETED
+					// before the refetch (versions.go: §11 says stale licensed
+					// text is revalidated, not served), and the fallback refuses
+					// a superseded epoch, or in the next major release serves
+					// one only inside its own window — so offline, or with the
+					// shared key's quota spent, with no copy it may serve on
+					// disk, both routes fail and the reader was left staring at
+					// a Retry button that could not succeed, locked out of the
+					// WHOLE app because their last translation happened to be
+					// the licensed one.
 					//
 					// Fall through to the default canon instead: the app opens,
 					// and the saved book and chapter survive (all our
-					// translations share the structure). Nothing stale is
-					// served, so the compliance line is untouched — this is only
-					// about refusing to open the app.
+					// translations share the structure). Nothing past its window
+					// is served, so the compliance line is untouched — this is
+					// only about refusing to open the app.
 					//
 					// preferredVersion is what makes it a fallback rather than a
 					// forgetting, and it is why the licensed text DOES come back

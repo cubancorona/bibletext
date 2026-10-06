@@ -63,6 +63,25 @@ type BibleVersion struct {
 	// a stale cache. Bumping the epoch versions the cache path
 	// (bibletext-<id>-v<epoch>.json), so existing installs re-fetch and re-decode
 	// only THIS version; others keep their caches. 0 = legacy unversioned path.
+	//
+	// A LICENSED version's bump costs more than a public-domain one's. The
+	// startup fast path never serves its superseded epoch. In the shipping
+	// build nothing does, and the startup sweep deletes it
+	// (purgeSupersededLicensedCaches), so a reader whose first launch after
+	// the release is offline reads the default translation until the edition
+	// can be fetched again. In the next major release (nextRelease,
+	// docs/NEXT.md) that copy serves as a bridge (loadLicensedBridge): while
+	// no current-epoch copy loads, after the fetch of the current epoch has
+	// failed, and while it is inside licensedRecencyWindow measured from its
+	// own saved-at stamp. That reader goes on reading the edition from the
+	// copy they already hold, marked as a previous edition, and the next load
+	// of the translation that can fetch replaces it and deletes it: a launch
+	// that restores it, or the reader choosing it or a link to it, which
+	// never takes that copy from memory (bridgeInMemory). A superseded copy
+	// past its window is never served and the startup sweep deletes it. In
+	// both, every re-fetch spends the provider's quota, and a licensed copy is
+	// re-fetched within licensedRecencyWindow anyway, so the bump only brings
+	// a decoder change forward by up to that window.
 	cacheEpoch int
 
 	// source fetches the real, licensed text. When it is unavailable (no
@@ -154,16 +173,37 @@ var registeredVersions = []BibleVersion{
 		// skipped; epoch 3 the publisher's paragraphing, read from
 		// the feed's own paragraph blocks, with the passage walk overlapping one
 		// verse so a chunk boundary cannot invent one.
-		// Carried by the next epoch, not given one of its own: the headings a
-		// chapter has after a passage-chunk boundary (mergeChunkHeadings), and
-		// the small capitals the edition sets the divine name in inside a
-		// heading or a psalm's title (Heading.SmallCaps,
-		// Superscription.SmallCaps). Every licensed copy is re-fetched, and so
-		// re-decoded, within licensedRecencyWindow, and an epoch costs every
-		// reader a download.
-		cacheEpoch: 7,
+		// epoch 8, in the next major release only (nkjvCacheEpoch): the
+		// headings a chapter has after a passage-chunk boundary
+		// (mergeChunkHeadings — 155 of them, eighteen of Psalm 119's acrostic
+		// letters among them), and the small capitals the edition sets the
+		// divine name in inside a heading or a psalm's title
+		// (Heading.SmallCaps, Superscription.SmallCaps). Two decoder changes
+		// batched into one epoch, because an epoch costs every reader a
+		// download of the whole edition. Without it a copy decoded before them
+		// serves until its recency window runs out, which is what the shipping
+		// build does: there both reach a reader's copy when it is next
+		// re-fetched, within licensedRecencyWindow. The epoch also brings
+		// forward the tagged citations in each cross-reference note
+		// (Footnote.Refs), which shipped without an epoch and are drawn only in
+		// a build with the nkjvxrefs tag. The verse text is unchanged, so the
+		// red-letter table and the versification tables carry over as they
+		// are.
+		cacheEpoch: nkjvCacheEpoch(),
 		source:     newBYOKLicensedSource("nkjv", nkjvProviderBibleID),
 	},
+}
+
+// nkjvCacheEpoch is the NKJV's cacheEpoch: 7 in the shipping build, 8 in the
+// next major release (nextRelease, docs/NEXT.md). At 8 the first launch that
+// can reach API.Bible fetches every reader's edition again, about 13 MB once,
+// rather than serving the copy decoded before the fixes the registry entry
+// lists until its recency window runs out.
+func nkjvCacheEpoch() int {
+	if nextRelease {
+		return 8
+	}
+	return 7
 }
 
 func bibleVersions() []BibleVersion { return registeredVersions }
@@ -263,6 +303,25 @@ func licensedCacheStale(path string) bool {
 		return false
 	}
 	return currentUTCTime().Sub(savedAt) > licensedRecencyWindow
+}
+
+// licensedCopyInsideWindow reports whether the licensed copy at path is
+// inside licensedRecencyWindow measured from its OWN saved-at stamp: the one
+// age a superseded epoch may be served on (loadLicensedBridge) or kept for
+// (purgeSupersededLicensedCaches), both in the next major release only. The
+// boundary is licensedCacheStale's: a copy exactly licensedRecencyWindow old
+// is inside it, and so is one stamped ahead of the clock, which
+// licensedCacheStale holds fresh (clock skew). The default is the opposite
+// one. A stamp that cannot be read is NOT inside the window: this answer is
+// what allows a copy nothing will revalidate to be served, where
+// licensedCacheStale's only decides whether to refetch a current copy that
+// the full load path then decodes and validates itself.
+func licensedCopyInsideWindow(path string) bool {
+	savedAt, err := cacheSavedAt(path)
+	if err != nil {
+		return false
+	}
+	return currentUTCTime().Sub(savedAt) <= licensedRecencyWindow
 }
 
 // purgeUnavailableLicensedCaches removes on-device copies of licensed
@@ -398,9 +457,13 @@ func loadVersionFromCacheOnly(v BibleVersion) (*BibleData, dataMode, error) {
 	if err == nil {
 		return data, modeReal, nil
 	}
-	// The superseded-epoch fallback below is a stale-serve by design — right
-	// for public-domain texts, wrong for licensed ones, which never serve
-	// stale copies.
+	// The superseded-epoch walk below serves a previous decode with no
+	// further question — right for public-domain texts, wrong for licensed
+	// ones on THIS path, which runs before any fetch has been tried. In the
+	// next major release a licensed superseded epoch is served only by
+	// loadVersionFallback, after the fetch has failed, and only inside that
+	// copy's own recency window (loadLicensedBridge); in the shipping build
+	// it is never served.
 	if isLicensedSource(v) {
 		return nil, modeReal, errCacheNotFound
 	}
@@ -419,6 +482,97 @@ func loadVersionFromCacheOnly(v BibleVersion) (*BibleData, dataMode, error) {
 		}
 	}
 	return nil, modeReal, errCacheNotFound
+}
+
+// loadVersionFallback is what a translation can still serve once
+// loadVersionData has failed to give it — offline, the provider refusing the
+// key, or the quota spent — and it is called only from there: the launch's
+// restore of the saved translation and the end of an interactive load. It is
+// the cache-only read, and for a licensed translation in the next major
+// release the bridge besides (loadLicensedBridge). In the shipping build it is
+// the cache-only read and nothing else.
+//
+// It is kept apart from loadVersionFromCacheOnly, the startup fast path that
+// runs before any fetch, so that the only way to a licensed superseded epoch
+// is through a fetch that has failed: a licensed edition whose current epoch
+// loads, or whose fetch succeeds, is never served from a previous epoch.
+func loadVersionFallback(v BibleVersion) (*BibleData, dataMode, error) {
+	data, mode, err := loadVersionFromCacheOnly(v)
+	if err == nil || !isLicensedSource(v) {
+		return data, mode, err
+	}
+	if bridged, berr := loadLicensedBridge(v); berr == nil {
+		return bridged, modeReal, nil
+	}
+	return nil, mode, err
+}
+
+// loadLicensedBridge serves a licensed translation's SUPERSEDED epoch — the
+// copy a reader already holds when a cacheEpoch bump renames the cache — in
+// the next major release (nextRelease, docs/NEXT.md). The shipping build has
+// no bridge: it refuses every copy, and a licensed superseded epoch is never
+// served. In the next release it serves one only when all three hold:
+//
+//   - no current-epoch copy loads. versionCacheIsCurrent loads rather than
+//     stats, for V1's reason, so a torn file at the current path is no copy;
+//   - the fetch of the current epoch has failed. This is reached only through
+//     loadVersionFallback, whose callers come to it from a loadVersionData
+//     that tried the current cache and then the provider;
+//   - the copy is inside licensedRecencyWindow measured from its own
+//     saved-at stamp (licensedCopyInsideWindow).
+//
+// A copy that meets them is the edition the reader held before the release,
+// inside the window it could have served in under its old name, so serving
+// it is what the app would have done had the epoch not moved. Newest first,
+// as in the public-domain walk.
+//
+// It reads and never writes. The copy keeps its own stamp, so its window
+// ends when it would have ended; nothing here deletes it either. The purge in
+// loadVersionData removes it the moment the current epoch is on disk, and the
+// startup sweep once its window is over (purgeSupersededLicensedCaches).
+//
+// The callers mark the translation as showing a previous edition (D3), so the
+// picker says so. The refresh never fetches it, because the app never spends
+// the provider's quota on its own initiative (owedUpgrades). What asks for the
+// current epoch is what asks for any licensed translation: a load of it,
+// which tries the provider before it falls back here. A launch makes one when
+// it restores the translation, and in a session the reader's choice of it, or
+// a link to it, makes one: the copy served here is never taken from memory
+// instead (bridgeInMemory). While it stays on screen, nothing asks.
+func loadLicensedBridge(v BibleVersion) (*BibleData, error) {
+	if !nextRelease || !isLicensedSource(v) || v.source == nil || !v.source.available() || versionCacheIsCurrent(v) {
+		return nil, errCacheNotFound
+	}
+	noFetch := func() (*BibleData, error) { return nil, errCacheNotFound }
+	for _, path := range supersededCachePaths(v) {
+		if !licensedCopyInsideWindow(path) {
+			continue
+		}
+		if data, _, err := loadBibleData(noFetch, path, currentUTCTime); err == nil {
+			return data, nil
+		}
+	}
+	return nil, errCacheNotFound
+}
+
+// bridgeInMemory reports whether the copy of v held in memory is the bridge's:
+// a licensed translation recorded as showing a previous edition, which only
+// loadLicensedBridge serves, and so only in the next major release. Always
+// false in the shipping build, which has no bridge, so there every switch
+// treats a licensed copy in memory as it treats any other. In the next release
+// a switch never takes that copy from memory the way it takes any other
+// translation already loaded. It loads the translation, which asks the
+// provider for the current epoch first and comes back to the bridge only when
+// that fails and the copy is still inside its window. Taken from memory, the
+// copy was the translation's text for the rest of the session: a reader back
+// online who chose it again was handed it again, and handed it after its
+// window had ended.
+func bridgeInMemory(state *AppState, v BibleVersion) bool {
+	if !nextRelease || state == nil || !isLicensedSource(v) || !state.staleVersions[v.ID] {
+		return false
+	}
+	_, held := state.loadedVersions[v.ID]
+	return held
 }
 
 func loadVersionData(v BibleVersion, base *BibleData) (*BibleData, dataMode, error) {
@@ -549,29 +703,65 @@ func versionCacheIsCurrent(v BibleVersion) bool {
 	return err == nil
 }
 
-// purgeSupersededLicensedCaches removes every SUPERSEDED epoch of every
-// licensed translation, unconditionally, at startup.
+// sweepLicensedCachesAtLaunch is the startup's licensed-cache sweep, run on
+// the load goroutine before anything is read: the copies of a translation
+// whose licence configuration is gone (purgeUnavailableLicensedCaches), then
+// the superseded epochs (purgeSupersededLicensedCaches). Named so the tests
+// run the launch's own order rather than a copy of it.
+func sweepLicensedCachesAtLaunch() {
+	purgeUnavailableLicensedCaches()
+	purgeSupersededLicensedCaches()
+}
+
+// purgeSupersededLicensedCaches removes, at startup, the SUPERSEDED epochs of
+// every licensed translation: in the shipping build every one,
+// unconditionally; in the next major release (nextRelease, docs/NEXT.md)
+// every one except those the bridge (loadLicensedBridge) may still serve.
 //
-// A licensed superseded epoch can never legitimately be served:
-// loadVersionFromCacheOnly returns on the licensed branch before it reaches
-// the superseded-epoch walk, precisely because a licensed copy past its
-// recency window must be revalidated rather than served. So these files are
-// unreadable by the app AND unreachable by the §11 recency machinery, which
-// only ever age-checks the current epoch — a licensed text sitting on the
-// reader's device with an unbounded lifetime and nothing that will ever look
-// at it again. The only two things that removed them were a successful load
-// of that version (which a reader who stopped opening it never performs) and
-// the licence going away.
+// In the shipping build a licensed superseded epoch can never legitimately be
+// served: loadVersionFromCacheOnly returns on the licensed branch before it
+// reaches the superseded-epoch walk, precisely because a licensed copy past
+// its recency window must be revalidated rather than served, and there is no
+// bridge. So these files are unreadable by the app AND unreachable by the §11
+// recency machinery, which age-checks a copy only when it loads it — licensed
+// text sitting on the reader's device with an unbounded lifetime and nothing
+// that will ever look at it again. The only two things that removed them were
+// a successful load of that version (which a reader who stopped opening it
+// never performs) and the licence going away. Deleting them costs the reader
+// nothing — they cannot be read — and discharges the retention half of the
+// obligation. See D2 in docs/VERSION_STATES.md.
 //
-// Deleting them costs the reader nothing — they cannot be read — and
-// discharges the retention half of the obligation. See D2 in
-// docs/VERSION_STATES.md.
+// The next release keeps a copy whose saved-at stamp puts it inside
+// licensedRecencyWindow, while no current-epoch copy of the translation
+// loads. Such a copy is the edition an offline reader goes on reading after a
+// cacheEpoch bump. The sweep reads the stamp, not the text, so it also keeps
+// a copy whose stamp reads and whose text the bridge then cannot decode, and
+// an older epoch inside its own window beside the newest, which the bridge
+// serves only when no newer one decodes. None of them stays past its window:
+// the sweep at every launch measures each again. Every other superseded epoch
+// is removed as in the shipping build, for the same reason: past its window
+// by the §11 rule, or beside a current epoch that loads because the current
+// one is what serves, it can never be served. The current epoch is asked
+// about only once a superseded file is found, so a launch with nothing to
+// sweep does not decode the current cache to learn that.
 func purgeSupersededLicensedCaches() {
 	for _, v := range registeredVersions {
 		if !isLicensedSource(v) {
 			continue
 		}
+		asked, current := false, false
 		for _, path := range supersededCachePaths(v) {
+			if nextRelease {
+				if _, err := os.Stat(path); os.IsNotExist(err) {
+					continue
+				}
+				if !asked {
+					asked, current = true, versionCacheIsCurrent(v)
+				}
+				if !current && licensedCopyInsideWindow(path) {
+					continue // the bridge
+				}
+			}
 			_ = os.Remove(path)
 		}
 	}
@@ -660,6 +850,13 @@ func switchVersion(state *AppState, id string, cause switchCause) {
 	// decode is in memory, only the refresh writes its current epoch (D17), so
 	// this is a switch made between that write and the refresh's own tail.
 	if cached && state.staleVersions[id] && versionCacheIsCurrent(v) {
+		cached = false
+	}
+	// The licensed bridge's copy is never served from memory, whatever the
+	// disk holds (bridgeInMemory, next major release only). This is the
+	// synchronous core's backstop: the picker and a link send that load off
+	// the UI goroutine themselves.
+	if cached && bridgeInMemory(state, v) {
 		cached = false
 	}
 	mode := modeReal
