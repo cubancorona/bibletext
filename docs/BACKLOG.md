@@ -3725,16 +3725,18 @@ Note or Cross-references, and a drag from the title into the psalm is cut at
 verse 1's number before Go sees it. So no shipped pane shared a title as
 Scripture, and decision 5 below (a title selected on its own cites verse 1
 with no quotation) is never seen on them: a reader gets no share verbs on a
-title at all, which may be what is wanted. The one page that does hand a
-title over is the Mac's plain-text fallback, when a chapter fails to import
-as HTML (`gMacContentStart` is 0 there, and no selection has a span), with
-the dead legacy pane. That is what the change below serves. With no span, a
-selection that is a piece of the title is answered as the title, and the same
-words selected in a later verse are too ("Yahweh" in Psalm 18, whose title
-names him): no quotation, verse 1, where before they were quoted from their
-first copy in the psalm. On every pane, the change's visible effect is on
-headings, as the paragraph on headings below says, and that wider effect was
-not part of the decision.
+title at all, which may be what is wanted. The pages that do hand a title
+over are the plain-text fallbacks the Mac and the iPhone and iPad show when a
+chapter fails to import as HTML (`gMacContentStart` is 0 on the Mac's, and
+the iPhone and iPad's empties its verse index, so `btIOSContentStart` is 0 as
+well; no selection on either has a span), with the dead legacy pane. That is what the
+change below serves. With no span, a selection that was a piece of the title
+was answered as the title, and so were the same words selected in a later
+verse ("Yahweh" in Psalm 18, whose title names him): no quotation, verse 1,
+where before they were quoted from their first copy in the psalm. That is
+fixed: whole words of the title are looked for in the psalm first (below). On
+every pane, the change's visible effect is on headings, as the paragraph on
+headings below says, and that wider effect was not part of the decision.
 
 What was done: fixed in `normalizeShareSelectionProse` and `stripHeadings`
 (`share.go`), which every verb resolves a selection through. A drag from the
@@ -3743,9 +3745,23 @@ span: the title, or its end, comes off when verse 1's number confirms it, and
 with a heading between them the heading repair takes both. A title selected
 on its own, or run on to verse 1's number or into part of its first word,
 quotes nothing and cites verse 1, as decided; a selection with no span that
-is a piece of the title is answered so before its words are looked for in the
-psalm, where "his" or "son" would be found. The link's verses, which a sent
-note is kept against, agree.
+is whole words of the title, as a double-click or a drag from word to word
+takes them, is looked for in the psalm first, as whole words there too, and
+quoted from its first such copy, cited by its verse, as any selection with no
+span is placed at its first copy; only the title whole, a phrase only the
+title has, a piece of a title's word, or what holds nothing quotable, a lone
+full stop, is answered as the title. A piece of a title's word stays the
+title's even where the psalm has the same letters as a word ("is" in "his",
+against "There is"), which `TestPsalmTitleDragSweep` requires; with no span
+nothing tells the two apart. `TestPsalmTitleWordsWithNoSpanSweep`
+(`share_cut_sweep_test.go`) selects every piece of an invented title that
+shares words with its psalm, 8,220 selections: of the 43 words and phrases
+of the title the psalm also holds as whole words, all 43 had been cited as
+verse 1 with nothing quoted, and all 43 are now quoted from their first copy
+in the psalm; before the title was answered at all (`1db51a02b`), 40 were,
+and "the", "he" and "all", whose first letters in the psalm stand inside a
+longer word, were shared verbatim under the chapter. The link's verses,
+which a sent note is kept against, agree.
 `TestPsalmTitleDragSweep` (`share_cut_sweep_test.go`) drags from every
 character of a title to every boundary through a heading, verse 1 and into
 verse 2, 14,124 drags, and `share_heading_selection_test.go` pins the shapes.

@@ -619,6 +619,36 @@ func isWordRune(r rune) bool {
 	return unicode.IsLetter(r) || unicode.IsDigit(r)
 }
 
+// wordAlignedIndex is the offset of the first copy of sub in s that splits no
+// word of s, or -1. Where sub opens with a word rune the rune before the copy
+// must not be one, and where it closes with one the rune after it must not
+// be: "he" is found in "and he heard" and not in "there".
+func wordAlignedIndex(s, sub string) int {
+	if sub == "" {
+		return -1
+	}
+	head, _ := utf8.DecodeRuneInString(sub)
+	tail, _ := utf8.DecodeLastRuneInString(sub)
+	for from := 0; from+len(sub) <= len(s); {
+		i := strings.Index(s[from:], sub)
+		if i < 0 {
+			return -1
+		}
+		i += from
+		end := i + len(sub)
+		before, _ := utf8.DecodeLastRuneInString(s[:i])
+		after, _ := utf8.DecodeRuneInString(s[end:])
+		splitsHead := isWordRune(head) && i > 0 && isWordRune(before)
+		splitsTail := isWordRune(tail) && end < len(s) && isWordRune(after)
+		if !splitsHead && !splitsTail {
+			return i
+		}
+		_, size := utf8.DecodeRuneInString(s[i:])
+		from = i + size
+	}
+	return -1
+}
+
 // normalizeShareSelection cleans a raw selection for sharing and attributes it
 // to its verse range positionally. ok=false when the selection can't be pinned
 // in the chapter (caller falls back to the legacy path).
@@ -693,19 +723,26 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 	// BtBridge's contentStart): a selection inside the title gets Copy and
 	// Look Up alone, and one from the title into the psalm is cut at verse
 	// 1's number before it gets here. What does hand a title over is a page
-	// with no verse geometry, the Mac's plain-text fallback when the chapter
-	// fails to import (gMacContentStart is 0 there, and nothing has a span),
-	// and the dead legacy pane. For those, two drags are answered here,
-	// before anything is looked for among the verses' words, because the
-	// title's words, "his" or "son" or its full stop, are often in the psalm
-	// too and would be found there:
+	// with no verse geometry: the plain-text fallback the Mac and the iPhone
+	// and iPad show when the chapter fails to import (gMacContentStart is 0
+	// there, as btIOSContentStart is with its verse index emptied, and
+	// nothing has a span), and the dead legacy pane. For those, two drags are
+	// answered here:
 	//
 	//   - a selection with no span that is the title or a piece of it,
 	//     perhaps on through a heading under it, is answered as a heading
-	//     selected on its own: verse 1, no quotation. With no span there is
-	//     no telling it from the same words selected in a verse, which are
-	//     answered the same way; with no span such words were only ever
-	//     found at their first copy;
+	//     selected on its own: verse 1, no quotation, unless the psalm has
+	//     it. Nothing tells the title's words from the same words selected
+	//     in a verse, so whole words of the title, as a double-click or a
+	//     drag from word to word takes them, are looked for in the psalm
+	//     first, as whole words there too, and quoted from the first such
+	//     copy, as any selection with no span is placed at its first copy:
+	//     "Yahweh" in a psalm whose title names him is the psalm's word. The
+	//     title answers only for what the psalm does not have that way, the
+	//     title whole or a phrase of its own, or has nothing quotable of, a
+	//     lone full stop. A piece of a title's word ("is" in "his") is not
+	//     words of the title, and stays the title's even where the psalm
+	//     has those letters as a word of its own;
 	//   - a drag from the title on into the psalm carries the title, or the
 	//     end of it, then verse 1's number. Confirmed by that number, the
 	//     title comes off, and what follows is the selection. Just the
@@ -714,25 +751,53 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 	// A heading between the title and verse 1 takes the heading repair below,
 	// which removes the title with it.
 	editorial := false // the selection carried a heading or a psalm title, now removed
+	titleVerse := 0    // whole words of the title, with no span: the verse cited if the psalm does not quote them
 	if title, first, ok := chapterTitle(state, book, chapter); ok {
 		if !span.valid() {
 			if _, ok := afterTitle(flat, title); ok {
 				if v, ok := headingOnlySelectionVerse(state, book, chapter, flat, span); ok {
-					return "", v, v, -1, true
+					if wordAlignedIndex(title, flat) < 0 {
+						return "", v, v, -1, true
+					}
+					titleVerse = v
 				}
 			}
 		}
-		num := strconv.Itoa(first)
-		if t := trimLeadingHeading(out, title, num); t != out {
-			if t == num {
-				return "", first, first, -1, true
+		if titleVerse == 0 {
+			num := strconv.Itoa(first)
+			if t := trimLeadingHeading(out, title, num); t != out {
+				if t == num {
+					return "", first, first, -1, true
+				}
+				out, editorial = t, true
 			}
-			out, editorial = t, true
 		}
 	}
+	text, lo, hi, at, ok = locateShareSelection(state, book, chapter, corpus, spans, flat, out, span, editorial, titleVerse > 0)
+	if titleVerse > 0 && text == "" {
+		return "", titleVerse, titleVerse, -1, true
+	}
+	return text, lo, hi, at, ok
+}
+
+// locateShareSelection is normalizeShareSelectionProse's search among the
+// verses' words and the repairs that follow it. out is the selection in the
+// shared form, with a psalm title it opened with already taken off, and flat
+// the selection as it came, which the heading test reads. wholeWords looks
+// for out only where it splits no word of the psalm, at the first such copy:
+// it is set for a selection with no span that is whole words of the title,
+// which the psalm has only if it has them as whole words.
+func locateShareSelection(state *AppState, book string, chapter int, corpus string, spans []verseSpan, flat, out string, span selSpan, editorial, wholeWords bool) (text string, lo, hi, at int, ok bool) {
 	s, anchor := stripVerseMarkersAnchored(corpus, spans, out)
 	if s == "" || corpus == "" {
 		return "", 0, 0, -1, false
+	}
+	if wholeWords {
+		// With no span there is no region, so locate takes this place as it
+		// stands, and nothing after it searches again.
+		if anchor = wordAlignedIndex(corpus, s); anchor < 0 {
+			return "", 0, 0, -1, false
+		}
 	}
 
 	rStart, rEnd, haveRegion := 0, len(corpus), false
@@ -1095,13 +1160,14 @@ func stripHeadings(state *AppState, book string, chapter int, s string) string {
 		s = removeWholeHeadings(s, text, num)
 	}
 	// A psalm's title is editorial matter too. A page that hands it over
-	// (the Mac's plain-text fallback; the panes with verse geometry cut a
-	// selection at verse 1's number, see normalizeShareSelectionProse) has
-	// it above the chapter's first verse and any heading there, so a drag
-	// from it into the psalm carries the title, or the end of it, at its
-	// front. It is confirmed as a heading at the top of a chapter is, by the
-	// number of the verse it stands above, and it goes after the headings,
-	// which may stand between it and that number.
+	// (the plain-text fallback of the Mac and the iPhone and iPad; the panes
+	// with verse geometry cut a selection at verse 1's number, see
+	// normalizeShareSelectionProse) has it above the chapter's first verse
+	// and any heading there, so a drag from it into the psalm carries the
+	// title, or the end of it, at its front. It is confirmed as a heading at
+	// the top of a chapter is, by the number of the verse it stands above,
+	// and it goes after the headings, which may stand between it and that
+	// number.
 	if title, first, ok := chapterTitle(state, book, chapter); ok {
 		s = trimLeadingHeading(s, title, strconv.Itoa(first))
 	}
