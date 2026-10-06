@@ -3525,6 +3525,20 @@ a proper saved-note test. It checks that an old note's record round-trips
 byte for byte through the current codec, which is worth keeping under a
 name that says so.
 
+**Done 6 October 2026.** The file is `notes_record_compat_test.go`. The probe
+only logged the old record's bytes beside the new and checked that the later
+build's field survived, so it would have passed a codec that changed the
+bytes. `TestAnOldSavedNoteRoundTripsByteForByte` now requires the bytes to be
+identical: emitting `"ar"` when empty, which writes `"ar":null` into every
+old record, fails it and passed the probe. `TestASavedNotesAnchorRunsRoundTrip`
+pins where the runs are written, that they stay out of the unknown fields,
+and that a second pass writes the same bytes. The second probe, which only
+logged what hostile anchor spellings parse to, is
+`TestAMalformedAnchorSpellingGivesNoRuns`: a malformed spelling gives no
+runs, a well-formed one a run per verse, and no run starts below verse 1 or
+ends before it starts.
+
+
 ## The web reader cannot render small capitals — DONE 2 October 2026, before it served an edition that uses them
 
 Recorded because it reads like a live defect and is not one, and because the
