@@ -287,9 +287,9 @@ place a fix on one does not reach the others.
     `share_sheet_desktop.go:384` (`under := takeReopenBeneath(state, popup)`).
     Email… on Linux is the desktop portal's Email interface,
     `share_email_linux.go:149` (`portalEmailIface+".ComposeEmail"`), its
-    request's answer watched, `share_portal_linux.go:63`
-    (`case sig := <-responses:`), and only its 2 — no mail client — handing
-    on to xdg-email and a `mailto:` link, `share_email_linux.go:156`
+    request's answer watched, `share_portal_linux.go:67`
+    (`case sig, open := <-responses:`), and only its 2 — no mail client —
+    handing on to xdg-email and a `mailto:` link, `share_email_linux.go:156`
     (`return portalEmailResponse(code)`); the image goes as a descriptor,
     `share_email_linux.go:147` (`"attachment_fds"`), and the image's Email…
     is offered only outside the snap and the Flatpak, and only where the

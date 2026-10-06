@@ -30,7 +30,11 @@ import (
 // the handle the call returns is matched too, for a portal that names the
 // request otherwise. taken reports whether the portal took the call: an
 // error after it did is a missing or unreadable answer, and the portal may
-// yet do what it was asked.
+// yet do what it was asked. A session bus that drops while the answer is
+// awaited, as one does when the desktop session ends, is such an error, at
+// once: godbus closes every signal channel when its connection ends, and a
+// closed channel answers each receive at once, so a loop that passed over
+// what it read would spin on a core until wait ran out.
 func portalRequest(conn *dbus.Conn, method string, options map[string]dbus.Variant, wait time.Duration, args ...interface{}) (code uint32, taken bool, err error) {
 	token := fmt.Sprintf("bibletext%d", time.Now().UnixNano())
 	names := conn.Names()
@@ -60,7 +64,10 @@ func portalRequest(conn *dbus.Conn, method string, options map[string]dbus.Varia
 	}
 	for {
 		select {
-		case sig := <-responses:
+		case sig, open := <-responses:
+			if !open {
+				return 0, true, errors.New("the session bus closed before the portal answered")
+			}
 			if sig == nil || (sig.Path != handle && sig.Path != request) {
 				continue
 			}

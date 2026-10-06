@@ -293,9 +293,7 @@ The fix: post the outcome back to the sheet — a line under the buttons when
 the compose fails, its wording to be approved — and stop at the first route
 that started a compose, rather than handing on after any non-zero exit.
 
-## A dropped session bus spins a core until the portal wait ends (Linux) — found 1 October 2026
-
-Planned for: 1.2.20 — see docs/ROADMAP.md.
+## A dropped session bus spins a core until the portal wait ends (Linux) — FIXED 6 October 2026, for 1.2.20
 
 `portalRequest` (`share_portal_linux.go:34-79`) waits for the portal's
 Response on a channel registered with godbus, in a loop that passes over a
@@ -316,6 +314,20 @@ desktop session is ending.
 The fix: receive with `sig, ok := <-responses` and, on a closed channel,
 return an error at once (the connection closed), with `taken` true, since
 the portal had the call.
+
+**FIXED 6 October 2026, for 1.2.20.** `portalRequest` receives with
+`sig, open := <-responses` and, on a closed channel, returns at once with
+`taken` true and the error "the session bus closed before the portal
+answered", which Email… takes as the end of its compose, as it does any
+error once the portal has the call, and the reveal as a picture not
+shown. `TestADroppedSessionBusEndsThePortalWaitAtOnce`
+(`share_portal_linux_test.go`) has the test's portal take the call and
+never answer, then kills the private bus's dbus-daemon: the request must
+return within a second of the drop, as the bus closing; the control, the
+bus left up, is still waiting then. On the Linux VM, with the old loop
+put back, it returned as "no answer from the portal" 3.9 s after the drop
+of a 4 s wait, using 3.92 s of CPU in 4.02 s; fixed, it returned at once,
+using none.
 
 ## A sheet turned from one landscape to the other keeps its side padding on the old side (Android) — found 1 October 2026
 
