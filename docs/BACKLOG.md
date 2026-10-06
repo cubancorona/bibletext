@@ -41,9 +41,12 @@ each wanting a dry run on a day that is not a release day:
   checks (`check-ios-pane.sh` alone, then `check-android-pane.sh`) are the
   part CI cannot stand in for; the rest can be CI's. The cost is a red public
   run when something slips.
-- **Screenshots go up by their own tool** (`appstore/push-screenshots.py`,
-  once it lands); `submit-version.py --write` could call it when a ready set
-  named for the version exists, so the upload is not a step to remember.
+- **Screenshots go up by their own tool**, `appstore/push-screenshots.py`
+  (29 September 2026), run as its own command in stage 7 between the two
+  `submit-version.py` calls, and `play/push-screenshots.py` for Play (30
+  September), outside any release. `submit-version.py --write` could call
+  the Apple one when a ready set named for the version exists, so the upload
+  is not a step to remember.
 - **A conductor for the Apple leg** — build, read back, upload, wait for
   `VALID`, `submit-version.py --write` — as one script with a ledger of what
   each step printed, leaving only the submit click.
@@ -83,8 +86,9 @@ What 1.2.18 (1–2 October 2026) adds:
   `--rollout=0.2`, is refused before anything is read (de8ef27e2). A
   staged rollout is raised, completed or halted in the Play Console. Not
   yet run against Play: held by stand-in tests
-  (`play/test_play_publish.py`, `Promote`), and the first live dry run
-  waits for Play's review of the 1.2.18 production release to finish.
+  (`play/test_play_publish.py`, `Promote`). First run against Play for
+  1.2.19 on 3 October 2026, the dry run and then the commit, which took
+  production to that release's versionCode and into Play's review.
 - **The arm64 snap build can fail before it builds anything.** On 1 October
   2026 the Linux stores workflow's `snap (arm64)` job, on the push of the
   release commit (e6fa1b6cc), failed inside `snapcore/action-build@v1`
@@ -3853,6 +3857,15 @@ What to do, in order:
 Until 1 is done, a red run of this workflow says nothing about whether Windows
 audio works, and the repeated failures should not be read as a shipping risk.
 
+**Steps 1 and 2 DONE 22 September 2026** (2e99c6b50). The smoke names the
+backend that carried the samples and stops with that diagnosis on the null
+sink. Only `AUDIOSES.DLL` mapped counts as proof, since oto maps
+`MMDevAPI.dll` and `winmm.dll` while looking for a device and leaves them
+mapped when it finds none; `audio_backend_proof.go` holds the decision and
+its test. The workflow's header and docs/PLATFORM_MIMIC.md no longer say it
+proves WASAPI on a runner. Step 3, the natural end on a machine with an
+audio device, is what is left.
+
 ## The direct downloads do not register `bibletext:` links
 
 Planned for: stays — see docs/ROADMAP.md.
@@ -4209,7 +4222,7 @@ channels are the tarball, the AppImage and the snap; the
 `uk.co.bibletext.BibleText` id stays on the snap's metainfo and the AppImage,
 and the 1.2.10 release note that promised a Flatpak stands as shipped.
 
-## Recapture the App Store and Play screenshots — App Store sets RECAPTURED 28 September 2026 and uploaded 29 September; Play being retaken
+## Recapture the App Store and Play screenshots — App Store sets RECAPTURED 28 September 2026 and uploaded 29 September; the Play 1.2.17 set committed 30 September; the Play phone set waits on a decision
 
 Planned for: 1.2.21+, the Play phone set once its shape is decided and after
 1.2.20 clears Play's review; the short desktop window stays — see
@@ -4258,8 +4271,13 @@ and paragraphing in the Junicode face, Psalm 23 the divine name in small
 capitals, and Psalm 82 its superscription and heading: the images asked for
 above.
 `docs/APP_STORE_SUBMISSION.md` ("The 1.2.17 set") keeps the set's history,
-and `docs/SCREENSHOT_PLAYBOOK.md` how each shot is taken. The Play set is being
-retaken to the same eight scenes under `build/play/screenshots-1.2.17/`.
+and `docs/SCREENSHOT_PLAYBOOK.md` how each shot is taken. The Play set was
+retaken to the same eight scenes under `build/play/screenshots-1.2.17/`, with
+the listing's first 10-inch tablet images, and `play/push-screenshots.py`
+committed it on 30 September 2026 (`docs/SCREENSHOT_PLAYBOOK.md`, §3). What is
+open is the phone set's shape: retaken at the default display size, or kept
+at the Small size with only the light images retaken
+(docs/ROADMAP.md, Later minor releases, row 14).
 
 The iPad shots carry a small grey resize grip in the bottom-right corner: the
 iPadOS 26 and 27 simulators open in "windowed apps" mode, and that mode is not
@@ -5025,20 +5043,27 @@ should still be remembered as a substitution at every launch; and whether a
 launch that cannot open the remembered translation should prefer a
 translation whose canon holds the saved place.
 
-## CI runs with the race detector, so 14 tests never run there
+## The tests tagged `!race` run only in CI's second pass, never under the detector
 
-Planned for: stays; retitled in 1.2.20 — see docs/ROADMAP.md.
+Planned for: stays — see docs/ROADMAP.md. Retitled 6 October 2026, for
+1.2.20. It was "CI runs with the race detector, so 14 tests never run there",
+which stopped being true when the second pass below arrived.
 
 DONE for the cheap half. The Linux job now runs the suite a second time
-without the race detector, so those 14 tests compile and run on every push;
-they cover focus order, render output, wrap layout, the download-status row,
-the audio card, the search mode row and the legacy pane. Retiring the `!race`
-tag by teaching them to stand up under the detector is the real fix and is
-still open.
+without the race detector, so the tests in the files tagged `!race` compile
+and run on every push. There were 14 when this was written, covering focus
+order, render output, wrap layout, the download-status row, the audio card,
+the search mode row and the legacy pane; seven files carry the tag today.
+Retiring the `!race` tag by teaching them to stand up under the detector is
+the real fix and is still open. It is not only tidiness: on 6 October 2026
+the verse-of-the-day card test's occasional failure turned out to be a race
+with a timer one of these files armed (`ui_render_test.go`), which the race
+run never saw because that file is not in it (the deferred-UI timers entry).
 
-Still true, and still untested anywhere: no CI job builds or tests the Android
-app. The only Android-named step checks the target SDK. With a physical device
-now available that gap is worth closing separately.
+The Android half of the old entry is out of date as well. CI cross-compiles
+the Android pane (`scripts/check-android-pane.sh`, with and without `next`)
+and compiles the Java (`scripts/check-android-java.sh`). What no CI job does
+is build or run an APK (docs/PLATFORM_MATRIX.md, divergence 13).
 
 ## Source fields: three defects and a decision list — DONE, closed 6 October 2026
 
@@ -5634,9 +5659,9 @@ inconsistency between fleet bands is accepted rather than overlooked.
 above (4a3b3de68). The gate stands: `justifiesInterWord`
 (`android/BtBridge.java`) justifies only from API 35. A deliberate
 difference between platforms is recorded where the platforms are
-compared, and the Divergences of docs/PLATFORM_MATRIX.md do not list
-this one yet; adding it is in 1.2.20's documentation row
-(docs/ROADMAP.md).
+compared: it is divergence 30 of docs/PLATFORM_MATRIX.md (6 October
+2026), which `TestTheMatrixRecordsTheRaggedAndroidPage` holds there while
+the gate stands.
 
 ## Tag 1.2.6 so `go install` and `go run …@latest` resolve the module — DONE
 
@@ -5727,9 +5752,7 @@ publisher text, so whatever the share carries has to be in those letters by the
 time it is matched. Worth a test that shares a divine-name verse and asserts
 both the outgoing text and that the selection was located rather than fell back.
 
-## Three comments that describe code that changed under them
-
-Planned for: 1.2.20 — see docs/ROADMAP.md.
+## Three comments that describe code that changed under them — DONE 6 October 2026, for 1.2.20
 
 Each verified against the source; all are comments, none change behaviour.
 
@@ -5750,9 +5773,17 @@ Each verified against the source; all are comments, none change behaviour.
   reads a seam) and / (installSheetCloseConsume reads a seam)." The sentence
   never completes. `dev_mimic_on.go:56-57` has the same kind of damage.
 
-## docs/ANDROID.md and reading_android.go disagree about the note sticker
+**Done.** The first had already been put right: `outbound_text.go` now says
+the small capital goes "To the CAPITAL, not back to the publisher's own
+letter", with the reason. `dev_mimic_test.go` says Junicode, the face its
+assertion requires. `dev_mimic_on.go`'s header no longer lists font
+candidates among the seams. The broken sentences in `app.go` (`Run`) and in
+`dev_mimic_on.go` (`devApplyMimic`) now say once that the mimic must run
+before `CreateMainUI`, whose sheet-close consume reads a seam it sets.
+Comments only, so there is no test to fail; `go vet -tags bibletextdev`
+compiles both tagged files.
 
-Planned for: 1.2.20 — see docs/ROADMAP.md.
+## docs/ANDROID.md and reading_android.go disagree about the note sticker — DONE 6 October 2026, for 1.2.20
 
 docs/ANDROID.md:183-185 says the Android shared-note sticker "is gated to
 `IsFullScreen` in Go (`pushNoteToOverlay`, reading_android.go) precisely so the
@@ -5765,6 +5796,15 @@ The code is the newer of the two. Left alone rather than guessed at because the
 sentence also asserts a reason — that the gate exists to prevent a double
 draw — and whether that concern is now handled by the banner standing down, or
 was simply overtaken, is worth confirming before rewriting it.
+
+**Done.** Confirmed from the code: the concern is handled by the banner
+standing down. `pushNoteToOverlay` pushes the sticker in both modes, and
+`buildNoteBanner` returns nothing wherever `nativeNoteSticker` is true, which
+on Android it always is (`nativeNoteStickerOnPlatform`,
+`notes_sticker_native_on.go`). So the note is drawn once in either mode.
+docs/ANDROID.md's section is retitled "Shared-note sticker" and says so. Its
+example WHO line now reads "2 of 3 in this chapter", the count
+`appleStickerPush` writes, in place of the old "2 of 3 on this passage".
 
 ## Target audience is 13+, and it was meant to include 9-12
 

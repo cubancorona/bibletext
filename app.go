@@ -682,9 +682,9 @@ func InstallReadingStateFlush(myApp fyne.App, window fyne.Window, state *AppStat
 func Run() {
 	// Dev builds only: BIBLETEXT_MIMIC=windows|linux flips the runtime seams so
 	// this build follows the Windows/Linux code paths (docs/PLATFORM_MIMIC.md).
-	// Must run before CreateMainUI (installSheetCloseConsume reads a seam) and
-	// (installSheetCloseConsume reads a seam). No-op — and not
-	// compiled in — for shipping builds (dev_mimic_off.go).
+	// Must run before CreateMainUI, whose installSheetCloseConsume reads a seam
+	// this sets. No-op — and not compiled in — for shipping builds
+	// (dev_mimic_off.go).
 	devApplyMimic()
 	// A link the OS launched us with (Windows: the Store manifest's handlers
 	// put it on the command line; Linux: the desktop entry's %u) — or nothing.

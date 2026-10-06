@@ -198,17 +198,20 @@ run loop — so the SAME Go `advanceAndContinue` drives it). The pieces:
 - The build script asserts the aapt2 path was taken (adaptive-icon resources in
   the output) in BOTH the debug and release branches.
 
-## Shared-note sticker (full-screen reading)
+## Shared-note sticker
 
-Full-screen reading draws the shared note NATIVELY on the overlay, matching the
-iOS interaction model: the bubble with the WHO line ("Note from Friend · 2 of 3 on this
-passage ›"), Hide ("–") / Delete ("✕") on the bubble, the count region as the
-next-tap selector when the passage holds more than one note, and the collapsed
-pill (tap = Restore) when the note is minimized or a foreign mark (search/link
-highlight) suppresses it. Normal (compact) reading keeps the Fyne banner
-(`notes_banner.go`) — the sticker is gated to `IsFullScreen` in Go
-(`pushNoteToOverlay`, reading_android.go) precisely so the reader never sees
-the note twice.
+Both reading modes, full-screen and compact, draw the shared note NATIVELY on
+the overlay, matching the iOS interaction model: the bubble with the WHO line
+("Note from Friend · 2 of 3 in this chapter ›"), Hide ("–") / Delete ("✕") on
+the bubble, the count region as the next-tap selector when the chapter holds
+more than one note, and the collapsed pill (tap = Restore) when the note is
+minimized or a foreign mark (search/link highlight) suppresses it.
+`pushNoteToOverlay` (reading_android.go) pushes it in either mode. The Fyne
+banner (`notes_banner.go`) stands down on Android in both, because
+`nativeNoteSticker` is true there (`notes_sticker_native_on.go`), so the
+reader never sees the note twice. Compact reading used to keep the banner,
+with the sticker gated to full screen; the two were unified so that Android
+draws one card anchored to its verse, as iOS does.
 
 The pushed tuple is composed by `androidStickerPush` (notes_plan.go) — a thin
 alias of `appleStickerPush`, so WHO lines, counts, pill labels and derived

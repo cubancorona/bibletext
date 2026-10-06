@@ -11,8 +11,8 @@ package bibletext
 // Windows/Linux UI before the CI visual smokes. Every reading-surface
 // divergence between macOS and Windows/Linux already sits behind a runtime
 // seam (a var initialised from a per-platform constant — useStyledPane,
-// sheetConsumeClosure, nativeNoteSticker, reporterLayout, ttsSupported,
-// and font candidates); this file is the one place that flips them all to the
+// sheetConsumeClosure, nativeNoteSticker, reporterLayout and ttsSupported);
+// this file is the one place that flips them all to the
 // target platform's answers at startup. The full covered/not-covered contract
 // lives in docs/PLATFORM_MIMIC.md — the CI visual smokes and real hardware
 // remain the final word.
@@ -53,9 +53,9 @@ func devMimicLabel() string {
 
 // devApplyMimic reads BIBLETEXT_MIMIC and, for a recognised target, flips the
 // runtime seams to that platform's answers. Called once at the very top of
-// Run() — before CreateMainUI installs the sheet-close consume closure and
-// which reads a seam this
-// sets. Unknown values are ignored (the mode simply stays off).
+// Run(), before CreateMainUI installs the sheet-close consume closure, which
+// reads a seam this sets. Unknown values are ignored (the mode simply stays
+// off).
 func devApplyMimic() {
 	t := strings.ToLower(strings.TrimSpace(os.Getenv("BIBLETEXT_MIMIC")))
 	if t != "windows" && t != "linux" {

@@ -891,6 +891,36 @@ func sharingTable(t *testing.T) map[string]map[string]string {
 	return rows
 }
 
+// A DIFFERENCE KEPT ON PURPOSE IS RECORDED WHERE THE PLATFORMS ARE COMPARED.
+// Android 13 and 14 read the page ragged because their selectable TextView
+// cannot justify without running lines past the edge, and the gate that says
+// so, justifiesInterWord in android/BtBridge.java, was closed as by design.
+// While the gate holds Android below 15 back, the Divergences must say so.
+func TestTheMatrixRecordsTheRaggedAndroidPage(t *testing.T) {
+	bridge := readRepoFile(t, "android/BtBridge.java")
+	gate := regexp.MustCompile(`boolean justifiesInterWord\(\) \{\s*return android\.os\.Build\.VERSION\.SDK_INT >= (\d+);`).FindStringSubmatch(bridge)
+	if gate == nil {
+		t.Fatal("android/BtBridge.java no longer gates justification in justifiesInterWord on one SDK level; " +
+			"re-read divergence 30 of docs/PLATFORM_MATRIX.md against the new rule")
+	}
+	if gate[1] != "35" {
+		t.Fatalf("justifiesInterWord now justifies from API %s, and divergence 30 says Android 13 and 14 "+
+			"read ragged; rewrite it for the new floor", gate[1])
+	}
+	doc := readRepoFile(t, "docs/PLATFORM_MATRIX.md")
+	start, end := strings.Index(doc, "\n## Divergences"), strings.Index(doc, "\n## Deliberate exclusions")
+	if start < 0 || end < start {
+		t.Fatal("docs/PLATFORM_MATRIX.md has no Divergences section before its Deliberate exclusions")
+	}
+	divergences := strings.Join(strings.Fields(doc[start:end]), " ")
+	for _, want := range []string{"ragged on Android 13 and 14", "`justifiesInterWord`"} {
+		if !strings.Contains(divergences, want) {
+			t.Errorf("the Divergences of docs/PLATFORM_MATRIX.md do not say %q, while justifiesInterWord "+
+				"justifies only from API 35", want)
+		}
+	}
+}
+
 // A LINE NUMBER IN A DOCUMENT IS A CLAIM ABOUT CODE THAT MOVES.
 //
 // The matrix cites the cause of a divergence down to the line, in the form
