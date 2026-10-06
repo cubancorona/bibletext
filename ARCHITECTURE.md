@@ -501,7 +501,10 @@ teardown (unlike the AVPlayer's KVO observer), so without the guard a stopped
 utterance's late `didFinish` could post a spurious `ENDED` after the next source had
 started. Audio auto-stops on any chapter/book/version change (`stopAudioForNav`) and on
 app stop / window-close (raw `nativeAudioStop()` from the lifecycle hooks — never
-`gAudio.stop()`, to avoid `fyne.Do` on the off-main shutdown path).
+`gAudio.stop()`, to avoid `fyne.Do` on the off-main shutdown path). Not on Android,
+where `OnStopped` ends an activity and the process, and the narration, can live on
+(`activityStopEndsAudio`, `activity_life.go`); there a swipe-away ends playback in
+the audio service and a killed process takes it along.
 
 ## Cross-references, parallels, red-letter, verse of the day
 

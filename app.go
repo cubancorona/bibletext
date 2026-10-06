@@ -599,13 +599,17 @@ func InstallReadingStateFlush(myApp fyne.App, window fyne.Window, state *AppStat
 	stoppedHook := func(gen uint64) func() {
 		return func() {
 			activityStopped(state, gen)
-			// Release the audio session / player on quit. Call the raw native stop, NOT
-			// gAudio.stop(): OnStopped can run off the main thread during shutdown, and
-			// the native stop is fire-and-forget (dispatch_async) with no UI callback, so
-			// it can't hang the way a fyne.Do / dispatch_sync(main) would. (Background —
-			// SetOnExitedForeground — deliberately does NOT stop: lock-screen controls and
-			// background playback are the whole point.)
-			nativeAudioStop()
+			// Release the audio session / player on quit. Call the raw native stop
+			// (engineStop, which is nativeAudioStop), NOT gAudio.stop(): OnStopped can
+			// run off the main thread during shutdown, and the native stop is
+			// fire-and-forget (dispatch_async) with no UI callback, so it can't hang
+			// the way a fyne.Do / dispatch_sync(main) would. (Background —
+			// SetOnExitedForeground — deliberately does NOT stop: lock-screen controls
+			// and background playback are the whole point.) Not on Android, where a
+			// stop ends an activity and not the app (activityStopEndsAudio).
+			if activityStopEndsAudio() {
+				engineStop()
+			}
 			flushReadingState(state)
 		}
 	}

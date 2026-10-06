@@ -465,3 +465,100 @@ func TestDesktopAndIOSStopAsTheyDid(t *testing.T) {
 		}
 	})
 }
+
+// countEngineStops mutes the audio engines and counts the raw stops the
+// lifecycle hooks send to the platform's engine.
+func countEngineStops(t *testing.T) *int {
+	t.Helper()
+	muteEngines(t)
+	n := 0
+	engineStop = func() { n++ }
+	return &n
+}
+
+// onPlatform runs the lifecycle as platform goos runs it.
+func onPlatform(t *testing.T, goos string) {
+	t.Helper()
+	prev := lifecycleGOOS
+	lifecycleGOOS = goos
+	t.Cleanup(func() { lifecycleGOOS = prev })
+}
+
+// THE NARRATION OUTLIVES AN ANDROID ACTIVITY (activityStopEndsAudio). The
+// system reclaiming the activity while the reader listens with the screen
+// off, or Back finishing it on Android 11 and older, destroys the activity
+// with the process alive. Its stop sent the engine's raw stop, which ended
+// the listening session, while the controller kept the chapter as playing:
+// on the API 35 emulator, with "Don't keep activities" on, Home mid-narration
+// ended the media session and the foreground service, and the app came back
+// showing a pause button and the read-along wash over silence. Decided 6
+// October 2026: on Android the stop stops no audio, as the iPhone keeps
+// playing. The controller and the engine then still agree in the next
+// activity: the chapter is loaded and nothing told the engine to stop. The
+// reading position is still flushed at the stop.
+//
+// The control is the platforms whose stop ends the app: the desktop's run
+// loop ending and iOS's termination still stop the engine, once.
+func TestAnAndroidActivityStopLeavesTheNarrationPlaying(t *testing.T) {
+	const fp = "web|John|20"
+	play := func(t *testing.T) {
+		gAudio.stop()
+		t.Cleanup(gAudio.stop)
+		gAudio.startChapter(&AppState{CurrentVersion: "web", CurrentBook: "John", CurrentChapter: 20},
+			chapterAudio{Kind: audioRecorded, URL: "https://example.invalid/WEB_43_020.mp3"}, fp)
+		if gAudio.playingFingerprint() != fp {
+			t.Fatal("control: the narration did not load")
+		}
+	}
+	flushes := func() *int {
+		n := 0
+		captureAnchorFn = func() (int, float64, float64, bool) { n++; return 0, 0, 0, false }
+		return &n
+	}
+
+	t.Run("android: a destroyed activity, the next one in the same process", func(t *testing.T) {
+		onPlatform(t, "android")
+		stops := countEngineStops(t)
+		h := newAppearanceHarness(t, true)
+		life := androidLife{installLifeHooks(t, h, nil)}
+		flushed := flushes()
+		life.starts()
+		play(t)
+		life.destroyed()() // Home with "Don't keep activities", or Back on Android 11
+		if *stops != 0 {
+			t.Errorf("the activity's stop sent the engine %d stops; on Android it must send none, "+
+				"or the narration ends while the controller still shows it playing", *stops)
+		}
+		if *flushed == 0 {
+			t.Error("the activity's stop must still flush the reading position")
+		}
+		life.starts()
+		if gAudio.playingFingerprint() != fp || *stops != 0 {
+			t.Errorf("the next activity must find the narration still loaded and the engine never stopped: "+
+				"chapter %q, %d engine stops", gAudio.playingFingerprint(), *stops)
+		}
+		// A stop that runs late, after the next activity's start, is the old
+		// activity's: it stops nothing either.
+		late := life.destroyed()
+		life.starts()
+		late()
+		if *stops != 0 {
+			t.Errorf("a late stop for an older activity sent the engine %d stops", *stops)
+		}
+	})
+
+	for _, goos := range []string{"darwin", "ios", "linux", "windows"} {
+		t.Run(goos+": the stop that ends the app still stops the engine", func(t *testing.T) {
+			onPlatform(t, goos)
+			stops := countEngineStops(t)
+			h := newAppearanceHarness(t, goos == "ios")
+			hooks := installLifeHooks(t, h, nil)
+			hooks.OnStarted()()
+			play(t)
+			hooks.OnStopped()()
+			if *stops != 1 {
+				t.Errorf("on %s the stop sent the engine %d stops, want 1", goos, *stops)
+			}
+		})
+	}
+}

@@ -269,12 +269,13 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       wash AND pill (a rotation keeps the activity: the same instance and
       process on the Android 15 emulator, 27 September 2026).
 - [ ] Android, narration playing: with Developer options > "Don't keep
-      activities" on, press Home mid-narration and wait. Note
-      whether the narration keeps playing and whether the transport, wash
-      and pill say what is true. From the code, the destroyed activity's
-      stop ends the narration and leaves the controller showing it
-      playing (docs/BACKLOG.md, "Android: an activity destroyed with the
-      process alive stops the narration", open).
+      activities" on, press Home mid-narration and wait. The narration
+      keeps playing, and back in the app the transport, wash and pill say
+      what is true: the destroyed activity's stop stops no audio on
+      Android (docs/BACKLOG.md, "Android: an activity destroyed with the
+      process alive stops the narration", fixed 6 October 2026; before
+      that the narration ended and the controller went on showing it
+      playing). Turn the setting off again afterwards, in the same screen.
 - [ ] Theme flip mid-play must NOT stop audio; navigation away does.
 
 ## V10 — search and the AI assistant

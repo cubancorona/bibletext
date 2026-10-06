@@ -1790,9 +1790,9 @@ crossing has dropped the GL context. Desktop and iOS (launch, background round
 trips, termination) otherwise stop as they did. What only a device can
 confirm is in `docs/VISUAL_TESTS.md` under V15 and V9.
 
-## Android: an activity destroyed with the process alive stops the narration
+## Android: an activity destroyed with the process alive stops the narration — FIXED 6 October 2026
 
-Planned for: 1.2.20 — see docs/ROADMAP.md.
+Fixed for 1.2.20 (the end of this entry).
 
 From the code, found while tracing the stop above; not run on a device.
 `OnStopped` calls `nativeAudioStop()` on every activity destroy, not only when
@@ -1826,6 +1826,29 @@ does not reach this path. Confirm first on a device: with Developer options >
 **Decided 6 October 2026** — Android narration when the system reclaims
 the screen: don't stop the audio, matching iPhone. Of the two candidates,
 the first: on Android, `OnStopped` stops no audio.
+
+**Reproduced and FIXED 6 October 2026** (for 1.2.20). On the API 35
+emulator, with "Don't keep activities" on, narration of WEB Matthew 6
+playing and Home pressed: the activity was destroyed (`wm_destroy_activity
+… always-finish`) in the same process, and within the same 60 ms the
+narration's audio focus was abandoned, the foreground service stopped and
+the media session destroyed. Back in the app, the new activity showed the
+transport's pause button and the read-along wash on verse 1 over silence.
+Turning the setting on with the app in the background did the same.
+
+The fix (`activityStopEndsAudio`, `activity_life.go`; `app.go`): the stop
+hook sends the engine's raw stop (`engineStop`, which is
+`nativeAudioStop`) only where a stop ends the app, which is everywhere but
+Android. On the same emulator and steps, the media session stayed PLAYING
+and the player started through the destroy, and the new activity's
+read-along went on from verse 3 to verse 4 with the pane following; its
+Pause and Play drove the same session, and a swipe-away from recents still
+ended it (`onTaskRemoved`). `TestAnAndroidActivityStopLeavesTheNarrationPlaying`
+(`activity_life_test.go`) runs the hooks in the Android glue's order and
+fails if a destroyed activity's stop, on time or late, sends the engine a
+stop, or if the desktop's or iOS's stop does not send one. Back on Android 11
+and older now leaves the narration playing as the iPhone does when the
+reader leaves the app; it was not run, the emulators here being 13 and later.
 
 ## Rework the download page — DONE 26 September 2026; Google Play filled its slot, the release notes followed, and the APK row returned, 30 September 2026
 
