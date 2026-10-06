@@ -14,8 +14,10 @@
 # Each step is a function, so ios_device_tools_test.go can drive them with a
 # stand-in for xcrun.
 
-# What devicectl prints when the phone is locked or asleep.
-IOS_INSTALL_LOCKED='12040|10003|[Ff]ailed to acquire assertion|[Ll]ocked'
+# What devicectl prints when the phone is locked or asleep. "locked" counts
+# only where it is not the end of "unlocked", so a failure that says the
+# phone is unlocked is not taken for a locked one and tried again.
+IOS_INSTALL_LOCKED='12040|10003|[Ff]ailed to acquire assertion|(^|[^Nn])[Ll]ocked'
 
 # ios_find_device: the identifier of a reachable iPhone or iPad, or nothing.
 # devicectl reports a usable phone as "connected" (USB) OR "available

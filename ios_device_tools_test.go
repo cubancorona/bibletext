@@ -60,10 +60,11 @@ func TestTheIOSBuildsCompileTheirOwnModule(t *testing.T) {
 // A LOCKED PHONE COSTS A RETRY, NOT A REBUILD. scripts/ios-device-install.sh,
 // driven with a stand-in for xcrun: a phone locked for two tries installs on
 // the third; one locked throughout is tried the given number of times and no
-// more; any other failure is not retried; and a bundle kept for later goes
-// into a folder only its owner can read. Mutations guarded: no retry (the
-// first case fails), a retry on every error (the third), a world-readable
-// kept folder (the last).
+// more; any other failure is not retried, one that says the phone is
+// unlocked included; and a bundle kept for later goes into a folder only its
+// owner can read. Mutations guarded: no retry (the first case fails), a retry
+// on every error (the refused signature), "locked" matched inside "unlocked"
+// (the unlocked phone), a world-readable kept folder (the last).
 func TestALockedPhoneIsTriedAgainAndItsBundleKept(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("run-ios-device.sh runs on a Mac; the macOS and Linux jobs run this")
@@ -108,7 +109,9 @@ echo "App installed"
 		{"locked for two tries", 2, "ERROR: The device is locked. (com.apple.dt.CoreDeviceError error 12040.)", "3", true},
 		{"asleep for two tries", 2, "Failed to acquire assertion (error 10003)", "3", true},
 		{"locked throughout", 99, "CoreDeviceError error 12040", "4", false},
+		{"locked, said first", 1, "Locked: unlock the device to continue.", "2", true},
 		{"a refused signature", 99, "ERROR: Failed to install the app on the device. (MIInstallerErrorDomain error 13.)", "1", false},
+		{"an unlocked phone that refused", 99, "ERROR: The device is unlocked, and the install failed. (MIInstallerErrorDomain error 13.)", "1", false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			calls, ok, out := install(strings.ReplaceAll(c.name, " ", "-"), c.failTimes, c.failText)
