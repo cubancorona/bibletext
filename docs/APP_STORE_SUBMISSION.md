@@ -501,8 +501,9 @@ each step it lists.
    (docs/RELEASING.md, stage 11). Nothing computes this: a new store is not a
    new release asset, so `scripts/check-public-surfaces.py` cannot see that
    one is missing — it can only hold a link that exists to the identity file
-   that owns it, and require Google Play, the one store it demands, in all
-   three places. The Microsoft Store went live on 17 September 2026 and
+   that owns it, require Google Play, the one store it demands, in all
+   three places, and hold the release notes to exactly the stores the
+   download page links, each at the page's listing. The Microsoft Store went live on 17 September 2026 and
    neither page mentioned it until someone noticed; Google Play went live on
    30 September 2026 and both pages linked it that day, but the release notes
    did not.

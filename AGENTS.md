@@ -135,7 +135,9 @@ dry run fetches the whole NKJV live from API.Bible with the Keychain key, about
   `msstore/identity.json`. The release notes' printf, the download page and
   the README must each link the Google Play listing, by the `appID` in
   `config/product.json`, since Play is the Android edition that updates
-  itself and the one the page puts first, above the APK. The
+  itself and the one the page puts first, above the APK. The release
+  notes' printf must link exactly the stores the download page links, each
+  at the page's listing. The
   four places that explain opening the unsigned Mac download — the release
   notes' printf, the download page, the README and
   `docs/MAC_APP_STORE.md` — must each name Open Anyway, must name Control-click

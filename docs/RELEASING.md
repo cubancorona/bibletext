@@ -518,9 +518,12 @@ read when a tag is pushed, so the line reaches the next release's notes; one
 already published changes only by `gh release edit`, a change to a public page
 that waits for their word. The printf is also its own format string, so the
 line carries no single quote and no percent sign. `check-public-surfaces.py`
-cannot catch a missing channel: a new store is not a new release asset, so
-nothing fails. It holds Google Play in all three places only because it names
-Play; it does not know the next store. Play went live on 30 September 2026,
+cannot catch a channel missing from every page: a new store is not a new
+release asset, so nothing fails. It holds Google Play in all three places only
+because it names Play; it does not know the next store. Once the download
+page links a store, though, it holds the release notes to the page: they must
+link exactly the stores the page links, each at the page's listing, so the
+page's badge and the printf's line go in together or CI fails. Play went live on 30 September 2026,
 the page and the README linked it that day, and the release notes, which this
 stage did not then name, went on offering Android readers only the APK until
 the printf gained its Play line later the same day.

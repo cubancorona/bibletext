@@ -25,7 +25,8 @@ was true when it was written:
     said so. Google Play went live and the download page and the README
     linked it the same day, while the release notes, which every release
     takes from the release workflow, went on offering Android readers only
-    the APK.
+    the APK. So the release notes are also held to the download page's set
+    of stores, store for store and listing for listing.
 
 Each rule below is mechanical: it compares a public page against the thing it
 claims to describe. Nothing here judges wording, and none of it can tell that
@@ -155,6 +156,33 @@ PLAY_SURFACES = (RELEASE_WORKFLOW, DOWNLOAD_PAGE, READ_ME)
 PLAY_ID_KEY = "appID"
 PLAY_LINK = r"https://play\.google\.com/store/apps/details\?id=([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*)"
 ANDROID_PACKAGE = re.compile(r"[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+")
+
+
+# The store channels a reader can be sent to, each with the part of its link
+# that names the listing: the App Store's numeric id, Play's package, the
+# Microsoft Store's product id and the snap's name. The download page offers
+# a badge for each live store above its files, and the release notes are the
+# other place a reader chooses an edition, so the notes must link exactly the
+# stores the page does, each at the same listing. A store linked on neither is
+# beyond this checker, as above. The page is never storeless while the checker
+# passes, since rule 2c requires its Play badge, so an empty set needs no
+# guard of its own.
+STORE_CHANNELS = (
+    ("the App Store", r"https://apps\.apple\.com/(?:[a-z]{2}/)?app/(?:[^/\s\"'<>()\\]+/)?id(\d+)"),
+    ("Google Play", PLAY_LINK),
+    ("the Microsoft Store", r"https://apps\.microsoft\.com/detail/([A-Za-z0-9]+)"),
+    ("the Snap Store", r"https://snapcraft\.io/([a-z0-9][a-z0-9-]*)"),
+)
+
+
+def store_channels(text: str) -> dict[str, set[str]]:
+    """Each store text links, with the listings it links there."""
+    found: dict[str, set[str]] = {}
+    for name, pattern in STORE_CHANNELS:
+        listings = set(re.findall(pattern, text))
+        if listings:
+            found[name] = listings
+    return found
 
 
 def store_links(text: str) -> set[str]:
@@ -535,6 +563,28 @@ def rule_failures(read, list_cmd) -> list[str]:
                 f"{package} ({PLAY_ID_KEY} in {PRODUCT_CONFIG}); the link is to another app"
             )
 
+    # 2d. The release notes offer exactly the stores the download page offers,
+    # each at the listing the page links.
+    if DOWNLOAD_PAGE in seen and RELEASE_WORKFLOW in seen:
+        page_stores = store_channels(seen[DOWNLOAD_PAGE])
+        notes_stores = store_channels(seen[RELEASE_WORKFLOW])
+        for name, listings in sorted(page_stores.items()):
+            if name not in notes_stores:
+                failures.append(
+                    f"{RELEASE_WORKFLOW}: the release notes never link {name}, which the download "
+                    f"page offers; a reader choosing an edition from the release is never told of it"
+                )
+            elif notes_stores[name] != listings:
+                failures.append(
+                    f"{RELEASE_WORKFLOW}: the release notes link {name} at {sorted(notes_stores[name])}, "
+                    f"the download page at {sorted(listings)}; one of the two is stale"
+                )
+        for name in sorted(set(notes_stores) - set(page_stores)):
+            failures.append(
+                f"{RELEASE_WORKFLOW}: the release notes link {name}, which the download page does "
+                f"not offer; either the page lost its badge or the notes name a store not yet live"
+            )
+
     # 3. Prose that counts the tree is checked against the tree.
     if readme is not None:
         listed, stated, found = readme_cmd_tree(readme)
@@ -601,11 +651,24 @@ def self_test() -> list[str]:
     page_play = b'<a class="badge" href="' + play + b'">Google Play</a>\n'
     readme_play = b"- **Android** \xe2\x80\x94 [Google Play](" + play + b")\n"
 
+    # The other three stores, each linked from the page and from the notes at
+    # the same listing. Neither id is a real listing.
+    apple = b"https://apps.apple.com/app/id1000000001"
+    snap = b"https://snapcraft.io/example-reader"
+    microsoft = b"https://apps.microsoft.com/detail/TESTID"
+    page_apple = b'<a class="badge" href="' + apple + b'">App Store</a>\n'
+    page_snap = b'<a class="badge" href="' + snap + b'">Snap Store</a>\n'
+    page_stores = page_apple + b'<a href="' + microsoft + b'">Store</a>\n' + page_play + page_snap
+    notes_apple = b"- Apple: [App Store](" + apple + b")"
+    notes_snap = b"- Linux: [Snap Store](" + snap + b")"
+    notes_stores = (notes_apple + b"\\n- Windows: [Microsoft Store](" + microsoft + b")\\n"
+                    + notes_snap)
+
     def notes(body: bytes) -> bytes:
         """A release-notes step whose printf carries body, shaped as release.yml's."""
         opening = (
             b"""          NOTES="$(printf 'Desktop builds.\\n\\n"""
-            + play_line + b"""\\n\\nmacOS note: """
+            + notes_stores + b"\\n" + play_line + b"""\\n\\nmacOS note: """
         )
         return opening + body.strip() + b"""')"\n"""
 
@@ -628,8 +691,7 @@ def self_test() -> list[str]:
             b'<a href="https://example.invalid/releases/latest/download/'
             b'BibleText-Linux-amd64.tar.xz">Linux</a>\n'
             b'<a href="https://example.invalid/releases/latest/download/'
-            b'BibleText-x86_64.AppImage">AppImage</a>\n' + page_apk +
-            b'<a href="https://apps.microsoft.com/detail/TESTID">Store</a>\n' + page_play + routes
+            b'BibleText-x86_64.AppImage">AppImage</a>\n' + page_apk + page_stores + routes
         ),
         READ_ME: (
             b"```\n"
@@ -689,8 +751,7 @@ def self_test() -> list[str]:
         b'<a href="https://example.invalid/releases/latest/download/'
         b'BibleText-Windows-amd64.zip">Windows</a>\n'
         b'<a href="https://example.invalid/releases/latest/download/'
-        b'BibleText-Windows-arm64.zip">Windows ARM</a>\n' + page_apk +
-        b'<a href="https://apps.microsoft.com/detail/TESTID">Store</a>\n' + page_play + routes
+        b'BibleText-Windows-arm64.zip">Windows ARM</a>\n' + page_apk + page_stores + routes
     )
     if matrix_failures := run(matrixed):
         problems.append(f"a matrixed upload step is misread: {matrix_failures}")
@@ -813,7 +874,7 @@ def self_test() -> list[str]:
 
     blind_upload = dict(clean)
     blind_upload[RELEASE_WORKFLOW] = b"        run: echo nothing is uploaded here\n" + notes(routes)
-    blind_upload[DOWNLOAD_PAGE] = b"<p>no downloads yet</p>\n" + page_play + routes
+    blind_upload[DOWNLOAD_PAGE] = b"<p>no downloads yet</p>\n" + page_stores + routes
     blind_upload[READ_ME] = clean[READ_ME]
     violations.append(("a release that uploads nothing", blind_upload, pair))
 
@@ -832,8 +893,9 @@ def self_test() -> list[str]:
     stale_store_readme[READ_ME] = clean[READ_ME] + b"https://apps.microsoft.com/detail/OLDID\n"
     violations.append(("a stale Store link in the README", stale_store_readme, pair))
 
-    # The clean notes carry no Store link, so a stale one is the only thing
-    # this tree can fail on.
+    # The stale link is beside the right one, so the notes still offer the
+    # Microsoft Store at the page's listing and also at another; the store
+    # rule and the identity rule both see it.
     stale_store_notes = dict(clean)
     stale_store_notes[RELEASE_WORKFLOW] = clean[RELEASE_WORKFLOW].replace(
         notes(routes), notes(routes + b"https://apps.microsoft.com/detail/OLDID\n")
@@ -987,6 +1049,29 @@ def self_test() -> list[str]:
         page_play, b"<!-- " + page_play.strip() + b" -->\n"
     )
     violations.append(("a Play link only inside a markup comment", play_markup, pair))
+
+    # The release notes are held to the page's stores in both directions, and
+    # store by store: the App Store and the Snap Store each missing from the
+    # notes, as the page links them; each linked from the notes after the
+    # page lost its badge; and each linked at another listing.
+    for label, page_badge, notes_link, other in (
+            ("the App Store", page_apple, notes_apple, notes_apple.replace(b"id1000000001", b"id1000000002")),
+            ("the Snap Store", page_snap, notes_snap, notes_snap.replace(b"example-reader", b"example-other"))):
+        missing = dict(clean)
+        missing[RELEASE_WORKFLOW] = clean[RELEASE_WORKFLOW].replace(notes_link, b"")
+        violations.append((f"release notes that never link {label}", missing, pair))
+        unbadged = dict(clean)
+        unbadged[DOWNLOAD_PAGE] = clean[DOWNLOAD_PAGE].replace(page_badge, b"")
+        unbadged[READ_ME] = clean[READ_ME]
+        violations.append((f"release notes linking {label} the page does not offer", unbadged, pair))
+        elsewhere = dict(clean)
+        elsewhere[RELEASE_WORKFLOW] = clean[RELEASE_WORKFLOW].replace(notes_link, other)
+        violations.append((f"release notes linking {label} at another listing", elsewhere, pair))
+    store_comment = dict(clean)
+    store_comment[RELEASE_WORKFLOW] = (
+        clean[RELEASE_WORKFLOW].replace(notes_apple, b"") + b"          # " + notes_apple + b"\n"
+    )
+    violations.append(("an App Store link only beside the release notes", store_comment, pair))
 
     blind_package = dict(clean)
     blind_package[PRODUCT_CONFIG] = config.replace(b'"appID"', b'"desktopAppID"')

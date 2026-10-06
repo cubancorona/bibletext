@@ -1891,9 +1891,22 @@ the first: on Android, `OnStopped` stops no audio.
 
 ## Rework the download page — DONE 26 September 2026; Google Play filled its slot, the release notes followed, and the APK row returned, 30 September 2026
 
-Still open: the public-surfaces check does not require the App Store and
-Snap Store links in the release notes — planned for 1.2.20; see
-docs/ROADMAP.md.
+The public-surfaces check did not require the App Store and Snap Store
+links in the release notes. FIXED 6 October 2026, for 1.2.20:
+`scripts/check-public-surfaces.py` (rule 2d) holds the release notes'
+printf to exactly the stores the download page links, in both directions
+and listing for listing. A store is told by its host and its listing by the
+part of the link that names it: the App Store's numeric id, Play's package,
+the Microsoft Store's product id, the snap's name. Locale or name segments
+and query strings do not count. So a store on the page and missing from
+the notes fails, as does one in the notes the page lost, or one linked at
+another listing. The page's badge and the printf's line now go in
+together. Its self-test fails, as every case must, against the rule
+switched off: the App Store and the Snap Store each missing from the notes,
+linked there without a badge, and linked at another listing, and an App
+Store link kept only in a comment beside the notes. The real tree with
+either line taken out of the printf fails. A store on neither page is still
+beyond it.
 
 The page had store buttons by platform at the top and a separate "Desktop —
 direct downloads" half with its own sections, three button styles, and the
