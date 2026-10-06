@@ -109,10 +109,9 @@ What 1.2.18 (1–2 October 2026) adds:
 
 ## macOS 12 and 13: an open note card calls a macOS 14 method — FIXED 2 October 2026
 
-Still open: the walk's `switch` names two element constants AppKit marks
-macOS 14 (`NSBezierPathElementCubicCurveTo`,
-`NSBezierPathElementQuadraticCurveTo`) — planned for 1.2.20; see
-docs/ROADMAP.md.
+The walk's `switch` named two element constants AppKit marks macOS 14
+(`NSBezierPathElementCubicCurveTo`, `NSBezierPathElementQuadraticCurveTo`)
+— FIXED 6 October 2026, for 1.2.20, at the end of this entry.
 
 `btMacLayoutNote` gives the note card its shape from
 `btMacNoteBubblePath(w, h).CGPath` (`reading_macos.go:2783`). AppKit
@@ -176,6 +175,24 @@ unguarded call. A build without the floor, which is a development build and
 CI's macOS job, targets the macOS it runs on and cannot see such a call, so
 `mac_floor_availability_contract_test.go` holds the flag, and the card's use
 of the walk, at the source. Not run on macOS 12 or 13.
+
+**The walk's two macOS 14 names — FIXED 6 October 2026.** Today's clang
+(Apple clang 21) lets a `case` label name `NSBezierPathElementCubicCurveTo`
+and `NSBezierPathElementQuadraticCurveTo` at a 12.0 target without a word,
+even with `-Wunguarded-availability-new`, so the release builds were never
+failing; but a compiler that started counting those uses would fail the Mac
+release on its day. The cubic's older name, `NSBezierPathElementCurveTo`,
+was not the way out. It is `API_DEPRECATED` from macOS 14, so it compiles
+quietly at the 12.0 floor but warns in every build that targets macOS 14 or
+later, which is every host build and CI's macOS job (checked with
+`clang -fsyntax-only` at 12.0, 14.0 and 26.0). Both curve kinds are now
+matched by the values the SDK gives them, 2 and 4 (`btMacPathCubic`,
+`btMacPathQuadratic`), which compile with no warning at any of the three
+targets, with `-Wall -Wextra -Wswitch-enum`. The values are the constants'
+own, so the walk takes the same branches as before. The package builds at
+the 12.0 floor and at the host's target. `mac_floor_availability_contract_test.go`
+now also fails if the walk names either macOS 14 kind or the deprecated
+name, or stops handling any of the five kinds.
 
 ## Share as image says "Picture saved" for a card it could not read — found 1 October 2026
 

@@ -2056,6 +2056,16 @@ static NSBezierPath *btMacNoteBubblePath(CGFloat w, CGFloat h) {
 // arcs already cubic curves, nothing re-approximated — which is the outline
 // the property gives on macOS 14 and later, element for element. The caller
 // owns the result.
+//
+// The two curve kinds are matched by value. AppKit names them
+// NSBezierPathElementCubicCurveTo (2) and NSBezierPathElementQuadraticCurveTo
+// (4), both API_AVAILABLE(macos(14.0)), and this file compiles with
+// -Werror=unguarded-availability-new at the macOS 12 floor; today's compiler
+// lets a case label name them, and one that stops doing so would fail the Mac
+// release on its day. The cubic's older name, NSBezierPathElementCurveTo, is
+// deprecated from macOS 14 and warns in every build that targets it, which is
+// every host build; the quadratic has no older name.
+enum { btMacPathCubic = 2, btMacPathQuadratic = 4 };
 static CGPathRef btMacCGPathCreate(NSBezierPath *p) CF_RETURNS_RETAINED;
 static CGPathRef btMacCGPathCreate(NSBezierPath *p) {
     CGMutablePathRef m = CGPathCreateMutable();
@@ -2068,11 +2078,11 @@ static CGPathRef btMacCGPathCreate(NSBezierPath *p) {
         case NSBezierPathElementLineTo:
             CGPathAddLineToPoint(m, NULL, pts[0].x, pts[0].y);
             break;
-        case NSBezierPathElementCubicCurveTo:
+        case btMacPathCubic:
             CGPathAddCurveToPoint(m, NULL, pts[0].x, pts[0].y, pts[1].x, pts[1].y,
                                   pts[2].x, pts[2].y);
             break;
-        case NSBezierPathElementQuadraticCurveTo:   // only made by macOS 14's API
+        case btMacPathQuadratic:   // only made by macOS 14's API
             CGPathAddQuadCurveToPoint(m, NULL, pts[0].x, pts[0].y, pts[1].x, pts[1].y);
             break;
         case NSBezierPathElementClosePath:
