@@ -468,7 +468,11 @@ func TestAVerseNumberSelectedOnItsOwnQuotesNothing(t *testing.T) {
 // above the psalm, not a verse of it. The Apple and Android panes draw it in
 // the same selectable text as the verses, above verse 1 and any heading
 // there (the Windows and Linux pane draws it outside the text, where no drag
-// reaches it), so a drag can run from it into the psalm. The text is the
+// reaches it), but their app verbs start at verse 1's number: a selection
+// inside the title gets none, and one that runs on into the psalm is cut at
+// that number before Go sees it. The page that does hand the title over is
+// the Mac's plain-text fallback, where nothing has a span, and these tests
+// stand for it and for any caller that hands over raw text. The text is the
 // World English Bible's Psalm 3; the heading under the title is invented, as
 // that edition sets none, and the small capitals on the title are the
 // fixture's own, so the title is matched as the page draws it.
@@ -535,10 +539,12 @@ func TestAPsalmTitleIsNeverQuotedAsScripture(t *testing.T) {
 }
 
 // A title selected on its own cites verse 1 with no quotation, as a heading
-// does. The panes report a drag inside the title as no span at all, or, once
-// it reaches verse 1's number, as verse 1 (selSpanFromNative's clamp). The
-// verbs agree: the citation, the link's verses, which a note is kept against,
-// and, given a span, the verses the cross-references resolve to.
+// does. No pane with verse geometry offers the verbs on it (see
+// psalmTitle); a page that hands it over reports it with no span at all, or,
+// were it to reach verse 1's number with one, as verse 1 (selSpanFromNative's
+// clamp). The verbs agree: the citation, the link's verses, which a note is
+// kept against, and, given a span, the verses the cross-references resolve
+// to.
 func TestAPsalmTitleSelectedOnItsOwnCitesTheFirstVerse(t *testing.T) {
 	for _, withHeading := range []bool{false, true} {
 		st := psalmTitleState(withHeading)
@@ -607,6 +613,60 @@ func TestAHeadingRunOnIntoPartOfAWordQuotesNothing(t *testing.T) {
 		quote, cite, _, _ := prepareShareQuote(st, sel, selSpanFromNative(43, 44))
 		if quote != "" || cite != "Acts 10:44" {
 			t.Errorf("%q shared (%q, %q), want (\"\", Acts 10:44)", sel, quote, cite)
+		}
+	}
+}
+
+// A drag from the verse above a heading, through the heading, that stops on
+// the number of the verse below holds no word of that verse. The first pass
+// drops such a trailing number, and the heading repair now does too: the
+// shared words are the verse above's, cited by it alone. It shared the
+// heading as Scripture with the number after it, cited by both verses. The
+// control is the same drag without the heading, which the first pass
+// answers.
+func TestAHeadingRepairDropsTheNumberTheDragStoppedOn(t *testing.T) {
+	st := headingChapterState()
+	const above = "whoever believes in him will receive remission of sins."
+
+	if quote, cite, _, _ := prepareShareQuote(st, above+" 44", selSpanFromNative(43, 44)); quote != above || cite != "Acts 10:43" {
+		t.Fatalf("control: verse 43's words and verse 44's number shared (%q, %q)", quote, cite)
+	}
+	quote, cite, _, _ := prepareShareQuote(st, above+" "+headingText+" 44", selSpanFromNative(43, 44))
+	if quote != above || cite != "Acts 10:43" {
+		t.Errorf("through the heading to verse 44's number: shared (%q, %q), want (%q, Acts 10:43)", quote, cite, above)
+	}
+}
+
+// A heading and the number of the verse it stands above are the page's
+// apparatus, with no word of Scripture in them. With the heading taken off,
+// the number alone is answered as the heading is, never looked for among the
+// verses' words, where the same figure can stand as a word of the text: here
+// verse 1's "3", which the number was found as, quoted and cited.
+func TestAHeadingAndItsVerseNumberAreNotLookedForInTheText(t *testing.T) {
+	bd := &BibleData{
+		Books: []string{"Numbers"},
+		Verses: map[string]map[int][]Verse{"Numbers": {2: {
+			{BookName: "Numbers", Book: "Numbers", Chapter: 2, Verse: 1,
+				Text: "These are the families, 3 in all."},
+			{BookName: "Numbers", Book: "Numbers", Chapter: 2, Verse: 2,
+				Text: "And they camped by their standards."},
+			{BookName: "Numbers", Book: "Numbers", Chapter: 2, Verse: 3,
+				Text: "The Levites were not counted among them."},
+		}}},
+		Headings: map[string]map[int][]Heading{"Numbers": {2: {
+			{Text: "The Levites Are Set Apart", Style: "s", BeforeVerse: 3},
+		}}},
+	}
+	st := &AppState{Bible: bd, CurrentBook: "Numbers", CurrentChapter: 2}
+
+	// The control: the heading alone is verse 3's, with nothing quoted.
+	if quote, cite, _, _ := prepareShareQuote(st, "The Levites Are Set Apart", selSpanFromNative(2, 2)); quote != "" || cite != "Numbers 2:3" {
+		t.Fatalf("control: the heading alone shared (%q, %q)", quote, cite)
+	}
+	for _, sel := range []string{"The Levites Are Set Apart 3", "Set Apart 3"} {
+		quote, cite, _, _ := prepareShareQuote(st, sel, selSpanFromNative(2, 3))
+		if quote != "" || cite != "Numbers 2:3" {
+			t.Errorf("%q, span 2–3: shared (%q, %q), want (\"\", Numbers 2:3)", sel, quote, cite)
 		}
 	}
 }

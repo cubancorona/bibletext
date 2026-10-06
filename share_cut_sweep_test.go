@@ -720,11 +720,14 @@ func TestSpannedBoundaryDragSweep(t *testing.T) {
 
 // TestPsalmTitleDragSweep drags from every character of a psalm's title to
 // every character boundary through it, a heading set under it, verse 1 and
-// into verse 2, as the Apple and Android panes draw the page: the title, the
-// heading, then "1 …". The span is the panes' (nothing at or before the
-// start, so no span until the drag reaches verse 1's number, then 1 to the
-// verse at its end). Two answers are possible, and the drag's own verse words
-// say which:
+// into verse 2, on a page drawn as the Apple and Android panes draw it: the
+// title, the heading, then "1 …". Those panes never hand such a drag over
+// (their verbs start at verse 1's number, see psalmTitle); a page with no
+// verse geometry, the Mac's plain-text fallback, does. The span is what a
+// verse lookup on that page would give (nothing at or before the start, so
+// no span until the drag reaches verse 1's number, then 1 to the verse at
+// its end). Two answers are possible, and the drag's own verse words say
+// which:
 //
 //   - it holds at least one whole word of the psalm: those words are shared,
 //     from verse 1's start, and cited by the verses they span. No piece of

@@ -3441,27 +3441,61 @@ rather than the span verses' full extent. Not done here because it is a
 behaviour change to the attribution core and wants its own pass with the sweep
 harness above as the before/after measure.
 
-### 2. A Psalm superscription can be shared as scripture — DONE 6 October 2026, for 1.2.20
+### 2. A Psalm superscription can be shared as scripture — DONE 6 October 2026, for 1.2.20; not reachable on the panes that draw it
 
-Fixed in `normalizeShareSelectionProse` and `stripHeadings` (`share.go`),
-which every verb resolves a selection through, so it holds on the iPhone,
-iPad, Mac and Android, the panes that draw the title in the selectable text
-(the Windows and Linux pane draws it outside the text, where no drag reaches
-it). A drag from the title into the psalm shares the psalm's words alone,
-cited by the verses they span: the title, or its end, comes off when verse 1's
-number confirms it, and with a heading between them the heading repair takes
-both. A title selected on its own, or run on to verse 1's number or into part
-of its first word, quotes nothing and cites verse 1, as decided; a drag inside
-the title reaches no verse number, so the panes report no span, and is
-answered before its words are looked for in the psalm, where "his" or "son"
-would be found. The link's verses, which a sent note is kept against, agree.
+**Corrected after review, 6 October 2026.** The finding below was made in Go
+alone, and the panes it names never hand Go such a drag. Since the titles were
+first drawn (27 August 2026, `d2385d5d6`), the iPhone, iPad, Mac and Android
+panes start their app verbs at verse 1's number (`btIOSContentStart` in
+`reading_ios.go`; `hbScriptureSelection` and the menu check in
+`reading_macos.go`; `contentStart` in `BtBridge.java`'s action handler). A
+selection wholly inside the title gets Copy and Look Up only, with no Share,
+Note or Cross-references, and a drag from the title into the psalm is cut at
+verse 1's number before Go sees it. So no shipped pane shared a title as
+Scripture, and decision 5 below (a title selected on its own cites verse 1
+with no quotation) is never seen on them: a reader gets no share verbs on a
+title at all, which may be what is wanted. The one page that does hand a
+title over is the Mac's plain-text fallback, when a chapter fails to import
+as HTML (`gMacContentStart` is 0 there, and no selection has a span), with
+the dead legacy pane. That is what the change below serves. With no span, a
+selection that is a piece of the title is answered as the title, and the same
+words selected in a later verse are too ("Yahweh" in Psalm 18, whose title
+names him): no quotation, verse 1, where before they were quoted from their
+first copy in the psalm. On every pane, the change's visible effect is on
+headings, as the paragraph on headings below says, and that wider effect was
+not part of the decision.
+
+What was done: fixed in `normalizeShareSelectionProse` and `stripHeadings`
+(`share.go`), which every verb resolves a selection through. A drag from the
+title into the psalm shares the psalm's words alone, cited by the verses they
+span: the title, or its end, comes off when verse 1's number confirms it, and
+with a heading between them the heading repair takes both. A title selected
+on its own, or run on to verse 1's number or into part of its first word,
+quotes nothing and cites verse 1, as decided; a selection with no span that
+is a piece of the title is answered so before its words are looked for in the
+psalm, where "his" or "son" would be found. The link's verses, which a sent
+note is kept against, agree.
 `TestPsalmTitleDragSweep` (`share_cut_sweep_test.go`) drags from every
 character of a title to every boundary through a heading, verse 1 and into
 verse 2, 14,124 drags, and `share_heading_selection_test.go` pins the shapes.
 The same repair answers a heading run on through its verse's number into part
 of that verse's first word, which quoted the heading and cited the verse above
 with it: it now quotes nothing and cites the verse below, as a heading
-selected on its own does.
+selected on its own does. And the heading repair now drops a verse number the
+drag stopped on, as the first pass does, so a drag from a verse through the
+heading under it to the next verse's number shares the verse alone, cited by
+it, where it shared the heading and the number as Scripture under both verses
+(`TestAHeadingRepairDropsTheNumberTheDragStoppedOn`); and a heading with its
+verse's number and nothing after is answered as the heading, where the bare
+number was looked for in the verses' words and could be quoted and cited from
+wherever the same figure stands (`TestAHeadingAndItsVerseNumberAreNotLookedForInTheText`).
+The review swept every drag from Acts 10:43 through a heading into verse 45 of
+the heading fixture, 19,110 drags, against 1.2.19's code: 410 change, with
+item 1's fix, 409 of them from the legacy path's verbatim share, and 352 had
+quoted the heading's words as Scripture. These are reached on every pane, the
+only part of this change that is, and keep the existing rule that a heading
+is never quoted; they await the owner's word as part of 1.2.20, the headings'
+own pass being the next major's (docs/ROADMAP.md, next major row 5).
 
 Two shapes stay as they were, being the headings' rather than the title's:
 with no span, the cross-references resolve a title selected on its own by

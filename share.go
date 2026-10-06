@@ -686,17 +686,26 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 	// in that same drawn form, so they locate.
 	out := sharedText(flat)
 
-	// A psalm's title is the publisher's, not a verse, and the Apple and
-	// Android panes draw it in the same text as the verses, above verse 1.
-	// Two drags are answered here, before anything is looked for among the
-	// verses' words, because the title's words, "his" or "son" or its full
-	// stop, are often in the psalm too and would be found there:
+	// A psalm's title is the publisher's, not a verse. The Apple and Android
+	// panes draw it in the same text as the verses, above verse 1, but their
+	// app verbs have been clamped to start at verse 1's number since the
+	// titles were first drawn (btIOSContentStart, hbScriptureSelection,
+	// BtBridge's contentStart): a selection inside the title gets Copy and
+	// Look Up alone, and one from the title into the psalm is cut at verse
+	// 1's number before it gets here. What does hand a title over is a page
+	// with no verse geometry, the Mac's plain-text fallback when the chapter
+	// fails to import (gMacContentStart is 0 there, and nothing has a span),
+	// and the dead legacy pane. For those, two drags are answered here,
+	// before anything is looked for among the verses' words, because the
+	// title's words, "his" or "son" or its full stop, are often in the psalm
+	// too and would be found there:
 	//
-	//   - a drag inside the title, perhaps on through a heading under it,
-	//     reaches no verse number, so those panes report it with no span (the
-	//     last number before it is none), where a drag among the verses
-	//     always has one. It is answered as a heading selected on its own:
-	//     verse 1, no quotation;
+	//   - a selection with no span that is the title or a piece of it,
+	//     perhaps on through a heading under it, is answered as a heading
+	//     selected on its own: verse 1, no quotation. With no span there is
+	//     no telling it from the same words selected in a verse, which are
+	//     answered the same way; with no span such words were only ever
+	//     found at their first copy;
 	//   - a drag from the title on into the psalm carries the title, or the
 	//     end of it, then verse 1's number. Confirmed by that number, the
 	//     title comes off, and what follows is the selection. Just the
@@ -1085,13 +1094,14 @@ func stripHeadings(state *AppState, book string, chapter int, s string) string {
 		s = trimTrailingHeading(s, text)
 		s = removeWholeHeadings(s, text, num)
 	}
-	// A psalm's title is editorial matter too. The Apple and Android panes
-	// draw it in the same selectable text as the verses, above the chapter's
-	// first verse and any heading there, so a drag from it into the psalm
-	// carries the title, or the end of it, at its front. It is confirmed as a
-	// heading at the top of a chapter is, by the number of the verse it stands
-	// above, and it goes after the headings, which may stand between it and
-	// that number.
+	// A psalm's title is editorial matter too. A page that hands it over
+	// (the Mac's plain-text fallback; the panes with verse geometry cut a
+	// selection at verse 1's number, see normalizeShareSelectionProse) has
+	// it above the chapter's first verse and any heading there, so a drag
+	// from it into the psalm carries the title, or the end of it, at its
+	// front. It is confirmed as a heading at the top of a chapter is, by the
+	// number of the verse it stands above, and it goes after the headings,
+	// which may stand between it and that number.
 	if title, first, ok := chapterTitle(state, book, chapter); ok {
 		s = trimLeadingHeading(s, title, strconv.Itoa(first))
 	}
