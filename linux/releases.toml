@@ -1,10 +1,18 @@
 # Release history for the AppStream MetaInfo, newest first: every version that
-# shipped an artifact, with its annotated tag's date, and the reader-facing
-# notes the stores carry (the What's New text, whose files are not tracked).
-# The newest entry must be the desktop ledger's Version, dates must descend
-# and may not be in the future. 1.2.6 (a tag with no assets) and 1.1.8 (notes
-# with no tag) are absent on purpose; the history starts at 1.1.2, the first
-# tag that shipped a Linux tarball.
+# shipped an artifact, with the day its store files were built, and the
+# reader-facing notes the stores carry (the What's New text, whose files are
+# not tracked). The newest entry must be the desktop ledger's Version, dates
+# must descend and may not be in the future. 1.2.6 (a tag with no assets) and
+# 1.1.8 (notes with no tag) are absent on purpose; the history starts at
+# 1.1.2, the first tag that shipped a Linux tarball.
+#
+# The date is the day the store files are built, not the tag's day. The entry
+# is written in stage 1 of docs/RELEASING.md, the store files are built from
+# that tree in stage 3, and the tag follows them in stage 5, so the tree
+# cannot know the tag's date, and correcting it afterwards would move the tree
+# off files already built. Write the day the stage 3 builds will run. Until
+# 1.2.19 the entries meant to carry the tag's date; 1.2.13, 1.2.17 and 1.2.18
+# are each a day before their tags, and stand.
 
 [[release]]
 version = "1.2.19"

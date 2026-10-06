@@ -325,6 +325,33 @@ func TestStage10NamesTheArm64SnapRerun(t *testing.T) {
 	}
 }
 
+// A linux/releases.toml entry is dated the day the store files are built,
+// not the tag's day: the entry is written in stage 1, the files built from
+// that tree in stage 3, and the tag comes after them, so the tree cannot know
+// the tag's date. The ledger's header and stage 1 say so in the same words,
+// and neither may go back to promising the tag's date.
+func TestTheLinuxReleaseDateIsTheBuildDay(t *testing.T) {
+	const rule = "the day the store files are built"
+	ledger := readRepoFile(t, "linux/releases.toml")
+	header, _, ok := strings.Cut(ledger, "\n[[release]]")
+	if !ok {
+		t.Fatal("linux/releases.toml has no [[release]] entry; the header cannot be found")
+	}
+	header = strings.Join(strings.Fields(strings.ReplaceAll(header, "#", " ")), " ")
+	stage := strings.Join(strings.Fields(releasingStage(t, "1")), " ")
+	for name, text := range map[string]string{"linux/releases.toml's header": header, "stage 1 of docs/RELEASING.md": stage} {
+		if !strings.Contains(text, rule) {
+			t.Errorf("%s does not say an entry is dated %s", name, rule)
+		}
+		if strings.Contains(text, "annotated tag's date") {
+			t.Errorf("%s still dates an entry by its annotated tag, which comes after the builds", name)
+		}
+	}
+	if !strings.Contains(stage, "`linux/releases.toml`") {
+		t.Error("stage 1 of docs/RELEASING.md no longer names `linux/releases.toml`")
+	}
+}
+
 // CONTROL: the filter matcher must have GitHub's semantics and the parsers
 // must see the real files, or the tests above pass by checking nothing.
 func TestTheWorkflowParsersSeeTheRealFiles(t *testing.T) {

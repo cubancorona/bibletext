@@ -553,9 +553,7 @@ holds `load_notes` to the same cases, and to the same pattern as the Go test.
 `scripts/check-release-identity.py` still checks only the iPhone notes'
 first line, and needs no more with these two in place.
 
-## linux/releases.toml dates a release the day before its tag — found 1 October 2026
-
-Planned for: 1.2.20 — see docs/ROADMAP.md.
+## linux/releases.toml dates a release the day before its tag — FIXED 6 October 2026, for 1.2.20
 
 The file's header says each entry carries its annotated tag's date
 (`linux/releases.toml:1-3`), and `cmd/linuxmeta` renders that date into the
@@ -581,6 +579,13 @@ day of the tag. The past entries can stand, each within a day of its tag.
 **Decided 6 October 2026** — Linux release date: the day the store files
 are built. The header of `linux/releases.toml` and stage 1 of
 `docs/RELEASING.md` say so in 1.2.20.
+
+**Done.** The header now dates an entry by the day its store files are
+built, says why, and leaves the three early entries as they are. Stage 1 says
+the same. `TestTheLinuxReleaseDateIsTheBuildDay` (`releasing_doc_test.go`)
+holds both to that wording, and fails if either goes back to the annotated
+tag's date. `go run ./cmd/linuxmeta render` changes nothing, since only the
+comment moved.
 
 ## msstore/submit.py keeps the last release's commit status in a new submission's state — FIXED 6 October 2026, for 1.2.20
 
