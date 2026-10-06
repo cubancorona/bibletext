@@ -365,9 +365,10 @@ func TestTheComposerTakesTheSideInsetsOfANewCanvas(t *testing.T) {
 // own: the cutout alone, whose area keeps its width and only starts
 // elsewhere, and the cutout with the navigation bar opposite it, whose area
 // changes width as well. The controls are the card before the watch runs,
-// under the new inset. An emulator cannot turn a phone through 180 degrees
-// in one step, so this is the proof (docs/BACKLOG.md, "A sheet turned from
-// one landscape to the other").
+// under the new inset. The API 35 emulator makes the same turn in one step,
+// since it refuses the upside-down posture, and drew the card under the
+// cutout before the change and clear of it after; this holds that in the
+// suite (docs/BACKLOG.md, "A sheet turned from one landscape to the other").
 func TestTheComposerFollowsTheSideInsetsAcrossALandscapeTurn(t *testing.T) {
 	for _, turn := range []struct {
 		name      string

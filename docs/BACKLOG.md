@@ -332,9 +332,14 @@ canvas size — the cutout alone, whose area keeps its width and only starts
 elsewhere; the cutout with a three-button bar opposite it; and a bar that
 appears with the turn — and fails on the tree before the change, where the
 card stayed padded on the old side and ran under the new inset, the native
-field with it. A host test is the proof, since the emulator cannot turn a
-phone through 180 degrees in one step. Ask is unchanged: it still throws its
-refit away, and waits until Ask returns to the menus.
+field with it. The API 35 emulator makes the same turn: it refuses the
+upside-down posture (`mAllowAllRotations=false`), so `adb emu rotate` takes
+its display from ROTATION_270 straight to ROTATION_90 at an unchanged size.
+With the composer opened at ROTATION_270 and the phone turned over, the build
+before the change left the card at x 11..2252, under the 136px cutout now on
+the left, and the fixed build moved it to x 147..2388, clear of it; so the
+driver does hand the composer the new insets on that turn. Ask is unchanged:
+it still throws its refit away, and waits until Ask returns to the menus.
 
 ## A Play upload's commit restarts a review in progress — found 2 October 2026
 
