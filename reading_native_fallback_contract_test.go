@@ -15,9 +15,9 @@ package bibletext
 // fallback that then replaces the text is the ONE path where those
 // derivations are skipped — so each range has to be re-derived (or cleared)
 // there, in the import's own order, or the previous chapter's value survives
-// under the plain text. Every reader clamps on length alone, and the
-// tag-stripped string is longer than the styled one it replaces, so a stale
-// range passes the clamp: the read-along painted verse 0 over the wrong text,
+// under the plain text. Every reader clamps on length alone, so a stale
+// range passes the clamp wherever the tag-stripped string is long enough to
+// hold it: the read-along painted verse 0 over the wrong text,
 // a resize or a reposition scrolled to the old highlight and anchored the
 // note card on it, and the pills were placed from paragraph ranges of a
 // storage that no longer existed.

@@ -395,9 +395,11 @@ static void btIOSRebuildWash(void);
 // in. Every path that can move a line rebuilds where it moves it (the import,
 // btIOSApplyInsets, btIOSRefreshNote, the wash mutation); this is the safety
 // net for anything that does not — a width the frame push changed with the
-// insets unchanged, a storage the plain-text fallback replaced. Two scalar
-// compares per frame, and a rebuild records the key it built against, so the
-// pass after it finds the key equal and cannot loop.
+// insets unchanged, a storage of another length put in place. The plain-text
+// fallback rebuilds through btIOSRefreshNote itself, since its text can be
+// as long as the import it replaces. Two scalar compares per frame, and a
+// rebuild records the key it built against, so the pass after it finds the
+// key equal and cannot loop.
 - (void)layoutSubviews {
     [super layoutSubviews];
     if (gWashView == nil) return;
@@ -3468,19 +3470,24 @@ static BOOL bibleTextApplyHTML(NSData *data) {
 // the title's words as Scripture. The stylesheet is text inside <head>, not
 // a tag, and the strip left it standing at the top of the page.
 static NSString *bibleTextPlainFromHTML(NSString *html) {
-    html = [html stringByReplacingOccurrencesOfString:@"<br>" withString:@"\n"];
-    html = [html stringByReplacingOccurrencesOfString:@"</p>" withString:@"</p>\n"];
+    html = [html stringByReplacingOccurrencesOfString:@"<br>" withString:@"\n" options:NSLiteralSearch range:NSMakeRange(0, html.length)];
+    html = [html stringByReplacingOccurrencesOfString:@"</p>" withString:@"</p>\n" options:NSLiteralSearch range:NSMakeRange(0, html.length)];
     NSRegularExpression *head = [NSRegularExpression regularExpressionWithPattern:@"<head>[\\s\\S]*?</head>" options:0 error:nil];
     html = [head stringByReplacingMatchesInString:html options:0
                                             range:NSMakeRange(0, html.length) withTemplate:@""];
     NSRegularExpression *re = [NSRegularExpression regularExpressionWithPattern:@"<[^>]+>" options:0 error:nil];
     NSString *t = [re stringByReplacingMatchesInString:html options:0
                                                  range:NSMakeRange(0, html.length) withTemplate:@""];
-    t = [t stringByReplacingOccurrencesOfString:@"&nbsp;" withString:@" "];
-    t = [t stringByReplacingOccurrencesOfString:@"&quot;" withString:@"\""];
-    t = [t stringByReplacingOccurrencesOfString:@"&amp;" withString:@"&"];
-    t = [t stringByReplacingOccurrencesOfString:@"&lt;" withString:@"<"];
-    t = [t stringByReplacingOccurrencesOfString:@"&gt;" withString:@">"];
+    // &amp; is read last, so an entity the text itself spells out
+    // ("&amp;lt;" for a verse's "&lt;") is read once, as the importer reads
+    // it, and not twice. Every replacement is literal: the default compare
+    // matches only whole composed characters, so an entity followed by a
+    // combining mark was left standing.
+    t = [t stringByReplacingOccurrencesOfString:@"&nbsp;" withString:@" " options:NSLiteralSearch range:NSMakeRange(0, t.length)];
+    t = [t stringByReplacingOccurrencesOfString:@"&quot;" withString:@"\"" options:NSLiteralSearch range:NSMakeRange(0, t.length)];
+    t = [t stringByReplacingOccurrencesOfString:@"&lt;" withString:@"<" options:NSLiteralSearch range:NSMakeRange(0, t.length)];
+    t = [t stringByReplacingOccurrencesOfString:@"&gt;" withString:@">" options:NSLiteralSearch range:NSMakeRange(0, t.length)];
+    t = [t stringByReplacingOccurrencesOfString:@"&amp;" withString:@"&" options:NSLiteralSearch range:NSMakeRange(0, t.length)];
     return t;
 }
 

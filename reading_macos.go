@@ -1662,8 +1662,8 @@ static NSString *bibleTextMacPlainFromHTML(NSString *html) {
     // together ("his son.1 LORD"), so verse 1's number was glued to the
     // title, a share could not confirm the title by it, and a drag from the
     // title into the psalm shared the title's words as Scripture.
-    html = [html stringByReplacingOccurrencesOfString:@"<br>" withString:@"\n"];
-    html = [html stringByReplacingOccurrencesOfString:@"</p>" withString:@"</p>\n"];
+    html = [html stringByReplacingOccurrencesOfString:@"<br>" withString:@"\n" options:NSLiteralSearch range:NSMakeRange(0, html.length)];
+    html = [html stringByReplacingOccurrencesOfString:@"</p>" withString:@"</p>\n" options:NSLiteralSearch range:NSMakeRange(0, html.length)];
     // The stylesheet is text inside <head>, not a tag, and the strip left it
     // standing at the top of the page.
     NSRegularExpression *head = [NSRegularExpression regularExpressionWithPattern:@"<head>[\\s\\S]*?</head>" options:0 error:nil];
@@ -1672,11 +1672,16 @@ static NSString *bibleTextMacPlainFromHTML(NSString *html) {
     NSRegularExpression *re = [NSRegularExpression regularExpressionWithPattern:@"<[^>]+>" options:0 error:nil];
     NSString *t = [re stringByReplacingMatchesInString:html options:0
                                                  range:NSMakeRange(0, html.length) withTemplate:@""];
-    t = [t stringByReplacingOccurrencesOfString:@"&nbsp;" withString:@" "];
-    t = [t stringByReplacingOccurrencesOfString:@"&quot;" withString:@"\""];
-    t = [t stringByReplacingOccurrencesOfString:@"&amp;" withString:@"&"];
-    t = [t stringByReplacingOccurrencesOfString:@"&lt;" withString:@"<"];
-    t = [t stringByReplacingOccurrencesOfString:@"&gt;" withString:@">"];
+    // &amp; is read last, so an entity the text itself spells out
+    // ("&amp;lt;" for a verse's "&lt;") is read once, as the importer reads
+    // it, and not twice. Every replacement is literal: the default compare
+    // matches only whole composed characters, so an entity followed by a
+    // combining mark was left standing.
+    t = [t stringByReplacingOccurrencesOfString:@"&nbsp;" withString:@" " options:NSLiteralSearch range:NSMakeRange(0, t.length)];
+    t = [t stringByReplacingOccurrencesOfString:@"&quot;" withString:@"\"" options:NSLiteralSearch range:NSMakeRange(0, t.length)];
+    t = [t stringByReplacingOccurrencesOfString:@"&lt;" withString:@"<" options:NSLiteralSearch range:NSMakeRange(0, t.length)];
+    t = [t stringByReplacingOccurrencesOfString:@"&gt;" withString:@">" options:NSLiteralSearch range:NSMakeRange(0, t.length)];
+    t = [t stringByReplacingOccurrencesOfString:@"&amp;" withString:@"&" options:NSLiteralSearch range:NSMakeRange(0, t.length)];
     return t;
 }
 
@@ -1711,11 +1716,12 @@ void bibleTextMacTVSetHTML(const char *html) {
                     // latched import, which returns before touching any
                     // geometry global when the import fails, so the previous
                     // chapter's range would survive here — and btMacTitleRange
-                    // clamps on length alone, which a LONGER fallback string
-                    // passes, so verse 0 would paint (and follow-scroll to)
-                    // whatever text now sits under the old range. The iOS twin
-                    // clears its title range on this same path. (No verse table
-                    // to drop beside it: btMacLocForVerse walks the runs live.)
+                    // clamps on length alone, which a fallback string long
+                    // enough to hold the old range passes, so verse 0 would
+                    // paint (and follow-scroll to) whatever text now sits
+                    // under the old range. The iOS twin clears its title
+                    // range on this same path. (No verse table to drop beside
+                    // it: btMacLocForVerse walks the runs live.)
                     btMacFindTitleRange(nil);
                     // The two derivations the latched import makes AFTER those,
                     // made here too, in its order, from the same model. The
