@@ -20,6 +20,7 @@ package bibletext
 // is what identifies the cause rather than merely recording the symptom.
 
 import (
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -340,6 +341,135 @@ func TestAHeadingSelectedOnItsOwnQuotesNothing(t *testing.T) {
 	}
 	if !strings.Contains(cite, "44") {
 		t.Errorf("a heading selected alone cited %q, want it to name verse 44", cite)
+	}
+}
+
+// The same with no span, as the plain-text fallback the Mac and the iPhone
+// and iPad show when a chapter fails to import hands a selection over. That
+// page sets each heading on a line of its own, so selecting its paragraph
+// takes the heading whole, perhaps with the line break after it, or run on
+// to the number of the verse below. Each quotes nothing and cites that verse,
+// and the link names it too; each was shared as Scripture under the chapter.
+// A heading whose own figure is the number of the verse below ("Saying 12"
+// above verse 12) is answered so as well. The control is a verse's own words
+// with no span, quoted as ever.
+func TestAHeadingSelectedWholeWithNoSpanQuotesNothing(t *testing.T) {
+	st := headingChapterState()
+	if quote, cite, _, _ := prepareShareQuote(st, "the Spirit fell on all those", selSpan{}); quote != "the Spirit fell on all those" || cite != "Acts 10:44" {
+		t.Fatalf("control: a verse's words with no span shared (%q, %q)", quote, cite)
+	}
+	for _, sel := range []string{headingText, headingText + "\n", headingText + "\n44"} {
+		quote, cite, _, _ := prepareShareQuote(st, sel, selSpan{})
+		if quote != "" || cite != "Acts 10:44" {
+			t.Errorf("%q with no span shared (%q, %q), want (\"\", \"Acts 10:44\")", sel, quote, cite)
+		}
+		if lo, hi := linkVersesForSelection(st, sel, selSpan{}); lo != 44 || hi != 44 {
+			t.Errorf("%q with no span links verses %d–%d, want 44", sel, lo, hi)
+		}
+	}
+
+	numbered := &AppState{Bible: &BibleData{
+		Books: []string{"Proverbs"},
+		Verses: map[string]map[int][]Verse{"Proverbs": {23: {
+			{BookName: "Proverbs", Book: "Proverbs", Chapter: 23, Verse: 11, Text: "Keep your ways straight."},
+			{BookName: "Proverbs", Book: "Proverbs", Chapter: 23, Verse: 12, Text: "Listen and learn."},
+		}}},
+		Headings: map[string]map[int][]Heading{"Proverbs": {23: {
+			{Text: "Saying 12", Style: "s", BeforeVerse: 12},
+		}}},
+	}, CurrentBook: "Proverbs", CurrentChapter: 23}
+	for _, sel := range []string{"Saying 12", "Saying 12\n12"} {
+		if quote, cite, _, _ := prepareShareQuote(numbered, sel, selSpan{}); quote != "" || cite != "Proverbs 23:12" {
+			t.Errorf("%q with no span shared (%q, %q), want (\"\", \"Proverbs 23:12\")", sel, quote, cite)
+		}
+	}
+
+	// The heading is answered before the search, so the heading repair, which
+	// takes the first word of the next heading off the end of a selection,
+	// cannot leave "Jacob and" to be quoted from verse 3. And a heading whose
+	// words the chapter has as words is quoted from them, as any selection
+	// with no span is.
+	twins := &AppState{Bible: &BibleData{
+		Books: []string{"Genesis"},
+		Verses: map[string]map[int][]Verse{"Genesis": {25: {
+			{BookName: "Genesis", Book: "Genesis", Chapter: 25, Verse: 1, Text: "Love waited for the harvest."},
+			{BookName: "Genesis", Book: "Genesis", Chapter: 25, Verse: 2, Text: "The twins were born in the spring."},
+			{BookName: "Genesis", Book: "Genesis", Chapter: 25, Verse: 3, Text: "So the elder swore to Jacob and sold the field."},
+		}}},
+		Headings: map[string]map[int][]Heading{"Genesis": {25: {
+			{Text: "Jacob and Esau", Style: "s", BeforeVerse: 2},
+			{Text: "Esau Sells the Field", Style: "s", BeforeVerse: 3},
+			{Text: "Love", Style: "s", BeforeVerse: 3},
+		}}},
+	}, CurrentBook: "Genesis", CurrentChapter: 25}
+	if quote, cite, _, _ := prepareShareQuote(twins, "Jacob and Esau", selSpan{}); quote != "" || cite != "Genesis 25:2" {
+		t.Errorf("\"Jacob and Esau\" with no span shared (%q, %q), want (\"\", \"Genesis 25:2\")", quote, cite)
+	}
+	if quote, cite, _, _ := prepareShareQuote(twins, "Love", selSpan{}); quote != "Love" || cite != "Genesis 25:1" {
+		t.Errorf("\"Love\", which verse 1 has, with no span shared (%q, %q), want (\"Love\", \"Genesis 25:1\")", quote, cite)
+	}
+}
+
+// Every heading of the public-domain translations' caches the app keeps,
+// selected whole with no span in the three shapes above. None may be shared
+// as it came, or quoted short: the answer quotes nothing and cites a verse
+// that a heading of the same words stands above (a chapter of the BSB's Song
+// of Solomon has "The Bride" more than once, and with no span the first is
+// taken), or it quotes the heading's words where the chapter has them as
+// words. LOCAL-ONLY and opt-in by BIBLETEXT_EXHAUSTIVE=1, as the phrase sweep
+// over the caches is. Before a heading further down was answered with no
+// span, of the BSB's 3,091 headings in three shapes 5,615 selections were
+// shared as they came, the heading as Scripture under the chapter; 6 cited a
+// verse that no heading of those words stands above; and 5 quoted other
+// words, the heading repair having cut the next heading's first word from
+// the end ("Jacob and" for Genesis 25's "Jacob and Esau", whose next heading
+// opens "Esau"). 63 of the WEB's 66 and 69 of the WEBC's 81 were shared as
+// they came.
+func TestEveryHeadingSelectedWholeWithNoSpanOverLocalCaches_LocalOnly(t *testing.T) {
+	if os.Getenv("BIBLETEXT_EXHAUSTIVE") == "" {
+		t.Skip("local-only and opt-in: every heading of three translation caches; run with BIBLETEXT_EXHAUSTIVE=1")
+	}
+	for _, c := range localPublicDomainCaches(t) {
+		headings, wrong := 0, 0
+		for _, book := range c.bd.Books {
+			for _, ch := range c.bd.GetChapterNumbersForBook(book) {
+				hs := c.bd.Headings[book][ch]
+				if len(hs) == 0 {
+					continue
+				}
+				st := &AppState{Bible: c.bd, CurrentBook: book, CurrentChapter: ch}
+				_, spans := chapterProse(st)
+				drawn := map[int]bool{}
+				for _, sp := range spans {
+					drawn[sp.verse] = true
+				}
+				above := map[string]bool{} // heading words and the citation of a verse they stand above
+				for _, h := range hs {
+					above[collapseSpaces(h.DrawnText())+"|"+verseRangeCitation(book, ch, h.BeforeVerse, h.BeforeVerse)] = true
+				}
+				for _, h := range hs {
+					text := h.DrawnText()
+					if collapseSpaces(text) == "" || !drawn[h.BeforeVerse] {
+						continue
+					}
+					headings++
+					for _, sel := range []string{text, text + "\n", text + "\n" + strconv.Itoa(h.BeforeVerse)} {
+						quote, cite, at, _ := prepareShareQuote(st, sel, selSpan{})
+						if (quote == "" && above[collapseSpaces(text)+"|"+cite]) || (at >= 0 && phraseWords(quote) == phraseWords(sharedText(collapseSpaces(text)))) {
+							continue
+						}
+						wrong++
+						if wrong <= 5 {
+							t.Logf("%s: %s %d %q with no span shared (%q, %q)", c.id, book, ch, sel, quote, cite)
+						}
+					}
+				}
+			}
+		}
+		t.Logf("%s: %d headings, %d selections answered otherwise", c.id, headings, wrong)
+		if wrong != 0 {
+			t.Errorf("%s: %d whole headings with no span were shared as they came or cited elsewhere", c.id, wrong)
+		}
 	}
 }
 

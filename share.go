@@ -807,6 +807,24 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 			}
 		}
 	}
+	// A heading further down selected whole, with no span. The heading-only
+	// answer below asks for a span naming the verse above the heading, which
+	// tells a heading from the same words in a verse, and a page with no span
+	// has none: the plain-text fallback the Mac and the iPhone and iPad show
+	// when a chapter fails to import, which sets each heading on a line of its
+	// own, so that selecting its paragraph takes exactly the heading. There it
+	// was shared as Scripture under the chapter. So a selection that is a
+	// heading whole, perhaps run on to the number below it (the BSB's "Saying
+	// 12" stands above verse 12, so its own figure reads as that number), is
+	// answered as a heading selected on its own is, the verse below and no
+	// quotation, unless the chapter has the heading's words as words, which
+	// are then quoted as any selection with no span is. A piece of a heading
+	// is not answered so: the same piece may stand in another heading.
+	if !span.valid() && titleVerse == 0 && !editorial {
+		if v, words, ok := wholeHeadingVerse(state, book, chapter, flat); ok && wordAlignedIndex(corpus, words) < 0 {
+			return "", v, v, -1, true
+		}
+	}
 	text, lo, hi, at, ok = locateShareSelection(state, book, chapter, corpus, spans, flat, out, span, editorial, titleVerse > 0)
 	if titleVerse > 0 && !ok {
 		return "", titleVerse, titleVerse, -1, true
@@ -1281,6 +1299,10 @@ func afterTitle(s, title string) (rest string, ok bool) {
 // shape of a selection there, and neither can belong to a verse further down,
 // whose own span starts at that verse. The words must still be the heading's.
 //
+// A heading further down selected whole with no span is answered before the
+// search, by wholeHeadingVerse; a piece of one with no span is left alone
+// here, since the same piece may stand in another heading.
+//
 // The words may end with the number of the verse the heading stands above: a
 // drag that ran on past the heading's last word stops at the next word the
 // page draws, which is that number. The number is the heading's own
@@ -1329,6 +1351,21 @@ func headingOnlySelectionVerse(state *AppState, book string, chapter int, s stri
 		}
 	}
 	return 0, false
+}
+
+// wholeHeadingVerse is the verse a heading of the chapter stands above when
+// s is that heading whole, as drawn, perhaps run on to the number of that
+// verse, and the heading's words in the shared form; the first such heading
+// when the chapter has more than one of those words.
+func wholeHeadingVerse(state *AppState, book string, chapter int, s string) (verse int, words string, ok bool) {
+	s = strings.TrimSpace(s)
+	for _, h := range state.Bible.Headings[book][chapter] {
+		text := collapseSpaces(h.DrawnText())
+		if text != "" && h.BeforeVerse > 0 && (s == text || s == text+" "+strconv.Itoa(h.BeforeVerse)) {
+			return h.BeforeVerse, sharedText(text), true
+		}
+	}
+	return 0, "", false
 }
 
 // allVerseNumbers reports whether every word of s is one of the chapter's
