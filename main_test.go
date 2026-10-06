@@ -276,9 +276,17 @@ func redirectHome(t *testing.T) string {
 // rather than reaching the network. A test that wants a landing takes the
 // door over for its own duration and lands what it is handed through the tail
 // it is handed (the arrivals walk, arrivalWorld).
+//
+// Nor does a search arrival's repaint run on a timer. openSearchResultRange
+// repaints the window a beat after it rebuilds it, and under the test driver
+// that repaint laid out an ended test's window on the timer's goroutine while
+// the next test laid out its own (arrivalRepaintAfter, state.go). So
+// arrivalRepaintAfter only counts here (arrivalRepaintsArmed); a test that
+// wants the repaint takes the door over and runs it on its own goroutine.
 var (
 	upgradeRetriesArmed   atomic.Int64
 	upgradeFetchesStarted atomic.Int64
+	arrivalRepaintsArmed  atomic.Int64
 )
 
 func TestMain(m *testing.M) {
@@ -295,6 +303,7 @@ func TestMain(m *testing.M) {
 		imageSharesMu.Unlock()
 	}
 	upgradeRetryAfter = func(time.Duration, func()) { upgradeRetriesArmed.Add(1) }
+	arrivalRepaintAfter = func(time.Duration, func()) { arrivalRepaintsArmed.Add(1) }
 	startUpgradeFetch = func(BibleVersion, func(*BibleData, dataMode, error)) { upgradeFetchesStarted.Add(1) }
 	startVersionLoad = func(BibleVersion, *BibleData, func(*BibleData, dataMode, error)) {}
 	realCacheDir = filepath.Dir(defaultCachePath())

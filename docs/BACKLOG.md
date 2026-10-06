@@ -16,8 +16,8 @@ not here.
 
 ## The release pipeline: what still waits on something it need not
 
-Planned for: stays, a standing entry; 1.2.20 names the arm64 snap rerun in
-stage 10 — see docs/ROADMAP.md.
+Planned for: stays, a standing entry — see docs/ROADMAP.md. Stage 10 names
+the arm64 snap rerun from 1.2.20.
 
 A standing entry, not a one-off: every release is the moment to ask what
 sat idle waiting on a step it did not depend on, in the release itself and
@@ -41,9 +41,12 @@ each wanting a dry run on a day that is not a release day:
   checks (`check-ios-pane.sh` alone, then `check-android-pane.sh`) are the
   part CI cannot stand in for; the rest can be CI's. The cost is a red public
   run when something slips.
-- **Screenshots go up by their own tool** (`appstore/push-screenshots.py`,
-  once it lands); `submit-version.py --write` could call it when a ready set
-  named for the version exists, so the upload is not a step to remember.
+- **Screenshots go up by their own tool**, `appstore/push-screenshots.py`
+  (29 September 2026), run as its own command in stage 7 between the two
+  `submit-version.py` calls, and `play/push-screenshots.py` for Play (30
+  September), outside any release. `submit-version.py --write` could call
+  the Apple one when a ready set named for the version exists, so the upload
+  is not a step to remember.
 - **A conductor for the Apple leg** — build, read back, upload, wait for
   `VALID`, `submit-version.py --write` — as one script with a ledger of what
   each step printed, leaving only the submit click.
@@ -83,8 +86,9 @@ What 1.2.18 (1–2 October 2026) adds:
   `--rollout=0.2`, is refused before anything is read (de8ef27e2). A
   staged rollout is raised, completed or halted in the Play Console. Not
   yet run against Play: held by stand-in tests
-  (`play/test_play_publish.py`, `Promote`), and the first live dry run
-  waits for Play's review of the 1.2.18 production release to finish.
+  (`play/test_play_publish.py`, `Promote`). First run against Play for
+  1.2.19 on 3 October 2026, the dry run and then the commit, which took
+  production to that release's versionCode and into Play's review.
 - **The arm64 snap build can fail before it builds anything.** On 1 October
   2026 the Linux stores workflow's `snap (arm64)` job, on the push of the
   release commit (e6fa1b6cc), failed inside `snapcore/action-build@v1`
@@ -98,16 +102,20 @@ What 1.2.18 (1–2 October 2026) adds:
   or none, so the same failure in a tag's run holds the snap until the job
   is rerun. The tag's own run built both snaps first time. Either retry the
   build step once on that error, in both workflows, or name the rerun in
-  stage 10 of `docs/RELEASING.md`.
+  stage 10 of `docs/RELEASING.md`. Stage 10 names it (6 October 2026, for
+  1.2.20): check both snap jobs passed, and rerun a failed one with
+  `gh run rerun <run-id> --failed` before promoting.
+  `TestStage10NamesTheArm64SnapRerun` (`releasing_doc_test.go`) holds the
+  stage to that while `release.yml` builds the arm64 snap with
+  `snapcore/action-build`. A retry in the workflows is still open.
 - **Apple's processing was quick.** It took about three minutes for 1.2.18,
   so the wait for `VALID` in stage 7 need not be planned as a long one.
 
 ## macOS 12 and 13: an open note card calls a macOS 14 method — FIXED 2 October 2026
 
-Still open: the walk's `switch` names two element constants AppKit marks
-macOS 14 (`NSBezierPathElementCubicCurveTo`,
-`NSBezierPathElementQuadraticCurveTo`) — planned for 1.2.20; see
-docs/ROADMAP.md.
+The walk's `switch` named two element constants AppKit marks macOS 14
+(`NSBezierPathElementCubicCurveTo`, `NSBezierPathElementQuadraticCurveTo`)
+— FIXED 6 October 2026, for 1.2.20, at the end of this entry.
 
 `btMacLayoutNote` gives the note card its shape from
 `btMacNoteBubblePath(w, h).CGPath` (`reading_macos.go:2783`). AppKit
@@ -171,6 +179,24 @@ unguarded call. A build without the floor, which is a development build and
 CI's macOS job, targets the macOS it runs on and cannot see such a call, so
 `mac_floor_availability_contract_test.go` holds the flag, and the card's use
 of the walk, at the source. Not run on macOS 12 or 13.
+
+**The walk's two macOS 14 names — FIXED 6 October 2026.** Today's clang
+(Apple clang 21) lets a `case` label name `NSBezierPathElementCubicCurveTo`
+and `NSBezierPathElementQuadraticCurveTo` at a 12.0 target without a word,
+even with `-Wunguarded-availability-new`, so the release builds were never
+failing; but a compiler that started counting those uses would fail the Mac
+release on its day. The cubic's older name, `NSBezierPathElementCurveTo`,
+was not the way out. It is `API_DEPRECATED` from macOS 14, so it compiles
+quietly at the 12.0 floor but warns in every build that targets macOS 14 or
+later, which is every host build and CI's macOS job (checked with
+`clang -fsyntax-only` at 12.0, 14.0 and 26.0). Both curve kinds are now
+matched by the values the SDK gives them, 2 and 4 (`btMacPathCubic`,
+`btMacPathQuadratic`), which compile with no warning at any of the three
+targets, with `-Wall -Wextra -Wswitch-enum`. The values are the constants'
+own, so the walk takes the same branches as before. The package builds at
+the 12.0 floor and at the host's target. `mac_floor_availability_contract_test.go`
+now also fails if the walk names either macOS 14 kind or the deprecated
+name, or stops handling any of the five kinds.
 
 ## Share as image says "Picture saved" for a card it could not read — FIXED 6 October 2026, for 1.2.20
 
@@ -378,9 +404,7 @@ the left, and the fixed build moved it to x 147..2388, clear of it; so the
 driver does hand the composer the new insets on that turn. Ask is unchanged:
 it still throws its refit away, and waits until Ask returns to the menus.
 
-## A Play upload's commit restarts a review in progress — found 2 October 2026
-
-Planned for: 1.2.20 — see docs/ROADMAP.md.
+## A Play upload's commit restarts a review in progress — FIXED 6 October 2026, for 1.2.20
 
 `scripts/play-publish.py upload` commits its edit with Play's default for
 changes in review (`upload()`, the `:commit` call with no query).
@@ -411,6 +435,24 @@ refusal can happen.
 progress instead of restarting it. The fix above goes in as its own change
 in 1.2.20, and stage 6 of `docs/RELEASING.md` is rewritten with it, not
 before.
+
+**The fix.** `play-publish.py upload` commits with `IN_REVIEW_QUERY`, as
+`promote` does. When Play refuses the commit with an HTTP 4xx, the upload
+keeps call()'s message whole and adds that the bundle is not on the track,
+that the versionCode is still unused, and that the same command is to be run
+again once the Publishing overview shows nothing in review. It then
+discards the edit. An edit Play has ended is still explained as an ended
+edit. A 5xx at the commit is left exactly as call() gave it, since Play may
+have taken that commit. Stage 6 of `docs/RELEASING.md` now says the upload
+waits, with the Publishing overview check as the reason a refusal can
+happen, and its "When a stage fails" row names the refused commit. Held by
+`play/test_play_publish.py`. The stand-in for Play models a review in
+progress: a commit without the query is taken and recorded as restarting
+that review, and one with it is refused. `UploadWhileInReview` checks that
+an upload made during a review restarts nothing and commits nothing, that
+the same command goes up once the review clears, and that a refusal for any
+other reason gets the same explanation and discard. `UploadNotes` pins the
+query on the commit. Four of these fail against the previous script.
 
 ## A Play status read during an upload deletes the upload's edit — FIXED 2 October 2026
 
@@ -510,9 +552,7 @@ counting both breaks of a blank line are refused before anything is sent,
 and 500 go up. Each fails against the previous script, which folded the
 breaks into spaces. 1.2.17's alpha notes on Play stay folded.
 
-## The App Review notes guard reads only the first line — found 1 October 2026
-
-Planned for: 1.2.20 — see docs/ROADMAP.md.
+## The App Review notes guard reads only the first line — FIXED 6 October 2026, for 1.2.20; the 1.2.20 notes must drop 1.2.19's comparisons
 
 The checks on the tracked App Review notes that look for a release's
 version read the heading alone. `TestAppReviewNotesAreForThisRelease` takes
@@ -550,9 +590,29 @@ versions in them. So the check needs no allow-list: any x.y.z in the notes
 other than the packaged version fails. 1.2.19's iPhone notes name 1.2.18
 twice, in comparisons; the 1.2.20 notes leave them out.
 
-## linux/releases.toml dates a release the day before its tag — found 1 October 2026
+**The fix.** Both checks read the whole notes. `load_notes` in
+`appstore/push-review-notes.py` refuses any x.y.z other than
+`TARGET_VERSION`, wherever it stands, with no allow-list. Run on today's
+tree with `--local-only`, it refuses 1.2.19's iPhone notes for naming
+1.2.18. `TestAppReviewNotesAreForThisRelease` applies the same rule to the
+tracked files from 1.2.20 on (`reviewNotesWholeTextFrom`). For 1.2.19 and
+earlier it still reads the heading alone, because 1.2.19's notes were
+written and sent under that rule, and the tree keeps them until the bump.
+So the suite stays green now, and the bump to 1.2.20 is what makes the
+comparisons fail. **The 1.2.20 preparation must rewrite those two
+"(1.2.18: …)" comparisons in `appstore/review-notes.txt`**, which this fix
+leaves untouched since the notes are the account holder's copy. On a copy of
+the tree bumped to 1.2.20, today's notes with every 1.2.19 changed to 1.2.20
+fail on 1.2.18, and the Mac's with only the heading bumped fail on 1.2.19;
+both passed the previous checks. `TestTheReviewNotesVersionRuleReadsTheWholeNotes`
+is the control on made notes: a bumped heading over the last release's body,
+a comparison, and an operating system's version are caught, while verse
+references and two-part numbers are not. `appstore/test_push_review_notes.py`
+holds `load_notes` to the same cases, and to the same pattern as the Go test.
+`scripts/check-release-identity.py` still checks only the iPhone notes'
+first line, and needs no more with these two in place.
 
-Planned for: 1.2.20 — see docs/ROADMAP.md.
+## linux/releases.toml dates a release the day before its tag — FIXED 6 October 2026, for 1.2.20
 
 The file's header says each entry carries its annotated tag's date
 (`linux/releases.toml:1-3`), and `cmd/linuxmeta` renders that date into the
@@ -579,9 +639,14 @@ day of the tag. The past entries can stand, each within a day of its tag.
 are built. The header of `linux/releases.toml` and stage 1 of
 `docs/RELEASING.md` say so in 1.2.20.
 
-## msstore/submit.py keeps the last release's commit status in a new submission's state — found 2 October 2026
+**Done.** The header now dates an entry by the day its store files are
+built, says why, and leaves the three early entries as they are. Stage 1 says
+the same. `TestTheLinuxReleaseDateIsTheBuildDay` (`releasing_doc_test.go`)
+holds both to that wording, and fails if either goes back to the annotated
+tag's date. `go run ./cmd/linuxmeta render` changes nothing, since only the
+comment moved.
 
-Planned for: 1.2.20 — see docs/ROADMAP.md.
+## msstore/submit.py keeps the last release's commit status in a new submission's state — FIXED 6 October 2026, for 1.2.20
 
 `save_state` merges what it is given into `build/msstore/run-state.json`
 (`msstore/submit.py:213-219`). `create` writes the new submission's id with
@@ -600,9 +665,18 @@ whole state rather than merging into the last, or clearing `commitStatus`
 with the other flags — with a test in `msstore/test_submit.py` that a
 create after a committed run leaves no `commitStatus` behind.
 
-## scripts/run-ios-device.sh: a locked phone costs a full rebuild — found 2 October 2026
+**The fix.** `create` writes its state whole (`new_state`) instead of
+merging it into the last run's, so a new submission keeps nothing of the
+previous one: no `commitStatus`, and no `verified` or `committed`, which it
+already cleared. Every later step of the same submission still merges
+(`save_state`). `abort` is unchanged; the next `create` starts fresh.
+`msstore/test_submit.py`, `test_a_create_after_a_committed_run_keeps_nothing_of_it`,
+creates after a state the last release's commit and poll left. It fails
+against the previous script, which kept `"commitStatus": "CommitStarted"`.
+The test that the id is on disk before the response is judged now reads the
+file back instead of watching `save_state`.
 
-Planned for: 1.2.20 — see docs/ROADMAP.md.
+## scripts/run-ios-device.sh: a locked phone costs a full rebuild — FIXED 6 October 2026, for 1.2.20
 
 The developer install to a physical iPhone fails at `xcrun devicectl device
 install app` (`scripts/run-ios-device.sh:276`) when the phone is locked,
@@ -631,6 +705,33 @@ phone to be unlocked; on a failed install keep the signed bundle in its
 private directory and say how to install it again, removing it once an
 install succeeds; and run the cross-compile as `go -C "$REPO_ROOT" build`,
 so the module is the script's own.
+
+**The fix.** The install goes through `scripts/ios-device-install.sh`, which
+`run-ios-device.sh` sources. It tries again while devicectl answers 12040,
+10003, "Failed to acquire assertion" or "Locked": five tries, ten seconds
+apart, asking for the phone to be unlocked. Any other failure is not tried
+again. A bundle that still did not go on is moved into `build/ios-device-kept`,
+made afresh with mode 0700, and the script stops saying so.
+`scripts/run-ios-device.sh --install-kept` then installs it with nothing
+built and no key loaded. It drops any raw key in the environment before
+devicectl runs, and is handled before the key is read. It removes the kept
+bundle once it is on the phone; so does the next successful build. The
+cross-compile is `go -C "$REPO_ROOT" build ... ./cmd/mobile` in
+`run-ios-device.sh` and in `release-ios.sh`, which had the same flaw.
+`release-ios.sh` had one more: `scripts/check-version-not-spent.sh`, which it
+runs first, asked whatever repository the caller stood in. From outside one
+it failed, and from inside another it compared that repository's HEAD with
+that repository's origin, so it could pass a spent number. It now runs git
+with `-C` at its own repository root. Held by `ios_device_tools_test.go`.
+`TestALockedPhoneIsTriedAgainAndItsBundleKept` drives the helper with a
+stand-in for xcrun: a phone locked for two tries installs on the third, one
+locked throughout is tried four times of four, a refused signature once,
+and the kept folder is 0700 and holds the moved bundle.
+`TestRunIOSDeviceKeepsTheBundleItCouldNotInstall` and
+`TestTheIOSBuildsCompileTheirOwnModule` read the two scripts.
+`TestTheVersionCheckReadsItsOwnRepository` runs the check from another
+repository, with its own as the control. Each fails against the previous
+scripts. Not run against a phone: no device was attached for this change.
 
 ## Windows: use the native Share sheet — BUILT 30 September 2026, seen in the app unpackaged the same day and packaged on 1 October
 
@@ -1955,9 +2056,22 @@ reader leaves the app; it was not run, the emulators here being 13 and later.
 
 ## Rework the download page — DONE 26 September 2026; Google Play filled its slot, the release notes followed, and the APK row returned, 30 September 2026
 
-Still open: the public-surfaces check does not require the App Store and
-Snap Store links in the release notes — planned for 1.2.20; see
-docs/ROADMAP.md.
+The public-surfaces check did not require the App Store and Snap Store
+links in the release notes. FIXED 6 October 2026, for 1.2.20:
+`scripts/check-public-surfaces.py` (rule 2d) holds the release notes'
+printf to exactly the stores the download page links, in both directions
+and listing for listing. A store is told by its host and its listing by the
+part of the link that names it: the App Store's numeric id, Play's package,
+the Microsoft Store's product id, the snap's name. Locale or name segments
+and query strings do not count. So a store on the page and missing from
+the notes fails, as does one in the notes the page lost, or one linked at
+another listing. The page's badge and the printf's line now go in
+together. Its self-test fails, as every case must, against the rule
+switched off: the App Store and the Snap Store each missing from the notes,
+linked there without a badge, and linked at another listing, and an App
+Store link kept only in a comment beside the notes. The real tree with
+either line taken out of the printf fails. A store on neither page is still
+beyond it.
 
 The page had store buttons by platform at the top and a separate "Desktop —
 direct downloads" half with its own sections, three button styles, and the
@@ -3688,6 +3802,22 @@ the offsets the share pipeline matches on. A superscript digit or an em/en space
 in publisher text does the same. Wants a test that walks the shipped
 translations.
 
+**DONE 6 October 2026, for 1.2.20** (`outbound_text_walk_test.go`). The walk
+reads every verse, heading and Psalm title and reports each one
+`outboundText` would change, by reference and by kind: a bracketed number,
+a superscript digit, a no-break space, an em or en space, a small capital.
+It never quotes the text, since the NKJV is licensed.
+`TestTheEmbeddedGospelsPassThroughTheOutboundCleanerUnchanged` walks the
+embedded WEB Gospels in every run, CI included. Its control plants `[12]` in
+John 3:16 and a superscript digit in 3:17 of a copy and requires both
+reported. `TestEveryDownloadedTranslationPassesThroughTheOutboundCleanerUnchanged`
+walks each translation downloaded on the machine running the suite, through
+`realCachePath`, and skips where there is none, which is every CI runner.
+On the machine it was written on, the WEB (31,236 texts), the BSB (34,293)
+and the WEB Catholic (35,522) passed unchanged; no NKJV was downloaded there,
+so the licensed edition is still unwalked. The comment in `outbound_text.go`
+now points at the walk instead of saying the belief is untested.
+
 ### Also: committed test litter
 
 `zz_probe_refute_test.go` is tracked, from commit `a0f34302d`. It looks like a
@@ -3698,6 +3828,19 @@ on someone else's behalf.
 a proper saved-note test. It checks that an old note's record round-trips
 byte for byte through the current codec, which is worth keeping under a
 name that says so.
+
+**Done 6 October 2026.** The file is `notes_record_compat_test.go`. The probe
+only logged the old record's bytes beside the new and checked that the later
+build's field survived, so it would have passed a codec that changed the
+bytes. `TestAnOldSavedNoteRoundTripsByteForByte` now requires the bytes to be
+identical: emitting `"ar"` when empty, which writes `"ar":null` into every
+old record, fails it and passed the probe. `TestASavedNotesAnchorRunsRoundTrip`
+pins where the runs are written, that they stay out of the unknown fields,
+and that a second pass writes the same bytes. The second probe, which only
+logged what hostile anchor spellings parse to, is
+`TestAMalformedAnchorSpellingGivesNoRuns`: a malformed spelling gives no
+runs, a well-formed one a run per verse, and no run starts below verse 1 or
+ends before it starts.
 
 ## A drag begun inside a verse number shares the digit — found 6 October 2026
 
@@ -3775,9 +3918,9 @@ supplement on those pages too.
 
 ## What we ship has largely never been run
 
-Planned for: 1.2.21+; its cheap halves, `UIDeviceFamily` read back and the
-preferences writer's marker on every release path, in 1.2.20 — see
-docs/ROADMAP.md.
+Planned for: 1.2.21+ — see docs/ROADMAP.md. Its cheap halves, `UIDeviceFamily`
+read back and the preferences writer's marker on every release path, are
+FIXED 6 October 2026, for 1.2.20 (end of this entry).
 
 Found by a five-platform survey on 18 September 2026, each platform's claims
 then checked by an adversarial reader that refuted 48 of them. The full picture
@@ -3826,6 +3969,45 @@ The cheap wins are probably the compile checks (a `GOOS=android` gate costs
 nothing) and launching the packaged macOS artefact rather than a development
 rebuild. The expensive one is deciding what "tested" should mean for a store
 binary we cannot run in CI at all.
+
+**The two cheap halves — FIXED 6 October 2026, for 1.2.20.**
+
+- *The atomic preferences writer on every release path.* Only
+  `release-mac-store.sh` looked for the patched writer's message in what it
+  built. `scripts/verify-atomic-prefs.py` now does it everywhere, with the
+  same control string. It checks each slice of a universal binary on its
+  own and each native library in an .apk or .aab, and fails closed on a
+  package with none. It runs after the last compile of every path:
+  `release-ios.sh` on the cross-compiled binary, and `build-android.sh
+  --release` on the AAB and on the APK. `release-mac-store.sh` runs it on
+  both slices, in place of its own loop. `build-windows-exe.sh`, which
+  `msstore.yml` builds through, runs it after the packager's rebuild, and
+  `check-linux-package.sh` on the tarball's executable. In `release.yml` it
+  runs on the Mac's universal binary, on each AppImage's extracted
+  executable and on each Windows executable. In `linux-stores.yml` it runs
+  on the binary its packages share. It was left out of
+  `verify-release-package.sh`, whose regression test
+  (`scripts/test-release-key-flow.sh`) runs it on a test binary built
+  without the Fyne patches. Built from this tree, `cmd/bibletext` with stock
+  Fyne is refused and the same build with `setup-fyne-patch.sh` applied
+  passes.
+- *`UIDeviceFamily` read back.* `scripts/check-ios-device-family.py` reads
+  the key with plistlib and requires exactly iPhone and iPad, or iPhone
+  alone for a `BIBLETEXT_IPAD=0` build. `release-ios.sh` runs it on the
+  archived app, the bundle the upload path sends, and on the exported .ipa
+  before it is published.
+
+Held by `atomic_prefs_release_test.go` and `ios_device_family_test.go`.
+`TestEveryReleasePathChecksTheAtomicPreferencesWriter` reads every path and
+every compiling workflow job for the check after its last compile.
+`TestVerifyAtomicPrefsRefusesAStockWriter` runs the verifier on made files:
+a stock binary, one with no control string, a universal binary with one
+stock slice, an .aab with one stock library, and an .apk with none.
+`TestReleaseIOSReadsItsDeviceFamiliesBack` and `TestCheckIOSDeviceFamily`
+cover the read-back. The path checks fail against the previous scripts and
+workflows, and each made-file case fails with its rule taken out of the
+verifier. Neither check has run on a real store build yet; the first will
+be 1.2.20's.
 
 ## Headings: quoting, notes and links need one deliberate pass
 
@@ -3971,6 +4153,15 @@ What to do, in order:
 
 Until 1 is done, a red run of this workflow says nothing about whether Windows
 audio works, and the repeated failures should not be read as a shipping risk.
+
+**Steps 1 and 2 DONE 22 September 2026** (2e99c6b50). The smoke names the
+backend that carried the samples and stops with that diagnosis on the null
+sink. Only `AUDIOSES.DLL` mapped counts as proof, since oto maps
+`MMDevAPI.dll` and `winmm.dll` while looking for a device and leaves them
+mapped when it finds none; `audio_backend_proof.go` holds the decision and
+its test. The workflow's header and docs/PLATFORM_MIMIC.md no longer say it
+proves WASAPI on a runner. Step 3, the natural end on a machine with an
+audio device, is what is left.
 
 ## The direct downloads do not register `bibletext:` links
 
@@ -4362,7 +4553,7 @@ channels are the tarball, the AppImage and the snap; the
 `uk.co.bibletext.BibleText` id stays on the snap's metainfo and the AppImage,
 and the 1.2.10 release note that promised a Flatpak stands as shipped.
 
-## Recapture the App Store and Play screenshots — App Store sets RECAPTURED 28 September 2026 and uploaded 29 September; Play being retaken
+## Recapture the App Store and Play screenshots — App Store sets RECAPTURED 28 September 2026 and uploaded 29 September; the Play 1.2.17 set committed 30 September; the Play phone set waits on a decision
 
 Planned for: 1.2.21+, the Play phone set once its shape is decided and after
 1.2.20 clears Play's review; the short desktop window stays — see
@@ -4411,8 +4602,13 @@ and paragraphing in the Junicode face, Psalm 23 the divine name in small
 capitals, and Psalm 82 its superscription and heading: the images asked for
 above.
 `docs/APP_STORE_SUBMISSION.md` ("The 1.2.17 set") keeps the set's history,
-and `docs/SCREENSHOT_PLAYBOOK.md` how each shot is taken. The Play set is being
-retaken to the same eight scenes under `build/play/screenshots-1.2.17/`.
+and `docs/SCREENSHOT_PLAYBOOK.md` how each shot is taken. The Play set was
+retaken to the same eight scenes under `build/play/screenshots-1.2.17/`, with
+the listing's first 10-inch tablet images, and `play/push-screenshots.py`
+committed it on 30 September 2026 (`docs/SCREENSHOT_PLAYBOOK.md`, §3). What is
+open is the phone set's shape: retaken at the default display size, or kept
+at the Small size with only the light images retaken
+(docs/ROADMAP.md, Later minor releases, row 14).
 
 The iPad shots carry a small grey resize grip in the bottom-right corner: the
 iPadOS 26 and 27 simulators open in "windowed apps" mode, and that mode is not
@@ -5178,20 +5374,27 @@ should still be remembered as a substitution at every launch; and whether a
 launch that cannot open the remembered translation should prefer a
 translation whose canon holds the saved place.
 
-## CI runs with the race detector, so 14 tests never run there
+## The tests tagged `!race` run only in CI's second pass, never under the detector
 
-Planned for: stays; retitled in 1.2.20 — see docs/ROADMAP.md.
+Planned for: stays — see docs/ROADMAP.md. Retitled 6 October 2026, for
+1.2.20. It was "CI runs with the race detector, so 14 tests never run there",
+which stopped being true when the second pass below arrived.
 
 DONE for the cheap half. The Linux job now runs the suite a second time
-without the race detector, so those 14 tests compile and run on every push;
-they cover focus order, render output, wrap layout, the download-status row,
-the audio card, the search mode row and the legacy pane. Retiring the `!race`
-tag by teaching them to stand up under the detector is the real fix and is
-still open.
+without the race detector, so the tests in the files tagged `!race` compile
+and run on every push. There were 14 when this was written, covering focus
+order, render output, wrap layout, the download-status row, the audio card,
+the search mode row and the legacy pane; seven files carry the tag today.
+Retiring the `!race` tag by teaching them to stand up under the detector is
+the real fix and is still open. It is not only tidiness: on 6 October 2026
+the verse-of-the-day card test's occasional failure turned out to be a race
+with a timer one of these files armed (`ui_render_test.go`), which the race
+run never saw because that file is not in it (the deferred-UI timers entry).
 
-Still true, and still untested anywhere: no CI job builds or tests the Android
-app. The only Android-named step checks the target SDK. With a physical device
-now available that gap is worth closing separately.
+The Android half of the old entry is out of date as well. CI cross-compiles
+the Android pane (`scripts/check-android-pane.sh`, with and without `next`)
+and compiles the Java (`scripts/check-android-java.sh`). What no CI job does
+is build or run an APK (docs/PLATFORM_MATRIX.md, divergence 13).
 
 ## Source fields: three defects and a decision list — DONE, closed 6 October 2026
 
@@ -5668,6 +5871,32 @@ must bring the fix with it:
 - `reading.go:~209` (`flashIcon`): the one arming test passes `time.Hour`
   and drives the restore synchronously — a deliberate crutch. A test that
   taps a real copy button (1200ms flash) needs the arm gated.
+- `state.go` (160ms repaint of the whole window after a search arrival,
+  `openSearchResultRange`) — FIXED 6 October 2026. The audit missed it, and
+  it was the cause of the verse-of-the-day card test's occasional failures
+  (`TestTheCardSetsThePassageInTheReadingFace`, 30 September and 2 October,
+  each a nil dereference inside Fyne: once in `theme.Padding`, once in a
+  button's `MinSize`). `TestFullUIBuildsAndExercisesPaths` opens a search
+  result on a real test window, and 160ms later the timer laid that window
+  out on its own goroutine while the card test, the first heavy layout after
+  it, laid out the card. Fyne keeps the theme a `ThemeOverride` lays out in
+  on one global stack with no lock (`internal/theme`'s `PushRenderingTheme`
+  and `PopRenderingTheme`). A pop sets the top entry to nil and then shortens
+  the stack, so a read between those two writes takes a nil theme, and a
+  method call on it faults at address 0x30, both crashes' address. The race
+  run never saw it because `ui_render_test.go` is `!race`. A probe with that
+  test's body and no tag, run with the card test under `-race -count=30`,
+  reported 51 races between the timer's goroutine and the card test's, on
+  that stack and on Fyne's font caches, and failed 7 of the 30 card runs. The
+  repaint now goes through `arrivalRepaintAfter`, which TestMain shuts so it
+  only counts arms (`arrivalRepaintsArmed`), as it does `upgradeRetryAfter`.
+  The same probe is clean. One full run with a Fyne copy that logged every
+  override theme pushed off a test goroutine found no other timer laying out
+  during another test; the only other such pushes came from the API.Bible
+  key test's request goroutine, inside the test that waits for it. `TestASearchArrivalRepaintsThroughItsDoor` holds the
+  arm and runs the repaint on the test's goroutine, and
+  `TestTheSuiteHoldsEveryArrivalRepaint` shows nothing repaints on a timer;
+  both fail with the arm put back on `time.AfterFunc`.
 
 The audit's rule, kept: a gate lands only with a demonstrated race (a
 `-race -count=30` loop that fails before and is clean after) — no
@@ -5761,9 +5990,9 @@ inconsistency between fleet bands is accepted rather than overlooked.
 above (4a3b3de68). The gate stands: `justifiesInterWord`
 (`android/BtBridge.java`) justifies only from API 35. A deliberate
 difference between platforms is recorded where the platforms are
-compared, and the Divergences of docs/PLATFORM_MATRIX.md do not list
-this one yet; adding it is in 1.2.20's documentation row
-(docs/ROADMAP.md).
+compared: it is divergence 30 of docs/PLATFORM_MATRIX.md (6 October
+2026), which `TestTheMatrixRecordsTheRaggedAndroidPage` holds there while
+the gate stands.
 
 ## Tag 1.2.6 so `go install` and `go run …@latest` resolve the module — DONE
 
@@ -5854,9 +6083,7 @@ publisher text, so whatever the share carries has to be in those letters by the
 time it is matched. Worth a test that shares a divine-name verse and asserts
 both the outgoing text and that the selection was located rather than fell back.
 
-## Three comments that describe code that changed under them
-
-Planned for: 1.2.20 — see docs/ROADMAP.md.
+## Three comments that describe code that changed under them — DONE 6 October 2026, for 1.2.20
 
 Each verified against the source; all are comments, none change behaviour.
 
@@ -5877,9 +6104,17 @@ Each verified against the source; all are comments, none change behaviour.
   reads a seam) and / (installSheetCloseConsume reads a seam)." The sentence
   never completes. `dev_mimic_on.go:56-57` has the same kind of damage.
 
-## docs/ANDROID.md and reading_android.go disagree about the note sticker
+**Done.** The first had already been put right: `outbound_text.go` now says
+the small capital goes "To the CAPITAL, not back to the publisher's own
+letter", with the reason. `dev_mimic_test.go` says Junicode, the face its
+assertion requires. `dev_mimic_on.go`'s header no longer lists font
+candidates among the seams. The broken sentences in `app.go` (`Run`) and in
+`dev_mimic_on.go` (`devApplyMimic`) now say once that the mimic must run
+before `CreateMainUI`, whose sheet-close consume reads a seam it sets.
+Comments only, so there is no test to fail; `go vet -tags bibletextdev`
+compiles both tagged files.
 
-Planned for: 1.2.20 — see docs/ROADMAP.md.
+## docs/ANDROID.md and reading_android.go disagree about the note sticker — DONE 6 October 2026, for 1.2.20
 
 docs/ANDROID.md:183-185 says the Android shared-note sticker "is gated to
 `IsFullScreen` in Go (`pushNoteToOverlay`, reading_android.go) precisely so the
@@ -5892,6 +6127,15 @@ The code is the newer of the two. Left alone rather than guessed at because the
 sentence also asserts a reason — that the gate exists to prevent a double
 draw — and whether that concern is now handled by the banner standing down, or
 was simply overtaken, is worth confirming before rewriting it.
+
+**Done.** Confirmed from the code: the concern is handled by the banner
+standing down. `pushNoteToOverlay` pushes the sticker in both modes, and
+`buildNoteBanner` returns nothing wherever `nativeNoteSticker` is true, which
+on Android it always is (`nativeNoteStickerOnPlatform`,
+`notes_sticker_native_on.go`). So the note is drawn once in either mode.
+docs/ANDROID.md's section is retitled "Shared-note sticker" and says so. Its
+example WHO line now reads "2 of 3 in this chapter", the count
+`appleStickerPush` writes, in place of the old "2 of 3 on this passage".
 
 ## Target audience is 13+, and it was meant to include 9-12
 

@@ -1030,18 +1030,34 @@ func openSearchResultRange(state *AppState, verse Verse, endVerse int) {
 	// Belt-and-braces: force one full repaint a beat after the rebuild so any stale
 	// paint of the now-removed search field is cleared from the header strip.
 	if state.window != nil {
-		time.AfterFunc(160*time.Millisecond, func() {
-			fyne.Do(func() {
-				if state.window == nil {
-					return
-				}
-				if c := state.window.Canvas(); c != nil && c.Content() != nil {
-					c.Content().Refresh()
-				}
-			})
+		arrivalRepaintAfter(arrivalRepaintDelay, func() {
+			if state.window == nil {
+				return
+			}
+			if c := state.window.Canvas(); c != nil && c.Content() != nil {
+				c.Content().Refresh()
+			}
 		})
 	}
 }
+
+// arrivalRepaintDelay is the beat after a search arrival's rebuild at which
+// the whole window is repainted once more.
+const arrivalRepaintDelay = 160 * time.Millisecond
+
+// arrivalRepaintAfter runs f on the UI goroutine after d: the one door the
+// search arrival's repaint goes through. The suite shuts it in TestMain.
+// Under the test driver fyne.Do runs its closure on the timer's own
+// goroutine, so the repaint laid out a test's whole window 160ms after that
+// test had ended, while a later one was laying out its own. Fyne keeps the
+// theme a ThemeOverride lays out in on one global stack with no lock
+// (internal/theme's PushRenderingTheme and PopRenderingTheme), and a pop on
+// the timer's goroutine, between its two writes, handed the other goroutine a
+// nil theme: the verse-of-the-day card test, the first heavy layout after
+// the full-UI test's arrival, failed now and then with a nil dereference in
+// Fyne's padding or button sizing. In the app fyne.Do marshals to the one UI
+// goroutine, so the two layouts never overlap there.
+var arrivalRepaintAfter = func(d time.Duration, f func()) { time.AfterFunc(d, func() { fyne.Do(f) }) }
 
 func clearHighlightedVerse(state *AppState) {
 	state.clearMark()

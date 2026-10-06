@@ -148,7 +148,8 @@ Eight coupled surfaces have to name the same version, each test-enforced:
 
 1. `cmd/mobile/FyneApp.toml` — Version and Build
 2. `cmd/bibletext/FyneApp.toml` — Version and Build
-3. `appstore/review-notes.txt` — first line `VERSION <v>`
+3. `appstore/review-notes.txt` — first line `VERSION <v>`, and no other
+   x.y.z anywhere in it: not the last release's, not in a comparison
 4. `appstore/review-notes-macos.txt` — same
 5. `TARGET_VERSION` in `appstore/push-review-notes.py`
 6. `build/appstore/metadata/en-GB/whats-new-<v>.txt` **and**
@@ -157,7 +158,9 @@ Eight coupled surfaces have to name the same version, each test-enforced:
    release's
 7. `linux/releases.toml` — a new `[[release]]` block, then
    `go run ./cmd/linuxmeta render`, which rewrites the AppStream metainfo,
-   the desktop entries and `snap/snapcraft.yaml`
+   the desktop entries and `snap/snapcraft.yaml`. Its date is the day the
+   store files are built (stage 3), not the tag's day: the tag comes after
+   the builds, and the tree cannot know it
 8. `msstore/metadata/en-gb/whats-new-<v>.txt` — the Microsoft Store's What's
    New, tracked: at most 1,500 characters, nothing but visible text, spaces
    and line breaks, and not a copy of another release's; required from 1.2.16
@@ -246,9 +249,13 @@ Version, build number, minimum OS — from the artefact, not the ledger. An
 artefact that was never read back is an assumption.
 
 The iOS and Mac scripts do this themselves: `release-ios.sh` reads the signed
-`.ipa` back in its final step, and `release-mac-store.sh` checks the signed
-`.pkg` after signing and fails if the entitlement did not survive. The AAB is
-read with `bundletool dump manifest`. Record what each one printed.
+`.ipa` back in its final step, its device families included (iPhone and iPad,
+`scripts/check-ios-device-family.py`), and `release-mac-store.sh` checks the
+signed `.pkg` after signing and fails if the entitlement did not survive. The
+AAB is read with `bundletool dump manifest`. Record what each one printed.
+Every path, these three and the workflows, has also checked that the patched
+Fyne preferences writer reached what it built (`scripts/verify-atomic-prefs.py`):
+without it a death mid-save empties every note.
 
 `scripts/verify-release-package.sh` is **not** this step. It checks how a
 desktop package's executable was built — trimpath, the release key, no
@@ -312,16 +319,14 @@ production track, and production waits for the promotion in stage 7. The
 script refuses an option it does not know, such as `--dryrun`, before it
 reads the key, so a mistyped dry run never commits.
 
-**An upload's commit restarts a review already in progress.** It takes
-Play's default for changes in review, which cancels that review and sends
-everything again, so an upload committed while a production release or a
-listing change is still in Play's review sends that review back to the
-start. Before the real upload, check that the Play Console's Publishing
-overview shows nothing in review, or accept the restart. `promote` and
-`play/push-screenshots.py` ask Play to refuse instead (docs/BACKLOG.md, "A
-Play upload's commit restarts a review in progress"). Planned for 1.2.20: the
-upload waits for a review in progress instead of restarting it
-(docs/ROADMAP.md). Until that change lands, the check above is the procedure.
+**An upload waits for a review already in progress.** Its commit asks Play
+to refuse rather than cancel that review and send everything again, as
+`promote` and `play/push-screenshots.py` do, so an upload made while a
+production release or a listing change is still in Play's review is refused:
+the bundle is not on the track, the versionCode is still unused, and the edit
+is discarded. That is the reason to look at the Play Console's Publishing
+overview before the real upload: while it shows something in review, the
+upload will be refused. Once the review clears, run the same command again.
 
 **Play steps run one at a time.** Every Play command opens an edit as the one
 service account, and Play lets that account hold one open edit: a new edit
@@ -482,14 +487,34 @@ tag, it ships under the next number; the tag keeps the text that was refused.
 
 ### 10 — Snap
 
-On a Linux host (snapcraft runs nowhere else; the Ubuntu arm64 VM serves, over
-SSH):
+Both snaps reach edge from the tag's run of `release.yml`, one job per
+architecture: `build snap (amd64)` and `build snap (arm64)`. Check that both
+passed before promoting. The arm64 job can fail before it has built
+anything, inside `snapcore/action-build` while it sets up its build instance
+("Failed to read instance config in environment at
+/etc/craft-instance.conf"). On 1 October 2026 the same failure in the Linux
+stores workflow's arm64 snap passed when rerun with nothing changed. Rerun
+the failed job, which publishes to edge as the first attempt would have:
+
+```
+gh run rerun <run-id> --failed
+```
+
+The rerun has three days. A snap job starts by downloading the files its
+Linux job staged for it (`snap-stage-arm64`, and `snap-stage` for amd64),
+which the run keeps for three days (`retention-days: 3` in `release.yml`);
+once they have expired, the rerun fails at that download. So check both
+snap jobs the day the tag is pushed.
+
+Then, on a Linux host (snapcraft runs nowhere else; the Ubuntu arm64 VM
+serves, over SSH):
 
 ```
 snapcraft promote bibletext --from-channel edge --to-channel stable
 ```
 
-One action covers every architecture and refuses a partial set.
+One action covers every architecture and refuses a partial set, which is why
+a failed arm64 job holds the snap until it is rerun.
 
 ### 11 — Link anything newly live, then publish the site
 
@@ -501,9 +526,12 @@ read when a tag is pushed, so the line reaches the next release's notes; one
 already published changes only by `gh release edit`, a change to a public page
 that waits for their word. The printf is also its own format string, so the
 line carries no single quote and no percent sign. `check-public-surfaces.py`
-cannot catch a missing channel: a new store is not a new release asset, so
-nothing fails. It holds Google Play in all three places only because it names
-Play; it does not know the next store. Play went live on 30 September 2026,
+cannot catch a channel missing from every page: a new store is not a new
+release asset, so nothing fails. It holds Google Play in all three places only
+because it names Play; it does not know the next store. Once the download
+page links a store, though, it holds the release notes to the page: they must
+link exactly the stores the page links, each at the page's listing, so the
+page's badge and the printf's line go in together or CI fails. Play went live on 30 September 2026,
 the page and the README linked it that day, and the release notes, which this
 stage did not then name, went on offering Android readers only the APK until
 the printf gained its Play line later the same day.
@@ -530,7 +558,7 @@ Re-running from the top is usually wrong. These steps are not idempotent:
 | step | re-running does | recovery |
 | --- | --- | --- |
 | `altool --upload-app` | rejects a duplicate build number | bump Build, rebuild |
-| `play-publish.py upload` | rejects a used versionCode once a run has committed; a run whose edit Play ended ("This Edit has been deleted") committed nothing | after a commit, bump Build and rebuild; after an ended edit, run the same command again on its own |
+| `play-publish.py upload` | rejects a used versionCode once a run has committed; a run whose edit Play ended ("This Edit has been deleted") committed nothing, and so did one whose commit Play refused over a review in progress | after a commit, bump Build and rebuild; after an ended edit, run the same command again on its own; after a refused commit, run it again once the review clears |
 | `play-publish.py promote` | refuses, printing what production holds, once production carries the versionCode, and while production holds a rollout still going out or a draft | a run stopped before its commit changed nothing and deleted its edit; one that reports the commit's outcome unknown may have committed, so run `play-publish.py tracks` on its own first; a commit refused over a review in progress runs again once the review clears; a rollout still going out is completed or halted in the Play Console, and a draft rolled out or discarded there, before a re-run (a halted rollout gives way to the promotion) |
 | `submit-version.py --submit` | 409 — already in review | remove from review in the console |
 | `push-screenshots.py --write` | leaves a set that holds the files, reorders one that holds them out of order, replaces the rest | re-run once a FAILED image or a refusal is understood |

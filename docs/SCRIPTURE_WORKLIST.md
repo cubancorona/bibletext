@@ -447,9 +447,9 @@ breaks survive a copy is too easy to get wrong to leave where no test can reach.
 | id | item | editions | effort | epoch | status |
 |---|---|---|---|---|---|
 | S14 | honour the publishers' paragraph breaks | all | M–L | all four | done |
-| S15 | section headings: captured | all | M | all four | done (capture) |
+| S15 | section headings: captured | all | M | all four | done; drawn by S16; the setting and the shape guard left to decide |
 | S16 | section headings: drawing them | all | M–L | none | done |
-| S17 | NKJV supplied words: captured | NKJV | M | nkjv | done (capture) |
+| S17 | NKJV supplied words: captured | NKJV | M | nkjv | done; captured, and drawn in italic on every surface |
 | S18 | speech reads the Psalm title | all | M | none | done |
 | S19 | mark an omitted verse's gap in the text | all | M | none | done |
 | S20 | show the NKJV's cross references | NKJV | M | none | built behind a tag; presentation second pass paused; gated on the licensing reply |
@@ -537,6 +537,10 @@ holds no licensed prose; then design how the shared run type carries two
 independent style dimensions, since italics and red letter overlap on the
 same characters and there is no coherent fallback for stale offsets. Do not
 start the second step until the first is pinned.
+
+Both steps are done. The supplied words became a flag on a run, which every
+surface could already set in italic, and they are drawn on every surface
+("Captured and still not drawn", below).
 
 **S18. DONE.** The read-along model gained its slot: a chapter's rows are
 verse 0 for the Psalm's title and n ≥ 1 for verse n, with `readAlongNone`
@@ -652,12 +656,16 @@ Ordering, the key and the cross-reference exclusion all come from one exported
 row — `bibletext.ChapterFootnoteEntries` — rather than being worked out again in
 the generator, so the page cannot drift from the app.
 
-**The NKJV contributes nothing, for two independent reasons**, which is why
-"all editions" needed no licensing decision. Its entire apparatus is cross
-references and the section excludes those (S20, still blocked); and a licensed
-chapter has no page here at all — `/nkjv/` is a notice page that never calls
-`chapterBody`. Measured on the generated site: 0 NKJV pages carry a notes
-section.
+**The NKJV contributes nothing**, which is why "all editions" needed no
+licensing decision. Its entire apparatus is cross references, and the section
+excludes those (S20, still blocked). There was a second reason until 3 October
+2026: a licensed chapter had no page here at all, since `/nkjv/` was a notice
+page that never called `chapterBody`. The site has served the NKJV's own text
+since that day (`nkjvSiteText`, `cmd/websitegen/nkjv_text.go`), its chapters
+rendered through `chapterBody` like the others', so the first reason is the
+one that holds now. Measured on the generated site before then: 0 NKJV pages
+carried a notes section. It has not been measured since, because building the
+NKJV's pages fetches its whole text from API.Bible.
 
 **S22.** In-text footnote markers, the superscript caller at each note's
 anchor. The data has been carried since the apparatus landed: every note
@@ -1026,11 +1034,17 @@ route works there.
 
 - 259 NKJV verses run two words together where the source lost a space.
 - WEB Catholic Mark 9:47 reads `the Gehenna oF fire`; the plain WEB has `of`.
-- Psalm 119's acrostic letters print at the end of the preceding verse, so
-  119:8 ends `Don't utterly forsake me. BETH`, and being inside the verse text
-  they reach search, sharing, links, the website and speech.
-- The website sets 990 poetic paragraphs justified and auto-hyphenated, because
-  the paragraph's kind is decided by its first verse alone.
+- Psalm 119's acrostic letters printed at the end of the preceding verse, so
+  119:8 ended `Don't utterly forsake me. BETH`, and being inside the verse text
+  they reached search, sharing, links, the website and speech. FIXED by S2
+  (above): they are stanza headings, and no verse of Psalm 119 ends in one.
+- The website sets 990 paragraphs that open in prose and turn to poetry
+  justified and auto-hyphenated whole, because the paragraph's kind is
+  decided by its first verse alone. Counted here as a defect on 7 September;
+  the 24 September reading-page record makes it the rule the website shares
+  with Android 15 and later, and the Windows and Linux pane justifies only
+  such a paragraph's prose. Which of the two it should be is open
+  (docs/ROADMAP.md, Later minor releases, row 6).
 
 ### Captured and still not drawn
 

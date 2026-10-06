@@ -297,6 +297,84 @@ func TestStage2NamesEveryCheckInTheHygieneStep(t *testing.T) {
 	}
 }
 
+// Stage 10 promotes every architecture's snap or none, and release.yml builds
+// the arm64 one with snapcore/action-build, which has failed before building
+// anything while it set up its build instance, and passed when rerun. While
+// the workflow builds that snap that way, the stage must name the job and the
+// rerun, or a release stops at a promotion that refuses with no next step.
+func TestStage10NamesTheArm64SnapRerun(t *testing.T) {
+	workflow := readRepoFile(t, ".github/workflows/release.yml")
+	job := strings.Index(workflow, "name: build snap (arm64)")
+	if job < 0 {
+		t.Skip("release.yml has no `build snap (arm64)` job; stage 10's rerun names nothing")
+	}
+	rest := workflow[job:]
+	if next := regexp.MustCompile(`\n  [a-z0-9_-]+:\n`).FindStringIndex(rest); next != nil {
+		rest = rest[:next[0]]
+	}
+	if !strings.Contains(rest, "snapcore/action-build") {
+		t.Skip("release.yml's arm64 snap is no longer built by snapcore/action-build")
+	}
+	stage := strings.Join(strings.Fields(releasingStage(t, "10")), " ")
+	for _, want := range []string{"`build snap (arm64)`", "gh run rerun <run-id> --failed",
+		"Failed to read instance config"} {
+		if !strings.Contains(stage, want) {
+			t.Errorf("stage 10 of docs/RELEASING.md does not name %s; the arm64 snap job can fail "+
+				"before it builds, and the promotion refuses until it is rerun", want)
+		}
+	}
+
+	// The rerun starts by downloading the files the Linux job staged, which
+	// the run keeps only for the upload's retention-days; after that the
+	// rerun fails at the download. The stage must give the limit the
+	// workflow sets. Mutation: the stage without it, or a retention changed
+	// in the workflow alone.
+	download := regexp.MustCompile(`uses: actions/download-artifact@\S+\s+with:\s+name: (\S+)`).FindStringSubmatch(rest)
+	if download == nil {
+		t.Fatal("release.yml's `build snap (arm64)` job downloads no artifact by name; " +
+			"re-read stage 10's rerun against how the job now gets its files")
+	}
+	upload := regexp.MustCompile(`uses: actions/upload-artifact@\S+\s+with:\s+name: ` + regexp.QuoteMeta(download[1]) +
+		`\s+(?:[a-z-]+: .*\s+)*?retention-days: ([0-9]+)`).FindStringSubmatch(workflow)
+	if upload == nil {
+		t.Fatalf("release.yml uploads %s with no retention-days; stage 10 says the rerun has a limit", download[1])
+	}
+	for _, want := range []string{"`" + download[1] + "`", "`retention-days: " + upload[1] + "`"} {
+		if !strings.Contains(stage, want) {
+			t.Errorf("stage 10 of docs/RELEASING.md does not name %s: a rerun of the arm64 snap job "+
+				"downloads %s, which release.yml keeps for %s days, and fails once it has expired",
+				want, download[1], upload[1])
+		}
+	}
+}
+
+// A linux/releases.toml entry is dated the day the store files are built,
+// not the tag's day: the entry is written in stage 1, the files built from
+// that tree in stage 3, and the tag comes after them, so the tree cannot know
+// the tag's date. The ledger's header and stage 1 say so in the same words,
+// and neither may go back to promising the tag's date.
+func TestTheLinuxReleaseDateIsTheBuildDay(t *testing.T) {
+	const rule = "the day the store files are built"
+	ledger := readRepoFile(t, "linux/releases.toml")
+	header, _, ok := strings.Cut(ledger, "\n[[release]]")
+	if !ok {
+		t.Fatal("linux/releases.toml has no [[release]] entry; the header cannot be found")
+	}
+	header = strings.Join(strings.Fields(strings.ReplaceAll(header, "#", " ")), " ")
+	stage := strings.Join(strings.Fields(releasingStage(t, "1")), " ")
+	for name, text := range map[string]string{"linux/releases.toml's header": header, "stage 1 of docs/RELEASING.md": stage} {
+		if !strings.Contains(text, rule) {
+			t.Errorf("%s does not say an entry is dated %s", name, rule)
+		}
+		if strings.Contains(text, "annotated tag's date") {
+			t.Errorf("%s still dates an entry by its annotated tag, which comes after the builds", name)
+		}
+	}
+	if !strings.Contains(stage, "`linux/releases.toml`") {
+		t.Error("stage 1 of docs/RELEASING.md no longer names `linux/releases.toml`")
+	}
+}
+
 // CONTROL: the filter matcher must have GitHub's semantics and the parsers
 // must see the real files, or the tests above pass by checking nothing.
 func TestTheWorkflowParsersSeeTheRealFiles(t *testing.T) {

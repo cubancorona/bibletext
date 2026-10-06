@@ -20,10 +20,17 @@
 # network anyway, and "could not check" must never read as "checked".
 #
 # Usage: check-version-not-spent.sh <version>   (e.g. 1.2.3)
+#
+# It asks the repository it lives in, wherever it is run from. Run from
+# another directory it read that directory's repository instead: outside any
+# repository it failed, and inside another one it compared that one's HEAD
+# with that one's origin and could pass a spent number.
 set -euo pipefail
 
 VERSION="${1:?usage: check-version-not-spent.sh <version>}"
 TAG="v$VERSION"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+git() { command git -C "$ROOT" "$@"; }
 
 if [ "${BIBLETEXT_ALLOW_SPENT_VERSION:-}" = "1" ]; then
   echo "version-spent check OVERRIDDEN for $TAG (BIBLETEXT_ALLOW_SPENT_VERSION=1)" >&2

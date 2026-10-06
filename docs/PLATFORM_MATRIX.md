@@ -120,9 +120,11 @@ place a fix on one does not reach the others.
    `UIBackgroundModes=['audio']`, privacy strings, `UIDeviceFamily`, and the
    scene manifest (`UIApplicationSceneManifest`, `scripts/ios-scene-manifest.sh`;
    without it iOS 27 refuses the app at launch — read back from the archived and
-   exported app by `release-ios.sh`). *Risk:*
-   `UIDeviceFamily` is the single property that makes the app a universal
-   iPhone+iPad binary, and it is **never read back out of the exported `.ipa`**.
+   exported app by `release-ios.sh`). `UIDeviceFamily` is the single property
+   that makes the app a universal iPhone+iPad binary. From 1.2.20
+   `release-ios.sh` reads it back from the archived app and from the exported
+   `.ipa` (`scripts/check-ios-device-family.py`), and refuses anything but
+   iPhone and iPad.
 8. **The icon catalogue is rebuilt from scratch** (18 slots scaled with `sips`)
    and the launch screen compiled by hand with `ibtool`.
 9. The simulator **cannot exercise the device-only paths** — Keychain
@@ -292,12 +294,12 @@ place a fix on one does not reach the others.
     handing on to xdg-email and a `mailto:` link, `share_email_linux.go:156`
     (`return portalEmailResponse(code)`); the image goes as a descriptor,
     `share_email_linux.go:147` (`"attachment_fds"`), and the image's Email…
-    is offered only outside the snap and the Flatpak, and only where the
+    is offered only outside the snap, and only where the
     desktop's mailto: handler is a mail client rather than a browser,
     `share_email.go:296` (`return !f.confined && (f.portalEmail`): a
     browser, which is what a stock Ubuntu desktop names, is handed a
     `mailto:` link with the file's local path in it and opens a compose
-    without the picture. Inside the snap and the Flatpak the text's Email…
+    without the picture. Inside the snap the text's Email…
     is offered only where the portal can answer `SchemeSupported`,
     `share_email.go:301` (`if f.confined {`), since `xdg-mime` there reads
     the sandbox's own handler, not the desktop's; Ubuntu 24.04's portal
@@ -418,12 +420,24 @@ place a fix on one does not reach the others.
     (see [Navigation](#navigation)). A desktop window tiled to a phone's
     shape keeps the rail down its narrow side. The desktop installs no
     layout watcher, so nothing would notice a resize across square. To be
-    unified in 1.2.19: `docs/BACKLOG.md`, "The desktop takes the phones'
+    unified in 1.2.21: `docs/BACKLOG.md`, "The desktop takes the phones'
     navigation rule".
 
 **Android before 15**
 
-30. **A Psalm title that wraps can still break a word with a hyphen** from
+30. **The reading page is ragged on Android 13 and 14**, as on every release
+    before Android 15 (API 21 to 34), and justified on Android 15 and later
+    and on every other platform. The pane is a selectable `TextView`, laid
+    out by a `DynamicLayout`, which before Android 15 breaks a line as if to
+    justify it and never shrinks its spaces, so a justified line ran past
+    the right edge. `justifiesInterWord`
+    (`android/BtBridge.java`) turns justification on only from API 35, and
+    older releases read ragged but whole. Closed as by design on 6 October
+    2026: each platform gets the best page it can draw, rather than every
+    platform the page the weakest can (`docs/BACKLOG.md`, "Android 13/14: the
+    reading text cannot be justified while it stays selectable").
+
+31. **A Psalm title that wraps can still break a word with a hyphen** from
     Android 6 to 14 (API 23 to 34; below API 23 the view hyphenates nothing),
     where Android 15 and later leave its words whole, as the web and the
     Windows and Linux pane do (decided 6 October 2026, which named Android 13
@@ -478,9 +492,10 @@ The honest to-do list, in proof-level terms.
   slices of the AAB remain `builds`: they ship inside it, but nothing indicates
   a tester is on one.
 - **The iPad build is `builds`, not `field`.** The universal binary ships and
-  iPhone use is established; nothing distinguishes an iPad install, and
-  `UIDeviceFamily` — the single property that makes it universal — is never
-  read back out of the exported `.ipa` (divergence 7).
+  iPhone use is established, but nothing distinguishes an iPad install.
+  `UIDeviceFamily`, the single property that makes the build universal, is
+  read back out of the archived app and the exported `.ipa` from 1.2.20 on
+  (divergence 7).
 - **The AppImage's type-2 runtime is not exercised in CI.** The smoke runs the
   extracted payload, deliberately: launching the runtime twice would extract
   twice into one content-addressed directory. It is covered there by the
@@ -587,8 +602,9 @@ Recorded 29–30 September 2026: the Apple and Android rows from the share
 code as it shipped in 1.2.17, the Linux row from the desktop confirmation
 sheet built on 30 September 2026, and the Windows row from its native Share
 sheet built the same day and driven in the app on the Windows VM that day,
-and again as a packaged app on 1 October 2026; neither is in a release yet.
-The iPadOS row was seen in the simulator on 6 October 2026.
+and again as a packaged app on 1 October 2026. Both shipped in 1.2.18, and
+neither row has yet been driven from the shipped artefact. The iPadOS row was
+seen in the simulator on 6 October 2026.
 
 | Platform | Share with note | Share with citation | Share as link | Share as image | Verse of the day | Defined in | Proof |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -602,9 +618,9 @@ The iPadOS row was seen in the simulator on 6 October 2026.
 What each proof rests on:
 
 - **Linux, `hardware`, as an exception to the rule that the artefact must
-  be the shipped one.** The sheet is not yet in a release: a local build of
-  the tree that adds it ran on the arm64 VM's GNOME X11 desktop (divergence
-  25's machine), and every verb was driven from its own entry point — the
+  be the shipped one.** The sheet shipped in 1.2.18. What was driven is a
+  local build of the tree that added it, on the arm64 VM's GNOME X11 desktop
+  (divergence 25's machine), and every verb was driven from its own entry point — the
   selection menu's Share with citation and Share as link, the composer's
   Share, the verse-of-the-day card's icon, the image preview's Share —
   in light and in dark, with a screenshot of each sheet, and the clipboard
@@ -668,9 +684,9 @@ What each proof rests on:
   the build after opened nothing and logged why; and with the card left in
   place it saved the picture in Downloads, showed it, and said so
   (divergence 27, and `docs/BACKLOG.md`, the entry on a card it could not
-  read). A mail client's compose has not
-  been seen. The row moves to the shipped artefact with the release that
-  carries it. Not Wayland.
+  read). A mail client's compose has not been seen. The row moves to the
+  shipped artefact once the 1.2.18 snap or tarball has been driven the same
+  way. Not Wayland.
 - **Android, `runner`.** The 1.2.17 build on the emulator. A simulator is not
   hardware (divergence 9), and an emulator is not either. Every verb but the
   verse of the day was driven to its share sheet; no share target was tapped.

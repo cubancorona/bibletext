@@ -393,7 +393,9 @@ type shareRelease struct {
 	file, lines string
 }
 
-var iosRelease = shareRelease{"scripts/release-ios.sh", `\bGOOS=ios GOARCH=arm64 .*\bgo build\b.*/cmd/mobile"?$`}
+// The cross-compile names its module with go -C (it is run from wherever the
+// script is started), so the build verb may follow -C and its directory.
+var iosRelease = shareRelease{"scripts/release-ios.sh", `\bGOOS=ios GOARCH=arm64 .*\bgo (?:-C \S+ )?build\b.*/cmd/mobile"?$`}
 
 const windowsReleaseLines = `\bgo build\b.* -o BibleText\.exe \.$|\bpackage -os windows\b`
 
@@ -887,6 +889,69 @@ func sharingTable(t *testing.T) map[string]map[string]string {
 		}
 	}
 	return rows
+}
+
+// A DIFFERENCE KEPT ON PURPOSE IS RECORDED WHERE THE PLATFORMS ARE COMPARED.
+// Android 13 and 14 read the page ragged because their selectable TextView
+// cannot justify without running lines past the edge, and the gate that says
+// so, justifiesInterWord in android/BtBridge.java, was closed as by design.
+// While the gate holds Android below 15 back, the Divergences must say so.
+func TestTheMatrixRecordsTheRaggedAndroidPage(t *testing.T) {
+	bridge := readRepoFile(t, "android/BtBridge.java")
+	gate := regexp.MustCompile(`boolean justifiesInterWord\(\) \{\s*return android\.os\.Build\.VERSION\.SDK_INT >= (\d+);`).FindStringSubmatch(bridge)
+	if gate == nil {
+		t.Fatal("android/BtBridge.java no longer gates justification in justifiesInterWord on one SDK level; " +
+			"re-read divergence 30 of docs/PLATFORM_MATRIX.md against the new rule")
+	}
+	if gate[1] != "35" {
+		t.Fatalf("justifiesInterWord now justifies from API %s, and divergence 30 says Android 13 and 14 "+
+			"read ragged; rewrite it for the new floor", gate[1])
+	}
+	doc := readRepoFile(t, "docs/PLATFORM_MATRIX.md")
+	start, end := strings.Index(doc, "\n## Divergences"), strings.Index(doc, "\n## Deliberate exclusions")
+	if start < 0 || end < start {
+		t.Fatal("docs/PLATFORM_MATRIX.md has no Divergences section before its Deliberate exclusions")
+	}
+	divergences := strings.Join(strings.Fields(doc[start:end]), " ")
+	for _, want := range []string{"ragged on Android 13 and 14", "`justifiesInterWord`"} {
+		if !strings.Contains(divergences, want) {
+			t.Errorf("the Divergences of docs/PLATFORM_MATRIX.md do not say %q, while justifiesInterWord "+
+				"justifies only from API 35", want)
+		}
+	}
+}
+
+// A DIVERGENCE IS CITED BY ITS NUMBER, SO THE PAGE MUST SHOW THAT NUMBER.
+// The tests, the BACKLOG and the matrix itself cite "divergence 30". Markdown
+// takes the number of a list's first item only and counts on from it, so an
+// item written as 30 straight after 13 in the same list is shown as 14, the
+// number the Windows list then starts at too. Numbering every divergence in
+// order, 1 to N down the section, is what makes each shown number the one
+// written: a list's first item keeps its own, and every later one is one more.
+func TestTheDivergencesAreNumberedInPageOrder(t *testing.T) {
+	doc := readRepoFile(t, "docs/PLATFORM_MATRIX.md")
+	start, end := strings.Index(doc, "\n## Divergences"), strings.Index(doc, "\n## Deliberate exclusions")
+	if start < 0 || end < start {
+		t.Fatal("docs/PLATFORM_MATRIX.md has no Divergences section before its Deliberate exclusions")
+	}
+	item := regexp.MustCompile(`(?m)^([0-9]+)\. `)
+	var numbers []int
+	for _, m := range item.FindAllStringSubmatch(doc[start:end], -1) {
+		n, _ := strconv.Atoi(m[1])
+		numbers = append(numbers, n)
+	}
+	if len(numbers) < 30 {
+		t.Fatalf("found %d numbered divergences; the section is not being read (%v)", len(numbers), numbers)
+	}
+	for i, n := range numbers {
+		if n != i+1 {
+			t.Fatalf("divergence %d is numbered item %d of the section; Markdown shows an item that "+
+				"continues a list as one more than the item before it, whatever it is written as, so "+
+				"number the divergences 1 to %d in the order they stand, and give one that belongs "+
+				"under an earlier platform its own heading after the last (%v)",
+				n, i+1, len(numbers), numbers)
+		}
+	}
 }
 
 // A LINE NUMBER IN A DOCUMENT IS A CLAIM ABOUT CODE THAT MOVES.

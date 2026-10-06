@@ -71,6 +71,7 @@ jobs:
           trap clear_release_bible_key EXIT
           (cd cmd/bibletext && CGO_ENABLED=1 GOARCH=${{ matrix.arch }} go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o ../../build/linux/bibletext .)
           BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" scripts/verify-release-package.sh build/linux/bibletext build/linux
+          python3 scripts/verify-atomic-prefs.py build/linux/bibletext
           scripts/check-glibc-floor.sh build/linux/bibletext 2.35
           install -Dm755 build/linux/bibletext build/snap-stage/bin/bibletext
           install -Dm644 linux/asound.conf build/snap-stage/etc/asound.conf

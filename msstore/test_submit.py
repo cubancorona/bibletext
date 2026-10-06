@@ -640,6 +640,22 @@ class Create(Stubbed):
                     self.quiet(self.m.cmd_commit)
                     self.assertIn(("POST", "commit"), reached)
 
+    def test_a_create_after_a_committed_run_keeps_nothing_of_it(self):
+        # The last release's run ended committed and polled; the file it left
+        # names that submission's commit. A new submission's state is its own.
+        self.m.save_state(submissionId="OLD", created=1.0, committed=True, verified=True,
+                          commitStatus="CommitStarted", publishMode="Manual",
+                          packages=[{"fileName": "old.msix"}])
+        self.arrange("9.9.9.0")
+        self.quiet(self.m.cmd_create, self.tmp, "Immediate")
+        state = self.m.load_state()
+        self.assertEqual(state["submissionId"], "S")
+        self.assertNotIn("commitStatus", state)
+        self.assertEqual((state["committed"], state["verified"]), (False, True))
+        self.assertEqual(state["publishMode"], "Immediate")
+        self.assertEqual([p["fileName"] for p in state["packages"]],
+                         [p["fileName"] for p in self.pkgs])
+
     def test_a_version_not_above_the_kept_one_never_reaches_the_put(self):
         self.arrange(ledger_version())
         # A distinct fileName, so the version guard and not the name guard is
@@ -671,13 +687,12 @@ class Create(Stubbed):
 
     def test_the_id_is_saved_before_the_response_is_judged(self):
         self.arrange("9.9.9.0")
-        saved = []
-        self.m.save_state = lambda **kw: saved.append(kw) or kw
         clone = clone_fixture()
         clone.pop("fileUploadUrl")
         self.m.api = lambda method, path, tok, payload=None: copy.deepcopy(clone)
         self.assertIn("no fileUploadUrl", self.refused(self.m.cmd_create, self.tmp, "Immediate"))
-        self.assertEqual(saved[0]["submissionId"], "S", "the id must be on disk before the response is judged")
+        self.assertEqual(self.m.load_state().get("submissionId"), "S",
+                         "the id must be on disk before the response is judged")
 
 
 class PublishedNames(Stubbed):

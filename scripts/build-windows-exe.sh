@@ -35,3 +35,6 @@ CGO_ENABLED=1 go build -tags gles -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" 
 # resources. GOFLAGS keeps that metadata pass trimmed and stripped.
 GOFLAGS="-trimpath -ldflags=-s -ldflags=-w -ldflags=$BIBLE_KEY_LDFLAGS" "$(go env GOPATH)/bin/fyne" package -os windows --tags gles --app-id uk.co.bibletext --executable BibleText.exe
 BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" ../../scripts/verify-release-package.sh BibleText.exe BibleText.exe
+# The patched Fyne preferences writer reached the executable, after the
+# packager's rebuild: without it a death mid-save empties every note.
+python3 ../../scripts/verify-atomic-prefs.py BibleText.exe

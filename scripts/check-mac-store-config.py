@@ -178,10 +178,13 @@ def patch_step_failures(script: str) -> list[str]:
             "release script: go.mod is never pointed at third_party/fyne, so "
             "regenerating the patched tree would have no effect on the build"
         )
-    if "Preferences save not published" not in script:
+    # The check every release path runs on what it built: each slice must
+    # carry the patched writer's message, beside a control string.
+    if "verify-atomic-prefs.py" not in script:
         failures.append(
             "release script: nothing verifies the built binary carries the "
-            "atomic preferences writer; the patch step could silently no-op"
+            "atomic preferences writer (scripts/verify-atomic-prefs.py); the "
+            "patch step could silently no-op"
         )
     return failures
 
@@ -307,7 +310,7 @@ def self_test() -> list[str]:
     ) + patch_step_failures(
         'scripts/setup-fyne-patch.sh\n'
         'go mod edit -replace fyne.io/fyne/v2=./third_party/fyne\n'
-        'grep -qF "Preferences save not published"\n'
+        'python3 scripts/verify-atomic-prefs.py "$WORK/BibleText-arm64" "$WORK/BibleText-amd64"\n'
     ) + release_script_failures(
         'PlistBuddy -c "Add :com.apple.developer.associated-domains array"\n'
         'PlistBuddy -c "Add ... string applinks:$SITE_HOST"')

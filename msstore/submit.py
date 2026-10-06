@@ -219,6 +219,19 @@ def save_state(**kw):
     return s
 
 
+def new_state(**kw):
+    """Replace the run state whole, for a submission that has just begun.
+
+    save_state merges into whatever the last run left, which suits every step
+    of one submission; a new submission keeps nothing of the last one's, not
+    its verified, its committed or its commitStatus.
+    """
+    os.makedirs(STATE_DIR, exist_ok=True)
+    with open(STATE, "w") as f:
+        json.dump(kw, f, indent=2)
+    return kw
+
+
 def load_state() -> dict:
     try:
         with open(STATE) as f:
@@ -603,13 +616,14 @@ def cmd_create(d: str, publish_mode: str):
     # reports as someone else's work and steers the operator away from
     # deleting. Record first; judge second.
     #
-    # verified is cleared in the same write. save_state merges into the last
-    # run's state, and the last release left verified true behind it; kept,
-    # it would stand for this submission, so a read-back that refuses below
-    # would still leave commit open.
+    # The write replaces the last run's state whole rather than merging into
+    # it. The last release left verified true behind it, and kept it would
+    # stand for this submission, so a read-back that refuses below would
+    # still leave commit open; it left its commitStatus too, which named the
+    # last submission's commit beside this one's id.
     sid = sub.get("id")
     if sid:
-        save_state(submissionId=sid, created=time.time(), committed=False, verified=False,
+        new_state(submissionId=sid, created=time.time(), committed=False, verified=False,
                    publishMode=publish_mode,
                    packages=[{k: p[k] for k in ("fileName", "sha256", "bytes", "architecture")} for p in pkgs],
                    releaseNotes={lang: notes_digest(text) for lang, text in notes.items()})

@@ -54,6 +54,9 @@ makefile="$(find "$scan_dir" -type f -name Makefile -print -quit)"
 grep -q 'update-desktop-database' "$makefile" || { echo "::error::the Makefile does not refresh mimeinfo.cache"; exit 1; }
 
 BIBLETEXT_RELEASE_LDFLAGS="${BIBLE_KEY_LDFLAGS:-}" "$here/scripts/verify-release-package.sh" "${packaged_binaries[0]}" "$scan_dir"
+# The patched Fyne preferences writer: without it a death mid-save empties
+# every note (scripts/verify-atomic-prefs.py).
+python3 "$here/scripts/verify-atomic-prefs.py" "${packaged_binaries[0]}"
 "$here/scripts/check-glibc-floor.sh" "${packaged_binaries[0]}" "$floor"
 
 # THE TARBALL IS THE THING A READER ACTUALLY INSTALLS, AND NOTHING EVER RAN ITS

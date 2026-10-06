@@ -53,18 +53,18 @@ const (
 // An omitted verse's mark — "[36]" in the hole Luke 17:36 leaves (verse_gaps.go)
 // — is the newest of the page's own characters and goes the same way. It is
 // stripped by SHAPE, a bracketed run of digits, because no publisher text in
-// any shipped edition is believed to contain one, and by shape rather than by
-// state so every funnel is covered by this one place.
+// any shipped edition is known to contain one, and by shape rather than by
+// state so every funnel is covered by this one place. The space after it goes
+// with it, or "left. [36] They" would become "left.  They".
 //
-// THAT BELIEF IS NOT TESTED. This comment used to claim outbound_text_test.go
-// "walks the feeds to keep that true"; it does not, and there is no sign it
-// ever did -- the file is a table of hand-written cases. The exposure is narrow
-// but real: a publisher verse containing a "[12]"-shaped token would have it
-// silently deleted on the way out, and because that strip changes the BYTE
-// LENGTH it would also shift the offsets the share pipeline matches on. A
-// superscript digit or an em/en space in publisher text does the same. Worth a
-// test that walks the shipped translations; recorded in docs/BACKLOG.md. The space after it goes with it, or "left. [36]
-// They" would become "left.  They".
+// That belief is held by test, not assumed. A publisher verse containing a
+// "[12]"-shaped token would have it silently deleted on the way out, and
+// because that strip changes the BYTE LENGTH it would also shift the offsets
+// the share pipeline matches on; a superscript digit, a no-break space or an
+// em or en space in publisher text would do the same.
+// outbound_text_walk_test.go walks the embedded WEB Gospels in every run, with
+// a planted token as its control, and every translation downloaded on the
+// machine running the suite, through realCachePath.
 func outboundText(s string) string { return outboundForm(s, false) }
 
 // sharedText is the form a reader's own shares and copies carry: the page's

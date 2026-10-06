@@ -175,10 +175,17 @@ for that debut alone.
 
 Each platform has its own review-notes field and its own tracked source of
 truth: `appstore/review-notes.txt` for iOS and `appstore/review-notes-macos.txt`
-for the Mac. Both must name the version their platform's ledger declares —
-1.2.5 in both files today — and each is held to its own platform's
-FyneApp.toml by `appstore_review_notes_test.go`. Validate the local sources
-without contacting App Store Connect:
+for the Mac. Both must name the version their platform's ledger declares in
+their first line, `VERSION <v>`, and each is held to its own platform's
+FyneApp.toml by `appstore_review_notes_test.go`. They name no other release
+anywhere: any x.y.z in the notes that is not that version fails, with no
+allow-list, so a body carried over from the last release under a bumped
+heading fails, and so does a comparison with an earlier release or an
+operating system's version written as x.y.z. The test holds the tracked
+files to that from 1.2.20 on; 1.2.19's iPhone notes, written before the
+rule, compare two results with 1.2.18's. The helper refuses such notes before
+anything is sent. Validate the local sources without contacting App Store
+Connect:
 
 ```bash
 python3 appstore/push-review-notes.py --local-only
@@ -494,8 +501,9 @@ each step it lists.
    (docs/RELEASING.md, stage 11). Nothing computes this: a new store is not a
    new release asset, so `scripts/check-public-surfaces.py` cannot see that
    one is missing — it can only hold a link that exists to the identity file
-   that owns it, and require Google Play, the one store it demands, in all
-   three places. The Microsoft Store went live on 17 September 2026 and
+   that owns it, require Google Play, the one store it demands, in all
+   three places, and hold the release notes to exactly the stores the
+   download page links, each at the page's listing. The Microsoft Store went live on 17 September 2026 and
    neither page mentioned it until someone noticed; Google Play went live on
    30 September 2026 and both pages linked it that day, but the release notes
    did not.

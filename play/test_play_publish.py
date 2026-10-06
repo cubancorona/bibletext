@@ -1,5 +1,6 @@
 """What scripts/play-publish.py does itself: the release notes an upload
-carries, what it says when Play ends an upload's edit, and promote.
+carries, what it says when Play ends an upload's edit, an upload that meets a
+review in progress, and promote.
 
 No store is contacted. The script reaches Play only through its own
 access_token() and call(); every test replaces both on the loaded module.
@@ -79,6 +80,13 @@ def track(name, *releases):
 LIVE = release("986", name="986 (9.8.6)", notes="Last time.")
 
 
+def in_review_answer(url):
+    """call()'s exit text for Play refusing a commit over a review in progress."""
+    body = json.dumps({"error": {"code": 400, "message": "Changes are currently in review.",
+                                 "status": "FAILED_PRECONDITION"}})
+    return f"Play API POST {url} -> HTTP 400\n{body}"
+
+
 def deleted_answer(method, url):
     """call()'s exit text for Play's answer on an edit it has ended."""
     body = json.dumps({"error": {"code": 400, "message": "This Edit has been deleted.",
@@ -92,6 +100,12 @@ class FakePlay:
     ``tracks`` is the committed state; each open edit starts from it, and a
     PUT changes only the edit until a commit. ``fail`` maps a request kind
     to the text call() would exit with, or to an exception to raise.
+
+    ``in_review`` is something else already in Play's review, a production
+    release or a listing change. A commit asking for ERROR_IF_IN_REVIEW is
+    then refused and its edit left open; any other commit is taken with
+    Play's default, CANCEL_IN_REVIEW_AND_SUBMIT, which sends that review
+    back to the start, and is recorded in ``restarted``.
     """
 
     KINDS = (
@@ -105,7 +119,7 @@ class FakePlay:
         ("DELETE", r"/edits/[^/:?]+", "delete"),
     )
 
-    def __init__(self, module, tracks=None, fail=None, bundle_code=BUILD):
+    def __init__(self, module, tracks=None, fail=None, bundle_code=BUILD, in_review=False):
         self.m = module
         self.tracks = copy.deepcopy(tracks or {})
         self.before = copy.deepcopy(self.tracks)
@@ -115,6 +129,8 @@ class FakePlay:
         self.commits = 0
         self.opened = 0
         self.edits = {}
+        self.in_review = in_review
+        self.restarted = []
 
     def kinds(self):
         return [kind for kind, _method, _path, _payload in self.calls]
@@ -161,6 +177,10 @@ class FakePlay:
         if kind == "validate":
             return 200, {"id": edit_id}
         if kind == "commit":
+            if self.in_review:
+                if "changesInReviewBehavior=ERROR_IF_IN_REVIEW" in path:
+                    raise SystemExit(in_review_answer(url.split("?")[0]))
+                self.restarted.append(edit_id)
             self.commits += 1
             self.tracks.update(self.edits.pop(edit_id))
             return 200, {"id": edit_id}
@@ -240,7 +260,9 @@ class UploadNotes(Harness):
                 self.assertEqual(self.uploaded_notes(play), [{"language": "en-GB", "text": NOTES}])
                 self.assertIn(f"notes {len(NOTES)} chars", self.printed)
 
-    def test_the_upload_sequence_and_payload_are_unchanged(self):
+    def test_the_upload_sequence_and_payload(self):
+        # The commit asks Play to refuse rather than restart a review in
+        # progress, as promote's does.
         play = self.fake()
         notes = self.write("notes.txt", NOTES + "\n")
         self.run_script("--notes", notes, "upload", self.bundle(), "alpha")
@@ -250,7 +272,7 @@ class UploadNotes(Harness):
             ("put", "PUT", "/edits/edit-1/tracks/alpha", {"track": "alpha", "releases": [
                 {"status": "completed", "versionCodes": [BUILD],
                  "releaseNotes": [{"language": "en-GB", "text": NOTES}]}]}),
-            ("commit", "POST", "/edits/edit-1:commit", None)])
+            ("commit", "POST", "/edits/edit-1:commit" + REVIEW, None)])
         self.assertEqual(play.commits, 1)
 
     def test_the_cap_counts_every_line_break(self):
@@ -369,6 +391,71 @@ class EditEndedMidUpload(Harness):
                 self.m.call("https://play.invalid/edits?uploadType=media", TOKEN, "POST", {})
         self.assertEqual(str(caught.exception.code),
                          'Play API POST https://play.invalid/edits -> HTTP 400\n{"error": "no"}')
+
+
+class UploadWhileInReview(Harness):
+    """An upload waits for a review in progress instead of restarting it."""
+
+    def setUp(self):
+        super().setUp()
+        self.aab = self.write("app.aab", b"bundle bytes", "wb")
+        self.notes = self.write("notes.txt", NOTES + "\n")
+
+    def upload(self):
+        return ("--notes", self.notes, "upload", self.aab, "alpha")
+
+    def test_an_upload_never_restarts_a_review_in_progress(self):
+        play = self.fake(tracks={"alpha": track("alpha", LIVE)}, in_review=True)
+        message = self.refused(*self.upload())
+        self.assertTrue(message.startswith(in_review_answer(self.m.BASE + "/edits/edit-1:commit")),
+                        message)
+        self.assertEqual(play.restarted, [], "the upload's commit sent the review back to the start")
+        self.assertEqual(play.commits, 0)
+        self.assertIn(f"Play refused the commit, so the bundle is not on 'alpha' and versionCode "
+                      f"{BUILD} is still unused", message)
+        self.assertIn("still in Play's review", message)
+        self.assertIn("run the same command again", message)
+        self.assertIn("Nothing changed on Play; the edit is discarded.", message)
+        self.assertEqual(play.kinds(), ["open", "bundle", "put", "commit", "delete"])
+        self.assertEqual(play.edits, {})
+        self.assertEqual(play.tracks, play.before)
+
+    def test_the_same_command_goes_up_once_the_review_clears(self):
+        play = self.fake(tracks={"alpha": track("alpha", LIVE)}, in_review=True)
+        self.refused(*self.upload())
+        play.in_review = False
+        self.assertEqual(self.run_script(*self.upload()), 0)
+        self.assertEqual(play.commits, 1)
+        self.assertEqual(play.tracks["alpha"], {"track": "alpha", "releases": [
+            {"status": "completed", "versionCodes": [BUILD],
+             "releaseNotes": [{"language": "en-GB", "text": NOTES}]}]})
+        self.assertIn("committed edit edit-2", self.printed)
+
+    def test_any_refused_commit_is_explained_and_its_edit_discarded(self):
+        answer = (f"Play API POST {self.m.BASE}/edits/edit-1:commit -> HTTP 403\n"
+                  '{"error": {"message": "The caller does not have permission"}}')
+        play = self.fake(fail={"commit": answer})
+        message = self.refused(*self.upload())
+        self.assertTrue(message.startswith(answer), message)
+        self.assertIn("Play refused the commit, so the bundle is not on 'alpha'", message)
+        self.assertEqual(play.kinds()[-2:], ["commit", "delete"])
+        self.assertEqual(play.tracks, play.before)
+
+    def test_a_commit_play_did_not_answer_is_not_called_a_refusal(self):
+        # A 5xx may follow a commit Play took, so nothing is said to be unused
+        # and the edit is not touched.
+        answer = f"Play API POST {self.m.BASE}/edits/edit-1:commit -> HTTP 503\nbackend error"
+        play = self.fake(fail={"commit": answer})
+        self.assertEqual(self.refused(*self.upload()), answer)
+        self.assertEqual(play.kinds()[-1], "commit")
+
+    def test_an_edit_ended_at_the_commit_is_still_explained_as_ended(self):
+        answer = deleted_answer("POST", self.m.BASE + "/edits/edit-1:commit")
+        play = self.fake(fail={"commit": answer})
+        message = self.refused(*self.upload())
+        self.assertIn("Play ended this edit while the upload was in flight", message)
+        self.assertNotIn("Play refused the commit", message)
+        self.assertNotIn("delete", play.kinds())
 
 
 class Promote(Harness):
@@ -680,6 +767,13 @@ class Promote(Harness):
         self.assertIn("Play ended this edit while the promotion was being committed", message)
         self.assertIn("production is unchanged", message)
         self.assertEqual(play.commits, 0)
+
+    def test_a_promotion_never_restarts_a_review_in_progress(self):
+        play = self.play(in_review=True)
+        message = self.refused(*self.promote())
+        self.assertIn("Play refused the commit, so production is unchanged", message)
+        self.assertEqual(play.restarted, [])
+        self.assertEqual(play.tracks, play.before)
 
     def test_a_re_run_after_the_commit_refuses(self):
         play = self.play()
