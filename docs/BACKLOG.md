@@ -1317,14 +1317,15 @@ the day on iPad and on Mac. The Mac's is still marked so.
 iPadOS 26.5, portrait, the World English Bible at Psalm 82, a development
 build of `main` at 1db51a02b. The simulator takes no taps, so a throwaway
 trigger compiled into that build alone, and never committed, stood in for
-the reader's hand: it made the reading view first responder and selected 14
-characters in verse 3, as a reader's selection leaves it; ran the body of
-the selection menu's handler for the verb (`bibleTextStudyMenuTapped` with
-the text and verse span the menu computes); and then pressed the Share
-button of the preview, the composer or the verse-of-the-day card itself
-(`Tapped` on the widget each had built). The presented
-`UIActivityViewController`'s source view and rectangle were read back and
-logged, and each popover was screenshotted.
+the reader's hand: it made the reading view first responder and set its
+selected range to 14 characters in verse 3, starting and ending mid-word,
+as a touch selection would not, which does not move the popover's anchor;
+ran the body of the selection menu's handler for the verb
+(`bibleTextStudyMenuTapped` with the text and verse span the menu
+computes); and then pressed the Share button of the preview, the composer
+or the verse-of-the-day card itself (`Tapped` on the widget each had
+built). The presented `UIActivityViewController`'s source view and
+rectangle were read back and logged, and each popover was screenshotted.
 
 - **Share with citation and Share as link.** Beside the selection, the arrow
   at its right end: the source rectangle is the selection's first rectangle.
@@ -1345,21 +1346,26 @@ logged, and each popover was screenshotted.
   covers the card's text and its Close and Read in context row. The same
   with no selection and with one made before the card opened: the hidden
   text view answers no rectangle for the range it keeps, and the fallback,
-  the middle of the view, is taken. This is the case predicted above; the fix is
-  the icon's rectangle, for 1.2.21.
+  the middle of the view, is taken. This is the case predicted above; the
+  fix is the icon's rectangle, for 1.2.21.
 
 Not seen on the iPad: landscape, where the reading view is the right-hand
-pane beside the sidebar; Split View and Slide Over widths; and a selection
-made by touch rather than set on the view.
+pane beside the sidebar; Split View and Slide Over widths; a selection made
+by touch rather than set on the view; and a note typed in the composer's
+field, since the trigger filled the note in, so a keyboard closing as Share
+is pressed was not seen. Also seen and not explained: in the Share as image
+popover the share sheet's header showed the system's blank image
+placeholder, not the card's thumbnail, though Save Image was offered. The
+card's file is not deleted after the share (`share_image.go`), so this is
+probably the simulator; worth a glance on a device.
 
 **The Mac, still to see**, by hand, since nothing drives the Mac app without
 host input: in BibleText for the Mac, select a few words, and from the
-selection's menu (Control-click or right-click on it) choose Share as
-image, then Share in the preview; then
-Share with note, with a word typed, then Share; then the verse of the day
-(the sparkle in the header) and the Share icon on its card. For each, where
-the share picker appears — beside the selection, elsewhere, or for the card
-at all.
+selection's menu (Control-click or right-click on it) choose Share > Share
+as image, then Share in the preview; then Share > Share with note, with a
+word typed, then Share; then the verse of the day (the sparkle in the
+header) and the Share icon on its card. For each, where the share picker
+appears — beside the selection, elsewhere, or for the card at all.
 
 ## Android: the status-bar icons were white on the light page — FIXED 30 September 2026
 
