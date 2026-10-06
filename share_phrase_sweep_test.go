@@ -218,13 +218,15 @@ func TestADragEndedOnTheNextVersesNumberIsNotPlacedInThatVerse(t *testing.T) {
 
 // With a span, a selection its verses do not hold is not a phrase of those
 // verses, and is found in the chapter at its first copy of any kind, as it
-// was before the region preferred a copy that splits no word. Taking the
-// first whole copy in the chapter moved each of these to a verse the drag
-// never touched:
+// was before the region preferred a copy that splits no word, or, where it
+// runs on into the heading below them, placed by that heading
+// (verseEndBeforeHeading). Taking the first whole copy in the chapter moved
+// each of these to a verse the drag never touched:
 //
 //   - a drag from the end of verse 13 into the first word of the heading
 //     below, whose copy in the corpus runs into verse 14's "Then": it was
-//     cited 32–33, where verse 32 ends as 13 does and verse 33 opens "The";
+//     cited 32–33, where verse 32 ends as 13 does and verse 33 opens "The".
+//     It is now placed at the end of verse 13, the heading's word taken off;
 //   - verse 20's number selected on its own, which an earlier verse holds as
 //     a word after "200": it was cited verse 14;
 //   - the first word of a heading selected on its own, with the span the

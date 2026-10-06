@@ -3712,7 +3712,8 @@ without, answers as before, byte for byte: 1,689,252 drags over the three
 translations.
 
 With a span, a selection the span's verses do not hold is found in the
-chapter at its first copy of any kind, as before. Taking the chapter's first
+chapter at its first copy of any kind, as before, but for a drag run on into
+the heading below them (corrected again, below). Taking the chapter's first
 whole copy instead, as the change first did, moved such selections to verses
 they never touched: a drag from the end of a verse into the first letters of
 the heading below, whose copy in the text runs on into the next verse's first
@@ -3776,6 +3777,49 @@ first whole copy, the verse clicked for 1,158 and an earlier copy's for 1,475
 (the BSB: 1,118 and 1,307 of 2,425). That is the rule for any selection with
 no span, and whether a selection with no span whose words stand more than once
 should cite the chapter instead is open.
+
+**Corrected again, 6 October 2026.** The first copy of any kind is not the
+reader's either for a drag from a verse's last words run on past its full stop
+into the heading drawn below it, which the Apple and Android panes span to the
+verse above. Placed at that copy and kept, such a drag was cited from another
+verse with the same words: the BSB's "gold.\nT" at the end of 2 Chronicles
+3:4, spanned 4 to 4, was found running from verse 8's "fine gold." into verse
+9, cut back by the end repair to verse 8's "gold." and cited 3:8; Philippians
+1:2's "Christ.\nT" was cited 1:27, 2 Chronicles 36:14's "Jerusalem.\nThe"
+36:19, and the WEB's Psalm 119:64 "statutes.\nT" 119:22. 1.2.19 cited all four
+from their own verse, its end repair searching the span's verses again for
+what it cut. Where the span's verses do not hold the selection, the front of
+the heading drawn below the last of them now comes off the selection's end
+first, or, where headings are stacked there, those before it whole and then
+its front, and what is left is placed at the end of that verse when it is how
+the verse ends (`verseEndBeforeHeading`). The end is read from the selection
+before a trailing verse number comes off, so a drag through a heading named
+"Saying 10" to the number below is not taken for a drag into the next heading,
+"Saying 11". Anything else is searched for as before, as is a selection the
+verse holds itself, since a drag inside the verse can make the same text with
+the same span. The 2 Chronicles 20:13 drag above, "the LORD.\nThe", is now
+placed this way, at the same place and with the same citation. Over a sweep of
+the page models of every pane (45,889,289 selections in the WEB, 44,315,627 in
+the BSB and 52,192,485 in the WEBC, each with the Apple and Android span, the
+styled pane's span and none), 436 answers change, every one a drag from a
+verse's last one or two words into the heading below with the Apple and
+Android span, and every one is now cited from the verse its words came from
+and quotes only them: 4 in the WEB, 426 in the BSB and 6 in the WEBC. 182 of
+them (4, 172 and 6) had been answered right by 1.2.19; the other 254, all in
+the BSB, had been cited from another verse or had shared heading words as
+Scripture in 1.2.19 as well. A further 61 BSB drags of that shape keep their
+quotation and citation and are now placed at the end of the verse, not at an
+earlier copy in it. No other answer changes, with any span or none
+(`TestADragRunOnIntoTheHeadingBelowCitesItsOwnVerse`,
+`TestADragRunOnIntoTheHeadingBelowSweep`,
+`TestADragThroughAHeadingToTheNumberBelowIsNotTakenForTheNextHeading`). With
+no span, on the plain-text fallback page, nothing names the verse above the
+heading, and such a drag is placed at the chapter's first copy, as any
+selection with no span is: of the BSB's 18,396 such drags of one or two words,
+41 that 1.2.19 cited from their own verse cite another (Numbers 3:26's
+"items.\nT", cited 3:31) and 99 it answered wrong are right, all as before
+this correction, and none of the WEB's or the WEBC's is answered worse than in
+1.2.19. Whether to place them by the heading as well is open.
 
 The original finding:
 
