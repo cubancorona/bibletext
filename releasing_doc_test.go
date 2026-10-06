@@ -323,6 +323,29 @@ func TestStage10NamesTheArm64SnapRerun(t *testing.T) {
 				"before it builds, and the promotion refuses until it is rerun", want)
 		}
 	}
+
+	// The rerun starts by downloading the files the Linux job staged, which
+	// the run keeps only for the upload's retention-days; after that the
+	// rerun fails at the download. The stage must give the limit the
+	// workflow sets. Mutation: the stage without it, or a retention changed
+	// in the workflow alone.
+	download := regexp.MustCompile(`uses: actions/download-artifact@\S+\s+with:\s+name: (\S+)`).FindStringSubmatch(rest)
+	if download == nil {
+		t.Fatal("release.yml's `build snap (arm64)` job downloads no artifact by name; " +
+			"re-read stage 10's rerun against how the job now gets its files")
+	}
+	upload := regexp.MustCompile(`uses: actions/upload-artifact@\S+\s+with:\s+name: ` + regexp.QuoteMeta(download[1]) +
+		`\s+(?:[a-z-]+: .*\s+)*?retention-days: ([0-9]+)`).FindStringSubmatch(workflow)
+	if upload == nil {
+		t.Fatalf("release.yml uploads %s with no retention-days; stage 10 says the rerun has a limit", download[1])
+	}
+	for _, want := range []string{"`" + download[1] + "`", "`retention-days: " + upload[1] + "`"} {
+		if !strings.Contains(stage, want) {
+			t.Errorf("stage 10 of docs/RELEASING.md does not name %s: a rerun of the arm64 snap job "+
+				"downloads %s, which release.yml keeps for %s days, and fails once it has expired",
+				want, download[1], upload[1])
+		}
+	}
 }
 
 // A linux/releases.toml entry is dated the day the store files are built,

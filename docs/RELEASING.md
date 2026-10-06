@@ -500,6 +500,12 @@ the failed job, which publishes to edge as the first attempt would have:
 gh run rerun <run-id> --failed
 ```
 
+The rerun has three days. A snap job starts by downloading the files its
+Linux job staged for it (`snap-stage-arm64`, and `snap-stage` for amd64),
+which the run keeps for three days (`retention-days: 3` in `release.yml`);
+once they have expired, the rerun fails at that download. So check both
+snap jobs the day the tag is pushed.
+
 Then, on a Linux host (snapcraft runs nowhere else; the Ubuntu arm64 VM
 serves, over SSH):
 
