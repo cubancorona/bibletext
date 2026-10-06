@@ -682,7 +682,9 @@ func TestVerifyNotNextRefusesTaggedBuilds(t *testing.T) {
 
 	plain := build("plain", nil, "-trimpath")
 	otherTags := build("other-tags", nil, "-tags", "gles,nextish")
-	onTheLine := build("on-the-command-line", nil, "-tags", "ios,next")
+	// Not ios: on a Linux host that tag selects a second GOOS file in the
+	// standard library and the probe does not build.
+	onTheLine := build("on-the-command-line", nil, "-tags", "gles,next")
 	fromEnv := build("from-goflags", []string{"GOFLAGS=-tags=next"})
 	fromGoEnv := build("from-go-env-w", []string{"GOENV=" + goEnvFile})
 	notGo := filepath.Join(dir, "not-go")
