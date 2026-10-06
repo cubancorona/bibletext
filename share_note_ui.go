@@ -420,7 +420,19 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 	// keyboard. A card fitted to it would end at the keyboard's top and stay
 	// short, the page showing beneath it, once the keyboard went down. Its
 	// side insets are read again, since a keyboard moves only the foot.
+	//
+	// AND REFIT WHEN THE SIDE INSETS MOVE WITHOUT THE CANVAS CHANGING SIZE.
+	// An Android phone turned straight from one landscape to the other keeps
+	// its canvas's size, and the navigation's answer (the rail), so nothing
+	// rebuilds the window either; but its display cutout, and a three-button
+	// navigation bar, go to the other side. Watching the size alone, the card
+	// kept its padding on the side that no longer needed it and ran under
+	// the inset on the side that did, until the sheet was closed and opened
+	// again. So the watch also compares where the sheet area starts and how
+	// wide it is: never its height, which a keyboard changes, and which the
+	// refit does not read (sheetArea gives the keyboard back in any case).
 	lastCanvas := cnv.Size()
+	lastAreaPos, lastAreaW := pos, sz.Width
 	refit := func() {
 		now := cnv.Size()
 		relayout := func() {
@@ -442,15 +454,17 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 	// an orphaned UITextView floating over whatever the rebuild painted. Poll
 	// until the popup is gone by ANY route, then run the (idempotent) teardown —
 	// the same 150ms watchdog the ask sheet uses. The same poll notices a new
-	// canvas size and refits the sheet to it.
+	// canvas size, or side insets that moved, and refits the sheet to them.
 	var watch func()
 	watch = func() {
 		if popup == nil || !popup.Visible() {
 			closeSheet() // idempotent; also drops the slot latch
 			return
 		}
-		if now := cnv.Size(); now != lastCanvas {
-			lastCanvas = now
+		now := cnv.Size()
+		apos, asz := noteSheetArea(cnv)
+		if now != lastCanvas || apos != lastAreaPos || asz.Width != lastAreaW {
+			lastCanvas, lastAreaPos, lastAreaW = now, apos, asz.Width
 			refit()
 		}
 		noteSheetAfter(150*time.Millisecond, watch)

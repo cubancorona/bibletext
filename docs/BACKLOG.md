@@ -329,10 +329,10 @@ put back, it returned as "no answer from the portal" 3.9 s after the drop
 of a 4 s wait, using 3.92 s of CPU in 4.02 s; fixed, it returned at once,
 using none.
 
-## A sheet turned from one landscape to the other keeps its side padding on the old side (Android) — found 1 October 2026
+## A sheet turned from one landscape to the other keeps its side padding on the old side (Android) — found 1 October 2026; the composer FIXED 6 October 2026
 
-Planned for: 1.2.20, the composer; Ask's half when Ask returns to the menus
-— see docs/ROADMAP.md.
+Still open: Ask's half, when Ask returns to the menus — see docs/ROADMAP.md.
+The note composer's half is fixed for 1.2.20 (below).
 
 Since 1.2.18 the note composer and Ask hold their card clear of the side
 safe insets of a phone held sideways (`clearOfSideInsets`,
@@ -359,6 +359,24 @@ side insets are 0. Read from the code; not seen on a device.
 The fix: refit when the safe area changes, not only the size — the
 composer's watch comparing the sheet area's position and width as well as
 `cnv.Size()` — and give Ask its refit and the same watch.
+
+**The composer, FIXED 6 October 2026** (for 1.2.20). Its watch
+(`share_note_ui.go`) now refits when the sheet area starts somewhere else or
+changes width, as well as when the canvas changes size; never on the area's
+height, which a keyboard changes. `TestTheComposerFollowsTheSideInsetsAcrossALandscapeTurn`
+(`sheet_side_insets_test.go`) turns a phone over three ways at an unchanged
+canvas size — the cutout alone, whose area keeps its width and only starts
+elsewhere; the cutout with a three-button bar opposite it; and a bar that
+appears with the turn — and fails on the tree before the change, where the
+card stayed padded on the old side and ran under the new inset, the native
+field with it. The API 35 emulator makes the same turn: it refuses the
+upside-down posture (`mAllowAllRotations=false`), so `adb emu rotate` takes
+its display from ROTATION_270 straight to ROTATION_90 at an unchanged size.
+With the composer opened at ROTATION_270 and the phone turned over, the build
+before the change left the card at x 11..2252, under the 136px cutout now on
+the left, and the fixed build moved it to x 147..2388, clear of it; so the
+driver does hand the composer the new insets on that turn. Ask is unchanged:
+it still throws its refit away, and waits until Ask returns to the menus.
 
 ## A Play upload's commit restarts a review in progress — found 2 October 2026
 
@@ -1848,8 +1866,9 @@ before.
 
 `OnStopped` still stops the audio and flushes the reading position on every
 activity destroy. Whether an activity destroy should stop the audio is a
-separate question, recorded as open under "Android: an activity destroyed with
-the process alive stops the narration" below.
+separate question, recorded under "Android: an activity destroyed with the
+process alive stops the narration" below; since 6 October 2026 it does not, on
+Android.
 
 The host tests (`activity_life_test.go`) run the hooks as installed, in each
 driver's order: the next activity starts not stopping and follows a light/dark
@@ -1874,9 +1893,9 @@ crossing has dropped the GL context. Desktop and iOS (launch, background round
 trips, termination) otherwise stop as they did. What only a device can
 confirm is in `docs/VISUAL_TESTS.md` under V15 and V9.
 
-## Android: an activity destroyed with the process alive stops the narration
+## Android: an activity destroyed with the process alive stops the narration — FIXED 6 October 2026
 
-Planned for: 1.2.20 — see docs/ROADMAP.md.
+Fixed for 1.2.20 (the end of this entry).
 
 From the code, found while tracing the stop above; not run on a device.
 `OnStopped` calls `nativeAudioStop()` on every activity destroy, not only when
@@ -1910,6 +1929,29 @@ does not reach this path. Confirm first on a device: with Developer options >
 **Decided 6 October 2026** — Android narration when the system reclaims
 the screen: don't stop the audio, matching iPhone. Of the two candidates,
 the first: on Android, `OnStopped` stops no audio.
+
+**Reproduced and FIXED 6 October 2026** (for 1.2.20). On the API 35
+emulator, with "Don't keep activities" on, narration of WEB Matthew 6
+playing and Home pressed: the activity was destroyed (`wm_destroy_activity
+… always-finish`) in the same process, and within the same 60 ms the
+narration's audio focus was abandoned, the foreground service stopped and
+the media session destroyed. Back in the app, the new activity showed the
+transport's pause button and the read-along wash on verse 1 over silence.
+Turning the setting on with the app in the background did the same.
+
+The fix (`activityStopEndsAudio`, `activity_life.go`; `app.go`): the stop
+hook sends the engine's raw stop (`engineStop`, which is
+`nativeAudioStop`) only where a stop ends the app, which is everywhere but
+Android. On the same emulator and steps, the media session stayed PLAYING
+and the player started through the destroy, and the new activity's
+read-along went on from verse 3 to verse 4 with the pane following; its
+Pause and Play drove the same session, and a swipe-away from recents still
+ended it (`onTaskRemoved`). `TestAnAndroidActivityStopLeavesTheNarrationPlaying`
+(`activity_life_test.go`) runs the hooks in the Android glue's order and
+fails if a destroyed activity's stop, on time or late, sends the engine a
+stop, or if the desktop's or iOS's stop does not send one. Back on Android 11
+and older now leaves the narration playing as the iPhone does when the
+reader leaves the app; it was not run, the emulators here being 13 and later.
 
 ## Rework the download page — DONE 26 September 2026; Google Play filled its slot, the release notes followed, and the APK row returned, 30 September 2026
 
@@ -2648,8 +2690,9 @@ What the spec work left, each one a known difference rather than a guess:
   sets the column about half the rail's width left of the pane's centre.
   Centring on the window only when the pane spans it less the system insets
   would give both.
-- **A note pill under a heading on Android's book page** sits 7px higher than
-  on the phone page (the entry below).
+- **A note pill under a heading on Android's book page — FIXED 6 October
+  2026.** It sat 7px higher than on the phone page (the entry below, which
+  has the fix).
 - **Android sets a Psalm title's word gaps 28 units narrower than its space.**
   From API 35 a title is set ragged there as everywhere, since 1.2.19, by the
   swap that sets a heading ragged: its spaces are four-per-em spaces in the
@@ -2680,7 +2723,24 @@ What the spec work left, each one a known difference rather than a guess:
   **Decided 6 October 2026** — Psalm titles: no hyphenation on the Apple apps
   and Android 15+, recording Android 13–14 as a divergence. On Android it is
   `LineBreakConfigSpan.createNoHyphenationSpan()` over each title, a span
-  API 35 brought, which Android 13 and 14 lack.
+  API 35 brought, which earlier releases lack.
+  **Android: FIXED 6 October 2026** (for 1.2.20). From API 35 the pass
+  that sets the title's gaps (`keepHeadingsRagged`) sets that span over the
+  title's paragraph (`keepTitleUnhyphenated`, `android/BtBridge.java`), and
+  the selectable, justified view honours it: on the API 35 emulator WEB
+  Psalm 102's title, which broke "over-whelmed" at the default size on a
+  phone held upright, breaks between words, while the body still
+  hyphenates ("be-came", "Ammi-nadab" in Matthew 1). The span shapes the
+  page and is a framework ParcelableSpan, so the text that leaves the page
+  drops it: `readerText`, and `copyAsRead`, which takes Copy over whenever a
+  selection holds one. On the API 33 emulator nothing changes, the phone
+  page's Psalm 102 pixel-identical to the base build: without the span,
+  Android can still hyphenate a title that wraps from API 23, where the view
+  starts hyphenating, to API 34 (the decision named 13 and 14; the same
+  holds back to 6), a divergence docs/PLATFORM_MATRIX.md records.
+  `TestAndroidPsalmTitleIsNotHyphenatedFromAPI35`
+  (`android_title_hyphenation_test.go`) holds the bridge to it, with
+  controls.
 - **A paragraph that opens in prose and turns to poetry** is indented on the
   web, Android and the Windows and Linux pane (justified where those surfaces
   justify — whole on the web and Android from API 35, its prose only on the
@@ -4068,9 +4128,10 @@ first, then Android after the Play closed-testing review clears — see the
 rework's proposal for the design (calendar triggers carrying the full date,
 re-issued on foreground, the passage computed with the fixed day key).
 
-## Android's compact page: a pill under a heading stands down
+## Android's compact page: a pill under a heading stands down — FIXED 6 October 2026
 
-Planned for: 1.2.20 — see docs/ROADMAP.md.
+Fixed for 1.2.20, with the psalm title's gap on the same page (the end of
+this entry).
 
 The one surface left out of the pill rule (below). On Android's compact page
 — the book page, which since 24 September 2026 is any pane wide enough for it:
@@ -4083,9 +4144,42 @@ heading-to-verse distance is the phone page's to the pixel (166px), and the
 pill sits 7px higher inside it. Centring there needs the ascent-mode air read
 back off the span rather than off a line. (Until 24 September the compact
 page drew no heading air at all — the bridge read any blank line as the phone
-page, and the compact import has two — so there was no air to centre in. A
-psalm title's gap is a blank line on this page too, written by the dialect's
-`<br>`, and takes `TITLE_GAP_EM` there.)
+page — so there was no air to centre in.)
+
+CORRECTED 6 October 2026: this entry said a psalm title's gap was a blank
+line on this page too, written by the dialect's `<br>`. It was not. The
+importer ends a block by adding newlines only until the text ends in as many
+as the mode asks for (`HtmlToSpannedConverter.appendNewlines`), one in
+COMPACT, and counts a `<br>`'s newline among them, so the one `<br>` before
+the title's `</p>` was the block's own end and nothing more: on the book
+page the title sat on verse 1 with no gap at all (the API 35 and API 33
+emulators, WEB Psalm 102, a phone held sideways).
+
+**FIXED 6 October 2026** (for 1.2.20), both halves.
+
+- The title's gap. The book page's title writes two line breaks
+  (`android_chapter_html.go`), so its text is the title, a blank line and
+  verse 1, as on the phone page, and the bridge sets that line to
+  `TITLE_GAP_EM` on both pages (from API 24: below it the import is LEGACY
+  and the bridge collapses every blank line of the book page, the title's
+  with them, so there the title still sits on verse 1, as it always has).
+  On both emulators the title now stands the
+  title gap above verse 1 on the book page. `TestAndroidPsalmTitleKeepsItsGapOnTheBookPage`
+  (`android_compact_page_air_test.go`) holds it through a model of the
+  importer's newline rule, which `TestTheAndroidImportModelMatchesTheEmulator`
+  holds to what the emulator drew before the change.
+- The pill. `btPillStackInkTop` reads the air off the span where there is no
+  separator line: when the noted paragraph's first character carries ascent
+  air (`airInAscentAt`), the stack centres between the line above it, the
+  heading's last, and the noted line, as it centres across a separator on
+  the phone page; between two of the book page's plain paragraphs, which
+  meet with no air, it still stands down. Measured under "Jesus Comforts
+  Martha and Mary" from the heading's baseline to the next cap line: on the
+  API 35 emulator held sideways, 52 above the pill and 65 below before,
+  59 and 58 after, against the phone page's 59 and 59; on the API 33
+  emulator held sideways, 34 and 43 before, 38 and 39 after.
+  `TestAndroidPillCentresUnderAHeadingOnTheBookPage` holds the bridge to it,
+  with controls.
 
 ## A collapsed note pill directly under a section heading — DONE 12 Sep 2026
 

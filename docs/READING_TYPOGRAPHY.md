@@ -261,7 +261,8 @@ and they differ:
   sets ragged and whole (below).
 - **Android** from API 35 justifies by the line: every line that is not the
   text's last and does not end at a hard break, whatever its paragraph — the
-  rows of a wrapped poem line too. It hyphenates. Below API 35 it is ragged
+  rows of a wrapped poem line too. It hyphenates, the Psalm title apart
+  (`keepTitleUnhyphenated`, below). Below API 35 it is ragged
   (docs/ANDROID.md). A heading and the Psalm title are set ragged, as every
   surface sets them: no span can exempt a line from the text view's
   justification, but a line with no U+0020 in it is not spread, so the bridge
@@ -307,10 +308,14 @@ factor. AppKit's importer and UIKit's (on the iPhone simulator) both give the
 title a factor of 0 where it had 1, and Psalm 18's title, laid out at 200 and
 320 points, no longer breaks "Mu-sician", "de-livered" or "Yah-weh"
 (`TestAppleTitleIsNotHyphenated` holds the rule). Android sets hyphenation on
-the whole text view, the title included, a known difference
-(docs/BACKLOG.md). The site's generator justified and hyphenated the title as
-well until 25 September 2026, and the published site does until it is next
-published: the title is a `<p>` inside `.text`, and its rule said nothing of
+the whole text view, and from API 35 turns it off for the title alone with the
+no-hyphenation span that release brought (`keepTitleUnhyphenated`,
+`android/BtBridge.java`, since 6 October 2026), so there the title is whole;
+earlier releases have no such span, and from API 23 to 34 can still break a
+word in a title that wraps, a divergence docs/PLATFORM_MATRIX.md records. These
+are known differences (docs/BACKLOG.md). The site's generator justified and
+hyphenated the title as well until 25 September 2026, and the published site
+does until it is next published: the title is a `<p>` inside `.text`, and its rule said nothing of
 alignment or hyphenation, so a title that wraps, such as Psalm 18's, took the
 prose paragraph's.
 
@@ -367,13 +372,20 @@ This list is kept current as each surface is brought to the spec.
   newline now takes the footnote size (at body size it made an entry's last
   line a body line tall; entries now stand 78px apart against the Apple
   panes' 78.6), and **the book page's heading air is live** — the bridge
-  inferred the page from blank lines, and the compact import has two (the
-  empty paragraph after the newline every chapter ends with, and a psalm
-  title's own gap), which turned the compact page's heading and footnote air
-  off entirely; the page now comes from the import. The lead and tail now match the phone page to the pixel; a
-  note pill under a heading sits 7px higher inside that air on the book page,
-  because its stack-centring refinement needs the blank line only the phone
-  page has.
+  inferred the page from blank lines, and the compact import has one (the
+  empty paragraph after the newline every chapter ends with; the blank line
+  meant as a psalm title's own gap was swallowed by the import until 6
+  October 2026, below), which turned the compact page's heading and footnote
+  air off entirely; the page now comes from the import. The lead and tail now
+  match the phone page to the pixel. A note pill under a heading sat 7px
+  higher inside that air on the book page, because its stack-centring
+  refinement needed the blank line only the phone page has, and on the book
+  page a psalm title sat on verse 1 with no gap: the dialect wrote one `<br>`
+  for the gap, and the COMPACT import counts its newline as the block's own
+  end. Both fixed 6 October 2026: the bridge reads the heading's tail off the
+  span that reserves it (`airInAscentAt`), and the title writes two line
+  breaks, so the book page's title stands over the same blank line as the
+  phone page's (docs/BACKLOG.md, "Android's compact page").
 - **Web** — on the spec since 24 September 2026, generated but not yet
   published (`scripts/publish-site.sh` is the owner's). A chapter's column is
   the reading page (`.wrap.page`): the measure and 15px a side, 37.96875rem at
@@ -474,7 +486,7 @@ came to on the two surfaces that reckoned it that way).
 |---|---|---|---|---|
 | **Apple panes** | `reading.go`: `p { margin: 0 0 <readingParaGapEm> }` (gapped) / `margin: 0` + `bibleTextSetReporterIndent(reporterIndentEm × readingGlyphPx())` | `p.sec` (0.35em below) and **`p.pre-sec { margin-bottom: 1.1em }` on the paragraph or title BEFORE the heading**, set by the block loop | `p.pst { margin: 0 0 <readingTitleGapEm> }` | **The native sweeps zero `paragraphSpacingBefore` on every paragraph** (to remove the phantom the importer injects on the first), so a `margin-top` never reaches the page. Space above anything must be the bottom margin of what precedes it. |
 | **Fyne pane** | `reading_styled_pane.go`: `paraGap = readingParaGapEm × textSize`, 0 on the reporter page; `indent = reporterIndentEm × textSize` | `reading_styled_layout.go` `appendHeadingLines`: `readingHeadLeadEm`/`readingHeadTailEm` × `styledLayoutParams.TextSize`; the paragraph after a heading skips its own gap | `reading_styled_super.go`: `readingTitleGapEm × size` | **The reporter page's paragraph gap is zero**, so anything figured "from the paragraph gap" vanishes on a wide window. Figure air from the text size. |
-| **Android** | `BtBridge.java` `applyParagraphAir`: the importer's blank separator line takes an exact height (`PARA_GAP_EM`); the compact page has no blank line, `INDENT_MARKER` → `LeadingMarginSpan` `INDENT_EM` × text | same sweep: `HEAD_LEAD_EM` / `HEAD_TAIL_EM` on the separator either side; on the compact page an `AirSpan` in the heading line's ascent and the next line's | the blank line after the title takes `TITLE_GAP_EM` | **`Html.fromHtml` separates paragraphs with a blank LINE** whose height is the pane's pitch plus `setLineHeight`'s extra — not a margin. A `LineHeightSpan` runs for every line of its paragraph over one reused `FontMetricsInt`: inflate only the line named, and put the metrics back on the next call (see `NoteBandSpan`). The wash paints full line boxes, so reserved air must be subtracted from wash rects. |
+| **Android** | `BtBridge.java` `applyParagraphAir`: the importer's blank separator line takes an exact height (`PARA_GAP_EM`); the compact page has no blank line, `INDENT_MARKER` → `LeadingMarginSpan` `INDENT_EM` × text | same sweep: `HEAD_LEAD_EM` / `HEAD_TAIL_EM` on the separator either side; on the compact page an `AirSpan` in the heading line's ascent and the next line's | the blank line after the title takes `TITLE_GAP_EM`, on both pages: the book page's title writes two `<br>`, since the COMPACT import counts one as the block's own end (from API 24; below it the import is LEGACY and the bridge collapses the book page's blank lines, the title's too, so the title sits on verse 1 there) | **`Html.fromHtml` separates paragraphs with a blank LINE** whose height is the pane's pitch plus `setLineHeight`'s extra — not a margin. A `LineHeightSpan` runs for every line of its paragraph over one reused `FontMetricsInt`: inflate only the line named, and put the metrics back on the next call (see `NoteBandSpan`). The wash paints full line boxes, so reserved air must be subtracted from wash rects. |
 | **web** | `cmd/websitegen/assets.go`: `--pgap` = `__PARA_GAP__` × body; `0rem` + `text-indent:__INDENT__` from 46rem up | `.text .sec`: `font-size:1em`, `margin:__HEAD_LEAD__ 0 __HEAD_TAIL__` | `p.pst{margin:0 0 __TITLE_GAP__}` | **The heading is an `<h2>`** for the outline, whose browser default is `font-size:1.5em`: leaving the size out is not inheriting. Margins figured from `--pgap` are zero on the reporter page. |
 
 ### To change one thing, touch these

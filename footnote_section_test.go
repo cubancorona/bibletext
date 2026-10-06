@@ -476,8 +476,10 @@ func TestSuperscriptionAndroidDialect(t *testing.T) {
 		// The reporter page has no blank line between blocks (imported
 		// COMPACT), so the air under the title is an empty line inside the
 		// title's own block — the Apple page's p.pst margin, in this dialect.
+		// Two line breaks make it: the import counts one as the block's own
+		// end (android_compact_page_air_test.go).
 		{"phone page", false, `<p><i>A test title, according to Gittith.</i></p>`},
-		{"reporter page", true, `<p><i>A test title, according to Gittith.</i><br></p>`},
+		{"reporter page", true, `<p><i>A test title, according to Gittith.</i><br><br></p>`},
 	} {
 		var html string
 		withReporterLayout(page.reporter, func() { html = buildChapterHTMLAndroid(st, verses) })

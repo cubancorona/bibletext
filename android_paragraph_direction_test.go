@@ -41,15 +41,16 @@ func TestAndroidSetsAParagraphOpeningOnHebrewLeftToRight(t *testing.T) {
 	// The Psalm title is written by the same rule, on the phone page and on
 	// the book page a wide pane takes, which write it on two different lines:
 	// the book page's title keeps its own air as an empty line inside the
-	// block (<br> before </p>). Each page is pinned, so neither line rests on
-	// the width of the host the test runs on.
+	// block (two <br> before </p>, android_compact_page_air_test.go). Each
+	// page is pinned, so neither line rests on the width of the host the test
+	// runs on.
 	st.CurrentBook, st.CurrentChapter = "Psalms", 150
 	st.Bible.Verses["Psalms"] = map[int][]Verse{150: {{BookName: "Psalms", Chapter: 150, Verse: 1, Text: "A fixture verse."}}}
 	pages := map[bool]string{false: "phone", true: "book"}
 	withTitle := func(text string, book bool) (html string) {
 		st.Bible.Superscriptions = map[string]map[int]Superscription{"Psalms": {150: {Text: text}}}
 		withReporterLayout(book, func() { html = buildChapterHTMLAndroid(st, st.Bible.GetChapter("Psalms", 150)) })
-		if book != strings.Contains(html, "</i><br></p>") {
+		if book != strings.Contains(html, "</i><br><br></p>") {
 			t.Fatalf("the title was not written on the %s page's line, so that line goes unchecked:\n%s", pages[book], html)
 		}
 		return html

@@ -53,8 +53,8 @@ package bibletext
 // the stop hook for its own activity, carrying the activity's generation. The
 // driver takes the hook as the stage crosses to Dead, so the hook it queues
 // names the activity that ended; a stop for an activity older than the one
-// started last flushes the reading position and stops the audio as ever
-// (nothing about those changes here), and leaves stopping clear.
+// started last flushes the reading position as ever, and leaves stopping
+// clear. (On Android no stop stops the audio: activityStopEndsAudio, below.)
 //
 // WHAT THE NEW ACTIVITY PICKS UP. Between a stop and the next start every
 // consumer of stopping refuses, and each is picked up as follows:
@@ -78,7 +78,37 @@ package bibletext
 //     runs once the start's event is over, as it would have run had it landed
 //     while the activity was live. If no start comes, it never lands.
 
-import "sync"
+import (
+	"runtime"
+	"sync"
+)
+
+// AN ACTIVITY'S STOP DOES NOT END THE NARRATION ON ANDROID.
+//
+// OnStopped stops the audio where a stop is the app ending: the desktop's
+// run loop ending, iOS's termination. On Android it is an ACTIVITY ending
+// (above), and the process lives on in exactly the cases background
+// narration exists for: the system reclaiming the activity while the reader
+// listens with the screen off (Developer options > "Don't keep activities"
+// forces it), and Back finishing the root activity on Android 11 and older,
+// where the iPhone keeps playing when the reader leaves the app. The stop
+// ended the listening session there — both engines, audio focus, the media
+// session and the foreground service — while the Go controller still held
+// the chapter as playing, so the next activity showed a transport, a
+// read-along wash and a pause button over silence (seen on the API 35
+// emulator, 6 October 2026). Decided 6 October 2026: on Android an
+// activity's stop stops no audio, matching the iPhone.
+//
+// Nothing is lost by it. A swipe-away already ends playback in the audio
+// service's onTaskRemoved, which tells Go (BtAudioService.java); a process
+// the system kills takes its audio with it and runs no Go at all; and the
+// next activity in a living process finds the controller and the engine
+// still agreeing. The reading position is still flushed at every stop.
+func activityStopEndsAudio() bool { return lifecycleGOOS != "android" }
+
+// lifecycleGOOS is the platform whose lifecycle the hooks follow:
+// runtime.GOOS, held in a variable so the host can run Android's stop.
+var lifecycleGOOS = runtime.GOOS
 
 // activityLife is the record of the activities the process has run in: which
 // started last, and the work held for the next. mu guards both and stopping's

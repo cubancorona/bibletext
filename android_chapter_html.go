@@ -110,13 +110,25 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 	var b strings.Builder
 	if super.Text != "" {
 		// The Psalm title: italic, unnumbered — no <sup> anywhere in it, so
-		// BtBridge's verse index (SuperscriptSpans only) never sees it. The
-		// Apple page keeps 14px under it even in reporter mode (p.pst), and
-		// this page's blank lines are all gone (COMPACT), so the air is put
-		// back as an empty line inside the title's own block.
+		// BtBridge's verse index (SuperscriptSpans only) never sees it. Every
+		// page keeps a gap under it (p.pst on the Apple panes, the title gap
+		// of reading_spacing.go), and on the phone page the importer's blank
+		// line between blocks is that gap, which the bridge sets to the
+		// title gap (applyParagraphAir). The book page imports COMPACT, with
+		// no blank line between blocks, so the title's block writes its own:
+		// TWO line breaks. One is not enough. The importer ends a block by
+		// adding newlines only until the text ends in as many as the mode
+		// asks for (HtmlToSpannedConverter.appendNewlines), one in COMPACT,
+		// and it counts a <br>'s newline among them, so a single <br> before
+		// </p> made the block's own end and nothing more: the title sat on
+		// verse 1 with no gap at all (androidImportedText models the rule).
+		// With two, the text is the title, a blank line and verse 1, as on
+		// the phone page, and the bridge gives that blank line the title gap
+		// on both pages. From API 24, that is: below it the import is LEGACY
+		// and the bridge collapses the book page's blank lines, this one too.
 		title := super.DrawnText()
 		if reporter {
-			fmt.Fprintf(&b, `<p><i>%s%s</i><br></p>`, androidDirectionMark(title), htmlEscape(title))
+			fmt.Fprintf(&b, `<p><i>%s%s</i><br><br></p>`, androidDirectionMark(title), htmlEscape(title))
 		} else {
 			fmt.Fprintf(&b, `<p><i>%s%s</i></p>`, androidDirectionMark(title), htmlEscape(title))
 		}

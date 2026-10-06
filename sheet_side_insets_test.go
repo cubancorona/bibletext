@@ -354,3 +354,78 @@ func TestTheComposerTakesTheSideInsetsOfANewCanvas(t *testing.T) {
 		t.Errorf("after the refit the box spans x %.1f..%.1f; want the canvas, 0..%.0f", box.x0, box.x1, s.w)
 	}
 }
+
+// THE COMPOSER FOLLOWS ITS SIDE INSETS WHEN A PHONE IS TURNED FROM ONE
+// LANDSCAPE TO THE OTHER. The canvas keeps its size, and the rail stays, so
+// nothing refits for a size or rebuilds the window; but the display cutout,
+// and a three-button navigation bar, go to the other side. The composer's
+// watch notices the safe area moving and refits: the card leaves the side
+// that no longer needs its padding and keeps clear of the side that does, and
+// the native field over its slot moves with it. Each turn is shown on its
+// own: the cutout alone, whose area keeps its width and only starts
+// elsewhere, and the cutout with the navigation bar opposite it, whose area
+// changes width as well. The controls are the card before the watch runs,
+// under the new inset. The API 35 emulator makes the same turn in one step,
+// since it refuses the upside-down posture, and drew the card under the
+// cutout before the change and clear of it after; this holds that in the
+// suite (docs/BACKLOG.md, "A sheet turned from one landscape to the other").
+func TestTheComposerFollowsTheSideInsetsAcrossALandscapeTurn(t *testing.T) {
+	for _, turn := range []struct {
+		name      string
+		from, to  insetScreen
+		sameWidth bool
+	}{
+		{"the cutout alone",
+			insetScreen{"Android phone, landscape, the cutout on the left", 803, 360, 0, 0, 32, 0},
+			insetScreen{"the same phone turned over, the cutout on the right", 803, 360, 0, 0, 0, 32}, true},
+		{"the cutout and a three-button bar",
+			insetScreen{"Android phone, landscape, the cutout left and the bar right", 803, 360, 0, 0, 32, 48},
+			insetScreen{"the same phone turned over, the bar left and the cutout right", 803, 360, 0, 0, 48, 32}, true},
+		{"the cutout, with the bar only after the turn",
+			insetScreen{"Android phone, landscape, the cutout on the left", 803, 360, 0, 0, 32, 0},
+			insetScreen{"turned over, with the bar on the left and the cutout right", 803, 360, 0, 0, 48, 32}, false},
+	} {
+		t.Run(turn.name, func(t *testing.T) {
+			held := holdNoteSheetTimers(t)
+			holdSheetTimers(t)
+			st, w := insetWindow(t, turn.from, 1)
+			frames := nativeNoteField(t, w)
+			promptShareNote(st, "For God so loved the world", selSpan{})
+			popup := topPopup(t, w)
+			pad := popup.Theme().Size(theme.SizeNameInnerPadding)
+			if under := underASideInset(turn.from, sheetParts(popup)); len(under) > 0 {
+				t.Fatalf("control: the composer must open clear of %s's insets: %v", turn.from.name, under)
+			}
+
+			to := turn.to
+			if gotSame := turn.from.w-turn.from.left-turn.from.right == to.w-to.left-to.right; gotSame != turn.sameWidth {
+				t.Fatalf("control: the turn keeps the area's width %v, want %v", gotSame, turn.sameWidth)
+			}
+			canvasArea = to.area // insetWindow puts the driver's area back
+			if len(underASideInset(to, sheetParts(popup))) == 0 {
+				t.Fatal("control: before the watch runs the card should reach under one of the turned phone's insets")
+			}
+			runHeld(held) // the turn arrives with no change of size
+			if w.Canvas().Size() != fyne.NewSize(to.w, to.h) {
+				t.Fatalf("control: the canvas is %v, not the same %vx%v", w.Canvas().Size(), to.w, to.h)
+			}
+			for _, p := range underASideInset(to, sheetParts(popup)) {
+				t.Errorf("after the turn the composer draws %s, under a side inset (the safe area runs from x %.0f to %.0f)",
+					p, to.left, to.w-to.right)
+			}
+			if card := partsSpan(sheetParts(popup)); card.x0 != to.left+pad/2 || card.x1 != to.w-to.right-pad/2 {
+				t.Errorf("after the turn the card spans x %.1f..%.1f, want the new safe area less the card's margin, %.1f..%.1f",
+					card.x0, card.x1, to.left+pad/2, to.w-to.right-pad/2)
+			}
+			if len(*frames) == 0 {
+				t.Fatal("control: the native field was never given a frame")
+			}
+			if f := (*frames)[len(*frames)-1]; f.pos.X < to.left || f.pos.X+f.sz.Width > to.w-to.right {
+				t.Errorf("after the turn the native field is parked at x %.1f..%.1f, under a side inset", f.pos.X, f.pos.X+f.sz.Width)
+			}
+			if box := sheetBoxOn(t, popup); box.x0 != 0 || box.x1 != to.w {
+				t.Errorf("after the turn the box spans x %.1f..%.1f; want the canvas, 0..%.0f", box.x0, box.x1, to.w)
+			}
+		})
+	}
+}
