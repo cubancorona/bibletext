@@ -11,10 +11,10 @@ package bibletext
 // Until the sheet has the share, it can still fail: a step Windows refuses,
 // a sheet that never asks, a package that will not fill. shareSession is the
 // share across that gap, and it ends once — delivered to the sheet, or in
-// the verb's fallback, the in-app confirmation sheet
-// (share_sheet_desktop.go) — so a share the reader started never ends in
-// silence. A reader who cancels the system sheet has made a choice, as on
-// macOS, iOS and Android, and is shown nothing more.
+// the verb's fallback, the in-app confirmation sheet (share_sheet_desktop.go),
+// which opens for any share but a picture it has nothing true to say of
+// (fallbackShareImage). A reader who cancels the system sheet has made a
+// choice, as on macOS, iOS and Android, and is shown nothing more.
 //
 // Ending and letting go are separate. What the share holds — the sheet's
 // handler and the package's parts — is freed as it ends, except when the

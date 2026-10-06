@@ -322,9 +322,13 @@ place a fix on one does not reach the others.
     A card that cannot be read at the tap, gone from the temp folder
     between the preview and the tap, is neither saved nor shown and opens
     no sheet; why is logged, `share_fallback.go:74`
-    (`fyne.LogError("the shared picture's card could not be read`). That
-    is a divergence: iOS and Android say "Could not share the card." on the
-    same case, and the Mac hands its share picker the missing file's
+    (`fyne.LogError("the shared picture's card could not be read`). The
+    Windows fallback ends the same way (28): when the copy made at the tap
+    for its Share sheet cannot read the card, `share_windows.go:410`
+    (`if pic.err != nil {`), the share falls back with the renderer's
+    file, which cannot be read either (by the code; not seen on Windows).
+    That is a divergence: iOS and Android say "Could not share the card."
+    on the same case, and the Mac hands its share picker the missing file's
     address (not seen); the desktop's line for a share that cannot finish
     is still to be worded (`docs/ROADMAP.md`, Later minor releases, row 2).
 
@@ -384,12 +388,14 @@ place a fix on one does not reach the others.
     IAgileObject before accepting it. Every step that fails, and a sheet
     that has not asked within `share_session.go:46`
     (`const shareSessionWait = 5 * time.Second`), ends the share in its
-    fallback, once, `share_session.go:232` (`s.fallback()`); a reader's
-    cancel is a choice, as on the other platforms, and opens nothing. A
-    sheet asked to open, `share_windows.go:287` (`s.sheetOpening()`), does
-    not know when the app stops waiting, so its handler stays registered
-    after that fallback for a sheet that asks late, which then still gets
-    the share, until it asks, a newer share starts or
+    fallback, once, `share_session.go:232` (`s.fallback()`), which for a
+    picture whose card could not be read at the tap opens no sheet and logs
+    why (27); a reader's cancel is a choice, as on the other platforms, and
+    opens nothing. A sheet asked to open, `share_windows.go:287`
+    (`s.sheetOpening()`), does not know when the app stops waiting, so its
+    handler stays registered after that fallback for a sheet that asks
+    late, which then still gets the share, until it asks, a newer share
+    starts or
     `share_session.go:54` (`const shareSheetKeep = 30 * time.Second`)
     runs out, the time Chromium gives the same sheet. The unpackaged
     download and the MSIX run the same code, although Microsoft's pages
@@ -572,7 +578,7 @@ and again as a packaged app on 1 October 2026; neither is in a release yet.
 | macOS | Share picker at the selection; the note card appears beneath | Share picker at the selection | Share picker at the selection | Preview, then the share picker with the image | Probably the share picker, anchored to the hidden reading view, not the icon; not seen | `reading_macos.go` | `builds` — code reading, 29–30 September 2026 |
 | Android | The note card, then the "Sharing text" sheet with the note, citation and link | "Sharing text" sheet with the quote and citation | "Sharing text" sheet with the link | Preview, then the "Sharing image" sheet | "Sharing text" sheet, by the citation's route; not driven | `reading_android.go` | `runner` — emulator, 1.2.17, 29–30 September 2026 |
 | Windows | The Windows Share sheet over the window, headed "Share link", with the citation, the link carrying the note, a QR-code button and a link button with no label (Copy link, by its icon), which shows a check when pressed; the new note card on the page beneath. By the code the note, the citation and the link go to the chosen app as text, and the link as a web link too; not seen (28) | The Windows Share sheet over the window, headed "Share", listing the apps to share to, with no title, preview or Copy on Windows 11. By the code the quote and its citation go to the chosen app as text; not seen (28) | The Windows Share sheet over the window, headed "Share link", with the citation, the link, a QR-code button and a link button with no label (Copy link, by its icon) (28) | Preview, then the Windows Share sheet over the window with the card as a file named "BibleText verse <date> <time>.png" in local time, shown in place of a title, with its thumbnail, its size and a size picker, Edit, and a copy button with no label (28) | The Windows Share sheet, as for Share with citation (28) | `share_windows.go` | `hardware` — arm64 VM, Windows 11 build 26200, the Store package workflow's arm64 package: its executable run unpackaged, 30 September 2026, and the package registered with package identity, 1 October 2026 (the proof note below) |
-| Linux | Copied; the "Copied — ready to paste" sheet over the new note card, with Email…, Copy again and Done (27) | Copied; the "Copied — ready to paste" sheet (27) | Copied; the "Copied — ready to paste" sheet (27) | Saved to the reader's Downloads folder, the XDG download directory under whatever name it has, inside the snap the one in the reader's own home (with none, in that home); the file manager shows it, through the desktop portal inside the snap; the "Picture saved" sheet, saying the file manager shows it only when the file manager said so, and Downloads only of a folder called Downloads, and not opening for a picture no folder took that the file manager did not show, or for a card that could not be read at the tap, with Email… attaching the file only where a mail client, not a browser, handles mailto:, and never in the snap (27) | Copied; the "Copied — ready to paste" sheet over the card (27) | `share_other.go`, handing on to `share_fallback.go` | `hardware` — arm64 VM, X11, 30 September 2026; Share as image in the snap, 1 October 2026 |
+| Linux | Copied; the "Copied — ready to paste" sheet over the new note card, with Email…, Copy again and Done (27) | Copied; the "Copied — ready to paste" sheet (27) | Copied; the "Copied — ready to paste" sheet (27) | Saved to the reader's Downloads folder, the XDG download directory under whatever name it has, inside the snap the one in the reader's own home (with none, in that home); the file manager shows it, through the desktop portal inside the snap; the "Picture saved" sheet, saying the file manager shows it only when the file manager said so, and Downloads only of a folder called Downloads, and not opening for a picture no folder took that the file manager did not show, or for a card that could not be read at the tap, with Email… attaching the file only where a mail client, not a browser, handles mailto:, and never in the snap (27) | Copied; the "Copied — ready to paste" sheet over the card (27) | `share_other.go`, handing on to `share_fallback.go` | `hardware` — arm64 VM, X11, 30 September 2026; Share as image in the snap, 1 October 2026; a card that could not be read at the tap, development builds before and after the fix, 6 October 2026 |
 
 What each proof rests on:
 
@@ -635,7 +641,15 @@ What each proof rests on:
   named pipe), the window kept answering in the snap and unconfined, where
   the build before the save left the UI goroutine was reported not
   responding (`docs/BACKLOG.md`, the Linux and Windows share-sheet entry).
-  A mail client's compose has not
+  On 6 October 2026, with development builds of the tree before and after
+  1.2.20's fix for a card that cannot be read at the tap, the image preview
+  opened at launch (`BIBLETEXT_DEV_OPEN=share-image`) and its card deleted
+  before Share was pressed: the build before opened Files on the empty temp
+  folder under a sheet saying the picture was shown in the file manager;
+  the build after opened nothing and logged why; and with the card left in
+  place it saved the picture in Downloads, showed it, and said so
+  (divergence 27, and `docs/BACKLOG.md`, the entry on a card it could not
+  read). A mail client's compose has not
   been seen. The row moves to the shipped artefact with the release that
   carries it. Not Wayland.
 - **Android, `runner`.** The 1.2.17 build on the emulator. A simulator is not
