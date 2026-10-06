@@ -36,12 +36,15 @@ package main
 //
 //   - TestNoteVectorCorpusAgainstGoMirrorOfReaderJS walks the corpus through
 //     the mirror whatever runtimes the machine has.
-//   - TestGoMirrorOfReaderJSAgreesWithNode, wherever node is on PATH (every CI
-//     runner has it), decodes the corpus, hand-built boundary payloads and
-//     seeded mutations of the corpus with both the shipped span and the
-//     mirror, and requires the same outcome and text from each. The corpus
-//     pins only what it has lines for; the probes also reach the rules it
-//     has no line for. It needs node rather than JavaScriptCore because the
+//   - TestGoMirrorOfReaderJSAgreesWithNode, wherever node is on PATH, decodes
+//     the corpus, hand-built boundary payloads and seeded mutations of the
+//     corpus with both the shipped span and the mirror, and requires the same
+//     outcome and text from each. The corpus pins only what it has lines for;
+//     the probes also reach the rules it has no line for, and every bound in
+//     the span from both sides. Without node it skips, except in CI, where it
+//     fails: it is the only guard most of the mirror's rules have, and a
+//     runner image that stopped shipping node would otherwise drop it
+//     without a sign. It needs node rather than JavaScriptCore because the
 //     JavaScriptCore path's atob is a polyfill, and the mirror follows the
 //     browser's atob.
 
@@ -891,11 +894,15 @@ func TestReaderJSCarriesTheTwoMessagesAndStrictUTF8(t *testing.T) {
 // both do; this says the mirror does what the page does, including where the
 // corpus has no line, so a rule added to the span without its twin in the
 // mirror fails here wherever node is installed, not only on a machine with no
-// JS runtime. A new rule that none of the probes reaches needs a probe added
-// to mirrorProbes in the same change.
+// JS runtime. A new rule that none of the probes reaches, or a new bound,
+// needs probes added to mirrorProbes in the same change, on both sides of a
+// bound: a mirror whose bound is one off agrees with node everywhere else.
 func TestGoMirrorOfReaderJSAgreesWithNode(t *testing.T) {
 	node, err := exec.LookPath("node")
 	if err != nil {
+		if os.Getenv("CI") != "" {
+			t.Fatalf("node not on PATH in CI, so the Go mirror of reader.js is held only to the corpus: %v", err)
+		}
 		t.Skip("node not on PATH; TestNoteVectorCorpusAgainstGoMirrorOfReaderJS still holds the mirror to the corpus")
 	}
 	probes := mirrorProbes(t)
@@ -1073,6 +1080,109 @@ func mirrorProbes(t *testing.T) []string {
 		dyn(full, []int{1}, clShort), // incomplete code-length table
 	)
 
+	// Every bound in the span, from both sides. A mirror whose bound is one
+	// off agrees with node on everything else, so neither the corpus nor the
+	// seeded mutations below reach these. They are added, not seeded, so the
+	// mutations stay as they were.
+	//
+	// HLIT and HDIST at the most codes the span allows (286 literal/length,
+	// 30 distance) and at the two counts above each that the 5-bit header
+	// fields can still express.
+	for _, n := range []int{286, 287, 288} {
+		add(dyn(append(append([]int(nil), full...), make([]int, n-len(full))...), []int{1}, cl))
+	}
+	for _, n := range []int{30, 31, 32} {
+		d := make([]int, n)
+		d[0], d[1] = 1, 1
+		add(dyn(full, d, cl))
+	}
+	// A repeat code that ends exactly where the code lengths do, and one that
+	// runs one length past them.
+	clRun := lens(19, map[int]int{0: 2, 1: 2, 2: 2, 17: 2})
+	add(enc(append([]byte{'z'}, dynamicBlockRun("hi", full, []int{1, 1, 0, 0, 0}, clRun, len(full)+2, 3)...)),
+		enc(append([]byte{'z'}, dynamicBlockRun("hi", full, []int{1, 1, 0, 0}, clRun, len(full)+2, 3)...)))
+
+	// Fixed-code blocks: a back-reference to exactly the first byte out and
+	// to one byte before it, length symbol 285 (258 bytes, the longest), and
+	// symbols 286 and 287, which the fixed code has codes for and RFC 1951
+	// does not use.
+	for _, block := range [][]byte{
+		fixedBlock("hi"),
+		fixedBlock("ab", [2]int{257, 2}),
+		fixedBlock("ab", [2]int{257, 3}),
+		fixedBlock("a", [2]int{257, 1}),
+		fixedBlock("", [2]int{257, 1}),
+		fixedBlock("a", [2]int{285, 1}),
+		fixedBlock("a", [2]int{286, 1}),
+		fixedBlock("a", [2]int{287, 1}),
+	} {
+		add(enc(append([]byte{'z'}, block...)))
+	}
+
+	// The inflate caps: a 'z' note may inflate to 1121 bytes and a 'd' record
+	// stream to 4096, and one byte more is damaged. A stored block reaches a
+	// cap on a literal byte, a compressed one inside a back-reference.
+	for _, level := range []int{flate.NoCompression, flate.BestCompression} {
+		for _, n := range []int{1120, 1121, 1122} {
+			add(enc(append([]byte{'z'}, deflateProbe(t, bytes.Repeat([]byte{'a'}, n), level)...)))
+		}
+		for _, n := range []int{4092, 4093, 4094} { // a stream of 4095, 4096 and 4097 bytes
+			rec := append([]byte{'t'}, binaryUvarint(uint64(n))...)
+			rec = append(rec, bytes.Repeat([]byte{'a'}, n)...)
+			add(enc(append([]byte{'d'}, deflateProbe(t, rec, level)...)))
+		}
+	}
+
+	// A ten-byte uvarint, the longest binary.Uvarint reads, whose last byte
+	// may be only 0 or 1, as the length of a lowercase and an uppercase record
+	// in front of a 't' record: zero, longer than the stream, or an overflow.
+	// And eleven bytes, which have no last byte within the ten.
+	for _, tag := range []byte{'x', 'A'} {
+		for _, last := range []byte{0, 1, 2, 3, 0x7f} {
+			rec := append([]byte{'r', tag}, bytes.Repeat([]byte{0x80}, 9)...)
+			add(enc(append(rec, last, 't', 2, 'h', 'i')))
+		}
+		rec := append([]byte{'r', tag}, bytes.Repeat([]byte{0x80}, 10)...)
+		add(enc(append(rec, 0, 't', 2, 'h', 'i')))
+	}
+
+	// Record tags either side of the uppercase range and of the stop byte,
+	// each in front of a 't' record; a uvarint that ends on the stream's last
+	// byte; and byte 0 either side of the uppercase range.
+	for _, tag := range []byte{'@', 'A', 'Z', '[', 0xfe, 0xff} {
+		add(enc([]byte{'r', tag, 0, 't', 2, 'h', 'i'}))
+	}
+	add(enc([]byte{'r', 't', 2, 'h', 'i', 'x', 0}))
+	for _, b0 := range []byte{'@', 'A', 'Z', '['} {
+		add(enc([]byte{b0, 't', 2, 'h', 'i'}))
+	}
+
+	// cleanNote's character classes at each end, between two letters so that
+	// a character kept and a character dropped make different notes, and
+	// runs of newlines either side of the three it shortens to two.
+	for _, r := range []rune{0x00, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x1f, 0x20,
+		0x7e, 0x7f, 0x9f, 0xa0, 0x200d, 0x200e, 0x200f, 0x2010, 0x2029, 0x202a, 0x202e,
+		0x202f, 0x2065, 0x2066, 0x2069, 0x206a, 0xfefe, 0xfeff, 0xff00, 0xfffc, 0xfffd, 0xfffe} {
+		add(enc([]byte("pa" + string(r) + "b")))
+	}
+	for n := 1; n <= 5; n++ {
+		add(enc([]byte("pa" + strings.Repeat("\n", n) + "b")))
+	}
+
+	// atob's failure on one character over a whole group, which only interior
+	// white space reaches: the JS pads by a length that still counts the white
+	// space, so three such characters leave the payload unpadded, and atob,
+	// once it has removed them, has one character too many.
+	add("cGFi   Y", "c G F iY", "cGFiYWJj\t \nY")
+
+	// Payloads a differential fuzz of the mirror against node turned up, one
+	// for each of ten rules above that the earlier probes missed, kept as
+	// found.
+	add("UuRjr0x\n 0\fK", "cGEKCgpi", "cMKf", "ZCoAwf", "ekocKw", "ckGAgICAgICAgIAC",
+		"ejq8chSOwlE4CmkBDy2oAgQAAP__", "ZOzAAQkAAAgDsChmFMwv73G2-1kAAACgXAIAAP__",
+		"evXAK27AMAwA0ABLFwjKRayjBCfnCAgKD80JynOCgOgKEc4ZeoAoMB8p1SeSS55SioT_uexkoL5bKDXZ6pqtEN",
+		"es3-OY4gMBDYAH5Mv6gXVFaFO6lcQf2hcKnwpfpBBYVCfaP0DgJ8BBEQdS_x1wI")
+
 	// Seeded mutations: of the decoded bytes (so they land inside DEFLATE
 	// headers, Huffman data and record framing), and of the spelling.
 	rng := rand.New(rand.NewPCG(0x6e6f7465, 0x6d6972726f72))
@@ -1190,6 +1300,42 @@ func canonicalCodes(lengths []int) []uint64 {
 	return codes
 }
 
+// fixedBlock is one final DEFLATE block of type 1 (RFC 1951, 3.2.6): each
+// byte of lits as a literal, then each ref as a literal/length symbol ref[0]
+// and the distance code for distance ref[1], then end-of-block. Only the
+// symbols whose lengths carry no extra bits (257 to 264, lengths 3 to 10, and
+// 285, length 258) and distances 1 to 4, which carry none either, are sent
+// as meant; symbols 286 and 287, which name no length, are sent all the same,
+// with a distance code after them.
+func fixedBlock(lits string, refs ...[2]int) []byte {
+	lens := make([]int, 288)
+	for i := range lens {
+		switch {
+		case i < 144:
+			lens[i] = 8
+		case i < 256:
+			lens[i] = 9
+		case i < 280:
+			lens[i] = 7
+		default:
+			lens[i] = 8
+		}
+	}
+	codes := canonicalCodes(lens)
+	w := &deflateBits{}
+	w.field(1, 1) // BFINAL
+	w.field(1, 2) // BTYPE: fixed Huffman codes
+	for i := 0; i < len(lits); i++ {
+		w.code(codes[lits[i]], lens[lits[i]])
+	}
+	for _, ref := range refs {
+		w.code(codes[ref[0]], lens[ref[0]])
+		w.code(uint64(ref[1]-1), 5)
+	}
+	w.code(codes[256], lens[256])
+	return w.bytes()
+}
+
 // dynamicBlock is one final DEFLATE block of type 2 holding text as
 // literals, under the given code lengths for the literal/length alphabet
 // (litLens, 257 or more entries), the distance alphabet (distLens) and the
@@ -1197,6 +1343,14 @@ func canonicalCodes(lengths []int) []uint64 {
 // sent as itself, never as a repeat, so clLens needs a code for each length
 // used.
 func dynamicBlock(text string, litLens, distLens, clLens []int) []byte {
+	return dynamicBlockRun(text, litLens, distLens, clLens, len(litLens)+len(distLens), 0)
+}
+
+// dynamicBlockRun is dynamicBlock with only the first sent code lengths sent
+// one by one, followed, when run is not zero, by one repeat-zero code (17)
+// for run more zero lengths, 3 to 10 of them, which may end where the
+// header's two counts end or past it. clLens needs a code for 17 then.
+func dynamicBlockRun(text string, litLens, distLens, clLens []int, sent, run int) []byte {
 	order := [19]int{16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15}
 	w := &deflateBits{}
 	w.field(1, 1) // BFINAL
@@ -1208,8 +1362,12 @@ func dynamicBlock(text string, litLens, distLens, clLens []int) []byte {
 		w.field(uint64(clLens[sym]), 3)
 	}
 	clCodes := canonicalCodes(clLens)
-	for _, l := range append(append([]int(nil), litLens...), distLens...) {
+	for _, l := range append(append([]int(nil), litLens...), distLens...)[:sent] {
 		w.code(clCodes[l], clLens[l])
+	}
+	if run > 0 {
+		w.code(clCodes[17], clLens[17])
+		w.field(uint64(run-3), 3)
 	}
 	litCodes := canonicalCodes(litLens)
 	for i := 0; i < len(text); i++ {
