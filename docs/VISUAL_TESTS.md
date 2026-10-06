@@ -90,9 +90,10 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       the pill rises half the separator above its band top). Under a
       section heading or a psalm title the separator is the heading's tail
       or the title's gap, on every layout including the reporter ones, and
-      the pill centres in that (the `headnote` fixture, minimized) — except
-      Android's compact page, whose import has no separator line to measure
-      and stands the pill down there (docs/BACKLOG.md). On
+      the pill centres in that (the `headnote` fixture, minimized), Android's
+      compact page included, where the bridge reads the heading's tail off
+      its span (fixed 6 October 2026; before, the pill stood down there, 7px
+      high). On
       reporter layouts (iPad/macOS/wide) a pill under a plain paragraph has
       not moved: GapAbove into the band as always. The OPEN card never
       centres — its tail stays the pinned 10 above the passage.

@@ -2587,8 +2587,9 @@ What the spec work left, each one a known difference rather than a guess:
   sets the column about half the rail's width left of the pane's centre.
   Centring on the window only when the pane spans it less the system insets
   would give both.
-- **A note pill under a heading on Android's book page** sits 7px higher than
-  on the phone page (the entry below).
+- **A note pill under a heading on Android's book page — FIXED 6 October
+  2026.** It sat 7px higher than on the phone page (the entry below, which
+  has the fix).
 - **Android sets a Psalm title's word gaps 28 units narrower than its space.**
   From API 35 a title is set ragged there as everywhere, since 1.2.19, by the
   swap that sets a heading ragged: its spaces are four-per-em spaces in the
@@ -3867,9 +3868,10 @@ first, then Android after the Play closed-testing review clears — see the
 rework's proposal for the design (calendar triggers carrying the full date,
 re-issued on foreground, the passage computed with the fixed day key).
 
-## Android's compact page: a pill under a heading stands down
+## Android's compact page: a pill under a heading stands down — FIXED 6 October 2026
 
-Planned for: 1.2.20 — see docs/ROADMAP.md.
+Fixed for 1.2.20, with the psalm title's gap on the same page (the end of
+this entry).
 
 The one surface left out of the pill rule (below). On Android's compact page
 — the book page, which since 24 September 2026 is any pane wide enough for it:
@@ -3882,9 +3884,39 @@ heading-to-verse distance is the phone page's to the pixel (166px), and the
 pill sits 7px higher inside it. Centring there needs the ascent-mode air read
 back off the span rather than off a line. (Until 24 September the compact
 page drew no heading air at all — the bridge read any blank line as the phone
-page, and the compact import has two — so there was no air to centre in. A
-psalm title's gap is a blank line on this page too, written by the dialect's
-`<br>`, and takes `TITLE_GAP_EM` there.)
+page — so there was no air to centre in.)
+
+CORRECTED 6 October 2026: this entry said a psalm title's gap was a blank
+line on this page too, written by the dialect's `<br>`. It was not. The
+importer ends a block by adding newlines only until the text ends in as many
+as the mode asks for (`HtmlToSpannedConverter.appendNewlines`), one in
+COMPACT, and counts a `<br>`'s newline among them, so the one `<br>` before
+the title's `</p>` was the block's own end and nothing more: on the book
+page the title sat on verse 1 with no gap at all (the API 35 and API 33
+emulators, WEB Psalm 102, a phone held sideways).
+
+**FIXED 6 October 2026** (for 1.2.20), both halves.
+
+- The title's gap. The book page's title writes two line breaks
+  (`android_chapter_html.go`), so its text is the title, a blank line and
+  verse 1, as on the phone page, and the bridge sets that line to
+  `TITLE_GAP_EM` on both pages. On both emulators the title now stands the
+  title gap above verse 1 on the book page. `TestAndroidPsalmTitleKeepsItsGapOnTheBookPage`
+  (`android_compact_page_air_test.go`) holds it through a model of the
+  importer's newline rule, which `TestTheAndroidImportModelMatchesTheEmulator`
+  holds to what the emulator drew before the change.
+- The pill. `btPillStackInkTop` reads the air off the span where there is no
+  separator line: when the noted paragraph's first character carries ascent
+  air (`airInAscentAt`), the stack centres between the line above it, the
+  heading's last, and the noted line, as it centres across a separator on
+  the phone page; between two of the book page's plain paragraphs, which
+  meet with no air, it still stands down. Measured under "Jesus Comforts
+  Martha and Mary" from the heading's baseline to the next cap line: on the
+  API 35 emulator held sideways, 52 above the pill and 65 below before,
+  59 and 58 after, against the phone page's 59 and 59; on the API 33
+  emulator held sideways, 34 and 43 before, 38 and 39 after.
+  `TestAndroidPillCentresUnderAHeadingOnTheBookPage` holds the bridge to it,
+  with controls.
 
 ## A collapsed note pill directly under a section heading — DONE 12 Sep 2026
 

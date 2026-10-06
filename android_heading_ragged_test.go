@@ -173,7 +173,7 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 		withReporterLayout(book, func() { html = buildChapterHTMLAndroid(st, st.Bible.GetChapter("Psalms", 150)) })
 		want := "<p><i>A fixture title that runs on.</i></p>"
 		if book {
-			want = "<p><i>A fixture title that runs on.</i><br></p>"
+			want = "<p><i>A fixture title that runs on.</i><br><br></p>"
 		}
 		if !strings.HasPrefix(html, want) {
 			t.Errorf("the Psalm title must open the chapter as %q (book page %v), the first paragraph "+

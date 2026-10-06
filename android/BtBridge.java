@@ -2179,21 +2179,54 @@ public final class BtBridge {
     // line is the one whose text is only the newline, i.e. the line STARTS at
     // the span's own character. Returns -1 to stand down; the caller keeps
     // the band-top arithmetic.
+    //
+    // THE COMPACT PAGE HAS NO SEPARATOR LINE. Its paragraphs meet with no
+    // blank line between them, so the air a heading leaves under itself, its
+    // tail, is reserved in the ascent of the next paragraph's first line
+    // instead (an AirSpan that is not exact, applyParagraphAir), and the line
+    // before the noted paragraph is the heading's own last ink line. Read
+    // off a line, that looked like a poem's '\n' and stood the pill down,
+    // which left it at the band's top: 7px higher in the heading's gap than
+    // on the phone page, over the same distance from the heading to the
+    // verse. So the air is read back off the span: where the noted
+    // paragraph's first character carries ascent air, the stack centres
+    // between the line above, the heading's last, and the noted line, as it
+    // centres across a separator line on the phone page. Where the compact
+    // page put no air, between two of its paragraphs, it stands down as
+    // before.
     private static int btPillStackInkTop(Layout lay, NoteBandSpan span, int ps,
                                          int stackH, int capH) {
         if (lay == null || span == null || !span.below || ps <= 0) return -1;
         int sl = lay.getLineForOffset(ps - 1);
-        if (lay.getLineStart(sl) != ps - 1) return -1; // an ink line: mid-poem, no separator
-        if (sl < 1) return -1;                          // nothing above the blank line
+        int above;
+        if (lay.getLineStart(sl) == ps - 1) {
+            if (sl < 1) return -1;                      // nothing above the blank line
+            above = sl - 1;                             // the line above the separator
+        } else if (airInAscentAt(ps)) {
+            above = sl;                                 // the compact page: the air is the noted line's
+        } else {
+            return -1;                                  // an ink line: mid-poem, or no air on the compact page
+        }
         // OPTICAL edges, not metric extremes: a text block's bottom edge is
         // its BASELINE (descenders are sparse; centring to baseline+descent
         // sat the pill low by half the descent), and its top edge is the cap
         // line.
-        float inkBottom = lay.getLineBaseline(sl - 1);
+        float inkBottom = lay.getLineBaseline(above);
         float inkTop = lay.getLineBaseline(lay.getLineForOffset(ps)) - capH;
         float gap = inkTop - inkBottom;
         if (gap <= stackH) return -1;
         return Math.round(inkBottom + (gap - stackH) / 2f);
+    }
+
+    // airInAscentAt reports whether the line starting at ps carries air in
+    // its ascent: an AirSpan of the compact page (not a separator line's
+    // exact height) whose character is ps. The spans applyParagraphAir set
+    // for the text on screen are the ones airSpans holds.
+    private static boolean airInAscentAt(int ps) {
+        for (AirSpan a : airSpans) {
+            if (!a.exact && a.at == ps && a.px > 0) return true;
+        }
+        return false;
     }
 
     private static void refreshNoteSticker() {
