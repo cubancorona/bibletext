@@ -3514,6 +3514,22 @@ the offsets the share pipeline matches on. A superscript digit or an em/en space
 in publisher text does the same. Wants a test that walks the shipped
 translations.
 
+**DONE 6 October 2026, for 1.2.20** (`outbound_text_walk_test.go`). The walk
+reads every verse, heading and Psalm title and reports each one
+`outboundText` would change, by reference and by kind: a bracketed number,
+a superscript digit, a no-break space, an em or en space, a small capital.
+It never quotes the text, since the NKJV is licensed.
+`TestTheEmbeddedGospelsPassThroughTheOutboundCleanerUnchanged` walks the
+embedded WEB Gospels in every run, CI included. Its control plants `[12]` in
+John 3:16 and a superscript digit in 3:17 of a copy and requires both
+reported. `TestEveryDownloadedTranslationPassesThroughTheOutboundCleanerUnchanged`
+walks each translation downloaded on the machine running the suite, through
+`realCachePath`, and skips where there is none, which is every CI runner.
+On the machine it was written on, the WEB (31,236 texts), the BSB (34,293)
+and the WEB Catholic (35,522) passed unchanged; no NKJV was downloaded there,
+so the licensed edition is still unwalked. The comment in `outbound_text.go`
+now points at the walk instead of saying the belief is untested.
+
 ### Also: committed test litter
 
 `zz_probe_refute_test.go` is tracked, from commit `a0f34302d`. It looks like a
@@ -3537,7 +3553,6 @@ logged what hostile anchor spellings parse to, is
 `TestAMalformedAnchorSpellingGivesNoRuns`: a malformed spelling gives no
 runs, a well-formed one a run per verse, and no run starts below verse 1 or
 ends before it starts.
-
 
 ## The web reader cannot render small capitals — DONE 2 October 2026, before it served an edition that uses them
 
