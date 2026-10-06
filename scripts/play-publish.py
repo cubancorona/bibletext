@@ -37,6 +37,12 @@ that user already has open, and a commit, or any change in the Play Console,
 ends every other edit for the app. An upload whose edit is ended that way
 says so (`EDIT_DELETED`). So uploads, promotions, `tracks`,
 `scripts/release-status.py` and `play/push-screenshots.py` run one at a time.
+
+A REVIEW IN PROGRESS IS NEVER RESTARTED. An upload and a promotion commit with
+`IN_REVIEW_QUERY`, so while anything else is in Play's review, a production
+release or a listing change, Play refuses the commit rather than cancel that
+review and send everything again. The edit is then discarded with nothing
+changed, and the same command is run again once the review clears.
 """
 import base64, copy, json, os, re, sys, time, urllib.parse, urllib.request
 from cryptography.hazmat.primitives import hashes, serialization
@@ -60,9 +66,13 @@ NOTES_CAP = 500
 # edits.commit's changesInReviewBehavior defaults to CANCEL_IN_REVIEW_AND_SUBMIT:
 # a commit made while other changes are in review cancels that review and sends
 # everything again. ERROR_IF_IN_REVIEW makes Play refuse the commit instead, so
-# a promotion never restarts the review of something else
+# neither an upload nor a promotion restarts the review of something else; the
+# command waits and is run again once that review clears
 # (play/push-screenshots.py commits the same way, and says more).
 IN_REVIEW_QUERY = "changesInReviewBehavior=ERROR_IF_IN_REVIEW"
+
+# The status call()'s exit text carries: "Play API <method> <url> -> HTTP <code>".
+HTTP_STATUS = re.compile(r"-> HTTP (\d{3})\b")
 
 # Play's answer, HTTP 400 FAILED_PRECONDITION, to a request on an edit that
 # another edit, a commit or a Play Console change has ended. On 2 October 2026
@@ -308,9 +318,25 @@ def upload(token, aab, track, status, notes, dry):
             call(f"{BASE}/edits/{eid}", token, "DELETE")
             print("  --dry-run: edit discarded, nothing changed on Play")
             return 0
-        _, done = call(f"{BASE}/edits/{eid}:commit", token, "POST")
     except SystemExit as stop:
         raise lost_edit(stop, "the upload was in flight", ", and the versionCode is still unused") from None
+    try:
+        _, done = call(f"{BASE}/edits/{eid}:commit?{IN_REVIEW_QUERY}", token, "POST")
+    except SystemExit as stop:
+        explained = lost_edit(stop, "the upload was in flight", ", and the versionCode is still unused")
+        if explained is not stop:
+            raise explained from None
+        message = str(stop.code)
+        status = HTTP_STATUS.search(message)
+        if status and 400 <= int(status.group(1)) < 500:
+            raise discarded(token, eid, (
+                f"{message}\n\nPlay refused the commit, so the bundle is not on '{track}' and "
+                f"versionCode {code} is still unused. A refusal over changes in review means "
+                "something else, a production release or a listing change, is still in Play's "
+                "review, and this upload waits rather than send that review back to the start: "
+                "once the Play Console's Publishing overview shows nothing in review, run the "
+                "same command again.")) from None
+        raise
     print(f"  committed edit {done.get('id', eid)}")
     return 0
 
@@ -371,7 +397,7 @@ def promote(token, source, version, build, rollout, dry):
         explained = lost_edit(stop, "the promotion was being committed", ", and production is unchanged")
         if explained is not stop:
             raise explained from None
-        status = re.search(r"-> HTTP (\d{3})\b", message)
+        status = HTTP_STATUS.search(message)
         if status and 400 <= int(status.group(1)) < 500:
             raise discarded(token, eid, (
                 f"{message}\n\nPlay refused the commit, so production is unchanged. A refusal "

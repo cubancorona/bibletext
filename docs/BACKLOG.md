@@ -323,9 +323,7 @@ The fix: refit when the safe area changes, not only the size — the
 composer's watch comparing the sheet area's position and width as well as
 `cnv.Size()` — and give Ask its refit and the same watch.
 
-## A Play upload's commit restarts a review in progress — found 2 October 2026
-
-Planned for: 1.2.20 — see docs/ROADMAP.md.
+## A Play upload's commit restarts a review in progress — FIXED 6 October 2026, for 1.2.20
 
 `scripts/play-publish.py upload` commits its edit with Play's default for
 changes in review (`upload()`, the `:commit` call with no query).
@@ -356,6 +354,24 @@ refusal can happen.
 progress instead of restarting it. The fix above goes in as its own change
 in 1.2.20, and stage 6 of `docs/RELEASING.md` is rewritten with it, not
 before.
+
+**The fix.** `play-publish.py upload` commits with `IN_REVIEW_QUERY`, as
+`promote` does. When Play refuses the commit with an HTTP 4xx, the upload
+keeps call()'s message whole and adds that the bundle is not on the track,
+that the versionCode is still unused, and that the same command is to be run
+again once the Publishing overview shows nothing in review. It then
+discards the edit. An edit Play has ended is still explained as an ended
+edit. A 5xx at the commit is left exactly as call() gave it, since Play may
+have taken that commit. Stage 6 of `docs/RELEASING.md` now says the upload
+waits, with the Publishing overview check as the reason a refusal can
+happen, and its "When a stage fails" row names the refused commit. Held by
+`play/test_play_publish.py`. The stand-in for Play models a review in
+progress: a commit without the query is taken and recorded as restarting
+that review, and one with it is refused. `UploadWhileInReview` checks that
+an upload made during a review restarts nothing and commits nothing, that
+the same command goes up once the review clears, and that a refusal for any
+other reason gets the same explanation and discard. `UploadNotes` pins the
+query on the commit. Four of these fail against the previous script.
 
 ## A Play status read during an upload deletes the upload's edit — FIXED 2 October 2026
 

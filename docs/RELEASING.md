@@ -312,16 +312,14 @@ production track, and production waits for the promotion in stage 7. The
 script refuses an option it does not know, such as `--dryrun`, before it
 reads the key, so a mistyped dry run never commits.
 
-**An upload's commit restarts a review already in progress.** It takes
-Play's default for changes in review, which cancels that review and sends
-everything again, so an upload committed while a production release or a
-listing change is still in Play's review sends that review back to the
-start. Before the real upload, check that the Play Console's Publishing
-overview shows nothing in review, or accept the restart. `promote` and
-`play/push-screenshots.py` ask Play to refuse instead (docs/BACKLOG.md, "A
-Play upload's commit restarts a review in progress"). Planned for 1.2.20: the
-upload waits for a review in progress instead of restarting it
-(docs/ROADMAP.md). Until that change lands, the check above is the procedure.
+**An upload waits for a review already in progress.** Its commit asks Play
+to refuse rather than cancel that review and send everything again, as
+`promote` and `play/push-screenshots.py` do, so an upload made while a
+production release or a listing change is still in Play's review is refused:
+the bundle is not on the track, the versionCode is still unused, and the edit
+is discarded. That is the reason to look at the Play Console's Publishing
+overview before the real upload: while it shows something in review, the
+upload will be refused. Once the review clears, run the same command again.
 
 **Play steps run one at a time.** Every Play command opens an edit as the one
 service account, and Play lets that account hold one open edit: a new edit
@@ -530,7 +528,7 @@ Re-running from the top is usually wrong. These steps are not idempotent:
 | step | re-running does | recovery |
 | --- | --- | --- |
 | `altool --upload-app` | rejects a duplicate build number | bump Build, rebuild |
-| `play-publish.py upload` | rejects a used versionCode once a run has committed; a run whose edit Play ended ("This Edit has been deleted") committed nothing | after a commit, bump Build and rebuild; after an ended edit, run the same command again on its own |
+| `play-publish.py upload` | rejects a used versionCode once a run has committed; a run whose edit Play ended ("This Edit has been deleted") committed nothing, and so did one whose commit Play refused over a review in progress | after a commit, bump Build and rebuild; after an ended edit, run the same command again on its own; after a refused commit, run it again once the review clears |
 | `play-publish.py promote` | refuses, printing what production holds, once production carries the versionCode, and while production holds a rollout still going out or a draft | a run stopped before its commit changed nothing and deleted its edit; one that reports the commit's outcome unknown may have committed, so run `play-publish.py tracks` on its own first; a commit refused over a review in progress runs again once the review clears; a rollout still going out is completed or halted in the Play Console, and a draft rolled out or discarded there, before a re-run (a halted rollout gives way to the promotion) |
 | `submit-version.py --submit` | 409 — already in review | remove from review in the console |
 | `push-screenshots.py --write` | leaves a set that holds the files, reorders one that holds them out of order, replaces the rest | re-run once a FAILED image or a refusal is understood |
