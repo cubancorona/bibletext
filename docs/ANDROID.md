@@ -45,11 +45,11 @@ differently on every phone): 21 dp em on a 28 dp pitch, the twin of the iOS
 lines in justified mode without ever drawing them justified — the breaker lets
 a line exceed the width by what its spaces could shrink, nothing shrinks them,
 and on API 33 every such line ran past the right edge while the rest stayed
-ragged (stock emulator; see `docs/BACKLOG.md`). Every release before Android
-15 (API 21 to 34) therefore reads ragged but whole; Android 15 justifies. The Study with AI popup is a
-palette-coloured Material list placed below the selection's line, or above it
-when the tab bar leaves no room (a `PopupMenu` on an anchor view shrank and
-scrolled against the bottom instead).
+ragged (stock emulator; see `docs/BACKLOG.md`). Every release before Android 15
+(API 21 to 34) therefore reads ragged but whole; Android 15 justifies. The
+Study with AI popup is a palette-coloured Material list placed below the
+selection's line, or above it when the tab bar leaves no room (a `PopupMenu` on
+an anchor view shrank and scrolled against the bottom instead).
 
 **Every reading paragraph is set left to right.** The reading `TextView` gives
 each paragraph the direction of its first strong character, and set the NKJV's
