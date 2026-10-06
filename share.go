@@ -630,6 +630,17 @@ func isWordRune(r rune) bool {
 // below still derives from the located position, so a trim that drops a verse
 // still drops it from the citation. The whole-corpus search remains as the
 // safety net for a span that somehow disagrees with the words.
+//
+// The region is wider than the drag: it runs from the start of the span's
+// first verse, and a drag can begin at that verse's last word or its full
+// stop. So the region is the last resort, not the first. A selection that
+// carries a verse number is placed where the number says, which is exact
+// (stripVerseMarkersAnchored), and once the selection is placed it is never
+// searched for again: each repair below only cuts it shorter, and the shorter
+// text's place follows from the cut. Searching again found the first copy of
+// the shorter words in the region, which for a drag begun on the full stop
+// ending verse N−1 was often a copy in N−1 itself — "When did we see you"
+// cited as Matthew 25:38 when the reader dragged into 25:39.
 func normalizeShareSelection(state *AppState, raw string, span selSpan) (text string, lo, hi, at int, ok bool) {
 	book, chapter := readerChapter(state)
 	return normalizeShareSelectionIn(state, book, chapter, raw, span)
@@ -674,7 +685,52 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 	// sends what the page shows (outbound_text.go) — and chapterProse is built
 	// in that same drawn form, so they locate.
 	out := sharedText(flat)
-	s := stripVerseMarkersProse(corpus, spans, out)
+
+	// A psalm's title is the publisher's, not a verse. The Apple and Android
+	// panes draw it in the same text as the verses, above verse 1, but their
+	// app verbs have been clamped to start at verse 1's number since the
+	// titles were first drawn (btIOSContentStart, hbScriptureSelection,
+	// BtBridge's contentStart): a selection inside the title gets Copy and
+	// Look Up alone, and one from the title into the psalm is cut at verse
+	// 1's number before it gets here. What does hand a title over is a page
+	// with no verse geometry, the Mac's plain-text fallback when the chapter
+	// fails to import (gMacContentStart is 0 there, and nothing has a span),
+	// and the dead legacy pane. For those, two drags are answered here,
+	// before anything is looked for among the verses' words, because the
+	// title's words, "his" or "son" or its full stop, are often in the psalm
+	// too and would be found there:
+	//
+	//   - a selection with no span that is the title or a piece of it,
+	//     perhaps on through a heading under it, is answered as a heading
+	//     selected on its own: verse 1, no quotation. With no span there is
+	//     no telling it from the same words selected in a verse, which are
+	//     answered the same way; with no span such words were only ever
+	//     found at their first copy;
+	//   - a drag from the title on into the psalm carries the title, or the
+	//     end of it, then verse 1's number. Confirmed by that number, the
+	//     title comes off, and what follows is the selection. Just the
+	//     number left is the title alone again.
+	//
+	// A heading between the title and verse 1 takes the heading repair below,
+	// which removes the title with it.
+	editorial := false // the selection carried a heading or a psalm title, now removed
+	if title, first, ok := chapterTitle(state, book, chapter); ok {
+		if !span.valid() {
+			if _, ok := afterTitle(flat, title); ok {
+				if v, ok := headingOnlySelectionVerse(state, book, chapter, flat, span); ok {
+					return "", v, v, -1, true
+				}
+			}
+		}
+		num := strconv.Itoa(first)
+		if t := trimLeadingHeading(out, title, num); t != out {
+			if t == num {
+				return "", first, first, -1, true
+			}
+			out, editorial = t, true
+		}
+	}
+	s, anchor := stripVerseMarkersAnchored(corpus, spans, out)
 	if s == "" || corpus == "" {
 		return "", 0, 0, -1, false
 	}
@@ -691,7 +747,16 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 			}
 		}
 	}
-	locate := func(s string) int {
+	// locate is the one search, for the selection before it is placed. anchor
+	// is where its verse number puts it (-1 for none), taken when the corpus
+	// has the selection there and the span, when there is one, agrees: a drag
+	// begun on the second digit of 29 arrives as "9 He said to", which the
+	// strip reads as verse 9's number when verse 9 opens with those words
+	// too, and the span, 29 to 29, is what says it is not.
+	locate := func(s string, anchor int) int {
+		if anchor >= 0 && (!haveRegion || (anchor >= rStart && anchor < rEnd)) && strings.HasPrefix(corpus[anchor:], s) {
+			return anchor
+		}
 		if haveRegion {
 			if i := strings.Index(corpus[rStart:rEnd], s); i >= 0 {
 				return rStart + i
@@ -710,7 +775,7 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 		validNum[strconv.Itoa(sp.verse)] = true
 	}
 	numbers := s
-	for locate(s) < 0 {
+	for locate(s, anchor) < 0 {
 		i := strings.LastIndexByte(strings.TrimSpace(s), ' ')
 		last := strings.TrimSpace(s)
 		if i >= 0 {
@@ -732,7 +797,7 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 		s = strings.TrimSpace(strings.TrimSpace(s)[:i])
 	}
 
-	idx := locate(s)
+	idx := locate(s, anchor)
 	if idx < 0 {
 		// A selection that will not locate may be carrying a publisher's
 		// heading, which is drawn between verses but is in no verse and so is
@@ -751,10 +816,23 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 		// corpus it searches is in that form, and a candidate rebuilt from
 		// the raw selection would still carry the gap mark or the superscript
 		// that made the first locate miss.
+		// What is left must be verse text: a verse number left on its own
+		// (the matter and the number of the verse it stands above, nothing
+		// after) is the page's apparatus, answered below, and is not looked
+		// for among the verses' words.
+		// A drag that ran on to the next verse's number ends with it, as the
+		// first pass found, and it comes off here the same way.
 		if h := stripHeadings(state, book, chapter, out); h != out {
-			if r := stripVerseMarkersProse(corpus, spans, h); r != "" {
-				if j := locate(r); j >= 0 {
-					s, idx = r, j
+			if r, a := stripVerseMarkersAnchored(corpus, spans, h); r != "" && !validNum[r] {
+				for locate(r, a) < 0 {
+					i := strings.LastIndexByte(r, ' ')
+					if i < 0 || !validNum[r[i+1:]] {
+						break
+					}
+					r = strings.TrimSpace(r[:i])
+				}
+				if j := locate(r, a); j >= 0 {
+					s, idx, editorial = r, j, true
 				}
 			}
 		}
@@ -775,36 +853,48 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 		return "", 0, 0, -1, false
 	}
 
+	// From here s is corpus[idx:idx+len(s)], and the repairs only cut it
+	// shorter: cutFront drops its first n bytes and the space after them,
+	// cutBack keeps its first n. Where the shorter text stands follows from
+	// the cut, so neither searches (see normalizeShareSelection).
+	cutFront := func(n int) {
+		rest := s[n:]
+		trimmed := strings.TrimLeftFunc(rest, unicode.IsSpace)
+		idx += n + len(rest) - len(trimmed)
+		s = strings.TrimRightFunc(trimmed, unicode.IsSpace)
+	}
+	cutBack := func(n int) {
+		s = strings.TrimRightFunc(s[:n], unicode.IsSpace)
+	}
+
 	// Mid-word END repair: if the character right after the selection is a
 	// word rune, the drag stopped inside a word — trim back to the last whole
-	// word (and re-drop a verse-number token left dangling by that trim).
+	// word. A verse number the drag ended on never gets this far: the
+	// marker strip took it with the start of its verse, or the loop above
+	// dropped it with nothing after it, and what is left is verse text.
 	for {
 		end := idx + len(s)
 		if end < len(corpus) {
 			if r, _ := utf8.DecodeRuneInString(corpus[end:]); isWordRune(r) {
 				cut := strings.LastIndexByte(s, ' ')
 				if cut <= 0 {
-					return "", 0, 0, -1, false // a single partial word — nothing left
-				}
-				s = strings.TrimSpace(s[:cut])
-				for {
-					j := strings.LastIndexByte(s, ' ')
-					last := s
-					if j >= 0 {
-						last = s[j+1:]
+					// A single partial word — nothing left. When it opens a
+					// verse whose heading or title the drag also took, the
+					// drag's only words were that editorial matter, which
+					// is answered as a heading selected on its own is: the
+					// verse it stands above, and no quotation. Anywhere
+					// else it is a fragment, and the caller's fallback
+					// shares it as one.
+					if editorial {
+						for _, sp := range spans {
+							if sp.start == idx {
+								return "", sp.verse, sp.verse, -1, true
+							}
+						}
 					}
-					if !validNum[last] || locate(s) >= 0 {
-						break
-					}
-					if j < 0 {
-						return "", 0, 0, -1, false
-					}
-					s = strings.TrimSpace(s[:j])
-				}
-				idx = locate(s)
-				if idx < 0 {
 					return "", 0, 0, -1, false
 				}
+				cutBack(cut)
 				continue
 			}
 		}
@@ -823,9 +913,8 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 		r, size := utf8.DecodeRuneInString(s)
 		if r == '.' || r == ',' || r == ';' || r == ':' || r == '!' || r == '?' ||
 			r == '…' || r == '—' || r == ')' || r == ']' || r == '”' || r == '’' {
-			s = strings.TrimSpace(s[size:])
-			idx = locate(s)
-			if idx < 0 || s == "" {
+			cutFront(size)
+			if s == "" {
 				return "", 0, 0, -1, false
 			}
 			continue
@@ -835,12 +924,8 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 	for s != "" {
 		r, size := utf8.DecodeLastRuneInString(s)
 		if r == ',' || r == ';' || r == ':' || r == '—' {
-			s = strings.TrimSpace(s[:len(s)-size])
+			cutBack(len(s) - size)
 			if s == "" {
-				return "", 0, 0, -1, false
-			}
-			idx = locate(s)
-			if idx < 0 {
 				return "", 0, 0, -1, false
 			}
 			continue
@@ -858,12 +943,8 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 		if cut < 0 {
 			return "", 0, 0, -1, false
 		}
-		s = strings.TrimSpace(s[cut+1:])
+		cutFront(cut + 1)
 		if s == "" {
-			return "", 0, 0, -1, false
-		}
-		idx = locate(s)
-		if idx < 0 {
 			return "", 0, 0, -1, false
 		}
 	}
@@ -1013,7 +1094,50 @@ func stripHeadings(state *AppState, book string, chapter int, s string) string {
 		s = trimTrailingHeading(s, text)
 		s = removeWholeHeadings(s, text, num)
 	}
+	// A psalm's title is editorial matter too. A page that hands it over
+	// (the Mac's plain-text fallback; the panes with verse geometry cut a
+	// selection at verse 1's number, see normalizeShareSelectionProse) has
+	// it above the chapter's first verse and any heading there, so a drag
+	// from it into the psalm carries the title, or the end of it, at its
+	// front. It is confirmed as a heading at the top of a chapter is, by the
+	// number of the verse it stands above, and it goes after the headings,
+	// which may stand between it and that number.
+	if title, first, ok := chapterTitle(state, book, chapter); ok {
+		s = trimLeadingHeading(s, title, strconv.Itoa(first))
+	}
 	return strings.TrimSpace(s)
+}
+
+// chapterTitle is the chapter's psalm title as the page draws it, and the
+// first verse the page draws, which the title stands above. ok is false for
+// a chapter without one.
+func chapterTitle(state *AppState, book string, chapter int) (title string, first int, ok bool) {
+	title = collapseSpaces(state.Bible.SuperscriptionFor(book, chapter).DrawnText())
+	if title == "" {
+		return "", 0, false
+	}
+	for _, v := range state.Bible.GetChapter(book, chapter) {
+		if collapseSpaces(v.Text) != "" {
+			return title, v.Verse, true
+		}
+	}
+	return "", 0, false
+}
+
+// afterTitle reports whether s opens with the psalm title, or a piece of
+// it, and what follows. A drag inside the title gives any piece of it; one
+// that runs on past it gives a piece that ends it, perhaps begun mid-word,
+// and then whatever the page draws next.
+func afterTitle(s, title string) (rest string, ok bool) {
+	if strings.Contains(title, s) {
+		return "", true
+	}
+	for i := len(s) - 1; i > 0; i-- {
+		if s[i] == ' ' && strings.HasSuffix(title, s[:i]) {
+			return strings.TrimSpace(s[i+1:]), true
+		}
+	}
+	return "", false
 }
 
 // headingOnlySelectionVerse reports the verse a selection belongs to when that
@@ -1054,6 +1178,19 @@ func headingOnlySelectionVerse(state *AppState, book string, chapter int, s stri
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return 0, false
+	}
+	// A psalm's title, or a piece of it, stands above the chapter's first
+	// verse as a heading at the top of a chapter does, and is answered the
+	// same way: the verse it stands above, by the same span test. A heading
+	// the publisher set under the title may follow it in the selection, and
+	// what follows the title is then checked as a heading below.
+	if title, first, ok := chapterTitle(state, book, chapter); ok && (!span.valid() || span.lo <= first) {
+		if rest, ok := afterTitle(s, title); ok {
+			if rest == "" || rest == strconv.Itoa(first) {
+				return first, true
+			}
+			s = rest
+		}
 	}
 	for _, h := range state.Bible.Headings[book][chapter] {
 		// As drawn, for the reason stripHeadings gives.
@@ -1221,6 +1358,20 @@ func stripVerseMarkers(state *AppState, book string, chapter int, s string) stri
 // collapseSpaces(verseSharedText(v)) — in chapter order, with the verses whose
 // body is empty left out, as the strip leaves them out.
 func stripVerseMarkersProse(corpus string, spans []verseSpan, s string) string {
+	s, _ = stripVerseMarkersAnchored(corpus, spans, s)
+	return s
+}
+
+// stripVerseMarkersAnchored is stripVerseMarkersProse that also says where its
+// result stands in the corpus, when the selection carries a verse number to
+// say so. A number the strip confirms is the page's own statement that its
+// verse's text begins at that point of the selection, so the result begins
+// that many bytes before the verse's start: at is that corpus offset, from
+// the number nearest the front, or -1 when no number was removed. It is a
+// claim for the caller to check against the corpus, not a promise: anything
+// in the selection that is not verse text, a heading say, makes it wrong.
+func stripVerseMarkersAnchored(corpus string, spans []verseSpan, s string) (out string, at int) {
+	pos, verseStart := -1, 0 // where in s the nearest-the-front number's verse begins
 	for _, sp := range spans {
 		body := corpus[sp.start:sp.end]
 		marker := strconv.Itoa(sp.verse) + " "
@@ -1238,13 +1389,26 @@ func stripVerseMarkersProse(corpus string, spans []verseSpan, s string) string {
 			}
 			if atBoundary && overlap > 0 && rest[:overlap] == body[:overlap] {
 				s = s[:i] + rest
+				// A number removed after the recorded one leaves it where
+				// it is; one removed before it is nearer the front.
+				if pos < 0 || i <= pos {
+					pos, verseStart = i, sp.start
+				}
 				from = i
 				continue
 			}
 			from = i + len(marker)
 		}
 	}
-	return strings.TrimSpace(s)
+	trimmed := strings.TrimLeftFunc(s, unicode.IsSpace)
+	if pos >= 0 {
+		pos -= len(s) - len(trimmed)
+	}
+	out = strings.TrimRightFunc(trimmed, unicode.IsSpace)
+	if pos < 0 || verseStart-pos < 0 {
+		return out, -1
+	}
+	return out, verseStart - pos
 }
 
 // verseRangeCitation renders "Book C:lo" / "Book C:lo–hi" (en dash per Bluebook).

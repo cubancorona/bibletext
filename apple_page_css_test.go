@@ -57,3 +57,33 @@ func TestAppleStylesheetCarriesTheReadingPage(t *testing.T) {
 		}
 	}
 }
+
+// A psalm's title is not hyphenated on the Apple panes, as it is not on the
+// web or the Windows and Linux pane: p.pst turns off, under both names, the
+// hyphenation the p rule turns on for the prose. On both pages, the phone's
+// and the book's. The control is the prose, which still hyphenates.
+func TestAppleTitleIsNotHyphenated(t *testing.T) {
+	verses := footnoteFixtureVerses()
+	st := superFixtureState(verses)
+	for _, book := range []bool{false, true} {
+		var html string
+		withReporterLayout(book, func() { html = buildChapterHTML(st, verses) })
+		css := html[:strings.Index(html, "<body>")]
+		rule := func(sel string) string {
+			m := regexp.MustCompile(`(?:^|})\s*` + regexp.QuoteMeta(sel) + ` \{[^}]*`).FindString(css)
+			if m == "" {
+				t.Fatalf("book=%v: no %s rule", book, sel)
+			}
+			return m
+		}
+		if p := rule("p"); !strings.Contains(p, "hyphens: auto;") || !strings.Contains(p, "-webkit-hyphens: auto;") {
+			t.Fatalf("book=%v: control: the prose is not hyphenated, so the title's rule proves nothing:\n%s", book, p)
+		}
+		pst := rule("p.pst")
+		for _, want := range []string{"\thyphens: none;", "-webkit-hyphens: none;"} {
+			if !strings.Contains(pst, want) {
+				t.Errorf("book=%v: the title's rule does not set %q, so it keeps the prose's hyphens:\n%s", book, strings.TrimSpace(want), pst)
+			}
+		}
+	}
+}
