@@ -690,6 +690,15 @@ func inWordAt(s string, i int) bool {
 // the shorter words in the region, which for a drag begun on the full stop
 // ending verse N−1 was often a copy in N−1 itself — "When did we see you"
 // cited as Matthew 25:38 when the reader dragged into 25:39.
+//
+// Since nothing searches again, the one search has to find the copy a drag
+// from word to word could have made: in the region, and then in the chapter,
+// it takes the first copy that splits no word (wordAlignedIndex) before the
+// first copy of any kind. Placed at the first copy of any kind, "the wicked"
+// stood inside "the wickedness", the end repair cut it to "the", and the
+// reader's last word was lost; with no span, the verse of that copy was cited
+// too. A copy that splits a word is still taken where there is no other, as a
+// drag begun or ended inside a word needs.
 func normalizeShareSelection(state *AppState, raw string, span selSpan) (text string, lo, hi, at int, ok bool) {
 	book, chapter := readerChapter(state)
 	return normalizeShareSelectionIn(state, book, chapter, raw, span)
@@ -852,15 +861,23 @@ func locateShareSelection(state *AppState, book string, chapter int, corpus stri
 	// has the selection there and the span, when there is one, agrees: a drag
 	// begun on the second digit of 29 arrives as "9 He said to", which the
 	// strip reads as verse 9's number when verse 9 opens with those words
-	// too, and the span, 29 to 29, is what says it is not.
+	// too, and the span, 29 to 29, is what says it is not. Without an anchor
+	// a copy that splits no word comes first, in the region and then in the
+	// chapter (see normalizeShareSelection).
 	locate := func(s string, anchor int) int {
 		if anchor >= 0 && (!haveRegion || (anchor >= rStart && anchor < rEnd)) && strings.HasPrefix(corpus[anchor:], s) {
 			return anchor
 		}
 		if haveRegion {
+			if i := wordAlignedIndex(corpus[rStart:rEnd], s); i >= 0 {
+				return rStart + i
+			}
 			if i := strings.Index(corpus[rStart:rEnd], s); i >= 0 {
 				return rStart + i
 			}
+		}
+		if i := wordAlignedIndex(corpus, s); i >= 0 {
+			return i
 		}
 		return strings.Index(corpus, s)
 	}
@@ -869,7 +886,7 @@ func locateShareSelection(state *AppState, book string, chapter int, corpus stri
 	// superscript marker) never appears in the prose corpus — drop it so the
 	// locate below can succeed. Verified against the chapter's real verse
 	// numbers (validNum) so a legitimate number inside verse text is never
-	// touched (that one locates fine WITH the number, so this branch is
+	// touched (that one locates fine with the number, so this branch is
 	// skipped).
 	numbers := s
 	for locate(s, anchor) < 0 {
