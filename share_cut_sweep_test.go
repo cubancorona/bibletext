@@ -421,3 +421,257 @@ func TestRaggedCutSweepPoetry(t *testing.T) {
 			fmt.Sprintf("Psalms 23 poetry end-cut@%d", e), raw)
 	}
 }
+
+// THE SPANNED SWEEP. The sweeps above hand the pipeline no span, which no
+// shipped pane does: the Apple and Android panes and the Windows and Linux
+// pane all report the verses a selection touches, read off the page by
+// position (selection_span.go). This one drags the way a reader does across
+// every verse boundary of all 89 chapters of the embedded WEB Gospels, with
+// the verse numbers in the selected text and the span the panes would
+// report, and asks of each drag the one question a citation must answer
+// right: are the verses it names the verses the shared words came from.
+//
+// The page is rebuilt as the panes draw it, "1 text 2 text …", and a drag's
+// span is what the panes compute: the verse whose number is the last at or
+// before the drag's first character, and the same for its last character
+// (btIOSVerseAtIndex, btMacVerseSpanForRange, BtBridge.verseAtOffset; the
+// styled pane's runs give the same answer). Three kinds of drag start at each
+// boundary between verse N−1 and verse N, and each runs on to the end of the
+// k-th word from the start of verse N:
+//
+//	punct  begins on a mark that ends verse N−1, its full stop or the closing
+//	       quotation marks with it. The span is honestly (N−1, …), the mark is
+//	       rightly dropped from the quotation, and the shared words are all
+//	       verse N's. k runs to 12;
+//	cross  begins on verse N−1's last word, so the shared words run across
+//	       the boundary. k runs to 3;
+//	number begins on verse N's own number, the control: the span starts at N,
+//	       and nothing is cut from the front. k runs to 3.
+//
+// The truth for a drag is where its shared words stand inside the drag: the
+// verses that stretch of the chapter overlaps. A shared text that does not
+// occur inside the drag at all is wrong whatever it cites.
+type spannedPage struct {
+	st       *AppState
+	corpus   string
+	spans    []verseSpan
+	page     string // the chapter as the panes draw it, numbers included
+	number   []int  // page offset of each verse's number, by index into spans
+	text     []int  // page offset of each verse's text
+	verseAt  []int  // per page offset: the verse whose number is last at or before it
+	toCorpus []int  // per page offset: the chapter-prose offset (a number maps to its verse's start)
+}
+
+func newSpannedPage(bd *BibleData, book string, chapter int) *spannedPage {
+	st := &AppState{Bible: bd, CurrentBook: book, CurrentChapter: chapter}
+	corpus, spans := chapterProse(st)
+	p := &spannedPage{st: st, corpus: corpus, spans: spans}
+	var b strings.Builder
+	for _, sp := range spans {
+		if b.Len() > 0 {
+			b.WriteByte(' ')
+		}
+		p.number = append(p.number, b.Len())
+		b.WriteString(strconv.Itoa(sp.verse))
+		b.WriteByte(' ')
+		p.text = append(p.text, b.Len())
+		b.WriteString(corpus[sp.start:sp.end])
+	}
+	p.page = b.String()
+	p.verseAt = make([]int, len(p.page)+1)
+	p.toCorpus = make([]int, len(p.page)+1)
+	vi := 0
+	for i := 0; i <= len(p.page); i++ {
+		for vi+1 < len(p.number) && p.number[vi+1] <= i {
+			vi++
+		}
+		p.verseAt[i] = spans[vi].verse
+		if i < p.text[vi] {
+			p.toCorpus[i] = spans[vi].start
+		} else {
+			p.toCorpus[i] = spans[vi].start + i - p.text[vi]
+		}
+	}
+	return p
+}
+
+// words is the page offset of the end of each space-delimited word of verse
+// text, in chapter order, and the index of each verse's first word.
+func (p *spannedPage) words() (ends []int, first []int) {
+	for vi, sp := range p.spans {
+		first = append(first, len(ends))
+		body := p.corpus[sp.start:sp.end]
+		for i := 0; i < len(body); {
+			j := strings.IndexByte(body[i:], ' ')
+			if j < 0 {
+				j = len(body) - i
+			}
+			if j > 0 {
+				ends = append(ends, p.text[vi]+i+j)
+			}
+			i += j + 1
+		}
+	}
+	return ends, first
+}
+
+// citeOf is the citation for the chapter-prose stretch [at, at+n).
+func (p *spannedPage) citeOf(at, n int) string {
+	lo, hi := 0, 0
+	for _, sp := range p.spans {
+		if sp.start < at+n && at < sp.end {
+			if lo == 0 {
+				lo = sp.verse
+			}
+			hi = sp.verse
+		}
+	}
+	return verseRangeCitation(p.st.CurrentBook, p.st.CurrentChapter, lo, hi)
+}
+
+// spannedDrag is one drag's outcome: whether its citation names the verses
+// its shared words came from, and the detail to print when it does not.
+type spannedDrag struct {
+	right  bool
+	detail string
+}
+
+func (p *spannedPage) drag(t *testing.T, from, to int) spannedDrag {
+	t.Helper()
+	raw := p.page[from:to]
+	span := selSpanFromNative(p.verseAt[from], p.verseAt[to-1])
+	text, cite, at, baseLen := prepareShareQuote(p.st, raw, span)
+	if text == "" {
+		t.Fatalf("%s %d: the drag %q span %+v shared nothing", p.st.CurrentBook, p.st.CurrentChapter, raw, span)
+	}
+	// The located words, without the terminal the completion may append.
+	body := strings.TrimRight(text, ".!?…")
+	if at >= 0 {
+		body = text[:baseLen]
+	}
+	lo, hi := p.toCorpus[from], p.toCorpus[to]
+	inDrag := p.corpus[lo:hi]
+	truth := ""
+	for i := 0; ; {
+		j := strings.Index(inDrag[i:], body)
+		if j < 0 {
+			break
+		}
+		c := p.citeOf(lo+i+j, len(body))
+		if truth != "" && c != truth {
+			t.Fatalf("%s %d: the shared words %q stand twice in the drag %q with different verses; the sweep cannot say which was meant",
+				p.st.CurrentBook, p.st.CurrentChapter, body, raw)
+		}
+		truth = c
+		i += j + 1
+	}
+	detail := fmt.Sprintf("%s %d: drag %q span %d–%d shared %q cited %s", p.st.CurrentBook, p.st.CurrentChapter,
+		raw, span.lo, span.hi, text, cite)
+	if truth == "" {
+		return spannedDrag{false, detail + ", words that are not in the drag"}
+	}
+	return spannedDrag{cite == truth, detail + ", want " + truth}
+}
+
+func TestSpannedBoundaryDragSweep(t *testing.T) {
+	bd, err := loadSeedGospels()
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	step := 1
+	if testing.Short() {
+		step = 7
+	}
+	type family struct {
+		name     string
+		maxWords int
+	}
+	families := []family{{"punct", 12}, {"cross", 3}, {"number", 3}}
+	drags := map[string][]int{}
+	wrong := map[string][]int{}
+	for _, f := range families {
+		drags[f.name] = make([]int, f.maxWords+1)
+		wrong[f.name] = make([]int, f.maxWords+1)
+	}
+	chapters, shown := 0, 0
+	for _, book := range bd.Books {
+		for _, ch := range bd.GetChapterNumbersForBook(book) {
+			chapters++
+			p := newSpannedPage(bd, book, ch)
+			ends, first := p.words()
+			for vi := 1; vi < len(p.spans); vi += step {
+				// The marks that end the verse before: the last characters
+				// before the space ahead of this verse's number, back to the
+				// first letter or digit.
+				var marks []int
+				for at := p.number[vi] - 1; at > 0; {
+					r, size := utf8.DecodeLastRuneInString(p.page[:at])
+					if isWordRune(r) || r == ' ' {
+						break
+					}
+					at -= size
+					marks = append(marks, at)
+				}
+				lastWord := ends[first[vi]-1] - 1
+				for lastWord > 0 && p.page[lastWord-1] != ' ' {
+					lastWord--
+				}
+				for _, f := range families {
+					var starts []int
+					switch f.name {
+					case "punct":
+						starts = marks
+					case "cross":
+						starts = []int{lastWord}
+					case "number":
+						starts = []int{p.number[vi]}
+					}
+					for k := 1; k <= f.maxWords && first[vi]+k-1 < len(ends); k++ {
+						for _, from := range starts {
+							d := p.drag(t, from, ends[first[vi]+k-1])
+							drags[f.name][k]++
+							if !d.right {
+								wrong[f.name][k]++
+								if shown < 5 {
+									shown++
+									t.Logf("%s", d.detail)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	if chapters != 89 {
+		t.Fatalf("swept %d chapters, want the 89 of the embedded Gospels", chapters)
+	}
+	total, totalWrong := 0, map[string]int{}
+	for _, f := range families {
+		var line []string
+		n := 0
+		for k := 1; k <= f.maxWords; k++ {
+			n += drags[f.name][k]
+			totalWrong[f.name] += wrong[f.name][k]
+			line = append(line, fmt.Sprintf("%d words %d/%d", k, wrong[f.name][k], drags[f.name][k]))
+		}
+		total += n
+		t.Logf("%s: %d of %d drags cite the wrong verses (%s)", f.name, totalWrong[f.name], n, strings.Join(line, ", "))
+	}
+	t.Logf("%d drags", total)
+
+	// The rates as they stand, held exactly so that any change shows. A drag
+	// that opens on the previous verse's punctuation is cited from an earlier
+	// copy of its words in 974 of 59,199 drags: one in seven at one word, 2.8%
+	// at two, none from ten. Five drags that begin on the previous verse's
+	// last word are located at an earlier copy of the same words that does
+	// not cross the boundary, and cite the one verse. Every drag that begins
+	// on the verse's number is right.
+	if testing.Short() {
+		return
+	}
+	if totalWrong["punct"] != 974 || totalWrong["cross"] != 5 || totalWrong["number"] != 0 {
+		t.Errorf("wrong citations: punct %d, cross %d, number %d; recorded 974, 5 and 0",
+			totalWrong["punct"], totalWrong["cross"], totalWrong["number"])
+	}
+}
