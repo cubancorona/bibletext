@@ -82,6 +82,7 @@ PROCESS_PATTERNS = (
         rb"|\bfound\s+by\s+(?:(?:an?|the)\s+)?(?:adversarial\s+)?(?:review|audit)\b"
         rb"|\badversarial\s+(?:review|audit)\b"
         rb"|\breview(?:[- ]driven|\s+(?:mutation|measured))\b"
+        rb"|\bfound\s+in\s+review\b|\bcorrected\s+after\s+review\b"
         rb"|\baudit\s+(?:offered|confirmed)\b"
         rb"|\bfootgun\s*\(\s*(?:review|audit)\s*\)"
     )),
@@ -181,6 +182,8 @@ PROCESS_POSITIVE_CASES = (
     ("internal task provenance", b"Implemented as task #42."),
     ("review-process narration", b"Found by adversarial review."),
     ("review-process narration", b"Review mutation M2 removed the guard."),
+    ("review-process narration", b"Found in review and fixed: the cut lost a word."),
+    ("review-process narration", b"**Corrected after review, 6 October 2026.**"),
     ("commit-process narration", b"The commit said the change was invisible."),
     ("test-discovery narration", b"Emulator-caught: the view jumped."),
     ("named-person process attribution", b"Alex (maintainer) wrote that the loop differs."),
@@ -214,6 +217,8 @@ PROCESS_NEGATIVE_CASES = (
     b"The audio session activates when playback starts.",
     b"A note's owner can delete it from the list.",
     b"After approval the release publishes automatically.",
+    b"The update goes live after review by the store.",
+    b"Play holds the production release in review.",
     b"The session category is set before the player starts.",
     b"noteFocus is which note is expanded this session, never persisted.",
     b"Loaded earlier this session, or an instant placeholder.",

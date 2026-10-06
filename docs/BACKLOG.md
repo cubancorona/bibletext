@@ -3681,7 +3681,7 @@ of the wider sweep's drags); the citation is the same, but the completion and
 the line-break restore read that copy's surroundings. The panes report the
 verse, not the place in it.
 
-**Corrected after review, 6 October 2026.** With nothing searched for again,
+**Corrected, 6 October 2026.** With nothing searched for again,
 the one search has to find the right copy, and it took the first copy of any
 kind. Where that copy stood inside a longer word, the end repair cut the
 selection back to the words before it: the WEB's "the wicked" in Psalm 7:9,
@@ -3810,7 +3810,7 @@ harness above as the before/after measure.
 
 ### 2. A Psalm superscription can be shared as scripture — DONE 6 October 2026, for 1.2.20; not reachable on the panes that draw it
 
-**Corrected after review, 6 October 2026.** The finding below was made in Go
+**Corrected, 6 October 2026.** The finding below was made in Go
 alone, and the panes it names never hand Go such a drag. Since the titles were
 first drawn (27 August 2026, `d2385d5d6`), the iPhone, iPad, Mac and Android
 panes start their app verbs at verse 1's number (`btIOSContentStart` in
@@ -3949,7 +3949,7 @@ only part of this change that is, and keep the existing rule that a heading
 is never quoted; they await the owner's word as part of 1.2.20, the headings'
 own pass being the next major's (docs/ROADMAP.md, next major row 5).
 
-Found in review, 6 October 2026, and fixed: on the fallback's page a heading
+Also fixed, 6 October 2026: on the fallback's page a heading
 further down, selected whole, was shared as Scripture under the chapter. The
 heading-only answer asks for a span naming the verse above the heading, which
 is what tells a heading from the same words in a verse, and that page never
