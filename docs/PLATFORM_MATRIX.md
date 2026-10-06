@@ -120,9 +120,11 @@ place a fix on one does not reach the others.
    `UIBackgroundModes=['audio']`, privacy strings, `UIDeviceFamily`, and the
    scene manifest (`UIApplicationSceneManifest`, `scripts/ios-scene-manifest.sh`;
    without it iOS 27 refuses the app at launch — read back from the archived and
-   exported app by `release-ios.sh`). *Risk:*
-   `UIDeviceFamily` is the single property that makes the app a universal
-   iPhone+iPad binary, and it is **never read back out of the exported `.ipa`**.
+   exported app by `release-ios.sh`). `UIDeviceFamily` is the single property
+   that makes the app a universal iPhone+iPad binary. From 1.2.20
+   `release-ios.sh` reads it back from the archived app and from the exported
+   `.ipa` (`scripts/check-ios-device-family.py`), and refuses anything but
+   iPhone and iPad.
 8. **The icon catalogue is rebuilt from scratch** (18 slots scaled with `sips`)
    and the launch screen compiled by hand with `ibtool`.
 9. The simulator **cannot exercise the device-only paths** — Keychain
@@ -446,9 +448,10 @@ The honest to-do list, in proof-level terms.
   slices of the AAB remain `builds`: they ship inside it, but nothing indicates
   a tester is on one.
 - **The iPad build is `builds`, not `field`.** The universal binary ships and
-  iPhone use is established; nothing distinguishes an iPad install, and
-  `UIDeviceFamily` — the single property that makes it universal — is never
-  read back out of the exported `.ipa` (divergence 7).
+  iPhone use is established, but nothing distinguishes an iPad install.
+  `UIDeviceFamily`, the single property that makes the build universal, is
+  read back out of the archived app and the exported `.ipa` from 1.2.20 on
+  (divergence 7).
 - **The AppImage's type-2 runtime is not exercised in CI.** The smoke runs the
   extracted payload, deliberately: launching the runtime twice would extract
   twice into one content-addressed directory. It is covered there by the

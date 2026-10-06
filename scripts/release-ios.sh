@@ -339,6 +339,14 @@ echo "  archive min iOS: $ARCHIVE_MIN (plist) / $ARCHIVE_MINOS (linker)"
 # The scene life cycle, in the bundle that is actually sent: without it an
 # iOS 27 device refuses the app at launch.
 "${REPO_ROOT}/scripts/ios-scene-manifest.sh" --check "$AAPP" || fail "archived app has no scene life cycle"
+# iPhone and iPad, read back: UIDeviceFamily is the one key that makes the app
+# universal, App Review refuses an update that drops a family it shipped, and
+# nothing else here would notice it gone. Checked on the archive for the upload
+# path, and again on the exported .ipa below.
+FAMILY_FLAG=""
+[ "${BIBLETEXT_IPAD:-1}" != "0" ] || FAMILY_FLAG="--iphone-only"
+python3 "$REPO_ROOT/scripts/check-ios-device-family.py" "$AAPP" $FAMILY_FLAG \
+  || fail "archived app does not declare the device families it ships for"
 
 # ── 8. exportArchive → App Store .ipa or direct upload (Xcode re-signs with the
 # distribution cert; BIBLETEXT_UPLOAD=1 sends it straight to App Store Connect
@@ -408,6 +416,8 @@ if /usr/libexec/PlistBuddy -c 'Print :UIRequiresFullScreen' "$VAPP/Info.plist" >
     fail "exported app still opts out of iPad multitasking"
 fi
 "${REPO_ROOT}/scripts/ios-scene-manifest.sh" --check "$VAPP" || fail "exported app has no scene life cycle"
+python3 "$REPO_ROOT/scripts/check-ios-device-family.py" "$VAPP" $FAMILY_FLAG \
+  || fail "exported app does not declare the device families it ships for"
 codesign -dvv "$VAPP" 2>&1 | grep -iE 'Authority=Apple|TeamIdentifier' | sed 's/^/  /'
 
 # Publish only after every content, identity, privacy, signature, and keyed-build
