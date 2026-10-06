@@ -827,9 +827,16 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 		// exactly. At body size (1.0em) it is invisible to the verse-number
 		// scans (sub-0.8× only) and to the content-end band ([0.8, 0.95)).
 		// margin-bottom only: the importer zeroes every margin-top.
+		// Unhyphenated, as the web and the Windows and Linux pane set it: a
+		// title is a line of its own, not prose, and without a rule of its
+		// own it took the hyphens of the p rule above, so a title that wraps
+		// broke words. Both names, because the p rule sets both; the importer
+		// reads them into the paragraph's hyphenation factor, which goes to 0.
 		fmt.Fprintf(&b, `p.pst {
 		font-style: italic;
 		text-align: left;
+		hyphens: none;
+		-webkit-hyphens: none;
 		line-height: %g;
 		margin: 0 0 %s 0;
 	}`, readingBookPitchEm, emCSS(readingTitleGapEm))

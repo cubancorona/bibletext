@@ -2567,7 +2567,13 @@ What the spec work left, each one a known difference rather than a guess:
   gaps would close it, at the cost of a span per gap, which `readerText` would
   have to drop so a pasted title does not carry widened spaces.
 - **The Apple panes and Android hyphenate a Psalm title that wraps,** where the
-  web and the Windows and Linux pane leave its words whole. The Apple `p.pst`
+  web and the Windows and Linux pane leave its words whole. **The Apple half
+  is DONE 6 October 2026, for 1.2.20:** `p.pst` sets `hyphens: none;
+  -webkit-hyphens: none;`, and the title imports with a hyphenation factor of
+  0 on the Mac and on the iPhone simulator, where it had 1; Psalm 18's title,
+  laid out at 200 and 320 points, stopped breaking "Mu-sician", "de-livered"
+  and "Yah-weh" (docs/READING_TYPOGRAPHY.md, "Justified prose";
+  `TestAppleTitleIsNotHyphenated`). What follows is the entry as it was. The Apple `p.pst`
   (`reading.go`) sets no hyphenation, so it keeps the `hyphens: auto` of the
   `p` rule; Android sets `HYPHENATION_FREQUENCY_NORMAL` on the whole text view
   (`BtBridge.java`). On macOS, adding `hyphens: none; -webkit-hyphens: none;`
