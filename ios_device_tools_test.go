@@ -148,6 +148,69 @@ echo "App installed"
 	}
 }
 
+// A COMMENT THAT NAMES THE TEST HOLDING A SCRIPT NAMES ONE THAT EXISTS. The
+// scripts and workflows say which Go test holds them, so that whoever changes
+// one finds the test to change with it; a name that matches no file sends
+// them nowhere. scripts/ios-device-install.sh named ios_device_install_test.go
+// for this file. A name with a directory must be that file; a bare name must
+// be a test file somewhere in the module.
+func TestCommentsNameTestFilesThatExist(t *testing.T) {
+	tests := map[string]bool{}
+	err := filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() && path != "." && (strings.HasPrefix(d.Name(), ".") || d.Name() == "third_party" ||
+			d.Name() == "build" || d.Name() == "node_modules") {
+			return filepath.SkipDir
+		}
+		if !d.IsDir() && strings.HasSuffix(d.Name(), "_test.go") {
+			tests[d.Name()] = true
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !tests["ios_device_tools_test.go"] {
+		t.Fatalf("the walk did not find this file among %d test files", len(tests))
+	}
+	named := regexp.MustCompile(`[A-Za-z0-9_./-]*_test\.go\b`)
+	var files []string
+	for _, dir := range []string{"scripts", "appstore", "msstore", "play", filepath.Join(".github", "workflows")} {
+		for _, ext := range []string{"*.sh", "*.py", "*.yml", "*.ps1"} {
+			m, _ := filepath.Glob(filepath.Join(dir, ext))
+			files = append(files, m...)
+		}
+	}
+	seen := 0
+	for _, f := range files {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i, line := range strings.Split(string(b), "\n") {
+			if !strings.HasPrefix(strings.TrimSpace(line), "#") {
+				continue
+			}
+			for _, name := range named.FindAllString(line, -1) {
+				seen++
+				ok := tests[name]
+				if strings.Contains(name, "/") {
+					_, err := os.Stat(filepath.FromSlash(name))
+					ok = err == nil
+				}
+				if !ok {
+					t.Errorf("%s:%d names %s, and no such test file exists", f, i+1, name)
+				}
+			}
+		}
+	}
+	if seen == 0 {
+		t.Fatal("no comment in the scripts or workflows names a test file; the scan is not reading them")
+	}
+}
+
 // run-ios-device.sh installs through the helper, keeps a bundle it could not
 // install, and --install-kept installs that bundle with nothing built and no
 // key loaded, removing it once it is on the phone. Mutation: delete the bundle

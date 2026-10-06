@@ -11,7 +11,7 @@
 # with the project's bundled key, which is why the folder is private and the
 # bundle is removed as soon as an install succeeds.
 #
-# Each step is a function, so ios_device_install_test.go can drive them with a
+# Each step is a function, so ios_device_tools_test.go can drive them with a
 # stand-in for xcrun.
 
 # What devicectl prints when the phone is locked or asleep.
