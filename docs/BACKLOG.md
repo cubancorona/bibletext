@@ -3814,9 +3814,11 @@ reported. `TestEveryDownloadedTranslationPassesThroughTheOutboundCleanerUnchange
 walks each translation downloaded on the machine running the suite, through
 `realCachePath`, and skips where there is none, which is every CI runner.
 On the machine it was written on, the WEB (31,236 texts), the BSB (34,293)
-and the WEB Catholic (35,522) passed unchanged; no NKJV was downloaded there,
-so the licensed edition is still unwalked. The comment in `outbound_text.go`
-now points at the walk instead of saying the belief is untested.
+and the WEB Catholic (35,522) passed unchanged; no NKJV was downloaded there.
+On 6 October 2026 the NKJV, fetched through the app's own API.Bible path into
+a cache outside the repository and deleted afterwards, passed too (34,094
+texts), with the other three again. The comment in `outbound_text.go` now
+points at the walk instead of saying the belief is untested.
 
 ### Also: committed test litter
 
