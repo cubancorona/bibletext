@@ -3723,25 +3723,50 @@ panes start their app verbs at verse 1's number (`btIOSContentStart` in
 selection wholly inside the title gets Copy and Look Up only, with no Share,
 Note or Cross-references, and a drag from the title into the psalm is cut at
 verse 1's number before Go sees it. So no shipped pane shared a title as
-Scripture, and decision 5 below (a title selected on its own cites verse 1
-with no quotation) is never seen on them: a reader gets no share verbs on a
-title at all, which may be what is wanted. The pages that do hand a title
-over are the plain-text fallbacks the Mac and the iPhone and iPad show when a
-chapter fails to import as HTML (`gMacContentStart` is 0 on the Mac's, and
-the iPhone and iPad's empties its verse index, so `btIOSContentStart` is 0 as
-well; no selection on either has a span), with the dead legacy pane. That is
-what the change below serves. With no span, a selection inside the title was
-answered as the title, and so were the same letters selected in a later
-verse ("Yahweh" in Psalm 18, whose title names him, or "is", which that
-title has inside "his" and "this"): no quotation, verse 1, where before they
-were quoted from their first copy in the psalm. Double-clicking every word
-of every titled psalm with no span, 29,618 words in the WEB and 28,670 in
-the BSB, 2,581 and 2,817 quoted nothing at `4db93bf64`, and 758 and 727 at
-`69d176b7c`, which looked in the psalm only for whole words of the title;
-none did at `1db51a02b`, and none do now, the psalm being searched first
-(below). On every pane, the change's visible effect is on headings, as the
-paragraph on headings below says, and that wider effect was not part of the
-decision.
+Scripture from a chapter it imported, and decision 5 below (a title selected
+on its own cites verse 1 with no quotation) is never seen there: a reader gets
+no share verbs on a title at all, which may be what is wanted. The pages that
+do hand a title over are the plain-text fallbacks the Mac and the iPhone and
+iPad show when a chapter fails to import as HTML (`gMacContentStart` is 0 on
+the Mac's, and the iPhone and iPad's empties its verse index, so
+`btIOSContentStart` is 0 as well; no selection on either has a span), with the
+dead legacy pane. That is what the change below serves. With no span, a
+selection inside the title was answered as the title, and so were the same
+letters selected in a later verse ("Yahweh" in Psalm 18, whose title names
+him, or "is", which that title has inside "his" and "this"): no quotation,
+verse 1, where before they were quoted from their first copy in the psalm.
+Double-clicking every word of every titled psalm with no span, 29,618 words in
+the WEB and 28,670 in the BSB, 2,581 and 2,817 quoted nothing at `4db93bf64`,
+and 758 and 727 at `69d176b7c`, which looked in the psalm only for whole words
+of the title; none did at `1db51a02b`, and none do now, the psalm being
+searched first (below). On every pane, the change's visible effect is on
+headings, as the paragraph on headings below says, and that wider effect was
+not part of the decision.
+
+**Corrected again, 6 October 2026.** The fallback's page ran its paragraphs
+together. Its tag strip took out every `<p>` and put nothing in its place, so
+the title's last word and verse 1's number were one word ("his son.1 LORD"),
+the number could not confirm the title, and every drag from a title into the
+psalm on that page was shared whole, the title's words as Scripture under the
+chapter. Of the drags from each character of a title to each boundary up to 30
+bytes into verse 1's text, that was all 176,571 in the WEB's titled psalms and
+all 305,428 in the BSB's, at every tree back to `1db51a02b`. The page also
+opened with the stylesheet's text, which the strip leaves standing, and showed
+a straight quotation mark as its entity. Both converters
+(`bibleTextMacPlainFromHTML` in `reading_macos.go`, `bibleTextPlainFromHTML`
+in `reading_ios.go`) now end each paragraph with a line break, drop the
+`<head>`, and read `&quot;`. On the page they now write, none of the WEB's
+182,112 such drags is shared so. In the BSB, 11,021 of 316,023 still are, in
+55 psalms whose heading under the title opens as verse 1 does ("The LORD Is My
+Shepherd", "The LORD is my shepherd"): when the drag stops in or at the end of
+those first letters, the heading repair, having cut the heading from the front
+of the selection, takes them at its end for the start of the same heading
+(`trimTrailingHeading`), and what is left cannot be placed. That shape is the
+heading repair's, not the title's. A drag from any heading through its verse's
+number to such letters ("He Restores 3 He") is shared whole on every pane,
+with a span or without, as at `1db51a02b`, and it is left with the headings'
+decision below. A remedy: a heading whose end was cut from the front of a
+selection cannot also be what the selection ends in.
 
 What was done: fixed in `normalizeShareSelectionProse` and `stripHeadings`
 (`share.go`), which every verb resolves a selection through. A drag from the
@@ -3780,7 +3805,12 @@ splits no word; and 3 verse numbers cite their verse. No answer with a span
 changes. The link's verses, which a sent note is kept against, agree.
 `TestPsalmTitleDragSweep` (`share_cut_sweep_test.go`) drags from every
 character of a title to every boundary through a heading, verse 1 and into
-verse 2, 14,124 drags, and `share_heading_selection_test.go` pins the shapes.
+verse 2, 14,124 drags on the page the panes draw, and as many again on the
+page the fallback writes, which
+`TestTheFallbackPageAnswersADragFromATitleAsThePanesWould`
+(`reading_native_fallback_page_test.go`) builds by running each converter's
+own steps on the chapter's HTML; `share_heading_selection_test.go` pins the
+shapes.
 The same repair answers a heading run on through its verse's number into part
 of that verse's first word, which quoted the heading and cited the verse above
 with it: it now quotes nothing and cites the verse below, as a heading

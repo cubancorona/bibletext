@@ -745,8 +745,11 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 	// with no verse geometry: the plain-text fallback the Mac and the iPhone
 	// and iPad show when the chapter fails to import (gMacContentStart is 0
 	// there, as btIOSContentStart is with its verse index emptied, and
-	// nothing has a span), and the dead legacy pane. For those pages, two
-	// drags are answered here:
+	// nothing has a span), and the dead legacy pane. The fallback sets each
+	// paragraph on a line of its own (bibleTextMacPlainFromHTML,
+	// bibleTextPlainFromHTML), so the title, a heading under it and verse 1's
+	// number reach a selection as separate words. For those pages, two drags
+	// are answered here:
 	//
 	//   - a selection with no span inside the title is the title's only
 	//     where the psalm does not have it. Every selection on those pages

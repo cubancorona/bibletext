@@ -3461,12 +3461,23 @@ static BOOL bibleTextApplyHTML(NSData *data) {
 // a readable last resort so the reader never sees raw markup. Poem-line <br>
 // must become a real newline BEFORE the tag strip, or poetry lines jam
 // together ("shepherd;I shall") and selections there can no longer locate.
+// So must the end of every paragraph: the title, a heading and each paragraph
+// of verses are a <p> apiece, and stripped bare they ran together ("his
+// son.1 LORD"), so verse 1's number was glued to the title, a share could not
+// confirm the title by it, and a drag from the title into the psalm shared
+// the title's words as Scripture. The stylesheet is text inside <head>, not
+// a tag, and the strip left it standing at the top of the page.
 static NSString *bibleTextPlainFromHTML(NSString *html) {
     html = [html stringByReplacingOccurrencesOfString:@"<br>" withString:@"\n"];
+    html = [html stringByReplacingOccurrencesOfString:@"</p>" withString:@"</p>\n"];
+    NSRegularExpression *head = [NSRegularExpression regularExpressionWithPattern:@"<head>[\\s\\S]*?</head>" options:0 error:nil];
+    html = [head stringByReplacingMatchesInString:html options:0
+                                            range:NSMakeRange(0, html.length) withTemplate:@""];
     NSRegularExpression *re = [NSRegularExpression regularExpressionWithPattern:@"<[^>]+>" options:0 error:nil];
     NSString *t = [re stringByReplacingMatchesInString:html options:0
                                                  range:NSMakeRange(0, html.length) withTemplate:@""];
     t = [t stringByReplacingOccurrencesOfString:@"&nbsp;" withString:@" "];
+    t = [t stringByReplacingOccurrencesOfString:@"&quot;" withString:@"\""];
     t = [t stringByReplacingOccurrencesOfString:@"&amp;" withString:@"&"];
     t = [t stringByReplacingOccurrencesOfString:@"&lt;" withString:@"<"];
     t = [t stringByReplacingOccurrencesOfString:@"&gt;" withString:@">"];
