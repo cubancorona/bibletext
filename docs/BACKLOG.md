@@ -3419,7 +3419,36 @@ rather than the span verses' full extent. Not done here because it is a
 behaviour change to the attribution core and wants its own pass with the sweep
 harness above as the before/after measure.
 
-### 2. A Psalm superscription can be shared as scripture
+### 2. A Psalm superscription can be shared as scripture — DONE 6 October 2026, for 1.2.20
+
+Fixed in `normalizeShareSelectionProse` and `stripHeadings` (`share.go`),
+which every verb resolves a selection through, so it holds on the iPhone,
+iPad, Mac and Android, the panes that draw the title in the selectable text
+(the Windows and Linux pane draws it outside the text, where no drag reaches
+it). A drag from the title into the psalm shares the psalm's words alone,
+cited by the verses they span: the title, or its end, comes off when verse 1's
+number confirms it, and with a heading between them the heading repair takes
+both. A title selected on its own, or run on to verse 1's number or into part
+of its first word, quotes nothing and cites verse 1, as decided; a drag inside
+the title reaches no verse number, so the panes report no span, and is
+answered before its words are looked for in the psalm, where "his" or "son"
+would be found. The link's verses, which a sent note is kept against, agree.
+`TestPsalmTitleDragSweep` (`share_cut_sweep_test.go`) drags from every
+character of a title to every boundary through a heading, verse 1 and into
+verse 2, 14,124 drags, and `share_heading_selection_test.go` pins the shapes.
+The same repair answers a heading run on through its verse's number into part
+of that verse's first word, which quoted the heading and cited the verse above
+with it: it now quotes nothing and cites the verse below, as a heading
+selected on its own does.
+
+Two shapes stay as they were, being the headings' rather than the title's:
+with no span, the cross-references resolve a title selected on its own by
+matching words, as they do a heading at the top of a chapter; and a piece of a
+word inside a heading that is also in the psalm is found in the psalm. A
+verse's number with only part of its first word ("39 Wh") still shares both,
+title or no title: the legacy path's verbatim fragment.
+
+The original finding:
 
 `stripHeadings` and `headingOnlySelectionVerse` consult `Bible.Headings` and
 never `Bible.Superscriptions`. On iOS/macOS/Android the title lives in the same

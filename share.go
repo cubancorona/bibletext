@@ -685,6 +685,42 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 	// sends what the page shows (outbound_text.go) — and chapterProse is built
 	// in that same drawn form, so they locate.
 	out := sharedText(flat)
+
+	// A psalm's title is the publisher's, not a verse, and the Apple and
+	// Android panes draw it in the same text as the verses, above verse 1.
+	// Two drags are answered here, before anything is looked for among the
+	// verses' words, because the title's words, "his" or "son" or its full
+	// stop, are often in the psalm too and would be found there:
+	//
+	//   - a drag inside the title, perhaps on through a heading under it,
+	//     reaches no verse number, so those panes report it with no span (the
+	//     last number before it is none), where a drag among the verses
+	//     always has one. It is answered as a heading selected on its own:
+	//     verse 1, no quotation;
+	//   - a drag from the title on into the psalm carries the title, or the
+	//     end of it, then verse 1's number. Confirmed by that number, the
+	//     title comes off, and what follows is the selection. Just the
+	//     number left is the title alone again.
+	//
+	// A heading between the title and verse 1 takes the heading repair below,
+	// which removes the title with it.
+	editorial := false // the selection carried a heading or a psalm title, now removed
+	if title, first, ok := chapterTitle(state, book, chapter); ok {
+		if !span.valid() {
+			if _, ok := afterTitle(flat, title); ok {
+				if v, ok := headingOnlySelectionVerse(state, book, chapter, flat, span); ok {
+					return "", v, v, -1, true
+				}
+			}
+		}
+		num := strconv.Itoa(first)
+		if t := trimLeadingHeading(out, title, num); t != out {
+			if t == num {
+				return "", first, first, -1, true
+			}
+			out, editorial = t, true
+		}
+	}
 	s, anchor := stripVerseMarkersAnchored(corpus, spans, out)
 	if s == "" || corpus == "" {
 		return "", 0, 0, -1, false
@@ -768,10 +804,23 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 		// corpus it searches is in that form, and a candidate rebuilt from
 		// the raw selection would still carry the gap mark or the superscript
 		// that made the first locate miss.
+		// What is left must be verse text: a verse number left on its own
+		// (the matter and the number of the verse it stands above, nothing
+		// after) is the page's apparatus, answered below, and is not looked
+		// for among the verses' words.
+		// A drag that ran on to the next verse's number ends with it, as the
+		// first pass found, and it comes off here the same way.
 		if h := stripHeadings(state, book, chapter, out); h != out {
-			if r, a := stripVerseMarkersAnchored(corpus, spans, h); r != "" {
+			if r, a := stripVerseMarkersAnchored(corpus, spans, h); r != "" && !validNum[r] {
+				for locate(r, a) < 0 {
+					i := strings.LastIndexByte(r, ' ')
+					if i < 0 || !validNum[r[i+1:]] {
+						break
+					}
+					r = strings.TrimSpace(r[:i])
+				}
 				if j := locate(r, a); j >= 0 {
-					s, idx = r, j
+					s, idx, editorial = r, j, true
 				}
 			}
 		}
@@ -817,7 +866,21 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 			if r, _ := utf8.DecodeRuneInString(corpus[end:]); isWordRune(r) {
 				cut := strings.LastIndexByte(s, ' ')
 				if cut <= 0 {
-					return "", 0, 0, -1, false // a single partial word — nothing left
+					// A single partial word — nothing left. When it opens a
+					// verse whose heading or title the drag also took, the
+					// drag's only words were that editorial matter, which
+					// is answered as a heading selected on its own is: the
+					// verse it stands above, and no quotation. Anywhere
+					// else it is a fragment, and the caller's fallback
+					// shares it as one.
+					if editorial {
+						for _, sp := range spans {
+							if sp.start == idx {
+								return "", sp.verse, sp.verse, -1, true
+							}
+						}
+					}
+					return "", 0, 0, -1, false
 				}
 				cutBack(cut)
 				continue
@@ -1019,7 +1082,49 @@ func stripHeadings(state *AppState, book string, chapter int, s string) string {
 		s = trimTrailingHeading(s, text)
 		s = removeWholeHeadings(s, text, num)
 	}
+	// A psalm's title is editorial matter too. The Apple and Android panes
+	// draw it in the same selectable text as the verses, above the chapter's
+	// first verse and any heading there, so a drag from it into the psalm
+	// carries the title, or the end of it, at its front. It is confirmed as a
+	// heading at the top of a chapter is, by the number of the verse it stands
+	// above, and it goes after the headings, which may stand between it and
+	// that number.
+	if title, first, ok := chapterTitle(state, book, chapter); ok {
+		s = trimLeadingHeading(s, title, strconv.Itoa(first))
+	}
 	return strings.TrimSpace(s)
+}
+
+// chapterTitle is the chapter's psalm title as the page draws it, and the
+// first verse the page draws, which the title stands above. ok is false for
+// a chapter without one.
+func chapterTitle(state *AppState, book string, chapter int) (title string, first int, ok bool) {
+	title = collapseSpaces(state.Bible.SuperscriptionFor(book, chapter).DrawnText())
+	if title == "" {
+		return "", 0, false
+	}
+	for _, v := range state.Bible.GetChapter(book, chapter) {
+		if collapseSpaces(v.Text) != "" {
+			return title, v.Verse, true
+		}
+	}
+	return "", 0, false
+}
+
+// afterTitle reports whether s opens with the psalm title, or a piece of
+// it, and what follows. A drag inside the title gives any piece of it; one
+// that runs on past it gives a piece that ends it, perhaps begun mid-word,
+// and then whatever the page draws next.
+func afterTitle(s, title string) (rest string, ok bool) {
+	if strings.Contains(title, s) {
+		return "", true
+	}
+	for i := len(s) - 1; i > 0; i-- {
+		if s[i] == ' ' && strings.HasSuffix(title, s[:i]) {
+			return strings.TrimSpace(s[i+1:]), true
+		}
+	}
+	return "", false
 }
 
 // headingOnlySelectionVerse reports the verse a selection belongs to when that
@@ -1060,6 +1165,19 @@ func headingOnlySelectionVerse(state *AppState, book string, chapter int, s stri
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return 0, false
+	}
+	// A psalm's title, or a piece of it, stands above the chapter's first
+	// verse as a heading at the top of a chapter does, and is answered the
+	// same way: the verse it stands above, by the same span test. A heading
+	// the publisher set under the title may follow it in the selection, and
+	// what follows the title is then checked as a heading below.
+	if title, first, ok := chapterTitle(state, book, chapter); ok && (!span.valid() || span.lo <= first) {
+		if rest, ok := afterTitle(s, title); ok {
+			if rest == "" || rest == strconv.Itoa(first) {
+				return first, true
+			}
+			s = rest
+		}
 	}
 	for _, h := range state.Bible.Headings[book][chapter] {
 		// As drawn, for the reason stripHeadings gives.

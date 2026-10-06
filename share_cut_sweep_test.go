@@ -682,3 +682,124 @@ func TestSpannedBoundaryDragSweep(t *testing.T) {
 		}
 	}
 }
+
+// TestPsalmTitleDragSweep drags from every character of a psalm's title to
+// every character boundary through it, a heading set under it, verse 1 and
+// into verse 2, as the Apple and Android panes draw the page: the title, the
+// heading, then "1 …". The span is the panes' (nothing at or before the
+// start, so no span until the drag reaches verse 1's number, then 1 to the
+// verse at its end). Two answers are possible, and the drag's own verse words
+// say which:
+//
+//   - it holds at least one whole word of the psalm: those words are shared,
+//     from verse 1's start, and cited by the verses they span. No piece of
+//     the title or the heading is ever in the quotation;
+//   - it holds none, only the title or the heading, perhaps with verse 1's
+//     number or part of its first word: nothing is quoted and verse 1 is
+//     cited, as for a heading selected on its own.
+func TestPsalmTitleDragSweep(t *testing.T) {
+	for _, withHeading := range []bool{false, true} {
+		st := psalmTitleState(withHeading)
+		corpus, spans := chapterProse(st)
+		var b strings.Builder
+		b.WriteString(collapseSpaces(st.Bible.SuperscriptionFor("Psalms", 3).DrawnText()))
+		titleEnd := b.Len()
+		if withHeading {
+			b.WriteString(" " + psalmHeading)
+		}
+		number := make([]int, len(spans)) // page offset of each verse's number
+		text := make([]int, len(spans))   // and of its text
+		for i, sp := range spans {
+			b.WriteByte(' ')
+			number[i] = b.Len()
+			b.WriteString(strconv.Itoa(sp.verse) + " ")
+			text[i] = b.Len()
+			b.WriteString(corpus[sp.start:sp.end])
+		}
+		page := b.String()
+		verseAt := func(at int) int {
+			v := 0
+			for i := range spans {
+				if number[i] <= at {
+					v = spans[i].verse
+				}
+			}
+			return v
+		}
+		// toCorpus maps a page offset inside verse text to chapter prose; an
+		// offset before verse 1's text took none of it.
+		toCorpus := func(at int) int {
+			c := 0
+			for i, sp := range spans {
+				if at >= text[i] {
+					c = sp.start + at - text[i]
+					if c > sp.end {
+						c = sp.end
+					}
+				} else if at > number[i] {
+					c = sp.start
+				}
+			}
+			return c
+		}
+		limit := text[1] + len("Many there are")
+		drags := 0
+		// Every drag begins in the title. One begun in the heading under it is
+		// a heading's, whose rules are the heading tests' (a piece of a word
+		// there that is also in the psalm is found in the psalm, as anywhere
+		// a heading stands).
+		for from := 0; from < titleEnd; from++ {
+			if !utf8.RuneStart(page[from]) {
+				continue
+			}
+			for to := from + 1; to <= limit; to++ {
+				if to < len(page) && !utf8.RuneStart(page[to]) {
+					continue
+				}
+				raw := page[from:to]
+				if strings.TrimSpace(raw) == "" {
+					continue // a space between two words, which no menu acts on
+				}
+				drags++
+				span := selSpanFromNative(0, verseAt(to-1))
+				quote, cite, at, baseLen := prepareShareQuote(st, raw, span)
+
+				// The psalm's words the drag holds, from verse 1's start, cut
+				// back to the last whole word.
+				took := corpus[:toCorpus(to)]
+				if r, _ := utf8.DecodeRuneInString(corpus[len(took):]); len(took) < len(corpus) && isWordRune(r) {
+					cut := strings.LastIndexByte(took, ' ')
+					if cut < 0 {
+						cut = 0
+					}
+					took = took[:cut]
+				}
+				hasWord := strings.IndexFunc(took, isWordRune) >= 0
+
+				label := fmt.Sprintf("heading=%v: drag %q span %d–%d", withHeading, raw, span.lo, span.hi)
+				if !hasWord {
+					if quote != "" || cite != "Psalms 3:1" {
+						t.Fatalf("%s holds no word of the psalm, but shared (%q, %q); want (\"\", Psalms 3:1)", label, quote, cite)
+					}
+					continue
+				}
+				if at != 0 || baseLen == 0 || !strings.HasPrefix(corpus, quote[:baseLen]) {
+					t.Fatalf("%s shared %q placed at %d; want the psalm's words from verse 1's start", label, quote, at)
+				}
+				lo, hi := 0, 0
+				for _, sp := range spans {
+					if sp.start < baseLen {
+						if lo == 0 {
+							lo = sp.verse
+						}
+						hi = sp.verse
+					}
+				}
+				if want := verseRangeCitation("Psalms", 3, lo, hi); cite != want {
+					t.Fatalf("%s shared %q cited %s, want %s", label, quote, cite, want)
+				}
+			}
+		}
+		t.Logf("heading=%v: %d drags", withHeading, drags)
+	}
+}

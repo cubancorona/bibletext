@@ -463,3 +463,150 @@ func TestAVerseNumberSelectedOnItsOwnQuotesNothing(t *testing.T) {
 		t.Errorf("the verse number resolved to %s, want just 2", verseRunString(vs))
 	}
 }
+
+// A psalm's title is editorial matter, as a heading is: the publisher's line
+// above the psalm, not a verse of it. The Apple and Android panes draw it in
+// the same selectable text as the verses, above verse 1 and any heading
+// there (the Windows and Linux pane draws it outside the text, where no drag
+// reaches it), so a drag can run from it into the psalm. The text is the
+// World English Bible's Psalm 3; the heading under the title is invented, as
+// that edition sets none, and the small capitals on the title are the
+// fixture's own, so the title is matched as the page draws it.
+const (
+	psalmTitle   = "A Psalm by David, when he fled from Absalom his son."
+	psalmHeading = "A Morning Prayer"
+)
+
+func psalmTitleState(withHeading bool) *AppState {
+	bd := &BibleData{
+		Books: []string{"Psalms"},
+		Verses: map[string]map[int][]Verse{"Psalms": {3: {
+			{BookName: "Psalms", Book: "Psalms", Chapter: 3, Verse: 1,
+				Text: "Yahweh, how my adversaries have increased!\nMany are those who rise up against me."},
+			{BookName: "Psalms", Book: "Psalms", Chapter: 3, Verse: 2,
+				Text: "Many there are who say of my soul,\n“There is no help for him in God.” Selah."},
+			{BookName: "Psalms", Book: "Psalms", Chapter: 3, Verse: 3,
+				Text: "But you, Yahweh, are a shield around me,\nmy glory, and the one who lifts up my head."},
+		}}},
+		Superscriptions: map[string]map[int]Superscription{"Psalms": {3: {
+			Text: psalmTitle, SmallCaps: []TextSpan{{Start: 2, End: 7}}}}},
+	}
+	if withHeading {
+		bd.Headings = map[string]map[int][]Heading{"Psalms": {3: {
+			{Text: psalmHeading, Style: "s", BeforeVerse: 1}}}}
+	}
+	return &AppState{Bible: bd, CurrentBook: "Psalms", CurrentChapter: 3}
+}
+
+// A drag from the title into the psalm shares the psalm's words and cites
+// them, and the title's words never ride along as if they were verse 1. The
+// control is the same verse words dragged on their own.
+func TestAPsalmTitleIsNeverQuotedAsScripture(t *testing.T) {
+	for _, withHeading := range []bool{false, true} {
+		st := psalmTitleState(withHeading)
+		title := collapseSpaces(st.Bible.SuperscriptionFor("Psalms", 3).DrawnText())
+		under := ""
+		if withHeading {
+			under = " " + psalmHeading
+		}
+		const words = "Yahweh, how my adversaries have increased!"
+
+		wantQuote, wantCite, _, _ := prepareShareQuote(st, "1 "+words, selSpanFromNative(1, 1))
+		if !strings.HasPrefix(wantQuote, "Yahweh") || wantCite != "Psalms 3:1" {
+			t.Fatalf("control: verse 1's words on their own shared as (%q, %q)", wantQuote, wantCite)
+		}
+		for _, sel := range []string{
+			title + under + " 1 " + words, // the whole title, then the verse
+			"his son." + under + " 1 " + words,
+			"on." + under + " 1 " + words, // begun mid-word
+		} {
+			quote, cite, _, _ := prepareShareQuote(st, sel, selSpanFromNative(0, 1))
+			if quote != wantQuote || cite != wantCite {
+				t.Errorf("heading=%v: %q shared (%q, %q), want the verse's words alone (%q, %q)",
+					withHeading, sel, quote, cite, wantQuote, wantCite)
+			}
+		}
+		// Through verse 1 into verse 2: the citation takes both.
+		sel := "his son." + under + " 1 Yahweh, how my adversaries have increased! Many are those who rise up against me. 2 Many there are"
+		if quote, cite, _, _ := prepareShareQuote(st, sel, selSpanFromNative(0, 2)); strings.Contains(quote, "Absalom") || cite != "Psalms 3:1–2" {
+			t.Errorf("heading=%v: a drag through verse 1 into 2 shared (%q, %q)", withHeading, quote, cite)
+		}
+	}
+}
+
+// A title selected on its own cites verse 1 with no quotation, as a heading
+// does. The panes report a drag inside the title as no span at all, or, once
+// it reaches verse 1's number, as verse 1 (selSpanFromNative's clamp). The
+// verbs agree: the citation, the link's verses, which a note is kept against,
+// and, given a span, the verses the cross-references resolve to.
+func TestAPsalmTitleSelectedOnItsOwnCitesTheFirstVerse(t *testing.T) {
+	for _, withHeading := range []bool{false, true} {
+		st := psalmTitleState(withHeading)
+		title := collapseSpaces(st.Bible.SuperscriptionFor("Psalms", 3).DrawnText())
+		sels := []struct {
+			name, sel string
+			span      selSpan
+		}{
+			{"the whole title", title, selSpan{}},
+			{"a piece inside it", "by David, when he", selSpan{}},
+			{"its end, begun mid-word", "rom Absalom his son.", selSpan{}},
+			{"run on to verse 1's number", title + " 1", selSpanFromNative(0, 1)},
+			{"run on into part of verse 1's first word", "his son. 1 Yah", selSpanFromNative(0, 1)},
+		}
+		if withHeading {
+			sels = append(sels, []struct {
+				name, sel string
+				span      selSpan
+			}{
+				{"the title and the heading", title + " " + psalmHeading, selSpan{}},
+				{"the end of the title and part of the heading", "his son. A Morn", selSpan{}},
+				{"the title and heading run on to verse 1's number", title + " " + psalmHeading + " 1", selSpanFromNative(0, 1)},
+				{"and into part of verse 1's first word", "his son. " + psalmHeading + " 1 Ya", selSpanFromNative(0, 1)},
+			}...)
+		}
+		for _, c := range sels {
+			quote, cite, _, _ := prepareShareQuote(st, c.sel, c.span)
+			if quote != "" || cite != "Psalms 3:1" {
+				t.Errorf("heading=%v, %s: shared (%q, %q), want (\"\", Psalms 3:1)", withHeading, c.name, quote, cite)
+			}
+			if lo, hi := linkVersesForSelection(st, c.sel, c.span); lo != 1 || hi != 1 {
+				t.Errorf("heading=%v, %s: the link names verses %d–%d, want 1–1", withHeading, c.name, lo, hi)
+			}
+			// With no span the resolver matches words, the legacy pane's
+			// path, as it does for a heading at the top of a chapter.
+			if !c.span.valid() {
+				continue
+			}
+			if vs := selectionVersesIn(st, "Psalms", 3, c.sel, c.span); len(vs) != 1 || vs[0].Verse != 1 {
+				t.Errorf("heading=%v, %s: resolved to %s, want just 1", withHeading, c.name, verseRunString(vs))
+			}
+		}
+	}
+
+	// A span that names a verse further down is not a drag inside the title,
+	// whatever the words: the selection stays where the span puts it.
+	st := psalmTitleState(false)
+	if _, cite, _, _ := prepareShareQuote(st, "by David, when he", selSpanFromNative(2, 2)); cite != "Psalms 3:2" {
+		t.Errorf("title words reported against verse 2 cited %q; only a drag the title could have produced is moved to verse 1", cite)
+	}
+}
+
+// A heading run on through the number of the verse it stands above into part
+// of that verse's first word holds no word of scripture: the piece of a word
+// cannot be quoted, so the drag is the heading's alone and is answered as
+// one, as a psalm's title is in the same shape. It quoted the heading and
+// cited the verse above with the one below.
+func TestAHeadingRunOnIntoPartOfAWordQuotesNothing(t *testing.T) {
+	st := headingChapterState()
+
+	// The control: run on through the whole first word, it is that verse's.
+	if quote, cite, _, _ := prepareShareQuote(st, headingText+" 44 While", selSpanFromNative(43, 44)); quote != "While" || cite != "Acts 10:44" {
+		t.Fatalf("control: the heading and verse 44's first word shared (%q, %q)", quote, cite)
+	}
+	for _, sel := range []string{headingText + " 44 Wh", "Gentiles 44 W"} {
+		quote, cite, _, _ := prepareShareQuote(st, sel, selSpanFromNative(43, 44))
+		if quote != "" || cite != "Acts 10:44" {
+			t.Errorf("%q shared (%q, %q), want (\"\", Acts 10:44)", sel, quote, cite)
+		}
+	}
+}
