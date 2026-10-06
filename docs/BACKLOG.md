@@ -560,9 +560,7 @@ day of the tag. The past entries can stand, each within a day of its tag.
 are built. The header of `linux/releases.toml` and stage 1 of
 `docs/RELEASING.md` say so in 1.2.20.
 
-## msstore/submit.py keeps the last release's commit status in a new submission's state — found 2 October 2026
-
-Planned for: 1.2.20 — see docs/ROADMAP.md.
+## msstore/submit.py keeps the last release's commit status in a new submission's state — FIXED 6 October 2026, for 1.2.20
 
 `save_state` merges what it is given into `build/msstore/run-state.json`
 (`msstore/submit.py:213-219`). `create` writes the new submission's id with
@@ -580,6 +578,17 @@ The fix: `create` starts a fresh state for its submission — writing the
 whole state rather than merging into the last, or clearing `commitStatus`
 with the other flags — with a test in `msstore/test_submit.py` that a
 create after a committed run leaves no `commitStatus` behind.
+
+**The fix.** `create` writes its state whole (`new_state`) instead of
+merging it into the last run's, so a new submission keeps nothing of the
+previous one: no `commitStatus`, and no `verified` or `committed`, which it
+already cleared. Every later step of the same submission still merges
+(`save_state`). `abort` is unchanged; the next `create` starts fresh.
+`msstore/test_submit.py`, `test_a_create_after_a_committed_run_keeps_nothing_of_it`,
+creates after a state the last release's commit and poll left. It fails
+against the previous script, which kept `"commitStatus": "CommitStarted"`.
+The test that the id is on disk before the response is judged now reads the
+file back instead of watching `save_state`.
 
 ## scripts/run-ios-device.sh: a locked phone costs a full rebuild — found 2 October 2026
 
