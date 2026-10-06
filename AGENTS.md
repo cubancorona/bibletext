@@ -64,16 +64,18 @@ Format changed Go files with `gofmt -w <files>`. Use `git diff --check` to catch
 whitespace errors and inspect `git status --short` before handing work off.
 
 Work meant for the next major version goes on `main` behind the `next` build
-tag, never on a long-lived branch, and without the tag the app must behave
-exactly as the current release does. Test both states:
+tag, not on a long-lived branch; without the tag the app must behave exactly
+as the current release does, and no release path may ever pass the tag. Test
+both states:
 
 ```bash
 go test ./...
 go test -tags next ./...
 ```
 
-[docs/NEXT.md](docs/NEXT.md) has the seams to use, what is behind the switch,
-and the guards that keep it out of every release build.
+[docs/NEXT.md](docs/NEXT.md) has the seams to use, the few changes that keep a
+branch instead, what is behind the switch, and the guards that keep it out of
+every release build.
 
 Launch the desktop application during UI work with:
 

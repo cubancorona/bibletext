@@ -13,8 +13,8 @@ package bibletext
 //
 // Without the tag the app must behave exactly as the current release does.
 // docs/NEXT.md is the plan: what is behind the switch, how to build and test
-// both states, and how the switch is retired on the day the major version
-// ships.
+// both states, and how the work behind it is made unconditional on the day
+// the major version ships.
 //
 // No release path passes the tag. next_release_guard_test.go holds each one's
 // text to that, and scripts/verify-not-next.sh refuses any built artifact

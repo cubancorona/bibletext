@@ -7,6 +7,13 @@ the date — and says what shipped and why. Closed entries earn their place: thi
 is the file to read before re-investigating a defect that may already be fixed,
 and a fix's reasoning is the expensive half to reconstruct.
 
+Work built for the next major version is not listed here. It is on `main`
+behind the `next` build tag, and [NEXT.md](NEXT.md) is its register: each
+piece, what readers will see, its tests and its open decisions. The NKJV's
+epoch-8 refresh with its offline bridge, the Greek Esther mapped verse for
+verse, and the Gospel parallels' "same saying, another occasion" are there,
+not here.
+
 ## The release pipeline: what still waits on something it need not
 
 A standing entry, not a one-off: every release is the moment to ask what

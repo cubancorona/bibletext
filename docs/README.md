@@ -25,7 +25,7 @@ Adding a document? Add its line here. One line, saying **when** to read it.
 
 - [COMMIT_AND_CODE_PROTOCOL.md](COMMIT_AND_CODE_PROTOCOL.md) — before writing any commit message, code comment or doc text — the rules here are enforced by a hook and by CI
 - [VERSIONING.md](VERSIONING.md) — before choosing a version number, cutting or moving a tag, or shipping any channel of a release
-- [NEXT.md](NEXT.md) — before starting work meant for the next major version, or touching the `next` build tag — what is behind it, how to build both states, and how it ships
+- [NEXT.md](NEXT.md) — before work meant for the next major version or touching the `next` tag — what is behind it, its open decisions, what needs a branch, and how it ships
 - [BACKLOG.md](BACKLOG.md) — before picking up deferred work, or before re-investigating a defect that may already be closed here
 - [PRIVACY_RELEASE_CHECKLIST.md](PRIVACY_RELEASE_CHECKLIST.md) — before any release that touches screenshots, store declarations, the public mailbox, or data flows — a checklist
 

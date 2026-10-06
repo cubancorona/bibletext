@@ -85,6 +85,21 @@ Apple's current definitions and the live terms of every AI provider.
 
 ---
 
+## Minor releases are built without `next`
+
+Work for the next major version is on `main` too, behind the `next` build tag
+([NEXT.md](NEXT.md)). A release cut from `main` by this page is built without
+the tag, so the work behind it is compiled out of every store package, every
+GitHub asset and the site; none of the commands below passes it. That does
+not rest on care. `next_release_guard_test.go`, part of stage 0's suite,
+fails if any release path could carry the tag; and every path refuses an
+artefact built with it, however the tag reached the build (stage 3).
+
+The major release goes through these same stages, once NEXT.md's release-day
+steps have made its work unconditional. It is never built by setting the tag.
+
+---
+
 ## Stages
 
 Numbered for reference, not because each needs a ceremony. Stages 0–2 are
@@ -110,6 +125,12 @@ Then the full local gate — `go build ./...`, `go test ./...`,
 `go test -race ./...`, `go vet ./...` — plus `scripts/check-ios-pane.sh` and
 `scripts/check-android-pane.sh` if any `ios`- or `android`-tagged file moved.
 The host build is blind to those, so nothing else will catch them.
+
+That `go test ./...` includes the release guard, `next_release_guard_test.go`:
+it fails if any release script or workflow could build with the next-release
+switch ([NEXT.md](NEXT.md)). And `go env GOFLAGS` must name no build tags. The
+release scripts empty `GOFLAGS` in their own environment, but a value saved
+with `go env -w` still reaches them (stage 3).
 
 Confirm `build/appstore/metadata/en-GB` exists before trusting the test run:
 `TestWhatsNewIsNamedForThisRelease` SKIPS when it does not, which is why CI
@@ -525,6 +546,8 @@ not create, so a draft started in Partner Center is safe from it.
   sweep.
 - Two Google Play steps at once.
 - Reporting a store as up to date that it could not actually reach.
+- Building a release with the `next` tag, or getting past a refusal from
+  `scripts/verify-not-next.sh` any way but removing the tag from where it came.
 
 ## Where "all stores" stops being true
 

@@ -6,6 +6,32 @@ that stays off in every release build until the day that version ships. So a
 minor release never waits for the major one, the major one never sits on a
 branch that drifts from `main`, and every push builds and tests both.
 
+**This page is the plan for the next major version and the rule for every
+release before it.** It holds what the switch is, how to put work behind it
+and try it, what keeps it out of every minor release, the few changes that
+cannot go behind it, the register of what is behind it now with every open
+decision, and the steps that turn it into a release. The detail of each
+piece's data lives where that data is documented (`TEXTUAL-DATA.md`,
+`VERSION_STATES.md`); where this page and one of those disagree about the
+data, that document is right and this one needs fixing.
+
+---
+
+## Why one switch and not a branch
+
+The three pieces in the register below were built on branches of their own
+while 1.2.19 was prepared, and parked there. By the time they were wanted,
+`main` had moved under them. It held earlier work from the same lines as
+copies under other commits, so none of them could be merged; and 1.2.19's
+cross-reference fixes had changed the code the Gospel parallels were built on
+(`treasuryRowsFor`'s signature, the depth measurement, the test of the
+kingdom woe). Each was ported by hand, change by change.
+
+On `main` behind a switch, that cost is paid as it arises instead of all at
+once. A change to shared code is compiled and tested against the gated work
+on the push that makes it, a fix both states need is written once, and the
+conflict a branch would have hidden until its merge shows the day it is made.
+
 ## The switch
 
 One build tag, `next`, declared by one pair of files:
@@ -28,9 +54,45 @@ at all.
 contract every gated change is held to, and it is what makes the switch safe
 to leave in place for months.
 
+## Minor releases never carry it
+
+Every minor release, 1.2.20 and each one after it until the major version,
+is built from `main` without the tag. It ships the last release's behaviour
+plus its own fixes, and none of the work behind the switch. Nobody has to
+remember that: no release path passes the tag, and two checks, each tested
+against a planted control, stop one that would.
+
+- **The release paths' text.** `next_release_guard_test.go`, which runs in
+  both states, reads `release-ios.sh`, `release-mac-store.sh`,
+  `build-android.sh`, `build-windows-exe.sh`, `build-appimage.sh`,
+  `go-release-wrapper.sh`, `publish-site.sh` and the `release`, `msstore` and
+  `linux-stores` workflows. Any tag list that names `next`, directly or
+  through a variable it expands, fails, and so does one it cannot resolve.
+  `BT_ANDROID_TAGS` is tolerated only while `build-android.sh --release`
+  refuses it.
+- **What each path built.** `scripts/verify-not-next.sh` reads the build tags
+  Go records inside a binary, so it also sees the tag arriving through
+  `GOFLAGS` in the environment or saved with `go env -w`, which no script
+  shows. `verify-release-package.sh` runs it on every desktop package (GitHub,
+  Mac App Store, Microsoft Store, Snap Store); `release-ios.sh` on the App
+  Store binary; `build-android.sh --release` on the Play bundle's libraries;
+  `publish-site.sh` on the site generator. The guard test asserts each of
+  those calls is in place, and builds probe binaries to show the verifier
+  refuses the tag each way it can arrive.
+
+`RELEASING.md` runs the first in stage 0's suite and says, in stage 3, what a
+refusal from the second means: a `GOFLAGS` saved with `go env -w` carries
+build tags.
+
+The major release is never built by setting the tag either. On its day the
+gated work is made unconditional (*The major release*, below), and it goes
+out through the same paths and the same two checks.
+
 ## Putting work behind it
 
-Use the smallest seam that keeps both states readable:
+Behaviour, wording, data tables and cache epochs go behind the switch: anything
+one build can hold in both states. Use the smallest seam that keeps both
+states readable:
 
 1. **A decision in code.** `if nextRelease { … } else { … }`. The constant is
    known when compiling, so the branch not taken is dropped from the binary,
@@ -39,7 +101,9 @@ Use the smallest seam that keeps both states readable:
    `if nextRelease { epoch = 8 }`, or a pair of constants in split files.
 3. **A pair of files.** When the states differ by whole declarations,
    `<name>_next.go` carries `//go:build next` and `<name>_current.go` carries
-   `//go:build !next`, with the same identifiers in each.
+   `//go:build !next`, with the same identifiers in each. Older files that
+   use the word in another sense, the note sticker's next-note control
+   (`notes_next_test.go`, `dev_notes_next_*.go`), are not gated.
 4. **Data.** A table that differs (versification, the Gospel parallels, red
    letter) is chosen by the switch, never edited by hand into one state. The
    generator that owns the data writes both, through an option for the next
@@ -60,13 +124,38 @@ Use the smallest seam that keeps both states readable:
    `//go:build next`. Never `t.Skip` on the switch: a skipped test reads as a
    pass.
 
-Some changes cannot be switched off, and they keep a branch of their own: the
-Fyne 2.8 port (`FYNE_28_PORT.md`), raising the minimum iOS or macOS version,
-and a change to how stored data is laid out that a current build would then
-read. Everything else comes to `main` behind the switch.
-
 A fix that both states need is written once, outside the switch, and reaches
 readers in the next minor release.
+
+Each piece gets an entry in the register below when it lands: what readers
+will see, where the switch is read, its tests, what a build with the switch on
+leaves on a device, and its open decisions.
+
+## What needs a branch instead
+
+Three kinds of change cannot be held off inside one build. Only these keep a
+branch of their own:
+
+| Change | Why the switch cannot hold it | Now |
+|---|---|---|
+| A toolkit upgrade | `go.mod` names one version of each module, and the release scripts swap in the patched Fyne for the build (`patches/README.md`); no build tag chooses a module version | the Fyne 2.8 port (`FYNE_28_PORT.md`), on a branch that is not published |
+| Raising the minimum iOS or macOS version | the floor is one value in `config/product.json`, the one every Apple build and store listing derives from (`check-min-os-versions.py`); no build tag changes it | none |
+| A change to how stored data is laid out | a build with the switch on shares a device's data with the store build (*Trying it on a device*), so data written the new way would be read the old way the moment the store build is reinstalled, and a move between layouts is one-way | none |
+
+Such a branch is kept current so that it never becomes the parked kind:
+
+1. **After every minor release ships**, it is brought up to date with `main`,
+   and its suite passes again with and without the tag. A catch-up is then one
+   release's worth of change, never several.
+2. **At the start of the major release's run-up**, it is merged into `main`.
+   From that merge on, `main` is the major release, so the run-up is kept
+   short; a fix readers need before it ships is made on a branch from the
+   last release's tag, released from there (every channel builds from the
+   tagged commit, `VERSIONING.md`), and merged back.
+
+The Fyne 2.8 port predates this rule and has not been brought up to date
+since it was made, so its first catch-up, after the next minor release, is
+the largest.
 
 ## Building and testing both states
 
@@ -104,62 +193,75 @@ note, is what the store build finds when it is reinstalled. A gated change that
 writes something the current release would read differently says so in its
 entry below, and reinstalling the store build is part of trying it.
 
-## What keeps it out of every release
+---
 
-Two checks, and each is tested against a planted control:
+## What is behind the switch now
 
-- **The release paths' text.** `next_release_guard_test.go` reads
-  `release-ios.sh`, `release-mac-store.sh`, `build-android.sh`,
-  `build-windows-exe.sh`, `build-appimage.sh`, `go-release-wrapper.sh`,
-  `publish-site.sh` and the `release`, `msstore` and `linux-stores`
-  workflows. Any tag list that names `next`, directly or through a variable it
-  expands, fails, and so does one it cannot resolve. `BT_ANDROID_TAGS` is
-  tolerated only while `build-android.sh --release` refuses it.
-- **What each path built.** `scripts/verify-not-next.sh` reads the build tags
-  Go records inside a binary, so it also sees the tag arriving through
-  `GOFLAGS` in the environment or saved with `go env -w`, which no script
-  shows. `verify-release-package.sh` runs it on every desktop package (GitHub,
-  Mac App Store, Microsoft Store, Snap Store); `release-ios.sh` on the App
-  Store binary; `build-android.sh --release` on the Play bundle's libraries;
-  `publish-site.sh` on the site generator. The guard test asserts each of
-  those calls is in place, and builds probe binaries to show the verifier
-  refuses the tag each way it can arrive.
+Three pieces, reviewed and parked while 1.2.19 was prepared, then ported onto
+`main` as changes, not merged (*Why one switch and not a branch*). All three
+are ported. None has been tried on a device yet.
 
-## The day the major version ships
+| Piece | What readers will see | Status | Tests | Open decisions |
+|---|---|---|---|---|
+| 1. The NKJV refreshed at cache epoch 8, with an offline bridge | One fresh download of the NKJV (about 13 MB) on the first launch that can reach API.Bible, bringing corrected headings after a 200-verse passage boundary and the divine name in small capitals inside headings and psalm titles; a reader offline at that launch keeps the previous copy for up to 30 days instead of falling back to the WEB | Ported; both states pass; not tried on a device | `licensed_epoch_bridge_test.go` (both states), `licensed_epoch_bridge_next_test.go`, `licensed_epoch_bridge_current_test.go`, `nkjv_epoch_next_test.go`, `nkjv_epoch_current_test.go`; switch-aware checks in `version_launch_flow_test.go` and `red_letter_epoch_test.go` | N1 |
+| 2. The Greek Esther mapped verse for verse, like Daniel 3 | WEB Catholic's Esther lines up with the other editions: notes, highlights, shared links and cross-references cross between them, the three verses it lacks show gap marks, and the cross-references panel says why it lists nothing for verses the Treasury does not cover | Ported; both states pass; not tried on a device | `greek_esther_current_test.go` and `greek_esther_next_test.go` (here and in `cmd/websitegen/`), `crossref_coverage_test.go` with its `_current` and `_next` pair, `versification_states_test.go`, the site pins in `cmd/websitegen/testdata/` | E-A, E-B, E-C |
+| 3. "Same saying, another occasion" among the Gospel parallels | The cross-references panel lists, after the synopsis rows, the passages that carry the same saying on another occasion, under a label of their own; and the twenty-two Gospel verses that belonged to no synopsis set each find one | Ported; both states pass; seen only in test renders | `parallels_occasions_test.go` and `parallels_states_test.go` (both states), `parallels_next_test.go`, `parallels_current_test.go`, the kingdom woe in `crossrefs_versification_test.go`, the depth in `crossrefs_realdata_test.go` | P1 to P6 |
 
-1. Every entry below is reviewed and every open decision settled.
-2. Each gated change is made unconditional: the current branch of each
-   `if nextRelease` (or `if bibletext.NextRelease`) is deleted with the test;
-   each `_current.go` file is deleted and its `_next.go` partner loses its
-   constraint; each generator's next rule becomes its only rule, its shipping
-   file is regenerated from it and its `_next.go` file deleted, with the test
-   that compares the two (`versification_states_test.go`); each next asset
-   replaces the shipping one under its name (`gospel_parallels_next.json`
-   becomes `gospel_parallels.json`), an asset the shipping build lacks is
-   embedded where the rest are (`gospel_occasions.json`, in `parallels.go`),
-   and the file that put them in place is deleted with the test that compares
-   them (`parallels_next.go`, `parallels_states_test.go`); each pinned file
-   kept per state (`nkjv_off_site_next.sha256`) replaces the shipping one and
-   stays as its copy, and the register of pages it may differ on
-   (`nextReleaseSitePages`) empties; `!next` tests are deleted and `next`
-   tests lose their constraint, and a value chosen in a test by the switch
-   (`crossRefDeepestRead`) keeps its next one.
-3. `grep -rni 'nextrelease\|go:build.*next' --include='*.go' .` finds the
-   switch files, the release guard (`next_release_guard_test.go`) and the
-   site guard with its empty register (`cmd/websitegen/site_off_golden_test.go`)
-   and nothing else, and the suite passes with and without the tag, which now
-   build the same app.
-4. The version number takes its major step (`VERSIONING.md`), and the release
-   follows `RELEASING.md` as any other does.
+### Open decisions
 
-The switch, the CI steps and both guards stay. The register below empties, and
-the next major version starts filling it.
+Every one is settled before the major release's run-up ends. Each is written
+as the proposal to accept or change, with what the tree does now with the
+switch on.
 
-## What is behind the switch
+**1. The NKJV refresh**
 
-Three pieces were reviewed and parked while 1.2.19 was prepared. Each is
-ported as a change, not merged: `main` already holds earlier work from the same
-lines under different commits. All three are ported.
+- **N1. The picker's promise.** While a bridged copy is on screen nothing
+  asks for the update, but the picker's sentence, "showing a previous edition
+  until the update can be downloaded", promises an update within the session.
+  Either the words change, or a tap on its checked row fetches
+  (`VERSION_STATES.md`, *Open decisions*). The tree keeps the sentence and
+  does not fetch.
+
+**2. The Greek Esther**
+
+- **E-A. The gap marks.** Keep the gap marks [6] in Esther 4 and [5], [30] in
+  Esther 9: the three verses the Greek Esther does not have. The tree shows
+  them.
+- **E-B. One line for every uncovered addition.** Show the same "Nothing is
+  listed for verses …" line for the Song of the Three, Susanna, Bel and the
+  NKJV's extra verses, which today show the panel's first line alone. The
+  tree gives the line to Esther only (`crossRefNotedAdditions`).
+- **E-C. Two drafted sentences.** Approve the two sentences drafted for any
+  book whose numbering does not correspond: the web reader's caveat
+  (`incommensurableCaveat`, `cmd/websitegen/notice.go`) and the line under a
+  note that cannot be placed (`placementCopyIncommensurable`,
+  `notes_anchor.go`). No book reaches them in the next release; the shipping
+  build keeps 1.2.19's sentences.
+
+**3. Same saying, another occasion**
+
+- **P1. The label.** Drafted as "Same saying, another occasion"; the
+  alternatives are "Said on another occasion" and "Repeated on another
+  occasion". Two groups (S33, R01) are a charge made by Jesus's opponents,
+  not his own saying, so the label must not say "Jesus said". It is one
+  constant, `otherOccasionLabel` (`crossref_panel.go`).
+- **P2. Robertson's group.** Leave out R01, the one group taken from
+  Robertson's harmony alone. The tree has it in the file.
+- **P3. Where the twenty-two verses go.** Place them as new sets instead of
+  changing sets 39, 49 and 71. The tree has them as reviewed: those three
+  sets extended and four new ones added.
+- **P4. The "Cf." pairings.** Keep out the five pairings the harmony marks
+  only "Cf.": the pounds and the talents, John 17:2, Luke 12:46, Luke
+  19:41-44, and Mark 11:19 beside Luke 21:37-38 (`TEXTUAL-DATA.md` §9.5). The
+  tree leaves them out.
+- **P5. The credit and the README.** The panel's footer still reads "Gospel
+  parallels: synopsis". The harmonies, both public domain, are credited in
+  `NOTICE` and `TEXTUAL-DATA.md` §9; whether the footer names them too, and
+  how the README describes the second kind, waits on P1.
+- **P6. Two hiding rules.** One rule for both kinds of row would hide
+  verse-level Treasury rows inside whole pericopes. The tree keeps two (see
+  piece 3's `crossRefHidden`); if one is wanted, `crossRefDeepestRead` is
+  measured again with the real-data walk.
 
 ### 1. Every reader's NKJV refreshed at cache epoch 8, with an offline bridge
 
@@ -216,11 +318,7 @@ names the cache files the last generation read, is left as it is; it already
 names older public-domain epochs than the shipping build's, and is rewritten
 when the snapshot is next regenerated.
 
-Open decision: while the bridged copy stays on screen nothing asks for the
-update, but the picker's sentence, "showing a previous edition until the
-update can be downloaded", promises one within the session. Either the words
-change, or a tap on its checked row fetches (`VERSION_STATES.md`, *Open
-decisions*).
+Open decision: N1.
 
 ### 2. The Greek Esther mapped verse for verse, like Daniel 3
 
@@ -279,7 +377,8 @@ state's own sentence (`greekAdditionUnplacedSentence`); the incommensurable
 arms are exercised on a book a test marks as one (`withIncommensurableBook`).
 `crossref_coverage_next_test.go` and `crossref_coverage_current_test.go` hold
 the panel in each state. The web reader's fixture tree is pinned per state
-(`testdata/nkjv_off_site.sha256` and `nkjv_off_site_next.sha256`), and the
+(`cmd/websitegen/testdata/nkjv_off_site.sha256` and
+`nkjv_off_site_next.sha256`), and the
 next one differs only on the four Esther 1 pages the piece names.
 
 The deepest cross-reference row a panel reads (`crossRefDeepestRead`) is the
@@ -296,17 +395,7 @@ store build. A note or highlight carried into or out of the Greek Esther is
 stored as any other is, and the store build shows it wherever its own table
 can place it.
 
-Open decisions:
-
-- A. Keep the gap marks at Esther 4:6 and 9:5, 9:30, the three verses the
-  Greek Esther does not have.
-- B. Show the same "Nothing is listed for verses …" line for the Song of the
-  Three, Susanna, Bel and the NKJV's extra verses, which today show the
-  panel's first line alone.
-- C. Approve two sentences drafted for any book whose numbering does not
-  correspond: the web reader's caveat (`incommensurableCaveat`,
-  `cmd/websitegen/notice.go`) and the line under a note that cannot be placed
-  (`placementCopyIncommensurable`, `notes_anchor.go`).
+Open decisions: E-A, E-B, E-C.
 
 ### 3. "Same saying, another occasion" among the Gospel parallels
 
@@ -360,7 +449,7 @@ other-occasion rows:
   hides every Treasury row inside its passage. Without the tag it holds
   labels alone.
 - `treasuryRowsFor`, which now takes a `crossRefHidden` rather than a set of
-  labels.
+  labels, adapted to `main`'s resolver, which returns a list of rows.
 
 The label is one constant, `otherOccasionLabel` (`crossref_panel.go`), drawn
 as an outlined tag where the synopsis's is filled.
@@ -402,46 +491,85 @@ Esther:
   other-occasion row covers.
 - A range now ends at the last verse a translation has.
 
-The deepest Treasury row a panel reads (`crossRefDeepestRead`) is the
-twenty-first, Matthew 10:17 in every edition. Five of its best rows lie
-inside passages its chapter lists as the same saying on another occasion: two
-are Matthew 10:17's own, three its neighbours'. That is inside the 32 the
-index keeps. The walk measures the depth between what every selection
-holding a verse hides and the most any selection hides
-(`crossRefSelectionsHide`). The narrower bound now leaves out an
-other-occasion row that a synopsis row of the chapter covers. A selection
+The deepest Treasury row a panel reads (`crossRefDeepestRead`, re-measured
+with all three pieces on) is the twenty-first, Matthew 10:17 in every
+edition. Five of its best rows lie inside passages its chapter lists as the
+same saying on another occasion: two are Matthew 10:17's own, three its
+neighbours'. That is inside the 32 the index keeps. The walk measures the
+depth between what every selection holding a verse hides and the most any
+selection hides (`crossRefSelectionsHide`). The narrower bound now leaves out
+an other-occasion row that a synopsis row of the chapter covers. A selection
 holding both verses lists the synopsis row instead, which hides by label
 alone; the only verse this affects is Luke 4:24.
 
 Trying it: a build with the switch on writes nothing new. The verse a
-reader selects and the rows shown are not stored.
+reader selects and the rows shown are not stored. It has been seen only in
+`TestRenderCrossRefPanel`'s phone-sized renders (Matthew 12:25, Luke 11:2):
+`scripts/run-ios-device.sh --next` is the next look.
 
-On the day the major version ships, `NOTICE`'s sentence about
-`gospel_parallels_next.json` moves to `gospel_parallels.json`, which that
-file becomes, and `TEXTUAL-DATA.md` §9 loses its note that it is the next
-release's.
+`NOTICE` already credits the two harmonies, because the occasions file is in
+the repository whichever build reads it. On the day the major version ships,
+its sentence about `gospel_parallels_next.json` moves to
+`gospel_parallels.json`, which that file becomes, and `TEXTUAL-DATA.md` §9
+loses its note that it is the next release's.
 
-Open decisions:
+Open decisions: P1 to P6.
 
-- **The label.** Drafted as "Same saying, another occasion"; the
-  alternatives are "Said on another occasion" and "Repeated on another
-  occasion". Two groups (S33, R01) are a charge made by Jesus's opponents,
-  not his own saying, so the label must not say "Jesus said".
-- **Robertson's group.** R01, the one group taken from Robertson's harmony
-  alone, is in the file; leave it out or keep it.
-- **Where the twenty-two verses go.** Ported as reviewed, which extends three
-  sets (39, 49 and 71) and adds four. The alternative is to leave every
-  existing set as 1.2.19 has it and place all twenty-two in new sets.
-- **The "Cf." pairings.** Keep out the five the harmony marks only "Cf.".
-  These are the pounds and the talents, John 17:2, Luke 12:46, Luke 19:41-44
-  and Mark 11:19 beside Luke 21:37-38 (`TEXTUAL-DATA.md` §9.5).
-- **The credit and the README.** The panel's footer still reads "Gospel
-  parallels: synopsis". The harmonies, both public domain, are credited in
-  `NOTICE` and `TEXTUAL-DATA.md` §9; whether the footer names them too, and
-  how the README describes the second kind, waits on the label.
-- **Two hiding rules.** One rule for both kinds would hide verse-level
-  Treasury rows inside whole pericopes. If it is wanted, `crossRefDeepestRead`
-  is measured again with the real-data walk.
-- **On a device.** It has been seen only in `TestRenderCrossRefPanel`'s
-  phone-sized renders (Matthew 12:25, Luke 11:2), not yet on a device:
-  `scripts/run-ios-device.sh --next`.
+---
+
+## The major release
+
+### The run-up
+
+1. **Branches merge first.** Every branch from *What needs a branch instead*
+   is merged into `main`, after the minor release before it has shipped. From
+   here a fix readers need goes out from a branch cut at the last release's
+   tag.
+2. **Decisions settle.** Every open decision above is answered, and each
+   answer is made behind the switch with its test, so the register's last
+   state is the one reviewed.
+3. **Each piece is tried on a device** with the switch on (*Trying it on a
+   device*), with the store build reinstalled over it where the piece's entry
+   says so.
+
+### Release day
+
+4. **Remove the switch from each piece; never flip it.** Setting `next_off.go`
+   to `true` would ship the next release beside dead code for the old one,
+   two copies of every gated table and tests of a state no build has, and
+   `next_release_guard_test.go` refuses it. Each gated change is made
+   unconditional instead:
+   - the shipping arm of each `if nextRelease` (or `if bibletext.NextRelease`)
+     is deleted, and the condition with it;
+   - each `_current.go` file is deleted and its `_next.go` partner loses its
+     constraint;
+   - each generator's next rule becomes its only rule and its `--next` option
+     goes; its shipping file is regenerated from it and its `_next.go` file
+     deleted (`versification_data_next.go`, `omitted_verses_data_next.go`);
+   - each next asset replaces the shipping one under its name
+     (`gospel_parallels_next.json` becomes `gospel_parallels.json`), an asset
+     the shipping build lacks is embedded where the rest are
+     (`gospel_occasions.json`, in `parallels.go`), and the file that put them
+     in place is deleted (`parallels_next.go`);
+   - each file pinned per state (`nkjv_off_site_next.sha256`) replaces the
+     shipping one and stays as its copy, and the register of pages it may
+     differ on (`nextReleaseSitePages`) empties.
+5. **Tests collapse to one state.** `!next` tests are deleted and `next` tests
+   lose their constraint; a value a test chooses by the switch
+   (`crossRefDeepestRead`) keeps its next one; the tests that compare two
+   states' data (`versification_states_test.go`, `parallels_states_test.go`)
+   go with the second copy.
+6. **Nothing is left behind.**
+   `grep -rli 'nextrelease\|go:build.*next' --include='*.go' .` finds the two
+   switch files, the release guard (`next_release_guard_test.go`) and the site
+   guard with its empty register (`cmd/websitegen/site_off_golden_test.go`),
+   and nothing else; `grep -l -e '--next' scripts/gen-*.py` finds nothing; and
+   the suite passes with and without the tag, which now build the same app.
+7. **The version number is chosen then, not before**: 2.0 or 1.3, by what the
+   release turns out to hold. The ledgers take it as any release's do
+   (`RELEASING.md`, stage 1), under `VERSIONING.md`'s rules.
+8. **It ships like any other release**, by `RELEASING.md`, built without the
+   tag, which by now changes nothing.
+
+The switch, the CI steps and both guards stay. The register empties, and the
+next major version starts filling it.
