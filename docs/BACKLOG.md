@@ -3693,11 +3693,11 @@ whole under the chapter; so on a page with no span (the plain-text fallback of
 the Mac and the iPhone and iPad, and the dead legacy pane) the cut was new
 with `fa77eb301`, and with a span it was already in 1.2.19. The search now
 takes the first copy that splits no word (`wordAlignedIndex`, as the
-psalm-title rule in item 2 already did), in the span's verses and then in the
-chapter, and a copy that splits a word only where there is no other, as a drag
-begun or ended inside a word needs. Over every phrase of two, three and five
-words in every verse of the WEB, the BSB and the WEBC, each with the span a
-pane reports and without
+psalm-title rule in item 2 already did), in the span's verses, or in the
+chapter when there is no span, and a copy that splits a word only where there
+is no other, as a drag begun or ended inside a word needs. Over every phrase
+of two, three and five words in every verse of the WEB, the BSB and the WEBC,
+each with the span a pane reports and without
 (`TestEveryPhraseInAVerseSharesItsOwnWordsOverLocalCaches_LocalOnly`, local
 and opt-in), 12,161, 9,339 and 13,855 had shared other words than those
 selected, or fallen back; 0, 4 and 0 do now. The BSB's four are two phrases
@@ -3709,19 +3709,72 @@ embedded Gospels in CI, 214,115 phrases each way, of which 59 with the span
 and 1,247 without had been wrong. Every drag across a verse boundary, from one
 to three words before the number to one to three after it, with the span and
 without, answers as before, byte for byte: 1,689,252 drags over the three
-translations. The cost is in drags begun one letter into a word or ended one
-letter short of one, when the letters also stand elsewhere as whole words:
-such a drag is now quoted from that whole copy. With the span the citation
-does not change (15 of the BSB's 965,485 such drags quote more letters than
-before, none in the WEB); with no span 202 of the BSB's that were cited by
-their own verse, and 9 of the WEB's 39,153, now cite the whole copy's. With
-no span a double-click is placed the same way, at the first copy of its word
-that splits no word: in the WEB's titled psalms, 2,633 of 29,618
-double-clicks, on words the psalm first has inside a longer word, were shared
-as they came and cited to the chapter, and each is now cited by its first
-whole copy, the verse clicked for 1,158 and an earlier copy's for 1,475 (the
-BSB: 1,118 and 1,307 of 2,425). That is the rule for any selection with no
-span, and whether a selection with no span whose words stand more than once
+translations.
+
+With a span, a selection the span's verses do not hold is found in the
+chapter at its first copy of any kind, as before. Taking the chapter's first
+whole copy instead, as the change first did, moved such selections to verses
+they never touched: a drag from the end of a verse into the first letters of
+the heading below, whose copy in the text runs on into the next verse's first
+word (the BSB's "the LORD.\nThe" at the end of 2 Chronicles 20:13, which verse
+14 follows with "Then", cited 20:32–33); a verse number selected on its own
+that a verse holds as a figure (Genesis 32's "20" cited 32:14, which has the
+figure after "200"); and a word of a heading selected on its own (the
+"The" of Genesis 1's "The Fourth Day", span 13, cited 1:12). And where a drag
+ends on the next verse's number, that verse, whose only part in the drag was
+its number, leaves the region when the verses before it hold the rest: "in
+Christ 9", begun two letters into "gain" at the end of the WEB's Philippians
+3:8, had been quoted from verse 9's own "in Christ" and cited 3:9, and the
+BSB's "he said.\n57", begun inside "she" in Luke 22:56, cited 22:57
+(`TestASelectionItsVersesDoNotHoldIsNotMovedToAWholeCopyElsewhere`,
+`TestADragEndedOnTheNextVersesNumberIsNotPlacedInThatVerse`). Over a sweep of
+the page models of every pane, of drags inside each verse, across each verse
+boundary, from and to each verse number and around each heading (40,139,729
+selections in the WEB, 38,654,375 in the BSB and 45,677,198 in the WEBC, each
+with the span its pane reports), those two corrections change 1,186 of the
+BSB's answers, 44 of the WEB's and 60 of the WEBC's, none of them drags inside
+one verse's words: a number or a heading selected on its own cites its own
+verse again, as before the change, and the drag ending on a number stays in the
+drag. Against the search before the change, the only answers of that sweep
+that move away from the reader's copy are drags begun or ended inside a word
+(below); 48 of the BSB's drags ending on a verse number, 60 of the WEB's and
+64 of the WEBC's, counted on both page models, are now placed in the drag or
+cited by its verses, where they fell back to the legacy path or cited another
+verse.
+
+The cost is in drags begun or ended inside a word. The text alone cannot tell
+such a drag from a phrase whose first copy stands inside a longer word, so
+where the drag's letters also stand as whole words in the span's verses it is
+quoted from that whole copy, which need not hold the reader's words; the
+citation stays the same verse. "leavened bread shall", begun two letters into
+"Unleavened" in the WEB's Exodus 13:7, quotes "leavened bread shall" from
+later in the verse, where it had quoted "bread shall"; the BSB's "righteous
+continue", begun inside "unrighteous" in Revelation 22:11, quotes "righteous
+continue" for "continue"
+(`TestADragBegunOrEndedInsideAWordIsQuotedFromAWholeCopyInItsVerse`). Over
+every phrase of one, two, three, four, six and ten words in every verse, begun
+one or two letters into its first word, ended one or two short of its last, or
+both, with the span of its verse, 938 of the WEB's 25,479,806 such drags, 683
+of the BSB's 24,234,120 and 1,043 of the WEBC's 28,996,684 are now quoted from
+a copy other than the reader's, 839, 615 and 939 of them with other words.
+With no span the whole copy is looked for in the chapter, and the citation
+moves with it. Taking drags of three words begun one letter into the first
+word or ended one letter short of the last, where that word has three letters
+or more, over every verse of each translation (991,511 in the WEB, 965,485 in
+the BSB and 1,130,541 in the WEBC, each with the span and without): with the
+span 31, 15 and 33 quote more letters than before, citing the same verse; with
+no span 311, 202 and 338 that cited their own verse now cite another (the
+WEB's "from the tree", ended one letter short of "trees" in Genesis 3:2, cited
+3:11). Telling the reader's copy from another needs the selection's place in
+its verse, which every pane has (the Apple panes' verse index, `BtBridge`'s
+verse starts, the styled pane's runs) and none hands over; whether to hand it
+over is open. With no span a double-click is placed the same way, at the first
+copy of its word that splits no word: in the WEB's titled psalms, 2,633 of
+29,618 double-clicks, on words the psalm first has inside a longer word, were
+shared as they came and cited to the chapter, and each is now cited by its
+first whole copy, the verse clicked for 1,158 and an earlier copy's for 1,475
+(the BSB: 1,118 and 1,307 of 2,425). That is the rule for any selection with
+no span, and whether a selection with no span whose words stand more than once
 should cite the chapter instead is open.
 
 The original finding:
@@ -3917,11 +3970,31 @@ heading of those words, the first is taken. None of the three shapes is now
 answered otherwise in any of the three translations
 (`TestEveryHeadingSelectedWholeWithNoSpanOverLocalCaches_LocalOnly`, local and
 opt-in; `TestAHeadingSelectedWholeWithNoSpanQuotesNothing`). A piece of a
-heading further down with no span is left as it was, since the same piece may
-stand in another heading. This applies the rule that a heading is never quoted
-to a shape no span reached, on the fallback's page alone (and the dead legacy
-pane), and goes with the change to headings if the decision on headings
-above limits that change to titles.
+heading further down with no span is not answered so, since the same piece may
+stand in another heading, though a piece that is another heading whole is
+answered as that heading ("The Parable of the Weeds", the start of Matthew
+13's "The Parable of the Weeds Explained", cites 13:24). Any other piece is
+placed by item 1's search, as any selection with no span is, at the first copy
+of its words that splits no word. Of the BSB's 29,465 words, prefixes and
+suffixes of headings selected with no span, 1,845 that were shared as they
+came, the heading's words as Scripture under the chapter, are now quoted from
+that copy and cited by its verse; and 18 quote fewer words than they hold, the
+heading repair having cut from their end what the chapter does not have, as
+the start of another heading ("Feast" of "The Feast", taken for the start of
+Leviticus 23's "Feasts and Sabbaths"), and the rest being quoted from its first
+whole copy ("The", 23:5). 7 of those 18 had quoted nothing, the first copy of
+"The" standing inside the "Then" that opens a verse, which answered them as a
+heading under that verse (23:1, no heading of those words standing above it);
+the other 11 had been shared as they came. The WEBC has 13 of its 306 pieces
+the first way. With a span no piece moves out of the span's verses: 620 of the
+BSB's 66,091 and 3 of the WEBC's 852, which the legacy path shared verbatim
+under the span, are now placed in those verses, quoting the same words; with a
+span of one verse the citation is the same, and with two it names the one that
+holds the words. This applies the rule that a heading is never quoted to a
+shape no span reached, on the fallback's page alone (and the dead legacy
+pane), and goes with the change to headings if the decision on headings above
+limits that change to titles. What a piece of a heading with no span should
+share is that decision's too.
 
 Two shapes stay as they were, being the headings' rather than the title's:
 with no span, the cross-references resolve a title selected on its own by
