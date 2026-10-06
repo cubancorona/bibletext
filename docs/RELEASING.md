@@ -97,6 +97,9 @@ artefact built with it, however the tag reached the build (stage 3).
 
 The major release goes through these same stages, once NEXT.md's release-day
 steps have made its work unconditional. It is never built by setting the tag.
+In its run-up, once a branch has merged into `main`, a minor release is cut
+from the last release's tag instead of `main`; NEXT.md, *A fix during the
+run-up*, gives the few steps that change.
 
 ---
 
@@ -247,11 +250,14 @@ The iOS and Mac scripts do this themselves: `release-ios.sh` reads the signed
 `.pkg` after signing and fails if the entitlement did not survive. The AAB is
 read with `bundletool dump manifest`. Record what each one printed.
 
-`scripts/verify-release-package.sh` is **not** this step. It is the CI-only
-check on the GitHub release assets — trimpath, the release key, no
-next-release switch, and that no runner workspace path leaked into the
-package — and it refuses to run without
-`GITHUB_WORKSPACE` set. It reads no version and no build number.
+`scripts/verify-release-package.sh` is **not** this step. It checks how a
+desktop package's executable was built — trimpath, the release key, no
+next-release switch, and that no build machine's path leaked into the
+package — and it reads no version and no build number. CI runs it on the
+GitHub release assets and the Linux and Microsoft Store packages;
+`release-mac-store.sh` runs it here on the Mac App Store binary, before
+signing, giving it the checkout as `GITHUB_WORKSPACE`, without which it
+refuses to run.
 
 ### 5 — Tag, once every artefact exists
 

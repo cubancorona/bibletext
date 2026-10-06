@@ -60,7 +60,10 @@ Every minor release, 1.2.20 and each one after it until the major version,
 is built from `main` without the tag. It ships the last release's behaviour
 plus its own fixes, and none of the work behind the switch. Nobody has to
 remember that: no release path passes the tag, and two checks, each tested
-against a planted control, stop one that would.
+against a planted control, stop one that would. The one exception is a fix
+released during the major release's run-up, after a branch has merged into
+`main`; it is built from the last release's tag instead (*A fix during the
+run-up*, below).
 
 - **The release paths' text.** `next_release_guard_test.go`, which runs in
   both states, reads `release-ios.sh`, `release-mac-store.sh`,
@@ -147,7 +150,7 @@ branch of their own:
 |---|---|---|
 | A toolkit upgrade | `go.mod` names one version of each module, and the release scripts swap in the patched Fyne for the build (`patches/README.md`); no build tag chooses a module version | the Fyne 2.8 port (`FYNE_28_PORT.md`), on a branch that is not published |
 | Raising the minimum iOS or macOS version | the floor is one value in `config/product.json`, the one every Apple build and store listing derives from (`check-min-os-versions.py`); no build tag changes it | none |
-| A change to how stored data is laid out | a build with the switch on shares a device's data with the store build (*Trying it on a device*), so data written the new way would be read the old way the moment the store build is reinstalled, and a move between layouts is one-way | none |
+| A change to how stored data is laid out | on an iPhone or iPad a build with the switch on shares the store build's data, and on a computer the build without it (*Trying it on a device*), so data written the new way would be read the old way the moment the other build runs, and a move between layouts is one-way | none |
 
 Such a branch is kept current so that it never becomes the parked kind:
 
@@ -156,9 +159,8 @@ Such a branch is kept current so that it never becomes the parked kind:
    release's worth of change, never several.
 2. **At the start of the major release's run-up**, it is merged into `main`.
    From that merge on, `main` is the major release, so the run-up is kept
-   short; a fix readers need before it ships is made on a branch from the
-   last release's tag, released from there (every channel builds from the
-   tagged commit, `VERSIONING.md`), and merged back.
+   short; a fix readers need before it ships goes out from the last
+   release's tag (*A fix during the run-up*, below).
 
 The Fyne 2.8 port predates this rule and has not been brought up to date
 since it was made, so its first catch-up, after the next minor release, is
@@ -197,13 +199,41 @@ editor settings, not the committed ones.
 | Simulator | `scripts/run-ios-sim.sh --next` (add `--dev`) |
 | Android, debug APK | `BT_ANDROID_TAGS=next scripts/build-android.sh` (or `bibletextdev,next`) |
 | Desktop | `go run -tags next ./cmd/bibletext`; in VS Code, "Run Desktop NEXT release" |
-| Web reader, locally | `go run -tags next ./cmd/websitegen -out <empty directory>`; never published |
+| Web reader, the pages it changes | `go test -tags next ./cmd/websitegen`, which checks them against fixtures with no network |
+| Web reader, the whole site | see below; never published |
 
-A device build installs over the store build under the same bundle id, and
-shares its data. Whatever the next build writes, a cache at a new epoch or a
-note, is what the store build finds when it is reinstalled. A gated change that
-writes something the current release would read differently says so in its
-entry below, and reinstalling the store build is part of trying it.
+The whole site needs the NKJV. While the site publishes the NKJV's text
+(`nkjvSiteText`, `cmd/websitegen/nkjv_text.go`), the generator reads the key
+before anything else and fetches the whole edition fresh, and refuses
+`-offline` outright. So a whole site with the switch on is built as
+`publish-site.sh` builds one, with the key from the login Keychain:
+
+```bash
+. scripts/release-bible-key.sh
+run_with_site_bible_key go run -tags next ./cmd/websitegen -out <empty directory>
+```
+
+That spends about 200 requests of API.Bible's monthly quota, as a dry run
+does, and leaves the NKJV's pages in the directory: delete it when done
+(`API_KEY_HANDLING.md`, *The web reader's NKJV text*).
+
+What a device build shares with the store build differs by platform:
+
+- **iPhone or iPad.** A device build installs over the App Store build under
+  the same bundle id and keeps its data. Whatever the next build writes, a
+  cache at a new epoch or a note, is what the store build finds when it is
+  put back over it without deleting the app.
+- **Android.** The debug APK is signed with the upload key and Play installs
+  carry Google's app-signing key (`ANDROID.md`, *Signing key*), so neither
+  installs over the other: the one there is uninstalled first, with its data.
+  The next build starts empty, and so does the store build after it.
+- **A computer.** `go run ./cmd/bibletext` with and without the tag share one
+  data folder, so the build without it finds what the next build wrote.
+
+A gated change that writes something the current release would read
+differently says so in its entry below, and running the build without the
+switch over it (the store build put back on an iPhone or iPad, or
+`go run ./cmd/bibletext`) is part of trying it.
 
 ---
 
@@ -316,9 +346,10 @@ verse's text.
 Trying it: a build with the switch on, at its first launch that can reach
 API.Bible with the NKJV chosen, fetches `bibletext-nkjv-v8.json` and deletes
 the epoch-7 copy, which spends the provider's quota once. A build
-without it on the same data afterwards (the store build reinstalled, or
-`go run ./cmd/bibletext` after `go run -tags next ./cmd/bibletext`, which share
-one cache folder) finds no epoch-7 copy and fetches the NKJV again, and
+without it on the same data afterwards (the store build put back over it on
+an iPhone or iPad, or `go run ./cmd/bibletext` after
+`go run -tags next ./cmd/bibletext`, which share one cache folder) finds no
+epoch-7 copy and fetches the NKJV again, and
 neither reads nor removes the epoch-8 file. That file stays until a build with
 the switch on runs again, the system clears the cache folder, or it is
 deleted from that folder by hand.
@@ -499,6 +530,11 @@ Esther:
 
 - The kingdom woe's Treasury row from Luke 11:52 now opens the kingdom woe,
   so the other-occasion row hides it.
+- In the BSB, which prints the kingdom woe at Matthew 23:13, Matthew 10:7's
+  and Luke 11:42's Treasury rows to it now open it there. The row takes one
+  of the verse's sixteen places (`maxCrossRefsPerVerse`), so the last row
+  the branch listed, Acts 4:2 and Ecclesiastes 7:18, drops off. The shipping
+  build lists the same row.
 - Matthew 18:35's row to Mark 11:25 now opens Mark 11:26, which no
   other-occasion row covers.
 - A range now ends at the last verse a translation has.
@@ -520,10 +556,15 @@ reader selects and the rows shown are not stored. It has been seen only in
 `scripts/run-ios-device.sh --next` is the next look.
 
 `NOTICE` already credits the two harmonies, because the occasions file is in
-the repository whichever build reads it. On the day the major version ships,
+the repository whichever build reads it, and a `NOTICE` that called all of
+`assets/parallels/` the app's own work would be wrong about the repository.
+The AppImage carries a copy of `NOTICE` (`build-appimage.sh`), so the next
+minor release's AppImage carries the credit too, for data its binary does not
+hold. It is the only shipped text that differs from 1.2.19's without the tag,
+and it changes no behaviour. On the day the major version ships,
 its sentence about `gospel_parallels_next.json` moves to
 `gospel_parallels.json`, which that file becomes, and `TEXTUAL-DATA.md` §9
-loses its note that it is the next release's.
+loses its note that it is the next major release's (step 7, below).
 
 Open decisions: P1 to P6.
 
@@ -535,14 +576,38 @@ Open decisions: P1 to P6.
 
 1. **Branches merge first.** Every branch from *What needs a branch instead*
    is merged into `main`, after the minor release before it has shipped. From
-   here a fix readers need goes out from a branch cut at the last release's
-   tag.
+   here a fix readers need goes out from the last release's tag (*A fix
+   during the run-up*, below).
 2. **Decisions settle.** Every open decision above is answered, and each
    answer is made behind the switch with its test, so the register's last
    state is the one reviewed.
 3. **Each piece is tried on a device** with the switch on (*Trying it on a
    device*), with the store build reinstalled over it where the piece's entry
    says so.
+
+### A fix during the run-up
+
+Once a branch has merged, `main` holds work no switch can hold off, so a
+minor release can no longer be cut from it. A fix readers need before the
+major release ships goes out by `RELEASING.md`, with these differences:
+
+- **Where.** On a branch cut at the last release's tag
+  (`git switch -c fix/<version> v<last version>`), not on `main`. The fix is
+  made there, the ledgers are bumped there (stage 1), and the branch is
+  pushed instead of `main` (stage 2). CI runs on every branch.
+- **The Microsoft Store package.** `msstore.yml` starts by itself only on a
+  push of `main`, so it is dispatched at the branch while the branch is the
+  release commit, `gh workflow run msstore.yml --ref fix/<version>`, and its
+  run's `headSha` checked as stage 3 says. `linux-stores.yml`, which checks
+  the Linux store packages, is dispatched the same way.
+- **The rest.** The local release scripts build the checkout they run in,
+  and `release.yml` builds whatever commit the tag names, so neither needs
+  more than the branch checked out and the tag on its commit (stage 5).
+  Stage 11 publishes the site from the branch,
+  `ALLOW_BRANCH=1 scripts/publish-site.sh`: `main` is no longer the tree the
+  tag names.
+- **Afterwards.** The branch is merged into `main`, so the fix is in the
+  major release too, and deleted.
 
 ### Release day
 
@@ -577,10 +642,31 @@ Open decisions: P1 to P6.
    guard with its empty register (`cmd/websitegen/site_off_golden_test.go`),
    and nothing else; `grep -l -e '--next' scripts/gen-*.py` finds nothing; and
    the suite passes with and without the tag, which now build the same app.
-7. **The version number is chosen then, not before**: 2.0 or 1.3, by what the
+7. **The prose follows.** Comments and documents describe both states in
+   words no build check reads: "in the next major release", "the shipping
+   build keeps 1.2.19's", "with the next tag". Every file with such words in
+   a line added since the switch arrived (`v1.2.19` is the last release
+   before it) is listed by
+
+   ```bash
+   P='major release|major version|next release|next switch|next tag|nextrelease|tags[ =]next|go:build.*next|next-release|--next|_next[._]|NEXT\.md|shipping build|both states'
+   git diff -U0 v1.2.19 -- . |
+     awk '/^\+\+\+ /{f=substr($0,7); next} /^\+/{print f "\t" substr($0,2)}' |
+     grep -iE -- "$P" | cut -f1 | sort -u
+   ```
+
+   Each is read where it matches, and the sentences around. Words about the
+   switch itself stay: this page, the two switch files, the two guards,
+   `verify-not-next.sh` and the release paths that call it, the `--next`
+   options of the device scripts and pane checks, CI's next steps, the editor
+   tasks, and the rules in `AGENTS.md`, `CONTRIBUTING.md` and `RELEASING.md`.
+   Words about what one state or the other does are rewritten to say what the
+   app now does. `NOTICE` and `TEXTUAL-DATA.md` §9 are among them, and change
+   with step 4's asset moves, since they name the files.
+8. **The version number is chosen then, not before**: 2.0 or 1.3, by what the
    release turns out to hold. The ledgers take it as any release's do
    (`RELEASING.md`, stage 1), under `VERSIONING.md`'s rules.
-8. **It ships like any other release**, by `RELEASING.md`, built without the
+9. **It ships like any other release**, by `RELEASING.md`, built without the
    tag, which by now changes nothing.
 
 The switch, the CI steps and both guards stay. The register empties, and the
