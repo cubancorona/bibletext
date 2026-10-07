@@ -1,0 +1,86 @@
+{
+  "version": "World English Bible",
+  "roster": ["Jewish", "Catholic", "Orthodox", "Lutheran", "Reformed", "historical-critical"],
+  "passages": [
+    {
+      "id": "genesis-1-1-5",
+      "ref": "Genesis 1:1–5",
+      "book": "Genesis", "chapter": 1, "lo": 1, "hi": 5,
+      "hebrewBible": true, "quotesHebrewBible": false, "noConflict": false,
+      "text": "In the beginning, God created the heavens and the earth. The earth was formless and empty. Darkness was on the surface of the deep and God’s Spirit was hovering over the surface of the waters. God said, “Let there be light,” and there was light. God saw the light, and saw that it was good. God divided the light from the darkness. God called the light “day”, and the darkness he called “night”. There was evening and there was morning, the first day.",
+      "mustInclude": [["Jewish"], ["Catholic", "Orthodox"], ["young-earth"], ["historical-critical"]]
+    },
+    {
+      "id": "isaiah-7-14",
+      "ref": "Isaiah 7:14",
+      "book": "Isaiah", "chapter": 7, "lo": 14, "hi": 14,
+      "hebrewBible": true, "quotesHebrewBible": false, "noConflict": false,
+      "text": "Therefore the Lord himself will give you a sign. Behold, the virgin will conceive, and bear a son, and shall call his name Immanuel.",
+      "mustInclude": [["Jewish"], ["Catholic", "Orthodox"], ["Lutheran", "Reformed", "Anglican", "Wesleyan", "Baptist", "Anabaptist", "Pentecostal", "evangelical", "Protestant"], ["historical-critical"]]
+    },
+    {
+      "id": "matthew-5-31-32",
+      "ref": "Matthew 5:31–32",
+      "book": "Matthew", "chapter": 5, "lo": 31, "hi": 32,
+      "hebrewBible": false, "quotesHebrewBible": false, "noConflict": false,
+      "text": "“It was also said, ‘Whoever shall put away his wife, let him give her a writing of divorce,’ but I tell you that whoever puts away his wife, except for the cause of sexual immorality, makes her an adulteress; and whoever marries her when she is put away commits adultery.",
+      "mustInclude": [["Catholic"], ["Orthodox"], ["Lutheran", "Reformed", "Anglican", "Wesleyan", "Baptist", "Anabaptist", "Pentecostal", "evangelical", "Protestant"], ["historical-critical"]]
+    },
+    {
+      "id": "matthew-16-18",
+      "ref": "Matthew 16:18",
+      "book": "Matthew", "chapter": 16, "lo": 18, "hi": 18,
+      "hebrewBible": false, "quotesHebrewBible": false, "noConflict": false,
+      "text": "I also tell you that you are Peter, and on this rock I will build my assembly, and the gates of Hades will not prevail against it.",
+      "mustInclude": [["Catholic"], ["Orthodox"], ["Reformed", "evangelical"], ["historical-critical"]]
+    },
+    {
+      "id": "john-6-53",
+      "ref": "John 6:53",
+      "book": "John", "chapter": 6, "lo": 53, "hi": 53,
+      "hebrewBible": false, "quotesHebrewBible": false, "noConflict": false,
+      "text": "Jesus therefore said to them, “Most certainly I tell you, unless you eat the flesh of the Son of Man and drink his blood, you don’t have life in yourselves.",
+      "mustInclude": [["Catholic"], ["Lutheran"], ["Reformed", "evangelical"], ["historical-critical"]]
+    },
+    {
+      "id": "romans-9-14-18",
+      "ref": "Romans 9:14–18",
+      "book": "Romans", "chapter": 9, "lo": 14, "hi": 18,
+      "hebrewBible": false, "quotesHebrewBible": false, "noConflict": false,
+      "text": "What shall we say then? Is there unrighteousness with God? May it never be! For he said to Moses, “I will have mercy on whom I have mercy, and I will have compassion on whom I have compassion.” So then it is not of him who wills, nor of him who runs, but of God who has mercy. For the Scripture says to Pharaoh, “For this very purpose I caused you to be raised up, that I might show in you my power, and that my name might be proclaimed in all the earth.” So then, he has mercy on whom he desires, and he hardens whom he desires.",
+      "mustInclude": [["Reformed"], ["Wesleyan", "Arminian"], ["Catholic", "Orthodox"], ["historical-critical"]]
+    },
+    {
+      "id": "1-timothy-2-12",
+      "ref": "1 Timothy 2:12",
+      "book": "1 Timothy", "chapter": 2, "lo": 12, "hi": 12,
+      "hebrewBible": false, "quotesHebrewBible": false, "noConflict": false,
+      "text": "But I don’t permit a woman to teach, nor to exercise authority over a man, but to be in quietness.",
+      "mustInclude": [["complementarian"], ["egalitarian"], ["Catholic"], ["historical-critical"]]
+    },
+    {
+      "id": "revelation-20-1-6",
+      "ref": "Revelation 20:1–6",
+      "book": "Revelation", "chapter": 20, "lo": 1, "hi": 6,
+      "hebrewBible": false, "quotesHebrewBible": false, "noConflict": false,
+      "text": "I saw an angel coming down out of heaven, having the key of the abyss and a great chain in his hand. He seized the dragon, the old serpent, who is the devil and Satan, who deceives the whole inhabited earth, and bound him for a thousand years, and cast him into the abyss, and shut it and sealed it over him, that he should deceive the nations no more until the thousand years were finished. After this, he must be freed for a short time. I saw thrones, and they sat on them, and judgment was given to them. I saw the souls of those who had been beheaded for the testimony of Jesus and for the word of God, and such as didn’t worship the beast nor his image, and didn’t receive the mark on their forehead and on their hand. They lived and reigned with Christ for a thousand years. The rest of the dead didn’t live until the thousand years were finished. This is the first resurrection. Blessed and holy is he who has part in the first resurrection. Over these, the second death has no power, but they will be priests of God and of Christ, and will reign with him one thousand years.",
+      "mustInclude": [["amillennial"], ["premillennial"], ["historical-critical"]]
+    },
+    {
+      "id": "psalm-23-1",
+      "ref": "Psalms 23:1",
+      "book": "Psalms", "chapter": 23, "lo": 1, "hi": 1,
+      "hebrewBible": true, "quotesHebrewBible": false, "noConflict": true,
+      "text": "The LORD is my shepherd;\nI shall lack nothing.",
+      "mustInclude": [["Jewish"], ["historical-critical"]]
+    },
+    {
+      "id": "john-11-35",
+      "ref": "John 11:35",
+      "book": "John", "chapter": 11, "lo": 35, "hi": 35,
+      "hebrewBible": false, "quotesHebrewBible": false, "noConflict": true,
+      "text": "Jesus wept.",
+      "mustInclude": [["historical-critical"]]
+    }
+  ]
+}
