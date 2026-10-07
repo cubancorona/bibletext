@@ -8,7 +8,7 @@ package bibletext
 // control under testdata/compare/_controls/ trips its own check and no other,
 // and that good.md, the hand-written answer to the contract, trips none.
 // TestCompareBenchRecordedAnswersAreFair scores every recorded answer under
-// testdata/compare/<provider>/<passage>.md and FAILS while any passage of
+// testdata/compare/<provider>/<passage>.md and fails while any passage of
 // passages.json has no answer from the default provider: an empty or a
 // thinned set cannot pass by scoring nothing, so the test is red from the
 // day it is committed until the first recording round lands its fixtures,

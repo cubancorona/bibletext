@@ -396,7 +396,7 @@ func TestProviderAPIKeyPrefersEnv(t *testing.T) {
 // --- Shared prompts / orchestration -----------------------------------------
 
 // john3Passage is the aiPassage the prompt tests build: John 3:16 in a
-// non-default version, which proves the translation prompt names the ACTIVE
+// non-default version, which proves the translation prompt names the active
 // version rather than a hardcoded "World English Bible".
 func john3Passage() aiPassage {
 	return aiPassage{Book: "John", Chapter: 3, Lo: 16, Hi: 16, Ref: "John 3:16",

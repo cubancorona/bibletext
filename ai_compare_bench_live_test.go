@@ -1,11 +1,11 @@
 package bibletext
 
 // The live recorder for the Compare perspectives fairness bench: one
-// recording round against the REAL providers, scored as it goes, with every
+// recording round against the real providers, scored as it goes, with every
 // answer written out for a person to read before any of it becomes a fixture.
 //
-// Doubly gated so it can never spend money by accident: it needs BOTH the
-// provider keys in the environment AND BIBLETEXT_COMPAREBENCH=1, and it
+// Doubly gated so it can never spend money by accident: it needs both the
+// provider keys in the environment and BIBLETEXT_COMPAREBENCH=1, and it
 // refuses to start without BIBLETEXT_COMPAREBENCH_DIR, the directory the
 // answers are written to (never under testdata; AGENTS.md). From the repo
 // root:
