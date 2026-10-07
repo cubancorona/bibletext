@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -172,5 +173,74 @@ func TestOrdinaryFormattingSurvives(t *testing.T) {
 	}
 	if headings == 0 {
 		t.Error("the heading did not survive; the answer fell back to literal text")
+	}
+}
+
+// subHeadings returns the text of every level-two heading segment, in order:
+// the segments the markdown renderer makes of "## " lines.
+func subHeadings(segs []widget.RichTextSegment) []string {
+	var out []string
+	for _, seg := range segs {
+		if ts, ok := seg.(*widget.TextSegment); ok && !ts.Style.Inline && ts.Style.SizeName == theme.SizeNameSubHeadingText {
+			out = append(out, ts.Text)
+		}
+	}
+	return out
+}
+
+// A comparison is a fixed skeleton of level-two headings, a bulleted list
+// under "Where they part, and why" and a numbered list of questions, and the
+// panel's renderer makes each of those what it is: the readings and the four
+// sections become heading segments in order, the bullets an unordered list
+// and the questions an ordered one. An ordinary link is flattened to its text
+// and the headings survive; a link the flattening cannot remove sends the
+// whole answer to literal text, with no heading at all, rather than to the
+// network. Control: that bypass is proven live before it is relied on.
+func TestCompareAnswerRendersSections(t *testing.T) {
+	w := widget.NewRichTextFromMarkdown("")
+	setAIAnswerText(w, compareFixture)
+	got := subHeadings(w.Segments)
+	want := append([]string{"Catholic", "Reformed", "Historical-critical"}, comparePromptHeadings...)
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("headings rendered %v, want %v", got, want)
+	}
+	var ordered, unordered *widget.ListSegment
+	for _, seg := range w.Segments {
+		if ls, ok := seg.(*widget.ListSegment); ok {
+			if ls.Ordered {
+				ordered = ls
+			} else {
+				unordered = ls
+			}
+		}
+	}
+	if ordered == nil || len(ordered.Items) != 3 {
+		t.Errorf("the questions did not render as a numbered list of three: %+v", ordered)
+	}
+	if unordered == nil || len(unordered.Items) != 3 {
+		t.Errorf("the differences did not render as a bulleted list of three: %+v", unordered)
+	}
+
+	linked := compareFixture + "\nSee [a commentary](https://tracker.example/click).\n"
+	v := widget.NewRichTextFromMarkdown("")
+	setAIAnswerText(v, linked)
+	if hs := subHeadings(v.Segments); strings.Join(hs, "|") != strings.Join(want, "|") {
+		t.Errorf("an ordinary link cost the headings: %v", hs)
+	}
+	if images, links := networkSegments(v.Segments); images+links != 0 {
+		t.Errorf("the linked answer reached the network (%d, %d)", images, links)
+	}
+
+	bypass := compareFixture + "\n[a]:\nhttps://evil.example/x\n\nSee [a] now.\n"
+	if !aiMarkdownReachesNetwork(sanitizeAIMarkdown(bypass)) {
+		t.Fatal("control: the bypass no longer survives the flattening, so the literal fallback cannot be exercised")
+	}
+	u := widget.NewRichTextFromMarkdown("")
+	setAIAnswerText(u, bypass)
+	if hs := subHeadings(u.Segments); len(hs) != 0 {
+		t.Errorf("an answer with a surviving link kept %d headings instead of falling to literal text", len(hs))
+	}
+	if images, links := networkSegments(u.Segments); images+links != 0 {
+		t.Errorf("the bypass reached the network (%d, %d)", images, links)
 	}
 }

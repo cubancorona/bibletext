@@ -165,6 +165,39 @@ func TestDispatchAIActionNoOpWhenOff(t *testing.T) {
 	if top := win.Canvas().Overlays().Top(); top != nil {
 		t.Fatalf("AI-off Ask dispatch opened an overlay: %T", top)
 	}
+	dispatchAIAction(state, aiActionCompare, "In the beginning", selSpan{})
+	if top := win.Canvas().Overlays().Top(); top != nil {
+		t.Fatalf("AI-off Compare dispatch opened an overlay: %T", top)
+	}
+}
+
+// An action string the app has no prompt for opens nothing: not the panel
+// that would title itself and ask as Explain, not any overlay. Control: the
+// comparison's own string opens its panel under its own title.
+func TestDispatchAIActionDropsUnknownActions(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	ctxs := stubAIActionParked(t)
+
+	state := sampleState()
+	state.aiKeys = newKeyStoreWith(newFakePrefs())
+	win := app.NewWindow("ai on")
+	state.window = win
+	for _, bad := range []string{"compar", "Explain", "perspectives", ""} {
+		dispatchAIAction(state, bad, "In the beginning", selSpanFromNative(1, 1))
+		if top := win.Canvas().Overlays().Top(); top != nil {
+			t.Fatalf("the unknown action %q opened an overlay: %T", bad, top)
+		}
+	}
+	dispatchAIAction(state, aiActionCompare, "In the beginning", selSpanFromNative(1, 1))
+	nextCtx(t, ctxs) // the panel's request has reached the seam, so the stub outlives it
+	top := win.Canvas().Overlays().Top()
+	if top == nil {
+		t.Fatal("control: the comparison opened no panel")
+	}
+	if !treeHasText(top, "Perspectives") || treeHasText(top, "Explanation") {
+		t.Errorf("the comparison's panel is not titled for it; texts %v", treeTexts(top))
+	}
 }
 
 // The selection's span reaches the request seam as the pane resolved it, for

@@ -1,10 +1,12 @@
 package bibletext
 
 // AI study actions. When the reader selects a passage and picks "Explain",
-// "Analyze context" or "Analyze translation" from the selection menu, the chosen
-// action + selected text arrive here, get turned into a prompt, and are sent to
-// the user's selected AI provider (see ai_providers.go). The response is shown in
-// a modal panel (see ai_panel.go).
+// "Analyze context", "Analyze translation" or "Compare perspectives" from the
+// selection menu, the chosen action + selected text arrive here, get turned
+// into a prompt, and are sent to the user's selected AI provider (see
+// ai_providers.go). The response is shown in a modal panel (see ai_panel.go).
+// The verbs the menus offer are listed once, in order, in ai_compare.go
+// (aiStudyVerbs); the comparison's own prompt lives there too.
 //
 // Bring-your-own-key: the user supplies a key per provider in settings
 // (ai_settings.go / ai_keystore.go). Nothing is embedded in the app.
@@ -23,7 +25,8 @@ const (
 	aiActionExplain     = "explain"
 	aiActionContext     = "context"
 	aiActionTranslation = "translation"
-	aiActionAsk         = "ask" // free-form question about the selection → narrative answer
+	aiActionCompare     = "compare" // the passage's differing readings, side by side (ai_compare.go)
+	aiActionAsk         = "ask"     // free-form question about the selection → narrative answer
 )
 
 // errNoAPIKey is a low-level "client constructed without a key" guard. The
@@ -74,6 +77,11 @@ func friendlyAIError(err error) string {
 	if errors.Is(err, errNoAPIKey) {
 		return "No API key configured. Open AI settings to add one."
 	}
+	var declined *aiDeclinedError
+	if errors.As(err, &declined) {
+		// DRAFT wording for the declined-passage line.
+		return "The model declined this passage. Try again, or choose a different model in AI settings."
+	}
 	var apiErr *apiHTTPError
 	if errors.As(err, &apiErr) {
 		switch apiErr.StatusCode {
@@ -93,6 +101,19 @@ func friendlyAIError(err error) string {
 		return "The AI service returned an error. Please try again shortly."
 	}
 	return "Couldn't reach the AI service. Check your connection and try again."
+}
+
+// aiDeclinedError is the provider withholding an answer on this passage: a
+// prompt it blocked, a reply it emptied for a safety or content reason, or a
+// model's refusal. Each provider reports it in its own field (ai_providers.go),
+// and each used to reach the reader as a plain error that friendlyAIError
+// could not tell from a dropped connection, so a reader on a contested
+// passage was told to check their network. The remedy is the one the panel's
+// Try again button offers: ask again, or switch model.
+type aiDeclinedError struct{ reason string }
+
+func (e *aiDeclinedError) Error() string {
+	return "the model declined this passage (" + e.reason + ")"
 }
 
 // isNoKeyError reports whether the panel should offer "Open AI settings" rather
@@ -152,6 +173,8 @@ func aiActionTitle(action string) string {
 		return "Context"
 	case aiActionTranslation:
 		return "Translation"
+	case aiActionCompare:
+		return "Perspectives"
 	case aiActionAsk:
 		return "Answer"
 	default:
@@ -159,11 +182,21 @@ func aiActionTitle(action string) string {
 	}
 }
 
+// aiReadingsSentence is what every prose prompt says about a passage that is
+// read more than one way: name the readings and what each rests on, and let
+// the wording of the passage weigh, rather than flatten the difference into
+// "scholars disagree". The comparison verb has its own, fuller contract
+// (ai_compare.go); this is the one sentence the four prose verbs share.
+const aiReadingsSentence = "Where this passage is read differently, name the main readings, " +
+	"who holds them and the assumption each rests on, and say what the wording of the " +
+	"passage counts for or against; where a point is uncertain, say so briefly. Do not " +
+	"quote anyone, and name a document or writer only when you are sure of it."
+
 func buildAIPrompt(action string, p aiPassage) string {
 	const preamble = "You are a knowledgeable, even-handed Bible study assistant. " +
 		"Write in clear, plain language for a general reader and keep it concise — a " +
-		"few short paragraphs at most. Where scholars disagree or a point is uncertain, " +
-		"say so briefly rather than overstating. Do not use markdown headings or bullet lists."
+		"few short paragraphs at most. " + aiReadingsSentence +
+		" Do not use markdown headings or bullet lists."
 
 	var task string
 	switch action {
@@ -204,11 +237,38 @@ func buildAskPrompt(p aiPassage, question string) string {
 		"concise — a few short paragraphs at most. Ground your answer in the passage below " +
 		"and its context; you may draw on directly relevant Scripture, but stay focused on " +
 		"the question. If the passage does not address the question, say so plainly rather " +
-		"than speculating. Where scholars disagree or a point is uncertain, say so briefly. " +
-		"Do not use markdown headings or bullet lists."
+		"than speculating. " + aiReadingsSentence +
+		" Do not use markdown headings or bullet lists."
 
 	return fmt.Sprintf("%s\n\nThe passage is from the %s.\n\nReader's question: %q\n\n%s",
 		preamble, p.Version, question, aiPassageLines(p))
+}
+
+// aiStudyPrompt is the prompt a study action sends: the three prose verbs
+// through buildAIPrompt, the comparison through its own builder, Ask with the
+// reader's question. The switch is the allow-list of action strings the app
+// has a prompt for. The native menus hand the action over as a string
+// (ai_menu_darwin.go, reading_android_export.go), and a string outside the
+// list used to fall into buildAIPrompt's default and run Explain under
+// Explain's title, so a mistyped or stale native entry answered as if it were
+// a different verb. It is an error now, before any cache lookup or request.
+func aiStudyPrompt(action string, p aiPassage, question string) (string, error) {
+	switch action {
+	case aiActionExplain, aiActionContext, aiActionTranslation:
+		return buildAIPrompt(action, p), nil
+	case aiActionCompare:
+		return buildComparePrompt(p), nil
+	case aiActionAsk:
+		return buildAskPrompt(p, question), nil
+	}
+	return "", fmt.Errorf("unknown study action %q", action)
+}
+
+// aiStudyActionKnown reports whether action is one aiStudyPrompt has a prompt
+// for, so a dispatch can drop an unknown string before it opens a panel.
+func aiStudyActionKnown(action string) bool {
+	_, err := aiStudyPrompt(action, aiPassage{}, "")
+	return err == nil
 }
 
 // --- Orchestration + cache --------------------------------------------------
@@ -279,12 +339,12 @@ func runAIAction(ctx context.Context, state *AppState, action, selectedText, que
 	}
 
 	p := aiPassageFor(state, selectedText, span)
+	prompt, err := aiStudyPrompt(action, p, question)
+	if err != nil {
+		return "", err
+	}
 	model := activeModelFor(store, id)
 	scope := aiRequestScope(id, model, action, question, p)
-	prompt := buildAIPrompt(action, p)
-	if action == aiActionAsk {
-		prompt = buildAskPrompt(p, question)
-	}
 
 	cacheKey := aiCacheKey(scope, p.Book, p.Chapter, p.Text)
 	if cached, ok := aiCacheGet(cacheKey); ok {
@@ -321,6 +381,13 @@ func dispatchAIAction(state *AppState, action, selectedText string, span selSpan
 	// but if a stale native menu ever delivered an AI action, drop it rather than
 	// open an AI panel.
 	if !aiFeaturesEnabled(state) {
+		return
+	}
+	// The same for an action string the app has no prompt for: the panel it
+	// would open titles itself and asks as Explain (aiStudyPrompt), so a stale
+	// or mistyped native menu entry would answer as a verb the reader did not
+	// choose. Dropped here, before any text leaves the selection.
+	if !aiStudyActionKnown(action) {
 		return
 	}
 	// The reader's selection carries the page's own typography with it — the

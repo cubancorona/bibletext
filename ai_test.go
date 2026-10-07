@@ -219,6 +219,84 @@ func TestParseAdapterText(t *testing.T) {
 	}
 }
 
+// declinedLine is the reader-facing line for a declined passage, the test's
+// own copy.
+const declinedLine = "The model declined this passage. Try again, or choose a different model in AI settings."
+
+// Every way a provider withholds an answer — Gemini blocking the prompt or
+// emptying the candidate for a safety reason, ChatGPT's and Grok's content
+// filter, Claude's refusal — reaches the reader as a declined passage, through
+// the client and through the model resolver that wraps it. Controls: a
+// dropped connection still reads as a connection, and an empty reply with no
+// reason is still an empty reply.
+func TestFriendlyErrorForADeclinedPassage(t *testing.T) {
+	old := aiRetrySleep
+	aiRetrySleep = func(time.Duration) {}
+	t.Cleanup(func() { aiRetrySleep = old })
+
+	for _, c := range []struct {
+		name   string
+		body   string
+		client func(m *mockHTTP) aiClient
+	}{
+		{"Gemini blocks the prompt",
+			`{"promptFeedback":{"blockReason":"PROHIBITED_CONTENT","safetyRatings":[]}}`,
+			func(m *mockHTTP) aiClient { return geminiTestClient(m) }},
+		{"Gemini withholds the candidate",
+			`{"candidates":[{"content":{"parts":[],"role":"model"},"finishReason":"SAFETY","safetyRatings":[{"category":"HARM_CATEGORY_HARASSMENT","probability":"HIGH"}]}]}`,
+			func(m *mockHTTP) aiClient { return geminiTestClient(m) }},
+		{"Gemini stops for recitation",
+			`{"candidates":[{"content":{"role":"model"},"finishReason":"RECITATION"}]}`,
+			func(m *mockHTTP) aiClient { return geminiTestClient(m) }},
+		{"ChatGPT's content filter",
+			`{"choices":[{"index":0,"message":{"role":"assistant","content":null},"finish_reason":"content_filter"}]}`,
+			func(m *mockHTTP) aiClient {
+				return &openAIClient{apiKey: "k", model: "gpt", baseURL: "https://openai.test/v1", http: m}
+			}},
+		{"Grok's content filter",
+			`{"choices":[{"index":0,"message":{"role":"assistant","content":""},"finish_reason":"content_filter"}]}`,
+			func(m *mockHTTP) aiClient {
+				return &openAIClient{apiKey: "k", model: "grok", baseURL: "https://grok.test/v1", http: m}
+			}},
+		{"Claude refuses",
+			`{"content":[],"stop_reason":"refusal","role":"assistant","type":"message"}`,
+			func(m *mockHTTP) aiClient {
+				return &anthropicClient{apiKey: "k", model: "claude", baseURL: "https://a.test", http: m}
+			}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m := &mockHTTP{statusCode: 200, body: c.body}
+			_, err := c.client(m).generate(context.Background(), "p")
+			var declined *aiDeclinedError
+			if !errors.As(err, &declined) {
+				t.Fatalf("want aiDeclinedError, got %v", err)
+			}
+			if got := friendlyAIError(err); got != declinedLine {
+				t.Errorf("friendly = %q", got)
+			}
+			// Through the resolver every study request goes through.
+			r := &modelResolver{id: providerGemini, def: "m", build: func(string) aiClient { return c.client(m) }}
+			if _, err := r.generate(context.Background(), "p"); !errors.As(err, &declined) {
+				t.Errorf("the resolver hid the declined passage: %v", err)
+			}
+		})
+	}
+
+	var declined *aiDeclinedError
+	m := &mockHTTP{err: errors.New("dial tcp: no route to host")}
+	_, err := geminiTestClient(m).generate(context.Background(), "p")
+	if errors.As(err, &declined) || !strings.Contains(friendlyAIError(err), "connection") {
+		t.Errorf("control: a dropped connection reads as %q (%v)", friendlyAIError(err), err)
+	}
+	_, err = parseOpenAIText([]byte(`{"choices":[{"message":{"content":""}}]}`))
+	if errors.As(err, &declined) || err == nil || !strings.Contains(err.Error(), "empty") {
+		t.Errorf("control: an empty reply with no reason is %v", err)
+	}
+	if friendlyAIError(err) == declinedLine {
+		t.Error("control: an empty reply with no reason reads as declined")
+	}
+}
+
 func TestProviderRegistry(t *testing.T) {
 	for _, id := range []string{providerGemini, providerOpenAI, providerAnthropic, providerGrok} {
 		p, ok := providerByID(id)
@@ -544,7 +622,8 @@ func TestRunAIActionCacheKeyCarriesVerseSpan(t *testing.T) {
 func TestAIActionTitle(t *testing.T) {
 	for action, want := range map[string]string{
 		aiActionExplain: "Explanation", aiActionContext: "Context",
-		aiActionTranslation: "Translation", aiActionAsk: "Answer", "unknown": "Explanation",
+		aiActionTranslation: "Translation", aiActionCompare: "Perspectives",
+		aiActionAsk: "Answer", "unknown": "Explanation",
 	} {
 		if got := aiActionTitle(action); got != want {
 			t.Errorf("aiActionTitle(%q) = %q, want %q", action, got, want)

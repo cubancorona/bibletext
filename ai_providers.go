@@ -362,7 +362,8 @@ func parseGeminiText(body []byte) (string, error) {
 		return "", fmt.Errorf("decoding AI response: %w", err)
 	}
 	if gr.PromptFeedback != nil && gr.PromptFeedback.BlockReason != "" {
-		return "", fmt.Errorf("request blocked (%s)", gr.PromptFeedback.BlockReason)
+		// The prompt itself was blocked: no candidate was generated at all.
+		return "", &aiDeclinedError{reason: gr.PromptFeedback.BlockReason}
 	}
 	if len(gr.Candidates) == 0 {
 		return "", errors.New("the AI returned no answer")
@@ -378,11 +379,26 @@ func parseGeminiText(body []byte) (string, error) {
 			if reason == "MAX_TOKENS" {
 				return "", errBudgetExhausted
 			}
+			if geminiWithheld(reason) {
+				return "", &aiDeclinedError{reason: reason}
+			}
 			return "", fmt.Errorf("the AI stopped early (%s)", reason)
 		}
 		return "", errors.New("the AI returned an empty answer")
 	}
 	return markIfTruncated(text, reason == "" || reason == "STOP"), nil
+}
+
+// geminiWithheld reports whether a candidate finish reason means the provider
+// withheld the answer — a safety or content block, a blocklist match, a
+// recitation stop, personal information — rather than ran out of budget or
+// failed in some other way. Each is the model declining the passage.
+func geminiWithheld(reason string) bool {
+	switch reason {
+	case "SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "RECITATION", "SPII":
+		return true
+	}
+	return false
 }
 
 // --- OpenAI-compatible (ChatGPT + Grok share /chat/completions) -------------
@@ -488,6 +504,11 @@ func parseOpenAIText(body []byte) (string, error) {
 		if reason == "length" {
 			return "", errBudgetExhausted
 		}
+		// The provider's content filter emptied the reply. ChatGPT and Grok
+		// both report it here, since Grok speaks this API.
+		if reason == "content_filter" {
+			return "", &aiDeclinedError{reason: reason}
+		}
 		return "", errors.New("the AI returned an empty answer")
 	}
 	return markIfTruncated(text, reason == "" || reason == "stop"), nil
@@ -575,8 +596,7 @@ func parseAnthropicText(body []byte) (string, error) {
 		// on one model and answered in full on the next attempt. Saying "empty
 		// answer" sends the reader looking for a fault that is not there.
 		if r.StopReason == "refusal" {
-			return "", errors.New("the model declined to answer this passage — try again, " +
-				"or choose a different model in Settings")
+			return "", &aiDeclinedError{reason: r.StopReason}
 		}
 		return "", errors.New("the AI returned an empty answer")
 	}
