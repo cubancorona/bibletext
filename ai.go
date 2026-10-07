@@ -317,15 +317,18 @@ func aiCacheSet(key, value string) {
 // request can still settle and cache — under one shared key, which model's
 // prose the panel later serves would be whichever wrote last. Distinct keys
 // keep every answer filed under the model that produced it. The verse range
-// enters only when the selection resolved to verses: the prompt then names
-// them, so an answer written for "Psalms 136:3" must never be served for the
-// identical refrain selected at verse 10, and a request that resolved to no
-// verse keeps the key it always had.
+// enters a fixed action's scope only when the selection resolved to verses:
+// the prompt then names them, so an answer written for "Psalms 136:3" must
+// never be served for the identical refrain selected at verse 10, and a
+// request that resolved to no verse keeps the key it always had. The
+// question is free-form and may hold any character, so it is the last field
+// and the range always precedes it, 0-0 when no verse resolved: a question
+// that ends in the text of a range cannot then be filed under that range.
 func aiRequestScope(id, model, action, question string, p aiPassage) string {
-	scope := id + "|" + model + "|" + action
 	if action == aiActionAsk {
-		scope = id + "|" + model + "|ask|" + question
+		return fmt.Sprintf("%s|%s|ask|%d-%d|%s", id, model, p.Lo, p.Hi, question)
 	}
+	scope := id + "|" + model + "|" + action
 	if p.Lo > 0 {
 		scope += fmt.Sprintf("|%d-%d", p.Lo, p.Hi)
 	}

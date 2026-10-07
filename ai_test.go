@@ -669,10 +669,21 @@ func TestRunAIActionCacheKeyCarriesVerseSpan(t *testing.T) {
 		}
 	}
 
-	// Ask folds the question in before the range.
-	seed(providerGemini+"|"+geminiModel+"|ask|Why?|2-2", refrain, "asked at verse two")
+	// Ask writes the range before the question, always: the question is
+	// free-form, so a question that ends in a range's text at an unresolved
+	// selection must not share a key with the plain question at that verse.
+	askScope := providerGemini + "|" + geminiModel + "|ask|"
+	seed(askScope+"2-2|Why?", refrain, "asked at verse two")
 	if got, err := runAIAction(context.Background(), st, aiActionAsk, refrain, "Why?", selSpanFromNative(2, 2)); err != nil || got != "asked at verse two" {
 		t.Errorf("ask at verse 2: got (%q, %v)", got, err)
+	}
+	seed(askScope+"2-2|Why?", elsewhere, "asked at verse two")
+	if got, err := runAIAction(context.Background(), st, aiActionAsk, elsewhere, "2-2|Why?", selSpan{}); !isNoKeyError(err) {
+		t.Errorf("a question ending in a range's text was filed under that range: (%q, %v)", got, err)
+	}
+	seed(askScope+"0-0|2-2|Why?", elsewhere, "asked of the chapter")
+	if got, err := runAIAction(context.Background(), st, aiActionAsk, elsewhere, "2-2|Why?", selSpan{}); err != nil || got != "asked of the chapter" {
+		t.Errorf("ask with no verse resolved: got (%q, %v), want the 0-0 entry", got, err)
 	}
 }
 
