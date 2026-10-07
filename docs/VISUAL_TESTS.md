@@ -236,7 +236,10 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       radio stacks on narrow phones with no clipped "Extra l…"; note bands
       re-measure. XL + read-along is the recorded still-open eyeball.
 - [ ] Selection menus per platform: exactly ONE Share; "Study with AI" only
-      with an assistant chosen; Cross-references takes the study slot when
+      with an assistant chosen, and then its four items on every surface —
+      Explain, Analyze context, Analyze translation, Compare perspectives
+      (the Android popup's fourth row, the Fyne child menu near the bottom
+      edge); Cross-references takes the study slot when
       AI is off; a selection inside the footnote section gets system verbs
       only. Android's toolbar must appear IMMEDIATELY on long-press.
 
@@ -305,6 +308,11 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
 - [ ] The AI answer panel: quote ellipsizes, Cancel exists while thinking,
       truncated answers carry the honest cut-off line, the reading text
       never paints THROUGH the panel, and a no-key error offers settings.
+      A comparison (title Perspectives; `compare` opens one without a key)
+      shows its headings: the readings, then Where they agree, Where they
+      part, and why, What the text settles, Questions to take back to the
+      text; a declined passage says so and offers Try again, not the
+      connection line.
 - [ ] Every AI wait names the model at work, on all five platforms: the
       Study with AI panel and Find show one line under the bar, over
       "Capable models can take a minute or more.", in that hint's size and
@@ -731,7 +739,7 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       mid-chapter, go to Books, quit, relaunch: the chapter opens where it
       was left, not at the top.
 - [ ] Android, AI on: select verse text, tap Study with AI, and while the
-      Explain / Analyze popup is up flip dark mode by schedule or
+      four-row study popup is up flip dark mode by schedule or
       `adb shell cmd uimode night yes`: the popup closes; it never floats in
       the old palette over the re-lit page.
 - [ ] Android, after the activity is recreated with the process alive —

@@ -111,6 +111,70 @@ What 1.2.18 (1–2 October 2026) adds:
 - **Apple's processing was quick.** It took about three minutes for 1.2.18,
   so the wait for `VALID` in stage 7 need not be planned as a long one.
 
+## Compare perspectives in Study with AI — built 7 October 2026, for 1.2.21
+
+Planned for: 1.2.21 — see docs/ROADMAP.md (Later, row 25). Built on its
+own branch; merged once the gates below close.
+
+A fourth Study with AI verb, action string `compare`, menu label "Compare
+perspectives", panel title "Perspectives", on all six surfaces: one line in
+each native menu (`reading_ios.go`, `reading_macos.go` with its selector,
+`android/BtBridge.java` with the Go case in `reading_android_export.go`)
+and the Fyne submenu ranging over `aiStudyVerbs` (`ai_compare.go`), held
+equal by `study_verbs_source_test.go`. The answer is the fixed `##`
+skeleton the existing panel already renders: three to five named readings,
+then Where they agree, Where they part, and why, What the text settles,
+Questions to take back to the text, under 700 words. The prompt is public
+in README.md and held to the builder by `TestREADMEMirrorsPrompts`.
+
+With it, for every AI verb: the selection's verse position reaches the
+request (`aiPassage`, `aiPassageFor`), so the prompt, the panel header, the
+Report mail and the cache key name the verses the share card would cite
+("Psalms 136:2", not "Psalms 136"); a passage the provider declines (a
+blocked prompt, a withheld reply, a refusal — `aiDeclinedError`) reads as
+declined, with Try again, where it read as a dropped connection; an action
+string the app has no prompt for is dropped before any text leaves the
+selection; the `%q` quoting that wrote a poem-line break as `\n` is gone
+(ADDITIONS_AND_DROPS item 19).
+
+The fairness bench (`ai_compare_bench_test.go`): ten World English Bible
+passages (`testdata/compare/passages.json`), a scorer of ten checks each
+with a control that trips it and no other (`testdata/compare/_controls/`),
+and a doubly gated live recorder (`ai_compare_bench_live_test.go`) that
+writes the answers outside the tree for a person to read.
+`TestCompareBenchRecordedAnswersAreFair` fails while any passage has no
+default-provider fixture, by design: an empty set cannot pass by scoring
+nothing. The branch's `go test ./...` is therefore red, in both tag states,
+until the recording round has run, been read, and its fixtures committed.
+Until then the rest of the suite is run with
+`-skip '^TestCompareBenchRecordedAnswersAreFair$'`.
+
+Still to close: the recording round (about fifty calls on the capable
+default models, read in full before any answer becomes a fixture); the
+six-surface pass on the World English Bible, never the NKJV (iPhone and
+iPad simulators, the Mac, the Android emulator in both orientations with
+the popup below and above the line, the Windows and Linux virtual machines
+with the child menu near the bottom edge; `compare` and `compare-waiting`
+open the panel without a key); the What's New copy; the screenshot retake
+(ROADMAP row 14). The cross-references panel still places a selection with
+no verse position by the probe matching alone, where the share card and
+the prompts now place it first at its first copy — PLATFORM_MATRIX
+divergence 33; whether the panel takes the same order is open.
+
+Privacy, walked against docs/PRIVACY_RELEASE_CHECKLIST.md: the reference
+line of every study request now carries the verse range with the book and
+chapter, where it carried the chapter alone; the selected text already
+identified the verses. No new data type, recipient or trigger: the text
+still goes from the reader's device to the provider the reader chose, with
+the reader's own key, and nothing to project infrastructure.
+`cmd/mobile/PrivacyInfo.xcprivacy`, the App Privacy answers, the Play Data
+safety answers and the in-app disclosure under the key field
+(`ai_settings.go`) are unchanged; `docs/privacy.html` and
+`docs/support.html` name the verb in their feature lists (draft wording,
+marked in the page). The Report button that Apple 1.2 and Play's
+generative-AI policy rely on now names the verb and the verses. Not signed
+in this cycle: the Play 9-12 declaration.
+
 ## macOS 12 and 13: an open note card calls a macOS 14 method — FIXED 2 October 2026
 
 The walk's `switch` named two element constants AppKit marks macOS 14

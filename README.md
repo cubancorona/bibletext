@@ -17,7 +17,7 @@ or right in the recipient's browser. No accounts, no server, no ads.
 | Reading | Study with AI | Share as image |
 |:---:|:---:|:---:|
 | ![Reading view with the words of Christ in red](docs/screenshots/reading.png) | ![Study any verse with AI](docs/screenshots/ai-study.png) | ![Share a verse as an image](docs/screenshots/share-image.png) |
-| Distraction-free reading — words of Christ in red | Explain, context & translation notes, with your own AI key | Any verse as shareable art with a clean citation |
+| Distraction-free reading — words of Christ in red | Explain, context & translation notes, or compare perspectives — with your own AI key | Any verse as shareable art with a clean citation |
 
 <details>
 <summary><b>More:</b> cross-references &amp; Gospel parallels</summary>
@@ -174,8 +174,9 @@ root), signing, emulator use, and distribution are covered in
   measure with comfortable leading and indented paragraphs, modelled on the
   U.S. Reports. See [docs/IPAD.md](docs/IPAD.md).
 - 🤖 **AI study** (bring your own key) — select any passage and have an AI
-  **Explain** it, **Analyze context**, or **Analyze translation**, using your own
-  Gemini / ChatGPT / Claude / Grok API key. There's also an AI **Find** that turns
+  **Explain** it, **Analyze context**, **Analyze translation**, or **Compare
+  perspectives** (several traditions' readings of it, side by side), using your
+  own Gemini / ChatGPT / Claude / Grok API key. There's also an AI **Find** that turns
   a plain-language request into matching passages on the Search tab. Optional and
   off-able (Settings → Assistant → None). See [AI study](#ai-study-bring-your-own-key)
   for exactly what is sent.
@@ -348,9 +349,10 @@ real text only loads once you've dropped the licensed file in place.
 ## AI study (bring your own key)
 
 Select a passage in the reader and the native selection menu gains a **Study with
-AI** submenu with three actions — **Explain**, **Analyze context**, and **Analyze
-translation**. The chosen action plus the selected text are sent to an AI provider
-of your choice, and the answer appears in a panel. (A free-form **Ask a question…**
+AI** submenu with four actions — **Explain**, **Analyze context**, **Analyze
+translation**, and **Compare perspectives**, which sets several named readings of
+the passage side by side under fixed headings. The chosen action plus the selected
+text are sent to an AI provider of your choice, and the answer appears in a panel. (A free-form **Ask a question…**
 verb also exists in the code but is not currently surfaced in the menu.) The whole
 AI surface can be turned off in Settings → Assistant → **None**. A separate AI
 **Find** on the Search

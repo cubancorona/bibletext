@@ -239,6 +239,7 @@ prose.
 | --- | --- |
 | `ai.go` | Action constants + `buildAIPrompt`; `aiPassage` / `aiPassageFor` (the verses a request names, resolved once for the prompt, the panel header, the Report mail and the cache key); `runAIAction` (cache scope, dispatch) |
 | `ai_ask.go` | "Ask a question…" input sheet (`promptAskQuestion`) + `buildAskPrompt` |
+| `ai_compare.go` | `buildComparePrompt` (the Compare perspectives prompt and its four section headings, `compareHeadings`) and `aiStudyVerbs`, the ordered list of menu verbs every surface's Study with AI menu is held to |
 | `ai_providers.go` | Gemini / OpenAI / Anthropic / Grok HTTP clients + models |
 | `ai_keystore.go` | On-device key storage (`keyStore`): Apple Keychain on **iOS only**, preferences elsewhere (incl. macOS); env-var override |
 | `ai_secure_store_darwin.go` / `ai_secure_store_other.go` | `//go:build ios` Keychain adapter (AfterFirstUnlock, backup-restorable) / its no-op twin everywhere else |
@@ -535,9 +536,11 @@ the audio service and a killed process takes it along.
 
 ## AI study (bring your own key)
 
-Select a passage → native "Study with AI" menu with three actions: **Explain**,
-**Analyze context**, **Analyze translation** (constants
-`aiActionExplain/Context/Translation` in [ai.go](ai.go); the free-form **Ask a
+Select a passage → native "Study with AI" menu with four actions: **Explain**,
+**Analyze context**, **Analyze translation**, **Compare perspectives** (constants
+`aiActionExplain/Context/Translation/Compare` in [ai.go](ai.go); the comparison's
+prompt and the ordered verb list every menu is held to, `aiStudyVerbs`, in
+[ai_compare.go](ai_compare.go); the free-form **Ask a
 question…** verb was removed from the menu in build 94/1.0.2 — its code,
 `aiActionAsk` / [ai_ask.go](ai_ask.go), remains but is unwired). Plus an
 AI **Find** passage search on the Search tab ([ai_search.go](ai_search.go)) and
