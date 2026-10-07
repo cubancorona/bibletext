@@ -407,12 +407,16 @@ leave() {
     NKJV_TEXT="$3"
     LIVE_TREE="$4"
     PAGES_CHECKOUT=true
+    # The wait after the signal is a loop of builtins, not sleep: a signal
+    # bash takes while it waits for a child is held for the child, and an INT
+    # the child never saw lets the script run on to exit 0.
+    hold() { local end=$((SECONDS + 5)); while ((SECONDS < end)); do :; done; }
     case "$5" in
       done) exit 0 ;;
       refused) exit 1 ;;
       failed) false ;;
-      interrupted) kill -INT $$; sleep 5 ;;
-      terminated) kill -TERM $$; sleep 5 ;;
+      interrupted) kill -INT $$; hold ;;
+      terminated) kill -TERM $$; hold ;;
     esac
   ' _ "$T/repo" "$ROOT" "$state" "$T/live" "$how" >"$T/out" 2>&1 || status=$?
   echo "$status"
