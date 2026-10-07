@@ -125,7 +125,13 @@ equal by `study_verbs_source_test.go`. The answer is the fixed `##`
 skeleton the existing panel already renders: three to five named readings,
 then Where they agree, Where they part, and why, What the text settles,
 Questions to take back to the text, under 700 words. The prompt is public
-in README.md and held to the builder by `TestREADMEMirrorsPrompts`.
+in README.md and held to the builder by `TestREADMEMirrorsPrompts`. Its
+design changed before the recording round: it is now a direct instruction
+with no list of churches, schools or groups and no theological label, so
+the model chooses the main readings of the passage and names their holders
+as they name themselves, and the bench asks a row only for what the passage
+itself implies (both stances on something reported as said or done, told
+apart; the Jewish reading on a Hebrew Bible passage).
 
 With it, for every AI verb: the selection's verse position reaches the
 request (`aiPassage`, `aiPassageFor`), so the prompt, the panel header, the

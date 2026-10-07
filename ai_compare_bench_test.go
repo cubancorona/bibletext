@@ -4,6 +4,14 @@ package bibletext
 // ten mechanical checks, planted controls that each trip exactly one check,
 // and the recorded answers the scorer holds every run.
 //
+// The prompt names no reading, so the scorer asks for none by name. A row
+// asks only for what the prompt implies of the passage: on one that reports
+// something said or done, a reading that takes it so and one that takes it
+// as a later composition or explains it naturally, told apart; on a Hebrew
+// Bible passage, the Jewish reading. The one list of readers the bench keeps
+// is the omission roster, judged across a provider's whole set, never on an
+// answer.
+//
 // Offline, on every run with no key: TestCompareScorerCanFail proves each
 // control under testdata/compare/_controls/ trips its own check and no other,
 // and that good.md, the hand-written answer to the contract, trips none.
@@ -68,21 +76,28 @@ const (
 )
 
 // benchCase is one row of passages.json: a selection in the World English
-// Bible and what a fair comparison of it must contain. MustInclude is a list
-// of requirements; each requirement is met by any one of its alternatives
-// appearing in the answer, in a heading or the body.
+// Bible and what a fair comparison of it must contain. The prompt names no
+// reading, so a row names none either; it carries the two the prompt implies
+// as properties of the passage. SaidOrDone marks a passage that reports
+// something said or done, over which the prompt asks for both a reading that
+// takes the report so and one that takes it as a later composition or
+// explains it naturally, each told apart. HebrewBible and QuotesHebrewBible
+// mark a passage whose first readers are the Jewish people, so a comparison
+// of its believers' readings that leaves theirs out is incomplete; that is a
+// fact about the passage, not a roster. A no-conflict row carries neither
+// floor: the prompt asks such a passage to say the readings largely agree.
 type benchCase struct {
-	ID                string     `json:"id"`
-	Ref               string     `json:"ref"`
-	Book              string     `json:"book"`
-	Chapter           int        `json:"chapter"`
-	Lo                int        `json:"lo"`
-	Hi                int        `json:"hi"`
-	HebrewBible       bool       `json:"hebrewBible"`
-	QuotesHebrewBible bool       `json:"quotesHebrewBible"`
-	NoConflict        bool       `json:"noConflict"`
-	Text              string     `json:"text"`
-	MustInclude       [][]string `json:"mustInclude"`
+	ID                string `json:"id"`
+	Ref               string `json:"ref"`
+	Book              string `json:"book"`
+	Chapter           int    `json:"chapter"`
+	Lo                int    `json:"lo"`
+	Hi                int    `json:"hi"`
+	HebrewBible       bool   `json:"hebrewBible"`
+	QuotesHebrewBible bool   `json:"quotesHebrewBible"`
+	NoConflict        bool   `json:"noConflict"`
+	SaidOrDone        bool   `json:"saidOrDone"`
+	Text              string `json:"text"`
 }
 
 // passage is the selection as the app would hand it to the prompt builder.
@@ -92,9 +107,10 @@ func (c benchCase) passage() aiPassage {
 }
 
 // benchTable is passages.json. Roster lists the readings the omission check
-// tracks across a provider's whole set: each is required, alone or as an
-// alternative, by at least two rows, so a provider that satisfies every row
-// without ever naming one of them is leaving it out on purpose.
+// tracks across a provider's whole set, and nowhere else: no single answer
+// is asked for any of them, but a set of ten passages from the Law to the
+// Apocalypse that names one of these readers in none of its answers is
+// leaving them out.
 type benchTable struct {
 	Version  string      `json:"version"`
 	Roster   []string    `json:"roster"`
@@ -150,13 +166,13 @@ func promptSHA1(c benchCase) string { return promptFingerprint(buildComparePromp
 
 // The ten checks, numbered as the bench describes them.
 const (
-	checkSkeleton  = 1  // the fixed heading skeleton, one opening sentence, no table
+	checkSkeleton  = 1  // the fixed heading skeleton, at most forty words before it, two to seven readings, no table
 	checkLabels    = 2  // labels only with an assumption; the settles section grounded
 	checkVerdict   = 3  // no verdict by preference
 	checkCitations = 4  // no invented citations, quotations or references
 	checkBalance   = 5  // section and total lengths
-	checkCoverage  = 6  // the row's readings all present
-	checkQuestions = 7  // two to four numbered questions
+	checkCoverage  = 6  // the readings the prompt implies for the row, told apart
+	checkQuestions = 7  // two to four numbered questions, one asking what the reader brought
 	checkGrounding = 8  // the passage's own words appear
 	checkNetwork   = 9  // nothing cut short, no link or image
 	checkOmission  = 10 // across a provider's set: no roster reading left out everywhere
@@ -361,6 +377,51 @@ var (
 	}
 
 	benchNumberedQuestion = regexp.MustCompile(`(?m)^\s*\d+[.)]\s+.*\?\s*$`)
+	// A question that asks what the reader brought to the passage: what they
+	// expected, already held, or came to it with.
+	benchBrought = regexp.MustCompile(`(?i)\b(?:brought|bring|expect\w*|(?:came|come) to (?:it|this|the (?:passage|verse|text))|` +
+		`already (?:believ\w*|th(?:ink|ought)|held|assum\w*|read|knew|know)|before (?:you )?(?:read|came|opened|looked)|` +
+		`your own (?:reading|view|assumption\w*|tradition|church|background|expectation\w*|upbringing)|` +
+		`you (?:already )?(?:assumed|thought|believed|took for granted|were taught|grew up)|` +
+		`prior (?:view|reading|assumption\w*|belief\w*)|preconception\w*|presupposition\w*)\b`)
+
+	// The two stances the prompt asks to be told apart on a passage that
+	// reports something said or done. A reading takes the report as said or
+	// done when it says so in any of the ways answers do: the words as the
+	// speaker's own, the act as real, actual or historical, the text at face
+	// value, as it stands, inerrant or God's word, a miracle, an act of God.
+	benchSaidOrDone = regexp.MustCompile(`(?i)\b(?:` +
+		`as (?:actually |really |truly |genuinely |historically )?(?:said|spoken|done|happened|given|reported|recorded|written|stated|uttered|delivered|performed|told|taught|commanded|promised|foretold)|` +
+		`(?:actually|really|truly|genuinely|historically|literally) (?:said|spoke|spoken|happened|did|done|took place|occurred|gave|made|created|wept|wrote|written|uttered|delivered|performed|taught|commanded|conceived|born|promised|founded|is|was|were)|` +
+		`(?:his|jesus'?s?|christ's|god's|the lord's|paul's|john's|moses'?s?|isaiah's|the prophet's|the apostle's) own (?:words?|sayings?|teaching|voice|acts?|deeds?|hands?|instructions?|commands?|promise|prophecy|vision|work|letter)|` +
+		`(?:jesus|christ|god|paul|john|moses|isaiah|the prophet|the apostle) himself|` +
+		`(?:real|actual|genuine|true|historical|literal|authentic|reliable|accurate|factual|original|eyewitness) (?:events?|acts?|action|sayings?|words?|promise|sign|commands?|instructions?|prophecy|prediction|miracles?|deeds?|history|account|record|report|narrative|speech|statement|teaching|utterance|happening|occurrence|birth|creation|conception|vision|memory)|` +
+		`took place|at face value|as (?:it|they) (?:stands?|reads?)|as (?:a )?(?:fact|history)|as (?:a |an )?(?:genuine|authentic|real|actual|historical|true|reliable|accurate|original)\b|` +
+		`eyewitness|inerran\w*|infallib\w*|fully true|verbally inspired|god-breathed|(?:the )?(?:very )?words? of god\b|god's (?:own )?words?|` +
+		`historically (?:reliable|accurate|true|real|genuine|factual|grounded|rooted)|act of (?:god|christ|jesus|the lord)|miracul\w*|a miracle|the miracle|` +
+		`divine (?:act|action|events?|intervention|speech|promise|guarantee|revelation|miracle|command))\b`)
+	// A reading takes the report as a later composition, or explains it
+	// naturally, when it says so: a later hand, community, editor or
+	// addition; a pseudonymous or attributed writing; words put in a mouth;
+	// a natural cause or an ordinary birth; myth, legend, poem, liturgy or
+	// genre; an exilic or priestly source. Neither the name of a school nor
+	// the word scholars counts: the stance has to be stated.
+	benchComposition = regexp.MustCompile(`(?i)\b(?:` +
+		`later (?:compositions?|additions?|insertions?|hands?|editors?|editing|redaction|redactor|church|communit(?:y|ies)|writers?|authors?|date|dating|stage|developments?|reflection|traditions?|expansion|creation|invention|generations?|disciples?|followers?|believers?|christians?|re-?reading|theolog\w*|formulation|layers?|sources?|period|time|origin|product|work|stor(?:y|ies)|era|age)|` +
+		`(?:decades|years|generations|a generation|centuries|a century|long|much) later|post-?easter|post-?resurrection|after (?:jesus'?s?|his|the) (?:death|resurrection|lifetime)|` +
+		`composed|composition|compiled|compilation|redact\w*|edited|editorial|editors?|inserted|insertion|interpolat\w+|added (?:by|later|to)|an? (?:later )?addition|` +
+		`pseudonym\w*|pseudepigraph\w*|deutero-?pauline|disputed (?:letter|epistle|authorship)|not (?:by|from|written by) paul|(?:using|under|in|bearing) (?:paul's|his|the apostle's) name|` +
+		`attributed to (?:paul|jesus|him|moses|david|isaiah|john)|put (?:into|in) (?:his|jesus'?s?|the) mouth|placed on (?:his|jesus'?s?) lips|on (?:his|jesus'?s?) lips|` +
+		`words? (?:of|from) the (?:early )?(?:church|community)|` +
+		`(?:church|community|evangelist|editor|redactor|author|writer|poet|psalmist|followers?|disciples?|school|circle)(?:'s)? (?:own )?(?:reflection|creation|composition|theology|work|hand|addition|wording|shaping|framing|invention|construction|retrojection|voice|stor(?:y|ies)|hope|memory|liturgy|ritual)|` +
+		`(?:community|church|evangelist|editor|redactor|author|writer|followers?|disciples?|school|circle) (?:later |then )?(?:created|composed|wrote|added|inserted|shaped|invented|constructed|formulated|produced|developed|put|placed|expanded|reworked|adapted|repurposed)|` +
+		`(?:shaped|created|invented|constructed|formulated|developed|coined|crafted|written|composed|produced|generated|adapted|repurposed) (?:by|within|in|for) (?:the|an?|its|their|matthew's|john's|luke's|mark's|paul's|a later|the early|the later) (?:early |later |johannine |matthean |pauline |christian |believing |exilic |post-exilic )?(?:church|communit(?:y|ies)|congregation|circle|school|tradition|followers|disciples|movement|editors?|redactors?|priestly)|` +
+		`naturally|natural (?:explanations?|causes?|events?|process(?:es)?|origins?|phenomen\w+|reading|account|terms|means|birth|conception|development|sense)|naturalist\w*|non-?supernatural|` +
+		`ordinary (?:birth|woman|child|event|conception|pregnancy|human|grief|tears)|young woman|` +
+		`(?:ancient near eastern|near eastern|babylonian|mesopotamian|canaanite|ugaritic|egyptian|ancient|israelite|hebrew) (?:myth\w*|cosmolog\w*|stor(?:y|ies)|poem|poetry|hymn|parallels?|creation (?:stor(?:y|ies)|myth\w*|accounts?)|literature|genre|conventions?|liturgy)|` +
+		`myth\w*|legend\w*|saga|folk ?tales?|a?etiolog\w*|liturg\w+|hymn|a poem|poetic (?:composition|creation|text|account|narrative|framework|structure|figure)|` +
+		`literary (?:creation|composition|device|form|genre|construct\w*|artistry|framework|structure|artifice|convention|fiction)|genre|apocalyptic (?:literature|genre|convention|imagery|form|writing)|symbolic (?:vision|narrative)|` +
+		`priestly (?:source|writer|author|account|tradition|school)|exilic|post-?exilic|second temple)\b`)
 )
 
 // scoreCompareAnswer runs checks 1 to 9 over one answer to c. bd resolves the
@@ -407,12 +468,12 @@ func scoreCompareAnswer(bd *BibleData, c benchCase, md string) []problem {
 		if strings.Join(after, "|") != strings.Join(compareHeadings, "|") {
 			add(checkSkeleton, "the sections after the readings are %v, want %v", after, compareHeadings)
 		}
-		if n := len(readings); n < 3 || n > 5 {
-			add(checkSkeleton, "%d reading sections before %q, want three to five", n, compareHeadings[0])
+		if n := len(readings); n < 2 || n > 7 {
+			add(checkSkeleton, "%d reading sections before %q, want two to seven", n, compareHeadings[0])
 		}
 	}
-	if n := words(opener); n == 0 || n > 40 {
-		add(checkSkeleton, "%d words before the first heading, want one sentence of at most forty", n)
+	if n := words(opener); n > 40 {
+		add(checkSkeleton, "%d words before the first heading, want at most forty", n)
 	}
 	for _, line := range strings.Split(md, "\n") {
 		if strings.Count(line, "|") >= 2 {
@@ -521,29 +582,54 @@ func scoreCompareAnswer(bd *BibleData, c benchCase, md string) []problem {
 		add(checkBalance, "%d words in all, want under %d", n, total)
 	}
 
-	// 6. Coverage.
-	for _, alternatives := range c.MustInclude {
-		met := false
-		for _, name := range alternatives {
-			if namesReading(normMD, name) {
-				met = true
+	// 6. Coverage: the readings the prompt implies for this row. On a passage
+	// that reports something said or done, one reading section takes the
+	// report so and a different one takes it as a later composition or
+	// explains it naturally; a single section carrying both stances has not
+	// said which is which. On a Hebrew Bible passage, the Jewish reading.
+	if c.SaidOrDone && len(readings) > 0 {
+		var said, composed []int
+		for i, r := range readings {
+			text := r.title + "\n" + r.body
+			if benchSaidOrDone.MatchString(text) {
+				said = append(said, i)
+			}
+			if benchComposition.MatchString(text) {
+				composed = append(composed, i)
 			}
 		}
-		if !met {
-			add(checkCoverage, "none of %v is named", alternatives)
+		told := false
+		for _, i := range said {
+			for _, j := range composed {
+				if i != j {
+					told = true
+				}
+			}
+		}
+		switch {
+		case told:
+		case len(said) == 0 && len(composed) == 0:
+			add(checkCoverage, "no reading says it takes what the passage reports as said or done, and none takes it as a later composition or explains it naturally")
+		case len(said) == 0:
+			add(checkCoverage, "no reading says it takes what the passage reports as said or done")
+		case len(composed) == 0:
+			add(checkCoverage, "no reading takes what the passage reports as a later composition or explains it naturally")
+		default:
+			add(checkCoverage, "%q alone carries both stances, so which is which is not said", readings[said[0]].title)
 		}
 	}
 	if (c.HebrewBible || c.QuotesHebrewBible) && !namesReading(normMD, "Jewish") && !namesReading(normMD, "Judaism") && !namesReading(normMD, "rabbinic") {
 		add(checkCoverage, "a Hebrew Bible passage with no Jewish reading")
 	}
-	if !namesReading(normMD, "historical-critical") {
-		add(checkCoverage, "no historical-critical reading")
-	}
 
-	// 7. Questions.
+	// 7. Questions: two to four numbered, one of them, or a line beside them,
+	// asking what the reader brought to the passage.
 	if q, ok := byTitle[compareHeadingQuestions]; ok {
 		if n := len(benchNumberedQuestion.FindAllString(q.body, -1)); n < 2 || n > 4 {
 			add(checkQuestions, "%d numbered questions, want two to four", n)
+		}
+		if !benchBrought.MatchString(q.body) {
+			add(checkQuestions, "no question asks what the reader brought to the passage")
 		}
 	}
 
@@ -761,10 +847,12 @@ func sortedKeys[V any](m map[string]V) []string {
 
 // The table is ten selections in the World English Bible, every row's
 // citation the one the share card would carry, every book in the canon; two
-// rows are the no-conflict controls; every row names the historical-critical
-// reading and every Hebrew Bible row the Jewish one, so the arithmetic that
-// no row asks for more than four sections is visible in the row itself; and
-// every reading of the omission roster is required by at least two rows.
+// rows are the no-conflict controls and carry no said-or-done floor, since a
+// floor on a passage whose readings largely agree would force a division;
+// no row names a reading, the prompt naming none; at least one row carries
+// the floor and at least one is a Hebrew Bible passage, so both halves of
+// the coverage check are exercised by the set; and the omission roster
+// names each reader once.
 func TestCompareBenchPassages(t *testing.T) {
 	tb := loadBenchTable(t)
 	if tb.Version != compareBenchVersion {
@@ -773,10 +861,16 @@ func TestCompareBenchPassages(t *testing.T) {
 	if len(tb.Passages) != 10 {
 		t.Fatalf("%d passages, want ten", len(tb.Passages))
 	}
+	raw, err := os.ReadFile(filepath.Join(compareBenchDir, compareBenchTable))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "mustInclude") {
+		t.Error("the table names readings a row must include; the prompt names none")
+	}
 	canon := NewBibleData()
 	seen := map[string]bool{}
-	required := map[string]int{}
-	noConflict := 0
+	noConflict, floors, hebrew := 0, 0, 0
 	for _, c := range tb.Passages {
 		if seen[c.ID] {
 			t.Errorf("%s: duplicate id", c.ID)
@@ -794,41 +888,37 @@ func TestCompareBenchPassages(t *testing.T) {
 		if want := c.passage().Ref; c.Ref != want {
 			t.Errorf("%s: ref %q, want %q as the share card cites it", c.ID, c.Ref, want)
 		}
-		if len(c.MustInclude) > 4 {
-			t.Errorf("%s: %d requirements; with every reading required a row may ask for at most four sections", c.ID, len(c.MustInclude))
-		}
-		has := func(name string) bool {
-			for _, alts := range c.MustInclude {
-				for _, a := range alts {
-					if strings.EqualFold(a, name) {
-						return true
-					}
-				}
-			}
-			return false
-		}
-		if !has("historical-critical") {
-			t.Errorf("%s: the historical-critical reading is not in the row", c.ID)
-		}
-		if (c.HebrewBible || c.QuotesHebrewBible) && !has("Jewish") {
-			t.Errorf("%s: a Hebrew Bible row without the Jewish reading", c.ID)
-		}
 		if c.NoConflict {
 			noConflict++
-		}
-		for _, alts := range c.MustInclude {
-			for _, a := range alts {
-				required[strings.ToLower(a)]++
+			if c.SaidOrDone {
+				t.Errorf("%s: a no-conflict row with the said-or-done floor", c.ID)
 			}
+		}
+		if c.SaidOrDone {
+			floors++
+		}
+		if c.HebrewBible || c.QuotesHebrewBible {
+			hebrew++
 		}
 	}
 	if noConflict != 2 || !tb.byID()["psalm-23-1"].NoConflict || !tb.byID()["john-11-35"].NoConflict {
 		t.Errorf("the no-conflict controls are Psalm 23:1 and John 11:35; got %d rows flagged", noConflict)
 	}
+	if floors == 0 {
+		t.Error("no row carries the said-or-done floor, so that half of the coverage check is never exercised")
+	}
+	if hebrew == 0 {
+		t.Error("no row is a Hebrew Bible passage, so the Jewish reading is never asked for")
+	}
+	roster := map[string]bool{}
 	for _, name := range tb.Roster {
-		if required[strings.ToLower(name)] < 2 {
-			t.Errorf("roster reading %q is required by %d rows, want at least two", name, required[strings.ToLower(name)])
+		if roster[strings.ToLower(name)] || strings.TrimSpace(name) == "" {
+			t.Errorf("roster reading %q is empty or repeated", name)
 		}
+		roster[strings.ToLower(name)] = true
+	}
+	if len(roster) == 0 {
+		t.Error("the omission roster is empty")
 	}
 }
 
@@ -841,7 +931,7 @@ var compareControls = map[string]struct {
 	passage string
 }{
 	"good.md":           {0, "matthew-16-18"},
-	"blended.md":        {checkSkeleton, "matthew-16-18"},
+	"one-reading.md":    {checkSkeleton, "john-11-35"},
 	"table.md":          {checkSkeleton, "matthew-16-18"},
 	"swapped.md":        {checkSkeleton, "matthew-16-18"},
 	"labels.md":         {checkLabels, "matthew-16-18"},
@@ -853,8 +943,10 @@ var compareControls = map[string]struct {
 	"thin.md":           {checkBalance, "matthew-16-18"},
 	"overlong.md":       {checkBalance, "matthew-16-18"},
 	"empty-agree.md":    {checkBalance, "matthew-16-18"},
+	"all-as-said.md":    {checkCoverage, "matthew-16-18"},
 	"missing-jewish.md": {checkCoverage, "isaiah-7-14"},
 	"no-questions.md":   {checkQuestions, "matthew-16-18"},
+	"no-brought.md":     {checkQuestions, "matthew-16-18"},
 	"ungrounded.md":     {checkGrounding, "matthew-16-18"},
 	"linked.md":         {checkNetwork, "matthew-16-18"},
 	"cut-short.md":      {checkNetwork, "matthew-16-18"},
@@ -1154,6 +1246,171 @@ func TestCompareScorerHoldsTheCapStrictly(t *testing.T) {
 	}
 	if ps := scoreCompareAnswer(canon, c, padded(699)); len(ps) != 0 {
 		t.Errorf("control: 699 words is under the cap, yet: %s", problemLines(ps))
+	}
+}
+
+// The prompt asks for no opening sentence, so none is required: good.md
+// opens on its first heading and passes, forty words before that heading
+// pass, and forty-one trip the skeleton check alone.
+func TestCompareScorerAllowsAShortOpener(t *testing.T) {
+	c := loadBenchTable(t).byID()["matthew-16-18"]
+	good := readCompareControl(t, "good.md")
+	canon := NewBibleData()
+	if !strings.HasPrefix(good, "## ") {
+		t.Fatalf("good.md does not open on its first heading: %.40q", good)
+	}
+	for _, tc := range []struct {
+		opener int
+		trips  bool
+	}{{0, false}, {40, false}, {41, true}} {
+		md := strings.TrimSpace(strings.Repeat("again ", tc.opener)) + "\n\n" + good
+		if tc.opener == 0 {
+			md = good
+		}
+		want := fmt.Sprint([]int{})
+		if tc.trips {
+			want = fmt.Sprint([]int{checkSkeleton})
+		}
+		if got := checksTripped(scoreCompareAnswer(canon, c, md)); fmt.Sprint(got) != want {
+			t.Errorf("%d words before the first heading trips %v, want %s", tc.opener, got, want)
+		}
+	}
+}
+
+// The reading count is two to seven, both ends inside it: two and seven
+// pass, eight trip the skeleton check alone, and one trips it with the
+// coverage check, since on a passage with the said-or-done floor a single
+// reading cannot tell the two stances apart (one-reading.md, on a passage
+// without the floor, trips the skeleton check alone). The answers are built
+// from good.md's four fixed sections and readings of forty-odd words each,
+// the first taking the saying as Jesus' own and the second as the
+// community's, so no other check moves with the count.
+func TestCompareScorerHoldsTheReadingCountAtItsEdges(t *testing.T) {
+	c := loadBenchTable(t).byID()["matthew-16-18"]
+	good := readCompareControl(t, "good.md")
+	canon := NewBibleData()
+	tail := good[strings.Index(good, "## "+compareHeadingAgree):]
+	bodies := []string{
+		"Peter himself is the rock, and the reading takes the words as Jesus' own words, spoken as the Gospel reports them, and the promise as a real act of Christ; it holds the Bible fully true and reads it with the Church's tradition. Held by the Catholic Church.",
+		"The saying is a later composition, Matthew's community reflecting on Peter's standing after his death; the weight falls on the word assembly, which Matthew alone uses. It treats the Gospel as a human record shaped by its community. Held by critical scholars of several churches.",
+		"The rock is the confession Peter has just made, and the Church is built on right faith kept by every bishop; the weight falls on the verse before and on the shift from Petros to petra. Held by the Orthodox Church, reading with the Fathers.",
+	}
+	with := func(n int) string {
+		var b strings.Builder
+		for i := 0; i < n; i++ {
+			fmt.Fprintf(&b, "## Reading %d\n%s\n\n", i+1, bodies[i%len(bodies)])
+		}
+		return b.String() + tail
+	}
+	for _, tc := range []struct {
+		readings int
+		trips    []int
+	}{
+		{1, []int{checkSkeleton, checkCoverage}},
+		{2, []int{}},
+		{7, []int{}},
+		{8, []int{checkSkeleton}},
+	} {
+		md := with(tc.readings)
+		if got := len(readingTitles(md)); got != tc.readings {
+			t.Fatalf("the built answer has %d readings, want %d", got, tc.readings)
+		}
+		if got := checksTripped(scoreCompareAnswer(canon, c, md)); fmt.Sprint(got) != fmt.Sprint(tc.trips) {
+			t.Errorf("%d readings trips %v, want %v:\n%s", tc.readings, got, tc.trips, problemLines(scoreCompareAnswer(canon, c, md)))
+		}
+	}
+}
+
+// On a passage that reports something said or done, the coverage check
+// reads the two stances in the words answers use for them, and wants them in
+// different readings. Each line below is read as the stance it states, none
+// of the neutral lines as either; and good.md with its two stances folded
+// into one reading trips the coverage check alone, since which is which is
+// then not said. Control: a reading that states neither stance, added to
+// good.md, changes nothing.
+func TestCompareScorerTellsTheTwoStancesApart(t *testing.T) {
+	for _, line := range []string{
+		"It takes the words as Jesus' own words, spoken to Peter as the Gospel reports them.",
+		"This reading takes the saying as actually spoken by Jesus.",
+		"The promise is a real act of Christ.",
+		"It assumes the Bible is a historical record of the Church's founding.",
+		"Holders take the sign as a genuine prophecy, fulfilled in a virgin birth that was a miracle.",
+		"It holds that God really did create in six days.",
+		"Paul himself wrote the letter, and the instruction is his own command.",
+		"The reading takes the text at face value.",
+		"It reads the vision as given to John, and the Bible as inerrant.",
+	} {
+		if !benchSaidOrDone.MatchString(line) || benchComposition.MatchString(line) {
+			t.Errorf("%q is not read as taking the report as said or done", line)
+		}
+	}
+	for _, line := range []string{
+		"The saying is read as a later composition.",
+		"Matthew's community created the verse after Jesus' death.",
+		"The exception clause was added by the evangelist.",
+		"It explains the sign naturally: a young woman in Ahaz's day.",
+		"The letter was written decades later by a follower using Paul's name.",
+		"The passage is an ancient Near Eastern poem adapting older creation myths.",
+		"On this reading the vision is apocalyptic literature of the first century.",
+		"It treats the saying as the evangelist's own creation.",
+		"The tears are a later theological story added by the author.",
+		"The verse is Matthew's redaction of an earlier saying.",
+	} {
+		if !benchComposition.MatchString(line) || benchSaidOrDone.MatchString(line) {
+			t.Errorf("%q is not read as taking the report as a later composition or explaining it naturally", line)
+		}
+	}
+	for _, line := range []string{
+		"Peter is the rock, and the Church is built on him.",
+		"The weight falls on the wordplay between Peter and rock.",
+		"Held by the Catholic Church.",
+		"Jesus says, you are Peter, and the crowd hears him.",
+		"Critical scholars of several churches hold it.",
+	} {
+		if benchSaidOrDone.MatchString(line) || benchComposition.MatchString(line) {
+			t.Errorf("control: %q states a stance", line)
+		}
+	}
+
+	c := loadBenchTable(t).byID()["matthew-16-18"]
+	good := readCompareControl(t, "good.md")
+	canon := NewBibleData()
+	at := strings.Index(good, "## "+compareHeadingAgree)
+	both := "## Peter the rock\nPeter himself is the rock, and the reading takes the words as Jesus' own words, spoken as the Gospel reports them; some scholars instead read the saying as a later composition of Matthew's community. The weight falls on the wordplay between Peter and rock. Held by the Catholic Church.\n\n"
+	neutral := "## Anglican\nThe rock is Peter in his confession, and the Church is built on both together; the weight falls on the whole scene from verse 13, and on Peter as the first to speak for the Twelve. Held by the Church of England and the churches of the Anglican Communion, reading with the Fathers and the Reformers.\n\n"
+	folded := both + neutral + good[at:]
+	if got := checksTripped(scoreCompareAnswer(canon, c, folded)); fmt.Sprint(got) != fmt.Sprint([]int{checkCoverage}) {
+		t.Errorf("both stances in one reading trips %v, want [%d]:\n%s", got, checkCoverage, problemLines(scoreCompareAnswer(canon, c, folded)))
+	}
+	if ps := scoreCompareAnswer(canon, c, good[:at]+neutral+good[at:]); len(ps) != 0 {
+		t.Errorf("control: a reading stating neither stance, added, yet: %s", problemLines(ps))
+	}
+}
+
+// The questions check reads a question about what the reader brought to the
+// passage in the words such questions use, and not in a question about the
+// text. Control: a numbered question about the verses around the passage
+// is not one.
+func TestCompareScorerReadsTheQuestionAboutWhatTheReaderBrought(t *testing.T) {
+	for _, line := range []string{
+		"4. What did you bring to this verse: which reading did you expect, and where did it come from?",
+		"4. Which reading did you expect before you read these, and why?",
+		"4. What did you already believe about this verse, and from whom?",
+		"4. Which church or tradition did you come to it from?",
+		"Ask what you brought to the passage, and whether it survived the reading.",
+	} {
+		if !benchBrought.MatchString(line) {
+			t.Errorf("%q is not read as asking what the reader brought", line)
+		}
+	}
+	for _, line := range []string{
+		"1. Read verses 13 to 20 together: does the promise answer the man or the confession?",
+		"2. In your translation, is rock the same word as Peter, and what changes if it is?",
+		"3. What does Jesus build, an assembly, and who belongs to it elsewhere in this Gospel?",
+	} {
+		if benchBrought.MatchString(line) {
+			t.Errorf("control: %q is read as asking what the reader brought", line)
+		}
 	}
 }
 
