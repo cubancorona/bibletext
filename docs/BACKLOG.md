@@ -1434,13 +1434,16 @@ Go seam reaches it; the contract matches the request as a whole line, so a
 request commented out fails it as a missing one does. Device check:
 `docs/VISUAL_TESTS.md`, V12 (the note composer) and regression pin 20.
 
-## iPad and Mac: where the share popover points — the iPad seen in the simulator 6 October 2026; the Mac not seen
+## iPad and Mac: where the share popover points — seen on both; the verse of the day's share FIXED 7 October 2026
 
-Planned for: 1.2.20, a look only; any fix in 1.2.21+ — see docs/ROADMAP.md.
-The iPad half was looked at on 6 October 2026 (below): every selection verb
-points at the selection, and the verse of the day's Share points at the
-middle of the screen, not at its icon, which is the fix for 1.2.21. The Mac
-half needs the Mac app driven by hand and has not been seen.
+Planned for: 1.2.20, a look only, with any fix in 1.2.21+ — see
+docs/ROADMAP.md. The iPad half was looked at on 6 October 2026 (below):
+every selection verb points at the selection, and the verse of the day's
+Share pointed at the middle of the screen, not at its icon. The Mac half was
+looked at on 7 October 2026 (further below): the selection verbs point at the
+selection, and the verse of the day's Share did nothing at all. That is a
+Share that never works, so the fix for both went into 1.2.20 (the last
+section of this entry).
 
 Read from the code on 30 September 2026; no simulator was booted and the Mac
 app was not launched. The first bullet's guess did not hold (the simulator,
@@ -1515,13 +1518,80 @@ placeholder, not the card's thumbnail, though Save Image was offered. The
 card's file is not deleted after the share (`share_image.go`), so this is
 probably the simulator; worth a glance on a device.
 
-**The Mac, still to see**, by hand, since nothing drives the Mac app without
-host input: in BibleText for the Mac, select a few words, and from the
-selection's menu (Control-click or right-click on it) choose Share > Share
-as image, then Share in the preview; then Share > Share with note, with a
-word typed, then Share; then the verse of the day (the sparkle in the
-header) and the Share icon on its card. For each, where the share picker
-appears — beside the selection, elsewhere, or for the card at all.
+**Seen on the Mac, 7 October 2026.** macOS 26.6.2, the light appearance, a
+1280x892 window, the World English Bible at Psalm 82, a development build
+of ebc9c98f3. No synthetic input was sent to the desktop, so, as on the
+iPad, a throwaway trigger compiled into that build alone selected 14
+characters inside verse 3, starting and ending mid-word, ran the body of
+the selection menu's handler for each verb (`hbSendStudy`, what a pick from
+the Control-click menu runs, so `dispatchSelectionAction` ran unchanged),
+and pressed the preview's, the composer's and the card's own Share. The
+picker's window was read back from the application's window list, and each
+window the app owns was rendered in-process (`cacheDisplayInRect:`, as
+`debug_capture_macos.go` does), which draws the picker's frame and arrow at
+their true place but not its service list, a remote view, nor the Fyne
+canvas.
+
+- **Share with citation and Share as link.** At the selection: the arrow,
+  the picker frame's top-centre vertex, 0.7 pt below the selection
+  rectangle's bottom edge and 0.4 pt from its centre; the picker hangs
+  below the words.
+- **Share as image, then the preview's Share.** At the selection, the same
+  numbers: the selected range survives the modal preview (the view is
+  suppressed, not cleared) and the overlay is shown again before the
+  queued presentation runs.
+- **Share with note, then the composer's Share.** Beside where the
+  selection was: the arrow 52 pt above the shared words, inside the new
+  "Note from you" card, and the picker's body over the verse. The
+  presentation is queued on the main queue by `shareTextOut` before
+  `showSentNote` runs; when it runs the arrival scroll has happened but
+  the card has not yet pushed the words down, so the anchor is the words'
+  place before the card — the iPad's arrow at the new card, the verse one
+  card lower. The selection is empty afterwards, the storage replaced.
+- **The verse of the day, with and without a selection.** No picker at
+  all. `bibleTextShareText` asked for the picker relative to the reading
+  view, hidden under the card (`isHiddenOrHasHiddenAncestor`, a zero
+  `visibleRect`, so the no-selection fallback was the view's origin); the
+  call returned, the window list stayed at the app's own windows, nothing
+  appeared and nothing was logged. The share was lost without a word. The
+  control: the same instrumented call for Share with citation is followed
+  by the picker's window.
+
+Not seen on the Mac: the Control-click menu itself; a selection made with
+the mouse; the dark appearance; other window sizes.
+
+**Fixed 7 October 2026, in 1.2.20: the verse of the day's share on the Mac
+and the iPad.** The card hands its Share icon's rectangle over for the
+length of its share (`shareAnchor`, `share.go`), read from the canvas at
+the tap, and the two panes present beside it: the Mac from the content
+view the canvas fills, which is on screen while the reading view is
+hidden, with y flipped for the unflipped view and the picker hanging below
+the icon (`bibleTextShareTextAt`, `reading_macos.go`); the iPad from the
+presenting view controller's view, the rectangle moved inside the window's
+safe area as the reading view's frame is (`reading_ios.go`). A selection
+share hands no anchor and keeps the selection, and the Android, Windows
+and Linux shares never read one, so nothing changes there
+(`reading_android.go`, `share_windows.go` and `share_other.go` take the
+text as before). Seen with development builds of fa4072f73 the same day,
+through the same triggers: on the Mac the picker's window now appears
+below the icon, its arrow 0.8 pt below the icon's bottom edge and 0.5 pt
+from its centre, with and without a selection, and Share with citation's
+picker is where it was to the point; on the iPad the popover's source
+rectangle is the icon, 33x22 points, 32 points below its canvas position
+for the safe area, and the popover opened to the left of the card with its
+arrow at the icon's left edge. Held by `share_anchor_test.go`: the card's
+share is handed over with the icon's rectangle, inside the card and not
+the origin, and nothing is left behind; a share with no control behind it,
+or an empty rectangle, has none; and, read as source, the two Apple panes'
+`nativeShareText` read the anchor and present beside it while the other
+three never read one.
+
+Left as seen: Share with note's arrow in the new note card on both. Moving
+the presentation after `showSentNote` is not enough, since by then the
+selection is gone with the replaced storage and the fallback would point
+at the middle of the view, which is worse; pointing at the words needs
+their rectangle read after the chapter's re-import and the arrival scroll
+have settled, new work in both panes, and it stays open here.
 
 ## Android: the status-bar icons were white on the light page — FIXED 30 September 2026
 
