@@ -237,7 +237,7 @@ prose.
 
 | File | Responsibility |
 | --- | --- |
-| `ai.go` | Action constants + `buildAIPrompt`; `runAIAction` (cache scope, dispatch) |
+| `ai.go` | Action constants + `buildAIPrompt`; `aiPassage` / `aiPassageFor` (the verses a request names, resolved once for the prompt, the panel header, the Report mail and the cache key); `runAIAction` (cache scope, dispatch) |
 | `ai_ask.go` | "Ask a question…" input sheet (`promptAskQuestion`) + `buildAskPrompt` |
 | `ai_providers.go` | Gemini / OpenAI / Anthropic / Grok HTTP clients + models |
 | `ai_keystore.go` | On-device key storage (`keyStore`): Apple Keychain on **iOS only**, preferences elsewhere (incl. macOS); env-var override |
@@ -554,8 +554,10 @@ keystroke supersedes it (pinned in `search_race_test.go`).
 
 - Prompts are built by `buildAIPrompt` / `buildAskPrompt` ([ai.go](ai.go),
   [ai_ask.go](ai_ask.go)): a shared even-handed preamble + per-action task + the
-  quoted selection. Only the selected text plus its **book and chapter** (not the
-  verse number) leave the device. Sent as one user message with a `32768`-token
+  quoted selection. Only the selected text plus its **book, chapter and verse
+  range** leave the device — the range the selection resolves to through the
+  share card's own resolver (`aiPassageFor`), or the chapter alone when no verse
+  can be pinned. Sent as one user message with a `32768`-token
   runaway backstop (`aiMaxOutputTokens` — a hung-generation guard, not a spending
   policy; reasoning models count hidden thinking against it, so a low cap starves
   them into empty answers). Temperature `0.4` for Gemini / Grok / non-reasoning

@@ -391,8 +391,8 @@ silently starved the reasoning models, which count their hidden thinking against
 it). Gemini and Grok requests are sent at temperature `0.4`, ChatGPT too except
 its reasoning families (`gpt-5`, `o*`), which — like Claude — use the provider's
 default. Identical requests are cached in memory, so re-opening the same
-analysis does not re-send. Only the text you selected — plus the book and chapter it came from — and
-the fixed instructions below ever leave the device:
+analysis does not re-send. Only the text you selected — plus the book, chapter and the verses it
+resolves to — and the fixed instructions below ever leave the device:
 
 ```
 You are a knowledgeable, even-handed Bible study assistant. Write in clear,
@@ -402,8 +402,8 @@ than overstating. Do not use markdown headings or bullet lists.
 
 {task}
 
-Passage ({Book} {Chapter}):
-"{selected text}"
+Passage ({Book} {Chapter}:{Verses}):
+“{selected text}”
 ```
 
 `{task}` is the only part that differs per action:
@@ -419,8 +419,10 @@ Passage ({Book} {Chapter}):
   from the {Version}." (the name of the active translation — e.g. the World English
   Bible or the Berean Standard Bible)
 
-The reference sent is the **book and chapter only** (e.g. `Passage (John 1)`), not
-the specific verse number. The separate **Test key** button in settings sends just
+The reference sent names the **book, chapter and the verses the selection resolves
+to** (e.g. `Passage (John 1:1–2)`), the same citation a share of that selection
+carries, or the chapter alone (`Passage (John 1)`) when no verse can be pinned to
+it. The separate **Test key** button in settings sends just
 `Reply with the single word: OK` to validate a key.
 
 ## Repository layout

@@ -317,14 +317,20 @@ func TestProviderAPIKeyPrefersEnv(t *testing.T) {
 
 // --- Shared prompts / orchestration -----------------------------------------
 
+// john3Passage is the aiPassage the prompt tests build: John 3:16 in a
+// non-default version, which proves the translation prompt names the ACTIVE
+// version rather than a hardcoded "World English Bible".
+func john3Passage() aiPassage {
+	return aiPassage{Book: "John", Chapter: 3, Lo: 16, Hi: 16, Ref: "John 3:16",
+		Text: "For God so loved the world", Version: "Berean Standard Bible"}
+}
+
 func TestBuildAIPromptVariesByAction(t *testing.T) {
-	const book, chap, sel = "John", 3, "For God so loved the world"
-	// A non-default version proves the translation prompt names the ACTIVE version
-	// rather than a hardcoded "World English Bible".
-	const version = "Berean Standard Bible"
-	explain := buildAIPrompt(aiActionExplain, book, chap, sel, version)
-	ctx := buildAIPrompt(aiActionContext, book, chap, sel, version)
-	trans := buildAIPrompt(aiActionTranslation, book, chap, sel, version)
+	psg := john3Passage()
+	sel, version := psg.Text, psg.Version
+	explain := buildAIPrompt(aiActionExplain, psg)
+	ctx := buildAIPrompt(aiActionContext, psg)
+	trans := buildAIPrompt(aiActionTranslation, psg)
 
 	for _, p := range []string{explain, ctx, trans} {
 		if !strings.Contains(p, "John 3") || !strings.Contains(p, sel) {
@@ -346,10 +352,10 @@ func TestBuildAIPromptVariesByAction(t *testing.T) {
 }
 
 func TestBuildAskPrompt(t *testing.T) {
-	const book, chap, sel = "John", 3, "For God so loved the world"
-	const version = "Berean Standard Bible"
+	psg := john3Passage()
+	sel, version := psg.Text, psg.Version
 	const question = "Who is the world here?"
-	p := buildAskPrompt(book, chap, sel, version, question)
+	p := buildAskPrompt(psg, question)
 
 	if !strings.Contains(p, question) {
 		t.Errorf("ask prompt should carry the reader's question, got: %q", p)
@@ -365,8 +371,173 @@ func TestBuildAskPrompt(t *testing.T) {
 	if !strings.Contains(low, "question") || !strings.Contains(low, "does not address") {
 		t.Errorf("ask prompt should answer the question and admit when unaddressed: %q", p)
 	}
-	if p == buildAIPrompt(aiActionExplain, book, chap, sel, version) {
+	if p == buildAIPrompt(aiActionExplain, psg) {
 		t.Errorf("ask prompt should differ from the Explain prompt")
+	}
+}
+
+// --- The passage every study prompt names -----------------------------------
+
+// The span resolves to the verses the prompt cites. Controls: a state with no
+// Bible, and a span past the chapter's last verse, both cite the chapter
+// alone with Lo and Hi zero.
+func TestAIPassageRefNamesVerses(t *testing.T) {
+	st := sampleState() // John 1:1-3 loaded; the reader is on John 1
+	verses := st.Bible.GetChapter("John", 1)
+	v1, v2 := verses[0].Text, verses[1].Text
+	for _, c := range []struct {
+		name, text string
+		span       selSpan
+		ref        string
+		lo, hi     int
+	}{
+		{"two verses", v1 + " " + v2, selSpanFromNative(1, 2), "John 1:1–2", 1, 2},
+		{"one verse", v2, selSpanFromNative(2, 2), "John 1:2", 2, 2},
+		{"a span past the last verse", "words this chapter never says", selSpanFromNative(7, 9), "John 1", 0, 0},
+	} {
+		p := aiPassageFor(st, c.text, c.span)
+		if p.Ref != c.ref || p.Lo != c.lo || p.Hi != c.hi {
+			t.Errorf("%s: Ref %q Lo %d Hi %d, want %q %d %d", c.name, p.Ref, p.Lo, p.Hi, c.ref, c.lo, c.hi)
+		}
+		if p.Book != "John" || p.Chapter != 1 || p.Text != c.text || p.Version != st.currentVersion().Name {
+			t.Errorf("%s: passage carries %q %d %q %q", c.name, p.Book, p.Chapter, p.Text, p.Version)
+		}
+	}
+	bare := &AppState{CurrentBook: "John", CurrentChapter: 1}
+	if p := aiPassageFor(bare, v2, selSpanFromNative(2, 2)); p.Ref != "John 1" || p.Lo != 0 || p.Hi != 0 {
+		t.Errorf("without a Bible: Ref %q Lo %d Hi %d, want the chapter alone", p.Ref, p.Lo, p.Hi)
+	}
+	if p := aiPassageFor(nil, "x", selSpan{}); p.Ref != "" || p.Text != "x" {
+		t.Errorf("nil state: %+v", p)
+	}
+}
+
+// The prompt's citation is the share card's citation for the same drag: the
+// repeated refrain at verse 2, at verse 3, across both, a selection under the
+// matching probe's floor, and the zero span's matching fallback.
+func TestAIPassageRefAgreesWithShareCitation(t *testing.T) {
+	st := refrainChapterState()
+	for _, c := range []struct {
+		text string
+		span selSpan
+	}{
+		{refrain, selSpanFromNative(2, 2)},
+		{refrain, selSpanFromNative(3, 3)},
+		{"gods; " + refrain + " 3 Give thanks to the Lord of lords;", selSpanFromNative(2, 3)},
+		{"gods;", selSpanFromNative(2, 2)},
+		{"gods;", selSpan{}},
+		{refrain, selSpan{}},
+	} {
+		got := aiPassageFor(st, c.text, c.span).Ref
+		if want := citationForSelection(st, c.text, c.span); got != want {
+			t.Errorf("%q %+v: prompt cites %q, the share card %q", c.text, c.span, got, want)
+		}
+		if c.span.valid() {
+			if _, cite, _, _ := prepareShareQuote(st, c.text, c.span); cite != got {
+				t.Errorf("%q %+v: prompt cites %q, the share pipeline %q", c.text, c.span, got, cite)
+			}
+		}
+	}
+	if got := aiPassageFor(st, refrain, selSpanFromNative(2, 2)).Ref; got != "Psalms 136:2" {
+		t.Fatalf("control: the refrain at verse 2 cites %q, want Psalms 136:2", got)
+	}
+}
+
+// Every study prompt ends on the passage line with the verses the selection
+// resolved to, and nothing after the quotation. Control: a passage no verse
+// resolves cites the chapter alone, as before.
+func TestBuildAIPromptNamesVerseRange(t *testing.T) {
+	psg := aiPassage{Book: "John", Chapter: 3, Lo: 16, Hi: 18, Ref: "John 3:16–18",
+		Text: "For God so loved the world", Version: "World English Bible"}
+	chapterOnly := psg
+	chapterOnly.Lo, chapterOnly.Hi, chapterOnly.Ref = 0, 0, "John 3"
+	for _, action := range []string{aiActionExplain, aiActionContext, aiActionTranslation, aiActionAsk} {
+		build := func(p aiPassage) string {
+			if action == aiActionAsk {
+				return buildAskPrompt(p, "Who is the world here?")
+			}
+			return buildAIPrompt(action, p)
+		}
+		tail := "Passage (John 3:16–18):\n“For God so loved the world”"
+		if got := build(psg); !strings.HasSuffix(got, tail) {
+			t.Errorf("%s: the prompt does not end on %q:\n%s", action, tail, got)
+		}
+		if got := build(chapterOnly); !strings.HasSuffix(got, "Passage (John 3):\n“For God so loved the world”") {
+			t.Errorf("%s: an unresolved passage must cite the chapter alone:\n%s", action, got)
+		}
+	}
+}
+
+// An authored line break in the selection reaches the model as a line break,
+// not as the two characters a %q quoting wrote.
+func TestBuildAIPromptKeepsLineBreaks(t *testing.T) {
+	psg := aiPassage{Book: "Psalms", Chapter: 23, Lo: 1, Hi: 2, Ref: "Psalms 23:1–2",
+		Text:    "Yahweh is my shepherd:\nI shall lack nothing.\nHe makes me lie down in green pastures.",
+		Version: "World English Bible"}
+	for _, action := range []string{aiActionExplain, aiActionContext, aiActionTranslation, aiActionAsk} {
+		got := buildAIPrompt(action, psg)
+		if action == aiActionAsk {
+			got = buildAskPrompt(psg, "Who is the shepherd?")
+		}
+		if !strings.Contains(got, "“"+psg.Text+"”") {
+			t.Errorf("%s: the selection is not quoted as written:\n%s", action, got)
+		}
+		if strings.Contains(got, `\n`) {
+			t.Errorf("%s: a line break reached the prompt as a backslash escape:\n%s", action, got)
+		}
+	}
+}
+
+// An answer is filed under the verses the prompt named: the same words at
+// another verse ask again, and an answer written for the chapter alone is
+// never served for a verse-numbered request. Control: a selection no verse
+// resolves keeps the chapter-only key it always had.
+func TestRunAIActionCacheKeyCarriesVerseSpan(t *testing.T) {
+	t.Setenv("GEMINI_API_KEY", "") // no key: a request not answered from the cache ends in noKeyError
+	st := refrainChapterState()    // no aiKeys -> inert store, active=gemini
+	base := providerGemini + "|" + geminiModel + "|" + aiActionExplain
+	seed := func(scope, text, answer string) {
+		key := aiCacheKey(scope, "Psalms", 136, text)
+		aiCacheSet(key, answer)
+		t.Cleanup(func() {
+			aiCacheMu.Lock()
+			delete(aiCache, key)
+			aiCacheMu.Unlock()
+		})
+	}
+	ask := func(text string, span selSpan) (string, error) {
+		return runAIAction(context.Background(), st, aiActionExplain, text, "", span)
+	}
+
+	seed(base+"|2-2", refrain, "about verse two")
+	if got, err := ask(refrain, selSpanFromNative(2, 2)); err != nil || got != "about verse two" {
+		t.Fatalf("verse 2: got (%q, %v), want the answer filed under 2-2", got, err)
+	}
+	if got, err := ask(refrain, selSpanFromNative(3, 3)); !isNoKeyError(err) {
+		t.Errorf("verse 3 was served verse 2's answer: (%q, %v)", got, err)
+	}
+	if got, err := ask(refrain, selSpanFromNative(2, 2)); err != nil || got != "about verse two" {
+		t.Errorf("verse 2 again: got (%q, %v), want the same cached answer", got, err)
+	}
+
+	seed(base, refrain, "about the chapter")
+	if got, err := ask(refrain, selSpanFromNative(3, 3)); !isNoKeyError(err) {
+		t.Errorf("a chapter-only entry served a verse-numbered request: (%q, %v)", got, err)
+	}
+	// A selection under the matching floor resolves to no verse without a
+	// span, so its key has no range and the chapter-only entry answers it.
+	seed(base, "gods;", "about the chapter")
+	if got, err := ask("gods;", selSpan{}); err != nil || got != "about the chapter" {
+		t.Errorf("unresolved selection: got (%q, %v), want the chapter-only answer", got, err)
+	}
+	if got, err := ask("gods;", selSpanFromNative(2, 2)); !isNoKeyError(err) {
+		t.Errorf("the same selection with a span was served the chapter-only answer: (%q, %v)", got, err)
+	}
+
+	// Ask folds the question in before the range.
+	seed(providerGemini+"|"+geminiModel+"|ask|Why?|2-2", refrain, "asked at verse two")
+	if got, err := runAIAction(context.Background(), st, aiActionAsk, refrain, "Why?", selSpanFromNative(2, 2)); err != nil || got != "asked at verse two" {
+		t.Errorf("ask at verse 2: got (%q, %v)", got, err)
 	}
 }
 
@@ -394,7 +565,7 @@ func TestRunAIActionUsesCache(t *testing.T) {
 		aiCacheMu.Unlock()
 	})
 
-	got, err := runAIAction(context.Background(), state, aiActionExplain, "the beginning", "")
+	got, err := runAIAction(context.Background(), state, aiActionExplain, "the beginning", "", selSpan{})
 	if err != nil || got != "cached answer" {
 		t.Fatalf("cache hit: got (%q, %v)", got, err)
 	}
@@ -403,7 +574,7 @@ func TestRunAIActionUsesCache(t *testing.T) {
 func TestRunAIActionNoKeyError(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "") // ensure no ambient dev key
 	state := &AppState{CurrentBook: "Acts", CurrentChapter: 2}
-	_, err := runAIAction(context.Background(), state, aiActionExplain, "unique selection no cache", "")
+	_, err := runAIAction(context.Background(), state, aiActionExplain, "unique selection no cache", "", selSpan{})
 	if !isNoKeyError(err) {
 		t.Fatalf("want noKeyError, got %v", err)
 	}

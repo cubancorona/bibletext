@@ -5,7 +5,9 @@ package bibletext
 // reach the AI result views, and the native-menu dispatch drops AI actions.
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"fyne.io/fyne/v2/test"
 )
@@ -162,5 +164,62 @@ func TestDispatchAIActionNoOpWhenOff(t *testing.T) {
 	dispatchAIAction(state, aiActionAsk, "In the beginning", selSpan{})
 	if top := win.Canvas().Overlays().Top(); top != nil {
 		t.Fatalf("AI-off Ask dispatch opened an overlay: %T", top)
+	}
+}
+
+// The selection's span reaches the request seam as the pane resolved it, for
+// a fixed action through the answer panel and for Ask through the question
+// sheet, whose header names the verses. Control: the zero span arrives as the
+// zero span.
+func TestDispatchAIActionCarriesSpan(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	spans := make(chan selSpan, 4)
+	never := make(chan struct{}) // requests park, so no completion touches a panel mid-test
+	prev := aiActionRun
+	aiActionRun = func(ctx context.Context, _ *AppState, _, _, _ string, span selSpan) (string, error) {
+		spans <- span
+		<-never
+		return "", ctx.Err()
+	}
+	t.Cleanup(func() { aiActionRun = prev })
+	next := func(what string) selSpan {
+		t.Helper()
+		select {
+		case s := <-spans:
+			return s
+		case <-time.After(2 * time.Second):
+			t.Fatalf("%s never reached the request seam", what)
+			return selSpan{}
+		}
+	}
+
+	// The refrain chapter: selected in verse 2 the words match every verse,
+	// so only the span can say verse 2 (selection_span_test.go).
+	state := refrainChapterState()
+	state.aiKeys = newKeyStoreWith(newFakePrefs())
+	win := app.NewWindow("ai on")
+	state.window = win
+
+	dispatchAIAction(state, aiActionExplain, refrain, selSpanFromNative(2, 2))
+	if got := next("the Explain dispatch"); got != (selSpan{lo: 2, hi: 2}) {
+		t.Errorf("the seam saw %+v for a verse-2 dispatch", got)
+	}
+	win.Canvas().Overlays().Remove(win.Canvas().Overlays().Top())
+
+	dispatchAIAction(state, aiActionExplain, refrain, selSpan{})
+	if got := next("the zero-span dispatch"); got != (selSpan{}) {
+		t.Errorf("control: the zero span arrived as %+v", got)
+	}
+	win.Canvas().Overlays().Remove(win.Canvas().Overlays().Top())
+
+	dispatchAIAction(state, aiActionAsk, refrain, selSpanFromNative(2, 2))
+	sheet := win.Canvas().Overlays().Top()
+	if sheet == nil || !treeHasText(sheet, "Ask about this passage") {
+		t.Fatalf("the Ask dispatch did not open the question sheet; texts %v", treeTexts(sheet))
+	}
+	if !treeHasText(sheet, "Psalms 136:2") {
+		t.Errorf("the question sheet does not name the verse the span resolved to; texts %v", treeTexts(sheet))
 	}
 }

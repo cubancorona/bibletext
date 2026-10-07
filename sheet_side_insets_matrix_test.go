@@ -55,9 +55,9 @@ func insetSheets(t *testing.T) []insetSheet {
 		{"votd-long", func(_ *testing.T, s *AppState) { showVerseOfDayCard(s, longDayPassage()) }},
 		{"audio", func(_ *testing.T, s *AppState) { showAudioSourceMenu(s) }},
 		{"note", func(_ *testing.T, s *AppState) { promptShareNote(s, quote, selSpan{}) }},
-		{"ask", func(_ *testing.T, s *AppState) { promptAskQuestion(s, quote) }},
+		{"ask", func(_ *testing.T, s *AppState) { promptAskQuestion(s, quote, selSpan{}) }},
 		{"ai-waiting", func(t *testing.T, s *AppState) {
-			showAIPanel(s, aiActionExplain, quote, "")
+			showAIPanel(s, aiActionExplain, quote, "", selSpan{})
 			waitParked(t, studies, "the study request")
 		}},
 		{"xrefs-waiting", func(_ *testing.T, s *AppState) {

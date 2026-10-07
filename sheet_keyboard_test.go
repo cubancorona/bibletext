@@ -114,7 +114,7 @@ func phoneSheets(t *testing.T) []phoneSheet {
 		{"the note composer", false, compose},
 		{"the note composer, native field", true, compose},
 		{"Settings", false, func(_ *testing.T, s *AppState) { showAISettings(s) }},
-		{"Ask", false, func(_ *testing.T, s *AppState) { promptAskQuestion(s, "For God so loved the world") }},
+		{"Ask", false, func(_ *testing.T, s *AppState) { promptAskQuestion(s, "For God so loved the world", selSpan{}) }},
 		{"Verse of the day", false, func(_ *testing.T, s *AppState) { showVerseOfDayCard(s, longDayPassage()) }},
 		{"Go to", false, func(_ *testing.T, s *AppState) { showGotoPicker(s) }},
 	}

@@ -70,7 +70,7 @@ func devSheets() []devSheet {
 		}},
 		{"audio", "the audio source menu", showAudioSourceMenu},
 		{"note", "the note composer", func(s *AppState) { promptShareNote(s, devQuote, selSpan{}) }},
-		{"ask", "the Ask sheet", func(s *AppState) { promptAskQuestion(s, devQuote) }},
+		{"ask", "the Ask sheet", func(s *AppState) { promptAskQuestion(s, devQuote, selSpan{}) }},
 		{"ai-waiting", "the AI answer panel, waiting for its answer", devOpenAIWaiting},
 		{"xrefs-waiting", "the cross-references panel, waiting for its list", devOpenCrossRefsWaiting},
 		{"share-image", "the share image preview", func(s *AppState) {
@@ -149,7 +149,7 @@ var devStudyWait = func(ctx context.Context) { <-ctx.Done() }
 
 // devParkedStudy answers a study request without asking anyone: it waits
 // until the panel abandons the request and returns why.
-func devParkedStudy(ctx context.Context, _ *AppState, _, _, _ string) (string, error) {
+func devParkedStudy(ctx context.Context, _ *AppState, _, _, _ string, _ selSpan) (string, error) {
 	devStudyWait(ctx)
 	return "", ctx.Err()
 }
@@ -158,7 +158,7 @@ func devParkedStudy(ctx context.Context, _ *AppState, _, _, _ string) (string, e
 // never sent, so the panel holds its waiting state.
 func devOpenAIWaiting(state *AppState) {
 	aiActionRun = devParkedStudy
-	showAIPanel(state, aiActionExplain, devQuote, "")
+	showAIPanel(state, aiActionExplain, devQuote, "", selSpan{})
 }
 
 // devOpenCrossRefsWaiting opens the cross-references panel with its load never
