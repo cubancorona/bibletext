@@ -3770,6 +3770,38 @@ void bibleTextShareText(const char *text) {
     });
 }
 
+// bibleTextPresentShareAt presents items as bibleTextPresentShare does, with
+// the iPad's popover anchored to r, a rectangle in the window's coordinates,
+// from the presenting view controller's own view. It is the verse-of-the-day
+// card's share: the reading view is hidden under the card and answers no
+// rectangle, so a share anchored to it pointed at the middle of the screen,
+// over the card, and not at the card's Share icon.
+static void bibleTextPresentShareAt(NSArray *items, CGRect r) {
+    if (items.count == 0) return;
+    UIViewController *top = bibleTextTopVC();
+    if (top == nil) return;
+    UIActivityViewController *av =
+        [[UIActivityViewController alloc] initWithActivityItems:items applicationActivities:nil];
+    if (av.popoverPresentationController != nil && top.view != nil) {
+        av.popoverPresentationController.sourceView = top.view;
+        av.popoverPresentationController.sourceRect = [top.view convertRect:r fromView:top.view.window];
+    }
+    [top presentViewController:av animated:YES completion:nil];
+}
+
+// bibleTextShareTextAt is bibleTextShareText anchored to a rectangle of the
+// canvas in Fyne's coordinates (top-left origin, points), which sit inside
+// the window's safe area, as bibleTextTVSetFrame places the reading view.
+void bibleTextShareTextAt(const char *text, double x, double y, double w, double h) {
+    if (text == NULL) return;
+    NSString *s = [NSString stringWithUTF8String:text];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (s.length == 0) return;
+        UIEdgeInsets safe = bibleTextFindWindow().safeAreaInsets;
+        bibleTextPresentShareAt(@[s], CGRectMake(x + safe.left, y + safe.top, w, h));
+    });
+}
+
 void bibleTextShareImageFile(const char *path) {
     if (path == NULL) return;
     NSString *p = [NSString stringWithUTF8String:path];
@@ -4148,6 +4180,12 @@ func hideNativeReadingOverlay() { C.bibleTextTVHide() }
 func nativeShareText(s string) {
 	c := C.CString(s)
 	defer C.free(unsafe.Pointer(c))
+	// The verse-of-the-day card's share presents beside its icon; a
+	// selection's share stays at the selection (shareAnchor, share.go).
+	if at, ok := shareAnchorNow(); ok {
+		C.bibleTextShareTextAt(c, C.double(at.x), C.double(at.y), C.double(at.w), C.double(at.h))
+		return
+	}
 	C.bibleTextShareText(c)
 }
 

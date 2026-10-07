@@ -15,6 +15,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"fyne.io/fyne/v2"
 )
 
 const (
@@ -218,6 +220,53 @@ func shareVerseTextIn(state *AppState, book string, chapter int, version, text s
 // written to it can be read back. Every text share delivers through it: the
 // citation, from a selection or a passage, and the two links.
 var shareTextOut = func(s string) { nativeShareText(s) }
+
+// shareAnchor is the rectangle a share is presented beside: a control on the
+// canvas, in the canvas's coordinates (top-left origin, points), as
+// AbsolutePositionForObject and Size give it. The Mac and iPad panes anchor
+// a share to the reading view's selection, and the verse-of-the-day card
+// hides that view: anchored to a hidden view, the Mac's picker never
+// appeared and the share was lost without a word, and the iPad's popover
+// fell back to the middle of the screen, over the card. The card hands its
+// Share icon's rectangle over instead, and those panes present beside it. A
+// selection share hands none and keeps its selection anchor, and the
+// Android, Windows and Linux shares read none: their sheets have no anchor.
+type shareAnchor struct {
+	x, y, w, h float32
+}
+
+// currentShareAnchor is the anchor of the share being handed over, set for
+// the length of one share by shareAnchoredAt and read inside it by the panes
+// that present beside one (nativeShareText in reading_macos.go and
+// reading_ios.go). It rides beside shareTextOut rather than through it, so
+// that the one seam every text share and every test passes keeps its shape.
+// The share is handed over, and presented or queued for presenting, before
+// shareAnchoredAt returns, all on the UI goroutine.
+var currentShareAnchor struct {
+	at shareAnchor
+	ok bool
+}
+
+// shareAnchoredAt runs share with at as its anchor, and leaves no anchor
+// behind for the next share. An empty rectangle is no anchor: a control that
+// has not been laid out gets the selection path, not a point at the origin.
+func shareAnchoredAt(at shareAnchor, share func()) {
+	currentShareAnchor.at, currentShareAnchor.ok = at, at.w > 0 && at.h > 0
+	defer func() { currentShareAnchor.at, currentShareAnchor.ok = shareAnchor{}, false }()
+	share()
+}
+
+// shareAnchorNow is the anchor of the share being handed over, if it has one.
+func shareAnchorNow() (shareAnchor, bool) {
+	return currentShareAnchor.at, currentShareAnchor.ok
+}
+
+// anchorOf is the rectangle o occupies on its canvas, as a share anchor.
+func anchorOf(o fyne.CanvasObject) shareAnchor {
+	pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(o)
+	sz := o.Size()
+	return shareAnchor{x: pos.X, y: pos.Y, w: sz.Width, h: sz.Height}
+}
 
 // shareQuoteIn is the whole text pipeline for one selection read against ONE
 // chapter, book/chapter: the located-and-normalized quote, the original

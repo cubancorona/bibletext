@@ -3162,6 +3162,39 @@ void bibleTextShareText(const char *text) {
     });
 }
 
+// btMacCanvasView is the view the Fyne canvas fills: the content view of the
+// reading view's window, or of the first visible window before the reading
+// view exists.
+static NSView *btMacCanvasView(void) {
+    NSWindow *win = gTextView.window;
+    if (win == nil) {
+        for (NSWindow *w in NSApp.windows) {
+            if (w.isVisible && w.contentView != nil) { win = w; break; }
+        }
+    }
+    return win.contentView;
+}
+
+// bibleTextShareTextAt presents the picker beside a rectangle of the canvas,
+// the verse-of-the-day card's Share icon, given in Fyne's coordinates
+// (top-left origin, points), from the content view the canvas fills, which
+// is on screen while the reading view is hidden under the card. Anchored to
+// the hidden reading view (bibleTextShareText), AppKit showed no picker at
+// all and the share was lost without a word. The content view is not
+// flipped, so y is measured from its bottom; the picker hangs below the
+// icon, as it hangs below a selection.
+void bibleTextShareTextAt(const char *text, double x, double y, double w, double h) {
+    if (text == NULL) return;
+    NSString *s = [NSString stringWithUTF8String:text];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        NSView *cv = btMacCanvasView();
+        if (cv == nil || s.length == 0) return;
+        NSRect r = NSMakeRect(x, cv.isFlipped ? y : cv.bounds.size.height - y - h, w, h);
+        NSSharingServicePicker *p = [[NSSharingServicePicker alloc] initWithItems:@[s]];
+        [p showRelativeToRect:r ofView:cv preferredEdge:NSMinYEdge];
+    });
+}
+
 void bibleTextShareImageFile(const char *path) {
     if (path == NULL) return;
     NSString *p = [NSString stringWithUTF8String:path];
@@ -3378,6 +3411,12 @@ func nativeShareText(s string) {
 	}
 	c := C.CString(s)
 	defer C.free(unsafe.Pointer(c))
+	// The verse-of-the-day card's share presents beside its icon; a
+	// selection's share stays at the selection (shareAnchor, share.go).
+	if at, ok := shareAnchorNow(); ok {
+		C.bibleTextShareTextAt(c, C.double(at.x), C.double(at.y), C.double(at.w), C.double(at.h))
+		return
+	}
 	C.bibleTextShareText(c)
 }
 

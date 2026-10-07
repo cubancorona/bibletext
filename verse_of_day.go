@@ -983,8 +983,17 @@ func showVerseOfDayCard(state *AppState, d dayVerse) {
 	// share reads the chapter the reader is on, so sharing Psalm 23 from the
 	// card over Matthew 5 would cite "Matthew 5"; sharePassageText reads the
 	// passage's own chapter and moves the reader nowhere.
-	shareBtn := newIconTapButton(state, theme.MailSendIcon(), 17, 22, func() {
-		sharePassageText(state, d.Book, d.Chapter, d.Lo, d.Hi)
+	//
+	// BESIDE THE ICON. The Mac and iPad panes anchor a share to the reading
+	// view, which this card hides: the Mac's picker then showed nothing and
+	// the share was lost, and the iPad's popover pointed at the middle of the
+	// screen. The icon's own rectangle, read at the tap, is the anchor
+	// (shareAnchor, share.go).
+	var shareBtn *iconTapButton
+	shareBtn = newIconTapButton(state, theme.MailSendIcon(), 17, 22, func() {
+		shareAnchoredAt(anchorOf(shareBtn), func() {
+			sharePassageText(state, d.Book, d.Chapter, d.Lo, d.Hi)
+		})
 	})
 	top := container.NewBorder(nil, nil, nil, shareBtn,
 		container.NewVBox(layout.NewSpacer(), kicker, layout.NewSpacer()))
