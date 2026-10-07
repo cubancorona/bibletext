@@ -490,34 +490,80 @@ func TestAIPassageRefNamesVerses(t *testing.T) {
 	}
 }
 
-// The prompt's citation is the share card's citation for the same drag: the
-// repeated refrain at verse 2, at verse 3, across both, a selection under the
-// matching probe's floor, and the zero span's matching fallback.
+// openingChapterState is a chapter in which one verse's words open another
+// verse: John 3:3 holds "Most certainly I tell you", which is how 3:11
+// begins. The probe matching, which compares the first 24 runes of every
+// verse with the selection, attributes the whole of verse 3 to verses 3 and
+// 11 both; the share card places it at verse 3.
+func openingChapterState() *AppState {
+	bd := &BibleData{
+		Books: []string{"John"},
+		Verses: map[string]map[int][]Verse{"John": {3: {
+			{BookName: "John", Book: "John", Chapter: 3, Verse: 3,
+				Text: "Jesus answered him, “Most certainly I tell you, unless one is born anew, he can’t see God’s Kingdom.”"},
+			{BookName: "John", Book: "John", Chapter: 3, Verse: 4,
+				Text: "Nicodemus said to him, “How can a man be born when he is old? Can he enter a second time into his mother’s womb and be born?”"},
+			{BookName: "John", Book: "John", Chapter: 3, Verse: 11,
+				Text: "Most certainly I tell you, we speak that which we know and testify of that which we have seen, and you don’t receive our witness."},
+		}}},
+	}
+	return &AppState{Bible: bd, CurrentBook: "John", CurrentChapter: 3}
+}
+
+// The prompt's citation is the share card's citation for the same drag, with
+// a position and without one: the repeated refrain at verse 2, at verse 3,
+// across both, a selection under the matching probe's floor, a selection no
+// verse holds, and the selections the probe over-attributes when they arrive
+// with no position — the refrain, which every verse carries, and a verse
+// whose words open another verse. The want column is the share card's own
+// citation, held here so that the two cannot drift together.
 func TestAIPassageRefAgreesWithShareCitation(t *testing.T) {
-	st := refrainChapterState()
+	refrainState, opening := refrainChapterState(), openingChapterState()
+	john3 := opening.Bible.GetChapter("John", 3)[0].Text
 	for _, c := range []struct {
+		st   *AppState
 		text string
 		span selSpan
+		want string
 	}{
-		{refrain, selSpanFromNative(2, 2)},
-		{refrain, selSpanFromNative(3, 3)},
-		{"gods; " + refrain + " 3 Give thanks to the Lord of lords;", selSpanFromNative(2, 3)},
-		{"gods;", selSpanFromNative(2, 2)},
-		{"gods;", selSpan{}},
-		{refrain, selSpan{}},
+		{refrainState, refrain, selSpanFromNative(2, 2), "Psalms 136:2"},
+		{refrainState, refrain, selSpanFromNative(3, 3), "Psalms 136:3"},
+		{refrainState, "gods; " + refrain + " 3 Give thanks to the Lord of lords;", selSpanFromNative(2, 3), "Psalms 136:2–3"},
+		{refrainState, "gods;", selSpanFromNative(2, 2), "Psalms 136:2"},
+		{refrainState, "words this chapter never says", selSpanFromNative(2, 2), "Psalms 136:2"},
+		{refrainState, "words this chapter never says", selSpan{}, "Psalms 136"},
+		{refrainState, "gods;", selSpan{}, "Psalms 136:2"},
+		{refrainState, refrain, selSpan{}, "Psalms 136:1"},
+		{refrainState, "Give thanks", selSpan{}, "Psalms 136:1"},
+		{refrainState, "Give thanks to the God of gods; " + refrain, selSpan{}, "Psalms 136:2"},
+		{opening, john3, selSpanFromNative(3, 3), "John 3:3"},
+		{opening, john3, selSpan{}, "John 3:3"},
+		{opening, "Most certainly I tell you", selSpan{}, "John 3:3"},
 	} {
-		got := aiPassageFor(st, c.text, c.span).Ref
-		if want := citationForSelection(st, c.text, c.span); got != want {
-			t.Errorf("%q %+v: prompt cites %q, the share card %q", c.text, c.span, got, want)
+		got := aiPassageFor(c.st, c.text, c.span).Ref
+		if got != c.want {
+			t.Errorf("%q %+v: prompt cites %q, want %q", c.text, c.span, got, c.want)
 		}
+		if _, cite, _, _ := prepareShareQuote(c.st, c.text, c.span); cite != got {
+			t.Errorf("%q %+v: prompt cites %q, the share card %q", c.text, c.span, got, cite)
+		}
+		// With a position the cross-references panel's citation is the
+		// same resolver; without one it still matches the probe alone,
+		// which is the over-attribution the rows above refuse.
 		if c.span.valid() {
-			if _, cite, _, _ := prepareShareQuote(st, c.text, c.span); cite != got {
-				t.Errorf("%q %+v: prompt cites %q, the share pipeline %q", c.text, c.span, got, cite)
+			if cite := citationForSelection(c.st, c.text, c.span); cite != got {
+				t.Errorf("%q %+v: prompt cites %q, the cross-references panel %q", c.text, c.span, got, cite)
 			}
 		}
 	}
-	if got := aiPassageFor(st, refrain, selSpanFromNative(2, 2)).Ref; got != "Psalms 136:2" {
-		t.Fatalf("control: the refrain at verse 2 cites %q, want Psalms 136:2", got)
+	// Controls: the probe alone names every verse that carries the refrain,
+	// and both verses that open alike, which is what the zero-span rows
+	// above must not report.
+	if got := citationForSelection(refrainState, refrain, selSpan{}); got != "Psalms 136:1–3" {
+		t.Fatalf("control: the probe matching cites the zero-span refrain as %q, want Psalms 136:1–3", got)
+	}
+	if got := citationForSelection(opening, john3, selSpan{}); got != "John 3:3–11" {
+		t.Fatalf("control: the probe matching cites the zero-span verse as %q, want John 3:3–11", got)
 	}
 }
 
@@ -602,14 +648,25 @@ func TestRunAIActionCacheKeyCarriesVerseSpan(t *testing.T) {
 	if got, err := ask(refrain, selSpanFromNative(3, 3)); !isNoKeyError(err) {
 		t.Errorf("a chapter-only entry served a verse-numbered request: (%q, %v)", got, err)
 	}
-	// A selection under the matching floor resolves to no verse without a
-	// span, so its key has no range and the chapter-only entry answers it.
-	seed(base, "gods;", "about the chapter")
-	if got, err := ask("gods;", selSpan{}); err != nil || got != "about the chapter" {
+	// A selection no verse holds resolves to no verse without a span, so its
+	// key has no range and the chapter-only entry answers it; with a span it
+	// is the verse the position touches, and the chapter-only entry is not.
+	const elsewhere = "words this chapter never says"
+	seed(base, elsewhere, "about the chapter")
+	if got, err := ask(elsewhere, selSpan{}); err != nil || got != "about the chapter" {
 		t.Errorf("unresolved selection: got (%q, %v), want the chapter-only answer", got, err)
 	}
-	if got, err := ask("gods;", selSpanFromNative(2, 2)); !isNoKeyError(err) {
+	if got, err := ask(elsewhere, selSpanFromNative(2, 2)); !isNoKeyError(err) {
 		t.Errorf("the same selection with a span was served the chapter-only answer: (%q, %v)", got, err)
+	}
+	// A selection under the matching probe's floor is still placed without a
+	// span, at its one copy, so it is filed under that verse as the spanned
+	// selection is.
+	seed(base+"|2-2", "gods;", "about verse two")
+	for _, span := range []selSpan{{}, selSpanFromNative(2, 2)} {
+		if got, err := ask("gods;", span); err != nil || got != "about verse two" {
+			t.Errorf("%+v: got (%q, %v), want the answer filed under verse 2", span, got, err)
+		}
 	}
 
 	// Ask folds the question in before the range.

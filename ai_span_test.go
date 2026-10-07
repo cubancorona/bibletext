@@ -171,7 +171,7 @@ func TestAskSheetNamesTheVerses(t *testing.T) {
 	bareWin := test.NewWindow(widget.NewLabel("reading"))
 	defer bareWin.Close()
 	bare := refrainPanelState(t, bareWin)
-	promptAskQuestion(bare, "gods;", selSpan{}) // under the matching probe's floor
+	promptAskQuestion(bare, "words this chapter never says", selSpan{})
 	q := bareWin.Canvas().Overlays().Top()
 	if q == nil || !treeHasText(q, "Psalms 136") || treeHasText(q, verseTwoRef) {
 		t.Errorf("control: an unresolved selection must name the chapter alone; texts %v", treeTexts(q))

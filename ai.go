@@ -140,13 +140,22 @@ type aiPassage struct {
 	Version string
 }
 
-// aiPassageFor resolves the selection once, through the resolver every other
-// verb uses (selectionVersesIn: the span positionally, delegating to the share
-// pipeline's normalize so a verse that contributes no words is dropped; the
-// zero span by text matching, as the legacy Entry pane's share card does), so
-// the prompt, the panel header, the Report mail and the share card all cite
-// the same verses for one and the same drag. A state without a Bible, or a
-// selection nothing resolves, cites the chapter alone.
+// aiPassageFor resolves the selection once, in the share card's order
+// (prepareShareQuoteIn), so the prompt, the panel header, the Report mail and
+// the share card all cite the same verses for one and the same drag. The
+// share pipeline's normalize places the selection first: a span positionally,
+// dropping a verse that contributes no words; a selection that arrives with
+// no position (the legacy Entry pane, the plain-text page the Mac and the
+// iPhone and iPad show when a chapter fails to import, a whitespace-only
+// selection on the styled pane) at its first copy in the chapter that splits
+// no word. Only where that declines does selectionVersesIn answer: the raw
+// span for a single partial word, the probe matching for the zero span. The
+// probe alone over-attributes a selection with no position — it matches the
+// first 24 runes of every verse, so a repeated refrain is every verse that
+// carries it and a verse whose words open another verse is both — and the
+// cross-references panel, which still takes it first (selectionVerses), can
+// name more verses than the card for such a drag. A state without a Bible, or
+// a selection nothing resolves, cites the chapter alone.
 func aiPassageFor(state *AppState, text string, span selSpan) aiPassage {
 	p := aiPassage{Text: text}
 	if state == nil {
@@ -158,8 +167,12 @@ func aiPassageFor(state *AppState, text string, span selSpan) aiPassage {
 	if state.Bible == nil {
 		return p
 	}
-	if vs := selectionVersesIn(state, p.Book, p.Chapter, text, span); len(vs) > 0 {
+	if _, lo, hi, _, ok := normalizeShareSelectionIn(state, p.Book, p.Chapter, text, span); ok && lo >= 1 {
+		p.Lo, p.Hi = lo, hi
+	} else if vs := selectionVersesIn(state, p.Book, p.Chapter, text, span); len(vs) > 0 {
 		p.Lo, p.Hi = vs[0].Verse, vs[len(vs)-1].Verse
+	}
+	if p.Lo > 0 {
 		p.Ref = verseRangeCitation(p.Book, p.Chapter, p.Lo, p.Hi)
 	}
 	return p
