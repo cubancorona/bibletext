@@ -351,8 +351,9 @@ var (
 	benchReference = regexp.MustCompile(`\b((?:[1-3] )?[A-Z][a-z]+(?: of [A-Z][a-z]+)?) (\d{1,3}):(\d{1,3})(?: ?[–-] ?(\d{1,3}))?`)
 	// Capitalised English words that precede a bare chapter:verse of the
 	// passage's own book ("In 11:33–38", "Read 7:15–16") without naming a
-	// book: the opening word of a sentence or a bullet, not a citation. A
-	// name that is in neither this list nor the canon is an invented book.
+	// book: the opening word of a sentence or a bullet, not a citation. The
+	// chapter and verse are then held to the passage's own book. A name
+	// that is in neither this list nor the canon is an invented book.
 	benchNotABook = map[string]bool{
 		"And": true, "At": true, "But": true, "Chapter": true, "Chapters": true, "Compare": true,
 		"Does": true, "From": true, "How": true, "In": true, "On": true, "Read": true, "See": true,
@@ -473,7 +474,7 @@ func scoreCompareAnswer(bd *BibleData, c benchCase, md string) []problem {
 	for _, m := range benchReference.FindAllStringSubmatch(md, -1) {
 		name := m[1]
 		if benchNotABook[name] {
-			continue
+			name = c.Book // a bare chapter:verse is the passage's own book
 		}
 		book, ok := resolveBookName(bd.Books, name)
 		if !ok {
@@ -485,25 +486,26 @@ func scoreCompareAnswer(bd *BibleData, c benchCase, md string) []problem {
 		}
 		ch, lo := atoi(m[2]), atoi(m[3])
 		if bd.GetVerse(book, ch, lo) == nil {
-			add(checkCitations, "%q is out of range", m[0])
+			add(checkCitations, "%q is out of range in %s", m[0], book)
 			continue
 		}
 		if hi := atoi(m[4]); hi > 0 && bd.GetVerse(book, ch, hi) == nil {
-			add(checkCitations, "%q runs past the chapter", m[0])
+			add(checkCitations, "%q runs past the chapter in %s", m[0], book)
 		}
 	}
 
-	// 5. Balance. The whole answer is held to the prompt's own cap. The
+	// 5. Balance. The whole answer is held under the prompt's own cap, and
+	// "under 700 words" is strict: an answer of exactly 700 is over it. The
 	// prompt gives a reading the length its substance needs and no number,
-	// so the band is the cap's arithmetic: with the opening sentence and
-	// the four fixed sections taking about three hundred words, three
-	// readings share about four hundred, which is the ceiling; the floor is
-	// the least a section can carry its six parts in (the meaning, the
-	// words that bear it, the three assumptions and the holders). There is
-	// no parity rule between readings: a reading that rests on little in
-	// the passage may be short, and the prompt says so. "Where they agree"
-	// need only be there. A no-conflict passage keeps every section short.
-	floor, ceiling, total := 40, 130, 700
+	// so the band is the bench plan's, 40 to 140 words: the floor is the
+	// least a section can carry its six parts in (the meaning, the words
+	// that bear it, the three assumptions and the holders), and the ceiling
+	// is a reading's fair share of the cap. There is no parity rule between
+	// readings: a reading that rests on little in the passage may be short,
+	// and the prompt says so. "Where they agree" need only be there. A
+	// no-conflict passage keeps every section short, in the plan's shorter
+	// band and under its shorter total.
+	floor, ceiling, total := 40, 140, 700
 	if c.NoConflict {
 		floor, ceiling, total = 20, 80, 400
 	}
@@ -515,8 +517,8 @@ func scoreCompareAnswer(bd *BibleData, c benchCase, md string) []problem {
 	if agree, ok := byTitle[compareHeadingAgree]; ok && words(agree.body) == 0 {
 		add(checkBalance, "%q is empty", compareHeadingAgree)
 	}
-	if n := answerWords(md); n > total {
-		add(checkBalance, "%d words in all, want at most %d", n, total)
+	if n := answerWords(md); n >= total {
+		add(checkBalance, "%d words in all, want under %d", n, total)
 	}
 
 	// 6. Coverage.
@@ -933,6 +935,17 @@ func TestCompareScorerExemptsThePassageFromTheQuotationRule(t *testing.T) {
 	}
 }
 
+// giveChapter gives bd a chapter of n verses in book, so a scorer test can
+// hold citations to a Bible of its own instead of the machine's cache.
+func giveChapter(bd *BibleData, book string, ch, n int) {
+	if bd.Verses[book] == nil {
+		bd.Verses[book] = map[int][]Verse{}
+	}
+	for v := 1; v <= n; v++ {
+		bd.Verses[book][ch] = append(bd.Verses[book][ch], Verse{BookName: book, Book: book, Chapter: ch, Verse: v, Text: "verse"})
+	}
+}
+
 // A cited chapter and verse are held to the Bible when one with verses is
 // given: a verse past the chapter, or a chapter past the book, is check 4.
 // With the bare canon the same text passes on the book name alone, which is
@@ -941,17 +954,9 @@ func TestCompareScorerChecksVerseBounds(t *testing.T) {
 	c := loadBenchTable(t).byID()["matthew-16-18"]
 	good := readCompareControl(t, "good.md")
 	bd := NewBibleData()
-	chapter := func(book string, ch, n int) {
-		if bd.Verses[book] == nil {
-			bd.Verses[book] = map[int][]Verse{}
-		}
-		for v := 1; v <= n; v++ {
-			bd.Verses[book][ch] = append(bd.Verses[book][ch], Verse{BookName: book, Book: book, Chapter: ch, Verse: v, Text: "verse"})
-		}
-	}
-	chapter("Matthew", 16, 28)
-	chapter("1 Corinthians", 3, 23)
-	chapter("1 Peter", 2, 25)
+	giveChapter(bd, "Matthew", 16, 28)
+	giveChapter(bd, "1 Corinthians", 3, 23)
+	giveChapter(bd, "1 Peter", 2, 25)
 	if ps := scoreCompareAnswer(bd, c, good); len(ps) != 0 {
 		t.Fatalf("good.md against a Bible with its chapters: %s", problemLines(ps))
 	}
@@ -1027,6 +1032,128 @@ func TestCompareScorerAllowsABareReferenceToTheBook(t *testing.T) {
 	line := "Hezekiah 16:18 says the same."
 	if got := checksTripped(scoreCompareAnswer(canon, c, good+"\n"+line+"\n")); fmt.Sprint(got) != fmt.Sprint([]int{checkCitations}) {
 		t.Errorf("control: %q trips %v, want [%d]", line, got, checkCitations)
+	}
+}
+
+// A bare chapter:verse is read as the passage's own book, and its chapter
+// and verse are held to that book when the Bible carries verses: "In 11:33"
+// on John 11 is in range, "In 99:1" on Psalm 23 is a chapter the Bible given
+// does not have. The Bible here carries Psalm 23 and John 11 alone, and
+// good.md cites neither, so the citation problems are the added line's
+// alone. Control: the John line on the Psalm passage trips, read as Psalm
+// 11:33 against a Bible with Psalm 23 alone.
+func TestCompareScorerHoldsABareReferenceToItsBook(t *testing.T) {
+	rows := loadBenchTable(t).byID()
+	good := readCompareControl(t, "good.md")
+	bd := NewBibleData()
+	giveChapter(bd, "Psalms", 23, 6)
+	giveChapter(bd, "John", 11, 57)
+	citations := func(ps []problem) []string {
+		var out []string
+		for _, p := range ps {
+			if p.check == checkCitations {
+				out = append(out, p.detail)
+			}
+		}
+		return out
+	}
+	for _, id := range []string{"psalm-23-1", "john-11-35"} {
+		if ps := citations(scoreCompareAnswer(bd, rows[id], good)); len(ps) != 0 {
+			t.Fatalf("good.md on %s cites out of this Bible before any line is added: %v", id, ps)
+		}
+	}
+	for _, tc := range []struct {
+		id, line string
+		trips    bool
+	}{
+		{"john-11-35", "In 11:33 he groaned in the spirit.", false},
+		{"john-11-35", "In 11:57 the order to report him is given.", false},
+		{"psalm-23-1", "In 23:1 the shepherd is named.", false},
+		{"psalm-23-1", "In 99:1 the same shepherd reigns.", true},
+		{"psalm-23-1", "In 23:7 the psalm would go on.", true},
+		{"psalm-23-1", "In 11:33 he groaned in the spirit.", true},
+	} {
+		got := citations(scoreCompareAnswer(bd, rows[tc.id], good+"\n"+tc.line+"\n"))
+		switch {
+		case tc.trips && (len(got) != 1 || !strings.Contains(got[0], benchReference.FindString(tc.line))):
+			t.Errorf("%q on %s: citation problems %v, want one naming the reference", tc.line, tc.id, got)
+		case !tc.trips && len(got) != 0:
+			t.Errorf("%q on %s is in range, yet: %v", tc.line, tc.id, got)
+		}
+	}
+}
+
+// The reading band is 40 to 140 words, both ends inside it: a reading of
+// 140 words passes and one of 141 trips the balance check alone; one of 40
+// passes and one of 39 trips it alone. The padding goes under the reading's
+// own heading, so only that reading's count moves.
+func TestCompareScorerHoldsTheReadingBandAtItsEdges(t *testing.T) {
+	c := loadBenchTable(t).byID()["matthew-16-18"]
+	canon := NewBibleData()
+	readingWords := func(md, title string) int {
+		_, secs := splitMarkdownSections(md)
+		for _, s := range secs {
+			if s.title == title {
+				return words(s.body)
+			}
+		}
+		t.Fatalf("no %q section", title)
+		return 0
+	}
+	for _, tc := range []struct {
+		control, title string
+		to             int
+		trips          bool
+	}{
+		{"good.md", "Catholic", 140, false},
+		{"good.md", "Catholic", 141, true},
+		{"thin.md", "Historical-critical", 40, false},
+		{"thin.md", "Historical-critical", 39, true},
+	} {
+		md := readCompareControl(t, tc.control)
+		n := readingWords(md, tc.title)
+		if n > tc.to {
+			t.Fatalf("%s: %q is %d words, more than the %d wanted", tc.control, tc.title, n, tc.to)
+		}
+		heading := "## " + tc.title + "\n"
+		md = strings.Replace(md, heading, heading+strings.Repeat("again ", tc.to-n)+"\n", 1)
+		if got := readingWords(md, tc.title); got != tc.to {
+			t.Fatalf("%s: %q padded to %d words, want %d", tc.control, tc.title, got, tc.to)
+		}
+		want := fmt.Sprint([]int{})
+		if tc.trips {
+			want = fmt.Sprint([]int{checkBalance})
+		}
+		if got := checksTripped(scoreCompareAnswer(canon, c, md)); fmt.Sprint(got) != want {
+			t.Errorf("%s with %q at %d words trips %v, want %s", tc.control, tc.title, tc.to, got, want)
+		}
+	}
+}
+
+// "Under 700 words" is strict: an answer of exactly 700 words is over the
+// cap and trips the balance check alone; the same answer one word shorter
+// trips nothing. The padding goes after the last section, where no other
+// check counts words.
+func TestCompareScorerHoldsTheCapStrictly(t *testing.T) {
+	c := loadBenchTable(t).byID()["matthew-16-18"]
+	good := readCompareControl(t, "good.md")
+	canon := NewBibleData()
+	padded := func(to int) string {
+		n := answerWords(good)
+		if n >= to {
+			t.Fatalf("good.md is %d words, no room under %d", n, to)
+		}
+		return good + "\n" + strings.TrimSpace(strings.Repeat("again ", to-n)) + "\n"
+	}
+	at := padded(700)
+	if n := answerWords(at); n != 700 {
+		t.Fatalf("the padded answer is %d words, want 700", n)
+	}
+	if got := checksTripped(scoreCompareAnswer(canon, c, at)); fmt.Sprint(got) != fmt.Sprint([]int{checkBalance}) {
+		t.Errorf("700 words trips %v, want [%d]", got, checkBalance)
+	}
+	if ps := scoreCompareAnswer(canon, c, padded(699)); len(ps) != 0 {
+		t.Errorf("control: 699 words is under the cap, yet: %s", problemLines(ps))
 	}
 }
 

@@ -63,8 +63,8 @@ func TestCompareControlAnswerRendersTheSkeleton(t *testing.T) {
 			t.Errorf("the control answer does not quote %q from the passage", run)
 		}
 	}
-	if n := len(strings.Fields(strings.ReplaceAll(md, "## ", ""))); n > 700 {
-		t.Errorf("the control answer is %d words", n)
+	if n := len(strings.Fields(strings.ReplaceAll(md, "## ", ""))); n >= 700 {
+		t.Errorf("the control answer is %d words, not under 700", n)
 	}
 	questions := md[strings.LastIndex(md, "## "):]
 	if n := len(regexp.MustCompile(`(?m)^\d+\. .*\?$`).FindAllString(questions, -1)); n < 2 || n > 4 {
