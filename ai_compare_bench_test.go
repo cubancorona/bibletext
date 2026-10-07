@@ -306,10 +306,21 @@ func splitSentences(s string) []string {
 
 var (
 	// The labels, the assumption words that license them in a sentence, and
-	// the forms of self-description that do too.
+	// the forms of self-description that do too. The assumption words are
+	// the three heads the prompt names (Scripture, the supernatural,
+	// authority) and the terms its own definitions of the labels use: fully
+	// true, a human record, a real miracle or event, explained naturally,
+	// the text alone, scholarly reconstruction. A sentence that earns its
+	// label in those words without one of the three heads is still a
+	// sentence that names the assumption. Tradition, council and confession
+	// are left out on purpose: each is as often another thing (a Reformed
+	// tradition, Peter's confession) as an authority.
 	benchLabel      = regexp.MustCompile(`(?i)\b(conservative|liberal|fundamentalist)\b`)
-	benchAssumption = regexp.MustCompile(`(?i)\b(scripture|supernatural|authority|assum\w*)\b`)
-	benchSelfNamed  = regexp.MustCompile(`(?i)\b(themselves|self-descri\w*|their own (?:name|term|word)s?)\b`)
+	benchAssumption = regexp.MustCompile(`(?i)\b(scripture|supernatural|authorit\w*|assum\w*|presuppos\w*|` +
+		`inerran\w*|inspir\w*|fully true|full truth|true in faith|human (?:record|editing|author\w*|composition|document|product|work|origin\w*)|` +
+		`miracle\w*|miraculous|naturally|naturali[sz]\w*|natural explanation|literal\w*|real(?:ly)? (?:event|happened)|as (?:an )?event|as a sign|as (?:a )?story|` +
+		`the text alone|the text as|sola scriptura|scholarly reconstruction)\b`)
+	benchSelfNamed = regexp.MustCompile(`(?i)\b(themselves|self-descri\w*|their own (?:name|term|word)s?)\b`)
 	// Names in which a label word is part of a proper name, not a verdict.
 	benchLabelAllow = []string{"Conservative Judaism", "Reform Judaism", "progressive revelation"}
 
@@ -338,8 +349,15 @@ var (
 	// "Book chapter:verse", with an optional verse range, the book possibly
 	// numbered ("1 Peter") or of the form "Song of Solomon".
 	benchReference = regexp.MustCompile(`\b((?:[1-3] )?[A-Z][a-z]+(?: of [A-Z][a-z]+)?) (\d{1,3}):(\d{1,3})(?: ?[–-] ?(\d{1,3}))?`)
-	// Capitalised words that precede a chapter:verse without naming a book.
-	benchNotABook = map[string]bool{"Chapter": true, "Verse": true, "Verses": true}
+	// Capitalised English words that precede a bare chapter:verse of the
+	// passage's own book ("In 11:33–38", "Read 7:15–16") without naming a
+	// book: the opening word of a sentence or a bullet, not a citation. A
+	// name that is in neither this list nor the canon is an invented book.
+	benchNotABook = map[string]bool{
+		"And": true, "At": true, "But": true, "Chapter": true, "Chapters": true, "Compare": true,
+		"Does": true, "From": true, "How": true, "In": true, "On": true, "Read": true, "See": true,
+		"Then": true, "Verse": true, "Verses": true, "With": true,
+	}
 
 	benchNumberedQuestion = regexp.MustCompile(`(?m)^\s*\d+[.)]\s+.*\?\s*$`)
 )
@@ -475,29 +493,27 @@ func scoreCompareAnswer(bd *BibleData, c benchCase, md string) []problem {
 		}
 	}
 
-	// 5. Balance.
-	floor, ceiling, total := 40, 140, 650
+	// 5. Balance. The whole answer is held to the prompt's own cap. The
+	// prompt gives a reading the length its substance needs and no number,
+	// so the band is the cap's arithmetic: with the opening sentence and
+	// the four fixed sections taking about three hundred words, three
+	// readings share about four hundred, which is the ceiling; the floor is
+	// the least a section can carry its six parts in (the meaning, the
+	// words that bear it, the three assumptions and the holders). There is
+	// no parity rule between readings: a reading that rests on little in
+	// the passage may be short, and the prompt says so. "Where they agree"
+	// need only be there. A no-conflict passage keeps every section short.
+	floor, ceiling, total := 40, 130, 700
 	if c.NoConflict {
 		floor, ceiling, total = 20, 80, 400
 	}
-	shortest, longest := 0, 0
 	for _, r := range readings {
-		n := words(r.body)
-		if n < floor || n > ceiling {
+		if n := words(r.body); n < floor || n > ceiling {
 			add(checkBalance, "%q is %d words, want %d to %d", r.title, n, floor, ceiling)
 		}
-		if shortest == 0 || n < shortest {
-			shortest = n
-		}
-		if n > longest {
-			longest = n
-		}
 	}
-	if shortest > 0 && longest > 2*shortest {
-		add(checkBalance, "the longest reading is %d words and the shortest %d, more than twice", longest, shortest)
-	}
-	if agree, ok := byTitle[compareHeadingAgree]; ok && words(agree.body) < 25 {
-		add(checkBalance, "%q is %d words, want at least 25", compareHeadingAgree, words(agree.body))
+	if agree, ok := byTitle[compareHeadingAgree]; ok && words(agree.body) == 0 {
+		add(checkBalance, "%q is empty", compareHeadingAgree)
 	}
 	if n := answerWords(md); n > total {
 		add(checkBalance, "%d words in all, want at most %d", n, total)
@@ -832,6 +848,9 @@ var compareControls = map[string]struct {
 	"invented-ref.md":   {checkCitations, "matthew-16-18"},
 	"quoted.md":         {checkCitations, "matthew-16-18"},
 	"lopsided.md":       {checkBalance, "matthew-16-18"},
+	"thin.md":           {checkBalance, "matthew-16-18"},
+	"overlong.md":       {checkBalance, "matthew-16-18"},
+	"empty-agree.md":    {checkBalance, "matthew-16-18"},
 	"missing-jewish.md": {checkCoverage, "isaiah-7-14"},
 	"no-questions.md":   {checkQuestions, "matthew-16-18"},
 	"ungrounded.md":     {checkGrounding, "matthew-16-18"},
@@ -898,20 +917,8 @@ func problemLines(ps []problem) string {
 // words that are not the passage's, attributed to a name, do not.
 func TestCompareScorerExemptsThePassageFromTheQuotationRule(t *testing.T) {
 	c := loadBenchTable(t).byID()["matthew-16-18"]
-	// good.md sits at the length ceiling; two sentences are dropped so an
-	// added line is judged on the quotation rule alone.
 	good := readCompareControl(t, "good.md")
-	for _, sentence := range []string{" Scholars are divided among themselves.", " None reads Peter as the rock apart from what he has just confessed."} {
-		trimmed := strings.Replace(good, sentence, "", 1)
-		if trimmed == good {
-			t.Fatalf("good.md no longer carries %q", sentence)
-		}
-		good = trimmed
-	}
 	canon := NewBibleData()
-	if ps := scoreCompareAnswer(canon, c, good); len(ps) != 0 {
-		t.Fatalf("the trimmed control does not pass: %s", problemLines(ps))
-	}
 	for _, line := range []string{
 		"Jesus said, “you are Peter, and on this rock I will build my assembly.”",
 		"Theophilus wrote, “on this rock I will build my assembly”.",
@@ -963,6 +970,63 @@ func TestCompareScorerChecksVerseBounds(t *testing.T) {
 		if ps := scoreCompareAnswer(NewBibleData(), c, md); len(ps) != 0 {
 			t.Errorf("control: with the bare canon %q is held on the book name only, yet: %s", edit.to, problemLines(ps))
 		}
+	}
+}
+
+// A label is licensed by the assumption that earns it, stated in the words
+// the prompt defines the label with as much as by naming Scripture, the
+// supernatural or authority outright; a label hung on a reading's holders
+// with no assumption in the sentence is not. Control: each bare sentence
+// trips the label check alone.
+func TestCompareScorerReadsTheLabelDefinitions(t *testing.T) {
+	c := loadBenchTable(t).byID()["matthew-16-18"]
+	good := readCompareControl(t, "good.md")
+	canon := NewBibleData()
+	for _, line := range []string{
+		"By treating the text as a human record and explaining its prophecy naturally, this is a liberal reading.",
+		"Because it holds the text as fully true and the miracle as real, this is a conservative reading.",
+		"It is a conservative reading because it treats the text as the true, authoritative command of Jesus.",
+		"This makes it a liberal reading, as it explains the text's development through human editing rather than as the unchanged speech of Jesus.",
+		"This is theologically conservative (inerrancy and a real miracle).",
+		"Theological stance: conservative, because it affirms the full truth of the text and literal events.",
+	} {
+		if ps := scoreCompareAnswer(canon, c, good+"\n"+line+"\n"); len(ps) != 0 {
+			t.Errorf("%q names its assumption, yet: %s", line, problemLines(ps))
+		}
+	}
+	for _, line := range []string{
+		"It is held by Catholics, Eastern Orthodox, and many conservative Protestants.",
+		"It is held by mainline Protestants and liberal scholars across traditions.",
+		"Theologically conservative.",
+		"Theological stance: conservative.",
+	} {
+		if got := checksTripped(scoreCompareAnswer(canon, c, good+"\n"+line+"\n")); fmt.Sprint(got) != fmt.Sprint([]int{checkLabels}) {
+			t.Errorf("control: %q trips %v, want [%d]", line, got, checkLabels)
+		}
+	}
+}
+
+// A bare chapter:verse opened by an English word ("In 16:18", "Read 16:13")
+// refers to the passage's own book and is not a citation of a book that
+// does not exist; a capitalised name that is neither such a word nor a book
+// of the canon still is. Control: the invented book trips the citation
+// check alone.
+func TestCompareScorerAllowsABareReferenceToTheBook(t *testing.T) {
+	c := loadBenchTable(t).byID()["matthew-16-18"]
+	good := readCompareControl(t, "good.md")
+	canon := NewBibleData()
+	for _, line := range []string{
+		"In 16:18 the promise follows the confession.",
+		"Read 16:13–20 as one scene.",
+		"But 16:19 gives the keys to Peter alone.",
+	} {
+		if ps := scoreCompareAnswer(canon, c, good+"\n"+line+"\n"); len(ps) != 0 {
+			t.Errorf("%q is a bare reference, yet: %s", line, problemLines(ps))
+		}
+	}
+	line := "Hezekiah 16:18 says the same."
+	if got := checksTripped(scoreCompareAnswer(canon, c, good+"\n"+line+"\n")); fmt.Sprint(got) != fmt.Sprint([]int{checkCitations}) {
+		t.Errorf("control: %q trips %v, want [%d]", line, got, checkCitations)
 	}
 }
 

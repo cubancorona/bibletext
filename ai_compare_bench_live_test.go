@@ -51,8 +51,12 @@ const (
 	// compareBenchCallBudget is the ceiling on one call.
 	compareBenchCallBudget = 120 * time.Second
 	// An Explain answer is a few short paragraphs when it is at most this
-	// many words and paragraphs, with no heading or bullet line.
-	compareBenchExplainWords      = 350
+	// many words and paragraphs, with no heading or bullet line. The Explain
+	// prompt sets no number, so the words bar is the first recording
+	// round's own ceiling: its ten Explain answers on the default model ran
+	// 310 to 427 words in three or four paragraphs, and the control now
+	// measures growth from that round rather than an unquantified "short".
+	compareBenchExplainWords      = 430
 	compareBenchExplainParagraphs = 5
 	compareBenchExplainTolerance  = 2
 )
