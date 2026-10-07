@@ -9,6 +9,7 @@ The rock is Christ, confessed by Peter, who speaks for all the apostles; the Chu
 
 ## Historical-critical
 Some scholars defend the saying as an original saying of Jesus, perhaps in Aramaic, where one word, Kepha, would stand for both name and rock, and the weight falls on that wordplay and on the Semitic idiom of the gates of Hades. It treats the Gospel as a human record all the same, read by scholarly reconstruction, and takes the promise as the hope of the first disciples. Held by critical scholars of several churches and of none, who are divided among themselves.
+
 ## Where they agree
 All four read Peter as spokesman for the apostles' confession, the assembly as the one people Jesus gathers, and the gates of Hades as the power of death, which cannot destroy it.
 
