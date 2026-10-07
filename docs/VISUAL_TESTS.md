@@ -22,10 +22,12 @@ auto-opens a sheet on the simulator for screenshots. The names cover every
 sheet a phone or tablet opens over the page, in its tallest and shortest
 forms and its waiting states: `settings`, `goto`, `chapters`, `versions`,
 `versions-more`, `votd` (today's), `votd-one`, `votd-long`, `audio`, `note`,
-`ask`, `ai-waiting`, `xrefs-waiting`, `xrefs`, `share-image`, `note-offer`,
-`link-notice`, `version-loading` and `version-error` (`devSheets` in
-`dev_open_sheets_on.go` says what each opens, and how the waiting states are
-held without a download or an AI request).
+`ask`, `ai-waiting`, `compare-waiting`, `compare` (the answer panel with the
+hand-written control comparison of Matthew 16:18 in place), `xrefs-waiting`,
+`xrefs`, `share-image`, `note-offer`, `link-notice`, `version-loading` and
+`version-error` (`devSheets` in `dev_open_sheets_on.go` says what each opens,
+and how the waiting and answered states are held without a download or an AI
+request).
 `SIMCTL_CHILD_BIBLETEXT_DEV_TAB=read|books|search` brings the launch up on
 that tab (`dev_open_tab_on.go`), so Books and Search, where a phone held
 sideways keeps its header and navigation, can be captured without a tap; a

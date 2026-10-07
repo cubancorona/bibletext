@@ -1131,7 +1131,8 @@ public final class BtBridge {
     private static final int STUDY_ROW_H = 48, STUDY_ROW_PAD_X = 16, STUDY_ROW_MIN_W = 196,
                              STUDY_CARD_PAD_Y = 8, STUDY_EDGE = 8, STUDY_GAP = 4;
 
-    // showStudyPopup presents Explain / Analyze context / Analyze translation as
+    // showStudyPopup presents the study verbs (Explain / Analyze context /
+    // Analyze translation / Compare perspectives) as
     // a popup at the selection — the inline "Study with AI" bar item's second
     // level (a floating toolbar cannot nest a real SubMenu inline). It used to
     // be a PopupMenu on a 1px anchor, which went wrong twice: PopupMenu shrinks
@@ -1190,8 +1191,11 @@ public final class BtBridge {
 
         android.util.TypedValue ripple = new android.util.TypedValue();
         activity.getTheme().resolveAttribute(android.R.attr.selectableItemBackground, ripple, true);
+        // The study verbs, in the order every surface offers them (aiStudyVerbs
+        // on the Go side, which a source test holds this list to).
         String[][] items = {{"Explain", "explain"}, {"Analyze context", "context"},
-                            {"Analyze translation", "translation"}};
+                            {"Analyze translation", "translation"},
+                            {"Compare perspectives", "compare"}};
         for (String[] it : items) {
             final String action = it[1];
             TextView row = new TextView(activity);
@@ -1515,7 +1519,7 @@ public final class BtBridge {
                 // can't show a SubMenu inline (only plain leaf items are eligible
                 // for the visible bar) and it flattens SubMenus in the overflow —
                 // so "Study with AI" is a PLAIN item pinned to the bar that opens
-                // our own popup with the three actions (onActionItemClicked),
+                // our own popup with the study actions (onActionItemClicked),
                 // giving it the same lead position the iOS menu has. Keep Copy /
                 // Select all; drop the system plain-text Share (ours, with the
                 // reference, supersedes it) so there aren't two Shares.
@@ -1585,7 +1589,7 @@ public final class BtBridge {
                 final int selLo = verseAtOffset(s0);
                 final int selHi = s1 > s0 ? verseAtOffset(s1 - 1) : selLo;
                 if (item.getItemId() == 200) {
-                    // The inline "Study with AI": open our popup of the three
+                    // The inline "Study with AI": open our popup of the study
                     // actions, anchored at the selection. The selected text is
                     // captured NOW — opening the popup may collapse the selection
                     // and end the action mode.

@@ -10,8 +10,12 @@ import (
 // enough for its submenus: Fyne clamps a child menu flush against the canvas
 // edge, which read as "butting against the bottom, slightly cut off".
 func TestSelectionMenuOpensWithRoomForItsSubmenus(t *testing.T) {
-	study := fyne.NewMenu("", fyne.NewMenuItem("Explain", nil),
-		fyne.NewMenuItem("Analyze context", nil), fyne.NewMenuItem("Analyze translation", nil))
+	// The study submenu as the pane builds it: one item per verb.
+	verbs := make([]*fyne.MenuItem, 0, len(aiStudyVerbs))
+	for _, v := range aiStudyVerbs {
+		verbs = append(verbs, fyne.NewMenuItem(v.Label, nil))
+	}
+	study := fyne.NewMenu("", verbs...)
 	share := fyne.NewMenu("", fyne.NewMenuItem("a", nil), fyne.NewMenuItem("b", nil),
 		fyne.NewMenuItem("c", nil), fyne.NewMenuItem("d", nil))
 	ai := fyne.NewMenuItem("Study with AI", nil)

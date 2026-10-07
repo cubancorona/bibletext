@@ -50,6 +50,9 @@ var devOpenWants = map[string]devOpenWant{
 	"note":            {has: []string{"Add a note"}},
 	"ask":             {has: []string{"Ask about this passage"}},
 	"ai-waiting":      {has: []string{"Explanation", "Reading the passage…", "Cancel"}},
+	"compare-waiting": {has: []string{"Perspectives", "Reading the passage…", "Cancel"}, hasnt: []string{"Explanation", compareHeadingAgree}},
+	"compare": {has: append([]string{"Perspectives", "Matthew 16:18"}, compareHeadings...),
+		hasnt: []string{"Reading the passage…", "Explanation"}},
 	"xrefs-waiting":   {has: []string{"Cross-references", "Finding related passages…"}, list: -1},
 	"xrefs":           {has: []string{"Cross-references", "Matthew 5:3"}, hasnt: []string{"Finding related passages…", "No cross-references"}, list: 1},
 	"share-image":     {has: []string{"Share as image", "John 3:16"}},
@@ -159,8 +162,9 @@ func checkDevOpen(st *AppState, w fyne.Window, open func(*AppState) bool, want d
 }
 
 // devOpenWindow is a fresh phone window for one name, with the sheets'
-// timers held as the sheet tests hold them, and Matthew 5:3 and Luke 6:20
-// in its Bible, which a reader's Bible has and the sample does not.
+// timers held as the sheet tests hold them, and Matthew 5:3, Luke 6:20 and
+// Matthew 16:18 in its Bible, which a reader's Bible has and the sample does
+// not.
 func devOpenWindow(t *testing.T) (*AppState, fyne.Window) {
 	t.Helper()
 	holdSheetTimers(t)
@@ -168,13 +172,26 @@ func devOpenWindow(t *testing.T) (*AppState, fyne.Window) {
 	votdSynchronousRemeasure(t)
 	st, w := devOpenPhoneWindow(t)
 	withBeatitudes(st)
+	withPeter(st)
 	st.CurrentBook, st.CurrentChapter = "John", 3
 	return st, w
 }
 
-// parkDevStudy holds the study request the ai-waiting name makes for good, as
-// the suite's study stubs do, and puts the request back once the parked one
-// has started.
+// withPeter puts Matthew 16:18 in s's Bible, beside whatever Matthew holds,
+// so the comparison's header can name the verse the compare name selects.
+// The chapter index is built again, or navigation, which reads the index
+// rather than the verses, would not reach the chapter.
+func withPeter(s *AppState) {
+	if s.Bible.Verses["Matthew"] == nil {
+		s.Bible.Verses["Matthew"] = map[int][]Verse{}
+	}
+	s.Bible.Verses["Matthew"][16] = []Verse{{BookName: "Matthew", Chapter: 16, Verse: 18, Text: devPeterQuote}}
+	s.Bible.PrepareSearchIndex()
+}
+
+// parkDevStudy holds the study request the ai-waiting and compare-waiting
+// names make for good, as the suite's study stubs do, and puts the request
+// back once the parked one has started.
 func parkDevStudy(t *testing.T) (started chan struct{}) {
 	t.Helper()
 	prevRun, prevWait := aiActionRun, devStudyWait
@@ -185,6 +202,65 @@ func parkDevStudy(t *testing.T) (started chan struct{}) {
 	}
 	t.Cleanup(func() { aiActionRun, devStudyWait = prevRun, prevWait })
 	return started
+}
+
+// serveDevStudy holds the study request the compare name makes, runs the
+// answer's second fit inline rather than on a timer (studyRemeasure), reports
+// each served request's context, and puts the request back after.
+func serveDevStudy(t *testing.T) (served chan context.Context) {
+	t.Helper()
+	prevRun, prevServed, prevFit := aiActionRun, devStudyServed, studyRemeasure
+	served = make(chan context.Context, 4)
+	devStudyServed = func(ctx context.Context) { served <- ctx }
+	studyRemeasure = func(fit func()) { fit() }
+	t.Cleanup(func() { aiActionRun, devStudyServed, studyRemeasure = prevRun, prevServed, prevFit })
+	return served
+}
+
+// settledDevStudy waits for a served request to reach the seam and for its
+// goroutine to return, its answer painted into the panel, which is when its
+// context ends.
+func settledDevStudy(t *testing.T, served chan context.Context) {
+	t.Helper()
+	var ctx context.Context
+	select {
+	case ctx = <-served:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the served comparison never reached the request seam")
+	}
+	select {
+	case <-ctx.Done():
+	case <-time.After(2 * time.Second):
+		t.Fatal("the served comparison never landed")
+	}
+}
+
+// devStudyOpener is name's opener for checkDevOpen, holding the study seam
+// for the names that move it and returning only once the sheet is whole:
+// after a parked request has started, which orders its read of the seam
+// before the test puts the seam back, or after a served answer has landed.
+func devStudyOpener(t *testing.T, name string) func(*AppState) bool {
+	t.Helper()
+	var started chan struct{}
+	var served chan context.Context
+	switch name {
+	case "ai-waiting", "compare-waiting":
+		started = parkDevStudy(t)
+	case "compare":
+		served = serveDevStudy(t)
+	}
+	return func(s *AppState) bool {
+		if !devOpenSheet(s, name) {
+			return false
+		}
+		if started != nil {
+			waitParked(t, started, "the parked study request")
+		}
+		if served != nil {
+			settledDevStudy(t, served)
+		}
+		return true
+	}
 }
 
 func TestDevOpenNamesOpenTheirSheets(t *testing.T) {
@@ -208,10 +284,7 @@ func TestDevOpenNamesOpenTheirSheets(t *testing.T) {
 		name := sh.name
 		t.Run(name, func(t *testing.T) {
 			st, w := devOpenWindow(t)
-			var started chan struct{}
-			if name == "ai-waiting" {
-				started = parkDevStudy(t)
-			}
+			open := devStudyOpener(t, name)
 			// The cross-references load is the test's own, and it must still be
 			// in place, never called, after either cross-references name.
 			prevRun, prevLoad := crossRefsRun, crossRefsLoad
@@ -223,13 +296,10 @@ func TestDevOpenNamesOpenTheirSheets(t *testing.T) {
 			cur, pref, stale := st.CurrentVersion, st.preferredVersion, st.staleVersions
 			pending, downloading, seed := st.fullPending, st.fullDownloading, st.seedOnly
 
-			if err := checkDevOpen(st, w, func(s *AppState) bool { return devOpenSheet(s, name) }, devOpenWants[name]); err != nil {
+			if err := checkDevOpen(st, w, open, devOpenWants[name]); err != nil {
 				t.Fatalf("%s, %s: %v", name, sh.opens, err)
 			}
 
-			if started != nil {
-				waitParked(t, started, "the parked study request")
-			}
 			if fetched {
 				t.Error("the cross-references were loaded")
 			}
@@ -269,9 +339,12 @@ func TestDevOpenChecksRefuseTheWrongSheet(t *testing.T) {
 		{"votd-one", "votd-long"},
 		{"goto", "chapters"},
 		{"note", "audio"},
+		{"ai-waiting", "compare-waiting"},
+		{"compare-waiting", "compare"},
+		{"compare", "compare-waiting"},
 	} {
 		st, w := devOpenWindow(t)
-		if err := checkDevOpen(st, w, func(s *AppState) bool { return devOpenSheet(s, tc.open) }, devOpenWants[tc.as]); err == nil {
+		if err := checkDevOpen(st, w, devStudyOpener(t, tc.open), devOpenWants[tc.as]); err == nil {
 			t.Errorf("control: %s passed as %s", tc.open, tc.as)
 		}
 	}
@@ -300,12 +373,19 @@ func TestDevOpenAtLaunchOpensTheNamedSheet(t *testing.T) {
 }
 
 // THE SIMULATOR SHOWS WHAT THE HOST TESTS MEASURE: the long verse-of-the-day
-// passage and the synthetic translations are the sheet tests' own, and the
+// passage and the synthetic translations are the sheet tests' own, the
 // one-verse passage is one verse, the one the sheets that quote a selection
-// quote.
+// quote, and the comparison is the scorer's control answer over the
+// comparison tests' own passage.
 func TestDevOpenFixturesAreTheTestsOwn(t *testing.T) {
 	if one := devOneDayVerse(); one.Lo != one.Hi || len(one.Verses) != 1 || one.Verses[0].Text != devQuote {
 		t.Errorf("votd-one's passage is not the one verse the other sheets quote: %+v", one)
+	}
+	if devPeterQuote != peterPassage().Text {
+		t.Error("compare's passage is not the comparison tests' Matthew 16:18")
+	}
+	if devCompareAnswer != compareControlAnswer(t) {
+		t.Error("compare's answer is not the control answer the scorer must pass")
 	}
 	if !reflect.DeepEqual(devLongDayPassage(), longDayPassage()) {
 		t.Error("votd-long's passage is not the sheet tests' long passage")

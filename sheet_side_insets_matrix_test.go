@@ -60,6 +60,18 @@ func insetSheets(t *testing.T) []insetSheet {
 			showAIPanel(s, aiActionExplain, quote, "", selSpan{})
 			waitParked(t, studies, "the study request")
 		}},
+		{"compare-waiting", func(t *testing.T, s *AppState) {
+			showAIPanel(s, aiActionCompare, quote, "", selSpan{})
+			waitParked(t, studies, "the comparison request")
+		}},
+		// The answer panel at its tallest: the control comparison, landed.
+		{"compare", func(t *testing.T, s *AppState) {
+			reqs := stubStudyRequests(t)
+			showAIPanel(s, aiActionCompare, quote, "", selSpan{})
+			r := nextStudyRequest(t, reqs, "the comparison")
+			r.answer <- compareControlAnswer(t)
+			settled(t, r)
+		}},
 		{"xrefs-waiting", func(_ *testing.T, s *AppState) {
 			crossRefsRun = func(func()) {} // the load never lands
 			showCrossRefs(s, quote, selSpan{})

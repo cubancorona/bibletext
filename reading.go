@@ -1606,17 +1606,15 @@ func selectionStudyMenu(state *AppState, sel string, span selSpan, copyFn, selec
 
 		if aiFeaturesEnabled(state) {
 			aiItem := fyne.NewMenuItem("Study with AI", nil)
-			aiItem.ChildMenu = fyne.NewMenu("",
-				fyne.NewMenuItem("Explain", func() {
-					dispatchAIAction(state, aiActionExplain, sel, span)
-				}),
-				fyne.NewMenuItem("Analyze context", func() {
-					dispatchAIAction(state, aiActionContext, sel, span)
-				}),
-				fyne.NewMenuItem("Analyze translation", func() {
-					dispatchAIAction(state, aiActionTranslation, sel, span)
-				}),
-			)
+			// One item per study verb, in the order every surface offers them
+			// (aiStudyVerbs), each dispatching its own action string.
+			verbs := make([]*fyne.MenuItem, 0, len(aiStudyVerbs))
+			for _, v := range aiStudyVerbs {
+				verbs = append(verbs, fyne.NewMenuItem(v.Label, func() {
+					dispatchAIAction(state, v.Action, sel, span)
+				}))
+			}
+			aiItem.ChildMenu = fyne.NewMenu("", verbs...)
 			items = append(items, aiItem, shareItem, xrefItem)
 		} else {
 			items = append(items, xrefItem, shareItem)

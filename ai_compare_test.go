@@ -10,6 +10,8 @@ package bibletext
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -19,6 +21,61 @@ import (
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 )
+
+// compareControlAnswer is the hand-written answer to the contract over
+// Matthew 16:18 (peterPassage) that the fairness scorer must pass, read from
+// testdata/compare/_controls/good.md: the comparison a development launch
+// shows (dev_open_sheets_on.go embeds the same file) and the control the
+// scorer's own checks are proven against. Line endings are normalised, as
+// readNativeSource normalises them, so a checkout's style is not asserted on.
+func compareControlAnswer(t *testing.T) string {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("testdata", "compare", "_controls", "good.md"))
+	if err != nil {
+		t.Fatalf("the control comparison is missing: %v", err)
+	}
+	return strings.ReplaceAll(string(b), "\r\n", "\n")
+}
+
+// The control answer is the skeleton the prompt asks for, rendered: one
+// sentence of at most forty words, then four readings and the four sections
+// in order as headings, the questions a numbered list; it quotes the
+// passage's own words; and it keeps under the length the prompt sets.
+// Control: the same text with its last heading renamed is not the skeleton.
+func TestCompareControlAnswerRendersTheSkeleton(t *testing.T) {
+	md := compareControlAnswer(t)
+	headings := func(md string) []string {
+		w := widget.NewRichTextFromMarkdown("")
+		setAIAnswerText(w, md)
+		return subHeadings(w.Segments)
+	}
+	got := headings(md)
+	want := append([]string{"Catholic", "Eastern Orthodox", "Reformed", "Historical-critical"}, comparePromptHeadings...)
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Fatalf("the control answer's headings are %v, want %v", got, want)
+	}
+	opener := strings.SplitN(md, "\n## ", 2)[0]
+	if n := len(strings.Fields(opener)); n == 0 || n > 40 || strings.Count(opener, ". ") > 0 {
+		t.Errorf("the opener is not one sentence of at most forty words: %q", opener)
+	}
+	for _, run := range []string{"gates of Hades", "will not prevail"} {
+		if !strings.Contains(md, run) {
+			t.Errorf("the control answer does not quote %q from the passage", run)
+		}
+	}
+	if n := len(strings.Fields(strings.ReplaceAll(md, "## ", ""))); n > 650 {
+		t.Errorf("the control answer is %d words", n)
+	}
+	questions := md[strings.LastIndex(md, "## "):]
+	if n := len(regexp.MustCompile(`(?m)^\d+\. .*\?$`).FindAllString(questions, -1)); n < 2 || n > 4 {
+		t.Errorf("the questions section has %d numbered questions", n)
+	}
+
+	renamed := strings.Replace(md, "## "+compareHeadingQuestions, "## Questions", 1)
+	if renamed == md || strings.Join(headings(renamed), "|") == strings.Join(want, "|") {
+		t.Error("control: a renamed heading still reads as the skeleton")
+	}
+}
 
 // peterPassage is Matthew 16:18 in the World English Bible, the worked
 // example of the comparison's design.
