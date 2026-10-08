@@ -105,19 +105,22 @@ var comparePromptHeadings = []string{
 }
 
 // The prompt is a direct instruction: it names no church, school or group,
-// and no theological label, for the model to fill a slot with; it asks for
-// the readings with their assumptions, for both a reading that takes what
-// the passage reports as said or done and one that takes it as a later
-// composition, for the agreement, the differences and what the words settle,
-// for the four headings by name, for the closing questions, and for honesty,
-// fairness and no invented quotation, under 700 words. Control: the Explain
-// prompt is a different prompt and carries no heading.
+// none of the bench's omission roster, and no theological label, for the
+// model to fill a slot with; it asks for the readings with their
+// assumptions, for the reading within Judaism on a Hebrew Bible passage, for
+// both a reading that takes what the passage reports as said or done as
+// reported and one that takes it as a later composition, for the agreement,
+// the differences and what the words settle, for every heading at level two
+// and the four fixed ones by name, for the closing questions, and for
+// honesty, fairness and no invented quotation, under 700 words, or under 300
+// said in the first sentence where the readings largely agree. Control: the
+// Explain prompt is a different prompt and carries no heading.
 func TestBuildComparePrompt(t *testing.T) {
 	psg := peterPassage()
 	got := buildComparePrompt(psg)
 	for _, absent := range []string{
-		"Catholic", "Eastern Orthodox", "Lutheran", "Jehovah's Witnesses", "historical-critical",
-		"conservative", "liberal",
+		"Catholic", "Eastern Orthodox", "Orthodox", "Lutheran", "Reformed", "Jewish",
+		"Jehovah's Witnesses", "historical-critical", "conservative", "liberal",
 	} {
 		if strings.Contains(strings.ToLower(got), strings.ToLower(absent)) {
 			t.Errorf("the comparison prompt names %q", absent)
@@ -127,9 +130,10 @@ func TestBuildComparePrompt(t *testing.T) {
 		"Help the reader understand the passage below honestly: how different believers and scholars understand it, why they differ, and what the words of the passage themselves support.",
 		"what it assumes about the Bible and about anything supernatural in the passage",
 		"calling each group by the name it uses for itself",
-		"Where some readers take what the passage reports as said or done and others take it as a later composition or explain it naturally, include both and say which is which.",
+		"For a passage from the Hebrew Bible, include how it is read within Judaism as its own reading.",
+		"Where the passage reports something said or done, and some readers take it as reported while others take it as a later composition or explain it naturally, include both and say which is which.",
 		"Then say where the readings agree, where they differ and why, and what the words of the passage settle or leave open.",
-		"If the readings largely agree, say so and be brief.",
+		"If the readings largely agree, say so in your first sentence and keep the whole answer under 300 words.",
 		"End with two or three numbered questions the reader can test against the words of the passage and the verses around it, and one asking what they brought to it.",
 		"keep the whole answer under 700 words",
 		"Put each reading as its own thoughtful holders would state it; do not choose for the reader, and do not invent quotations or references.",
@@ -141,17 +145,21 @@ func TestBuildComparePrompt(t *testing.T) {
 	}
 
 	// The skeleton: a level-two heading per reading, then the four headings
-	// named in one sentence, in order, from the same constants the scorer
-	// splits on. The prompt writes no heading line of its own.
+	// named in one sentence, in order, at level two as well, from the same
+	// constants the scorer splits on. The prompt writes no heading line of
+	// its own.
 	for i, h := range comparePromptHeadings {
 		if compareHeadings[i] != h {
 			t.Errorf("compareHeadings[%d] = %q, want %q", i, compareHeadings[i], h)
 		}
 	}
-	sentence := `Give each reading a level-two heading, then use the headings "` +
+	sentence := `Give each reading a level-two heading, and then, also at level two, the headings "` +
 		strings.Join(comparePromptHeadings[:3], `", "`) + `" and "` + comparePromptHeadings[3] + `".`
 	if strings.Count(got, sentence) != 1 {
-		t.Errorf("the prompt does not name the four headings once in order:\n%s", got)
+		t.Errorf("the prompt does not name the four headings once in order, at level two:\n%s", got)
+	}
+	if strings.Count(got, "level-two") != 1 || strings.Count(got, "level two") != 1 {
+		t.Errorf("the prompt should set level two once for the readings and once for the fixed headings:\n%s", got)
 	}
 	if strings.Contains(got, "\n## ") {
 		t.Errorf("the prompt writes a heading line of its own:\n%s", got)

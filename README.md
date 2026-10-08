@@ -446,17 +446,20 @@ themselves support.
 Set out the main readings side by side. For each one say what it takes the
 passage to mean, which words it rests on, what it assumes about the Bible and
 about anything supernatural in the passage, and who holds it, calling each
-group by the name it uses for itself. Where some readers take what the passage
-reports as said or done and others take it as a later composition or explain it
-naturally, include both and say which is which. Then say where the readings
-agree, where they differ and why, and what the words of the passage settle or
-leave open. If the readings largely agree, say so and be brief. End with two or
-three numbered questions the reader can test against the words of the passage
-and the verses around it, and one asking what they brought to it.
+group by the name it uses for itself. For a passage from the Hebrew Bible,
+include how it is read within Judaism as its own reading. Where the passage
+reports something said or done, and some readers take it as reported while
+others take it as a later composition or explain it naturally, include both
+and say which is which. Then say where the readings agree, where they differ
+and why, and what the words of the passage settle or leave open. If the
+readings largely agree, say so in your first sentence and keep the whole answer
+under 300 words. End with two or three numbered questions the reader can test
+against the words of the passage and the verses around it, and one asking what
+they brought to it.
 
-Give each reading a level-two heading, then use the headings "Where they
-agree", "Where they part, and why", "What the text settles" and "Questions to
-take back to the text".
+Give each reading a level-two heading, and then, also at level two, the
+headings "Where they agree", "Where they part, and why", "What the text
+settles" and "Questions to take back to the text".
 
 Put each reading as its own thoughtful holders would state it; do not choose
 for the reader, and do not invent quotations or references.
