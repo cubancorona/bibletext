@@ -51,20 +51,22 @@ var compareHeadings = []string{
 // chooses the main readings of this passage and names each group's holders
 // as they name themselves. Each reading states what it takes the passage to
 // mean, the words it rests on, what it assumes about the Bible and about
-// anything supernatural in the passage, and who holds it; on a passage from
-// the Hebrew Bible the reading within Judaism is one of them; where a
-// passage reports something said or done, a reading that takes it as
-// reported and one that takes it as a later composition or explains it
-// naturally are both set out and told apart; the passage, not the model,
-// does the judging, in the section named by compareHeadingSettles; and a
-// passage whose readings largely agree says so in its first sentence and
-// keeps under 300 words where the rest keep under 700. Every heading is
-// level two, the readings' and the four fixed ones alike, so the panel
-// renders one skeleton. README.md carries this prompt in full, and a test
-// holds the two equal.
+// anything supernatural in the passage, and who holds it; where the passage
+// is Scripture to more than one faith, each faith's reading is a section of
+// its own; where a passage reports something said or done, a reading that
+// takes it as reported and one that takes it as a later composition or
+// explains it naturally are both set out and told apart; the passage, not
+// the model, does the judging, in the section named by
+// compareHeadingSettles; and a passage whose readings largely agree says so
+// in its first sentence and keeps under 250 words where the rest keep under
+// 600. The fairness scorer (ai_compare_bench_test.go) holds answers under
+// 700 and 300, looser than the prompt on purpose. Every heading is level
+// two, the readings' and the four fixed ones alike, so the panel renders
+// one skeleton. README.md carries this prompt in full, and a test holds the
+// two equal.
 func buildComparePrompt(p aiPassage) string {
 	const voice = "You are a knowledgeable, even-handed Bible study assistant. Write in clear, " +
-		"plain language for a general reader, and keep the whole answer under 700 words."
+		"plain language for a general reader, and keep the whole answer under 600 words."
 
 	const task = "Help the reader understand the passage below honestly: how different believers " +
 		"and scholars understand it, why they differ, and what the words of the passage " +
@@ -73,14 +75,14 @@ func buildComparePrompt(p aiPassage) string {
 	const readings = "Set out the main readings side by side. For each one say what it takes the " +
 		"passage to mean, which words it rests on, what it assumes about the Bible and about " +
 		"anything supernatural in the passage, and who holds it, calling each group by the name " +
-		"it uses for itself. For a passage from the Hebrew Bible, include how it is read within " +
-		"Judaism as its own reading. Where the passage reports something said or done, and some " +
-		"readers take it as reported while others take it as a later composition or explain it " +
-		"naturally, include both and say which is which. Then say where the readings agree, where " +
-		"they differ and why, and what the words of the passage settle or leave open. If the " +
-		"readings largely agree, say so in your first sentence and keep the whole answer under " +
-		"300 words. End with two or three numbered questions the reader can test against the " +
-		"words of the passage and the verses around it, and one asking what they brought to it."
+		"it uses for itself. Where the passage is Scripture to more than one faith, give each " +
+		"faith's reading its own section. Where the passage reports something said or done, and " +
+		"some readers take it as reported while others take it as a later composition or explain " +
+		"it naturally, include both and say which is which. Then say where the readings agree, " +
+		"where they differ and why, and what the words of the passage settle or leave open. If " +
+		"the readings largely agree, say so in your first sentence and keep the whole answer " +
+		"under 250 words. End with two or three numbered questions the reader can test against " +
+		"the words of the passage and the verses around it, and one asking what they brought to it."
 
 	const headings = "Give each reading a level-two heading, and then, also at level two, the " +
 		"headings \"" + compareHeadingAgree + "\", \"" + compareHeadingPart + "\", \"" +

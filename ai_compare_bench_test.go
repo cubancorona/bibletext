@@ -8,9 +8,11 @@ package bibletext
 // asks only for what the prompt asks of such a passage: on one that reports
 // something said or done, a reading that takes it as reported and one that
 // takes it as a later composition or explains it naturally, told apart; on a
-// Hebrew Bible passage, the reading within Judaism. The one list of readers
-// the bench keeps is the omission roster, judged across a provider's whole
-// set, never on an answer.
+// Hebrew Bible passage, Scripture to Judaism as well as to the churches, a
+// reading within Judaism, which is what the prompt's ask for each faith's
+// reading as its own section comes to there. The one list of readers the
+// bench keeps is the omission roster, judged across a provider's whole set,
+// never on an answer.
 //
 // Quotations: a quotation an answer attributes to a speaker is held to the
 // World English Bible chapter the passage is from, committed verse by verse
@@ -711,19 +713,23 @@ func scoreCompareAnswer(bd *BibleData, c benchCase, md string) []problem {
 		}
 	}
 
-	// 5. Balance. The whole answer is held under the prompt's own cap, and
-	// "under 700 words" is strict: an answer of exactly 700 is over it. The
-	// prompt gives a reading the length its substance needs and no number,
-	// so the band is the bench plan's, 40 to 140 words: the floor is the
-	// least a section can carry its six parts in (the meaning, the words
-	// that bear it, the three assumptions and the holders), and the ceiling
-	// is a reading's fair share of the cap. There is no parity rule between
-	// readings: a reading that rests on little in the passage may be short,
-	// and the prompt says so. "Where they agree" need only be there. A
-	// no-conflict passage keeps every section short, in the plan's shorter
-	// band, and under the 300 words the prompt sets for a passage whose
-	// readings largely agree, strict as the 700 is; the plan had 400 here,
-	// and the scorer follows the prompt's own figure.
+	// 5. Balance. The whole answer is held under 700 words, strictly: an
+	// answer of exactly 700 is over the cap. The prompt asks for under 600,
+	// and the scorer holds the 700 the prompt asked for before, because a
+	// scorer may be looser than its prompt, never tighter: an answer that
+	// meets the prompt passes, and one that runs a little past the prompt's
+	// figure, as answers do when they take a figure for a target, is held
+	// to the cap and not to the figure. The prompt gives a reading the
+	// length its substance needs and no number, so the band is the bench
+	// plan's, 40 to 140 words: the floor is the least a section can carry
+	// its six parts in (the meaning, the words that bear it, the three
+	// assumptions and the holders), and the ceiling is a reading's fair
+	// share of the cap. There is no parity rule between readings: a reading
+	// that rests on little in the passage may be short, and the prompt says
+	// so. "Where they agree" need only be there. A no-conflict passage keeps
+	// every section short, in the plan's shorter band, and under 300 words,
+	// strict as the 700 is, where the prompt asks for under 250 on a passage
+	// whose readings largely agree; the plan had 400 here.
 	floor, ceiling, total := 40, 140, 700
 	if c.NoConflict {
 		floor, ceiling, total = 20, 80, 300
@@ -744,7 +750,11 @@ func scoreCompareAnswer(bd *BibleData, c benchCase, md string) []problem {
 	// that reports something said or done, one reading section takes the
 	// report so and a different one takes it as a later composition or
 	// explains it naturally; a single section carrying both stances has not
-	// said which is which. On a Hebrew Bible passage, the Jewish reading.
+	// said which is which. On a Hebrew Bible passage, Scripture to Judaism
+	// as well as to the churches, the prompt's ask for each faith's reading
+	// as its own section comes to a reading within Judaism, so one is owed;
+	// the check reads the whole answer for its name, and an answer naming
+	// none has left a faith's reading out.
 	if c.SaidOrDone && len(readings) > 0 {
 		var said, composed []int
 		for i, r := range readings {
@@ -777,7 +787,7 @@ func scoreCompareAnswer(bd *BibleData, c benchCase, md string) []problem {
 		}
 	}
 	if (c.HebrewBible || c.QuotesHebrewBible) && !namesReading(normMD, "Jewish") && !namesReading(normMD, "Judaism") && !namesReading(normMD, "rabbinic") {
-		add(checkCoverage, "a Hebrew Bible passage with no Jewish reading")
+		add(checkCoverage, "a Hebrew Bible passage is Scripture to Judaism as well, so a reading within Judaism is owed its own section, and none is named")
 	}
 
 	// 7. Questions: two to four numbered, one of them, or a line beside them,
@@ -1576,10 +1586,10 @@ func TestCompareScorerHoldsTheReadingBandAtItsEdges(t *testing.T) {
 	}
 }
 
-// "Under 700 words" is strict: an answer of exactly 700 words is over the
-// cap and trips the balance check alone; the same answer one word shorter
-// trips nothing. The padding goes after the last section, where no other
-// check counts words.
+// The scorer's cap of 700 words is strict: an answer of exactly 700 words is
+// over it and trips the balance check alone; the same answer one word
+// shorter trips nothing. The padding goes after the last section, where no
+// other check counts words.
 func TestCompareScorerHoldsTheCapStrictly(t *testing.T) {
 	c := loadBenchTable(t).byID()["matthew-16-18"]
 	good := readCompareControl(t, "good.md")
@@ -1603,8 +1613,8 @@ func TestCompareScorerHoldsTheCapStrictly(t *testing.T) {
 	}
 }
 
-// On a passage whose readings largely agree the cap is the prompt's own 300
-// words, strict as the 700 is: a two-reading answer to John 11:35 of exactly
+// On a passage whose readings largely agree the scorer's cap is 300 words,
+// strict as the 700 is: a two-reading answer to John 11:35 of exactly
 // 300 words trips the balance check alone, and the same answer one word
 // shorter trips nothing. The answer is one-reading.md with a second reading
 // of the shorter band's length, so the skeleton holds and only the total

@@ -43,8 +43,10 @@ func compareControlAnswer(t *testing.T) string {
 // sections in order as headings, the questions a numbered list with one
 // asking what the reader brought; it quotes the passage's own words; it
 // hangs no conservative or liberal label on a reading, which the prompt no
-// longer asks for; and it keeps under the length the prompt sets. Control:
-// the same text with its last heading renamed is not the skeleton.
+// longer asks for; and it keeps under the 700 words the fairness scorer
+// holds (ai_compare_bench_test.go), which stands looser than the prompt's
+// own 600 on purpose. Control: the same text with its last heading renamed
+// is not the skeleton.
 func TestCompareControlAnswerRendersTheSkeleton(t *testing.T) {
 	md := compareControlAnswer(t)
 	headings := func(md string) []string {
@@ -107,21 +109,25 @@ var comparePromptHeadings = []string{
 // The prompt is a direct instruction: it names no church, school or group,
 // none of the bench's omission roster, and no theological label, for the
 // model to fill a slot with; it asks for the readings with their
-// assumptions, for the reading within Judaism on a Hebrew Bible passage, for
-// both a reading that takes what the passage reports as said or done as
-// reported and one that takes it as a later composition, for the agreement,
-// the differences and what the words settle, for every heading at level two
-// and the four fixed ones by name, for the closing questions, and for
-// honesty, fairness and no invented quotation, under 700 words, or under 300
-// said in the first sentence where the readings largely agree. Control: the
-// Explain prompt is a different prompt and carries no heading.
+// assumptions, for each faith's reading as its own section where the
+// passage is Scripture to more than one faith (and so names no faith, not
+// Judaism on a Hebrew Bible passage), for both a reading that takes what the
+// passage reports as said or done as reported and one that takes it as a
+// later composition, for the agreement, the differences and what the words
+// settle, for every heading at level two and the four fixed ones by name,
+// for the closing questions, and for honesty, fairness and no invented
+// quotation, under 600 words, or under 250 said in the first sentence where
+// the readings largely agree. Control: the Explain prompt is a different
+// prompt and carries no heading.
 func TestBuildComparePrompt(t *testing.T) {
 	psg := peterPassage()
 	got := buildComparePrompt(psg)
-	for _, absent := range []string{
+	names := append([]string{
 		"Catholic", "Eastern Orthodox", "Orthodox", "Lutheran", "Reformed", "Jewish",
 		"Jehovah's Witnesses", "historical-critical", "conservative", "liberal",
-	} {
+		"within Judaism",
+	}, loadBenchTable(t).Roster...)
+	for _, absent := range names {
 		if strings.Contains(strings.ToLower(got), strings.ToLower(absent)) {
 			t.Errorf("the comparison prompt names %q", absent)
 		}
@@ -130,12 +136,12 @@ func TestBuildComparePrompt(t *testing.T) {
 		"Help the reader understand the passage below honestly: how different believers and scholars understand it, why they differ, and what the words of the passage themselves support.",
 		"what it assumes about the Bible and about anything supernatural in the passage",
 		"calling each group by the name it uses for itself",
-		"For a passage from the Hebrew Bible, include how it is read within Judaism as its own reading.",
+		"Where the passage is Scripture to more than one faith, give each faith's reading its own section.",
 		"Where the passage reports something said or done, and some readers take it as reported while others take it as a later composition or explain it naturally, include both and say which is which.",
 		"Then say where the readings agree, where they differ and why, and what the words of the passage settle or leave open.",
-		"If the readings largely agree, say so in your first sentence and keep the whole answer under 300 words.",
+		"If the readings largely agree, say so in your first sentence and keep the whole answer under 250 words.",
 		"End with two or three numbered questions the reader can test against the words of the passage and the verses around it, and one asking what they brought to it.",
-		"keep the whole answer under 700 words",
+		"keep the whole answer under 600 words",
 		"Put each reading as its own thoughtful holders would state it; do not choose for the reader, and do not invent quotations or references.",
 		"The quoted text is from the World English Bible. Verse numbers may appear inside the quotation.",
 	} {
