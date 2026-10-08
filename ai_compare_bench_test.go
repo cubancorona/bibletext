@@ -519,15 +519,25 @@ var (
 	// reports something said or done. A reading takes the report as said or
 	// done when it says so in any of the ways answers do: the words as the
 	// speaker's own, the act as real, actual or historical, the text at face
-	// value, as it stands, inerrant or God's word, a miracle, an act of God.
+	// value, as it stands, inerrant or God's word, a miracle, an act of God;
+	// the report as accurate (the Bible accurately records Jesus' words,
+	// reported accurately, an accurate, authoritative record, with an
+	// adjective or two between the stance word and its noun); the text as
+	// divinely or supernaturally inspired; the letter as written by the
+	// apostle whose name it carries. A reading that names its holders and
+	// the words it rests on and says nothing of the report states no stance.
 	benchSaidOrDone = regexp.MustCompile(`(?i)\b(?:` +
 		`as (?:actually |really |truly |genuinely |historically )?(?:said|spoken|done|happened|given|reported|recorded|written|stated|uttered|delivered|performed|told|taught|commanded|promised|foretold)|` +
 		`(?:actually|really|truly|genuinely|historically|literally) (?:said|spoke|spoken|happened|did|done|took place|occurred|gave|made|created|wept|wrote|written|uttered|delivered|performed|taught|commanded|conceived|born|promised|founded|is|was|were)|` +
 		`(?:his|jesus'?s?|christ's|god's|the lord's|paul's|john's|moses'?s?|isaiah's|the prophet's|the apostle's) own (?:words?|sayings?|teaching|voice|acts?|deeds?|hands?|instructions?|commands?|promise|prophecy|vision|work|letter)|` +
 		`(?:jesus|christ|god|paul|john|moses|isaiah|the prophet|the apostle) himself|` +
-		`(?:real|actual|genuine|true|historical|literal|authentic|reliable|accurate|factual|original|eyewitness) (?:events?|acts?|action|sayings?|words?|promise|sign|commands?|instructions?|prophecy|prediction|miracles?|deeds?|history|account|record|report|narrative|speech|statement|teaching|utterance|happening|occurrence|birth|creation|conception|vision|memory)|` +
+		`(?:real|actual|genuine|true|historical|literal|authentic|reliable|accurate|factual|original|eyewitness)(?:,? (?:and |or )?(?:real|actual|genuine|true|historical|literal|authentic|reliable|accurate|factual|original|eyewitness|authoritative|inspired|divinely inspired|supernaturally inspired|trustworthy|faithful|direct|straightforward|scientific|first-?hand|contemporary|physical)){0,2} (?:events?|acts?|action|sayings?|words?|promise|sign|commands?|instructions?|prophecy|prediction|miracles?|deeds?|history|account|record|report|narrative|speech|statement|teaching|utterance|happening|occurrence|birth|creation|conception|vision|memory)|` +
 		`took place|at face value|as (?:it|they) (?:stands?|reads?)|as (?:a )?(?:fact|history)|as (?:a |an )?(?:genuine|authentic|real|actual|historical|true|reliable|accurate|original)\b|` +
 		`eyewitness|inerran\w*|infallib\w*|fully true|verbally inspired|god-breathed|(?:the )?(?:very )?words? of god\b|god's (?:own )?words?|` +
+		`divinely inspired|supernaturally inspired|inspired by (?:god|the (?:holy )?spirit)|(?:divine|god's|the (?:holy )?spirit's) inspiration|under inspiration|inspired (?:scripture|word|text|prophecy|record|revelation)|` +
+		`(?:accurately|faithfully|reliably|truthfully) (?:records?|recorded|reports?|reported|preserves?|preserved|transmits?|transmitted|describes?|described|relates?|related|recounts?|recounted|conveys?|conveyed|quotes?|quoted|hands? down|handed down|sets? down)|` +
+		`(?:recorded|reported|preserved|transmitted|described|related|recounted|conveyed|quoted|handed down|set down) (?:accurately|faithfully|reliably|truthfully)|` +
+		`(?:paul|the apostle paul|apostle paul|the apostle|moses|isaiah|the prophet) (?:himself )?(?:wrote|authored|penned|dictated)|` +
 		`historically (?:reliable|accurate|true|real|genuine|factual|grounded|rooted)|act of (?:god|christ|jesus|the lord)|miracul\w*|a miracle|the miracle|` +
 		`divine (?:act|action|events?|intervention|speech|promise|guarantee|revelation|miracle|command))\b`)
 	// A reading takes the report as a later composition, or explains it
@@ -1128,7 +1138,11 @@ func TestCompareBenchPassages(t *testing.T) {
 // words, so it trips before its speaker is read; wrong-speaker.md keeps the
 // words and puts them in the mouth of bystanders the chapter never names;
 // wrong-writer.md puts them in Paul's mouth, the voice of his letters and
-// of no Gospel.
+// of no Gospel. Two controls hold the first stance of the coverage check:
+// said-by-record.md states it in one reading only as the Bible accurately
+// recording Jesus' words, beside a composition reading, and passes;
+// no-said.md names holders and words and takes no stance on the report in
+// any reading, beside the same composition reading, and trips the check.
 var compareControls = map[string]struct {
 	check   int
 	passage string
@@ -1151,6 +1165,8 @@ var compareControls = map[string]struct {
 	"overlong.md":           {checkBalance, "matthew-16-18"},
 	"empty-agree.md":        {checkBalance, "matthew-16-18"},
 	"all-as-said.md":        {checkCoverage, "matthew-16-18"},
+	"said-by-record.md":     {0, "matthew-16-18"},
+	"no-said.md":            {checkCoverage, "matthew-16-18"},
 	"missing-jewish.md":     {checkCoverage, "isaiah-7-14"},
 	"no-questions.md":       {checkQuestions, "matthew-16-18"},
 	"no-brought.md":         {checkQuestions, "matthew-16-18"},
@@ -1715,6 +1731,14 @@ func TestCompareScorerTellsTheTwoStancesApart(t *testing.T) {
 		"Paul himself wrote the letter, and the instruction is his own command.",
 		"The reading takes the text at face value.",
 		"It reads the vision as given to John, and the Bible as inerrant.",
+		"This assumes the Bible accurately records Jesus' words.",
+		"It assumes the Bible accurately reports Jesus's teachings.",
+		"This reading assumes the Bible is the accurate, authoritative record of Jesus' teachings.",
+		"It assumes the Bible provides an accurate historical and scientific record.",
+		"They assume the birth is reported accurately in the New Testament.",
+		"It assumes the Apostle Paul wrote the letter under divine inspiration.",
+		"This view assumes the text is divinely inspired and written by Paul.",
+		"Traditional readers assume the text is a genuine, supernaturally inspired prophecy given by God to Isaiah.",
 	} {
 		if !benchSaidOrDone.MatchString(line) || benchComposition.MatchString(line) {
 			t.Errorf("%q is not read as taking the report as said or done", line)
@@ -1742,6 +1766,10 @@ func TestCompareScorerTellsTheTwoStancesApart(t *testing.T) {
 		"Held by the Catholic Church.",
 		"Jesus says, you are Peter, and the crowd hears him.",
 		"Critical scholars of several churches hold it.",
+		"Matthew alone records this promise, and the Gospel's report of it is read with the Fathers.",
+		"It reads the words with the Church's tradition, which is its authority.",
+		"Scholars inspired by the Aramaic wordplay look for an early form of the saying.",
+		"The letter addresses a church in Ephesus, and its holders read it with Paul's other letters.",
 	} {
 		if benchSaidOrDone.MatchString(line) || benchComposition.MatchString(line) {
 			t.Errorf("control: %q states a stance", line)
