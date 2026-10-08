@@ -227,6 +227,9 @@ CANONICAL_SCRIPTURE_PREFIXES = (
     "bsb/",
     "web/",
     "webc/",
+    # The World English Bible chapters the comparison bench holds quotations
+    # to, verse for verse as the seed above is.
+    "testdata/compare/chapters.json",
 )
 
 

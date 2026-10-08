@@ -130,9 +130,13 @@ words. The prompt is public in README.md and held to the builder by
 round: it is now a direct instruction with no list of churches, schools
 or groups and no theological label, so the model chooses the main
 readings of the passage and names their holders as they name
-themselves, and the bench asks a row only for what the passage itself
-implies (both stances on something reported as said or done, told
-apart; the Jewish reading on a Hebrew Bible passage).
+themselves, and the bench asks a row only for what the prompt asks of
+the passage itself (both stances on something reported as said or done,
+told apart; the reading within Judaism on a Hebrew Bible passage). It
+holds a quotation to the World English Bible chapter the passage is from
+(`testdata/compare/chapters.json`, committed so every machine scores
+alike), and a passage whose readings largely agree to the prompt's 300
+words.
 
 With it, for every AI verb: the selection's verse position reaches the
 request (`aiPassage`, `aiPassageFor`), so the prompt, the panel header, the

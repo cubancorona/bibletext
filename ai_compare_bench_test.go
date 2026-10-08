@@ -5,12 +5,20 @@ package bibletext
 // and the recorded answers the scorer holds every run.
 //
 // The prompt names no reading, so the scorer asks for none by name. A row
-// asks only for what the prompt implies of the passage: on one that reports
-// something said or done, a reading that takes it so and one that takes it
-// as a later composition or explains it naturally, told apart; on a Hebrew
-// Bible passage, the Jewish reading. The one list of readers the bench keeps
-// is the omission roster, judged across a provider's whole set, never on an
-// answer.
+// asks only for what the prompt asks of such a passage: on one that reports
+// something said or done, a reading that takes it as reported and one that
+// takes it as a later composition or explains it naturally, told apart; on a
+// Hebrew Bible passage, the reading within Judaism. The one list of readers
+// the bench keeps is the omission roster, judged across a provider's whole
+// set, never on an answer.
+//
+// Quotations: a quotation an answer attributes to a speaker is held to the
+// World English Bible chapter the passage is from, committed verse by verse
+// in chapters.json so every machine reads the same chapter. Its words must
+// be there, and its speaker must be named there or be the text's own voice,
+// so the passage and its neighbours may be quoted in the mouth of the one
+// who speaks them, and a writer, council, document or person the chapter
+// does not name may not be quoted at all.
 //
 // Offline, on every run with no key: TestCompareScorerCanFail proves each
 // control under testdata/compare/_controls/ trips its own check and no other,
@@ -66,6 +74,13 @@ const (
 	compareBenchTable    = "passages.json"
 	compareBenchControls = "_controls"
 	compareBenchVersion  = "World English Bible"
+	// compareBenchChapters is the World English Bible text of every chapter
+	// the table's passages are drawn from, verse by verse: the chapter a
+	// quotation in an answer is held to. It is committed, as the table's
+	// passages are, so the scorer gives the same verdict on every machine;
+	// where the machine's own cache carries the full World English Bible, the
+	// committed chapters are held equal to it (TestCompareBenchPassages).
+	compareBenchChapters = "chapters.json"
 
 	// compareBenchSwitch, set to 1, arms the live recorder and makes a
 	// prompt-drift mismatch in the recorded set a failure.
@@ -85,7 +100,10 @@ const (
 // mark a passage whose first readers are the Jewish people, so a comparison
 // of its believers' readings that leaves theirs out is incomplete; that is a
 // fact about the passage, not a roster. A no-conflict row carries neither
-// floor: the prompt asks such a passage to say the readings largely agree.
+// floor: the prompt asks such a passage to say the readings largely agree,
+// and holds it to the shorter cap. chapter is the text of the chapter the
+// passage is from, attached by loadBenchTable from chapters.json and never
+// carried in the table itself.
 type benchCase struct {
 	ID                string `json:"id"`
 	Ref               string `json:"ref"`
@@ -98,7 +116,12 @@ type benchCase struct {
 	NoConflict        bool   `json:"noConflict"`
 	SaidOrDone        bool   `json:"saidOrDone"`
 	Text              string `json:"text"`
+
+	chapter string
 }
+
+// benchChapterKey names the chapter a row is from as chapters.json keys it.
+func (c benchCase) benchChapterKey() string { return fmt.Sprintf("%s %d", c.Book, c.Chapter) }
 
 // passage is the selection as the app would hand it to the prompt builder.
 func (c benchCase) passage() aiPassage {
@@ -125,6 +148,9 @@ func (tb benchTable) byID() map[string]benchCase {
 	return m
 }
 
+// loadBenchTable reads the table and gives every row the text of its chapter.
+// A row whose chapter chapters.json does not carry is a table the scorer
+// cannot hold quotations against, and fails here.
 func loadBenchTable(t *testing.T) benchTable {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join(compareBenchDir, compareBenchTable))
@@ -135,7 +161,51 @@ func loadBenchTable(t *testing.T) benchTable {
 	if err := json.Unmarshal(b, &tb); err != nil {
 		t.Fatalf("the bench table does not parse: %v", err)
 	}
+	chapters := loadBenchChapters(t)
+	for i, c := range tb.Passages {
+		vs, ok := chapters[c.benchChapterKey()]
+		if !ok {
+			t.Fatalf("%s: %s is not in %s", c.ID, c.benchChapterKey(), compareBenchChapters)
+		}
+		tb.Passages[i].chapter = benchChapterText(vs)
+	}
 	return tb
+}
+
+// benchVerse is one verse of chapters.json.
+type benchVerse struct {
+	Verse int    `json:"verse"`
+	Text  string `json:"text"`
+}
+
+// loadBenchChapters reads chapters.json: the chapters by "Book chapter", each
+// its verses in order.
+func loadBenchChapters(t *testing.T) map[string][]benchVerse {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(compareBenchDir, compareBenchChapters))
+	if err != nil {
+		t.Fatalf("the bench chapters are missing: %v", err)
+	}
+	var f struct {
+		Version  string                  `json:"version"`
+		Chapters map[string][]benchVerse `json:"chapters"`
+	}
+	if err := json.Unmarshal(b, &f); err != nil {
+		t.Fatalf("%s does not parse: %v", compareBenchChapters, err)
+	}
+	if f.Version != compareBenchVersion {
+		t.Fatalf("%s is the %q, want the %s", compareBenchChapters, f.Version, compareBenchVersion)
+	}
+	return f.Chapters
+}
+
+// benchChapterText is a chapter's verses as one text, a line each.
+func benchChapterText(vs []benchVerse) string {
+	lines := make([]string, 0, len(vs))
+	for _, v := range vs {
+		lines = append(lines, v.Text)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // benchBible is the Bible the scorer resolves citations against: the full
@@ -275,11 +345,21 @@ var benchNonWord = regexp.MustCompile(`[^a-z0-9' ]+`)
 // benchNormalize lowers the text, straightens curly quotation marks and
 // apostrophes, turns dashes and punctuation into spaces and collapses runs,
 // so the passage's words are compared with an answer's on the words alone.
+// An apostrophe inside a word stays (don't, God's); one at a word's edge is
+// a single quotation mark (‘Whoever ... divorce,’) or a plural possessive,
+// and goes, so a saying quoted without the marks around it is the same words.
 func benchNormalize(s string) string {
 	s = strings.ToLower(s)
 	s = strings.NewReplacer("’", "'", "‘", "'", "“", " ", "”", " ", "—", " ", "–", " ", "-", " ").Replace(s)
 	s = benchNonWord.ReplaceAllString(s, " ")
-	return strings.Join(strings.Fields(s), " ")
+	fields := strings.Fields(s)
+	ws := fields[:0]
+	for _, w := range fields {
+		if w = strings.Trim(w, "'"); w != "" {
+			ws = append(ws, w)
+		}
+	}
+	return strings.Join(ws, " ")
 }
 
 // threeWordRuns is the set of distinct runs of three consecutive words.
@@ -359,9 +439,32 @@ var (
 	benchPage       = regexp.MustCompile(`\bpp?\.\s?\d`)
 	benchISBN       = regexp.MustCompile(`(?i)\bisbn\b`)
 	benchAuthorYear = regexp.MustCompile(`\([A-Z][A-Za-z]+(?: and [A-Z][A-Za-z]+)?,? \d{4}\)`)
-	// A quotation attributed to a capitalised name with a verb of speech or
-	// writing, on either side of the marks.
-	benchAttributed = regexp.MustCompile(`\b[A-Z][a-z]+ (?:wrote|writes|said|says|states|stated|taught|teaches)[,:]? [“"]([^”"]+)[”"]|[“"]([^”"]+)[”"],? (?:as )?[A-Z][a-z]+ (?:wrote|writes|said|says|states|stated|taught|teaches)`)
+	// A quotation attributed to a speaker with a verb of speech or writing,
+	// on either side of the marks. The speaker is a capitalised name of up to
+	// three words ("Jesus", "Simon Peter", "the Council of Trent"), or "the"
+	// and one or two plain words ("the bystanders", "the text"). Groups: the
+	// speaker and the words, marks first, then the words and the speaker.
+	benchSpeaker    = `((?:[Tt]he )?[A-Z][a-z]+(?: (?:of )?[A-Z][a-z]+){0,2}|[Tt]he [a-z]+(?: [a-z]+)?)`
+	benchSpeech     = `(?:wrote|writes|said|says|states|stated|taught|teaches|answered|answers|replied|replies|asked|asks|declared|declares)`
+	benchAttributed = regexp.MustCompile(`\b` + benchSpeaker + ` ` + benchSpeech + `[,:]? [“"]([^”"]+)[”"]|[“"]([^”"]+)[”"],? (?:as )?` + benchSpeaker + ` ` + benchSpeech)
+	// The text's own voice, which may quote the chapter without being named
+	// in it: the text, the passage, the book and its parts, the one who
+	// speaks for it, and the names the books are traditionally written under.
+	benchTextVoice = map[string]bool{
+		"text": true, "passage": true, "verse": true, "verses": true, "chapter": true, "book": true,
+		"psalm": true, "psalmist": true, "prophet": true, "apostle": true, "evangelist": true,
+		"narrator": true, "author": true, "writer": true, "gospel": true, "letter": true,
+		"epistle": true, "scripture": true, "scriptures": true, "torah": true, "law": true,
+		"moses": true, "david": true, "isaiah": true, "matthew": true, "mark": true, "luke": true,
+		"john": true, "paul": true,
+	}
+	// Words that open a clause before a speaker's name ("As Jesus said") and
+	// are not part of it, with "the" and "of".
+	benchNotASpeaker = map[string]bool{
+		"the": true, "of": true, "and": true, "as": true, "but": true, "for": true, "so": true,
+		"then": true, "when": true, "where": true, "while": true, "since": true, "because": true,
+		"yet": true, "here": true, "thus": true, "if": true, "once": true, "after": true, "before": true,
+	}
 	// "Book chapter:verse", with an optional verse range, the book possibly
 	// numbered ("1 Peter") or of the form "Song of Solomon".
 	benchReference = regexp.MustCompile(`\b((?:[1-3] )?[A-Z][a-z]+(?: of [A-Z][a-z]+)?) (\d{1,3}):(\d{1,3})(?: ?[–-] ?(\d{1,3}))?`)
@@ -525,12 +628,28 @@ func scoreCompareAnswer(bd *BibleData, c benchCase, md string) []problem {
 	if m := benchAuthorYear.FindString(md); m != "" {
 		add(checkCitations, "an author-year citation: %q", m)
 	}
+	// A quotation attributed to a speaker is held to the chapter the passage
+	// is from: its words must be the chapter's, and its speaker must be
+	// named in the chapter or be the text's own voice. A quotation of one
+	// word is a term, not a quotation, and is not held. A row with no
+	// chapter text holds quotations to the passage alone.
+	chapter := c.chapter
+	if chapter == "" {
+		chapter = c.Text
+	}
+	normChapter := " " + benchNormalize(chapter) + " "
 	for _, m := range benchAttributed.FindAllStringSubmatch(md, -1) {
-		quoted := m[1] + m[2]
-		if strings.Contains(normPassage, benchNormalize(quoted)) {
-			continue // the passage's own words, attributed to their speaker
+		speaker, quoted := m[1]+m[4], benchNormalize(m[2]+m[3])
+		if words(quoted) < 2 {
+			continue
 		}
-		add(checkCitations, "a quotation attributed to a name: %q", m[0])
+		if !strings.Contains(normChapter, " "+quoted+" ") {
+			add(checkCitations, "a quotation whose words are not in %s: %q", c.benchChapterKey(), m[0])
+			continue
+		}
+		if !benchSpeaksInChapter(speaker, normChapter, c) {
+			add(checkCitations, "a quotation attributed to %q, named nowhere in %s: %q", speaker, c.benchChapterKey(), m[0])
+		}
 	}
 	for _, m := range benchReference.FindAllStringSubmatch(md, -1) {
 		name := m[1]
@@ -565,10 +684,12 @@ func scoreCompareAnswer(bd *BibleData, c benchCase, md string) []problem {
 	// readings: a reading that rests on little in the passage may be short,
 	// and the prompt says so. "Where they agree" need only be there. A
 	// no-conflict passage keeps every section short, in the plan's shorter
-	// band and under its shorter total.
+	// band, and under the 300 words the prompt sets for a passage whose
+	// readings largely agree, strict as the 700 is; the plan had 400 here,
+	// and the scorer follows the prompt's own figure.
 	floor, ceiling, total := 40, 140, 700
 	if c.NoConflict {
-		floor, ceiling, total = 20, 80, 400
+		floor, ceiling, total = 20, 80, 300
 	}
 	for _, r := range readings {
 		if n := words(r.body); n < floor || n > ceiling {
@@ -662,6 +783,22 @@ func scoreCompareAnswer(bd *BibleData, c benchCase, md string) []problem {
 		add(checkNetwork, "a link or image")
 	}
 	return ps
+}
+
+// benchSpeaksInChapter reports whether a quotation's speaker is a voice of the
+// chapter: every word of the name, past a clause opener, is a word of the
+// chapter, of the book's name, or of the text's own voice.
+func benchSpeaksInChapter(speaker, normChapter string, c benchCase) bool {
+	for _, w := range strings.Fields(benchNormalize(speaker)) {
+		switch {
+		case benchNotASpeaker[w], benchTextVoice[w]:
+		case strings.Contains(normChapter, " "+w+" "):
+		case strings.Contains(" "+benchNormalize(c.Book)+" ", " "+w+" "):
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func atoi(s string) int {
@@ -852,9 +989,15 @@ func sortedKeys[V any](m map[string]V) []string {
 // no row names a reading, the prompt naming none; at least one row carries
 // the floor and at least one is a Hebrew Bible passage, so both halves of
 // the coverage check are exercised by the set; and the omission roster
-// names each reader once.
+// names each reader once. Every row's chapter is in chapters.json with its
+// verses ascending and the row's verses among them, the row's text is those
+// verses word for word, and where the machine's cache carries the full World
+// English Bible the committed chapter is that Bible's, verse for verse;
+// without the cache the run says the chapters went unchecked against it.
 func TestCompareBenchPassages(t *testing.T) {
 	tb := loadBenchTable(t)
+	chapters := loadBenchChapters(t)
+	bd := benchBible(t)
 	if tb.Version != compareBenchVersion {
 		t.Errorf("table version %q, want %q", tb.Version, compareBenchVersion)
 	}
@@ -887,6 +1030,30 @@ func TestCompareBenchPassages(t *testing.T) {
 		}
 		if want := c.passage().Ref; c.Ref != want {
 			t.Errorf("%s: ref %q, want %q as the share card cites it", c.ID, c.Ref, want)
+		}
+		vs := chapters[c.benchChapterKey()]
+		var selected []string
+		for i, v := range vs {
+			if i > 0 && v.Verse <= vs[i-1].Verse {
+				t.Errorf("%s: verse %d of %s follows verse %d", c.ID, v.Verse, c.benchChapterKey(), vs[i-1].Verse)
+			}
+			if v.Verse >= c.Lo && v.Verse <= c.Hi {
+				selected = append(selected, v.Text)
+			}
+		}
+		if got := strings.Join(selected, " "); got != c.Text {
+			t.Errorf("%s: the row's text is not verses %d to %d of %s:\n got: %s\nwant: %s", c.ID, c.Lo, c.Hi, c.benchChapterKey(), c.Text, got)
+		}
+		if len(bd.Verses[c.Book]) > 0 {
+			full := bd.GetChapter(c.Book, c.Chapter)
+			if len(full) != len(vs) {
+				t.Errorf("%s: %s has %d verses in the machine's %s, %d committed", c.ID, c.benchChapterKey(), len(full), compareBenchVersion, len(vs))
+			}
+			for i := 0; i < len(full) && i < len(vs); i++ {
+				if full[i].Verse != vs[i].Verse || strings.ReplaceAll(full[i].Text, "\r\n", "\n") != vs[i].Text {
+					t.Errorf("%s: verse %d of %s differs from the machine's %s", c.ID, vs[i].Verse, c.benchChapterKey(), compareBenchVersion)
+				}
+			}
 		}
 		if c.NoConflict {
 			noConflict++
@@ -925,31 +1092,36 @@ func TestCompareBenchPassages(t *testing.T) {
 // --- The controls ---------------------------------------------------------------
 
 // compareControls maps each planted control to the one check it trips and
-// the row it is scored against. good.md trips nothing.
+// the row it is scored against. good.md trips nothing, and nor does
+// neighbour-quote.md, good.md quoting the verse after the passage in the
+// mouth of its speaker; misquote-neighbour.md is the same quotation with its
+// words altered and put in the mouth of bystanders the chapter never names.
 var compareControls = map[string]struct {
 	check   int
 	passage string
 }{
-	"good.md":           {0, "matthew-16-18"},
-	"one-reading.md":    {checkSkeleton, "john-11-35"},
-	"table.md":          {checkSkeleton, "matthew-16-18"},
-	"swapped.md":        {checkSkeleton, "matthew-16-18"},
-	"labels.md":         {checkLabels, "matthew-16-18"},
-	"unsettled.md":      {checkLabels, "matthew-16-18"},
-	"verdict.md":        {checkVerdict, "matthew-16-18"},
-	"invented-ref.md":   {checkCitations, "matthew-16-18"},
-	"quoted.md":         {checkCitations, "matthew-16-18"},
-	"lopsided.md":       {checkBalance, "matthew-16-18"},
-	"thin.md":           {checkBalance, "matthew-16-18"},
-	"overlong.md":       {checkBalance, "matthew-16-18"},
-	"empty-agree.md":    {checkBalance, "matthew-16-18"},
-	"all-as-said.md":    {checkCoverage, "matthew-16-18"},
-	"missing-jewish.md": {checkCoverage, "isaiah-7-14"},
-	"no-questions.md":   {checkQuestions, "matthew-16-18"},
-	"no-brought.md":     {checkQuestions, "matthew-16-18"},
-	"ungrounded.md":     {checkGrounding, "matthew-16-18"},
-	"linked.md":         {checkNetwork, "matthew-16-18"},
-	"cut-short.md":      {checkNetwork, "matthew-16-18"},
+	"good.md":               {0, "matthew-16-18"},
+	"neighbour-quote.md":    {0, "matthew-16-18"},
+	"misquote-neighbour.md": {checkCitations, "matthew-16-18"},
+	"one-reading.md":        {checkSkeleton, "john-11-35"},
+	"table.md":              {checkSkeleton, "matthew-16-18"},
+	"swapped.md":            {checkSkeleton, "matthew-16-18"},
+	"labels.md":             {checkLabels, "matthew-16-18"},
+	"unsettled.md":          {checkLabels, "matthew-16-18"},
+	"verdict.md":            {checkVerdict, "matthew-16-18"},
+	"invented-ref.md":       {checkCitations, "matthew-16-18"},
+	"quoted.md":             {checkCitations, "matthew-16-18"},
+	"lopsided.md":           {checkBalance, "matthew-16-18"},
+	"thin.md":               {checkBalance, "matthew-16-18"},
+	"overlong.md":           {checkBalance, "matthew-16-18"},
+	"empty-agree.md":        {checkBalance, "matthew-16-18"},
+	"all-as-said.md":        {checkCoverage, "matthew-16-18"},
+	"missing-jewish.md":     {checkCoverage, "isaiah-7-14"},
+	"no-questions.md":       {checkQuestions, "matthew-16-18"},
+	"no-brought.md":         {checkQuestions, "matthew-16-18"},
+	"ungrounded.md":         {checkGrounding, "matthew-16-18"},
+	"linked.md":             {checkNetwork, "matthew-16-18"},
+	"cut-short.md":          {checkNetwork, "matthew-16-18"},
 }
 
 func readCompareControl(t *testing.T, name string) string {
@@ -963,7 +1135,8 @@ func readCompareControl(t *testing.T, name string) string {
 
 // Every control trips exactly the check it is planted for, so a check that
 // stopped firing, or one that fires on a sound answer, is caught by name;
-// good.md passes all nine; and every file in the directory is accounted for.
+// good.md and neighbour-quote.md pass all nine; and every file in the
+// directory is accounted for.
 func TestCompareScorerCanFail(t *testing.T) {
 	tb := loadBenchTable(t).byID()
 	canon := NewBibleData()
@@ -1006,24 +1179,81 @@ func problemLines(ps []problem) string {
 	return b.String()
 }
 
-// The passage's own words may be quoted and attributed to their speaker;
-// the same words attributed to anyone else are the passage too, and pass;
-// words that are not the passage's, attributed to a name, do not.
-func TestCompareScorerExemptsThePassageFromTheQuotationRule(t *testing.T) {
-	c := loadBenchTable(t).byID()["matthew-16-18"]
+// citationProblems is the citation check's share of a score.
+func citationProblems(ps []problem) []string {
+	var out []string
+	for _, p := range ps {
+		if p.check == checkCitations {
+			out = append(out, p.detail)
+		}
+	}
+	return out
+}
+
+// A quotation attributed to a speaker is held to the chapter the passage is
+// from. The passage's own words and the verses around it pass in the mouth
+// of one the chapter names, past a clause opener, in either order of words
+// and name, and in the text's own voice; a one-word quotation is a term and
+// is not held. The same words attributed to a writer, a council or
+// bystanders the chapter never names trip the citation check alone, with
+// the name in the detail; words the chapter does not have trip it whoever is
+// named, with the chapter in the detail; and the chapter is the row's own,
+// so Matthew's words in John's chapter are not there. A saying the chapter
+// sets in single quotation marks is quoted without them.
+func TestCompareScorerHoldsQuotationsToTheChapter(t *testing.T) {
+	rows := loadBenchTable(t).byID()
+	c := rows["matthew-16-18"]
 	good := readCompareControl(t, "good.md")
 	canon := NewBibleData()
 	for _, line := range []string{
 		"Jesus said, “you are Peter, and on this rock I will build my assembly.”",
-		"Theophilus wrote, “on this rock I will build my assembly”.",
+		"Jesus says, “Blessed are you, Simon Bar Jonah, for flesh and blood has not revealed this to you.”",
+		"Simon Peter answered, “You are the Christ, the Son of the living God.”",
+		"As Jesus said, “I will give to you the keys of the Kingdom of Heaven.”",
+		"“Get behind me, Satan!” Jesus said.",
+		"The text says, “the gates of Hades will not prevail against it.”",
+		"Matthew writes, “Who do men say that I, the Son of Man, am?”",
+		"The Greek says “petra”.",
 	} {
 		if ps := scoreCompareAnswer(canon, c, good+"\n"+line+"\n"); len(ps) != 0 {
-			t.Errorf("%q is the passage, yet: %s", line, problemLines(ps))
+			t.Errorf("%q is the chapter in its speaker's mouth, yet: %s", line, problemLines(ps))
 		}
 	}
-	line := "Theophilus wrote, “the rock is the confession and nothing else.”"
-	if got := checksTripped(scoreCompareAnswer(canon, c, good+"\n"+line+"\n")); fmt.Sprint(got) != fmt.Sprint([]int{checkCitations}) {
-		t.Errorf("control: an attributed quotation that is not the passage trips %v, want [%d]", got, checkCitations)
+	for _, tc := range []struct{ line, detail string }{
+		{"Theophilus wrote, “on this rock I will build my assembly”.", `attributed to "Theophilus"`},
+		{"The Council of Trent stated, “on this rock I will build my assembly.”", `attributed to "The Council of Trent"`},
+		{"the bystanders said, “You are the Christ, the Son of the living God.”", `attributed to "the bystanders"`},
+		{"Jesus said, “the rock is the confession and nothing else.”", "words are not in Matthew 16"},
+		{"Peter said, “You are the Christ, the Son of the one true God.”", "words are not in Matthew 16"},
+		{"Augustine wrote, “the rock is the confession and nothing else.”", "words are not in Matthew 16"},
+	} {
+		ps := scoreCompareAnswer(canon, c, good+"\n"+tc.line+"\n")
+		if got := checksTripped(ps); fmt.Sprint(got) != fmt.Sprint([]int{checkCitations}) {
+			t.Errorf("control: %q trips %v, want [%d]:\n%s", tc.line, got, checkCitations, problemLines(ps))
+		}
+		if cs := citationProblems(ps); len(cs) != 1 || !strings.Contains(cs[0], tc.detail) {
+			t.Errorf("%q: citation problems %v, want one saying %q", tc.line, cs, tc.detail)
+		}
+	}
+
+	john := rows["john-11-35"]
+	line := "Jesus said, “you are Peter, and on this rock I will build my assembly.”"
+	if cs := citationProblems(scoreCompareAnswer(canon, john, line+"\n")); len(cs) != 1 || !strings.Contains(cs[0], "not in John 11") {
+		t.Errorf("Matthew's words on John 11:35: citation problems %v, want one naming John 11", cs)
+	}
+
+	divorce := rows["matthew-5-31-32"]
+	for _, tc := range []struct {
+		line  string
+		trips bool
+	}{
+		{"Moses said, “Whoever shall put away his wife, let him give her a writing of divorce.”", false},
+		{"Moses said, “Whoever shall put away his wife, let him give her a bill of divorce.”", true},
+	} {
+		cs := citationProblems(scoreCompareAnswer(canon, divorce, tc.line+"\n"))
+		if tc.trips != (len(cs) == 1) {
+			t.Errorf("%q on Matthew 5:31: citation problems %v, want %v", tc.line, cs, tc.trips)
+		}
 	}
 }
 
@@ -1140,15 +1370,7 @@ func TestCompareScorerHoldsABareReferenceToItsBook(t *testing.T) {
 	bd := NewBibleData()
 	giveChapter(bd, "Psalms", 23, 6)
 	giveChapter(bd, "John", 11, 57)
-	citations := func(ps []problem) []string {
-		var out []string
-		for _, p := range ps {
-			if p.check == checkCitations {
-				out = append(out, p.detail)
-			}
-		}
-		return out
-	}
+	citations := citationProblems
 	for _, id := range []string{"psalm-23-1", "john-11-35"} {
 		if ps := citations(scoreCompareAnswer(bd, rows[id], good)); len(ps) != 0 {
 			t.Fatalf("good.md on %s cites out of this Bible before any line is added: %v", id, ps)
@@ -1246,6 +1468,44 @@ func TestCompareScorerHoldsTheCapStrictly(t *testing.T) {
 	}
 	if ps := scoreCompareAnswer(canon, c, padded(699)); len(ps) != 0 {
 		t.Errorf("control: 699 words is under the cap, yet: %s", problemLines(ps))
+	}
+}
+
+// On a passage whose readings largely agree the cap is the prompt's own 300
+// words, strict as the 700 is: a two-reading answer to John 11:35 of exactly
+// 300 words trips the balance check alone, and the same answer one word
+// shorter trips nothing. The answer is one-reading.md with a second reading
+// of the shorter band's length, so the skeleton holds and only the total
+// moves; the padding goes after the last section.
+func TestCompareScorerHoldsTheShorterCapStrictly(t *testing.T) {
+	c := loadBenchTable(t).byID()["john-11-35"]
+	if !c.NoConflict {
+		t.Fatal("John 11:35 is not a no-conflict row")
+	}
+	one := readCompareControl(t, "one-reading.md")
+	at := strings.Index(one, "## "+compareHeadingAgree)
+	second := "## The sign and the tears\nThe tears are read with the raising that follows them: Jesus weeps and then calls Lazarus out, so grief and power stand in one scene, and the weight falls on the whole chapter as much as on the one verb. Held by readers of every church alike.\n\n"
+	two := one[:at] + second + one[at:]
+	canon := NewBibleData()
+	if ps := scoreCompareAnswer(canon, c, two); len(ps) != 0 {
+		t.Fatalf("two short readings on John 11:35 should pass, yet: %s", problemLines(ps))
+	}
+	padded := func(to int) string {
+		n := answerWords(two)
+		if n >= to {
+			t.Fatalf("the answer is %d words, no room under %d", n, to)
+		}
+		return two + "\n" + strings.TrimSpace(strings.Repeat("again ", to-n)) + "\n"
+	}
+	at300 := padded(300)
+	if n := answerWords(at300); n != 300 {
+		t.Fatalf("the padded answer is %d words, want 300", n)
+	}
+	if got := checksTripped(scoreCompareAnswer(canon, c, at300)); fmt.Sprint(got) != fmt.Sprint([]int{checkBalance}) {
+		t.Errorf("300 words trips %v, want [%d]", got, checkBalance)
+	}
+	if ps := scoreCompareAnswer(canon, c, padded(299)); len(ps) != 0 {
+		t.Errorf("control: 299 words is under the shorter cap, yet: %s", problemLines(ps))
 	}
 }
 
