@@ -497,7 +497,6 @@ func aiReportMailBody(action, ref, question, answer string) string {
 	var b strings.Builder
 	b.WriteString("I'd like to report AI-generated content shown in BibleText.\n\n")
 	b.WriteString("Reference: " + ref + "\n")
-	// DRAFT wording for the line naming the action.
 	b.WriteString("Study action: " + aiActionTitle(action) + "\n")
 	if action == aiActionAsk {
 		b.WriteString("Question: " + strings.TrimSpace(question) + "\n")

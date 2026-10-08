@@ -79,7 +79,6 @@ func friendlyAIError(err error) string {
 	}
 	var declined *aiDeclinedError
 	if errors.As(err, &declined) {
-		// DRAFT wording for the declined-passage line.
 		return "The model declined this passage. Try again, or choose a different model in AI settings."
 	}
 	var apiErr *apiHTTPError
