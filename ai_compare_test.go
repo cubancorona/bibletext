@@ -107,7 +107,7 @@ var comparePromptHeadings = []string{
 }
 
 // The prompt is a direct instruction: it names no church, school or group,
-// none of the bench's omission roster, and no theological label, for the
+// none of the readings answers have named, and no theological label, for the
 // model to fill a slot with; it asks for the readings with their
 // assumptions, for each faith's reading as its own section where the
 // passage is Scripture to more than one faith (and so names no faith, not
@@ -122,12 +122,11 @@ var comparePromptHeadings = []string{
 func TestBuildComparePrompt(t *testing.T) {
 	psg := peterPassage()
 	got := buildComparePrompt(psg)
-	names := append([]string{
+	for _, absent := range []string{
 		"Catholic", "Eastern Orthodox", "Orthodox", "Lutheran", "Reformed", "Jewish",
 		"Jehovah's Witnesses", "historical-critical", "conservative", "liberal",
 		"within Judaism",
-	}, loadBenchTable(t).Roster...)
-	for _, absent := range names {
+	} {
 		if strings.Contains(strings.ToLower(got), strings.ToLower(absent)) {
 			t.Errorf("the comparison prompt names %q", absent)
 		}

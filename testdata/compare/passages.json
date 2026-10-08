@@ -1,6 +1,5 @@
 {
   "version": "World English Bible",
-  "roster": ["Jewish", "Catholic", "Orthodox", "Lutheran", "Reformed", "historical-critical"],
   "passages": [
     {
       "id": "genesis-1-1-5",

@@ -4,15 +4,15 @@ package bibletext
 // ten mechanical checks, planted controls that each trip exactly one check,
 // and the recorded answers the scorer holds every run.
 //
-// The prompt names no reading, so the scorer asks for none by name. A row
-// asks only for what the prompt asks of such a passage: on one that reports
-// something said or done, a reading that takes it as reported and one that
-// takes it as a later composition or explains it naturally, told apart; on a
-// Hebrew Bible passage, Scripture to Judaism as well as to the churches, a
-// reading within Judaism, which is what the prompt's ask for each faith's
-// reading as its own section comes to there. The one list of readers the
-// bench keeps is the omission roster, judged across a provider's whole set,
-// never on an answer.
+// The prompt names no reading, so the scorer asks for none by name, and the
+// bench keeps no list of readers. A row asks only for what the prompt asks
+// of such a passage: on one that reports something said or done, a reading
+// that takes it as reported and one that takes it as a later composition or
+// explains it naturally, told apart; on a Hebrew Bible passage, Scripture to
+// Judaism as well as to the churches, a reading within Judaism, which is
+// what the prompt's ask for each faith's reading as its own section comes
+// to there. The one check judged across a provider's whole set, never on an
+// answer, is that same reading on every Hebrew Bible row of the set.
 //
 // Quotations: a quotation an answer attributes to a speaker is held to the
 // World English Bible chapter the passage is from, committed verse by verse
@@ -92,6 +92,11 @@ const (
 	// compareBenchOutDir names the directory the recorder writes answers to,
 	// the only place a test writes for a person to read (AGENTS.md).
 	compareBenchOutDir = "BIBLETEXT_COMPAREBENCH_DIR"
+	// compareBenchOnly, set to passage ids separated by commas, narrows a
+	// round to those passages, so a later round can re-record the rows a
+	// reader held back without paying for the rest; unset, a round records
+	// every passage of the table.
+	compareBenchOnly = "BIBLETEXT_COMPAREBENCH_ONLY"
 )
 
 // benchCase is one row of passages.json: a selection in the World English
@@ -127,20 +132,19 @@ type benchCase struct {
 // benchChapterKey names the chapter a row is from as chapters.json keys it.
 func (c benchCase) benchChapterKey() string { return fmt.Sprintf("%s %d", c.Book, c.Chapter) }
 
+// owesJudaism reports whether the row is a Hebrew Bible passage, or quotes
+// one, so that a reading within Judaism is owed its own section.
+func (c benchCase) owesJudaism() bool { return c.HebrewBible || c.QuotesHebrewBible }
+
 // passage is the selection as the app would hand it to the prompt builder.
 func (c benchCase) passage() aiPassage {
 	return aiPassage{Book: c.Book, Chapter: c.Chapter, Lo: c.Lo, Hi: c.Hi,
 		Ref: verseRangeCitation(c.Book, c.Chapter, c.Lo, c.Hi), Text: c.Text, Version: compareBenchVersion}
 }
 
-// benchTable is passages.json. Roster lists the readings the omission check
-// tracks across a provider's whole set, and nowhere else: no single answer
-// is asked for any of them, but a set of ten passages from the Law to the
-// Apocalypse that names one of these readers in none of its answers is
-// leaving them out.
+// benchTable is passages.json: the version every row quotes, and the rows.
 type benchTable struct {
 	Version  string      `json:"version"`
-	Roster   []string    `json:"roster"`
 	Passages []benchCase `json:"passages"`
 }
 
@@ -249,7 +253,7 @@ const (
 	checkQuestions = 7  // two to four numbered questions, one asking what the reader brought
 	checkGrounding = 8  // the passage's own words appear
 	checkNetwork   = 9  // nothing cut short, no link or image
-	checkOmission  = 10 // across a provider's set: no roster reading left out everywhere
+	checkOmission  = 10 // across a provider's complete set: the reading within Judaism on every Hebrew Bible row
 )
 
 var checkNames = map[int]string{
@@ -392,6 +396,12 @@ func threeWordRuns(norm string) map[string]bool {
 // and "evangelical" in "evangelicals", and neither in "unorthodox".
 func namesReading(normMD, name string) bool {
 	return strings.Contains(" "+normMD, " "+benchNormalize(name))
+}
+
+// namesJudaism reports whether the normalised answer names a reading within
+// Judaism, by any of the names answers give it.
+func namesJudaism(normMD string) bool {
+	return namesReading(normMD, "Jewish") || namesReading(normMD, "Judaism") || namesReading(normMD, "rabbinic")
 }
 
 // splitSentences cuts text at sentence ends and line breaks, so a heading or
@@ -851,7 +861,7 @@ func scoreCompareAnswer(bd *BibleData, c benchCase, md string) []problem {
 			add(checkCoverage, "%q alone carries both stances, so which is which is not said", readings[said[0]].title)
 		}
 	}
-	if (c.HebrewBible || c.QuotesHebrewBible) && !namesReading(normMD, "Jewish") && !namesReading(normMD, "Judaism") && !namesReading(normMD, "rabbinic") {
+	if c.owesJudaism() && !namesJudaism(normMD) {
 		add(checkCoverage, "a Hebrew Bible passage is Scripture to Judaism as well, so a reading within Judaism is owed its own section, and none is named")
 	}
 
@@ -968,16 +978,16 @@ func readingTitles(md string) []string {
 }
 
 // compareOmissions is check 10 over a provider's whole set: with an answer
-// for every passage, each reading of the roster must be named in at least
-// one of them. A provider with an incomplete set is not judged.
+// for every passage, every Hebrew Bible row's answer names a reading within
+// Judaism, the one reading the prompt's ask for each faith's own section
+// implies on such a row, seen across the set rather than row by row (where
+// the coverage check reads it too). A provider with an incomplete set is
+// not judged, so the check is a verdict on a set and never on a sample of
+// it. The detail opens with the provider's id, which the recorder reads to
+// tell the default provider's verdict from the others'.
 func compareOmissions(tb benchTable, answers map[string]map[string]string) []problem {
 	var ps []problem
-	providers := make([]string, 0, len(answers))
-	for p := range answers {
-		providers = append(providers, p)
-	}
-	sort.Strings(providers)
-	for _, provider := range providers {
+	for _, provider := range sortedKeys(answers) {
 		complete := true
 		for _, c := range tb.Passages {
 			if _, ok := answers[provider][c.ID]; !ok {
@@ -987,17 +997,20 @@ func compareOmissions(tb benchTable, answers map[string]map[string]string) []pro
 		if !complete {
 			continue
 		}
-		for _, name := range tb.Roster {
-			named := false
-			for _, md := range answers[provider] {
-				if namesReading(benchNormalize(md), name) {
-					named = true
-				}
+		var hebrew, missing []string
+		for _, c := range tb.Passages {
+			if !c.owesJudaism() {
+				continue
 			}
-			if !named {
-				ps = append(ps, problem{check: checkOmission,
-					detail: fmt.Sprintf("%s names the %s reading in none of its %d answers", provider, name, len(answers[provider]))})
+			hebrew = append(hebrew, c.ID)
+			if !namesJudaism(benchNormalize(answers[provider][c.ID])) {
+				missing = append(missing, c.ID)
 			}
+		}
+		if len(missing) > 0 {
+			ps = append(ps, problem{check: checkOmission,
+				detail: fmt.Sprintf("%s names a reading within Judaism on %d of its %d Hebrew Bible rows, and none on %s",
+					provider, len(hebrew)-len(missing), len(hebrew), strings.Join(missing, ", "))})
 		}
 	}
 	return ps
@@ -1129,8 +1142,8 @@ func sortedKeys[V any](m map[string]V) []string {
 // floor on a passage whose readings largely agree would force a division;
 // no row names a reading, the prompt naming none; at least one row carries
 // the floor and at least one is a Hebrew Bible passage, so both halves of
-// the coverage check are exercised by the set; and the omission roster
-// names each reader once. Every row's chapter is in chapters.json with its
+// the coverage check are exercised by the set and the omission check has a
+// row to read. Every row's chapter is in chapters.json with its
 // verses ascending and the row's verses among them, the row's text is those
 // verses word for word, and where the machine's cache carries the full World
 // English Bible the committed chapter is that Bible's, verse for verse;
@@ -1149,8 +1162,10 @@ func TestCompareBenchPassages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(raw), "mustInclude") {
-		t.Error("the table names readings a row must include; the prompt names none")
+	for _, key := range []string{"mustInclude", "roster"} {
+		if strings.Contains(string(raw), key) {
+			t.Errorf("the table carries %q, a list of readings; the prompt names none and the bench keeps no list of readers", key)
+		}
 	}
 	canon := NewBibleData()
 	seen := map[string]bool{}
@@ -1205,7 +1220,7 @@ func TestCompareBenchPassages(t *testing.T) {
 		if c.SaidOrDone {
 			floors++
 		}
-		if c.HebrewBible || c.QuotesHebrewBible {
+		if c.owesJudaism() {
 			hebrew++
 		}
 	}
@@ -1216,17 +1231,7 @@ func TestCompareBenchPassages(t *testing.T) {
 		t.Error("no row carries the said-or-done floor, so that half of the coverage check is never exercised")
 	}
 	if hebrew == 0 {
-		t.Error("no row is a Hebrew Bible passage, so the Jewish reading is never asked for")
-	}
-	roster := map[string]bool{}
-	for _, name := range tb.Roster {
-		if roster[strings.ToLower(name)] || strings.TrimSpace(name) == "" {
-			t.Errorf("roster reading %q is empty or repeated", name)
-		}
-		roster[strings.ToLower(name)] = true
-	}
-	if len(roster) == 0 {
-		t.Error("the omission roster is empty")
+		t.Error("no row is a Hebrew Bible passage, so the reading within Judaism is never asked for")
 	}
 }
 
@@ -2045,35 +2050,64 @@ func TestCompareScorerReadsTheQuestionAboutWhatTheReaderBrought(t *testing.T) {
 	}
 }
 
-// The omission check judges a provider by its whole set: a reading of the
-// roster named nowhere in a complete set is a problem, a set with a passage
-// missing is not judged, and a set naming every roster reading somewhere
-// passes even though no single answer names them all.
+// The omission check judges a provider by its whole set: a complete set
+// whose Hebrew Bible rows all name a reading within Judaism passes, whether
+// or not any other row names one; a complete set naming it on none of them,
+// or on all but one, is one problem naming the rows that lack it; and a set
+// with a passage missing is not judged, however its rows read.
 func TestCompareOmissionAcrossTheSet(t *testing.T) {
 	tb := loadBenchTable(t)
-	every := "Jewish, Catholic, Orthodox, Lutheran, Reformed and historical-critical readings."
-	set := func(body func(i int) string) map[string]string {
+	var hebrew []string
+	for _, c := range tb.Passages {
+		if c.owesJudaism() {
+			hebrew = append(hebrew, c.ID)
+		}
+	}
+	if len(hebrew) < 2 {
+		t.Fatalf("the table has %d Hebrew Bible rows; the test wants two or more", len(hebrew))
+	}
+	set := func(body func(c benchCase) string) map[string]string {
 		m := map[string]string{}
-		for i, c := range tb.Passages {
-			m[c.ID] = body(i)
+		for _, c := range tb.Passages {
+			m[c.ID] = body(c)
 		}
 		return m
 	}
+	jewish := "The reading within Judaism takes the verse as Israel's own; the Catholic and Reformed readings take it as the Church's."
+	churches := "The Catholic and Reformed readings take it as the Church's."
 	answers := map[string]map[string]string{
-		"full": set(func(int) string { return every }),
-		"spread": set(func(i int) string {
-			return []string{"Jewish", "Catholic", "Orthodox", "Lutheran", "Reformed", "historical-critical"}[i%6]
+		"everywhere": set(func(benchCase) string { return jewish }),
+		"onhebrew": set(func(c benchCase) string {
+			if c.owesJudaism() {
+				return jewish
+			}
+			return churches
 		}),
-		"nojewish": set(func(int) string { return "Catholic, Orthodox, Lutheran, Reformed and historical-critical readings." }),
-		"partial":  {"matthew-16-18": "Catholic"},
+		"nowhere": set(func(benchCase) string { return churches }),
+		"butone": set(func(c benchCase) string {
+			if c.ID == hebrew[0] {
+				return churches
+			}
+			return jewish
+		}),
+		"partial": {hebrew[0]: churches},
 	}
 	ps := compareOmissions(tb, answers)
-	if len(ps) != 1 || ps[0].check != checkOmission || !strings.HasPrefix(ps[0].detail, "nojewish names the Jewish reading in none") {
-		t.Errorf("omissions = %s, want one for nojewish's Jewish reading", problemLines(ps))
+	if len(ps) != 2 {
+		t.Fatalf("omissions = %s, want one for nowhere and one for butone", problemLines(ps))
 	}
-	delete(answers, "nojewish")
+	for i, want := range []string{
+		fmt.Sprintf("butone names a reading within Judaism on %d of its %d Hebrew Bible rows, and none on %s", len(hebrew)-1, len(hebrew), hebrew[0]),
+		fmt.Sprintf("nowhere names a reading within Judaism on 0 of its %d Hebrew Bible rows, and none on %s", len(hebrew), strings.Join(hebrew, ", ")),
+	} {
+		if ps[i].check != checkOmission || ps[i].detail != want {
+			t.Errorf("omission %d = %s, want check %d: %s", i, ps[i], checkOmission, want)
+		}
+	}
+	delete(answers, "nowhere")
+	delete(answers, "butone")
 	if ps := compareOmissions(tb, answers); len(ps) != 0 {
-		t.Errorf("control: the full, spread and partial sets should pass, got %s", problemLines(ps))
+		t.Errorf("control: the everywhere, onhebrew and partial sets should pass, got %s", problemLines(ps))
 	}
 }
 
@@ -2138,11 +2172,12 @@ func TestCompareBenchFixtureTextIsPublicDomain(t *testing.T) {
 }
 
 // Every recorded answer passes the scorer, every passage has a recorded
-// answer from the default provider, no provider with a complete set leaves a
-// roster reading out everywhere, and the fixtures were recorded against the
-// prompt as it stands (logged otherwise; a failure with the bench switch
-// set). This is red until the first recording round's fixtures are
-// committed: a set that does not exist scores nothing and must not pass.
+// answer from the default provider, no provider with a complete set leaves
+// the reading within Judaism out of a Hebrew Bible row, and the fixtures
+// were recorded against the prompt as it stands (logged otherwise; a
+// failure with the bench switch set). This is red until the first
+// recording round's fixtures are committed: a set that does not exist
+// scores nothing and must not pass.
 func TestCompareBenchRecordedAnswersAreFair(t *testing.T) {
 	tb := loadBenchTable(t)
 	byID := tb.byID()

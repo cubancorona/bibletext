@@ -29,10 +29,18 @@ package bibletext
 // is what turns TestCompareBenchRecordedAnswersAreFair green.
 //
 // The round fails when the default provider's answer fails the scorer, is
-// declined or times out on any passage, when a provider with a complete set
-// leaves a roster reading out of every answer, or when the Explain control
-// shows the shared prompt sentence has lengthened Explain past a few short
-// paragraphs (more than two of the ten over the length below).
+// declined or times out on any passage, when its complete set leaves the
+// reading within Judaism out of a Hebrew Bible row, or when the Explain
+// control shows the shared prompt sentence has lengthened Explain past a
+// few short paragraphs (more than two of the ten over the length below).
+//
+// BIBLETEXT_COMPAREBENCH_ONLY, set to passage ids separated by commas
+// (BIBLETEXT_COMPAREBENCH_ONLY=isaiah-7-14,psalm-23-1), narrows the round
+// to those passages on every provider and both actions, so the rows a
+// reader held back can be re-recorded alone; an id the table does not have
+// refuses the round. The two verdicts on a whole set, the omission check
+// and the Explain control, are judged on a full round only and logged on a
+// narrowed one, and the round's closing line says which it was.
 
 import (
 	"context"
@@ -97,6 +105,40 @@ func compareBenchSettings(dir string, keyFor func(providerInfo) string) (compare
 		return run, fmt.Errorf("no key for the default provider in %s: the round is judged on it", envVarFor(defaultProviderID))
 	}
 	return run, nil
+}
+
+// compareBenchPassages is the rows a round records: every row of the table,
+// or with only set (the value of BIBLETEXT_COMPAREBENCH_ONLY) the rows it
+// names, in the table's order whatever the order given, blanks and repeats
+// ignored. An id the table does not have, or a value naming no passage, is
+// refused rather than skipped, so a mistyped filter cannot quietly record
+// nothing or everything.
+func compareBenchPassages(tb benchTable, only string) ([]benchCase, error) {
+	if strings.TrimSpace(only) == "" {
+		return tb.Passages, nil
+	}
+	byID := tb.byID()
+	want := map[string]bool{}
+	for _, id := range strings.Split(only, ",") {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, ok := byID[id]; !ok {
+			return nil, fmt.Errorf("%s names %q, which is not a passage of the table", compareBenchOnly, id)
+		}
+		want[id] = true
+	}
+	if len(want) == 0 {
+		return nil, fmt.Errorf("%s is set and names no passage", compareBenchOnly)
+	}
+	var out []benchCase
+	for _, c := range tb.Passages {
+		if want[c.ID] {
+			out = append(out, c)
+		}
+	}
+	return out, nil
 }
 
 // benchRow is one call's record.
@@ -183,6 +225,11 @@ func TestCompareBenchLive(t *testing.T) {
 		t.Fatal(err)
 	}
 	tb := loadBenchTable(t)
+	passages, err := compareBenchPassages(tb, os.Getenv(compareBenchOnly))
+	if err != nil {
+		t.Fatal(err)
+	}
+	narrowed := len(passages) != len(tb.Passages)
 	bd := benchBible(t)
 	if err := os.MkdirAll(run.dir, 0o755); err != nil {
 		t.Fatal(err)
@@ -211,7 +258,7 @@ func TestCompareBenchLive(t *testing.T) {
 				actions = append(actions, aiActionExplain)
 			}
 			for _, action := range actions {
-				for _, c := range tb.Passages {
+				for _, c := range passages {
 					prompt, err := aiStudyPrompt(action, c.passage(), "")
 					if err != nil {
 						t.Error(err)
@@ -304,8 +351,12 @@ func TestCompareBenchLive(t *testing.T) {
 			t.Log(p)
 		}
 	}
-	if longExplains > compareBenchExplainTolerance {
-		t.Errorf("%d of %d Explain answers on %s are not a few short paragraphs; the shared prompt sentence has lengthened Explain", longExplains, len(tb.Passages), defaultProviderID)
+	explain := fmt.Sprintf("%d of %d Explain answers on %s are not a few short paragraphs", longExplains, len(passages), defaultProviderID)
+	switch {
+	case narrowed:
+		t.Logf("%s (logged only: the Explain control is judged on a full round)", explain)
+	case longExplains > compareBenchExplainTolerance:
+		t.Errorf("%s; the shared prompt sentence has lengthened Explain", explain)
 	}
 	for _, p := range run.providers {
 		secs := secsByProvider[p.ID]
@@ -313,6 +364,22 @@ func TestCompareBenchLive(t *testing.T) {
 		if len(secs) > 0 {
 			t.Logf("%s: median %.1f s over %d calls; answers under %s", p.ID, secs[len(secs)/2], len(secs), filepath.Join(run.dir, p.ID))
 		}
+	}
+	passed := 0
+	var ids []string
+	for _, c := range passages {
+		ids = append(ids, c.ID)
+	}
+	for _, r := range rows {
+		if r.provider == defaultProviderID && r.action == aiActionCompare && r.outcome == "ok" && len(r.problems) == 0 {
+			passed++
+		}
+	}
+	if narrowed {
+		t.Logf("round narrowed by %s to %d of %d passages (%s): %s passes %d of %d; the omission check and the Explain control are judged on a full round only",
+			compareBenchOnly, len(passages), len(tb.Passages), strings.Join(ids, ","), defaultProviderID, passed, len(passages))
+	} else {
+		t.Logf("full round over all %d passages: %s passes %d of %d", len(tb.Passages), defaultProviderID, passed, len(passages))
 	}
 }
 
@@ -332,6 +399,39 @@ func TestCompareBenchLiveWantsItsSwitch(t *testing.T) {
 	}
 	if !reached("1") {
 		t.Error("control: with the switch set the round still skipped, so the skip above proves nothing")
+	}
+}
+
+// The round's rows are the table's, or those BIBLETEXT_COMPAREBENCH_ONLY
+// names, in the table's order whatever the order given, blanks and repeats
+// ignored, and a value of spaces alone is unset. Control: an id the table
+// does not have, or a value naming no passage, refuses the round with the
+// variable in the error rather than narrowing it to nothing or to all.
+func TestCompareBenchOnlyPassages(t *testing.T) {
+	tb := loadBenchTable(t)
+	ids := func(cs []benchCase) string {
+		var out []string
+		for _, c := range cs {
+			out = append(out, c.ID)
+		}
+		return strings.Join(out, ",")
+	}
+	for _, tc := range []struct{ only, want string }{
+		{"", ids(tb.Passages)},
+		{"   ", ids(tb.Passages)},
+		{"psalm-23-1", "psalm-23-1"},
+		{"psalm-23-1,isaiah-7-14", "isaiah-7-14,psalm-23-1"},
+		{" psalm-23-1 , isaiah-7-14,,psalm-23-1,", "isaiah-7-14,psalm-23-1"},
+	} {
+		got, err := compareBenchPassages(tb, tc.only)
+		if err != nil || ids(got) != tc.want {
+			t.Errorf("%q: %s, %v; want %s", tc.only, ids(got), err, tc.want)
+		}
+	}
+	for _, only := range []string{"psalm-23", "psalm-23-1,matthew-16", ",", "Psalm-23-1"} {
+		if got, err := compareBenchPassages(tb, only); err == nil || !strings.Contains(err.Error(), compareBenchOnly) {
+			t.Errorf("control: %q gave %s, %v; want a refusal naming %s", only, ids(got), err, compareBenchOnly)
+		}
 	}
 }
 
