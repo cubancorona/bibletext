@@ -446,8 +446,16 @@ var (
 	// three words ("Jesus", "Simon Peter", "the Council of Trent"), or "the"
 	// and one or two plain words ("the bystanders", "the text"). Groups: the
 	// speaker and the words, marks first, then the words and the speaker.
-	benchSpeaker    = `((?:[Tt]he )?[A-Z][a-z]+(?: (?:of )?[A-Z][a-z]+){0,2}|[Tt]he [a-z]+(?: [a-z]+)?)`
-	benchSpeech     = `(?:wrote|writes|said|says|states|stated|taught|teaches|answered|answers|replied|replies|asked|asks|declared|declares)`
+	benchSpeaker = `((?:[Tt]he )?[A-Z][a-z]+(?: (?:of )?[A-Z][a-z]+){0,2}|[Tt]he [a-z]+(?: [a-z]+)?)`
+	// The verbs of speech and writing that open a quotation, in past and
+	// present. Called and named are left out: they label ("the place called
+	// ...") as often as they speak.
+	benchSpeech = `(?:wrote|writes|said|says|states|stated|taught|teaches|answered|answers|replied|replies|asked|asks|declared|declares|` +
+		`told|tells|spoke|speaks|promised|promises|warned|warns|proclaimed|proclaims|cried|cries|commanded|commands|` +
+		`prayed|prays|preached|preaches|announced|announces|insisted|insists|affirmed|affirms|confessed|confesses|` +
+		`testified|testifies|exclaimed|exclaims|explained|explains|argued|argues|noted|notes|observed|observes|` +
+		`added|adds|continued|continues|concluded|concludes|prophesied|prophesies|foretold|foretells|urged|urges|` +
+		`charged|charges|instructed|instructs|reminded|reminds|pleaded|pleads|put it|puts it)`
 	benchAttributed = regexp.MustCompile(`\b` + benchSpeaker + ` ` + benchSpeech + `[,:]? [“"]([^”"]+)[”"]|[“"]([^”"]+)[”"],? (?:as )?` + benchSpeaker + ` ` + benchSpeech)
 	// The text's own voice, which may quote the chapter without being named
 	// in it, on any book: the text, the passage, the book and its parts, and
@@ -1226,7 +1234,9 @@ func citationProblems(ps []problem) []string {
 // the name in the detail; words the chapter does not have trip it whoever is
 // named, with the chapter in the detail; and the chapter is the row's own,
 // so Matthew's words in John's chapter are not there. A saying the chapter
-// sets in single quotation marks is quoted without them.
+// sets in single quotation marks is quoted without them. Every verb of
+// speech or writing the pattern reads opens a held quotation, on either side
+// of the marks.
 func TestCompareScorerHoldsQuotationsToTheChapter(t *testing.T) {
 	rows := loadBenchTable(t).byID()
 	c := rows["matthew-16-18"]
@@ -1240,6 +1250,9 @@ func TestCompareScorerHoldsQuotationsToTheChapter(t *testing.T) {
 		"“Get behind me, Satan!” Jesus said.",
 		"The text says, “the gates of Hades will not prevail against it.”",
 		"Matthew writes, “Who do men say that I, the Son of Man, am?”",
+		"Jesus warned, “Get behind me, Satan!”",
+		"Jesus promised, “I will give to you the keys of the Kingdom of Heaven.”",
+		"“You are the Christ, the Son of the living God,” Simon Peter confessed.",
 		"The Greek says “petra”.",
 	} {
 		if ps := scoreCompareAnswer(canon, c, good+"\n"+line+"\n"); len(ps) != 0 {
@@ -1260,6 +1273,31 @@ func TestCompareScorerHoldsQuotationsToTheChapter(t *testing.T) {
 		}
 		if cs := citationProblems(ps); len(cs) != 1 || !strings.Contains(cs[0], tc.detail) {
 			t.Errorf("%q: citation problems %v, want one saying %q", tc.line, cs, tc.detail)
+		}
+	}
+
+	// Invented words are held in any mouth whatever verb opens them. The
+	// verbs are written out here rather than read from the pattern, so a
+	// verb dropped from the pattern is still asked for.
+	invented := "the rock is the confession and nothing else"
+	for _, verb := range []string{
+		"wrote", "writes", "said", "says", "states", "stated", "taught", "teaches", "answered", "answers",
+		"replied", "replies", "asked", "asks", "declared", "declares", "told", "tells", "spoke", "speaks",
+		"promised", "promises", "warned", "warns", "proclaimed", "proclaims", "cried", "cries", "commanded", "commands",
+		"prayed", "prays", "preached", "preaches", "announced", "announces", "insisted", "insists", "affirmed", "affirms",
+		"confessed", "confesses", "testified", "testifies", "exclaimed", "exclaims", "explained", "explains", "argued", "argues",
+		"noted", "notes", "observed", "observes", "added", "adds", "continued", "continues", "concluded", "concludes",
+		"prophesied", "prophesies", "foretold", "foretells", "urged", "urges", "charged", "charges", "instructed", "instructs",
+		"reminded", "reminds", "pleaded", "pleads", "put it", "puts it",
+	} {
+		for _, line := range []string{
+			"Jesus " + verb + ", “" + invented + ".”",
+			"“" + invented + ",” as Jesus " + verb + ".",
+		} {
+			ps := scoreCompareAnswer(canon, c, good+"\n"+line+"\n")
+			if got := checksTripped(ps); fmt.Sprint(got) != fmt.Sprint([]int{checkCitations}) {
+				t.Errorf("control: %q trips %v, want [%d]:\n%s", line, got, checkCitations, problemLines(ps))
+			}
 		}
 	}
 
