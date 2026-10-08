@@ -18,7 +18,9 @@ package bibletext
 // be there, and its speaker must be named there or be the text's own voice,
 // so the passage and its neighbours may be quoted in the mouth of the one
 // who speaks them, and a writer, council, document or person the chapter
-// does not name may not be quoted at all.
+// does not name may not be quoted at all. The name a book is traditionally
+// written under is its voice on that book alone: Paul may quote 1 Timothy
+// where the chapter does not name him, and not Matthew.
 //
 // Offline, on every run with no key: TestCompareScorerCanFail proves each
 // control under testdata/compare/_controls/ trips its own check and no other,
@@ -448,15 +450,32 @@ var (
 	benchSpeech     = `(?:wrote|writes|said|says|states|stated|taught|teaches|answered|answers|replied|replies|asked|asks|declared|declares)`
 	benchAttributed = regexp.MustCompile(`\b` + benchSpeaker + ` ` + benchSpeech + `[,:]? [“"]([^”"]+)[”"]|[“"]([^”"]+)[”"],? (?:as )?` + benchSpeaker + ` ` + benchSpeech)
 	// The text's own voice, which may quote the chapter without being named
-	// in it: the text, the passage, the book and its parts, the one who
-	// speaks for it, and the names the books are traditionally written under.
+	// in it, on any book: the text, the passage, the book and its parts, and
+	// the one who speaks for it.
 	benchTextVoice = map[string]bool{
 		"text": true, "passage": true, "verse": true, "verses": true, "chapter": true, "book": true,
-		"psalm": true, "psalmist": true, "prophet": true, "apostle": true, "evangelist": true,
-		"narrator": true, "author": true, "writer": true, "gospel": true, "letter": true,
-		"epistle": true, "scripture": true, "scriptures": true, "torah": true, "law": true,
-		"moses": true, "david": true, "isaiah": true, "matthew": true, "mark": true, "luke": true,
-		"john": true, "paul": true,
+		"prophet": true, "apostle": true, "evangelist": true, "narrator": true, "author": true,
+		"writer": true, "gospel": true, "letter": true, "epistle": true, "scripture": true, "scriptures": true,
+	}
+	// benchBookVoice is the text's own voice on one book alone: the name it
+	// is traditionally written under, the word for its kind, and for a
+	// Gospel the one whose words it reports, written as benchNormalize
+	// writes them. Paul may quote 1 Timothy, Moses or the Law Genesis, David
+	// or the psalmist a Psalm, and Jesus a Gospel chapter that reports his
+	// words without his name (Matthew 5), where the chapter names none of
+	// them; and none of them may quote another book. A book that carries
+	// its writer's name (Isaiah, 1 Peter) needs no entry for the writer: the
+	// book's own name passes already.
+	benchBookVoice = map[string]string{
+		"Genesis": "moses law torah", "Exodus": "moses law torah", "Leviticus": "moses law torah",
+		"Numbers": "moses law torah", "Deuteronomy": "moses law torah",
+		"Psalms": "david psalm psalmist", "Proverbs": "solomon", "Ecclesiastes": "solomon",
+		"Lamentations": "jeremiah", "Acts": "luke",
+		"Matthew": "jesus christ", "Mark": "jesus christ", "Luke": "jesus christ", "John": "jesus christ",
+		"Romans": "paul", "1 Corinthians": "paul", "2 Corinthians": "paul", "Galatians": "paul",
+		"Ephesians": "paul", "Philippians": "paul", "Colossians": "paul", "1 Thessalonians": "paul",
+		"2 Thessalonians": "paul", "1 Timothy": "paul", "2 Timothy": "paul", "Titus": "paul",
+		"Philemon": "paul", "1 John": "john", "2 John": "john", "3 John": "john", "Revelation": "john",
 	}
 	// Words that open a clause before a speaker's name ("As Jesus said") and
 	// are not part of it, with "the" and "of".
@@ -787,13 +806,15 @@ func scoreCompareAnswer(bd *BibleData, c benchCase, md string) []problem {
 
 // benchSpeaksInChapter reports whether a quotation's speaker is a voice of the
 // chapter: every word of the name, past a clause opener, is a word of the
-// chapter, of the book's name, or of the text's own voice.
+// chapter, of the text's own voice, or of the book's name and the voice of
+// that book alone.
 func benchSpeaksInChapter(speaker, normChapter string, c benchCase) bool {
+	book := " " + benchNormalize(c.Book) + " " + benchBookVoice[c.Book] + " "
 	for _, w := range strings.Fields(benchNormalize(speaker)) {
 		switch {
 		case benchNotASpeaker[w], benchTextVoice[w]:
 		case strings.Contains(normChapter, " "+w+" "):
-		case strings.Contains(" "+benchNormalize(c.Book)+" ", " "+w+" "):
+		case strings.Contains(book, " "+w+" "):
 		default:
 			return false
 		}
@@ -1094,8 +1115,12 @@ func TestCompareBenchPassages(t *testing.T) {
 // compareControls maps each planted control to the one check it trips and
 // the row it is scored against. good.md trips nothing, and nor does
 // neighbour-quote.md, good.md quoting the verse after the passage in the
-// mouth of its speaker; misquote-neighbour.md is the same quotation with its
-// words altered and put in the mouth of bystanders the chapter never names.
+// mouth of its speaker. Three controls take that quotation through each
+// branch of the citation check in turn: misquote-neighbour.md alters its
+// words, so it trips before its speaker is read; wrong-speaker.md keeps the
+// words and puts them in the mouth of bystanders the chapter never names;
+// wrong-writer.md puts them in Paul's mouth, the voice of his letters and
+// of no Gospel.
 var compareControls = map[string]struct {
 	check   int
 	passage string
@@ -1103,6 +1128,8 @@ var compareControls = map[string]struct {
 	"good.md":               {0, "matthew-16-18"},
 	"neighbour-quote.md":    {0, "matthew-16-18"},
 	"misquote-neighbour.md": {checkCitations, "matthew-16-18"},
+	"wrong-speaker.md":      {checkCitations, "matthew-16-18"},
+	"wrong-writer.md":       {checkCitations, "matthew-16-18"},
 	"one-reading.md":        {checkSkeleton, "john-11-35"},
 	"table.md":              {checkSkeleton, "matthew-16-18"},
 	"swapped.md":            {checkSkeleton, "matthew-16-18"},
@@ -1247,12 +1274,63 @@ func TestCompareScorerHoldsQuotationsToTheChapter(t *testing.T) {
 		line  string
 		trips bool
 	}{
-		{"Moses said, “Whoever shall put away his wife, let him give her a writing of divorce.”", false},
-		{"Moses said, “Whoever shall put away his wife, let him give her a bill of divorce.”", true},
+		{"Jesus said, “Whoever shall put away his wife, let him give her a writing of divorce.”", false},
+		{"Jesus said, “Whoever shall put away his wife, let him give her a bill of divorce.”", true},
 	} {
 		cs := citationProblems(scoreCompareAnswer(canon, divorce, tc.line+"\n"))
 		if tc.trips != (len(cs) == 1) {
 			t.Errorf("%q on Matthew 5:31: citation problems %v, want %v", tc.line, cs, tc.trips)
+		}
+	}
+}
+
+// The name a book is traditionally written under, the word for its kind,
+// and for a Gospel the one whose words it reports, are the text's own voice
+// on that book alone. Paul may quote 1 Timothy 2, Moses and the Law Genesis
+// 1, David and the psalmist Psalm 23, John Revelation 20 and Jesus Matthew
+// 5, none of which names them, and Isaiah his own book, which does; the same
+// names over Matthew 16's words, and Jesus over Romans 9's, are a speaker
+// the chapter never names, and trip the citation check alone with the name
+// in the detail. The directory control is wrong-writer.md, good.md quoting
+// Matthew 16:19 in Paul's mouth.
+func TestCompareScorerHoldsAWriterToTheirBook(t *testing.T) {
+	rows := loadBenchTable(t).byID()
+	canon := NewBibleData()
+	for _, tc := range []struct{ id, line string }{
+		{"1-timothy-2-12", "Paul writes, “But I don’t permit a woman to teach, nor to exercise authority over a man, but to be in quietness.”"},
+		{"genesis-1-1-5", "Moses wrote, “In the beginning, God created the heavens and the earth.”"},
+		{"genesis-1-1-5", "The law says, “Let there be light,” and light is the first thing made."},
+		{"psalm-23-1", "David says, “I shall lack nothing.”"},
+		{"psalm-23-1", "The psalmist says, “I shall lack nothing.”"},
+		{"revelation-20-1-6", "John writes, “Blessed and holy is he who has part in the first resurrection.”"},
+		{"isaiah-7-14", "Isaiah said, “Behold, the virgin will conceive, and bear a son, and shall call his name Immanuel.”"},
+		{"matthew-5-31-32", "Jesus says, “Whoever shall put away his wife, let him give her a writing of divorce.”"},
+	} {
+		if cs := citationProblems(scoreCompareAnswer(canon, rows[tc.id], tc.line+"\n")); len(cs) != 0 {
+			t.Errorf("%q on %s is the book in its own voice, yet: %v", tc.line, tc.id, cs)
+		}
+	}
+	line := "Jesus said, “I will have mercy on whom I have mercy, and I will have compassion on whom I have compassion.”"
+	if cs := citationProblems(scoreCompareAnswer(canon, rows["romans-9-14-18"], line+"\n")); len(cs) != 1 || !strings.Contains(cs[0], `attributed to "Jesus"`) {
+		t.Errorf("control: %q on Romans 9: citation problems %v, want one naming Jesus", line, cs)
+	}
+	c := rows["matthew-16-18"]
+	good := readCompareControl(t, "good.md")
+	for _, tc := range []struct{ line, detail string }{
+		{"Paul writes, “on this rock I will build my assembly.”", `attributed to "Paul"`},
+		{"Luke writes, “on this rock I will build my assembly.”", `attributed to "Luke"`},
+		{"Isaiah said, “on this rock I will build my assembly.”", `attributed to "Isaiah"`},
+		{"Moses said, “on this rock I will build my assembly.”", `attributed to "Moses"`},
+		{"David says, “on this rock I will build my assembly.”", `attributed to "David"`},
+		{"The law says, “on this rock I will build my assembly.”", `attributed to "The law"`},
+		{"The psalmist says, “on this rock I will build my assembly.”", `attributed to "The psalmist"`},
+	} {
+		ps := scoreCompareAnswer(canon, c, good+"\n"+tc.line+"\n")
+		if got := checksTripped(ps); fmt.Sprint(got) != fmt.Sprint([]int{checkCitations}) {
+			t.Errorf("control: %q trips %v, want [%d]:\n%s", tc.line, got, checkCitations, problemLines(ps))
+		}
+		if cs := citationProblems(ps); len(cs) != 1 || !strings.Contains(cs[0], tc.detail) {
+			t.Errorf("%q: citation problems %v, want one saying %q", tc.line, cs, tc.detail)
 		}
 	}
 }
