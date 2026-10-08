@@ -1,3 +1,5 @@
+Readers of every church and most critical scholars largely agree on this verse.
+
 ## The one reading
 Jesus wept: at the tomb of Lazarus, Jesus grieved as any mourner does, and the verse shows his full humanity. The weight falls on the plain verb, wept, and on the mourners around him in the verses before. It takes the Gospel's report as it stands, and the raising that follows as a real act. Held by the Catholic Church, the Orthodox Church, the Protestant churches and most critical scholars alike.
 

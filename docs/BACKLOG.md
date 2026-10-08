@@ -124,21 +124,24 @@ and the Fyne submenu ranging over `aiStudyVerbs` (`ai_compare.go`), held
 equal by `study_verbs_source_test.go`. The answer is the fixed `##`
 skeleton the existing panel already renders: the readings the model
 chooses, two to seven, then Where they agree, Where they part, and why,
-What the text settles, Questions to take back to the text, under 600
-words. The prompt is public in README.md and held to the builder by
-`TestREADMEMirrorsPrompts`. Its design changed before the recording
-round: it is now a direct instruction with no list of churches, schools
-or groups and no theological label, so the model chooses the main
-readings of the passage and names their holders as they name
-themselves, and the bench asks a row only for what the prompt asks of
-the passage itself (both stances on something reported as said or done,
-told apart; on a Hebrew Bible passage, Scripture to Judaism as well, a
-reading within Judaism, the section the prompt asks for each faith's
-reading to have). It holds a quotation to the World English Bible chapter
-the passage is from (`testdata/compare/chapters.json`, committed so every
-machine scores alike), the whole answer under 700 words and a passage
-whose readings largely agree under 300, where the prompt asks for 600 and
-250: a scorer may be looser than its prompt, never tighter.
+What the text settles, Questions to take back to the text; the prompt
+asks for succinctness and sets no word count, a number having been taken
+as a target that cost the readings their breadth. The prompt is public
+in README.md and held to the builder by `TestREADMEMirrorsPrompts`. Its
+design changed before the recording round: it is now a direct
+instruction with no list of churches, schools or groups and no
+theological label, so the model chooses the main readings of the passage
+and names their holders as they name themselves, and the bench asks a
+row only for what the prompt asks of the passage itself (both stances on
+something reported as said or done, told apart; on a Hebrew Bible
+passage, Scripture to Judaism as well, a reading within Judaism, the
+section the prompt asks for each faith's reading to have). It holds a
+quotation to the World English Bible chapter the passage is from
+(`testdata/compare/chapters.json`, committed so every machine scores
+alike), and no length beyond a runaway guard at a thousand words,
+reporting the words of each answer and of each reading instead, with a
+passage whose readings largely agree held to the first sentence the
+prompt asks of it rather than to a shorter cap.
 
 With it, for every AI verb: the selection's verse position reaches the
 request (`aiPassage`, `aiPassageFor`), so the prompt, the panel header, the

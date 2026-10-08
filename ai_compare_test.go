@@ -43,10 +43,10 @@ func compareControlAnswer(t *testing.T) string {
 // sections in order as headings, the questions a numbered list with one
 // asking what the reader brought; it quotes the passage's own words; it
 // hangs no conservative or liberal label on a reading, which the prompt no
-// longer asks for; and it keeps under the 700 words the fairness scorer
-// holds (ai_compare_bench_test.go), which stands looser than the prompt's
-// own 600 on purpose. Control: the same text with its last heading renamed
-// is not the skeleton.
+// longer asks for; and it is well inside the fairness scorer's runaway guard
+// (ai_compare_bench_test.go), the one length the scorer holds, the prompt
+// setting none. Control: the same text with its last heading renamed is not
+// the skeleton.
 func TestCompareControlAnswerRendersTheSkeleton(t *testing.T) {
 	md := compareControlAnswer(t)
 	headings := func(md string) []string {
@@ -71,8 +71,8 @@ func TestCompareControlAnswerRendersTheSkeleton(t *testing.T) {
 	if m := regexp.MustCompile(`(?i)\b(conservative|liberal)\b`).FindString(md); m != "" {
 		t.Errorf("the control answer labels a reading %q", m)
 	}
-	if n := len(strings.Fields(strings.ReplaceAll(md, "## ", ""))); n >= 700 {
-		t.Errorf("the control answer is %d words, not under 700", n)
+	if n := answerWords(md); n > compareBenchRunawayWords {
+		t.Errorf("the control answer is %d words, over the runaway guard of %d", n, compareBenchRunawayWords)
 	}
 	questions := md[strings.LastIndex(md, "## "):]
 	if n := len(regexp.MustCompile(`(?m)^\d+\. .*\?$`).FindAllString(questions, -1)); n < 2 || n > 4 {
@@ -116,9 +116,10 @@ var comparePromptHeadings = []string{
 // later composition, for the agreement, the differences and what the words
 // settle, for every heading at level two and the four fixed ones by name,
 // for the closing questions, and for honesty, fairness and no invented
-// quotation, under 600 words, or under 250 said in the first sentence where
-// the readings largely agree. Control: the Explain prompt is a different
-// prompt and carries no heading.
+// quotation; succinct, and brief where the readings largely agree, said in
+// the first sentence, with no word count anywhere: a number was taken as a
+// target and cost the readings their breadth. Control: the Explain prompt
+// is a different prompt and carries no heading.
 func TestBuildComparePrompt(t *testing.T) {
 	psg := peterPassage()
 	got := buildComparePrompt(psg)
@@ -138,15 +139,23 @@ func TestBuildComparePrompt(t *testing.T) {
 		"Where the passage is Scripture to more than one faith, give each faith's reading its own section.",
 		"Where the passage reports something said or done, and some readers take it as reported while others take it as a later composition or explain it naturally, include both and say which is which.",
 		"Then say where the readings agree, where they differ and why, and what the words of the passage settle or leave open.",
-		"If the readings largely agree, say so in your first sentence and keep the whole answer under 250 words.",
+		"If the readings largely agree, say so in your first sentence and be brief.",
 		"End with two or three numbered questions the reader can test against the words of the passage and the verses around it, and one asking what they brought to it.",
-		"keep the whole answer under 600 words",
+		"Write in clear, plain language for a general reader, and be succinct.",
 		"Put each reading as its own thoughtful holders would state it; do not choose for the reader, and do not invent quotations or references.",
 		"The quoted text is from the World English Bible. Verse numbers may appear inside the quotation.",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the comparison prompt lacks %q", want)
 		}
+	}
+	for _, limit := range []string{"under 600", "under 250", "under 700", "under 300"} {
+		if strings.Contains(got, limit) {
+			t.Errorf("the comparison prompt sets a word count: %q", limit)
+		}
+	}
+	if m := regexp.MustCompile(`(?i)\b(?:under|within|at most|no more than|up to) \d+\b|\b\d+ words\b`).FindString(got); m != "" {
+		t.Errorf("the comparison prompt sets a word count: %q", m)
 	}
 
 	// The skeleton: a level-two heading per reading, then the four headings

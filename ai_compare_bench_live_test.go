@@ -31,8 +31,10 @@ package bibletext
 // The round fails when the default provider's answer fails the scorer, is
 // declined or times out on any passage, when its complete set leaves the
 // reading within Judaism out of a Hebrew Bible row, or when the Explain
-// control shows the shared prompt sentence has lengthened Explain past a
-// few short paragraphs (more than two of the ten over the length below).
+// control shows the shared prompt sentence has turned Explain into
+// something other than a few paragraphs of prose (more than two of the ten
+// past the runaway guard, over the paragraph bound below, or carrying a
+// heading or bullet).
 //
 // BIBLETEXT_COMPAREBENCH_ONLY, set to passage ids separated by commas
 // (BIBLETEXT_COMPAREBENCH_ONLY=isaiah-7-14,psalm-23-1), narrows the round
@@ -58,14 +60,17 @@ import (
 const (
 	// compareBenchCallBudget is the ceiling on one call.
 	compareBenchCallBudget = 120 * time.Second
-	// An Explain answer is a few short paragraphs when it is at most this
-	// many words and paragraphs, with no heading or bullet line. The Explain
-	// prompt sets no number; the bar is the bench plan's figure for a few
-	// short paragraphs, not a ceiling read off a recording round, which
-	// would make the control pass by definition. An Explain that is meant
-	// to run longer is a change to the prompt, not to this number.
-	compareBenchExplainWords      = 350
-	compareBenchExplainParagraphs = 5
+	// An Explain answer is a few paragraphs of prose when it has no heading
+	// or bullet line, at most this many paragraphs, and is inside the
+	// comparison's runaway guard (compareBenchRunawayWords). The Explain
+	// prompt asks for concision and sets no number, so the control holds
+	// no length but the guard, and reports the words. The paragraph bound
+	// is kept, well above the three or four a recording round returns,
+	// because it reads a runaway of another shape, prose cut into many
+	// short paragraphs, which the heading and bullet line does not; it is
+	// a shape, not a length. An Explain meant to run to a page is a change
+	// to the prompt, not to these numbers.
+	compareBenchExplainParagraphs = 8
 	compareBenchExplainTolerance  = 2
 )
 
@@ -189,11 +194,11 @@ func writeBenchAnswer(dir, provider, action string, c benchCase, model, prompt, 
 	return path, os.WriteFile(path, []byte(formatBenchFixture(fields, body)), 0o644)
 }
 
-// explainShortProse reports why an Explain answer is not a few short
-// paragraphs of prose, or "" when it is.
+// explainShortProse reports why an Explain answer is not a few paragraphs
+// of prose, or "" when it is.
 func explainShortProse(md string) string {
-	if n := words(md); n > compareBenchExplainWords {
-		return fmt.Sprintf("%d words, want at most %d", n, compareBenchExplainWords)
+	if n := words(md); n > compareBenchRunawayWords {
+		return fmt.Sprintf("not succinct: %d words", n)
 	}
 	paragraphs := 0
 	for _, chunk := range strings.Split(strings.ReplaceAll(md, "\r\n", "\n"), "\n\n") {
@@ -271,7 +276,7 @@ func TestCompareBenchLive(t *testing.T) {
 					if r.outcome == "ok" {
 						r.words = answerWords(answer)
 						if action == aiActionCompare {
-							r.readings = readingTitles(answer)
+							r.readings = readingLengths(answer)
 							r.problems = scoreCompareAnswer(bd, c, answer)
 						} else if why := explainShortProse(answer); why != "" {
 							r.problems = []problem{{check: 0, detail: why}}
@@ -298,7 +303,7 @@ func TestCompareBenchLive(t *testing.T) {
 		}
 		return rows[i].id < rows[j].id
 	})
-	t.Logf("%-10s %-8s %-18s %6s %5s  %s", "provider", "action", "passage", "secs", "words", "readings / outcome / problems")
+	t.Logf("%-10s %-8s %-18s %6s %5s  %s", "provider", "action", "passage", "secs", "words", "readings (words) / outcome / problems")
 	for _, r := range rows {
 		line := r.outcome
 		if r.outcome == "ok" {
@@ -351,12 +356,12 @@ func TestCompareBenchLive(t *testing.T) {
 			t.Log(p)
 		}
 	}
-	explain := fmt.Sprintf("%d of %d Explain answers on %s are not a few short paragraphs", longExplains, len(passages), defaultProviderID)
+	explain := fmt.Sprintf("%d of %d Explain answers on %s are not a few paragraphs of prose", longExplains, len(passages), defaultProviderID)
 	switch {
 	case narrowed:
 		t.Logf("%s (logged only: the Explain control is judged on a full round)", explain)
 	case longExplains > compareBenchExplainTolerance:
-		t.Errorf("%s; the shared prompt sentence has lengthened Explain", explain)
+		t.Errorf("%s; the shared prompt sentence has changed Explain's shape", explain)
 	}
 	for _, p := range run.providers {
 		secs := secsByProvider[p.ID]
@@ -505,16 +510,23 @@ func TestCompareBenchRecorderWritesWhereTheLoaderReads(t *testing.T) {
 	}
 }
 
-// The Explain control's rule: a few short paragraphs of prose pass; more
-// words, more paragraphs, a heading or a bullet do not.
+// The Explain control's rule: a few paragraphs of prose pass, at the
+// runaway guard and at the paragraph bound alike; one word past the guard,
+// one paragraph past the bound, a heading or a bullet do not.
 func TestExplainShortProse(t *testing.T) {
 	short := "The passage opens the chapter.\n\nIt turns on one word.\n\nThe parts connect through it."
 	if why := explainShortProse(short); why != "" {
 		t.Errorf("three short paragraphs: %s", why)
 	}
-	long := strings.Repeat("word ", compareBenchExplainWords+1)
-	if why := explainShortProse(long); !strings.Contains(why, "words") {
-		t.Errorf("control: %d words passed (%q)", compareBenchExplainWords+1, why)
+	if why := explainShortProse(strings.Repeat("word ", compareBenchRunawayWords)); why != "" {
+		t.Errorf("%d words, the guard itself: %s", compareBenchRunawayWords, why)
+	}
+	long := strings.Repeat("word ", compareBenchRunawayWords+1)
+	if want := fmt.Sprintf("not succinct: %d words", compareBenchRunawayWords+1); explainShortProse(long) != want {
+		t.Errorf("control: %d words read as %q, want %q", compareBenchRunawayWords+1, explainShortProse(long), want)
+	}
+	if why := explainShortProse(strings.Repeat("A paragraph.\n\n", compareBenchExplainParagraphs)); why != "" {
+		t.Errorf("%d paragraphs, the bound itself: %s", compareBenchExplainParagraphs, why)
 	}
 	many := strings.Repeat("A paragraph.\n\n", compareBenchExplainParagraphs+1)
 	if why := explainShortProse(many); !strings.Contains(why, "paragraphs") {

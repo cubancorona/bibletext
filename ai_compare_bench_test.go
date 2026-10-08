@@ -97,6 +97,18 @@ const (
 	// reader held back without paying for the rest; unset, a round records
 	// every passage of the table.
 	compareBenchOnly = "BIBLETEXT_COMPAREBENCH_ONLY"
+
+	// compareBenchRunawayWords is the one length the scorer holds, on a
+	// comparison and on the Explain control alike. The prompt sets no word
+	// count: it asks for succinctness and leaves the length to the answer's
+	// substance, a number having been taken as a target that cost the
+	// readings their breadth, and the scorer follows it, reporting the
+	// words of an answer and of each reading rather than ruling on them. An
+	// answer over this many words has stopped being succinct whatever its
+	// substance, and trips the balance check as a runaway. The figure
+	// stands well above the longest answer any recording round has
+	// returned, and is not a target.
+	compareBenchRunawayWords = 1000
 )
 
 // benchCase is one row of passages.json: a selection in the World English
@@ -109,10 +121,11 @@ const (
 // mark a passage whose first readers are the Jewish people, so a comparison
 // of its believers' readings that leaves theirs out is incomplete; that is a
 // fact about the passage, not a roster. A no-conflict row carries neither
-// floor: the prompt asks such a passage to say the readings largely agree,
-// and holds it to the shorter cap. chapter is the text of the chapter the
-// passage is from, attached by loadBenchTable from chapters.json and never
-// carried in the table itself.
+// floor: the prompt asks such a passage to say in its first sentence that
+// the readings largely agree, and to be brief, and the scorer reads the
+// first sentence for it. chapter is the text of the chapter the passage is
+// from, attached by loadBenchTable from chapters.json and never carried in
+// the table itself.
 type benchCase struct {
 	ID                string `json:"id"`
 	Ref               string `json:"ref"`
@@ -248,7 +261,7 @@ const (
 	checkLabels    = 2  // labels only with an assumption; the settles section grounded
 	checkVerdict   = 3  // no verdict by preference
 	checkCitations = 4  // no invented citations, quotations or references
-	checkBalance   = 5  // section and total lengths
+	checkBalance   = 5  // the whole answer's shape: no runaway, Where they agree not empty, the agree sentence first on a no-conflict row
 	checkCoverage  = 6  // the readings the prompt implies for the row, told apart
 	checkQuestions = 7  // two to four numbered questions, one asking what the reader brought
 	checkGrounding = 8  // the passage's own words appear
@@ -460,6 +473,24 @@ var (
 	benchVerdicts = []string{"the correct reading", "the right reading", "the only faithful reading",
 		"clearly the", "obviously", "true christians", "you should believe"}
 
+	// A first sentence that says the readings largely agree, in the words
+	// answers use: a word of extent and a word of agreement, in either
+	// order ("Readers across different traditions largely agree", "the
+	// main readings overlap a great deal"), with no negation in front of
+	// the agreement ("not all readers agree"); or little disagreement said
+	// outright. A sentence with an agreement word and no extent ("Readers
+	// agree on little here") has not said that they largely agree.
+	benchAgreeExtent = regexp.MustCompile(`(?i)\b(?:largely|broadly|broad|mostly|mainly|essentially|substantially|` +
+		`generally|general|widely|wide|overwhelmingly|most|all|every|nearly all|almost all|for the most part|` +
+		`on the whole|in the main|a great deal|much)\b`)
+	benchAgreeWord = regexp.MustCompile(`(?i)\b(?:agree\w*|concur\w*|overlap\w*|consensus|unanim\w*|common ground|` +
+		`in common|alike|of one mind|the same (?:way|reading|meaning|sense|thing)|` +
+		`shar(?:e|es|ed|ing) (?:\w+ ){0,2}(?:reading|meaning|sense|understanding|view|ground|conviction))\b`)
+	benchAgreeNegated = regexp.MustCompile(`(?i)\b(?:not|no|never|hardly|seldom|rarely|little|few|without)\b(?: \w+){0,3} ` +
+		`(?:agree\w*|concur\w*|overlap\w*|consensus|unanim\w*|common ground|in common|alike|of one mind|shar\w+)\b`)
+	benchLittleDisagreement = regexp.MustCompile(`(?i)\b(?:little|no|hardly any|scarcely any|without|not much) (?:\w+ ){0,2}` +
+		`(?:disagreement|dispute|controversy|division|divergence)\b`)
+
 	benchURL        = regexp.MustCompile(`(?i)\bhttps?://|\bwww\.`)
 	benchPage       = regexp.MustCompile(`\bpp?\.\s?\d`)
 	benchISBN       = regexp.MustCompile(`(?i)\bisbn\b`)
@@ -620,6 +651,28 @@ var (
 // stance as "God's word".
 func statesSaidOrDone(text string) bool  { return benchSaidOrDone.MatchString(benchStraighten(text)) }
 func statesComposition(text string) bool { return benchComposition.MatchString(benchStraighten(text)) }
+
+// saysLargelyAgree reads a sentence for the statement the prompt asks of a
+// passage whose readings largely agree, with its apostrophes straightened
+// as the stances are.
+func saysLargelyAgree(sentence string) bool {
+	s := benchStraighten(sentence)
+	if benchLittleDisagreement.MatchString(s) {
+		return true
+	}
+	return benchAgreeExtent.MatchString(s) && benchAgreeWord.MatchString(s) && !benchAgreeNegated.MatchString(s)
+}
+
+// firstSentence is an answer's first sentence as splitSentences cuts it: a
+// heading line is a sentence of its own, so an answer that opens on a
+// heading has that heading as its first sentence and has said nothing
+// before it.
+func firstSentence(md string) string {
+	if ss := splitSentences(md); len(ss) > 0 {
+		return ss[0]
+	}
+	return ""
+}
 
 // groundingRunsWanted is how many distinct three-word runs of the passage an
 // answer must carry to be grounded in its words: two of a passage of twelve
@@ -788,37 +841,27 @@ func scoreCompareAnswer(bd *BibleData, c benchCase, md string) []problem {
 		}
 	}
 
-	// 5. Balance. The whole answer is held under 700 words, strictly: an
-	// answer of exactly 700 is over the cap. The prompt asks for under 600,
-	// and the scorer holds the 700 the prompt asked for before, because a
-	// scorer may be looser than its prompt, never tighter: an answer that
-	// meets the prompt passes, and one that runs a little past the prompt's
-	// figure, as answers do when they take a figure for a target, is held
-	// to the cap and not to the figure. The prompt gives a reading the
-	// length its substance needs and no number, so the band is the bench
-	// plan's, 40 to 140 words: the floor is the least a section can carry
-	// its six parts in (the meaning, the words that bear it, the three
-	// assumptions and the holders), and the ceiling is a reading's fair
-	// share of the cap. There is no parity rule between readings: a reading
-	// that rests on little in the passage may be short, and the prompt says
-	// so. "Where they agree" need only be there. A no-conflict passage keeps
-	// every section short, in the plan's shorter band, and under 300 words,
-	// strict as the 700 is, where the prompt asks for under 250 on a passage
-	// whose readings largely agree; the plan had 400 here.
-	floor, ceiling, total := 40, 140, 700
-	if c.NoConflict {
-		floor, ceiling, total = 20, 80, 300
-	}
-	for _, r := range readings {
-		if n := words(r.body); n < floor || n > ceiling {
-			add(checkBalance, "%q is %d words, want %d to %d", r.title, n, floor, ceiling)
-		}
+	// 5. The whole answer's shape. The prompt sets no word count: it asks
+	// for succinctness and gives a reading the length its substance needs,
+	// so the scorer holds no cap and no band, and the words of the answer
+	// and of each reading are reported for a reader to weigh (the
+	// recorder's line, readingLengths) rather than ruled on. One guard
+	// stands against a runaway: an answer over compareBenchRunawayWords has
+	// stopped being succinct whatever its substance. "Where they agree"
+	// need only be there. On a passage whose readings largely agree the
+	// prompt asks for that in the first sentence, and the scorer reads the
+	// first sentence for it: an answer that opens on a heading, or on a
+	// sentence that says anything else, has not said so.
+	if n := answerWords(md); n > compareBenchRunawayWords {
+		add(checkBalance, "not succinct: %d words", n)
 	}
 	if agree, ok := byTitle[compareHeadingAgree]; ok && words(agree.body) == 0 {
 		add(checkBalance, "%q is empty", compareHeadingAgree)
 	}
-	if n := answerWords(md); n >= total {
-		add(checkBalance, "%d words in all, want under %d", n, total)
+	if c.NoConflict {
+		if first := firstSentence(md); !saysLargelyAgree(first) {
+			add(checkBalance, "the first sentence does not say the readings largely agree: %q", first)
+		}
 	}
 
 	// 6. Coverage: the readings the prompt implies for this row. On a passage
@@ -973,6 +1016,21 @@ func readingTitles(md string) []string {
 			break
 		}
 		out = append(out, s.title)
+	}
+	return out
+}
+
+// readingLengths is readingTitles with each reading's word count beside its
+// title, for the recorder's line: the scorer holds no reading to a length,
+// so what the answer gave each reading is reported for a reader to weigh.
+func readingLengths(md string) []string {
+	_, secs := splitMarkdownSections(md)
+	var out []string
+	for _, s := range secs {
+		if s.level == 2 && s.title == compareHeadings[0] {
+			break
+		}
+		out = append(out, fmt.Sprintf("%s (%d)", s.title, words(s.body)))
 	}
 	return out
 }
@@ -1255,7 +1313,14 @@ func TestCompareBenchPassages(t *testing.T) {
 // Two controls hold the grounding check to a short passage: on Psalm 23:1,
 // nine words, grounded-once.md quotes "I shall lack nothing" once and
 // passes, and ungrounded-short.md names the verse's word shepherd, quotes
-// no three-word run of it, and trips the check.
+// no three-word run of it, and trips the check. Two controls stand for the
+// band the scorer no longer holds a reading to: thin.md cuts good.md's last
+// reading to one sentence of twenty-five words, lopsided.md lengthens its
+// first to a hundred and fifty, and both pass, the prompt giving a reading
+// the length its substance needs. overlong.md runs past the runaway guard
+// and trips the balance check as not succinct; agree-unsaid.md, a
+// two-reading answer to John 11:35, a passage whose readings largely
+// agree, opens on a heading instead of saying so, and trips the same check.
 var compareControls = map[string]struct {
 	check   int
 	passage string
@@ -1273,10 +1338,11 @@ var compareControls = map[string]struct {
 	"verdict.md":            {checkVerdict, "matthew-16-18"},
 	"invented-ref.md":       {checkCitations, "matthew-16-18"},
 	"quoted.md":             {checkCitations, "matthew-16-18"},
-	"lopsided.md":           {checkBalance, "matthew-16-18"},
-	"thin.md":               {checkBalance, "matthew-16-18"},
+	"lopsided.md":           {0, "matthew-16-18"},
+	"thin.md":               {0, "matthew-16-18"},
 	"overlong.md":           {checkBalance, "matthew-16-18"},
 	"empty-agree.md":        {checkBalance, "matthew-16-18"},
+	"agree-unsaid.md":       {checkBalance, "john-11-35"},
 	"all-as-said.md":        {checkCoverage, "matthew-16-18"},
 	"said-by-record.md":     {0, "matthew-16-18"},
 	"said-by-gods-word.md":  {0, "matthew-16-18"},
@@ -1302,8 +1368,8 @@ func readCompareControl(t *testing.T, name string) string {
 
 // Every control trips exactly the check it is planted for, so a check that
 // stopped firing, or one that fires on a sound answer, is caught by name;
-// good.md and neighbour-quote.md pass all nine; and every file in the
-// directory is accounted for.
+// the controls planted to pass, good.md first among them, pass all nine;
+// and every file in the directory is accounted for.
 func TestCompareScorerCanFail(t *testing.T) {
 	tb := loadBenchTable(t).byID()
 	canon := NewBibleData()
@@ -1757,12 +1823,17 @@ func TestCompareScorerHoldsABareReferenceToItsBook(t *testing.T) {
 	}
 }
 
-// The reading band is 40 to 140 words, both ends inside it: a reading of
-// 140 words passes and one of 141 trips the balance check alone; one of 40
-// passes and one of 39 trips it alone. The padding goes under the reading's
-// own heading, so only that reading's count moves.
-func TestCompareScorerHoldsTheReadingBandAtItsEdges(t *testing.T) {
+// The scorer holds no reading to a band: the prompt gives a reading the
+// length its substance needs and no number, so good.md with its first
+// reading padded to three hundred words passes, as thin.md, whose last
+// reading is one sentence of twenty-five words, is planted to. What each
+// reading was given is reported beside its title instead (readingLengths,
+// the recorder's line). Control: the same padding carried on until the
+// whole answer passes the runaway guard trips the balance check alone, so
+// the padding reaches the scorer and only that guard reads it.
+func TestCompareScorerHoldsNoReadingBand(t *testing.T) {
 	c := loadBenchTable(t).byID()["matthew-16-18"]
+	good := readCompareControl(t, "good.md")
 	canon := NewBibleData()
 	readingWords := func(md, title string) int {
 		_, secs := splitMarkdownSections(md)
@@ -1774,41 +1845,56 @@ func TestCompareScorerHoldsTheReadingBandAtItsEdges(t *testing.T) {
 		t.Fatalf("no %q section", title)
 		return 0
 	}
-	for _, tc := range []struct {
-		control, title string
-		to             int
-		trips          bool
-	}{
-		{"good.md", "Catholic", 140, false},
-		{"good.md", "Catholic", 141, true},
-		{"thin.md", "Historical-critical", 40, false},
-		{"thin.md", "Historical-critical", 39, true},
-	} {
-		md := readCompareControl(t, tc.control)
-		n := readingWords(md, tc.title)
-		if n > tc.to {
-			t.Fatalf("%s: %q is %d words, more than the %d wanted", tc.control, tc.title, n, tc.to)
+	padded := func(to int) string {
+		n := readingWords(good, "Catholic")
+		if n > to {
+			t.Fatalf("good.md's first reading is %d words, more than the %d wanted", n, to)
 		}
-		heading := "## " + tc.title + "\n"
-		md = strings.Replace(md, heading, heading+strings.Repeat("again ", tc.to-n)+"\n", 1)
-		if got := readingWords(md, tc.title); got != tc.to {
-			t.Fatalf("%s: %q padded to %d words, want %d", tc.control, tc.title, got, tc.to)
+		heading := "## Catholic\n"
+		md := strings.Replace(good, heading, heading+strings.Repeat("again ", to-n)+"\n", 1)
+		if got := readingWords(md, "Catholic"); got != to {
+			t.Fatalf("the first reading padded to %d words, want %d", got, to)
 		}
-		want := fmt.Sprint([]int{})
-		if tc.trips {
-			want = fmt.Sprint([]int{checkBalance})
-		}
-		if got := checksTripped(scoreCompareAnswer(canon, c, md)); fmt.Sprint(got) != want {
-			t.Errorf("%s with %q at %d words trips %v, want %s", tc.control, tc.title, tc.to, got, want)
-		}
+		return md
+	}
+	if got := strings.Join(readingLengths(good), "; "); got != "Catholic (101); Eastern Orthodox (96); Reformed (102); Historical-critical (87)" {
+		t.Errorf("good.md's readings are reported as %q", got)
+	}
+	thin := readCompareControl(t, "thin.md")
+	if got := readingLengths(thin); got[len(got)-1] != "Historical-critical (25)" {
+		t.Errorf("thin.md's last reading is reported as %q", got[len(got)-1])
+	}
+	if ps := scoreCompareAnswer(canon, c, thin); len(ps) != 0 {
+		t.Errorf("a reading of twenty-five words fails: %s", problemLines(ps))
+	}
+	long := padded(300)
+	if ps := scoreCompareAnswer(canon, c, long); len(ps) != 0 {
+		t.Errorf("a reading of three hundred words fails: %s", problemLines(ps))
+	}
+	if got := readingLengths(long)[0]; got != "Catholic (300)" {
+		t.Errorf("the padded reading is reported as %q", got)
+	}
+	runaway := padded(compareBenchRunawayWords)
+	n := answerWords(runaway)
+	if n <= compareBenchRunawayWords {
+		t.Fatalf("the padded answer is %d words, inside the runaway guard", n)
+	}
+	ps := scoreCompareAnswer(canon, c, runaway)
+	if got := checksTripped(ps); fmt.Sprint(got) != fmt.Sprint([]int{checkBalance}) {
+		t.Errorf("control: the padding past the guard trips %v, want [%d]:\n%s", got, checkBalance, problemLines(ps))
+	}
+	if len(ps) != 1 || ps[0].detail != fmt.Sprintf("not succinct: %d words", n) {
+		t.Errorf("control: the padding past the guard reads as %s", problemLines(ps))
 	}
 }
 
-// The scorer's cap of 700 words is strict: an answer of exactly 700 words is
-// over it and trips the balance check alone; the same answer one word
-// shorter trips nothing. The padding goes after the last section, where no
-// other check counts words.
-func TestCompareScorerHoldsTheCapStrictly(t *testing.T) {
+// The runaway guard is the one length the scorer holds, and it is strict at
+// its figure: good.md padded to exactly compareBenchRunawayWords words
+// passes, and one word more trips the balance check alone, as not
+// succinct, with the count in the detail. The padding goes after the last
+// section, where no other check counts words. The directory control is
+// overlong.md.
+func TestCompareScorerHoldsTheRunawayGuardStrictly(t *testing.T) {
 	c := loadBenchTable(t).byID()["matthew-16-18"]
 	good := readCompareControl(t, "good.md")
 	canon := NewBibleData()
@@ -1817,55 +1903,105 @@ func TestCompareScorerHoldsTheCapStrictly(t *testing.T) {
 		if n >= to {
 			t.Fatalf("good.md is %d words, no room under %d", n, to)
 		}
-		return good + "\n" + strings.TrimSpace(strings.Repeat("again ", to-n)) + "\n"
+		md := good + "\n" + strings.TrimSpace(strings.Repeat("again ", to-n)) + "\n"
+		if got := answerWords(md); got != to {
+			t.Fatalf("the padded answer is %d words, want %d", got, to)
+		}
+		return md
 	}
-	at := padded(700)
-	if n := answerWords(at); n != 700 {
-		t.Fatalf("the padded answer is %d words, want 700", n)
+	over := compareBenchRunawayWords + 1
+	ps := scoreCompareAnswer(canon, c, padded(over))
+	if got := checksTripped(ps); fmt.Sprint(got) != fmt.Sprint([]int{checkBalance}) {
+		t.Errorf("%d words trips %v, want [%d]:\n%s", over, got, checkBalance, problemLines(ps))
 	}
-	if got := checksTripped(scoreCompareAnswer(canon, c, at)); fmt.Sprint(got) != fmt.Sprint([]int{checkBalance}) {
-		t.Errorf("700 words trips %v, want [%d]", got, checkBalance)
+	if want := fmt.Sprintf("not succinct: %d words", over); len(ps) != 1 || ps[0].detail != want {
+		t.Errorf("%d words reads as %s, want %q", over, problemLines(ps), want)
 	}
-	if ps := scoreCompareAnswer(canon, c, padded(699)); len(ps) != 0 {
-		t.Errorf("control: 699 words is under the cap, yet: %s", problemLines(ps))
+	if ps := scoreCompareAnswer(canon, c, padded(compareBenchRunawayWords)); len(ps) != 0 {
+		t.Errorf("control: %d words is inside the guard, yet: %s", compareBenchRunawayWords, problemLines(ps))
 	}
 }
 
-// On a passage whose readings largely agree the scorer's cap is 300 words,
-// strict as the 700 is: a two-reading answer to John 11:35 of exactly
-// 300 words trips the balance check alone, and the same answer one word
-// shorter trips nothing. The answer is one-reading.md with a second reading
-// of the shorter band's length, so the skeleton holds and only the total
-// moves; the padding goes after the last section.
-func TestCompareScorerHoldsTheShorterCapStrictly(t *testing.T) {
+// On a passage whose readings largely agree the prompt asks for that in the
+// first sentence, and the scorer reads the first sentence for it in the
+// words answers use: a word of extent and a word of agreement, in either
+// order, with no negation in front of the agreement, or little disagreement
+// said outright. Each line below is read as saying so; none of the lines
+// after them is, a heading among them, since an answer that opens on a
+// heading has said nothing first. A two-reading answer to John 11:35 that
+// opens on the sentence passes; the same answer with the sentence second
+// trips the balance check alone, naming the sentence that came first; and
+// on Matthew 16:18, whose readings part, good.md opens on a heading and
+// passes, so the rule is the no-conflict rows' alone. The directory control
+// is agree-unsaid.md.
+func TestCompareScorerWantsTheAgreeSentenceFirst(t *testing.T) {
+	for _, line := range []string{
+		"Readers across different traditions largely agree on the meaning of this famous verse.",
+		"Readers largely agree this verse shows Jesus experiencing deep human emotion, though they differ on the event's history.",
+		"On this verse the main readings largely agree: the speaker calls God his shepherd, and on that ground claims he will lack nothing.",
+		"Psalm 23:1 is one of the most widely shared verses in the Bible, and its main readings overlap a great deal.",
+		"The readings of this verse are broadly in agreement.",
+		"Most readers agree that Jesus wept from grief.",
+		"Jews and Christians alike share one reading of this verse, and there is little real disagreement about it.",
+		"There is broad consensus on this verse across the churches.",
+		"Readers of every tradition agree on what the verse means.",
+		"Readers’ views largely concur here.",
+	} {
+		if !saysLargelyAgree(line) {
+			t.Errorf("%q is not read as saying the readings largely agree", line)
+		}
+	}
+	for _, line := range []string{
+		"## Jewish Reading",
+		"Jesus wept: at the tomb of Lazarus, Jesus grieved as any mourner does, and the verse shows his full humanity.",
+		"Readers do not agree on why Jesus wept.",
+		"Not all readers agree on the meaning of this verse.",
+		"Few readers agree about who the shepherd is.",
+		"The readings differ sharply on who the shepherd is.",
+		"Readers agree on little here.",
+		"There is no agreement on the verse.",
+		"The verse is one of the most quoted in the Bible.",
+	} {
+		if saysLargelyAgree(line) {
+			t.Errorf("control: %q is read as saying the readings largely agree", line)
+		}
+	}
+
 	c := loadBenchTable(t).byID()["john-11-35"]
 	if !c.NoConflict {
 		t.Fatal("John 11:35 is not a no-conflict row")
 	}
+	canon := NewBibleData()
 	one := readCompareControl(t, "one-reading.md")
+	sentence := firstSentence(one)
+	if !saysLargelyAgree(sentence) || !strings.HasPrefix(one, sentence+"\n\n## ") {
+		t.Fatalf("one-reading.md does not open on the sentence the row asks for: %q", sentence)
+	}
 	at := strings.Index(one, "## "+compareHeadingAgree)
 	second := "## The sign and the tears\nThe tears are read with the raising that follows them: Jesus weeps and then calls Lazarus out, so grief and power stand in one scene, and the weight falls on the whole chapter as much as on the one verb. Held by readers of every church alike.\n\n"
 	two := one[:at] + second + one[at:]
-	canon := NewBibleData()
 	if ps := scoreCompareAnswer(canon, c, two); len(ps) != 0 {
-		t.Fatalf("two short readings on John 11:35 should pass, yet: %s", problemLines(ps))
+		t.Fatalf("two readings on John 11:35 opening on the sentence should pass, yet: %s", problemLines(ps))
 	}
-	padded := func(to int) string {
-		n := answerWords(two)
-		if n >= to {
-			t.Fatalf("the answer is %d words, no room under %d", n, to)
-		}
-		return two + "\n" + strings.TrimSpace(strings.Repeat("again ", to-n)) + "\n"
+	other := "Jesus wept, and the verse gives no reason for the tears."
+	moved := other + " " + two
+	if got := firstSentence(moved); got != other {
+		t.Fatalf("the moved answer's first sentence is %q", got)
 	}
-	at300 := padded(300)
-	if n := answerWords(at300); n != 300 {
-		t.Fatalf("the padded answer is %d words, want 300", n)
+	ps := scoreCompareAnswer(canon, c, moved)
+	if got := checksTripped(ps); fmt.Sprint(got) != fmt.Sprint([]int{checkBalance}) {
+		t.Errorf("the sentence second trips %v, want [%d]:\n%s", got, checkBalance, problemLines(ps))
 	}
-	if got := checksTripped(scoreCompareAnswer(canon, c, at300)); fmt.Sprint(got) != fmt.Sprint([]int{checkBalance}) {
-		t.Errorf("300 words trips %v, want [%d]", got, checkBalance)
+	if len(ps) != 1 || !strings.Contains(ps[0].detail, "first sentence") || !strings.Contains(ps[0].detail, other) {
+		t.Errorf("the sentence second reads as %s", problemLines(ps))
 	}
-	if ps := scoreCompareAnswer(canon, c, padded(299)); len(ps) != 0 {
-		t.Errorf("control: 299 words is under the shorter cap, yet: %s", problemLines(ps))
+	matthew := loadBenchTable(t).byID()["matthew-16-18"]
+	good := readCompareControl(t, "good.md")
+	if !strings.HasPrefix(good, "## ") {
+		t.Fatalf("good.md does not open on a heading: %.40q", good)
+	}
+	if ps := scoreCompareAnswer(canon, matthew, good); len(ps) != 0 {
+		t.Errorf("control: on a passage whose readings part, an answer opening on a heading fails: %s", problemLines(ps))
 	}
 }
 

@@ -58,15 +58,17 @@ var compareHeadings = []string{
 // explains it naturally are both set out and told apart; the passage, not
 // the model, does the judging, in the section named by
 // compareHeadingSettles; and a passage whose readings largely agree says so
-// in its first sentence and keeps under 250 words where the rest keep under
-// 600. The fairness scorer (ai_compare_bench_test.go) holds answers under
-// 700 and 300, looser than the prompt on purpose. Every heading is level
-// two, the readings' and the four fixed ones alike, so the panel renders
-// one skeleton. README.md carries this prompt in full, and a test holds the
-// two equal.
+// in its first sentence and is brief. The prompt sets no word count: it
+// asks for succinctness, as the Explain prompt asks for concision, and
+// leaves the length to the answer's substance, since a number was taken as
+// a target and cost the readings their breadth. The fairness scorer
+// (ai_compare_bench_test.go) holds no length either, beyond a runaway
+// guard. Every heading is level two, the readings' and the four fixed ones
+// alike, so the panel renders one skeleton. README.md carries this prompt
+// in full, and a test holds the two equal.
 func buildComparePrompt(p aiPassage) string {
 	const voice = "You are a knowledgeable, even-handed Bible study assistant. Write in clear, " +
-		"plain language for a general reader, and keep the whole answer under 600 words."
+		"plain language for a general reader, and be succinct."
 
 	const task = "Help the reader understand the passage below honestly: how different believers " +
 		"and scholars understand it, why they differ, and what the words of the passage " +
@@ -80,9 +82,9 @@ func buildComparePrompt(p aiPassage) string {
 		"some readers take it as reported while others take it as a later composition or explain " +
 		"it naturally, include both and say which is which. Then say where the readings agree, " +
 		"where they differ and why, and what the words of the passage settle or leave open. If " +
-		"the readings largely agree, say so in your first sentence and keep the whole answer " +
-		"under 250 words. End with two or three numbered questions the reader can test against " +
-		"the words of the passage and the verses around it, and one asking what they brought to it."
+		"the readings largely agree, say so in your first sentence and be brief. End with two or " +
+		"three numbered questions the reader can test against the words of the passage and the " +
+		"verses around it, and one asking what they brought to it."
 
 	const headings = "Give each reading a level-two heading, and then, also at level two, the " +
 		"headings \"" + compareHeadingAgree + "\", \"" + compareHeadingPart + "\", \"" +
