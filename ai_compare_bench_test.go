@@ -344,7 +344,18 @@ func words(s string) int { return len(strings.Fields(s)) }
 // answerWords counts the words of an answer without its heading markers.
 func answerWords(md string) int { return words(strings.ReplaceAll(md, "## ", "")) }
 
-var benchNonWord = regexp.MustCompile(`[^a-z0-9' ]+`)
+var (
+	benchNonWord = regexp.MustCompile(`[^a-z0-9' ]+`)
+	// benchApostrophes straightens the curly apostrophes and single
+	// quotation marks providers write (God’s, don’t), so a pattern written
+	// with a straight apostrophe reads them.
+	benchApostrophes = strings.NewReplacer("’", "'", "‘", "'")
+)
+
+// benchStraighten is the text with its apostrophes straightened and nothing
+// else changed: what the stance patterns, written with straight apostrophes,
+// are matched against, since they run on a reading's raw text.
+func benchStraighten(s string) string { return benchApostrophes.Replace(s) }
 
 // benchNormalize lowers the text, straightens curly quotation marks and
 // apostrophes, turns dashes and punctuation into spaces and collapses runs,
@@ -353,8 +364,8 @@ var benchNonWord = regexp.MustCompile(`[^a-z0-9' ]+`)
 // a single quotation mark (‘Whoever ... divorce,’) or a plural possessive,
 // and goes, so a saying quoted without the marks around it is the same words.
 func benchNormalize(s string) string {
-	s = strings.ToLower(s)
-	s = strings.NewReplacer("’", "'", "‘", "'", "“", " ", "”", " ", "—", " ", "–", " ", "-", " ").Replace(s)
+	s = strings.ToLower(benchStraighten(s))
+	s = strings.NewReplacer("“", " ", "”", " ", "—", " ", "–", " ", "-", " ").Replace(s)
 	s = benchNonWord.ReplaceAllString(s, " ")
 	fields := strings.Fields(s)
 	ws := fields[:0]
@@ -446,8 +457,10 @@ var (
 	// A quotation attributed to a speaker with a verb of speech or writing,
 	// on either side of the marks. The speaker is a capitalised name of up to
 	// three words ("Jesus", "Simon Peter", "the Council of Trent"), or "the"
-	// and one or two plain words ("the bystanders", "the text"). Groups: the
-	// speaker and the words, marks first, then the words and the speaker.
+	// and one or two plain words ("the bystanders", "the text", and also
+	// "the direct" of "the direct commands", which benchNamesASpeaker then
+	// reads as no speaker at all). Groups: the speaker and the words, marks
+	// first, then the words and the speaker.
 	benchSpeaker = `((?:[Tt]he )?[A-Z][a-z]+(?: (?:of )?[A-Z][a-z]+){0,2}|[Tt]he [a-z]+(?: [a-z]+)?)`
 	// The verbs of speech and writing that open a quotation, in past and
 	// present. Called and named are left out: they label ("the place called
@@ -460,10 +473,11 @@ var (
 		`charged|charges|instructed|instructs|reminded|reminds|pleaded|pleads|put it|puts it)`
 	benchAttributed = regexp.MustCompile(`\b` + benchSpeaker + ` ` + benchSpeech + `[,:]? [“"]([^”"]+)[”"]|[“"]([^”"]+)[”"],? (?:as )?` + benchSpeaker + ` ` + benchSpeech)
 	// The text's own voice, which may quote the chapter without being named
-	// in it, on any book: the text, the passage, the book and its parts, and
-	// the one who speaks for it.
+	// in it, on any book: the text, the passage, the book and its parts, its
+	// words, and the one who speaks for it. A plural is read by its singular
+	// (benchVoiceWord).
 	benchTextVoice = map[string]bool{
-		"text": true, "passage": true, "verse": true, "verses": true, "chapter": true, "book": true,
+		"text": true, "passage": true, "verse": true, "verses": true, "chapter": true, "book": true, "word": true, "words": true,
 		"prophet": true, "apostle": true, "evangelist": true, "narrator": true, "author": true,
 		"writer": true, "gospel": true, "letter": true, "epistle": true, "scripture": true, "scriptures": true,
 	}
@@ -493,6 +507,30 @@ var (
 		"the": true, "of": true, "and": true, "as": true, "but": true, "for": true, "so": true,
 		"then": true, "when": true, "where": true, "while": true, "since": true, "because": true,
 		"yet": true, "here": true, "thus": true, "if": true, "once": true, "after": true, "before": true,
+	}
+	// The plain words for a person, a body or a document that a lower-case
+	// speaker phrase may name ("the council", "the psalmist", "the law"); a
+	// plural names a body by its ending ("the bystanders"). A phrase whose
+	// head word is none of these ("the direct", "the same breath") names no
+	// one: it is prose around the quotation marks, and the words in them are
+	// held to the chapter on their own (benchNamesASpeaker).
+	benchBodyWords = map[string]bool{
+		"law": true, "torah": true, "psalmist": true, "council": true, "synod": true, "court": true, "senate": true,
+		"tribunal": true, "crowd": true, "mob": true, "multitude": true, "people": true, "nation": true, "church": true,
+		"assembly": true, "congregation": true, "community": true, "synagogue": true, "household": true, "family": true,
+		"army": true, "clergy": true, "laity": true, "faithful": true, "magisterium": true, "papacy": true,
+		"priesthood": true, "catechism": true, "creed": true, "decree": true, "encyclical": true, "commentary": true,
+		"talmud": true, "mishnah": true, "midrash": true, "targum": true, "vulgate": true, "septuagint": true,
+		"king": true, "queen": true, "emperor": true, "governor": true, "ruler": true, "pope": true, "bishop": true,
+		"priest": true, "rabbi": true, "elder": true, "scribe": true, "pharisee": true, "sadducee": true, "lawyer": true,
+		"judge": true, "centurion": true, "soldier": true, "servant": true, "slave": true, "man": true, "woman": true,
+		"child": true, "boy": true, "girl": true, "father": true, "mother": true, "son": true, "daughter": true,
+		"brother": true, "sister": true, "husband": true, "wife": true, "disciple": true, "teacher": true, "master": true,
+		"student": true, "scholar": true, "critic": true, "commentator": true, "translator": true, "editor": true,
+		"redactor": true, "reformer": true, "theologian": true, "historian": true, "philosopher": true, "saint": true,
+		"martyr": true, "angel": true, "devil": true, "serpent": true, "dragon": true, "beast": true, "voice": true,
+		"speaker": true, "reader": true, "hearer": true, "believer": true, "mourner": true, "bystander": true,
+		"onlooker": true, "witness": true, "friend": true, "stranger": true, "neighbour": true, "neighbor": true, "enemy": true,
 	}
 	// "Book chapter:verse", with an optional verse range, the book possibly
 	// numbered ("1 Peter") or of the form "Song of Solomon".
@@ -565,6 +603,29 @@ var (
 		`literary (?:creation|composition|device|form|genre|construct\w*|artistry|framework|structure|artifice|convention|fiction)|genre|apocalyptic (?:literature|genre|convention|imagery|form|writing)|symbolic (?:vision|narrative)|` +
 		`priestly (?:source|writer|author|account|tradition|school)|exilic|post-?exilic|second temple)\b`)
 )
+
+// statesSaidOrDone and statesComposition read a reading's text for the two
+// stances with its apostrophes straightened first: the patterns are written
+// with straight apostrophes, and a provider's "God’s word" states the same
+// stance as "God's word".
+func statesSaidOrDone(text string) bool  { return benchSaidOrDone.MatchString(benchStraighten(text)) }
+func statesComposition(text string) bool { return benchComposition.MatchString(benchStraighten(text)) }
+
+// groundingRunsWanted is how many distinct three-word runs of the passage an
+// answer must carry to be grounded in its words: two of a passage of twelve
+// words or more, where two runs are a small part of it; one of a shorter
+// passage, where a second run would be most of the verse quoted twice (Psalm
+// 23:1 is nine words); and none under four words, where the one run is the
+// passage itself (John 11:35), which must then appear whole.
+func groundingRunsWanted(normPassage string) int {
+	switch n := words(normPassage); {
+	case n < 4:
+		return 0
+	case n < 12:
+		return 1
+	}
+	return 2
+}
 
 // scoreCompareAnswer runs checks 1 to 9 over one answer to c. bd resolves the
 // books an answer cites; when it carries verses, chapter and verse bounds are
@@ -670,8 +731,12 @@ func scoreCompareAnswer(bd *BibleData, c benchCase, md string) []problem {
 	// A quotation attributed to a speaker is held to the chapter the passage
 	// is from: its words must be the chapter's, and its speaker must be
 	// named in the chapter or be the text's own voice. A quotation of one
-	// word is a term, not a quotation, and is not held. A row with no
-	// chapter text holds quotations to the passage alone.
+	// word is a term, not a quotation, and is not held. A phrase before the
+	// verb that names no one ("the direct commands", "in the same breath
+	// says") is prose, and the chapter's own words beside it are the
+	// chapter's, in no one's mouth; words the chapter does not have are held
+	// whatever stands before them. A row with no chapter text holds
+	// quotations to the passage alone.
 	chapter := c.chapter
 	if chapter == "" {
 		chapter = c.Text
@@ -686,7 +751,7 @@ func scoreCompareAnswer(bd *BibleData, c benchCase, md string) []problem {
 			add(checkCitations, "a quotation whose words are not in %s: %q", c.benchChapterKey(), m[0])
 			continue
 		}
-		if !benchSpeaksInChapter(speaker, normChapter, c) {
+		if benchNamesASpeaker(speaker) && !benchSpeaksInChapter(speaker, normChapter, c) {
 			add(checkCitations, "a quotation attributed to %q, named nowhere in %s: %q", speaker, c.benchChapterKey(), m[0])
 		}
 	}
@@ -759,10 +824,10 @@ func scoreCompareAnswer(bd *BibleData, c benchCase, md string) []problem {
 		var said, composed []int
 		for i, r := range readings {
 			text := r.title + "\n" + r.body
-			if benchSaidOrDone.MatchString(text) {
+			if statesSaidOrDone(text) {
 				said = append(said, i)
 			}
-			if benchComposition.MatchString(text) {
+			if statesComposition(text) {
 				composed = append(composed, i)
 			}
 		}
@@ -801,18 +866,15 @@ func scoreCompareAnswer(bd *BibleData, c benchCase, md string) []problem {
 		}
 	}
 
-	// 8. Grounding.
-	runs := threeWordRuns(normPassage)
-	if len(runs) == 0 {
+	// 8. Grounding: the passage's own words, in the measure its length
+	// allows (groundingRunsWanted).
+	if need := groundingRunsWanted(normPassage); need == 0 {
 		if !strings.Contains(" "+normMD+" ", " "+normPassage+" ") {
 			add(checkGrounding, "the passage %q does not appear whole", c.Text)
 		}
 	} else {
-		need, found := 2, 0
-		if len(runs) < need {
-			need = len(runs)
-		}
-		for run := range runs {
+		found := 0
+		for run := range threeWordRuns(normPassage) {
 			if strings.Contains(" "+normMD+" ", " "+run+" ") {
 				found++
 			}
@@ -840,7 +902,7 @@ func benchSpeaksInChapter(speaker, normChapter string, c benchCase) bool {
 	book := " " + benchNormalize(c.Book) + " " + benchBookVoice[c.Book] + " "
 	for _, w := range strings.Fields(benchNormalize(speaker)) {
 		switch {
-		case benchNotASpeaker[w], benchTextVoice[w]:
+		case benchNotASpeaker[w], benchVoiceWord(w):
 		case strings.Contains(normChapter, " "+w+" "):
 		case strings.Contains(book, " "+w+" "):
 		default:
@@ -848,6 +910,36 @@ func benchSpeaksInChapter(speaker, normChapter string, c benchCase) bool {
 		}
 	}
 	return true
+}
+
+// benchVoiceWord reports whether w, singular or plural, is the text's own
+// voice (benchTextVoice).
+func benchVoiceWord(w string) bool {
+	return benchTextVoice[w] || benchTextVoice[strings.TrimSuffix(w, "s")]
+}
+
+// benchNamesASpeaker reports whether the phrase before a verb of speech names
+// someone the quotation can be attributed to: a capitalised name past the
+// article ("Jesus", "the Council of Trent"), or a plain phrase whose head
+// word is the text's own voice, a word for a person, a body or a document,
+// or a plural ("the text", "the council", "the bystanders"). "The direct" of
+// "the direct commands" and "the same breath" name no one, so the words
+// beside them are held to the chapter on their own and in no mouth.
+func benchNamesASpeaker(speaker string) bool {
+	ws := strings.Fields(speaker)
+	if len(ws) > 0 && strings.EqualFold(ws[0], "the") {
+		ws = ws[1:]
+	}
+	if len(ws) == 0 {
+		return false
+	}
+	for _, w := range ws {
+		if w != strings.ToLower(w) {
+			return true
+		}
+	}
+	head := benchNormalize(ws[len(ws)-1])
+	return benchVoiceWord(head) || benchBodyWords[head] || strings.HasSuffix(head, "s")
 }
 
 func atoi(s string) int {
@@ -1148,11 +1240,17 @@ func TestCompareBenchPassages(t *testing.T) {
 // words, so it trips before its speaker is read; wrong-speaker.md keeps the
 // words and puts them in the mouth of bystanders the chapter never names;
 // wrong-writer.md puts them in Paul's mouth, the voice of his letters and
-// of no Gospel. Two controls hold the first stance of the coverage check:
+// of no Gospel. Three controls hold the first stance of the coverage check:
 // said-by-record.md states it in one reading only as the Bible accurately
 // recording Jesus' words, beside a composition reading, and passes;
+// said-by-gods-word.md states it in one reading only as the Bible being
+// God’s word, with the curly apostrophe providers write, and passes;
 // no-said.md names holders and words and takes no stance on the report in
 // any reading, beside the same composition reading, and trips the check.
+// Two controls hold the grounding check to a short passage: on Psalm 23:1,
+// nine words, grounded-once.md quotes "I shall lack nothing" once and
+// passes, and ungrounded-short.md names the verse's word shepherd, quotes
+// no three-word run of it, and trips the check.
 var compareControls = map[string]struct {
 	check   int
 	passage string
@@ -1176,11 +1274,14 @@ var compareControls = map[string]struct {
 	"empty-agree.md":        {checkBalance, "matthew-16-18"},
 	"all-as-said.md":        {checkCoverage, "matthew-16-18"},
 	"said-by-record.md":     {0, "matthew-16-18"},
+	"said-by-gods-word.md":  {0, "matthew-16-18"},
 	"no-said.md":            {checkCoverage, "matthew-16-18"},
 	"missing-jewish.md":     {checkCoverage, "isaiah-7-14"},
 	"no-questions.md":       {checkQuestions, "matthew-16-18"},
 	"no-brought.md":         {checkQuestions, "matthew-16-18"},
 	"ungrounded.md":         {checkGrounding, "matthew-16-18"},
+	"grounded-once.md":      {0, "psalm-23-1"},
+	"ungrounded-short.md":   {checkGrounding, "psalm-23-1"},
 	"linked.md":             {checkNetwork, "matthew-16-18"},
 	"cut-short.md":          {checkNetwork, "matthew-16-18"},
 }
@@ -1396,6 +1497,118 @@ func TestCompareScorerHoldsAWriterToTheirBook(t *testing.T) {
 		if cs := citationProblems(ps); len(cs) != 1 || !strings.Contains(cs[0], tc.detail) {
 			t.Errorf("%q: citation problems %v, want one saying %q", tc.line, cs, tc.detail)
 		}
+	}
+}
+
+// A phrase before a verb of speech that names no one ("the direct commands",
+// "in the same breath says") is prose, and the chapter's own words in
+// quotation marks beside it are the chapter's: they trip nothing. A name,
+// the text's own voice, a plain word for a person, a body or a document, or
+// a plural names a speaker, who is held to the chapter as before; and words
+// the chapter does not have trip the citation check whatever stands before
+// them. Controls: the chapter's words in the mouth of a council and of
+// bystanders the chapter never names, and of a named writer, trip with the
+// name in the detail; the same writer with altered words, and the prose
+// phrase with altered words, trip on the words.
+func TestCompareScorerReadsProseAroundTheChaptersWords(t *testing.T) {
+	rows := loadBenchTable(t).byID()
+	canon := NewBibleData()
+	for _, tc := range []struct{ id, line string }{
+		{"1-timothy-2-12", `This reading rests on the direct commands "don't permit," "teach," and "exercise authority."`},
+		{"matthew-16-18", `Jesus renames Simon "Peter" (*Petros*, rock) and in the same breath says "on this rock" — the nearest and most natural referent.`},
+	} {
+		if cs := citationProblems(scoreCompareAnswer(canon, rows[tc.id], tc.line+"\n")); len(cs) != 0 {
+			t.Errorf("%q on %s is prose around the chapter's words, yet: %v", tc.line, tc.id, cs)
+		}
+	}
+	for _, tc := range []struct{ id, line, detail string }{
+		{"matthew-16-18", `the council stated, “on this rock I will build my assembly.”`, `attributed to "the council"`},
+		{"matthew-16-18", `the bystanders said, “on this rock I will build my assembly.”`, `attributed to "the bystanders"`},
+		{"matthew-16-18", `Augustine commands, “on this rock I will build my assembly.”`, `attributed to "Augustine"`},
+		{"matthew-16-18", `Augustine commands, “on this rock I will build my church.”`, "words are not in Matthew 16"},
+		{"1-timothy-2-12", `This reading rests on the direct commands "do not permit," "teach," and "exercise authority."`, "words are not in 1 Timothy 2"},
+	} {
+		cs := citationProblems(scoreCompareAnswer(canon, rows[tc.id], tc.line+"\n"))
+		if len(cs) != 1 || !strings.Contains(cs[0], tc.detail) {
+			t.Errorf("control: %q on %s: citation problems %v, want one saying %q", tc.line, tc.id, cs, tc.detail)
+		}
+	}
+	for _, tc := range []struct {
+		speaker string
+		names   bool
+	}{
+		{"Jesus", true}, {"the Council of Trent", true}, {"The text", true}, {"the following verses", true},
+		{"the council", true}, {"the bystanders", true}, {"The law", true}, {"The psalmist", true},
+		{"the direct", false}, {"the same breath", false}, {"the following", false},
+	} {
+		if got := benchNamesASpeaker(tc.speaker); got != tc.names {
+			t.Errorf("benchNamesASpeaker(%q) = %v, want %v", tc.speaker, got, tc.names)
+		}
+	}
+}
+
+// checkProblems is one check's share of a score.
+func checkProblems(ps []problem, check int) []string {
+	var out []string
+	for _, p := range ps {
+		if p.check == check {
+			out = append(out, p.detail)
+		}
+	}
+	return out
+}
+
+// The grounding check scales with the passage: two three-word runs of a
+// passage of twelve words or more, one of a shorter passage, and the whole
+// passage under four words, at each edge of the count. On Psalm 23:1, nine
+// words, one run is wanted: grounded-once.md quotes "I shall lack nothing"
+// once and passes every check, and ungrounded-short.md names the verse's
+// word shepherd and quotes no run of it, so it trips the grounding check
+// alone, asking for one. Control: an answer carrying one run passes on a
+// row of eleven words and trips on the same row a word longer, asking for
+// two; the whole of a three-word row passes and two of its words do not.
+func TestCompareScorerScalesGroundingToThePassage(t *testing.T) {
+	for _, tc := range []struct{ words, want int }{{2, 0}, {3, 0}, {4, 1}, {11, 1}, {12, 2}, {26, 2}} {
+		passage := strings.TrimSpace(strings.Repeat("word ", tc.words))
+		if got := groundingRunsWanted(benchNormalize(passage)); got != tc.want {
+			t.Errorf("a passage of %d words wants %d runs, want %d", tc.words, got, tc.want)
+		}
+	}
+	rows := loadBenchTable(t).byID()
+	psalm := rows["psalm-23-1"]
+	if n := words(benchNormalize(psalm.Text)); n != 9 {
+		t.Fatalf("Psalm 23:1 is %d words; the controls are written for nine", n)
+	}
+	canon := NewBibleData()
+	if ps := scoreCompareAnswer(canon, psalm, readCompareControl(t, "grounded-once.md")); len(ps) != 0 {
+		t.Errorf("grounded-once.md quotes one run of a nine-word verse, yet: %s", problemLines(ps))
+	}
+	ps := scoreCompareAnswer(canon, psalm, readCompareControl(t, "ungrounded-short.md"))
+	if got := checksTripped(ps); fmt.Sprint(got) != fmt.Sprint([]int{checkGrounding}) {
+		t.Errorf("control: ungrounded-short.md trips %v, want [%d]:\n%s", got, checkGrounding, problemLines(ps))
+	}
+	if gs := checkProblems(ps, checkGrounding); len(gs) != 1 || !strings.HasSuffix(gs[0], "want 1") {
+		t.Errorf("control: ungrounded-short.md's grounding problems %v, want one asking for one run", gs)
+	}
+
+	eleven := benchCase{ID: "eleven", Book: "Psalms", Chapter: 23, Lo: 1, Hi: 1,
+		Text: "one two three four five six seven eight nine ten eleven"}
+	twelve := eleven
+	twelve.Text += " twelve"
+	oneRun := "The reading rests on \"one two three\" and on nothing else.\n"
+	if gs := checkProblems(scoreCompareAnswer(canon, eleven, oneRun), checkGrounding); len(gs) != 0 {
+		t.Errorf("one run of an eleven-word passage: %v", gs)
+	}
+	if gs := checkProblems(scoreCompareAnswer(canon, twelve, oneRun), checkGrounding); len(gs) != 1 || !strings.HasSuffix(gs[0], "want 2") {
+		t.Errorf("control: one run of a twelve-word passage: %v, want one asking for two runs", gs)
+	}
+	three := eleven
+	three.Text = "one two three"
+	if gs := checkProblems(scoreCompareAnswer(canon, three, oneRun), checkGrounding); len(gs) != 0 {
+		t.Errorf("the whole of a three-word passage: %v", gs)
+	}
+	if gs := checkProblems(scoreCompareAnswer(canon, three, "The reading rests on \"one two\".\n"), checkGrounding); len(gs) != 1 || !strings.Contains(gs[0], "does not appear whole") {
+		t.Errorf("control: two words of a three-word passage: %v, want one saying it does not appear whole", gs)
 	}
 }
 
@@ -1724,12 +1937,13 @@ func TestCompareScorerHoldsTheReadingCountAtItsEdges(t *testing.T) {
 }
 
 // On a passage that reports something said or done, the coverage check
-// reads the two stances in the words answers use for them, and wants them in
-// different readings. Each line below is read as the stance it states, none
-// of the neutral lines as either; and good.md with its two stances folded
-// into one reading trips the coverage check alone, since which is which is
-// then not said. Control: a reading that states neither stance, added to
-// good.md, changes nothing.
+// reads the two stances in the words answers use for them, with a curly
+// apostrophe as with a straight one, and wants them in different readings.
+// Each line below is read as the stance it states, none of the neutral
+// lines as either; and good.md with its two stances folded into one reading
+// trips the coverage check alone, since which is which is then not said.
+// Control: a reading that states neither stance, added to good.md, changes
+// nothing. The directory control for the apostrophe is said-by-gods-word.md.
 func TestCompareScorerTellsTheTwoStancesApart(t *testing.T) {
 	for _, line := range []string{
 		"It takes the words as Jesus' own words, spoken to Peter as the Gospel reports them.",
@@ -1749,8 +1963,9 @@ func TestCompareScorerTellsTheTwoStancesApart(t *testing.T) {
 		"It assumes the Apostle Paul wrote the letter under divine inspiration.",
 		"This view assumes the text is divinely inspired and written by Paul.",
 		"Traditional readers assume the text is a genuine, supernaturally inspired prophecy given by God to Isaiah.",
+		"It assumes the Bible is God’s word, interpreted alongside Church tradition.",
 	} {
-		if !benchSaidOrDone.MatchString(line) || benchComposition.MatchString(line) {
+		if !statesSaidOrDone(line) || statesComposition(line) {
 			t.Errorf("%q is not read as taking the report as said or done", line)
 		}
 	}
@@ -1765,8 +1980,9 @@ func TestCompareScorerTellsTheTwoStancesApart(t *testing.T) {
 		"It treats the saying as the evangelist's own creation.",
 		"The tears are a later theological story added by the author.",
 		"The verse is Matthew's redaction of an earlier saying.",
+		"The exception clause is the evangelist’s own addition.",
 	} {
-		if !benchComposition.MatchString(line) || benchSaidOrDone.MatchString(line) {
+		if !statesComposition(line) || statesSaidOrDone(line) {
 			t.Errorf("%q is not read as taking the report as a later composition or explaining it naturally", line)
 		}
 	}
@@ -1780,8 +1996,9 @@ func TestCompareScorerTellsTheTwoStancesApart(t *testing.T) {
 		"It reads the words with the Church's tradition, which is its authority.",
 		"Scholars inspired by the Aramaic wordplay look for an early form of the saying.",
 		"The letter addresses a church in Ephesus, and its holders read it with Paul's other letters.",
+		"It reads the words with the Church’s tradition, which is its authority.",
 	} {
-		if benchSaidOrDone.MatchString(line) || benchComposition.MatchString(line) {
+		if statesSaidOrDone(line) || statesComposition(line) {
 			t.Errorf("control: %q states a stance", line)
 		}
 	}
