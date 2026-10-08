@@ -476,20 +476,36 @@ var (
 	// A first sentence that says the readings largely agree, in the words
 	// answers use: a word of extent and a word of agreement, in either
 	// order ("Readers across different traditions largely agree", "the
-	// main readings overlap a great deal"), with no negation in front of
-	// the agreement ("not all readers agree"); or little disagreement said
-	// outright. A sentence with an agreement word and no extent ("Readers
-	// agree on little here") has not said that they largely agree.
+	// main readings overlap a great deal", "almost everyone reads it the
+	// same way"), with no negation in front of the agreement in the same
+	// clause ("not all readers agree"); or little disagreement said
+	// outright, as a noun ("little real disagreement"), as few disagreeing
+	// ("few readers disagree") or as readings differing little. A sentence
+	// is read clause by clause, cut where it turns on a concession or a
+	// contrast, so that a sentence which says the readings largely agree
+	// and then concedes a point ("though there is no consensus on the
+	// date") has still said so, and one that opens on the concession
+	// ("Although not every reader agrees on the date, most concur on the
+	// meaning") is read past it. A sentence with an agreement word and no
+	// extent ("Readers agree on little here") has not said that they
+	// largely agree.
 	benchAgreeExtent = regexp.MustCompile(`(?i)\b(?:largely|broadly|broad|mostly|mainly|essentially|substantially|` +
-		`generally|general|widely|wide|overwhelmingly|most|all|every|nearly all|almost all|for the most part|` +
-		`on the whole|in the main|a great deal|much)\b`)
-	benchAgreeWord = regexp.MustCompile(`(?i)\b(?:agree\w*|concur\w*|overlap\w*|consensus|unanim\w*|common ground|` +
+		`generally|general|widely|wide|overwhelmingly|most|all|every|everyone|nearly all|almost all|for the most part|` +
+		`on the whole|in the main|a great deal|much|entirely|wholly)\b`)
+	benchAgreeWord = regexp.MustCompile(`(?i)\b(?:agree\w*|concur\w*|overlap\w*|converg\w*|consensus|unanim\w*|common ground|` +
 		`in common|alike|of one mind|the same (?:way|reading|meaning|sense|thing)|` +
 		`shar(?:e|es|ed|ing) (?:\w+ ){0,2}(?:reading|meaning|sense|understanding|view|ground|conviction))\b`)
 	benchAgreeNegated = regexp.MustCompile(`(?i)\b(?:not|no|never|hardly|seldom|rarely|little|few|without)\b(?: \w+){0,3} ` +
-		`(?:agree\w*|concur\w*|overlap\w*|consensus|unanim\w*|common ground|in common|alike|of one mind|shar\w+)\b`)
+		`(?:agree\w*|concur\w*|overlap\w*|converg\w*|consensus|unanim\w*|common ground|in common|alike|of one mind|shar\w+)\b`)
 	benchLittleDisagreement = regexp.MustCompile(`(?i)\b(?:little|no|hardly any|scarcely any|without|not much) (?:\w+ ){0,2}` +
-		`(?:disagreement|dispute|controversy|division|divergence)\b`)
+		`(?:disagreement|dispute|controversy|division|divergence)\b|` +
+		`\b(?:few|hardly any|scarcely any|almost no|not many) (?:\w+ ){0,2}(?:disagree\w*|differ(?:s|ed)?|dispute\w*|diverge\w*|dissent\w*)\b|` +
+		`\b(?:differ(?:s|ed)?|disagree\w*|diverge\w*) (?:\w+ )?(?:little|hardly|scarcely|barely)\b`)
+	// Where a sentence turns: a concession or a contrast after a comma or
+	// a semicolon, or one the sentence opens on, which runs to its first
+	// comma.
+	benchClauseBreak       = regexp.MustCompile(`(?i)[,;]\s+(?:though|although|even though|but|yet|while|whereas)\b|;\s+`)
+	benchLeadingConcession = regexp.MustCompile(`(?i)^\s*(?:although|though|even though|while|whereas)\b`)
 
 	benchURL        = regexp.MustCompile(`(?i)\bhttps?://|\bwww\.`)
 	benchPage       = regexp.MustCompile(`\bpp?\.\s?\d`)
@@ -654,13 +670,31 @@ func statesComposition(text string) bool { return benchComposition.MatchString(b
 
 // saysLargelyAgree reads a sentence for the statement the prompt asks of a
 // passage whose readings largely agree, with its apostrophes straightened
-// as the stances are.
+// as the stances are, one clause at a time: the sentence has said so if
+// any clause of it has, and a negation stands only against the agreement
+// in its own clause.
 func saysLargelyAgree(sentence string) bool {
-	s := benchStraighten(sentence)
-	if benchLittleDisagreement.MatchString(s) {
-		return true
+	for _, clause := range benchClauses(benchStraighten(sentence)) {
+		if benchLittleDisagreement.MatchString(clause) {
+			return true
+		}
+		if benchAgreeExtent.MatchString(clause) && benchAgreeWord.MatchString(clause) && !benchAgreeNegated.MatchString(clause) {
+			return true
+		}
 	}
-	return benchAgreeExtent.MatchString(s) && benchAgreeWord.MatchString(s) && !benchAgreeNegated.MatchString(s)
+	return false
+}
+
+// benchClauses cuts a sentence where it turns, at a concession or a
+// contrast (benchClauseBreak), and when it opens on a concession, at the
+// first comma that closes it.
+func benchClauses(s string) []string {
+	if benchLeadingConcession.MatchString(s) {
+		if i := strings.Index(s, ","); i >= 0 {
+			return append([]string{s[:i]}, benchClauses(s[i+1:])...)
+		}
+	}
+	return benchClauseBreak.Split(s, -1)
 }
 
 // firstSentence is an answer's first sentence as splitSentences cuts it: a
@@ -1925,10 +1959,16 @@ func TestCompareScorerHoldsTheRunawayGuardStrictly(t *testing.T) {
 // On a passage whose readings largely agree the prompt asks for that in the
 // first sentence, and the scorer reads the first sentence for it in the
 // words answers use: a word of extent and a word of agreement, in either
-// order, with no negation in front of the agreement, or little disagreement
-// said outright. Each line below is read as saying so; none of the lines
-// after them is, a heading among them, since an answer that opens on a
-// heading has said nothing first. A two-reading answer to John 11:35 that
+// order, with no negation in front of the agreement in the same clause, or
+// little disagreement said outright. Each line below is read as saying so,
+// among them the sentence that says it and then concedes a point ("though
+// there is no consensus on the date"), the one that opens on the
+// concession, and the ones that say it as few disagreeing, as readings
+// differing little, as everyone reading the verse the same way, or as the
+// readings converging; none of the lines after them is, a heading among
+// them, since an answer that opens on a heading has said nothing first, nor
+// a negation in the clause that holds the agreement, nor a sentence of
+// extent without agreement. A two-reading answer to John 11:35 that
 // opens on the sentence passes; the same answer with the sentence second
 // trips the balance check alone, naming the sentence that came first; and
 // on Matthew 16:18, whose readings part, good.md opens on a heading and
@@ -1946,6 +1986,12 @@ func TestCompareScorerWantsTheAgreeSentenceFirst(t *testing.T) {
 		"There is broad consensus on this verse across the churches.",
 		"Readers of every tradition agree on what the verse means.",
 		"Readers’ views largely concur here.",
+		"Readers largely agree on the meaning, though there is no consensus on the date.",
+		"Although not every reader agrees on the date, most concur on the meaning.",
+		"Few readers disagree about what this verse means.",
+		"The main readings of this verse differ little.",
+		"Almost everyone reads this verse the same way.",
+		"The readings of this verse converge almost entirely.",
 	} {
 		if !saysLargelyAgree(line) {
 			t.Errorf("%q is not read as saying the readings largely agree", line)
@@ -1961,6 +2007,11 @@ func TestCompareScorerWantsTheAgreeSentenceFirst(t *testing.T) {
 		"Readers agree on little here.",
 		"There is no agreement on the verse.",
 		"The verse is one of the most quoted in the Bible.",
+		"Not everyone agrees on this verse.",
+		"Most readers do not converge on a single meaning.",
+		"The readings differ widely on who the shepherd is.",
+		"Readers largely disagree on the meaning of the verse.",
+		"Readers agree on the date, though not on the meaning.",
 	} {
 		if saysLargelyAgree(line) {
 			t.Errorf("control: %q is read as saying the readings largely agree", line)
