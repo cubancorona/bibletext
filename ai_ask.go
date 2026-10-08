@@ -6,7 +6,6 @@ package bibletext
 // prose grounded in the selection (see buildAskPrompt in ai.go).
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
@@ -28,14 +27,16 @@ import (
 // means no tap ever lands "outside" it, so the popup can't self-dismiss and leave the
 // native reading overlay hidden — every exit runs through closeAsk, which restores it. On
 // desktop there's no soft keyboard, so a plain centered modal is cleaner.
-func promptAskQuestion(state *AppState, selectedText string) {
-	promptAskQuestionWith(state, selectedText, "")
+func promptAskQuestion(state *AppState, selectedText string, span selSpan) {
+	promptAskQuestionWith(state, selectedText, "", span)
 }
 
 // promptAskQuestionWith opens the sheet with question already in the field —
 // "" for every ordinary open. The light/dark reopen passes what the reader had
-// typed when the rebuild drained the sheet (sheet_reopen.go).
-func promptAskQuestionWith(state *AppState, selectedText, question string) {
+// typed when the rebuild drained the sheet (sheet_reopen.go). span is the
+// selection's position; the sheet names the verses it resolves to, as the
+// answer panel that follows will, and hands it on to that panel.
+func promptAskQuestionWith(state *AppState, selectedText, question string, span selSpan) {
 	if state == nil || state.window == nil {
 		return
 	}
@@ -74,7 +75,7 @@ func promptAskQuestionWith(state *AppState, selectedText, question string) {
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	title.TextSize = 20
 
-	ref := canvas.NewText(fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter), pal.Accent)
+	ref := canvas.NewText(aiPassageFor(state, selectedText, span).Ref, pal.Accent)
 	ref.TextStyle = fyne.TextStyle{Bold: true}
 	ref.TextSize = subheadingTextSize
 
@@ -95,7 +96,7 @@ func promptAskQuestionWith(state *AppState, selectedText, question string) {
 	entry.SetPlaceHolder("Ask a question about this passage…")
 	entry.SetText(question)
 	// Read when the rebuild comes, not now: the question as typed so far.
-	reopen := func() { promptAskQuestionWith(state, selectedText, entry.Text) }
+	reopen := func() { promptAskQuestionWith(state, selectedText, entry.Text, span) }
 
 	doAsk := func() {
 		q := strings.TrimSpace(entry.Text)
@@ -103,7 +104,7 @@ func promptAskQuestionWith(state *AppState, selectedText, question string) {
 			return
 		}
 		closeAsk()
-		showAIPanel(state, aiActionAsk, selectedText, q)
+		showAIPanel(state, aiActionAsk, selectedText, q, span)
 	}
 	entry.OnSubmitted = func(string) { doAsk() }
 

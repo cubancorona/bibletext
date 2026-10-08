@@ -6,7 +6,9 @@ package bibletext
 // Untagged: chapterText is untagged, so these run on every platform's CI.
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
@@ -54,11 +56,41 @@ func TestSelectionMenuMirrorsNativeLayout(t *testing.T) {
 			}
 		}
 	}
-	// The AI submenu carries the three study actions; Share carries all four
-	// forms — with citation, as image, as a link, and as a link with a note.
+	// The AI submenu is the study verbs, in order, each dispatching its own
+	// action string (read at the request seam, where the request parks);
+	// Share carries all four forms — with citation, as image, as a link, and
+	// as a link with a note.
 	ai := m.Items[3]
-	if ai.ChildMenu == nil || len(ai.ChildMenu.Items) != 3 {
+	if ai.ChildMenu == nil || len(ai.ChildMenu.Items) != len(aiStudyVerbs) {
 		t.Fatalf("Study with AI submenu wrong: %+v", ai.ChildMenu)
+	}
+	actions := make(chan string, 8)
+	never := make(chan struct{})
+	prevRun := aiActionRun
+	aiActionRun = func(ctx context.Context, _ *AppState, action, _, _ string, _ selSpan) (string, error) {
+		actions <- action
+		<-never
+		return "", ctx.Err()
+	}
+	t.Cleanup(func() { aiActionRun = prevRun })
+	state.window = app.NewWindow("menu")
+	for i, v := range aiStudyVerbs {
+		it := ai.ChildMenu.Items[i]
+		if it.Label != v.Label {
+			t.Errorf("study item %d is %q, want %q", i, it.Label, v.Label)
+		}
+		it.Action()
+		select {
+		case got := <-actions:
+			if got != v.Action {
+				t.Errorf("%q dispatched %q, want %q", it.Label, got, v.Action)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("%q never reached the request seam", it.Label)
+		}
+		if top := state.window.Canvas().Overlays().Top(); top != nil {
+			state.window.Canvas().Overlays().Remove(top)
+		}
 	}
 	if share := m.Items[4]; share.ChildMenu == nil || len(share.ChildMenu.Items) != 4 {
 		t.Fatalf("Share submenu wrong: %+v", share.ChildMenu)

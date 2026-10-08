@@ -18,8 +18,8 @@ import (
 // devOpenNames is every name BIBLETEXT_DEV_OPEN takes in a development build.
 var devOpenNames = []string{
 	"settings", "goto", "chapters", "versions", "votd", "votd-one", "votd-long",
-	"audio", "note", "ask", "ai-waiting", "xrefs-waiting", "share-image", "note-offer",
-	"link-notice", "version-loading", "version-error", "versions-more", "xrefs",
+	"audio", "note", "ask", "ai-waiting", "compare-waiting", "xrefs-waiting", "share-image", "note-offer",
+	"link-notice", "version-loading", "version-error", "versions-more", "xrefs", "compare",
 }
 
 // devOpenTabNames is every name BIBLETEXT_DEV_TAB takes in a development

@@ -8,7 +8,6 @@ package bibletext
 
 import (
 	"context"
-	"fmt"
 	"net/url"
 	"strings"
 	"time"
@@ -21,7 +20,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-func showAIPanel(state *AppState, action, selectedText, question string) {
+func showAIPanel(state *AppState, action, selectedText, question string, span selSpan) {
 	if state == nil || state.window == nil {
 		return
 	}
@@ -30,6 +29,10 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		return
 	}
 	pal := state.pal()
+	// The verses the header and the Report mail name, resolved exactly as the
+	// request resolves them (runAIAction), so the panel cites what the prompt
+	// cited.
+	passage := aiPassageFor(state, selectedText, span)
 
 	// The native overlay floats above the canvas; hide it while the modal is up.
 	if state.hideReadingOverlay != nil {
@@ -46,7 +49,7 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	title.TextSize = 22
 
-	ref := canvas.NewText(fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter), pal.Accent)
+	ref := canvas.NewText(passage.Ref, pal.Accent)
 	ref.TextStyle = fyne.TextStyle{Bold: true}
 	ref.TextSize = subheadingTextSize
 
@@ -137,20 +140,21 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 	copyBtn.Disable()
 
 	// Report lets a reader flag AI output (Guideline 1.2): it opens a pre-filled
-	// email to support with the question + the generated answer. Enabled once an
-	// answer is shown. Only this panel renders free-form AI prose — "Find" shows
-	// canonical scripture only — so this is the one surface that needs it.
+	// email to support naming the passage and the study action, with the
+	// question and the generated answer. Enabled once an answer is shown. Only
+	// this panel renders free-form AI prose — "Find" shows canonical scripture
+	// only — so this is the one surface that needs it.
 	reportBtn := widget.NewButton("Report", func() {
 		if current == "" {
 			return
 		}
-		mailBody := fmt.Sprintf(
-			"I'd like to report AI-generated content shown in BibleText.\n\nReference: %s %d\nQuestion: %s\n\nResponse:\n%s\n\nMy concern:\n",
-			state.CurrentBook, state.CurrentChapter, strings.TrimSpace(question), current)
 		mu := &url.URL{
-			Scheme:   "mailto",
-			Opaque:   SupportMailtoRecipient(),
-			RawQuery: url.Values{"subject": {"BibleText: report AI content"}, "body": {mailBody}}.Encode(),
+			Scheme: "mailto",
+			Opaque: SupportMailtoRecipient(),
+			RawQuery: url.Values{
+				"subject": {"BibleText: report AI content"},
+				"body":    {aiReportMailBody(action, passage.Ref, question, current)},
+			}.Encode(),
 		}
 		openExternalURL(mu)
 	})
@@ -315,7 +319,7 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		// without a second request. Only now — while a request is in flight the
 		// request belongs to this panel, which reopens itself when it lands
 		// (below), and a second reopen would stack two panels (sheet_reopen.go).
-		registerSheetReopen(state, popup, func() { showAIPanel(state, action, selectedText, question) })
+		registerSheetReopen(state, popup, func() { showAIPanel(state, action, selectedText, question, span) })
 		setAIAnswerText(answer, text)
 		// A word-wrapped RichText only reports its true height once it has wrapped
 		// at a known width. Pre-wrap at the body width so the height is right, then
@@ -326,12 +330,10 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		body.Refresh()
 		fitBody(answerScroll, answer.MinSize().Height+10)
 		// Re-measure once the real layout has landed so the height is exact.
-		time.AfterFunc(40*time.Millisecond, func() {
-			fyne.Do(func() {
-				answer.Refresh()
-				answerScroll.Refresh()
-				fitBody(answerScroll, answer.MinSize().Height+10)
-			})
+		studyRemeasure(func() {
+			answer.Refresh()
+			answerScroll.Refresh()
+			fitBody(answerScroll, answer.MinSize().Height+10)
 		})
 	}
 
@@ -424,7 +426,7 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		cancelFetch = cancel // so Close / Cancel can abandon THIS request
 		go func() {
 			defer cancelTimeout()
-			result, err := aiActionRun(ctx, state, action, selectedText, question)
+			result, err := aiActionRun(ctx, state, action, selectedText, question, span)
 			fyne.Do(func() {
 				if gen != fetchGen {
 					return // superseded — a newer request owns the panel now
@@ -447,7 +449,7 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 				if !userClosed && popup != nil && !popup.Visible() {
 					stopThinking()
 					if err == nil {
-						showAIPanel(state, action, selectedText, question)
+						showAIPanel(state, action, selectedText, question, span)
 					}
 					return
 				}
@@ -476,6 +478,32 @@ func showAIPanel(state *AppState, action, selectedText, question string) {
 		}
 	})
 	startFetch()
+}
+
+// studyRemeasure schedules the answer's second fit, once the real layout has
+// landed, so the panel fits the answer exactly. A variable for the same
+// reason as votdRemeasure: under the test driver fyne.Do runs on the timer's
+// own goroutine, and its font measurement would race the test's, so a test
+// that lands an answer runs the fit synchronously instead.
+var studyRemeasure = func(fit func()) {
+	time.AfterFunc(40*time.Millisecond, func() { fyne.Do(fit) })
+}
+
+// aiReportMailBody is the body of the Report mail: the passage as the panel
+// cited it (verses included, so the report names what was shown), the study
+// action, the reader's question when the action took one, and the answer.
+// A fixed action carries no question line at all, rather than an empty one.
+func aiReportMailBody(action, ref, question, answer string) string {
+	var b strings.Builder
+	b.WriteString("I'd like to report AI-generated content shown in BibleText.\n\n")
+	b.WriteString("Reference: " + ref + "\n")
+	// DRAFT wording for the line naming the action.
+	b.WriteString("Study action: " + aiActionTitle(action) + "\n")
+	if action == aiActionAsk {
+		b.WriteString("Question: " + strings.TrimSpace(question) + "\n")
+	}
+	b.WriteString("\nResponse:\n" + answer + "\n\nMy concern:\n")
+	return b.String()
 }
 
 // minF returns the smaller of two float32 values.

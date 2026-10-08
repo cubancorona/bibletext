@@ -1,10 +1,12 @@
 package bibletext
 
 // AI study actions. When the reader selects a passage and picks "Explain",
-// "Analyze context" or "Analyze translation" from the selection menu, the chosen
-// action + selected text arrive here, get turned into a prompt, and are sent to
-// the user's selected AI provider (see ai_providers.go). The response is shown in
-// a modal panel (see ai_panel.go).
+// "Analyze context", "Analyze translation" or "Compare perspectives" from the
+// selection menu, the chosen action + selected text arrive here, get turned
+// into a prompt, and are sent to the user's selected AI provider (see
+// ai_providers.go). The response is shown in a modal panel (see ai_panel.go).
+// The verbs the menus offer are listed once, in order, in ai_compare.go
+// (aiStudyVerbs); the comparison's own prompt lives there too.
 //
 // Bring-your-own-key: the user supplies a key per provider in settings
 // (ai_settings.go / ai_keystore.go). Nothing is embedded in the app.
@@ -23,7 +25,8 @@ const (
 	aiActionExplain     = "explain"
 	aiActionContext     = "context"
 	aiActionTranslation = "translation"
-	aiActionAsk         = "ask" // free-form question about the selection → narrative answer
+	aiActionCompare     = "compare" // the passage's differing readings, side by side (ai_compare.go)
+	aiActionAsk         = "ask"     // free-form question about the selection → narrative answer
 )
 
 // errNoAPIKey is a low-level "client constructed without a key" guard. The
@@ -74,6 +77,11 @@ func friendlyAIError(err error) string {
 	if errors.Is(err, errNoAPIKey) {
 		return "No API key configured. Open AI settings to add one."
 	}
+	var declined *aiDeclinedError
+	if errors.As(err, &declined) {
+		// DRAFT wording for the declined-passage line.
+		return "The model declined this passage. Try again, or choose a different model in AI settings."
+	}
 	var apiErr *apiHTTPError
 	if errors.As(err, &apiErr) {
 		switch apiErr.StatusCode {
@@ -95,11 +103,79 @@ func friendlyAIError(err error) string {
 	return "Couldn't reach the AI service. Check your connection and try again."
 }
 
+// aiDeclinedError is the provider withholding an answer on this passage: a
+// prompt it blocked, a reply it emptied for a safety or content reason, or a
+// model's refusal. Each provider reports it in its own field (ai_providers.go),
+// and each used to reach the reader as a plain error that friendlyAIError
+// could not tell from a dropped connection, so a reader on a contested
+// passage was told to check their network. The remedy is the one the panel's
+// Try again button offers: ask again, or switch model.
+type aiDeclinedError struct{ reason string }
+
+func (e *aiDeclinedError) Error() string {
+	return "the model declined this passage (" + e.reason + ")"
+}
+
 // isNoKeyError reports whether the panel should offer "Open AI settings" rather
 // than "Try again".
 func isNoKeyError(err error) bool {
 	var nk *noKeyError
 	return errors.As(err, &nk) || errors.Is(err, errNoAPIKey)
+}
+
+// --- The passage a request is about -----------------------------------------
+
+// aiPassage is what a study prompt may name about the selection: the chapter
+// it was made in, the verses it resolves to, the citation the share card
+// would carry for the same selection, the cleaned text and the translation.
+// Ref is "John 3:16", "John 3:16–18" (an en dash for a range, as the share
+// card writes it), or "John 3" when no verse can be pinned. Lo and Hi are
+// 0,0 then.
+type aiPassage struct {
+	Book    string
+	Chapter int
+	Lo, Hi  int
+	Ref     string
+	Text    string
+	Version string
+}
+
+// aiPassageFor resolves the selection once, in the share card's order
+// (prepareShareQuoteIn), so the prompt, the panel header, the Report mail and
+// the share card all cite the same verses for one and the same drag. The
+// share pipeline's normalize places the selection first: a span positionally,
+// dropping a verse that contributes no words; a selection that arrives with
+// no position (the legacy Entry pane, the plain-text page the Mac and the
+// iPhone and iPad show when a chapter fails to import, a whitespace-only
+// selection on the styled pane) at its first copy in the chapter that splits
+// no word. Only where that declines does selectionVersesIn answer: the raw
+// span for a single partial word, the probe matching for the zero span. The
+// probe alone over-attributes a selection with no position — it matches the
+// first 24 runes of every verse, so a repeated refrain is every verse that
+// carries it and a verse whose words open another verse is both — and the
+// cross-references panel, which still takes it first (selectionVerses), can
+// name more verses than the card for such a drag. A state without a Bible, or
+// a selection nothing resolves, cites the chapter alone.
+func aiPassageFor(state *AppState, text string, span selSpan) aiPassage {
+	p := aiPassage{Text: text}
+	if state == nil {
+		return p
+	}
+	p.Book, p.Chapter = readerChapter(state)
+	p.Version = state.currentVersion().Name
+	p.Ref = fmt.Sprintf("%s %d", p.Book, p.Chapter)
+	if state.Bible == nil {
+		return p
+	}
+	if _, lo, hi, _, ok := normalizeShareSelectionIn(state, p.Book, p.Chapter, text, span); ok && lo >= 1 {
+		p.Lo, p.Hi = lo, hi
+	} else if vs := selectionVersesIn(state, p.Book, p.Chapter, text, span); len(vs) > 0 {
+		p.Lo, p.Hi = vs[0].Verse, vs[len(vs)-1].Verse
+	}
+	if p.Lo > 0 {
+		p.Ref = verseRangeCitation(p.Book, p.Chapter, p.Lo, p.Hi)
+	}
+	return p
 }
 
 // --- Prompts ----------------------------------------------------------------
@@ -110,6 +186,8 @@ func aiActionTitle(action string) string {
 		return "Context"
 	case aiActionTranslation:
 		return "Translation"
+	case aiActionCompare:
+		return "Perspectives"
 	case aiActionAsk:
 		return "Answer"
 	default:
@@ -117,29 +195,48 @@ func aiActionTitle(action string) string {
 	}
 }
 
-func buildAIPrompt(action, book string, chapter int, text, version string) string {
+// aiReadingsSentence is what every prose prompt says about a passage that is
+// read more than one way: name the readings and what each rests on, and let
+// the wording of the passage weigh, rather than flatten the difference into
+// "scholars disagree". The comparison verb has its own, fuller contract
+// (ai_compare.go); this is the one sentence the four prose verbs share.
+const aiReadingsSentence = "Where this passage is read differently, name the main readings, " +
+	"who holds them and the assumption each rests on, and say what the wording of the " +
+	"passage counts for or against; where a point is uncertain, say so briefly. Do not " +
+	"quote anyone, and name a document or writer only when you are sure of it."
+
+func buildAIPrompt(action string, p aiPassage) string {
 	const preamble = "You are a knowledgeable, even-handed Bible study assistant. " +
 		"Write in clear, plain language for a general reader and keep it concise — a " +
-		"few short paragraphs at most. Where scholars disagree or a point is uncertain, " +
-		"say so briefly rather than overstating. Do not use markdown headings or bullet lists."
+		"few short paragraphs at most. " + aiReadingsSentence +
+		" Do not use markdown headings or bullet lists."
 
 	var task string
 	switch action {
 	case aiActionContext:
 		task = "Explain the context of the passage below: who wrote it and to whom, what " +
 			"is happening in the surrounding narrative, and how it fits the historical, " +
-			"literary, and theological themes of " + book + "."
+			"literary, and theological themes of " + p.Book + "."
 	case aiActionTranslation:
 		task = "Discuss translation considerations for the passage below: notable Hebrew or " +
 			"Greek words behind the English, how major English translations render it " +
 			"differently, and nuances that are hard to carry into English. The quoted text " +
-			"is from the " + version + "."
+			"is from the " + p.Version + "."
 	default:
 		task = "Explain what the passage below means: its main idea, any imagery or terms a " +
 			"general reader might not know, and how its parts connect."
 	}
 
-	return fmt.Sprintf("%s\n\n%s\n\nPassage (%s %d):\n%q", preamble, task, book, chapter, text)
+	return fmt.Sprintf("%s\n\n%s\n\n%s", preamble, task, aiPassageLines(p))
+}
+
+// aiPassageLines is the tail every study prompt ends on: the citation the
+// share card would carry, then the cleaned selection between curly quotation
+// marks. The text goes in as it stands, not through %q: that quoting wrote an
+// authored poem-line break as the two characters backslash and n, and the
+// model read a line of poetry as prose with a stray escape in it.
+func aiPassageLines(p aiPassage) string {
+	return fmt.Sprintf("Passage (%s):\n“%s”", p.Ref, p.Text)
 }
 
 // buildAskPrompt turns a reader's free-form question about the selected passage into a
@@ -147,17 +244,44 @@ func buildAIPrompt(action, book string, chapter int, text, version string) strin
 // page's "Find", which returns matching verses. The answer is grounded in the passage and
 // may draw on directly relevant Scripture, but stays focused on the question, and says so
 // plainly when the passage doesn't address it rather than speculating.
-func buildAskPrompt(book string, chapter int, text, version, question string) string {
+func buildAskPrompt(p aiPassage, question string) string {
 	const preamble = "You are a knowledgeable, even-handed Bible study assistant. " +
 		"Answer the reader's question directly and clearly in plain language, and keep it " +
 		"concise — a few short paragraphs at most. Ground your answer in the passage below " +
 		"and its context; you may draw on directly relevant Scripture, but stay focused on " +
 		"the question. If the passage does not address the question, say so plainly rather " +
-		"than speculating. Where scholars disagree or a point is uncertain, say so briefly. " +
-		"Do not use markdown headings or bullet lists."
+		"than speculating. " + aiReadingsSentence +
+		" Do not use markdown headings or bullet lists."
 
-	return fmt.Sprintf("%s\n\nThe passage is from the %s.\n\nReader's question: %q\n\nPassage (%s %d):\n%q",
-		preamble, version, question, book, chapter, text)
+	return fmt.Sprintf("%s\n\nThe passage is from the %s.\n\nReader's question: %q\n\n%s",
+		preamble, p.Version, question, aiPassageLines(p))
+}
+
+// aiStudyPrompt is the prompt a study action sends: the three prose verbs
+// through buildAIPrompt, the comparison through its own builder, Ask with the
+// reader's question. The switch is the allow-list of action strings the app
+// has a prompt for. The native menus hand the action over as a string
+// (ai_menu_darwin.go, reading_android_export.go), and a string outside the
+// list used to fall into buildAIPrompt's default and run Explain under
+// Explain's title, so a mistyped or stale native entry answered as if it were
+// a different verb. It is an error now, before any cache lookup or request.
+func aiStudyPrompt(action string, p aiPassage, question string) (string, error) {
+	switch action {
+	case aiActionExplain, aiActionContext, aiActionTranslation:
+		return buildAIPrompt(action, p), nil
+	case aiActionCompare:
+		return buildComparePrompt(p), nil
+	case aiActionAsk:
+		return buildAskPrompt(p, question), nil
+	}
+	return "", fmt.Errorf("unknown study action %q", action)
+}
+
+// aiStudyActionKnown reports whether action is one aiStudyPrompt has a prompt
+// for, so a dispatch can drop an unknown string before it opens a panel.
+func aiStudyActionKnown(action string) bool {
+	_, err := aiStudyPrompt(action, aiPassage{}, "")
+	return err == nil
 }
 
 // --- Orchestration + cache --------------------------------------------------
@@ -185,17 +309,43 @@ func aiCacheSet(key, value string) {
 	aiCacheMu.Unlock()
 }
 
+// aiRequestScope is the cache scope of one study request. The fixed actions
+// (Explain / Context / Translation) are scoped by the action alone; "ask"
+// carries a free-form question, which is folded in (same passage, new
+// question → fresh answer). The model is part of the scope too: a
+// faster-model switch re-asks the same passage+action, and the superseded
+// request can still settle and cache — under one shared key, which model's
+// prose the panel later serves would be whichever wrote last. Distinct keys
+// keep every answer filed under the model that produced it. The verse range
+// enters a fixed action's scope only when the selection resolved to verses:
+// the prompt then names them, so an answer written for "Psalms 136:3" must
+// never be served for the identical refrain selected at verse 10, and a
+// request that resolved to no verse keeps the key it always had. The
+// question is free-form and may hold any character, so it is the last field
+// and the range always precedes it, 0-0 when no verse resolved: a question
+// that ends in the text of a range cannot then be filed under that range.
+func aiRequestScope(id, model, action, question string, p aiPassage) string {
+	if action == aiActionAsk {
+		return fmt.Sprintf("%s|%s|ask|%d-%d|%s", id, model, p.Lo, p.Hi, question)
+	}
+	scope := id + "|" + model + "|" + action
+	if p.Lo > 0 {
+		scope += fmt.Sprintf("|%d-%d", p.Lo, p.Hi)
+	}
+	return scope
+}
+
 // runAIAction returns the analysis for a selection using the active provider and
-// the user's key. Results are cached (keyed by provider+action+passage) so
+// the user's key. Results are cached (keyed by provider+model+action+passage) so
 // re-opening the same thing doesn't spend another request.
 // aiActionRun is a seam over the study-action call (twin of aiSearchGenerate),
 // so tests can observe the context a study request runs under — the only way to
 // prove Close and Cancel abandon the REQUEST rather than just the spinner.
-var aiActionRun = func(ctx context.Context, state *AppState, action, selectedText, question string) (string, error) {
-	return runAIAction(ctx, state, action, selectedText, question)
+var aiActionRun = func(ctx context.Context, state *AppState, action, selectedText, question string, span selSpan) (string, error) {
+	return runAIAction(ctx, state, action, selectedText, question, span)
 }
 
-func runAIAction(ctx context.Context, state *AppState, action, selectedText, question string) (string, error) {
+func runAIAction(ctx context.Context, state *AppState, action, selectedText, question string, span selSpan) (string, error) {
 	store := state.keys()
 	id := store.activeProvider()
 	info, ok := providerByID(id)
@@ -204,26 +354,15 @@ func runAIAction(ctx context.Context, state *AppState, action, selectedText, que
 		id = info.ID
 	}
 
-	book, chapter := state.CurrentBook, state.CurrentChapter
-	version := state.currentVersion().Name
-
-	// The fixed actions (Explain / Context / Translation) build their prompt from the
-	// action alone; "ask" carries a free-form question, so it builds a different prompt and
-	// folds the question into the cache scope (same passage, new question → fresh answer).
-	// The MODEL is part of the scope too: a faster-model switch re-asks the same
-	// passage+action, and the superseded request can still settle and cache —
-	// under one shared key, which model's prose the panel later serves would be
-	// whichever wrote last. Distinct keys keep every answer filed under the
-	// model that produced it.
-	model := activeModelFor(store, id)
-	scope := id + "|" + model + "|" + action
-	prompt := buildAIPrompt(action, book, chapter, selectedText, version)
-	if action == aiActionAsk {
-		scope = id + "|" + model + "|ask|" + question
-		prompt = buildAskPrompt(book, chapter, selectedText, version, question)
+	p := aiPassageFor(state, selectedText, span)
+	prompt, err := aiStudyPrompt(action, p, question)
+	if err != nil {
+		return "", err
 	}
+	model := activeModelFor(store, id)
+	scope := aiRequestScope(id, model, action, question, p)
 
-	cacheKey := aiCacheKey(scope, book, chapter, selectedText)
+	cacheKey := aiCacheKey(scope, p.Book, p.Chapter, p.Text)
 	if cached, ok := aiCacheGet(cacheKey); ok {
 		return cached, nil
 	}
@@ -243,11 +382,13 @@ func runAIAction(ctx context.Context, state *AppState, action, selectedText, que
 
 // dispatchAIAction is the entry point the native selection-menu callback calls
 // (on the Fyne UI goroutine). It opens the result panel, which drives the fetch.
-// span rides the same ABI as the study dispatch so both callbacks carry the
-// selection's position; the AI prompts name only book+chapter (buildAIPrompt),
-// so nothing here consumes it yet — an AI verb that cites verses must take it
-// from this parameter, never re-derive it from the words.
-func dispatchAIAction(state *AppState, action, selectedText string, _ selSpan) {
+// span is the selection's position as the pane resolved it, on the same ABI
+// as the study dispatch; it rides with the text through the panel to the
+// request, where aiPassageFor turns it into the verses the prompt, the panel
+// header, the Report mail and the cache key name. The words alone cannot say
+// which verse they came from (selection_span.go), so every consumer takes the
+// span from here and none re-derives it.
+func dispatchAIAction(state *AppState, action, selectedText string, span selSpan) {
 	if state == nil {
 		return
 	}
@@ -256,6 +397,13 @@ func dispatchAIAction(state *AppState, action, selectedText string, _ selSpan) {
 	// but if a stale native menu ever delivered an AI action, drop it rather than
 	// open an AI panel.
 	if !aiFeaturesEnabled(state) {
+		return
+	}
+	// The same for an action string the app has no prompt for: the panel it
+	// would open titles itself and asks as Explain (aiStudyPrompt), so a stale
+	// or mistyped native menu entry would answer as a verb the reader did not
+	// choose. Dropped here, before any text leaves the selection.
+	if !aiStudyActionKnown(action) {
 		return
 	}
 	// The reader's selection carries the page's own typography with it — the
@@ -270,8 +418,8 @@ func dispatchAIAction(state *AppState, action, selectedText string, _ selSpan) {
 	// "Ask" first collects a free-form question (a small input sheet), then opens the
 	// answer panel; the fixed actions go straight to the panel.
 	if action == aiActionAsk {
-		promptAskQuestion(state, selectedText)
+		promptAskQuestion(state, selectedText, span)
 		return
 	}
-	showAIPanel(state, action, selectedText, "")
+	showAIPanel(state, action, selectedText, "", span)
 }

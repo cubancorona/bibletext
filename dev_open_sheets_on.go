@@ -19,6 +19,14 @@ package bibletext
 //	               request budget) and sends nothing. It stays in place for
 //	               the rest of the launch, so no study request of this run
 //	               reaches a provider.
+//	compare-waiting
+//	               the same, on a Compare perspectives request.
+//	compare        a comparison is answered at once by devServedStudy with
+//	               the hand-written control answer the fairness scorer must
+//	               pass (testdata/compare/_controls/good.md, embedded), on
+//	               Matthew 16:18; every other request parks as above, for
+//	               the rest of the launch. Nothing is recorded from a
+//	               provider: the answer is the test suite's own.
 //	xrefs-waiting  the panel's load is never run (crossRefsRun), for this
 //	               one opening only.
 //	xrefs          the load is run where it stands and answered at once
@@ -40,6 +48,7 @@ package bibletext
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"strings"
 )
@@ -52,9 +61,9 @@ type devSheet struct {
 }
 
 // devSheets is every sheet a launch can open, in the order of devOpenNames,
-// with today's verse of the day beside the two fixed passages. The two that
-// set state up to open as they do, every notice at once and Matthew 5, come
-// last.
+// with today's verse of the day beside the two fixed passages. The three that
+// set state up to open as they do, every notice at once, Matthew 5 and
+// Matthew 16, come last.
 func devSheets() []devSheet {
 	return []devSheet{
 		{"settings", "Settings", showAISettings},
@@ -70,8 +79,9 @@ func devSheets() []devSheet {
 		}},
 		{"audio", "the audio source menu", showAudioSourceMenu},
 		{"note", "the note composer", func(s *AppState) { promptShareNote(s, devQuote, selSpan{}) }},
-		{"ask", "the Ask sheet", func(s *AppState) { promptAskQuestion(s, devQuote) }},
+		{"ask", "the Ask sheet", func(s *AppState) { promptAskQuestion(s, devQuote, selSpan{}) }},
 		{"ai-waiting", "the AI answer panel, waiting for its answer", devOpenAIWaiting},
+		{"compare-waiting", "the AI answer panel, waiting for a comparison", devOpenCompareWaiting},
 		{"xrefs-waiting", "the cross-references panel, waiting for its list", devOpenCrossRefsWaiting},
 		{"share-image", "the share image preview", func(s *AppState) {
 			showShareImagePreview(s, devQuote, "John 3:16", s.currentVersion().Name)
@@ -88,6 +98,7 @@ func devSheets() []devSheet {
 		}},
 		{"versions-more", "the translation picker with eight more translations and every notice", devOpenVersionsMore},
 		{"xrefs", "the cross-references panel, listing Matthew 5:3", devOpenCrossRefsListed},
+		{"compare", "the AI answer panel, comparing the readings of Matthew 16:18", devOpenCompare},
 	}
 }
 
@@ -149,7 +160,7 @@ var devStudyWait = func(ctx context.Context) { <-ctx.Done() }
 
 // devParkedStudy answers a study request without asking anyone: it waits
 // until the panel abandons the request and returns why.
-func devParkedStudy(ctx context.Context, _ *AppState, _, _, _ string) (string, error) {
+func devParkedStudy(ctx context.Context, _ *AppState, _, _, _ string, _ selSpan) (string, error) {
 	devStudyWait(ctx)
 	return "", ctx.Err()
 }
@@ -158,7 +169,54 @@ func devParkedStudy(ctx context.Context, _ *AppState, _, _, _ string) (string, e
 // never sent, so the panel holds its waiting state.
 func devOpenAIWaiting(state *AppState) {
 	aiActionRun = devParkedStudy
-	showAIPanel(state, aiActionExplain, devQuote, "")
+	showAIPanel(state, aiActionExplain, devQuote, "", selSpan{})
+}
+
+// devOpenCompareWaiting opens the AI answer panel on a Compare perspectives
+// request that is never sent, so the panel holds its waiting state under the
+// comparison's title.
+func devOpenCompareWaiting(state *AppState) {
+	aiActionRun = devParkedStudy
+	showAIPanel(state, aiActionCompare, devQuote, "", selSpan{})
+}
+
+// devCompareAnswer is the comparison the compare name shows: the hand-written
+// control answer the fairness scorer must pass, written to the prompt's
+// contract over Matthew 16:18 in the World English Bible. Embedded, so a
+// simulator shows the rendered skeleton without a key, a provider or a spend;
+// never a recorded answer.
+//
+//go:embed testdata/compare/_controls/good.md
+var devCompareAnswer string
+
+// devPeterQuote is Matthew 16:18 in the World English Bible, the passage the
+// control answer compares, and the worked example of the comparison's design
+// (peterPassage in the host tests, held equal).
+const devPeterQuote = "I also tell you that you are Peter, and on this rock I will build my assembly, and the gates of Hades will not prevail against it."
+
+// devStudyServed is told the request devServedStudy is about to answer. A
+// variable so the host test can wait for the answer to land before it reads
+// the panel, as it waits for a parked request to start.
+var devStudyServed = func(context.Context) {}
+
+// devServedStudy answers a Compare perspectives request at once with the
+// control answer, and parks every other request as devParkedStudy does, so no
+// study request of the launch reaches a provider.
+func devServedStudy(ctx context.Context, state *AppState, action, text, question string, span selSpan) (string, error) {
+	if action != aiActionCompare {
+		return devParkedStudy(ctx, state, action, text, question, span)
+	}
+	devStudyServed(ctx)
+	return devCompareAnswer, nil
+}
+
+// devOpenCompare opens the AI answer panel on Matthew 16:18 with the control
+// comparison in place: the reader is put on Matthew 16 first, so the header
+// names the verse the way a reader's own selection would.
+func devOpenCompare(state *AppState) {
+	navigateToReference(state, "Matthew", 16)
+	aiActionRun = devServedStudy
+	showAIPanel(state, aiActionCompare, devPeterQuote, "", selSpanFromNative(18, 18))
 }
 
 // devOpenCrossRefsWaiting opens the cross-references panel with its load never

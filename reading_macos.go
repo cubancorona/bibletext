@@ -140,9 +140,10 @@ void btMacSetNotesEnabled(int on) { gBTMacNotesEnabled = on; }
 static int gBTAIEnabled = 1;
 void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
 
-// HBReadingTextView adds a "Study with AI" submenu (Explain /
-// Analyze context / Analyze translation) to the right-click selection menu and
-// hands the selected text to Go.
+// HBReadingTextView adds a "Study with AI" submenu (Explain / Analyze context /
+// Analyze translation / Compare perspectives: the verbs of aiStudyVerbs, which a
+// source test holds this list to) to the right-click selection menu and hands
+// the selected text to Go.
 @interface HBReadingTextView : NSTextView
 @end
 
@@ -218,7 +219,8 @@ void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
         NSMenu *ai = [[NSMenu alloc] initWithTitle:@"Study with AI"];
         for (NSArray *pair in @[@[@"Explain", @"explain"],
                                 @[@"Analyze context", @"context"],
-                                @[@"Analyze translation", @"translation"]]) {
+                                @[@"Analyze translation", @"translation"],
+                                @[@"Compare perspectives", @"compare"]]) {
             SEL action = NSSelectorFromString([NSString stringWithFormat:@"hbAI_%@:", pair[1]]);
             NSMenuItem *it = [[NSMenuItem alloc] initWithTitle:pair[0] action:action keyEquivalent:@""];
             it.target = self;
@@ -287,9 +289,13 @@ void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
     NSString *text = [self.textStorage.string substringWithRange:sel];
     bibleTextStudyMenuTapped((char *)action, (char *)text.UTF8String, lo, hi);
 }
+// One hbAI_<action>: method per pair above: the menu builds each selector from
+// the pair's action string by name, so a pair without its method is a silent
+// no-op at run time, and a source test holds the two lists equal.
 - (void)hbAI_explain:(id)sender     { [self hbSendAI:"explain"]; }
 - (void)hbAI_context:(id)sender     { [self hbSendAI:"context"]; }
 - (void)hbAI_translation:(id)sender { [self hbSendAI:"translation"]; }
+- (void)hbAI_compare:(id)sender     { [self hbSendAI:"compare"]; }
 - (void)hbCrossRefs:(id)sender      { [self hbSendStudy:"crossref"]; }
 - (void)hbShare_cite:(id)sender     { [self hbSendStudy:"share-cite"]; }
 - (void)hbShare_image:(id)sender    { [self hbSendStudy:"share-image"]; }

@@ -218,9 +218,10 @@ static CGFloat    gWashBuiltWidth = 0;
 static NSUInteger gWashBuiltLen   = 0;
 static void btIOSRebuildWash(void);
 
-// HBReadingTextView adds a "Study with AI" submenu (Explain /
-// Analyze context / Analyze translation) to the standard selection menu and hands
-// the selected text to Go. It's its own delegate so it can implement the iOS 16+ menu hook.
+// HBReadingTextView adds a "Study with AI" submenu (Explain / Analyze context /
+// Analyze translation / Compare perspectives: the verbs of aiStudyVerbs, which a
+// source test holds this list to) to the standard selection menu and hands the
+// selected text to Go. It's its own delegate so it can implement the iOS 16+ menu hook.
 @interface HBReadingTextView : UITextView <UITextViewDelegate,
     UIGestureRecognizerDelegate, UIEditMenuInteractionDelegate>
 @property (nonatomic, strong) UIEditMenuInteraction *hlMenu API_AVAILABLE(ios(16.0));
@@ -281,6 +282,7 @@ static void btIOSRebuildWash(void);
                                   make(@"Explain", @"explain"),
                                   make(@"Analyze context", @"context"),
                                   make(@"Analyze translation", @"translation"),
+                                  make(@"Compare perspectives", @"compare"),
                               ]];
 
     // Share verse → with citation / as image (both go to the iOS share sheet).

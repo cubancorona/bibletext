@@ -2138,12 +2138,5 @@ func citationForSelectionIn(state *AppState, book string, ch int, text string, s
 	if len(matched) == 0 {
 		return fmt.Sprintf("%s %d", book, ch)
 	}
-	lo, hi := matched[0].Verse, matched[len(matched)-1].Verse
-	switch {
-	case lo == hi:
-		return fmt.Sprintf("%s %d:%d", book, ch, lo)
-	default:
-		// Bluebook uses an en dash (not a hyphen) for a span of verses.
-		return fmt.Sprintf("%s %d:%d–%d", book, ch, lo, hi)
-	}
+	return verseRangeCitation(book, ch, matched[0].Verse, matched[len(matched)-1].Verse)
 }

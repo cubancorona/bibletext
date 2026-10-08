@@ -6,8 +6,9 @@ selectable `TextView` in a `Dialog` floated over the Fyne GL surface —
 `UITextView`, so readers get real long-press selection with drag handles, the
 floating toolbar, and BibleText's study menu — the same Go dispatch as iOS.
 **"Study with AI" sits INLINE on the floating toolbar** (a plain item that
-opens a popup with Explain / Analyze context / Analyze translation, anchored
-at the selection — Android's floating toolbar can't show a SubMenu inline and
+opens a popup with Explain / Analyze context / Analyze translation / Compare
+perspectives, anchored at the selection — Android's floating toolbar can't
+show a SubMenu inline and
 flattens SubMenus in its overflow, so a real submenu would bury the AI verbs
 while hoisting Cross-references above them). Cross-references also gets an
 inline slot when there's room; Share with citation / Share as image live in

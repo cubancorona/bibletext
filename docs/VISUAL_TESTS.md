@@ -22,10 +22,12 @@ auto-opens a sheet on the simulator for screenshots. The names cover every
 sheet a phone or tablet opens over the page, in its tallest and shortest
 forms and its waiting states: `settings`, `goto`, `chapters`, `versions`,
 `versions-more`, `votd` (today's), `votd-one`, `votd-long`, `audio`, `note`,
-`ask`, `ai-waiting`, `xrefs-waiting`, `xrefs`, `share-image`, `note-offer`,
-`link-notice`, `version-loading` and `version-error` (`devSheets` in
-`dev_open_sheets_on.go` says what each opens, and how the waiting states are
-held without a download or an AI request).
+`ask`, `ai-waiting`, `compare-waiting`, `compare` (the answer panel with the
+hand-written control comparison of Matthew 16:18 in place), `xrefs-waiting`,
+`xrefs`, `share-image`, `note-offer`, `link-notice`, `version-loading` and
+`version-error` (`devSheets` in `dev_open_sheets_on.go` says what each opens,
+and how the waiting and answered states are held without a download or an AI
+request).
 `SIMCTL_CHILD_BIBLETEXT_DEV_TAB=read|books|search` brings the launch up on
 that tab (`dev_open_tab_on.go`), so Books and Search, where a phone held
 sideways keeps its header and navigation, can be captured without a tap; a
@@ -234,7 +236,10 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       radio stacks on narrow phones with no clipped "Extra l…"; note bands
       re-measure. XL + read-along is the recorded still-open eyeball.
 - [ ] Selection menus per platform: exactly ONE Share; "Study with AI" only
-      with an assistant chosen; Cross-references takes the study slot when
+      with an assistant chosen, and then its four items on every surface —
+      Explain, Analyze context, Analyze translation, Compare perspectives
+      (the Android popup's fourth row, the Fyne child menu near the bottom
+      edge); Cross-references takes the study slot when
       AI is off; a selection inside the footnote section gets system verbs
       only. Android's toolbar must appear IMMEDIATELY on long-press.
 
@@ -303,6 +308,11 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
 - [ ] The AI answer panel: quote ellipsizes, Cancel exists while thinking,
       truncated answers carry the honest cut-off line, the reading text
       never paints THROUGH the panel, and a no-key error offers settings.
+      A comparison (title Perspectives; `compare` opens one without a key)
+      shows its headings: the readings, then Where they agree, Where they
+      part, and why, What the text settles, Questions to take back to the
+      text; a declined passage says so and offers Try again, not the
+      connection line.
 - [ ] Every AI wait names the model at work, on all five platforms: the
       Study with AI panel and Find show one line under the bar, over
       "Capable models can take a minute or more.", in that hint's size and
@@ -729,7 +739,7 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       mid-chapter, go to Books, quit, relaunch: the chapter opens where it
       was left, not at the top.
 - [ ] Android, AI on: select verse text, tap Study with AI, and while the
-      Explain / Analyze popup is up flip dark mode by schedule or
+      four-row study popup is up flip dark mode by schedule or
       `adb shell cmd uimode night yes`: the popup closes; it never floats in
       the old palette over the re-lit page.
 - [ ] Android, after the activity is recreated with the process alive —

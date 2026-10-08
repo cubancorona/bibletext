@@ -195,7 +195,7 @@ type phoneSheetOpener struct {
 
 var spanningSheets = []phoneSheetOpener{
 	{"the note composer", func(st *AppState) { promptShareNote(st, "For God so loved the world", selSpan{}) }},
-	{"the Ask sheet", func(st *AppState) { promptAskQuestion(st, "For God so loved the world") }},
+	{"the Ask sheet", func(st *AppState) { promptAskQuestion(st, "For God so loved the world", selSpan{}) }},
 }
 
 func TestSideInsets(t *testing.T) {

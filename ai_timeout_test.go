@@ -403,7 +403,7 @@ func stubAIAction(t *testing.T) (ctxs chan context.Context, release func()) {
 	ctxs = make(chan context.Context, 4)
 	done := make(chan struct{})
 	prev := aiActionRun
-	aiActionRun = func(ctx context.Context, _ *AppState, _, _, _ string) (string, error) {
+	aiActionRun = func(ctx context.Context, _ *AppState, _, _, _ string, _ selSpan) (string, error) {
 		ctxs <- ctx
 		<-done
 		return "", ctx.Err()
@@ -425,7 +425,7 @@ func TestStudyPanelCloseAbandonsRequest(t *testing.T) {
 	defer w.Close()
 	st := studyPanelState(t, w)
 
-	showAIPanel(st, aiActionExplain, "For God so loved the world", "")
+	showAIPanel(st, aiActionExplain, "For God so loved the world", "", selSpan{})
 	var ctx context.Context
 	select {
 	case ctx = <-ctxs:
@@ -463,7 +463,7 @@ func TestStudyPanelOffersCancelWhileThinking(t *testing.T) {
 	defer w.Close()
 	st := studyPanelState(t, w)
 
-	showAIPanel(st, aiActionExplain, "For God so loved the world", "")
+	showAIPanel(st, aiActionExplain, "For God so loved the world", "", selSpan{})
 	var ctx context.Context
 	select {
 	case ctx = <-ctxs:
@@ -493,7 +493,7 @@ func stubAIActionParked(t *testing.T) (ctxs chan context.Context) {
 	ctxs = make(chan context.Context, 4)
 	never := make(chan struct{}) // intentionally never closed
 	prev := aiActionRun
-	aiActionRun = func(ctx context.Context, _ *AppState, _, _, _ string) (string, error) {
+	aiActionRun = func(ctx context.Context, _ *AppState, _, _, _ string, _ selSpan) (string, error) {
 		ctxs <- ctx
 		<-never
 		return "", ctx.Err()
@@ -517,7 +517,7 @@ func TestStudyPanelFasterSwitchAbandonsTheSlowRequest(t *testing.T) {
 	defer w.Close()
 	st := studyPanelState(t, w)
 
-	showAIPanel(st, aiActionExplain, "For God so loved the world", "")
+	showAIPanel(st, aiActionExplain, "For God so loved the world", "", selSpan{})
 	var slow context.Context
 	select {
 	case slow = <-ctxs:
@@ -559,7 +559,7 @@ func TestStudyPanelStaleSettleCannotDisarmTheNewRequest(t *testing.T) {
 	}
 	calls := make(chan studyCall, 4)
 	prev := aiActionRun
-	aiActionRun = func(ctx context.Context, _ *AppState, _, _, _ string) (string, error) {
+	aiActionRun = func(ctx context.Context, _ *AppState, _, _, _ string, _ selSpan) (string, error) {
 		c := studyCall{ctx: ctx, release: make(chan struct{})}
 		calls <- c
 		// Block on the test's explicit release, NOT ctx.Done(): the release
@@ -576,7 +576,7 @@ func TestStudyPanelStaleSettleCannotDisarmTheNewRequest(t *testing.T) {
 	defer w.Close()
 	st := studyPanelState(t, w)
 
-	showAIPanel(st, aiActionExplain, "For God so loved the world", "")
+	showAIPanel(st, aiActionExplain, "For God so loved the world", "", selSpan{})
 	var slow studyCall
 	select {
 	case slow = <-calls:

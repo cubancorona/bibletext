@@ -33,8 +33,10 @@ func btaSelectionAction(cAction, cText *C.char, lo, hi C.int) {
 		return
 	}
 	fyne.Do(func() {
+		// The study verbs (aiStudyVerbs, held to this list by a source test)
+		// and Ask go to the AI dispatch; anything else is a selection action.
 		switch action {
-		case "ask", "explain", "context", "translation":
+		case "ask", "explain", "context", "translation", "compare":
 			dispatchAIAction(state, action, text, span)
 		default:
 			dispatchSelectionAction(state, action, text, span)

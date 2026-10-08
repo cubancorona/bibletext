@@ -52,7 +52,7 @@ func TestSheetWatchdogsArmThroughTheSeam(t *testing.T) {
 		open  func(*AppState)
 	}{
 		{"the audio source menu", false, showAudioSourceMenu},
-		{"the Ask sheet", true, func(s *AppState) { promptAskQuestion(s, "For God so loved the world") }},
+		{"the Ask sheet", true, func(s *AppState) { promptAskQuestion(s, "For God so loved the world", selSpan{}) }},
 		{"the Go to picker", true, showGotoPicker},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

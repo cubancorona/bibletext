@@ -75,7 +75,7 @@ func routeStudy(t *testing.T, replacement string) chan *resolverSend {
 	t.Helper()
 	sends := make(chan *resolverSend, 8)
 	prev := aiActionRun
-	aiActionRun = func(ctx context.Context, st *AppState, _, _, _ string) (string, error) {
+	aiActionRun = func(ctx context.Context, st *AppState, _, _, _ string, _ selSpan) (string, error) {
 		store := st.keys()
 		return routedResolver(store, store.activeProvider(), sends, replacement).generate(ctx, "study")
 	}
@@ -323,7 +323,7 @@ func TestTheStudyWaitNamesTheModelAndFollowsTheRetry(t *testing.T) {
 	defer w.Close()
 	st := studyPanelState(t, w)
 
-	showAIPanel(st, aiActionExplain, "God is love.", "")
+	showAIPanel(st, aiActionExplain, "God is love.", "", selSpan{})
 	first := nextSend(t, sends)
 	if first.model != geminiModel {
 		t.Fatalf("control: the first send went to %q, want the default %q", first.model, geminiModel)
@@ -355,7 +355,7 @@ func TestTheStudyWaitFollowsTheFasterModel(t *testing.T) {
 	defer w.Close()
 	st := studyPanelState(t, w)
 
-	showAIPanel(st, aiActionExplain, "God is love.", "")
+	showAIPanel(st, aiActionExplain, "God is love.", "", selSpan{})
 	nextSend(t, sends)
 	overlay := studyOverlay(t, w)
 	wantModelLine(t, overlay, "Gemini (Google) · "+geminiModel, "before the switch")
@@ -388,7 +388,7 @@ func TestTheStudyWaitIgnoresAStaleReport(t *testing.T) {
 	defer w.Close()
 	st := studyPanelState(t, w)
 
-	showAIPanel(st, aiActionExplain, "God is love.", "")
+	showAIPanel(st, aiActionExplain, "God is love.", "", selSpan{})
 	slow := nextCtx(t, ctxs)
 	overlay := studyOverlay(t, w)
 	wantModelLine(t, overlay, "", "before the request reports")
@@ -484,7 +484,7 @@ func TestTheStudyWaitWrapsALongModelAndKeepsCancelInReach(t *testing.T) {
 			w.Resize(fyne.NewSize(sc.w, sc.h))
 			st := studyPanelState(t, w)
 
-			showAIPanel(st, aiActionExplain, "God is love.", "")
+			showAIPanel(st, aiActionExplain, "God is love.", "", selSpan{})
 			ctx := nextCtx(t, ctxs)
 			p := studyOverlay(t, w)
 			reportAIModel(ctx, providerGemini, long)

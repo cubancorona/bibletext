@@ -87,7 +87,7 @@ func desktopSheets(t *testing.T) []desktopSheet {
 			}
 		}},
 		{"AI answer", func(t *testing.T, s *AppState) {
-			showAIPanel(s, aiActionExplain, "For God so loved the world", "")
+			showAIPanel(s, aiActionExplain, "For God so loved the world", "", selSpan{})
 			waitParked(t, studies, "the study request")
 		}},
 	}

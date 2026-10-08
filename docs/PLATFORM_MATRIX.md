@@ -453,6 +453,43 @@ place a fix on one does not reach the others.
     rarer and a title reads like the lines around it. It closes only if the
     app's minimum Android version reaches 15.
 
+**The fallback panes**
+
+32. **The mobile Fyne fallback pane has no Study with AI and no
+    Cross-references.** Its long-press menu (`reading_mobile.go`,
+    `selectableParagraph`) offers Copy, Look up and Share… only, where the
+    native panes offer the four study verbs and Cross-references beside
+    them. It is the page Android draws without the bridge dex and the dead
+    iOS Fyne path, and is unreachable in every shipping build (its Share… is
+    item 17 of `docs/ADDITIONS_AND_DROPS.md` for the same reason). *Risk:* a
+    reader who ever reached it would have no AI verbs at all, not a stale
+    set, and the menu-source test that holds the four native menus to
+    `aiStudyVerbs` (`study_verbs_source_test.go`) does not read this pane.
+33. **A selection that arrives with no verse position is placed by its
+    words, and the cross-references panel places it differently from the
+    share card and the study prompts.** The positional panes resolve a
+    selection to its verses themselves (`selSpan`, `selection_span.go`); a
+    page with none — the legacy Entry pane behind the styled Windows and
+    Linux pane (`chapterTextScrollArea` in `reading_fyne.go`, dispatching
+    `selSpan{}`), the plain-text page the Mac, iPhone and iPad show when a
+    chapter fails to import, a whitespace-only selection on the styled pane
+    — hands over the zero span. The share card and every Study with AI verb
+    then place the selection at its first copy in the chapter that splits
+    no word (`normalizeShareSelectionIn`, taken first by
+    `prepareShareQuoteIn` and `aiPassageFor`), and only where that declines
+    fall back to matching the first 24 runes of every verse
+    (`selectionVersesIn`). The cross-references panel takes that matching
+    first (`selectionVerses`, `citationForSelection`), so for a repeated
+    wording it names every verse that carries it (Psalm 136's refrain, every
+    verse) and for a verse whose words open another verse it names both
+    (John 3:3 and 3:11), where the card and the prompt name one. *Risk:* on
+    those pages only, the cross-references header can name more verses than
+    the share card for the same drag, and pull references for them;
+    `TestAIPassageRefAgreesWithShareCitation` holds the card and the prompt
+    together and records the panel's wider answer as the control. Closes
+    when the panel takes the same order, which changes what it shows on
+    those pages and is a decision not yet taken.
+
 ## Deliberate exclusions
 
 Decisions, with the reason — so that none of these is ever mistaken for

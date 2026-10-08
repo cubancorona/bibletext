@@ -17,7 +17,7 @@ or right in the recipient's browser. No accounts, no server, no ads.
 | Reading | Study with AI | Share as image |
 |:---:|:---:|:---:|
 | ![Reading view with the words of Christ in red](docs/screenshots/reading.png) | ![Study any verse with AI](docs/screenshots/ai-study.png) | ![Share a verse as an image](docs/screenshots/share-image.png) |
-| Distraction-free reading — words of Christ in red | Explain, context & translation notes, with your own AI key | Any verse as shareable art with a clean citation |
+| Distraction-free reading — words of Christ in red | Explain, context & translation notes, or compare perspectives — with your own AI key | Any verse as shareable art with a clean citation |
 
 <details>
 <summary><b>More:</b> cross-references &amp; Gospel parallels</summary>
@@ -174,8 +174,9 @@ root), signing, emulator use, and distribution are covered in
   measure with comfortable leading and indented paragraphs, modelled on the
   U.S. Reports. See [docs/IPAD.md](docs/IPAD.md).
 - 🤖 **AI study** (bring your own key) — select any passage and have an AI
-  **Explain** it, **Analyze context**, or **Analyze translation**, using your own
-  Gemini / ChatGPT / Claude / Grok API key. There's also an AI **Find** that turns
+  **Explain** it, **Analyze context**, **Analyze translation**, or **Compare
+  perspectives** (several traditions' readings of it, side by side), using your
+  own Gemini / ChatGPT / Claude / Grok API key. There's also an AI **Find** that turns
   a plain-language request into matching passages on the Search tab. Optional and
   off-able (Settings → Assistant → None). See [AI study](#ai-study-bring-your-own-key)
   for exactly what is sent.
@@ -348,9 +349,10 @@ real text only loads once you've dropped the licensed file in place.
 ## AI study (bring your own key)
 
 Select a passage in the reader and the native selection menu gains a **Study with
-AI** submenu with three actions — **Explain**, **Analyze context**, and **Analyze
-translation**. The chosen action plus the selected text are sent to an AI provider
-of your choice, and the answer appears in a panel. (A free-form **Ask a question…**
+AI** submenu with four actions — **Explain**, **Analyze context**, **Analyze
+translation**, and **Compare perspectives**, which sets several named readings of
+the passage side by side under fixed headings. The chosen action plus the selected
+text are sent to an AI provider of your choice, and the answer appears in a panel. (A free-form **Ask a question…**
 verb also exists in the code but is not currently surfaced in the menu.) The whole
 AI surface can be turned off in Settings → Assistant → **None**. A separate AI
 **Find** on the Search
@@ -384,26 +386,30 @@ A `<PROVIDER>_API_KEY` environment variable (`GEMINI_API_KEY`, `OPENAI_API_KEY`,
 
 ### What gets sent
 
-Each action builds one prompt (`buildAIPrompt` in `ai.go`) and sends it as a
-single user message. Output is limited only by a `32768`-token runaway backstop
+Each action builds one prompt (`buildAIPrompt` in `ai.go`; the comparison has
+its own builder, `buildComparePrompt` in `ai_compare.go`, shown further down)
+and sends it as a single user message. Output is limited only by a `32768`-token runaway backstop
 — the prompt, not a spending cap, is what keeps answers short (a lower cap
 silently starved the reasoning models, which count their hidden thinking against
 it). Gemini and Grok requests are sent at temperature `0.4`, ChatGPT too except
 its reasoning families (`gpt-5`, `o*`), which — like Claude — use the provider's
 default. Identical requests are cached in memory, so re-opening the same
-analysis does not re-send. Only the text you selected — plus the book and chapter it came from — and
-the fixed instructions below ever leave the device:
+analysis does not re-send. Only the text you selected — plus the book, chapter and the verses it
+resolves to — and the fixed instructions below ever leave the device:
 
 ```
 You are a knowledgeable, even-handed Bible study assistant. Write in clear,
 plain language for a general reader and keep it concise — a few short paragraphs
-at most. Where scholars disagree or a point is uncertain, say so briefly rather
-than overstating. Do not use markdown headings or bullet lists.
+at most. Where this passage is read differently, name the main readings, who
+holds them and the assumption each rests on, and say what the wording of the
+passage counts for or against; where a point is uncertain, say so briefly. Do
+not quote anyone, and name a document or writer only when you are sure of it. Do
+not use markdown headings or bullet lists.
 
 {task}
 
-Passage ({Book} {Chapter}):
-"{selected text}"
+Passage ({Book} {Chapter}:{Verses}):
+“{selected text}”
 ```
 
 `{task}` is the only part that differs per action:
@@ -419,9 +425,50 @@ Passage ({Book} {Chapter}):
   from the {Version}." (the name of the active translation — e.g. the World English
   Bible or the Berean Standard Bible)
 
-The reference sent is the **book and chapter only** (e.g. `Passage (John 1)`), not
-the specific verse number. The separate **Test key** button in settings sends just
+The reference sent names the **book, chapter and the verses the selection resolves
+to** (e.g. `Passage (John 1:1–2)`), the same citation a share of that selection
+carries, or the chapter alone (`Passage (John 1)`) when no verse can be pinned to
+it. The separate **Test key** button in settings sends just
 `Reply with the single word: OK` to validate a key.
+
+**Compare perspectives** sends a prompt of its own, which asks for headings on
+purpose — one section per reading, then four fixed sections — so the panel can
+show the readings side by side. It ends on the same passage lines:
+
+```
+You are a knowledgeable, even-handed Bible study assistant. Write in clear,
+plain language for a general reader, and be succinct.
+
+Help the reader understand the passage below honestly: how different believers
+and scholars understand it, why they differ, and what the words of the passage
+themselves support.
+
+Set out the main readings side by side. For each one say what it takes the
+passage to mean, which words it rests on, what it assumes about the Bible and
+about anything supernatural in the passage, and who holds it, calling each
+group by the name it uses for itself. Where the passage is Scripture to more
+than one faith, give each faith's reading its own section. Where the passage
+reports something said or done, and some readers take it as reported while
+others take it as a later composition or explain it naturally, include both
+and say which is which. Then say where the readings agree, where they differ
+and why, and what the words of the passage settle or leave open. If the
+readings largely agree, say so in your first sentence and be brief. End with
+two or three numbered questions the reader can test against the words of the
+passage and the verses around it, and one asking what they brought to it.
+
+Give each reading a level-two heading, and then, also at level two, the
+headings "Where they agree", "Where they part, and why", "What the text
+settles" and "Questions to take back to the text".
+
+Put each reading as its own thoughtful holders would state it; do not choose
+for the reader, and do not invent quotations or references.
+
+The quoted text is from the {Version}. Verse numbers may appear inside the
+quotation.
+
+Passage ({Book} {Chapter}:{Verses}):
+“{selected text}”
+```
 
 ## Repository layout
 

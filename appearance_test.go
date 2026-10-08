@@ -841,7 +841,7 @@ func TestEveryRegisteredSheetComesBack(t *testing.T) {
 		{"a link notice", func(s *AppState) { showLinkVersionUnavailable(s, "New King James Version") }, "Shared in New King James Version"},
 		{"the download error", func(s *AppState) { showVersionLoadError(s, "World English Bible") }, "OK"},
 		{"the note-link offer", func(s *AppState) { offerNoteLinkChoice(s, "https://bibletext.co.uk/web/john/3/#v16", target) }, "Someone added a note"},
-		{"Ask", func(s *AppState) { promptAskQuestion(s, "For God so loved the world") }, "Ask about this passage"},
+		{"Ask", func(s *AppState) { promptAskQuestion(s, "For God so loved the world", selSpan{}) }, "Ask about this passage"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			h := newAppearanceHarness(t, true)
@@ -877,7 +877,7 @@ func TestAskSheetReopensWithTheQuestion(t *testing.T) {
 		})
 		return found
 	}
-	promptAskQuestion(h.state, "For God so loved the world")
+	promptAskQuestion(h.state, "For God so loved the world", selSpan{})
 	entry := question(h.top())
 	if entry == nil {
 		t.Fatal("control: no question field")

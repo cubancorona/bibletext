@@ -160,12 +160,14 @@ different verse on one device. The standard:
   the mighty; / He judges among the gods." — from its number or its first
   word to the full stop after "gods". Nothing of the superscription, the
   heading or verse 2 is selected.
-- The three Study with AI items — **Explain, Analyze context, Analyze
-  translation** — show **below the selection**, as a reader sees them after
-  choosing Study with AI. They cover neither the verse nor its number;
-  covering part of verse 2 is fine.
+- The Study with AI items — **Explain, Analyze context, Analyze
+  translation**, and from 1.2.20 **Compare perspectives** — show **below the
+  selection**, as a reader sees them after choosing Study with AI. They cover
+  neither the verse nor its number; covering part of verse 2 is fine. The
+  sets captured before 1.2.20 show three items; the retake goes with the
+  pending Play phone retake (docs/ROADMAP.md, Later, row 14).
 - On the Mac the context menu is open with Study with AI highlighted and its
-  submenu, the same three items, opening to the left inside the window. The
+  submenu, the same items, opening to the left inside the window. The
   selection starts just after the verse number, so Look Up quotes the verse
   rather than the number.
 - **The same verse on every device, in every store.**
@@ -272,8 +274,9 @@ needed, one at a time.
       `expr -l objc -- UIMenu *$all = [(id)[(UITextView *)gReadingTV delegate] textView:(UITextView *)gReadingTV editMenuForTextInRange:[(UITextView *)gReadingTV selectedRange] suggestedActions:@[]]`,
       then `po $all.children` and take the element titled "Study with AI":
       `expr -l objc -- UIMenu *$studyMenu = (UIMenu *)$all.children[<its index>]`.
-      `po $studyMenu.children` lists Explain, Analyze context and Analyze
-      translation.
+      `po $studyMenu.children` lists the Study with AI items (Explain,
+      Analyze context, Analyze translation and, from 1.2.20, Compare
+      perspectives).
    5. Present it below the selection through the text interaction's
       edit-menu assistant:
       `expr -l objc -- ((void (*)(id, SEL, long, id))objc_msgSend)([[(id)gReadingTV interactionAssistant] _editMenuAssistant], @selector(_presentEditMenuWithPreferredDirection:overrideMenu:), 1, $studyMenu)`.
@@ -457,7 +460,7 @@ password prompt. The Mac shots are driven with the mouse and keyboard.
    "gods" — on that line, never onto the next, where verse 2 begins — with
    one `input swipe <from x> <from y> <to x> <to y> 800` each, and confirm on
    a capture that exactly verse 1 is selected. Then open Study with AI from
-   the selection menu — on Android its three actions sit one level below the
+   the selection menu — on Android its actions sit one level below the
    platform's own selection menu — so that they show below the selection.
 10. Afterwards: `adb -s emulator-5580 shell am broadcast -a
     com.android.systemui.demo -e command exit`, `adb -s emulator-5580 shell wm
@@ -547,8 +550,9 @@ round passes with nothing flagged.
       recognised text, not only the picture.
 - [ ] Shot 08 against §2, from an enlarged crop of the selection read word by
       word: exactly verse 1 selected, nothing of the superscription, the
-      heading or verse 2; the three items labelled Explain, Analyze context
-      and Analyze translation, below the selection; the verse and its number
+      heading or verse 2; the Study with AI items, labelled Explain, Analyze
+      context, Analyze translation and, from 1.2.20, Compare perspectives,
+      below the selection; the verse and its number
       uncovered; the same verse as every other device's 08.
 - [ ] No key anywhere: shot 03's key field is empty.
 - [ ] A store build: no Links tab, no debug line.
