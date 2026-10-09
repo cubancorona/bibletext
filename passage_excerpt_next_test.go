@@ -29,8 +29,8 @@ func exactPreviewCitation(t *testing.T, root fyne.CanvasObject, want string) *wi
 		t.Fatalf("citation has %d segments, want one", len(found.Segments))
 	}
 	segment, ok := found.Segments[0].(*widget.TextSegment)
-	if !ok || segment.Text != want || segment.Style.Alignment != fyne.TextAlignTrailing || found.Wrapping != fyne.TextWrapWord {
-		t.Fatalf("citation must be one exact trailing-aligned wrapping string %q", want)
+	if !ok || segment.Text != want || segment.Style.Alignment != fyne.TextAlignLeading || found.Wrapping != fyne.TextWrapWord {
+		t.Fatalf("citation must be one exact left-aligned wrapping string %q", want)
 	}
 	return found
 }
@@ -66,10 +66,7 @@ func TestPassageExcerptPreviewWrapsCitationInsideSymmetricInsets(t *testing.T) {
 			t.Errorf("%s needs 16pt on both sides; left %vpt, right %vpt", name, left, right)
 		}
 	}
-	quoteBottom := driver.AbsolutePositionForObject(excerpt).Y + excerpt.Size().Height
-	if citationY := driver.AbsolutePositionForObject(citation).Y; citationY < quoteBottom {
-		t.Errorf("citation starts at %v above the quote's bottom %v", citationY, quoteBottom)
-	}
+	assertPassagePreviewSpacing(t, excerpt, citation)
 	renderer := test.WidgetRenderer(excerpt).(*noteExcerptRenderer)
 	if len(renderer.drawn()) != 3 {
 		t.Errorf("a long portrait quote must take exactly three rows: %v", renderer.drawn())
@@ -100,6 +97,7 @@ func TestPassagePreviewsKeepQuoteCitationAndNativeFieldInOrder(t *testing.T) {
 			popup := topPopup(t, win)
 			excerpt, renderer := noteSheetExcerpt(t, popup)
 			citation := exactPreviewCitation(t, popup, wantCitation)
+			assertPassagePreviewSpacing(t, excerpt, citation)
 			driver := fyne.CurrentApp().Driver()
 			quoteBottom := driver.AbsolutePositionForObject(excerpt).Y + float32(len(renderer.drawn()))*renderer.rowH
 			citationPosition := driver.AbsolutePositionForObject(citation)

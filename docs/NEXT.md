@@ -580,7 +580,10 @@ question field initially.
 
 Ask, Share with note and the AI answer panel use one inset passage preview:
 upright text in the reading face, indented on both sides, with a wrapping
-citation below it. The citation combines the passage and translation
+citation below it, aligned with the quote's left edge. Extra vertical space
+separates the block from the surrounding controls and the citation from the
+quote; short desktop composers tighten this space to keep clear of the header.
+The citation combines the passage and translation
 abbreviation, such as `Matthew 7:1–3 (NKJV)`. Long selections retain the
 excerpt's row cap and ellipsis. This presentation stays behind `next`; the
 ordinary Share with note and answer panel retain their current appearance.

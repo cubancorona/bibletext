@@ -1,6 +1,7 @@
 package bibletext
 
 import (
+	"math"
 	"strings"
 	"testing"
 
@@ -99,15 +100,29 @@ func assertCapturedPassagePreview(t *testing.T, popup *widget.PopUp, passage aiP
 		t.Fatalf("citation has %d segments, want one exact string", len(citation.Segments))
 	}
 	segment, ok := citation.Segments[0].(*widget.TextSegment)
-	if !ok || segment.Text != wantCitation || segment.Style.Alignment != fyne.TextAlignTrailing || citation.Wrapping != fyne.TextWrapWord {
-		t.Errorf("citation must be the exact trailing-aligned wrapping string %q", wantCitation)
+	if !ok || segment.Text != wantCitation || segment.Style.Alignment != fyne.TextAlignLeading || citation.Wrapping != fyne.TextWrapWord {
+		t.Errorf("citation must be the exact left-aligned wrapping string %q", wantCitation)
 	}
-	quoteBottom := fyne.CurrentApp().Driver().AbsolutePositionForObject(ex).Y + ex.Size().Height
-	if citationY := fyne.CurrentApp().Driver().AbsolutePositionForObject(citation).Y; citationY < quoteBottom {
-		t.Errorf("citation is above or over the preview: citation Y %v, quote bottom %v", citationY, quoteBottom)
-	}
+	assertPassagePreviewSpacing(t, ex, citation)
 	if sheetHas(popup, passage.Ref) || sheetHas(popup, passage.Version) {
 		t.Errorf("next preview retained a separate reference or full translation; texts %v", sheetTexts(popup))
+	}
+}
+
+func assertPassagePreviewSpacing(t *testing.T, excerpt *noteExcerpt, citation *widget.RichText) {
+	t.Helper()
+	if !excerpt.Visible() {
+		return
+	}
+	driver := fyne.CurrentApp().Driver()
+	quotePosition := driver.AbsolutePositionForObject(excerpt)
+	citationPosition := driver.AbsolutePositionForObject(citation)
+	if math.Abs(float64(citationPosition.X-quotePosition.X)) > 0.5 {
+		t.Errorf("citation must share the quote's left edge: quote X %v, citation X %v", quotePosition.X, citationPosition.X)
+	}
+	quoteBottom := quotePosition.Y + excerpt.Size().Height
+	if gap := citationPosition.Y - quoteBottom; gap < 8-0.5 {
+		t.Errorf("citation needs at least 8pt of space below the quote: gap %vpt", gap)
 	}
 }
 

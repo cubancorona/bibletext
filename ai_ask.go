@@ -148,11 +148,18 @@ func promptAskQuestionForPassage(state *AppState, passage aiPassage, question st
 		fit := func() {
 			w := min(float32(460), max(float32(280), cnv.Size().Width-80))
 			excerpt.setMaxLines(rows)
+			if nextRelease {
+				setPassagePreviewCompact(passageView, false)
+			}
 			popup.Resize(fyne.NewSize(w, card.MinSize().Height))
 			popup.Resize(fyne.NewSize(w, card.MinSize().Height))
 			room := clearOfHeader(cnv.Size().Height, cnv.Size().Height, headerClearance(state))
 			for n := rows; n > 1 && popup.MinSize().Height > room; n-- {
 				excerpt.setMaxLines(n - 1)
+				popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+			}
+			if nextRelease && popup.MinSize().Height > room {
+				setPassagePreviewCompact(passageView, true)
 				popup.Resize(fyne.NewSize(w, card.MinSize().Height))
 			}
 		}

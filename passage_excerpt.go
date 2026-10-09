@@ -47,15 +47,30 @@ func newPassageExcerptPreview(ref, version, text string, rows int, pal palette) 
 	citation := widget.NewRichText(&widget.TextSegment{
 		Text: passagePreviewCitation(ref, version),
 		Style: widget.RichTextStyle{
-			Alignment: fyne.TextAlignTrailing,
+			Alignment: fyne.TextAlignLeading,
 			ColorName: theme.ColorNamePrimary,
 			SizeName:  theme.SizeNameCaptionText,
 		},
 	})
 	citation.Wrapping = fyne.TextWrapWord
 	base := fyne.CurrentApp().Settings().Theme()
-	block := container.NewVBox(excerpt, container.NewThemeOverride(citation, passageCitationTheme{base}))
-	return container.New(layout.NewCustomPaddedLayout(0, 0, passageExcerptInset, passageExcerptInset), block), excerpt
+	block := container.New(layout.NewCustomPaddedVBoxLayout(12),
+		excerpt, container.NewThemeOverride(citation, passageCitationTheme{base}))
+	return container.New(layout.NewCustomPaddedLayout(8, 8, passageExcerptInset, passageExcerptInset), block), excerpt
+}
+
+// setPassagePreviewCompact lets a short desktop card give up decorative space
+// after its excerpt has reached the one-row floor, keeping controls reachable.
+func setPassagePreviewCompact(preview fyne.CanvasObject, compact bool) {
+	outer := preview.(*fyne.Container)
+	block := outer.Objects[0].(*fyne.Container)
+	vertical, gap := float32(8), float32(12)
+	if compact {
+		vertical, gap = 0, 8
+	}
+	outer.Layout = layout.NewCustomPaddedLayout(vertical, vertical, passageExcerptInset, passageExcerptInset)
+	block.Layout = layout.NewCustomPaddedVBoxLayout(gap)
+	outer.Refresh()
 }
 
 func (p aiPassage) previewText() string {
