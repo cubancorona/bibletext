@@ -137,20 +137,34 @@ func TestDispatchAIActionNoOpWhenOff(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 
-	// Positive control on a live window: with AI ON, an Ask dispatch opens the
-	// question sheet as a canvas overlay. (Ask is the safe control — unlike the
-	// fixed actions it makes no provider call until the question is submitted.)
-	// This proves the overlay channel observes the dispatch, so the AI-off
-	// assertions below can genuinely fail if the guard is ever lost.
+	// A positive control observes the overlay channel with AI enabled. Ask
+	// collects a question only in the gated build; a fixed-action stub keeps
+	// the ordinary-build control independent of providers and credentials.
+	reqs := stubStudyRequests(t)
 	onState := sampleState()
 	onState.aiKeys = newKeyStoreWith(newFakePrefs())
 	onWin := app.NewWindow("ai on")
 	onState.window = onWin
-	dispatchAIAction(onState, aiActionAsk, "In the beginning", selSpan{})
+	controlAction := aiActionExplain
+	if askQuestionEnabled {
+		controlAction = aiActionAsk
+	}
+	dispatchAIAction(onState, controlAction, "In the beginning", selSpan{})
 	if onWin.Canvas().Overlays().Top() == nil {
-		t.Fatal("control failed: with AI on, an Ask dispatch must open the question sheet")
+		t.Fatal("control failed: an available action with AI on must open an overlay")
+	}
+	if controlAction == aiActionExplain {
+		r := nextStudyRequest(t, reqs, "positive AI-enabled control")
+		r.answer <- "Synthetic answer."
+		settled(t, r)
 	}
 	onWin.Canvas().Overlays().Remove(onWin.Canvas().Overlays().Top())
+	if !askQuestionEnabled {
+		dispatchAIAction(onState, aiActionAsk, "In the beginning", selSpan{})
+		if onWin.Canvas().Overlays().Top() != nil {
+			t.Fatal("gated-off Ask opened an overlay")
+		}
+	}
 
 	// With the assistant on "None", the same dispatches must be dropped by the
 	// aiFeaturesEnabled guard: no panel, no sheet, no overlay of any kind.
@@ -248,6 +262,12 @@ func TestDispatchAIActionCarriesSpan(t *testing.T) {
 	win.Canvas().Overlays().Remove(win.Canvas().Overlays().Top())
 
 	dispatchAIAction(state, aiActionAsk, refrain, selSpanFromNative(2, 2))
+	if !askQuestionEnabled {
+		if win.Canvas().Overlays().Top() != nil {
+			t.Fatal("gated-off Ask opened a question sheet")
+		}
+		return
+	}
 	sheet := win.Canvas().Overlays().Top()
 	if sheet == nil || !treeHasText(sheet, "Ask about this passage") {
 		t.Fatalf("the Ask dispatch did not open the question sheet; texts %v", treeTexts(sheet))

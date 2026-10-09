@@ -13,6 +13,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 )
 
 func menuLabels(m *fyne.Menu) []string {
@@ -37,7 +38,7 @@ func TestPlainSelection(t *testing.T) {
 
 func TestSelectionMenuMirrorsNativeLayout(t *testing.T) {
 	app := test.NewApp()
-	defer app.Quit()
+	t.Cleanup(app.Quit)
 
 	state := sampleState()
 	state.aiKeys = newKeyStoreWith(newFakePrefs())
@@ -64,32 +65,118 @@ func TestSelectionMenuMirrorsNativeLayout(t *testing.T) {
 	if ai.ChildMenu == nil || len(ai.ChildMenu.Items) != len(aiStudyVerbs) {
 		t.Fatalf("Study with AI submenu wrong: %+v", ai.ChildMenu)
 	}
-	actions := make(chan string, 8)
-	never := make(chan struct{})
+	type menuStudyRequest struct {
+		action  string
+		release chan struct{}
+		done    chan struct{}
+	}
+	requests := make(chan menuStudyRequest, 8)
+	stop := make(chan struct{})
 	prevRun := aiActionRun
 	aiActionRun = func(ctx context.Context, _ *AppState, action, _, _ string, _ selSpan) (string, error) {
-		actions <- action
-		<-never
-		return "", ctx.Err()
+		release := make(chan struct{})
+		done := make(chan struct{})
+		defer close(done)
+		requests <- menuStudyRequest{action: action, release: release, done: done}
+		select {
+		case <-ctx.Done():
+			// The test driver runs completion on this goroutine. Let the
+			// button finish its cancellation cleanup before returning.
+			select {
+			case <-release:
+			case <-stop:
+			}
+			return "", ctx.Err()
+		case <-stop:
+			return "", context.Canceled
+		}
 	}
-	t.Cleanup(func() { aiActionRun = prevRun })
 	state.window = app.NewWindow("menu")
+	dismissPanel := func() bool {
+		top := state.window.Canvas().Overlays().Top()
+		if top == nil {
+			return false
+		}
+		for _, label := range []string{"Close", "Cancel"} {
+			if button := findTreeButton(top, label); button != nil {
+				test.Tap(button)
+				return true
+			}
+		}
+		return false
+	}
+	attempted, observed := 0, 0
+	var completions []chan struct{}
+	t.Cleanup(func() {
+		dismissPanel()
+		close(stop)
+		// A failing assertion can leave a request not yet observed at the seam.
+		// Drain it before restoring the stub or closing the test window.
+		deadline := time.NewTimer(2 * time.Second)
+		defer deadline.Stop()
+		for observed < attempted {
+			select {
+			case request := <-requests:
+				observed++
+				completions = append(completions, request.done)
+			case <-deadline.C:
+				t.Errorf("request cleanup observed %d of %d attempted requests", observed, attempted)
+				aiActionRun = prevRun
+				state.window.Close()
+				return
+			}
+		}
+		for _, done := range completions {
+			<-done
+		}
+		aiActionRun = prevRun
+		state.window.Close()
+	})
 	for i, v := range aiStudyVerbs {
 		it := ai.ChildMenu.Items[i]
 		if it.Label != v.Label {
 			t.Errorf("study item %d is %q, want %q", i, it.Label, v.Label)
 		}
+		if v.Action != aiActionAsk {
+			attempted++
+		}
 		it.Action()
-		select {
-		case got := <-actions:
-			if got != v.Action {
-				t.Errorf("%q dispatched %q, want %q", it.Label, got, v.Action)
+		if v.Action == aiActionAsk {
+			top := state.window.Canvas().Overlays().Top()
+			if top == nil || !treeHasText(top, "Ask about this passage") {
+				t.Fatal("Ask did not open the question composer")
 			}
+			var entry *searchKeyEntry
+			var submit *widget.Button
+			walkTree(top, func(o fyne.CanvasObject) {
+				if e, ok := o.(*searchKeyEntry); ok {
+					entry = e
+				}
+				if b, ok := o.(*widget.Button); ok && b.Text == "Ask" {
+					submit = b
+				}
+			})
+			if entry == nil || submit == nil {
+				t.Fatal("question composer lacks field or Ask button")
+			}
+			entry.SetText("What does this passage mean?")
+			attempted++
+			submit.OnTapped()
+		}
+		select {
+		case request := <-requests:
+			observed++
+			completions = append(completions, request.done)
+			if request.action != v.Action {
+				t.Errorf("%q dispatched %q, want %q", it.Label, request.action, v.Action)
+			}
+			if !dismissPanel() {
+				t.Fatal("study panel has no Close or Cancel button")
+			}
+			close(request.release)
+			<-request.done
 		case <-time.After(2 * time.Second):
 			t.Fatalf("%q never reached the request seam", it.Label)
-		}
-		if top := state.window.Canvas().Overlays().Top(); top != nil {
-			state.window.Canvas().Overlays().Remove(top)
 		}
 	}
 	if share := m.Items[4]; share.ChildMenu == nil || len(share.ChildMenu.Items) != 4 {

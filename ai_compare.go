@@ -22,12 +22,20 @@ type aiStudyVerb struct {
 // aiStudyVerbs is the ordered list every selection menu offers — the Fyne
 // pane's submenu, the iPhone and iPad text view, the Mac text view and the
 // Android popup — and every menu is held to it, so the surfaces cannot drift.
-// Ask is not here: it exists in the code but no menu surfaces it.
-var aiStudyVerbs = []aiStudyVerb{
-	{Action: aiActionExplain, Label: "Explain"},
-	{Action: aiActionContext, Label: "Analyze context"},
-	{Action: aiActionTranslation, Label: "Analyze translation"},
-	{Action: aiActionCompare, Label: "Compare perspectives"},
+// Ask is available only while its refinement gate is enabled.
+var aiStudyVerbs = aiStudyVerbsForAsk(askQuestionEnabled)
+
+func aiStudyVerbsForAsk(enabled bool) []aiStudyVerb {
+	verbs := []aiStudyVerb{
+		{Action: aiActionExplain, Label: "Explain"},
+		{Action: aiActionContext, Label: "Analyze context"},
+		{Action: aiActionTranslation, Label: "Analyze translation"},
+		{Action: aiActionCompare, Label: "Compare perspectives"},
+	}
+	if enabled {
+		verbs = append(verbs, aiStudyVerb{Action: aiActionAsk, Label: "Ask a question"})
+	}
+	return verbs
 }
 
 // The five sections that follow the readings, in the order the prompt asks

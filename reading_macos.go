@@ -139,6 +139,8 @@ void btMacSetNotesEnabled(int on) { gBTMacNotesEnabled = on; }
 
 static int gBTAIEnabled = 1;
 void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
+static int gBTMacAskEnabled = 0;
+void btMacSetAskEnabled(int on) { gBTMacAskEnabled = on; }
 
 // HBReadingTextView adds a "Study with AI" submenu (Explain / Analyze context /
 // Analyze translation / Compare perspectives: the verbs of aiStudyVerbs, which a
@@ -220,7 +222,9 @@ void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
         for (NSArray *pair in @[@[@"Explain", @"explain"],
                                 @[@"Analyze context", @"context"],
                                 @[@"Analyze translation", @"translation"],
-                                @[@"Compare perspectives", @"compare"]]) {
+                                @[@"Compare perspectives", @"compare"],
+                                @[@"Ask a question", @"ask"]]) {
+            if ([pair[1] isEqualToString:@"ask"] && !gBTMacAskEnabled) continue;
             SEL action = NSSelectorFromString([NSString stringWithFormat:@"hbAI_%@:", pair[1]]);
             NSMenuItem *it = [[NSMenuItem alloc] initWithTitle:pair[0] action:action keyEquivalent:@""];
             it.target = self;
@@ -296,6 +300,7 @@ void btMacSetAIEnabled(int on) { gBTAIEnabled = on; }
 - (void)hbAI_context:(id)sender     { [self hbSendAI:"context"]; }
 - (void)hbAI_translation:(id)sender { [self hbSendAI:"translation"]; }
 - (void)hbAI_compare:(id)sender     { [self hbSendAI:"compare"]; }
+- (void)hbAI_ask:(id)sender         { [self hbSendAI:"ask"]; }
 - (void)hbCrossRefs:(id)sender      { [self hbSendStudy:"crossref"]; }
 - (void)hbShare_cite:(id)sender     { [self hbSendStudy:"share-cite"]; }
 - (void)hbShare_image:(id)sender    { [self hbSendStudy:"share-image"]; }
@@ -3456,6 +3461,11 @@ func syncNativeAIMenu(state *AppState) {
 		on = 1
 	}
 	C.btMacSetAIEnabled(on)
+	askOn := C.int(0)
+	if askQuestionEnabled {
+		askOn = 1
+	}
+	C.btMacSetAskEnabled(askOn)
 }
 
 // lastPushedBookChapter is the "book|chapter" held by the NSTextView — distinct

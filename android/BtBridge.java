@@ -706,6 +706,7 @@ public final class BtBridge {
     // thread, not the UI thread, so this is what formally guarantees the UI
     // thread sees the new value on the next selection.
     private static volatile boolean aiEnabled = true;
+    private static volatile boolean askEnabled = false;
 
     // Verse index for the current chapter's Spanned, built in setHtml by scanning
     // the verse-number SuperscriptSpans (Html.fromHtml turns <sup> into one).
@@ -1099,6 +1100,7 @@ public final class BtBridge {
     // on init and on change (from the Go/JNI thread — the volatile on aiEnabled
     // makes the write visible to the UI thread's onCreateActionMode read).
     public static void setAIEnabled(boolean on) { aiEnabled = on; }
+    public static void setAskEnabled(boolean on) { askEnabled = on; }
 
     // The reading palette, as last pushed by setStyle — the study popup below
     // draws itself in it, so it belongs to the page it floats over.
@@ -1195,9 +1197,11 @@ public final class BtBridge {
         // on the Go side, which a source test holds this list to).
         String[][] items = {{"Explain", "explain"}, {"Analyze context", "context"},
                             {"Analyze translation", "translation"},
-                            {"Compare perspectives", "compare"}};
+                            {"Compare perspectives", "compare"},
+                            {"Ask a question", "ask"}};
         for (String[] it : items) {
             final String action = it[1];
+            if ("ask".equals(action) && !askEnabled) continue;
             TextView row = new TextView(activity);
             row.setText(it[0]);
             row.setTextColor(lastTextColor);

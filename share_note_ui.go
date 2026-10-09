@@ -36,17 +36,18 @@ import (
 // was only re-asserted for 600ms after the sheet opened, and any later layout
 // change left the UITextView stranded where the slot used to be.
 //
-// open latches it: a slot from a closed sheet must never push frames, or a
-// stale relayout could reposition a native view belonging to nothing. quiet
-// holds its pushes while the sheet is refitted (settle).
+// open latches it and owner identifies the singleton editor: neither a closed
+// sheet nor one superseded by another composer may move the native field.
+// quiet holds its pushes while the sheet is refitted (settle).
 type noteEntrySlot struct {
 	widget.BaseWidget
 	open  *bool
 	quiet bool
+	owner uint64
 }
 
 func newNoteEntrySlot(open *bool) *noteEntrySlot {
-	s := &noteEntrySlot{open: open}
+	s := &noteEntrySlot{open: open, owner: noteEntryOwner}
 	s.ExtendBaseWidget(s)
 	return s
 }
@@ -71,12 +72,12 @@ func (s *noteEntrySlot) Move(p fyne.Position) {
 // (Resize/Move can fire mid-layout, before siblings have their final heights —
 // same double-push the reading overlay uses).
 func (s *noteEntrySlot) push() {
-	if s.open == nil || !*s.open || s.quiet {
+	if s.open == nil || !*s.open || s.quiet || s.owner != noteEntryOwner {
 		return
 	}
 	noteEntryFrameTo(s)
 	noteSheetAfter(50*time.Millisecond, func() {
-		if s.open != nil && *s.open {
+		if s.open != nil && *s.open && s.owner == noteEntryOwner {
 			noteEntryFrameTo(s)
 		}
 	})
@@ -96,7 +97,7 @@ func (s *noteEntrySlot) settle(relayout func()) {
 	s.push()
 }
 
-// The composer's platform seams, variables so a host test can lay out the
+// The composers' platform seams, variables so a host test can lay out the
 // sheet iOS gets and read what its native field would be told:
 //
 //   - noteEntryNative says whether this platform floats a native field over
@@ -120,13 +121,15 @@ var (
 	noteEntryNative  = nativeNoteEntrySupported
 	noteEntryFrameTo = setNativeNoteEntryFrameFromObject
 	noteEntryTyped   = nativeNoteEntryText
+	noteEntryShow    = showNativeNoteEntry
+	noteEntryHide    = hideNativeNoteEntry
 	noteSheetAfter   = func(d time.Duration, f func()) { sheetAfter(d, f) }
 	noteSheetArea    = func(c fyne.Canvas) (fyne.Position, fyne.Size) { return sheetArea(c) }
 )
 
-// noteEntryOnChanged is installed by the compose sheet while it is open, and
+// noteEntryOnChanged is installed by a compose sheet while it is open, and
 // fired (via fyne.Do) by the native field's //export callback on every edit —
-// it drives the live character counter. nil whenever no sheet is up.
+// it drives the note's live character counter. Ask installs no counter.
 var noteEntryOnChanged func()
 
 // noteEntryOwner counts compose sheets, so the native field and its counter
@@ -191,7 +194,7 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 		// its own by the time a watchdog runs this.
 		if owner == noteEntryOwner {
 			noteEntryOnChanged = nil
-			hideNativeNoteEntry() // no-op off iOS, and when the Fyne entry was used
+			noteEntryHide() // no-op off iOS, and when the Fyne entry was used
 		}
 		if popup != nil {
 			popup.Hide() // removes it from the overlay stack synchronously
@@ -481,7 +484,7 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 	// Resize/Move fired during the popup's layout pass above and keep firing on
 	// every relayout. The view stays hidden until its first real frame arrives,
 	// so mis-timing shows nothing rather than a box at (0,0).
-	showNativeNoteEntry(note, "Say something about this passage…", pal)
+	noteEntryShow(note, "Say something about this passage…", pal)
 	noteEntryOnChanged = updateLeft
 }
 

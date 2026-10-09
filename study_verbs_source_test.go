@@ -8,15 +8,14 @@ package bibletext
 // the Android export's case list that admits an action into the AI dispatch
 // (reading_android_export.go). The Fyne pane ranges over aiStudyVerbs itself
 // (reading_menu_test.go). Each copy is parsed out of its source and held to
-// aiStudyVerbs in order, so a verb added to one surface and not another, a
+// the complete ungated study list in order, so a verb added to one surface and not another, a
 // label that drifts, or a Mac pair whose selector has no method, which is a
 // silent no-op at run time, fails here.
 //
 // A parser that matched nothing would hold its source to nothing, so each is
 // first proven on a fixture of its surface's shape, the source as it stood
 // with three verbs: it must find exactly those three, and the hold must then
-// refuse them as short of the fourth. The fixtures are baked in; a fifth verb
-// means raising the count of three here to four, once.
+// refuse an incomplete list. Runtime gates are checked separately.
 
 import (
 	"fmt"
@@ -70,7 +69,18 @@ func pairsIn(src string, block, pair *regexp.Regexp) []aiStudyVerb {
 	return out
 }
 
-func parseIOSStudyMenu(src string) []aiStudyVerb  { return pairsIn(src, iosStudyMenu, iosStudyMake) }
+func parseIOSStudyMenu(src string) []aiStudyVerb {
+	if start := strings.Index(src, "NSMutableArray<UIMenuElement *> *aiItems ="); start >= 0 {
+		if end := strings.Index(src[start:], "UIMenu *ai ="); end >= 0 {
+			var out []aiStudyVerb
+			for _, p := range iosStudyMake.FindAllStringSubmatch(src[start:start+end], -1) {
+				out = append(out, aiStudyVerb{Label: p[1], Action: p[2]})
+			}
+			return out
+		}
+	}
+	return pairsIn(src, iosStudyMenu, iosStudyMake)
+}
 func parseMacStudyPairs(src string) []aiStudyVerb { return pairsIn(src, macStudyPairs, macStudyPair) }
 func parseJavaStudyItems(src string) []aiStudyVerb {
 	return pairsIn(src, javaStudyItems, javaStudyItem)
@@ -102,10 +112,10 @@ func exportStudyActions(src string) []string {
 
 // holdStudyVerbs says what is wrong with got against aiStudyVerbs, or nil.
 func holdStudyVerbs(got []aiStudyVerb) error {
-	if len(got) != len(aiStudyVerbs) {
-		return fmt.Errorf("%d verbs, want the %d of aiStudyVerbs: %v", len(got), len(aiStudyVerbs), got)
+	if len(got) != len(aiStudyVerbsForAsk(true)) {
+		return fmt.Errorf("%d verbs, want the %d of aiStudyVerbs: %v", len(got), len(aiStudyVerbsForAsk(true)), got)
 	}
-	for i, v := range aiStudyVerbs {
+	for i, v := range aiStudyVerbsForAsk(true) {
 		if got[i] != v {
 			return fmt.Errorf("verb %d is %+v, want %+v", i, got[i], v)
 		}
@@ -117,10 +127,10 @@ func holdStudyVerbs(got []aiStudyVerb) error {
 // aiStudyVerbs, or nil: one method per verb, in order, sending the action its
 // selector names.
 func holdMacStudyMethods(got [][2]string) error {
-	if len(got) != len(aiStudyVerbs) {
-		return fmt.Errorf("%d hbAI_ methods, want one per verb of aiStudyVerbs (%d): %v", len(got), len(aiStudyVerbs), got)
+	if len(got) != len(aiStudyVerbsForAsk(true)) {
+		return fmt.Errorf("%d hbAI_ methods, want one per verb of aiStudyVerbs (%d): %v", len(got), len(aiStudyVerbsForAsk(true)), got)
 	}
-	for i, v := range aiStudyVerbs {
+	for i, v := range aiStudyVerbsForAsk(true) {
 		if got[i][0] != v.Action {
 			return fmt.Errorf("method %d is hbAI_%s:, want hbAI_%s:", i, got[i][0], v.Action)
 		}
@@ -134,7 +144,7 @@ func holdMacStudyMethods(got [][2]string) error {
 // studyVerbActions is aiStudyVerbs' action strings, in order.
 func studyVerbActions() []string {
 	var out []string
-	for _, v := range aiStudyVerbs {
+	for _, v := range aiStudyVerbsForAsk(true) {
 		out = append(out, v.Action)
 	}
 	return out
@@ -180,10 +190,10 @@ const (
 )
 
 func TestStudyVerbSetAgreesAcrossMenus(t *testing.T) {
-	if len(aiStudyVerbs) != 4 {
-		t.Fatalf("aiStudyVerbs has %d verbs; the fixtures here carry the first three of four, so a new verb means re-baking them", len(aiStudyVerbs))
+	if len(aiStudyVerbsForAsk(true)) != 5 {
+		t.Fatalf("aiStudyVerbs has %d verbs; the fixtures here carry the first three of five, so a new verb means re-baking them", len(aiStudyVerbsForAsk(true)))
 	}
-	three := slices.Clone(aiStudyVerbs[:3])
+	three := slices.Clone(aiStudyVerbsForAsk(true)[:3])
 
 	for _, s := range []nativeVerbSource{
 		{"reading_ios.go", parseIOSStudyMenu, iosStudyFixture},
@@ -205,12 +215,12 @@ func TestStudyVerbSetAgreesAcrossMenus(t *testing.T) {
 			if holdStudyVerbs(s.parse("")) == nil {
 				t.Fatal("control: a source the parser cannot read passed")
 			}
-			swapped := slices.Clone(aiStudyVerbs)
+			swapped := slices.Clone(aiStudyVerbsForAsk(true))
 			swapped[2], swapped[3] = swapped[3], swapped[2]
 			if holdStudyVerbs(swapped) == nil {
 				t.Fatal("control: a swapped order passed")
 			}
-			drifted := slices.Clone(aiStudyVerbs)
+			drifted := slices.Clone(aiStudyVerbsForAsk(true))
 			drifted[3].Label += " "
 			if holdStudyVerbs(drifted) == nil {
 				t.Fatal("control: a drifted label passed")
@@ -253,8 +263,8 @@ func TestStudyVerbSetAgreesAcrossMenus(t *testing.T) {
 	})
 
 	t.Run("reading_android_export.go", func(t *testing.T) {
-		// Ask is dispatched to the AI tail too, though no menu offers it.
-		want := append([]string{aiActionAsk}, studyVerbActions()...)
+		// The export admits Ask first; its dispatch checks the same gate as the menu.
+		want := append([]string{aiActionAsk}, studyVerbActions()[:4]...)
 		got := exportStudyActions(exportStudyFixture)
 		if !slices.Equal(got, []string{"ask", "explain", "context", "translation"}) {
 			t.Fatalf("control: the parser reads the fixture as %v", got)
@@ -275,7 +285,7 @@ func TestStudyVerbSetAgreesAcrossMenus(t *testing.T) {
 	// The labels themselves are the native copies' and the Fyne pane's alike:
 	// a native label is never a Go identifier, so a parser reading one as the
 	// action string is caught by the hold, which compares both fields.
-	for _, v := range aiStudyVerbs {
+	for _, v := range aiStudyVerbsForAsk(true) {
 		if strings.TrimSpace(v.Label) == "" || v.Label == v.Action {
 			t.Errorf("verb %+v has no label of its own", v)
 		}

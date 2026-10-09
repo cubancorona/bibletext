@@ -568,6 +568,40 @@ loses its note that it is the next major release's (step 7, below).
 
 Open decisions: P1 to P6.
 
+### 4. Ask a question about a selected passage
+
+**Behind the switch for refinement.** A selection's Study with AI menu gains
+"Ask a question". The composer shows the reference, translation and a short,
+wrapping excerpt of the selected passage above the question. iPhone and iPad
+use the native multiline editor shared with Share with note, with system
+dictation, editing and keyboard support. Ask and Cancel are explicit buttons;
+Return in the native editor inserts a newline. Other platforms keep the Fyne
+question field initially.
+
+The gate is `askQuestionEnabled = nextRelease` (`ai_ask_gate.go`), mirrored
+into the native selection menus. Ordinary builds keep Ask out of every menu.
+The composer captures the passage once: a theme rebuild or an incoming link
+does not change the selected text, verses or translation the question names.
+The request, answer card, retry, cache and Report mail retain that snapshot.
+Different questions and translations have separate cached answers.
+
+The native field has one owner. Closing or refitting a drained composer never
+hides or repositions a newer editor. Its card refits to a narrowed iPad canvas
+and changed side insets without sizing itself to the keyboard. It neither
+stores a note nor adds a note to a share link, and has no note character cap.
+
+The tests in `ai_ask_composer_test.go`, `ai_ask_native_next_test.go` and
+`ai_ask_passage_test.go` cover the excerpt, native submission and cleanup,
+reopening, frozen request and translation/question cache separation. The
+selection-menu tests hold both offered lists and native gate wiring.
+
+Trying it leaves no new persistent data; a submitted question uses the
+selected AI provider and the reader's key, like the other study verbs. Native
+portrait layout and keyboard placement have been checked in iPhone and iPad
+simulators, including appearance rebuilds. Editing and submission through the
+native controls, short and landscape layouts, and refinement of the question
+prompt remain open before making the feature unconditional.
+
 ---
 
 ## The major release

@@ -79,7 +79,7 @@ func devSheets() []devSheet {
 		}},
 		{"audio", "the audio source menu", showAudioSourceMenu},
 		{"note", "the note composer", func(s *AppState) { promptShareNote(s, devQuote, selSpan{}) }},
-		{"ask", "the Ask sheet", func(s *AppState) { promptAskQuestion(s, devQuote, selSpan{}) }},
+		{"ask", "the Ask sheet on John 3:16", devOpenAsk},
 		{"ai-waiting", "the AI answer panel, waiting for its answer", devOpenAIWaiting},
 		{"compare-waiting", "the AI answer panel, waiting for a comparison", devOpenCompareWaiting},
 		{"xrefs-waiting", "the cross-references panel, waiting for its list", devOpenCrossRefsWaiting},
@@ -126,6 +126,29 @@ func devOpenSheetNames() string {
 // devQuote is the selection the sheets that quote one are opened on: John
 // 3:16 in the World English Bible, which is in the public domain.
 const devQuote = "For God so loved the world, that he gave his one and only Son, that whoever believes in him should not perish, but have eternal life."
+
+// devOpenAsk opens on the loaded edition's John 3:16, rather than attaching
+// a fixed quote to whichever chapter the launch happened to open. If that
+// verse is unavailable, the card explicitly names the WEB fixture it quotes.
+func devOpenAsk(state *AppState) {
+	if state == nil {
+		return
+	}
+	navigateToReference(state, "John", 3)
+	span := selSpanFromNative(16, 16)
+	if state.Bible != nil {
+		if verse := state.Bible.GetVerse("John", 3, 16); verse != nil {
+			if quote := strings.TrimSpace(outboundText(verse.Text)); quote != "" {
+				promptAskQuestion(state, quote, span)
+				return
+			}
+		}
+	}
+	promptAskQuestionForPassage(state, aiPassage{
+		Book: "John", Chapter: 3, Lo: 16, Hi: 16, Ref: "John 3:16",
+		Text: devQuote, Version: devVersionName(),
+	}, "", span)
+}
 
 // devOneDayVerse is the verse of the day at its shortest ordinary form: one
 // verse, John 3:16.

@@ -2,20 +2,20 @@
 
 package bibletext
 
-// The native compose field for Share-with-note.
+// The native compose field shared by Share with note and Ask.
 //
 // WHY NATIVE. The Fyne Entry works, but it is a canvas-drawn imitation of a
 // text field: no dictation, no autocorrect or predictive bar, no system
 // selection loupe, no undo gesture, no VoiceOver text semantics — and its
 // emoji come from whatever font we bundle rather than the system set. For the
-// one field in the app where a person writes a message to another person,
+// fields where a reader composes a message or question,
 // those absences are the difference between typing and composing.
 //
 // HOW. The same trick as the reading pane and the note sticker: a real UIKit
 // view floating ABOVE the Fyne canvas. The sheet keeps a transparent
 // placeholder rectangle where the field belongs; once the popup lays out, the
 // placeholder's absolute rect is pushed here and a UITextView is parked over
-// it. Fyne never knows the difference; the sheet's counter and Share button
+// it. Fyne never knows the difference; the sheet's counter and submit button
 // read the text back across cgo.
 //
 // The view is added to the root view controller's view, NOT the bare window —

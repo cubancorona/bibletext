@@ -75,6 +75,8 @@ extern void bibleTextKeyboardChanged(double height);
 // omit the "Study with AI" submenu. Defaults to on, matching the preference.
 static int gBTAIEnabled = 1;
 void btIOSSetAIEnabled(int on) { gBTAIEnabled = on; }
+static int gBTAskEnabled = 0;
+void btIOSSetAskEnabled(int on) { gBTAskEnabled = on; }
 // Whether to offer writing a note. Same shape as the AI gate: Go pushes it
 // whenever the reading view is built.
 static int gBTNotesEnabled = 1;
@@ -277,13 +279,15 @@ static void btIOSRebuildWash(void);
         }];
     };
 
-    UIMenu *ai = [UIMenu menuWithTitle:@"Study with AI" image:nil identifier:nil options:0
-                              children:@[
+    NSMutableArray<UIMenuElement *> *aiItems = [NSMutableArray arrayWithArray:@[
                                   make(@"Explain", @"explain"),
                                   make(@"Analyze context", @"context"),
                                   make(@"Analyze translation", @"translation"),
                                   make(@"Compare perspectives", @"compare"),
                               ]];
+    if (gBTAskEnabled) [aiItems addObject:make(@"Ask a question", @"ask")];
+    UIMenu *ai = [UIMenu menuWithTitle:@"Study with AI" image:nil identifier:nil options:0
+                              children:aiItems];
 
     // Share verse → with citation / as image (both go to the iOS share sheet).
     UIAction * (^study)(NSString *, NSString *) = ^UIAction *(NSString *title, NSString *act) {
@@ -4066,6 +4070,11 @@ func syncNativeAIMenu(state *AppState) {
 		on = 1
 	}
 	C.btIOSSetAIEnabled(on)
+	askOn := C.int(0)
+	if askQuestionEnabled {
+		askOn = 1
+	}
+	C.btIOSSetAskEnabled(askOn)
 }
 
 func newNativeReadingHost(state *AppState, verses []Verse) *nativeReadingHost {

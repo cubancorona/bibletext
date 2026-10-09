@@ -1,10 +1,5 @@
 package bibletext
 
-// The reading selection menu's "Ask": collect a free-form question about the selected
-// passage, then open the AI answer panel for a narrative reply. This is deliberately
-// distinct from the Search page's "Find", which returns matching verses — Ask returns
-// prose grounded in the selection (see buildAskPrompt in ai.go).
-
 import (
 	"strings"
 	"time"
@@ -17,174 +12,207 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// promptAskQuestion shows a small input sheet for the reader's question, then hands off to
-// showAIPanel(aiActionAsk, …).
-//
-// iOS keyboard handling: a centered modal would put the field mid-screen, under the soft
-// keyboard (which a modal can't dodge — see the fyne-modal-keyboard notes). So on mobile we
-// use a NON-modal popup whose card fills the canvas and is anchored at the top, with the
-// field + buttons near the top, comfortably above the keyboard. A full-canvas card also
-// means no tap ever lands "outside" it, so the popup can't self-dismiss and leave the
-// native reading overlay hidden — every exit runs through closeAsk, which restores it. On
-// desktop there's no soft keyboard, so a plain centered modal is cleaner.
+// promptAskQuestion captures the passage before collecting a question. A link
+// can move the reader while the composer is open; the request still belongs
+// to the selection and translation the card showed when it opened.
 func promptAskQuestion(state *AppState, selectedText string, span selSpan) {
 	promptAskQuestionWith(state, selectedText, "", span)
 }
 
-// promptAskQuestionWith opens the sheet with question already in the field —
-// "" for every ordinary open. The light/dark reopen passes what the reader had
-// typed when the rebuild drained the sheet (sheet_reopen.go). span is the
-// selection's position; the sheet names the verses it resolves to, as the
-// answer panel that follows will, and hands it on to that panel.
 func promptAskQuestionWith(state *AppState, selectedText, question string, span selSpan) {
 	if state == nil || state.window == nil {
-		return
-	}
-	cnv := pickerCanvas(state)
-	if cnv == nil {
 		return
 	}
 	selectedText = strings.TrimSpace(selectedText)
 	if selectedText == "" {
 		return
 	}
+	promptAskQuestionForPassage(state, aiPassageFor(state, selectedText, span), question, span)
+}
+
+// promptAskQuestionForPassage reopens with the same passage and the question
+// typed so far. iOS uses the shared native multiline editor; other platforms
+// keep the Fyne field. Ask produces a prose answer, rather than Search's list
+// of matching verses.
+func promptAskQuestionForPassage(state *AppState, passage aiPassage, question string, span selSpan) {
+	if state == nil || state.window == nil || strings.TrimSpace(passage.Text) == "" {
+		return
+	}
+	cnv := pickerCanvas(state)
+	if cnv == nil {
+		return
+	}
 	pal := state.pal()
 	mobile := fyne.CurrentDevice().IsMobile()
-
-	// The native overlay floats above the canvas; hide it while the sheet is up.
+	useNative := askQuestionEnabled && mobile && noteEntryNative()
 	if state.hideReadingOverlay != nil {
 		state.hideReadingOverlay()
 	}
+
 	var popup *widget.PopUp
-	closed := false
+	closed, sheetOpen := false, true
+	noteEntryOwner++
+	owner := noteEntryOwner
 	closeAsk := func() {
 		if closed {
 			return
 		}
-		closed = true
+		closed, sheetOpen = true, false
+		if owner == noteEntryOwner {
+			noteEntryOnChanged = nil
+			noteEntryHide()
+		}
 		if popup != nil {
 			popup.Hide()
 		}
-		if state.showReadingOverlay != nil {
+		if state.showReadingOverlay != nil && cnv.Overlays().Top() == nil {
 			state.showReadingOverlay()
 		}
 	}
 
-	// --- Header: prompt, reference, one-line selection preview. ---
 	title := canvas.NewText("Ask about this passage", pal.Text)
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	title.TextSize = 20
-
-	ref := canvas.NewText(aiPassageFor(state, selectedText, span).Ref, pal.Accent)
+	ref := canvas.NewText(passage.Ref, pal.Accent)
 	ref.TextStyle = fyne.TextStyle{Bold: true}
 	ref.TextSize = subheadingTextSize
-
-	quote := widget.NewRichText(&widget.TextSegment{
-		Text: quotedOneLine(selectedText, 240),
-		Style: widget.RichTextStyle{
-			ColorName: colorNameMuted,
-			SizeName:  theme.SizeNameCaptionText,
-			TextStyle: fyne.TextStyle{Italic: true},
-			Inline:    true,
-		},
+	version := widget.NewRichText(&widget.TextSegment{
+		Text:  passage.Version,
+		Style: widget.RichTextStyle{ColorName: colorNameMuted, SizeName: theme.SizeNameCaptionText},
 	})
-	quote.Wrapping = fyne.TextWrapOff
-	quote.Truncation = fyne.TextTruncateEllipsis
+	version.Wrapping = fyne.TextWrapWord
+	if passage.Version == "" {
+		version.Hide()
+	}
+	excerpt := newNoteExcerpt(passage.Text, noteExcerptMaxLinesFor(mobile, cnv.Size().Height), pal.TextMuted)
 
-	// --- Question field + actions. ---
-	entry := newSearchEntry() // Return submits on iOS (see searchKeyEntry)
-	entry.SetPlaceHolder("Ask a question about this passage…")
+	entry := newSearchEntry()
+	const placeholder = "Ask a question about this passage…"
+	entry.SetPlaceHolder(placeholder)
 	entry.SetText(question)
-	// Read when the rebuild comes, not now: the question as typed so far.
-	reopen := func() { promptAskQuestionWith(state, selectedText, entry.Text, span) }
-
+	questionText := func() string {
+		if useNative {
+			return noteEntryTyped()
+		}
+		return entry.Text
+	}
 	doAsk := func() {
-		q := strings.TrimSpace(entry.Text)
+		if closed || owner != noteEntryOwner {
+			return
+		}
+		q := strings.TrimSpace(questionText())
 		if q == "" {
 			return
 		}
 		closeAsk()
-		showAIPanel(state, aiActionAsk, selectedText, q, span)
+		showAIPanelForPassage(state, aiActionAsk, passage, q, span)
 	}
+	// The Fyne field retains Return-to-submit. The native UITextView is
+	// multiline: Return inserts a newline and the Ask button submits it.
 	entry.OnSubmitted = func(string) { doAsk() }
-
 	askBtn := widget.NewButton("Ask", doAsk)
 	askBtn.Importance = widget.HighImportance
 	cancelBtn := widget.NewButton("Cancel", closeAsk)
 	actions := container.NewBorder(nil, nil, nil, container.NewHBox(cancelBtn, askBtn))
 
-	hint := canvas.NewText("AI answers in its own words, grounded in this passage.", pal.TextMuted)
-	hint.TextSize = 11
-
-	form := container.NewVBox(
-		title, ref, quote,
-		widget.NewSeparator(),
-		inputFrame(withCaret(state, entry), pal.Border),
-		actions,
-		hint,
-	)
-
-	focusEntry := func() {
-		if state.window != nil {
-			state.window.Canvas().Focus(entry)
-		}
+	var entrySlot fyne.CanvasObject
+	if useNative {
+		entrySlot = newNoteEntrySlot(&sheetOpen)
+	} else {
+		entrySlot = inputFrame(withCaret(state, entry), pal.Border)
+	}
+	hint := widget.NewRichText(&widget.TextSegment{
+		Text:  "AI answers in its own words, grounded in this passage.",
+		Style: widget.RichTextStyle{ColorName: colorNameMuted, SizeName: theme.SizeNameCaptionText},
+	})
+	hint.Wrapping = fyne.TextWrapWord
+	form := container.NewVBox(title, ref, version, excerpt, widget.NewSeparator(), entrySlot, actions, hint)
+	focusEntry := func() { cnv.Focus(entry) }
+	registerReopen := func() {
+		registerSheetReopenCapture(state, popup, func() func() {
+			q := questionText()
+			return func() { promptAskQuestionForPassage(state, passage, q, span) }
+		})
 	}
 
 	if !mobile {
-		// Desktop: a compact centered modal.
 		card := surface(container.NewPadded(form), pal.SurfaceAlt, pal.Border, fyne.Size{})
 		popup = widget.NewModalPopUp(card, cnv)
 		popup.Show()
-		registerSheetReopen(state, popup, reopen)
-		w := float32(460)
-		if cw := cnv.Size().Width - 80; cw > 280 && w > cw {
-			w = cw
+		rows := excerpt.maxLines
+		fit := func() {
+			w := min(float32(460), max(float32(280), cnv.Size().Width-80))
+			excerpt.setMaxLines(rows)
+			popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+			popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+			room := clearOfHeader(cnv.Size().Height, cnv.Size().Height, headerClearance(state))
+			for n := rows; n > 1 && popup.MinSize().Height > room; n-- {
+				excerpt.setMaxLines(n - 1)
+				popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+			}
 		}
-		popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+		fit()
+		registerReopen()
+		registerSheetRefit(state, popup, fit)
 		focusEntry()
 		return
 	}
 
-	// Mobile: a full-canvas, top-anchored, NON-modal sheet (see the doc comment). The
-	// trailing spacer pins the form to the top, above the soft keyboard. The card
-	// keeps clear of the side safe insets of a phone held sideways (clearOfSideInsets).
+	// The top-anchored non-modal card keeps its keyboard-free foot gap
+	// across refits, rather than staying short after the keyboard goes away.
 	body := container.NewVBox(form, layout.NewSpacer())
 	card := surface(container.NewPadded(body), pal.SurfaceAlt, pal.Border, fyne.Size{})
-
-	cw := cnv.Size().Width
-	ch := cnv.Size().Height
+	cw, ch := cnv.Size().Width, cnv.Size().Height
 	topY := float32(0)
-	pos, sz := sheetArea(cnv)
+	pos, sz := noteSheetArea(cnv)
 	if sz.Height > 0 {
-		topY = pos.Y
-		ch = sz.Height
+		topY, ch = pos.Y, sz.Height
 	}
 	sideL, sideR := sideInsets(cw, pos, sz)
-	sheet, _ := clearOfSideInsets(card, sideL, sideR)
+	sheet, refitSides := clearOfSideInsets(card, sideL, sideR)
 	popup = widget.NewPopUp(sheet, cnv)
+	footGap := cnv.Size().Height - topY - ch
 	popup.Resize(fyne.NewSize(cw, ch))
 	popup.ShowAtPosition(fyne.NewPos(0, topY))
-	registerSheetReopen(state, popup, reopen)
-	focusEntry()
-
-	// Catch an outside-tap close. The sheet is non-modal and sized to the
-	// interactive area, so the safe-inset bands (status bar / home indicator —
-	// and after a rotation, much more) are still tappable canvas: Fyne's
-	// PopUp.Tapped runs Hide() directly there, bypassing closeAsk, which would
-	// leave the reading overlay latched hidden (blank verse pane). Same 150ms
-	// Visible() poll as the audio source menu, armed through the same seam
-	// (sheet_timers.go); closeAsk is idempotent.
+	registerReopen()
+	lastCanvas := cnv.Size()
+	lastAreaPos, lastAreaW := pos, sz.Width
+	refit := func() {
+		now := cnv.Size()
+		relayout := func() {
+			excerpt.setMaxLines(noteExcerptMaxLinesFor(true, now.Height))
+			apos, asz := noteSheetArea(cnv)
+			refitSides(sideInsets(now.Width, apos, asz))
+			popup.Resize(fyne.NewSize(now.Width, now.Height-topY-footGap))
+		}
+		if slot, ok := entrySlot.(*noteEntrySlot); ok {
+			slot.settle(relayout)
+		} else {
+			relayout()
+		}
+	}
 	var watch func()
 	watch = func() {
 		if popup == nil || !popup.Visible() {
-			// Skip when another overlay owns the canvas (a sheet reopened
-			// within one tick of a rebuild drain) — see goto.go's watchdog.
-			if cnv.Overlays().Top() == nil {
-				closeAsk()
-			}
+			closeAsk()
 			return
 		}
-		sheetAfter(150*time.Millisecond, watch)
+		now := cnv.Size()
+		apos, asz := noteSheetArea(cnv)
+		if now != lastCanvas || apos != lastAreaPos || asz.Width != lastAreaW {
+			lastCanvas, lastAreaPos, lastAreaW = now, apos, asz.Width
+			refit()
+		}
+		noteSheetAfter(150*time.Millisecond, watch)
 	}
-	sheetAfter(150*time.Millisecond, watch)
+	noteSheetAfter(150*time.Millisecond, watch)
+	if useNative {
+		noteEntryShow(question, placeholder, pal)
+		// Ask has no note character limit or live counter. Its delegate
+		// must not update a former note composer's counter.
+		noteEntryOnChanged = nil
+		entrySlot.(*noteEntrySlot).push()
+		return
+	}
+	focusEntry()
 }

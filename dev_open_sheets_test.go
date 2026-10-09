@@ -48,7 +48,7 @@ var devOpenWants = map[string]devOpenWant{
 	"votd-long":       {has: []string{"Verse of the day", "Psalms 119:1–16"}},
 	"audio":           {has: []string{"Audio source"}},
 	"note":            {has: []string{"Add a note"}},
-	"ask":             {has: []string{"Ask about this passage"}},
+	"ask":             {has: []string{"Ask about this passage", "John 3:16"}},
 	"ai-waiting":      {has: []string{"Explanation", "Reading the passage…", "Cancel"}},
 	"compare-waiting": {has: []string{"Perspectives", "Reading the passage…", "Cancel"}, hasnt: []string{"Explanation", compareHeadingAgree}},
 	"compare": {has: append([]string{"Perspectives", "Matthew 16:18"}, compareHeadings...),
@@ -313,6 +313,57 @@ func TestDevOpenNamesOpenTheirSheets(t *testing.T) {
 				st.fullPending != pending || st.fullDownloading != downloading || st.seedOnly != seed {
 				t.Error("the translation state the notice was read from was left changed")
 			}
+		})
+	}
+}
+
+func TestDevAskQuotesTheVerseItsCardNames(t *testing.T) {
+	const loadedQuote = "A synthetic verse in the loaded edition, distinct from the WEB fixture."
+	for _, tc := range []struct {
+		name, text string
+		available  bool
+	}{
+		{"loaded edition", loadedQuote, true},
+		{"empty verse uses the WEB fixture", "", true},
+		{"missing verse uses the WEB fixture", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			st, w := devOpenWindow(t)
+			st.CurrentBook, st.CurrentChapter, st.CurrentVersion = "Matthew", 5, "bsb"
+			verse := Verse{BookName: "John", Book: "John", Chapter: 3, Verse: 16, Text: tc.text}
+			if !tc.available {
+				verse.Verse, verse.Text = 17, "A synthetic neighbouring verse."
+			}
+			st.Bible.Verses["John"][3] = []Verse{verse}
+			st.Bible.PrepareSearchIndex()
+			reqs := stubCapturedStudyRequests(t)
+			if !devOpenSheet(st, "ask") {
+				t.Fatal("the Ask development name did not open")
+			}
+			if st.CurrentBook != "John" || st.CurrentChapter != 3 {
+				t.Fatalf("Ask did not navigate to its passage: %s %d", st.CurrentBook, st.CurrentChapter)
+			}
+			popup := topPopup(t, w)
+			quote, version := devQuote, devVersionName()
+			if tc.available && tc.text != "" {
+				quote, version = tc.text, st.currentVersion().Name
+			}
+			excerpt, _ := noteSheetExcerpt(t, popup)
+			if excerpt.text != quote || !sheetHas(popup, "John 3:16") || !sheetHas(popup, version) {
+				t.Errorf("the preview's text, reference and translation disagree: quote %q, texts %v", excerpt.text, sheetTexts(popup))
+			}
+			field := composerField(popup)
+			if field == nil {
+				t.Fatal("the host development sheet has no question field")
+			}
+			field.SetText("What does this fixture passage mean?")
+			test.Tap(findTreeButton(popup, "Ask"))
+			r := nextCapturedStudyRequest(t, reqs, "development Ask")
+			if r.passage.Ref != "John 3:16" || r.passage.Text != quote || r.passage.Version != version || r.span != selSpanFromNative(16, 16) {
+				t.Errorf("the request did not retain the preview and explicit verse span: %+v", r)
+			}
+			finishCapturedStudyRequest(t, r, "A synthetic answer.", nil)
+			test.Tap(findTreeButton(topPopup(t, w), "Close"))
 		})
 	}
 }

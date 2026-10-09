@@ -23,7 +23,7 @@ package bibletext
 static jclass    btaClass = NULL;   // global ref to org.bibletext.BtBridge
 static jmethodID btaInitM, btaSetStyleM, btaSetHtmlM, btaArmRestoreM, btaGetFracM,
                  btaSetFrameM, btaShowM, btaHideM, btaSuppressM, btaUnsuppressM,
-                 btaShareTextM, btaShareImageM, btaSetAIEnabledM, btaSetNotesEnabledM,
+                 btaShareTextM, btaShareImageM, btaSetAIEnabledM, btaSetAskEnabledM, btaSetNotesEnabledM,
                  btaOpenBrowserM,
                  btaRAHighlightM, btaRAClearM, btaRAFollowM, btaRAColorsM,
                  btaSetNoteM, btaSetNoteBandsM, btaTimeZoneIDM, btaWindowWidthM,
@@ -65,6 +65,7 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	// Selection-menu AI gate — mirrors the Settings → Assistant choice; when off,
 	// onCreateActionMode omits the "Study with AI" submenu (Share/Cross-refs stay).
 	btaSetAIEnabledM = (*env)->GetStaticMethodID(env, btaClass, "setAIEnabled", "(Z)V");
+	btaSetAskEnabledM = (*env)->GetStaticMethodID(env, btaClass, "setAskEnabled", "(Z)V");
 	// Selection-menu notes gate — mirrors Settings → Shared notes; when off,
 	// onCreateActionMode omits "Share with note".
 	btaSetNotesEnabledM = (*env)->GetStaticMethodID(env, btaClass, "setNotesEnabled", "(Z)V");
@@ -103,7 +104,7 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	    btaArmRestoreM == NULL || btaGetFracM == NULL || btaSetFrameM == NULL ||
 	    btaShowM == NULL || btaHideM == NULL || btaSuppressM == NULL ||
 	    btaUnsuppressM == NULL || btaShareTextM == NULL || btaShareImageM == NULL ||
-	    btaSetAIEnabledM == NULL || btaSetNotesEnabledM == NULL || btaOpenBrowserM == NULL ||
+	    btaSetAIEnabledM == NULL || btaSetAskEnabledM == NULL || btaSetNotesEnabledM == NULL || btaOpenBrowserM == NULL ||
 	    btaRAHighlightM == NULL || btaRAClearM == NULL || btaRAFollowM == NULL ||
 	    btaRAColorsM == NULL || btaSetNoteM == NULL || btaSetNoteBandsM == NULL ||
 	    btaTimeZoneIDM == NULL || btaWindowWidthM == NULL || btaSetSystemBarsLightM == NULL) {
@@ -224,6 +225,12 @@ static void btaSetAIEnabled(uintptr_t jni_env, int on) {
 	JNIEnv *env = (JNIEnv*)jni_env;
 	if (btaClass == NULL) return;
 	(*env)->CallStaticVoidMethod(env, btaClass, btaSetAIEnabledM, on ? JNI_TRUE : JNI_FALSE);
+}
+
+static void btaSetAskEnabled(uintptr_t jni_env, int on) {
+	JNIEnv *env = (JNIEnv*)jni_env;
+	if (btaClass == NULL) return;
+	(*env)->CallStaticVoidMethod(env, btaClass, btaSetAskEnabledM, on ? JNI_TRUE : JNI_FALSE);
 }
 
 static void btaSetNotesEnabled(uintptr_t jni_env, int on) {
@@ -428,6 +435,11 @@ func syncNativeAIMenu(state *AppState) {
 	}
 	runBta(func(env uintptr) {
 		C.btaSetAIEnabled(C.uintptr_t(env), on)
+		askOn := C.int(0)
+		if askQuestionEnabled {
+			askOn = 1
+		}
+		C.btaSetAskEnabled(C.uintptr_t(env), askOn)
 		notesOn := C.int(0)
 		if notesFeatureOn(state) {
 			notesOn = 1

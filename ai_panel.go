@@ -21,6 +21,20 @@ import (
 )
 
 func showAIPanel(state *AppState, action, selectedText, question string, span selSpan) {
+	if state == nil || state.window == nil || state.window.Canvas() == nil {
+		return
+	}
+	showAIPanelWithPassage(state, action, aiPassageFor(state, selectedText, span), question, span,
+		action == aiActionAsk && askQuestionEnabled)
+}
+
+// showAIPanelForPassage keeps the composer or selection's captured page through
+// retries and appearance rebuilds, even if the reader has since navigated.
+func showAIPanelForPassage(state *AppState, action string, passage aiPassage, question string, span selSpan) {
+	showAIPanelWithPassage(state, action, passage, question, span, true)
+}
+
+func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, question string, span selSpan, captured bool) {
 	if state == nil || state.window == nil {
 		return
 	}
@@ -29,10 +43,15 @@ func showAIPanel(state *AppState, action, selectedText, question string, span se
 		return
 	}
 	pal := state.pal()
-	// The verses the header and the Report mail name, resolved exactly as the
-	// request resolves them (runAIAction), so the panel cites what the prompt
-	// cited.
-	passage := aiPassageFor(state, selectedText, span)
+	// Fixed actions retain their request and reopen behavior. Ask's composer
+	// passes a captured passage so navigation cannot change the question's page.
+	reopen := func() {
+		if captured {
+			showAIPanelForPassage(state, action, passage, question, span)
+		} else {
+			showAIPanel(state, action, passage.Text, question, span)
+		}
+	}
 
 	// The native overlay floats above the canvas; hide it while the modal is up.
 	if state.hideReadingOverlay != nil {
@@ -58,7 +77,7 @@ func showAIPanel(state *AppState, action, selectedText, question string, span se
 	// with an ellipsis (it's given the panel width by the VBox). The char cap is
 	// only a sanity bound; the visual truncation is what keeps it tidy.
 	quote := widget.NewRichText(&widget.TextSegment{
-		Text: quotedOneLine(selectedText, 300),
+		Text: quotedOneLine(passage.Text, 300),
 		Style: widget.RichTextStyle{
 			ColorName: colorNameMuted,
 			SizeName:  theme.SizeNameCaptionText,
@@ -73,6 +92,17 @@ func showAIPanel(state *AppState, action, selectedText, question string, span se
 	// (word-wrapped, bold) above the grounding passage preview.
 	headerItems := []fyne.CanvasObject{title, ref}
 	if action == aiActionAsk {
+		if passage.Version != "" {
+			version := widget.NewRichText(&widget.TextSegment{
+				Text: passage.Version,
+				Style: widget.RichTextStyle{
+					ColorName: colorNameMuted,
+					SizeName:  theme.SizeNameCaptionText,
+				},
+			})
+			version.Wrapping = fyne.TextWrapWord
+			headerItems = append(headerItems, version)
+		}
 		if q := strings.TrimSpace(question); q != "" {
 			ql := widget.NewRichText(&widget.TextSegment{
 				Text:  q,
@@ -153,7 +183,7 @@ func showAIPanel(state *AppState, action, selectedText, question string, span se
 			Opaque: SupportMailtoRecipient(),
 			RawQuery: url.Values{
 				"subject": {"BibleText: report AI content"},
-				"body":    {aiReportMailBody(action, passage.Ref, question, current)},
+				"body":    {aiReportMailBodyForPassage(action, passage, question, current)},
 			}.Encode(),
 		}
 		openExternalURL(mu)
@@ -319,7 +349,7 @@ func showAIPanel(state *AppState, action, selectedText, question string, span se
 		// without a second request. Only now — while a request is in flight the
 		// request belongs to this panel, which reopens itself when it lands
 		// (below), and a second reopen would stack two panels (sheet_reopen.go).
-		registerSheetReopen(state, popup, func() { showAIPanel(state, action, selectedText, question, span) })
+		registerSheetReopen(state, popup, reopen)
 		setAIAnswerText(answer, text)
 		// A word-wrapped RichText only reports its true height once it has wrapped
 		// at a known width. Pre-wrap at the body width so the height is right, then
@@ -413,6 +443,9 @@ func showAIPanel(state *AppState, action, selectedText, question string, span se
 		setThinking()
 		ctx, cancel := context.WithCancel(context.Background())
 		ctx, cancelTimeout := context.WithTimeout(ctx, aiRequestBudget)
+		if captured {
+			ctx = withAIPassage(ctx, passage)
+		}
 		// The request names its model on the waiting state it started, and
 		// only there: a request the faster-model switch or Try again has
 		// replaced (a newer gen), or one whose wait is over (Close, Cancel,
@@ -426,7 +459,7 @@ func showAIPanel(state *AppState, action, selectedText, question string, span se
 		cancelFetch = cancel // so Close / Cancel can abandon THIS request
 		go func() {
 			defer cancelTimeout()
-			result, err := aiActionRun(ctx, state, action, selectedText, question, span)
+			result, err := aiActionRun(ctx, state, action, passage.Text, question, span)
 			fyne.Do(func() {
 				if gen != fetchGen {
 					return // superseded — a newer request owns the panel now
@@ -449,7 +482,7 @@ func showAIPanel(state *AppState, action, selectedText, question string, span se
 				if !userClosed && popup != nil && !popup.Visible() {
 					stopThinking()
 					if err == nil {
-						showAIPanel(state, action, selectedText, question, span)
+						reopen()
 					}
 					return
 				}
@@ -494,11 +527,18 @@ var studyRemeasure = func(fit func()) {
 // action, the reader's question when the action took one, and the answer.
 // A fixed action carries no question line at all, rather than an empty one.
 func aiReportMailBody(action, ref, question, answer string) string {
+	return aiReportMailBodyForPassage(action, aiPassage{Ref: ref}, question, answer)
+}
+
+func aiReportMailBodyForPassage(action string, passage aiPassage, question, answer string) string {
 	var b strings.Builder
 	b.WriteString("I'd like to report AI-generated content shown in BibleText.\n\n")
-	b.WriteString("Reference: " + ref + "\n")
+	b.WriteString("Reference: " + passage.Ref + "\n")
 	b.WriteString("Study action: " + aiActionTitle(action) + "\n")
 	if action == aiActionAsk {
+		if passage.Version != "" {
+			b.WriteString("Translation: " + passage.Version + "\n")
+		}
 		b.WriteString("Question: " + strings.TrimSpace(question) + "\n")
 	}
 	b.WriteString("\nResponse:\n" + answer + "\n\nMy concern:\n")

@@ -248,14 +248,17 @@ func TestStudyPromptsNameDifferingReadings(t *testing.T) {
 	}
 }
 
-// The verbs every menu offers: four, in this order, the comparison last under
-// its label, every one with a prompt; Ask has a prompt but no menu entry.
+// The fixed study verbs retain their order; Ask is appended only with its
+// refinement gate. Every offered action has a prompt.
 func TestAIStudyVerbs(t *testing.T) {
 	want := []aiStudyVerb{
 		{aiActionExplain, "Explain"},
 		{aiActionContext, "Analyze context"},
 		{aiActionTranslation, "Analyze translation"},
 		{aiActionCompare, "Compare perspectives"},
+	}
+	if askQuestionEnabled {
+		want = append(want, aiStudyVerb{aiActionAsk, "Ask a question"})
 	}
 	if len(aiStudyVerbs) != len(want) {
 		t.Fatalf("aiStudyVerbs = %v, want %v", aiStudyVerbs, want)

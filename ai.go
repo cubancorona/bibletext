@@ -127,6 +127,8 @@ func isNoKeyError(err error) bool {
 // aiPassage is what a study prompt may name about the selection: the chapter
 // it was made in, the verses it resolves to, the citation the share card
 // would carry for the same selection, the cleaned text and the translation.
+// Ask captures it on the UI goroutine and copies it through the question's
+// lifetime; retries and sheet rebuilds must not resolve a different page.
 // Ref is "John 3:16", "John 3:16–18" (an en dash for a range, as the share
 // card writes it), or "John 3" when no verse can be pinned. Lo and Hi are
 // 0,0 then.
@@ -137,6 +139,19 @@ type aiPassage struct {
 	Ref     string
 	Text    string
 	Version string
+}
+
+// aiPassageContextKey carries the panel's captured passage through aiActionRun,
+// whose text-and-span signature is also the study-request test seam.
+type aiPassageContextKey struct{}
+
+func withAIPassage(ctx context.Context, p aiPassage) context.Context {
+	return context.WithValue(ctx, aiPassageContextKey{}, p)
+}
+
+func aiPassageFromContext(ctx context.Context) (aiPassage, bool) {
+	p, ok := ctx.Value(aiPassageContextKey{}).(aiPassage)
+	return p, ok
 }
 
 // aiPassageFor resolves the selection once, in the share card's order
@@ -310,8 +325,9 @@ func aiCacheSet(key, value string) {
 
 // aiRequestScope is the cache scope of one study request. The fixed actions
 // (Explain / Context / Translation) are scoped by the action alone; "ask"
-// carries a free-form question, which is folded in (same passage, new
-// question → fresh answer). The model is part of the scope too: a
+// carries a free-form question and the captured translation, which are folded
+// in (same passage, new question or translation → fresh answer). The model
+// is part of the scope too: a
 // faster-model switch re-asks the same passage+action, and the superseded
 // request can still settle and cache — under one shared key, which model's
 // prose the panel later serves would be whichever wrote last. Distinct keys
@@ -325,7 +341,8 @@ func aiCacheSet(key, value string) {
 // that ends in the text of a range cannot then be filed under that range.
 func aiRequestScope(id, model, action, question string, p aiPassage) string {
 	if action == aiActionAsk {
-		return fmt.Sprintf("%s|%s|ask|%d-%d|%s", id, model, p.Lo, p.Hi, question)
+		version := sha1.Sum([]byte(p.Version))
+		return fmt.Sprintf("%s|%s|ask|%x|%d-%d|%s", id, model, version, p.Lo, p.Hi, question)
 	}
 	scope := id + "|" + model + "|" + action
 	if p.Lo > 0 {
@@ -345,6 +362,16 @@ var aiActionRun = func(ctx context.Context, state *AppState, action, selectedTex
 }
 
 func runAIAction(ctx context.Context, state *AppState, action, selectedText, question string, span selSpan) (string, error) {
+	p, captured := aiPassageFromContext(ctx)
+	if !captured {
+		p = aiPassageFor(state, selectedText, span)
+	}
+	return runAIActionForPassage(ctx, state, action, p, question)
+}
+
+// runAIActionForPassage may read the provider and model settings, but never
+// the reader's page: the prompt and cache both use the captured passage.
+func runAIActionForPassage(ctx context.Context, state *AppState, action string, p aiPassage, question string) (string, error) {
 	store := state.keys()
 	id := store.activeProvider()
 	info, ok := providerByID(id)
@@ -353,7 +380,6 @@ func runAIAction(ctx context.Context, state *AppState, action, selectedText, que
 		id = info.ID
 	}
 
-	p := aiPassageFor(state, selectedText, span)
 	prompt, err := aiStudyPrompt(action, p, question)
 	if err != nil {
 		return "", err
@@ -389,6 +415,9 @@ func runAIAction(ctx context.Context, state *AppState, action, selectedText, que
 // span from here and none re-derives it.
 func dispatchAIAction(state *AppState, action, selectedText string, span selSpan) {
 	if state == nil {
+		return
+	}
+	if action == aiActionAsk && !askQuestionEnabled {
 		return
 	}
 	// Defense in depth: with Settings → Assistant on "None" the native menus omit
