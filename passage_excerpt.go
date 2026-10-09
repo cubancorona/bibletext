@@ -37,12 +37,15 @@ func passagePreviewCitation(ref, version string) string {
 }
 
 // newPassageExcerptPreview shares the composers' and answer panel's selected
-// passage treatment: an upright inset quote, with its source below it. The
-// excerpt keeps the reading face, small capitals, row budget and ellipsis.
+// passage treatment: an upright inset quote, with its source below at the
+// surrounding text's left margin. The excerpt keeps the reading face, small
+// capitals, row budget and ellipsis.
 func newPassageExcerptPreview(ref, version, text string, rows int, pal palette) (*fyne.Container, *noteExcerpt) {
 	excerpt := newNoteExcerpt(text, rows, pal.TextMuted)
+	quote := container.New(layout.NewCustomPaddedLayout(0, 0, passageExcerptInset, passageExcerptInset), excerpt)
 	if strings.TrimSpace(text) == "" {
 		excerpt.Hide()
+		quote.Hide()
 	}
 	citation := widget.NewRichText(&widget.TextSegment{
 		Text: passagePreviewCitation(ref, version),
@@ -55,8 +58,8 @@ func newPassageExcerptPreview(ref, version, text string, rows int, pal palette) 
 	citation.Wrapping = fyne.TextWrapWord
 	base := fyne.CurrentApp().Settings().Theme()
 	block := container.New(layout.NewCustomPaddedVBoxLayout(12),
-		excerpt, container.NewThemeOverride(citation, passageCitationTheme{base}))
-	return container.New(layout.NewCustomPaddedLayout(8, 8, passageExcerptInset, passageExcerptInset), block), excerpt
+		quote, container.NewThemeOverride(citation, passageCitationTheme{base}))
+	return container.New(layout.NewCustomPaddedLayout(8, 8, 0, 0), block), excerpt
 }
 
 // setPassagePreviewCompact lets a short desktop card give up decorative space
@@ -68,7 +71,7 @@ func setPassagePreviewCompact(preview fyne.CanvasObject, compact bool) {
 	if compact {
 		vertical, gap = 0, 8
 	}
-	outer.Layout = layout.NewCustomPaddedLayout(vertical, vertical, passageExcerptInset, passageExcerptInset)
+	outer.Layout = layout.NewCustomPaddedLayout(vertical, vertical, 0, 0)
 	block.Layout = layout.NewCustomPaddedVBoxLayout(gap)
 	outer.Refresh()
 }

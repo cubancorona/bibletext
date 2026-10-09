@@ -117,8 +117,8 @@ func assertPassagePreviewSpacing(t *testing.T, excerpt *noteExcerpt, citation *w
 	driver := fyne.CurrentApp().Driver()
 	quotePosition := driver.AbsolutePositionForObject(excerpt)
 	citationPosition := driver.AbsolutePositionForObject(citation)
-	if math.Abs(float64(citationPosition.X-quotePosition.X)) > 0.5 {
-		t.Errorf("citation must share the quote's left edge: quote X %v, citation X %v", quotePosition.X, citationPosition.X)
+	if inset := quotePosition.X - citationPosition.X; math.Abs(float64(inset-16)) > 0.5 {
+		t.Errorf("the quote must start 16pt inside the citation's main margin: quote X %v, citation X %v", quotePosition.X, citationPosition.X)
 	}
 	quoteBottom := quotePosition.Y + excerpt.Size().Height
 	if gap := citationPosition.Y - quoteBottom; gap < 8-0.5 {

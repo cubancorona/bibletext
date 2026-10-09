@@ -35,7 +35,7 @@ func exactPreviewCitation(t *testing.T, root fyne.CanvasObject, want string) *wi
 	return found
 }
 
-func TestPassageExcerptPreviewWrapsCitationInsideSymmetricInsets(t *testing.T) {
+func TestPassageExcerptPreviewWrapsCitationOutsideQuoteInsets(t *testing.T) {
 	st := psalm23NoteState()
 	win := noteSheetWindow(t, st, true, 900, 640)
 	win.SetPadded(false)
@@ -62,8 +62,12 @@ func TestPassageExcerptPreviewWrapsCitationInsideSymmetricInsets(t *testing.T) {
 		position := driver.AbsolutePositionForObject(object)
 		left := position.X - outer.X
 		right := preview.Size().Width - left - object.Size().Width
-		if math.Abs(float64(left-16)) > 0.5 || math.Abs(float64(right-16)) > 0.5 {
-			t.Errorf("%s needs 16pt on both sides; left %vpt, right %vpt", name, left, right)
+		wantInset := float32(0)
+		if name == "quote" {
+			wantInset = 16
+		}
+		if math.Abs(float64(left-wantInset)) > 0.5 || math.Abs(float64(right-wantInset)) > 0.5 {
+			t.Errorf("%s needs %vpt on both sides; left %vpt, right %vpt", name, wantInset, left, right)
 		}
 	}
 	assertPassagePreviewSpacing(t, excerpt, citation)
@@ -112,6 +116,9 @@ func TestPassagePreviewsKeepQuoteCitationAndNativeFieldInOrder(t *testing.T) {
 				t.Fatal("the native field received no frames")
 			}
 			for i, frame := range *frames {
+				if math.Abs(float64(frame.pos.X-citationPosition.X)) > 0.5 {
+					t.Errorf("citation must align with the native field's main margin: citation X %v, frame %d X %v", citationPosition.X, i, frame.pos.X)
+				}
 				if frame.pos.Y < citationBottom || frame.pos.X+frame.sz.Width > 320 {
 					t.Errorf("native frame %d overlaps the citation or leaves the canvas: %+v; citation bottom %v", i, frame, citationBottom)
 				}

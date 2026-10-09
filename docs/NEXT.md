@@ -578,9 +578,9 @@ dictation, editing and keyboard support. Ask and Cancel are explicit buttons;
 Return in the native editor inserts a newline. Other platforms keep the Fyne
 question field initially.
 
-Ask, Share with note and the AI answer panel use one inset passage preview:
+Ask, Share with note and the AI answer panel use one passage preview:
 upright text in the reading face, indented on both sides, with a wrapping
-citation below it, aligned with the quote's left edge. Extra vertical space
+citation below it at the surrounding body margin. Extra vertical space
 separates the block from the surrounding controls and the citation from the
 quote; short desktop composers tighten this space to keep clear of the header.
 The citation combines the passage and translation
