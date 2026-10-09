@@ -217,7 +217,7 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 	ref.TextStyle = fyne.TextStyle{Bold: true}
 	ref.TextSize = subheadingTextSize
 
-	// The selected words, as the share makes them, under the reference
+	// The selected words, as the share makes them, with their reference
 	// (share_note_excerpt.go). It is built from the selection on every open,
 	// the light/dark reopen's included, so it comes back with the sheet.
 	excerpt := newNoteExcerpt(quote, noteExcerptMaxLinesFor(mobile, cnv.Size().Height), pal.TextMuted)
@@ -226,6 +226,16 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 		// verse beneath it and carries no words (prepareShareQuote). The sheet
 		// shows the reference alone, without an empty row's gap under it.
 		excerpt.Hide()
+	}
+	var passageView fyne.CanvasObject = container.NewVBox(ref, excerpt)
+	if nextRelease {
+		version := at.version(state)
+		label := version.Abbrev
+		if label == "" {
+			label = version.Name
+		}
+		passageView, excerpt = newPassageExcerptPreview(cite, label, quote,
+			noteExcerptMaxLinesFor(mobile, cnv.Size().Height), pal)
 	}
 
 	// On iOS the field is a REAL UITextView floated over the sheet (dictation,
@@ -307,8 +317,7 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 	}
 
 	form := container.NewVBox(
-		title, ref,
-		excerpt,
+		title, passageView,
 		widget.NewSeparator(),
 		entrySlot,
 		left,

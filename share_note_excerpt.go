@@ -4,7 +4,7 @@ package bibletext
 //
 // The composer hides the reading text while it is open (the native reading
 // view floats above the canvas and would cover the sheet), so writing about a
-// phrase used to mean remembering it. The sheet now shows the words under the
+// phrase used to mean remembering it. The sheet shows the words with their
 // reference, small and muted: a reminder of what the note is about, not a
 // second reading view, so it stops after a few lines and the last one ends in
 // an ellipsis when the selection runs on.
@@ -79,7 +79,7 @@ const (
 	noteExcerptShortCanvas = 480
 
 	// noteExcerptTextSize is the excerpt's reference size, a step above the
-	// 13pt reference line over it and well under the 18pt the note is typed
+	// 13pt citation and well under the 18pt the note is typed
 	// at. It is set through readingGlyphSize, like every other size the
 	// reading face is drawn at, so it looks the size the number says.
 	noteExcerptTextSize float32 = 14

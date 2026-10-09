@@ -180,6 +180,9 @@ func TestTheNoteSheetShowsTheSharesQuote(t *testing.T) {
 			if strings.HasPrefix(got, "1 ") || strings.Contains(got, " 2 ") {
 				t.Errorf("the excerpt carries a verse number: %q", got)
 			}
+			if nextRelease {
+				cite = expectedPreviewCitation(cite, st.currentVersion().Abbrev)
+			}
 			if !sheetHas(p, cite) {
 				t.Errorf("the reference must be the share's citation %q; texts %v", cite, sheetTexts(p))
 			}
@@ -207,7 +210,11 @@ func TestTheNoteSheetShowsTheSharesQuote(t *testing.T) {
 			// A verse number on its own: the reference to its verse, no words.
 			promptShareNote(st, "2", selSpanFromNative(2, 2))
 			p = topPopup(t, win)
-			if !sheetHas(p, "Psalms 23:2") {
+			wantCitation := "Psalms 23:2"
+			if nextRelease {
+				wantCitation = expectedPreviewCitation(wantCitation, st.currentVersion().Abbrev)
+			}
+			if !sheetHas(p, wantCitation) {
 				t.Fatalf("control: a verse number selected alone must cite its verse; texts %v", sheetTexts(p))
 			}
 			if ex, r := noteSheetExcerpt(t, p); ex.Visible() {
@@ -241,7 +248,11 @@ func TestAHeadingNeverReachesTheNoteExcerpt(t *testing.T) {
 
 	promptShareNote(st, headingText, selSpanFromNative(43, 43))
 	p = topPopup(t, win)
-	if !sheetHas(p, "Acts 10:44") {
+	wantCitation := "Acts 10:44"
+	if nextRelease {
+		wantCitation = expectedPreviewCitation(wantCitation, st.currentVersion().Abbrev)
+	}
+	if !sheetHas(p, wantCitation) {
 		t.Fatalf("control: a heading selected alone must cite the verse beneath it; texts %v", sheetTexts(p))
 	}
 	ex, r = noteSheetExcerpt(t, p)
@@ -256,7 +267,11 @@ func TestAHeadingNeverReachesTheNoteExcerpt(t *testing.T) {
 	for _, span := range []selSpan{{}, selSpanFromNative(0, 1)} {
 		promptShareNote(top, "The Making of All Things", span)
 		p = topPopup(t, win)
-		if !sheetHas(p, "Genesis 1:1") {
+		wantCitation := "Genesis 1:1"
+		if nextRelease {
+			wantCitation = expectedPreviewCitation(wantCitation, top.currentVersion().Abbrev)
+		}
+		if !sheetHas(p, wantCitation) {
 			t.Fatalf("span %+v: a chapter's opening heading selected alone must cite the verse beneath it; texts %v",
 				span, sheetTexts(p))
 		}

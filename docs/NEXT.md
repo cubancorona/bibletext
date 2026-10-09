@@ -578,6 +578,16 @@ dictation, editing and keyboard support. Ask and Cancel are explicit buttons;
 Return in the native editor inserts a newline. Other platforms keep the Fyne
 question field initially.
 
+Ask, Share with note and the AI answer panel use one inset passage preview:
+upright text in the reading face, indented on both sides, with a wrapping
+citation below it. The citation combines the passage and translation
+abbreviation, such as `Matthew 7:1–3 (NKJV)`. Long selections retain the
+excerpt's row cap and ellipsis. This presentation stays behind `next`; the
+ordinary Share with note and answer panel retain their current appearance.
+Ask captures its display text and abbreviation alongside the raw request text,
+so navigation cannot change the preview. Display cleanup removes verse markers
+without extending the selected text into a neighboring sentence.
+
 The gate is `askQuestionEnabled = nextRelease` (`ai_ask_gate.go`), mirrored
 into the native selection menus. Ordinary builds keep Ask out of every menu.
 The composer captures the passage once: a theme rebuild or an incoming link
@@ -593,13 +603,15 @@ stores a note nor adds a note to a share link, and has no note character cap.
 The tests in `ai_ask_composer_test.go`, `ai_ask_native_next_test.go` and
 `ai_ask_passage_test.go` cover the excerpt, native submission and cleanup,
 reopening, frozen request and translation/question cache separation. The
+preview geometry and selected-text controls in `passage_excerpt_next_test.go`
+hold the quote, citation and native field in order on a narrow card. The
 selection-menu tests hold both offered lists and native gate wiring.
 
 Trying it leaves no new persistent data; a submitted question uses the
 selected AI provider and the reader's key, like the other study verbs. Native
-portrait layout and keyboard placement have been checked in iPhone and iPad
-simulators, including appearance rebuilds. Editing and submission through the
-native controls, short and landscape layouts, and refinement of the question
+portrait layout and keyboard placement have been checked in compact iPhone
+and iPad simulators, including appearance rebuilds. Editing and submission
+through the native controls, landscape layouts, and refinement of the question
 prompt remain open before making the feature unconditional.
 
 ---

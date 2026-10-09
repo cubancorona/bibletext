@@ -272,7 +272,7 @@ func TestDispatchAIActionCarriesSpan(t *testing.T) {
 	if sheet == nil || !treeHasText(sheet, "Ask about this passage") {
 		t.Fatalf("the Ask dispatch did not open the question sheet; texts %v", treeTexts(sheet))
 	}
-	if !treeHasText(sheet, "Psalms 136:2") {
+	if !treeHasText(sheet, expectedStudyPanelCitation(state, "Psalms 136:2")) {
 		t.Errorf("the question sheet does not name the verse the span resolved to; texts %v", treeTexts(sheet))
 	}
 }

@@ -90,9 +90,12 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 
 	// For "Ask", the title is the generic "Answer", so show the reader's actual question
 	// (word-wrapped, bold) above the grounding passage preview.
-	headerItems := []fyne.CanvasObject{title, ref}
+	headerItems := []fyne.CanvasObject{title}
+	if !nextRelease {
+		headerItems = append(headerItems, ref)
+	}
 	if action == aiActionAsk {
-		if passage.Version != "" {
+		if !nextRelease && passage.Version != "" {
 			version := widget.NewRichText(&widget.TextSegment{
 				Text: passage.Version,
 				Style: widget.RichTextStyle{
@@ -112,7 +115,16 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 			headerItems = append(headerItems, ql)
 		}
 	}
-	headerItems = append(headerItems, quote, widget.NewSeparator())
+	var passageExcerpt *noteExcerpt
+	if nextRelease {
+		preview, excerpt := newPassageExcerptPreview(passage.Ref, passage.previewVersion(), passage.previewText(),
+			noteExcerptMaxLinesFor(fyne.CurrentDevice().IsMobile(), cnv.Size().Height), pal)
+		passageExcerpt = excerpt
+		headerItems = append(headerItems, preview)
+	} else {
+		headerItems = append(headerItems, quote)
+	}
+	headerItems = append(headerItems, widget.NewSeparator())
 	header := container.NewVBox(headerItems...)
 
 	// --- Body: a vertical scroll holds the answer, with the thinking and error
@@ -505,6 +517,9 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 	// the panel to fit the answer once it arrives.
 	popup.Resize(fyne.NewSize(ps.Width, minF(ps.Height, 320)))
 	registerSheetRefit(state, popup, func() {
+		if passageExcerpt != nil {
+			passageExcerpt.setMaxLines(noteExcerptMaxLinesFor(fyne.CurrentDevice().IsMobile(), cnv.Size().Height))
+		}
 		ps.Height = sheetPanelSize(state, cnv).Height
 		if fittedBody != nil {
 			fitBody(fittedBody, fittedWant)

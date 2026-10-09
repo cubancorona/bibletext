@@ -345,11 +345,17 @@ func TestDevAskQuotesTheVerseItsCardNames(t *testing.T) {
 			}
 			popup := topPopup(t, w)
 			quote, version := devQuote, devVersionName()
+			previewVersion := "WEB"
 			if tc.available && tc.text != "" {
 				quote, version = tc.text, st.currentVersion().Name
+				previewVersion = st.currentVersion().Abbrev
 			}
 			excerpt, _ := noteSheetExcerpt(t, popup)
-			if excerpt.text != quote || !sheetHas(popup, "John 3:16") || !sheetHas(popup, version) {
+			matchesCitation := sheetHas(popup, "John 3:16") && sheetHas(popup, version)
+			if nextRelease {
+				matchesCitation = sheetHas(popup, expectedPreviewCitation("John 3:16", previewVersion))
+			}
+			if excerpt.text != quote || !matchesCitation {
 				t.Errorf("the preview's text, reference and translation disagree: quote %q, texts %v", excerpt.text, sheetTexts(popup))
 			}
 			field := composerField(popup)
@@ -361,6 +367,9 @@ func TestDevAskQuotesTheVerseItsCardNames(t *testing.T) {
 			r := nextCapturedStudyRequest(t, reqs, "development Ask")
 			if r.passage.Ref != "John 3:16" || r.passage.Text != quote || r.passage.Version != version || r.span != selSpanFromNative(16, 16) {
 				t.Errorf("the request did not retain the preview and explicit verse span: %+v", r)
+			}
+			if nextRelease && (r.passage.previewVersion() != previewVersion || r.passage.previewText() != quote) {
+				t.Errorf("the request changed the preview metadata: %+v", r.passage)
 			}
 			finishCapturedStudyRequest(t, r, "A synthetic answer.", nil)
 			test.Tap(findTreeButton(topPopup(t, w), "Close"))

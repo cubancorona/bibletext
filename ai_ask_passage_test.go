@@ -93,10 +93,16 @@ func finishCapturedStudyRequest(t *testing.T, r capturedStudyRequest, text strin
 }
 
 func syntheticAskPassage() aiPassage {
-	return aiPassage{
+	p := aiPassage{
 		Book: "Mark", Chapter: 1, Lo: 2, Hi: 2, Ref: "Mark 1:2",
 		Text: "Synthetic passage selected on the first page.", Version: "Synthetic edition A",
 	}
+	if nextRelease {
+		p.VersionAbbrev = "SYN-A"
+		p.PreviewText = "A distinct captured preview names the Lᴏʀᴅ."
+		p.HasPreview = true
+	}
+	return p
 }
 
 // The legacy wrapper changes only gated Ask. Fixed actions retain their
@@ -156,6 +162,17 @@ func TestAskCacheSeparatesCapturedTranslationAndQuestion(t *testing.T) {
 
 	otherEdition := p
 	otherEdition.Version = "Synthetic edition B"
+	otherPreview := p
+	otherPreview.VersionAbbrev = "DISPLAY"
+	otherPreview.PreviewText = "A different display-only preview."
+	otherPreview.HasPreview = !p.HasPreview
+	wantPrompt, err := aiStudyPrompt(aiActionAsk, p, question)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotPrompt, err := aiStudyPrompt(aiActionAsk, otherPreview, question); err != nil || gotPrompt != wantPrompt {
+		t.Errorf("preview metadata changed the provider prompt: got (%q, %v), want %q", gotPrompt, err, wantPrompt)
+	}
 	for _, tc := range []struct {
 		name     string
 		passage  aiPassage
@@ -163,6 +180,7 @@ func TestAskCacheSeparatesCapturedTranslationAndQuestion(t *testing.T) {
 		cached   bool
 	}{
 		{"same passage and question", p, question, true},
+		{"same request with different preview metadata", otherPreview, question, true},
 		{"same words reference and question in another edition", otherEdition, question, false},
 		{"same passage with another question", p, "Why is this line here?", false},
 	} {
@@ -197,6 +215,7 @@ func TestAskPanelRetainsCapturedPassage(t *testing.T) {
 			first := nextCapturedStudyRequest(t, reqs, "first request")
 			checkCapturedAskRequest(t, first, p, question, span)
 			panel := studyOverlay(t, w)
+			assertAskPanelPassage(t, panel, p)
 
 			state.Bible = nil
 			state.CurrentBook, state.CurrentChapter, state.CurrentVersion = "Acts", 7, "bsb"
@@ -233,10 +252,9 @@ func TestAskPanelRetainsCapturedPassage(t *testing.T) {
 			checkCapturedAskRequest(t, second, p, question, span)
 			finishCapturedStudyRequest(t, second, "final synthetic answer", nil)
 			again := studyOverlay(t, w)
-			for _, text := range []string{p.Ref, p.Version, question, quotedOneLine(p.Text, 300)} {
-				if !treeHasText(again, text) {
-					t.Errorf("panel lost captured %q; texts %v", text, treeTexts(again))
-				}
+			assertAskPanelPassage(t, again, p)
+			if !treeHasText(again, question) {
+				t.Errorf("panel lost exact question %q; texts %v", question, treeTexts(again))
 			}
 			openedInTests()
 			report := findTreeButton(again, "Report")
@@ -253,10 +271,11 @@ func TestAskPanelRetainsCapturedPassage(t *testing.T) {
 				t.Fatalf("Report did not open a mail link: %v", err)
 			}
 			body := mail.Query().Get("body")
-			for _, want := range []string{"Reference: " + p.Ref + "\n", "Translation: " + p.Version + "\n", "Question: " + question + "\n", "final synthetic answer"} {
-				if !strings.Contains(body, want) {
-					t.Errorf("Report lost captured %q", want)
-				}
+			wantBody := "I'd like to report AI-generated content shown in BibleText.\n\n" +
+				"Reference: " + p.Ref + "\nStudy action: Answer\nTranslation: " + p.Version +
+				"\nQuestion: " + question + "\n\nResponse:\nfinal synthetic answer\n\nMy concern:\n"
+			if body != wantBody {
+				t.Errorf("Report changed the exact captured reference, full translation, question or answer: got %q, want %q", body, wantBody)
 			}
 		})
 	}

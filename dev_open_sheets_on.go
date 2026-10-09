@@ -147,6 +147,7 @@ func devOpenAsk(state *AppState) {
 	promptAskQuestionForPassage(state, aiPassage{
 		Book: "John", Chapter: 3, Lo: 16, Hi: 16, Ref: "John 3:16",
 		Text: devQuote, Version: devVersionName(),
+		VersionAbbrev: "WEB",
 	}, "", span)
 }
 

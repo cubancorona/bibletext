@@ -99,6 +99,13 @@ var verseTwo = selSpanFromNative(2, 2)
 
 const verseTwoRef = "Psalms 136:2"
 
+func expectedStudyPanelCitation(state *AppState, ref string) string {
+	if nextRelease {
+		return expectedPreviewCitation(ref, state.currentVersion().Abbrev)
+	}
+	return ref
+}
+
 // The panel header names the verse the span resolved to, not the verses the
 // words match. Control: the same open on a state with no Bible names the
 // chapter alone.
@@ -113,7 +120,7 @@ func TestAIPanelHeaderNamesTheVerses(t *testing.T) {
 	showAIPanel(st, aiActionExplain, refrain, "", verseTwo)
 	nextCtx(t, ctxs)
 	p := studyOverlay(t, w)
-	if !treeHasText(p, verseTwoRef) {
+	if !treeHasText(p, expectedStudyPanelCitation(st, verseTwoRef)) {
 		t.Errorf("the header does not name the selected verse; texts %v", treeTexts(p))
 	}
 
@@ -124,7 +131,7 @@ func TestAIPanelHeaderNamesTheVerses(t *testing.T) {
 	showAIPanel(bare, aiActionExplain, refrain, "", verseTwo)
 	nextCtx(t, ctxs)
 	q := studyOverlay(t, bareWin)
-	if !treeHasText(q, "Psalms 136") || treeHasText(q, verseTwoRef) {
+	if !treeHasText(q, expectedStudyPanelCitation(bare, "Psalms 136")) || treeHasText(q, expectedStudyPanelCitation(bare, verseTwoRef)) {
 		t.Errorf("control: without a Bible the header must name the chapter alone; texts %v", treeTexts(q))
 	}
 }
@@ -145,7 +152,7 @@ func TestAskSheetNamesTheVerses(t *testing.T) {
 	if sheet == nil || !treeHasText(sheet, "Ask about this passage") {
 		t.Fatalf("the Ask sheet did not open; texts %v", treeTexts(sheet))
 	}
-	if !treeHasText(sheet, verseTwoRef) {
+	if !treeHasText(sheet, expectedStudyPanelCitation(st, verseTwoRef)) {
 		t.Errorf("the sheet does not name the selected verse; texts %v", treeTexts(sheet))
 	}
 	var entry *searchKeyEntry
@@ -162,7 +169,7 @@ func TestAskSheetNamesTheVerses(t *testing.T) {
 	if r := nextStudyRequest(t, reqs, "the question"); r.span != verseTwo {
 		t.Errorf("the panel asked with span %+v, want the sheet's %+v", r.span, verseTwo)
 	}
-	if p := studyOverlay(t, w); !treeHasText(p, verseTwoRef) {
+	if p := studyOverlay(t, w); !treeHasText(p, expectedStudyPanelCitation(st, verseTwoRef)) {
 		t.Errorf("the answer panel the sheet opened does not name the verse; texts %v", treeTexts(p))
 	}
 
@@ -171,7 +178,7 @@ func TestAskSheetNamesTheVerses(t *testing.T) {
 	bare := refrainPanelState(t, bareWin)
 	promptAskQuestion(bare, "words this chapter never says", selSpan{})
 	q := bareWin.Canvas().Overlays().Top()
-	if q == nil || !treeHasText(q, "Psalms 136") || treeHasText(q, verseTwoRef) {
+	if q == nil || !treeHasText(q, expectedStudyPanelCitation(bare, "Psalms 136")) || treeHasText(q, expectedStudyPanelCitation(bare, verseTwoRef)) {
 		t.Errorf("control: an unresolved selection must name the chapter alone; texts %v", treeTexts(q))
 	}
 }
@@ -183,7 +190,7 @@ func TestAskSheetReopensWithTheVerses(t *testing.T) {
 	h.state.Bible, h.state.CurrentBook, h.state.CurrentChapter = r.Bible, r.CurrentBook, r.CurrentChapter
 	promptAskQuestion(h.state, refrain, verseTwo)
 	first := h.top()
-	if !sheetHas(first, verseTwoRef) {
+	if !sheetHas(first, expectedStudyPanelCitation(h.state, verseTwoRef)) {
 		t.Fatalf("control: the sheet did not open naming the verse; texts %v", sheetTexts(first))
 	}
 	h.flip()
@@ -191,7 +198,7 @@ func TestAskSheetReopensWithTheVerses(t *testing.T) {
 	if again == nil || again == first || !sheetHas(again, "Ask about this passage") {
 		t.Fatalf("the sheet did not come back; texts %v", sheetTexts(again))
 	}
-	if !sheetHas(again, verseTwoRef) {
+	if !sheetHas(again, expectedStudyPanelCitation(h.state, verseTwoRef)) {
 		t.Errorf("the reopened sheet lost the verse; texts %v", sheetTexts(again))
 	}
 }
@@ -224,7 +231,7 @@ func TestStudyPanelReopenCarriesSpan(t *testing.T) {
 		}
 		settled(t, first)
 		again := studyOverlay(t, w)
-		if again == p || !treeHasText(again, verseTwoRef) {
+		if again == p || !treeHasText(again, expectedStudyPanelCitation(st, verseTwoRef)) {
 			t.Errorf("the reopened panel does not name the verse; texts %v", treeTexts(again))
 		}
 	})
@@ -257,7 +264,7 @@ func TestStudyPanelReopenCarriesSpan(t *testing.T) {
 			t.Errorf("the reopened panel asked with %+v, want %+v", second.span, verseTwo)
 		}
 		again := studyOverlay(t, w)
-		if again == p || !treeHasText(again, verseTwoRef) {
+		if again == p || !treeHasText(again, expectedStudyPanelCitation(st, verseTwoRef)) {
 			t.Errorf("the reopened panel does not name the verse; texts %v", treeTexts(again))
 		}
 	})

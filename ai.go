@@ -139,6 +139,11 @@ type aiPassage struct {
 	Ref     string
 	Text    string
 	Version string
+	// Preview fields are captured only for the next presentation. Text remains
+	// the provider's input; HasPreview preserves an intentionally empty quote.
+	VersionAbbrev string
+	PreviewText   string
+	HasPreview    bool
 }
 
 // aiPassageContextKey carries the panel's captured passage through aiActionRun,
@@ -176,13 +181,22 @@ func aiPassageFor(state *AppState, text string, span selSpan) aiPassage {
 		return p
 	}
 	p.Book, p.Chapter = readerChapter(state)
-	p.Version = state.currentVersion().Name
+	version := state.currentVersion()
+	p.Version = version.Name
+	if nextRelease {
+		p.VersionAbbrev = version.Abbrev
+		p.PreviewText = cleanQuoteTextIn(state, p.Book, p.Chapter, text)
+		p.HasPreview = true
+	}
 	p.Ref = fmt.Sprintf("%s %d", p.Book, p.Chapter)
 	if state.Bible == nil {
 		return p
 	}
-	if _, lo, hi, _, ok := normalizeShareSelectionIn(state, p.Book, p.Chapter, text, span); ok && lo >= 1 {
+	if quote, lo, hi, _, ok := normalizeShareSelectionIn(state, p.Book, p.Chapter, text, span); ok && lo >= 1 {
 		p.Lo, p.Hi = lo, hi
+		if nextRelease {
+			p.PreviewText = quote
+		}
 	} else if vs := selectionVersesIn(state, p.Book, p.Chapter, text, span); len(vs) > 0 {
 		p.Lo, p.Hi = vs[0].Verse, vs[len(vs)-1].Verse
 	}

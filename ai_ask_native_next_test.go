@@ -33,6 +33,7 @@ func TestAskNativeComposerSubmitsMultilineTextAndCapturedPassage(t *testing.T) {
 	passage := askComposerFixture()
 	promptAskQuestionForPassage(st, passage, "", verseTwo)
 	p := topPopup(t, win)
+	assertAskComposerPassage(t, p, passage)
 	if composerField(p) != nil || *shows != 1 || len(*frames) == 0 {
 		t.Fatalf("the iOS composer must use the positioned native field; shows %d, frames %d", *shows, len(*frames))
 	}
@@ -47,7 +48,7 @@ func TestAskNativeComposerSubmitsMultilineTextAndCapturedPassage(t *testing.T) {
 	}
 	question := strings.TrimSpace("How do these fixture verses connect?\n" + strings.Repeat("A further question. ", 24))
 	*typed = "  " + question + "  "
-	st.CurrentBook, st.CurrentChapter = "Another fixture book", 8
+	st.CurrentBook, st.CurrentChapter, st.CurrentVersion = "Another fixture book", 8, "bsb"
 	test.Tap(findTreeButton(p, "Ask"))
 	r := nextCapturedStudyRequest(t, reqs, "native Ask")
 	if r.question != question || r.passage != passage || !r.captured || r.span != verseTwo {
@@ -58,9 +59,7 @@ func TestAskNativeComposerSubmitsMultilineTextAndCapturedPassage(t *testing.T) {
 	}
 	finishCapturedStudyRequest(t, r, "A fixture answer.", nil)
 	panel := topPopup(t, win)
-	if !sheetHas(panel, passage.Ref) || !sheetHas(panel, passage.Version) {
-		t.Errorf("the answer card must retain the passage and translation; texts %v", sheetTexts(panel))
-	}
+	assertAskPanelPassage(t, panel, passage)
 	test.Tap(findTreeButton(panel, "Close"))
 }
 
@@ -74,6 +73,7 @@ func TestAskNativeComposerReopenLeavesTheNewEditorAlone(t *testing.T) {
 	st.showReadingOverlay = func() { restores++ }
 	promptAskQuestionForPassage(st, passage, "", verseTwo)
 	first := topPopup(t, win)
+	assertAskComposerPassage(t, first, passage)
 	*typed = "First fixture line.\nSecond fixture line."
 	want := *typed
 	oldCallbacks := append([]func(){}, (*held)...)
@@ -82,12 +82,13 @@ func TestAskNativeComposerReopenLeavesTheNewEditorAlone(t *testing.T) {
 		t.Fatal("the native composer did not register a reopen")
 	}
 	first.Hide()
-	st.CurrentBook, st.CurrentChapter = "Another fixture book", 8
+	st.CurrentBook, st.CurrentChapter, st.CurrentVersion = "Another fixture book", 8, "bsb"
 	reopen()
 	again := topPopup(t, win)
-	if *shows != 2 || *typed != want || !sheetHas(again, passage.Ref) {
+	if *shows != 2 || *typed != want {
 		t.Fatalf("reopen lost the question or passage; shows %d, text %q, card %v", *shows, *typed, sheetTexts(again))
 	}
+	assertAskComposerPassage(t, again, passage)
 	before := len(*frames)
 	for _, f := range oldCallbacks {
 		f()
@@ -115,6 +116,7 @@ func TestAskNativeComposerFollowsANarrowedIPadCanvas(t *testing.T) {
 		f()
 	}
 	ex, renderer := noteSheetExcerpt(t, p)
+	assertAskComposerPassage(t, p, passage)
 	bottom := fyne.CurrentApp().Driver().AbsolutePositionForObject(ex).Y + float32(len(renderer.drawn()))*renderer.rowH
 	if len(*frames) == 0 {
 		t.Fatal("the native field received no frame")

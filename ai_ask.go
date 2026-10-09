@@ -85,6 +85,11 @@ func promptAskQuestionForPassage(state *AppState, passage aiPassage, question st
 		version.Hide()
 	}
 	excerpt := newNoteExcerpt(passage.Text, noteExcerptMaxLinesFor(mobile, cnv.Size().Height), pal.TextMuted)
+	var passageView fyne.CanvasObject = container.NewVBox(ref, version, excerpt)
+	if nextRelease {
+		passageView, excerpt = newPassageExcerptPreview(passage.Ref, passage.previewVersion(), passage.previewText(),
+			noteExcerptMaxLinesFor(mobile, cnv.Size().Height), pal)
+	}
 
 	entry := newSearchEntry()
 	const placeholder = "Ask a question about this passage…"
@@ -126,7 +131,7 @@ func promptAskQuestionForPassage(state *AppState, passage aiPassage, question st
 		Style: widget.RichTextStyle{ColorName: colorNameMuted, SizeName: theme.SizeNameCaptionText},
 	})
 	hint.Wrapping = fyne.TextWrapWord
-	form := container.NewVBox(title, ref, version, excerpt, widget.NewSeparator(), entrySlot, actions, hint)
+	form := container.NewVBox(title, passageView, widget.NewSeparator(), entrySlot, actions, hint)
 	focusEntry := func() { cnv.Focus(entry) }
 	registerReopen := func() {
 		registerSheetReopenCapture(state, popup, func() func() {
