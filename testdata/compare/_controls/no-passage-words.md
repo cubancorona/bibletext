@@ -17,7 +17,3 @@ A description of care can carry a personal meaning and a communal meaning togeth
 
 ## What the text settles
 Its grammar gives a statement rather than a command, without specifying an occasion.
-
-## Questions to take back to the text
-1. How does the wider context develop the assurance?
-2. What did you bring to the line before reading it?

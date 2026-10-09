@@ -24,9 +24,3 @@ Peter and his confession can both be foundational if Peter is understood as the 
 
 ## What the text settles
 Each reading has its strengths, and a thoughtful reader may weigh them differently. The question remains open, and the answer turns on what one brings to it.
-
-## Questions to take back to the text
-1. Read verses 13 to 20 together: does the promise answer the man or the confession?
-2. In your translation, is rock the same word as Peter, and what changes if it is?
-3. What does Jesus build, an assembly, and who belongs to it elsewhere in this Gospel?
-4. What did you bring to this verse: which reading did you expect, and where did it come from?

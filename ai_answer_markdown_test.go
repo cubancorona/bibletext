@@ -156,7 +156,7 @@ func TestSanitisingKeepsTheReadableText(t *testing.T) {
 // cost the formatting that makes an answer readable, and an ordinary answer must
 // still take the markdown path rather than the literal-text fallback.
 func TestOrdinaryFormattingSurvives(t *testing.T) {
-	const ordinary = "## Context\n\n**Paul** writes to the *church* in `Corinth`:\n\n- first\n- second\n\n> a quotation\n"
+	const ordinary = "## Context\n\n**Paul** writes to the *church* in `Corinth`:\n\n- first\n- second\n\n1. first step\n2. second step\n\n> a quotation\n"
 	if got := sanitizeAIMarkdown(ordinary); got != ordinary {
 		t.Errorf("ordinary markdown was altered:\n got: %q\nwant: %q", got, ordinary)
 	}
@@ -166,13 +166,20 @@ func TestOrdinaryFormattingSurvives(t *testing.T) {
 	w := widget.NewRichTextFromMarkdown("")
 	setAIAnswerText(w, ordinary)
 	var headings int
+	var ordered *widget.ListSegment
 	for _, seg := range w.Segments {
 		if ts, ok := seg.(*widget.TextSegment); ok && ts.Style.Inline == false && ts.Text == "Context" {
 			headings++
 		}
+		if ls, ok := seg.(*widget.ListSegment); ok && ls.Ordered {
+			ordered = ls
+		}
 	}
 	if headings == 0 {
 		t.Error("the heading did not survive; the answer fell back to literal text")
+	}
+	if ordered == nil || len(ordered.Items) != 2 {
+		t.Errorf("the two steps did not render as a numbered list: %+v", ordered)
 	}
 }
 
@@ -188,11 +195,10 @@ func subHeadings(segs []widget.RichTextSegment) []string {
 	return out
 }
 
-// A comparison is a fixed skeleton of level-two headings, a bulleted list
-// under "Where they part, and why" and a numbered list of questions, and the
-// panel's renderer makes each of those what it is: the readings and the four
-// sections become heading segments in order, the bullets an unordered list
-// and the questions an ordered one. An ordinary link is flattened to its text
+// A comparison is a fixed skeleton of level-two headings and a bulleted list
+// under "Where they part, and why". The readings and the four sections become
+// heading segments in order, and the bullets become an unordered list. The
+// fixture has no closing questions. An ordinary link is flattened to its text
 // and the headings survive; a link the flattening cannot remove sends the
 // whole answer to literal text, with no heading at all, rather than to the
 // network. Control: that bypass is proven live before it is relied on.
@@ -214,8 +220,8 @@ func TestCompareAnswerRendersSections(t *testing.T) {
 			}
 		}
 	}
-	if ordered == nil || len(ordered.Items) != 3 {
-		t.Errorf("the questions did not render as a numbered list of three: %+v", ordered)
+	if ordered != nil {
+		t.Errorf("the comparison fixture rendered an unexpected numbered list: %+v", ordered)
 	}
 	if unordered == nil || len(unordered.Items) != 3 {
 		t.Errorf("the differences did not render as a bulleted list of three: %+v", unordered)

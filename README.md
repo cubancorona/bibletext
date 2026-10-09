@@ -434,7 +434,7 @@ it. The separate **Test key** button in settings sends just
 `Reply with the single word: OK` to validate a key.
 
 **Compare perspectives** sends a prompt of its own, which asks for headings on
-purpose — one section per reading, then five fixed sections — so the panel can
+purpose — one section per reading, then four fixed sections — so the panel can
 show the readings side by side. It ends on the same passage lines:
 
 ```
@@ -455,9 +455,7 @@ while others take it as a later composition or explain it naturally, include
 both and say which is which. Then say where the readings agree, where they
 differ and why, whether any can be held together, and what the words of the
 passage settle or leave open. If the readings largely agree, say so in your
-first sentence and be brief. End with two or three numbered questions the
-reader can test against the words of the passage and the verses around it,
-and one asking what they brought to it.
+first sentence and be brief.
 
 Consider whether different readings can be true together, including where
 they address different aspects, levels of meaning, or kinds of explanation.
@@ -482,8 +480,7 @@ true.
 
 Give each reading a level-two heading, and then, also at level two, the
 headings "Where they agree", "Where they part, and why", "Where readings can
-be held together", "What the text settles" and "Questions to take back to
-the text".
+be held together" and "What the text settles".
 
 Put each reading as its own thoughtful holders would state it; do not choose
 for the reader, and do not invent quotations or references. Quote only
@@ -492,9 +489,7 @@ them. A scholarly method is not by itself a rejection of supernatural
 action, and a named group need not be uniform in its readings. Distinguish
 what the passage explicitly states from what a reading infers, what it
 leaves possible, and what requires evidence beyond it. Do not treat the
-narrative’s claims as independent proof of an event or its mechanism. Make
-the closing questions open: do not assume a disputed reading is correct or
-force an either-or where meanings or explanations could coexist.
+narrative’s claims as independent proof of an event or its mechanism.
 
 The quoted text is from the {Version}. Verse numbers may appear inside the
 quotation.

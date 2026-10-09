@@ -17,8 +17,3 @@ A description of care can carry a personal meaning and a communal meaning togeth
 
 ## What the text settles
 The shepherd is the LORD, and the one who speaks wants for nothing; the verse names no occasion and no enemy.
-
-## Questions to take back to the text
-1. Read the whole psalm: where does the shepherd give way to the host?
-2. What does the second line promise, and what does it leave out?
-3. What did you bring to the word shepherd before you read the verse?

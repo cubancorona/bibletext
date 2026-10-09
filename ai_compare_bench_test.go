@@ -43,7 +43,7 @@ package bibletext
 // Each fixture's front matter carries the sha1 of the prompt it was recorded
 // against. A mismatch fails the optional recorded-answer evaluation, so a
 // recorded set cannot be scored against a different prompt by mistake. The
-// five section headings are shared with the prompt (ai_compare.go), so a
+// four section headings are shared with the prompt (ai_compare.go), so a
 // heading rename does need a re-record or a mechanical edit of the set.
 //
 // Verse bounds: every "Book chapter:verse" an answer cites must name a book
@@ -253,7 +253,7 @@ func promptSHA1(c benchCase) string { return promptFingerprint(buildComparePromp
 
 // --- The scorer -------------------------------------------------------------
 
-// The ten checks, numbered as the bench describes them.
+// Check numbers remain stable in saved scoring reports.
 const (
 	checkSkeleton  = 1  // the fixed heading skeleton, two to seven readings, no table
 	checkLabels    = 2  // labels only with an assumption; the settles section grounded
@@ -261,7 +261,6 @@ const (
 	checkCitations = 4  // no invented citations, quotations or references
 	checkBalance   = 5  // no runaway, agreement and compatibility sections not empty, agreement first on a no-conflict row
 	checkCoverage  = 6  // the readings the prompt implies for the row, told apart
-	checkQuestions = 7  // two to four numbered questions, one asking what the reader brought
 	checkGrounding = 8  // the passage's own words appear
 	checkNetwork   = 9  // nothing cut short, no link or image
 	checkOmission  = 10 // across a provider's complete set: the reading within Judaism on every Hebrew Bible row
@@ -270,7 +269,7 @@ const (
 var checkNames = map[int]string{
 	checkSkeleton: "skeleton", checkLabels: "labels", checkVerdict: "verdict",
 	checkCitations: "citations", checkBalance: "balance", checkCoverage: "coverage",
-	checkQuestions: "questions", checkGrounding: "grounding", checkNetwork: "network",
+	checkGrounding: "grounding", checkNetwork: "network",
 	checkOmission: "omission",
 }
 
@@ -605,16 +604,6 @@ var (
 		"Then": true, "Verse": true, "Verses": true, "With": true,
 	}
 
-	benchNumberedQuestion = regexp.MustCompile(`(?m)^\s*\d+[.)]\s+.*\?\s*$`)
-	// A question that asks what the reader brought to the passage: what they
-	// expected, already held, or came to it with.
-	benchBrought = regexp.MustCompile(`(?i)\b(?:brought|bring|expect\w*|(?:came|come) to (?:it|this|the (?:passage|verse|text))|` +
-		`(?:i|you) (?:be )?bringing to (?:it|this|the (?:passage|verse|text))|` +
-		`already (?:believ\w*|th(?:ink|ought)|held|assum\w*|read|knew|know)|before (?:you )?(?:read|came|opened|looked)|` +
-		`your own (?:reading|view|assumption\w*|tradition|church|background|expectation\w*|upbringing)|` +
-		`you (?:already )?(?:assumed|thought|believed|took for granted|were taught|grew up)|` +
-		`(?:do|did) (?:i|you) assume|prior (?:view|reading|assumption\w*|belief\w*)|preconception\w*|presupposition\w*)\b`)
-
 	// The two stances the prompt asks to be told apart on a passage that
 	// reports something said or done. A reading takes the report as said or
 	// done when it says so in any of the ways answers do: the words as the
@@ -728,9 +717,10 @@ func benchPassageWords(normPassage string) map[string]bool {
 	return out
 }
 
-// scoreCompareAnswer runs checks 1 to 9 over one answer to c. bd resolves the
-// books an answer cites; when it carries verses, chapter and verse bounds are
-// checked as well (pass the full Bible or the bare canon, never a sample).
+// scoreCompareAnswer runs the per-answer checks over one answer to c. bd
+// resolves the books an answer cites; when it carries verses, chapter and
+// verse bounds are checked as well (pass the full Bible or the bare canon,
+// never a sample).
 // The omission check (10) is a property of a whole set: compareOmissions.
 func scoreCompareAnswer(bd *BibleData, c benchCase, md string) []problem {
 	var ps []problem
@@ -982,26 +972,24 @@ func scoreCompareAnswer(bd *BibleData, c benchCase, md string) []problem {
 		add(checkCoverage, "a Hebrew Bible passage is Scripture to Judaism as well, so a reading within Judaism is owed its own section, and none is named")
 	}
 
-	// 7. Questions: two to four numbered, one of them, or a line beside them,
-	// asking what the reader brought to the passage.
-	if q, ok := byTitle[compareHeadingQuestions]; ok {
-		if n := len(benchNumberedQuestion.FindAllString(q.body, -1)); n < 2 || n > 4 {
-			add(checkQuestions, "%d numbered questions, want two to four", n)
-		}
-		if !benchBrought.MatchString(q.body) {
-			add(checkQuestions, "no question asks what the reader brought to the passage")
-		}
-	}
-
 	// 8. Grounding: an explanatory body names a content word from the
 	// selection. The prompt asks which words a reading rests on, without
 	// requiring a quotation or a count of consecutive words. Headings,
-	// the opener and reflection questions cannot replace an explanation.
+	// the opener and extra closing sections cannot replace an explanation.
 	passageWords := benchPassageWords(normPassage)
 	grounded := false
-	for _, section := range secs {
-		if section.title == compareHeadingQuestions {
-			continue
+	for i, section := range secs {
+		if firstFixed >= 0 && i >= firstFixed {
+			fixed := false
+			for _, title := range compareHeadings {
+				if section.title == title {
+					fixed = true
+					break
+				}
+			}
+			if !fixed {
+				continue
+			}
 		}
 		for _, w := range strings.Fields(benchNormalize(section.body)) {
 			if passageWords[w] {
@@ -1084,7 +1072,7 @@ func atoi(s string) int {
 }
 
 // readingTitles is the headings of the reading sections, the ones before the
-// five fixed sections: what the answer chose to compare.
+// four fixed sections: what the answer chose to compare.
 func readingTitles(md string) []string {
 	_, secs := splitMarkdownSections(md)
 	var out []string
@@ -1429,8 +1417,6 @@ var compareControls = map[string]struct {
 	"said-by-gods-word.md":  {0, "matthew-16-18"},
 	"no-said.md":            {checkCoverage, "matthew-16-18"},
 	"missing-jewish.md":     {checkCoverage, "isaiah-7-14"},
-	"no-questions.md":       {checkQuestions, "matthew-16-18"},
-	"no-brought.md":         {checkQuestions, "matthew-16-18"},
 	"ungrounded.md":         {0, "matthew-16-18"},
 	"no-passage-words.md":   {checkGrounding, "psalm-23-1"},
 	"grounded-once.md":      {0, "psalm-23-1"},
@@ -1487,7 +1473,7 @@ func readCompareControl(t *testing.T, name string) string {
 
 // Every control trips exactly the check it is planted for, so a check that
 // stopped firing, or one that fires on a sound answer, is caught by name;
-// the controls planted to pass, good.md first among them, pass all nine;
+// the controls planted to pass, good.md first among them, pass every check;
 // and every file in the directory is accounted for.
 func TestCompareScorerCanFail(t *testing.T) {
 	tb := loadBenchTable(t).byID()
@@ -1776,7 +1762,7 @@ func checkProblems(ps []problem, check int) []string {
 
 // A passage's words can ground an answer without a contiguous quotation.
 // The check reads explanatory bodies, so a heading, opening quotation or
-// reflection question cannot stand in for an explanation.
+// extra closing section cannot stand in for an explanation.
 func TestCompareScorerReadsPassageWords(t *testing.T) {
 	rows := loadBenchTable(t).byID()
 	canon := NewBibleData()
@@ -1798,7 +1784,7 @@ func TestCompareScorerReadsPassageWords(t *testing.T) {
 		{"substring", "The rock remains.", "## First reading\nThe claim rocketed through a community.\n", false},
 		{"heading only", "The rock remains.", "## Rock\nThe meaning is a general assurance.\n", false},
 		{"opener only", "The rock remains.", "Rock.\n\n## First reading\nThe meaning is a general assurance.\n", false},
-		{"question only", "The rock remains.", "## First reading\nThe meaning is a general assurance.\n\n## Questions to take back to the text\n1. What does rock mean?\n", false},
+		{"extra closing section only", "The rock remains.", "## First reading\nThe meaning is a general assurance.\n\n## Where they agree\nA general assurance.\n\n## Where they part, and why\nThe scope of the assurance.\n\n## Where readings can be held together\nThe applications can coexist.\n\n## What the text settles\nIts grammar gives a statement.\n\n## Appendix\nRock names a foundation.\n", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c := benchCase{Book: "Matthew", Chapter: 16, Lo: 18, Hi: 18, Text: tc.passage}
@@ -1857,7 +1843,7 @@ func TestCompareScorerChecksVerseBounds(t *testing.T) {
 // the prompt defines the label with as much as by naming Scripture, the
 // supernatural or authority outright; a label hung on a reading's holders
 // with no assumption beside it outside a reading is not. Control: each
-// bare sentence appended to the questions trips the label check alone.
+// bare sentence appended to the final section trips the label check alone.
 func TestCompareScorerReadsTheLabelDefinitions(t *testing.T) {
 	c := loadBenchTable(t).byID()["matthew-16-18"]
 	good := readCompareControl(t, "good.md")
@@ -2212,7 +2198,7 @@ func TestCompareScorerAllowsAnOpenerWithoutAWordCap(t *testing.T) {
 // coverage check, since on a passage with the said-or-done floor a single
 // reading cannot tell the two stances apart (one-reading.md, on a passage
 // without the floor, trips the skeleton check alone). The answers are built
-// from good.md's five fixed sections and readings of forty-odd words each,
+// from good.md's four fixed sections and readings of forty-odd words each,
 // the first taking the saying as Jesus' own and the second as the
 // community's, so no other check moves with the count.
 func TestCompareScorerHoldsTheReadingCountAtItsEdges(t *testing.T) {
@@ -2336,37 +2322,6 @@ func TestCompareScorerTellsTheTwoStancesApart(t *testing.T) {
 	}
 	if ps := scoreCompareAnswer(canon, c, good[:at]+neutral+good[at:]); len(ps) != 0 {
 		t.Errorf("control: a reading stating neither stance, added, yet: %s", problemLines(ps))
-	}
-}
-
-// The questions check reads a question about what the reader brought to the
-// passage in the words such questions use, and not in a question about the
-// text. Control: a numbered question about the verses around the passage
-// is not one.
-func TestCompareScorerReadsTheQuestionAboutWhatTheReaderBrought(t *testing.T) {
-	for _, line := range []string{
-		"4. What did you bring to this verse: which reading did you expect, and where did it come from?",
-		"4. Which reading did you expect before you read these, and why?",
-		"4. What did you already believe about this verse, and from whom?",
-		"4. Which church or tradition did you come to it from?",
-		"Ask what you brought to the passage, and whether it survived the reading.",
-		"4. What personal experiences might you be bringing to the text that shape your reading?",
-		"3. Do I assume the account is literal history or a theological story, and how does that assumption shape my reading?",
-	} {
-		if !benchBrought.MatchString(line) {
-			t.Errorf("%q is not read as asking what the reader brought", line)
-		}
-	}
-	for _, line := range []string{
-		"1. Read verses 13 to 20 together: does the promise answer the man or the confession?",
-		"2. In your translation, is rock the same word as Peter, and what changes if it is?",
-		"3. What does Jesus build, an assembly, and who belongs to it elsewhere in this Gospel?",
-		"3. What does the author assume about the people in the story?",
-		"3. What was the author bringing to the text for the first readers?",
-	} {
-		if benchBrought.MatchString(line) {
-			t.Errorf("control: %q is read as asking what the reader brought", line)
-		}
 	}
 }
 

@@ -14,8 +14,3 @@ Grief for the dead and compassion for the mourners can be held together: Jesus w
 
 ## What the text settles
 The verb is wept, a single plain word, and the verse gives no reason for the tears; the verses before supply the mourners, and the verses after the crowd's two readings of them.
-
-## Questions to take back to the text
-1. Read verses 33 to 38: what does the text say moved Jesus, and what does it leave unsaid?
-2. Do the crowd's two responses in the verses after settle why he wept?
-3. What did you bring to this verse: what did you expect his tears to mean?

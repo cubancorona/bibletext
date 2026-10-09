@@ -310,8 +310,8 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       never paints THROUGH the panel, and a no-key error offers settings.
       A comparison (title Perspectives; `compare` opens one without a key)
       shows its headings: the readings, then Where they agree, Where they
-      part, and why, What the text settles, Questions to take back to the
-      text; a declined passage says so and offers Try again, not the
+      part, and why, Where readings can be held together, and What the text
+      settles; a declined passage says so and offers Try again, not the
       connection line.
 - [ ] Every AI wait names the model at work, on all five platforms: the
       Study with AI panel and Find show one line under the bar, over

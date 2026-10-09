@@ -20,9 +20,3 @@ A historical setting and a later theological use can be held together if the lat
 
 ## What the text settles
 The Hebrew has almah, a young woman, where the word for virgin, bethulah, was available, and the sign is tied to the years of the child's growing up, so a reading that makes the verse speak only of a distant birth rests on little here. The Greek translators chose parthenos, so the Christian reading has a text of its own. The verse does not say the mother is unmarried, for or against.
-
-## Questions to take back to the text
-1. Read the chapter from verse 10: what has Ahaz refused, and what does the sign answer?
-2. Does the sign lie in the manner of the birth or in what happens before the boy grows up?
-3. When Matthew 1:23 quotes the verse, which words does it change?
-4. What did you bring to this verse: which reading did you expect, and where did it come from?

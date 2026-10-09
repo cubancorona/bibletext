@@ -124,7 +124,7 @@ and the Fyne submenu ranging over `aiStudyVerbs` (`ai_compare.go`), held
 equal by `study_verbs_source_test.go`. The answer is the fixed `##`
 skeleton the existing panel already renders: the readings the model
 chooses, two to seven, then Where they agree, Where they part, and why,
-What the text settles, Questions to take back to the text; the prompt
+Where readings can be held together, and What the text settles; the prompt
 asks for succinctness and sets no word count, a number having been taken
 as a target that cost the readings their breadth. The prompt is public
 in README.md and held to the builder by `TestREADMEMirrorsPrompts`. Its

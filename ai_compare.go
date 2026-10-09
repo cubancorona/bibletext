@@ -5,7 +5,7 @@ package bibletext
 // the passage weigh for and against them. One prompt, one answer in the
 // ordinary study panel (ai_panel.go), no input sheet, no setting and nothing
 // stored. The answer is a fixed skeleton of level-two markdown headings the
-// panel's RichText already renders — one section per reading, then the five
+// panel's RichText already renders — one section per reading, then the four
 // sections named below — so the builder is its own: the prose verbs' shared
 // preamble (buildAIPrompt) forbids headings and lists on purpose, and this
 // one asks for them.
@@ -38,20 +38,19 @@ func aiStudyVerbsForAsk(enabled bool) []aiStudyVerb {
 	return verbs
 }
 
-// The five sections that follow the readings, in the order the prompt asks
+// The four sections that follow the readings, in the order the prompt asks
 // for them. The prompt names them in one sentence and the answer scorer
 // splits on the same strings, so a heading renamed here is renamed in both.
 const (
-	compareHeadingAgree     = "Where they agree"
-	compareHeadingPart      = "Where they part, and why"
-	compareHeadingTogether  = "Where readings can be held together"
-	compareHeadingSettles   = "What the text settles"
-	compareHeadingQuestions = "Questions to take back to the text"
+	compareHeadingAgree    = "Where they agree"
+	compareHeadingPart     = "Where they part, and why"
+	compareHeadingTogether = "Where readings can be held together"
+	compareHeadingSettles  = "What the text settles"
 )
 
-// compareHeadings is the five in order.
+// compareHeadings is the four in order.
 var compareHeadings = []string{
-	compareHeadingAgree, compareHeadingPart, compareHeadingTogether, compareHeadingSettles, compareHeadingQuestions,
+	compareHeadingAgree, compareHeadingPart, compareHeadingTogether, compareHeadingSettles,
 }
 
 // buildComparePrompt is the comparison's prompt: instruction first, passage
@@ -72,7 +71,7 @@ var compareHeadings = []string{
 // leaves the length to the answer's substance, since a number was taken as
 // a target and cost the readings their breadth. The fairness scorer
 // (ai_compare_bench_test.go) holds no length either, beyond a runaway
-// guard. Every heading is level two, the readings' and the five fixed ones
+// guard. Every heading is level two, the readings' and the four fixed ones
 // alike, so the panel renders one skeleton. README.md carries this prompt
 // in full, and a test holds the two equal.
 func buildComparePrompt(p aiPassage) string {
@@ -91,13 +90,11 @@ func buildComparePrompt(p aiPassage) string {
 		"some readers take it as reported while others take it as a later composition or explain " +
 		"it naturally, include both and say which is which. Then say where the readings agree, " +
 		"where they differ and why, whether any can be held together, and what the words of the passage settle or leave open. If " +
-		"the readings largely agree, say so in your first sentence and be brief. End with two or " +
-		"three numbered questions the reader can test against the words of the passage and the " +
-		"verses around it, and one asking what they brought to it."
+		"the readings largely agree, say so in your first sentence and be brief."
 
 	const headings = "Give each reading a level-two heading, and then, also at level two, the " +
 		"headings \"" + compareHeadingAgree + "\", \"" + compareHeadingPart + "\", \"" +
-		compareHeadingTogether + "\", \"" + compareHeadingSettles + "\" and \"" + compareHeadingQuestions + "\"."
+		compareHeadingTogether + "\" and \"" + compareHeadingSettles + "\"."
 
 	const compatibility = "Consider whether different readings can be true together, including where they address " +
 		"different aspects, levels of meaning, or kinds of explanation. Distinguish a reading that " +
@@ -122,8 +119,7 @@ func buildComparePrompt(p aiPassage) string {
 		"a rejection of supernatural action, and a named group need not be uniform in its readings. " +
 		"Distinguish what the passage explicitly states from what a reading infers, what it leaves possible, " +
 		"and what requires evidence beyond it. Do not treat the narrative’s claims as independent proof " +
-		"of an event or its mechanism. Make the closing questions open: do not assume a disputed reading " +
-		"is correct or force an either-or where meanings or explanations could coexist."
+		"of an event or its mechanism."
 
 	version := fmt.Sprintf("The quoted text is from the %s. Verse numbers may appear inside the quotation.", p.Version)
 

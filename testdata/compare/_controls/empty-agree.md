@@ -23,9 +23,3 @@ Peter and his confession can both be foundational if Peter is understood as the 
 
 ## What the text settles
 The wordplay is in the text, and the confession stands in the verse before it, so a reading that separates the rock from the confession rests on little here. The Greek has two forms, Petros and petra, and the passage does not say whether the change is meant. Nothing in the verse speaks of succession, for or against.
-
-## Questions to take back to the text
-1. Read verses 13 to 20 together: does the promise answer the man or the confession?
-2. In your translation, is rock the same word as Peter, and what changes if it is?
-3. What does Jesus build, an assembly, and who belongs to it elsewhere in this Gospel?
-4. What did you bring to this verse: which reading did you expect, and where did it come from?
