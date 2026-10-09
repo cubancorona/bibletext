@@ -1,7 +1,7 @@
 package bibletext
 
 // The comparison verb's contract: its prompt is a direct instruction with no
-// list of churches, schools or groups, carries the four section headings in
+// list of churches, schools or groups, carries the five section headings in
 // order and the passage last; the four prose prompts name differing readings
 // in one shared sentence and still forbid headings; README.md mirrors every
 // prompt word for word; the action string is dispatched by an allow-list;
@@ -38,7 +38,7 @@ func compareControlAnswer(t *testing.T) string {
 }
 
 // The control answer is the skeleton the prompt asks for, rendered: four
-// readings followed by the four sections in order as headings, the questions
+// readings followed by the five sections in order as headings, the questions
 // a numbered list with one asking what the reader brought; it quotes the
 // passage's own words and hangs no conservative or liberal label on a
 // reading, which the prompt no
@@ -92,11 +92,12 @@ func peterPassage() aiPassage {
 		Version: "World English Bible"}
 }
 
-// The four headings, the test's own copy: a renamed constant is caught here
+// The five headings, the test's own copy: a renamed constant is caught here
 // and not silently carried into the prompt and the scorer together.
 var comparePromptHeadings = []string{
 	"Where they agree",
 	"Where they part, and why",
+	"Where readings can be held together",
 	"What the text settles",
 	"Questions to take back to the text",
 }
@@ -109,7 +110,7 @@ var comparePromptHeadings = []string{
 // Judaism on a Hebrew Bible passage), for both a reading that takes what the
 // passage reports as said or done as reported and one that takes it as a
 // later composition, for the agreement, the differences and what the words
-// settle, for every heading at level two and the four fixed ones by name,
+// settle, for every heading at level two and the five fixed ones by name,
 // for the closing questions, and for honesty, fairness and no invented
 // quotation; succinct, and brief where the readings largely agree, said in
 // the first sentence, with no word count anywhere: a number was taken as a
@@ -133,11 +134,25 @@ func TestBuildComparePrompt(t *testing.T) {
 		"calling each group by the name it uses for itself",
 		"Where the passage is Scripture to more than one faith, give each faith's reading its own section.",
 		"Where the passage reports something said or done, and some readers take it as reported while others take it as a later composition or explain it naturally, include both and say which is which.",
-		"Then say where the readings agree, where they differ and why, and what the words of the passage settle or leave open.",
+		"Then say where the readings agree, where they differ and why, whether any can be held together, and what the words of the passage settle or leave open.",
 		"If the readings largely agree, say so in your first sentence and be brief.",
 		"End with two or three numbered questions the reader can test against the words of the passage and the verses around it, and one asking what they brought to it.",
 		"Write in clear, plain language for a general reader, and be succinct.",
 		"Put each reading as its own thoughtful holders would state it; do not choose for the reader, and do not invent quotations or references.",
+
+		"Consider whether different readings can be true together, including where they address different aspects, levels of meaning, or kinds of explanation.",
+		"Distinguish a reading that adds another meaning or explanation from one that excludes alternatives.",
+		"Where readings can be held together, explain how, which words support that combination, and what assumptions it requires.",
+		"When combining readings, preserve what each actually affirms; do not replace them with a weaker compromise.",
+		"Consider compatible meanings or explanations within a reading as well as between readings. For example, a reading may affirm a real event or presence and also symbolic meaning; natural mechanisms may coexist with divine agency or purpose. These are examples, not an exhaustive set, and a reading that explicitly excludes the additional meaning or explanation must be distinguished. If a combination changes a reading’s original claim, identify it as a revised position, not as both original readings being true. Where claims contradict one another, state the specific conflicting claims clearly; do not force a reconciliation. Different labels, methods, genres, or dates of composition are not by themselves contradictions. Literary form alone does not deny that an event occurred; identify any actual denial before calling the readings incompatible.",
+		"For example, a reading may affirm a real event or presence and also symbolic meaning; natural mechanisms may coexist with divine agency or purpose.",
+		"These are examples, not an exhaustive set, and a reading that explicitly excludes the additional meaning or explanation must be distinguished.",
+		"Compatibility alone does not establish that either reading is true.",
+		"Quote only wording supplied in the passage; describe surrounding verses without quoting them.",
+		"A scholarly method is not by itself a rejection of supernatural action, and a named group need not be uniform in its readings.",
+		"Distinguish what the passage explicitly states from what a reading infers, what it leaves possible, and what requires evidence beyond it.",
+		"Do not treat the narrative’s claims as independent proof of an event or its mechanism.",
+		"Make the closing questions open: do not assume a disputed reading is correct or force an either-or where meanings or explanations could coexist.",
 		"The quoted text is from the World English Bible. Verse numbers may appear inside the quotation.",
 	} {
 		if !strings.Contains(got, want) {
@@ -153,7 +168,7 @@ func TestBuildComparePrompt(t *testing.T) {
 		t.Errorf("the comparison prompt sets a word count: %q", m)
 	}
 
-	// The skeleton: a level-two heading per reading, then the four headings
+	// The skeleton: a level-two heading per reading, then the five headings
 	// named in one sentence, in order, at level two as well, from the same
 	// constants the scorer splits on. The prompt writes no heading line of
 	// its own.
@@ -163,9 +178,9 @@ func TestBuildComparePrompt(t *testing.T) {
 		}
 	}
 	sentence := `Give each reading a level-two heading, and then, also at level two, the headings "` +
-		strings.Join(comparePromptHeadings[:3], `", "`) + `" and "` + comparePromptHeadings[3] + `".`
+		strings.Join(comparePromptHeadings[:4], `", "`) + `" and "` + comparePromptHeadings[4] + `".`
 	if strings.Count(got, sentence) != 1 {
-		t.Errorf("the prompt does not name the four headings once in order, at level two:\n%s", got)
+		t.Errorf("the prompt does not name the five headings once in order, at level two:\n%s", got)
 	}
 	if strings.Count(got, "level-two") != 1 || strings.Count(got, "level two") != 1 {
 		t.Errorf("the prompt should set level two once for the readings and once for the fixed headings:\n%s", got)
@@ -405,6 +420,8 @@ const compareFixture = "## Catholic\n" +
 	"- Whether Peter and rock name the same thing.\n" +
 	"- Whether what is founded is an office that passes on, or the confession as such.\n" +
 	"- Whether the words are Jesus' own or the community's: an assumption about the Gospel itself.\n\n" +
+	"## Where readings can be held together\n" +
+	"Peter and his confession can both be foundational if the promise addresses him as the confessing apostle; this does not settle succession.\n\n" +
 	"## What the text settles\n" +
 	"The wordplay is in the text, and the verse before it is the confession; the passage says nothing of succession either way.\n\n" +
 	"## Questions to take back to the text\n" +

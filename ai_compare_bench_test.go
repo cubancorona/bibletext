@@ -43,7 +43,7 @@ package bibletext
 // Each fixture's front matter carries the sha1 of the prompt it was recorded
 // against. A mismatch fails the optional recorded-answer evaluation, so a
 // recorded set cannot be scored against a different prompt by mistake. The
-// four section headings are shared with the prompt (ai_compare.go), so a
+// five section headings are shared with the prompt (ai_compare.go), so a
 // heading rename does need a re-record or a mechanical edit of the set.
 //
 // Verse bounds: every "Book chapter:verse" an answer cites must name a book
@@ -259,7 +259,7 @@ const (
 	checkLabels    = 2  // labels only with an assumption; the settles section grounded
 	checkVerdict   = 3  // no verdict by preference
 	checkCitations = 4  // no invented citations, quotations or references
-	checkBalance   = 5  // the whole answer's shape: no runaway, Where they agree not empty, the agree sentence first on a no-conflict row
+	checkBalance   = 5  // no runaway, agreement and compatibility sections not empty, agreement first on a no-conflict row
 	checkCoverage  = 6  // the readings the prompt implies for the row, told apart
 	checkQuestions = 7  // two to four numbered questions, one asking what the reader brought
 	checkGrounding = 8  // the passage's own words appear
@@ -927,8 +927,10 @@ func scoreCompareAnswer(bd *BibleData, c benchCase, md string) []problem {
 	if n := answerWords(md); n > compareBenchRunawayWords {
 		add(checkBalance, "not succinct: %d words", n)
 	}
-	if agree, ok := byTitle[compareHeadingAgree]; ok && words(agree.body) == 0 {
-		add(checkBalance, "%q is empty", compareHeadingAgree)
+	for _, title := range []string{compareHeadingAgree, compareHeadingTogether} {
+		if section, ok := byTitle[title]; ok && words(section.body) == 0 {
+			add(checkBalance, "%q is empty", title)
+		}
 	}
 	if c.NoConflict {
 		if first := firstSentence(md); !saysLargelyAgree(first) {
@@ -1082,7 +1084,7 @@ func atoi(s string) int {
 }
 
 // readingTitles is the headings of the reading sections, the ones before the
-// four fixed sections: what the answer chose to compare.
+// five fixed sections: what the answer chose to compare.
 func readingTitles(md string) []string {
 	_, secs := splitMarkdownSections(md)
 	var out []string
@@ -1435,6 +1437,43 @@ var compareControls = map[string]struct {
 	"ungrounded-short.md":   {0, "psalm-23-1"},
 	"linked.md":             {checkNetwork, "matthew-16-18"},
 	"cut-short.md":          {checkNetwork, "matthew-16-18"},
+}
+
+// Compatibility has a distinct, nonempty section between disagreement and
+// textual judgment. The scorer checks its structure; theological compatibility
+// still requires reading the answer rather than matching vocabulary.
+func TestCompareScorerRequiresCompatibilitySection(t *testing.T) {
+	good := readCompareControl(t, "good.md")
+	start := strings.Index(good, "## "+compareHeadingTogether+"\n")
+	end := strings.Index(good, "## "+compareHeadingSettles+"\n")
+	if start < 0 || end <= start {
+		t.Fatal("control lacks the ordered compatibility section")
+	}
+	section := good[start:end]
+	c := loadBenchTable(t).byID()["matthew-16-18"]
+	canon := NewBibleData()
+	for _, tc := range []struct {
+		name   string
+		answer string
+		check  int
+	}{
+		{"present", good, 0},
+		{"missing", good[:start] + good[end:], checkSkeleton},
+		{"renamed", strings.Replace(good, "## "+compareHeadingTogether, "## Combination", 1), checkSkeleton},
+		{"empty", good[:start] + "## " + compareHeadingTogether + "\n\n" + good[end:], checkBalance},
+		{"moved", good[:start] + good[end:] + "\n" + section, checkSkeleton},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ps := scoreCompareAnswer(canon, c, tc.answer)
+			want := []int{}
+			if tc.check != 0 {
+				want = append(want, tc.check)
+			}
+			if got := checksTripped(ps); fmt.Sprint(got) != fmt.Sprint(want) {
+				t.Errorf("trips %v, want %v: %s", got, want, problemLines(ps))
+			}
+		})
+	}
 }
 
 func readCompareControl(t *testing.T, name string) string {
@@ -2173,7 +2212,7 @@ func TestCompareScorerAllowsAnOpenerWithoutAWordCap(t *testing.T) {
 // coverage check, since on a passage with the said-or-done floor a single
 // reading cannot tell the two stances apart (one-reading.md, on a passage
 // without the floor, trips the skeleton check alone). The answers are built
-// from good.md's four fixed sections and readings of forty-odd words each,
+// from good.md's five fixed sections and readings of forty-odd words each,
 // the first taking the saying as Jesus' own and the second as the
 // community's, so no other check moves with the count.
 func TestCompareScorerHoldsTheReadingCountAtItsEdges(t *testing.T) {

@@ -19,6 +19,9 @@ The saying is read as a later composition: Matthew's community reflecting on Pet
 ## Where they agree
 All four read Peter as spokesman for the apostles' confession, the assembly as the one people Jesus gathers, and the gates of Hades as the power of death, which cannot destroy it.
 
+## Where readings can be held together
+Peter and his confession can both be foundational if Peter is understood as the confessing apostle. Peter and rock support that connection, while the confession itself appears in the surrounding verses; this requires reading the promise in its narrative context. The combination does not settle succession. A reading that affirms Jesus said these words conflicts with one that denies he did.
+
 ## What the text settles
 The wordplay is in the text, and the confession stands in the verse before it, so a reading that separates the rock from the confession rests on little here. The Greek has two forms, Petros and petra, and the passage does not say whether the change is meant. Nothing in the verse speaks of succession, for or against.
 

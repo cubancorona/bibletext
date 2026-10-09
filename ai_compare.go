@@ -5,7 +5,7 @@ package bibletext
 // the passage weigh for and against them. One prompt, one answer in the
 // ordinary study panel (ai_panel.go), no input sheet, no setting and nothing
 // stored. The answer is a fixed skeleton of level-two markdown headings the
-// panel's RichText already renders — one section per reading, then the four
+// panel's RichText already renders — one section per reading, then the five
 // sections named below — so the builder is its own: the prose verbs' shared
 // preamble (buildAIPrompt) forbids headings and lists on purpose, and this
 // one asks for them.
@@ -30,19 +30,20 @@ var aiStudyVerbs = []aiStudyVerb{
 	{Action: aiActionCompare, Label: "Compare perspectives"},
 }
 
-// The four sections that follow the readings, in the order the prompt asks
+// The five sections that follow the readings, in the order the prompt asks
 // for them. The prompt names them in one sentence and the answer scorer
 // splits on the same strings, so a heading renamed here is renamed in both.
 const (
 	compareHeadingAgree     = "Where they agree"
 	compareHeadingPart      = "Where they part, and why"
+	compareHeadingTogether  = "Where readings can be held together"
 	compareHeadingSettles   = "What the text settles"
 	compareHeadingQuestions = "Questions to take back to the text"
 )
 
-// compareHeadings is the four in order.
+// compareHeadings is the five in order.
 var compareHeadings = []string{
-	compareHeadingAgree, compareHeadingPart, compareHeadingSettles, compareHeadingQuestions,
+	compareHeadingAgree, compareHeadingPart, compareHeadingTogether, compareHeadingSettles, compareHeadingQuestions,
 }
 
 // buildComparePrompt is the comparison's prompt: instruction first, passage
@@ -63,7 +64,7 @@ var compareHeadings = []string{
 // leaves the length to the answer's substance, since a number was taken as
 // a target and cost the readings their breadth. The fairness scorer
 // (ai_compare_bench_test.go) holds no length either, beyond a runaway
-// guard. Every heading is level two, the readings' and the four fixed ones
+// guard. Every heading is level two, the readings' and the five fixed ones
 // alike, so the panel renders one skeleton. README.md carries this prompt
 // in full, and a test holds the two equal.
 func buildComparePrompt(p aiPassage) string {
@@ -81,20 +82,43 @@ func buildComparePrompt(p aiPassage) string {
 		"faith's reading its own section. Where the passage reports something said or done, and " +
 		"some readers take it as reported while others take it as a later composition or explain " +
 		"it naturally, include both and say which is which. Then say where the readings agree, " +
-		"where they differ and why, and what the words of the passage settle or leave open. If " +
+		"where they differ and why, whether any can be held together, and what the words of the passage settle or leave open. If " +
 		"the readings largely agree, say so in your first sentence and be brief. End with two or " +
 		"three numbered questions the reader can test against the words of the passage and the " +
 		"verses around it, and one asking what they brought to it."
 
 	const headings = "Give each reading a level-two heading, and then, also at level two, the " +
 		"headings \"" + compareHeadingAgree + "\", \"" + compareHeadingPart + "\", \"" +
-		compareHeadingSettles + "\" and \"" + compareHeadingQuestions + "\"."
+		compareHeadingTogether + "\", \"" + compareHeadingSettles + "\" and \"" + compareHeadingQuestions + "\"."
+
+	const compatibility = "Consider whether different readings can be true together, including where they address " +
+		"different aspects, levels of meaning, or kinds of explanation. Distinguish a reading that " +
+		"adds another meaning or explanation from one that excludes alternatives. Where readings can " +
+		"be held together, explain how, which words support that combination, and what assumptions it " +
+		"requires. When combining readings, preserve what each actually affirms; do not replace them " +
+		"with a weaker compromise. Consider compatible meanings or explanations within a reading as " +
+		"well as between readings. For example, a reading may affirm a real event or presence and " +
+		"also symbolic meaning; natural mechanisms may coexist with divine agency or purpose. These " +
+		"are examples, not an exhaustive set, and a reading that explicitly excludes the additional " +
+		"meaning or explanation must be distinguished. If a combination changes a reading’s original " +
+		"claim, identify it as a revised position, not as both original readings being true. Where " +
+		"claims contradict one another, state the specific conflicting claims clearly; do not force a " +
+		"reconciliation. Different labels, methods, genres, or dates of composition are not by " +
+		"themselves contradictions. Literary form alone does not deny that an event occurred; " +
+		"identify any actual denial before calling the readings incompatible. Compatibility alone " +
+		"does not establish that either reading is true."
 
 	const fairness = "Put each reading as its own thoughtful holders would state it; do not choose " +
-		"for the reader, and do not invent quotations or references."
+		"for the reader, and do not invent quotations or references. Quote only wording supplied in the " +
+		"passage; describe surrounding verses without quoting them. A scholarly method is not by itself " +
+		"a rejection of supernatural action, and a named group need not be uniform in its readings. " +
+		"Distinguish what the passage explicitly states from what a reading infers, what it leaves possible, " +
+		"and what requires evidence beyond it. Do not treat the narrative’s claims as independent proof " +
+		"of an event or its mechanism. Make the closing questions open: do not assume a disputed reading " +
+		"is correct or force an either-or where meanings or explanations could coexist."
 
 	version := fmt.Sprintf("The quoted text is from the %s. Verse numbers may appear inside the quotation.", p.Version)
 
-	return voice + "\n\n" + task + "\n\n" + readings + "\n\n" + headings + "\n\n" +
+	return voice + "\n\n" + task + "\n\n" + readings + "\n\n" + compatibility + "\n\n" + headings + "\n\n" +
 		fairness + "\n\n" + version + "\n\n" + aiPassageLines(p)
 }

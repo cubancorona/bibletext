@@ -19,6 +19,9 @@ All four read Peter as spokesman for the apostles' confession, the assembly as t
 - Whether the words are Jesus' own or the community's: a question about the Gospel itself.
 - What settles it: tradition, the Fathers, Scripture read with Scripture, or reconstruction.
 
+## Where readings can be held together
+Peter and his confession can both be foundational if Peter is understood as the confessing apostle. Peter and rock support that connection, while the confession itself appears in the surrounding verses; this requires reading the promise in its narrative context. The combination does not settle succession. A reading that affirms Jesus said these words conflicts with one that denies he did.
+
 ## What the text settles
 Each reading has its strengths, and a thoughtful reader may weigh them differently. The question remains open, and the answer turns on what one brings to it.
 

@@ -12,6 +12,9 @@ Both read the shepherd as God’s own care, and the second line as trust in it.
 ## Where they part, and why
 - Whether the shepherd is heard again in the Gospel: a question of what else is read with the psalm.
 
+## Where readings can be held together
+A description of care can carry a personal meaning and a communal meaning together if neither excludes the other. These possible applications require a broader interpretive context; compatibility alone establishes neither.
+
 ## What the text settles
 The shepherd is the LORD, and the one who speaks wants for nothing; the verse names no occasion and no enemy.
 

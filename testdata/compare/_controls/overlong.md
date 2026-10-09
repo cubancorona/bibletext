@@ -27,6 +27,9 @@ All four read Peter as spokesman for the apostles' confession, the assembly as t
 - Whether the words are Jesus' own or the community's: a question about the Gospel itself, and the one difference that no reading of the Greek can close.
 - What settles it: tradition, the Fathers, Scripture read with Scripture, or reconstruction; each reading names its authority, and the authorities do not overlap.
 
+## Where readings can be held together
+Peter and his confession can both be foundational if Peter is understood as the confessing apostle. Peter and rock support that connection, while the confession itself appears in the surrounding verses; this requires reading the promise in its narrative context. The combination does not settle succession. A reading that affirms Jesus said these words conflicts with one that denies he did.
+
 ## What the text settles
 The wordplay is in the text, and the confession stands in the verse before it, so a reading that separates the rock from the confession rests on little here. The Greek has two forms, Petros and petra, and the passage does not say whether the change is meant; a reader who knows no Greek still sees that the name and the rock are set side by side on purpose. Nothing in the verse speaks of succession, for or against, and nothing in it names Rome, a see or an office that outlives the man addressed. The gates of Hades are the power of death, so the promise is that the assembly survives, not that it never errs.
 

@@ -15,6 +15,9 @@ All three read the verse as a sign given to Ahaz in a moment of fear, with a chi
 - Whether the sign is fulfilled in Ahaz's day, in Christ, or in both: a question about prophecy.
 - Whether Matthew's reading governs Isaiah's meaning: a question about authority.
 
+## Where readings can be held together
+A historical setting and a later theological use can be held together if the later use does not replace the earlier meaning. This requires a framework for typology beyond these words; it does not make the differing claims about the sign identical.
+
 ## What the text settles
 The Hebrew has almah, a young woman, where the word for virgin, bethulah, was available, and the sign is tied to the years of the child's growing up, so a reading that makes the verse speak only of a distant birth rests on little here. The Greek translators chose parthenos, so the Christian reading has a text of its own. The verse does not say the mother is unmarried, for or against.
 
