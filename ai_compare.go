@@ -33,7 +33,7 @@ func aiStudyVerbsForAsk(enabled bool) []aiStudyVerb {
 		{Action: aiActionCompare, Label: "Compare perspectives"},
 	}
 	if enabled {
-		verbs = append(verbs, aiStudyVerb{Action: aiActionAsk, Label: "Ask a question"})
+		verbs = append(verbs, aiStudyVerb{Action: aiActionAsk, Label: "Ask a question…"})
 	}
 	return verbs
 }

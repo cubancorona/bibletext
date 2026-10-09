@@ -1198,7 +1198,7 @@ public final class BtBridge {
         String[][] items = {{"Explain", "explain"}, {"Analyze context", "context"},
                             {"Analyze translation", "translation"},
                             {"Compare perspectives", "compare"},
-                            {"Ask a question", "ask"}};
+                            {"Ask a question…", "ask"}};
         for (String[] it : items) {
             final String action = it[1];
             if ("ask".equals(action) && !askEnabled) continue;

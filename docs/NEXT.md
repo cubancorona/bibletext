@@ -571,7 +571,7 @@ Open decisions: P1 to P6.
 ### 4. Ask a question about a selected passage
 
 **Behind the switch for refinement.** A selection's Study with AI menu gains
-"Ask a question". The composer shows the reference, translation and a short,
+"Ask a question…". The composer shows the reference, translation and a short,
 wrapping excerpt of the selected passage above the question. iPhone and iPad
 use the native multiline editor shared with Share with note, with system
 dictation, editing and keyboard support. Ask and Cancel are explicit buttons;

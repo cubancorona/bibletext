@@ -353,7 +353,7 @@ AI** submenu with four actions — **Explain**, **Analyze context**, **Analyze
 translation**, and **Compare perspectives**, which sets several named readings of
 the passage side by side under fixed headings. The chosen action plus the selected
 text are sent to an AI provider of your choice, and the answer appears in a panel.
-The next-major development build also offers **Ask a question**, with the selected
+The next-major development build also offers **Ask a question…**, with the selected
 passage excerpt above the question field and a native multiline editor on iOS;
 it remains behind the [development switch](docs/NEXT.md) while it is refined. The whole
 AI surface can be turned off in Settings → Assistant → **None**. A separate AI

@@ -12,7 +12,7 @@ func TestAskQuestionMenuGate(t *testing.T) {
 	if got := aiStudyVerbsForAsk(false); !slices.Equal(got, fixed) {
 		t.Errorf("gate off: %v", got)
 	}
-	all := append(slices.Clone(fixed), aiStudyVerb{aiActionAsk, "Ask a question"})
+	all := append(slices.Clone(fixed), aiStudyVerb{aiActionAsk, "Ask a question…"})
 	if got := aiStudyVerbsForAsk(true); !slices.Equal(got, all) {
 		t.Errorf("gate on: %v", got)
 	}
@@ -34,7 +34,7 @@ func TestNativeAskMenusMirrorTheCodeGate(t *testing.T) {
 		{"reading_ios.go", []string{
 			`static int gBTAskEnabled = 0;`,
 			`void btIOSSetAskEnabled\(int on\) \{ gBTAskEnabled = on; \}`,
-			`if \(gBTAskEnabled\) \[aiItems addObject:make\(@"Ask a question", @"ask"\)\];`,
+			`if \(gBTAskEnabled\) \[aiItems addObject:make\(@"Ask a question…", @"ask"\)\];`,
 			`askOn := C.int\(0\)\s+if askQuestionEnabled \{\s+askOn = 1\s+\}\s+C.btIOSSetAskEnabled\(askOn\)`,
 		}},
 		{"reading_macos.go", []string{

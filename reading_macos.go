@@ -223,7 +223,7 @@ void btMacSetAskEnabled(int on) { gBTMacAskEnabled = on; }
                                 @[@"Analyze context", @"context"],
                                 @[@"Analyze translation", @"translation"],
                                 @[@"Compare perspectives", @"compare"],
-                                @[@"Ask a question", @"ask"]]) {
+                                @[@"Ask a question…", @"ask"]]) {
             if ([pair[1] isEqualToString:@"ask"] && !gBTMacAskEnabled) continue;
             SEL action = NSSelectorFromString([NSString stringWithFormat:@"hbAI_%@:", pair[1]]);
             NSMenuItem *it = [[NSMenuItem alloc] initWithTitle:pair[0] action:action keyEquivalent:@""];

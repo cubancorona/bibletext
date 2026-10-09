@@ -285,7 +285,7 @@ static void btIOSRebuildWash(void);
                                   make(@"Analyze translation", @"translation"),
                                   make(@"Compare perspectives", @"compare"),
                               ]];
-    if (gBTAskEnabled) [aiItems addObject:make(@"Ask a question", @"ask")];
+    if (gBTAskEnabled) [aiItems addObject:make(@"Ask a question…", @"ask")];
     UIMenu *ai = [UIMenu menuWithTitle:@"Study with AI" image:nil identifier:nil options:0
                               children:aiItems];
 

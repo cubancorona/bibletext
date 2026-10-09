@@ -258,7 +258,7 @@ func TestAIStudyVerbs(t *testing.T) {
 		{aiActionCompare, "Compare perspectives"},
 	}
 	if askQuestionEnabled {
-		want = append(want, aiStudyVerb{aiActionAsk, "Ask a question"})
+		want = append(want, aiStudyVerb{aiActionAsk, "Ask a question…"})
 	}
 	if len(aiStudyVerbs) != len(want) {
 		t.Fatalf("aiStudyVerbs = %v, want %v", aiStudyVerbs, want)
