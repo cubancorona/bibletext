@@ -124,25 +124,38 @@ jobs:
             return @{ Window=$window; Id=$windowId; Name=$name; Path=$path; Session=$session;
               Class=$class.ToString(); Title=$title.ToString(); Visible=$visible; CloakResult=$cloakResult; Cloaked=$cloaked }
           }
-          $start = Read-StartupWindow 'Start' ([CIStartup.Native]::FindWindow('Windows.UI.Core.CoreWindow', 'Start'))
-          $focus = Read-StartupWindow 'foreground' ([CIStartup.Native]::GetForegroundWindow())
           $startPath = Join-Path $env:WINDIR 'SystemApps\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\StartMenuExperienceHost.exe'
           # Microsoft documents this exact Windows 11 SearchHost package path:
           # https://learn.microsoft.com/windows/privacy/manage-connections-from-windows-operating-system-components-to-microsoft-services#21-cortana-and-search-group-policies
           $searchPath = Join-Path $env:WINDIR 'SystemApps\MicrosoftWindows.Client.CBS_cw5n1h2txyewy\SearchHost.exe'
-          $knownStart = $start.Name -eq 'StartMenuExperienceHost' -and $start.Session -eq $jobSession -and
-            [string]::Equals($start.Path, $startPath, [StringComparison]::OrdinalIgnoreCase) -and
-            $start.Class -ceq 'Windows.UI.Core.CoreWindow' -and $start.Title -ceq 'Start' -and
-            $start.Visible -and $start.CloakResult -eq 0 -and $start.Cloaked -eq 0
-          $focusIsStart = $focus.Window -eq $start.Window -and $focus.Id -eq $start.Id -and
-            $focus.Class -ceq 'Windows.UI.Core.CoreWindow' -and $focus.Title -ceq 'Start' -and
-            $focus.Visible -and $focus.CloakResult -eq 0 -and $focus.Cloaked -eq 0
-          # The image can report shell-cloaked Search as foreground while Start
-          # covers the desktop. Permit only this exact system Search identity.
-          $focusIsSearch = $focus.Name -eq 'SearchHost' -and $focus.Session -eq $jobSession -and
-            [string]::Equals($focus.Path, $searchPath, [StringComparison]::OrdinalIgnoreCase) -and
-            $focus.Class -ceq 'Windows.UI.Core.CoreWindow' -and $focus.Title -ceq 'Search' -and
-            $focus.Visible -and $focus.CloakResult -eq 0 -and $focus.Cloaked -eq 2 # DWM_CLOAKED_SHELL.
+          # Start can remain shell-cloaked during runner startup, then become
+          # visible. Observe only the exact system identities for a bounded
+          # period; shell-cloaked Start never qualifies for Escape input.
+          $observeDeadline = [DateTime]::UtcNow.AddSeconds(30)
+          do {
+            $start = Read-StartupWindow 'Start' ([CIStartup.Native]::FindWindow('Windows.UI.Core.CoreWindow', 'Start'))
+            $focus = Read-StartupWindow 'foreground' ([CIStartup.Native]::GetForegroundWindow())
+            $canonicalStart = $start.Name -eq 'StartMenuExperienceHost' -and $start.Session -eq $jobSession -and
+              [string]::Equals($start.Path, $startPath, [StringComparison]::OrdinalIgnoreCase) -and
+              $start.Class -ceq 'Windows.UI.Core.CoreWindow' -and $start.Title -ceq 'Start' -and
+              $start.Visible -and $start.CloakResult -eq 0
+            $knownStart = $canonicalStart -and $start.Cloaked -eq 0
+            $focusIsStart = $focus.Window -eq $start.Window -and $focus.Id -eq $start.Id -and
+              $focus.Class -ceq 'Windows.UI.Core.CoreWindow' -and $focus.Title -ceq 'Start' -and
+              $focus.Visible -and $focus.CloakResult -eq 0 -and $focus.Cloaked -eq 0
+            $waitingFocusIsStart = $focus.Window -eq $start.Window -and $focus.Id -eq $start.Id -and
+              $focus.Class -ceq 'Windows.UI.Core.CoreWindow' -and $focus.Title -ceq 'Start' -and
+              $focus.Visible -and $focus.CloakResult -eq 0 -and $focus.Cloaked -eq 2
+            # This image reports both visible and shell-cloaked Search as
+            # foreground. Permit only the exact same-session system identity.
+            $focusIsSearch = $focus.Name -eq 'SearchHost' -and $focus.Session -eq $jobSession -and
+              [string]::Equals($focus.Path, $searchPath, [StringComparison]::OrdinalIgnoreCase) -and
+              $focus.Class -ceq 'Windows.UI.Core.CoreWindow' -and $focus.Title -ceq 'Search' -and
+              $focus.Visible -and $focus.CloakResult -eq 0 -and $focus.Cloaked -in @(0, 2)
+            $awaitUncloaking = $canonicalStart -and $start.Cloaked -eq 2 -and
+              ($waitingFocusIsStart -or $focusIsSearch) -and [DateTime]::UtcNow -lt $observeDeadline
+            if ($awaitUncloaking) { Start-Sleep -Milliseconds 200 }
+          } while ($awaitUncloaking)
           if ($knownStart -and ($focusIsStart -or $focusIsSearch)) {
             Write-Host "known Start signature: session=$jobSession path=$($start.Path); verified focus Start=$focusIsStart Search=$focusIsSearch; sending Escape to foreground HWND=$($focus.Window)"
             $sent = [CIStartup.Native]::EscapeIfForeground($focus.Window, $start.Window)
