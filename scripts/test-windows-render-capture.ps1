@@ -15,6 +15,13 @@ param(
   [long]$CoveredWindow
 )
 $ErrorActionPreference = 'Stop'
+Add-Type -Namespace Fixture -Name Native -MemberDefinition @"
+[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int command);
+[DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+[DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr h, uint command);
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint process);
+"@
 
 if ($Mode -ne 'run') {
   if ($Mode -eq 'no-window') {
@@ -24,9 +31,6 @@ if ($Mode -ne 'run') {
   }
   Add-Type -AssemblyName System.Windows.Forms
   Add-Type -AssemblyName System.Drawing
-  Add-Type -Namespace Fixture -Name Native -MemberDefinition @"
-[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
-"@
   $form = New-Object System.Windows.Forms.Form
   $form.Text = 'Synthetic capture fixture'
   $form.StartPosition = 'Manual'
@@ -50,6 +54,9 @@ if ($Mode -ne 'run') {
   }
   $form.TopMost = $Mode -eq 'cover'
   $form.Add_Shown({
+    [void][Fixture.Native]::ShowWindow($form.Handle, 5) # SW_SHOW, preserve fixture geometry.
+    $form.Activate()
+    $form.Refresh()
     # Keep the target foreground while the foreign TopMost surface covers it.
     # The negative case must exercise pixel ownership, not focus alone.
     if ($CoveredWindow) { [void][Fixture.Native]::SetForegroundWindow([IntPtr]$CoveredWindow) }
@@ -78,18 +85,36 @@ function Start-Fixture([string]$kind, [long]$covered = 0) {
   $fixtureArgs = @('-NoProfile', '-STA', '-File', ('"' + $PSCommandPath + '"'),
     '-Mode', $kind, '-ReadyFile', ('"' + $ready + '"'))
   if ($covered) { $fixtureArgs += @('-CoveredWindow', $covered.ToString()) }
-  $process = Start-Process -FilePath $pwsh -ArgumentList $fixtureArgs -WindowStyle Hidden -PassThru
+  # A hidden startup window can suppress the first native form as well.
+  # Reuse the console so the visible, unowned form is the child main window.
+  $process = Start-Process -FilePath $pwsh -ArgumentList $fixtureArgs -NoNewWindow -PassThru
   $children.Add($process)
+  $readiness = 'ready file absent'
   for ($i = 0; $i -lt 100; $i++) {
     $process.Refresh()
     if ($process.HasExited) { throw "synthetic $kind fixture exited before readiness" }
     if (Test-Path -LiteralPath $ready) {
       $process.Refresh()
-      return $process
+      if ($kind -eq 'no-window') { return $process }
+      [long]$fixtureWindow = 0
+      $readyText = Get-Content -LiteralPath $ready -Raw
+      if ([long]::TryParse($readyText, [ref]$fixtureWindow) -and $fixtureWindow) {
+        $window = [IntPtr]$fixtureWindow
+        [uint32]$windowProcess = 0
+        [void][Fixture.Native]::GetWindowThreadProcessId($window, [ref]$windowProcess)
+        $visible = [Fixture.Native]::IsWindowVisible($window)
+        $owner = [Fixture.Native]::GetWindow($window, 4) # GW_OWNER.
+        $main = $process.MainWindowHandle
+        $readiness = "PID=$($process.Id) ready HWND=$window visible=$visible window PID=$windowProcess owner HWND=$owner main HWND=$main"
+        if ($visible -and $windowProcess -eq $process.Id -and $owner -eq [IntPtr]::Zero -and $main -eq $window) {
+          Write-Host "synthetic $kind ready: $readiness"
+          return $process
+        }
+      } else { $readiness = 'ready file has no complete HWND' }
     }
     Start-Sleep -Milliseconds 100
   }
-  throw "synthetic $kind fixture did not become ready"
+  throw "synthetic $kind fixture did not become ready: $readiness"
 }
 
 function Probe-Fixture([System.Diagnostics.Process]$process, [string]$expect, [string]$name) {

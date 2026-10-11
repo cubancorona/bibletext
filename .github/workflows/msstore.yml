@@ -161,8 +161,9 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           # ARM runner startup can leave the privacy setup window over every
-          # app. Clean up only its broker and foreground host in this job's
-          # session; the capture guard still rejects any remaining occluder.
+          # app. Its broker can exit while the foreground host remains. Clean
+          # up only same-session brokers and the foreground system host; the
+          # capture guard still rejects any remaining occluder.
           Add-Type -Namespace CIStartup -Name Native -MemberDefinition @'
           [System.Runtime.InteropServices.DllImport("user32.dll")]
           public static extern System.IntPtr GetForegroundWindow();
@@ -176,11 +177,15 @@ jobs:
           $foregroundProcess = if ($foregroundId) { Get-Process -Id $foregroundId -ErrorAction SilentlyContinue }
           $foregroundDescription = if ($foregroundProcess) { "$($foregroundProcess.ProcessName) PID=$foregroundId session=$($foregroundProcess.SessionId)" } else { 'none' }
           Write-Host "ARM CI desktop session=$jobSession foreground=$foregroundDescription OOBE brokers=$($brokers.Count)"
-          if ($brokers.Count) {
-            $startupProcesses = @($brokers)
-            if ($foregroundProcess -and $foregroundProcess.ProcessName -eq 'WWAHost' -and $foregroundProcess.SessionId -eq $jobSession) {
-              $startupProcesses += $foregroundProcess
-            }
+          $startupProcesses = @($brokers)
+          $systemHost = Join-Path $env:WINDIR 'System32\WWAHost.exe'
+          if ($foregroundProcess -and $foregroundProcess.ProcessName -eq 'WWAHost' -and
+              $foregroundProcess.SessionId -eq $jobSession -and
+              [string]::Equals($foregroundProcess.Path, $systemHost, [StringComparison]::OrdinalIgnoreCase)) {
+            Write-Host "known foreground system host path=$($foregroundProcess.Path) title=$($foregroundProcess.MainWindowTitle)"
+            $startupProcesses += $foregroundProcess
+          }
+          if ($startupProcesses.Count) {
             foreach ($startupProcess in $startupProcesses) {
               Write-Host "stopping known startup process $($startupProcess.ProcessName) PID=$($startupProcess.Id) session=$jobSession"
               try { Stop-Process -InputObject $startupProcess -Force }
