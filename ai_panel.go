@@ -20,6 +20,42 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+// aiPassageDisclosureTheme keeps the glyph small inside a full touch target.
+// Button measures its empty label too, so its text size follows the citation.
+type aiPassageDisclosureTheme struct{ fyne.Theme }
+
+func (t aiPassageDisclosureTheme) Size(name fyne.ThemeSizeName) float32 {
+	switch name {
+	case theme.SizeNameText:
+		return t.Theme.Size(theme.SizeNameCaptionText)
+	case theme.SizeNameInnerPadding:
+		return 0
+	case theme.SizeNameInlineIcon:
+		return 14
+	}
+	return t.Theme.Size(name)
+}
+
+// aiPassageHeaderLayout lets the touch target use the citation's surrounding
+// space while retaining at least twelve points between quotation and citation.
+type aiPassageHeaderLayout struct{ citation fyne.CanvasObject }
+
+func (l aiPassageHeaderLayout) box(objects []fyne.CanvasObject) fyne.Layout {
+	gap := float32(12)
+	if len(objects) > 1 {
+		gap = fyne.Max(0, gap-(objects[1].MinSize().Height-l.citation.MinSize().Height)/2)
+	}
+	return layout.NewCustomPaddedVBoxLayout(gap)
+}
+
+func (l aiPassageHeaderLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	return l.box(objects).MinSize(objects)
+}
+
+func (l aiPassageHeaderLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	l.box(objects).Layout(objects, size)
+}
+
 func showAIPanel(state *AppState, action, selectedText, question string, span selSpan) {
 	if state == nil || state.window == nil || state.window.Canvas() == nil {
 		return
@@ -42,6 +78,19 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 	if cnv == nil {
 		return
 	}
+	panelID := devDiagnosticID()
+	diagnose := func(event string, metrics ...devDiagnosticMetric) {
+		if !devDiagnosticsEnabled {
+			return
+		}
+		metrics = append(metrics, devDiagnosticMetric{Key: "panel_id", Value: int64(panelID)},
+			devDiagnosticMetric{Key: "action", Value: devDiagnosticAction(action)})
+		devDiagnosticEvent(event, metrics...)
+	}
+	diagnose("panel_open", devDiagnosticMetric{Key: "question_bytes", Value: int64(len(question))},
+		devDiagnosticMetric{Key: "passage_bytes", Value: int64(len(passage.Text))},
+		devDiagnosticMetric{Key: "width", Value: int64(cnv.Size().Width)},
+		devDiagnosticMetric{Key: "height", Value: int64(cnv.Size().Height)})
 	pal := state.pal()
 	// Fixed actions retain their request and reopen behavior. Ask's composer
 	// passes a captured passage so navigation cannot change the question's page.
@@ -63,66 +112,64 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 		}
 	}
 
-	// --- Header: action title, reference, and a one-line preview of the selection.
+	// --- Header: action title and grounding passage.
 	title := canvas.NewText(aiActionTitle(action), pal.Text)
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	title.TextSize = 22
 
-	ref := canvas.NewText(passage.Ref, pal.Accent)
-	ref.TextStyle = fyne.TextStyle{Bold: true}
-	ref.TextSize = subheadingTextSize
-
-	// The quoted selection stays to one quiet line. A canvas.Text just clips at
-	// the panel edge with no hint there's more, so use a RichText that truncates
-	// with an ellipsis (it's given the panel width by the VBox). The char cap is
-	// only a sanity bound; the visual truncation is what keeps it tidy.
-	quote := widget.NewRichText(&widget.TextSegment{
-		Text: quotedOneLine(passage.Text, 300),
-		Style: widget.RichTextStyle{
-			ColorName: colorNameMuted,
-			SizeName:  theme.SizeNameCaptionText,
-			TextStyle: fyne.TextStyle{Italic: true},
-			Inline:    true,
-		},
-	})
-	quote.Wrapping = fyne.TextWrapOff
-	quote.Truncation = fyne.TextTruncateEllipsis
-
-	// For "Ask", the title is the generic "Answer", so show the reader's actual question
-	// (word-wrapped, bold) above the grounding passage preview.
+	// Ask's question introduces the reading area below the passage citation.
+	// It scrolls with the response, so a long question cannot crowd it out.
 	headerItems := []fyne.CanvasObject{title}
-	if !nextRelease {
-		headerItems = append(headerItems, ref)
-	}
+	var questionText *widget.RichText
 	if action == aiActionAsk {
-		if !nextRelease && passage.Version != "" {
-			version := widget.NewRichText(&widget.TextSegment{
-				Text: passage.Version,
-				Style: widget.RichTextStyle{
-					ColorName: colorNameMuted,
-					SizeName:  theme.SizeNameCaptionText,
-				},
-			})
-			version.Wrapping = fyne.TextWrapWord
-			headerItems = append(headerItems, version)
-		}
 		if q := strings.TrimSpace(question); q != "" {
-			ql := widget.NewRichText(&widget.TextSegment{
+			ql := widget.NewRichText(aiAnswerLayoutSegments([]widget.RichTextSegment{&widget.TextSegment{
 				Text:  q,
-				Style: widget.RichTextStyle{TextStyle: fyne.TextStyle{Bold: true}},
-			})
+				Style: widget.RichTextStyle{SizeName: theme.SizeNameCaptionText},
+			}})...)
 			ql.Wrapping = fyne.TextWrapWord
-			headerItems = append(headerItems, ql)
+			questionText = ql
 		}
 	}
+	boundedContext := strings.TrimSpace(passage.previewText()) != ""
 	var passageExcerpt *noteExcerpt
-	if nextRelease {
-		preview, excerpt := newPassageExcerptPreview(passage.Ref, passage.previewVersion(), passage.previewText(),
-			noteExcerptMaxLinesFor(fyne.CurrentDevice().IsMobile(), cnv.Size().Height), pal)
-		passageExcerpt = excerpt
-		headerItems = append(headerItems, preview)
+	var detailsScroll *container.Scroll
+	var detailsBox *fyne.Container
+	var detailsButton *widget.Button
+	var detailsChoice bool
+	detailsExpanded := true
+	var refitContext func()
+	preview, excerpt := newPassageExcerptPreview(passage.Ref, passage.previewVersion(), passage.previewText(),
+		noteExcerptMaxLinesFor(fyne.CurrentDevice().IsMobile(), cnv.Size().Height), pal)
+	passageExcerpt = excerpt
+	if boundedContext {
+		// The citation stays visible when the quote collapses.
+		// Expanded details retain the complete selected words in a scroll.
+		block := preview.Objects[0].(*fyne.Container)
+		quoteBox := block.Objects[0]
+		block.Objects = block.Objects[1:]
+		excerpt.setMaxLines(len([]rune(passage.previewText())) + 1)
+		detailsScroll = container.NewVScroll(container.New(squeezeWidthLayout{}, quoteBox))
+		detailsBox = container.NewStack(detailsScroll)
+		detailsButton = widget.NewButtonWithIcon("", iconDisclosureCollapse, func() {
+			detailsChoice = true
+			detailsExpanded = !detailsExpanded
+			diagnose("panel_details")
+			if refitContext != nil {
+				refitContext()
+			}
+		})
+		detailsButton.Importance = widget.LowImportance
+		compactButton := container.NewThemeOverride(detailsButton,
+			aiPassageDisclosureTheme{fyne.CurrentApp().Settings().Theme()})
+		disclosure := container.NewGridWrap(fyne.NewSize(minTapTarget, minTapTarget), compactButton)
+		setPassagePreviewCompact(preview, true)
+		// Keep the title on its own row: long action titles and the disclosure
+		// would otherwise widen the popup beyond a narrow phone's canvas.
+		citationRow := container.NewBorder(nil, nil, nil, container.New(vCenterLayout{}, disclosure), container.New(vCenterLayout{}, preview))
+		headerItems = append(headerItems, container.New(aiPassageHeaderLayout{citation: preview}, detailsBox, citationRow))
 	} else {
-		headerItems = append(headerItems, quote)
+		headerItems = append(headerItems, preview)
 	}
 	headerItems = append(headerItems, widget.NewSeparator())
 	header := container.NewVBox(headerItems...)
@@ -139,7 +186,20 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 	maxBodyH := ps.Height - 168
 	answer := widget.NewRichTextFromMarkdown("")
 	answer.Wrapping = fyne.TextWrapWord
-	answerScroll := container.NewVScroll(answer)
+	var questionView fyne.CanvasObject
+	if questionText != nil {
+		questionText.Resize(fyne.NewSize(bodyW-16, questionText.MinSize().Height))
+		questionView = container.New(layout.NewCustomPaddedLayout(0, 0, 8, 8),
+			container.NewThemeOverride(questionText, passageCitationTheme{fyne.CurrentApp().Settings().Theme()}))
+	}
+	withQuestion := func(content fyne.CanvasObject) fyne.CanvasObject {
+		if questionView == nil {
+			return content
+		}
+		return container.New(squeezeWidthLayout{}, container.NewVBox(questionView, content))
+	}
+	answerContent := withQuestion(answer)
+	answerScroll := container.NewVScroll(answerContent)
 	answerScroll.SetMinSize(fyne.NewSize(bodyW, maxBodyH))
 	body := container.NewStack(answerScroll)
 
@@ -227,6 +287,51 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 		if popup == nil {
 			return
 		}
+		if boundedContext {
+			// Measure expanded context before deciding whether it leaves several
+			// answer rows. An explicit disclosure choice survives window resizing.
+			detailsBox.Show()
+			contextW := header.Size().Width
+			if contextW <= 0 {
+				contextW = bodyW
+			}
+			// Wrapped text's minimum height settles after its actual width lands.
+			for range 2 {
+				detailsScroll.Content.Resize(fyne.NewSize(contextW, detailsScroll.Content.MinSize().Height))
+			}
+			contextH := detailsScroll.Content.MinSize().Height
+			setContextHeight := func(height float32) {
+				direction := fyne.ScrollVerticalOnly
+				if contextH <= height {
+					// A fitting quote needs no scroller's 32-point minimum height.
+					direction = fyne.ScrollNone
+				}
+				changed := detailsScroll.Direction != direction
+				detailsScroll.Direction = direction
+				detailsScroll.SetMinSize(fyne.NewSize(0, height))
+				if changed {
+					detailsScroll.Refresh()
+				}
+			}
+			setContextHeight(minF(contextH, ps.Height/3))
+			need := minF(want, 96)
+			available := func() float32 {
+				return ps.Height - (popup.MinSize().Height - sc.MinSize().Height)
+			}
+			if !detailsChoice {
+				detailsExpanded = available() >= need
+			}
+			if detailsExpanded {
+				detailsButton.SetIcon(iconDisclosureCollapse)
+				if available() < need {
+					h := detailsScroll.MinSize().Height - (need - available())
+					setContextHeight(fyne.Max(32, h))
+				}
+			} else {
+				detailsBox.Hide()
+				detailsButton.SetIcon(iconDisclosureExpand)
+			}
+		}
 		// Everything the panel needs that is NOT the body. Read after the
 		// SetMinSize above, so it is this panel's real chrome.
 		chrome := popup.MinSize().Height - want
@@ -239,8 +344,14 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 		}
 		popup.Resize(fyne.NewSize(ps.Width, want+chrome))
 	}
+	refitContext = func() {
+		if fittedBody != nil {
+			fitBody(fittedBody, fittedWant)
+		}
+	}
 
 	closeBtn := widget.NewButton("Close", func() {
+		diagnose("panel_close")
 		userClosed = true
 		stopThinking()
 		if popup != nil {
@@ -306,6 +417,7 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 			}))
 		}
 		cancelBtn := widget.NewButton("Cancel", func() {
+			diagnose("panel_cancel")
 			userClosed = true
 			stopThinking() // cancels the request, not just the spinner
 			if popup != nil {
@@ -334,10 +446,11 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 			spacer(4), container.NewCenter(inputFrame(cancelBtn, pal.Border)),
 			fasterRow,
 		))
-		waitScroll := container.NewVScroll(waitCol)
+		waitContent := withQuestion(waitCol)
+		waitScroll := container.NewVScroll(waitContent)
 		// A model name that wraps makes the column taller: fit the panel to
 		// it again, as below, so Cancel stays inside the scroll's reach.
-		modelLine.relayout = func() { fitBody(waitScroll, waitCol.MinSize().Height+10) }
+		modelLine.relayout = func() { fitBody(waitScroll, waitContent.MinSize().Height+10) }
 		// Replace, don't layer. The answer scroll underneath is empty in this
 		// state, but it still carries the answer cap as its minimum size, and in
 		// a stack that minimum wins — so the panel was sized for an answer that
@@ -349,9 +462,11 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 		// size it to theirs. Re-entering this state from an error — Try again,
 		// or the faster-model switch — used to leave the panel at the height the
 		// previous state chose, which is what put Cancel under the footer.
-		fitBody(waitScroll, waitCol.MinSize().Height+10)
+		fitBody(waitScroll, waitContent.MinSize().Height+10)
 	}
 	setResult := func(text string) {
+		renderStarted := devDiagnosticNow()
+		diagnose("render_start", devDiagnosticMetric{Key: "bytes", Value: int64(len(text))})
 		stopThinking()
 		current = text
 		copyBtn.Enable()
@@ -363,23 +478,37 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 		// (below), and a second reopen would stack two panels (sheet_reopen.go).
 		registerSheetReopen(state, popup, reopen)
 		setAIAnswerText(answer, text)
+		diagnose("render_parsed", devDiagnosticSince(renderStarted))
 		// A word-wrapped RichText only reports its true height once it has wrapped
 		// at a known width. Pre-wrap at the body width so the height is right, then
 		// fit the panel to the answer (capped at maxBodyH).
 		answer.Resize(fyne.NewSize(bodyW-16, answer.MinSize().Height))
+		if questionText != nil {
+			questionText.Resize(fyne.NewSize(bodyW-16, questionText.MinSize().Height))
+		}
+		diagnose("render_wrapped", devDiagnosticSince(renderStarted))
 		answerScroll.ScrollToTop()
 		body.Objects = []fyne.CanvasObject{answerScroll}
 		body.Refresh()
-		fitBody(answerScroll, answer.MinSize().Height+10)
+		fitBody(answerScroll, answerContent.MinSize().Height+10)
+		diagnose("render_fit_done", devDiagnosticSince(renderStarted))
 		// Re-measure once the real layout has landed so the height is exact.
 		studyRemeasure(func() {
+			if userClosed || !sheetShowing(state, popup) {
+				diagnose("remeasure_skipped")
+				return
+			}
+			started := devDiagnosticNow()
+			diagnose("remeasure_start")
 			answer.Refresh()
 			answerScroll.Refresh()
-			fitBody(answerScroll, answer.MinSize().Height+10)
+			fitBody(answerScroll, answerContent.MinSize().Height+10)
+			diagnose("remeasure_done", devDiagnosticSince(started))
 		})
 	}
 
 	setError := func(msg string, needsSettings bool) {
+		diagnose("panel_error")
 		stopThinking()
 		// An error is not an answer aiCache holds, so reopening would ask
 		// again, on the reader's key: the error state never comes back after a
@@ -402,6 +531,7 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 		var actBtn *widget.Button
 		if needsSettings {
 			actBtn = widget.NewButton("Open AI settings", func() {
+				diagnose("panel_settings")
 				// Every dismiss path undoes what opening the panel did: mark it
 				// closed so a late reply cannot reopen it, and put the native
 				// reading overlay back. Close and Cancel already did both; this
@@ -428,14 +558,15 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 		errCol := container.New(squeezeWidthLayout{}, container.NewVBox(
 			spacer(8), lbl, container.NewCenter(actBtn),
 		))
-		errScroll := container.NewVScroll(errCol)
+		errContent := withQuestion(errCol)
+		errScroll := container.NewVScroll(errContent)
 		body.Objects = []fyne.CanvasObject{errScroll}
 		body.Refresh()
 		// Pre-wrap the message at the body width before measuring, for the same
 		// reason the answer is pre-wrapped: a word-wrapped label reports its
 		// true height only once it has wrapped at a known width.
 		lbl.Resize(fyne.NewSize(bodyW-16, lbl.MinSize().Height))
-		fitBody(errScroll, errCol.MinSize().Height+10)
+		fitBody(errScroll, errContent.MinSize().Height+10)
 	}
 
 	startFetch = func() {
@@ -452,9 +583,14 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 		forgetSheetReopen(state, popup)
 		fetchGen++
 		gen := fetchGen
+		requestID := devDiagnosticID()
+		requestStarted := devDiagnosticNow()
+		diagnose("request_start", devDiagnosticMetric{Key: "generation", Value: int64(gen)},
+			devDiagnosticMetric{Key: "request_id", Value: int64(requestID)})
 		setThinking()
 		ctx, cancel := context.WithCancel(context.Background())
 		ctx, cancelTimeout := context.WithTimeout(ctx, aiRequestBudget)
+		ctx = devDiagnosticRequestContext(ctx, requestID)
 		if captured {
 			ctx = withAIPassage(ctx, passage)
 		}
@@ -472,8 +608,23 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 		go func() {
 			defer cancelTimeout()
 			result, err := aiActionRun(ctx, state, action, passage.Text, question, span)
+			completed := devDiagnosticNow()
+			var completionMetrics []devDiagnosticMetric
+			if devDiagnosticsEnabled {
+				completionMetrics = []devDiagnosticMetric{
+					{Key: "generation", Value: int64(gen)}, {Key: "request_id", Value: int64(requestID)},
+					{Key: "bytes", Value: int64(len(result))}, {Key: "error_class", Value: devDiagnosticErrorClass(err)},
+					{Key: "http_status", Value: devDiagnosticHTTPStatus(err)},
+					devDiagnosticSince(requestStarted),
+				}
+			}
+			diagnose("request_complete", completionMetrics...)
 			fyne.Do(func() {
+				queueWait := devDiagnosticSince(completed)
+				queueWait.Key = "queue_ms"
+				diagnose("request_ui_delivery", append(completionMetrics, queueWait)...)
 				if gen != fetchGen {
+					diagnose("request_drop_superseded", devDiagnosticMetric{Key: "generation", Value: int64(gen)})
 					return // superseded — a newer request owns the panel now
 				}
 				cancelFetch = nil // settled: nothing left to abandon
@@ -483,6 +634,7 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 				// after they moved on. The reply is in aiCache, so reopening
 				// the same action shows it instantly.
 				if userClosed {
+					diagnose("request_drop_closed", devDiagnosticMetric{Key: "generation", Value: int64(gen)})
 					return
 				}
 				// The panel may have been EVICTED (not user-closed) by a
@@ -492,6 +644,7 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 				// hits aiCache, so the already-paid answer shows instantly
 				// in the new palette; an errored fetch just ends quietly.
 				if !userClosed && popup != nil && !popup.Visible() {
+					diagnose("panel_evicted", devDiagnosticMetric{Key: "generation", Value: int64(gen)})
 					stopThinking()
 					if err == nil {
 						reopen()
@@ -516,13 +669,38 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 	// A modest starting size for the thinking state; setResult grows or shrinks
 	// the panel to fit the answer once it arrives.
 	popup.Resize(fyne.NewSize(ps.Width, minF(ps.Height, 320)))
-	registerSheetRefit(state, popup, func() {
-		if passageExcerpt != nil {
+	lastCanvas := cnv.Size()
+	registerCanvasSheetRefit(state, popup, func() {
+		now := cnv.Size()
+		// Mobile roots also relayout for the keyboard. Only a canvas resize
+		// changes this card's margins; it never replaces the answer or fetch.
+		if fyne.CurrentDevice().IsMobile() && now == lastCanvas {
+			return
+		}
+		lastCanvas = now
+		if passageExcerpt != nil && !boundedContext {
 			passageExcerpt.setMaxLines(noteExcerptMaxLinesFor(fyne.CurrentDevice().IsMobile(), cnv.Size().Height))
 		}
-		ps.Height = sheetPanelSize(state, cnv).Height
+		ps = sheetPanelSize(state, cnv)
+		bodyW = ps.Width - 44
 		if fittedBody != nil {
-			fitBody(fittedBody, fittedWant)
+			offset := fittedBody.Offset
+			var contextOffset fyne.Position
+			if detailsScroll != nil {
+				contextOffset = detailsScroll.Offset
+			}
+			// Release the old width before laying out the citation and quote.
+			// Their wrapped heights settle only after the new width lands.
+			fittedBody.SetMinSize(fyne.NewSize(bodyW, fittedBody.MinSize().Height))
+			popup.Resize(fyne.NewSize(ps.Width, minF(popup.Content.Size().Height, ps.Height)))
+			for range 2 {
+				fittedBody.Content.Resize(fyne.NewSize(fittedBody.Size().Width, fittedBody.Content.MinSize().Height))
+				fitBody(fittedBody, fittedBody.Content.MinSize().Height+10)
+			}
+			fittedBody.ScrollToOffset(offset)
+			if detailsScroll != nil {
+				detailsScroll.ScrollToOffset(contextOffset)
+			}
 		}
 	})
 	startFetch()

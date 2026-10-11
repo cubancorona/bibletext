@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Refuse a release artifact built with the next-release switch (docs/NEXT.md).
+# Refuse release artifacts built with next or bibletextdev tags (docs/NEXT.md).
 #
 #   scripts/verify-not-next.sh ARTIFACT...
 #
@@ -10,6 +10,8 @@
 # GOFLAGS in the environment, or from GOFLAGS saved with `go env -w`. The last
 # two leave no trace in any script, which is why the release paths check what
 # they built as well as next_release_guard_test.go checking their text.
+# Development builds contain test hooks and persistent local diagnostics;
+# neither belongs in a release artifact.
 #
 # A universal binary is one executable per architecture, built separately and
 # joined by lipo, so one slice can carry the tag while another does not; and
@@ -73,6 +75,9 @@ check_binary() {
   case ",$tags," in
     *,next,*)
       fail "$label was built with the next tag (-tags=$tags). The next major release must never ship before its day; see docs/NEXT.md."
+      ;;
+    *,bibletextdev,*)
+      fail "$label was built with the bibletextdev tag (-tags=$tags). Development diagnostics and test hooks must never ship."
       ;;
   esac
 }
@@ -148,4 +153,4 @@ for artifact in "$@"; do
       ;;
   esac
 done
-echo "Not a next build: ${*}"
+echo "No next or bibletextdev tags: ${*}"

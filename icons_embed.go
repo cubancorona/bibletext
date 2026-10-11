@@ -33,6 +33,17 @@ var footnoteIconSVG []byte
 //go:embed assets/icons/arrow_outward.svg
 var arrowOutwardSVG []byte
 
+//go:embed assets/icons/disclosure_down.svg
+var disclosureDownSVG []byte
+
+//go:embed assets/icons/disclosure_up.svg
+var disclosureUpSVG []byte
+
+// These chevrons fill their small citation-row frame while keeping a clear
+// foreground in both appearance variants.
+var iconDisclosureExpand = theme.NewThemedResource(fyne.NewStaticResource("disclosure_down.svg", disclosureDownSVG))
+var iconDisclosureCollapse = theme.NewThemedResource(fyne.NewStaticResource("disclosure_up.svg", disclosureUpSVG))
+
 // iconLeavesApp is the arrow after a link that opens outside the app ("Get a
 // key", "Privacy Policy"): the shape of U+2197, drawn from our own asset because
 // the character itself comes out as a colour emoji (see outboundLink). Tinted

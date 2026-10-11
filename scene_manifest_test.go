@@ -126,6 +126,87 @@ func TestSceneLifecyclePatchStillDoesWhatItMust(t *testing.T) {
 	}
 }
 
+// Native graphics must stop before UIKit's background callback returns; the
+// Go lifecycle event is asynchronous and cannot provide that boundary.
+func TestSceneLifecyclePatchStopsBackgroundGraphics(t *testing.T) {
+	patch := readRepoFile(t, sceneLifecyclePatch)
+	// Include context as well as additions so the existing render and legacy
+	// lifecycle methods are checked together with their new guards.
+	var source strings.Builder
+	for _, line := range strings.Split(patch, "\n") {
+		if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") || strings.HasPrefix(line, " ") {
+			source.WriteString(line[1:])
+			source.WriteByte('\n')
+		}
+	}
+	src := source.String()
+	render := methodBody(t, src, "- (void)render:(CADisplayLink*)displayLink {")
+	guard := strings.Index(render, "if (!goAppCanRender(self))")
+	display := strings.Index(render, "[self.glview display];")
+	if guard < 0 || display < 0 || guard >= display || !strings.Contains(render[guard:display], "return;") {
+		t.Fatal("render must reject a background or detached view before GLKView binds and presents its drawable")
+	}
+	gate := methodBody(t, src, "static BOOL goAppCanRender(GoAppAppController *controller) {")
+	for claim, want := range map[string]string{
+		"rejects the background app":       "application.applicationState == UIApplicationStateBackground",
+		"requires an attached view":        "window == nil",
+		"requires the app's own window":    "window != appDelegate.window",
+		"requires the attached controller": "window.rootViewController != controller",
+		"preserves the legacy scene path":  "if (goAppUsesScenes())",
+		"requires an attached scene":       "scene == nil",
+		"allows foreground drawing":        "scene.activationState != UISceneActivationStateForegroundActive",
+		"allows inactive snapshots":        "scene.activationState != UISceneActivationStateForegroundInactive",
+	} {
+		if !strings.Contains(gate, want) {
+			t.Errorf("native render gate no longer %s (%q)", claim, want)
+		}
+	}
+	if strings.Count(gate, "return NO;") != 3 || !strings.Contains(gate, "return YES;") {
+		t.Error("native render gate must reject app, attachment and scene failures and permit the remaining foreground state")
+	}
+
+	drain := methodBody(t, src, "- (void)finishOpenGLBeforeBackground {")
+	nilContext := strings.Index(drain, "if (context == nil)")
+	selectContext := strings.Index(drain, "if (![EAGLContext setCurrentContext:context])")
+	finish := strings.Index(drain, "glFinish();")
+	restore := strings.Index(drain, "[EAGLContext setCurrentContext:previous];")
+	if nilContext < 0 || selectContext < 0 || finish < 0 || restore < 0 ||
+		nilContext >= selectContext || selectContext >= finish || finish >= restore {
+		t.Fatal("background drain must select a nonnil controller context, finish its GPU work, then restore the previous context")
+	}
+	if !strings.Contains(drain[nilContext:selectContext], "return;") ||
+		!strings.Contains(drain[selectContext:finish], "return;") {
+		t.Error("a missing context or failed context selection must return without issuing GL commands")
+	}
+	if !strings.Contains(drain, "[[EAGLContext currentContext] retain]") ||
+		!strings.Contains(drain[restore:], "[previous release];") {
+		t.Error("the previous context must stay alive until restoration, including a nil previous context")
+	}
+	for _, forbidden := range []string{"dispatch_sync", "lifecycle", "startloop", "drawloop"} {
+		if strings.Contains(drain, forbidden) {
+			t.Errorf("native drain must not await the Go render/lifecycle loop (%s)", forbidden)
+		}
+	}
+	for _, callback := range []struct {
+		sig, guard, call string
+	}{
+		{"- (void)sceneDidEnterBackground:(UIScene *)scene {", "if ([self ownsAppWindow])", "[appDelegate.controller finishOpenGLBeforeBackground];"},
+		{"- (void)applicationDidEnterBackground:(UIApplication *)application {", "if (!goAppUsesScenes())", "[self.controller finishOpenGLBeforeBackground];"},
+	} {
+		body := methodBody(t, src, callback.sig)
+		guard := strings.Index(body, callback.guard)
+		finish := strings.Index(body, callback.call)
+		event := strings.Index(body, "lifecycleAlive();")
+		if guard < 0 || finish < 0 || event < 0 || guard >= finish || finish >= event {
+			t.Errorf("%s must synchronously drain its owned context before sending the asynchronous lifecycle event", callback.sig)
+		}
+	}
+	disconnect := methodBody(t, src, "- (void)sceneDidDisconnect:(UIScene *)scene {")
+	if strings.Contains(disconnect, "finishOpenGL") || strings.Contains(disconnect, "glFinish") {
+		t.Error("a disconnected scene must not issue new graphics commands after its background callback")
+	}
+}
+
 // The forwarders call the app delegate's own link methods, which BibleText
 // implements in a category; if the two stop meeting, links are dropped
 // without a sound.

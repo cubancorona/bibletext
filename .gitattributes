@@ -4,3 +4,7 @@
 # toolkit patches apply to LF sources; a CRLF checkout on the Windows runner
 # broke all three. Binary files are detected by content.
 * text=auto eol=lf
+
+# Unified diffs require a leading context space, including before Go tabs and
+# on empty context lines. Check the patched source's formatting separately.
+patches/*.patch -whitespace

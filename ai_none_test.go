@@ -138,8 +138,8 @@ func TestDispatchAIActionNoOpWhenOff(t *testing.T) {
 	defer app.Quit()
 
 	// A positive control observes the overlay channel with AI enabled. Ask
-	// collects a question only in the gated build; a fixed-action stub keeps
-	// the ordinary-build control independent of providers and credentials.
+	// collects a question while its code gate is enabled; a fixed-action stub
+	// keeps the gate-off control independent of providers and credentials.
 	reqs := stubStudyRequests(t)
 	onState := sampleState()
 	onState.aiKeys = newKeyStoreWith(newFakePrefs())

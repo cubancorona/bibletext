@@ -28,6 +28,9 @@ application source.
 | **Patch 10** | [`fyne-2.7.4-ios-window-size.patch`](fyne-2.7.4-ios-window-size.patch) — applies after Patch 9 |
 | **Target** | `fyne.io/fyne/v2@v2.7.4` → `internal/driver/mobile/app/darwin_ios.m` |
 | **Change 8 (the canvas is the window, not the screen)** | Fyne sized its canvas from `UIScreen.nativeBounds`, so a resized iPad window (Split View, Stage Manager, iPadOS 26 windows) was laid out for the whole screen. Every size report now measures the view, in the same pixels, so a full-screen window reports exactly what it did before. See [Patch 10](#patch-10-ios-window-size-fyne-274-ios-window-sizepatch). |
+| **Patch 11** | [`fyne-2.7.4-font-resource-cache.patch`](fyne-2.7.4-font-resource-cache.patch) |
+| **Target** | `fyne.io/fyne/v2@v2.7.4` → `internal/painter/font.go` |
+| **Change 9 (temporary theme scopes retain bounded font data)** | A theme override parsed another complete copy of every font, including the emoji bitmap table, whenever its scope changed. Immutable font tables are now cached by resource; each scope retains independent mutable glyph caches. A 128-entry LRU bounds the scoped face cache while keeping the existing lifetimes of unscoped and explicit-font entries. |
 | **Applied by** | [`../scripts/setup-fyne-patch.sh`](../scripts/setup-fyne-patch.sh) |
 | **Patch (tools)** | [`fyne-tools-1.7.2-ios-deployment-target.patch`](fyne-tools-1.7.2-ios-deployment-target.patch) |
 | **Target** | `fyne.io/tools@v1.7.2` → `cmd/fyne/internal/mobile/build_iosapp.go` + `cmd/fyne/internal/commands/package-mobile.go` |
@@ -204,6 +207,15 @@ ios|android` yourself** — it would build against stock Fyne and ship the
 laggy / hot-caret version. Use the scripts.
 
 ## Setup
+
+The font resource cache patch includes regression tests copied into the generated
+toolkit's painter package. Run them with
+`go test -race ./internal/painter -run TestBTFontResource` from the generated
+Fyne directory. They check shared immutable tables, independent mutable faces,
+different-font and style isolation, LRU eviction and retention, settings resets,
+and parallel measurement and drawing in separate scopes. The scope limit retains
+enough entries for a substantial active widget set without letting closed sheets
+or repeated theme-scope refreshes retain glyph caches indefinitely.
 
 Nothing to do for desktop. For iOS run `scripts/run-ios-device.sh` /
 `run-ios-sim.sh` / `release-ios.sh`, for Android `scripts/build-android.sh` —
@@ -479,6 +491,18 @@ stamp. The simulator build now stamps the SDK it was really built with.
   any other scene (an external display, for one) is given no delegate and the
   system goes on mirroring the device; every scene callback acts only for the
   scene that holds the app's window.
+- The custom display link checks the native app state and the controller's
+  window before calling `GLKView.display`. Background, detached and unattached
+  scene views cannot bind or present a drawable; foreground-inactive scenes
+  can still draw app-switcher snapshots. The owning scene's background callback
+  synchronously selects the controller's EAGL context, calls `glFinish`, and
+  restores the previous context before sending Fyne's asynchronous lifecycle
+  event. Bundles without a scene manifest do the same in the app-delegate
+  background callback. Disconnecting a scene issues no graphics commands.
+  This follows [Apple's OpenGL ES background requirements](https://developer.apple.com/library/archive/documentation/3DDrawing/Conceptual/OpenGLES_ProgrammingGuide/ImplementingaMultitasking-awareOpenGLESApplication/ImplementingaMultitasking-awareOpenGLESApplication.html):
+  submitted GPU work must finish before backgrounding, and background drawing
+  is prohibited. Waiting for Go lifecycle handling would deadlock against its
+  synchronous UIKit reads, so the rendering boundary stays on the native thread.
 - Links: under scenes UIKit calls the scene delegate, never the app
   delegate's link methods, which is where BibleText's category
   (`share_link_ios.go`) implements them. The scene delegate passes each link

@@ -14,9 +14,11 @@ package bibletext
 import (
 	"context"
 	"crypto/sha1"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -139,8 +141,8 @@ type aiPassage struct {
 	Ref     string
 	Text    string
 	Version string
-	// Preview fields are captured only for the next presentation. Text remains
-	// the provider's input; HasPreview preserves an intentionally empty quote.
+	// Preview fields are captured with the selection. Text remains the
+	// provider's input; HasPreview preserves an intentionally empty quote.
 	VersionAbbrev string
 	PreviewText   string
 	HasPreview    bool
@@ -183,20 +185,16 @@ func aiPassageFor(state *AppState, text string, span selSpan) aiPassage {
 	p.Book, p.Chapter = readerChapter(state)
 	version := state.currentVersion()
 	p.Version = version.Name
-	if nextRelease {
-		p.VersionAbbrev = version.Abbrev
-		p.PreviewText = cleanQuoteTextIn(state, p.Book, p.Chapter, text)
-		p.HasPreview = true
-	}
+	p.VersionAbbrev = version.Abbrev
+	p.PreviewText = cleanQuoteTextIn(state, p.Book, p.Chapter, text)
+	p.HasPreview = true
 	p.Ref = fmt.Sprintf("%s %d", p.Book, p.Chapter)
 	if state.Bible == nil {
 		return p
 	}
 	if quote, lo, hi, _, ok := normalizeShareSelectionIn(state, p.Book, p.Chapter, text, span); ok && lo >= 1 {
 		p.Lo, p.Hi = lo, hi
-		if nextRelease {
-			p.PreviewText = quote
-		}
+		p.PreviewText = quote
 	} else if vs := selectionVersesIn(state, p.Book, p.Chapter, text, span); len(vs) > 0 {
 		p.Lo, p.Hi = vs[0].Verse, vs[len(vs)-1].Verse
 	}
@@ -223,15 +221,17 @@ func aiActionTitle(action string) string {
 	}
 }
 
-// aiReadingsSentence is what every prose prompt says about a passage that is
+// aiDifferingReadingsSentence is what every prose prompt says about a passage that is
 // read more than one way: name the readings and what each rests on, and let
 // the wording of the passage weigh, rather than flatten the difference into
 // "scholars disagree". The comparison verb has its own, fuller contract
-// (ai_compare.go); this is the one sentence the four prose verbs share.
-const aiReadingsSentence = "Where this passage is read differently, name the main readings, " +
+// (ai_compare.go). Ask has its own quotation boundary below.
+const aiDifferingReadingsSentence = "Where this passage is read differently, name the main readings, " +
 	"who holds them and the assumption each rests on, and say what the wording of the " +
-	"passage counts for or against; where a point is uncertain, say so briefly. Do not " +
-	"quote anyone, and name a document or writer only when you are sure of it."
+	"passage counts for or against; where a point is uncertain, say so briefly."
+
+const aiReadingsSentence = aiDifferingReadingsSentence + " Do not quote anyone, and name " +
+	"a document or writer only when you are sure of it."
 
 func buildAIPrompt(action string, p aiPassage) string {
 	const preamble = "You are a knowledgeable, even-handed Bible study assistant. " +
@@ -278,8 +278,13 @@ func buildAskPrompt(p aiPassage, question string) string {
 		"concise — a few short paragraphs at most. Ground your answer in the passage below " +
 		"and its context; you may draw on directly relevant Scripture, but stay focused on " +
 		"the question. If the passage does not address the question, say so plainly rather " +
-		"than speculating. " + aiReadingsSentence +
-		" Do not use markdown headings or bullet lists."
+		"than speculating. Distinguish what the selected passage states, what it reports " +
+		"a speaker saying, and what a reading infers. Quote only wording supplied in the " +
+		"passage; paraphrase surrounding context and other Scripture. If the question " +
+		"assumes something the passage does not establish, say so briefly and answer " +
+		"what it does support. " + aiDifferingReadingsSentence +
+		" Name a document or writer only when you are sure of it. Do not use markdown " +
+		"headings or bullet lists, and do not add follow-up questions."
 
 	return fmt.Sprintf("%s\n\nThe passage is from the %s.\n\nReader's question: %q\n\n%s",
 		preamble, p.Version, question, aiPassageLines(p))
@@ -315,8 +320,14 @@ func aiStudyActionKnown(action string) bool {
 // --- Orchestration + cache --------------------------------------------------
 
 var (
-	aiCacheMu sync.Mutex
-	aiCache   = map[string]string{}
+	aiCacheMu    sync.Mutex
+	aiCache      = map[string]string{}
+	aiCacheOrder []string // least recently used first; guarded by aiCacheMu
+)
+
+const (
+	aiCacheMaxBytes   = 8 << 20
+	aiCacheMaxEntries = 64
 )
 
 func aiCacheKey(scope, book string, chapter int, text string) string {
@@ -327,14 +338,95 @@ func aiCacheKey(scope, book string, chapter int, text string) string {
 func aiCacheGet(key string) (string, bool) {
 	aiCacheMu.Lock()
 	defer aiCacheMu.Unlock()
+	aiCacheSyncLocked()
 	v, ok := aiCache[key]
+	if ok {
+		aiCacheTouchLocked(key)
+	}
 	return v, ok
 }
 
 func aiCacheSet(key, value string) {
 	aiCacheMu.Lock()
+	defer aiCacheMu.Unlock()
+	aiCacheSyncLocked()
+	delete(aiCache, key)
+	aiCacheRemoveLocked(key)
+	// A single large answer must not displace every reusable answer. The
+	// panel still displays it; only retention is bounded here.
+	if len(key) > aiCacheMaxBytes || len(value) > aiCacheMaxBytes-len(key) {
+		return
+	}
+	// Own the retained strings so a small substring cannot keep a much larger
+	// request or response allocation alive beyond the byte budget.
+	key, value = strings.Clone(key), strings.Clone(value)
 	aiCache[key] = value
-	aiCacheMu.Unlock()
+	aiCacheOrder = append(aiCacheOrder, key)
+	bytes := 0
+	for k, v := range aiCache {
+		bytes += len(k) + len(v)
+	}
+	for len(aiCache) > aiCacheMaxEntries || bytes > aiCacheMaxBytes {
+		oldest := aiCacheOrder[0]
+		bytes -= len(oldest) + len(aiCache[oldest])
+		delete(aiCache, oldest)
+		aiCacheRemoveLocked(oldest)
+	}
+}
+
+// Keep recency consistent with cache resets and direct removals. Missing
+// entries are ordered by key so reconciliation never depends on map order.
+func aiCacheSyncLocked() {
+	old := aiCacheOrder
+	live := old[:0]
+	for _, key := range old {
+		if _, ok := aiCache[key]; ok {
+			live = append(live, key)
+		}
+	}
+	clear(old[len(live):])
+	aiCacheOrder = live
+	if len(live) == len(aiCache) {
+		return
+	}
+	var missing []string
+	for key := range aiCache {
+		found := false
+		for _, known := range live {
+			if key == known {
+				found = true
+				break
+			}
+		}
+		if !found {
+			missing = append(missing, key)
+		}
+	}
+	sort.Strings(missing)
+	aiCacheOrder = append(live, missing...)
+}
+
+func aiCacheRemoveLocked(key string) {
+	for i, known := range aiCacheOrder {
+		if known == key {
+			copy(aiCacheOrder[i:], aiCacheOrder[i+1:])
+			last := len(aiCacheOrder) - 1
+			aiCacheOrder[last] = ""
+			aiCacheOrder = aiCacheOrder[:last]
+			return
+		}
+	}
+}
+
+func aiCacheTouchLocked(key string) {
+	// Reuse the owned key rather than retaining the lookup's backing storage.
+	for _, known := range aiCacheOrder {
+		if known == key {
+			aiCacheRemoveLocked(key)
+			aiCacheOrder = append(aiCacheOrder, known)
+			return
+		}
+	}
 }
 
 // aiRequestScope is the cache scope of one study request. The fixed actions
@@ -350,13 +442,13 @@ func aiCacheSet(key, value string) {
 // the prompt then names them, so an answer written for "Psalms 136:3" must
 // never be served for the identical refrain selected at verse 10, and a
 // request that resolved to no verse keeps the key it always had. The
-// question is free-form and may hold any character, so it is the last field
-// and the range always precedes it, 0-0 when no verse resolved: a question
-// that ends in the text of a range cannot then be filed under that range.
+// question is hashed separately to keep retained keys fixed in size even
+// for long questions, while distinguishing every question's exact wording.
 func aiRequestScope(id, model, action, question string, p aiPassage) string {
 	if action == aiActionAsk {
 		version := sha1.Sum([]byte(p.Version))
-		return fmt.Sprintf("%s|%s|ask|%x|%d-%d|%s", id, model, version, p.Lo, p.Hi, question)
+		questionSum := sha256.Sum256([]byte(question))
+		return fmt.Sprintf("%s|%s|ask|%x|%d-%d|%x", id, model, version, p.Lo, p.Hi, questionSum)
 	}
 	scope := id + "|" + model + "|" + action
 	if p.Lo > 0 {
@@ -403,8 +495,13 @@ func runAIActionForPassage(ctx context.Context, state *AppState, action string, 
 
 	cacheKey := aiCacheKey(scope, p.Book, p.Chapter, p.Text)
 	if cached, ok := aiCacheGet(cacheKey); ok {
+		devDiagnosticEvent("cache_hit", devDiagnosticMetric{Key: "action", Value: devDiagnosticAction(action)},
+			devDiagnosticMetric{Key: "bytes", Value: int64(len(cached))},
+			devDiagnosticMetric{Key: "request_id", Value: devDiagnosticRequestID(ctx)})
 		return cached, nil
 	}
+	devDiagnosticEvent("cache_miss", devDiagnosticMetric{Key: "action", Value: devDiagnosticAction(action)},
+		devDiagnosticMetric{Key: "request_id", Value: devDiagnosticRequestID(ctx)})
 
 	key := providerAPIKey(store, id)
 	if strings.TrimSpace(key) == "" {

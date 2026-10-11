@@ -33,7 +33,9 @@ PATCH_SCENE="patches/fyne-2.7.4-ios-scene-lifecycle.patch"
 # These two are made against the scene patch and apply after it, in this order.
 PATCH_TOUCH_CANCEL="patches/fyne-2.7.4-ios-touch-cancel.patch"
 PATCH_WINDOW_SIZE="patches/fyne-2.7.4-ios-window-size.patch"
+PATCH_FONT_CACHE="patches/fyne-2.7.4-font-resource-cache.patch"
 ATOMIC_TEST="patches/testdata/atomic-prefs_test.go"   # copied in, not diffed (a new file); testdata/ so the go tool ignores it here
+FONT_CACHE_TEST="patches/testdata/font-resource-cache_test.go"
 EMOJI_FONT="patches/NotoColorEmoji.ttf"
 # Where the patched copy goes, relative to the repository root. The packaging
 # scripts build from third_party/fyne; scripts/check-ios-pane.sh passes its own
@@ -80,6 +82,7 @@ patch -p1 -d "$DEST" < "$PATCH_WINEGL"
 patch -p1 -d "$DEST" < "$PATCH_SCENE"
 patch -p1 -d "$DEST" < "$PATCH_TOUCH_CANCEL"
 patch -p1 -d "$DEST" < "$PATCH_WINDOW_SIZE"
+patch -p1 -d "$DEST" < "$PATCH_FONT_CACHE"
 # The emoji swap is patch + binary: the .patch retargets the embed directive, and
 # the font itself (a binary; it cannot ride a unified diff) is copied in here.
 # Noto Color Emoji, OFL 1.1 — licence tracked beside it in patches/.
@@ -90,6 +93,7 @@ cp "$EMOJI_FONT" "$DEST/theme/font/NotoColorEmoji.ttf"
 # third_party/fyne survives exactly until the next build (learned by losing it).
 # Run it with: ( cd third_party/fyne && go test ./app/ -run TestBT -v )
 cp "$ATOMIC_TEST" "$DEST/app/bt_atomic_prefs_test.go"
+cp "$FONT_CACHE_TEST" "$DEST/internal/painter/bt_font_resource_cache_test.go"
 rm -f "$DEST/theme/font/EmojiOneColor.otf"   # no longer embedded; leaving it would ship 4 MB of nothing
 
 # 3. Verify the patches actually landed.
@@ -146,4 +150,11 @@ if ! grep -q "BibleText patch: current emoji" "$DEST/theme/bundled-emoji.go" \
   echo "ERROR: emoji swap did not land — bundled-emoji.go unpatched or font missing." >&2
   exit 1
 fi
-echo "OK: ${DEST} regenerated and patched (fyne ${FYNE_VERSION}: drawloop 100ms -> 2ms, discrete caret blink, Noto emoji, atomic preferences write, Windows EGL context, Android night-mode follow, iOS scene life cycle, iOS touch cancel, iOS window size)."
+# Parsed font tables are shared, while scoped mutable glyph caches stay bounded.
+if ! grep -q "BibleText patch: share immutable parsed font tables" "$DEST/internal/painter/font.go" \
+   || ! grep -q 'const fontScopeCacheLimit = 128' "$DEST/internal/painter/font.go" \
+   || [ ! -s "$DEST/internal/painter/bt_font_resource_cache_test.go" ]; then
+  echo "ERROR: font resource caching or scoped cache bound did not land." >&2
+  exit 1
+fi
+echo "OK: ${DEST} regenerated and patched (fyne ${FYNE_VERSION}: drawloop 100ms -> 2ms, discrete caret blink, Noto emoji, atomic preferences write, Windows EGL context, Android night-mode follow, iOS scene life cycle, iOS touch cancel, iOS window size, shared font tables and bounded scoped glyph caches)."

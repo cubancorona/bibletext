@@ -3,7 +3,7 @@ package bibletext
 // The comparison verb's contract: its prompt is a direct instruction with no
 // list of churches, schools or groups, carries the four section headings in
 // order and the passage last; the four prose prompts name differing readings
-// in one shared sentence and still forbid headings; README.md mirrors every
+// and still forbid headings; README.md mirrors every
 // prompt word for word; the action string is dispatched by an allow-list;
 // the request is filed under its own cache scope; the panel titles it
 // "Perspectives" and renders its headings; and a provider's refusal reaches
@@ -201,15 +201,15 @@ func TestBuildComparePrompt(t *testing.T) {
 	}
 }
 
-// The sentence the four prose verbs share about a passage read more than one
-// way, the test's own copy.
+// Explain, Context and Translation retain this wording. Ask shares its
+// readings instruction but allows quotation only from the supplied passage.
 const readingsSentence = "Where this passage is read differently, name the main readings, who holds " +
 	"them and the assumption each rests on, and say what the wording of the passage counts for " +
 	"or against; where a point is uncertain, say so briefly. Do not quote anyone, and name a " +
 	"document or writer only when you are sure of it."
 
-// Explain, Context, Translation and Ask all carry the sentence and still
-// forbid headings and lists; the comparison carries neither. Control: the
+// The prose verbs name differing readings and still forbid headings and
+// lists; the comparison carries neither. Control: the
 // older "scholars disagree" sentence is gone from all four.
 func TestStudyPromptsNameDifferingReadings(t *testing.T) {
 	psg := john3Passage()
@@ -219,11 +219,16 @@ func TestStudyPromptsNameDifferingReadings(t *testing.T) {
 		aiActionTranslation: buildAIPrompt(aiActionTranslation, psg),
 		aiActionAsk:         buildAskPrompt(psg, "Who is the world here?"),
 	}
+	readingsCore, _, _ := strings.Cut(readingsSentence, " Do not quote anyone")
 	for action, p := range prose {
-		if !strings.Contains(p, readingsSentence) {
+		wantReadings := readingsSentence
+		if action == aiActionAsk {
+			wantReadings = readingsCore
+		}
+		if !strings.Contains(p, wantReadings) {
 			t.Errorf("%s: the prompt does not name differing readings:\n%s", action, p)
 		}
-		if !strings.Contains(p, "Do not use markdown headings or bullet lists.") {
+		if !strings.Contains(p, "Do not use markdown headings or bullet lists") {
 			t.Errorf("%s: the prompt no longer forbids headings and lists:\n%s", action, p)
 		}
 		if strings.Contains(p, "Where scholars disagree") || strings.Contains(p, "rather than overstating") {
@@ -299,17 +304,17 @@ func readmeWhatGetsSent(t *testing.T) string {
 }
 
 // README.md reproduces what leaves the device: the shared prose prompt with
-// its {task} slot, the three tasks, and the comparison prompt. Each is held
+// its {task} slot, the three tasks, the comparison and Ask prompts. Each is held
 // to the builder's output word for word — the README wraps lines at eighty
 // columns, so the comparison is on the words — with placeholders standing
 // for the passage. A one-word edit to either side fails here.
 func TestREADMEMirrorsPrompts(t *testing.T) {
 	section := readmeWhatGetsSent(t)
 	blocks := fencedBlock.FindAllStringSubmatch(section, -1)
-	if len(blocks) != 2 {
-		t.Fatalf("the section has %d fenced blocks, want the shared prompt and the comparison", len(blocks))
+	if len(blocks) != 3 {
+		t.Fatalf("the section has %d fenced blocks, want the shared prompt, comparison and Ask", len(blocks))
 	}
-	shared, compare := blocks[0][1], blocks[1][1]
+	shared, compare, ask := blocks[0][1], blocks[1][1], blocks[2][1]
 	if strings.Count(shared, "{task}") != 1 {
 		t.Fatalf("the shared block does not carry one {task} slot:\n%s", shared)
 	}
@@ -335,6 +340,9 @@ func TestREADMEMirrorsPrompts(t *testing.T) {
 	}
 	if got, want := words(buildComparePrompt(placeholders)), words(compare); got != want {
 		t.Errorf("README.md and buildComparePrompt differ\n got: %s\nwant: %s", got, want)
+	}
+	if got, want := words(buildAskPrompt(placeholders, "{question}")), words(ask); got != want {
+		t.Errorf("README.md and buildAskPrompt differ\n got: %s\nwant: %s", got, want)
 	}
 }
 

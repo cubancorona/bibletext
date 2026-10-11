@@ -627,6 +627,10 @@ func TestVerifyNotNextRefusesTaggedBuilds(t *testing.T) {
 	if err := os.WriteFile(goEnvFile, []byte("GOFLAGS=-tags=next\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	devGoEnvFile := filepath.Join(dir, "go-dev.env")
+	if err := os.WriteFile(devGoEnvFile, []byte("GOFLAGS=-tags=bibletextdev\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	baseEnv := func() []string {
 		var env []string
 		for _, kv := range os.Environ() {
@@ -681,12 +685,16 @@ func TestVerifyNotNextRefusesTaggedBuilds(t *testing.T) {
 	}
 
 	plain := build("plain", nil, "-trimpath")
-	otherTags := build("other-tags", nil, "-tags", "gles,nextish")
+	otherTags := build("other-tags", nil, "-tags", "gles,nextish,bibletextdevish")
 	// Not ios: on a Linux host that tag selects a second GOOS file in the
 	// standard library and the probe does not build.
 	onTheLine := build("on-the-command-line", nil, "-tags", "gles,next")
 	fromEnv := build("from-goflags", []string{"GOFLAGS=-tags=next"})
 	fromGoEnv := build("from-go-env-w", []string{"GOENV=" + goEnvFile})
+	devOnTheLine := build("dev-on-the-command-line", nil, "-tags", "gles,bibletextdev")
+	devFromEnv := build("dev-from-goflags", []string{"GOFLAGS=-tags=bibletextdev"})
+	devFromGoEnv := build("dev-from-go-env-w", []string{"GOENV=" + devGoEnvFile})
+	bothTags := build("both-excluded-tags", nil, "-tags", "next,bibletextdev")
 	notGo := filepath.Join(dir, "not-go")
 	if err := os.WriteFile(notGo, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
 		t.Fatal(err)
@@ -699,6 +707,8 @@ func TestVerifyNotNextRefusesTaggedBuilds(t *testing.T) {
 	macArm := build("mac-arm64", []string{"GOOS=darwin", "GOARCH=arm64"}, "-trimpath")
 	macIntelNext := build("mac-amd64-next", []string{"GOOS=darwin", "GOARCH=amd64"}, "-tags", "next")
 	macArmNext := build("mac-arm64-next", []string{"GOOS=darwin", "GOARCH=arm64", "GOFLAGS=-tags=next"})
+	macIntelDev := build("mac-amd64-dev", []string{"GOOS=darwin", "GOARCH=amd64"}, "-tags", "bibletextdev")
+	macArmDev := build("mac-arm64-dev", []string{"GOOS=darwin", "GOARCH=arm64", "GOFLAGS=-tags=bibletextdev"})
 	universal := func(name string, fat64 bool, slices ...string) string {
 		return nextUniversal(t, filepath.Join(dir, name), fat64, slices...)
 	}
@@ -717,13 +727,19 @@ func TestVerifyNotNextRefusesTaggedBuilds(t *testing.T) {
 	}
 	cases := []verifierCase{
 		{"a plain build", plain, ""},
-		{"other tags, one of them starting with next", otherTags, ""},
+		{"other tags sharing excluded-tag prefixes", otherTags, ""},
 		{"a bundle of a plain build", pack("plain.aab", "base/lib/arm64-v8a/libBibleText.so", plain), ""},
 		{"tag on the command line", onTheLine, "built with the next tag"},
 		{"tag from GOFLAGS", fromEnv, "built with the next tag"},
 		{"tag from go env -w", fromGoEnv, "built with the next tag"},
 		{"a bundle carrying it", pack("next.aab", "base/lib/arm64-v8a/libBibleText.so", onTheLine), "built with the next tag"},
 		{"an APK carrying it", pack("next.apk", "lib/arm64-v8a/libBibleText.so", fromEnv), "built with the next tag"},
+		{"dev tag on the command line", devOnTheLine, "built with the bibletextdev tag"},
+		{"dev tag from GOFLAGS", devFromEnv, "built with the bibletextdev tag"},
+		{"dev tag from go env -w", devFromGoEnv, "built with the bibletextdev tag"},
+		{"a bundle carrying the dev tag", pack("dev.aab", "base/lib/arm64-v8a/libBibleText.so", devOnTheLine), "built with the bibletextdev tag"},
+		{"an APK carrying the dev tag", pack("dev.apk", "lib/arm64-v8a/libBibleText.so", devFromEnv), "built with the bibletextdev tag"},
+		{"both excluded tags preserve next refusal", bothTags, "built with the next tag"},
 		{"a package with no native library", pack("empty.aab", "", ""), "no native library"},
 		{"a file Go did not build", notGo, "no Go build information"},
 		{"a universal binary of plain builds", plainUniversal, ""},
@@ -731,6 +747,9 @@ func TestVerifyNotNextRefusesTaggedBuilds(t *testing.T) {
 		{"a universal binary whose second slice carries it", universal("universal-arm-next", false, macIntel, macArmNext), "(arm64 slice) was built with the next tag"},
 		{"a universal binary whose first slice carries it", universal("universal-intel-next", false, macIntelNext, macArm), "(x86_64 slice) was built with the next tag"},
 		{"a 64-bit universal binary carrying it", universal("universal64-arm-next", true, macIntel, macArmNext), "(arm64 slice) was built with the next tag"},
+		{"a universal binary whose second slice carries the dev tag", universal("universal-arm-dev", false, macIntel, macArmDev), "(arm64 slice) was built with the bibletextdev tag"},
+		{"a universal binary whose first slice carries the dev tag", universal("universal-intel-dev", false, macIntelDev, macArm), "(x86_64 slice) was built with the bibletextdev tag"},
+		{"a 64-bit universal binary carrying the dev tag", universal("universal64-arm-dev", true, macIntel, macArmDev), "(arm64 slice) was built with the bibletextdev tag"},
 		{"a universal binary cut short", truncated, "slice lies outside the file"},
 	}
 	// Where lipo is installed (the macOS runner, a Mac), the binaries the
@@ -748,6 +767,8 @@ func TestVerifyNotNextRefusesTaggedBuilds(t *testing.T) {
 			verifierCase{"lipo: plain builds", join("lipo-plain", macIntel, macArm), ""},
 			verifierCase{"lipo: the second slice carries it", join("lipo-arm-next", macIntel, macArmNext), "(arm64 slice) was built with the next tag"},
 			verifierCase{"lipo: the first slice carries it", join("lipo-intel-next", macIntelNext, macArm), "(x86_64 slice) was built with the next tag"},
+			verifierCase{"lipo: the second slice carries the dev tag", join("lipo-arm-dev", macIntel, macArmDev), "(arm64 slice) was built with the bibletextdev tag"},
+			verifierCase{"lipo: the first slice carries the dev tag", join("lipo-intel-dev", macIntelDev, macArm), "(x86_64 slice) was built with the bibletextdev tag"},
 		)
 	}
 	for _, tc := range cases {

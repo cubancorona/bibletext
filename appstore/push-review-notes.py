@@ -48,7 +48,7 @@ REPOSITORY_HYGIENE_CHECK = os.path.join(REPO, "scripts", "check-repository-hygie
 # This helper intentionally has no app-ID or version override. Changing either
 # target requires a tracked, reviewable source change.
 APP_ID = "6784567351"
-TARGET_VERSION = "1.2.19"
+TARGET_VERSION = "1.2.20"
 
 # Any x.y.z in the notes. The notes name no release but TARGET_VERSION,
 # anywhere in them: a body carried over from the last release under a bumped

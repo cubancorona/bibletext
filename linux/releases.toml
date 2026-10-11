@@ -15,6 +15,18 @@
 # are each a day before their tags, and stand.
 
 [[release]]
+version = "1.2.20"
+date = "2026-10-11"
+head = "Compare readings and ask about a passage."
+bullets = [
+  "Compare perspectives sends the selected passage to your chosen AI provider and presents its readings, including meanings that may fit together.",
+  "Ask a question sends your question with the selected passage to your chosen AI provider and shows its answer.",
+  "Collapse the selected quotation while reading an AI answer, and expand it again beside the citation.",
+  "Passage previews use an inset quotation with its citation below at the body margin, and study cards fit smaller windows.",
+  "Opening study cards repeatedly now uses less memory.",
+]
+
+[[release]]
 version = "1.2.19"
 date = "2026-10-03"
 head = "Cross-references that open the passage they name."

@@ -351,10 +351,7 @@ func TestDevAskQuotesTheVerseItsCardNames(t *testing.T) {
 				previewVersion = st.currentVersion().Abbrev
 			}
 			excerpt, _ := noteSheetExcerpt(t, popup)
-			matchesCitation := sheetHas(popup, "John 3:16") && sheetHas(popup, version)
-			if nextRelease {
-				matchesCitation = sheetHas(popup, expectedPreviewCitation("John 3:16", previewVersion))
-			}
+			matchesCitation := sheetHas(popup, expectedPreviewCitation("John 3:16", previewVersion))
 			if excerpt.text != quote || !matchesCitation {
 				t.Errorf("the preview's text, reference and translation disagree: quote %q, texts %v", excerpt.text, sheetTexts(popup))
 			}
@@ -368,7 +365,7 @@ func TestDevAskQuotesTheVerseItsCardNames(t *testing.T) {
 			if r.passage.Ref != "John 3:16" || r.passage.Text != quote || r.passage.Version != version || r.span != selSpanFromNative(16, 16) {
 				t.Errorf("the request did not retain the preview and explicit verse span: %+v", r)
 			}
-			if nextRelease && (r.passage.previewVersion() != previewVersion || r.passage.previewText() != quote) {
+			if r.passage.previewVersion() != previewVersion || r.passage.previewText() != quote {
 				t.Errorf("the request changed the preview metadata: %+v", r.passage)
 			}
 			finishCapturedStudyRequest(t, r, "A synthetic answer.", nil)

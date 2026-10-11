@@ -747,7 +747,7 @@ func openAISettings(state *AppState) {
 	// (Guideline 5.1.2 — be transparent before user content leaves the device). It
 	// mirrors the privacy policy and links to it.
 	aiNote := widget.NewRichText(&widget.TextSegment{
-		Text: "When you use AI study, your Find search or selected passage and study action are sent directly to the provider you choose, authenticated with your key. " +
+		Text: "When you use AI study, your Find search or selected passage and study action, including any question you enter, are sent directly to the provider you choose, authenticated with your key. " +
 			"The provider may associate and retain the request under your account terms.",
 		Style: widget.RichTextStyle{ColorName: colorNameMuted, SizeName: theme.SizeNameCaptionText},
 	})

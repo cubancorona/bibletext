@@ -345,13 +345,20 @@ into its sandbox container.
 
 ## Privacy, age rating, and declarations
 
-The public listing currently says **Data Not Collected**, consistent with the
-empty collected-data array in `cmd/mobile/PrivacyInfo.xcprivacy` and the fact
-that the developer operates no account, analytics, advertising, or application
-server. Before each submission, re-evaluate that answer against Apple's current
-definitions and the live terms of every supported AI provider: an optional AI
-request goes directly from the reader's device to the provider selected under
-the reader's own key, and that provider may associate or retain it.
+The existing public listing says **Data Not Collected**. The 1.2.20 manifest
+instead conservatively declares optional AI user content, search history and
+provider account identifiers as linked data, without tracking. Content and
+search serve app functionality and other purposes, covering unpaid Gemini's
+permitted product/model improvement use. Account association serves app
+functionality. This includes retained provider account/key-associated records,
+not a claim that a raw API secret is retained. The absence of a developer
+application server does not determine the collection answer.
+
+Before submission, inspect and update both platform records' live App Privacy
+forms to match the final binary, manifest and public policy, then read the saved
+answers back. See [PRIVACY_RELEASE_CHECKLIST.md](PRIVACY_RELEASE_CHECKLIST.md)
+for the mapping and the separate unresolved Gemini eligibility review. A local
+manifest change does not update the public store label.
 
 Confirm the public privacy and support pages match the submitted binary and are
 live before review. Keep the configured support mailbox consistent through the

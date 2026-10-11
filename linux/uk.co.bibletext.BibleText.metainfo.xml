@@ -75,6 +75,18 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.2.20" date="2026-10-11">
+      <description>
+        <p>Compare readings and ask about a passage.</p>
+        <ul>
+          <li>Compare perspectives sends the selected passage to your chosen AI provider and presents its readings, including meanings that may fit together.</li>
+          <li>Ask a question sends your question with the selected passage to your chosen AI provider and shows its answer.</li>
+          <li>Collapse the selected quotation while reading an AI answer, and expand it again beside the citation.</li>
+          <li>Passage previews use an inset quotation with its citation below at the body margin, and study cards fit smaller windows.</li>
+          <li>Opening study cards repeatedly now uses less memory.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.19" date="2026-10-03">
       <description>
         <p>Cross-references that open the passage they name.</p>

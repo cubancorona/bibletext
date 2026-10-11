@@ -6,15 +6,53 @@
   <false/>
   <key>NSPrivacyTrackingDomains</key>
   <array/>
-  <!-- Deliberately EMPTY (audit correction): BibleText has no accounts, no
-       server, and no analytics — the developer collects nothing. Reading
-       position/history and BYOK AI keys live ON DEVICE only; Apple's
-       nutrition-label "collection" means off-device transmission to the
-       developer or partners, which never happens. Verse text a reader
-       explicitly sends to THEIR OWN configured AI provider, under their own
-       key, is the user's disclosure to their own vendor. -->
+  <!-- Reading history, notes and saved provider keys stay on device.
+       Optional AI requests send a query or selected passage/action, including
+       an entered question, directly to the selected provider under the
+       reader's own key. Providers can retain account-associated content and
+       usage records. The content purposes cover unpaid Gemini improvement
+       use as well as answering requests; no tracking is performed. -->
   <key>NSPrivacyCollectedDataTypes</key>
-  <array/>
+  <array>
+    <dict>
+      <key>NSPrivacyCollectedDataType</key>
+      <string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key>
+      <true/>
+      <key>NSPrivacyCollectedDataTypeTracking</key>
+      <false/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array>
+        <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+        <string>NSPrivacyCollectedDataTypePurposeOther</string>
+      </array>
+    </dict>
+    <dict>
+      <key>NSPrivacyCollectedDataType</key>
+      <string>NSPrivacyCollectedDataTypeSearchHistory</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key>
+      <true/>
+      <key>NSPrivacyCollectedDataTypeTracking</key>
+      <false/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array>
+        <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+        <string>NSPrivacyCollectedDataTypePurposeOther</string>
+      </array>
+    </dict>
+    <dict>
+      <key>NSPrivacyCollectedDataType</key>
+      <string>NSPrivacyCollectedDataTypeUserID</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key>
+      <true/>
+      <key>NSPrivacyCollectedDataTypeTracking</key>
+      <false/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array>
+        <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+      </array>
+    </dict>
+  </array>
   <key>NSPrivacyAccessedAPITypes</key>
   <array>
     <dict>

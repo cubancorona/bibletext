@@ -225,6 +225,23 @@ func observeAppearance(state *AppState, ev appearanceEvent) {
 	sheetOpen := state.window != nil && state.window.Canvas().Overlays().Top() != nil
 	built := state.appearance.built
 	act := state.appearance.decide(ev, now, sheetOpen)
+	if devDiagnosticsEnabled {
+		flags := int64(0)
+		if act.rebuild {
+			flags |= 1
+		}
+		if act.reopen {
+			flags |= 2
+		}
+		if sheetOpen {
+			flags |= 4
+		}
+		if state.appearance.background {
+			flags |= 8
+		}
+		devDiagnosticEvent("appearance", devDiagnosticMetric{Key: "reason", Value: int64(ev)},
+			devDiagnosticMetric{Key: "status_class", Value: flags})
+	}
 	if os.Getenv("BT_SHEET_DEBUG") != "" {
 		fmt.Fprintf(os.Stderr, "[sheet] appearance %s: built=%v now=%v background=%v sheet=%v -> rebuild=%v reopen=%v\n",
 			ev, built, now, state.appearance.background, sheetOpen, act.rebuild, act.reopen)

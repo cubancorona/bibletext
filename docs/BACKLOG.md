@@ -436,8 +436,10 @@ using none.
 
 ## A sheet turned from one landscape to the other keeps its side padding on the old side (Android) — found 1 October 2026; the composer FIXED 6 October 2026
 
-Still open: Ask's half, when Ask returns to the menus — see docs/ROADMAP.md.
-The note composer's half is fixed for 1.2.20 (below).
+The note composer and Ask both retain their side-inset refit for 1.2.20.
+The note composer's native Android turn is verified below. Ask's watch now
+checks the sheet area's position and width as well as canvas and input-area
+changes (`ai_ask.go`); an unchanged canvas size no longer prevents its refit.
 
 Since 1.2.18 the note composer and Ask hold their card clear of the side
 safe insets of a phone held sideways (`clearOfSideInsets`,
@@ -480,8 +482,9 @@ its display from ROTATION_270 straight to ROTATION_90 at an unchanged size.
 With the composer opened at ROTATION_270 and the phone turned over, the build
 before the change left the card at x 11..2252, under the 136px cutout now on
 the left, and the fixed build moved it to x 147..2388, clear of it; so the
-driver does hand the composer the new insets on that turn. Ask is unchanged:
-it still throws its refit away, and waits until Ask returns to the menus.
+driver does hand the composer the new insets on that turn. Ask now keeps
+its refit and watches the same safe-area changes. That code correction is
+separate from the recorded native Android proof for the note composer.
 
 ## A Play upload's commit restarts a review in progress — FIXED 6 October 2026, for 1.2.20
 
@@ -1915,7 +1918,8 @@ already reopens it); the AI panel showing an error or asking for a key
 (reopening would send the request again); the share-image preview; the model
 picker and the notes questions over Settings (only the top sheet ever comes
 back, and these answer into the one beneath); the menus themselves.
-Rotation's rebuild still closes every sheet, as before.
+Responsive-layout rebuilds capture and reopen the registered top sheet too,
+preserving entered questions and notes and completed study answers.
 
 **Outside the sheets, what a switch also left behind, and does no longer:**
 
@@ -5165,12 +5169,16 @@ confirm is in `docs/VISUAL_TESTS.md` V15:
   those start above the header's controls rather than below the header,
   and a tablet sheet a little shorter than its cap could still start
   partway down the Go to chip. Not seen in the new images; left until a
-  screen shows it. Nor are their sheets sized again when the canvas changes
-  size: there the content also changes height as the soft keyboard comes
-  and goes, and a sheet resized under the reader's typing is worse; a
-  rotation that moves the navigation rebuilds the window and closes the
-  sheets, the Go to picker and the note composer refit themselves, and the
-  rest keep the size they opened at, which the modal clamps to the canvas.
+  screen shows it. Mobile AI result cards now refit in place when the canvas
+  changes size, including an iPad floating window resized without rotating.
+  They retain the answer, reading offsets, explicit quotation choice and any
+  pending request while rewrapping to the current reading width and height.
+  Keyboard-only root layout changes do not refit them. Other mobile sheets
+  retain their existing sizing policy so a keyboard does not move a sheet
+  under the reader's typing: a rotation that moves the navigation rebuilds
+  the window and reopens its registered top sheet; the Go to picker and the
+  note composer refit themselves; the remaining sheets keep the size they
+  opened at, which the modal clamps to the canvas.
   Also left: a desktop window under about 420pt tall (the window allows
   386pt) has too little room below the header for the fixed parts of some
   sheets, so cross-references while the list loads (below 418pt), the AI

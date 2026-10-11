@@ -2,8 +2,11 @@ package bibletext
 
 import (
 	"regexp"
+	"unicode"
+	"unicode/utf8"
 
 	"fyne.io/fyne/v2/widget"
+	"github.com/rivo/uniseg"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
@@ -87,15 +90,108 @@ func aiMarkdownReachesNetwork(md string) bool {
 // ever giving it a segment that reaches the network.
 func setAIAnswerText(answer *widget.RichText, raw string) {
 	clean := sanitizeAIMarkdown(raw)
+	var segments []widget.RichTextSegment
 	if aiMarkdownReachesNetwork(clean) {
 		// Literal text: a TextSegment has no URL and fetches nothing, so this is
 		// safe whatever the model sent. Formatting is the price, and it is only
 		// paid by an answer that tried to link in the first place.
-		answer.Segments = []widget.RichTextSegment{
+		segments = []widget.RichTextSegment{
 			&widget.TextSegment{Style: widget.RichTextStyleInline, Text: clean},
 		}
-		answer.Refresh()
-		return
+	} else {
+		// Parse without refreshing the sized answer first. Refreshing one long
+		// paragraph makes Fyne shape the entire remaining text for every row.
+		segments = widget.NewRichTextFromMarkdown(clean).Segments
 	}
-	answer.ParseMarkdown(clean)
+	answer.Segments = aiAnswerLayoutSegments(segments)
+	answer.Refresh()
+}
+
+const aiAnswerSegmentRunes = 512
+
+// aiAnswerLayoutSegments bounds the text Fyne remeasures for each wrapped row.
+// Intermediate pieces stay inline, so splitting adds no paragraph or list break;
+// the final piece retains the original block ending. The answer used by Copy,
+// Report and the request cache is unchanged.
+func aiAnswerLayoutSegments(segments []widget.RichTextSegment) []widget.RichTextSegment {
+	var out []widget.RichTextSegment
+	for _, segment := range segments {
+		switch s := segment.(type) {
+		case *widget.TextSegment:
+			// Fyne recognizes quote indentation by exact style equality. Making
+			// an intermediate quote inline would lose it, so keep quotes intact.
+			if s.Style == widget.RichTextStyleBlockquote || utf8.RuneCountInString(s.Text) <= aiAnswerSegmentRunes {
+				out = append(out, s)
+				continue
+			}
+			pieces := aiAnswerTextPieces(s.Text)
+			for i, piece := range pieces {
+				style := s.Style
+				if i < len(pieces)-1 {
+					style.Inline = true
+				}
+				out = append(out, &widget.TextSegment{Text: piece, Style: style})
+			}
+		case *widget.ParagraphSegment:
+			s.Texts = aiAnswerLayoutSegments(s.Texts)
+			out = append(out, s)
+		case *widget.ListSegment:
+			for i, item := range s.Items {
+				pieces := aiAnswerLayoutSegments([]widget.RichTextSegment{item})
+				if len(pieces) == 1 {
+					s.Items[i] = pieces[0]
+				} else {
+					// One Items entry owns one bullet. A plain text item may need
+					// several layout pieces, but it is still one list item.
+					s.Items[i] = &widget.ParagraphSegment{Texts: pieces}
+				}
+			}
+			out = append(out, s)
+		default:
+			out = append(out, segment)
+		}
+	}
+	return out
+}
+
+// aiAnswerTextPieces prefers whitespace boundaries and keeps grapheme clusters
+// whole when a word has to span pieces. One unusually large grapheme may exceed
+// the budget: preserving a combining sequence is preferable to breaking it.
+func aiAnswerTextPieces(text string) []string {
+	type boundary struct {
+		byteEnd, runeEnd int
+		space            bool
+	}
+	ends := []boundary{{}}
+	graphemes := uniseg.NewGraphemes(text)
+	runes := 0
+	for graphemes.Next() {
+		_, end := graphemes.Positions()
+		cluster := graphemes.Runes()
+		runes += len(cluster)
+		ends = append(ends, boundary{end, runes, unicode.IsSpace(cluster[len(cluster)-1])})
+	}
+	var pieces []string
+	for start := 0; start < len(ends)-1; {
+		end := start + 1
+		space := 0
+		for end < len(ends) && ends[end].runeEnd-ends[start].runeEnd <= aiAnswerSegmentRunes {
+			if ends[end].space {
+				// Keep the separator at the start of the next piece. Fyne's
+				// word wrapper otherwise splits that piece's first word when
+				// it does not fit the preceding piece's partially filled row.
+				space = end - 1
+			}
+			end++
+		}
+		end--
+		if end == start {
+			end++ // a single grapheme longer than the normal budget
+		} else if end < len(ends)-1 && space > start {
+			end = space
+		}
+		pieces = append(pieces, text[ends[start].byteEnd:ends[end].byteEnd])
+		start = end
+	}
+	return pieces
 }

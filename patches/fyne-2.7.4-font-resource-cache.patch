@@ -1,0 +1,129 @@
+--- a/internal/painter/font.go
++++ b/internal/painter/font.go
+@@ -2,9 +2,11 @@
+ 
+ import (
+ 	"bytes"
++	"container/list"
+ 	"image/color"
+ 	"image/draw"
+ 	"math"
++	"reflect"
+ 	"strings"
+ 	"sync"
+ 
+@@ -127,6 +129,10 @@
+ 	scope := ""
+ 	if o != nil { // for overridden themes get the cache key right
+ 		scope = cache.WidgetScopeID(o)
++	}
++	if scope != "" {
++		fontScopeMutex.Lock()
++		defer fontScopeMutex.Unlock()
+ 	}
+ 
+ 	val, ok := fontCache.Load(cacheID{style: style, scope: scope})
+@@ -166,14 +172,24 @@
+ 		val = &FontCacheItem{Fonts: faces}
+ 		fontCache.Store(cacheID{style: style, scope: scope}, val)
+ 	}
++	if scope != "" {
++		touchFontScope(cacheID{style: style, scope: scope})
++	}
+ 
+ 	return val
+ }
+ 
+ // ClearFontCache is used to remove cached fonts in the case that we wish to re-load Font faces
+ func ClearFontCache() {
++	fontScopeMutex.Lock()
++	defer fontScopeMutex.Unlock()
+ 	fontCache.Clear()
++	fontScopeOrder.Init()
++	fontScopeEntries = make(map[cacheID]*list.Element)
+ 	fontCustomCache.Clear()
++	fontResourceMutex.Lock()
++	fontResourceCache = make(map[fyne.Resource]*font.Font)
++	fontResourceMutex.Unlock()
+ }
+ 
+ // DrawString draws a string into an image.
+@@ -202,13 +218,32 @@
+ }
+ 
+ func loadMeasureFont(data fyne.Resource) *font.Face {
+-	loaded, err := font.ParseTTF(bytes.NewReader(data.Content()))
+-	if err != nil {
+-		fyne.LogError("font load error", err)
+-		return nil
+-	}
+-
+-	return loaded
++	// Resource permits value implementations containing slices. Preserve their
++	// uncached loading behavior instead of using them as map keys.
++	if !reflect.ValueOf(data).Comparable() {
++		loaded, err := font.ParseTTF(bytes.NewReader(data.Content()))
++		if err != nil {
++			fyne.LogError("font load error", err)
++			return nil
++		}
++		return loaded
++	}
++	// BibleText patch: share immutable parsed font tables across theme scopes.
++	// Each scope keeps its own Face because glyph caches on Face are mutable.
++	fontResourceMutex.Lock()
++	parsed := fontResourceCache[data]
++	if parsed == nil {
++		loaded, err := font.ParseTTF(bytes.NewReader(data.Content()))
++		if err != nil {
++			fontResourceMutex.Unlock()
++			fyne.LogError("font load error", err)
++			return nil
++		}
++		parsed = loaded.Font
++		fontResourceCache[data] = parsed
++	}
++	fontResourceMutex.Unlock()
++	return font.NewFace(parsed)
+ }
+ 
+ // MeasureString returns how far dot would advance by drawing s with f.
+@@ -355,10 +390,36 @@
+ 	scope string
+ }
+ 
++// A scoped entry owns mutable glyph caches. Keep enough for active widgets,
++// while retired scopes from sheets and refreshes cannot grow without a bound.
++const fontScopeCacheLimit = 128
++
+ var (
+-	fontCache       async.Map[cacheID, *FontCacheItem]
+-	fontCustomCache async.Map[fyne.Resource, *FontCacheItem] // for custom resources
++	fontScopeMutex    sync.Mutex
++	fontScopeOrder    list.List
++	fontScopeEntries  = make(map[cacheID]*list.Element)
++	fontCache         async.Map[cacheID, *FontCacheItem]
++	fontCustomCache   async.Map[fyne.Resource, *FontCacheItem] // for custom resources
++	fontResourceMutex sync.Mutex
++	fontResourceCache = make(map[fyne.Resource]*font.Font)
+ )
++
++// touchFontScope runs with fontScopeMutex held. Unscoped and explicit-font
++// entries keep their existing lifetimes; only temporary theme scopes use LRU.
++func touchFontScope(key cacheID) {
++	if entry := fontScopeEntries[key]; entry != nil {
++		fontScopeOrder.MoveToBack(entry)
++		return
++	}
++	fontScopeEntries[key] = fontScopeOrder.PushBack(key)
++	if fontScopeOrder.Len() > fontScopeCacheLimit {
++		oldest := fontScopeOrder.Front()
++		expired := oldest.Value.(cacheID)
++		fontCache.Delete(expired)
++		delete(fontScopeEntries, expired)
++		fontScopeOrder.Remove(oldest)
++	}
++}
+ 
+ type noopLogger struct{}
+ 

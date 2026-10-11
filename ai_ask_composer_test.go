@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 )
@@ -27,41 +28,21 @@ func askComposerFixture() aiPassage {
 		Text: "The first fixture verse describes a field beside a hill. " +
 			"The second fixture verse describes a path from the field to the river.",
 	}
-	if nextRelease {
-		p.VersionAbbrev = "FXT"
-		p.PreviewText = "The fixture preview names the Lᴏʀᴅ beside a field and a hill. " +
-			"Its second sentence follows the path from that field to the river."
-		p.HasPreview = true
-	}
+	p.VersionAbbrev = "FXT"
+	p.PreviewText = "The fixture preview names the Lᴏʀᴅ beside a field and a hill. " +
+		"Its second sentence follows the path from that field to the river."
+	p.HasPreview = true
 	return p
 }
 
 func assertAskComposerPassage(t *testing.T, popup *widget.PopUp, passage aiPassage) {
 	t.Helper()
-	if nextRelease {
-		assertCapturedPassagePreview(t, popup, passage)
-		return
-	}
-	if !sheetHas(popup, passage.Ref) || !sheetHas(popup, passage.Version) {
-		t.Errorf("current composer changed its exact reference or translation; texts %v", sheetTexts(popup))
-	}
-	ex, _ := noteSheetExcerpt(t, popup)
-	if ex.text != strings.Join(strings.Fields(passage.Text), " ") {
-		t.Errorf("current composer excerpt = %q, want raw selected text %q", ex.text, passage.Text)
-	}
+	assertCapturedPassagePreview(t, popup, passage)
 }
 
 func assertAskPanelPassage(t *testing.T, popup *widget.PopUp, passage aiPassage) {
 	t.Helper()
-	if nextRelease {
-		assertCapturedPassagePreview(t, popup, passage)
-		return
-	}
-	for _, want := range []string{passage.Ref, passage.Version, quotedOneLine(passage.Text, 300)} {
-		if !sheetHas(popup, want) {
-			t.Errorf("current panel lost exact %q; texts %v", want, sheetTexts(popup))
-		}
-	}
+	assertCapturedPassagePreview(t, popup, passage)
 }
 
 func assertCapturedPassagePreview(t *testing.T, popup *widget.PopUp, passage aiPassage) {
@@ -105,7 +86,7 @@ func assertCapturedPassagePreview(t *testing.T, popup *widget.PopUp, passage aiP
 	}
 	assertPassagePreviewSpacing(t, ex, citation)
 	if sheetHas(popup, passage.Ref) || sheetHas(popup, passage.Version) {
-		t.Errorf("next preview retained a separate reference or full translation; texts %v", sheetTexts(popup))
+		t.Errorf("preview retained a separate reference or full translation; texts %v", sheetTexts(popup))
 	}
 }
 
@@ -115,12 +96,63 @@ func assertPassagePreviewSpacing(t *testing.T, excerpt *noteExcerpt, citation *w
 		return
 	}
 	driver := fyne.CurrentApp().Driver()
+	var root fyne.CanvasObject
+	if cnv := driver.CanvasForObject(citation); cnv != nil {
+		root = cnv.Overlays().Top()
+		if root == nil {
+			root = cnv.Content()
+		}
+	}
+	if root != nil {
+		var shown func(fyne.CanvasObject, bool) (bool, bool)
+		shown = func(object fyne.CanvasObject, ancestorsVisible bool) (bool, bool) {
+			if object == nil {
+				return false, false
+			}
+			visible := ancestorsVisible && object.Visible()
+			if object == excerpt {
+				return true, visible
+			}
+			var children []fyne.CanvasObject
+			switch object := object.(type) {
+			case *fyne.Container:
+				children = object.Objects
+			case *container.Scroll:
+				children = []fyne.CanvasObject{object.Content}
+			case *container.ThemeOverride:
+				children = []fyne.CanvasObject{object.Content}
+			case *widget.PopUp:
+				children = []fyne.CanvasObject{object.Content}
+			}
+			for _, child := range children {
+				if found, visible := shown(child, visible); found {
+					return true, visible
+				}
+			}
+			return false, false
+		}
+		found, visible := shown(root, true)
+		if !found {
+			t.Fatal("the excerpt is missing from its canvas's visible-root tree")
+		}
+		if !visible {
+			return // a collapsed ancestor hides its complete quote
+		}
+	}
 	quotePosition := driver.AbsolutePositionForObject(excerpt)
 	citationPosition := driver.AbsolutePositionForObject(citation)
 	if inset := quotePosition.X - citationPosition.X; math.Abs(float64(inset-16)) > 0.5 {
 		t.Errorf("the quote must start 16pt inside the citation's main margin: quote X %v, citation X %v", quotePosition.X, citationPosition.X)
 	}
 	quoteBottom := quotePosition.Y + excerpt.Size().Height
+	if root != nil {
+		if scroll := scrollHolding(root, excerpt); scroll != nil && scrollHolding(root, citation) != scroll {
+			// The citation follows the details viewport, not the full quote's
+			// offscreen rows; only the visible portion can meet that citation.
+			bottom := driver.AbsolutePositionForObject(scroll).Y + scroll.Size().Height
+			quoteBottom = minF(quoteBottom, bottom)
+		}
+	}
 	if gap := citationPosition.Y - quoteBottom; gap < 8-0.5 {
 		t.Errorf("citation needs at least 8pt of space below the quote: gap %vpt", gap)
 	}
@@ -175,14 +207,12 @@ func TestAskComposerRetainsAnIntentionallyEmptyPreview(t *testing.T) {
 	win := noteSheetWindow(t, st, false, 393, 852)
 	holdNoteSheetTimers(t)
 	passage := askComposerFixture()
-	if nextRelease {
-		passage.PreviewText = ""
-	}
+	passage.PreviewText = ""
 	promptAskQuestionForPassage(st, passage, "", verseTwo)
 	first := topPopup(t, win)
 	assertAskComposerPassage(t, first, passage)
-	if excerpt, _ := noteSheetExcerpt(t, first); excerpt.Visible() != !nextRelease {
-		t.Errorf("empty captured preview visibility = %v, want %v", excerpt.Visible(), !nextRelease)
+	if excerpt, _ := noteSheetExcerpt(t, first); excerpt.Visible() {
+		t.Error("the intentionally empty preview must stay hidden")
 	}
 	reopen := takeTopSheetReopen(st)
 	if reopen == nil {
@@ -193,8 +223,8 @@ func TestAskComposerRetainsAnIntentionallyEmptyPreview(t *testing.T) {
 	reopen()
 	again := topPopup(t, win)
 	assertAskComposerPassage(t, again, passage)
-	if excerpt, _ := noteSheetExcerpt(t, again); excerpt.Visible() != !nextRelease {
-		t.Errorf("reopened empty preview visibility = %v, want %v", excerpt.Visible(), !nextRelease)
+	if excerpt, _ := noteSheetExcerpt(t, again); excerpt.Visible() {
+		t.Error("the reopened empty preview must stay hidden")
 	}
 	test.Tap(findTreeButton(again, "Cancel"))
 }
@@ -238,9 +268,7 @@ func TestAskComposerExcerptNeverWidensANarrowCard(t *testing.T) {
 	holdNoteSheetTimers(t)
 	passage := askComposerFixture()
 	passage.Text = strings.Repeat("A fixture passage with a deliberately long word. ", 30)
-	if nextRelease {
-		passage.PreviewText = strings.Repeat("A fixture preview with a deliberately long word. ", 30)
-	}
+	passage.PreviewText = strings.Repeat("A fixture preview with a deliberately long word. ", 30)
 	promptAskQuestionForPassage(st, passage, "", selSpan{})
 	p := topPopup(t, win)
 	ex, renderer := noteSheetExcerpt(t, p)

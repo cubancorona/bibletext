@@ -1,6 +1,6 @@
 package bibletext
 
-// REFITTING THE OPEN SHEETS WHEN A DESKTOP WINDOW CHANGES SIZE.
+// Refitting open sheets when the window changes size.
 //
 // A desktop sheet takes its size from the window as it opens (sheet_fit.go),
 // and the toolkit never sizes it again: on a window resize the driver only
@@ -23,14 +23,14 @@ package bibletext
 // does (sheet_reopen.go): it is dropped at the next register, the next refit,
 // and every rebuild's drain.
 //
-// DESKTOP ONLY. On a phone or tablet the content also changes height as the
-// soft keyboard comes and goes (layoutWatcher, ui_regular.go), and a sheet
-// resized under the reader's typing is what the Go to picker's rule against
-// resizing exists to prevent. There a rotation that moves the navigation
-// rebuilds the window, which closes the sheets; the Go to picker and the note
-// composer refit themselves on the canvas changes that remain (goto.go,
-// share_note_ui.go); the others keep the size they opened at, which a modal
-// popup clamps to the canvas. Recorded in docs/BACKLOG.md.
+// Most registrations are desktop-only. On a phone or tablet the content also
+// changes height as the soft keyboard comes and goes (layoutWatcher,
+// ui_regular.go). Resizing under the reader's typing is what the Go to
+// picker's rule against resizing exists to prevent. A rotation that moves the
+// navigation rebuilds the window and reopens its registered top sheet. The Go
+// to picker and note composer refit on the canvas changes that remain
+// (goto.go, share_note_ui.go). AI result cards opt in on every platform,
+// ignoring keyboard-only layout changes; other mobile sheets retain their size.
 
 import (
 	"fyne.io/fyne/v2"
@@ -51,6 +51,16 @@ type sheetRefit struct {
 // no-op on a phone or tablet (above).
 func registerSheetRefit(state *AppState, popup *widget.PopUp, fit func()) {
 	if state == nil || popup == nil || fit == nil || fyne.CurrentDevice().IsMobile() {
+		return
+	}
+	registerCanvasSheetRefit(state, popup, fit)
+}
+
+// registerCanvasSheetRefit also permits a mobile sheet to refit in place.
+// Callers must distinguish canvas resizing from keyboard-driven root layout
+// changes; a field being edited must not move with an unrelated refit.
+func registerCanvasSheetRefit(state *AppState, popup *widget.PopUp, fit func()) {
+	if state == nil || popup == nil || fit == nil {
 		return
 	}
 	pruneSheetRefits(state)

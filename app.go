@@ -151,6 +151,8 @@ var loadProgressFn func(book string, bookNum, totalBooks, chapter int)
 //
 // Exported so both entry points (desktop Run, cmd/mobile) use the same path.
 func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
+	devDiagnosticEvent("load_start")
+	loadStarted := devDiagnosticNow()
 	// The device's zone, before anything computes a date. The loading-phase
 	// window already on screen shows no date, and everything that does — the
 	// verse of the day's day number, note bylines — is built only after the
@@ -181,12 +183,14 @@ func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
 			})
 		}
 		loaded, err := loadStateData()
+		devDiagnosticEvent("load_complete", devDiagnosticSince(loadStarted), devDiagnosticMetric{Key: "error_class", Value: devDiagnosticErrorClass(err)})
 		loadProgressFn = nil
 		fyne.Do(func() {
 			// Leaving the loading phase either way — stop the spinner so its
 			// animation doesn't keep the canvas repainting after it's off-screen.
 			state.stopLoadingBar()
 			if err != nil {
+				devDiagnosticEvent("load_failed")
 				fmt.Fprintln(os.Stderr, "BibleText failed to load:", err)
 				state.loadPhase = loadFailed
 				state.loadErr = err
@@ -214,6 +218,7 @@ func StartBackgroundLoad(myApp fyne.App, window fyne.Window, state *AppState) {
 			// the iOS native overlay and armPendingRestore re-arms the saved
 			// scroll position on the freshly-built reading view.
 			rebuildWindow(state)
+			devDiagnosticEvent("load_ui_ready", devDiagnosticSince(loadStarted))
 			// Dev builds only: open a sheet named by BIBLETEXT_DEV_OPEN so it can
 			// be screenshotted in the simulator, which has no tap command. No-op
 			// (and not compiled in) for shipping builds — dev_autoopen_off.go.
@@ -598,6 +603,7 @@ func InstallReadingStateFlush(myApp fyne.App, window fyne.Window, state *AppStat
 	// teardown unless a newer activity has started since (activity_life.go).
 	stoppedHook := func(gen uint64) func() {
 		return func() {
+			devDiagnosticEvent("lifecycle_stop", devDiagnosticMetric{Key: "generation", Value: int64(gen)})
 			activityStopped(state, gen)
 			// Release the audio session / player on quit. Call the raw native stop
 			// (engineStop, which is nativeAudioStop), NOT gAudio.stop(): OnStopped can
@@ -627,6 +633,7 @@ func InstallReadingStateFlush(myApp fyne.App, window fyne.Window, state *AppStat
 	// in the same event picks up the rest (activity_life.go).
 	lc.SetOnStarted(func() {
 		gen, held := activityStarted(state)
+		devDiagnosticEvent("lifecycle_start", devDiagnosticMetric{Key: "generation", Value: int64(gen)})
 		lc.SetOnStopped(stoppedHook(gen))
 		for _, land := range held {
 			fyne.Do(land)
@@ -638,7 +645,10 @@ func InstallReadingStateFlush(myApp fyne.App, window fyne.Window, state *AppStat
 		// which is what keeps the app switcher's two-appearance snapshot
 		// from rebuilding the window (appearance.go). A no-op on desktop.
 		observeAppearance(state, appearanceExitedForeground)
+		started := devDiagnosticNow()
+		devDiagnosticEvent("background")
 		flushReadingState(state)
+		devDiagnosticEvent("background_done", devDiagnosticSince(started))
 	})
 	// Retry the refresh whenever the app returns to the foreground — covers a
 	// fetch that stalled or dropped while backgrounded. No-op once nothing is owed
@@ -662,13 +672,17 @@ func InstallReadingStateFlush(myApp fyne.App, window fyne.Window, state *AppStat
 	lc.SetOnEnteredForeground(func() {
 		refreshLocalTimeZone()
 		observeAppearance(state, appearanceEnteredForeground)
+		started := devDiagnosticNow()
+		devDiagnosticEvent("foreground")
 		foregroundOverlayRecovery(state)
+		devDiagnosticEvent("foreground_enter_done", devDiagnosticSince(started))
 		fyne.Do(func() { triggerFullDownload(state) })
 	})
 	if window != nil && !fyne.CurrentDevice().IsMobile() {
 		// Desktop: the window-close button bypasses the lifecycle "stopped" hook
 		// until teardown, so capture here while the NSTextView is still alive.
 		window.SetCloseIntercept(func() {
+			devDiagnosticEvent("window_close")
 			// Mark teardown BEFORE Close() drains the main loop, so an in-flight
 			// background apply (e.g. a version download) drops itself rather than
 			// running inline off the main thread during exit.
@@ -678,6 +692,14 @@ func InstallReadingStateFlush(myApp fyne.App, window fyne.Window, state *AppStat
 			window.Close()
 		})
 	}
+}
+
+// InstallDevDiagnostics starts bounded local diagnostics in bibletextdev builds.
+// Both entry points call it before constructing the window; release builds have
+// no recorder or native notification observers.
+func InstallDevDiagnostics() {
+	devDiagnosticsStart()
+	devDiagnosticsNativeStart()
 }
 
 // Run is the desktop entry: loads the data, opens a sized window, and starts the
@@ -701,6 +723,7 @@ func Run() {
 		return
 	}
 	myApp := app.NewWithID(devAppID("bibletext"))
+	InstallDevDiagnostics()
 	// Start in loadPending: the window shows a spinner while the Bible loads on a
 	// background goroutine, then swaps to the reader.
 	state := NewLoadingState()

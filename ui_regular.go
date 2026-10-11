@@ -176,6 +176,6 @@ func (w *layoutWatcher) Resize(size fyne.Size) {
 	w.BaseWidget.Resize(size)
 	if changed {
 		w.pending = true
-		fyne.Do(func() { rebuildWindow(w.state) })
+		fyne.Do(func() { rebuildForLayoutChange(w.state) })
 	}
 }

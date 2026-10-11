@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 )
@@ -97,18 +98,16 @@ func syntheticAskPassage() aiPassage {
 		Book: "Mark", Chapter: 1, Lo: 2, Hi: 2, Ref: "Mark 1:2",
 		Text: "Synthetic passage selected on the first page.", Version: "Synthetic edition A",
 	}
-	if nextRelease {
-		p.VersionAbbrev = "SYN-A"
-		p.PreviewText = "A distinct captured preview names the Lᴏʀᴅ."
-		p.HasPreview = true
-	}
+	p.VersionAbbrev = "SYN-A"
+	p.PreviewText = "A distinct captured preview names the Lᴏʀᴅ."
+	p.HasPreview = true
 	return p
 }
 
-// The legacy wrapper changes only gated Ask. Fixed actions retain their
+// The legacy wrapper captures Ask only. Fixed actions retain their
 // text-and-span request seam in both build states; explicit ForPassage calls
 // are covered separately by the captured-passage lifecycle controls.
-func TestStudyPanelWrapperCapturesOnlyGatedAsk(t *testing.T) {
+func TestStudyPanelWrapperCapturesOnlyAsk(t *testing.T) {
 	for _, action := range []string{aiActionExplain, aiActionContext, aiActionTranslation, aiActionCompare, aiActionAsk} {
 		t.Run(action, func(t *testing.T) {
 			app := test.NewApp()
@@ -206,6 +205,7 @@ func TestAskPanelRetainsCapturedPassage(t *testing.T) {
 			t.Cleanup(app.Quit)
 			w := test.NewWindow(widget.NewLabel("reading"))
 			t.Cleanup(w.Close)
+			w.Resize(fyne.NewSize(900, 760))
 			reqs := stubCapturedStudyRequests(t)
 			state := studyPanelState(t, w)
 			p := syntheticAskPassage()

@@ -66,4 +66,4 @@ esac
 unset _asc_mode
 
 export ASC_ISSUER_ID ASC_KEY_ID ASC_KEY_PATH
-echo "App Store Connect credentials loaded (key id ${ASC_KEY_ID})."
+echo "App Store Connect credentials loaded."

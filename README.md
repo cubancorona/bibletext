@@ -174,8 +174,9 @@ root), signing, emulator use, and distribution are covered in
   measure with comfortable leading and indented paragraphs, modelled on the
   U.S. Reports. See [docs/IPAD.md](docs/IPAD.md).
 - 🤖 **AI study** (bring your own key) — select any passage and have an AI
-  **Explain** it, **Analyze context**, **Analyze translation**, or **Compare
-  perspectives** (several traditions' readings of it, side by side), using your
+  **Explain** it, **Analyze context**, **Analyze translation**, **Compare
+  perspectives** (several traditions' readings of it, side by side), or **Ask a
+  question…**, using your
   own Gemini / ChatGPT / Claude / Grok API key. There's also an AI **Find** that turns
   a plain-language request into matching passages on the Search tab. Optional and
   off-able (Settings → Assistant → None). See [AI study](#ai-study-bring-your-own-key)
@@ -349,13 +350,18 @@ real text only loads once you've dropped the licensed file in place.
 ## AI study (bring your own key)
 
 Select a passage in the reader and the native selection menu gains a **Study with
-AI** submenu with four actions — **Explain**, **Analyze context**, **Analyze
-translation**, and **Compare perspectives**, which sets several named readings of
+AI** submenu with five actions — **Explain**, **Analyze context**, **Analyze
+translation**, **Compare perspectives**, and **Ask a question…**. Compare sets several named readings of
 the passage side by side under fixed headings. The chosen action plus the selected
 text are sent to an AI provider of your choice, and the answer appears in a panel.
-The next-major development build also offers **Ask a question…**, with the selected
-passage excerpt above the question field and a native multiline editor on iOS;
-it remains behind the [development switch](docs/NEXT.md) while it is refined. The whole
+Every result can collapse its selected quotation while keeping the citation
+visible. The small chevron beside the citation collapses or restores the quotation;
+Ask keeps the question below the divider, in the same scrolling area as the answer.
+Expanding does not ask the AI for another answer. Short screens collapse the
+quotation automatically.
+Ask shows the selected passage excerpt above the question field and uses a native
+multiline editor on iOS. Its availability is controlled by one code constant,
+`askQuestionEnabled` in `ai_ask_gate.go`. The whole
 AI surface can be turned off in Settings → Assistant → **None**. A separate AI
 **Find** on the Search
 tab (the **Search / Find** toggle) takes a plain-language request and returns
@@ -388,7 +394,7 @@ A `<PROVIDER>_API_KEY` environment variable (`GEMINI_API_KEY`, `OPENAI_API_KEY`,
 
 ### What gets sent
 
-Each action builds one prompt (`buildAIPrompt` in `ai.go`; the comparison has
+Each action builds one prompt (`buildAIPrompt` and `buildAskPrompt` in `ai.go`; the comparison has
 its own builder, `buildComparePrompt` in `ai_compare.go`, shown further down)
 and sends it as a single user message. Output is limited only by a `32768`-token runaway backstop
 — the prompt, not a spending cap, is what keeps answers short (a lower cap
@@ -396,8 +402,9 @@ silently starved the reasoning models, which count their hidden thinking against
 it). Gemini and Grok requests are sent at temperature `0.4`, ChatGPT too except
 its reasoning families (`gpt-5`, `o*`), which — like Claude — use the provider's
 default. Identical requests are cached in memory, so re-opening the same
-analysis does not re-send. Only the text you selected — plus the book, chapter and the verses it
-resolves to — and the fixed instructions below ever leave the device:
+analysis does not re-send. Study requests send the text you selected, the book,
+chapter and verses it resolves to, and the fixed instructions below. Ask also
+sends the question you enter:
 
 ```
 You are a knowledgeable, even-handed Bible study assistant. Write in clear,
@@ -493,6 +500,36 @@ narrative’s claims as independent proof of an event or its mechanism.
 
 The quoted text is from the {Version}. Verse numbers may appear inside the
 quotation.
+
+Passage ({Book} {Chapter}:{Verses}):
+“{selected text}”
+```
+
+**Ask a question…** sends its own prompt. It separates the selected wording,
+reported speech and inference, corrects unsupported premises, and allows only
+the supplied passage to be quoted. Surrounding context and other Scripture are
+paraphrased. The answer stays focused on the question, with relevant differing
+readings and uncertainty stated briefly, and adds no closing questions:
+
+```
+You are a knowledgeable, even-handed Bible study assistant. Answer the reader's
+question directly and clearly in plain language, and keep it concise — a few
+short paragraphs at most. Ground your answer in the passage below and its
+context; you may draw on directly relevant Scripture, but stay focused on the
+question. If the passage does not address the question, say so plainly rather
+than speculating. Distinguish what the selected passage states, what it reports
+a speaker saying, and what a reading infers. Quote only wording supplied in the
+passage; paraphrase surrounding context and other Scripture. If the question
+assumes something the passage does not establish, say so briefly and answer
+what it does support. Where this passage is read differently, name the main
+readings, who holds them and the assumption each rests on, and say what the
+wording of the passage counts for or against; where a point is uncertain, say
+so briefly. Name a document or writer only when you are sure of it. Do not use
+markdown headings or bullet lists, and do not add follow-up questions.
+
+The passage is from the {Version}.
+
+Reader's question: "{question}"
 
 Passage ({Book} {Chapter}:{Verses}):
 “{selected text}”

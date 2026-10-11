@@ -42,6 +42,41 @@ disputes what happened. The dev Links tab carries the full share-link scenario
 inventory (~33 rows), the version-cache panel, the note seeds and the
 highlight colour lab.
 
+Development builds also start local runtime diagnostics automatically; use the
+existing `--dev` option (combine with `--next` for the next-release features).
+Launching from the Home Screen retains this behavior without launch environment
+variables. Release builds compile out the recorder and its native observers.
+The directory is `<translation-cache-directory>/<appID>/runtime-diagnostic-dev`,
+with `appID` read from `config/product.json`. Retrieve only its named files:
+`status.json`, `events.jsonl`, `events-previous.jsonl`, `go-panic.log`, and
+`go-panic.previous.log`. Keep retrieved diagnostics private.
+
+The event files retain at most 1 MiB each, across launches. They record fixed
+event names and numeric metrics: native app transitions and memory warnings,
+Fyne lifecycle and appearance decisions, composer and answer-panel activity,
+request completion versus UI delivery, render stages, and sampled Go memory and
+iOS process footprint. Panel and request IDs identify operations within a
+session. Actions are 1 Explain, 2 Context, 3 Translation, 4 Compare, and 5 Ask.
+Error classes are 0 success, 1 cancellation, 2 deadline, 3 missing key, and
+4 other; HTTP status is recorded separately. Appearance status flags are
+1 rebuild, 2 reopen, 4 sheet open, and 8 background, combined as a bitmask.
+Event records contain no passage, question, answer, credential, provider error
+text, URL, or device identifier. Logging never captures stdout or stderr.
+
+`status.json` identifies the version/build, `dev` and `next` tags, startup count,
+readiness, and dropped/rejected event counts. A Go fatal dump is separately
+captured by the runtime and can contain its panic value; treat it as private
+content. A previous dump is trimmed to 256 KiB at startup. One fatal dump can
+exceed that size before the process exits. Native faults, watchdog termination,
+and memory-pressure termination still require Apple's crash or jetsam report;
+the absence of a Go dump does not rule out an exit.
+
+For an uninterrupted physical-device reproduction, install and announce the
+test build first, then leave the process alone while reading exact diagnostic
+files. Installing, relaunching, attaching a debugger, or stopping a device
+console client can interfere with the observation. `devicectl --console`
+forwards host signals to the app, so do not terminate it during such a test.
+
 The one scenario that exercises most of the NOTES list at once: **s12pills**
 (dev builds) — four received notes on four John 11 paragraphs plus a
 chapter-scope note, collapsed, then a plain re-entry. The dev tab's
@@ -242,6 +277,14 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       edge); Cross-references takes the study slot when
       AI is off; a selection inside the footnote section gets system verbs
       only. Android's toolbar must appear IMMEDIATELY on long-press.
+- [ ] Ask answer, a long question and a full selected chapter: supporting
+      details stay within their scroll, with the complete question and quote
+      reachable. Show/Hide details preserves useful answer space and keeps
+      the citation, Report, Copy and Close in the card on phones and desktops.
+- [ ] iOS, with an AI answer open: switch rapidly to another app and back,
+      then scroll to the answer's end and close it. Background rendering is
+      blocked; inactive app-switcher snapshots and foreground drawing still
+      work. Verify on a physical phone as well as Simulator.
 
 ## V9 — audio and read-along
 
@@ -494,8 +537,15 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       with "…", on a phone in landscape after one. iOS, in portrait, in
       landscape and with the keyboard up in each: the native field's outline
       sits below the last row, never over it, and lines up with the gap the
-      sheet leaves for it; in landscape the typed note is still visible
-      above the keyboard. Android: the same, with the Fyne field. Android,
+      sheet leaves for it. When the usable height is insufficient, the
+      citation and Show passage remain visible while the excerpt collapses;
+      the editor and Share/Cancel stay above the keyboard. Show passage and
+      Hide passage preserve the draft and reachable actions. Dismissing the
+      keyboard restores the full form without shortening the sheet background.
+      Android: the same, with the Fyne field. On an especially short keyboard
+      viewport, citation, disclosure, live count and actions share one row;
+      Show passage puts the keyboard away to show the full quotation, and
+      returning to typing folds the passage without losing the note. Android,
       with the keyboard up: Share and then Back out of the chooser, and
       Cancel, each leave the page whole — the reading text fills the pane
       and the tab bar sits at the foot, not mid-screen with the bottom

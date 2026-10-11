@@ -431,6 +431,8 @@ func descendantPos(root, target fyne.CanvasObject) (fyne.Position, bool) {
 		kids = v.Objects
 	case *container.Scroll:
 		kids = []fyne.CanvasObject{v.Content}
+	case *container.ThemeOverride:
+		kids = []fyne.CanvasObject{v.Content}
 	}
 	for _, k := range kids {
 		if p, ok := descendantPos(k, target); ok {

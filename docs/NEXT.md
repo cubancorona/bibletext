@@ -568,54 +568,29 @@ loses its note that it is the next major release's (step 7, below).
 
 Open decisions: P1 to P6.
 
-### 4. Ask a question about a selected passage
+## Work graduated for 1.2.20
 
-**Behind the switch for refinement.** A selection's Study with AI menu gains
-"Ask a question…". The composer shows the reference, translation and a short,
-wrapping excerpt of the selected passage above the question. iPhone and iPad
-use the native multiline editor shared with Share with note, with system
-dictation, editing and keyboard support. Ask and Cancel are explicit buttons;
-Return in the native editor inserts a newline. Other platforms keep the Fyne
-question field initially.
+Ask a question and the shared passage-preview layout are available in ordinary
+builds from 1.2.20. They no longer read `nextRelease`. The independent
+`askQuestionEnabled` constant in `ai_ask_gate.go` controls Ask in the shared
+and native selection menus without enabling the remaining major-release work.
 
-Ask, Share with note and the AI answer panel use one passage preview:
-upright text in the reading face, indented on both sides, with a wrapping
-citation below it at the surrounding body margin. Extra vertical space
-separates the block from the surrounding controls and the citation from the
-quote; short desktop composers tighten this space to keep clear of the header.
-The citation combines the passage and translation
-abbreviation, such as `Matthew 7:1–3 (NKJV)`. Long selections retain the
-excerpt's row cap and ellipsis. This presentation stays behind `next`; the
-ordinary Share with note and answer panel retain their current appearance.
-Ask captures its display text and abbreviation alongside the raw request text,
-so navigation cannot change the preview. Display cleanup removes verse markers
-without extending the selected text into a neighboring sentence.
+Ask captures its selected passage, translation and question for the request,
+answer, retry, cache and Report. Its iOS composer uses the native multiline
+editor shared with Share with note. The previews indent the quotation on both
+sides and place its citation below at the surrounding body margin. Short
+composers and all AI answers collapse supporting text into expandable details
+while retaining the editor, answer and actions. In-place resizing preserves
+disclosure choices and reading offsets. Full navigation rebuilds, including
+appearance or orientation changes, preserve drafts and cached answers but can
+reset disclosure choices and reading offsets.
 
-The gate is `askQuestionEnabled = nextRelease` (`ai_ask_gate.go`), mirrored
-into the native selection menus. Ordinary builds keep Ask out of every menu.
-The composer captures the passage once: a theme rebuild or an incoming link
-does not change the selected text, verses or translation the question names.
-The request, answer card, retry, cache and Report mail retain that snapshot.
-Different questions and translations have separate cached answers.
-
-The native field has one owner. Closing or refitting a drained composer never
-hides or repositions a newer editor. Its card refits to a narrowed iPad canvas
-and changed side insets without sizing itself to the keyboard. It neither
-stores a note nor adds a note to a share link, and has no note character cap.
-
-The tests in `ai_ask_composer_test.go`, `ai_ask_native_next_test.go` and
-`ai_ask_passage_test.go` cover the excerpt, native submission and cleanup,
-reopening, frozen request and translation/question cache separation. The
-preview geometry and selected-text controls in `passage_excerpt_next_test.go`
-hold the quote, citation and native field in order on a narrow card. The
-selection-menu tests hold both offered lists and native gate wiring.
-
-Trying it leaves no new persistent data; a submitted question uses the
-selected AI provider and the reader's key, like the other study verbs. Native
-portrait layout and keyboard placement have been checked in compact iPhone
-and iPad simulators, including appearance rebuilds. Editing and submission
-through the native controls, landscape layouts, and refinement of the question
-prompt remain open before making the feature unconditional.
+The ordinary and `next` suites now exercise the same Ask and preview behavior.
+`ai_ask_native_test.go`, `ai_ask_passage_test.go`, `passage_excerpt_test.go`,
+`ai_panel_context_test.go` and the keyboard viewport tests cover their shared
+contracts. [VISUAL_TESTS.md](VISUAL_TESTS.md) holds the native checks, including
+physical-device dictation/accessibility and actual iPad multitasking windows.
+The request flow and prompts are documented in [README.md](../README.md).
 
 ---
 

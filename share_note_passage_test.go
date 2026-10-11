@@ -53,13 +53,11 @@ const sluglessBook = "Fixture Book"
 // sheetExcerptAndRef reads the words and the reference the composer shows.
 func sheetExcerptAndRef(t *testing.T, p *widget.PopUp, wantRef string) string {
 	t.Helper()
-	if nextRelease {
-		version, ok := versionByID(defaultVersionID)
-		if !ok {
-			t.Fatal("the default fixture translation is not registered")
-		}
-		wantRef = expectedPreviewCitation(wantRef, version.Abbrev)
+	version, ok := versionByID(defaultVersionID)
+	if !ok {
+		t.Fatal("the default fixture translation is not registered")
 	}
+	wantRef = expectedPreviewCitation(wantRef, version.Abbrev)
 	ex, _ := noteSheetExcerpt(t, p)
 	found := false
 	for _, s := range sheetTexts(p) {

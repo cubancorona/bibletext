@@ -269,3 +269,15 @@ func takeTopSheetReopen(state *AppState) func() {
 	}
 	return nil
 }
+
+// A rotation or window-size change moves the navigation without changing the
+// passage a sheet belongs to. Capture the top sheet before the rebuild drains
+// it, so a typed question or note and a completed answer survive that move.
+// Unregistered sheets retain the ordinary rebuild's dismissal behavior.
+func rebuildForLayoutChange(state *AppState) {
+	reopen := takeTopSheetReopen(state)
+	rebuildWindow(state)
+	if reopen != nil {
+		reopen()
+	}
+}

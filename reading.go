@@ -490,8 +490,8 @@ func rebuildWindow(state *AppState) {
 	}
 	// Every sheet is closed now, so no registration to bring one back may
 	// outlive the drain — the closures hold the drained sheets whole. A
-	// light/dark rebuild took the top sheet's closure before calling here
-	// (appearance.go); anything else that rebuilds closes its sheets for good.
+	// light/dark or responsive-layout rebuild takes the top sheet's closure
+	// before calling here; other rebuilds close their sheets for good.
 	pruneSheetReopens(state)
 	pruneSheetRefits(state)
 	// A popup's own restore may not fire (or not yet — the watchdogs poll on

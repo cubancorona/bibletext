@@ -16,8 +16,8 @@ func TestAskQuestionMenuGate(t *testing.T) {
 	if got := aiStudyVerbsForAsk(true); !slices.Equal(got, all) {
 		t.Errorf("gate on: %v", got)
 	}
-	if askQuestionEnabled != nextRelease {
-		t.Error("Ask gate must follow the next-release switch")
+	if !askQuestionEnabled {
+		t.Error("Ask must be available in ordinary and next builds")
 	}
 	if !slices.Equal(aiStudyVerbs, aiStudyVerbsForAsk(askQuestionEnabled)) {
 		t.Error("active menu ignores the Ask gate")

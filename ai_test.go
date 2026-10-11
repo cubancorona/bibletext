@@ -452,6 +452,19 @@ func TestBuildAskPrompt(t *testing.T) {
 	if p == buildAIPrompt(aiActionExplain, psg) {
 		t.Errorf("ask prompt should differ from the Explain prompt")
 	}
+	for _, want := range []string{
+		"what the selected passage states, what it reports a speaker saying, and what a reading infers",
+		"Quote only wording supplied in the passage; paraphrase surrounding context and other Scripture",
+		"If the question assumes something the passage does not establish, say so briefly and answer what it does support",
+		"do not add follow-up questions",
+	} {
+		if !strings.Contains(p, want) {
+			t.Errorf("ask prompt is missing its evidence or answer boundary %q", want)
+		}
+	}
+	if strings.Contains(p, "Do not quote anyone") {
+		t.Error("Ask must allow the supplied passage's wording without a contradictory blanket quotation ban")
+	}
 }
 
 // --- The passage every study prompt names -----------------------------------
@@ -487,6 +500,29 @@ func TestAIPassageRefNamesVerses(t *testing.T) {
 	}
 	if p := aiPassageFor(nil, "x", selSpan{}); p.Ref != "" || p.Text != "x" {
 		t.Errorf("nil state: %+v", p)
+	}
+}
+
+func TestAIPassageCapturesDisplayWithoutChangingRequestText(t *testing.T) {
+	st := psalm23NoteState()
+	version := st.currentVersion()
+	const raw = "3 He restoreth my"
+	p := aiPassageFor(st, raw, selSpanFromNative(3, 3))
+	if p.Text != raw || p.PreviewText != "He restoreth my" || !p.HasPreview ||
+		p.VersionAbbrev != version.Abbrev || p.Ref != "Psalms 23:3" {
+		t.Fatalf("request text and cleaned display were not captured separately: %+v", p)
+	}
+	st.CurrentBook, st.CurrentChapter, st.CurrentVersion = "John", 1, "bsb"
+	if p.Ref != "Psalms 23:3" || p.Version != version.Name || p.VersionAbbrev != version.Abbrev ||
+		!strings.HasSuffix(buildAskPrompt(p, "What does this selected phrase mean?"), "“"+raw+"”") {
+		t.Errorf("navigation changed the captured passage or provider text: %+v", p)
+	}
+	blank := aiPassageFor(st, " \n\t", selSpan{})
+	if !blank.HasPreview || blank.PreviewText != "" || blank.Text != " \n\t" {
+		t.Errorf("an intentionally empty display must not fall back to raw whitespace: %+v", blank)
+	}
+	if bare := aiPassageFor(nil, raw, selSpan{}); bare.Text != raw || bare.HasPreview || bare.PreviewText != "" {
+		t.Errorf("a state-less passage must retain only its request text: %+v", bare)
 	}
 }
 

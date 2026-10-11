@@ -1,12 +1,29 @@
 --- a/internal/driver/mobile/app/darwin_ios.m
 +++ b/internal/driver/mobile/app/darwin_ios.m
-@@ -27,8 +27,46 @@
+@@ -12,6 +12,7 @@
+ #import <UIKit/UIKit.h>
+ #import <MobileCoreServices/MobileCoreServices.h>
+ #import <GLKit/GLKit.h>
++#import <OpenGLES/ES2/gl.h>
+ #import <UserNotifications/UserNotifications.h>
+
+ struct utsname sysInfo;
+@@ -19,6 +20,7 @@
+ static CGFloat keyboardHeight;
+
+ @interface GoAppAppController : GLKViewController<UIContentContainer, GLKViewDelegate>
++- (void)finishOpenGLBeforeBackground;
+ @end
+
+ @interface GoInputView : UITextField<UITextFieldDelegate>
+@@ -27,7 +29,70 @@
  @interface GoAppAppDelegate : UIResponder<UIApplicationDelegate>
  @property (strong, nonatomic) UIWindow *window;
  @property (strong, nonatomic) GoAppAppController *controller;
+-@end
 +- (void)attachToWindow:(UIWindow *)window;
- @end
- 
++@end
++
 +// BibleText patch: UIScene life cycle.
 +//
 +// An app linked against the iOS 27 SDK is refused at launch on iOS 27 unless it
@@ -44,31 +61,55 @@
 +	return [[UIApplication sharedApplication] statusBarOrientation];
 +}
 +
++// The custom display link is independent of GLKViewController's paused timer.
++// Gate before GLKView binds or presents its drawable; inactive snapshots still draw.
++static BOOL goAppCanRender(GoAppAppController *controller) {
++	UIApplication *application = [UIApplication sharedApplication];
++	if (application.applicationState == UIApplicationStateBackground) {
++		return NO;
++	}
++	GoAppAppDelegate *appDelegate = (GoAppAppDelegate *)application.delegate;
++	UIWindow *window = controller.view.window;
++	if (window == nil || window != appDelegate.window || window.rootViewController != controller) {
++		return NO;
++	}
++	if (goAppUsesScenes()) {
++		if (@available(iOS 13.0, *)) {
++			UIWindowScene *scene = window.windowScene;
++			if (scene == nil ||
++			    (scene.activationState != UISceneActivationStateForegroundActive &&
++			     scene.activationState != UISceneActivationStateForegroundInactive)) {
++				return NO;
++			}
++		}
++	}
++	return YES;
++}
+
  @implementation GoAppAppDelegate
  - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
-     int scale = 1;
-@@ -39,21 +77,47 @@
+@@ -39,14 +104,9 @@
      setDisplayMetrics((int)size.width, (int)size.height, scale);
- 
+
  	lifecycleAlive();
 -	self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
 -	self.controller = [[GoAppAppController alloc] initWithNibName:nil bundle:nil];
 -	self.window.rootViewController = self.controller;
 -	[self.window makeKeyAndVisible];
-+	if (!goAppUsesScenes()) {
-+		[self attachToWindow:[[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]]];
-+	}
- 
+-
 -    // update insets once key window is set
 -	UIInterfaceOrientation orientation = [[UIApplication sharedApplication] statusBarOrientation];
 -	updateConfig((int)size.width, (int)size.height, orientation);
--
++	if (!goAppUsesScenes()) {
++		[self attachToWindow:[[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]]];
++	}
+
  	UNUserNotificationCenter *center = [UNUserNotificationCenter currentNotificationCenter];
  	center.delegate = (id) self;
- 
+@@ -54,6 +114,37 @@
  	return YES;
  }
- 
+
 +// Puts the one controller (and with it the GL context) into a window. A scene
 +// the system disconnects and later reconnects gets a new window, but the same
 +// controller, so the renderer's state survives the move.
@@ -103,13 +144,21 @@
  - (void)applicationDidBecomeActive:(UIApplication * )application {
  	lifecycleFocused();
  }
-@@ -97,7 +161,148 @@
-        willPresentNotification:(UNNotification *)notification
-          withCompletionHandler:(void (^)(UNNotificationPresentationOptions options))completionHandler {
- 	completionHandler(UNNotificationPresentationOptionAlert);
-+}
-+@end
-+
+@@ -63,6 +154,9 @@
+ }
+
+ - (void)applicationDidEnterBackground:(UIApplication *)application {
++	if (!goAppUsesScenes()) {
++		[self.controller finishOpenGLBeforeBackground];
++	}
+-	lifecycleAlive();
++	lifecycleAlive();
+ }
+
+@@ -100,6 +194,149 @@
+ }
+ @end
+
 +// Under scenes UIKit delivers incoming links to the scene delegate and never
 +// calls the app delegate's link methods, which is where an app (through a
 +// category on GoAppAppDelegate) implements them. These pass each link on, so
@@ -238,9 +287,11 @@
 +
 +- (void)sceneDidEnterBackground:(UIScene *)scene {
 +	if ([self ownsAppWindow]) {
++		GoAppAppDelegate *appDelegate = (GoAppAppDelegate *)[[UIApplication sharedApplication] delegate];
++		[appDelegate.controller finishOpenGLBeforeBackground];
 +		lifecycleAlive();
 +	}
- }
++}
 +
 +- (void)scene:(UIScene *)scene continueUserActivity:(NSUserActivity *)userActivity {
 +	goAppForwardUserActivity(userActivity);
@@ -249,19 +300,46 @@
 +- (void)scene:(UIScene *)scene openURLContexts:(NSSet<UIOpenURLContext *> *)URLContexts {
 +	goAppForwardURLContexts(URLContexts);
 +}
- @end
- 
++@end
++
  @interface GoAppAppController ()
-@@ -151,7 +356,7 @@
+ @property (strong, nonatomic) EAGLContext *context;
+ @property (strong, nonatomic) GLKView *glview;
+@@ -122,6 +359,24 @@
+
+     [[NSNotificationCenter defaultCenter] removeObserver:self name:UIKeyboardWillShowNotification object:nil];
+     [[NSNotificationCenter defaultCenter] removeObserver:self name:UIKeyboardWillHideNotification object:nil];
++}
++
++// All iOS GL worker calls execute in drawloop on this thread. Finish the
++// submitted GPU work before the background callback returns, without waiting
++// for Go lifecycle handlers that can synchronously call back into UIKit.
++- (void)finishOpenGLBeforeBackground {
++	EAGLContext *context = self.context;
++	if (context == nil) {
++		return;
++	}
++	EAGLContext *previous = [[EAGLContext currentContext] retain];
++	if (![EAGLContext setCurrentContext:context]) {
++		[previous release];
++		return;
++	}
++	glFinish();
++	[EAGLContext setCurrentContext:previous];
++	[previous release];
+ }
+
+ - (void)viewDidLoad {
+@@ -151,7 +406,7 @@
  	setScreen(scale);
- 
+
  	CGSize size = [UIScreen mainScreen].nativeBounds.size;
 -	UIInterfaceOrientation orientation = [[UIApplication sharedApplication] statusBarOrientation];
 +	UIInterfaceOrientation orientation = goAppInterfaceOrientation();
  	updateConfig((int)size.width, (int)size.height, orientation);
- 
+
      self.glview.enableSetNeedsDisplay = NO;
-@@ -163,7 +368,7 @@
+@@ -163,13 +418,16 @@
  	[coordinator animateAlongsideTransition:^(id<UIViewControllerTransitionCoordinatorContext> context) {
  		// TODO(crawshaw): come up with a plan to handle animations.
  	} completion:^(id<UIViewControllerTransitionCoordinatorContext> context) {
@@ -270,35 +348,44 @@
  		CGSize size = [UIScreen mainScreen].nativeBounds.size;
  		updateConfig((int)size.width, (int)size.height, orientation);
  	}];
-@@ -208,7 +413,7 @@
+ }
+
+ - (void)render:(CADisplayLink*)displayLink {
++	if (!goAppCanRender(self)) {
++		return;
++	}
+     [self.glview display];
+ }
+
+@@ -208,7 +466,7 @@
  - (void) traitCollectionDidChange: (UITraitCollection *) previousTraitCollection {
      [super traitCollectionDidChange: previousTraitCollection];
- 
+
 -	UIInterfaceOrientation orientation = [[UIApplication sharedApplication] statusBarOrientation];
 +	UIInterfaceOrientation orientation = goAppInterfaceOrientation();
  	CGSize size = [UIScreen mainScreen].nativeBounds.size;
  	updateConfig((int)size.width, (int)size.height, orientation);
  }
-@@ -218,7 +423,7 @@
+@@ -218,7 +476,7 @@
      keyboardHeight = keyboardSize.height;
- 
+
      CGSize size = [UIScreen mainScreen].nativeBounds.size;
 -	UIInterfaceOrientation orientation = [[UIApplication sharedApplication] statusBarOrientation];
 +	UIInterfaceOrientation orientation = goAppInterfaceOrientation();
  	updateConfig((int)size.width, (int)size.height, orientation);
  }
- 
-@@ -226,7 +431,7 @@
+
+@@ -226,7 +484,7 @@
      keyboardHeight = 0;
- 
+
      CGSize size = [UIScreen mainScreen].nativeBounds.size;
 -	UIInterfaceOrientation orientation = [[UIApplication sharedApplication] statusBarOrientation];
 +	UIInterfaceOrientation orientation = goAppInterfaceOrientation();
  	updateConfig((int)size.width, (int)size.height, orientation);
  }
- 
-@@ -295,7 +500,12 @@
- 
+
+@@ -295,7 +553,12 @@
+
  UIEdgeInsets getDevicePadding() {
      if (@available(iOS 11.0, *)) {
 -        UIWindow *window = UIApplication.sharedApplication.keyWindow;
@@ -308,6 +395,6 @@
 +        if (window == nil) {
 +            window = UIApplication.sharedApplication.keyWindow;
 +        }
- 
+
          UIEdgeInsets inset = window.safeAreaInsets;
          if (keyboardHeight != 0) {

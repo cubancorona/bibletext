@@ -205,6 +205,10 @@ jobs:
           scripts/check-ios-pane.sh
           scripts/check-ios-pane.sh --next
 
+      - name: Patched font cache regressions
+        working-directory: build/ios-check/fyne
+        run: go test -race ./internal/painter -run '^TestBTFont' -count=1
+
       # The darwin-tagged native pane and its tests in the next major release
       # (docs/NEXT.md); the linux job cannot compile them.
       - name: go test (next release)

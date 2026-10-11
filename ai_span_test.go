@@ -100,10 +100,7 @@ var verseTwo = selSpanFromNative(2, 2)
 const verseTwoRef = "Psalms 136:2"
 
 func expectedStudyPanelCitation(state *AppState, ref string) string {
-	if nextRelease {
-		return expectedPreviewCitation(ref, state.currentVersion().Abbrev)
-	}
-	return ref
+	return expectedPreviewCitation(ref, state.currentVersion().Abbrev)
 }
 
 // The panel header names the verse the span resolved to, not the verses the

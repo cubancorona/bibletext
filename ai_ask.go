@@ -7,7 +7,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -45,6 +44,13 @@ func promptAskQuestionForPassage(state *AppState, passage aiPassage, question st
 	pal := state.pal()
 	mobile := fyne.CurrentDevice().IsMobile()
 	useNative := askQuestionEnabled && mobile && noteEntryNative()
+	composerID := devDiagnosticID()
+	nativeMetric := int64(0)
+	if useNative {
+		nativeMetric = 1
+	}
+	devDiagnosticEvent("composer_open", devDiagnosticMetric{Key: "panel_id", Value: int64(composerID)},
+		devDiagnosticMetric{Key: "native", Value: nativeMetric})
 	if state.hideReadingOverlay != nil {
 		state.hideReadingOverlay()
 	}
@@ -58,6 +64,7 @@ func promptAskQuestionForPassage(state *AppState, passage aiPassage, question st
 			return
 		}
 		closed, sheetOpen = true, false
+		devDiagnosticEvent("composer_close", devDiagnosticMetric{Key: "panel_id", Value: int64(composerID)})
 		if owner == noteEntryOwner {
 			noteEntryOnChanged = nil
 			noteEntryHide()
@@ -73,23 +80,8 @@ func promptAskQuestionForPassage(state *AppState, passage aiPassage, question st
 	title := canvas.NewText("Ask about this passage", pal.Text)
 	title.TextStyle = fyne.TextStyle{Bold: true}
 	title.TextSize = 20
-	ref := canvas.NewText(passage.Ref, pal.Accent)
-	ref.TextStyle = fyne.TextStyle{Bold: true}
-	ref.TextSize = subheadingTextSize
-	version := widget.NewRichText(&widget.TextSegment{
-		Text:  passage.Version,
-		Style: widget.RichTextStyle{ColorName: colorNameMuted, SizeName: theme.SizeNameCaptionText},
-	})
-	version.Wrapping = fyne.TextWrapWord
-	if passage.Version == "" {
-		version.Hide()
-	}
-	excerpt := newNoteExcerpt(passage.Text, noteExcerptMaxLinesFor(mobile, cnv.Size().Height), pal.TextMuted)
-	var passageView fyne.CanvasObject = container.NewVBox(ref, version, excerpt)
-	if nextRelease {
-		passageView, excerpt = newPassageExcerptPreview(passage.Ref, passage.previewVersion(), passage.previewText(),
-			noteExcerptMaxLinesFor(mobile, cnv.Size().Height), pal)
-	}
+	passageView, excerpt := newPassageExcerptPreview(passage.Ref, passage.previewVersion(), passage.previewText(),
+		noteExcerptMaxLinesFor(mobile, cnv.Size().Height), pal)
 
 	entry := newSearchEntry()
 	const placeholder = "Ask a question about this passage…"
@@ -109,6 +101,9 @@ func promptAskQuestionForPassage(state *AppState, passage aiPassage, question st
 		if q == "" {
 			return
 		}
+		devDiagnosticEvent("composer_submit", devDiagnosticMetric{Key: "panel_id", Value: int64(composerID)},
+			devDiagnosticMetric{Key: "question_bytes", Value: int64(len(q))},
+			devDiagnosticMetric{Key: "passage_bytes", Value: int64(len(passage.Text))})
 		closeAsk()
 		showAIPanelForPassage(state, aiActionAsk, passage, q, span)
 	}
@@ -127,7 +122,7 @@ func promptAskQuestionForPassage(state *AppState, passage aiPassage, question st
 		entrySlot = inputFrame(withCaret(state, entry), pal.Border)
 	}
 	hint := widget.NewRichText(&widget.TextSegment{
-		Text:  "AI answers in its own words, grounded in this passage.",
+		Text:  "Your question and selected passage will be sent to your chosen AI provider.",
 		Style: widget.RichTextStyle{ColorName: colorNameMuted, SizeName: theme.SizeNameCaptionText},
 	})
 	hint.Wrapping = fyne.TextWrapWord
@@ -148,9 +143,7 @@ func promptAskQuestionForPassage(state *AppState, passage aiPassage, question st
 		fit := func() {
 			w := min(float32(460), max(float32(280), cnv.Size().Width-80))
 			excerpt.setMaxLines(rows)
-			if nextRelease {
-				setPassagePreviewCompact(passageView, false)
-			}
+			setPassagePreviewCompact(passageView, false)
 			popup.Resize(fyne.NewSize(w, card.MinSize().Height))
 			popup.Resize(fyne.NewSize(w, card.MinSize().Height))
 			room := clearOfHeader(cnv.Size().Height, cnv.Size().Height, headerClearance(state))
@@ -158,7 +151,7 @@ func promptAskQuestionForPassage(state *AppState, passage aiPassage, question st
 				excerpt.setMaxLines(n - 1)
 				popup.Resize(fyne.NewSize(w, card.MinSize().Height))
 			}
-			if nextRelease && popup.MinSize().Height > room {
+			if popup.MinSize().Height > room {
 				setPassagePreviewCompact(passageView, true)
 				popup.Resize(fyne.NewSize(w, card.MinSize().Height))
 			}
@@ -172,7 +165,10 @@ func promptAskQuestionForPassage(state *AppState, passage aiPassage, question st
 
 	// The top-anchored non-modal card keeps its keyboard-free foot gap
 	// across refits, rather than staying short after the keyboard goes away.
-	body := container.NewVBox(form, layout.NewSpacer())
+	compactTitle := canvas.NewText("Ask a question", pal.Text)
+	compactTitle.TextStyle, compactTitle.TextSize = title.TextStyle, 18
+	body := newComposeViewport(cnv, form, compactTitle, passageView, entrySlot, actions, excerpt,
+		passagePreviewCitation(passage.Ref, passage.previewVersion()), useNative, false, focusEntry)
 	card := surface(container.NewPadded(body), pal.SurfaceAlt, pal.Border, fyne.Size{})
 	cw, ch := cnv.Size().Width, cnv.Size().Height
 	topY := float32(0)
@@ -186,9 +182,11 @@ func promptAskQuestionForPassage(state *AppState, passage aiPassage, question st
 	footGap := cnv.Size().Height - topY - ch
 	popup.Resize(fyne.NewSize(cw, ch))
 	popup.ShowAtPosition(fyne.NewPos(0, topY))
+	body.Refresh()
 	registerReopen()
 	lastCanvas := cnv.Size()
 	lastAreaPos, lastAreaW := pos, sz.Width
+	lastInputPos, lastInputSize := canvasArea(cnv)
 	refit := func() {
 		now := cnv.Size()
 		relayout := func() {
@@ -196,6 +194,7 @@ func promptAskQuestionForPassage(state *AppState, passage aiPassage, question st
 			apos, asz := noteSheetArea(cnv)
 			refitSides(sideInsets(now.Width, apos, asz))
 			popup.Resize(fyne.NewSize(now.Width, now.Height-topY-footGap))
+			body.Refresh()
 		}
 		if slot, ok := entrySlot.(*noteEntrySlot); ok {
 			slot.settle(relayout)
@@ -211,8 +210,10 @@ func promptAskQuestionForPassage(state *AppState, passage aiPassage, question st
 		}
 		now := cnv.Size()
 		apos, asz := noteSheetArea(cnv)
-		if now != lastCanvas || apos != lastAreaPos || asz.Width != lastAreaW {
+		inputPos, inputSize := canvasArea(cnv)
+		if now != lastCanvas || apos != lastAreaPos || asz.Width != lastAreaW || inputPos != lastInputPos || inputSize != lastInputSize {
 			lastCanvas, lastAreaPos, lastAreaW = now, apos, asz.Width
+			lastInputPos, lastInputSize = inputPos, inputSize
 			refit()
 		}
 		noteSheetAfter(150*time.Millisecond, watch)

@@ -256,7 +256,7 @@ type AppState struct {
 	// the moment its popup closes and is pruned on the next touch.
 	// UI-goroutine only.
 	sheetReopens []sheetReopen
-	// sheetRefits holds, for each desktop sheet showing, how it sizes itself
+	// sheetRefits holds, for each showing sheet that opts in, how it sizes itself
 	// to the window again when the window changes size (sheet_refit.go).
 	// Pruned like sheetReopens. UI-goroutine only.
 	sheetRefits []sheetRefit

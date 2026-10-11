@@ -207,6 +207,9 @@ the saved one whenever the variable is empty. So a refusal means a saved
 `GOFLAGS` carries build tags. `go env GOFLAGS` shows it, `go env -u GOFLAGS`
 clears it; then build again.
 
+The same artifact guard also rejects `bibletextdev`, which carries development
+test hooks and persistent local diagnostics. Neither tag belongs in any release.
+
 The Windows Store package needs nothing from this machine: the push of stage 2
 builds it. `msstore.yml` runs on a push of `main` that touches its inputs, and
 the release bump touches one of them, `cmd/bibletext/FyneApp.toml` — the

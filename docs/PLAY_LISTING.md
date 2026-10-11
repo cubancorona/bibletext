@@ -16,15 +16,14 @@ to Play.
 Release identity in production:
 
 - package: `uk.co.bibletext`
-- version: 1.2.18
-- versionCode: 188
+- version: 1.2.19
+- versionCode: 189
 - minimum SDK: Android 5.0 / API 21
 - target SDK: Android 16 / API 36
 - upload artifact: `~/Library/Android/bibletext-dist/BibleText.aab`
 
-1.2.18, versionCode 188, has been in production since 2 October 2026, when
-Play approved it the day it was promoted. 1.2.19, versionCode 189, is
-prepared, with its release notes in the 1.2.19 section below. A release goes
+1.2.19, versionCode 189, is live in production and alpha. The next prepared
+release is 1.2.20, versionCode 191, with draft release notes below. A release goes
 up to the alpha track with `scripts/play-publish.py upload`, and on the
 account holder's OK `scripts/play-publish.py promote` takes that release to
 production, its release notes unchanged (docs/RELEASING.md, stages 6 and 7).
@@ -153,13 +152,24 @@ keys. However, the app makes off-device requests:
 - translation/study/audio providers receive the resource being requested;
 - API.Bible receives passage requests plus the project or reader API key; and
 - when the reader invokes an optional AI feature, the selected AI provider
-  receives the query or selected passage/action under the reader's account.
+  receives the query or selected passage/action, including an entered question,
+  under the reader's account.
 
 Google treats collection and sharing as separate questions, and a
 user-initiated transfer exception for sharing does not automatically answer the
-collection question. Complete the form from the final binary and current policy,
-document the reasoning, and make the privacy policy match. All network traffic
-is HTTPS.
+collection question. For 1.2.20, the conservative declaration includes optional
+Other user-generated content, In-app search history and User IDs associated with
+the provider account, with collection and sharing disclosed. Content and search
+serve app functionality and any provider product/model improvement purpose
+required by the live form, including unpaid Gemini handling. Account-associated
+records serve app functionality; this does not assert retention of a raw API
+secret. Requests use HTTPS, and provider retention means they are not ephemeral.
+
+Inspect the current form, save the matching choices and read them back before
+upload. Do not claim that deleting local keys or notes deletes provider records.
+The separate Gemini eligibility review in
+[PRIVACY_RELEASE_CHECKLIST.md](PRIVACY_RELEASE_CHECKLIST.md) also remains a
+release prerequisite. Local documentation does not update Play Console.
 
 ## Content rating and other declarations
 
@@ -180,6 +190,22 @@ Also confirm from the final AAB:
   removal controls; and
 - target audience and Families eligibility are selected from the real intended
   audience, not to avoid or trigger a policy track.
+
+## Release notes — 1.2.20
+
+> Compare perspectives and ask your own question about a selected passage with your chosen AI provider. Collapse the quotation while reading an answer. Improved citations, sharing, Android narration and passage layout, and lower memory use when opening study cards.
+
+Suggested tester coverage:
+
+- confirm the installed version and build match the final release artifact;
+- with an AI provider configured, select Matthew 7:1–3 and use Compare
+  perspectives, then Ask a question…; check that the captured passage and
+  question match the answer;
+- collapse and expand the selected quotation beside its citation, and confirm
+  the answer and footer remain accessible in portrait and landscape;
+- type a multiline question, rotate, and confirm the draft remains;
+- test narration, chapter continuation and a shared link with a synthetic note;
+- open and close study cards repeatedly and confirm the app remains responsive.
 
 ## Release notes — 1.2.19
 

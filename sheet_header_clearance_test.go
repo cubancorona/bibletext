@@ -664,10 +664,10 @@ func TestTranslationPickerFitsA320Phone(t *testing.T) {
 	}
 }
 
-// ON A PHONE OR TABLET NOTHING IS RESIZED UNDER THE READER. There the
+// GENERIC MOBILE SHEETS ARE NOT RESIZED UNDER THE READER. There the
 // content changes height as the soft keyboard comes and goes, and a refit
-// would resize Settings while the reader types a key into it. Only a desktop
-// window refits its sheets (registerSheetRefit).
+// would resize Settings while the reader types a key into it. AI result cards
+// opt in separately; registerSheetRefit stays desktop-only.
 func TestSheetsAreNotRefitOnAPhoneOrTablet(t *testing.T) {
 	app := test.NewTempApp(t)
 	th := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
