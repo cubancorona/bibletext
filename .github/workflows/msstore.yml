@@ -155,7 +155,7 @@ jobs:
           name: BibleText-${{ env.MSIX_VERSION }}-${{ matrix.arch }}-msix
           path: build/msstore/BibleText-${{ env.MSIX_VERSION }}-${{ matrix.arch }}.msix
           if-no-files-found: error
-      - name: clear known ARM runner startup privacy window
+      - name: clear known ARM runner startup windows
         if: matrix.arch == 'arm64'
         shell: pwsh
         run: |
@@ -169,6 +169,36 @@ jobs:
           public static extern System.IntPtr GetForegroundWindow();
           [System.Runtime.InteropServices.DllImport("user32.dll")]
           public static extern uint GetWindowThreadProcessId(System.IntPtr window, out uint processId);
+          [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+          public static extern int GetClassName(System.IntPtr window, System.Text.StringBuilder text, int capacity);
+          [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+          public static extern int GetWindowText(System.IntPtr window, System.Text.StringBuilder text, int capacity);
+          [System.Runtime.InteropServices.DllImport("user32.dll")]
+          public static extern bool IsWindowVisible(System.IntPtr window);
+          [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+          public static extern int DwmGetWindowAttribute(System.IntPtr window, uint attribute, out uint value, int size);
+          [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+          private static extern uint SendInput(uint count, INPUT[] inputs, int size);
+          [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+          private struct INPUT { public uint type; public INPUTUNION data; }
+          [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Explicit)]
+          private struct INPUTUNION {
+            [System.Runtime.InteropServices.FieldOffset(0)] public MOUSEINPUT mouse;
+            [System.Runtime.InteropServices.FieldOffset(0)] public KEYBDINPUT key;
+          }
+          [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+          private struct MOUSEINPUT { public int x, y; public uint data, flags, time; public System.UIntPtr extra; }
+          [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+          private struct KEYBDINPUT { public ushort key, scan; public uint flags, time; public System.UIntPtr extra; }
+          public static uint EscapeIfForeground(System.IntPtr expected) {
+            INPUT[] inputs = new INPUT[2];
+            inputs[0].type = inputs[1].type = 1; // INPUT_KEYBOARD.
+            inputs[0].data.key.key = inputs[1].data.key.key = 0x1B; // VK_ESCAPE.
+            inputs[1].data.key.flags = 2; // KEYEVENTF_KEYUP.
+            if (GetForegroundWindow() != expected)
+              throw new System.InvalidOperationException("Start foreground changed before Escape; no input sent");
+            return SendInput(2, inputs, System.Runtime.InteropServices.Marshal.SizeOf(typeof(INPUT)));
+          }
           '@
           $jobSession = (Get-Process -Id $PID).SessionId
           $brokers = @(Get-Process -Name UserOOBEBroker -ErrorAction SilentlyContinue | Where-Object SessionId -eq $jobSession)
@@ -199,6 +229,43 @@ jobs:
             } while ([DateTime]::UtcNow -lt $cleanupDeadline)
             if ($remaining.Count) { throw "known ARM startup processes did not exit within the cleanup deadline" }
             Write-Host 'known ARM startup processes exited; native capture controls will verify desktop availability'
+          }
+          # The same ARM image can leave Start open after privacy setup. Escape
+          # dismisses that menu without restarting the shell host; unknown
+          # foreground windows remain subject to the strict capture guard.
+          # https://github.com/electron/electron/commit/eb81213f9148b67601980bf83f02ef34e8298a45
+          $startWindow = [CIStartup.Native]::GetForegroundWindow()
+          [uint32]$startId = 0
+          [void][CIStartup.Native]::GetWindowThreadProcessId($startWindow, [ref]$startId)
+          $startProcess = if ($startId) { Get-Process -Id $startId -ErrorAction SilentlyContinue }
+          $startPath = Join-Path $env:WINDIR 'SystemApps\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\StartMenuExperienceHost.exe'
+          $startClass = [System.Text.StringBuilder]::new(256)
+          $startTitle = [System.Text.StringBuilder]::new(256)
+          [void][CIStartup.Native]::GetClassName($startWindow, $startClass, $startClass.Capacity)
+          [void][CIStartup.Native]::GetWindowText($startWindow, $startTitle, $startTitle.Capacity)
+          [uint32]$startCloaked = 0
+          $cloakResult = [CIStartup.Native]::DwmGetWindowAttribute($startWindow, 14, [ref]$startCloaked, 4) # DWMWA_CLOAKED.
+          $startVisible = [CIStartup.Native]::IsWindowVisible($startWindow)
+          Write-Host "ARM startup foreground HWND=$startWindow PID=$startId class=$startClass title=$startTitle visible=$startVisible cloakResult=$cloakResult cloaked=$startCloaked"
+          if ($startProcess -and $startProcess.ProcessName -eq 'StartMenuExperienceHost' -and
+              $startProcess.SessionId -eq $jobSession -and
+              [string]::Equals($startProcess.Path, $startPath, [StringComparison]::OrdinalIgnoreCase) -and
+              $startClass.ToString() -ceq 'Windows.UI.Core.CoreWindow' -and $startTitle.ToString() -ceq 'Start' -and
+              $startVisible -and $cloakResult -eq 0 -and $startCloaked -eq 0) {
+            Write-Host "known Start signature: session=$jobSession path=$($startProcess.Path); sending Escape to foreground HWND=$startWindow"
+            $sent = [CIStartup.Native]::EscapeIfForeground($startWindow)
+            if ($sent -ne 2) { throw "Start Escape input failed: inserted $sent of 2 events" }
+            $startDeadline = [DateTime]::UtcNow.AddSeconds(3)
+            do {
+              Start-Sleep -Milliseconds 100
+              $startVisible = [CIStartup.Native]::IsWindowVisible($startWindow)
+              $cloakResult = [CIStartup.Native]::DwmGetWindowAttribute($startWindow, 14, [ref]$startCloaked, 4)
+              $dismissed = -not $startVisible -or ($cloakResult -eq 0 -and $startCloaked -ne 0)
+            } while (-not $dismissed -and [DateTime]::UtcNow -lt $startDeadline)
+            Write-Host "Start Escape outcome: HWND=$startWindow dismissed=$dismissed visible=$startVisible cloakResult=$cloakResult cloaked=$startCloaked foreground=$([CIStartup.Native]::GetForegroundWindow())"
+            if (-not $dismissed) { throw 'known Start menu did not dismiss within the startup deadline' }
+          } else {
+            Write-Host 'foreground does not match visible canonical Start; no key input sent'
           }
       - name: verify native render capture ownership controls
         shell: pwsh
