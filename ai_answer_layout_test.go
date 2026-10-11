@@ -16,6 +16,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"github.com/rivo/uniseg"
 )
@@ -102,19 +103,29 @@ func TestAIAnswerLayoutPreservesBlockStyles(t *testing.T) {
 
 func captureAIAnswerLayout(t *testing.T, raw string, bounded bool, width float32) (float32, []byte, []string) {
 	t.Helper()
+	// Attach an empty answer to its sized viewport before populating it.
+	// Otherwise the initial minimum-width layout can shape CJK at an
+	// unintended narrow width before the reading viewport is established.
+	w := test.NewWindow(nil)
+	defer w.Close()
+	viewport := fyne.NewSize(width, 240)
+	w.Resize(viewport)
 	answer := widget.NewRichTextFromMarkdown("")
 	answer.Wrapping = fyne.TextWrapWord
-	answer.Resize(fyne.NewSize(width, 200))
+	scroll := container.NewVScroll(answer)
+	w.SetContent(scroll)
+	if got := w.Canvas().Size(); got != viewport {
+		t.Fatalf("answer fixture viewport is %v, want %v", got, viewport)
+	}
 	if bounded {
 		setAIAnswerText(answer, raw)
 	} else {
 		answer.ParseMarkdown(raw)
 	}
-	scroll := container.NewVScroll(answer)
-	w := test.NewWindow(scroll)
-	defer w.Close()
-	w.Resize(fyne.NewSize(width, 240))
-	answer.Refresh()
+	scroll.Refresh()
+	if got, want := answer.Size().Width, width-2*theme.Padding(); got != want {
+		t.Fatalf("answer fixture content width is %.0f, want %.0f", got, want)
+	}
 	var image bytes.Buffer
 	if err := png.Encode(&image, w.Canvas().Capture()); err != nil {
 		t.Fatal(err)
