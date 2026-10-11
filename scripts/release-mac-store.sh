@@ -58,6 +58,7 @@ WORK="$REPO_ROOT/build/mac-store"
 APP="$WORK/BibleText.app"
 ENTITLEMENTS="$REPO_ROOT/appstore/mac/BibleText.entitlements"
 MIGRATION="$REPO_ROOT/appstore/mac/Container-Migration.plist"
+PRIVACY="$REPO_ROOT/appstore/mac/PrivacyInfo.xcprivacy"
 
 note() { printf '\n\033[1m==> %s\033[0m\n' "$1"; }
 fail() { printf '\033[31mERROR: %s\033[0m\n' "$1" >&2; exit 1; }
@@ -214,10 +215,13 @@ note "declaring export compliance"
   2>/dev/null ||
   /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$APP/Contents/Info.plist"
 
-note "embedding the provisioning profile and the container migration"
+note "embedding the provisioning profile, container migration and privacy manifest"
 cp "$PROFILE" "$APP/Contents/embedded.provisionprofile"
 mkdir -p "$APP/Contents/Resources"
 cp "$MIGRATION" "$APP/Contents/Resources/Container-Migration.plist"
+cp "$PRIVACY" "$APP/Contents/Resources/PrivacyInfo.xcprivacy"
+plutil -lint "$APP/Contents/Resources/PrivacyInfo.xcprivacy" ||
+  fail "the packaged privacy manifest is invalid"
 
 note "signing with the real entitlements"
 # A store build must carry the application and team identifiers in its
@@ -266,6 +270,8 @@ for key in com.apple.security.app-sandbox com.apple.security.network.client \
     fail "the signed bundle is missing $key — the packager's template won"
 done
 codesign --verify --deep --strict --verbose=2 "$APP"
+cmp -s "$PRIVACY" "$APP/Contents/Resources/PrivacyInfo.xcprivacy" ||
+  fail "the signed bundle does not contain the intended privacy manifest"
 
 note "confirming the app honours the declared macOS floor"
 # Two claims must agree with config/product.json: the plist value the Store

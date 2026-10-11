@@ -5,7 +5,7 @@ and they are **two different apps to macOS**. This document records what that
 means, what the Store build needs, and the one decision that cannot be undone
 after the first submission.
 
-Nothing here is wired into CI. `scripts/release-mac-store.sh` is run by hand.
+`scripts/release-mac-store.sh` is run by hand; its configuration checker runs in CI.
 The plain desktop release — unsigned, unsandboxed, one zip per architecture —
 is unchanged and remains available beside the Store build.
 
@@ -200,11 +200,19 @@ scripts/release-mac-store.sh          # → build/mac-store/BibleText.pkg
 
 The script refuses to start unless both checkers pass, builds both
 architectures and `lipo`s them into one universal binary, packages the app,
-verifies the keyed binary and `-trimpath` before signing, embeds the profile
-and the migration manifest, re-signs with the real entitlements, and **reads
-the signature back** to confirm the entitlements actually landed — because the
-packager writes its own single-key file and overwrites anything left in the
+verifies the keyed binary and `-trimpath` before signing, embeds the profile,
+migration manifest and privacy manifest, re-signs with the real entitlements,
+and **reads the signature back** to confirm the entitlements actually landed —
+because the packager writes its own single-key file and overwrites anything left in the
 build directory.
+
+The Mac privacy manifest lives at `appstore/mac/PrivacyInfo.xcprivacy` and is
+copied to `Contents/Resources` before signing. Its collected-data and tracking
+declarations match the mobile manifest; the configuration checker rejects
+drift and the release script verifies the signed copy. The required-reason
+API array is empty because Apple's [required-reason API rules](https://developer.apple.com/documentation/BundleResources/describing-use-of-required-reason-api)
+apply to iOS, iPadOS, tvOS, visionOS and watchOS. The bundled declaration does
+not update App Store Connect's privacy answers.
 
 Upload with Transporter, or `xcrun altool --upload-app -t macos`. The existing
 `appstore/` tooling talks to the same App Store Connect service and mostly

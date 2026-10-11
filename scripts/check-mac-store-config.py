@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Hold the Mac App Store entitlements and migration manifest to the code.
+"""Hold the Mac App Store entitlements and manifests to the code.
 
 Both files fail silently when wrong. Entitlements that omit a needed key give
 a sandboxed app that launches and does nothing useful; a migration manifest
@@ -21,6 +21,8 @@ So the checks here are not style checks. They assert that:
     The cost is real and deliberate — Move takes the preferences, so a
     direct-download build still installed alongside opens as a new reader
     afterwards — and docs/MAC_APP_STORE.md records why that trade was taken.
+  * privacy declarations match the mobile AI data flow and are embedded before
+    signing, so the final bundle seals the intended disclosure as a resource.
 
 Self-tests first, as everywhere else here: each rule is run against a
 synthetic violation and must fail, because a checker that cannot fail proves
@@ -37,6 +39,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ENTITLEMENTS = ROOT / "appstore" / "mac" / "BibleText.entitlements"
 MIGRATION = ROOT / "appstore" / "mac" / "Container-Migration.plist"
+PRIVACY = ROOT / "appstore" / "mac" / "PrivacyInfo.xcprivacy"
+MOBILE_PRIVACY = ROOT / "cmd" / "mobile" / "PrivacyInfo.xcprivacy"
 APP_GO = ROOT / "app.go"
 RELEASE_SCRIPT = ROOT / "scripts" / "release-mac-store.sh"
 
@@ -245,6 +249,38 @@ def release_script_failures(script: str) -> list[str]:
     return failures
 
 
+def privacy_manifest_failures(mac: dict, mobile: dict) -> list[str]:
+    """Both platforms send the same optional AI content to the same providers."""
+    shared_keys = {"NSPrivacyTracking", "NSPrivacyTrackingDomains",
+                   "NSPrivacyCollectedDataTypes"}
+    if not isinstance(mac, dict) or set(mac) != shared_keys | {"NSPrivacyAccessedAPITypes"}:
+        return ["privacy: the Mac manifest must contain the four privacy configuration keys"]
+    if not isinstance(mobile, dict) or not shared_keys <= set(mobile):
+        return ["privacy: the mobile manifest lacks shared privacy declarations"]
+    failures = []
+    # Serializing preserves plist types: False and integer zero must not be
+    # accepted as interchangeable declarations by Python's equality rules.
+    if plistlib.dumps({k: mac[k] for k in shared_keys}) != plistlib.dumps(
+            {k: mobile[k] for k in shared_keys}):
+        failures.append("privacy: Mac collected-data and tracking declarations differ from mobile")
+    if mac["NSPrivacyAccessedAPITypes"] != []:
+        failures.append("privacy: the Mac manifest must not inherit mobile required-reason API entries")
+    return failures
+
+
+def privacy_packaging_failures(script: str) -> list[str]:
+    """The manifest must be inside the signature's resource seal."""
+    failures = []
+    copy = script.find('cp "$PRIVACY" "$APP/Contents/Resources/PrivacyInfo.xcprivacy"')
+    sign = script.find('codesign -f -s "$APP_CERT"')
+    verify = script.find('cmp -s "$PRIVACY" "$APP/Contents/Resources/PrivacyInfo.xcprivacy"')
+    if copy < 0 or sign < 0 or copy > sign:
+        failures.append("privacy: the release script must embed the Mac manifest before signing")
+    if verify < sign or verify < 0:
+        failures.append("privacy: the release script must verify the manifest after signing")
+    return failures
+
+
 def self_test() -> list[str]:
     problems = []
     checks = [
@@ -316,6 +352,35 @@ def self_test() -> list[str]:
         'PlistBuddy -c "Add ... string applinks:$SITE_HOST"')
     if clean:
         problems.append(f"self-test: a correct configuration still fails: {clean}")
+    mobile_privacy = {"NSPrivacyTracking": False, "NSPrivacyTrackingDomains": [],
+                      "NSPrivacyCollectedDataTypes": []}
+    mac_privacy = {**mobile_privacy, "NSPrivacyAccessedAPITypes": []}
+    privacy_checks = [
+        ("missing privacy keys", privacy_manifest_failures({}, mobile_privacy), "four privacy"),
+        ("privacy drift", privacy_manifest_failures(
+            {**mac_privacy, "NSPrivacyTracking": True}, mobile_privacy), "differ from mobile"),
+        ("wrong plist type", privacy_manifest_failures(
+            {**mac_privacy, "NSPrivacyTracking": 0}, mobile_privacy), "differ from mobile"),
+        ("mobile API reasons", privacy_manifest_failures(
+            {**mac_privacy, "NSPrivacyAccessedAPITypes": [{}]}, mobile_privacy), "must not inherit"),
+        ("missing resource copy", privacy_packaging_failures(
+            'codesign -f -s "$APP_CERT"'), "before signing"),
+        ("copy after signing", privacy_packaging_failures(
+            'codesign -f -s "$APP_CERT"\n'
+            'cp "$PRIVACY" "$APP/Contents/Resources/PrivacyInfo.xcprivacy"'), "before signing"),
+        ("missing resource verification", privacy_packaging_failures(
+            'cp "$PRIVACY" "$APP/Contents/Resources/PrivacyInfo.xcprivacy"\n'
+            'codesign -f -s "$APP_CERT"'), "after signing"),
+    ]
+    for name, failures, fragment in privacy_checks:
+        if not any(fragment in f for f in failures):
+            problems.append(f"self-test: the {name!r} rule cannot fire")
+    privacy_clean = privacy_manifest_failures(mac_privacy, mobile_privacy) + privacy_packaging_failures(
+        'cp "$PRIVACY" "$APP/Contents/Resources/PrivacyInfo.xcprivacy"\n'
+        'codesign -f -s "$APP_CERT"\n'
+        'cmp -s "$PRIVACY" "$APP/Contents/Resources/PrivacyInfo.xcprivacy"')
+    if privacy_clean:
+        problems.append(f"self-test: correct privacy configuration still fails: {privacy_clean}")
     return problems
 
 
@@ -346,10 +411,16 @@ def main() -> int:
     failures += entitlement_failures(ents)
     failures += migration_failures(mig, unique)
     try:
+        failures += privacy_manifest_failures(
+            plistlib.loads(PRIVACY.read_bytes()), plistlib.loads(MOBILE_PRIVACY.read_bytes()))
+    except (OSError, plistlib.InvalidFileException, ValueError, TypeError) as err:
+        failures.append(f"privacy: unreadable or invalid manifest ({err})")
+    try:
         script_text = RELEASE_SCRIPT.read_text(encoding="utf-8")
         failures += release_script_failures(script_text)
         failures += patch_step_failures(script_text)
         failures += supply_chain_failures(script_text)
+        failures += privacy_packaging_failures(script_text)
     except OSError:
         failures.append("release script: scripts/release-mac-store.sh is unreadable")
 
