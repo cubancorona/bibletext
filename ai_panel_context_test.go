@@ -40,9 +40,36 @@ func askAnswerRichText(t *testing.T, popup *widget.PopUp) *widget.RichText {
 	return rich
 }
 
+func studyAnswerContent(t *testing.T, popup *widget.PopUp) fyne.CanvasObject {
+	t.Helper()
+	var comparison *compareAnswer
+	walkTree(popup, func(object fyne.CanvasObject) {
+		if candidate, ok := object.(*compareAnswer); ok {
+			comparison = candidate
+		}
+	})
+	if comparison != nil {
+		if !strings.Contains(studyAnswerText(comparison), "A synthetic answer paragraph") {
+			t.Fatal("the complete synthetic comparison never rendered")
+		}
+		return comparison
+	}
+	return askAnswerRichText(t, popup)
+}
+
+func studyAnswerText(object fyne.CanvasObject) string {
+	var blocks []string
+	walkTree(object, func(child fyne.CanvasObject) {
+		if rich, ok := child.(*widget.RichText); ok {
+			blocks = append(blocks, segmentText(rich.Segments))
+		}
+	})
+	return strings.Join(blocks, "\n")
+}
+
 func askAnswerBody(t *testing.T, popup *widget.PopUp) *container.Scroll {
 	t.Helper()
-	rich := askAnswerRichText(t, popup)
+	rich := studyAnswerContent(t, popup)
 	scroll := scrollHolding(popup, rich)
 	if scroll == nil {
 		t.Fatal("the answer lost its scroll")
@@ -125,7 +152,7 @@ func TestStudyResultPassageDisclosure(t *testing.T) {
 				finishCapturedStudyRequest(t, request, answer, nil)
 				popup := topPopup(t, w)
 				body := askAnswerBody(t, popup)
-				rendered := segmentText(askAnswerRichText(t, popup).Segments)
+				rendered := studyAnswerText(studyAnswerContent(t, popup))
 				if strings.Count(rendered, "A synthetic answer paragraph") != 30 {
 					t.Fatal("the rendered answer lost paragraphs")
 				}
@@ -213,7 +240,7 @@ func TestStudyResultPassageDisclosure(t *testing.T) {
 				if !studyObjectVisible(popup, excerpt) || excerpt.text != passage.PreviewText || !strings.HasSuffix(strings.Join(rows, " "), "Final selected words.") {
 					t.Error("expanding failed to restore the complete selected quotation")
 				}
-				if body.Offset != offset || segmentText(askAnswerRichText(t, popup).Segments) != rendered {
+				if body.Offset != offset || studyAnswerText(studyAnswerContent(t, popup)) != rendered {
 					t.Error("expanding changed the answer or reading position")
 				}
 				body.ScrollToBottom()
@@ -452,7 +479,7 @@ func TestAskAnswerLongMobileContextLeavesReadableAnswer(t *testing.T) {
 			if body.Offset.Y <= 0 || body.Content.Size().Height-body.Offset.Y > body.Size().Height+0.5 {
 				t.Error("the answer's final paragraph is outside the phone scroll's reach")
 			}
-			if strings.Count(segmentText(askAnswerRichText(t, popup).Segments), "A synthetic answer paragraph") != 20 {
+			if strings.Count(studyAnswerText(studyAnswerContent(t, popup)), "A synthetic answer paragraph") != 20 {
 				t.Error("details disclosure changed the complete answer")
 			}
 			test.Tap(findTreeButton(popup, "Close"))
@@ -575,7 +602,7 @@ func TestAskAnswerRefitsContextOnShortDesktop(t *testing.T) {
 			if studyDisclosureButton(popup, true) == nil || body.Size().Height < minimumReadingHeight {
 				t.Error("a resize lost the reader's explicit expanded choice or reading room")
 			}
-			if got := segmentText(askAnswerRichText(t, popup).Segments); strings.Count(got, "A synthetic answer paragraph") != 30 {
+			if got := studyAnswerText(studyAnswerContent(t, popup)); strings.Count(got, "A synthetic answer paragraph") != 30 {
 				t.Error("context fitting changed the complete rendered answer")
 			}
 			if top := studyOverlay(t, state.window); top != popup {

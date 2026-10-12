@@ -239,7 +239,8 @@ prose.
 | --- | --- |
 | `ai.go` | Action constants + `buildAIPrompt`; `aiPassage` / `aiPassageFor` (the verses a request names, resolved once for the prompt, the panel header, the Report mail and the cache key); `runAIAction` (cache scope, dispatch) |
 | `ai_ask.go` | "Ask a question…" input sheet (`promptAskQuestion`) + `buildAskPrompt` |
-| `ai_compare.go` | `buildComparePrompt` (the Compare perspectives prompt and its four section headings, `compareHeadings`) and `aiStudyVerbs`, the ordered list of menu verbs every surface's Study with AI menu is held to |
+| `ai_compare.go` | `buildComparePrompt` (the concise Compare perspectives prompt, with optional simple Markdown) and `aiStudyVerbs`, the ordered list of menu verbs every surface's Study with AI menu is held to |
+| `ai_compare_render.go` | Compare answer layout: Goldmark blocks, Fyne inline text, section spacing, hanging list markers and quote insets; children wrap at their assigned width before height measurement |
 | `ai_providers.go` | Gemini / OpenAI / Anthropic / Grok HTTP clients + models |
 | `ai_keystore.go` | On-device key storage (`keyStore`): Apple Keychain on **iOS only**, preferences elsewhere (incl. macOS); env-var override |
 | `ai_secure_store_darwin.go` / `ai_secure_store_other.go` | `//go:build ios` Keychain adapter (AfterFirstUnlock, backup-restorable) / its no-op twin everywhere else |
@@ -536,13 +537,14 @@ the audio service and a killed process takes it along.
 
 ## AI study (bring your own key)
 
-Select a passage → native "Study with AI" menu with four actions: **Explain**,
-**Analyze context**, **Analyze translation**, **Compare perspectives** (constants
-`aiActionExplain/Context/Translation/Compare` in [ai.go](ai.go); the comparison's
-prompt and the ordered verb list every menu is held to, `aiStudyVerbs`, in
-[ai_compare.go](ai_compare.go); the free-form **Ask a
-question…** verb was removed from the menu in build 94/1.0.2 — its code,
-`aiActionAsk` / [ai_ask.go](ai_ask.go), remains but is unwired). Plus an
+Select a passage → native "Study with AI" menu with five actions: **Explain**,
+**Analyze context**, **Analyze translation**, **Compare perspectives**, and
+**Ask a question…** (constants `aiActionExplain/Context/Translation/Compare/Ask`
+in [ai.go](ai.go)). The comparison's prompt and the ordered verb list every menu
+is held to, `aiStudyVerbs`, live in [ai_compare.go](ai_compare.go). Ask is enabled
+by `askQuestionEnabled` in [ai_ask_gate.go](ai_ask_gate.go); its composer in
+[ai_ask.go](ai_ask.go) uses the native multiline editor on iPhone and iPad and
+the Fyne entry elsewhere. Plus an
 AI **Find** passage search on the Search tab ([ai_search.go](ai_search.go)) and
 plain keyword **Search**. The three search/AI verbs are kept distinct on purpose:
 *Search* = keyword/reference lookup, *Find* = AI passage search returning verses,
@@ -577,6 +579,14 @@ keystroke supersedes it (pinned in `search_race_test.go`).
   `<PROVIDER>_API_KEY` env var overrides. Settings sheet:
   [ai_settings.go](ai_settings.go) (header gear). Result panel with a **Report**
   button and an in-app disclosure line: [ai_panel.go](ai_panel.go).
+- Compare renders the parsed Markdown blocks through
+  [ai_compare_render.go](ai_compare_render.go), retaining paragraphs, heading
+  levels, nested lists, quote contents and explicit line breaks. Fyne shapes
+  inline text; the answer layout supplies block spacing and indentation.
+  [ai_answer_markdown.go](ai_answer_markdown.go) supplies the shared link/image
+  guard and bounded text segments. Copy, Report and the request cache retain
+  the provider's original answer. The other study actions keep their existing
+  rich-text renderer.
 - Every AI wait names the provider and model at work, in one muted line under
   its bar: the Study panel, Find (the Search tab and the former sidebar) and
   Test key. The name comes from the request, not the configuration: the

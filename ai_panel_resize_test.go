@@ -110,8 +110,8 @@ func TestStudyPanelMobileResizePreservesAnswerAndQuotation(t *testing.T) {
 				finishCapturedStudyRequest(t, request, answer, nil)
 				popup := topPopup(t, w)
 				body := askAnswerBody(t, popup)
-				rich := askAnswerRichText(t, popup)
-				rendered := segmentText(rich.Segments)
+				rich := studyAnswerContent(t, popup)
+				rendered := studyAnswerText(rich)
 				excerpt, _ := noteSheetExcerpt(t, popup)
 				context := scrollHolding(popup, excerpt)
 				if context == nil {
@@ -133,7 +133,7 @@ func TestStudyPanelMobileResizePreservesAnswerAndQuotation(t *testing.T) {
 				for _, size := range []fyne.Size{{Width: 375, Height: 602.5}, {Width: 540, Height: 850}, {Width: 744, Height: 1133}} {
 					w.Resize(size)
 					assertMobileStudyMargins(t, w, popup)
-					if topPopup(t, w) != popup || askAnswerBody(t, popup) != body || askAnswerRichText(t, popup) != rich {
+					if topPopup(t, w) != popup || askAnswerBody(t, popup) != body || studyAnswerContent(t, popup) != rich {
 						t.Fatal("resizing replaced the answer card or its reading area")
 					}
 					if studyDisclosureButton(popup, expanded) == nil || studyObjectVisible(popup, excerpt) != expanded {
@@ -142,7 +142,7 @@ func TestStudyPanelMobileResizePreservesAnswerAndQuotation(t *testing.T) {
 					if body.Offset != offset || expanded && context.Offset != contextOffset {
 						t.Errorf("resizing changed reading offsets: answer %v→%v, quote %v→%v", offset, body.Offset, contextOffset, context.Offset)
 					}
-					if body.Size().Height < 80 || segmentText(rich.Segments) != rendered || !sheetHas(popup, expectedPreviewCitation(passage.Ref, passage.VersionAbbrev)) {
+					if body.Size().Height < 80 || studyAnswerText(rich) != rendered || !sheetHas(popup, expectedPreviewCitation(passage.Ref, passage.VersionAbbrev)) {
 						t.Error("resizing lost reading space, the complete answer, or the long citation")
 					}
 					body.ScrollToBottom()

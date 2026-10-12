@@ -1,13 +1,9 @@
 package bibletext
 
-// The comparison verb's contract: its prompt is a direct instruction with no
-// list of churches, schools or groups, carries the four section headings in
-// order and the passage last; the four prose prompts name differing readings
-// and still forbid headings; README.md mirrors every
-// prompt word for word; the action string is dispatched by an allow-list;
-// the request is filed under its own cache scope; the panel titles it
-// "Perspectives" and renders its headings; and a provider's refusal reaches
-// the reader as a declined passage with Try again.
+// The comparison prompt shares the prose study instructions and permits
+// brief headings without a fixed template. README.md mirrors every prompt;
+// requests retain the selected passage and their own cache scope; the panel
+// renders prose and headings; provider refusals retain retry behavior.
 
 import (
 	"context"
@@ -19,6 +15,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -37,8 +34,8 @@ func compareControlAnswer(t *testing.T) string {
 	return strings.ReplaceAll(string(b), "\r\n", "\n")
 }
 
-// The control answer is the skeleton the prompt asks for, rendered: four
-// readings followed by the four sections in order as headings; it quotes the
+// The legacy control answer renders four readings followed by its four
+// fixed sections. It quotes the
 // passage's own words and hangs no conservative or liberal label on a
 // reading, which the prompt no longer asks for; and it is well inside the
 // fairness scorer's runaway guard
@@ -83,8 +80,7 @@ func peterPassage() aiPassage {
 		Version: "World English Bible"}
 }
 
-// The four headings, the test's own copy: a renamed constant is caught here
-// and not silently carried into the prompt and the scorer together.
+// The legacy scorer headings, copied independently for rendering checks.
 var comparePromptHeadings = []string{
 	"Where they agree",
 	"Where they part, and why",
@@ -92,112 +88,47 @@ var comparePromptHeadings = []string{
 	"What the text settles",
 }
 
-// The prompt is a direct instruction: it names no church, school or group,
-// none of the readings answers have named, and no theological label, for the
-// model to fill a slot with; it asks for the readings with their
-// assumptions, for each faith's reading as its own section where the
-// passage is Scripture to more than one faith (and so names no faith, not
-// Judaism on a Hebrew Bible passage), for both a reading that takes what the
-// passage reports as said or done as reported and one that takes it as a
-// later composition, for the agreement, the differences and what the words
-// settle, for every heading at level two and the four fixed ones by name,
-// and for honesty, fairness and no invented quotation; succinct, and brief
-// where the readings largely agree, said in
-// the first sentence, with no word count anywhere: a number was taken as a
-// target and cost the readings their breadth. Control: the Explain prompt
-// is a different prompt and carries no heading.
+// The short comparison retains the passage and permits simple Markdown,
+// without prescribing named traditions, examples or a section skeleton.
 func TestBuildComparePrompt(t *testing.T) {
 	psg := peterPassage()
 	got := buildComparePrompt(psg)
 	for _, absent := range []string{
-		"Catholic", "Eastern Orthodox", "Orthodox", "Lutheran", "Reformed", "Jewish",
-		"Jehovah's Witnesses", "historical-critical", "conservative", "liberal",
-		"within Judaism", "Questions to take back to the text", "numbered questions", "closing questions",
+		"Catholic", "Eastern Orthodox", "Lutheran", "Reformed", "Jewish",
+		"historical-critical", "conservative", "liberal", "For example",
+		"natural mechanisms", "divine agency", "level-two", "Where they agree",
+		"Do not use markdown headings", "closing questions",
 	} {
 		if strings.Contains(strings.ToLower(got), strings.ToLower(absent)) {
-			t.Errorf("the comparison prompt contains %q", absent)
+			t.Errorf("the comparison prompt prescribes %q", absent)
 		}
 	}
 	for _, want := range []string{
-		"Help the reader understand the passage below honestly: how different believers and scholars understand it, why they differ, and what the words of the passage themselves support.",
-		"what it assumes about the Bible and about anything supernatural in the passage",
-		"calling each group by the name it uses for itself",
-		"Where the passage is Scripture to more than one faith, give each faith's reading its own section.",
-		"Where the passage reports something said or done, and some readers take it as reported while others take it as a later composition or explain it naturally, include both and say which is which.",
-		"Then say where the readings agree, where they differ and why, whether any can be held together, and what the words of the passage settle or leave open.",
-		"If the readings largely agree, say so in your first sentence and be brief.",
-		"Write in clear, plain language for a general reader, and be succinct.",
-		"Put each reading as its own thoughtful holders would state it; do not choose for the reader, and do not invent quotations or references.",
-
-		"Consider whether different readings can be true together, including where they address different aspects, levels of meaning, or kinds of explanation.",
-		"Distinguish a reading that adds another meaning or explanation from one that excludes alternatives.",
-		"Where readings can be held together, explain how, which words support that combination, and what assumptions it requires.",
-		"When combining readings, preserve what each actually affirms; do not replace them with a weaker compromise.",
-		"Consider compatible meanings or explanations within a reading as well as between readings. For example, a reading may affirm a real event or presence and also symbolic meaning; natural mechanisms may coexist with divine agency or purpose. These are examples, not an exhaustive set, and a reading that explicitly excludes the additional meaning or explanation must be distinguished. If a combination changes a reading’s original claim, identify it as a revised position, not as both original readings being true. Where claims contradict one another, state the specific conflicting claims clearly; do not force a reconciliation. Different labels, methods, genres, or dates of composition are not by themselves contradictions. Literary form alone does not deny that an event occurred; identify any actual denial before calling the readings incompatible.",
-		"For example, a reading may affirm a real event or presence and also symbolic meaning; natural mechanisms may coexist with divine agency or purpose.",
-		"These are examples, not an exhaustive set, and a reading that explicitly excludes the additional meaning or explanation must be distinguished.",
-		"Compatibility alone does not establish that either reading is true.",
-		"Quote only wording supplied in the passage; describe surrounding verses without quoting them.",
-		"A scholarly method is not by itself a rejection of supernatural action, and a named group need not be uniform in its readings.",
-		"Distinguish what the passage explicitly states from what a reading infers, what it leaves possible, and what requires evidence beyond it.",
-		"Do not treat the narrative’s claims as independent proof of an event or its mechanism.",
-		"The quoted text is from the World English Bible. Verse numbers may appear inside the quotation.",
+		readingsSentence,
+		"keep it concise — a few short paragraphs at most",
+		"Use brief Markdown headings, emphasis, short lists or blockquotes where helpful. Avoid tables and HTML.",
+		"Compare the main readings of the passage below: what each means, why readers differ, and whether any can be held together.",
+		"Represent each fairly without choosing for the reader or forcing agreement.",
+		"Where readings can be held together, explain how without changing what each reading actually claims.",
+		"If the main readings largely agree, say so.",
+		"The quoted text is from the World English Bible.",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("the comparison prompt lacks %q", want)
 		}
 	}
-	for _, limit := range []string{"under 600", "under 250", "under 700", "under 300"} {
-		if strings.Contains(got, limit) {
-			t.Errorf("the comparison prompt sets a word count: %q", limit)
-		}
+	instruction, _, _ := strings.Cut(got, "Passage (")
+	if n := len(strings.Fields(instruction)); n > 180 {
+		t.Errorf("the comparison instructions expanded to %d words", n)
 	}
-	if m := regexp.MustCompile(`(?i)\b(?:under|within|at most|no more than|up to) \d+\b|\b\d+ words\b`).FindString(got); m != "" {
-		t.Errorf("the comparison prompt sets a word count: %q", m)
-	}
-
-	// The skeleton: a level-two heading per reading, then the four headings
-	// named in one sentence, in order, at level two as well, from the same
-	// constants the scorer splits on. The prompt writes no heading line of
-	// its own.
-	if len(compareHeadings) != len(comparePromptHeadings) {
-		t.Fatalf("the comparison has %d fixed headings, want %d", len(compareHeadings), len(comparePromptHeadings))
-	}
-	for i, h := range comparePromptHeadings {
-		if compareHeadings[i] != h {
-			t.Errorf("compareHeadings[%d] = %q, want %q", i, compareHeadings[i], h)
-		}
-	}
-	sentence := `Give each reading a level-two heading, and then, also at level two, the headings "` +
-		strings.Join(comparePromptHeadings[:3], `", "`) + `" and "` + comparePromptHeadings[3] + `".`
-	if strings.Count(got, sentence) != 1 {
-		t.Errorf("the prompt does not name the four headings once in order, at level two:\n%s", got)
-	}
-	if strings.Count(got, "level-two") != 1 || strings.Count(got, "level two") != 1 {
-		t.Errorf("the prompt should set level two once for the readings and once for the fixed headings:\n%s", got)
-	}
-	if strings.Contains(got, "\n## ") {
-		t.Errorf("the prompt writes a heading line of its own:\n%s", got)
-	}
-
-	// Instruction first, passage last.
 	if !strings.HasPrefix(got, "You are a knowledgeable, even-handed Bible study assistant") {
-		t.Errorf("the prompt does not open on the instruction:\n%s", got[:80])
+		t.Error("the prompt does not open on the study instructions")
 	}
 	if tail := "Passage (Matthew 16:18):\n“" + psg.Text + "”"; !strings.HasSuffix(got, tail) {
-		t.Errorf("the prompt does not end on the passage lines %q:\n%s", tail, got)
+		t.Errorf("the prompt does not end on the captured passage: %q", got)
 	}
-
-	// Controls: it is its own builder, and the prose prompt has no skeleton.
-	explain := buildAIPrompt(aiActionExplain, psg)
-	if got == explain {
+	if got == buildAIPrompt(aiActionExplain, psg) {
 		t.Fatal("the comparison prompt is the Explain prompt")
-	}
-	if strings.Contains(explain, "Where they agree") {
-		t.Error("control: the Explain prompt carries the comparison's heading")
-	}
-	if strings.Contains(got, "Do not use markdown headings") {
-		t.Error("the comparison prompt forbids the headings it asks for")
 	}
 }
 
@@ -209,8 +140,7 @@ const readingsSentence = "Where this passage is read differently, name the main 
 	"document or writer only when you are sure of it."
 
 // The prose verbs name differing readings and still forbid headings and
-// lists; the comparison carries neither. Control: the
-// older "scholars disagree" sentence is gone from all four.
+// lists. Compare shares their readings instruction but permits brief headings.
 func TestStudyPromptsNameDifferingReadings(t *testing.T) {
 	psg := john3Passage()
 	prose := map[string]string{
@@ -236,8 +166,8 @@ func TestStudyPromptsNameDifferingReadings(t *testing.T) {
 		}
 	}
 	compare := buildComparePrompt(psg)
-	if strings.Contains(compare, readingsSentence) {
-		t.Error("the comparison prompt carries the prose verbs' sentence")
+	if !strings.Contains(compare, readingsSentence) {
+		t.Error("the comparison prompt lacks the shared readings instruction")
 	}
 	if strings.Contains(compare, "Do not use markdown headings") {
 		t.Error("the comparison prompt forbids headings")
@@ -427,35 +357,56 @@ const compareFixture = "## Catholic\n" +
 	"## What the text settles\n" +
 	"The wordplay is in the text, and the verse before it is the confession; the passage says nothing of succession either way.\n"
 
-// The panel titles the comparison and renders its headings as headings.
-func TestComparePanelTitlesAndRendersTheSections(t *testing.T) {
-	app := test.NewApp()
-	defer app.Quit()
-	reqs := stubStudyRequests(t)
-	w := test.NewWindow(widget.NewLabel("reading"))
-	defer w.Close()
-	st := studyPanelState(t, w)
-
-	showAIPanel(st, aiActionCompare, peterPassage().Text, "", selSpan{})
-	r := nextStudyRequest(t, reqs, "the comparison")
-	p := studyOverlay(t, w)
-	if !treeHasText(p, "Perspectives") {
-		t.Errorf("the panel is not titled for the comparison; texts %v", treeTexts(p))
-	}
-	r.answer <- compareFixture
-	settled(t, r)
-	var answer *widget.RichText
-	walkTree(p, func(o fyne.CanvasObject) {
-		if rt, ok := o.(*widget.RichText); ok && strings.Contains(segmentText(rt.Segments), "Catholic") {
-			answer = rt
-		}
-	})
-	if answer == nil {
-		t.Fatalf("the answer did not land in the panel; texts %v", treeTexts(p))
-	}
-	if got := subHeadings(answer.Segments); strings.Join(got, "|") !=
-		"Catholic|Reformed|Historical-critical|"+strings.Join(comparePromptHeadings, "|") {
-		t.Errorf("the panel's headings are %v", got)
+// The same panel accepts prose and optional headings without a fixed structure.
+func TestComparePanelTitlesAndRendersAnswers(t *testing.T) {
+	const prose = "Readers differ over whether the rock refers to Peter or his confession. " +
+		"The two readings can overlap when Peter is understood as the confessing apostle."
+	for _, c := range []struct {
+		name, answer, needle string
+		headings             []string
+	}{
+		{"prose", prose, "Readers differ", nil},
+		{"brief headings", "## Main readings\n" + prose + "\n\n## Holding them together\nThe overlap does not settle succession.", "Readers differ", []string{"Main readings", "Holding them together"}},
+		{"legacy headings", compareFixture, "Catholic", append([]string{"Catholic", "Reformed", "Historical-critical"}, comparePromptHeadings...)},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			app := test.NewApp()
+			defer app.Quit()
+			reqs := stubStudyRequests(t)
+			w := test.NewWindow(widget.NewLabel("reading"))
+			defer w.Close()
+			st := studyPanelState(t, w)
+			showAIPanel(st, aiActionCompare, peterPassage().Text, "", selSpan{})
+			r := nextStudyRequest(t, reqs, "the comparison")
+			p := studyOverlay(t, w)
+			if !treeHasText(p, "Perspectives") {
+				t.Errorf("the panel is not titled for the comparison; texts %v", treeTexts(p))
+			}
+			r.answer <- c.answer
+			settled(t, r)
+			var answer *compareAnswer
+			walkTree(p, func(o fyne.CanvasObject) {
+				if comparison, ok := o.(*compareAnswer); ok && strings.Contains(studyAnswerText(comparison), c.needle) {
+					answer = comparison
+				}
+			})
+			if answer == nil {
+				t.Fatalf("the answer did not land in the panel; texts %v", treeTexts(p))
+			}
+			var headings []string
+			walkTree(answer, func(object fyne.CanvasObject) {
+				if rich, ok := object.(*widget.RichText); ok {
+					for _, segment := range rich.Segments {
+						if text, ok := segment.(*widget.TextSegment); ok && text.Style.SizeName == theme.SizeNameSubHeadingText {
+							headings = append(headings, text.Text)
+						}
+					}
+				}
+			})
+			if got := headings; strings.Join(got, "|") != strings.Join(c.headings, "|") {
+				t.Errorf("the panel's headings are %v, want %v", got, c.headings)
+			}
+		})
 	}
 }
 

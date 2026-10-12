@@ -19,7 +19,7 @@ import (
 // app.NewWithID fetch it AT RENDER TIME — an outbound request to a host the
 // model chose, with no reader action at all.
 //
-// The prompts ask for plain prose, but a prompt is a request rather than a
+// Some prompts ask for plain prose, but a prompt is a request rather than a
 // guarantee, and the answer arrives from a third party over the network.
 //
 // The guarantee here does NOT come from the stripping below. Pattern-matching
@@ -71,6 +71,10 @@ func sanitizeAIMarkdown(s string) string {
 // rather than approximating it.
 func aiMarkdownReachesNetwork(md string) bool {
 	doc := goldmark.New().Parser().Parse(text.NewReader([]byte(md)))
+	return aiMarkdownNodeReachesNetwork(doc)
+}
+
+func aiMarkdownNodeReachesNetwork(doc ast.Node) bool {
 	found := false
 	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {

@@ -193,7 +193,7 @@ Also confirm from the final AAB:
 
 ## Release notes — 1.2.20
 
-> Compare perspectives and ask your own question about a selected passage with your chosen AI provider. Collapse the quotation while reading an answer. Improved citations, sharing, Android narration and passage layout, and lower memory use when opening study cards.
+> New: Ask a question… and Compare perspectives for the selected passage, with your own AI key. Collapse the quotation while reading any AI answer. More accurate citations for study, sharing and notes; clearer quotation previews; drafts retained through rotation. Narration continues if Android closes the reading screen but leaves the app running. Improved title and note spacing on tablets and landscape phones, and psalm-title wrapping on Android 15+. Lower memory use when opening study cards.
 
 Suggested tester coverage:
 
@@ -203,7 +203,7 @@ Suggested tester coverage:
   question match the answer;
 - collapse and expand the selected quotation beside its citation, and confirm
   the answer and footer remain accessible in portrait and landscape;
-- type a multiline question, rotate, and confirm the draft remains;
+- type a question, rotate, and confirm the draft remains;
 - test narration, chapter continuation and a shared link with a synthetic note;
 - open and close study cards repeatedly and confirm the app remains responsive.
 

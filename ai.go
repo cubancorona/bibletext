@@ -224,8 +224,8 @@ func aiActionTitle(action string) string {
 // aiDifferingReadingsSentence is what every prose prompt says about a passage that is
 // read more than one way: name the readings and what each rests on, and let
 // the wording of the passage weigh, rather than flatten the difference into
-// "scholars disagree". The comparison verb has its own, fuller contract
-// (ai_compare.go). Ask has its own quotation boundary below.
+// "scholars disagree". Compare shares this instruction and allows brief
+// headings (ai_compare.go). Ask has its own quotation boundary below.
 const aiDifferingReadingsSentence = "Where this passage is read differently, name the main readings, " +
 	"who holds them and the assumption each rests on, and say what the wording of the " +
 	"passage counts for or against; where a point is uncertain, say so briefly."

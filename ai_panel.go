@@ -186,6 +186,12 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 	maxBodyH := ps.Height - 168
 	answer := widget.NewRichTextFromMarkdown("")
 	answer.Wrapping = fyne.TextWrapWord
+	var compare *compareAnswer
+	var answerView fyne.CanvasObject = answer
+	if action == aiActionCompare {
+		compare = newCompareAnswer()
+		answerView = compare
+	}
 	var questionView fyne.CanvasObject
 	if questionText != nil {
 		questionText.Resize(fyne.NewSize(bodyW-16, questionText.MinSize().Height))
@@ -198,7 +204,7 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 		}
 		return container.New(squeezeWidthLayout{}, container.NewVBox(questionView, content))
 	}
-	answerContent := withQuestion(answer)
+	answerContent := withQuestion(answerView)
 	answerScroll := container.NewVScroll(answerContent)
 	answerScroll.SetMinSize(fyne.NewSize(bodyW, maxBodyH))
 	body := container.NewStack(answerScroll)
@@ -477,12 +483,16 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 		// request belongs to this panel, which reopens itself when it lands
 		// (below), and a second reopen would stack two panels (sheet_reopen.go).
 		registerSheetReopen(state, popup, reopen)
-		setAIAnswerText(answer, text)
+		if compare != nil {
+			compare.setText(text)
+		} else {
+			setAIAnswerText(answer, text)
+		}
 		diagnose("render_parsed", devDiagnosticSince(renderStarted))
-		// A word-wrapped RichText only reports its true height once it has wrapped
-		// at a known width. Pre-wrap at the body width so the height is right, then
+		// Wrapped answer text reports its true height at a known width.
+		// Pre-wrap at the body width so the height is right, then
 		// fit the panel to the answer (capped at maxBodyH).
-		answer.Resize(fyne.NewSize(bodyW-16, answer.MinSize().Height))
+		answerView.Resize(fyne.NewSize(bodyW-16, answerView.MinSize().Height))
 		if questionText != nil {
 			questionText.Resize(fyne.NewSize(bodyW-16, questionText.MinSize().Height))
 		}
@@ -500,7 +510,7 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 			}
 			started := devDiagnosticNow()
 			diagnose("remeasure_start")
-			answer.Refresh()
+			answerView.Refresh()
 			answerScroll.Refresh()
 			fitBody(answerScroll, answerContent.MinSize().Height+10)
 			diagnose("remeasure_done", devDiagnosticSince(started))
@@ -524,7 +534,11 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 		current = ""
 		copyBtn.Disable()
 		reportBtn.Disable()
-		answer.ParseMarkdown("")
+		if compare != nil {
+			compare.setText("")
+		} else {
+			answer.ParseMarkdown("")
+		}
 		lbl := widget.NewLabel(msg)
 		lbl.Wrapping = fyne.TextWrapWord
 		lbl.Alignment = fyne.TextAlignCenter

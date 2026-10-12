@@ -3,7 +3,7 @@ VERSION 1.2.20 (macOS)
 BibleText is a Bible reader. No account, login, or registration is required, and reading, search, navigation, notes, and cross-references need no AI-provider key. Downloaded scripture stays readable and searchable offline; downloads and optional provider services need connectivity when used.
 
 STUDY GESTURE ON THE MAC
-Selection actions live on the right-click menu rather than a touch popover. Select any passage and right-click: the menu offers the system's Copy and Look Up, Cross-references, a Share submenu, and — only when an AI provider is configured — a Study with AI submenu. No AI-provider key is bundled, so these items need setup; core reading needs none.
+Selection actions live on the right-click menu rather than a touch popover. Select any passage and right-click: the menu offers the system’s Copy and Look Up, Cross-references, Share and Study with AI. Choose None in Settings → Assistant to hide AI features. AI answers require a provider key; core reading needs none.
 
 APP SANDBOX AND THE ONE-TIME MIGRATION
 The Store edition runs in the App Sandbox. On the first launch that creates its container, macOS moves an existing direct-download install's preferences (notes, settings, reading position) into it via the bundled container-migration manifest — a local file move; nothing is transmitted. With no prior install the app simply starts fresh, so the migration is not visible during review.
@@ -11,7 +11,7 @@ The Store edition runs in the App Sandbox. On the first launch that creates its 
 KEYS AND TRANSLATIONS
 The App Store binary intentionally contains an obfuscated, link-time-injected API.Bible fallback used only to fetch the licensed New King James Version; a reader can replace it with their own key. The NKJV text is fetched from API.Bible, not packaged in the app.
 
-No AI-provider key is bundled. The optional Study with AI features stay off until the reader enters their own provider key in Settings → Assistant. The Store edition keeps that key (and any API.Bible key the reader adds) in the login Keychain rather than the preferences file; a key saved by an earlier release moves across once. Requests go directly to the selected provider.
+No AI-provider key is bundled. AI answers require the reader’s own provider key. The Store edition keeps it (and any API.Bible key added) in the login Keychain; a previously saved key moves across once. Requests go directly to the selected provider.
 
 The full WEB, WEB Catholic, and BSB texts are fetched and cached at runtime. The only embedded scripture is a small WEB Gospels seed shown on first launch; the Gospel-parallels dataset holds references, not another translation.
 
@@ -25,7 +25,7 @@ To receive on the Mac: paste the link into Notes or Messages and click it — wi
 PRIVACY: the message is encoded in the URL fragment and travels only through the channel the sender chose. There is no server, account, user directory, or developer copy, and the fragment is not sent to the website host. A received message is rendered as plain text with neutral attribution, never as markup. The recipient can delete one note, delete all in Settings, or disable notes entirely.
 
 WHAT IS NEW IN 1.2.20
-Compare perspectives sends a selected passage to the reader's chosen AI provider and shows its response, including compatible readings where appropriate. Ask a question sends the selected passage and the reader's question to that provider. Each AI answer offers a quotation disclosure control to leave more room for reading. Passage previews have an inset quotation and a left-aligned citation below it. Study cards fit smaller windows, and repeated opening of cards uses less memory.
+New in Study with AI: Compare perspectives considers different and compatible readings; Ask a question sends the selected passage and a typed question to the chosen provider. AI study uses the selected verse range. Answers offer a quotation collapse control beside the citation. Share with note and study cards have inset quotations, citations below at the body margin, and layouts that fit smaller windows. Repeated cards use less memory.
 
 HOW TO EXERCISE 1.2.20
 To exercise the optional AI features, configure your own provider key in Settings → Assistant. Select Matthew 7:1–3, right-click, and choose Study with AI → Compare perspectives. The response appears under Perspectives. Use the arrow beside the citation to collapse and expand the quotation. Select the passage again, choose Ask a question…, enter a question and press Ask. The response includes the captured citation and question. To test sharing without AI, select a verse, right-click, choose Share with note and enter a short synthetic message.

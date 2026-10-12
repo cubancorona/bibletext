@@ -1,11 +1,17 @@
 package bibletext
 
-// The fairness bench for Compare perspectives: ten passages, a scorer with
+// The legacy structured bench for Compare perspectives: ten passages, a scorer with
 // ten mechanical checks, planted controls that each trip exactly one check,
 // and an optional evaluation of recorded answers.
 //
-// The prompt names no reading, so the scorer asks for none by name, and the
-// bench keeps no list of readers. A row asks only for what the prompt asks
+// The scorer and its fixtures protect the former fixed-heading contract;
+// they are regression diagnostics, not quality evidence for a free-form
+// comparison. Live and recorded evaluations reject a prompt without the
+// exact structured heading instruction before calling a provider or scoring
+// answers. The current free-form prompt is therefore not evaluated here.
+//
+// The structured prompt named no reading, so the scorer asks for none by name,
+// and the bench keeps no list of readers. A row asks what that prompt asked
 // of such a passage: on one that reports something said or done, a reading
 // that takes it as reported and one that takes it as a later composition or
 // explains it naturally, told apart; on a Hebrew Bible passage, Scripture to
@@ -43,8 +49,8 @@ package bibletext
 // Each fixture's front matter carries the sha1 of the prompt it was recorded
 // against. A mismatch fails the optional recorded-answer evaluation, so a
 // recorded set cannot be scored against a different prompt by mistake. The
-// four section headings are shared with the prompt (ai_compare.go), so a
-// heading rename does need a re-record or a mechanical edit of the set.
+// four section headings remain test-only constants for the legacy scorer;
+// they do not prescribe the current production prompt or answer format.
 //
 // Verse bounds: every "Book chapter:verse" an answer cites must name a book
 // of the canon, which holds everywhere (the 66-book list every BibleData
@@ -69,6 +75,58 @@ import (
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
 )
+
+// These are the former structured prompt's four sections, in order. The
+// legacy scorer and its planted controls retain their exact contract.
+const (
+	compareHeadingAgree    = "Where they agree"
+	compareHeadingPart     = "Where they part, and why"
+	compareHeadingTogether = "Where readings can be held together"
+	compareHeadingSettles  = "What the text settles"
+)
+
+var compareHeadings = []string{
+	compareHeadingAgree, compareHeadingPart, compareHeadingTogether, compareHeadingSettles,
+}
+
+const compareBenchStructuredHeadingInstruction = "Give each reading a level-two heading, and then, also at level two, the " +
+	"headings \"" + compareHeadingAgree + "\", \"" + compareHeadingPart + "\", \"" +
+	compareHeadingTogether + "\" and \"" + compareHeadingSettles + "\"."
+
+// compareBenchStructuredPromptError refuses to apply a format-dependent
+// scorer to a prompt that does not require its exact heading skeleton.
+func compareBenchStructuredPromptError(prompt string) error {
+	if !strings.Contains(prompt, compareBenchStructuredHeadingInstruction) {
+		return errors.New("the legacy structured comparison scorer does not support this prompt: the exact fixed-headings instruction is absent; no provider calls or answer evaluation will run")
+	}
+	return nil
+}
+
+func TestCompareBenchStructuredPromptGuard(t *testing.T) {
+	// An independent copy of the former instruction proves compatibility;
+	// merely naming its headings or changing their order is insufficient.
+	const former = "Give each reading a level-two heading, and then, also at level two, the headings \"Where they agree\", \"Where they part, and why\", \"Where readings can be held together\" and \"What the text settles\"."
+	for _, tc := range []struct {
+		name, prompt string
+		compatible   bool
+	}{
+		{"former instruction", "Compare this passage.\n\n" + former + "\n\nPassage: sample text", true},
+		{"current free-form prompt", buildComparePrompt(aiPassage{Ref: "John 3:16", Text: "sample text", Version: compareBenchVersion}), false},
+		{"heading names only", strings.Join(compareHeadings, "; "), false},
+		{"different heading order", strings.Replace(former, "\"Where they agree\", \"Where they part, and why\"", "\"Where they part, and why\", \"Where they agree\"", 1), false},
+		{"different heading level", strings.ReplaceAll(former, "level-two", "level-three"), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := compareBenchStructuredPromptError(tc.prompt)
+			if (err == nil) != tc.compatible {
+				t.Errorf("compatible = %v, want %v; error: %v", err == nil, tc.compatible, err)
+			}
+			if err != nil && !strings.Contains(err.Error(), "no provider calls or answer evaluation will run") {
+				t.Errorf("incompatible prompt lacks an explicit evaluation refusal: %v", err)
+			}
+		})
+	}
+}
 
 const (
 	compareBenchDir      = "testdata/compare"
@@ -2454,6 +2512,9 @@ func TestCompareBenchFixtureTextIsPublicDomain(t *testing.T) {
 func TestCompareBenchRecordedAnswersAreFair(t *testing.T) {
 	if os.Getenv(compareBenchRecordedSwitch) != "1" {
 		t.Skipf("set %s=1 to evaluate saved provider responses", compareBenchRecordedSwitch)
+	}
+	if err := compareBenchStructuredPromptError(buildComparePrompt(aiPassage{})); err != nil {
+		t.Fatal(err)
 	}
 	tb := loadBenchTable(t)
 	byID := tb.byID()

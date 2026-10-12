@@ -16,14 +16,17 @@
 
 [[release]]
 version = "1.2.20"
-date = "2026-10-11"
-head = "Compare readings and ask about a passage."
+date = "2026-10-12"
+head = "Ask a question and compare perspectives."
 bullets = [
-  "Compare perspectives sends the selected passage to your chosen AI provider and presents its readings, including meanings that may fit together.",
-  "Ask a question sends your question with the selected passage to your chosen AI provider and shows its answer.",
-  "Collapse the selected quotation while reading an AI answer, and expand it again beside the citation.",
-  "Passage previews use an inset quotation with its citation below at the body margin, and study cards fit smaller windows.",
-  "Opening study cards repeatedly now uses less memory.",
+  "Ask a question… is now available in Study with AI. Send your question and selected passage to your chosen AI provider using your own key.",
+  "Compare perspectives is new: explore different readings of a passage, including meanings and explanations that may fit together.",
+  "Collapse or expand the selected quotation beside its citation while reading any AI study answer.",
+  "Clearer quotation previews, with an inset passage and a left-aligned citation below it.",
+  "More accurate selected-verse references for AI study, sharing and notes.",
+  "Study cards fit shorter windows, with lower memory use and more efficient layout for long answers.",
+  "When a picture cannot be read, the image-sharing fallback no longer reports that it was saved.",
+  "Linux portal sharing ends promptly if the desktop session connection closes.",
 ]
 
 [[release]]

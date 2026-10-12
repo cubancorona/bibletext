@@ -3,7 +3,7 @@ VERSION 1.2.20
 BibleText is a Bible reader. No account, login, or registration is required. Reading, search, navigation, notes, and cross-references do not require an AI-provider key. Downloaded scripture remains readable and searchable offline; network-backed downloads and optional provider services require connectivity when used.
 
 WHAT IS NEW IN 1.2.20
-Compare perspectives sends a selected passage to the reader's chosen AI provider and shows its response, including compatible readings where appropriate. Ask a question sends the selected passage and the reader's question to that provider. Each AI answer offers a quotation disclosure control to leave more room for reading. Passage previews have an inset quotation and a left-aligned citation below it. Study cards fit smaller windows, and repeated opening of cards uses less memory.
+New in Study with AI: Compare perspectives considers different and compatible readings; Ask a question sends the selected passage and a typed question to the chosen provider. AI study uses the selected verse range. Answers offer a quotation collapse control beside the citation. Share with note and study cards have inset quotations, citations below at the body margin, and layouts that fit smaller windows. Repeated cards use less memory.
 
 HOW TO EXERCISE 1.2.20
 Reading, navigation, notes and cross-references still need no AI setup. To exercise the optional AI features, configure your own provider key in Settings → Assistant. Select Matthew 7:1–3, press and hold, and choose Compare perspectives from Study with AI. The response appears under Perspectives. Use the arrow beside the citation to collapse and expand the quotation. Select the passage again, choose Ask a question…, type a question in the native multiline editor and press Ask. The response includes the captured citation and question. To test sharing without AI, select a verse, choose Share with note and enter a short synthetic message.
@@ -23,6 +23,6 @@ PRIVACY: the message is encoded in the URL fragment and travels only through the
 KEYS AND TRANSLATIONS
 The App Store binary intentionally contains an obfuscated, link-time-injected API.Bible fallback used only to fetch the licensed New King James Version. A reader can replace it with their own API.Bible key. The NKJV text itself is fetched from API.Bible and is not packaged in the app.
 
-No AI-provider key is bundled. Optional Study with AI and Find features remain off until the reader enters their own provider key in Settings → Assistant. That key is stored in the device Keychain and requests go directly to the selected provider. No AI setup is required for review.
+No AI-provider key is bundled. AI answers require the reader’s own provider key, stored in the device Keychain; requests go directly to that provider. Choose None in Settings → Assistant to hide AI features. Core reading needs no AI setup.
 
 The full WEB, WEB Catholic, and BSB texts are fetched and cached at runtime. The only embedded scripture is a small WEB Gospels seed used to show readable text immediately on first launch; the embedded Gospel-parallels dataset contains references rather than another full translation.

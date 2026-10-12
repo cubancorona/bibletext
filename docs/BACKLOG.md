@@ -121,27 +121,20 @@ perspectives", panel title "Perspectives", on all six surfaces: one line in
 each native menu (`reading_ios.go`, `reading_macos.go` with its selector,
 `android/BtBridge.java` with the Go case in `reading_android_export.go`)
 and the Fyne submenu ranging over `aiStudyVerbs` (`ai_compare.go`), held
-equal by `study_verbs_source_test.go`. The answer is the fixed `##`
-skeleton the existing panel already renders: the readings the model
-chooses, two to seven, then Where they agree, Where they part, and why,
-Where readings can be held together, and What the text settles; the prompt
-asks for succinctness and sets no word count, a number having been taken
-as a target that cost the readings their breadth. The prompt is public
-in README.md and held to the builder by `TestREADMEMirrorsPrompts`. Its
-design changed before the recording round: it is now a direct
-instruction with no list of churches, schools or groups and no
-theological label, so the model chooses the main readings of the passage
-and names their holders as they name themselves, and the bench asks a
-row only for what the prompt asks of the passage itself (both stances on
-something reported as said or done, told apart; on a Hebrew Bible
-passage, Scripture to Judaism as well, a reading within Judaism, the
-section the prompt asks for each faith's reading to have). It holds a
-quotation to the World English Bible chapter the passage is from
-(`testdata/compare/chapters.json`, committed so every machine scores
-alike), and no length beyond a runaway guard at a thousand words,
-reporting the words of each answer and of each reading instead, with a
-passage whose readings largely agree held to the first sentence the
-prompt asks of it rather than to a shorter cap.
+equal by `study_verbs_source_test.go`. The prompt shares the prose study
+instructions, asks for the main readings and whether they can be held together,
+and permits brief Markdown headings, emphasis, short lists and blockquotes,
+while avoiding tables and HTML. It names no groups or examples and
+prescribes no section structure. A combined reading must preserve each reading's
+actual claims. The complete prompt is public in README.md and held to the
+builder by `TestREADMEMirrorsPrompts`.
+
+The earlier structured scorer and its planted controls remain test-only
+regressions. They depend on the former fixed sections and are not quality
+scores for the current free-form prompt. Their optional live and recorded
+rounds reject an unsupported prompt before making provider calls or scoring
+answers. Fresh samples require direct review of the readings, assumptions,
+textual support and compatibility reasoning, with exact prompt fingerprints.
 
 With it, for every AI verb: the selection's verse position reaches the
 request (`aiPassage`, `aiPassageFor`), so the prompt, the panel header, the
@@ -153,15 +146,17 @@ string the app has no prompt for is dropped before any text leaves the
 selection; the `%q` quoting that wrote a poem-line break as `\n` is gone
 (ADDITIONS_AND_DROPS item 19).
 
-The fairness bench (`ai_compare_bench_test.go`): ten World English Bible
+The legacy fairness bench (`ai_compare_bench_test.go`): ten World English Bible
 passages (`testdata/compare/passages.json`), a scorer of ten checks each
 with a control that trips it and no other (`testdata/compare/_controls/`),
 and a doubly gated live recorder (`ai_compare_bench_live_test.go`) that
 writes the answers outside the tree for a person to read.
 Recorded-answer evaluation is optional development tooling. Run it with
 `BIBLETEXT_COMPAREBENCH_RECORDED=1 go test -run '^TestCompareBenchRecordedAnswersAreFair$' .`.
-It still requires every default-provider passage, checks the recorded prompt
-fingerprint and fails on an incomplete or failing set. The ordinary suite
+It requires the former structured prompt and stops before evaluating the current
+free-form prompt. For a supported prompt it requires every default-provider
+passage, checks the recorded prompt fingerprint and fails on an incomplete or
+failing set. The ordinary suite
 runs the deterministic prompt, request, cache, rendering, cancellation,
 provider-error, menu and scorer-control tests without requiring paid responses
 or approval of saved answers. The app never reads those response files.

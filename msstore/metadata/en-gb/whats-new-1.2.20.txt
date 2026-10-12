@@ -1,1 +1,7 @@
-Compare perspectives on a selected passage, including readings that may fit together, and ask your own question with your chosen AI provider. Collapse the quotation to leave more room for an answer. This update also improves citations and sharing, fits study cards to smaller windows, and reduces memory use when opening study cards.
+- Ask a question… is now available in Study with AI. Send your question and selected passage to your chosen AI provider using your own key.
+- Compare perspectives is new: explore different readings of a passage, including meanings and explanations that may fit together.
+- Collapse or expand the selected quotation beside its citation while reading any AI study answer.
+- Clearer quotation previews, with an inset passage and a left-aligned citation below it.
+- More accurate selected-verse references for AI study, sharing and notes.
+- Study cards fit shorter windows, with lower memory use and more efficient layout for long answers.
+- When a picture cannot be read, the sharing fallback no longer reports that it was saved.

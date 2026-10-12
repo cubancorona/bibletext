@@ -195,7 +195,7 @@ func subHeadings(segs []widget.RichTextSegment) []string {
 	return out
 }
 
-// A comparison is a fixed skeleton of level-two headings and a bulleted list
+// The legacy comparison fixture has level-two headings and a bulleted list
 // under "Where they part, and why". The readings and the four sections become
 // heading segments in order, and the bullets become an unordered list. The
 // fixture has no closing questions. An ordinary link is flattened to its text

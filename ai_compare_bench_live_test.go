@@ -1,8 +1,13 @@
 package bibletext
 
-// The live recorder for the Compare perspectives fairness bench: one
+// The live recorder for the legacy structured Compare perspectives bench: one
 // recording round against the real providers, scored as it goes, with every
 // answer written out for a person to read before any of it becomes a fixture.
+//
+// This recorder requires the former fixed-heading instruction. A free-form
+// prompt is rejected before provider setup or calls: its answers cannot be
+// assessed honestly by the structured scorer. The offline scorer controls
+// remain regression diagnostics, not evidence for the current prompt.
 //
 // Doubly gated so it can never spend money by accident: it needs both the
 // provider keys in the environment and BIBLETEXT_COMPAREBENCH=1, and it
@@ -220,6 +225,9 @@ func explainShortProse(md string) string {
 
 func TestCompareBenchLive(t *testing.T) {
 	compareBenchSwitchOn(t)
+	if err := compareBenchStructuredPromptError(buildComparePrompt(aiPassage{})); err != nil {
+		t.Fatal(err)
+	}
 	for _, p := range aiProviders() {
 		useLiveEnv(t, envVarFor(p.ID)) // the key the suite found; TestMain withholds it
 	}
