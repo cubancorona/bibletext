@@ -240,8 +240,14 @@ the projection + repaint.
 **Geometry, honestly:** iOS reserves the band with `paragraphSpacingBefore` on
 the anchor paragraph; a TextView has no per-paragraph spacing, so the band is
 a one-character `LineHeightSpan` (`NoteBandSpan`, implements `UpdateLayout` so
-DynamicLayout reflows) on the anchor verse's first character, raising that
-line's top by the measured sticker height + gap. The sticker view lives INSIDE
+DynamicLayout reflows) on the character before the anchor's paragraph,
+growing that line's descent by the measured sticker height + gap (a paragraph
+that opens the text takes it in its first line's ascent). The paragraph is
+the page's `<p>` block, read from the verse that opens it, which Go pushes
+with the band specs (`androidParagraphOpeners`, `paragraphStartOf`): once
+imported, a poem line's `<br>` and a paragraph's end are the same `'\n'`, and
+walking back from the anchor verse to the last one opened the band between
+two lines of a stanza. The sticker view lives INSIDE
 the scroll content (a `FrameLayout` sibling of the TextView), positioned into
 the reserved gap from the Layout's line geometry — so it scrolls with its
 verse natively, no per-scroll tracking. Recorded simplifications vs iOS: no

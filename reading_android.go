@@ -84,8 +84,9 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	btaSetNoteM = (*env)->GetStaticMethodID(env, btaClass, "setNote",
 	                                        "([B[BZZZIIIIIIZI[BI)V");
 	// The per-paragraph band specs (the Apple panes' bibleTextSetNoteBands):
-	// parallel key/verse arrays plus the pill labels '\n'-joined as UTF-8.
-	btaSetNoteBandsM = (*env)->GetStaticMethodID(env, btaClass, "setNoteBands", "([I[I[B)V");
+	// parallel key/verse arrays, the chapter's paragraph-opening verses, then
+	// the pill labels '\n'-joined as UTF-8.
+	btaSetNoteBandsM = (*env)->GetStaticMethodID(env, btaClass, "setNoteBands", "([I[I[I[B)V");
 	// The device's zone database name, for time.Local (timezone_mobile.go).
 	btaTimeZoneIDM = (*env)->GetStaticMethodID(env, btaClass, "timeZoneID", "()Ljava/lang/String;");
 	// The activity window's width in dp, for the reading page (reading_page_width.go).
@@ -315,22 +316,28 @@ static void btaSetNote(uintptr_t jni_env, const char *text, const char *who,
 }
 
 // The band-spec push. n may be zero — the empty push CLEARS stale pills, so
-// it always crosses.
-static void btaSetNoteBands(uintptr_t jni_env, const int *keys, const int *verses,
-                            int n, const char *labels) {
+// it always crosses. nOpeners is the chapter's paragraph count, zero for an
+// empty chapter.
+static void btaSetNoteBands(uintptr_t jni_env, const int *keys, const int *verses, int n,
+                            const int *openers, int nOpeners, const char *labels) {
 	JNIEnv *env = (JNIEnv*)jni_env;
 	if (btaClass == NULL) return;
 	jintArray jk = (*env)->NewIntArray(env, n);
 	jintArray jv = (*env)->NewIntArray(env, n);
-	if (jk == NULL || jv == NULL) return;
+	jintArray jo = (*env)->NewIntArray(env, nOpeners);
+	if (jk == NULL || jv == NULL || jo == NULL) return;
 	if (n > 0) {
 		(*env)->SetIntArrayRegion(env, jk, 0, n, (const jint*)keys);
 		(*env)->SetIntArrayRegion(env, jv, 0, n, (const jint*)verses);
 	}
+	if (nOpeners > 0) {
+		(*env)->SetIntArrayRegion(env, jo, 0, nOpeners, (const jint*)openers);
+	}
 	jbyteArray jl = btaBytes(env, labels);
-	(*env)->CallStaticVoidMethod(env, btaClass, btaSetNoteBandsM, jk, jv, jl);
+	(*env)->CallStaticVoidMethod(env, btaClass, btaSetNoteBandsM, jk, jv, jo, jl);
 	(*env)->DeleteLocalRef(env, jk);
 	(*env)->DeleteLocalRef(env, jv);
+	(*env)->DeleteLocalRef(env, jo);
 	if (jl != NULL) (*env)->DeleteLocalRef(env, jl);
 }
 */
@@ -736,16 +743,26 @@ func pushNoteToOverlay(state *AppState) {
 	}
 	cBandLabels := C.CString(strings.Join(bandLabels, "\n"))
 	defer C.free(unsafe.Pointer(cBandLabels))
+	// THE PARAGRAPHS the bands hang above, as the page writes them: the
+	// bridge cannot tell a poem line's '\n' from a paragraph's.
+	openers := androidParagraphOpeners(state, verses)
+	paraOpeners := make([]C.int, 0, len(openers))
+	for _, v := range openers {
+		paraOpeners = append(paraOpeners, C.int(v))
+	}
 	if os.Getenv("BT_NOTE_DEBUG") != "" {
 		fmt.Fprintf(os.Stderr, "[note] push text=%dch who=%q pill=%v next=%v anchor=%d fullscreen=%v\n",
 			len(text), who, pill, next, anchor, state.IsFullScreen)
 	}
 	runBta(func(env uintptr) {
-		var kp, vp *C.int
+		var kp, vp, op *C.int
 		if len(bandKeys) > 0 {
 			kp, vp = &bandKeys[0], &bandVerses[0]
 		}
-		C.btaSetNoteBands(C.uintptr_t(env), kp, vp, C.int(len(bandKeys)), cBandLabels)
+		if len(paraOpeners) > 0 {
+			op = &paraOpeners[0]
+		}
+		C.btaSetNoteBands(C.uintptr_t(env), kp, vp, C.int(len(bandKeys)), op, C.int(len(paraOpeners)), cBandLabels)
 		C.btaSetNote(C.uintptr_t(env), ct, cw, p, n, ownFlag, C.int(anchor),
 			C.int(argbInt(pal.SurfaceAlt)), C.int(argbInt(pal.Text)),
 			C.int(argbInt(pal.TextMuted)), C.int(argbInt(pal.Accent)),

@@ -173,6 +173,13 @@ public final class BtBridge {
     private static int[] noteSpecKeys = new int[0];
     private static int[] noteSpecVerses = new int[0];
     private static String[] noteSpecLabels = new String[0];
+    // The verse that opens each of the page's paragraphs (its <p> blocks of
+    // verses), pushed with the specs from the same chapter the page was built
+    // from (androidParagraphOpeners). The paragraph a band hangs above is
+    // read from these (paragraphStartOf), because the text alone cannot say
+    // where one begins: a poem line's <br> and a paragraph's end are both a
+    // '\n' once imported.
+    private static int[] noteParaOpeners = new int[0];
     private static final java.util.ArrayList<TextView> notePillChips =
             new java.util.ArrayList<TextView>();
 
@@ -2180,20 +2187,25 @@ public final class BtBridge {
     // bibleTextSetNoteBands): parallel key/verse arrays plus the pill labels
     // '\n'-joined — safe because sender names are sanitized newline-free
     // before they reach any label. Empty arrays turn the machinery off.
+    // openers is the chapter's paragraph-opening verses (noteParaOpeners),
+    // which every band and the band arrival read, specs or none.
     // UI-thread hop and changed-compare mirror setNote.
-    public static void setNoteBands(final int[] keys, final int[] verses, final byte[] labelsJoined) {
+    public static void setNoteBands(final int[] keys, final int[] verses, final int[] openers, final byte[] labelsJoined) {
         UI.post(new Runnable() {
             @Override public void run() {
                 int[] k = keys == null ? new int[0] : keys;
                 int[] v = verses == null ? new int[0] : verses;
+                int[] o = openers == null ? new int[0] : openers;
                 String joined = (labelsJoined == null || labelsJoined.length == 0)
                         ? "" : new String(labelsJoined, java.nio.charset.StandardCharsets.UTF_8);
                 String[] l = joined.isEmpty() ? new String[0] : joined.split("\n", -1);
                 boolean changed = !java.util.Arrays.equals(k, noteSpecKeys)
                         || !java.util.Arrays.equals(v, noteSpecVerses)
+                        || !java.util.Arrays.equals(o, noteParaOpeners)
                         || !java.util.Arrays.equals(l, noteSpecLabels);
                 noteSpecKeys = k;
                 noteSpecVerses = v;
+                noteParaOpeners = o;
                 noteSpecLabels = l;
                 if (NOTE_DEBUG) android.util.Log.i("BtNote", "setNoteBands: n=" + k.length + " changed=" + changed);
                 if (changed) refreshNoteSticker();
@@ -2224,11 +2236,11 @@ public final class BtBridge {
     // evenly around the glyphs, so a box-centred pill carried the slack under
     // it and visibly hugged the wrong side, worse at larger text sizes. The
     // separator here is the blank line Html.fromHtml puts between paragraphs;
-    // a band hanging off an INK line (a poem line's '\n', which paraStartAt
-    // also stops at) has no separator above it and stands down: the blank
-    // line is the one whose text is only the newline, i.e. the line STARTS at
-    // the span's own character. Returns -1 to stand down; the caller keeps
-    // the band-top arithmetic.
+    // a band hanging off an INK line (a poem line's '\n', where a band hangs
+    // only when no paragraph opener is pushed) has no separator above it and
+    // stands down: the blank line is the one whose text is only the newline,
+    // i.e. the line STARTS at the span's own character. Returns -1 to stand
+    // down; the caller keeps the band-top arithmetic.
     //
     // THE COMPACT PAGE HAS NO SEPARATOR LINE. Its paragraphs meet with no
     // blank line between them, so the air a heading leaves under itself, its
@@ -2420,7 +2432,7 @@ public final class BtBridge {
                 if (vv != null && vv.getParent() != null && off >= 0) {
                     // The band belongs to the paragraph, so the sticker hangs from
                     // the paragraph's first line — not the anchor verse's line.
-                    int paraOff = paraStartAt(cs3, off);
+                    int paraOff = paragraphStartOf(cs3, off);
                     int line = lay.getLineForOffset(paraOff);
                     // The reserved gap is [lineTop - band, lineTop): it lives at the
                     // bottom of the PREVIOUS line's box now (applyNoteBand), so the
@@ -2484,7 +2496,7 @@ public final class BtBridge {
                         if (sr == null) continue; // never reserved; stays hidden
                         soff = sr[0];
                     }
-                    int ps = paraStartAt(cs3, soff);
+                    int ps = paragraphStartOf(cs3, soff);
                     NoteBandSpan span = null;
                     for (NoteBandSpan b : noteBandSpans) {
                         if (b.paraStart == ps) { span = b; break; }
@@ -2502,7 +2514,7 @@ public final class BtBridge {
                     // the card: the pill form stands down when specs exist).
                     int ink = btPillStackInkTop(lay, span, ps, chip.getMeasuredHeight(), capH);
                     if (vv != null && vv.getParent() != null && off >= 0
-                            && paraStartAt(cs3, off) == ps) ink = -1;
+                            && paragraphStartOf(cs3, off) == ps) ink = -1;
                     int ctop = ink >= 0 ? textTop + ink + slot * pillBand
                             : textTop + bandTop + slot * pillBand + gapAbove;
                     FrameLayout.LayoutParams cp = (FrameLayout.LayoutParams) chip.getLayoutParams();
@@ -2957,7 +2969,7 @@ public final class BtBridge {
         // paraStart -> {sticker share, pill share}
         java.util.TreeMap<Integer, int[]> shares = new java.util.TreeMap<Integer, int[]>();
         if (off >= 0 && off + 1 <= sp.length() && band > 0) {
-            int ps = paraStartAt(sp, off);
+            int ps = paragraphStartOf(sp, off);
             shares.put(ps, new int[]{band, 0});
         }
         int pillBand = dp(NOTE_GAP_ABOVE) + dp(NOTE_PILL_H) + dp(NOTE_GAP_BELOW);
@@ -2971,7 +2983,7 @@ public final class BtBridge {
                 soff = r[0];
             }
             if (soff < 0 || soff + 1 > sp.length()) continue;
-            int ps = paraStartAt(sp, soff);
+            int ps = paragraphStartOf(sp, soff);
             int[] cur = shares.get(ps);
             if (cur == null) { cur = new int[]{0, 0}; shares.put(ps, cur); }
             cur[1] += pillBand;
@@ -2998,9 +3010,32 @@ public final class BtBridge {
     }
 
     // THE PARAGRAPH RULE, in one place. The band opens above the whole
-    // paragraph carrying the verse, never between two of its lines —
-    // Html.fromHtml separates paragraphs with newlines, so the paragraph starts
-    // after the last '\n' at or before the offset.
+    // paragraph carrying the verse, never between two of its lines. The
+    // paragraph is the page's <p> block, and its opening verse is pushed
+    // (noteParaOpeners): the verse that opens the block holding off's verse
+    // starts on the block's first line, after at most the reporter indent and
+    // an omitted verse's mark, so the block starts after the last '\n' before
+    // it. Walking back from off itself stopped at the first '\n', and a poem
+    // writes each line as a <br>, so in poetry it found the line: a note on
+    // any verse below its stanza's first line opened its band, card or pill
+    // inside the stanza, on about a fifth of the WEB's and the BSB's verses,
+    // where every other surface opens it above the paragraph. Without an
+    // opener at or before off (no push yet, or an offset above the first
+    // verse) the walk starts from off, as it always did.
+    private static int paragraphStartOf(CharSequence sp, int off) {
+        int from = off;
+        for (int i = 0; i < verseNums.length; i++) {
+            if (verseStarts[i] > off) break;
+            for (int o : noteParaOpeners) {
+                if (o == verseNums[i]) { from = verseStarts[i]; break; }
+            }
+        }
+        return paraStartAt(sp, from);
+    }
+
+    // paraStartAt is the start of the run of text after the last '\n' at or
+    // before off: a line of the imported text, which is a paragraph only where
+    // no <br> stands inside it.
     private static int paraStartAt(CharSequence sp, int off) {
         int ps = off;
         while (ps > 0 && sp.charAt(ps - 1) != '\n') ps--;
@@ -3338,8 +3373,8 @@ public final class BtBridge {
                 // and setStyle runs first, so lastMeasureDp is this chapter's
                 // answer: a centred column and a gapless page are the same page.
                 //
-                // Downstream this only tightens the separator: paraStartAt scans
-                // back to the last '\n' either way, and the verse index is built
+                // Downstream this only tightens the separator: paragraphStartOf
+                // scans back to the last '\n' either way, and the verse index is built
                 // from <sup> spans. The one thing it costs is the note pill's
                 // stack-centring refinement, which centres IN the blank line and
                 // stands down without one (btPillStackInkTop) — the pill still
@@ -3483,9 +3518,7 @@ public final class BtBridge {
                         // here is indistinguishable from "already there" and
                         // leaves the reader wherever they were.
                         if (noteArrival == ARRIVE_BAND && noteBandSpan != null) {
-                            int paraOff = r[0];
-                            CharSequence cs = text.getText();
-                            while (paraOff > 0 && cs.charAt(paraOff - 1) != '\n') paraOff--;
+                            int paraOff = paragraphStartOf(text.getText(), r[0]);
                             int paraLine = layout.getLineForOffset(paraOff);
                             top = layout.getLineTop(paraLine) - noteBandSpan.band;
                             // The drawn stack takes the centering lift and can

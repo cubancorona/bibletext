@@ -62,6 +62,27 @@ func androidDirectionMark(text string) string {
 	return ""
 }
 
+// androidParagraphOpeners is the verse that opens each paragraph of verses
+// buildChapterHTMLAndroid writes, in page order: the first verse of every
+// block it writes as a <p> (chapterBlocksFor, as the page reads it). BtBridge
+// hangs a note's band, card or pill above the paragraph these name
+// (paragraphStartOf), because once imported a poem line's <br> and a
+// paragraph's end are both a '\n', and the text alone cannot tell which ends
+// a paragraph.
+func androidParagraphOpeners(state *AppState, verses []Verse) []int {
+	if state == nil || len(verses) == 0 {
+		return nil
+	}
+	var out []int
+	for _, blk := range chapterBlocksFor(state.Bible, state.CurrentBook, state.CurrentChapter, verses) {
+		if blk.IsHeading() || len(blk.Verses) == 0 {
+			continue
+		}
+		out = append(out, blk.Verses[0].Verse)
+	}
+	return out
+}
+
 func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 	pal := state.pal()
 	redLetter := redLetterEnabled()
