@@ -4,9 +4,10 @@
 # `fyne package/release -os android` can only ship the dex embedded in the fyne
 # CLI (GoNativeActivity), so the BtBridge class (android/BtBridge.java — the
 # native selectable TextView + selection menu) is compiled here with javac+d8
-# and injected as classes2.dex, which ART auto-loads on API 21+. The APK is
-# then re-signed (apksigner, v1+v2+v3 — strictly better than fyne's v1-only
-# debug signing); the AAB is re-signed with jarsigner (the AAB scheme).
+# and injected as classes2.dex, which ART auto-loads on API 21+.
+# The debug APK is re-signed with apksigner; final APKs must verify their v2/v3
+# signatures and configured signer at the declared API-24 floor. The AAB is
+# re-signed with jarsigner (the AAB scheme).
 #
 #   scripts/build-android.sh            debug APK  -> cmd/mobile/BibleText.apk
 #   scripts/build-android.sh --release  signed AAB -> ~/Library/Android/bibletext-dist/BibleText.aab

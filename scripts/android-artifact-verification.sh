@@ -176,68 +176,55 @@ verify_android_aab_signature() {
   fi
 }
 
+# Keep the underlying verifier output in the caller's build log before a
+# temporary work directory is removed. Package callers keep those logs private;
+# CI signature controls use synthetic certificates.
+android_apk_signature_failure() {
+  echo "ERROR: $1" >&2
+  if [ -s "$2" ]; then
+    echo "APK verifier output:" >&2
+    cat "$2" >&2
+  fi
+  return 1
+}
+
 verify_android_apk_signature() {
   local artifact="$1"
   local expected_digest="$2"
   local apksigner="$3"
   local verify_log="$4"
-  local legacy_log="${verify_log%.log}-legacy.log"
-  local digest_count actual_digest
+  local signer_count digest_count actual_digest
 
+  # Verify the range declared in the manifest. API 24+ uses v2/v3 signatures;
+  # bundletool can omit obsolete v1 metadata when no older platform is supported.
   if ! LC_ALL=C "$apksigner" verify --verbose --print-certs "$artifact" >"$verify_log" 2>&1; then
-    echo "ERROR: APK signature verification failed" >&2
+    android_apk_signature_failure "APK signature verification failed" "$verify_log"
     return 1
   fi
   for required in \
     'Verified using v2 scheme (APK Signature Scheme v2): true' \
     'Verified using v3 scheme (APK Signature Scheme v3): true'; do
     if ! grep -Fq "$required" "$verify_log"; then
-      echo "ERROR: APK is missing a required Android signature scheme" >&2
+      android_apk_signature_failure "APK is missing a required Android signature scheme" "$verify_log"
       return 1
     fi
   done
 
-  digest_count="$(awk '/^Signer #[0-9]+ certificate SHA-256 digest:/{count++} END{print count+0}' \
-    "$verify_log")"
-  if [ "$digest_count" != "1" ]; then
-    echo "ERROR: APK must have exactly one signer certificate" >&2
+  # Build Tools 36 prints Signer #1; 37 prints V3.0 Signer. Accept those
+  # observed layouts only, and require one signer and one certificate digest.
+  signer_count="$(awk '/^Number of signers:/ {rows++} /^Number of signers: 1[[:space:]]*$/ {valid++}
+    END{print (rows == 1 && valid == 1) ? 1 : 0}' "$verify_log")"
+  digest_count="$(awk '/^Signer #[0-9]+ certificate SHA-256 digest:/ || /^V3[.]0 Signer: certificate SHA-256 digest:/ {count++}
+    END{print count+0}' "$verify_log")"
+  if [ "$signer_count" != "1" ] || [ "$digest_count" != "1" ]; then
+    android_apk_signature_failure "APK must have exactly one signer certificate" "$verify_log"
     return 1
   fi
-  actual_digest="$(awk '/^Signer #1 certificate SHA-256 digest:/{sub(/^[^:]*:[[:space:]]*/, ""); print; exit}' \
+  actual_digest="$(awk '/^Signer #1 certificate SHA-256 digest:/ || /^V3[.]0 Signer: certificate SHA-256 digest:/ {
+    sub(/^.*certificate SHA-256 digest:[[:space:]]*/, ""); print; exit}' \
     "$verify_log" | normalize_android_cert_digest)"
   if [ -z "$actual_digest" ] || [ "$actual_digest" != "$expected_digest" ]; then
-    echo "ERROR: APK signer certificate does not match the configured upload key" >&2
-    return 1
-  fi
-
-  # At a manifest floor of API 24 or higher, apksigner skips v1 verification
-  # when a newer signature exists. Check the supported range above, then
-  # separately exercise all three schemes from API 21 for extra signature
-  # coverage. This does not change the manifest or the app's supported floor.
-  if ! LC_ALL=C "$apksigner" verify --min-sdk-version 21 --verbose --print-certs \
-    "$artifact" >"$legacy_log" 2>&1; then
-    echo "ERROR: APK legacy signature coverage verification failed" >&2
-    return 1
-  fi
-  for required in \
-    'Verified using v1 scheme (JAR signing): true' \
-    'Verified using v2 scheme (APK Signature Scheme v2): true' \
-    'Verified using v3 scheme (APK Signature Scheme v3): true'; do
-    if ! grep -Fq "$required" "$legacy_log"; then
-      echo "ERROR: APK is missing a required signature in the legacy coverage check" >&2
-      return 1
-    fi
-  done
-  digest_count="$(awk '/^Signer #[0-9]+ certificate SHA-256 digest:/{count++} END{print count+0}' \
-    "$legacy_log")"
-  if [ "$digest_count" != "1" ]; then
-    echo "ERROR: APK legacy coverage must have exactly one signer certificate" >&2
-    return 1
-  fi
-  actual_digest="$(awk '/^Signer #1 certificate SHA-256 digest:/{sub(/^[^:]*:[[:space:]]*/, ""); print; exit}' \
-    "$legacy_log" | normalize_android_cert_digest)"
-  if [ -z "$actual_digest" ] || [ "$actual_digest" != "$expected_digest" ]; then
-    echo "ERROR: APK legacy coverage signer does not match the configured upload key" >&2
+    android_apk_signature_failure "APK signer certificate does not match the configured upload key" "$verify_log"
     return 1
   fi
 }

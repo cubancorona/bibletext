@@ -113,12 +113,12 @@ for candidate in "${ANDROID_HOME:-}/build-tools"/*/d8; do
   [ -x "$candidate" ] && D8="$candidate"
 done
 
-# The supported-range verifier deliberately skips v1 at API 24. A real minimal
-# APK proves that the extra legacy coverage accepts all three signatures and
-# rejects a missing v1 signature without lowering the manifest's minimum.
+# A real API-24 APK can omit obsolete v1 metadata. The supported-range guard
+# must still enforce v2/v3 and its single expected signer, and reject tampering.
 APK_AAPT2="${D8%/d8}/aapt2"
 APK_SIGNER="${D8%/d8}/apksigner"
 if [ -n "$ANDROID_JAR" ] && [ -n "$D8" ] && [ -x "$APK_AAPT2" ] && [ -x "$APK_SIGNER" ]; then
+  echo "APK signature controls: build-tools $(basename "$(dirname "$APK_SIGNER")"), apksigner $("$APK_SIGNER" version)"
   APK_TEST="$SYNTHETIC_DIR/apk"
   mkdir -p "$APK_TEST"
   cat > "$APK_TEST/AndroidManifest.xml" <<'XML'
@@ -130,47 +130,49 @@ XML
     -I "$ANDROID_JAR" --min-sdk-version 24 --target-sdk-version 36
   "$APK_SIGNER" sign --ks "$SYNTHETIC_DIR/upload.p12" --ks-key-alias synthetic \
     --ks-pass "file:$SYNTHETIC_DIR/password.txt" \
-    --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
-    --out "$APK_TEST/all-schemes.apk" "$APK_TEST/unsigned.apk"
-  verify_android_apk_signature "$APK_TEST/all-schemes.apk" "$SYNTHETIC_DIGEST" \
-    "$APK_SIGNER" "$APK_TEST/valid.log"
-  grep -Fq 'Verified using v1 scheme (JAR signing): false' "$APK_TEST/valid.log" \
-    || { echo "ERROR: API-24 fixture did not exercise skipped v1 verification" >&2; exit 1; }
-  "$APK_AAPT2" dump badging "$APK_TEST/all-schemes.apk" > "$APK_TEST/badging.log"
-  grep -Fq "minSdkVersion:'24'" "$APK_TEST/badging.log" \
-    || { echo "ERROR: extra signature coverage changed the APK minimum SDK" >&2; exit 1; }
-
-  "$APK_SIGNER" sign --ks "$SYNTHETIC_DIR/upload.p12" --ks-key-alias synthetic \
-    --ks-pass "file:$SYNTHETIC_DIR/password.txt" \
     --v1-signing-enabled false --v2-signing-enabled true --v3-signing-enabled true \
-    --out "$APK_TEST/no-v1.apk" "$APK_TEST/unsigned.apk"
-  if verify_android_apk_signature "$APK_TEST/no-v1.apk" "$SYNTHETIC_DIGEST" \
-    "$APK_SIGNER" "$APK_TEST/no-v1.log" >/dev/null 2>&1; then
-    echo "ERROR: APK verifier accepted a missing legacy v1 signature" >&2
+    --out "$APK_TEST/modern.apk" "$APK_TEST/unsigned.apk"
+  verify_android_apk_signature "$APK_TEST/modern.apk" "$SYNTHETIC_DIGEST" \
+    "$APK_SIGNER" "$APK_TEST/valid.log"
+  "$APK_AAPT2" dump badging "$APK_TEST/modern.apk" > "$APK_TEST/badging.log"
+  grep -Fq "minSdkVersion:'24'" "$APK_TEST/badging.log" \
+    || { echo "ERROR: signature verification changed the APK minimum SDK" >&2; exit 1; }
+  if unzip -Z1 "$APK_TEST/modern.apk" | grep -Fq 'META-INF/MANIFEST.MF'; then
+    echo "ERROR: API-24 fixture unexpectedly contains legacy v1 metadata" >&2
     exit 1
   fi
-  grep -Fq 'Verified using v2 scheme (APK Signature Scheme v2): true' "$APK_TEST/no-v1.log" \
-    || { echo "ERROR: missing-v1 control failed before supported-range verification" >&2; exit 1; }
-  grep -Fq 'Verified using v3 scheme (APK Signature Scheme v3): true' "$APK_TEST/no-v1.log" \
-    && [ -s "$APK_TEST/no-v1-legacy.log" ] \
-    || { echo "ERROR: missing-v1 control did not reach legacy verification" >&2; exit 1; }
-  if verify_android_apk_signature "$APK_TEST/all-schemes.apk" \
+
+  for missing in v2 v3; do
+    v2=true; v3=true
+    [ "$missing" != v2 ] || v2=false
+    [ "$missing" != v3 ] || v3=false
+    "$APK_SIGNER" sign --ks "$SYNTHETIC_DIR/upload.p12" --ks-key-alias synthetic \
+      --ks-pass "file:$SYNTHETIC_DIR/password.txt" \
+      --v1-signing-enabled true --v2-signing-enabled "$v2" --v3-signing-enabled "$v3" \
+      --out "$APK_TEST/no-$missing.apk" "$APK_TEST/unsigned.apk"
+    if verify_android_apk_signature "$APK_TEST/no-$missing.apk" "$SYNTHETIC_DIGEST" \
+      "$APK_SIGNER" "$APK_TEST/no-$missing.log" >"$APK_TEST/no-$missing-error.log" 2>&1; then
+      echo "ERROR: APK verifier accepted a missing $missing signature" >&2
+      exit 1
+    fi
+    grep -Fq "Verified using $missing scheme (APK Signature Scheme $missing): false" "$APK_TEST/no-$missing.log" \
+      || { echo "ERROR: missing-$missing control did not exercise the intended scheme" >&2; exit 1; }
+    grep -Fq 'APK verifier output:' "$APK_TEST/no-$missing-error.log" \
+      || { echo "ERROR: failed APK verification discarded its diagnostic output" >&2; exit 1; }
+  done
+  if verify_android_apk_signature "$APK_TEST/modern.apk" \
     0000000000000000000000000000000000000000000000000000000000000000 \
     "$APK_SIGNER" "$APK_TEST/wrong-signer.log" >/dev/null 2>&1; then
     echo "ERROR: APK verifier accepted an unexpected signer certificate" >&2
     exit 1
   fi
-  cp "$APK_TEST/all-schemes.apk" "$APK_TEST/tampered.apk"
+  cp "$APK_TEST/modern.apk" "$APK_TEST/tampered.apk"
   (cd "$SYNTHETIC_DIR/tamper" && zip -q "$APK_TEST/tampered.apk" appended.txt)
   if verify_android_apk_signature "$APK_TEST/tampered.apk" "$SYNTHETIC_DIGEST" \
     "$APK_SIGNER" "$APK_TEST/tampered.log" >/dev/null 2>&1; then
     echo "ERROR: APK verifier accepted a payload changed after signing" >&2
     exit 1
   fi
-  for rejected in wrong-signer tampered; do
-    [ ! -e "$APK_TEST/$rejected-legacy.log" ] \
-      || { echo "ERROR: $rejected control was not rejected by supported-range checks" >&2; exit 1; }
-  done
 else
   echo "NOTE: no Android SDK signing tools here — APK signature controls did NOT run." >&2
 fi
