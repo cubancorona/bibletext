@@ -325,15 +325,16 @@ and arm64 tarballs, both AppImages with `.zsync`, both Windows zips — and
 publishes both snaps to the Snap Store's **edge** channel, while the Apple
 uploads of stage 6 go on.
 
-### 6 — Upload to Apple, then Play
+### 6 — Upload to Play, then Apple
 
-`xcrun altool --upload-app -t ios` and `-t macos`. **Keep both delivery
-UUIDs**: each is that build's App Store Connect id and `submit-version.py`
-checks the attached build against it.
-
-Play: `scripts/play-publish.py --dry-run upload <aab> alpha` first — it
-uploads into an edit it then discards — then the identical command without
-`--dry-run`, with `--status completed`. The release notes are read from
+Play's alpha upload goes first. Google reviews every track change, and the
+promotion in stage 7 is refused until that review has cleared, so the
+review runs while Apple is processing its builds to `VALID`, and the
+Publishing overview is usually showing the alpha release published by the
+time the Apple submissions go. `scripts/play-publish.py --dry-run upload
+<aab> alpha` first — it uploads into an edit it then discards — then the
+identical command without `--dry-run`, with `--status completed`. The
+release notes are read from
 `play/metadata/en-GB/whats-new-<v>.txt`, the tracked file of stage 1, unless
 `--notes <file>` names another, and the upload refuses without it; the file
 keeps its line breaks, so the opening line and each bullet reach Play as
@@ -353,6 +354,10 @@ reviews every track change, closed testing on it was the prerequisite for
 production access, and its release is the build the testers get — while
 TestFlight is deliberately unused for releases, so an Apple build goes
 straight to the version record.
+
+Then Apple: `xcrun altool --upload-app -t ios` and `-t macos`. **Keep both
+delivery UUIDs**: each is that build's App Store Connect id and
+`submit-version.py` checks the attached build against it.
 
 Verify the current [Play publishing mode](PLAY_LISTING.md#publishing-mode)
 in Publishing overview and record it before submitting. The expected setting
@@ -427,17 +432,15 @@ published, the promotion's commit is refused with
 `CHANGES_ALREADY_IN_REVIEW`; the script's refusal names this release's own
 alpha upload as the likeliest cause. The dry run cannot tell, because it has
 Play validate the edit and then deletes it, and only the commit carries the
-flag that asks Play to refuse rather than cancel the review. So the OK that
-names Play is asked for only after the overview has been read and shows the
-alpha release published — a wait of about fifteen minutes on 3 October 2026
-and of more than twenty-four minutes on 13 October — then the dry run, and
-the same command without `--dry-run` once its output has been read. A
-refusal does not use up the OK: a person reads the overview again and
-re-runs the promotion once it shows the release published; a timer never
-does. Stage 6 lists Apple's uploads before Play's, and the better order is
-Play's alpha upload first: Google's review then runs while Apple is
-processing the builds to `VALID`, so the overview is usually showing the
-alpha release published by the time the Apple submissions go.
+flag that asks Play to refuse rather than cancel the review. So once the
+overview has been read and shows the alpha release published — a wait of
+about fifteen minutes on 3 October 2026 and of more than twenty-four
+minutes on 13 October — the dry run is run, the OK that names Play is given
+on its output, and then the same command without `--dry-run`. A refusal
+does not use up the OK: a person reads the overview again and re-runs the
+promotion once it shows the release published; a timer never does. Stage 6
+uploads Play's alpha first so that the overview is usually showing it
+published by the time the Apple submissions go.
 
 ```
 scripts/play-publish.py promote alpha production --confirm-version <v> --dry-run
