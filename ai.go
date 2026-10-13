@@ -173,10 +173,10 @@ func aiPassageFromContext(ctx context.Context) (aiPassage, bool) {
 // span for a single partial word, the probe matching for the zero span. The
 // probe alone over-attributes a selection with no position — it matches the
 // first 24 runes of every verse, so a repeated refrain is every verse that
-// carries it and a verse whose words open another verse is both — and the
-// cross-references panel, which still takes it first (selectionVerses), can
-// name more verses than the card for such a drag. A state without a Bible, or
-// a selection nothing resolves, cites the chapter alone.
+// carries it and a verse whose words open another verse is both — which is
+// why it answers only after the normalize, here and in the cross-references
+// panel (selectionVerses). A state without a Bible, or a selection nothing
+// resolves, cites the chapter alone.
 func aiPassageFor(state *AppState, text string, span selSpan) aiPassage {
 	p := aiPassage{Text: text}
 	if state == nil {

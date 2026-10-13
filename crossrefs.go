@@ -1381,8 +1381,9 @@ func treasuryRowsFor(rows []tskRow, resolve func(crossRef) []crossRef, hidden cr
 // matching below cannot be trusted with scripture's repetitions: Psalm 136's
 // refrain opens the same way in all 26 verses, so a probe match cites whichever
 // verse compares first, and the 8-rune floor resolves short selections to
-// nothing at all. The matching path survives only as the fallback for
-// selections that arrive without a position (legacy Entry pane, zero span).
+// nothing at all. Without a position (the zero span) the selection is placed
+// as the share card places it, and the matching survives only where that
+// declines.
 func selectionVerses(state *AppState, text string, span selSpan) []Verse {
 	book, chapter := readerChapter(state)
 	return selectionVersesIn(state, book, chapter, text, span)
@@ -1415,6 +1416,25 @@ func selectionVersesIn(state *AppState, book string, chapter int, text string, s
 		var out []Verse
 		for _, v := range state.Bible.GetChapter(book, chapter) {
 			if v.Verse >= lo && v.Verse <= hi {
+				out = append(out, v)
+			}
+		}
+		return out
+	}
+	// No position: the selection is placed as the share card and the study
+	// prompts place it, at its first copy in the chapter that splits no word
+	// (normalizeShareSelectionIn), and the matching below answers only where
+	// that declines. Taken first, the matching named every verse holding a
+	// repeated wording: Psalm 136's refrain pulled the cross-references of
+	// all 26 verses, and John 3:3 named 3:3–11, while the card cited one
+	// verse for the same drag. On the plain-text page the Mac, iPhone and
+	// iPad show when a chapter fails to import, 1,661 of the WEB's 31,098
+	// whole verses (5.34%) and 1,350 of the BSB's (4.34%) were named with
+	// other verses.
+	if _, l, h, _, ok := normalizeShareSelectionIn(state, book, chapter, text, span); ok && l >= 1 && h >= l {
+		var out []Verse
+		for _, v := range state.Bible.GetChapter(book, chapter) {
+			if v.Verse >= l && v.Verse <= h {
 				out = append(out, v)
 			}
 		}

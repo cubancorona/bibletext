@@ -2172,6 +2172,7 @@ func citationForSelectionIn(state *AppState, book string, ch int, text string, s
 		return fmt.Sprintf("%s %d", book, ch)
 	}
 	// A valid span resolves the verses positionally; without one, selectionVerses
+	// places the selection as the normalize does and, where that declines,
 	// matches in BOTH directions (the selection contains a verse, or a verse
 	// contains the selection) so a partial selection — e.g. one that omits the
 	// verse's leading quotation mark — still pins to the verse it falls within,

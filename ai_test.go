@@ -555,7 +555,9 @@ func openingChapterState() *AppState {
 // verse holds, and the selections the probe over-attributes when they arrive
 // with no position — the refrain, which every verse carries, and a verse
 // whose words open another verse. The want column is the share card's own
-// citation, held here so that the two cannot drift together.
+// citation, held here so that the two cannot drift together. The
+// cross-references panel's header and the verses it pulls references for
+// are the same answer, with a position and without one.
 func TestAIPassageRefAgreesWithShareCitation(t *testing.T) {
 	refrainState, opening := refrainChapterState(), openingChapterState()
 	john3 := opening.Bible.GetChapter("John", 3)[0].Text
@@ -586,24 +588,24 @@ func TestAIPassageRefAgreesWithShareCitation(t *testing.T) {
 		if _, cite, _, _ := prepareShareQuote(c.st, c.text, c.span); cite != got {
 			t.Errorf("%q %+v: prompt cites %q, the share card %q", c.text, c.span, got, cite)
 		}
-		// With a position the cross-references panel's citation is the
-		// same resolver; without one it still matches the probe alone,
-		// which is the over-attribution the rows above refuse.
-		if c.span.valid() {
-			if cite := citationForSelection(c.st, c.text, c.span); cite != got {
-				t.Errorf("%q %+v: prompt cites %q, the cross-references panel %q", c.text, c.span, got, cite)
-			}
+		if cite := citationForSelection(c.st, c.text, c.span); cite != got {
+			t.Errorf("%q %+v: prompt cites %q, the cross-references panel %q", c.text, c.span, got, cite)
+		}
+		p := aiPassageFor(c.st, c.text, c.span)
+		vs := selectionVerses(c.st, c.text, c.span)
+		pulled := len(vs) > 0
+		if pulled != (p.Lo > 0) || (pulled && (vs[0].Verse != p.Lo || vs[len(vs)-1].Verse != p.Hi)) {
+			t.Errorf("%q %+v: the cross-references panel pulls references for verses %v, the prompt cites %q", c.text, c.span, verseNumbers(vs), got)
 		}
 	}
-	// Controls: the probe alone names every verse that carries the refrain,
-	// and both verses that open alike, which is what the zero-span rows
-	// above must not report.
-	if got := citationForSelection(refrainState, refrain, selSpan{}); got != "Psalms 136:1–3" {
-		t.Fatalf("control: the probe matching cites the zero-span refrain as %q, want Psalms 136:1–3", got)
+}
+
+func verseNumbers(vs []Verse) []int {
+	out := make([]int, len(vs))
+	for i, v := range vs {
+		out[i] = v.Verse
 	}
-	if got := citationForSelection(opening, john3, selSpan{}); got != "John 3:3–11" {
-		t.Fatalf("control: the probe matching cites the zero-span verse as %q, want John 3:3–11", got)
-	}
+	return out
 }
 
 // Every study prompt ends on the passage line with the verses the selection

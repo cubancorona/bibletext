@@ -61,13 +61,19 @@ func TestSelectionSpanShortSelectionResolves(t *testing.T) {
 	if vs := selectionVerses(st, "gods;", selSpanFromNative(2, 2)); len(vs) != 1 || vs[0].Verse != 2 {
 		t.Fatalf("short selection with span = %v, want verse 2", vs)
 	}
-	// The old floor, pinned: the same selection without a span resolves to
-	// nothing, so the citation degrades to chapter-only.
-	if vs := selectionVerses(st, "gods;", selSpan{}); vs != nil {
-		t.Errorf("short selection without span = %v, want nil (the 8-rune floor)", vs)
+	// Without a span the selection is placed as the share card places it,
+	// at its first copy that splits no word, so the probe's 8-rune floor no
+	// longer turns a short selection into the chapter alone. The floor
+	// still holds where the normalize declines: a piece of a word too short
+	// to match.
+	if vs := selectionVerses(st, "gods;", selSpan{}); len(vs) != 1 || vs[0].Verse != 2 {
+		t.Errorf("short selection without span = %v, want verse 2, where the share card places it", vs)
 	}
-	if got := citationForSelection(st, "gods;", selSpan{}); got != "Psalms 136" {
-		t.Errorf("floor citation = %q, want the chapter-only fallback", got)
+	if got := citationForSelection(st, "gods;", selSpan{}); got != "Psalms 136:2" {
+		t.Errorf("short-selection citation without span = %q, want Psalms 136:2", got)
+	}
+	if vs := selectionVerses(st, "ods;", selSpan{}); vs != nil {
+		t.Errorf("a piece of a word under the floor without span = %v, want nil (the 8-rune floor)", vs)
 	}
 	if got := citationForSelection(st, "gods;", selSpanFromNative(2, 2)); got != "Psalms 136:2" {
 		t.Errorf("short-selection citation with span = %q, want Psalms 136:2", got)
@@ -95,23 +101,25 @@ func TestSelectionSpanCrossingVerseBoundary(t *testing.T) {
 	}
 }
 
-// The zero span takes today's text-matching path — and on this fixture that
-// path MISATTRIBUTES, which is pinned deliberately: it is the honest record of
-// why the span exists. If matching ever learns to attribute repeated wording
-// correctly, this test should fail and the span's fallback story be revisited.
+// The zero span places the selection by its words, and on this fixture that
+// MISATTRIBUTES, which is pinned deliberately: it is the honest record of why
+// the span exists. If the text alone ever learns to attribute repeated
+// wording correctly, this test should fail and the span's fallback story be
+// revisited.
 func TestSelectionSpanZeroFallsBackToMatching(t *testing.T) {
 	st := refrainChapterState()
 
-	// The probe matches the refrain's copy in EVERY verse, so a one-verse
-	// selection comes back as all three.
-	vs := selectionVerses(st, refrain, selSpan{})
-	if len(vs) != 3 {
-		t.Fatalf("matching fallback = %d verses, want all 3 (the misattribution)", len(vs))
-	}
 	// The share pipeline locates the FIRST copy, so a verse-2 selection is
 	// cited as verse 1.
 	if _, cite, _, _ := prepareShareQuote(st, refrain, selSpan{}); cite != "Psalms 136:1" {
 		t.Errorf("fallback share citation = %q, want the (wrong) Psalms 136:1", cite)
+	}
+	// The cross-references panel takes the same first copy. Matching each
+	// verse's opening first, it took the refrain's copy in EVERY verse, so a
+	// one-verse selection came back as all three.
+	vs := selectionVerses(st, refrain, selSpan{})
+	if len(vs) != 1 || vs[0].Verse != 1 {
+		t.Fatalf("zero-span verses = %v, want verse 1 alone, the share card's (wrong) verse", verseNumbers(vs))
 	}
 }
 
