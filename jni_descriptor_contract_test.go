@@ -31,6 +31,7 @@ func jniLookupFor(classVar string) *regexp.Regexp {
 var javaTypeDescriptor = map[string]string{
 	"byte[]":   "[B",
 	"int[]":    "[I",
+	"float[]":  "[F",
 	"String":   "Ljava/lang/String;",
 	"boolean":  "Z",
 	"int":      "I",

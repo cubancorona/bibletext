@@ -279,10 +279,16 @@ the tap); an unplaced-only pill parks at the top of the text with no band.
   or the system bars does nothing here — a NativeActivity window's view
   hierarchy never draws. The reporter column is centred on the window from
   the overlay's frame, not on the cutout-inset overlay itself.
-  Before a width change the bridge captures the live fractional scroll position,
-  then reapplies it after the TextView has reflowed at the new width; an explicit
-  arrival or restore target still takes precedence. This prevents the old
-  portrait offset from clamping the short landscape pane to its blank bottom.
+  Before a width change the bridge captures the reading position, the verse at
+  the top of the view and how far into it the top stands as a fraction of the
+  verse's height, then reapplies it after the TextView has reflowed at the new
+  width; an explicit arrival or restore target still takes precedence. This
+  prevents the old portrait offset from clamping the short landscape pane to its
+  blank bottom. The same position is what the Go side saves and restores
+  (`getScrollAnchor`, `armRestore`, `setHtml`), with the fraction of the scroll
+  range only as the fallback for a verse the text does not hold: the fraction
+  alone leaves out the viewport's height, so it moved the verse at the top on
+  a rotation in 32 to 49% of positions and on a text-size change in 58 to 68%.
 - **First-run arrival gesture arbitration.** An explicit verse arrival is carried
   across the one-time seed-to-full-Bible data replacement. A reader scroll
   cancels that carry through the 200 ms scroll-idle callback. A gesture during

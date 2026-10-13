@@ -21,7 +21,7 @@ package bibletext
 #include <string.h>
 
 static jclass    btaClass = NULL;   // global ref to org.bibletext.BtBridge
-static jmethodID btaInitM, btaSetStyleM, btaSetHtmlM, btaArmRestoreM, btaGetFracM,
+static jmethodID btaInitM, btaSetStyleM, btaSetHtmlM, btaArmRestoreM, btaGetAnchorM,
                  btaSetFrameM, btaShowM, btaHideM, btaSuppressM, btaUnsuppressM,
                  btaShareTextM, btaShareImageM, btaSetAIEnabledM, btaSetAskEnabledM, btaSetNotesEnabledM,
                  btaOpenBrowserM,
@@ -52,9 +52,12 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 
 	btaInitM       = (*env)->GetStaticMethodID(env, btaClass, "init", "(Landroid/app/Activity;)V");
 	btaSetStyleM   = (*env)->GetStaticMethodID(env, btaClass, "setStyle", "(IIFFIIIIFF)V");
-	btaSetHtmlM    = (*env)->GetStaticMethodID(env, btaClass, "setHtml", "(Ljava/lang/String;FI)V");
-	btaArmRestoreM = (*env)->GetStaticMethodID(env, btaClass, "armRestore", "(F)V");
-	btaGetFracM    = (*env)->GetStaticMethodID(env, btaClass, "getScrollFrac", "()F");
+	// The chapter, the restore fraction, the arrival verse, then the restore
+	// verse and how far into it (a fraction of its height).
+	btaSetHtmlM    = (*env)->GetStaticMethodID(env, btaClass, "setHtml", "(Ljava/lang/String;FIIF)V");
+	btaArmRestoreM = (*env)->GetStaticMethodID(env, btaClass, "armRestore", "(IFF)V");
+	// {verse, within, frac}: the reading position as of the last scroll.
+	btaGetAnchorM  = (*env)->GetStaticMethodID(env, btaClass, "getScrollAnchor", "()[F");
 	btaSetFrameM   = (*env)->GetStaticMethodID(env, btaClass, "setFrame", "(IIII)V");
 	btaShowM       = (*env)->GetStaticMethodID(env, btaClass, "show", "()V");
 	btaHideM       = (*env)->GetStaticMethodID(env, btaClass, "hide", "()V");
@@ -102,7 +105,7 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	// the Fyne reading pane (mirrors Fyne's own find_static_method helper).
 	if ((*env)->ExceptionCheck(env) ||
 	    btaInitM == NULL || btaSetStyleM == NULL || btaSetHtmlM == NULL ||
-	    btaArmRestoreM == NULL || btaGetFracM == NULL || btaSetFrameM == NULL ||
+	    btaArmRestoreM == NULL || btaGetAnchorM == NULL || btaSetFrameM == NULL ||
 	    btaShowM == NULL || btaHideM == NULL || btaSuppressM == NULL ||
 	    btaUnsuppressM == NULL || btaShareTextM == NULL || btaShareImageM == NULL ||
 	    btaSetAIEnabledM == NULL || btaSetAskEnabledM == NULL || btaSetNotesEnabledM == NULL || btaOpenBrowserM == NULL ||
@@ -138,24 +141,36 @@ static void btaSetStyle(uintptr_t jni_env, int textColor, int paperColor, float 
 	                             opticalScale);
 }
 
-static void btaSetHtml(uintptr_t jni_env, const char *html, float frac, int arrivalVerse) {
+static void btaSetHtml(uintptr_t jni_env, const char *html, float frac, int arrivalVerse,
+                       int restoreVerse, float restoreWithin) {
 	JNIEnv *env = (JNIEnv*)jni_env;
 	if (btaClass == NULL) return;
 	jstring s = (*env)->NewStringUTF(env, html);
-	(*env)->CallStaticVoidMethod(env, btaClass, btaSetHtmlM, s, frac, arrivalVerse);
+	(*env)->CallStaticVoidMethod(env, btaClass, btaSetHtmlM, s, frac, arrivalVerse,
+	                             restoreVerse, restoreWithin);
 	(*env)->DeleteLocalRef(env, s);
 }
 
-static void btaArmRestore(uintptr_t jni_env, float frac) {
+static void btaArmRestore(uintptr_t jni_env, int verse, float within, float frac) {
 	JNIEnv *env = (JNIEnv*)jni_env;
 	if (btaClass == NULL) return;
-	(*env)->CallStaticVoidMethod(env, btaClass, btaArmRestoreM, frac);
+	(*env)->CallStaticVoidMethod(env, btaClass, btaArmRestoreM, verse, within, frac);
 }
 
-static float btaGetFrac(uintptr_t jni_env) {
+// btaGetAnchor fills out with {verse, within, frac}; frac is -1 when the
+// bridge is absent or answered nothing.
+static void btaGetAnchor(uintptr_t jni_env, float *out) {
 	JNIEnv *env = (JNIEnv*)jni_env;
-	if (btaClass == NULL) return -1.0f;
-	return (*env)->CallStaticFloatMethod(env, btaClass, btaGetFracM);
+	out[0] = 0.0f;
+	out[1] = 0.0f;
+	out[2] = -1.0f;
+	if (btaClass == NULL) return;
+	jfloatArray a = (jfloatArray)(*env)->CallStaticObjectMethod(env, btaClass, btaGetAnchorM);
+	if (a == NULL) return;
+	if ((*env)->GetArrayLength(env, a) >= 3) {
+		(*env)->GetFloatArrayRegion(env, a, 0, 3, (jfloat*)out);
+	}
+	(*env)->DeleteLocalRef(env, a);
 }
 
 // btaWindowWidthDp is the activity window's width in dp; 0 when the bridge is
@@ -831,6 +846,11 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	} else if preserveTop {
 		frac = 0
 	}
+	// The restore's verse goes first; frac stays its fallback (BtBridge.anchorY).
+	restoreVerse, restoreWithin := 0, float32(0)
+	if state.restore != nil && state.restore.Verse > 0 {
+		restoreVerse, restoreWithin = state.restore.Verse, float32(state.restore.Delta)
+	}
 
 	html := buildChapterHTMLAndroid(state, verses)
 	pal := state.pal()
@@ -918,7 +938,8 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 			C.int(padL), C.int(padT), C.int(padL), C.int(padT),
 			C.float(measureDp), C.float(readingOpticalScale()))
 		ch := C.CString(html)
-		C.btaSetHtml(C.uintptr_t(env), ch, C.float(frac), C.int(arrivalVerse))
+		C.btaSetHtml(C.uintptr_t(env), ch, C.float(frac), C.int(arrivalVerse),
+			C.int(restoreVerse), C.float(restoreWithin))
 		C.free(unsafe.Pointer(ch))
 	})
 	if carryDataSwapArrival && (!state.seedOnly || !state.fullPending) {
@@ -930,25 +951,29 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	pushFollowButtonColors(pal)
 }
 
-// --- Reading-position persistence (frac-based; see reading_scroll_android.go) --
+// --- Reading-position persistence (see reading_scroll_android.go) -----------
 
-// captureReadingAnchor reads the live scroll as a whole-chapter fraction.
-// ok=true whenever the native view is alive (even at the top — ok means
-// "readable", not "non-zero"); ok=false only when the overlay is absent, so a
-// late lifecycle flush preserves the previously saved anchor instead of
-// wiping it.
+// captureReadingAnchor reads the reading position the bridge holds as of the
+// last scroll: the verse at the top of the view, how far into it the top
+// stands as a fraction of the verse's height (delta, 0 to 1, where iOS keeps
+// pixels), and the whole-chapter fraction as the fallback. verse is 0 at the
+// top of the chapter. ok=true whenever the native view is alive (even at the
+// top — ok means "readable", not "non-zero"); ok=false only when the overlay
+// is absent, so a late lifecycle flush preserves the previously saved anchor
+// instead of wiping it.
 func captureReadingAnchor() (verse int, delta, frac float64, ok bool) {
 	if !btaBridgePresent() {
 		return 0, 0, 0, false
 	}
-	f := float32(-1)
+	var a [3]C.float
+	a[2] = -1
 	runBta(func(env uintptr) {
-		f = float32(C.btaGetFrac(C.uintptr_t(env)))
+		C.btaGetAnchor(C.uintptr_t(env), &a[0])
 	})
-	if f < 0 {
+	if a[2] < 0 {
 		return 0, 0, 0, false
 	}
-	return 0, 0, float64(f), true
+	return int(a[0]), float64(a[1]), float64(a[2]), true
 }
 
 // androidWindowWidthDp is the activity window's width in dp, from its
@@ -981,11 +1006,10 @@ func deviceTimeZoneName() string {
 	return C.GoString(&buf[0])
 }
 
-// armReadingRestore arms the one-shot scroll target. A verse-anchored save
-// from an iOS session still carries Frac (always populated on capture), so
-// ignoring verse/delta here loses nothing but precision. verse<=0 && frac<=0
-// disarms. Not consumed on apply; dropped on the reader's first scroll
-// (BtBridge's scroll listener clears it).
+// armReadingRestore arms the one-shot scroll target: the verse and how far
+// into it (captureReadingAnchor's delta) first, the fraction where the verse
+// is not in the text. verse<=0 && frac<=0 disarms. Not consumed on apply;
+// dropped on the reader's first scroll (BtBridge's scroll listener clears it).
 func armReadingRestore(verse int, delta, frac float64) {
 	if !btaBridgePresent() {
 		return
@@ -994,8 +1018,11 @@ func armReadingRestore(verse int, delta, frac float64) {
 	if verse <= 0 && frac <= 0 {
 		f = -1 // disarm
 	}
+	if verse < 0 {
+		verse = 0
+	}
 	runBta(func(env uintptr) {
-		C.btaArmRestore(C.uintptr_t(env), C.float(f))
+		C.btaArmRestore(C.uintptr_t(env), C.int(verse), C.float(delta), C.float(f))
 	})
 }
 

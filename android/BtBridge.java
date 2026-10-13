@@ -927,19 +927,44 @@ public final class BtBridge {
     // must not repaint the verses over it. Touched only on the UI thread.
     private static boolean suppressed = false;
 
-    // One-shot scroll restore (fraction of the scrollable height), applied after
-    // the next layout pass that follows setHtml. Dropped on the first user
-    // scroll. Guarded by the UI thread.
+    // THE READING POSITION IS A VERSE (reading_state.go): the verse at the top
+    // of the view and how far into it the top stands, as a fraction of the
+    // verse's own height (verseBand), with the fraction of the scroll range
+    // kept as the fallback for a verse the text does not hold. The position
+    // used to be the scroll fraction alone, and the scroll range leaves out
+    // the viewport's height, so a fraction names a point in the range, not in
+    // the text: any change of content or viewport height moved the verse at
+    // the top. Turning the phone moved it in 32 to 49% of positions, in 97 to
+    // 98% of the WEB's chapters, and a text-size change in 58 to 68% (John 3
+    // read from verse 3 came back at verse 2). A fraction of the verse's own
+    // height rather than a pixel offset into it, because a verse that turning
+    // the phone made shorter would put a pixel offset in the next verse.
+
+    // One-shot scroll restore, applied after the next layout pass that follows
+    // setHtml: the verse first (pendingRestoreVerse, 0 for none), else the
+    // fraction of the scrollable height. Dropped on the first user scroll.
+    // Guarded by the UI thread.
     private static float pendingFrac = -1f;
+    private static int pendingRestoreVerse = 0;
+    private static float pendingRestoreWithin = 0f;
 
     // A width change reflows every line and changes the scroll range. Capture
-    // the live fraction before the Dialog is resized, then reapply it after the
-    // TextView has laid out at the new width.
+    // the live position before the Dialog is resized, then reapply it after the
+    // TextView has laid out at the new width. pendingReflowFrac >= 0 is what
+    // says a reflow is pending.
     private static float pendingReflowFrac = -1f;
+    private static int pendingReflowVerse = 0;
+    private static float pendingReflowWithin = 0f;
 
-    // Last known scroll fraction, updated on every scroll change; read (racily,
-    // but it is just a float) by the Go side when persisting reading position.
+    // Last known scroll fraction, updated on every scroll change.
     private static volatile float lastFrac = 0f;
+
+    // lastAnchor is {verse, within, frac} as of the last scroll the reader or
+    // a placement made (anchorAt; verse 0 at the top of the chapter or above
+    // verse 1's number), read by the Go side when it persists the reading
+    // position (getScrollAnchor). One array, replaced whole on the UI thread,
+    // so a read from another thread never mixes two scrolls.
+    private static volatile float[] lastAnchor = {0f, 0f, 0f};
 
     // Set while OUR code drives scrollTo, so the scroll listener can tell a
     // restore/follow-scroll from a reader gesture (a reader gesture disarms
@@ -1424,6 +1449,7 @@ public final class BtBridge {
                 contentStart = 0;
                 titleStart = titleEnd = -1;
                 pendingReflowFrac = -1f;
+                pendingReflowVerse = 0;
                 activity = act;
                 installKeyboardWatcher(act);
                 deliverLaunchLink(act);
@@ -1740,15 +1766,18 @@ public final class BtBridge {
                     int range = Math.max(1, scrollRange());
                     int y = scroll.getScrollY();
                     lastFrac = clamp01((float) y / range);
+                    // Resizing the Dialog can clamp the old absolute scrollY
+                    // before the new-width restore runs. That is reflow, not a
+                    // reader gesture; applyPendingReflow owns this traversal,
+                    // and the position stays the one setFrame captured.
+                    if (pendingReflowFrac >= 0) return;
+                    float[] a = anchorAt(y);
+                    lastAnchor = new float[]{a != null ? a[0] : 0f, a != null ? a[1] : 0f, lastFrac};
                     // Attaching and measuring a cold ScrollView can dispatch a
                     // scroll-change at y=0 even though no reader gesture occurred.
                     // An explicit arrival owns the first placement; keep it armed
                     // until applyPendingScroll resolves and consumes it.
                     if (pendingVerse > 0) return;
-                    // Resizing the Dialog can clamp the old absolute scrollY
-                    // before the new-width restore runs. That is reflow, not a
-                    // reader gesture; applyPendingReflow owns this traversal.
-                    if (pendingReflowFrac >= 0) return;
                     if (ownScroll) return;
                     if (lastOwnScrollY >= 0 && Math.abs(y - lastOwnScrollY) <= 2) {
                         return; // our own scrollTo arriving after the timed latch expired
@@ -1758,6 +1787,7 @@ public final class BtBridge {
                     // position once still.
                     lastOwnScrollY = -1;
                     pendingFrac = -1f;
+                    pendingRestoreVerse = 0;
                     pendingVerse = 0;
                     UI.removeCallbacks(scrollIdle);
                     UI.postDelayed(scrollIdle, 200);
@@ -1782,6 +1812,59 @@ public final class BtBridge {
     }
 
     private static float clamp01(float f) { return f < 0 ? 0 : (f > 1 ? 1 : f); }
+
+    // verseBand is where the verse at index i of the verse index stands in the
+    // layout, {top, bottom}: from the top of the line its number is on to the
+    // top of the line the next verse's number is on, or to the bottom of its
+    // own last line where no verse follows or the next begins on its line.
+    private static int[] verseBand(Layout lay, int i) {
+        int top = lay.getLineTop(lay.getLineForOffset(verseStarts[i]));
+        int bottom = i + 1 < verseNums.length ? lay.getLineTop(lay.getLineForOffset(verseStarts[i + 1])) : -1;
+        if (bottom <= top) {
+            int last = Math.max(verseStarts[i], verseEnds[i] - 1);
+            bottom = lay.getLineBottom(lay.getLineForOffset(last));
+        }
+        if (bottom <= top) bottom = top + 1;
+        return new int[]{top, bottom};
+    }
+
+    // anchorAt is the reading position when the view's top stands at scrollY:
+    // {verse, within}, the verse whose number is the last at or before the top
+    // line's first character (verseAtOffset's rule) and how far into its band
+    // the top stands, 0 to 1. null at the top of the chapter, above verse 1's
+    // number, and without a layout or a verse index.
+    private static float[] anchorAt(int scrollY) {
+        if (text == null || scrollY <= 0) return null;
+        Layout lay = text.getLayout();
+        if (lay == null || verseNums.length == 0) return null;
+        int y = scrollY - text.getTop() - text.getTotalPaddingTop();
+        if (y < 0) return null;
+        int off = lay.getLineStart(lay.getLineForVertical(y));
+        int idx = -1;
+        for (int i = 0; i < verseNums.length; i++) {
+            if (verseStarts[i] > off) break;
+            idx = i;
+        }
+        if (idx < 0) return null;
+        int[] b = verseBand(lay, idx);
+        return new float[]{verseNums[idx], clamp01((float) (y - b[0]) / (b[1] - b[0]))};
+    }
+
+    // anchorY is the scrollY that puts the top of the view within of the way
+    // into verse's band, held to the scroll range, or -1 when the verse is not
+    // in the index or there is no layout yet.
+    private static int anchorY(int verse, float within) {
+        if (text == null || scroll == null || verse <= 0) return -1;
+        Layout lay = text.getLayout();
+        if (lay == null) return -1;
+        for (int i = 0; i < verseNums.length; i++) {
+            if (verseNums[i] != verse) continue;
+            int[] b = verseBand(lay, i);
+            int y = text.getTop() + text.getTotalPaddingTop() + b[0] + Math.round(clamp01(within) * (b[1] - b[0]));
+            return Math.max(0, Math.min(y, scrollRange()));
+        }
+        return -1;
+    }
 
     // THE SHARED NOTE SPACING SPEC — noteMetrics in notes_bubble.go, in dp.
     // These are not this file's numbers to choose: notes_spacing_spec_test.go
@@ -3358,13 +3441,15 @@ public final class BtBridge {
      *  during the import and replaced by a real leading margin. */
     private static final char INDENT_MARKER = '\uE010';
 
-    public static void setHtml(final String html, final float frac, final int arrivalVerse) {
+    public static void setHtml(final String html, final float frac, final int arrivalVerse,
+                               final int restoreVerse, final float restoreWithin) {
         UI.post(new Runnable() {
             @Override public void run() {
                 if (text == null) return;
                 // A chapter import carries its own top/restore/arrival placement
                 // and supersedes any unfinished placement for the prior width.
                 pendingReflowFrac = -1f;
+                pendingReflowVerse = 0;
                 // THE PARAGRAPH GAP IS THE IMPORTER'S. LEGACY mode separates two
                 // blocks with a blank line, COMPACT with a single newline — so
                 // the reporter page (a first-line indent and NO gap, the octavo
@@ -3448,6 +3533,8 @@ public final class BtBridge {
                 noteBandSpan = null;
                 refreshNoteSticker();
                 pendingFrac = frac >= 0 ? frac : -1f;
+                pendingRestoreVerse = restoreVerse > 0 ? restoreVerse : 0;
+                pendingRestoreWithin = restoreWithin;
                 if (arrivalVerse > 0) UI.removeCallbacks(scrollIdle);
                 if (SCROLL_DEBUG) android.util.Log.i("BtScroll", "setHtml: frac=" + frac
                         + " arrivalVerse=" + arrivalVerse + " replacing pendingVerse=" + pendingVerse);
@@ -3555,7 +3642,12 @@ public final class BtBridge {
                     return;
                 }
                 pendingPlace = false;
-                if (pendingFrac >= 0) {
+                int vy = pendingRestoreVerse > 0 ? anchorY(pendingRestoreVerse, pendingRestoreWithin) : -1;
+                if (vy >= 0) {
+                    if (SCROLL_DEBUG) android.util.Log.i("BtScroll", "apply: placing at verse "
+                            + pendingRestoreVerse + " +" + pendingRestoreWithin);
+                    ownScrollTo(vy);
+                } else if (pendingFrac >= 0) {
                     if (SCROLL_DEBUG) android.util.Log.i("BtScroll", "apply: placing at frac "
                             + pendingFrac);
                     ownScrollTo(Math.round(pendingFrac * scrollRange()));
@@ -3567,19 +3659,29 @@ public final class BtBridge {
         });
     }
 
-    /** armRestore arms/updates the one-shot scroll target without touching the text. */
-    public static void armRestore(final float frac) {
+    /** armRestore arms/updates the one-shot scroll target without touching the
+     *  text: the verse first, else the fraction; verse <= 0 and frac < 0
+     *  disarm. */
+    public static void armRestore(final int verse, final float within, final float frac) {
         UI.post(new Runnable() {
             @Override public void run() {
                 pendingFrac = frac;
-                if (text == null || frac < 0) return;
-                ownScrollTo(Math.round(frac * scrollRange()));
+                pendingRestoreVerse = verse > 0 ? verse : 0;
+                pendingRestoreWithin = within;
+                if (text == null) return;
+                int vy = verse > 0 ? anchorY(verse, within) : -1;
+                if (vy >= 0) ownScrollTo(vy);
+                else if (frac >= 0) ownScrollTo(Math.round(frac * scrollRange()));
             }
         });
     }
 
-    /** getScrollFrac is read by the Go side when persisting the reading position. */
-    public static float getScrollFrac() { return lastFrac; }
+    /** getScrollAnchor is read by the Go side when persisting the reading
+     *  position: {verse, within, frac} (lastAnchor). */
+    public static float[] getScrollAnchor() {
+        float[] a = lastAnchor;
+        return new float[]{a[0], a[1], a[2]};
+    }
 
     /** windowWidthDp is the activity window's width in dp, from its current
      *  configuration (screenWidthDp follows rotation and multi-window): the
@@ -3606,8 +3708,12 @@ public final class BtBridge {
                 if (frameW > 1 && w > 1 && frameW != w && pendingReflowFrac < 0
                         && pendingVerse <= 0 && !pendingPlace && scroll != null) {
                     int range = scrollRange();
+                    float[] a = anchorAt(scroll.getScrollY());
+                    pendingReflowVerse = a != null ? (int) a[0] : 0;
+                    pendingReflowWithin = a != null ? a[1] : 0f;
                     pendingReflowFrac = range > 0
                             ? clamp01((float) scroll.getScrollY() / range) : lastFrac;
+                    lastAnchor = new float[]{pendingReflowVerse, pendingReflowWithin, pendingReflowFrac};
                 }
                 frameX = x;   // RAW Fyne pixel coords (relative to the activity window).
                 frameY = y;   // The decor's on-screen origin is added in applyFrame.
@@ -3629,8 +3735,10 @@ public final class BtBridge {
             @Override public void run() {
                 if (scroll == null || pendingReflowFrac != frac
                         || pendingVerse > 0 || pendingPlace) return;
+                int vy = pendingReflowVerse > 0 ? anchorY(pendingReflowVerse, pendingReflowWithin) : -1;
                 pendingReflowFrac = -1f;
-                ownScrollTo(Math.round(frac * scrollRange()));
+                pendingReflowVerse = 0;
+                ownScrollTo(vy >= 0 ? vy : Math.round(frac * scrollRange()));
             }
         });
     }

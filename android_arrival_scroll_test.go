@@ -66,7 +66,7 @@ func TestAndroidColdStartArrivalWaitsForFirstLayout(t *testing.T) {
 // top as a restore and erase the link arrival.
 func TestAndroidColdStartArrivalSurvivesSeedDataSwap(t *testing.T) {
 	java := readNativeSource(t, "android/BtBridge.java")
-	if !strings.Contains(java, "setHtml(final String html, final float frac, final int arrivalVerse)") ||
+	if !strings.Contains(java, "setHtml(final String html, final float frac, final int arrivalVerse,") ||
 		!strings.Contains(java, "pendingVerse = arrivalVerse > 0 ? arrivalVerse : 0;") {
 		t.Fatal("Android chapter content and its arrival verse must be one UI operation")
 	}
@@ -76,13 +76,13 @@ func TestAndroidColdStartArrivalSurvivesSeedDataSwap(t *testing.T) {
 
 	goSrc := readNativeSource(t, "reading_android.go")
 	for _, want := range []string{
-		`"setHtml", "(Ljava/lang/String;FI)V"`,
+		`"setHtml", "(Ljava/lang/String;FIIF)V"`,
 		"explicitArrival := state.forceReposition || carryDataSwapArrival",
 		// The capture asks the SHARED predicate now, so the arrival clause cannot
 		// be omitted here without being omitted for every pane at once.
 		"shouldCaptureScrollRestore(state, bc == lastPushedBookChapter",
 		"armAndroidDataSwapArrival(state, arrivalVerse)",
-		"C.btaSetHtml(C.uintptr_t(env), ch, C.float(frac), C.int(arrivalVerse))",
+		"C.btaSetHtml(C.uintptr_t(env), ch, C.float(frac), C.int(arrivalVerse),",
 	} {
 		if !strings.Contains(goSrc, want) {
 			t.Fatalf("Android seed-to-full arrival contract is missing %q", want)
@@ -179,6 +179,13 @@ func TestAndroidGoToOutranksSameChapterTopAndMidCarry(t *testing.T) {
 	}
 }
 
+// A width change (a rotation, split screen) reflows every line; the bridge
+// captures the verse at the top of the view and how far into it the top
+// stands before the frame changes, and places that verse back after the
+// TextView has laid out at the new width, with the scroll fraction only as
+// the fallback for a verse the text does not hold. It reapplied the fraction
+// alone, which names a point in the scroll range, not in the text, so the
+// verse at the top moved.
 func TestAndroidRotationReappliesScrollAfterWidthReflow(t *testing.T) {
 	src := readNativeSource(t, "android/BtBridge.java")
 
@@ -191,17 +198,27 @@ func TestAndroidRotationReappliesScrollAfterWidthReflow(t *testing.T) {
 		t.Fatal("Android frame/reflow methods not found")
 	}
 	setFrame := src[setFrameStart : setFrameStart+setFrameEnd]
-	capture := strings.Index(setFrame, "pendingReflowFrac = range > 0")
+	captureVerse := strings.Index(setFrame, "float[] a = anchorAt(scroll.getScrollY());")
+	keepVerse := strings.Index(setFrame, "pendingReflowVerse = a != null ? (int) a[0] : 0;")
+	captureFrac := strings.Index(setFrame, "pendingReflowFrac = range > 0")
 	resize := strings.Index(setFrame, "frameW = w;")
-	if capture < 0 || resize < 0 || capture > resize {
-		t.Fatal("the live scroll fraction must be captured before a width-changing frame is applied")
+	if captureVerse < 0 || keepVerse < 0 || captureFrac < 0 || resize < 0 ||
+		captureVerse > resize || keepVerse > resize || captureFrac > resize {
+		t.Fatal("the verse at the top, and the fraction beside it, must be captured before a width-changing frame is applied")
 	}
 
 	if !strings.Contains(src, "refreshNoteSticker();\n                    applyPendingReflow();") {
-		t.Fatal("the new content width must reapply the pre-rotation scroll fraction")
+		t.Fatal("the new content width must reapply the pre-rotation position")
 	}
-	if !strings.Contains(src, "ownScrollTo(Math.round(frac * scrollRange()));") {
-		t.Fatal("rotation restore must use the post-reflow scroll range")
+	reflowStart := strings.Index(src, "private static void applyPendingReflow()")
+	reflowEnd := strings.Index(src[reflowStart:], "private static void applyFrame()")
+	if reflowStart < 0 || reflowEnd < 0 {
+		t.Fatal("applyPendingReflow has no stable boundary")
+	}
+	reflow := src[reflowStart : reflowStart+reflowEnd]
+	if !strings.Contains(reflow, "anchorY(pendingReflowVerse, pendingReflowWithin)") ||
+		!strings.Contains(reflow, "ownScrollTo(vy >= 0 ? vy : Math.round(frac * scrollRange()));") {
+		t.Fatal("rotation restore must place the captured verse first, and the fraction of the post-reflow range only without it")
 	}
 	if !strings.Contains(src, "if (pendingReflowFrac >= 0) return;") {
 		t.Fatal("a width-clamp callback must not be persisted as a reader scroll")

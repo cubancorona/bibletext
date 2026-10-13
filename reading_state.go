@@ -58,7 +58,7 @@ type readingState struct {
 	Book        string  `json:"book"`
 	Chapter     int     `json:"chapter"`
 	AnchorVerse int     `json:"anchorVerse,omitempty"` // top-visible verse (0 = top/unknown)
-	AnchorDelta float64 `json:"anchorDelta,omitempty"` // px scrolled into the anchor verse
+	AnchorDelta float64 `json:"anchorDelta,omitempty"` // how far into the anchor verse: px; on Android a fraction of the verse's height
 	ScrollFrac  float64 `json:"scrollFrac,omitempty"`  // fallback: 0..1 of scrollable height
 	// TouchVerse/Delta record where the reader's finger first landed on the LAST
 	// scroll — the verse they grabbed to push the text (≈ the line they were
@@ -119,7 +119,7 @@ func rotationAnchorWanted(needed bool, restore *restoreAnchor, forceReposition b
 // phone-landscape presentation (layoutWatcher.Resize), so the rebuild's
 // re-import lands on it. Only the panes that re-import under a new grammar
 // need it (rotationRestoreNeeded: iOS; Android's bridge re-places its own view
-// by scroll fraction). It yields to a restore already captured and to an
+// by the verse at its top). It yields to a restore already captured and to an
 // arrival in flight: the resolver runs restore before highlight, and a
 // rotation between a link arrival and its rebuild must not park the reader at
 // the pre-arrival place over the tapped verse.
