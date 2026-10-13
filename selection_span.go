@@ -4,15 +4,18 @@ package bibletext
 // POSITIONALLY by the pane the selection was made in — the native overlays map
 // the selected character range onto their verse-number index (reading_ios.go /
 // reading_macos.go / BtBridge.java), the styled pane reads it off its own runs
-// (reading_styled_select.go). Position is authoritative: text matching cannot
+// (reading_styled_select.go), and the legacy Fyne Entry pane from the verse
+// offsets it records as it lays the chapter out (chapterText.selectionSpan).
+// Position is authoritative: text matching cannot
 // tell apart repeated wording (Psalm 136's refrain appears in all 26 verses)
 // and its 8-rune probe floor resolves short selections to nothing, so the
 // selection's position must survive the trip through the dispatch layer instead
 // of being rediscovered from the words.
 //
-// The zero value means "position unknown" — the legacy Fyne Entry pane, or a
-// native layer that could not resolve the range — and every consumer then falls
-// back to the old text matching (selectionVerses, normalizeShareSelection).
+// The zero value means "position unknown" — the plain-text page the Apple
+// panes show when a chapter fails to import, or a layer that could not resolve
+// the range — and every consumer then falls back to the old text matching
+// (selectionVerses, normalizeShareSelection).
 type selSpan struct{ lo, hi int }
 
 func (s selSpan) valid() bool { return s.lo >= 1 && s.hi >= s.lo }

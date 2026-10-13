@@ -1125,6 +1125,13 @@ type chapterText struct {
 	// scroll back to it) on the platforms without a native text view.
 	verseLines []verseLine
 
+	// verseStarts is the byte offset in Entry.Text at which each verse's
+	// first token (its number, glued to its first word) begins, parallel to
+	// verseLines and recorded by rewrap as it writes the token. It is how
+	// the pane places a selection in its verses (selectionSpan) without
+	// looking for the selected words anywhere.
+	verseStarts []int
+
 	// hardBreakRows records the global row indexes whose trailing newline is
 	// an AUTHORED poem-line break (not a soft width-wrap). copySelection uses
 	// it so poetry copies as poetry while re-flowed prose copies clean — the
@@ -1190,15 +1197,26 @@ func (c *chapterText) rewrap(width float32) {
 	c.highlightLine = -1
 	c.highlightEndLine = -1
 	c.verseLines = c.verseLines[:0]
+	c.verseStarts = c.verseStarts[:0]
 	c.hardBreakRows = make(map[int]bool)
 	lineNo := 0
 	paras := make([]string, 0, len(c.paragraphs))
+	paraOff := 0 // byte offset in the joined text at which this paragraph begins
 
 	for pi, para := range c.paragraphs {
 		if pi > 0 {
 			lineNo++ // the blank line produced by joining paragraphs with "\n\n"
+			paraOff += len(paras[pi-1]) + len("\n\n")
 		}
 		var lines []string
+		// linesLen is the bytes the paragraph's finished lines take in the
+		// joined text, each with its "\n", so the line under construction
+		// begins at paraOff+linesLen.
+		linesLen := 0
+		pushLine := func(line string) {
+			lines = append(lines, line)
+			linesLen += len(line) + len("\n")
+		}
 		var cur strings.Builder
 		curW := float32(0)
 		// hardBreak ends the line under construction — an authored poem-line
@@ -1208,7 +1226,7 @@ func (c *chapterText) rewrap(width float32) {
 		// the row in hardBreakRows so copySelection keeps the break.
 		hardBreak := func() {
 			if cur.Len() > 0 {
-				lines = append(lines, cur.String())
+				pushLine(cur.String())
 				cur.Reset()
 				curW = 0
 				c.hardBreakRows[lineNo+len(lines)-1] = true
@@ -1247,6 +1265,7 @@ func (c *chapterText) rewrap(width float32) {
 			// highlight) when the token wraps onto a fresh line instead of
 			// joining the previous verse's partial line.
 			c.verseLines = append(c.verseLines, verseLine{verse: v.Verse, line: lineNo + len(lines)})
+			c.verseStarts = append(c.verseStarts, paraOff+linesLen+cur.Len())
 			vlIdx := len(c.verseLines) - 1
 			first := true
 			for _, w := range verseTokens(v) {
@@ -1257,7 +1276,7 @@ func (c *chapterText) rewrap(width float32) {
 					// so this pane matches the HTML surfaces (<br><br>) and
 					// the share restore ("\n\n").
 					if cur.Len() == 0 {
-						lines = append(lines, "")
+						pushLine("")
 						c.hardBreakRows[lineNo+len(lines)-1] = true
 					} else {
 						hardBreak()
@@ -1269,8 +1288,9 @@ func (c *chapterText) rewrap(width float32) {
 				if cur.Len() > 0 {
 					add += spaceW
 				}
+				col := 0 // where w begins in the line under construction
 				if cur.Len() > 0 && curW+add > avail {
-					lines = append(lines, cur.String())
+					pushLine(cur.String())
 					cur.Reset()
 					cur.WriteString(w)
 					curW = ww
@@ -1278,14 +1298,17 @@ func (c *chapterText) rewrap(width float32) {
 					if cur.Len() > 0 {
 						cur.WriteString(" ")
 					}
+					col = cur.Len()
 					cur.WriteString(w)
 					curW += add
 				}
 				if first {
 					// The line the verse's first token ACTUALLY landed on (the
-					// wrap branch above starts it one line later than recorded).
+					// wrap branch above starts it one line later than recorded),
+					// and the byte it begins at.
 					line := lineNo + len(lines)
 					c.verseLines[vlIdx].line = line
+					c.verseStarts[vlIdx] = paraOff + linesLen + col
 					if hl {
 						c.highlightLine = line
 					}
@@ -1299,7 +1322,7 @@ func (c *chapterText) rewrap(width float32) {
 			}
 		}
 		if cur.Len() > 0 {
-			lines = append(lines, cur.String())
+			pushLine(cur.String())
 		}
 		lineNo += len(lines)
 		paras = append(paras, strings.Join(lines, "\n"))
@@ -1462,38 +1485,8 @@ func (c *chapterText) copySelection() string {
 		return sel
 	}
 	text := c.Entry.Text
-
-	// Byte offset of the cursor from its rune-based row/column.
-	off := 0
-	for row := 0; row < c.CursorRow && off < len(text); row++ {
-		i := strings.IndexByte(text[off:], '\n')
-		if i < 0 {
-			break
-		}
-		off += i + 1
-	}
-	rowEnd := strings.IndexByte(text[off:], '\n')
-	if rowEnd < 0 {
-		rowEnd = len(text) - off
-	}
-	rowStr := text[off : off+rowEnd]
-	col := c.CursorColumn
-	if r := []rune(rowStr); col <= len(r) {
-		off += len(string(r[:col]))
-	} else {
-		off += len(rowStr)
-	}
-
-	// The selection is the contiguous run ending or starting at the cursor.
-	start := -1
-	if off >= len(sel) && text[off-len(sel):off] == sel {
-		start = off - len(sel)
-	} else if off+len(sel) <= len(text) && text[off:off+len(sel)] == sel {
-		start = off
-	} else if i := strings.Index(text, sel); i >= 0 && strings.Index(text[i+1:], sel) < 0 {
-		start = i // unique occurrence — cursor bookkeeping mismatch fallback
-	}
-	if start < 0 {
+	start, _, ok := c.selectionBounds()
+	if !ok {
 		return cleanCopy(sel)
 	}
 
@@ -1519,6 +1512,78 @@ func (c *chapterText) copySelection() string {
 		row++
 	}
 	return out.String()
+}
+
+// selectionBounds is where the selection stands in Entry.Text, [start, end)
+// in bytes, read from the cursor, which sits at one end of a selection: the
+// cursor's byte offset comes from its rune-based row and column, and the
+// selection is the run of its length ending or starting there. Only when
+// neither matches, a mismatch of the cursor's bookkeeping, is the selection
+// looked for in the text, and taken only where it stands once. ok is false
+// with no selection or when it cannot be placed.
+func (c *chapterText) selectionBounds() (start, end int, ok bool) {
+	sel := c.SelectedText()
+	if sel == "" {
+		return 0, 0, false
+	}
+	text := c.Entry.Text
+
+	// Byte offset of the cursor from its rune-based row/column.
+	off := 0
+	for row := 0; row < c.CursorRow && off < len(text); row++ {
+		i := strings.IndexByte(text[off:], '\n')
+		if i < 0 {
+			break
+		}
+		off += i + 1
+	}
+	rowEnd := strings.IndexByte(text[off:], '\n')
+	if rowEnd < 0 {
+		rowEnd = len(text) - off
+	}
+	rowStr := text[off : off+rowEnd]
+	col := c.CursorColumn
+	if r := []rune(rowStr); col <= len(r) {
+		off += len(string(r[:col]))
+	} else {
+		off += len(rowStr)
+	}
+
+	// The selection is the contiguous run ending or starting at the cursor.
+	switch {
+	case off >= len(sel) && text[off-len(sel):off] == sel:
+		return off - len(sel), off, true
+	case off+len(sel) <= len(text) && text[off:off+len(sel)] == sel:
+		return off, off + len(sel), true
+	}
+	if i := strings.Index(text, sel); i >= 0 && strings.Index(text[i+1:], sel) < 0 {
+		return i, i + len(sel), true // unique occurrence — cursor bookkeeping mismatch fallback
+	}
+	return 0, 0, false
+}
+
+// selectionSpan is the verses the selection runs over, as the native panes
+// report them: the verse whose first token last begins at or before the
+// selection's first byte, to the one at or before its last byte. A
+// selection that begins above verse 1's number clamps to verse 1
+// (selSpanFromNative). It is the zero span when the selection cannot be
+// placed or the pane has laid out no verse.
+func (c *chapterText) selectionSpan() selSpan {
+	start, end, ok := c.selectionBounds()
+	if !ok || end <= start || len(c.verseStarts) != len(c.verseLines) {
+		return selSpan{}
+	}
+	at := func(off int) int {
+		v := 0
+		for i, vs := range c.verseStarts {
+			if vs > off {
+				break
+			}
+			v = c.verseLines[i].verse
+		}
+		return v
+	}
+	return selSpanFromNative(at(start), at(end-1))
 }
 
 // superToDigit reverses superscriptNumber's mapping, so a selection's rendered
@@ -1553,10 +1618,14 @@ func (c *chapterText) selectionMenu() *fyne.Menu {
 }
 
 func (c *chapterText) menuForSelection(sel string) *fyne.Menu {
-	// The legacy Entry pane has no positional selection model (Entry exposes
-	// only the selected STRING), so its dispatches carry the zero span and the
-	// text-matching fallback attributes the verses.
-	return selectionStudyMenu(c.state, sel, selSpan{},
+	// The pane places its own selection: rewrap records where each verse's
+	// number begins in the text it lays out, and the cursor says where the
+	// selection stands (selectionSpan). With the zero span it handed over
+	// before, every verb placed the words by their first copy in the chapter:
+	// Psalm 136:20's refrain was shared as 136:1, and 0.34% of whole verses
+	// and 6.2% of drags over a verse's last four words in the WEB were cited
+	// at another verse.
+	return selectionStudyMenu(c.state, sel, c.selectionSpan(),
 		func() {
 			if c.clipboard != nil {
 				c.clipboard.SetContent(c.copySelection())
@@ -1569,8 +1638,8 @@ func (c *chapterText) menuForSelection(sel string) *fyne.Menu {
 // then (with a selection) Study with AI, Share, Cross-references, in the same
 // order and gating as the native menus. Shared by BOTH desktop panes
 // (chapterText and the styled pane), so the verb set can never diverge. span is
-// the selection's positionally-resolved verse range (zero from the legacy
-// Entry pane, which has none).
+// the selection's positionally-resolved verse range, as each pane reads it
+// from its own layout (zero when the pane cannot place the selection).
 func selectionStudyMenu(state *AppState, sel string, span selSpan, copyFn, selectAllFn func()) *fyne.Menu {
 	copyItem := fyne.NewMenuItem("Copy", copyFn)
 	copyItem.Disabled = sel == ""
