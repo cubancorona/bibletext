@@ -184,7 +184,7 @@ Also confirm from the final AAB:
 
 ## Release notes — 1.2.21
 
-> New: Ask a question… and Compare perspectives with your own AI key. Collapse quotations while reading AI answers. Clearer previews and more accurate citations for study, sharing and notes; drafts survive rotation. Narration continues when Android closes the reading screen while the app runs. Better tablet and landscape spacing, psalm-title wrapping on Android 15+, and lower study-card memory use. Restored prior AI privacy declarations. Requires Android 7.0 or later.
+> Ask a question… and Compare perspectives for your selected passage with your own AI key. Collapse quotations while reading AI answers. Clearer previews and more accurate citations for study, sharing and notes; drafts survive rotation. Narration continues when Android closes the reading screen while the app runs. Better tablet and landscape spacing, psalm-title wrapping on Android 15+, and lower study-card memory use. Requires Android 7.0 or later.
 
 ## Release notes — 1.2.20
 

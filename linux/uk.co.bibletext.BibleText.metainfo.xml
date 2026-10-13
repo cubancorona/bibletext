@@ -77,10 +77,12 @@
   <releases>
     <release version="1.2.21" date="2026-10-13">
       <description>
-        <p>Restore privacy declarations for optional AI study.</p>
+        <p>AI study and platform maintenance.</p>
         <ul>
-          <li>Restore the prior privacy declarations for optional AI study with the reader's own provider key.</li>
-          <li>Requests still go directly to the selected AI provider; the developer receives no AI queries or keys.</li>
+          <li>Ask a question… sends a typed question and selected passage to the AI provider you choose, using your own key.</li>
+          <li>Compare perspectives explores different and compatible readings of the selected passage.</li>
+          <li>Collapse the selected quotation beside its citation while reading AI study answers.</li>
+          <li>Clearer quotation previews and selected-verse references, with study cards that fit shorter windows and use less memory.</li>
         </ul>
       </description>
     </release>

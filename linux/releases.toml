@@ -17,10 +17,12 @@
 [[release]]
 version = "1.2.21"
 date = "2026-10-13"
-head = "Restore privacy declarations for optional AI study."
+head = "AI study and platform maintenance."
 bullets = [
-  "Restore the prior privacy declarations for optional AI study with the reader's own provider key.",
-  "Requests still go directly to the selected AI provider; the developer receives no AI queries or keys.",
+  "Ask a question… sends a typed question and selected passage to the AI provider you choose, using your own key.",
+  "Compare perspectives explores different and compatible readings of the selected passage.",
+  "Collapse the selected quotation beside its citation while reading AI study answers.",
+  "Clearer quotation previews and selected-verse references, with study cards that fit shorter windows and use less memory.",
 ]
 
 [[release]]
