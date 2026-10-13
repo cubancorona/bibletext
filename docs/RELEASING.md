@@ -342,8 +342,8 @@ tree: its versionCode must be the mobile ledger's Build and the sha1 Play
 computed over the bytes it received must be the file's, or the edit is
 discarded with nothing changed. After the commit it reads the track back in
 a fresh edit and prints it, held to the release written — the versionCode,
-the status, and the name Play gives a release, `<versionCode>
-(<versionName>)`, which is where the bundle's versionName is held to the
+the status, and the name Play gives a release it was given no name for,
+the bundle's versionName, which is where that versionName is held to the
 ledger's Version. That is where stage 6 ends on Play: the release is on the
 alpha track, `upload` refuses the production track, and production waits for
 the promotion in stage 7. The script refuses an option it does not know, such

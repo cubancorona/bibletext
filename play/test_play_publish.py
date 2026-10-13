@@ -77,8 +77,9 @@ def load_module():
 
 
 def release(code=BUILD, *, name=None, status="completed", notes=NOTES, codes=None):
-    """A track release as Play returns one; named the way Play names it."""
-    found = {"name": f"{code} ({VERSION})" if name is None else name,
+    """A track release as Play returns one, named as Play names a release it
+    was given no name for: after the bundle's versionName, "9.8.7"."""
+    found = {"name": VERSION if name is None else name,
              "versionCodes": list(codes) if codes is not None else [code],
              "status": status}
     if notes is not None:
@@ -90,7 +91,7 @@ def track(name, *releases):
     return {"track": name, "releases": list(releases)}
 
 
-LIVE = release("986", name="986 (9.8.6)", notes="Last time.")
+LIVE = release("986", name="9.8.6", notes="Last time.")
 
 
 def in_review_answer(url):
@@ -122,10 +123,11 @@ class FakePlay:
 
     A bundle is answered with the versionCode ``bundle_code`` and the sha1
     of the bytes received, or ``bundle_sha1`` when given. A commit names
-    each release it was given no name for the way Play does,
-    "<versionCode> (<versionName>)", with ``bundle_version`` as the
-    versionName; ``tamper``, when set, is called with the committed tracks
-    after each commit, standing for a change made beside the script.
+    each release it was given no name for the way Play does, after the
+    bundle's versionName, ``bundle_version`` (the Play Console shows the
+    same release as "<versionCode> (<versionName>)", the API never has);
+    ``tamper``, when set, is called with the committed tracks after each
+    commit, standing for a change made beside the script.
     """
 
     KINDS = (
@@ -211,8 +213,7 @@ class FakePlay:
             for held in committed.values():
                 for found in held.get("releases") or []:
                     if not found.get("name"):
-                        code = (found.get("versionCodes") or ["?"])[0]
-                        found["name"] = f"{code} ({self.bundle_version})"
+                        found["name"] = self.bundle_version
             self.tracks.update(committed)
             if self.tamper is not None:
                 self.tamper(self.tracks)
@@ -473,7 +474,7 @@ class UploadHeldToTheTree(Harness):
         self.assertEqual(self.run_script("upload", self.aab, "alpha"), 0)
         self.assertEqual(play.calls[-3:], read_back_calls("edit-2", "alpha"))
         self.assertIn("committed edit edit-1\n  read back after the commit:\n"
-                      f"  alpha: '{BUILD} ({VERSION})', versionCode {BUILD}, completed\n",
+                      f"  alpha: '{VERSION}', versionCode {BUILD}, completed\n",
                       self.printed)
         self.assertEqual(play.edits, {})
 
@@ -486,7 +487,7 @@ class UploadHeldToTheTree(Harness):
             tracks["alpha"]["releases"][0]["status"] = "draft"
         for label, kwargs, hook, wanted in (
                 ("a versionName that is not the ledger's Version", {"bundle_version": "9.8.6"},
-                 None, f"named '{BUILD} (9.8.6)', for 9.8.6, not {VERSION}"),
+                 None, f"named '9.8.6', for 9.8.6, not {VERSION}"),
                 ("the release gone", {}, gone, f"'alpha' read back without versionCode {BUILD}"),
                 ("another status", {}, draft, f"versionCode {BUILD} draft, not completed")):
             with self.subTest(label):
@@ -595,7 +596,7 @@ class UploadWhileInReview(Harness):
         self.assertEqual(self.run_script(*self.upload()), 0)
         self.assertEqual(play.commits, 1)
         self.assertEqual(play.tracks["alpha"], {"track": "alpha", "releases": [
-            {"status": "completed", "versionCodes": [BUILD], "name": f"{BUILD} ({VERSION})",
+            {"status": "completed", "versionCodes": [BUILD], "name": VERSION,
              "releaseNotes": [{"language": "en-GB", "text": NOTES}]}]})
         self.assertIn("committed edit edit-2", self.printed)
 
@@ -639,7 +640,7 @@ class Promote(Harness):
         }, **kwargs)
 
     def expected(self, **changes):
-        found = {"name": f"{BUILD} ({VERSION})", "versionCodes": [BUILD],
+        found = {"name": VERSION, "versionCodes": [BUILD],
                  "releaseNotes": [{"language": "en-GB", "text": NOTES}], "status": "completed"}
         found.update(changes)
         return {"track": "production", "releases": [{k: v for k, v in found.items() if v is not None}]}
@@ -680,7 +681,7 @@ class Promote(Harness):
                 self.assertEqual(play.tracks["alpha"], play.before["alpha"])
                 self.assertIn("committed edit edit-1", self.printed)
                 self.assertIn("  read back after the commit:\n"
-                              f"  production: '{BUILD} ({VERSION})', versionCode {BUILD}, completed\n",
+                              f"  production: '{VERSION}', versionCode {BUILD}, completed\n",
                               self.printed)
                 self.assertEqual(play.edits, {}, "the read-back left its edit open")
 
@@ -746,8 +747,8 @@ class Promote(Harness):
     def test_the_plan_shows_both_tracks_and_the_notes_line_by_line(self):
         self.play()
         self.run_script(*self.promote(), "--dry-run")
-        self.assertIn(f"  alpha: '{BUILD} ({VERSION})', versionCode {BUILD}, completed", self.printed)
-        self.assertIn("  production: '986 (9.8.6)', versionCode 986, completed", self.printed)
+        self.assertIn(f"  alpha: '{VERSION}', versionCode {BUILD}, completed", self.printed)
+        self.assertIn("  production: '9.8.6', versionCode 986, completed", self.printed)
         for line in NOTES.split("\n"):
             self.assertIn(f"    | {line}\n", self.printed)
 
@@ -832,11 +833,11 @@ class Promote(Harness):
                 message = self.refused(*self.promote())
                 self.assert_refused_and_discarded(
                     play, message, f"production already carries versionCode {BUILD}", status)
-                self.assertIn(f"  production: '{BUILD} ({VERSION})', versionCode {BUILD}, {status}",
+                self.assertIn(f"  production: '{VERSION}', versionCode {BUILD}, {status}",
                               self.printed)
 
     def test_another_versioncode_on_the_track_is_refused(self):
-        play = self.play(held=track("alpha", release("986", name="986 (9.8.6)")))
+        play = self.play(held=track("alpha", release("986", name="9.8.6")))
         message = self.refused(*self.promote())
         self.assert_refused_and_discarded(play, message, "'alpha' holds versionCode 986",
                                           f"Build {BUILD}")
@@ -855,9 +856,25 @@ class Promote(Harness):
                 self.assert_refused_and_discarded(play, message, f"'alpha' holds {count} releases")
 
     def test_a_release_named_for_another_version_is_refused(self):
-        play = self.play(held=track("alpha", release(name=f"{BUILD} (9.8.6)")))
-        message = self.refused(*self.promote())
-        self.assert_refused_and_discarded(play, message, "for 9.8.6, not 9.8.7")
+        # Play names a release after its bundle's versionName; the Play
+        # Console shows it as "<versionCode> (<versionName>)", and a name in
+        # that form is read the same way.
+        for name in ("9.8.6", f"{BUILD} (9.8.6)"):
+            with self.subTest(name=name):
+                play = self.play(held=track("alpha", release(name=name)))
+                message = self.refused(*self.promote())
+                self.assert_refused_and_discarded(play, message, f"named '{name}'",
+                                                  "for 9.8.6, not 9.8.7")
+
+    def test_a_release_named_for_this_version_goes_up(self):
+        # CONTROL for the refusal above: both forms of the ledger's own
+        # version pass, and a name given by hand names no version at all.
+        for name in (VERSION, f"{BUILD} ({VERSION})", "Autumn release", "9.8.6 fixes"):
+            with self.subTest(name=name):
+                play = self.play(held=track("alpha", release(name=name)))
+                self.assertEqual(self.run_script(*self.promote()), 0)
+                self.assertEqual(play.commits, 1)
+                self.assertEqual(play.tracks["production"], self.expected(name=name))
 
     def test_a_release_testers_do_not_yet_have_is_refused(self):
         for status in ("draft", "inProgress", "halted"):
@@ -874,16 +891,16 @@ class Promote(Harness):
                 self.assert_refused_and_discarded(play, message, "carries no release notes")
 
     def test_a_production_rollout_still_going_out_is_refused(self):
-        staged = release("986", name="986 (9.8.6)", status="inProgress")
+        staged = release("986", name="9.8.6", status="inProgress")
         staged["userFraction"] = 0.1
-        play = self.play(production=track("production", release("985", name="985 (9.8.5)"), staged))
+        play = self.play(production=track("production", release("985", name="9.8.5"), staged))
         message = self.refused(*self.promote())
         self.assert_refused_and_discarded(play, message, "production holds a release that is inProgress",
                                           "complete or halt its rollout in the Play Console first")
 
     def test_a_production_draft_is_refused(self):
-        draft = release("986", name="986 (9.8.6)", status="draft")
-        play = self.play(production=track("production", release("985", name="985 (9.8.5)"), draft))
+        draft = release("986", name="9.8.6", status="draft")
+        play = self.play(production=track("production", release("985", name="9.8.5"), draft))
         message = self.refused(*self.promote())
         self.assert_refused_and_discarded(play, message, "production holds a draft release",
                                           "roll it out or discard it in the Play Console first")
@@ -891,23 +908,23 @@ class Promote(Harness):
     def test_a_halted_production_rollout_gives_way_to_the_promotion(self):
         # A staged rollout halted over a defect is where a fix is promoted
         # from; the promotion writes production's releases whole.
-        halted = release("986", name="986 (9.8.6)", status="halted")
+        halted = release("986", name="9.8.6", status="halted")
         halted["userFraction"] = 0.2
         for extra, status in (((), {}), (("--rollout", "0.1"), {"status": "inProgress",
                                                                  "userFraction": 0.1})):
             with self.subTest(extra=extra):
                 play = self.play(production=track("production",
-                                                  release("985", name="985 (9.8.5)"), halted))
+                                                  release("985", name="9.8.5"), halted))
                 self.assertEqual(self.run_script(*self.promote(*extra)), 0)
                 self.assertEqual(play.commits, 1)
                 self.assertEqual(play.tracks["production"], self.expected(**status))
-                self.assertIn("in place of production's halted release '986 (9.8.6)', "
+                self.assertIn("in place of production's halted release '9.8.6', "
                               "versionCode 986, halted to 20% of users", self.printed)
 
     def test_production_ahead_of_the_ledger_is_refused(self):
         for status in ("completed", "halted"):
             with self.subTest(status=status):
-                ahead = release("990", name="990 (9.9.0)", status=status)
+                ahead = release("990", name="9.9.0", status=status)
                 play = self.play(production=track("production", ahead))
                 message = self.refused(*self.promote())
                 self.assert_refused_and_discarded(

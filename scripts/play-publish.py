@@ -40,7 +40,7 @@ Build, and the sha1 Play computed over the bytes it received must be the
 file's, or the edit is discarded with nothing changed. After the commit the
 track is read back in a fresh edit and printed, and the release Play now
 holds must carry that versionCode with the status asked for; Play names a
-release it was given no name for "<versionCode> (<versionName>)", so the
+release it was given no name for after the bundle's versionName, so the
 read-back is also where the bundle's versionName is held to the ledger's
 Version. A promotion reads production back the same way.
 
@@ -258,6 +258,22 @@ def track_lines(name, track):
     return [f"  {name}: {describe(r)}" for r in releases]
 
 
+def named_version(name):
+    """The version a release name Play generated carries, or None for a name
+    given by hand.
+
+    A release given no name is named by Play after the bundle's versionName,
+    "1.2.21", which is the only form the Developer API has returned; the
+    Play Console shows a release as "<versionCode> (<versionName>)", and a
+    name in that form is read the same way. Either names the version the
+    bundle was built with. Any other name was given by hand and names none.
+    """
+    if re.fullmatch(r"\d+(\.\d+)+", name):
+        return name
+    shown = re.fullmatch(r"\d+ \((\d+(\.\d+)+)\)", name)
+    return shown.group(1) if shown else None
+
+
 def promotion_refusal(source, held, production, version, build):
     """Why the source track's release may not go to production now, or None.
 
@@ -288,12 +304,12 @@ def promotion_refusal(source, held, production, version, build):
     if codes[0] != build:
         return (f"'{source}' holds versionCode {codes[0]}; the mobile ledger is {version}, "
                 f"Build {build}, so it is not this release")
-    # Play names a release "<versionCode> (<versionName>)" unless it is given
-    # a name; a name in that form that names another version is a bundle
-    # built from another ledger.
-    named = re.fullmatch(r"\d+ \((.+)\)", release.get("name") or "")
-    if named and named.group(1) != version:
-        return (f"the release on '{source}' is named '{release['name']}', for {named.group(1)}, "
+    # Play names a release after its bundle's versionName unless it is given
+    # a name; a name that names another version is a bundle built from
+    # another ledger.
+    carried = named_version(release.get("name") or "")
+    if carried is not None and carried != version:
+        return (f"the release on '{source}' is named '{release['name']}', for {carried}, "
                 f"not {version}")
     if release.get("status") != "completed":
         return (f"the release on '{source}' is {release.get('status')}, not completed: promote "
@@ -348,12 +364,12 @@ def committed_problem(name, held, version, build, status):
     if not releases:
         return f"'{name}' read back without versionCode {build}"
     release = releases[0]
-    # Play names a release it was given no name for "<versionCode>
-    # (<versionName>)", so this is where the bundle's versionName shows.
-    named = re.fullmatch(r"\d+ \((.+)\)", release.get("name") or "")
-    if named and named.group(1) != version:
+    # Play names a release it was given no name for after the bundle's
+    # versionName, so this is where the bundle's versionName shows.
+    carried = named_version(release.get("name") or "")
+    if carried is not None and carried != version:
         return (f"'{name}' read back with versionCode {build} named '{release['name']}', for "
-                f"{named.group(1)}, not {version}: the bundle's versionName is not the mobile "
+                f"{carried}, not {version}: the bundle's versionName is not the mobile "
                 "ledger's Version")
     if release.get("status") != status:
         return (f"'{name}' read back with versionCode {build} {release.get('status')}, not "
