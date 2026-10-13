@@ -453,6 +453,14 @@ func prepareShareQuoteIn(state *AppState, book string, chapter int, raw string, 
 		if t, lo, hi, idx, ok := normalizeShareSelectionProse(state, book, chapter, corpus, spans, raw, span); ok {
 			return completeTrailingSentenceProse(corpus, t, idx), verseRangeCitation(book, chapter, lo, hi), idx, len(t)
 		}
+		// Declined: a fragment inside one word, which has no whole word to
+		// quote. With the pane's lead it is still where the reader made it,
+		// and is completed, terminated and restored there; the legacy path
+		// below completes the first copy of its letters in the chapter.
+		if p := placeByLead(corpus, spans, span, sharedText(collapseSpaces(raw))); p.text != "" {
+			lo, hi := leadVerses(spans, p.at, len(p.text))
+			return completeTrailingSentenceProse(corpus, p.text, p.at), verseRangeCitation(book, chapter, lo, hi), p.at, len(p.text)
+		}
 	}
 	cleaned := completeTrailingSentenceIn(state, book, chapter, cleanQuoteTextIn(state, book, chapter, raw), -1)
 	return cleaned, citationForSelectionIn(state, book, chapter, raw, span), -1, 0
@@ -753,8 +761,11 @@ func inWordAt(s string, i int) bool {
 // whose letters also stand as whole words later in the region is quoted from
 // that later copy ("leavened bread shall", begun two letters into Exodus
 // 13:7's "Unleavened", quotes "leavened bread shall" from later in the
-// verse). With a span the citation is the same verse; the panes hand over the
-// selection's text and its verses, not its place in them.
+// verse). With a span the citation is the same verse. A pane that also sends
+// the selection's lead (selSpan.lead) tells the two apart: the selection is
+// placed where it was made (placeByLead) and quotes "bread shall", and this
+// search places only a selection that comes without one, or whose lead does
+// not resolve.
 func normalizeShareSelection(state *AppState, raw string, span selSpan) (text string, lo, hi, at int, ok bool) {
 	book, chapter := readerChapter(state)
 	return normalizeShareSelectionIn(state, book, chapter, raw, span)
@@ -897,7 +908,26 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 // nothing but verse numbers: it is set for a selection with no span inside
 // the title, which is the psalm's only if the psalm has it so.
 func locateShareSelection(state *AppState, book string, chapter int, corpus string, spans []verseSpan, flat, out string, span selSpan, editorial, wholeWords bool) (text string, lo, hi, at int, ok bool) {
+	// The pane's lead, when it sent one, says where in verse lo the selection
+	// begins (placeByLead). Where the selection reads as the corpus from
+	// there, it is placed there with its verse numbers taken out by position,
+	// and the strip's text matching does not decide it; otherwise its place
+	// is the first one locate tries. Not when a title already came off the
+	// front: the selection then no longer begins where the lead says.
+	lead := leadPlacement{at: -1, out: out}
+	if !editorial && !wholeWords {
+		lead = placeByLead(corpus, spans, span, out)
+	}
+	if lead.number {
+		// The rest of verse lo's number alone, begun inside it: apparatus,
+		// as a verse number selected on its own is (below).
+		return "", span.lo, span.lo, -1, true
+	}
+	out = lead.out
 	s, anchor := stripVerseMarkersAnchored(corpus, spans, out)
+	if lead.text != "" {
+		s, anchor = lead.text, lead.at
+	}
 	if s == "" || corpus == "" {
 		return "", 0, 0, -1, false
 	}
@@ -930,7 +960,9 @@ func locateShareSelection(state *AppState, book string, chapter int, corpus stri
 			}
 		}
 	}
-	// locate is the one search, for the selection before it is placed. anchor
+	// locate is the one search, for the selection before it is placed. The
+	// lead's place comes first, taken on the same terms as the anchor: the
+	// corpus has the selection there, inside the span's verses. anchor
 	// is where its verse number puts it (-1 for none), taken when the corpus
 	// has the selection there and the span, when there is one, agrees: a drag
 	// begun on the second digit of 29 arrives as "9 He said to", which the
@@ -953,8 +985,12 @@ func locateShareSelection(state *AppState, book string, chapter int, corpus stri
 	// into the heading below the region, which is placed by that heading
 	// instead when this search does not find it in the region
 	// (verseEndBeforeHeading).
+	inRegion := func(at int) bool { return !haveRegion || (at >= rStart && at < rEnd) }
 	locate := func(s string, anchor int) int {
-		if anchor >= 0 && (!haveRegion || (anchor >= rStart && anchor < rEnd)) && strings.HasPrefix(corpus[anchor:], s) {
+		if lead.at >= 0 && inRegion(lead.at) && strings.HasPrefix(corpus[lead.at:], s) {
+			return lead.at
+		}
+		if anchor >= 0 && inRegion(anchor) && strings.HasPrefix(corpus[anchor:], s) {
 			return anchor
 		}
 		if haveRegion {

@@ -550,10 +550,20 @@ type spannedDrag struct {
 	detail   string
 }
 
-func (p *spannedPage) drag(t *testing.T, from, to int) spannedDrag {
+func (p *spannedPage) drag(t *testing.T, from, to int, lead bool) spannedDrag {
 	t.Helper()
 	raw := p.page[from:to]
 	span := selSpanFromNative(p.verseAt[from], p.verseAt[to-1])
+	if lead {
+		// What every pane sends with the span: the page from verse lo's
+		// number to the drag's first character (selSpan.lead).
+		for i, sp := range p.spans {
+			if sp.verse == span.lo {
+				span = selSpanWithLead(span.lo, span.hi, p.page[p.number[i]:from])
+				break
+			}
+		}
+	}
 	text, cite, at, baseLen := prepareShareQuote(p.st, raw, span)
 	if text == "" {
 		t.Fatalf("%s %d: the drag %q span %+v shared nothing", p.st.CurrentBook, p.st.CurrentChapter, raw, span)
@@ -594,24 +604,89 @@ func (p *spannedPage) drag(t *testing.T, from, to int) spannedDrag {
 	return spannedDrag{right: cite == truth, detail: detail + ", want " + truth}
 }
 
+// spannedFamily is one kind of drag the spanned sweep makes at each verse
+// boundary, run on to at most maxWords words of the verse.
+type spannedFamily struct {
+	name     string
+	maxWords int
+}
+
+var spannedFamilies = []spannedFamily{{"punct", 12}, {"cross", 3}, {"number", 3}, {"digit", 3}}
+
 func TestSpannedBoundaryDragSweep(t *testing.T) {
-	bd, err := loadSeedGospels()
-	if err != nil {
-		t.Fatalf("seed: %v", err)
-	}
 	step := 1
 	if testing.Short() {
 		step = 7
 	}
-	type family struct {
-		name     string
-		maxWords int
+	drags, wrong, verbatim := spannedBoundarySweep(t, step, false)
+	total, totalWrong := reportSpannedSweep(t, drags, wrong)
+	t.Logf("%d drags; %d digit drags shared as they came", total, verbatim)
+
+	// None may be wrong. Before the selection was placed by its verse number
+	// and kept in place through the repairs (normalizeShareSelection), a drag
+	// that opens on the previous verse's punctuation was cited from an earlier
+	// copy of its words in 974 of these 59,199 drags: one in seven at one
+	// word, 2.8% at two, none from ten. Five that begin on the previous
+	// verse's last word were placed at an earlier copy of the same words
+	// inside that verse and cited it alone. Those that begin on the verse's
+	// number were right.
+	//
+	// A drag begun on a later digit of a verse's number was placed where the
+	// digit says, as if it were a number of its own, in 141 of these 8,931
+	// drags when that placing was first made, before the span had to agree:
+	// Mark 7's "9 He said to", spanned 29, cited 7:9.
+	for _, f := range spannedFamilies {
+		if totalWrong[f.name] != 0 {
+			t.Errorf("%s: %d drags cite verses their words did not come from, or place the words outside the drag",
+				f.name, totalWrong[f.name])
+		}
 	}
-	families := []family{{"punct", 12}, {"cross", 3}, {"number", 3}, {"digit", 3}}
-	drags := map[string][]int{}
-	wrong := map[string][]int{}
-	verbatim := 0 // digit drags shared as they came, cited by their span
-	for _, f := range families {
+	// The rest of the digit drags are shared as they came, the stray digit
+	// in the quotation and the citation right: "0 Hezekiah" for Matthew 1:10.
+	// Held exactly so that a change shows; the backlog has it (BACKLOG.md,
+	// "A drag begun inside a verse number shares the digit").
+	if !testing.Short() && verbatim != 8769 {
+		t.Errorf("%d digit drags shared as they came, stray digit and all; recorded 8,769", verbatim)
+	}
+}
+
+// The same drags, each with the lead every pane sends (selSpan.lead): the
+// page from verse lo's number to the drag's first character. None is wrong,
+// and no digit drag is shared as it came: the lead says the drag began inside
+// the number, so the rest of the number is taken off as the page's apparatus
+// instead of being quoted.
+func TestSpannedBoundaryDragSweepWithLeads(t *testing.T) {
+	step := 1
+	if testing.Short() {
+		step = 7
+	}
+	drags, wrong, verbatim := spannedBoundarySweep(t, step, true)
+	total, totalWrong := reportSpannedSweep(t, drags, wrong)
+	t.Logf("%d drags with their leads; %d digit drags shared as they came", total, verbatim)
+	for _, f := range spannedFamilies {
+		if totalWrong[f.name] != 0 {
+			t.Errorf("%s, with the lead: %d drags cite verses their words did not come from, or place the words outside the drag",
+				f.name, totalWrong[f.name])
+		}
+	}
+	if verbatim != 0 {
+		t.Errorf("with the lead, %d digit drags were shared as they came, stray digit and all", verbatim)
+	}
+}
+
+// spannedBoundarySweep makes every drag of the spanned sweep over the
+// embedded Gospels, each with the lead the panes send when lead is set, and
+// counts by family and word count the drags made and those wrong, and the
+// digit drags shared as they came.
+func spannedBoundarySweep(t *testing.T, step int, lead bool) (drags, wrong map[string][]int, verbatim int) {
+	t.Helper()
+	bd, err := loadSeedGospels()
+	if err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	drags = map[string][]int{}
+	wrong = map[string][]int{}
+	for _, f := range spannedFamilies {
 		drags[f.name] = make([]int, f.maxWords+1)
 		wrong[f.name] = make([]int, f.maxWords+1)
 	}
@@ -638,7 +713,7 @@ func TestSpannedBoundaryDragSweep(t *testing.T) {
 				for lastWord > 0 && p.page[lastWord-1] != ' ' {
 					lastWord--
 				}
-				for _, f := range families {
+				for _, f := range spannedFamilies {
 					var starts []int
 					switch f.name {
 					case "punct":
@@ -655,7 +730,7 @@ func TestSpannedBoundaryDragSweep(t *testing.T) {
 					}
 					for k := 1; k <= f.maxWords && first[vi]+k-1 < len(ends); k++ {
 						for _, from := range starts {
-							d := p.drag(t, from, ends[first[vi]+k-1])
+							d := p.drag(t, from, ends[first[vi]+k-1], lead)
 							drags[f.name][k]++
 							if !d.right && f.name == "digit" && d.verbatim {
 								verbatim++
@@ -677,8 +752,15 @@ func TestSpannedBoundaryDragSweep(t *testing.T) {
 	if chapters != 89 {
 		t.Fatalf("swept %d chapters, want the 89 of the embedded Gospels", chapters)
 	}
-	total, totalWrong := 0, map[string]int{}
-	for _, f := range families {
+	return drags, wrong, verbatim
+}
+
+// reportSpannedSweep logs each family's counts and returns the drags made and
+// the wrong ones by family.
+func reportSpannedSweep(t *testing.T, drags, wrong map[string][]int) (total int, totalWrong map[string]int) {
+	t.Helper()
+	totalWrong = map[string]int{}
+	for _, f := range spannedFamilies {
 		var line []string
 		n := 0
 		for k := 1; k <= f.maxWords; k++ {
@@ -689,34 +771,7 @@ func TestSpannedBoundaryDragSweep(t *testing.T) {
 		total += n
 		t.Logf("%s: %d of %d drags wrong (%s)", f.name, totalWrong[f.name], n, strings.Join(line, ", "))
 	}
-	t.Logf("%d drags; %d digit drags shared as they came", total, verbatim)
-
-	// None may be wrong. Before the selection was placed by its verse number
-	// and kept in place through the repairs (normalizeShareSelection), a drag
-	// that opens on the previous verse's punctuation was cited from an earlier
-	// copy of its words in 974 of these 59,199 drags: one in seven at one
-	// word, 2.8% at two, none from ten. Five that begin on the previous
-	// verse's last word were placed at an earlier copy of the same words
-	// inside that verse and cited it alone. Those that begin on the verse's
-	// number were right.
-	//
-	// A drag begun on a later digit of a verse's number was placed where the
-	// digit says, as if it were a number of its own, in 141 of these 8,931
-	// drags when that placing was first made, before the span had to agree:
-	// Mark 7's "9 He said to", spanned 29, cited 7:9.
-	for _, f := range families {
-		if totalWrong[f.name] != 0 {
-			t.Errorf("%s: %d drags cite verses their words did not come from, or place the words outside the drag",
-				f.name, totalWrong[f.name])
-		}
-	}
-	// The rest of the digit drags are shared as they came, the stray digit
-	// in the quotation and the citation right: "0 Hezekiah" for Matthew 1:10.
-	// Held exactly so that a change shows; the backlog has it (BACKLOG.md,
-	// "A drag begun inside a verse number shares the digit").
-	if !testing.Short() && verbatim != 8769 {
-		t.Errorf("%d digit drags shared as they came, stray digit and all; recorded 8,769", verbatim)
-	}
+	return total, totalWrong
 }
 
 // wordToken is a word as a double-click takes it: letters and digits, with
