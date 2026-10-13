@@ -398,23 +398,21 @@ func cleanQuoteText(state *AppState, raw string) string {
 // positional locate declined. It is still a way out of the app, so sharedText
 // runs here too — the fallback takes the page's typography off exactly as the
 // located path does, and it used to ship an omitted verse's gap mark through
-// untouched. The marker probes are built from verseSharedText for the same
-// reason stripVerseMarkers' bodies are.
+// untouched. The verse numbers go by the located path's own strip, which
+// removes "N " only where it stands as a token of its own and is followed by
+// verse N's body. The pass used to remove "N " plus the verse's first twelve
+// runes wherever that string stood, with no token boundary, so a verse whose
+// number ends a later verse's number and whose opening is the later verse's
+// too (Genesis 1:6 and 1:26 in the WEB) stripped the later number from
+// inside: "26 God said" became "2God said" in the share and in the AI
+// panel's preview, on 193 WEB and 146 BSB verses.
 func cleanQuoteTextIn(state *AppState, book string, chapter int, raw string) string {
 	s := sharedText(collapseSpaces(raw))
 	if state == nil || state.Bible == nil {
 		return s
 	}
-	for _, v := range state.Bible.GetChapter(book, chapter) {
-		body := collapseSpaces(verseSharedText(v))
-		if body == "" {
-			continue
-		}
-		probe := firstRunes(body, 12)
-		marker := strconv.Itoa(v.Verse) + " " + probe
-		s = strings.ReplaceAll(s, marker, probe)
-	}
-	return strings.TrimSpace(s)
+	corpus, spans := chapterProseIn(state, book, chapter)
+	return stripVerseMarkersProse(corpus, spans, s)
 }
 
 // prepareShareQuote is the share pipeline's front half: it turns a raw
