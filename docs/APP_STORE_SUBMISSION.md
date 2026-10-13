@@ -421,8 +421,11 @@ each step it lists.
    `TestWindowsWhatsNewIsNamedForThisRelease` requires from 1.2.16 on whether
    or not this version goes to that Store, so CI goes red on all three OSes
    without it (docs/WINDOWS_STORE_LISTING.md, "What's new"); add the Play
-   notes section to `docs/PLAY_LISTING.md`; prepend a
-   `[[release]]` block to `linux/releases.toml` and run
+   notes section to `docs/PLAY_LISTING.md` and write its blockquote's text
+   to `play/metadata/en-GB/whats-new-<v>.txt`, tracked, which
+   `play_whats_new_test.go` holds equal to the blockquote and within Play's
+   500 characters, and which `scripts/play-publish.py upload` sends (step
+   5); prepend a `[[release]]` block to `linux/releases.toml` and run
    `go run ./cmd/linuxmeta render`, which rewrites the AppStream metainfo,
    the desktop entries and `snap/snapcraft.yaml` — `cmd/linuxmeta` refuses a
    newest entry that is not the desktop ledger's version, so CI goes red

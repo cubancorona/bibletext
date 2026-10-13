@@ -52,8 +52,11 @@ built from the tag, not from a later HEAD.
 **Version bumps touch more than the two packaging ledgers**, and each coupling
 is enforced by a test: `cmd/bibletext/FyneApp.toml`, `cmd/mobile/FyneApp.toml`,
 both review-notes files' first line, `appstore/push-review-notes.py`'s
-`TARGET_VERSION`, and version-named What's New files for iOS, Mac and the
-Microsoft Store.
+`TARGET_VERSION`, and version-named What's New files for iOS, Mac, the
+Microsoft Store and Google Play — the last,
+`play/metadata/en-GB/whats-new-<v>.txt`, held equal to the blockquote under
+"Release notes — <v>" in [PLAY_LISTING.md](PLAY_LISTING.md) by
+`play_whats_new_test.go` (docs/RELEASING.md, stage 1, lists all nine).
 
 **Not every release is submitted anywhere.** Skipping a store for a release
 that changes nothing a reader of that platform would notice is normal and

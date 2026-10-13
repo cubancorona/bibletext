@@ -650,12 +650,14 @@ in a message to the developer mailbox, and nothing the scripts read shows it.
 On both stores the fix is a new version: a version number names one tree on
 every channel (docs/VERSIONING.md), so the rejected number is spent and the
 fix starts at stage 1 under the next one, with review notes and What's New of
-its own. A rejected Apple version is withdrawn before the fix's build is
-attached to anything, so the spent number is never resubmitted with a tree it
-does not name; `submit-version.py` prepares a version in a rejected state,
-but only the ledger's version string, which the bump has moved on. On Play the
-fix is the next upload to alpha, under the next versionCode, as stage 6
-says, and the promotion's dry run prints what alpha and production hold.
+its own. On Apple, `submit-version.py` resolves the version record by the
+ledger's version string, so once the bump has moved that on it neither finds
+nor touches the rejected record, and it prepares a record in a rejected
+state only under that string, never under the next one; what becomes of the
+rejected record is settled in App Store Connect, and no script here touches
+it. On Play the fix is the next upload to alpha, under the next versionCode,
+as stage 6 says, and the promotion's dry run prints what alpha and
+production hold.
 
 ## What a conductor refuses
 
