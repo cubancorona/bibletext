@@ -451,9 +451,53 @@ func prepareShareQuoteIn(state *AppState, book string, chapter int, raw string, 
 		if t, lo, hi, idx, ok := normalizeShareSelectionProse(state, book, chapter, corpus, spans, raw, span); ok {
 			return completeTrailingSentenceProse(corpus, t, idx), verseRangeCitation(book, chapter, lo, hi), idx, len(t)
 		}
+		// The normalize declined: the selection is shared as it stands, and
+		// the span still says which verses the reader dragged over. The
+		// fragment is placed in those verses, as locate places a selection,
+		// so the completion, the retained terminal and the line breaks read
+		// the copy the reader selected. Found anywhere in the chapter
+		// instead, a drag inside "would" in Genesis 2:19 (WEB) was completed
+		// from verse 7's "soul." and shared as "[O]ul.". Of the WEB's
+		// one-word drags begun or ended inside a word, 1,151,120 end up
+		// here, and 117,933 of them took another copy's ending, 115,019
+		// from another verse. A repeat inside the span's own verses needs
+		// the selection's offset in its verse, which no pane hands over yet.
+		cleaned := cleanQuoteTextIn(state, book, chapter, raw)
+		if at := placeInSpan(corpus, spans, cleaned, span); at >= 0 {
+			return completeTrailingSentenceProse(corpus, cleaned, at), citationForSelectionIn(state, book, chapter, raw, span), at, len(cleaned)
+		}
 	}
 	cleaned := completeTrailingSentenceIn(state, book, chapter, cleanQuoteTextIn(state, book, chapter, raw), -1)
 	return cleaned, citationForSelectionIn(state, book, chapter, raw, span), -1, 0
+}
+
+// placeInSpan is where s stands in the corpus inside the span's verses, by
+// the order locate searches a region in: the first copy there that splits no
+// word, else the first copy of any kind. It is -1 when the span is not valid,
+// names no verse the corpus holds, or its verses do not hold s.
+func placeInSpan(corpus string, spans []verseSpan, s string, span selSpan) int {
+	if s == "" || !span.valid() {
+		return -1
+	}
+	rStart, rEnd, haveRegion := 0, 0, false
+	for _, sp := range spans {
+		if sp.verse >= span.lo && sp.verse <= span.hi {
+			if !haveRegion {
+				rStart, haveRegion = sp.start, true
+			}
+			rEnd = sp.end
+		}
+	}
+	if !haveRegion {
+		return -1
+	}
+	if i := wordAlignedIndex(corpus[rStart:rEnd], s); i >= 0 {
+		return rStart + i
+	}
+	if i := strings.Index(corpus[rStart:rEnd], s); i >= 0 {
+		return rStart + i
+	}
+	return -1
 }
 
 // Every stage of the pipeline from here down reads ONE chapter, and the
