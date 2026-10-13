@@ -927,7 +927,7 @@ public final class BtBridge {
     // must not repaint the verses over it. Touched only on the UI thread.
     private static boolean suppressed = false;
 
-    // THE READING POSITION IS A VERSE (reading_state.go): the verse at the top
+    // The reading position is a verse (reading_state.go): the verse at the top
     // of the view and how far into it the top stands, as a fraction of the
     // verse's own height (verseBand), with the fraction of the scroll range
     // kept as the fallback for a verse the text does not hold. The position

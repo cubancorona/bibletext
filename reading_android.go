@@ -760,7 +760,7 @@ func pushNoteToOverlay(state *AppState) {
 	}
 	cBandLabels := C.CString(strings.Join(bandLabels, "\n"))
 	defer C.free(unsafe.Pointer(cBandLabels))
-	// THE PARAGRAPHS the bands hang above, as the page writes them: the
+	// The paragraphs the bands hang above, as the page writes them: the
 	// bridge cannot tell a poem line's '\n' from a paragraph's.
 	openers := androidParagraphOpeners(state, verses)
 	paraOpeners := make([]C.int, 0, len(openers))

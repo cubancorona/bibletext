@@ -1,14 +1,14 @@
 package main
 
-// WHERE A LINK LANDS, RUN. The fragment's lines, the highlight band, the
-// highlight's own landing (HIGHLIGHT_RANGE), the verse carry and the note's
-// placement (NOTE_PLACE) are taken from the shipped reader.js between their
-// markers and run against a small stand-in DOM: three paragraphs, verses 1-2,
-// 3-4 and 5. A fresh arrival is a fresh closure, as a page load is; a
-// hashchange calls highlightRange and then the listeners NOTE_PLACE
-// registered, the page's registration order. requestAnimationFrame runs its
-// callback at once, so a scroll the page asks for after layout is recorded
-// in order with the others.
+// These tests run the code that decides where a link lands. The fragment's
+// lines, the highlight band, the highlight's own landing (HIGHLIGHT_RANGE),
+// the verse carry and the note's placement (NOTE_PLACE) are taken from the
+// shipped reader.js between their markers and run against a small stand-in
+// DOM: three paragraphs, verses 1-2, 3-4 and 5. A fresh arrival is a fresh
+// closure, as a page load is; a hashchange calls highlightRange and then the
+// listeners NOTE_PLACE registered, the page's registration order.
+// requestAnimationFrame runs its callback at once, so a scroll the page asks
+// for after layout is recorded in order with the others.
 //
 // The note's payload is not under test (note_vectors_test.go holds the
 // decoder): the stand-in decodeNotePayload reads "OK", "NEWER" and anything
