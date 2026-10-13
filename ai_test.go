@@ -446,17 +446,17 @@ func TestBuildAskPrompt(t *testing.T) {
 	// It must instruct a direct answer (not the fixed Explain task) and stay honest when
 	// the passage doesn't address the question.
 	low := strings.ToLower(p)
-	if !strings.Contains(low, "question") || !strings.Contains(low, "does not address") {
+	if !strings.Contains(low, "question") || !strings.Contains(low, "does not answer") {
 		t.Errorf("ask prompt should answer the question and admit when unaddressed: %q", p)
 	}
 	if p == buildAIPrompt(aiActionExplain, psg) {
 		t.Errorf("ask prompt should differ from the Explain prompt")
 	}
 	for _, want := range []string{
-		"what the selected passage states, what it reports a speaker saying, and what a reading infers",
+		"what the passage states, what it reports someone saying, and what a reading infers",
 		"Quote only wording supplied in the passage; paraphrase surrounding context and other Scripture",
-		"If the question assumes something the passage does not establish, say so briefly and answer what it does support",
-		"do not add follow-up questions",
+		"If the passage does not answer the question or support its assumptions, say so plainly",
+		"Use Markdown for any formatting. Avoid tables and HTML. Do not add follow-up questions",
 	} {
 		if !strings.Contains(p, want) {
 			t.Errorf("ask prompt is missing its evidence or answer boundary %q", want)
@@ -464,6 +464,9 @@ func TestBuildAskPrompt(t *testing.T) {
 	}
 	if strings.Contains(p, "Do not quote anyone") {
 		t.Error("Ask must allow the supplied passage's wording without a contradictory blanket quotation ban")
+	}
+	if strings.Contains(p, "Do not use markdown headings or bullet lists") {
+		t.Error("Ask must allow Markdown formatting")
 	}
 }
 

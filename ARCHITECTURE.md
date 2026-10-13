@@ -238,9 +238,9 @@ prose.
 | File | Responsibility |
 | --- | --- |
 | `ai.go` | Action constants + `buildAIPrompt`; `aiPassage` / `aiPassageFor` (the verses a request names, resolved once for the prompt, the panel header, the Report mail and the cache key); `runAIAction` (cache scope, dispatch) |
-| `ai_ask.go` | "Ask a question…" input sheet (`promptAskQuestion`) + `buildAskPrompt` |
+| `ai_ask.go` | "Ask a question…" input sheet (`promptAskQuestion`); its question-focused prompt is built by `buildAskPrompt` in `ai.go` |
 | `ai_compare.go` | `buildComparePrompt` (the concise Compare perspectives prompt, with optional simple Markdown) and `aiStudyVerbs`, the ordered list of menu verbs every surface's Study with AI menu is held to |
-| `ai_compare_render.go` | Compare answer layout: Goldmark blocks, Fyne inline text, section spacing, hanging list markers and quote insets; children wrap at their assigned width before height measurement |
+| `ai_compare_render.go` | Ask and Compare answer layout: Goldmark blocks, Fyne inline text, section spacing, hanging list markers and quote insets; children wrap at their assigned width before height measurement |
 | `ai_providers.go` | Gemini / OpenAI / Anthropic / Grok HTTP clients + models |
 | `ai_keystore.go` | On-device key storage (`keyStore`): Apple Keychain on **iOS only**, preferences elsewhere (incl. macOS); env-var override |
 | `ai_secure_store_darwin.go` / `ai_secure_store_other.go` | `//go:build ios` Keychain adapter (AfterFirstUnlock, backup-restorable) / its no-op twin everywhere else |
@@ -569,6 +569,11 @@ keystroke supersedes it (pinned in `search_race_test.go`).
   ChatGPT models; the OpenAI reasoning families and Claude use provider defaults
   (`openAIFixedTemperature`). Identical requests are cached in memory, keyed by
   provider + resolved model + action + passage.
+- Ask's prompt keeps the answer focused on the question, distinguishes passage
+  statements from reported speech and inference, and identifies unsupported
+  assumptions. Differing readings are included when relevant. Quotations use
+  only the supplied passage; other Scripture is paraphrased. Simple Markdown is
+  permitted without tables, HTML or follow-up questions.
 - Providers Gemini / OpenAI / Anthropic / Grok live in
   [ai_providers.go](ai_providers.go). Keys are stored **on-device only** via
   `keyStore` ([ai_keystore.go](ai_keystore.go)): the Apple Keychain on **iOS
@@ -579,7 +584,7 @@ keystroke supersedes it (pinned in `search_race_test.go`).
   `<PROVIDER>_API_KEY` env var overrides. Settings sheet:
   [ai_settings.go](ai_settings.go) (header gear). Result panel with a **Report**
   button and an in-app disclosure line: [ai_panel.go](ai_panel.go).
-- Compare renders the parsed Markdown blocks through
+- Ask and Compare render the parsed Markdown blocks through
   [ai_compare_render.go](ai_compare_render.go), retaining paragraphs, heading
   levels, nested lists, quote contents and explicit line breaks. Fyne shapes
   inline text; the answer layout supplies block spacing and indentation.

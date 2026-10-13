@@ -42,17 +42,17 @@ func askAnswerRichText(t *testing.T, popup *widget.PopUp) *widget.RichText {
 
 func studyAnswerContent(t *testing.T, popup *widget.PopUp) fyne.CanvasObject {
 	t.Helper()
-	var comparison *compareAnswer
+	var blocks *compareAnswer
 	walkTree(popup, func(object fyne.CanvasObject) {
 		if candidate, ok := object.(*compareAnswer); ok {
-			comparison = candidate
+			blocks = candidate
 		}
 	})
-	if comparison != nil {
-		if !strings.Contains(studyAnswerText(comparison), "A synthetic answer paragraph") {
-			t.Fatal("the complete synthetic comparison never rendered")
+	if blocks != nil {
+		if !strings.Contains(studyAnswerText(blocks), "A synthetic answer paragraph") {
+			t.Fatal("the synthetic answer blocks never rendered")
 		}
-		return comparison
+		return blocks
 	}
 	return askAnswerRichText(t, popup)
 }
@@ -367,13 +367,72 @@ func TestAskAnswerQuestionFollowsCitationInReadingArea(t *testing.T) {
 	}
 	questionPosition := app.Driver().AbsolutePositionForObject(questionText)
 	citationPosition := app.Driver().AbsolutePositionForObject(citation)
-	answerPosition := app.Driver().AbsolutePositionForObject(askAnswerRichText(t, popup))
+	answerPosition := app.Driver().AbsolutePositionForObject(studyAnswerContent(t, popup))
 	if questionPosition.Y < citationPosition.Y+citation.Size().Height || answerPosition.Y < questionPosition.Y+questionText.Size().Height {
 		t.Error("the question must appear after the citation and before the answer")
 	}
 	test.Tap(studyDisclosureButton(popup, true))
 	if !studyObjectVisible(popup, questionText) || segmentText(questionText.Segments) != question {
 		t.Error("collapsing the quotation hid or changed the question")
+	}
+}
+
+func TestStudyAnswerMarkdownRendererScope(t *testing.T) {
+	const raw = "## Reading\n\nA synthetic answer paragraph describes **the path**.\n\n- Outer point.\n  - Nested point.\n\n> A synthetic quoted line."
+	for _, action := range []string{aiActionExplain, aiActionContext, aiActionTranslation, aiActionCompare, aiActionAsk} {
+		t.Run(action, func(t *testing.T) {
+			app := test.NewApp()
+			t.Cleanup(app.Quit)
+			w := coverTestWindow{Window: test.NewWindow(widget.NewLabel("reading")), clip: &fakeClipboard{}}
+			t.Cleanup(w.Close)
+			w.Resize(fyne.NewSize(900, 760))
+			requests := stubCapturedStudyRequests(t)
+			showAIPanelForPassage(studyPanelState(t, w), action, syntheticAskPassage(), "What does the path mean?", selSpan{})
+			request := nextCapturedStudyRequest(t, requests, "Markdown renderer scope")
+			finishCapturedStudyRequest(t, request, raw, nil)
+			popup := topPopup(t, w)
+			answer := studyAnswerContent(t, popup)
+			blocks, usesBlocks := answer.(*compareAnswer)
+			if wantBlocks := action == aiActionCompare || action == aiActionAsk; usesBlocks != wantBlocks {
+				t.Fatalf("%s block renderer = %v, want %v", action, usesBlocks, wantBlocks)
+			}
+			if usesBlocks {
+				assertStudyAnswerMarkdownBlocks(t, blocks)
+			}
+			test.Tap(findTreeButton(popup, "Copy"))
+			if got := w.Clipboard().Content(); got != raw {
+				t.Error("Markdown rendering changed the copied provider answer")
+			}
+			if !sheetHas(popup, "AI-generated — may be imperfect. Verify important details.") {
+				t.Error("Markdown rendering lost the AI disclosure")
+			}
+			test.Tap(findTreeButton(popup, "Close"))
+		})
+	}
+}
+
+func assertStudyAnswerMarkdownBlocks(t *testing.T, answer *compareAnswer) {
+	t.Helper()
+	fixture := collectCompareRendered(answer)
+	heading := fixture.find(t, "Reading")
+	paragraph := fixture.find(t, "A synthetic answer")
+	outer := fixture.find(t, "Outer point")
+	nested := fixture.find(t, "Nested point")
+	quote := fixture.find(t, "A synthetic quoted")
+	if !heading.style.Bold || paragraph.pos.Y < heading.pos.Y+heading.size.Height+theme.Padding() {
+		t.Error("the Markdown heading is not separate from the following answer paragraph")
+	}
+	if nested.pos.X <= outer.pos.X || nested.pos.Y < outer.pos.Y+outer.size.Height {
+		t.Error("the nested Markdown list lost its indentation or vertical placement")
+	}
+	if quote.pos.X <= paragraph.pos.X {
+		t.Error("the Markdown quotation lost its inset")
+	}
+	for _, text := range fixture.texts {
+		position := text.pos.Subtract(answer.Position())
+		if position.X < -0.5 || position.X+text.size.Width > answer.Size().Width+0.5 || position.Y+text.size.Height > answer.MinSize().Height+0.5 {
+			t.Errorf("rendered Markdown text %q escaped the measured answer: %v/%v within %v", text.text, position, text.size, answer.Size())
+		}
 	}
 }
 

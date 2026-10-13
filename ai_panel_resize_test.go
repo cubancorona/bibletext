@@ -16,7 +16,7 @@ func mobileStudyResizeWindow(t *testing.T) (*AppState, fyne.Window) {
 	app := test.NewApp()
 	t.Cleanup(app.Quit)
 	fyne.SetCurrentApp(phoneTestApp{app})
-	w := test.NewWindow(nil)
+	w := coverTestWindow{Window: test.NewWindow(nil), clip: &fakeClipboard{}}
 	t.Cleanup(w.Close)
 	w.Resize(fyne.NewSize(744, 1133))
 	state := studyPanelState(t, w)
@@ -106,11 +106,16 @@ func TestStudyPanelMobileResizePreservesAnswerAndQuotation(t *testing.T) {
 				question := "How does this synthetic passage describe the path?"
 				showAIPanelForPassage(state, action, passage, question, selSpan{})
 				request := nextCapturedStudyRequest(t, requests, "resizable study card")
-				answer := strings.Repeat("A synthetic answer paragraph describes the path and the river.\n\n", 40)
+				answer := "## Reading\n\n" + strings.Repeat("A synthetic answer paragraph describes the path and the river.\n\n", 40) +
+					"- Outer point follows the path through the field to the river.\n  - Nested point follows the surrounding words and the wider passage.\n\n> A synthetic quoted line.\n\nFinal answer words."
 				finishCapturedStudyRequest(t, request, answer, nil)
 				popup := topPopup(t, w)
 				body := askAnswerBody(t, popup)
 				rich := studyAnswerContent(t, popup)
+				blocks, ok := rich.(*compareAnswer)
+				if !ok {
+					t.Fatal("Ask and Compare must use the Markdown block renderer")
+				}
 				rendered := studyAnswerText(rich)
 				excerpt, _ := noteSheetExcerpt(t, popup)
 				context := scrollHolding(popup, excerpt)
@@ -130,7 +135,7 @@ func TestStudyPanelMobileResizePreservesAnswerAndQuotation(t *testing.T) {
 				if offset.Y == 0 || expanded && contextOffset.Y == 0 {
 					t.Fatal("the reading offsets must exercise scrolled content")
 				}
-				for _, size := range []fyne.Size{{Width: 375, Height: 602.5}, {Width: 540, Height: 850}, {Width: 744, Height: 1133}} {
+				for _, size := range []fyne.Size{{Width: 375, Height: 602.5}, {Width: 874, Height: 402}, {Width: 540, Height: 850}, {Width: 744, Height: 1133}} {
 					w.Resize(size)
 					assertMobileStudyMargins(t, w, popup)
 					if topPopup(t, w) != popup || askAnswerBody(t, popup) != body || studyAnswerContent(t, popup) != rich {
@@ -145,11 +150,27 @@ func TestStudyPanelMobileResizePreservesAnswerAndQuotation(t *testing.T) {
 					if body.Size().Height < 80 || studyAnswerText(rich) != rendered || !sheetHas(popup, expectedPreviewCitation(passage.Ref, passage.VersionAbbrev)) {
 						t.Error("resizing lost reading space, the complete answer, or the long citation")
 					}
+					assertStudyAnswerMarkdownBlocks(t, blocks)
+					if action == aiActionAsk {
+						questionText, questionScroll := askAnswerContext(t, popup, question)
+						questionPosition := fyne.CurrentApp().Driver().AbsolutePositionForObject(questionText)
+						answerPosition := fyne.CurrentApp().Driver().AbsolutePositionForObject(rich)
+						if questionScroll != body || answerPosition.Y < questionPosition.Y+questionText.Size().Height {
+							t.Error("resizing moved the Ask question out of the answer scroll or below the answer")
+						}
+					}
 					body.ScrollToBottom()
 					if body.Content.Size().Height-body.Offset.Y > body.Size().Height+0.5 {
 						t.Error("the resized answer's last paragraph is unreachable")
 					}
+					if strings.Count(studyAnswerText(rich), "Final answer words.") != 1 {
+						t.Error("the resized Markdown answer lost its final paragraph")
+					}
 					body.ScrollToOffset(offset)
+				}
+				test.Tap(findTreeButton(popup, "Copy"))
+				if got := w.Clipboard().Content(); got != answer {
+					t.Error("resizing or quotation disclosure changed the copied Markdown answer")
 				}
 				select {
 				case <-requests:

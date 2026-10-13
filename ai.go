@@ -221,11 +221,12 @@ func aiActionTitle(action string) string {
 	}
 }
 
-// aiDifferingReadingsSentence is what every prose prompt says about a passage that is
-// read more than one way: name the readings and what each rests on, and let
+// aiDifferingReadingsSentence is what the three prose prompts say about a
+// passage read more than one way: name the readings and what each rests on, and let
 // the wording of the passage weigh, rather than flatten the difference into
 // "scholars disagree". Compare shares this instruction and allows brief
-// headings (ai_compare.go). Ask has its own quotation boundary below.
+// headings (ai_compare.go). Ask keeps differing readings relevant to its question
+// and has its own quotation boundary below.
 const aiDifferingReadingsSentence = "Where this passage is read differently, name the main readings, " +
 	"who holds them and the assumption each rests on, and say what the wording of the " +
 	"passage counts for or against; where a point is uncertain, say so briefly."
@@ -267,24 +268,21 @@ func aiPassageLines(p aiPassage) string {
 	return fmt.Sprintf("Passage (%s):\n“%s”", p.Ref, p.Text)
 }
 
-// buildAskPrompt turns a reader's free-form question about the selected passage into a
-// prompt for a narrative answer. This is the reading-menu "Ask" — distinct from the search
-// page's "Find", which returns matching verses. The answer is grounded in the passage and
-// may draw on directly relevant Scripture, but stays focused on the question, and says so
-// plainly when the passage doesn't address it rather than speculating.
+// buildAskPrompt answers a reader's free-form question about the selected
+// passage. This is the reading-menu "Ask" — distinct from the search page's
+// "Find", which returns matching verses. The prompt separates statements,
+// reported speech and inference, and permits simple Markdown without fixing
+// the answer's structure.
 func buildAskPrompt(p aiPassage, question string) string {
 	const preamble = "You are a knowledgeable, even-handed Bible study assistant. " +
-		"Answer the reader's question directly and clearly in plain language, and keep it " +
-		"concise — a few short paragraphs at most. Ground your answer in the passage below " +
-		"and its context; you may draw on directly relevant Scripture, but stay focused on " +
-		"the question. If the passage does not address the question, say so plainly rather " +
-		"than speculating. Distinguish what the selected passage states, what it reports " +
-		"a speaker saying, and what a reading infers. Quote only wording supplied in the " +
-		"passage; paraphrase surrounding context and other Scripture. If the question " +
-		"assumes something the passage does not establish, say so briefly and answer " +
-		"what it does support. " + aiDifferingReadingsSentence +
-		" Name a document or writer only when you are sure of it. Do not use markdown " +
-		"headings or bullet lists, and do not add follow-up questions."
+		"Answer the reader's question clearly and concisely, grounded in the passage " +
+		"and its context. You may draw on directly relevant Scripture. Distinguish what " +
+		"the passage states, what it reports someone saying, and what a reading infers. " +
+		"If the passage does not answer the question or support its assumptions, say so " +
+		"plainly. Mention differing readings when relevant to the question, and acknowledge " +
+		"uncertainty. Quote only wording supplied in the passage; paraphrase surrounding " +
+		"context and other Scripture.\n\n" +
+		"Use Markdown for any formatting. Avoid tables and HTML. Do not add follow-up questions."
 
 	return fmt.Sprintf("%s\n\nThe passage is from the %s.\n\nReader's question: %q\n\n%s",
 		preamble, p.Version, question, aiPassageLines(p))

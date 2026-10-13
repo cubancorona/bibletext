@@ -186,11 +186,11 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 	maxBodyH := ps.Height - 168
 	answer := widget.NewRichTextFromMarkdown("")
 	answer.Wrapping = fyne.TextWrapWord
-	var compare *compareAnswer
+	var markdownAnswer *compareAnswer
 	var answerView fyne.CanvasObject = answer
-	if action == aiActionCompare {
-		compare = newCompareAnswer()
-		answerView = compare
+	if action == aiActionCompare || action == aiActionAsk {
+		markdownAnswer = newCompareAnswer()
+		answerView = markdownAnswer
 	}
 	var questionView fyne.CanvasObject
 	if questionText != nil {
@@ -483,8 +483,8 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 		// request belongs to this panel, which reopens itself when it lands
 		// (below), and a second reopen would stack two panels (sheet_reopen.go).
 		registerSheetReopen(state, popup, reopen)
-		if compare != nil {
-			compare.setText(text)
+		if markdownAnswer != nil {
+			markdownAnswer.setText(text)
 		} else {
 			setAIAnswerText(answer, text)
 		}
@@ -534,8 +534,8 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 		current = ""
 		copyBtn.Disable()
 		reportBtn.Disable()
-		if compare != nil {
-			compare.setText("")
+		if markdownAnswer != nil {
+			markdownAnswer.setText("")
 		} else {
 			answer.ParseMarkdown("")
 		}

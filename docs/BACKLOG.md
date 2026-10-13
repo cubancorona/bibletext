@@ -123,11 +123,17 @@ each native menu (`reading_ios.go`, `reading_macos.go` with its selector,
 and the Fyne submenu ranging over `aiStudyVerbs` (`ai_compare.go`), held
 equal by `study_verbs_source_test.go`. The prompt shares the prose study
 instructions, asks for the main readings and whether they can be held together,
-and permits brief Markdown headings, emphasis, short lists and blockquotes,
-while avoiding tables and HTML. It names no groups or examples and
-prescribes no section structure. A combined reading must preserve each reading's
-actual claims. The complete prompt is public in README.md and held to the
-builder by `TestREADMEMirrorsPrompts`.
+and uses Markdown for formatting while avoiding tables and HTML. It names no
+groups or examples and prescribes no section structure. A combined reading must
+preserve each reading's actual claims. The complete prompt is public in README.md
+and held to the builder by `TestREADMEMirrorsPrompts`.
+
+Ask a question uses a concise question-focused prompt. It separates passage
+statements, reported speech and inference, corrects unsupported assumptions,
+and mentions differing readings only when relevant to the question. Only the
+supplied passage is quoted; surrounding context and other Scripture are
+paraphrased. Markdown formatting is permitted without tables, HTML or
+follow-up questions. README.md also mirrors this prompt.
 
 The earlier structured scorer and its planted controls remain test-only
 regressions. They depend on the former fixed sections and are not quality

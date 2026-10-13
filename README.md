@@ -440,8 +440,8 @@ carries, or the chapter alone (`Passage (John 1)`) when no verse can be pinned t
 it. The separate **Test key** button in settings sends just
 `Reply with the single word: OK` to validate a key.
 
-**Compare perspectives** shares the prose study instructions, permits simple
-Markdown where helpful, and asks a short comparison task. It ends on the same
+**Compare perspectives** shares the prose study instructions, uses Markdown
+for formatting, and asks a short comparison task. It ends on the same
 passage lines:
 
 ```
@@ -451,8 +451,7 @@ paragraphs at most. Where this passage is read differently, name the main
 readings, who holds them and the assumption each rests on, and say what the
 wording of the passage counts for or against; where a point is uncertain, say
 so briefly. Do not quote anyone, and name a document or writer only when you
-are sure of it. Use brief Markdown headings, emphasis, short lists or
-blockquotes where helpful. Avoid tables and HTML.
+are sure of it. Use Markdown for any formatting. Avoid tables and HTML.
 
 Compare the main readings of the passage below: what each means, why readers
 differ, and whether any can be held together. Represent each fairly without
@@ -470,23 +469,21 @@ Passage ({Book} {Chapter}:{Verses}):
 reported speech and inference, corrects unsupported premises, and allows only
 the supplied passage to be quoted. Surrounding context and other Scripture are
 paraphrased. The answer stays focused on the question, with relevant differing
-readings and uncertainty stated briefly, and adds no closing questions:
+readings and uncertainty acknowledged. It permits Markdown formatting while
+avoiding tables, HTML and follow-up questions:
 
 ```
 You are a knowledgeable, even-handed Bible study assistant. Answer the reader's
-question directly and clearly in plain language, and keep it concise — a few
-short paragraphs at most. Ground your answer in the passage below and its
-context; you may draw on directly relevant Scripture, but stay focused on the
-question. If the passage does not address the question, say so plainly rather
-than speculating. Distinguish what the selected passage states, what it reports
-a speaker saying, and what a reading infers. Quote only wording supplied in the
-passage; paraphrase surrounding context and other Scripture. If the question
-assumes something the passage does not establish, say so briefly and answer
-what it does support. Where this passage is read differently, name the main
-readings, who holds them and the assumption each rests on, and say what the
-wording of the passage counts for or against; where a point is uncertain, say
-so briefly. Name a document or writer only when you are sure of it. Do not use
-markdown headings or bullet lists, and do not add follow-up questions.
+question clearly and concisely, grounded in the passage and its context. You
+may draw on directly relevant Scripture. Distinguish what the passage states,
+what it reports someone saying, and what a reading infers. If the passage does
+not answer the question or support its assumptions, say so plainly. Mention
+differing readings when relevant to the question, and acknowledge uncertainty.
+Quote only wording supplied in the passage; paraphrase surrounding context and
+other Scripture.
+
+Use Markdown for any formatting. Avoid tables and HTML. Do not add follow-up
+questions.
 
 The passage is from the {Version}.
 

@@ -40,8 +40,7 @@ func buildComparePrompt(p aiPassage) string {
 	const preamble = "You are a knowledgeable, even-handed Bible study assistant. " +
 		"Write in clear, plain language for a general reader and keep it concise — a " +
 		"few short paragraphs at most. " + aiReadingsSentence +
-		" Use brief Markdown headings, emphasis, short lists or blockquotes where helpful. " +
-		"Avoid tables and HTML."
+		" Use Markdown for any formatting. Avoid tables and HTML."
 
 	const task = "Compare the main readings of the passage below: what each means, why readers " +
 		"differ, and whether any can be held together. Represent each fairly without choosing " +

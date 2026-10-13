@@ -106,7 +106,7 @@ func TestBuildComparePrompt(t *testing.T) {
 	for _, want := range []string{
 		readingsSentence,
 		"keep it concise — a few short paragraphs at most",
-		"Use brief Markdown headings, emphasis, short lists or blockquotes where helpful. Avoid tables and HTML.",
+		"Use Markdown for any formatting. Avoid tables and HTML.",
 		"Compare the main readings of the passage below: what each means, why readers differ, and whether any can be held together.",
 		"Represent each fairly without choosing for the reader or forcing agreement.",
 		"Where readings can be held together, explain how without changing what each reading actually claims.",
@@ -132,30 +132,25 @@ func TestBuildComparePrompt(t *testing.T) {
 	}
 }
 
-// Explain, Context and Translation retain this wording. Ask shares its
-// readings instruction but allows quotation only from the supplied passage.
+// Explain, Context, Translation and Compare retain this wording. Ask mentions
+// differing readings only when relevant to the reader's question.
 const readingsSentence = "Where this passage is read differently, name the main readings, who holds " +
 	"them and the assumption each rests on, and say what the wording of the passage counts for " +
 	"or against; where a point is uncertain, say so briefly. Do not quote anyone, and name a " +
 	"document or writer only when you are sure of it."
 
-// The prose verbs name differing readings and still forbid headings and
-// lists. Compare shares their readings instruction but permits brief headings.
+// The three prose verbs name differing readings and forbid headings and lists.
+// Compare shares their readings instruction; Ask uses a question-focused one.
+// Both Compare and Ask permit Markdown formatting.
 func TestStudyPromptsNameDifferingReadings(t *testing.T) {
 	psg := john3Passage()
 	prose := map[string]string{
 		aiActionExplain:     buildAIPrompt(aiActionExplain, psg),
 		aiActionContext:     buildAIPrompt(aiActionContext, psg),
 		aiActionTranslation: buildAIPrompt(aiActionTranslation, psg),
-		aiActionAsk:         buildAskPrompt(psg, "Who is the world here?"),
 	}
-	readingsCore, _, _ := strings.Cut(readingsSentence, " Do not quote anyone")
 	for action, p := range prose {
-		wantReadings := readingsSentence
-		if action == aiActionAsk {
-			wantReadings = readingsCore
-		}
-		if !strings.Contains(p, wantReadings) {
+		if !strings.Contains(p, readingsSentence) {
 			t.Errorf("%s: the prompt does not name differing readings:\n%s", action, p)
 		}
 		if !strings.Contains(p, "Do not use markdown headings or bullet lists") {
@@ -171,6 +166,13 @@ func TestStudyPromptsNameDifferingReadings(t *testing.T) {
 	}
 	if strings.Contains(compare, "Do not use markdown headings") {
 		t.Error("the comparison prompt forbids headings")
+	}
+	ask := buildAskPrompt(psg, "Who is the world here?")
+	if !strings.Contains(ask, "Mention differing readings when relevant to the question, and acknowledge uncertainty") {
+		t.Error("Ask does not keep differing readings relevant to the question")
+	}
+	if strings.Contains(ask, aiDifferingReadingsSentence) {
+		t.Error("Ask requires the broader readings task rather than focusing on the question")
 	}
 }
 
