@@ -188,8 +188,8 @@ PB "Set :ITSAppUsesNonExemptEncryption false" 2>/dev/null || PB "Add :ITSAppUses
 xcrun ibtool --compile "$APP/LaunchScreen.storyboardc" "$APP_DIR/LaunchScreen.storyboard" \
     --target-device iphone --target-device ipad --minimum-deployment-target "$IOS_MIN" \
     --module BibleText >/dev/null
-# PrivacyInfo must be at the root of an iOS app bundle. It declares the optional
-# third-party AI data flow plus the required-reason APIs present in the Go/Fyne
+# PrivacyInfo must be at the root of an iOS app bundle. It declares no developer
+# collection, plus the required-reason APIs present in the Go/Fyne
 # executable (UserDefaults, app-container file metadata, and monotonic timers).
 cp "$APP_DIR/PrivacyInfo.xcprivacy" "$APP/PrivacyInfo.xcprivacy"
 plutil -lint "$APP/Info.plist" "$APP/PrivacyInfo.xcprivacy" >/dev/null

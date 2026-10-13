@@ -34,54 +34,50 @@ account identifiers or private fixture data.
   Privacy answers, and Google Play Data safety answers against the final binary.
 - Re-evaluate the declarations whenever a provider, analytics component,
   account feature, note transport, key-storage path, or report flow changes.
-- Distinguish data sent directly to a selected third-party provider from data
-  received by project-operated infrastructure. Record the applicable store
-  definitions and exceptions; do not infer them from an earlier submission.
+- Distinguish data sent directly to a reader-selected provider under the
+  reader's own key from data received by project-operated infrastructure.
+  Preserve that distinction when assessing an actual data-flow change.
 - Confirm that the AI report action opens the device mail client and that no
   report is transmitted until the sender chooses to send it.
-- Run `appstore/preflight.py` before an Apple submission and review current
-  Play Console declarations before uploading an Android release.
+- Run `appstore/preflight.py` before an Apple submission. Update store privacy
+  answers when the app's data handling changes, then read the saved answers back.
 
-### Optional AI requests in 1.2.20
+### Direct bring-your-own-key AI requests
 
-The manifest conservatively covers provider-retained data from direct,
-authenticated requests, even though the developer receives none of it. It
-declares Other User Content and Search History as linked, for App Functionality
-and Other Purposes, and User ID as linked for App Functionality. None is used
-for tracking. User ID covers retained account/key-associated usage records,
-not an assertion that a raw API secret is retained. Other Purposes covers
-unpaid Gemini's permitted product/model improvement use. The app does not
-enforce a provider service tier or promise that requests are de-identified.
+The release classification is **Data Not Collected**: the developer operates no
+application server, app accounts, or analytics and receives none of the reader's
+AI requests. Both Apple manifests have an empty collected-data array and false
+tracking declarations. The mobile manifest's required-reason API entries remain
+independent of that classification.
 
-The corresponding Play choices are optional Other user-generated content,
-In-app search history and User IDs, conservatively disclosed as both collected
-and shared. Requests are encrypted in transit but not ephemeral. Core reading
-works without AI. Provider records are governed by provider controls; local
-deletion does not delete them.
+Find sends the entered query; passage study sends the selected passage and study
+action, including an entered question for Ask a question. These optional requests
+go directly to the selected provider under the reader's own key. The key is not
+sent to the developer. Core reading works without AI.
 
-This is a conservative disclosure judgment, not an Apple ruling about direct
-bring-your-own-key services. Apple's partner definition describes integrated
-external vendors but does not expressly settle this exact relationship. Review
-the live forms and retained records before submission, save the corresponding
-choices, and read them back. The manifest alone changes no store label.
+This classification treats direct BYOK use as the reader's interaction with the
+reader's own provider account. It is not an Apple ruling about this exact
+relationship. The manifest does not assert that providers receive nothing,
+retain nothing, or cannot associate requests with a provider account. Provider
+retention and use depend on provider policies and account settings; local
+key removal does not delete provider records. Keep those facts in the public
+privacy policy and the in-app AI disclosure.
+
+A prompt or presentation change does not itself change the data flow. Reassess
+this classification if requests begin passing through project-operated
+infrastructure, developer-managed AI credentials replace reader-supplied keys,
+or another feature introduces developer collection. A manifest change alone
+does not update a store's public privacy label.
 
 References:
 
 - [Apple collection and linkage definitions](https://developer.apple.com/app-store/app-privacy-details/)
-- [Apple manifest purposes](https://developer.apple.com/documentation/bundleresources/app-privacy-configuration/nsprivacycollecteddatatypes/nsprivacycollecteddatatypepurposes)
 - [Google Play Data safety definitions](https://support.google.com/googleplay/android-developer/answer/10787469?hl=en)
-- [Gemini handling and authentication details](https://ai.google.dev/gemini-api/terms)
-- [Grok per-key request records](https://docs.x.ai/developers/faq/security)
-- [Anthropic API-key-associated usage](https://platform.claude.com/docs/en/api/beta/organization/usage_report/retrieve_messages)
 
-### Provider eligibility before release
+### Provider account terms
 
-Privacy disclosure does not settle whether a provider permits the application's
-use. Gemini's terms effective 23 March 2026 require adult API users, restrict
-clients directed toward or likely accessed by minors, describe professional or
-business rather than consumer use, and require Paid Services for clients made
-available in the EEA, Switzerland or UK. Resolve the applicability of these
-terms to this general-purpose reader before releasing Gemini support. An age
-rating, a reader-supplied key or a privacy label alone does not establish
-eligibility. This review remains open; no provider configuration change is
-implied by the manifest update.
+Readers create their provider accounts and keys directly with the provider;
+provider terms govern eligibility, billing, retention, and account controls.
+BibleText does not determine a key's service tier or override those terms.
+Review the provider relationship when adding a provider or changing how requests
+are authenticated or routed.

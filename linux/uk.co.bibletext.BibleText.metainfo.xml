@@ -75,6 +75,15 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.2.21" date="2026-10-13">
+      <description>
+        <p>Restore privacy declarations for optional AI study.</p>
+        <ul>
+          <li>Restore the prior privacy declarations for optional AI study with the reader's own provider key.</li>
+          <li>Requests still go directly to the selected AI provider; the developer receives no AI queries or keys.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.20" date="2026-10-13">
       <description>
         <p>Ask a question and compare perspectives.</p>

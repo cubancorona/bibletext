@@ -345,20 +345,23 @@ into its sandbox container.
 
 ## Privacy, age rating, and declarations
 
-The existing public listing says **Data Not Collected**. The 1.2.20 manifest
-instead conservatively declares optional AI user content, search history and
-provider account identifiers as linked data, without tracking. Content and
-search serve app functionality and other purposes, covering unpaid Gemini's
-permitted product/model improvement use. Account association serves app
-functionality. This includes retained provider account/key-associated records,
-not a claim that a raw API secret is retained. The absence of a developer
-application server does not determine the collection answer.
+The release classification is **Data Not Collected**, matching the direct
+bring-your-own-key arrangement. The developer receives no AI requests; the app
+sends the selected query, passage, action, or entered question directly to the
+reader's selected provider under the reader's own key. Both Apple manifests
+have empty collected-data arrays and false tracking declarations. Mobile
+required-reason API entries remain unchanged.
 
-Before submission, inspect and update both platform records' live App Privacy
-forms to match the final binary, manifest and public policy, then read the saved
-answers back. See [PRIVACY_RELEASE_CHECKLIST.md](PRIVACY_RELEASE_CHECKLIST.md)
-for the mapping and the separate unresolved Gemini eligibility review. A local
-manifest change does not update the public store label.
+Provider retention and account association depend on the provider's policies
+and the reader's account settings. Empty collection declarations do not promise
+that the provider retains nothing. This classification is not an Apple ruling
+about this exact BYOK relationship. See
+[PRIVACY_RELEASE_CHECKLIST.md](PRIVACY_RELEASE_CHECKLIST.md) for the data flow and
+the changes that require reassessment.
+
+Update live App Privacy answers when data handling changes, then read the saved
+answers back. Prompt wording and answer presentation alone do not add a new data
+flow, and a local manifest edit does not update the public store label.
 
 Confirm the public privacy and support pages match the submitted binary and are
 live before review. Keep the configured support mailbox consistent through the

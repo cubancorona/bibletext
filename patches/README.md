@@ -234,17 +234,26 @@ installation.
 Fyne tools v1.7.2 chooses target SDK 29 for `fyne package` and 35 for
 `fyne release`; there is no public target-SDK flag. BibleText's wrapper already
 re-signs debug APKs with current Android signature schemes, so the old debug
-signing workaround is not needed. The patch makes both modes target API 36.
+signing workaround is not needed. The patch makes both modes target API 36
+with a minimum of API 24 (Android 7.0). `binres.MinSDK` is the shared floor:
+the native compiler default, the binary-manifest fallback, and aapt2's
+`--min-sdk-version` all use it. No unsupported packaging flag is required.
 
 The same patch lets the wrapper pin the exact API-36 platform and build-tools
 paths. Upstream selects SDK directories lexicographically rather than by
 numeric version, so neither its first-directory build-tools choice nor its
 greatest-name platform choice is a safe version selector. The regression tests
 include both 9.x and 36.x directories. `scripts/build-android.sh` then verifies
-the package/version identity, compile SDK 36, minSdkVersion 21, targetSdkVersion
+the package/version identity, compile SDK 36, minSdkVersion 24, targetSdkVersion
 36, injected dex bridge, and configured signer from every final APK and AAB.
 These artifact checks are the release gate; the source patch alone is not
 treated as proof.
+
+The patch regressions exercise production resource compilation with a synthetic
+aapt2 process and inspect its actual link arguments in debug and release modes.
+They also decode the fallback binary manifest and check native compiler selection
+with both an API-21 compiler and an API-24 compiler available. An obsolete lower
+default therefore fails instead of finding only the API-24 compiler by chance.
 
 This patch is Android-only. The iOS and desktop packaging paths continue to use
 the installed Fyne CLI and are unaffected.

@@ -9,11 +9,10 @@ import (
 	"testing"
 )
 
-// Optional AI requests carry content authenticated to a provider account.
-// Keep release declarations aligned with that data flow and the supported
-// providers' purposes. This guard checks plist types and dictionary ownership,
-// which matching strings cannot establish.
-func TestPrivacyManifestDeclaresProviderDataAndRequiredReasons(t *testing.T) {
+// The developer receives no data from direct bring-your-own-key AI requests.
+// Keep the empty collection declarations separate from the required-reason
+// APIs. Check plist types and dictionary ownership, not only matching strings.
+func TestPrivacyManifestDeclaresNoCollectionAndRequiredReasons(t *testing.T) {
 	raw, err := os.ReadFile("cmd/mobile/PrivacyInfo.xcprivacy")
 	if err != nil {
 		t.Fatal(err)
@@ -40,36 +39,11 @@ func TestPrivacyManifestDeclaresProviderDataAndRequiredReasons(t *testing.T) {
 		t.Fatal("privacy manifest must not declare tracking domains")
 	}
 
-	wantData := map[string][]string{
-		"NSPrivacyCollectedDataTypeOtherUserContent": {
-			"NSPrivacyCollectedDataTypePurposeAppFunctionality", "NSPrivacyCollectedDataTypePurposeOther",
-		},
-		"NSPrivacyCollectedDataTypeSearchHistory": {
-			"NSPrivacyCollectedDataTypePurposeAppFunctionality", "NSPrivacyCollectedDataTypePurposeOther",
-		},
-		"NSPrivacyCollectedDataTypeUserID": {"NSPrivacyCollectedDataTypePurposeAppFunctionality"},
-	}
-	collected := privacyManifestArray(t, root["NSPrivacyCollectedDataTypes"])
-	if len(collected) != len(wantData) {
-		t.Fatalf("privacy manifest declares %d collected-data types, want %d", len(collected), len(wantData))
-	}
-	seenData := make(map[string]bool)
-	for _, entry := range collected {
-		dict := privacyManifestDictionary(t, entry, "NSPrivacyCollectedDataType",
-			"NSPrivacyCollectedDataTypeLinked", "NSPrivacyCollectedDataTypeTracking", "NSPrivacyCollectedDataTypePurposes")
-		kind := privacyManifestString(t, dict["NSPrivacyCollectedDataType"])
-		purposes, ok := wantData[kind]
-		if !ok || seenData[kind] {
-			t.Fatalf("unexpected or duplicate collected-data type %q", kind)
-		}
-		seenData[kind] = true
-		privacyManifestBoolean(t, dict["NSPrivacyCollectedDataTypeLinked"], true)
-		privacyManifestBoolean(t, dict["NSPrivacyCollectedDataTypeTracking"], false)
-		privacyManifestStringSet(t, dict["NSPrivacyCollectedDataTypePurposes"], purposes)
+	if collected := privacyManifestArray(t, root["NSPrivacyCollectedDataTypes"]); len(collected) != 0 {
+		t.Fatal("privacy manifest must not declare data collected by the developer")
 	}
 
-	// Keep the required-reason API declarations independent of the collected
-	// data changes: packaging still depends on all three existing reasons.
+	// Packaging depends on all three required-reason API declarations.
 	wantAPIs := map[string]string{
 		"NSPrivacyAccessedAPICategoryFileTimestamp":  "C617.1",
 		"NSPrivacyAccessedAPICategorySystemBootTime": "35F9.1",

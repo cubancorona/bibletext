@@ -13,7 +13,7 @@ testers supplied through the Google Group
 September. 1.2.10 is a desktop-packaging release and was deliberately not sent
 to Play.
 
-Release identity in production:
+Release identity in production (1.2.19):
 
 - package: `uk.co.bibletext`
 - version: 1.2.19
@@ -23,9 +23,10 @@ Release identity in production:
 - upload artifact: `~/Library/Android/bibletext-dist/BibleText.aab`
 
 1.2.19, versionCode 189, is live in production and alpha. The next prepared
-release is 1.2.20, versionCode 191, with draft release notes below. A release goes
-up to the alpha track with `scripts/play-publish.py upload`, and on the
-account holder's OK `scripts/play-publish.py promote` takes that release to
+release is 1.2.21, versionCode 192, which requires Android 7.0 / API 24 or
+later. Google Play's installer check remains enabled. Draft release notes are
+below. Releases go to alpha with `scripts/play-publish.py upload`. On the
+account holder's OK, `scripts/play-publish.py promote` takes that release to
 production, its release notes unchanged (docs/RELEASING.md, stages 6 and 7).
 The service account was granted "release to production" on 2 October 2026,
 for this app only; until then it could not reach production, and the
@@ -157,19 +158,9 @@ keys. However, the app makes off-device requests:
 
 Google treats collection and sharing as separate questions, and a
 user-initiated transfer exception for sharing does not automatically answer the
-collection question. For 1.2.20, the conservative declaration includes optional
-Other user-generated content, In-app search history and User IDs associated with
-the provider account, with collection and sharing disclosed. Content and search
-serve app functionality and any provider product/model improvement purpose
-required by the live form, including unpaid Gemini handling. Account-associated
-records serve app functionality; this does not assert retention of a raw API
-secret. Requests use HTTPS, and provider retention means they are not ephemeral.
-
-Inspect the current form, save the matching choices and read them back before
-upload. Do not claim that deleting local keys or notes deletes provider records.
-The separate Gemini eligibility review in
-[PRIVACY_RELEASE_CHECKLIST.md](PRIVACY_RELEASE_CHECKLIST.md) also remains a
-release prerequisite. Local documentation does not update Play Console.
+collection question. Complete the form from the final binary and current policy,
+document the reasoning, and make the privacy policy match. All network traffic
+is HTTPS.
 
 ## Content rating and other declarations
 
@@ -190,6 +181,10 @@ Also confirm from the final AAB:
   removal controls; and
 - target audience and Families eligibility are selected from the real intended
   audience, not to avoid or trigger a policy track.
+
+## Release notes — 1.2.21
+
+> New: Ask a question… and Compare perspectives with your own AI key. Collapse quotations while reading AI answers. Clearer previews and more accurate citations for study, sharing and notes; drafts survive rotation. Narration continues when Android closes the reading screen while the app runs. Better tablet and landscape spacing, psalm-title wrapping on Android 15+, and lower study-card memory use. Restored prior AI privacy declarations. Requires Android 7.0 or later.
 
 ## Release notes — 1.2.20
 

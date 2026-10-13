@@ -15,6 +15,15 @@
 # are each a day before their tags, and stand.
 
 [[release]]
+version = "1.2.21"
+date = "2026-10-13"
+head = "Restore privacy declarations for optional AI study."
+bullets = [
+  "Restore the prior privacy declarations for optional AI study with the reader's own provider key.",
+  "Requests still go directly to the selected AI provider; the developer receives no AI queries or keys.",
+]
+
+[[release]]
 version = "1.2.20"
 date = "2026-10-13"
 head = "Ask a question and compare perspectives."

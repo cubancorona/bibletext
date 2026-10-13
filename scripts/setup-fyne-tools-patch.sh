@@ -5,7 +5,8 @@
 # fyne.io/tools v1.7.2 hardcodes target SDK 29 for debug packages and 35 for
 # release packages. BibleText re-signs its debug APK with current signature
 # schemes, so both packaging modes can and must target API 36. The tiny patch
-# also lets the wrapper pin the exact API-36 platform and build-tools paths.
+# also keeps the manifest and native compiler floor at API 24 (Android 7.0)
+# and lets the wrapper pin the exact API-36 platform and build-tools paths.
 #
 # The same CLI writes IPHONEOS_DEPLOYMENT_TARGET = 9.0 into the Xcode project
 # it generates for iOS, and Xcode 27 refuses any target below 15.0 — the app
@@ -131,9 +132,16 @@ PATCH_RESIDUE="$(find "$DEST" -type f \( -name '*.orig' -o -name '*.rej' \) -pri
 TARGET="$DEST/cmd/fyne/internal/mobile/build.go"
 TOOLS_PICKER="$DEST/cmd/fyne/internal/util/mobile.go"
 PLATFORM_PICKER="$DEST/cmd/fyne/internal/mobile/binres/sdk.go"
+RESOURCE_COMPILER="$DEST/cmd/fyne/internal/mobile/android_resources.go"
 if ! grep -q 'androidTargetSDK = 36' "$TARGET" \
    || ! grep -q 'target := androidTargetSDK' "$TARGET"; then
   echo "ERROR: fyne.io/tools Android target-SDK patch did not apply" >&2
+  exit 1
+fi
+if ! grep -q 'const MinSDK = 24' "$PLATFORM_PICKER" \
+   || ! grep -q 'minAndroidAPI[[:space:]]*=[[:space:]]*binres.MinSDK' "$TARGET" \
+   || ! grep -q '"--min-sdk-version", strconv.Itoa(binres.MinSDK)' "$RESOURCE_COMPILER"; then
+  echo "ERROR: fyne.io/tools Android minimum-API patch did not apply" >&2
   exit 1
 fi
 if ! grep -q 'BIBLETEXT_ANDROID_BUILD_TOOLS' "$TOOLS_PICKER"; then
@@ -146,6 +154,8 @@ if ! grep -q 'BIBLETEXT_ANDROID_PLATFORM' "$PLATFORM_PICKER"; then
 fi
 [ -s "$DEST/cmd/fyne/internal/mobile/build_bibletext_test.go" ] \
   || { echo "ERROR: fyne.io/tools target-SDK regression test is missing" >&2; exit 1; }
+[ -s "$DEST/cmd/fyne/internal/mobile/android_resources_bibletext_test.go" ] \
+  || { echo "ERROR: fyne.io/tools manifest-link regression test is missing" >&2; exit 1; }
 [ -s "$DEST/cmd/fyne/internal/util/mobile_bibletext_test.go" ] \
   || { echo "ERROR: fyne.io/tools build-tools regression test is missing" >&2; exit 1; }
 [ -s "$DEST/cmd/fyne/internal/mobile/binres/sdk_bibletext_test.go" ] \
@@ -173,4 +183,4 @@ fi
 [ -s "$DEST/cmd/fyne/internal/mobile/build_iosapp_bibletext_test.go" ] \
   || { echo "ERROR: fyne.io/tools iOS deployment-target regression test is missing" >&2; exit 1; }
 
-echo "OK: patched fyne.io/tools ${TOOLS_VERSION} for Android target API 36, iOS deployment target ${IOS_MIN} and the Linux scheme-handler desktop entry."
+echo "OK: patched fyne.io/tools ${TOOLS_VERSION} for Android minimum API 24 and target API 36, iOS deployment target ${IOS_MIN} and the Linux scheme-handler desktop entry."

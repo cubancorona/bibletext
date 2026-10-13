@@ -96,6 +96,9 @@ export PATH="$(go env GOPATH)/bin:$HOME/bin:$PATH"   # fyne + bundletool wrapper
 "$REPO_ROOT/scripts/setup-fyne-patch.sh"
 "$REPO_ROOT/scripts/setup-fyne-tools-patch.sh"
 
+# Play's installer protection requires Android 7.0 or later. Keep dex generation
+# and the final manifest checks at the same floor as the patched Fyne packager.
+ANDROID_MIN_API=24
 ANDROID_TARGET_API=36
 ANDROID_BUILD_TOOLS_VERSION=36.1.0
 ANDROID_JAR="$ANDROID_HOME/platforms/android-${ANDROID_TARGET_API}/android.jar"
@@ -150,8 +153,8 @@ verify_apk_identity_sdk() {
     || { echo "ERROR: $package_path has the wrong versionName" >&2; exit 1; }
   grep -Fq "compileSdkVersion='${ANDROID_TARGET_API}'" "$WORK/android-sdk-badging.txt" \
     || { echo "ERROR: $package_path was not compiled with Android API $ANDROID_TARGET_API" >&2; exit 1; }
-  grep -Fq "minSdkVersion:'21'" "$WORK/android-sdk-badging.txt" \
-    || { echo "ERROR: $package_path does not declare minSdkVersion 21" >&2; exit 1; }
+  grep -Fq "minSdkVersion:'${ANDROID_MIN_API}'" "$WORK/android-sdk-badging.txt" \
+    || { echo "ERROR: $package_path does not declare minSdkVersion $ANDROID_MIN_API" >&2; exit 1; }
   grep -Fq "targetSdkVersion:'${ANDROID_TARGET_API}'" "$WORK/android-sdk-badging.txt" \
     || { echo "ERROR: $package_path does not target Android API $ANDROID_TARGET_API" >&2; exit 1; }
 }
@@ -168,8 +171,8 @@ verify_aab_identity_sdk() {
     || { echo "ERROR: $package_path has the wrong versionName" >&2; exit 1; }
   grep -Fq "android:compileSdkVersion=\"${ANDROID_TARGET_API}\"" "$WORK/android-sdk-manifest.xml" \
     || { echo "ERROR: $package_path was not compiled with Android API $ANDROID_TARGET_API" >&2; exit 1; }
-  grep -Fq 'android:minSdkVersion="21"' "$WORK/android-sdk-manifest.xml" \
-    || { echo "ERROR: $package_path does not declare minSdkVersion 21" >&2; exit 1; }
+  grep -Fq "android:minSdkVersion=\"${ANDROID_MIN_API}\"" "$WORK/android-sdk-manifest.xml" \
+    || { echo "ERROR: $package_path does not declare minSdkVersion $ANDROID_MIN_API" >&2; exit 1; }
   grep -Fq "android:targetSdkVersion=\"${ANDROID_TARGET_API}\"" "$WORK/android-sdk-manifest.xml" \
     || { echo "ERROR: $package_path does not target Android API $ANDROID_TARGET_API" >&2; exit 1; }
 }
@@ -194,7 +197,7 @@ mkdir -p "$WORK/classes"
 javac --release 8 -Xlint:-options -cp "$ANDROID_JAR" -d "$WORK/classes" \
   "$REPO_ROOT"/android/*.java
 mkdir -p "$WORK/dexout"
-"$BT/d8" --min-api 21 --lib "$ANDROID_JAR" --output "$WORK/dexout" \
+"$BT/d8" --min-api "$ANDROID_MIN_API" --lib "$ANDROID_JAR" --output "$WORK/dexout" \
   "$WORK/classes/org/bibletext/"*.class
 mv "$WORK/dexout/classes.dex" "$WORK/classes2.dex"
 ls -la "$WORK/classes2.dex"
@@ -210,7 +213,7 @@ mkdir -p "$WORK/classes1" "$WORK/dexout1"
 javac --release 8 -Xlint:-options -cp "$ANDROID_JAR" -d "$WORK/classes1" \
   "$REPO_ROOT/third_party/fyne/internal/driver/mobile/app/GoNativeActivity.java" \
   "$REPO_ROOT/android/goapp/FyneNotificationReceiver.java"
-"$BT/d8" --min-api 21 --lib "$ANDROID_JAR" --output "$WORK/dexout1" \
+"$BT/d8" --min-api "$ANDROID_MIN_API" --lib "$ANDROID_JAR" --output "$WORK/dexout1" \
   "$WORK/classes1/org/golang/app/"*.class
 mv "$WORK/dexout1/classes.dex" "$WORK/classes1.dex"
 grep -q "onNewIntent" "$REPO_ROOT/third_party/fyne/internal/driver/mobile/app/GoNativeActivity.java" \

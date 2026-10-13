@@ -3784,11 +3784,9 @@ public final class BtBridge {
      *
      * Publishing through MediaStore needs no permission from API 29, where
      * each app owns what it inserts. Below that it writes to shared storage,
-     * so WRITE_EXTERNAL_STORAGE is needed — and it is a RUNTIME permission
-     * only from API 23. The app's floor is 21, where the manifest's
-     * maxSdkVersion="28" declaration is granted at install and nothing has to
-     * be asked; the window that was broken is 23..28, where the permission was
-     * declared, never requested, and the insert therefore refused. Every
+     * so WRITE_EXTERNAL_STORAGE must be requested at runtime on supported
+     * API 24..28. The earlier API 23..28 path declared the permission but
+     * never requested it, so the insert was refused. Every
      * failure then returned quietly: the reader
      * tapped Share as image and nothing happened at all — no sheet, no error,
      * not even a wrong result to report. Two of the paths out of this method

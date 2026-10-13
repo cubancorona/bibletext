@@ -22,6 +22,11 @@ foreground service + framework `MediaSession` + MediaStyle notification; see
 the Audio section). Everything else (reading, search, Find/Ask AI, navigation,
 versions, history, text size) is data-driven off the same code.
 
+**Android 7.0 / API 24 or later is required from 1.2.21.** Earlier releases
+supported Android 5.0 / API 21. Google Play's installer check remains enabled;
+both the native build and the packaged minimum SDK must match the supported
+floor.
+
 **Build with [`scripts/build-android.sh`](../scripts/build-android.sh), NOT a
 bare `fyne package`** — the overlay's Java half ships as `classes2.dex`, which
 that script compiles and injects. A plain `fyne package` build still runs, but
@@ -46,9 +51,9 @@ differently on every phone): 21 dp em on a 28 dp pitch, the twin of the iOS
 lines in justified mode without ever drawing them justified — the breaker lets
 a line exceed the width by what its spaces could shrink, nothing shrinks them,
 and on API 33 every such line ran past the right edge while the rest stayed
-ragged (stock emulator; see `docs/BACKLOG.md`). Every release before Android 15
-(API 21 to 34) therefore reads ragged but whole; Android 15 justifies. The
-Study with AI popup is a palette-coloured Material list placed below the
+ragged (stock emulator; see `docs/BACKLOG.md`). Supported versions before
+Android 15 (API 24 to 34) therefore read ragged but whole; Android 15 justifies.
+The Study with AI popup is a palette-coloured Material list placed below the
 selection's line, or above it when the tab bar leaves no room (a `PopupMenu` on
 an anchor view shrank and scrolled against the bottom instead).
 
@@ -246,7 +251,7 @@ the tap); an unplaced-only pill parks at the top of the text with no band.
 
 ## Known quirks
 
-- Debug and release packages both declare **minSdkVersion 21** and
+- Debug and release packages both declare **minSdkVersion 24** and
   **targetSdkVersion 36**. The wrapper verifies those values from each final
   APK/AAB rather than trusting the packaging command. This keeps notification
   permission and foreground-service behavior representative in debug builds.
@@ -335,10 +340,11 @@ the tap); an unplaced-only pill parks at the top of the text with no band.
 Use **`scripts/build-android.sh`** — it compiles `android/BtBridge.java` to
 `classes2.dex`, builds a locally patched copy of the pinned Fyne CLI
 (`fyne-io/tools` v1.7.2), and **builds against the patched Fyne library**. The
-CLI patch makes debug and release target API 36 and honors the wrapper's explicit
-API-36 platform/build-tools paths; the library patches provide the Android
-caret-blink, current emoji, warm-App-Link, and atomic-preferences fixes. The
-script injects the dex and re-signs the result. Before publishing, it checks the
+CLI patch sets minimum API 24 and target API 36 for debug and release, and
+honors the wrapper's explicit API-36 platform/build-tools paths; the library
+patches provide the Android caret-blink, current emoji, warm-App-Link, and
+atomic-preferences fixes. The script injects the dex and re-signs the result.
+Before publishing, it checks the
 final package ID, version, compile/min/target SDKs, both dex entries and warm-link
 bridge, signature schemes, and upload-certificate fingerprint independently on
 the AAB and universal APK.
@@ -559,7 +565,7 @@ someone else is using the emulator.
 AJ="$ANDROID_HOME/platforms/android-36/android.jar"
 BT="$(ls -d "$ANDROID_HOME"/build-tools/* | tail -1)"
 javac --release 8 -cp "$AJ" -d classes android/BtKeys.java Probe.java
-"$BT/d8" --min-api 21 --lib "$AJ" --output dex $(find classes -name '*.class')
+"$BT/d8" --min-api 24 --lib "$AJ" --output dex $(find classes -name '*.class')
 adb push dex/classes.dex /data/local/tmp/ksprobe.dex
 adb shell "CLASSPATH=/data/local/tmp/ksprobe.dex app_process / Probe"
 ```
@@ -613,7 +619,8 @@ Use `am start`, not `monkey`: as noted under Emulator, `monkey` exits 251
 against the current manifest and starts nothing, which reads exactly like a
 migration that failed to run.
 
-Still unverified anywhere: API 21–22 degradation on a genuinely old image (the
-gate is structural, pinned by `TestBtKeysGatesOnAPI23`), and that `no_backup/`
-really is excluded from a `bmgr backupnow`/restore cycle — which the Bible
-caches have always assumed too.
+Earlier releases supported API 21–22, whose key-storage degradation was not
+exercised on a genuinely old image (the gate is structural, pinned by
+`TestBtKeysGatesOnAPI23`). Those versions are below the supported floor from
+1.2.21. Still unverified: that `no_backup/` really is excluded from a
+`bmgr backupnow`/restore cycle — which the Bible caches have always assumed too.

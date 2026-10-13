@@ -12,7 +12,7 @@
     android:foregroundServiceType attribute (API 29 attr vs its baked-in API 21
     table) and would fail the build on this file.
   - Do NOT add android:versionCode / android:versionName or <uses-sdk> here:
-    fyne passes them as aapt2 link flags (-app-build / -app-version, min 21,
+    fyne passes them as aapt2 link flags (-app-build / -app-version, min 24,
     target 36 for debug and release via the pinned CLI patch), and flag values
     only apply when the manifest doesn't already declare them — hardcoding here
     would freeze the versionCode.

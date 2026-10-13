@@ -1,24 +1,40 @@
 diff --git a/cmd/fyne/internal/mobile/binres/sdk.go b/cmd/fyne/internal/mobile/binres/sdk.go
-index 46b1d57..6a4a0c9 100644
 --- a/cmd/fyne/internal/mobile/binres/sdk.go
 +++ b/cmd/fyne/internal/mobile/binres/sdk.go
-@@ -55,0 +56,5 @@ func LatestAPIResourcesPath() (string, error) {
+@@ -10,8 +10,8 @@
+ 	"path"
+ )
+ 
+-// MinSDK is the targeted sdk version for support by package binres.
+-const MinSDK = 21
++// MinSDK is the minimum Android API for manifest and native compilation.
++const MinSDK = 24
+ 
+ // Requires environment variable ANDROID_HOME to be set.
+ func apiResources() ([]byte, error) {
+@@ -53,6 +53,11 @@
+ }
+ 
+ func LatestAPIResourcesPath() (string, error) {
 +	// Keep resource compilation on the platform checked by the wrapper instead
 +	// of relying on the upstream lexicographic directory scan.
 +	if pinned := os.Getenv("BIBLETEXT_ANDROID_PLATFORM"); pinned != "" {
 +		return pinned, nil
 +	}
-diff --git b/cmd/fyne/internal/mobile/binres/sdk_bibletext_test.go b/cmd/fyne/internal/mobile/binres/sdk_bibletext_test.go
+ 	sdkdir := os.Getenv("ANDROID_HOME")
+ 	if sdkdir == "" {
+ 		return "", fmt.Errorf("ANDROID_HOME env var not set")
+diff --git a/cmd/fyne/internal/mobile/binres/sdk_bibletext_test.go b/cmd/fyne/internal/mobile/binres/sdk_bibletext_test.go
 new file mode 100644
-index 0000000..c171f53
 --- /dev/null
 +++ b/cmd/fyne/internal/mobile/binres/sdk_bibletext_test.go
-@@ -0,0 +1,30 @@
+@@ -0,0 +1,67 @@
 +package binres
 +
 +import (
 +	"os"
 +	"path/filepath"
++	"strings"
 +	"testing"
 +)
 +
@@ -44,15 +60,67 @@ index 0000000..c171f53
 +		t.Fatalf("LatestAPIResourcesPath() = %q, want %q", got, platform)
 +	}
 +}
++
++func TestBibleTextAndroidManifestMinimum(t *testing.T) {
++	old := skipSynthesize
++	skipSynthesize = false
++	t.Cleanup(func() { skipSynthesize = old })
++	manifest := `<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="org.example.synthetic"><application/></manifest>`
++	parsed, err := UnmarshalXML(strings.NewReader(manifest), false, 36)
++	if err != nil {
++		t.Fatal(err)
++	}
++	data, err := parsed.MarshalBinary()
++	if err != nil {
++		t.Fatal(err)
++	}
++	decoded := new(XML)
++	if err := decoded.UnmarshalBinary(data); err != nil {
++		t.Fatal(err)
++	}
++	found := false
++	for element := range decoded.iterElements() {
++		if element.Name.Resolve(decoded.Pool) != "uses-sdk" {
++			continue
++		}
++		for _, attr := range element.attrs {
++			if attr.Name.Resolve(decoded.Pool) == "minSdkVersion" {
++				found = true
++				if attr.TypedValue.Type != DataIntDec || attr.TypedValue.Value != 24 {
++					t.Errorf("binary manifest minSdkVersion = %+v, want integer 24", attr.TypedValue)
++				}
++			}
++		}
++	}
++	if !found {
++		t.Fatal("binary manifest has no minimum SDK declaration")
++	}
++}
 diff --git a/cmd/fyne/internal/mobile/build.go b/cmd/fyne/internal/mobile/build.go
-index a07b5b0..e543e00 100644
 --- a/cmd/fyne/internal/mobile/build.go
 +++ b/cmd/fyne/internal/mobile/build.go
-@@ -33 +33,2 @@ const (
+@@ -17,6 +17,7 @@
+ 	"runtime"
+ 	"strings"
+ 
++	"fyne.io/tools/cmd/fyne/internal/mobile/binres"
+ 	"fyne.io/tools/cmd/fyne/internal/util"
+ 
+ 	"golang.org/x/tools/go/packages"
+@@ -30,7 +31,8 @@
+ }
+ 
+ const (
 -	minAndroidAPI = 15
-+	minAndroidAPI    = 15
++	minAndroidAPI    = binres.MinSDK
 +	androidTargetSDK = 36
-@@ -111,4 +112,4 @@ func runBuildImpl(cmd *command) (*packages.Package, error) {
+ )
+ 
+ func runBuild(cmd *command) error {
+@@ -108,10 +110,10 @@
+ 			}
+ 			return pkg, nil
+ 		}
 -		target := 35
 -		if !buildRelease {
 -			target = 29 // TODO once we have gomobile debug signing working for v2 android signs
@@ -61,15 +129,22 @@ index a07b5b0..e543e00 100644
 +		// so the upstream target-29 workaround is unnecessary. Debug and release
 +		// packages must exercise the same API-36 platform behavior.
 +		target := androidTargetSDK
-diff --git b/cmd/fyne/internal/mobile/build_bibletext_test.go b/cmd/fyne/internal/mobile/build_bibletext_test.go
+ 		nmpkgs, err = goAndroidBuild(pkg, buildBundleID, targetArchs, cmd.IconPath, cmd.AppName, cmd.Version, cmd.Build,
+ 			target, buildRelease, cmd.iconFG, cmd.iconBG, cmd.iconMono)
+ 		if err != nil {
+diff --git a/cmd/fyne/internal/mobile/build_bibletext_test.go b/cmd/fyne/internal/mobile/build_bibletext_test.go
 new file mode 100644
-index 0000000..26cd2e5
 --- /dev/null
 +++ b/cmd/fyne/internal/mobile/build_bibletext_test.go
-@@ -0,0 +1,10 @@
+@@ -0,0 +1,49 @@
 +package mobile
 +
-+import "testing"
++import (
++	"os"
++	"path/filepath"
++	"strconv"
++	"testing"
++)
 +
 +func TestBibleTextAndroidTargetSDK(t *testing.T) {
 +	t.Parallel()
@@ -77,20 +152,218 @@ index 0000000..26cd2e5
 +		t.Fatalf("androidTargetSDK = %d, want 36", androidTargetSDK)
 +	}
 +}
++
++func TestBibleTextAndroidNativeMinimum(t *testing.T) {
++	if flag := cmdBuild.Flag.Lookup("androidapi"); flag == nil || flag.DefValue != "24" {
++		t.Fatalf("native Android API flag default = %v, want 24", flag)
++	}
++	oldRelease := buildRelease
++	t.Cleanup(func() { buildRelease = oldRelease })
++	for _, release := range []bool{false, true} {
++		buildRelease = release
++		t.Run(map[bool]string{false: "debug", true: "release"}[release], func(t *testing.T) {
++			for _, arch := range []string{"arm", "arm64", "386", "amd64"} {
++				tc := ndk.Toolchain(arch)
++				root := t.TempDir()
++				bin := filepath.Join(root, "toolchains", "llvm", "prebuilt", archNDK(), "bin")
++				if err := os.MkdirAll(bin, 0o755); err != nil {
++					t.Fatal(err)
++				}
++				// A lower-API compiler exists, so an obsolete default chooses
++				// it and fails rather than advancing until it finds API 24.
++				for _, api := range []int{21, 24} {
++					file := filepath.Join(bin, tc.ClangPrefix(api)+"-clang")
++					if err := os.WriteFile(file, nil, 0o755); err != nil {
++						t.Fatal(err)
++					}
++				}
++				got := tc.Path(root, "clang")
++				want := filepath.Join(bin, tc.ClangPrefix(24)+"-clang")
++				if got != want {
++					t.Errorf("%s native compiler at default API %s = %q, want %q", arch, strconv.Itoa(buildAndroidAPI), got, want)
++				}
++			}
++		})
++	}
++}
+diff --git a/cmd/fyne/internal/mobile/android_resources.go b/cmd/fyne/internal/mobile/android_resources.go
+--- a/cmd/fyne/internal/mobile/android_resources.go
++++ b/cmd/fyne/internal/mobile/android_resources.go
+@@ -7,6 +7,7 @@
+ 	"os"
+ 	"os/exec"
+ 	"path/filepath"
++	"strconv"
+ 	"strings"
+ 
+ 	"fyne.io/tools/cmd/fyne/internal/mobile/binres"
+@@ -149,7 +150,7 @@
+ 		"link",
+ 		"-o", outputAPK,
+ 		"--manifest", tempManifestPath,
+-		"--min-sdk-version", "21", // Android 5.0, minimum for adaptive icons (v26) with backward compat
++		"--min-sdk-version", strconv.Itoa(binres.MinSDK),
+ 		"--target-sdk-version", fmt.Sprintf("%d", targetSDK),
+ 		"--version-code", fmt.Sprintf("%d", versionCode),
+ 		"--version-name", versionName,
+diff --git a/cmd/fyne/internal/mobile/android_resources_bibletext_test.go b/cmd/fyne/internal/mobile/android_resources_bibletext_test.go
+new file mode 100644
+--- /dev/null
++++ b/cmd/fyne/internal/mobile/android_resources_bibletext_test.go
+@@ -0,0 +1,135 @@
++package mobile
++
++import (
++	"archive/zip"
++	"encoding/json"
++	"fmt"
++	"os"
++	"path/filepath"
++	"runtime"
++	"testing"
++)
++
++// The child process stands in for aapt2 while production resource compilation
++// constructs and executes its actual compile and link commands.
++func TestMain(m *testing.M) {
++	if os.Getenv("BIBLETEXT_TEST_RESOURCE_LINK_HELPER") == "1" {
++		if err := syntheticAapt2(os.Args[1:]); err != nil {
++			fmt.Fprintln(os.Stderr, err)
++			os.Exit(1)
++		}
++		os.Exit(0)
++	}
++	os.Exit(m.Run())
++}
++
++func syntheticAapt2(args []string) error {
++	value := func(flag string) string {
++		for i, arg := range args {
++			if arg == flag && i+1 < len(args) {
++				return args[i+1]
++			}
++		}
++		return ""
++	}
++	if len(args) == 0 {
++		return fmt.Errorf("no aapt2 operation")
++	}
++	switch args[0] {
++	case "compile":
++		return os.WriteFile(filepath.Join(value("-o"), filepath.Base(args[len(args)-1])+".flat"), nil, 0o644)
++	case "link":
++		captured, err := json.Marshal(args)
++		if err != nil {
++			return err
++		}
++		if err := os.WriteFile(os.Getenv("BIBLETEXT_TEST_RESOURCE_LINK_ARGS"), captured, 0o644); err != nil {
++			return err
++		}
++		manifest, err := os.ReadFile(value("--manifest"))
++		if err != nil {
++			return err
++		}
++		output, err := os.Create(value("-o"))
++		if err != nil {
++			return err
++		}
++		archive := zip.NewWriter(output)
++		for name, data := range map[string][]byte{"resources.arsc": []byte("synthetic resources"), "AndroidManifest.xml": manifest} {
++			writer, err := archive.Create(name)
++			if err != nil {
++				return err
++			}
++			if _, err := writer.Write(data); err != nil {
++				return err
++			}
++		}
++		if err := archive.Close(); err != nil {
++			return err
++		}
++		return output.Close()
++	default:
++		return fmt.Errorf("unexpected aapt2 operation %q", args[0])
++	}
++}
++
++func TestBibleTextAndroidResourceLinkMinimum(t *testing.T) {
++	root := t.TempDir()
++	self, err := os.Executable()
++	if err != nil {
++		t.Fatal(err)
++	}
++	binary, err := os.ReadFile(self)
++	if err != nil {
++		t.Fatal(err)
++	}
++	tool := "aapt2"
++	if runtime.GOOS == "windows" {
++		tool += ".exe"
++	}
++	if err := os.WriteFile(filepath.Join(root, tool), binary, 0o755); err != nil {
++		t.Fatal(err)
++	}
++	platform := filepath.Join(root, "android.jar")
++	icon := filepath.Join(root, "foreground.png")
++	for _, file := range []string{platform, icon} {
++		if err := os.WriteFile(file, []byte("synthetic input"), 0o644); err != nil {
++			t.Fatal(err)
++		}
++	}
++	t.Setenv("BIBLETEXT_ANDROID_BUILD_TOOLS", root)
++	t.Setenv("BIBLETEXT_ANDROID_PLATFORM", platform)
++	t.Setenv("BIBLETEXT_TEST_RESOURCE_LINK_HELPER", "1")
++	oldRelease := buildRelease
++	t.Cleanup(func() { buildRelease = oldRelease })
++	for _, release := range []bool{false, true} {
++		buildRelease = release
++		t.Run(map[bool]string{false: "debug", true: "release"}[release], func(t *testing.T) {
++			capture := filepath.Join(t.TempDir(), "link-args.json")
++			t.Setenv("BIBLETEXT_TEST_RESOURCE_LINK_ARGS", capture)
++			_, _, _, err := compileAndroidResources(t.TempDir(), []byte(`<manifest package="org.example.synthetic"><application/></manifest>`), icon, "", "", androidTargetSDK, 1, "1.0.0")
++			if err != nil {
++				t.Fatal(err)
++			}
++			data, err := os.ReadFile(capture)
++			if err != nil {
++				t.Fatal(err)
++			}
++			var args []string
++			if err := json.Unmarshal(data, &args); err != nil {
++				t.Fatal(err)
++			}
++			for flag, want := range map[string]string{"--min-sdk-version": "24", "--target-sdk-version": "36"} {
++				got, count := "", 0
++				for i, arg := range args {
++					if arg == flag && i+1 < len(args) {
++						got, count = args[i+1], count+1
++					}
++				}
++				if count != 1 || got != want {
++					t.Errorf("aapt2 link %s = %q (%d occurrences), want %q once", flag, got, count, want)
++				}
++			}
++		})
++	}
++}
 diff --git a/cmd/fyne/internal/util/mobile.go b/cmd/fyne/internal/util/mobile.go
-index d438b9a..9515a57 100644
 --- a/cmd/fyne/internal/util/mobile.go
 +++ b/cmd/fyne/internal/util/mobile.go
-@@ -13,0 +14,6 @@ func AndroidBuildToolsPath() string {
+@@ -11,6 +11,12 @@
+ // AndroidBuildToolsPath tries to find the location of the "build-tools" directory.
+ // This depends on ANDROID_HOME variable, so you should call RequireAndroidSDK() first.
+ func AndroidBuildToolsPath() string {
 +	// BibleText pins the build-tools used by its Android wrapper. The upstream
 +	// directory picker is not version-aware (for example, 9 sorts after 36), so
 +	// an explicit path is the only deterministic selection.
 +	if pinned := os.Getenv("BIBLETEXT_ANDROID_BUILD_TOOLS"); pinned != "" {
 +		return pinned
 +	}
-diff --git b/cmd/fyne/internal/util/mobile_bibletext_test.go b/cmd/fyne/internal/util/mobile_bibletext_test.go
+ 	env := os.Getenv("ANDROID_HOME")
+ 	dir := filepath.Join(env, "build-tools")
+ 
+diff --git a/cmd/fyne/internal/util/mobile_bibletext_test.go b/cmd/fyne/internal/util/mobile_bibletext_test.go
 new file mode 100644
-index 0000000..3736d75
 --- /dev/null
 +++ b/cmd/fyne/internal/util/mobile_bibletext_test.go
 @@ -0,0 +1,37 @@

@@ -25,10 +25,10 @@ case "${1:-}" in
   *) echo "usage: scripts/check-android-pane.sh [--next]" >&2; exit 2 ;;
 esac
 
-# minSdkVersion 21 is asserted twice in scripts/build-android.sh against the
+# minSdkVersion 24 is asserted twice in scripts/build-android.sh against the
 # built package; the compile must target the same floor or it can accept code
 # the shipped package cannot run.
-API=21
+API=24
 PINNED_NDK=27.2.12479018
 
 find_ndk() {

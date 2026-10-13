@@ -36,7 +36,7 @@ platforms in one place, or directly:
 
 - **iPhone, iPad & Mac** — [App Store](https://apps.apple.com/app/id6784567351)
 - **Windows** — [Microsoft Store](https://apps.microsoft.com/detail/9NDCCZH9RB9K) — signed, and updated for you
-- **Android** — [Google Play](https://play.google.com/store/apps/details?id=uk.co.bibletext) — updated for you.
+- **Android 7.0 or later** — [Google Play](https://play.google.com/store/apps/details?id=uk.co.bibletext) — updated for you.
   Without Google Play, `BibleText-Android.apk` is on [Releases](https://github.com/cubancorona/bibletext/releases/latest); it never updates itself, and moving to Play means uninstalling it, notes and all.
 - **Linux, from the Snap Store** — `snap install bibletext`, or
   [snapcraft.io/bibletext](https://snapcraft.io/bibletext). Intel, AMD and ARM

@@ -121,7 +121,7 @@ else
   mkdir -p "$JNI_DIR/classes-good" "$JNI_DIR/classes-skew"
   javac -nowarn --release 17 -classpath "$ANDROID_JAR" \
     -d "$JNI_DIR/classes-good" android/BtBridge.java >/dev/null 2>&1
-  "$D8" --min-api 21 --output "$JNI_DIR" \
+  "$D8" --min-api 24 --output "$JNI_DIR" \
     $(find "$JNI_DIR/classes-good" -name '*.class') >/dev/null 2>&1
   mv "$JNI_DIR/classes.dex" "$JNI_DIR/good.dex"
   verify_android_jni_descriptors "$JNI_DIR/good.dex" reading_android.go
@@ -156,7 +156,7 @@ PY_SKEW
   fi
   javac -nowarn --release 17 -classpath "$ANDROID_JAR" \
     -d "$JNI_DIR/classes-skew" "$JNI_DIR/BtBridge.java" >/dev/null 2>&1
-  "$D8" --min-api 21 --output "$JNI_DIR" \
+  "$D8" --min-api 24 --output "$JNI_DIR" \
     $(find "$JNI_DIR/classes-skew" -name '*.class') >/dev/null 2>&1
   mv "$JNI_DIR/classes.dex" "$JNI_DIR/skew.dex"
   if verify_android_jni_descriptors "$JNI_DIR/skew.dex" reading_android.go \

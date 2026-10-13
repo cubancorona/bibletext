@@ -38,7 +38,7 @@ import javax.crypto.spec.GCMParameterSpec;
  * thread in any case — it is a binder round trip plus file I/O.
  *
  * API 23. KeyGenParameterSpec, KeyProperties and KeyPermanentlyInvalidated-
- * Exception are all API 23, and minSdk is 21. javac and d8 both accept those
+ * Exception are all API 23. javac and d8 both accept those
  * references without complaint, so the gate is entirely ours, and it is
  * STRUCTURAL rather than an `if`: every API-23 type is referenced only from
  * BtKeysV23, which is only ever reached from inside an SDK_INT check, so ART

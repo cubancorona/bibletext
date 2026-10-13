@@ -21,8 +21,9 @@ So the checks here are not style checks. They assert that:
     The cost is real and deliberate — Move takes the preferences, so a
     direct-download build still installed alongside opens as a new reader
     afterwards — and docs/MAC_APP_STORE.md records why that trade was taken.
-  * privacy declarations match the mobile AI data flow and are embedded before
-    signing, so the final bundle seals the intended disclosure as a resource.
+  * privacy declarations match the mobile direct BYOK model and are embedded
+    before signing, so the final bundle seals the intended disclosure as a
+    resource.
 
 Self-tests first, as everywhere else here: each rule is run against a
 synthetic violation and must fail, because a checker that cannot fail proves
@@ -250,7 +251,7 @@ def release_script_failures(script: str) -> list[str]:
 
 
 def privacy_manifest_failures(mac: dict, mobile: dict) -> list[str]:
-    """Both platforms send the same optional AI content to the same providers."""
+    """Both platforms declare no collection by the developer under direct BYOK."""
     shared_keys = {"NSPrivacyTracking", "NSPrivacyTrackingDomains",
                    "NSPrivacyCollectedDataTypes"}
     if not isinstance(mac, dict) or set(mac) != shared_keys | {"NSPrivacyAccessedAPITypes"}:

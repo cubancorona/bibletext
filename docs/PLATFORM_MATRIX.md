@@ -140,7 +140,9 @@ place a fix on one does not reach the others.
 11. **Four Java sources** (`BtBridge`, `BtAudio`, `BtAudioService`, `BtKeys`)
     compiled with `javac --release 8` + `d8`, and a **custom
     `cmd/mobile/AndroidManifest.xml` consumed verbatim**, whose `foregroundServiceType`
-    is what makes background narration legal.
+    is what makes background narration legal. From 1.2.21, all four Android
+    ABIs require Android 7.0 / API 24; the native build and manifest share that
+    floor. Earlier releases supported Android 5.0 / API 21.
 12. **NDK pinned to r27 LTS**; r28+ explicitly forbidden.
 13. Android's only CI was a target-SDK text check until 19 September 2026;
     `scripts/check-android-pane.sh` now cross-compiles android/arm64 beside
@@ -425,8 +427,8 @@ place a fix on one does not reach the others.
 
 **Android before 15**
 
-30. **The reading page is ragged before Android 15**, on every release from
-    Android 5 to 14 (API 21 to 34), and justified on Android 15 and later and
+30. **The reading page is ragged before Android 15**, on supported versions
+    Android 7 to 14 (API 24 to 34), and justified on Android 15 and later and
     on every other platform. The pane is a selectable `TextView`, laid
     out by a `DynamicLayout`, which before Android 15 breaks a line as if to
     justify it and never shrinks its spaces, so a justified line ran past
@@ -438,12 +440,12 @@ place a fix on one does not reach the others.
     reading text cannot be justified while it stays selectable").
 
 31. **A Psalm title that wraps can still break a word with a hyphen** from
-    Android 6 to 14 (API 23 to 34; below API 23 the view hyphenates nothing),
+    Android 7 to 14 (API 24 to 34),
     where Android 15 and later leave its words whole, as the web and the
     Windows and Linux pane do (decided 6 October 2026, which named Android 13
-    and 14; the same holds back to Android 6). The reading view hyphenates
-    its whole text (`HYPHENATION_FREQUENCY_NORMAL`), and the one way to turn
-    that off for a single paragraph is the no-hyphenation span that API 35
+    and 14; earlier releases also exhibited it on Android 6). The reading view
+    hyphenates its whole text (`HYPHENATION_FREQUENCY_NORMAL`), and the one way
+    to turn that off for a single paragraph is the no-hyphenation span that API 35
     brought (`LineBreakConfigSpan`, set over the title by
     `keepTitleUnhyphenated` in `android/BtBridge.java`), which earlier
     releases do not have. On the API 35 emulator WEB Psalm 102's title
