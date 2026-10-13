@@ -102,6 +102,23 @@ def find_version(platform, version):
     return items[0]["id"], attributes["appStoreState"], attributes.get("releaseType")
 
 
+def read_release_type(version_id):
+    """The version record's releaseType, read by its id.
+
+    The record is already in hand by the time this is read, so the read
+    goes by its id and not by the filter the look-up used: it cannot then
+    depend on the listing or on its first item. A failure on this one read
+    is not a refusal of the release, and the run stops saying so.
+    """
+    try:
+        d = asc("get", f"/v1/appStoreVersions/{version_id}?fields[appStoreVersions]=releaseType")
+        return d["data"]["attributes"].get("releaseType")
+    except (SystemExit, Exception) as error:
+        reason = str(error.code) if isinstance(error, SystemExit) else f"{type(error).__name__}: {error}"
+        sys.exit(f"{reason}\n\nThe version's releaseType could not be read back, so nothing was "
+                 "submitted; run the same command again.")
+
+
 def release_type_refusal(platform, version, release_type):
     """Why the version may not be submitted with this releaseType, or None."""
     if release_type == RELEASE_TYPE:
@@ -215,7 +232,7 @@ def main():
     # Read back, not remembered from the look-up above: the metadata writes
     # and the preflight have run since, and the setting can be changed in
     # App Store Connect at any time before the submission.
-    _, _, release_type = find_version(a.platform, version)
+    release_type = read_release_type(version_id)
     refusal = release_type_refusal(a.platform, version, release_type)
     if refusal:
         sys.exit(refusal)

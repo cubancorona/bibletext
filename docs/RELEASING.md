@@ -402,11 +402,13 @@ the report to expect at this point; anything else in that list is a real
 gap. The second replaces the sets with the release's own — read-only without
 `--write`, so run it that way first and read the plan. The third submits, and
 the preflight it runs now finds the screenshots written for this release.
-Immediately before the submission it reads the version's `releaseType` back
-and refuses, printing what it is, unless it is `AFTER_APPROVAL`: the setting
-can be changed on the version's page in App Store Connect at any time before
-the submission, and a version released by hand or on a date would make
-approval a second checkpoint the sequence does not have.
+Immediately before the submission it reads the version's `releaseType` back,
+by the version record's id, and refuses, printing what it is, unless it is
+`AFTER_APPROVAL`: the setting can be changed on the version's page in App
+Store Connect at any time before the submission, and a version released by
+hand or on a date would make approval a second checkpoint the sequence does
+not have. A read that fails there stops the run with nothing submitted, and
+the same command is run again.
 The order is not negotiable: a version placed in a review submission no
 longer takes image edits, so the screenshots cannot follow the submission,
 and `push-screenshots.py` refuses a version past that point.

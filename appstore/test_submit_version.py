@@ -39,22 +39,31 @@ def load_module():
 class FakeConnect:
     """App Store Connect behind the script's one seam, holding one version.
 
-    ``release_type`` is what the version record answers; ``later`` replaces
-    it from the second read of the version on, standing for a change made
-    on the version's page after the script's first look. A review submission
-    is recorded in ``submitted``; any request the stand-in has no answer for
-    fails the test.
+    ``release_type`` is what the version record answers, whether it is
+    looked up by version string or read by its id; ``later`` replaces it
+    from the second read of the version on, standing for a change made on
+    the version's page after the script's first look. ``read_back_fails``
+    makes the read of the record by its id fail the way asc() fails, with
+    the exit text it prints for an answer that is not JSON. A review
+    submission is recorded in ``submitted``; any request the stand-in has
+    no answer for fails the test.
     """
 
     def __init__(self, module, *, release_type=AFTER_APPROVAL, later=None,
-                 state="PREPARE_FOR_SUBMISSION"):
+                 state="PREPARE_FOR_SUBMISSION", read_back_fails=False):
         self.m = module
         self.release_type = release_type
         self.later = later
         self.state = state
+        self.read_back_fails = read_back_fails
         self.calls = []
         self.version_reads = 0
         self.submitted = False
+
+    def read_version(self):
+        self.version_reads += 1
+        if self.version_reads > 1 and self.later is not None:
+            self.release_type = self.later
 
     def asc(self, method, path, body=None):
         self.calls.append((method, path, body))
@@ -62,12 +71,15 @@ class FakeConnect:
             return {"data": [{"id": BUILD_ID, "attributes": {"version": str(BUILD),
                                                              "processingState": "VALID"}}]}
         if method == "get" and path.startswith(f"/v1/apps/{self.m.APP_ID}/appStoreVersions?"):
-            self.version_reads += 1
-            if self.version_reads > 1 and self.later is not None:
-                self.release_type = self.later
+            self.read_version()
             return {"data": [{"id": VERSION_ID, "attributes": {
                 "versionString": VERSION, "appStoreState": self.state,
                 "releaseType": self.release_type}}]}
+        if method == "get" and path.startswith(f"/v1/appStoreVersions/{VERSION_ID}?"):
+            self.read_version()
+            if self.read_back_fails:
+                sys.exit(f"App Store Connect GET {path} failed:\n<html>502 Bad Gateway</html>\n")
+            return {"data": {"id": VERSION_ID, "attributes": {"releaseType": self.release_type}}}
         if method == "get" and path.startswith(f"/v1/appStoreVersions/{VERSION_ID}/build"):
             return {"data": {"id": BUILD_ID, "attributes": {"version": str(BUILD)}}}
         if method == "post" and path == "/v1/reviewSubmissions":
@@ -150,7 +162,8 @@ class SubmitHoldsTheReleaseType(Harness):
 
     def test_a_version_releasing_after_approval_is_submitted(self):
         # CONTROL: the read-back is the request immediately before the
-        # submission, and it asks for the releaseType.
+        # submission, made by the version record's id already in hand, so
+        # it depends on no listing's filter or first item.
         store = self.fake()
         self.assertEqual(self.run_script(*self.submit()), 0)
         self.assertTrue(store.submitted)
@@ -159,11 +172,24 @@ class SubmitHoldsTheReleaseType(Harness):
             ("patch", f"/v1/reviewSubmissions/{SUBMISSION_ID}")])
         first = next(i for i, (m, p, _b) in enumerate(store.calls) if p == "/v1/reviewSubmissions")
         method, path, _body = store.calls[first - 1]
-        self.assertEqual(method, "get")
-        self.assertIn("appStoreVersions?", path)
-        self.assertIn("releaseType", path)
+        self.assertEqual((method, path),
+                         ("get", f"/v1/appStoreVersions/{VERSION_ID}?fields[appStoreVersions]=releaseType"))
         self.assertIn(f"is releaseType {AFTER_APPROVAL}: approval publishes it", self.printed)
         self.assertIn("submitted: submission sub-0001 is WAITING_FOR_REVIEW", self.printed)
+
+    def test_a_read_back_that_fails_stops_the_run_with_nothing_submitted(self):
+        # A failure of App Store Connect on that one read is not a refusal
+        # of the release: the run stops saying so, and the same command is
+        # run again. CONTROL: the test above, where the read answers.
+        store = self.fake(read_back_fails=True)
+        message = self.refused(*self.submit())
+        self.assertTrue(message.startswith(
+            f"App Store Connect GET /v1/appStoreVersions/{VERSION_ID}?"), message)
+        self.assertIn("nothing was submitted", message)
+        self.assertIn("run the same command again", message)
+        self.assertFalse(store.submitted)
+        self.assertEqual(store.submissions(), [])
+        self.assertEqual(self.ran, ["push-metadata", "push-review-notes"])
 
     def test_every_look_at_the_version_asks_for_its_release_type(self):
         store = self.fake(release_type="MANUAL")
