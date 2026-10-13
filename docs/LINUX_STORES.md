@@ -8,12 +8,13 @@ the AppStream MetaInfo, the desktop entries, the icons and
 `snap/snapcraft.yaml`, and the tests in `cmd/linuxmeta` hold the committed
 files equal to a fresh render. Edit the source, never the outputs.
 
-State on 3 October 2026: the snap has been on the Snap Store's `stable`
-channel since 1.2.13 (21 September 2026), and 1.2.18 is there now on both
-architectures (amd64 revision 14, arm64 revision 13, promoted on 2 October
-2026), beside the 1.2.18 tarballs and AppImages on its GitHub release. 1.2.19
-is prepared: its entry leads `linux/releases.toml`, and its tag's release run
-puts the snap on `edge` for promotion. AppImageHub has no submission yet.
+The snap has been on the Snap Store's `stable` channel since 1.2.13
+(21 September 2026), on both architectures. Which version each channel
+holds, and what the GitHub release carries beside it, is read with
+`scripts/release-status.py`, never from this page. A release's entry leads
+`linux/releases.toml`, and its tag's release run puts the snap on `edge` for
+the promotion to `stable` (docs/RELEASING.md, stages 5 and 10). AppImageHub
+has no submission yet.
 
 ## Decisions taken, and the ones still open
 

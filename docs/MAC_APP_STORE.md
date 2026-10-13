@@ -10,13 +10,14 @@ The plain desktop release — unsigned, unsandboxed, one zip per architecture �
 is unchanged and remains available beside the Store build.
 
 **Status: shipped.** The first Mac submission — 1.2.4, desktop build 44,
-uploaded 28 August 2026 — reached `READY_FOR_SALE`; so has the second, 1.2.5
-(desktop build 46), submitted 3 September 2026 with the platform's first What's
-New and now the live Mac version. The listing carries both platforms and the
-"one decision that cannot be undone" below is spent: the bundle id, the minimum
-macOS version and the sandbox posture recorded here are what the Store holds.
-Everything below is therefore a record of how it was done and what constrains
-the next submission, not a plan.
+uploaded 28 August 2026 — reached `READY_FOR_SALE`, and the second, 1.2.5
+(desktop build 46), submitted 3 September 2026, carried the platform's first
+What's New. Which Mac version is live, and what is in flight, is read with
+`scripts/release-status.py`, never from this page. The listing carries both
+platforms and the "one decision that cannot be undone" below is spent: the
+bundle id, the minimum macOS version and the sandbox posture recorded here
+are what the Store holds. Everything below is therefore a record of how it
+was done and what constrains the next submission, not a plan.
 
 ## Checking which platforms are live
 

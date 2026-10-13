@@ -421,9 +421,10 @@ the appearance fix is Android's and the universal build is the macOS direct
 download — and the Store had published hours earlier. The next change that
 touches Windows carries the number.
 
-As of 3 October 2026 the Store serves 1.2.18.0, x64 and arm64, published on
-2 October 2026. 1.2.19 is prepared; its What's New is
-`msstore/metadata/en-gb/whats-new-1.2.19.txt`.
+Which version the Store serves, for both architectures, and whether a
+submission is in flight, is read with `scripts/release-status.py`, never
+from this page. A release's What's New is the tracked
+`msstore/metadata/en-gb/whats-new-<v>.txt` ("What's new" below).
 
 ## Submission 1 — what is filled and what is not
 

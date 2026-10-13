@@ -4,7 +4,7 @@ This is the current operational checklist. Historical release mistakes are
 summarised at the end so they remain useful without being mistaken for live App
 Store Connect state.
 
-## Current release state — verify before acting
+## Release state is read, never recorded here
 
 What App Store Connect holds — the live version on each platform, anything in
 flight and its state — and the ledgers this tree declares beside it are read

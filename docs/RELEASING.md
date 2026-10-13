@@ -28,8 +28,10 @@ scripts/release-status.py
 Read-only and creates nothing; safe at any moment except beside another
 Google Play step, because its Play read opens an edit and ends the one an
 upload or a promotion has open (stage 6). It prints what this tree declares
-and what each of the five store fronts is actually serving, asked of the
-stores themselves. A store it cannot reach is printed as `UNREACHABLE` and
+and what each of the five store fronts holds, asked of the stores
+themselves — for Play, what is committed to each track, which readers are
+not served until Google's review clears (stage 7). A store it cannot reach
+is printed as `UNREACHABLE` and
 the exit code is non-zero — it never reports a network failure as up to
 date.
 
