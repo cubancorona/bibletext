@@ -231,12 +231,25 @@ def lost_edit(stop, doing, unused=""):
         "Play: Play steps go one at a time.")
 
 
+def failure_text(error):
+    """`error` as text: call()'s exit text whole, or the exception's type and words.
+
+    A request fails as call()'s SystemExit when Play answered with an HTTP
+    error, but also as an OSError when the connection did, as an
+    HTTPException when the answer was cut short, and as a ValueError when
+    the body was not JSON; every one has to read as a reason.
+    """
+    if isinstance(error, SystemExit):
+        return str(error.code)
+    return f"{type(error).__name__}: {error}" if str(error) else type(error).__name__
+
+
 def discarded(token, eid, message):
     """Delete the edit and stop with `message`: nothing in it was committed."""
     try:
         call(f"{BASE}/edits/{eid}", token, "DELETE")
         tail = "Nothing changed on Play; the edit is discarded."
-    except (SystemExit, OSError) as error:
+    except (SystemExit, Exception) as error:
         reason = str(error.code if isinstance(error, SystemExit) else error).splitlines()[0]
         tail = (f"Nothing changed on Play. Edit {eid} could not be discarded ({reason}); "
                 "it ends when the next edit opens.")
@@ -386,7 +399,7 @@ def read_track(token, name):
     finally:
         try:
             call(f"{BASE}/edits/{eid}", token, "DELETE")
-        except (SystemExit, OSError):
+        except (SystemExit, Exception):
             pass   # a discarded edit expires on its own; the read is what matters
     return held
 
@@ -400,11 +413,11 @@ def read_back(token, name, version, build, status):
     """
     try:
         held = read_track(token, name)
-    except (SystemExit, OSError) as error:
-        reason = str(error.code if isinstance(error, SystemExit) else error)
+    except (SystemExit, Exception) as error:
         raise SystemExit(
-            f"{reason}\n\nThe commit went through, and the read-back of '{name}' did not: run "
-            "`scripts/play-publish.py tracks` on its own to see what Play holds.") from None
+            f"{failure_text(error)}\n\nThe commit went through, and the read-back of '{name}' "
+            "did not: run `scripts/play-publish.py tracks` on its own to see what Play "
+            "holds.") from None
     print("  read back after the commit:")
     for line in track_lines(name, held):
         print(line)
@@ -466,8 +479,8 @@ def upload(token, aab, track, status, notes, version, build, dry):
         if explained is not stop:
             raise explained from None
         message = str(stop.code)
-        status = HTTP_STATUS.search(message)
-        if status and 400 <= int(status.group(1)) < 500:
+        refused = HTTP_STATUS.search(message)
+        if refused and 400 <= int(refused.group(1)) < 500:
             raise discarded(token, eid, (
                 f"{message}\n\nPlay refused the commit, so the bundle is not on '{track}' and "
                 f"versionCode {code} is still unused. A refusal over changes in review means "
@@ -476,6 +489,11 @@ def upload(token, aab, track, status, notes, version, build, dry):
                 "once the Play Console's Publishing overview shows nothing in review, run the "
                 "same command again.")) from None
         raise
+    except (Exception, KeyboardInterrupt) as error:
+        # As in promote: once the commit has been sent, a lost connection, a
+        # truncated or unreadable answer or an interrupt leaves Play's side
+        # unknown, so nothing is called unused and the edit is not touched.
+        raise SystemExit(unknown_outcome(failure_text(error), build, "upload")) from None
     print(f"  committed edit {done.get('id', eid)}")
     read_back(token, track, version, build, status)
     return 0
@@ -537,8 +555,8 @@ def promote(token, source, version, build, rollout, dry):
         explained = lost_edit(stop, "the promotion was being committed", ", and production is unchanged")
         if explained is not stop:
             raise explained from None
-        status = HTTP_STATUS.search(message)
-        if status and 400 <= int(status.group(1)) < 500:
+        refused = HTTP_STATUS.search(message)
+        if refused and 400 <= int(refused.group(1)) < 500:
             if IN_REVIEW_REFUSAL.search(message):
                 why = (f"Play refused the commit over changes in review, so production is "
                        f"unchanged. The likeliest is this release's own '{source}' upload: Google "
@@ -556,19 +574,22 @@ def promote(token, source, version, build, rollout, dry):
         # Anything else once the commit has been sent -- a lost connection, a
         # truncated or unreadable answer, an interrupt -- leaves Play's side
         # unknown, so every such failure gets the same advice.
-        reason = f"{type(error).__name__}: {error}" if str(error) else type(error).__name__
-        raise SystemExit(unknown_outcome(reason, build)) from None
+        raise SystemExit(unknown_outcome(failure_text(error), build)) from None
     print(f"  committed edit {done.get('id', eid)}: production is {describe(new)}, "
           "in Play's review before readers see it")
     read_back(token, PRODUCTION, version, build, new["status"])
     return 0
 
 
-def unknown_outcome(reason, build):
+def unknown_outcome(reason, build, command="promote"):
+    if command == "upload":
+        rerun = (f"Play refuses a re-run of this upload once versionCode {build} is on a track, "
+                 "since a versionCode is used once")
+    else:
+        rerun = f"a re-run of this promote refuses once production carries versionCode {build}"
     return (f"the commit's outcome is unknown: {reason}\n"
             "Play may have taken the commit before the answer was lost. Run "
-            "`scripts/play-publish.py tracks` on its own before anything else; a re-run of "
-            f"this promote refuses once production carries versionCode {build}.")
+            f"`scripts/play-publish.py tracks` on its own before anything else; {rerun}.")
 
 
 def main(argv):

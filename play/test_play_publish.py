@@ -112,8 +112,10 @@ class FakePlay:
     """Play as the script sees it through call().
 
     ``tracks`` is the committed state; each open edit starts from it, and a
-    PUT changes only the edit until a commit. ``fail`` maps a request kind
-    to the text call() would exit with, or to an exception to raise.
+    PUT changes only the edit until a commit. The account holds one open
+    edit, as on Play: an open ends the edit already open. ``fail`` maps a
+    request kind to the text call() would exit with, or to an exception to
+    raise.
 
     ``in_review`` is something else already in Play's review, a production
     release or a listing change. A commit asking for ERROR_IF_IN_REVIEW is
@@ -182,8 +184,11 @@ class FakePlay:
         if failure is not None:
             raise SystemExit(failure)
         if kind == "open":
+            # One open edit per account: a new edit ends the one already
+            # open, and any request on the ended edit answers as deleted.
             self.opened += 1
             edit_id = f"edit-{self.opened}"
+            self.edits.clear()
             self.edits[edit_id] = {}
             return 200, {"id": edit_id}
         edit_id = re.match(r"/edits/([^/:?]+)", path).group(1)
@@ -513,6 +518,41 @@ class UploadHeldToTheTree(Harness):
         self.assertEqual(play.commits, 1)
         self.assertEqual(play.kinds()[-3:], ["open", "get", "delete"], "the read-back's edit was left open")
 
+    def test_a_read_back_whose_answer_cannot_be_read_still_says_the_commit_went_through(self):
+        # Not every failure of the read is call()'s exit or an OSError: an
+        # answer that is not JSON, or one cut short, must carry the same
+        # advice rather than escape as a traceback.
+        for failure in (json.JSONDecodeError("Expecting value", "<html>", 0),
+                        http.client.IncompleteRead(b"{\"track\"")):
+            with self.subTest(failure=type(failure).__name__):
+                play = self.fake(fail={"get": failure})
+                message = self.refused("upload", self.aab, "alpha")
+                self.assertTrue(message.startswith(type(failure).__name__ + ": "), message)
+                self.assertIn("The commit went through, and the read-back of 'alpha' did not", message)
+                self.assertIn("scripts/play-publish.py tracks", message)
+                self.assertEqual(play.commits, 1)
+                self.assertIn("committed edit edit-1", self.printed)
+                self.assertEqual(play.kinds()[-3:], ["open", "get", "delete"])
+
+    def test_a_good_read_back_survives_a_cleanup_delete_that_fails(self):
+        # The read is what matters; the edit it was made in expires on its
+        # own, so a DELETE that fails in any way loses nothing.
+        for failure in (f"Play API DELETE {self.m.BASE}/edits/edit-2 -> HTTP 503\nbackend error",
+                        ConnectionResetError("connection reset"),
+                        http.client.IncompleteRead(b"")):
+            with self.subTest(failure=str(failure).splitlines()[0]):
+                play = self.fake()
+
+                def fail_the_cleanup(tracks):
+                    play.fail["delete"] = failure
+                play.tamper = fail_the_cleanup
+                self.assertEqual(self.run_script("upload", self.aab, "alpha"), 0)
+                self.assertIn("committed edit edit-1\n  read back after the commit:\n"
+                              f"  alpha: '{VERSION}', versionCode {BUILD}, completed\n",
+                              self.printed)
+                self.assertEqual(play.kinds()[-3:], ["open", "get", "delete"])
+                self.assertEqual(play.commits, 1)
+
     def test_a_dry_run_is_held_to_the_tree_too(self):
         play = self.fake(bundle_code="986")
         message = self.refused("--dry-run", "upload", self.aab, "alpha")
@@ -617,6 +657,26 @@ class UploadWhileInReview(Harness):
         play = self.fake(fail={"commit": answer})
         self.assertEqual(self.refused(*self.upload()), answer)
         self.assertEqual(play.kinds()[-1], "commit")
+
+    def test_a_commit_whose_answer_is_lost_is_an_unknown_outcome(self):
+        # As promote says it: Play may have taken the commit, so nothing is
+        # called unused, the edit is not touched, and a re-run is refused by
+        # Play once the versionCode is on a track.
+        for failure in (TimeoutError("timed out"), KeyboardInterrupt(),
+                        http.client.IncompleteRead(b"{\"id\""),
+                        json.JSONDecodeError("Expecting value", "<html>", 0)):
+            with self.subTest(failure=repr(failure).splitlines()[0]):
+                play = self.fake(fail={"commit": failure})
+                try:
+                    message = self.refused(*self.upload())
+                except KeyboardInterrupt:
+                    self.fail("an interrupt during the commit escaped without the advice")
+                self.assertIn("the commit's outcome is unknown", message)
+                self.assertIn("scripts/play-publish.py tracks", message)
+                self.assertIn(f"versionCode {BUILD}", message)
+                self.assertNotIn("still unused", message)
+                self.assertEqual(play.kinds()[-1], "commit")
+                self.assertEqual(play.commits, 0)
 
     def test_an_edit_ended_at_the_commit_is_still_explained_as_ended(self):
         answer = deleted_answer("POST", self.m.BASE + "/edits/edit-1:commit")
@@ -1042,6 +1102,24 @@ class Promote(Harness):
         message = self.refused(*self.promote())
         self.assertIn(f"production already carries versionCode {BUILD}", message)
         self.assertEqual(play.commits, 1)
+
+
+class TheStandInHoldsOneOpenEdit(Harness):
+    """Play lets one account hold one open edit, so the stand-in ends every
+    other edit when one opens: a path that opened a second edit before its
+    commit would fail here, not only where the request sequence is asserted."""
+
+    def test_an_open_ends_the_edit_already_open(self):
+        play = self.fake(tracks={"alpha": track("alpha", release())})
+        _, first = self.m.call(self.m.BASE + "/edits", TOKEN, "POST", {})
+        _, second = self.m.call(self.m.BASE + "/edits", TOKEN, "POST", {})
+        self.assertEqual(list(play.edits), [second["id"]])
+        with self.assertRaises(SystemExit) as caught:
+            self.m.call(f"{self.m.BASE}/edits/{first['id']}/tracks/alpha", TOKEN)
+        self.assertIn("This Edit has been deleted", str(caught.exception.code))
+        # CONTROL: the edit that is open still answers.
+        _, held = self.m.call(f"{self.m.BASE}/edits/{second['id']}/tracks/alpha", TOKEN)
+        self.assertEqual(held, track("alpha", release()))
 
 
 class Ledger(unittest.TestCase):
