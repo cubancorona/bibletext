@@ -456,10 +456,18 @@ func prepareShareQuoteIn(state *AppState, book string, chapter int, raw string, 
 		// Declined: a fragment inside one word, which has no whole word to
 		// quote. With the pane's lead it is still where the reader made it,
 		// and is completed, terminated and restored there; the legacy path
-		// below completes the first copy of its letters in the chapter.
-		if p := placeByLead(corpus, spans, span, sharedText(collapseSpaces(raw))); p.text != "" {
-			lo, hi := leadVerses(spans, p.at, len(p.text))
-			return completeTrailingSentenceProse(corpus, p.text, p.at), verseRangeCitation(book, chapter, lo, hi), p.at, len(p.text)
+		// below completes the first copy of its letters in the chapter. The
+		// lead moves the quotation only: it is cited as the legacy path
+		// cites it, by the span, which is what the selection's link and its
+		// cross-references name for a selection the locate declines
+		// (selectionVersesIn). A place that reaches outside the span's
+		// verses is no place for it, and the legacy path answers.
+		if span.hasLead {
+			if p := placeByLead(corpus, spans, pageHeadingsIn(state, book, chapter), span, sharedText(collapseSpaces(raw))); p.text != "" {
+				if lo, hi := leadVerses(spans, p.at, len(p.text)); lo >= span.lo && hi <= span.hi {
+					return completeTrailingSentenceProse(corpus, p.text, p.at), citationForSelectionIn(state, book, chapter, raw, span), p.at, len(p.text)
+				}
+			}
 		}
 	}
 	cleaned := completeTrailingSentenceIn(state, book, chapter, cleanQuoteTextIn(state, book, chapter, raw), -1)
@@ -910,13 +918,14 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 func locateShareSelection(state *AppState, book string, chapter int, corpus string, spans []verseSpan, flat, out string, span selSpan, editorial, wholeWords bool) (text string, lo, hi, at int, ok bool) {
 	// The pane's lead, when it sent one, says where in verse lo the selection
 	// begins (placeByLead). Where the selection reads as the corpus from
-	// there, it is placed there with its verse numbers taken out by position,
-	// and the strip's text matching does not decide it; otherwise its place
-	// is the first one locate tries. Not when a title already came off the
-	// front: the selection then no longer begins where the lead says.
+	// there, it is placed there with its verse numbers, and the headings
+	// drawn between its verses, taken out by position, and the strip's text
+	// matching does not decide it; otherwise its place is the first one
+	// locate tries. Not when a title already came off the front: the
+	// selection then no longer begins where the lead says.
 	lead := leadPlacement{at: -1, out: out}
-	if !editorial && !wholeWords {
-		lead = placeByLead(corpus, spans, span, out)
+	if !editorial && !wholeWords && span.hasLead {
+		lead = placeByLead(corpus, spans, pageHeadingsIn(state, book, chapter), span, out)
 	}
 	if lead.number {
 		// The rest of verse lo's number alone, begun inside it: apparatus,

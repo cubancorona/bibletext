@@ -30,9 +30,32 @@ type leadPlacement struct {
 	number bool
 }
 
+// pageHeading is a publisher's heading as a selection carries it: the verse
+// it stands above, and its drawn text in the selection's shared form.
+type pageHeading struct {
+	before int
+	text   string
+}
+
+// pageHeadingsIn is the chapter's headings for walkSelectionFrom, in the
+// order the page draws them.
+func pageHeadingsIn(state *AppState, book string, chapter int) []pageHeading {
+	if state == nil {
+		return nil
+	}
+	var out []pageHeading
+	for _, h := range headingsFor(state.Bible, book, chapter) {
+		if t := sharedText(collapseSpaces(h.DrawnText())); t != "" && h.BeforeVerse > 0 {
+			out = append(out, pageHeading{before: h.BeforeVerse, text: t})
+		}
+	}
+	return out
+}
+
 // placeByLead places out, a selection in the shared form, by the span's lead.
-// corpus and spans must be chapterProseIn's for the selection's chapter.
-func placeByLead(corpus string, spans []verseSpan, span selSpan, out string) leadPlacement {
+// corpus and spans must be chapterProseIn's for the selection's chapter, and
+// heads pageHeadingsIn's.
+func placeByLead(corpus string, spans []verseSpan, heads []pageHeading, span selSpan, out string) leadPlacement {
 	p := leadPlacement{at: -1, out: out}
 	at, tail, onNumber, ok := span.leadStart(corpus, spans)
 	if !ok {
@@ -52,7 +75,7 @@ func placeByLead(corpus string, spans []verseSpan, span selSpan, out string) lea
 		}
 	}
 	p.at = at
-	p.text = walkSelectionFrom(corpus, spans, at, onNumber, p.out)
+	p.text = walkSelectionFrom(corpus, spans, heads, at, onNumber, p.out)
 	return p
 }
 
@@ -66,10 +89,15 @@ func placeByLead(corpus string, spans []verseSpan, span selSpan, out string) lea
 // selection begins on it. A figure inside a verse's words is never at a
 // verse's start, so it is matched as text whatever words follow it.
 //
-// A heading inside the selection, or any drawn character the corpus lacks,
-// ends the walk with "": the caller then places the selection as it would
-// with no lead.
-func walkSelectionFrom(corpus string, spans []verseSpan, at int, onNumber bool, out string) string {
+// Past a verse's end, before the next verse's number, the page draws the
+// publisher's headings that stand above that verse, which the corpus does
+// not hold. The selection is read through them, whole and in order, and the
+// verse's number must follow them; a selection that ends inside them ends
+// with the verse above, whatever words the verse below opens with. Words
+// there that are neither the headings nor the number end the walk with "",
+// and so does any other drawn character the corpus lacks: the caller then
+// places the selection as it would with no lead.
+func walkSelectionFrom(corpus string, spans []verseSpan, heads []pageHeading, at int, onNumber bool, out string) string {
 	k := 0
 	for k < len(spans) && spans[k].start < at {
 		k++
@@ -78,6 +106,7 @@ func walkSelectionFrom(corpus string, spans []verseSpan, at int, onNumber bool, 
 	if onNumber {
 		taken = -1
 	}
+	headed := -1 // the verse start whose headings have been read through
 	i, j := 0, at
 	for i < len(out) {
 		for k < len(spans) && spans[k].start < j {
@@ -97,6 +126,24 @@ func walkSelectionFrom(corpus string, spans []verseSpan, at int, onNumber bool, 
 			if len(rest) < len(num) && strings.HasPrefix(num, rest) {
 				break // a drag ended inside the number
 			}
+			if j != at {
+				// Past the end of the verse above, without this verse's
+				// number: the selection holds what the page draws between
+				// the two verses, or it is not this page's text.
+				if headed == j || k == 0 {
+					return ""
+				}
+				n, ended := throughHeadings(rest, heads, spans[k-1].verse, spans[k].verse)
+				if n < 0 {
+					return ""
+				}
+				if ended {
+					break // a drag ended inside a heading
+				}
+				i += n
+				headed = j
+				continue
+			}
 		}
 		if j >= len(corpus) || out[i] != corpus[j] {
 			return ""
@@ -105,6 +152,35 @@ func walkSelectionFrom(corpus string, spans []verseSpan, at int, onNumber bool, 
 		j++
 	}
 	return strings.TrimRightFunc(corpus[at:j], unicode.IsSpace)
+}
+
+// throughHeadings reads rest, what the selection holds past the end of verse
+// above, against the headings standing between that verse and verse below,
+// in the order the page draws them: n is the bytes the headings and the
+// space after each take, and ended reports a selection that ends inside
+// them, on any first part of one. n is -1 when no heading stands there, or
+// rest does not open with them.
+func throughHeadings(rest string, heads []pageHeading, above, below int) (n int, ended bool) {
+	found := false
+	for _, h := range heads {
+		if h.before <= above || h.before > below {
+			continue
+		}
+		found = true
+		r := rest[n:]
+		switch {
+		case strings.HasPrefix(r, h.text+" "):
+			n += len(h.text) + 1
+		case strings.HasPrefix(h.text, r):
+			return len(rest), true
+		default:
+			return -1, false
+		}
+	}
+	if !found {
+		return -1, false
+	}
+	return n, false
 }
 
 // leadVerses is the first and last verse the corpus stretch [at, at+n)

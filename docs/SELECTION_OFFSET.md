@@ -182,13 +182,21 @@ selection's front):
    is at the start of that verse and the token is that verse's number (at
    the end of the selection, any first part of it: a drag ended on the
    number's first digit); the number at the lead's own place only when the
-   lead may open on one (it is empty, or holds all of verse `lo`). Everything
-   else must match byte for byte. When the walk
-   consumes the whole selection, its place and its words replace the text
-   strip's: the selection is placed where the reader made it and no number is
-   removed by text.
-3. When the walk fails (a heading inside the selection, a drawn character
-   the prose lacks), the text strip runs as it does without a lead, and
+   lead may open on one (it is empty, or holds all of verse `lo`). Past a
+   verse's end, where the selection does not have the next verse's number,
+   it holds what the page draws between the two verses: the publisher's
+   headings above the next verse, which the prose does not hold. The walk
+   reads through them whole and in order (`throughHeadings`), and the
+   number must follow; a selection that ends inside them ends with the verse
+   above, whatever words the verse below opens with. Every pane draws a
+   verse's number before its words, so the words of a heading that the next
+   verse also opens with are the heading's. Everything else must match byte
+   for byte. When the walk consumes the whole selection, its place and its
+   words replace the text strip's: the selection is placed where the reader
+   made it, and no number or heading is removed by text.
+3. When the walk fails (words between two verses that are neither the
+   headings drawn there nor the next verse's number, a drawn character the
+   prose lacks), the text strip runs as it does without a lead, and
    `locate` takes the
    lead's place before the number's anchor and before any search, when the
    prose has the stripped words there inside the span's verses.
@@ -198,14 +206,27 @@ selection's front):
 **The fallback.** When the locate declines, a piece of one word, and the lead
 resolves and the walk succeeds, `prepareShareQuoteIn` completes the piece at
 the lead's place and returns that place, so the terminal and the line-break
-restore read it too, and cites the verses that place overlaps; it is not
-handed to `cleanQuoteTextIn` and the chapter-wide search.
+restore read it too; it is not handed to `cleanQuoteTextIn` and the
+chapter-wide search. The lead moves the quotation only. The piece is cited
+as it is without a lead, by the span (`citationForSelectionIn`), which is
+what its link (`linkVersesForSelectionIn`) and its cross-references
+(`selectionVersesIn`) name for a selection the locate declines, so the verbs
+still agree: a drag from inside a verse's last word to the next verse's
+number is cited as both verses by each of them. A place that reaches
+outside the span's verses is not taken, and the legacy path answers.
 
 Without a lead nothing above runs, and every path is as it was.
 
 ## What this closes, and what it does not
 
-- **The later copy:** closed on each pane once it sends the lead. The Windows and Linux pane sends it in the Go change.
+- **The later copy:** closed on each pane once it sends the lead,
+  including a later copy of the words that end a verse dragged on into the
+  heading below it. The Windows and Linux pane sends it in the Go change.
+- **A drag into a heading that opens with the next verse's words:** with
+  the lead it ends with the verse above, placed and cited there. Without a
+  lead the text strip still reads the heading's words as the verse's where
+  the region holds them (`verseEndBeforeHeading` answers only where it does
+  not).
 - **The fragment fallback:** at the root, for every pane that sends a
   lead. Narrowing the fallback's search to the span's verses remains worth
   doing for the no-span page and for a lead that fails its check.
@@ -229,7 +250,8 @@ Without a lead nothing above runs, and every path is as it was.
 ## Tests
 
 Go side, with the Windows and Linux pane (share_lead_test.go,
-reading_styled_lead_test.go, and the sweeps beside the tests they extend):
+share_lead_heading_test.go, reading_styled_lead_test.go, and the sweeps
+beside the tests they extend):
 
 - **Resolution** (`TestALeadResolvesToTheSelectionsPlace`,
   `TestALeadIsKeptOnlyForTheVerseItWasMeasuredFrom`): each case above, the
@@ -287,10 +309,40 @@ reading_styled_lead_test.go, and the sweeps beside the tests they extend):
   made through the pane's own layout of every Gospel chapter are placed at
   their own offsets by the lead the pane builds; the 13,254 later copies among
   them are placed elsewhere without it.
+- **Drags into a heading** (share_lead_heading_test.go), on a page drawn as
+  the Apple and Android panes draw it: superscript numbers with the no-break
+  join, each heading on a line of its own above the verse it stands over,
+  indented paragraphs. With invented verses
+  (`TestADragRunOnIntoAHeadingIsCitedByTheVerseItTouched`,
+  `TestALaterCopyRunOnIntoAHeadingIsSharedFromItsOwnPlace`,
+  `TestAPieceOfAWordIsCitedAsItsLinkCitesIt`): a drag begun inside the last
+  word of a verse into a heading that opens with the next verse's first
+  word is placed in the verse above and cited by it, as its link and its AI
+  passage cite it; a later copy of a verse's last words dragged into the
+  heading below is shared from its own place; a drag through a heading that
+  repeats the next verse's opening words, to that verse's number, quotes the
+  verse above alone; a piece of a word is cited as its link cites it.
+  `TestEveryDragIntoAHeadingIsPlacedInsideItselfWithItsLead`, in CI, invents
+  headings over every fourth verse of the embedded Gospels, among them
+  headings that repeat the next verse's opening words and headings that
+  open with the word that follows an earlier copy of the last word above
+  them, and makes the 23,567 drags from the last three words of a verse into
+  the heading below, through it, to the next verse's number or first words:
+  with the lead none is placed outside the stretch of verse words it covers,
+  and each is cited as its link cites it; without it 75 are placed outside,
+  pinned. A walk that reads on past a verse's start without its number
+  places 828 of them outside and cites 766 otherwise than linked. Over the
+  publishers' own headings in the local caches
+  (`TestEveryDragIntoAHeadingIsPlacedInsideItselfOverLocalCaches_LocalOnly`)
+  the same holds for the WEB's 503, the BSB's 50,680 and the WEBC's 557
+  drags (BSB 14 placed outside without the lead, pinned; 262 with such a
+  walk).
 
-Every test above that carries a lead fails on 6bf27aee4 with only the field
+Every test of the placement above fails on 6bf27aee4 with only the field
 added (share.go and reading_styled_select.go as they were), which shows it
-measures the consumer and not the plumbing.
+measures the consumer and not the plumbing. The two resolution tests are
+the plumbing's own: they hold `leadStart` and `selSpanWithLead`
+(selection_span.go) and pass there.
 
 Native panes, in their own change:
 
