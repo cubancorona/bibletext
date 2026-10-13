@@ -24,12 +24,25 @@ testing-track releases, tester lists and store presence, and, since 2 October
   --status draft|completed                     draft is REQUIRED until the app
                                                has been published once
   --notes <file>                               the en-GB release notes, line
-                                               breaks kept, at most 500 characters
+                                               breaks kept, at most 500 characters;
+                                               without it, the tracked
+                                               play/metadata/en-GB/whats-new-<v>.txt
+                                               for the mobile ledger's Version
   play-publish.py promote <from-track> production --confirm-version <v>
                   [--rollout <fraction>] [--dry-run]
                                                the from-track's one release to
                                                production, its notes and name as
                                                they are; --dry-run discards the edit
+
+WHAT AN UPLOAD IS HELD TO. The bundle Play reports back is checked against
+this tree before the commit: its versionCode must be the mobile ledger's
+Build, and the sha1 Play computed over the bytes it received must be the
+file's, or the edit is discarded with nothing changed. After the commit the
+track is read back in a fresh edit and printed, and the release Play now
+holds must carry that versionCode with the status asked for; Play names a
+release it was given no name for "<versionCode> (<versionName>)", so the
+read-back is also where the bundle's versionName is held to the ledger's
+Version. A promotion reads production back the same way.
 
 ONE PLAY STEP AT A TIME. Every command here opens an edit as the one service
 account, and Play lets each user hold one open edit: a new edit ends the one
@@ -42,9 +55,12 @@ A REVIEW IN PROGRESS IS NEVER RESTARTED. An upload and a promotion commit with
 `IN_REVIEW_QUERY`, so while anything else is in Play's review, a production
 release or a listing change, Play refuses the commit rather than cancel that
 review and send everything again. The edit is then discarded with nothing
-changed, and the same command is run again once the review clears.
+changed, and the same command is run again once the review clears. For a
+promotion the likeliest thing in review is this release's own alpha upload:
+Google reviews every track change, and only the Play Console's Publishing
+overview shows when that review has cleared.
 """
-import base64, copy, json, os, re, sys, time, urllib.parse, urllib.request
+import base64, copy, hashlib, json, os, re, sys, time, urllib.parse, urllib.request
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
@@ -60,6 +76,12 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # from its Version and Build, so the versionCode Play holds for a release is
 # the ledger's Build, and the ledger is what a promotion is checked against.
 LEDGER = os.path.join(REPO, "cmd", "mobile", "FyneApp.toml")
+# The release notes, tracked per release as the Microsoft Store's are
+# (msstore/metadata/<language>/whats-new-<version>.txt). `upload` reads the
+# ledger's file unless --notes names another, and play_whats_new_test.go
+# holds the file equal to the blockquote under "Release notes — <version>"
+# in docs/PLAY_LISTING.md, so what is sent is what was read.
+NOTES_DIR = os.path.join(REPO, "play", "metadata", "en-GB")
 PRODUCTION = "production"
 NOTES_CAP = 500
 
@@ -73,6 +95,11 @@ IN_REVIEW_QUERY = "changesInReviewBehavior=ERROR_IF_IN_REVIEW"
 
 # The status call()'s exit text carries: "Play API <method> <url> -> HTTP <code>".
 HTTP_STATUS = re.compile(r"-> HTTP (\d{3})\b")
+
+# Play's refusal of a commit made with IN_REVIEW_QUERY while changes are in
+# review: HTTP 400, the reason CHANGES_ALREADY_IN_REVIEW, and a message that
+# says in words that changes are in review.
+IN_REVIEW_REFUSAL = re.compile(r"(?i)in review|CHANGES_ALREADY_IN_REVIEW")
 
 # Play's answer, HTTP 400 FAILED_PRECONDITION, to a request on an edit that
 # another edit, a commit or a Play Console change has ended. On 2 October 2026
@@ -147,6 +174,18 @@ def read_notes(path):
         raise SystemExit(f"--notes: {len(notes)} characters, line breaks included; "
                          f"Play caps release notes at {NOTES_CAP}")
     return notes
+
+
+def default_notes(version):
+    """The tracked release notes file for the ledger's Version."""
+    return os.path.join(NOTES_DIR, f"whats-new-{version}.txt")
+
+
+def shown(path):
+    """`path` relative to the repository when it is inside it."""
+    if path.startswith(REPO + os.sep):
+        return path[len(REPO) + 1:]
+    return path
 
 
 def ledger():
@@ -280,6 +319,86 @@ def promotion_refusal(source, held, production, version, build):
     return None
 
 
+def bundle_problem(answer, blob, version, build):
+    """Why the bundle Play reports is not this tree's, or None.
+
+    `answer` is Play's description of the bundle it received: the
+    versionCode it read from the manifest and the sha1 it computed over the
+    bytes. Both are compared before anything is committed, the versionCode
+    with the mobile ledger's Build and the sha1 with the file's, so a bundle
+    built from another ledger, or bytes Play received short, never reach a
+    track.
+    """
+    code = str(answer.get("versionCode"))
+    if code != build:
+        return (f"Play holds the bundle as versionCode {code}; the mobile ledger is {version}, "
+                f"Build {build}, so it is not the bundle this tree builds")
+    ours = hashlib.sha1(blob).hexdigest()
+    theirs = str(answer.get("sha1") or "").lower()
+    if theirs != ours:
+        return (f"Play reports sha1 {theirs or '(none)'} for the bundle it received; the file's "
+                f"is {ours}, so the bytes Play holds are not the file's")
+    return None
+
+
+def committed_problem(name, held, version, build, status):
+    """Why the track read back after a commit does not hold the release written, or None."""
+    releases = [r for r in held.get("releases") or []
+                if build in [str(c) for c in (r.get("versionCodes") or [])]]
+    if not releases:
+        return f"'{name}' read back without versionCode {build}"
+    release = releases[0]
+    # Play names a release it was given no name for "<versionCode>
+    # (<versionName>)", so this is where the bundle's versionName shows.
+    named = re.fullmatch(r"\d+ \((.+)\)", release.get("name") or "")
+    if named and named.group(1) != version:
+        return (f"'{name}' read back with versionCode {build} named '{release['name']}', for "
+                f"{named.group(1)}, not {version}: the bundle's versionName is not the mobile "
+                "ledger's Version")
+    if release.get("status") != status:
+        return (f"'{name}' read back with versionCode {build} {release.get('status')}, not "
+                f"{status}")
+    return None
+
+
+def read_track(token, name):
+    """The track as committed, read in an edit of its own, which is then deleted."""
+    _, edit = call(BASE + "/edits", token, "POST", {})
+    eid = edit["id"]
+    try:
+        _, held = call(f"{BASE}/edits/{eid}/tracks/{name}", token)
+    finally:
+        try:
+            call(f"{BASE}/edits/{eid}", token, "DELETE")
+        except (SystemExit, OSError):
+            pass   # a discarded edit expires on its own; the read is what matters
+    return held
+
+
+def read_back(token, name, version, build, status):
+    """Print the track as Play holds it after the commit, held to the release written.
+
+    The commit has gone through by now, so a disagreement is reported, not
+    undone: Play holds what was committed, and the next step waits until the
+    track is settled in the Play Console.
+    """
+    try:
+        held = read_track(token, name)
+    except (SystemExit, OSError) as error:
+        reason = str(error.code if isinstance(error, SystemExit) else error)
+        raise SystemExit(
+            f"{reason}\n\nThe commit went through, and the read-back of '{name}' did not: run "
+            "`scripts/play-publish.py tracks` on its own to see what Play holds.") from None
+    print("  read back after the commit:")
+    for line in track_lines(name, held):
+        print(line)
+    problem = committed_problem(name, held, version, build, status)
+    if problem:
+        raise SystemExit(f"The commit went through, but {problem}. Play holds what was committed "
+                         "and nothing here can discard it; settle the track in the Play Console "
+                         "before the next step.")
+
+
 def tracks(token):
     _, edit = call(BASE + "/edits", token, "POST", {})
     _, listed = call(f"{BASE}/edits/{edit['id']}/tracks", token)
@@ -291,7 +410,7 @@ def tracks(token):
     return 0
 
 
-def upload(token, aab, track, status, notes, dry):
+def upload(token, aab, track, status, notes, version, build, dry):
     with open(aab, "rb") as f:
         blob = f.read()
     print(f"  {aab}: {len(blob):,} bytes -> track '{track}'")
@@ -302,6 +421,10 @@ def upload(token, aab, track, status, notes, dry):
                     raw=blob, content_type="application/octet-stream")
         code = b["versionCode"]
         print(f"  uploaded versionCode {code} (sha1 {b.get('sha1')})")
+        problem = bundle_problem(b, blob, version, build)
+        if problem:
+            raise discarded(token, eid, f"{problem}; the bundle is not on '{track}'.")
+        print(f"  the ledger's Build {build} and the file's sha1, as Play holds them")
         # An app that has never been published is a DRAFT app, and Play refuses
         # any release on it whose status is not "draft" ("Only releases with
         # status draft may be created on draft app"). The first release of a new
@@ -338,6 +461,7 @@ def upload(token, aab, track, status, notes, dry):
                 "same command again.")) from None
         raise
     print(f"  committed edit {done.get('id', eid)}")
+    read_back(token, track, version, build, status)
     return 0
 
 
@@ -399,11 +523,18 @@ def promote(token, source, version, build, rollout, dry):
             raise explained from None
         status = HTTP_STATUS.search(message)
         if status and 400 <= int(status.group(1)) < 500:
-            raise discarded(token, eid, (
-                f"{message}\n\nPlay refused the commit, so production is unchanged. A refusal "
-                "over changes in review means something else, an earlier upload or a listing "
-                "change, is still in Play's review: wait for it to clear in the Play Console, "
-                "then run the same command again.")) from None
+            if IN_REVIEW_REFUSAL.search(message):
+                why = (f"Play refused the commit over changes in review, so production is "
+                       f"unchanged. The likeliest is this release's own '{source}' upload: Google "
+                       "reviews every track change, and until the Play Console's Publishing "
+                       f"overview shows the {source} release published, a promotion is refused "
+                       "rather than cancel that review and start it again. Otherwise an earlier "
+                       "production release or a listing change is still in review. Read the "
+                       "Publishing overview, and once it shows nothing in review run the same "
+                       "command again; the refusal changed nothing.")
+            else:
+                why = "Play refused the commit, so production is unchanged."
+            raise discarded(token, eid, f"{message}\n\n{why}") from None
         raise SystemExit(unknown_outcome(message, build)) from None
     except (Exception, KeyboardInterrupt) as error:
         # Anything else once the commit has been sent -- a lost connection, a
@@ -413,6 +544,7 @@ def promote(token, source, version, build, rollout, dry):
         raise SystemExit(unknown_outcome(reason, build)) from None
     print(f"  committed edit {done.get('id', eid)}: production is {describe(new)}, "
           "in Play's review before readers see it")
+    read_back(token, PRODUCTION, version, build, new["status"])
     return 0
 
 
@@ -461,8 +593,19 @@ def main(argv):
         if track == PRODUCTION:
             raise SystemExit("upload goes to a testing track; production is reached only by "
                              "promote, on the account holder's OK")
-        notes = read_notes(notes_path) if notes_path is not None else None
-        return upload(access_token(), aab, track, status, notes, dry)
+        version, build = ledger()
+        if notes_path is None:
+            notes_path = default_notes(version)
+            if not os.path.exists(notes_path):
+                raise SystemExit(
+                    f"no release notes for {version}: {shown(notes_path)} is missing. upload "
+                    "reads the tracked play/metadata/en-GB/whats-new-<version>.txt for the mobile "
+                    "ledger's Version, the text of the blockquote under 'Release notes — "
+                    "<version>' in docs/PLAY_LISTING.md, unless --notes names another file; "
+                    "nothing was changed")
+        notes = read_notes(notes_path)
+        print(f"  ledger {version}, Build {build}; release notes from {shown(notes_path)}")
+        return upload(access_token(), aab, track, status, notes, version, build, dry)
 
     if cmd == "promote":
         if len(argv) != 4:

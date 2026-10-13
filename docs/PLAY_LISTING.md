@@ -24,8 +24,12 @@ Release identity:
 What alpha and production hold is read with `scripts/release-status.py`,
 never from this page: its Play rows show what is committed to each track,
 and Google's review of a committed release shows only in the Play Console's
-Publishing overview. Google Play's installer check remains enabled. Draft
-release notes are below. Releases go to alpha with
+Publishing overview. Google Play's installer check remains enabled. Release
+notes are drafted below, under "Release notes — <version>", and the
+release's text is tracked in `play/metadata/en-GB/whats-new-<version>.txt`,
+which `scripts/play-publish.py upload` sends and `play_whats_new_test.go`
+holds equal to the blockquote, within 500 characters with its line breaks
+counted. Releases go to alpha with
 `scripts/play-publish.py upload`. On the account holder's OK,
 `scripts/play-publish.py promote` takes that release to production, its
 release notes unchanged (docs/RELEASING.md, stages 6 and 7). The service

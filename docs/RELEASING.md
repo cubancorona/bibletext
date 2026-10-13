@@ -147,13 +147,14 @@ with `go env -w` still reaches them (stage 3).
 Confirm `build/appstore/metadata/en-GB` exists before trusting the test run:
 `TestWhatsNewIsNamedForThisRelease` SKIPS when it does not, which is why CI
 cannot catch a missing Mac What's New — the exact fault that got 1.2.8's Mac
-submission refused. The Microsoft Store's What's New is tracked, so
-`TestWindowsWhatsNewIsNamedForThisRelease` runs everywhere and needs no such
+submission refused. The Microsoft Store's and Google Play's What's New are
+tracked, so `TestWindowsWhatsNewIsNamedForThisRelease` and
+`TestPlayWhatsNewIsNamedForThisRelease` run everywhere and need no such
 check.
 
 ### 1 — Prepare, on main
 
-Eight coupled surfaces have to name the same version, each test-enforced:
+Nine coupled surfaces have to name the same version, each test-enforced:
 
 1. `cmd/mobile/FyneApp.toml` — Version and Build
 2. `cmd/bibletext/FyneApp.toml` — Version and Build
@@ -175,9 +176,13 @@ Eight coupled surfaces have to name the same version, each test-enforced:
    and line breaks, and not a copy of another release's; required from 1.2.16
    on, including for a release the Store is not sent
    (`docs/WINDOWS_STORE_LISTING.md`, "What's new")
-
-Plus the Play notes blockquote in `docs/PLAY_LISTING.md`, under 500 characters
-with its line breaks counted.
+9. `play/metadata/en-GB/whats-new-<v>.txt` — Google Play's release notes,
+   tracked: the text of the blockquote under "Release notes — <v>" in
+   `docs/PLAY_LISTING.md`, exactly, at most 500 characters with its line
+   breaks counted, and not a copy of another release's. The blockquote is
+   where the notes are drafted and read; the file is what
+   `scripts/play-publish.py upload` sends, unless `--notes` names another,
+   and the upload refuses without it (`play_whats_new_test.go`)
 
 ### 2 — Push and wait for green
 
@@ -326,18 +331,28 @@ uploads of stage 6 go on.
 UUIDs**: each is that build's App Store Connect id and `submit-version.py`
 checks the attached build against it.
 
-Play: `scripts/play-publish.py --dry-run --notes <file> upload <aab> alpha`
-first — it uploads into an edit it then discards — then the identical command
-without `--dry-run`, with `--status completed`. The notes file keeps its line
-breaks, so the opening line and each bullet reach Play as lines. That is where
-stage 6 ends on Play: the release is on the alpha track, `upload` refuses the
-production track, and production waits for the promotion in stage 7. The
-script refuses an option it does not know, such as `--dryrun`, before it
-reads the key, so a mistyped dry run never commits. The two legs part here on
-purpose: Play keeps the alpha track — Google reviews every track change,
-closed testing on it was the prerequisite for production access, and its
-release is the build the testers get — while TestFlight is deliberately
-unused for releases, so an Apple build goes straight to the version record.
+Play: `scripts/play-publish.py --dry-run upload <aab> alpha` first — it
+uploads into an edit it then discards — then the identical command without
+`--dry-run`, with `--status completed`. The release notes are read from
+`play/metadata/en-GB/whats-new-<v>.txt`, the tracked file of stage 1, unless
+`--notes <file>` names another, and the upload refuses without it; the file
+keeps its line breaks, so the opening line and each bullet reach Play as
+lines. Before the commit the upload holds the bundle Play reports to this
+tree: its versionCode must be the mobile ledger's Build and the sha1 Play
+computed over the bytes it received must be the file's, or the edit is
+discarded with nothing changed. After the commit it reads the track back in
+a fresh edit and prints it, held to the release written — the versionCode,
+the status, and the name Play gives a release, `<versionCode>
+(<versionName>)`, which is where the bundle's versionName is held to the
+ledger's Version. That is where stage 6 ends on Play: the release is on the
+alpha track, `upload` refuses the production track, and production waits for
+the promotion in stage 7. The script refuses an option it does not know, such
+as `--dryrun`, before it reads the key, so a mistyped dry run never commits.
+The two legs part here on purpose: Play keeps the alpha track — Google
+reviews every track change, closed testing on it was the prerequisite for
+production access, and its release is the build the testers get — while
+TestFlight is deliberately unused for releases, so an Apple build goes
+straight to the version record.
 
 Verify the current [Play publishing mode](PLAY_LISTING.md#publishing-mode)
 in Publishing overview and record it before submitting. The expected setting
@@ -402,19 +417,20 @@ Play's promotion waits on nothing of Apple's. It does wait on Play's own
 review of the alpha upload: Google reviews that release before it publishes,
 and until the Publishing overview in the Play Console shows the alpha release
 published, the promotion's commit is refused with
-`CHANGES_ALREADY_IN_REVIEW`. The dry run cannot tell, because it has Play
-validate the edit and then deletes it, and only the commit carries the flag
-that asks Play to refuse rather than cancel the review. So the OK that names
-Play is asked for only after the overview has been read and shows the alpha
-release published — a wait of about fifteen minutes on 3 October 2026 and of
-more than twenty-four minutes on 13 October — then the dry run, and the same
-command without `--dry-run` once its output has been read. A refusal does not
-use up the OK: a person reads the overview again and re-runs the promotion
-once it shows the release published; a timer never does. Stage 6 lists
-Apple's uploads before Play's, and the better order is Play's alpha upload
-first: Google's review then runs while Apple is processing the builds to
-`VALID`, so the overview is usually showing the alpha release published by
-the time the Apple submissions go.
+`CHANGES_ALREADY_IN_REVIEW`; the script's refusal names this release's own
+alpha upload as the likeliest cause. The dry run cannot tell, because it has
+Play validate the edit and then deletes it, and only the commit carries the
+flag that asks Play to refuse rather than cancel the review. So the OK that
+names Play is asked for only after the overview has been read and shows the
+alpha release published — a wait of about fifteen minutes on 3 October 2026
+and of more than twenty-four minutes on 13 October — then the dry run, and
+the same command without `--dry-run` once its output has been read. A
+refusal does not use up the OK: a person reads the overview again and
+re-runs the promotion once it shows the release published; a timer never
+does. Stage 6 lists Apple's uploads before Play's, and the better order is
+Play's alpha upload first: Google's review then runs while Apple is
+processing the builds to `VALID`, so the overview is usually showing the
+alpha release published by the time the Apple submissions go.
 
 ```
 scripts/play-publish.py promote alpha production --confirm-version <v> --dry-run
@@ -437,10 +453,12 @@ going out is completed or halted in the Play Console first, and a draft
 there is rolled out or discarded, and until then both commands refuse.
 `--rollout 0.2` stages the release to a fifth of readers instead; raising,
 completing or halting a staged rollout is done in the Play Console. After the
-commit, `scripts/release-status.py`, run on its own, shows production on the
-new versionCode. Its Play rows mean committed, not approved: Google reviews
-the promotion as it reviewed the alpha release, and that review is visible
-only in the Play Console's Publishing overview.
+commit, `promote` reads production back in a fresh edit and prints it, held
+to the release it wrote, and `scripts/release-status.py`, run on its own,
+shows production on the new versionCode. Its Play rows mean committed, not
+approved, and say so: Google reviews the promotion as it reviewed the alpha
+release, and that review is visible only in the Play Console's Publishing
+overview.
 
 ### 8 — Finish the GitHub release
 
@@ -598,8 +616,8 @@ Re-running from the top is usually wrong. These steps are not idempotent:
 | step | re-running does | recovery |
 | --- | --- | --- |
 | `altool --upload-app` | rejects a duplicate build number | bump Build, rebuild |
-| `play-publish.py upload` | rejects a used versionCode once a run has committed; a run whose edit Play ended ("This Edit has been deleted") committed nothing, and so did one whose commit Play refused over a review in progress | after a commit, bump Build and rebuild; after an ended edit, run the same command again on its own; after a refused commit, run it again once the review clears |
-| `play-publish.py promote` | refuses, printing what production holds, once production carries the versionCode, and while production holds a rollout still going out or a draft | a run stopped before its commit changed nothing and deleted its edit; one that reports the commit's outcome unknown may have committed, so run `play-publish.py tracks` on its own first; a commit refused over a review in progress runs again once the review clears; a rollout still going out is completed or halted in the Play Console, and a draft rolled out or discarded there, before a re-run (a halted rollout gives way to the promotion) |
+| `play-publish.py upload` | rejects a used versionCode once a run has committed; a run whose edit Play ended ("This Edit has been deleted") committed nothing, and so did one whose commit Play refused over a review in progress, or that was refused before the commit because the bundle's versionCode is not the ledger's Build or its sha1 is not the file's | after a commit, bump Build and rebuild; after an ended edit, run the same command again on its own; after a refused commit, run it again once the review clears; after a refusal over the bundle, build it from this tree (stage 3) first; a run that reports the commit went through but the read-back disagrees has committed, and the track is settled in the Play Console before the next step |
+| `play-publish.py promote` | refuses, printing what production holds, once production carries the versionCode, and while production holds a rollout still going out or a draft | a run stopped before its commit changed nothing and deleted its edit; one that reports the commit's outcome unknown may have committed, so run `play-publish.py tracks` on its own first; a commit refused over a review in progress runs again once the review clears (the refusal names this release's own alpha upload first); a rollout still going out is completed or halted in the Play Console, and a draft rolled out or discarded there, before a re-run (a halted rollout gives way to the promotion); a run that reports the commit went through but the read-back disagrees has committed, and production is settled in the Play Console before the next step |
 | `submit-version.py --submit` | 409 — already in review | remove from review in the console |
 | `push-screenshots.py --write` | leaves a set that holds the files, reorders one that holds them out of order, replaces the rest | re-run once a FAILED image or a refusal is understood |
 | `play/push-screenshots.py --write` | leaves a type that holds the files, replaces the rest | a run stopped before the commit deleted its edit and changed nothing; one that reports the commit's outcome unknown may have committed, so run it read-only first; re-run once the reason is understood |

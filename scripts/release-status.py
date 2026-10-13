@@ -25,6 +25,12 @@ WHAT IT DELIBERATELY DOES NOT DO. It does not judge whether a release is
 ready, and it does not tell you the next step. It reports state; the runbook
 in docs/RELEASING.md holds the order and the decisions.
 
+WHAT THE PLAY ROWS MEAN. A Play row is what is committed to a track, not
+what Google has approved: every track change goes into Play's review, and
+the Developer API reports nothing of that review, so a release stays in it
+until the Play Console's Publishing overview shows it published. The rows
+say so, so that "production ... completed" is not read as live.
+
 A store that cannot be reached is reported as UNREACHABLE and the exit code
 is non-zero. It is never reported as up to date -- a status tool that turns a
 network failure into a green line is worse than no tool, because the whole
@@ -98,7 +104,8 @@ def play(version: str) -> list[str]:
     tok = pp.access_token()
     _st, edit = pp.call(f"{pp.BASE}/edits", tok, method="POST", payload={})
     eid = edit["id"]
-    rows = []
+    rows = ["committed to each track, not approved: a release is in Play's review until the "
+            "Play Console's Publishing overview shows it published, which nothing read here shows"]
     try:
         for track in ("internal", "alpha", "beta", "production"):
             _st, t = pp.call(f"{pp.BASE}/edits/{eid}/tracks/{track}", tok)
