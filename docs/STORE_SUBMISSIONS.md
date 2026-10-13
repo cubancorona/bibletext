@@ -6,7 +6,9 @@ and who can do the rest.
 This page is a map, not a status board. It deliberately records **no version
 numbers and no review states** — those change weekly and would go stale here
 while the per-store documents stayed right. Each row points at the document
-that holds the truth.
+that holds the truth. The live state — what each store holds and what is in
+flight — is read with `scripts/release-status.py`, which the per-store
+documents point at too.
 
 ## The rule
 
@@ -32,8 +34,8 @@ step too.
 
 | Store | What a release does | What a submission needs | Who | Detail |
 | --- | --- | --- | --- | --- |
-| **Apple App Store** (iPhone, iPad) | nothing | `scripts/release-ios.sh` builds and uploads only with `BIBLETEXT_UPLOAD=1`; then metadata, screenshots and review notes in App Store Connect | account holder | [APP_STORE_SUBMISSION.md](APP_STORE_SUBMISSION.md) |
-| **Mac App Store** | nothing | `scripts/release-mac-store.sh` builds a signed, sandboxed `.pkg` against the Store certificates; uploaded and submitted separately | account holder | [MAC_APP_STORE.md](MAC_APP_STORE.md), [APP_STORE_SUBMISSION.md](APP_STORE_SUBMISSION.md) |
+| **Apple App Store** (iPhone, iPad) | nothing | `scripts/release-ios.sh` builds the `.ipa` and `xcrun altool` uploads it; `appstore/submit-version.py` then prepares the version record, `appstore/push-screenshots.py` its screenshots, and `submit-version.py --submit` sends it for review (docs/RELEASING.md, stage 7) | account holder | [APP_STORE_SUBMISSION.md](APP_STORE_SUBMISSION.md) |
+| **Mac App Store** | nothing | `scripts/release-mac-store.sh` builds a signed, sandboxed `.pkg` against the Store certificates; `xcrun altool` uploads it, and the same three Apple commands, with `--platform MAC_OS`, submit it | account holder | [MAC_APP_STORE.md](MAC_APP_STORE.md), [APP_STORE_SUBMISSION.md](APP_STORE_SUBMISSION.md) |
 | **Microsoft Store** | nothing | `msstore.yml` builds and smokes both MSIX packages; `msstore/submit.py` then creates the submission, sets the listing's What's New from the release's file, uploads them and commits it. Only the FIRST submission after a name reservation had to be made in Partner Center | mixed | [WINDOWS_STORE_LISTING.md](WINDOWS_STORE_LISTING.md) |
 | **Google Play** | nothing — the APK is attached to the GitHub release by hand | `scripts/build-android.sh --release` produces the signed AAB; `scripts/play-publish.py` uploads it to the alpha track and, on the account holder's OK, promotes that release to production | account holder | [PLAY_LISTING.md](PLAY_LISTING.md) |
 | **Snap Store** | **publishes both architectures to `edge`** | promotion to `stable` is one command and can be automated; categories, screenshots and visibility are console-only | mixed | [LINUX_STORES.md](LINUX_STORES.md) |

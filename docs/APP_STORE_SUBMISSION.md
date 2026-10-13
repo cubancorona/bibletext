@@ -6,28 +6,18 @@ Store Connect state.
 
 ## Current release state — verify before acting
 
-As recorded on 3 October 2026, with 1.2.18 live on every channel and 1.2.19
-prepared:
+What App Store Connect holds — the live version on each platform, anything in
+flight and its state — and the ledgers this tree declares beside it are read
+with `scripts/release-status.py` (docs/RELEASING.md, "Start by reading the
+world"). This page records none of it: version numbers and review states
+change with every release, and a note of them is stale by the next one. Two
+things do hold from release to release:
 
-- **Live App Store version (iOS):** 1.2.18, build 188, approved and released
-  on 3 October 2026.
-- **Live Mac App Store version:** 1.2.18, desktop build 59, approved and
-  released on 3 October 2026.
-- **Prepared next version:** 1.2.19. Both ledgers now read 1.2.19 — mobile
-  build 189, desktop build 60 — and both review-notes files and a What's New
-  file on each platform path describe this release rather than the last.
-- **Submission state:** nothing is in review on either Apple platform. 1.2.18
-  was submitted on 2 October 2026 (iOS build 188, Mac desktop build 59)
-  and both platforms cleared on 3 October; the annotated tag v1.2.18 sits at
-  the release commit every channel built from. The other channels carry the
-  same version: Google Play production since 2 October 2026 (versionCode 188,
-  docs/PLAY_LISTING.md), the Microsoft Store (1.2.18.0, x64 and arm64), the
-  Snap Store's stable channel and the GitHub release.
-  `fyne package` rewrites the desktop ledger's Build after packaging; both
-  `scripts/release-mac-store.sh` and `release.yml` put the committed file
-  back afterwards, so the shipped build is the committed number. Before
-  that, 1.2.5's two direct-download zips, packaged one after the other from
-  one tree, carried builds 46 and 47.
+- **The shipped build is the committed number.** `fyne package` rewrites the
+  desktop ledger's Build after packaging; both `scripts/release-mac-store.sh`
+  and `release.yml` put the committed file back afterwards. Before that,
+  1.2.5's two direct-download zips, packaged one after the other from one
+  tree, carried builds 46 and 47.
 - **Bundle ID:** `uk.co.bibletext`; universal iPhone and iPad. Builds up to
   174 (the 1.2.3 submission) declare minimum iOS 13; the repository now
   declares iOS 15 for every FUTURE build (`iosMinimumOSVersion` in
@@ -69,18 +59,13 @@ iOS versions — which is exactly what App Store Connect seeded it from.
 ## Release identity and local build
 
 Before producing a binary, verify that `cmd/mobile/FyneApp.toml` names the
-version being prepared and a build number nothing has been uploaded under. It
-now holds the numbers 1.2.19 is prepared as:
-
-```toml
-Version = "1.2.19"
-Build = 189
-```
-
-Build 189 has not been uploaded anywhere; 188 is 1.2.18's, on App Store
-Connect and Google Play alike. The desktop ledger is at build 60, above
-1.2.18's 59. A release after this one moves both ledgers again, along with both
-review-notes files and a What's New file named for the new version.
+version being prepared and a build number nothing has been uploaded under:
+`scripts/release-status.py` prints both ledgers beside what each store holds,
+and `scripts/check-version-not-spent.sh <version>` holds the number to the
+tag. The mobile ledger's Build is the iOS build number and Play's versionCode
+alike, and the desktop ledger's is the Mac's. A release moves both ledgers,
+along with both review-notes files and a What's New file named for the new
+version.
 `scripts/check-release-identity.py` holds the two ledgers to one version and to
 `appstore/review-notes.txt` — and to the tag, when the release workflow passes
 one; the macOS notes and the version-named What's New file are held by
@@ -134,8 +119,7 @@ Git. For the version being prepared the English (UK) set must include:
 
 - the current public description naming WEB, WEB Catholic, BSB, NKJV, shared
   notes, narration, and optional bring-your-own-key AI study;
-- a `whats-new-<version>.txt` describing this release (`whats-new-1.2.19.txt`
-  is the newest one written);
+- a `whats-new-<version>.txt` describing this release;
 - current name, subtitle, keywords, promotional text, support URL, marketing
   URL, and privacy URL.
 
@@ -387,8 +371,7 @@ Before a human submits a version:
    default run covers iOS only; add `--platform MAC_OS` for the Mac) and
    resolve every warning.
 2. Confirm the version and build being submitted against that platform's
-   ledger — 1.2.18 shipped as iOS build 188 and Mac desktop build 59, and
-   1.2.19 is prepared as builds 189 and 60 — and the intended release mode.
+   ledger and the intended release mode.
 3. Read back description, What's New, review notes, URLs, copyright, privacy
    answers, age rating, and screenshot order from App Store Connect.
 4. Inspect the selected build and archive evidence.

@@ -13,24 +13,25 @@ testers supplied through the Google Group
 September. 1.2.10 is a desktop-packaging release and was deliberately not sent
 to Play.
 
-Release identity in production (1.2.19):
+Release identity:
 
 - package: `uk.co.bibletext`
-- version: 1.2.19
-- versionCode: 189
-- minimum SDK: Android 5.0 / API 21
+- version and versionCode: `cmd/mobile/FyneApp.toml`'s Version and Build
+- minimum SDK: Android 7.0 / API 24, from 1.2.21 ([ANDROID.md](ANDROID.md))
 - target SDK: Android 16 / API 36
 - upload artifact: `~/Library/Android/bibletext-dist/BibleText.aab`
 
-1.2.19, versionCode 189, is live in production and alpha. The next prepared
-release is 1.2.21, versionCode 192, which requires Android 7.0 / API 24 or
-later. Google Play's installer check remains enabled. Draft release notes are
-below. Releases go to alpha with `scripts/play-publish.py upload`. On the
-account holder's OK, `scripts/play-publish.py promote` takes that release to
-production, its release notes unchanged (docs/RELEASING.md, stages 6 and 7).
-The service account was granted "release to production" on 2 October 2026,
-for this app only; until then it could not reach production, and the
-promotion was made in the Play Console.
+What alpha and production hold is read with `scripts/release-status.py`,
+never from this page: its Play rows show what is committed to each track,
+and Google's review of a committed release shows only in the Play Console's
+Publishing overview. Google Play's installer check remains enabled. Draft
+release notes are below. Releases go to alpha with
+`scripts/play-publish.py upload`. On the account holder's OK,
+`scripts/play-publish.py promote` takes that release to production, its
+release notes unchanged (docs/RELEASING.md, stages 6 and 7). The service
+account was granted "release to production" on 2 October 2026, for this app
+only; until then it could not reach production, and the promotion was made in
+the Play Console.
 
 The version and versionCode come from `cmd/mobile/FyneApp.toml`; do not supply a
 different manual `-app-build`. Produce the AAB only with

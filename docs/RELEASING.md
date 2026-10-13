@@ -264,7 +264,11 @@ The iOS and Mac scripts do this themselves: `release-ios.sh` reads the signed
 `.ipa` back in its final step, its device families included (iPhone and iPad,
 `scripts/check-ios-device-family.py`), and `release-mac-store.sh` checks the
 signed `.pkg` after signing and fails if the entitlement did not survive. The
-AAB is read with `bundletool dump manifest`. Record what each one printed.
+AAB is read with `bundletool dump manifest`; `build-android.sh` has already
+read it that way before it finishes, failing unless the manifest's
+application id, versionCode, versionName and compile, minimum and target SDK
+are the ones the tree declares, and holds the sideload APK's `aapt2` badging
+to the same values. Record what each one printed.
 Every path, these three and the workflows, has also checked that the patched
 Fyne preferences writer reached what it built (`scripts/verify-atomic-prefs.py`):
 without it a death mid-save empties every note.
@@ -329,7 +333,11 @@ breaks, so the opening line and each bullet reach Play as lines. That is where
 stage 6 ends on Play: the release is on the alpha track, `upload` refuses the
 production track, and production waits for the promotion in stage 7. The
 script refuses an option it does not know, such as `--dryrun`, before it
-reads the key, so a mistyped dry run never commits.
+reads the key, so a mistyped dry run never commits. The two legs part here on
+purpose: Play keeps the alpha track — Google reviews every track change,
+closed testing on it was the prerequisite for production access, and its
+release is the build the testers get — while TestFlight is deliberately
+unused for releases, so an Apple build goes straight to the version record.
 
 Verify the current [Play publishing mode](PLAY_LISTING.md#publishing-mode)
 in Publishing overview and record it before submitting. The expected setting
@@ -390,9 +398,23 @@ rather than an oversight. Apple takes **one version per platform** into
 review at a time, so check nothing else is in review on that platform first —
 `release-status.py` prints it.
 
-Play's promotion waits on nothing of Apple's, only on an OK that names Play:
-the dry run first, and the same command without `--dry-run` once its output
-has been read.
+Play's promotion waits on nothing of Apple's. It does wait on Play's own
+review of the alpha upload: Google reviews that release before it publishes,
+and until the Publishing overview in the Play Console shows the alpha release
+published, the promotion's commit is refused with
+`CHANGES_ALREADY_IN_REVIEW`. The dry run cannot tell, because it has Play
+validate the edit and then deletes it, and only the commit carries the flag
+that asks Play to refuse rather than cancel the review. So the OK that names
+Play is asked for only after the overview has been read and shows the alpha
+release published — a wait of about fifteen minutes on 3 October 2026 and of
+more than twenty-four minutes on 13 October — then the dry run, and the same
+command without `--dry-run` once its output has been read. A refusal does not
+use up the OK: a person reads the overview again and re-runs the promotion
+once it shows the release published; a timer never does. Stage 6 lists
+Apple's uploads before Play's, and the better order is Play's alpha upload
+first: Google's review then runs while Apple is processing the builds to
+`VALID`, so the overview is usually showing the alpha release published by
+the time the Apple submissions go.
 
 ```
 scripts/play-publish.py promote alpha production --confirm-version <v> --dry-run
@@ -414,10 +436,11 @@ is where a fix is promoted from, and the dry run names it; a rollout still
 going out is completed or halted in the Play Console first, and a draft
 there is rolled out or discarded, and until then both commands refuse.
 `--rollout 0.2` stages the release to a fifth of readers instead; raising,
-completing or halting a staged rollout is done in the Play Console. A commit
-refused over changes in review — Play reviews the alpha upload too — is run
-again once that review clears. After the commit, `scripts/release-status.py`,
-run on its own, shows production on the new versionCode.
+completing or halting a staged rollout is done in the Play Console. After the
+commit, `scripts/release-status.py`, run on its own, shows production on the
+new versionCode. Its Play rows mean committed, not approved: Google reviews
+the promotion as it reviewed the alpha release, and that review is visible
+only in the Play Console's Publishing overview.
 
 ### 8 — Finish the GitHub release
 
@@ -586,6 +609,23 @@ Re-running from the top is usually wrong. These steps are not idempotent:
 
 `msstore/submit.py abort` refuses to delete a pending submission the run did
 not create, so a draft started in Partner Center is safe from it.
+
+### Rejected in review
+
+A rejection is a reviewer's decision, not an API refusal, so no script here
+reports one. Apple's shows in App Store Connect's Resolution Center and in a
+message to the developer mailbox, and `release-status.py` prints the
+version's state; Play's shows in the Play Console's Publishing overview and
+in a message to the developer mailbox, and nothing the scripts read shows it.
+On both stores the fix is a new version: a version number names one tree on
+every channel (docs/VERSIONING.md), so the rejected number is spent and the
+fix starts at stage 1 under the next one, with review notes and What's New of
+its own. A rejected Apple version is withdrawn before the fix's build is
+attached to anything, so the spent number is never resubmitted with a tree it
+does not name; `submit-version.py` prepares a version in a rejected state,
+but only the ledger's version string, which the bump has moved on. On Play the
+fix is the next upload to alpha, under the next versionCode, as stage 6
+says, and the promotion's dry run prints what alpha and production hold.
 
 ## What a conductor refuses
 
