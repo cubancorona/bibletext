@@ -6,10 +6,6 @@
   <false/>
   <key>NSPrivacyTrackingDomains</key>
   <array/>
-  <!-- Reading history, notes and saved provider keys stay on device.
-       Optional AI requests go directly to the provider selected by the reader,
-       under the reader's own key. The developer does not receive these requests.
-       Provider retention and use depend on the reader's provider account. -->
   <key>NSPrivacyCollectedDataTypes</key>
   <array/>
   <key>NSPrivacyAccessedAPITypes</key>

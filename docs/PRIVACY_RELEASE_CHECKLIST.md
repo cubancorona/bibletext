@@ -41,6 +41,8 @@ account identifiers or private fixture data.
   report is transmitted until the sender chooses to send it.
 - Run `appstore/preflight.py` before an Apple submission. Update store privacy
   answers when the app's data handling changes, then read the saved answers back.
+- Keep XML comments out of both bundled Apple manifests; record their rationale
+  in this checklist.
 
 ### Direct bring-your-own-key AI requests
 
