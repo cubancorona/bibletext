@@ -80,7 +80,7 @@ El.prototype.replaceChild = function (c, old) {
 El.prototype.closest = function (tag) { var n = this; while (n && n.nodeType === 1) { if (n.tagName === tag) return n; n = n.parentNode; } return null; };
 El.prototype.setAttribute = function (k, v) { this.attrs[k] = String(v); };
 El.prototype.getAttribute = function (k) { return k in this.attrs ? this.attrs[k] : null; };
-El.prototype.addEventListener = function () {};
+El.prototype.addEventListener = function (type, f) { this['on' + type] = f; };
 El.prototype.querySelector = function (tag) {
   var found = null;
   (function walk(n) { if (found || n.nodeType !== 1) return; if (n.tagName === tag) { found = n; return; } n.childNodes.forEach(walk); })(this);
@@ -231,6 +231,70 @@ func TestTheWebPageLandsOnAVerseWhoseLinkCarriesAKey(t *testing.T) {
 		}
 		if g.Card != "none" && (g.Before != "the paragraph of v3" || !g.Tail) {
 			t.Errorf("%s: the %s stands before %s (tail %v), want before the paragraph of v3 with a tail", hash, g.Card, g.Before, g.Tail)
+		}
+	}
+}
+
+// A note link whose fragment lights no verse parks its note at the top of the
+// chapter with no tail, whatever the page showed before: a hashchange to
+// "#n=..." or to a verse the page lacks used to put the note, with a tail,
+// before the paragraph the previous link had lit, and scroll there, while a
+// reload of the same address parked it at the top. Controls: a fresh load of
+// each such address, a hashchange to a verse the page has, and the marker,
+// which keeps the note's own place when minimizing clears the highlight,
+// also after the reader cleared it and so took the verse out of the address,
+// and puts the note back there when tapped.
+func TestTheWebNoteParksAtTheTopWhenItsFragmentLightsNoVerse(t *testing.T) {
+	type place struct {
+		Card, Before, Landed string
+		Tail                 bool
+	}
+	var got map[string]place
+	runJS(t, landingPage(t)+`
+load('#v3&n=OK');
+out['load #v3&n=OK'] = report();
+hashchange('#n=OK'); out['then #n=OK'] = report();
+hashchange('#v999&n=OK'); out['then #v999&n=OK'] = report();
+hashchange('#v5&n=OK'); out['then #v5&n=OK'] = report();
+hashchange('#n=OK'); out['then #n=OK after v5'] = report();
+load('#v3&n=DAMAGED');
+hashchange('#n=DAMAGED'); out['notice then #n=DAMAGED'] = report();
+load('#n=OK'); out['load #n=OK'] = report();
+load('#v999&n=OK'); out['load #v999&n=OK'] = report();
+load('#v3&n=OK');
+page.minimizeNote(page.activeNote()); out['minimized'] = report();
+load('#v3&n=OK');
+location.hash = '#n=OK'; page.highlightRange();
+page.minimizeNote(page.activeNote()); out['cleared, then minimized'] = report();
+all('notechip')[0].onclick({ preventDefault: function () {} });
+out['cleared, minimized, marker tapped'] = report();
+`, &got)
+	top := place{Before: "the chapter top", Tail: false}
+	at := func(n string) place { return place{Before: "the paragraph of " + n, Tail: true} }
+	for name, want := range map[string]struct {
+		card string
+		p    place
+	}{
+		"load #v3&n=OK":                     {"note", at("v3")},
+		"then #n=OK":                        {"note", top},
+		"then #v999&n=OK":                   {"note", top},
+		"then #v5&n=OK":                     {"note", at("v5")},
+		"then #n=OK after v5":               {"note", top},
+		"notice then #n=DAMAGED":            {"notenotice", top},
+		"load #n=OK":                        {"note", top},
+		"load #v999&n=OK":                   {"note", top},
+		"minimized":                         {"notechip", at("v3")},
+		"cleared, then minimized":           {"notechip", at("v3")},
+		"cleared, minimized, marker tapped": {"note", at("v3")},
+	} {
+		g, ok := got[name]
+		if !ok {
+			t.Errorf("%s: the page reported nothing", name)
+			continue
+		}
+		if g.Card != want.card || g.Before != want.p.Before || g.Tail != want.p.Tail {
+			t.Errorf("%s: the %s stands before %s (tail %v), want the %s before %s (tail %v)",
+				name, g.Card, g.Before, g.Tail, want.card, want.p.Before, want.p.Tail)
 		}
 	}
 }

@@ -1528,7 +1528,9 @@ const readerJSTemplate = `
   var ICON_TRASH = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 1.75a.75.75 0 0 0-.75.75V3H3a.75.75 0 0 0 0 1.5h.4l.62 8.06A1.75 1.75 0 0 0 5.77 14h4.46a1.75 1.75 0 0 0 1.75-1.44l.62-8.06H13A.75.75 0 0 0 13 3h-2.75v-.5a.75.75 0 0 0-.75-.75h-3zm.75 1.25h1.5V3h-1.5v-.0zM5.9 4.5h4.2l-.6 7.9a.25.25 0 0 1-.25.1H6.75a.25.25 0 0 1-.25-.1L5.9 4.5z"/></svg>';
   var ICON_NOTE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.75A1.75 1.75 0 0 1 4.75 1h6.5A1.75 1.75 0 0 1 13 2.75v10.5A1.75 1.75 0 0 1 11.25 15h-6.5A1.75 1.75 0 0 1 3 13.25V2.75zM5.5 4.5a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 0-1.5h-5zm0 3a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 0-1.5h-5zm0 3a.75.75 0 0 0 0 1.5h3a.75.75 0 0 0 0-1.5h-3z"/></svg>';
 
-  function showNote(text) {
+  // showNote places the note before para, the paragraph of the passage it is
+  // about (fragmentParagraph), or at the chapter top when para is null.
+  function showNote(text, para) {
     hideNote();
     var wrap = document.querySelector('.wrap');
     if (!wrap || !text) return;
@@ -1564,8 +1566,9 @@ const readerJSTemplate = `
     }));
 
     box.appendChild(tools); box.appendChild(who); box.appendChild(body);
-    anchorToPassage(box);
+    anchorToPassage(box, para);
     noteBox = box;
+    notePara = para;
     activeNoteText = text;
     rescrollToHighlight();
   }
@@ -1585,7 +1588,11 @@ const readerJSTemplate = `
   // it, so the reader gets the passage as it would normally read. Nothing is
   // lost — the fragment still carries both, so this survives a reload and the
   // marker puts everything back.
+  // The marker takes the note's own place: minimizing clears the highlight,
+  // and the reader may have cleared it before, taking the verse out of the
+  // fragment, so neither can say where the note stood.
   function minimizeNote(text) {
+    var para = notePara;
     hideNote();
     // suppressHighlight(true) is UNCONDITIONAL where the app's hide clears
     // only the mark the note itself owns. Reasoned: this page has no other
@@ -1607,10 +1614,11 @@ const readerJSTemplate = `
     chip.addEventListener('click', function (e) {
       e.preventDefault();
       suppressHighlight(false);
-      showNote(text);
+      showNote(text, para);
     });
-    anchorToPassage(chip);
+    anchorToPassage(chip, para);
     noteChip = chip;
+    notePara = para;
     activeNoteText = text;
   }
 
@@ -1639,6 +1647,7 @@ const readerJSTemplate = `
   function hideNote() {
     if (noteBox) { noteBox.remove(); noteBox = null; }
     if (noteChip) { noteChip.remove(); noteChip = null; }
+    notePara = null;
   }
 
   // The note belongs to the passage, so it goes into the FLOW immediately above
@@ -1646,17 +1655,32 @@ const readerJSTemplate = `
   // top of the chapter. Two reasons: it can never cover the words it is about,
   // and a reader arriving on a shared link lands mid-chapter at their verse, so
   // a note parked at the top of the page is a note they never see.
-  // The paragraph the note belongs to, remembered the first time we can see it.
-  // It has to be remembered: minimizing CLEARS the highlight, so by the time the
-  // marker is placed there is no .v.hl left to anchor to and the marker would
-  // jump to the top of the chapter — which is exactly what it did.
-  var noteAnchorPara = null;
+  //
+  // The paragraph comes from the fragment the note arrived with
+  // (fragmentParagraph), and the marker keeps the note's own (notePara). The
+  // placement used to fall back to the paragraph it had last been given, kept
+  // for as long as the page was open, so a later fragment that lit no verse
+  // (Back to a note link with no verse, a second note link pasted into the
+  // tab, a verse the page lacks) put its note, with a tail, before the
+  // paragraph the previous link had lit, and scrolled there; a reload of the
+  // same address parked it at the top.
+  var notePara = null;
 
-  function anchorToPassage(el) {
-    var lit = document.querySelector('.v.hl') || document.querySelector('.v:target');
-    var para = (lit && lit.closest ? lit.closest('p') : null) || noteAnchorPara;
+  // fragmentParagraph is the paragraph holding the first verse of the
+  // fragment's span the page has, the verse highlightRange lights first, or
+  // null when the fragment names no verse the page has.
+  function fragmentParagraph() {
+    var m = verseSpan();
+    if (!m) return null;
+    for (var n = m[0]; n <= m[1]; n++) {
+      var el = document.getElementById('v' + n);
+      if (el) return el.closest ? el.closest('p') : null;
+    }
+    return null;
+  }
+
+  function anchorToPassage(el, para) {
     if (para && para.parentNode) {
-      noteAnchorPara = para;
       para.parentNode.insertBefore(el, para);
       el.classList.remove('notail');
       return;
@@ -1690,9 +1714,10 @@ const readerJSTemplate = `
       // assigned two statements before the call, so the note always won. That is
       // right on a fresh arrival — anchorToPassage inserts the card immediately
       // before the paragraph holding the lit verse — and wrong the moment the
-      // anchor is STALE, which is exactly what the noteAnchorPara fallback
-      // there produces: a hashchange to another passage then scrolled the reader
-      // back to a note about the one they had left.
+      // anchor is STALE, which a placement remembered from an earlier fragment
+      // produced: a hashchange to another passage then scrolled the reader
+      // back to a note about the one they had left. The card is now placed
+      // from the fragment being arrived at, and the question stays.
       //
       // So: the card wins when it belongs to the paragraph being arrived at.
       // Asking the DOM for that paragraph is not re-deriving the rule — these <p>
@@ -1729,12 +1754,12 @@ const readerJSTemplate = `
   // It lands as the note does (rescrollToHighlight): the passage opens in
   // all three cases, NOTE_WIRE_FORMAT.md rule 5, and a notice placed with no
   // scroll left the reader at the top of the chapter.
-  function showNotice(msg) {
+  function showNotice(msg, para) {
     hideNotice();
     var box = document.createElement('aside');
     box.className = 'notenotice';
     box.textContent = msg;                 // our own fixed sentence, still TEXT
-    anchorToPassage(box);
+    anchorToPassage(box, para);
     noticeBox = box;
     rescrollToHighlight();
   }
@@ -1748,8 +1773,9 @@ const readerJSTemplate = `
     // damaged — exactly as in the app's parser (share_link_parse.go).
     if (!('n' in keys)) return;
     var got = decodeNotePayload(keys.n);
-    if (got.outcome === 'ok') { showNote(got.text); return; }
-    showNotice(got.outcome === 'newer' ? NOTE_MSG_NEWER : NOTE_MSG_DAMAGED);
+    var para = fragmentParagraph();
+    if (got.outcome === 'ok') { showNote(got.text, para); return; }
+    showNotice(got.outcome === 'newer' ? NOTE_MSG_NEWER : NOTE_MSG_DAMAGED, para);
   }
 
   renderNote();
