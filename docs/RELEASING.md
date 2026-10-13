@@ -39,6 +39,15 @@ whole preparation gets wasted. Source the two credential scripts, never pipe
 them: a pipe is a subshell and the exports die with it, surfacing later as a
 bare `KeyError` that reads like a missing credential.
 
+Store timelines may differ for a deliberate schedule or a practical reason,
+including prerequisites, failures and independent review times. When a
+material difference appears, report which stores are ahead or behind, why,
+and the next action or planned timing. Distinguish a chosen delay from an external
+blocker or an unknown cause; do not let a pending release action become an
+unexplained wait. Continue already authorized work and ask for input only
+when a decision is actually needed. Record remaining actions and release
+ownership at handoff so a second worker does not duplicate them.
+
 ---
 
 ## What only the owner decides
@@ -321,6 +330,11 @@ stage 6 ends on Play: the release is on the alpha track, `upload` refuses the
 production track, and production waits for the promotion in stage 7. The
 script refuses an option it does not know, such as `--dryrun`, before it
 reads the key, so a mistyped dry run never commits.
+
+Verify the current [Play publishing mode](PLAY_LISTING.md#publishing-mode)
+in Publishing overview and record it before submitting. The expected setting
+is Managed publishing off, so approval publishes automatically; this does not
+replace the production promotion in stage 7.
 
 **An upload waits for a review already in progress.** Its commit asks Play
 to refuse rather than cancel that review and send everything again, as

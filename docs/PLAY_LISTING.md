@@ -41,6 +41,19 @@ target-SDK patch, and verifies both debug APK and release AAB manifests. Google
 requires API 36 for new apps and updates from 31 August 2026, so an API 35
 artifact is not a valid prepared upload.
 
+## Publishing mode
+
+Google Play's **Managed publishing** was **off** when verified on 13 October
+2026. In that mode, approved releases publish automatically to the submitted
+track. Alpha approval does not promote a release to production; the production
+promotion remains a separate step.
+
+Check Publishing overview before each release and record the setting with its
+verification time. Treat the recorded mode as the expected configuration, not
+as a permanent guarantee. If managed publishing is on, approved changes wait
+for a separate publish action. Do not change the setting merely to match an
+older note. See [Google's publishing guidance](https://support.google.com/googleplay/android-developer/answer/9859654?hl=en).
+
 ## App details
 
 | Field | Value |
