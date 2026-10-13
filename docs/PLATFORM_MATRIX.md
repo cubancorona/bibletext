@@ -490,7 +490,9 @@ place a fix on one does not reach the others.
     `TestAIPassageRefAgreesWithShareCitation` holds the card and the prompt
     together and records the panel's wider answer as the control. Closes
     when the panel takes the same order, which changes what it shows on
-    those pages and is a decision not yet taken.
+    those pages; that order was decided on 13 October 2026 for 1.2.22
+    (docs/ROADMAP.md, 1.2.22, row 6), and this divergence closes with that
+    change.
 
 ## Deliberate exclusions
 

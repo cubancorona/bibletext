@@ -175,7 +175,7 @@ Job, Proverbs, Isaiah and Jeremiah most.
 Fix, 1.5 days: push the paragraph's first verse with each band spec
 (`noteBandSpecs`, `notes_chrome.go:319`, through `btaSetNoteBands`), with the
 sticker (`btaSetNote`) and with the arrival (`chapterNoteArrival`), and
-replace the four `paraStartAt` calls and the inline walk with
+replace the five `paraStartAt` calls and the inline walk with
 `verseRange(firstVerse)[0]`. The Android fragments of the bridge's contract
 tests change with it; then a noted psalm, with a link into its stanza, on the
 emulator. docs/ANDROID.md, which still places the band on the anchor verse's
@@ -186,7 +186,7 @@ first character, is corrected in the same change.
 Planned for: 1.2.22 — see docs/ROADMAP.md.
 
 `captureReadingAnchor` (`reading_android.go:923`) reads only the bridge's
-scroll fraction and returns verse 0 (:933), so every shared restore path —
+scroll fraction and returns verse 0 (:934), so every shared restore path —
 the rotation capture (`reading_state.go:130`), the snapshot (:251), the
 foreground recovery (`reading_android.go:551-558`) and a same-chapter push
 (:783-789) — keeps no verse on Android. The fraction is the scroll offset
@@ -213,6 +213,14 @@ portrait to landscape); hand both through `captureReadingAnchor` and
 `applyPendingReflow`, keeping the fraction as the fallback, as
 `btIOSApplyRestore` does. `readingState` already carries `AnchorVerse` and
 `AnchorDelta`.
+
+The same change on iOS, for one rule on both: iOS keeps the offset into the
+top verse in pixels (`bibleTextTVCaptureAnchor`, `reading_ios.go:3831-3865`),
+the shape that overshoots a verse that got shorter on a rotation; it was
+measured on the Android model, not on iOS. Taking the fraction there too, or
+clamping the offset to the verse's new height, is Objective-C, which 1.2.22's
+set otherwise leaves alone. If AND-3 ships without it, PLATFORM_MATRIX.md
+records the difference in the same change, until iOS takes the fraction.
 
 ### AI-1. The fixed study actions resolve their passage again on every request
 
@@ -414,23 +422,26 @@ selections, 0.34% of two-word and 0.12% of three-word. The BSB: 11,785
 (1.29%, 0.27%, 0.08%). The Mac's character-granular drags add the shape
 `share_phrase_sweep_test.go:124-160` pins ("leavened bread shall").
 
-Fix, about 5 days as one change (3, 4, 2 and 2 by pane): `selSpan` gains the
-offset within verse lo, -1 when unknown; each pane fills it where it has it —
-iOS `range.location` less `btIOSVerseAtIndex`'s out location, the Mac
-`sel.location` less the numeral run, Android `s0 - verseStarts[i]`, the
-styled pane `p.selStart - run.Offset` — and `locateShareSelection` takes it as
-the anchor it already honours (`share.go:957`), with today's search as the
+Fix, about 5 days as one change; counted apart, the shared seam and consumer
+with the styled pane (A) 3, iOS 4, the Mac 2 and Android 2. `selSpan` gains
+the offset within verse lo, -1 when unknown; each pane fills it where it has
+it — iOS `range.location` less `btIOSVerseAtIndex`'s out location, the Mac
+`sel.location` less the numeral run, Android `s0 - verseStarts[i]`, the styled
+pane `p.selStart - run.Offset` — and `locateShareSelection` takes it as the
+anchor it already honours (`share.go:957`), with today's search as the
 fallback. The seams: `reading_ios.go:272-296` and its externs (:31, :33);
 `reading_macos.go:280-295` (:94, :96); `ai_menu_darwin.go:68`, :87;
 `android/BtBridge.java:1590-1613` and :970, `reading_jni_android.c:28-36`,
 `reading_android_export.go:27-30`; `reading_styled_select.go:425-451`; the
 consumer, `share.go:956-971`. On the Mac, handing over the verse's words
 before the selection rather than a UTF-16 offset lets the normalisation the
-selection already goes through place it. It also closes D's root, M, the
-roots of E/AI-3 and AI-2, and "A drag begun inside a verse number shares the
-digit", and turns the trade-off `share_phrase_sweep_test.go` pins into a
-positive test. Open: one change on all four panes, or pane by pane with -1
-as the fallback.
+selection already goes through place it. It also closes D's root, M, the roots
+of E/AI-3 and AI-2, and "A drag begun inside a verse number shares the digit",
+and turns the trade-off `share_phrase_sweep_test.go` pins into a positive
+test. It is expected to close the two dash phrases of "A phrase ending on a
+dash, where its verse has the same words earlier, is cut short" that carry a
+span, which the phrase sweep run with the offset has to show. Open: one change
+on all four panes, or pane by pane with -1 as the fallback.
 
 ### M. The marker strip confirms a verse number by any overlap with that verse's opening
 
@@ -516,8 +527,9 @@ docs/ROADMAP.md.
 (`reading_ios.go:273`), the Mac never asks `btMacIsHeadingParagraph`
 (`reading_macos.go:284`, :292), and Android has the same backward rule
 (`android/BtBridge.java:1593`): a selection inside a publisher's heading
-resolves to the verse above at both ends. Go's repair (`wholeHeadingVerse`,
-`share.go:1462`) fires only when the words are not found first, so a heading
+resolves to the verse above at both ends. Go's repair
+(`headingOnlySelectionVerse`, `share.go:1427`; the `span.lo == above` test at
+:1462) fires only when the words are not found first, so a heading
 word the verse above also has is cited from that verse by the share, the note
 anchor, the cross-references and the AI reference: "Cain" in "The
 Descendants of Cain" cites Genesis 4:16, and the "The" of "The Fourth Day"
@@ -555,6 +567,15 @@ Fix, 1.5 days: resolve the arrival verse once in Go (the walk `gapsBefore`
 does) for all six; Android takes the first verse after the omitted one on a
 miss; the website scrolls the `.vg` mark. `reading_legacy_band_test.go:14-36`
 pins the legacy pane's behaviour as not decided.
+
+Open, apart from the fix: whether the omitted verse's mark is lit when a mark
+covers that verse. Every page ties the mark to the verse after it, drawn in
+that verse's tint or outside its highlight (`android_chapter_html.go:172`,
+:193-194; `reading.go:946-947`; `reading_styled_layout.go:553-556`;
+`cmd/websitegen/render.go:265-266`), so a one-verse mark on an omitted verse
+lights nothing on any surface; lighting it is a change of its own. "Headings: quoting, notes and links need one
+deliberate pass" records the neighbouring mismatch, a gap mark before a verse
+washed by the markup but not by a single-verse mark's native range.
 
 ### RL-NKJV-1 and RL-NKJV-2. The NKJV red-letter generator places a run after its cursor, and retries from the verse's start
 
@@ -643,6 +664,12 @@ Each with what settles it, so that none is taken up again by mistake:
 - **I, AND-6, AND-7 and APPLE-NOTE-COUNTS-SPAN-BY-SEARCH**, the note chrome's
   who-line and counts searched for in their own line, which holds each count
   once (NOTE_CHROME_UNIFICATION.md; `notes_chrome_conformance_test.go`).
+  Apart from that, a test fixture describes a line the composer does not
+  produce: `note_counts_span_test.go:57` puts the chevron before " · N not
+  shown here", where the composer appends it last (`notes_chrome.go:240`,
+  after `notes_plan.go:600`). The conformance sweep
+  (`notes_chrome_conformance_test.go:70-74`) covers the real shape; the
+  fixture is corrected with any change to that test.
 - **J**, the share parts read back from the message's own shape, with no text
   search (`share_parts.go`).
 - **L**, the prompt quoting the raw selection: the text is the provider's
@@ -665,6 +692,14 @@ superscript span is the importer's own carried position), **W5** (the
 notice's title is built from the same reference as its heading) and **W6**
 (the website's verse ids are unique; the NKJV feed is unchecked, which a
 build-time uniqueness assertion would close).
+
+Observed and not verified: the live website's WEB John pages carry one
+paragraph per chapter, so even a readable note there lands its card under the
+heading with the verse 800 to 1,500 px below (John 3:16: the card at 16 px,
+the verse at 1,403). `cmd/websitegen/render.go:218` takes paragraphs from the
+app's rule, so either the live pages predate the WEB's paragraph data for
+John or the WEB has none there. W3's fix lands the verse when the card is not
+beside it, which would cover this too.
 
 Not measured: the NKJV, for M, E, W6, the shipped NKJV red-letter table and
 VERS-1. And the text-to-speech and chapter strings cross JNI as modified
@@ -716,11 +751,16 @@ with the span and without, these are the four left wrong ("Verse
 attribution: three findings", item 1); `share_phrase_sweep_test.go:280-287`
 holds them as known.
 
+The four are two phrases, each wrong once with the span and once without.
 The selection's place in its verse ("Where the app re-finds the reader's
-position from text", P1) closes it: placed at the reader's copy, at the
-verse's end, nothing follows the dash. On its own, the end repair would need
-a dash to end a word, which changes what other drags quote and wants the
-phrase sweep before and after. Either way the known count goes to 0.
+position from text", P1) is expected to close the two with the span, placing
+the phrase at the reader's copy, but that is not shown: the chapter's next
+verse still follows that copy's dash, so
+`TestEveryPhraseInAVerseSharesItsOwnWordsOverLocalCaches_LocalOnly` run with
+the offset settles it. The two with no span, which no offset reaches, need
+the end repair's own rule, a dash that ends a word, which changes what other
+drags quote and wants the phrase sweep before and after. The known count goes
+to 0 only when both halves are done.
 
 ## A heading that opens as its verse does is shared whole (the BSB's "The LORD Is My Shepherd") — deferred from 1.2.20, 7 October 2026
 
@@ -1141,7 +1181,10 @@ temp folder and the sheet said the picture was shown; after, nothing
 opened and the cause was logged; and with the card left in place, the
 fixed build saved the picture in Downloads, showed it, and said so.
 iOS and Android say *Could not share the card.* on the same case; the
-Mac's share picker is handed the missing file's address (not seen).
+Mac's share picker is handed the missing file's address (not seen). The
+Windows fallback ends the same way by the code and by the test under
+Windows' rules, and has not been seen on Windows; that look goes with the
+Windows checks still to run — see docs/ROADMAP.md.
 
 ## Email… on the desktop share sheet fails without a word — found 1 October 2026
 
@@ -2997,6 +3040,8 @@ fails if a destroyed activity's stop, on time or late, sends the engine a
 stop, or if the desktop's or iOS's stop does not send one. Back on Android 11
 and older now leaves the narration playing as the iPhone does when the
 reader leaves the app; it was not run, the emulators here being 13 and later.
+Android 7.0 to 11 (API 24 to 30) are still supported, so the check is open,
+on an emulator at API 30 or below — see docs/ROADMAP.md.
 
 ## Rework the download page — DONE 26 September 2026; Google Play filled its slot, the release notes followed, and the APK row returned, 30 September 2026
 
@@ -3709,11 +3754,11 @@ a card, flush right under the header, that pushed the text down.
 
 ## The reading page: what is left after 24 September 2026
 
-Planned for: the Psalm title's hyphenation and the pill under a heading on
-Android's book page in 1.2.20; the Windows and Linux footnote section,
-Android's centring and the prose-into-poetry rule in 1.2.23+; hyphenation on
-Windows and Linux in the next major; the Android title gaps and the other
-kept differences stay — see docs/ROADMAP.md.
+Released in 1.2.20: the Psalm title's hyphenation and the pill under a
+heading on Android's book page. Planned for: the Windows and Linux footnote
+section, Android's centring and the prose-into-poetry rule in 1.2.23+;
+hyphenation on Windows and Linux in the next major; the Android title gaps
+and the other kept differences stay — see docs/ROADMAP.md.
 
 Every surface takes its page from `reading_page.go` since 24 September 2026
 (docs/READING_TYPOGRAPHY.md, "The reading page", keeps the per-surface list).
