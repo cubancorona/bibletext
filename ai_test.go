@@ -600,6 +600,34 @@ func TestAIPassageRefAgreesWithShareCitation(t *testing.T) {
 	}
 }
 
+// A selection with no span that the normalize cannot place, a piece of one
+// word, is cited at the one verse that holds it, or at the chapter alone
+// when several do: a piece of a word stands in one verse, so naming every
+// verse holding the longer word names verses the reader did not select.
+// "certainl" stands in verses 3 and 11 of the fixture and was cited as
+// John 3:3–11 by the card, the panel and the prompt alike. Control: a
+// piece only verse 4 holds.
+func TestAPieceOfAWordWithNoSpanNamesOneVerseOrTheChapter(t *testing.T) {
+	st := openingChapterState()
+	for _, c := range []struct{ text, want string }{
+		{"certainl", "John 3"},
+		{"icodemus", "John 3:4"},
+	} {
+		if _, _, _, _, ok := normalizeShareSelection(st, c.text, selSpan{}); ok {
+			t.Fatalf("%q: the normalize placed a piece of a word, so the matching is not under test", c.text)
+		}
+		if got := aiPassageFor(st, c.text, selSpan{}).Ref; got != c.want {
+			t.Errorf("%q: the prompt cites %q, want %q", c.text, got, c.want)
+		}
+		if _, cite, _, _ := prepareShareQuote(st, c.text, selSpan{}); cite != c.want {
+			t.Errorf("%q: the share card cites %q, want %q", c.text, cite, c.want)
+		}
+		if cite := citationForSelection(st, c.text, selSpan{}); cite != c.want {
+			t.Errorf("%q: the cross-references panel cites %q, want %q", c.text, cite, c.want)
+		}
+	}
+}
+
 func verseNumbers(vs []Verse) []int {
 	out := make([]int, len(vs))
 	for i, v := range vs {

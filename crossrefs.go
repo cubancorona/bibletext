@@ -1451,6 +1451,19 @@ func selectionVersesIn(state *AppState, book string, chapter int, text string, s
 			out = append(out, v)
 		}
 	}
+	// The matching is taken only when it names one verse. What reaches it
+	// is a selection the normalize could not place, almost always a piece
+	// of one word, and a piece of a word stands in one verse: naming
+	// several is naming every verse that holds the longer word. A drag one
+	// letter short of "righteousness" in Romans 3:26 named 3:5–26, and
+	// "commandment" in Psalm 119:176 named 119:6–176; on the plain-text
+	// page 43.5% of the WEB's matching answers (40.0% of the BSB's) named
+	// verses the selection was not made in, every one of them as a range.
+	// Such a selection cites the chapter alone, in the card, the panel and
+	// the prompt.
+	if len(out) > 1 {
+		return nil
+	}
 	return out
 }
 
