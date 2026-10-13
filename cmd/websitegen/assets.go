@@ -708,6 +708,7 @@ const readerJSTemplate = `
   // span, written bare as "v16" / "v16-18", plus optional keys like "n=<note>".
   // Unknown keys are ignored — that rule is what lets a future key be added
   // without stranding the links already sent, and it has to hold here too.
+  /*__FRAGMENT_BEGIN__*/
   function fragKeys() {
     var out = { v: '' };
     var raw = (location.hash || '').replace(/^#/, '');
@@ -726,8 +727,10 @@ const readerJSTemplate = `
   }
 
   function verseSpan() { return spanOf(fragKeys().v); }
+  /*__FRAGMENT_END__*/
 
-  // 1) Verse RANGES (#v16-18). A single verse needs no help — :target has it.
+  // 1) Verse RANGES (#v16-18). A bare single verse (#v16) needs no help —
+  // :target has it; one with a key beside it does (highlightRange).
   // THE JOINING SPACE BETWEEN TWO VERSES BELONGS TO THE BAND.
   //
   // paragraphBody writes that space BETWEEN two <span class="v"> elements, so it
@@ -813,6 +816,9 @@ const readerJSTemplate = `
   }
   /*__HIGHLIGHT_BAND_END__*/
 
+  // highlight_landing_test.go runs the lines between the HIGHLIGHT_RANGE
+  // markers, with the fragment's and the note's, against a stand-in DOM.
+  /*__HIGHLIGHT_RANGE_BEGIN__*/
   function highlightRange() {
     unlightVerses();
     var m = verseSpan();
@@ -829,8 +835,15 @@ const readerJSTemplate = `
       if (!first) first = el;
     }
     bridgeHighlightGaps();
-    if (first && hi > lo) first.scrollIntoView({ block: 'center' });
+    // The browser scrolls to the verse itself only for a bare "#v16", the
+    // one fragment that is an element's id. A range, and any fragment that
+    // carries a key beside the verse ("#v16&n=..."), matches no id, so the
+    // page lands here or nowhere: a link to one verse with a note the page
+    // could not read used to open at the top of the chapter, the verse and
+    // the notice beside it off-screen.
+    if (first && (hi > lo || location.hash !== '#v' + lo)) first.scrollIntoView({ block: 'center' });
   }
+  /*__HIGHLIGHT_RANGE_END__*/
   // Clearing a highlight: tap the highlighted text and a small bubble appears at
   // the tap; the bubble clears it. Removing the fragment is what does the work —
   // it un-targets the CSS :target rule (single verse) as well as letting us drop
@@ -1508,6 +1521,7 @@ const readerJSTemplate = `
   }
   /*__NOTE_DECODER_END__*/
 
+  /*__NOTE_PLACE_BEGIN__*/
   var noteBox = null, noteChip = null;
 
   var ICON_MINIMIZE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.75h10a.75.75 0 0 0 0-1.5H3a.75.75 0 0 0 0 1.5z"/></svg>';
@@ -1670,7 +1684,7 @@ const readerJSTemplate = `
   function rescrollToHighlight() {
     var go = function () {
       var lit = document.querySelector('.v.hl') || document.querySelector('.v:target');
-      var card = noteBox || noteChip;
+      var card = noteBox || noteChip || noticeBox;
       // THE SAME QUESTION THE OTHER FOUR SURFACES ASK, and this one used to ask
       // nothing at all: its only gate was a null-check on an element
       // assigned two statements before the call, so the note always won. That is
@@ -1712,6 +1726,9 @@ const readerJSTemplate = `
   // phishing template in our own typeface on our own domain.
   var noticeBox = null;
   function hideNotice() { if (noticeBox) { noticeBox.remove(); noticeBox = null; } }
+  // It lands as the note does (rescrollToHighlight): the passage opens in
+  // all three cases, NOTE_WIRE_FORMAT.md rule 5, and a notice placed with no
+  // scroll left the reader at the top of the chapter.
   function showNotice(msg) {
     hideNotice();
     var box = document.createElement('aside');
@@ -1719,6 +1736,7 @@ const readerJSTemplate = `
     box.textContent = msg;                 // our own fixed sentence, still TEXT
     anchorToPassage(box);
     noticeBox = box;
+    rescrollToHighlight();
   }
 
   function renderNote() {
@@ -1736,6 +1754,7 @@ const readerJSTemplate = `
 
   renderNote();
   window.addEventListener('hashchange', renderNote);
+  /*__NOTE_PLACE_END__*/
 
   // 2) Carry the verse across a translation switch. The switcher's hrefs are
   // plain chapter links (they must be: the fragment is not known at build
