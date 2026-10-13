@@ -21,13 +21,17 @@ import (
 // untagged AI/share/cross-reference code. lo/hi is the selection's verse span,
 // resolved in Java against the Spanned's verse index (BtBridge.verseAtOffset)
 // — same contract as the Apple exports: position decides which verses are
-// cited, 0,0 = unresolved.
+// cited, 0,0 = unresolved. cLead is the selection's lead
+// (BtBridge.selectionLead, selSpan.lead), nil when the pane has none.
 //
 //export btaSelectionAction
-func btaSelectionAction(cAction, cText *C.char, lo, hi C.int) {
+func btaSelectionAction(cAction, cText *C.char, lo, hi C.int, cLead *C.char) {
 	action := C.GoString(cAction)
 	text := C.GoString(cText)
 	span := selSpanFromNative(int(lo), int(hi))
+	if cLead != nil {
+		span = selSpanWithLead(int(lo), int(hi), C.GoString(cLead))
+	}
 	state := activeAIState
 	if state == nil || text == "" {
 		return

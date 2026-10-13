@@ -23,14 +23,16 @@ package bibletext
 #include <time.h>
 
 // Implemented in Go (ai_menu_darwin.go, //export). Called when the reader picks
-// an AI study action; it copies both strings immediately, so passing the
+// an AI study action; it copies every string immediately, so passing the
 // transient UTF8String pointers is safe. lo/hi is the selection's verse span,
 // resolved here against the verse-number index of the attributed string the
 // selection was made in (0,0 = unresolved) — position, not text, decides which
-// verses a share or cross-reference cites.
-extern void bibleTextAIMenuTapped(char *action, char *text, int lo, int hi);
+// verses a share or cross-reference cites. lead is the selection's place in
+// verse lo: the text from lo's number to the selection's first character, NULL
+// when there is none (docs/SELECTION_OFFSET.md).
+extern void bibleTextAIMenuTapped(char *action, char *text, int lo, int hi, char *lead);
 // Sibling callback for the non-AI selection-menu actions (Share verse, …).
-extern void bibleTextStudyMenuTapped(char *action, char *text, int lo, int hi);
+extern void bibleTextStudyMenuTapped(char *action, char *text, int lo, int hi, char *lead);
 // Called when the reader finishes scrolling, to persist the live scroll position.
 // iOS's app-background lifecycle hook is unreliable, so we save continuously
 // (on scroll-end) instead, keeping the saved position current even on a hard kill.
@@ -269,13 +271,23 @@ static void btIOSRebuildWash(void);
     // first char, last verse number at or before its last char] — a selection
     // touching a verse's NUMBER starts at that number's location, so it
     // resolves to that verse. 0 means "above verse 1" (the heading); Go clamps.
-    int spanLo = (int)btIOSVerseAtIndex(textView.textStorage, range.location, NULL);
+    NSUInteger loLoc = 0;
+    int spanLo = (int)btIOSVerseAtIndex(textView.textStorage, range.location, &loLoc);
     int spanHi = (int)btIOSVerseAtIndex(textView.textStorage, NSMaxRange(range) - 1, NULL);
+    // The selection's lead: the same text from verse lo's number run to the
+    // selection's first character. The span says which verses; the lead says
+    // where in verse lo the selection begins, which tells a later copy of
+    // wording the verse repeats from the first (docs/SELECTION_OFFSET.md).
+    // nil, sent as NULL, when the selection starts above verse 1's number.
+    NSString *lead = (spanLo > 0 && loLoc <= range.location)
+        ? [[textView.text substringWithRange:NSMakeRange(loLoc, range.location - loLoc)] copy]
+        : nil;
 
     UIAction * (^make)(NSString *, NSString *) = ^UIAction *(NSString *title, NSString *act) {
         return [UIAction actionWithTitle:title image:nil identifier:nil
                                  handler:^(__kindof UIAction *_Nonnull a) {
-            bibleTextAIMenuTapped((char *)act.UTF8String, (char *)captured.UTF8String, spanLo, spanHi);
+            bibleTextAIMenuTapped((char *)act.UTF8String, (char *)captured.UTF8String, spanLo, spanHi,
+                                  (char *)lead.UTF8String);
         }];
     };
 
@@ -293,7 +305,8 @@ static void btIOSRebuildWash(void);
     UIAction * (^study)(NSString *, NSString *) = ^UIAction *(NSString *title, NSString *act) {
         return [UIAction actionWithTitle:title image:nil identifier:nil
                                  handler:^(__kindof UIAction *_Nonnull a) {
-            bibleTextStudyMenuTapped((char *)act.UTF8String, (char *)captured.UTF8String, spanLo, spanHi);
+            bibleTextStudyMenuTapped((char *)act.UTF8String, (char *)captured.UTF8String, spanLo, spanHi,
+                                     (char *)lead.UTF8String);
         }];
     };
     NSMutableArray *shareKids = [NSMutableArray arrayWithArray:@[

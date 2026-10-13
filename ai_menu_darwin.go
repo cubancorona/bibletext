@@ -62,13 +62,15 @@ func bibleTextKeyboardChanged(height C.double) {
 // numbers of the attributed string the selection was made in — the position is
 // authoritative for which verses are cited, and it would otherwise be discarded
 // at this boundary and re-derived (wrongly, on repeated wording) from the text.
-// 0,0 = unresolved.
+// 0,0 = unresolved. cLead is the selection's lead, the pane's text from verse
+// lo's number to the selection's first character (selSpan.lead), nil when the
+// pane has none.
 //
 //export bibleTextAIMenuTapped
-func bibleTextAIMenuTapped(cAction, cText *C.char, lo, hi C.int) {
+func bibleTextAIMenuTapped(cAction, cText *C.char, lo, hi C.int, cLead *C.char) {
 	action := C.GoString(cAction)
 	text := C.GoString(cText)
-	span := selSpanFromNative(int(lo), int(hi))
+	span := nativeSelSpan(lo, hi, cLead)
 	state := activeAIState
 	if state == nil {
 		return
@@ -81,13 +83,13 @@ func bibleTextAIMenuTapped(cAction, cText *C.char, lo, hi C.int) {
 // bibleTextStudyMenuTapped is the sibling callback for the non-AI selection-menu
 // actions (Share verse, and — as they land — Cross-references and Word study).
 // Same threading contract as above: copy the C strings, then hop to Fyne's UI
-// goroutine before touching any state. Same lo/hi contract as above.
+// goroutine before touching any state. Same lo/hi and lead contract as above.
 //
 //export bibleTextStudyMenuTapped
-func bibleTextStudyMenuTapped(cAction, cText *C.char, lo, hi C.int) {
+func bibleTextStudyMenuTapped(cAction, cText *C.char, lo, hi C.int, cLead *C.char) {
 	action := C.GoString(cAction)
 	text := C.GoString(cText)
-	span := selSpanFromNative(int(lo), int(hi))
+	span := nativeSelSpan(lo, hi, cLead)
 	state := activeAIState
 	if state == nil {
 		return
@@ -95,6 +97,14 @@ func bibleTextStudyMenuTapped(cAction, cText *C.char, lo, hi C.int) {
 	fyne.Do(func() {
 		dispatchSelectionAction(state, action, text, span)
 	})
+}
+
+// nativeSelSpan is the span a pane reported, with its lead when it sent one.
+func nativeSelSpan(lo, hi C.int, cLead *C.char) selSpan {
+	if cLead == nil {
+		return selSpanFromNative(int(lo), int(hi))
+	}
+	return selSpanWithLead(int(lo), int(hi), C.GoString(cLead))
 }
 
 // bibleTextNoteHidden is the tap menu's "Hide note": the note and its highlight

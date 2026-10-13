@@ -13,8 +13,10 @@
 
 // Implemented in Go (reading_android_export.go). The char* arguments are
 // only valid for the duration of the call — Go copies them immediately.
-// lo/hi is the selection's verse span, resolved in Java (0,0 = unresolved).
-extern void btaSelectionAction(char *action, char *text, int lo, int hi);
+// lo/hi is the selection's verse span, resolved in Java (0,0 = unresolved);
+// lead is the selection's place in verse lo, NULL when there is none
+// (docs/SELECTION_OFFSET.md).
+extern void btaSelectionAction(char *action, char *text, int lo, int hi, char *lead);
 extern void btaScrolled(float frac);
 extern void btaReadAlongUserScrolled(void);
 extern void btaReadAlongFollowTapped(void);
@@ -27,12 +29,15 @@ extern void btaNoteRestored(void);
 extern void btaNoteAction(int verb, int key);
 
 JNIEXPORT void JNICALL
-Java_org_bibletext_BtBridge_nativeSelectionAction(JNIEnv *env, jclass clazz, jstring jAction, jstring jText, jint jLo, jint jHi) {
+Java_org_bibletext_BtBridge_nativeSelectionAction(JNIEnv *env, jclass clazz, jstring jAction, jstring jText, jint jLo, jint jHi, jstring jLead) {
 	const char *action = (*env)->GetStringUTFChars(env, jAction, NULL);
 	const char *text = (*env)->GetStringUTFChars(env, jText, NULL);
-	btaSelectionAction((char *)action, (char *)text, (int)jLo, (int)jHi);
+	// A null lead is no lead, and GetStringUTFChars must not see it.
+	const char *lead = jLead != NULL ? (*env)->GetStringUTFChars(env, jLead, NULL) : NULL;
+	btaSelectionAction((char *)action, (char *)text, (int)jLo, (int)jHi, (char *)lead);
 	(*env)->ReleaseStringUTFChars(env, jAction, action);
 	(*env)->ReleaseStringUTFChars(env, jText, text);
+	if (lead != NULL) (*env)->ReleaseStringUTFChars(env, jLead, lead);
 }
 
 JNIEXPORT void JNICALL
