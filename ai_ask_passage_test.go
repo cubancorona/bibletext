@@ -104,10 +104,11 @@ func syntheticAskPassage() aiPassage {
 	return p
 }
 
-// The legacy wrapper captures Ask only. Fixed actions retain their
-// text-and-span request seam in both build states; explicit ForPassage calls
-// are covered separately by the captured-passage lifecycle controls.
-func TestStudyPanelWrapperCapturesOnlyAsk(t *testing.T) {
+// The wrapper captures the passage for every action, in both build states:
+// the request carries the passage resolved when the panel opened, beside the
+// unchanged text-and-span seam. Explicit ForPassage calls are covered
+// separately by the captured-passage lifecycle controls.
+func TestStudyPanelWrapperCapturesEveryAction(t *testing.T) {
 	for _, action := range []string{aiActionExplain, aiActionContext, aiActionTranslation, aiActionCompare, aiActionAsk} {
 		t.Run(action, func(t *testing.T) {
 			app := test.NewApp()
@@ -122,12 +123,11 @@ func TestStudyPanelWrapperCapturesOnlyAsk(t *testing.T) {
 			passage := aiPassageFor(state, text, span)
 			showAIPanel(state, action, text, question, span)
 			r := nextCapturedStudyRequest(t, reqs, action+" wrapper")
-			wantCaptured := action == aiActionAsk && askQuestionEnabled
-			if r.captured != wantCaptured {
-				t.Errorf("captured passage = %v, want %v", r.captured, wantCaptured)
+			if !r.captured {
+				t.Errorf("%s request carried no captured passage", action)
 			}
-			if wantCaptured && r.passage != passage {
-				t.Errorf("Ask wrapper changed the passage: got %+v, want %+v", r.passage, passage)
+			if r.passage != passage {
+				t.Errorf("wrapper changed the passage: got %+v, want %+v", r.passage, passage)
 			}
 			if r.action != action || r.text != text || r.question != question || r.span != span {
 				t.Errorf("wrapper changed the legacy request arguments: %+v", r)
@@ -278,6 +278,117 @@ func TestAskPanelRetainsCapturedPassage(t *testing.T) {
 				t.Errorf("Report changed the exact captured reference, full translation, question or answer: got %q, want %q", body, wantBody)
 			}
 		})
+	}
+}
+
+// fixedActionChapters is an invented book with two chapters that both have
+// a verse 1, so a passage resolved again after the reader moves names a
+// verse that exists, in the wrong chapter.
+func fixedActionChapters() *AppState {
+	bd := NewBibleData()
+	bd.Books = []string{"Probe"}
+	bd.Verses["Probe"] = map[int][]Verse{
+		1: {{BookName: "Probe", Book: "Probe", Chapter: 1, Verse: 1, Text: "In the first days the people built a city by the river."}},
+		2: {{BookName: "Probe", Book: "Probe", Chapter: 2, Verse: 1, Text: "The rain fell on the hills for many nights."}},
+	}
+	return &AppState{Bible: bd, CurrentBook: "Probe", CurrentChapter: 1, CurrentVersion: "web"}
+}
+
+// The fixed study actions keep the passage selected, as Ask does, through
+// Try again, the rebuild of an answered panel and the eviction of one in
+// flight, after the reader has moved to another chapter under the open
+// panel (a link, or the narration turning the chapter). They used to
+// resolve the passage again on every request against the chapter then
+// current, so the retried request asked about Probe 2:1 for words selected
+// in Probe 1:1, and a reopened panel's header and Report mail named Probe
+// 2:1 too.
+func TestFixedStudyActionsRetainTheirPassage(t *testing.T) {
+	const text = "In the first days the people built a city by the river."
+	span := selSpanFromNative(1, 1)
+	for _, action := range []string{aiActionExplain, aiActionContext, aiActionTranslation, aiActionCompare} {
+		for _, transition := range []string{"retry", "answered rebuild", "in-flight eviction"} {
+			t.Run(action+"/"+transition, func(t *testing.T) {
+				app := test.NewApp()
+				t.Cleanup(app.Quit)
+				w := test.NewWindow(widget.NewLabel("reading"))
+				t.Cleanup(w.Close)
+				w.Resize(fyne.NewSize(900, 760))
+				reqs := stubCapturedStudyRequests(t)
+				state := fixedActionChapters()
+				state.window = w
+				state.aiKeys = newKeyStoreWith(newFakePrefs())
+				state.aiKeys.setAPIKey(defaultProviderID, "test-key")
+				selected := aiPassageFor(state, text, span)
+				if selected.Ref != "Probe 1:1" {
+					t.Fatalf("the selection resolves to %q, want Probe 1:1", selected.Ref)
+				}
+				showAIPanel(state, action, text, "", span)
+				first := nextCapturedStudyRequest(t, reqs, "first request")
+				panel := studyOverlay(t, w)
+
+				state.CurrentChapter = 2
+				if moved := aiPassageFor(state, text, span); moved.Ref != "Probe 2:1" {
+					t.Fatalf("after the move the selection resolves to %q; the fixture does not move it", moved.Ref)
+				}
+				switch transition {
+				case "retry":
+					finishCapturedStudyRequest(t, first, "", errors.New("synthetic request failure"))
+					retry := findTreeButton(panel, "Try again")
+					if retry == nil {
+						t.Fatal("failed request has no retry")
+					}
+					test.Tap(retry)
+				case "answered rebuild":
+					finishCapturedStudyRequest(t, first, "first synthetic answer", nil)
+					var reopen func()
+					for _, registration := range state.sheetReopens {
+						if registration.popup == panel {
+							reopen = registration.capture()
+						}
+					}
+					if reopen == nil {
+						t.Fatal("answered panel registered no reopen")
+					}
+					panel.Hide()
+					reopen()
+				case "in-flight eviction":
+					panel.Hide()
+					first.answer <- capturedStudyResult{text: "first synthetic answer"}
+				}
+
+				second := nextCapturedStudyRequest(t, reqs, "request after "+transition)
+				if transition == "in-flight eviction" {
+					<-first.ctx.Done()
+				}
+				for i, r := range []capturedStudyRequest{first, second} {
+					if !r.captured || r.passage != selected {
+						t.Errorf("request %d asked about %q (captured %v), want the passage selected, %q", i+1, r.passage.Ref, r.captured, selected.Ref)
+					}
+				}
+				finishCapturedStudyRequest(t, second, "final synthetic answer", nil)
+				again := studyOverlay(t, w)
+				if !strings.Contains(strings.Join(treeTexts(again), "\n"), selected.Ref) {
+					t.Errorf("the panel's header lost %q; texts %v", selected.Ref, treeTexts(again))
+				}
+				openedInTests()
+				report := findTreeButton(again, "Report")
+				if report == nil || report.Disabled() {
+					t.Fatal("answered panel has no enabled Report button")
+				}
+				test.Tap(report)
+				opened := openedInTests()
+				if len(opened) != 1 {
+					t.Fatalf("Report opened %d links, want one", len(opened))
+				}
+				mail, err := url.Parse(opened[0])
+				if err != nil || mail.Scheme != "mailto" {
+					t.Fatalf("Report did not open a mail link: %v", err)
+				}
+				if body := mail.Query().Get("body"); !strings.Contains(body, "Reference: "+selected.Ref+"\n") {
+					t.Errorf("the Report mail does not name %q: %q", selected.Ref, body)
+				}
+			})
+		}
 	}
 }
 

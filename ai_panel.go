@@ -56,21 +56,26 @@ func (l aiPassageHeaderLayout) Layout(objects []fyne.CanvasObject, size fyne.Siz
 	l.box(objects).Layout(objects, size)
 }
 
+// showAIPanel resolves the selection's passage once, here on the UI
+// goroutine, and the panel keeps it for every action: the request, its cache
+// key, the header, every Try again, the faster-model switch, the Report mail
+// and the reopen after a light/dark change all read that one capture. Only
+// Ask used to capture; the fixed actions resolved the passage again on each
+// request, inside the request goroutine, against whatever chapter the reader
+// was then on, so once a link or the narration had moved the chapter under
+// the open panel they cited the old selection's verse numbers in the new
+// chapter (Genesis 1:1 selected, "John 1:1" asked about after a link), while
+// the header and the Report mail still named the passage selected.
 func showAIPanel(state *AppState, action, selectedText, question string, span selSpan) {
 	if state == nil || state.window == nil || state.window.Canvas() == nil {
 		return
 	}
-	showAIPanelWithPassage(state, action, aiPassageFor(state, selectedText, span), question, span,
-		action == aiActionAsk && askQuestionEnabled)
+	showAIPanelForPassage(state, action, aiPassageFor(state, selectedText, span), question, span)
 }
 
 // showAIPanelForPassage keeps the composer or selection's captured page through
 // retries and appearance rebuilds, even if the reader has since navigated.
 func showAIPanelForPassage(state *AppState, action string, passage aiPassage, question string, span selSpan) {
-	showAIPanelWithPassage(state, action, passage, question, span, true)
-}
-
-func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, question string, span selSpan, captured bool) {
 	if state == nil || state.window == nil {
 		return
 	}
@@ -92,14 +97,10 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 		devDiagnosticMetric{Key: "width", Value: int64(cnv.Size().Width)},
 		devDiagnosticMetric{Key: "height", Value: int64(cnv.Size().Height)})
 	pal := state.pal()
-	// Fixed actions retain their request and reopen behavior. Ask's composer
-	// passes a captured passage so navigation cannot change the question's page.
+	// The reopen keeps the captured passage, so a light/dark change rebuilds
+	// the panel about the passage selected, wherever the reader now is.
 	reopen := func() {
-		if captured {
-			showAIPanelForPassage(state, action, passage, question, span)
-		} else {
-			showAIPanel(state, action, passage.Text, question, span)
-		}
+		showAIPanelForPassage(state, action, passage, question, span)
 	}
 
 	// The native overlay floats above the canvas; hide it while the modal is up.
@@ -605,9 +606,7 @@ func showAIPanelWithPassage(state *AppState, action string, passage aiPassage, q
 		ctx, cancel := context.WithCancel(context.Background())
 		ctx, cancelTimeout := context.WithTimeout(ctx, aiRequestBudget)
 		ctx = devDiagnosticRequestContext(ctx, requestID)
-		if captured {
-			ctx = withAIPassage(ctx, passage)
-		}
+		ctx = withAIPassage(ctx, passage)
 		// The request names its model on the waiting state it started, and
 		// only there: a request the faster-model switch or Try again has
 		// replaced (a newer gen), or one whose wait is over (Close, Cancel,

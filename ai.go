@@ -129,8 +129,9 @@ func isNoKeyError(err error) bool {
 // aiPassage is what a study prompt may name about the selection: the chapter
 // it was made in, the verses it resolves to, the citation the share card
 // would carry for the same selection, the cleaned text and the translation.
-// Ask captures it on the UI goroutine and copies it through the question's
-// lifetime; retries and sheet rebuilds must not resolve a different page.
+// The study panel captures it on the UI goroutine, for every action, and
+// copies it through the request's lifetime; retries and sheet rebuilds must
+// not resolve a different page.
 // Ref is "John 3:16", "John 3:16–18" (an en dash for a range, as the share
 // card writes it), or "John 3" when no verse can be pinned. Lo and Hi are
 // 0,0 then.
@@ -465,6 +466,9 @@ var aiActionRun = func(ctx context.Context, state *AppState, action, selectedTex
 	return runAIAction(ctx, state, action, selectedText, question, span)
 }
 
+// The panel always sends the passage it captured (showAIPanel); resolving it
+// here from the text and the span serves only a caller with no panel, such as
+// a test, and reads the reader's chapter as it is now.
 func runAIAction(ctx context.Context, state *AppState, action, selectedText, question string, span selSpan) (string, error) {
 	p, captured := aiPassageFromContext(ctx)
 	if !captured {
