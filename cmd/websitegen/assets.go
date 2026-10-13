@@ -821,8 +821,20 @@ const readerJSTemplate = `
   /*__HIGHLIGHT_RANGE_BEGIN__*/
   function highlightRange() {
     unlightVerses();
+    var land = lightFragment();
+    if (land) land.scrollIntoView({ block: 'center' });
+  }
+
+  // lightFragment lights the fragment's verses and returns the verse the page
+  // has to scroll to itself, or null. The browser scrolls to the verse itself
+  // only for a bare "#v16", the one fragment that is an element's id. A
+  // range, and any fragment that carries a key beside the verse
+  // ("#v16&n=..."), matches no id, so the page lands there or nowhere: a link
+  // to one verse with a note the page could not read used to open at the top
+  // of the chapter, the verse and the notice beside it off-screen.
+  function lightFragment() {
     var m = verseSpan();
-    if (!m) return;
+    if (!m) return null;
     // A fresh fragment re-lights the verse: drop the suppression flag a
     // previous clear may have set.
     document.documentElement.classList.remove('nohl');
@@ -835,13 +847,7 @@ const readerJSTemplate = `
       if (!first) first = el;
     }
     bridgeHighlightGaps();
-    // The browser scrolls to the verse itself only for a bare "#v16", the
-    // one fragment that is an element's id. A range, and any fragment that
-    // carries a key beside the verse ("#v16&n=..."), matches no id, so the
-    // page lands here or nowhere: a link to one verse with a note the page
-    // could not read used to open at the top of the chapter, the verse and
-    // the notice beside it off-screen.
-    if (first && (hi > lo || location.hash !== '#v' + lo)) first.scrollIntoView({ block: 'center' });
+    return first && (hi > lo || location.hash !== '#v' + lo) ? first : null;
   }
   /*__HIGHLIGHT_RANGE_END__*/
   // Clearing a highlight: tap the highlighted text and a small bubble appears at
@@ -1639,8 +1645,13 @@ const readerJSTemplate = `
       document.documentElement.classList.add('nohl');
       unlightVerses();
     } else {
+      // The marker is what puts the highlight back, and showNote then lands
+      // on the note it restores, so the verse is lit without a scroll of its
+      // own: scrolling to it on the way made the page jump to the verse and
+      // then, two frames later, to the note.
       document.documentElement.classList.remove('nohl');
-      highlightRange();
+      unlightVerses();
+      lightFragment();
     }
   }
 

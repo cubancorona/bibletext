@@ -298,3 +298,52 @@ out['cleared, minimized, marker tapped'] = report();
 		}
 	}
 }
+
+// Tapping a minimized note's marker puts the highlight back and lands on the
+// note with one scroll. Re-lighting the passage on the way scrolled to its
+// first verse as well, so the page jumped to the verse and then, two frames
+// later, to the note: on a range's marker before the page landed on a verse
+// whose link carries a key, and on a single verse's marker since. Control: the
+// arrival on the same range scrolls to its verse and then to the note, so the
+// trace does see a scroll to a verse.
+func TestTheNoteMarkerLandsOnTheNoteWithOneScroll(t *testing.T) {
+	type tap struct {
+		Scrolls []string
+		Lit     []string
+		Nohl    bool
+	}
+	var got map[string]tap
+	runJS(t, landingPage(t)+`
+function trace() {
+  return scrolled.map(function (s) {
+    return s.el.classList.contains('v') ? s.el.id : s.el.className.split(' ')[0];
+  });
+}
+function lit() { return all('v.hl').map(function (el) { return el.id; }); }
+['#v3&n=OK', '#v3-4&n=OK'].forEach(function (h) {
+  load(h);
+  out['arrival ' + h] = { Scrolls: trace(), Lit: lit(), Nohl: html.classList.contains('nohl') };
+  page.minimizeNote(page.activeNote());
+  scrolled = [];
+  all('notechip')[0].onclick({ preventDefault: function () {} });
+  out['marker ' + h] = { Scrolls: trace(), Lit: lit(), Nohl: html.classList.contains('nohl') };
+});
+`, &got)
+	for name, want := range map[string]tap{
+		"arrival #v3-4&n=OK": {Scrolls: []string{"v3", "note"}, Lit: []string{"v3", "v4"}},
+		"marker #v3&n=OK":    {Scrolls: []string{"note"}, Lit: []string{"v3"}},
+		"marker #v3-4&n=OK":  {Scrolls: []string{"note"}, Lit: []string{"v3", "v4"}},
+	} {
+		g, ok := got[name]
+		if !ok {
+			t.Errorf("%s: the page reported nothing", name)
+			continue
+		}
+		if strings.Join(g.Scrolls, " ") != strings.Join(want.Scrolls, " ") {
+			t.Errorf("%s: the page scrolled to %v, want %v", name, g.Scrolls, want.Scrolls)
+		}
+		if strings.Join(g.Lit, " ") != strings.Join(want.Lit, " ") || g.Nohl {
+			t.Errorf("%s: lit %v (suppressed %v), want %v lit", name, g.Lit, g.Nohl, want.Lit)
+		}
+	}
+}
