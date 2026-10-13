@@ -710,8 +710,9 @@ func TestAPsalmTitleSelectedOnItsOwnCitesTheFirstVerse(t *testing.T) {
 			if lo, hi := linkVersesForSelection(st, c.sel, c.span); lo != 1 || hi != 1 {
 				t.Errorf("heading=%v, %s: the link names verses %d–%d, want 1–1", withHeading, c.name, lo, hi)
 			}
-			// With no span the resolver matches words, the legacy pane's
-			// path, as it does for a heading at the top of a chapter.
+			// With no span the resolver matches words, the plain-text
+			// fallback page's path, as it does for a heading at the top of
+			// a chapter.
 			if !c.span.valid() {
 				continue
 			}

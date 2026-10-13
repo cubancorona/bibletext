@@ -965,8 +965,8 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       rebuild storm. Android phones get both halves too: the centred column,
       the indent on every prose paragraph and no blank line between them
       (justified on Android 15+, ragged below — the same SDK rule as
-      portrait), the TextView keeping its place through the rotation by
-      scroll fraction, and a note pill still placed though it loses its
+      portrait), the TextView keeping the verse at the top through the
+      rotation, and a note pill still placed though it loses its
       stack-centring (there is no blank line to centre in). In the LIGHT
       theme the short edge on the cutout side is paper, not black
       (BtBridge.extendIntoTheCutout), and the column is centred on the screen,

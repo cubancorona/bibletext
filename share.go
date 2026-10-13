@@ -427,11 +427,14 @@ func cleanQuoteTextIn(state *AppState, book string, chapter int, raw string) str
 // Rule 5.2's empty brackets adapt a real root word), so a chopped word can
 // neither be quoted as-is nor marked. A dangling verse-number token whose
 // verse lost its only (partial) word is apparatus with nothing to introduce
-// and is dropped with it. Falls back to the legacy probe-based path whenever
-// the selection cannot be located in the chapter's prose.
+// and is dropped with it. Whenever the selection cannot be located in the
+// chapter's prose, it falls back to the selection as it stands, its verse
+// numbers stripped only as whole tokens (cleanQuoteTextIn), and completed
+// from its copy in the span's verses where it can be placed there
+// (placeInSpan), else from its first copy in the chapter.
 // The last two returns carry the LOCATION so the pipeline's later stages never
 // re-find the text: at = the located start of the quote in chapterProse's
-// coordinates (-1 when the legacy path could not pin it), baseLen = the byte
+// coordinates (-1 when the fallback could not place it), baseLen = the byte
 // length of the located portion (completeTrailingSentence only ever APPENDS, so
 // text[:baseLen] is exactly the located string). Re-finding was the same
 // first-match defect the span fixed for the citation, one stage later: for
@@ -852,7 +855,9 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 	// with no verse geometry: the plain-text fallback the Mac and the iPhone
 	// and iPad show when the chapter fails to import (gMacContentStart is 0
 	// there, as btIOSContentStart is with its verse index emptied, and
-	// nothing has a span), and the dead legacy pane. The fallback sets each
+	// nothing has a span). The dead legacy pane does not: rewrap lays out
+	// the verses alone, with no title, and every verb gets the selection's
+	// span (chapterText.selectionSpan). The fallback sets each
 	// paragraph on a line of its own (bibleTextMacPlainFromHTML,
 	// bibleTextPlainFromHTML), so the title, a heading under it and verse 1's
 	// number reach a selection as separate words. For those pages, two drags

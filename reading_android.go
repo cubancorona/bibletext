@@ -566,10 +566,12 @@ func foregroundOverlayRecovery(state *AppState) {
 			if state.Bible == nil {
 				return // still on the loading screen — rebuildWindow will render fresh anyway
 			}
-			// Preserve the reader's place: BtBridge.lastFrac is a static that
-			// SURVIVES the Dialog rebuild, so it still holds the pre-recreation
-			// scroll. Capture it as a one-shot restore anchor for the re-render
-			// (else the fingerprint reset below would re-open pinned to the top).
+			// Preserve the reader's place: BtBridge.lastAnchor is a static that
+			// survives the Dialog rebuild, so it still holds the reading
+			// position from before the recreation (the verse at the top, how
+			// far into it, the scroll fraction). Capture it as a one-shot
+			// restore anchor for the re-render (else the fingerprint reset
+			// below would re-open pinned to the top).
 			if v, d, f, ok := captureReadingAnchor(); ok {
 				state.restore = &restoreAnchor{
 					Book:    state.CurrentBook,

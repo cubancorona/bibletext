@@ -29,12 +29,14 @@ func deviceIsTablet() bool {
 // and on the book page when the pane is wide enough for it, as every surface
 // does (reporter_android.go): the dialect's paragraph grammar in
 // android_chapter_html.go, the measure centred by the bridge. No Go-side
-// anchor is captured on rotation: a rotation recreates the
-// activity, the bridge's own
-// recovery restores the place from its surviving scroll fraction and forces
-// the re-import (foregroundOverlayRecovery, reading_android.go), and a
-// same-activity width change re-places by fraction too (BtBridge
-// pendingReflowFrac); a Go restore would only duplicate that.
+// anchor is captured on rotation: a rotation recreates the activity, and the
+// recovery (foregroundOverlayRecovery, reading_android.go) restores the place
+// from the reading position the bridge kept across the recreation
+// (BtBridge.lastAnchor: the verse at the top, how far into it, and the scroll
+// fraction as the fallback) and forces the re-import; a same-activity width
+// change places the verse captured before the frame changed (BtBridge
+// pendingReflowVerse, the fraction as the fallback). A Go restore would only
+// duplicate that.
 func phoneLandscapeReadingSupported() bool { return true }
 
 func rotationRestoreNeeded() bool { return false }
