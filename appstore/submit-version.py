@@ -8,7 +8,11 @@ if it is missing, attaches the build, and runs the two metadata writers.
 ``--submit`` is a separate, explicit flag: only then is a review submission
 created, and only after ``preflight.py`` reports every per-release field
 written. Screenshots are the one field a release may knowingly inherit; say so
-with ``--accept-inherited-screenshots`` or the submission is refused.
+with ``--accept-inherited-screenshots`` or the submission is refused. The
+version's ``releaseType`` is read back immediately before the submission and
+must be ``AFTER_APPROVAL``, so that Apple's approval publishes the version and
+the submission is the last act; a version switched to manual or scheduled
+release on its App Store Connect page is refused with what it is.
 
 WHY THE ORDER IS THE POINT. 1.2.8's Mac submission was attempted with the
 version's What's New empty: App Store Connect accepted the review submission
@@ -38,6 +42,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASC = os.path.join(ROOT, "build", "appstore", "asc.py")
 APP_ID = "6784567351"
 LEDGERS = {"IOS": "cmd/mobile/FyneApp.toml", "MAC_OS": "cmd/bibletext/FyneApp.toml"}
+# A version is created with this releaseType and submitted only while it still
+# has it: approval then publishes the version, and the submission is the last
+# act of the release. App Store Connect lets the setting be changed on the
+# version's page at any time before the submission, to MANUAL (published by a
+# later click) or SCHEDULED (published at a date), and the change shows
+# nowhere else, so it is read back immediately before the submission.
+RELEASE_TYPE = "AFTER_APPROVAL"
 
 
 def ledger_version(platform):
@@ -80,12 +91,25 @@ def find_build(platform, number):
 
 
 def find_version(platform, version):
+    """(id, appStoreState, releaseType) of the version record, or three Nones."""
     d = asc("get", f"/v1/apps/{APP_ID}/appStoreVersions?filter[platform]={platform}"
-                   f"&filter[versionString]={version}&fields[appStoreVersions]=versionString,appStoreState&limit=5")
+                   f"&filter[versionString]={version}"
+                   "&fields[appStoreVersions]=versionString,appStoreState,releaseType&limit=5")
     items = d.get("data", [])
     if not items:
-        return None, None
-    return items[0]["id"], items[0]["attributes"]["appStoreState"]
+        return None, None, None
+    attributes = items[0]["attributes"]
+    return items[0]["id"], attributes["appStoreState"], attributes.get("releaseType")
+
+
+def release_type_refusal(platform, version, release_type):
+    """Why the version may not be submitted with this releaseType, or None."""
+    if release_type == RELEASE_TYPE:
+        return None
+    return (f"NOT SUBMITTED: version {version} on {platform} is releaseType {release_type}, not "
+            f"{RELEASE_TYPE}, so approval would not publish it. Set Version Release to automatic "
+            "on the version's page in App Store Connect, then run the same command again; "
+            "nothing was submitted.")
 
 
 def attached_build(version_id):
@@ -146,8 +170,9 @@ def main():
     if a.delivery_uuid and a.delivery_uuid.lower() != build_id.lower():
         sys.exit(f"build id {build_id} is not the delivery UUID {a.delivery_uuid}: this is not the artifact that was uploaded")
 
-    version_id, vstate = find_version(a.platform, version)
-    print(f"version {version} on {a.platform}: {version_id or 'absent'} {vstate or ''}")
+    version_id, vstate, release_type = find_version(a.platform, version)
+    print(f"version {version} on {a.platform}: {version_id or 'absent'} {vstate or ''}"
+          + (f" releaseType {release_type}" if release_type else ""))
     if not a.write:
         print("read-only: nothing changed (add --write --confirm-version to create/attach/write, --submit to send)")
         return 0
@@ -155,7 +180,7 @@ def main():
     if version_id is None:
         d = asc("post", "/v1/appStoreVersions", {"data": {
             "type": "appStoreVersions",
-            "attributes": {"platform": a.platform, "versionString": version, "releaseType": "AFTER_APPROVAL"},
+            "attributes": {"platform": a.platform, "versionString": version, "releaseType": RELEASE_TYPE},
             "relationships": {"app": {"data": {"type": "apps", "id": APP_ID}}}}})
         version_id, vstate = d["data"]["id"], d["data"]["attributes"]["appStoreState"]
         print(f"created version {version}: {version_id} {vstate}")
@@ -187,6 +212,15 @@ def main():
         print("prepared; add --submit to send it for review")
         return 0
 
+    # Read back, not remembered from the look-up above: the metadata writes
+    # and the preflight have run since, and the setting can be changed in
+    # App Store Connect at any time before the submission.
+    _, _, release_type = find_version(a.platform, version)
+    refusal = release_type_refusal(a.platform, version, release_type)
+    if refusal:
+        sys.exit(refusal)
+    print(f"version {version} on {a.platform} is releaseType {release_type}: approval publishes it")
+
     sub = asc("post", "/v1/reviewSubmissions", {"data": {
         "type": "reviewSubmissions", "attributes": {"platform": a.platform},
         "relationships": {"app": {"data": {"type": "apps", "id": APP_ID}}}}})["data"]["id"]
@@ -197,8 +231,8 @@ def main():
     d = asc("patch", f"/v1/reviewSubmissions/{sub}", {"data": {
         "type": "reviewSubmissions", "id": sub, "attributes": {"submitted": True}}})
     print(f"submitted: submission {sub} is {d['data']['attributes']['state']}")
-    _, vstate = find_version(a.platform, version)
-    print(f"version {version} on {a.platform}: {vstate}")
+    _, vstate, release_type = find_version(a.platform, version)
+    print(f"version {version} on {a.platform}: {vstate} releaseType {release_type}")
     return 0
 
 
