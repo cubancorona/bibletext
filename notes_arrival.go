@@ -122,6 +122,7 @@ func chapterNoteArrival(state *AppState, c noteChrome, verses []Verse, groups []
 	if verse <= 0 {
 		return arriveNothing, 0
 	}
+	verse = drawnArrivalVerse(verses, verse)
 	if !c.present() {
 		return arriveVerse, verse
 	}
@@ -166,4 +167,30 @@ func chapterNoteArrival(state *AppState, c noteChrome, verses []Verse, groups []
 		return arriveBand, verse
 	}
 	return arriveVerse, verse
+}
+
+// drawnArrivalVerse is the verse an arrival at verse lands on in a chapter
+// drawn as verses: verse itself when the chapter has it, and otherwise the
+// first verse after it, the one whose number the hole's mark stands before
+// (gapsBefore). A link names a verse in the sender's edition, and the
+// reader's may omit it: the NKJV prints Matthew 17:21, the BSB does not.
+// Arriving at the 21 the page does not have, Android found no row for it and
+// opened the chapter at the top, and so did every pane for a link to the one
+// verse; a link to 21-22 lit 22 on the others and still opened Android at
+// the top. A verse past the chapter's last is left as it is, and lands
+// nowhere.
+func drawnArrivalVerse(verses []Verse, verse int) int {
+	next := 0
+	for _, v := range verses {
+		if v.Verse == verse {
+			return verse
+		}
+		if v.Verse > verse && (next == 0 || v.Verse < next) {
+			next = v.Verse
+		}
+	}
+	if next == 0 {
+		return verse
+	}
+	return next
 }

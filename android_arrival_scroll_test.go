@@ -114,7 +114,10 @@ func TestAndroidColdStartArrivalSurvivesSeedDataSwap(t *testing.T) {
 	if strings.Contains(next, "forceReposition") {
 		t.Fatal("Android callback must not override advanceNoteFocus's conditional placement")
 	}
-	if !strings.Contains(goSrc, "arrivalVerse = sp.Lo") {
+	// The mark's first verse, resolved to the verse after the hole when this
+	// edition omits it (drawnArrivalVerse): the bridge has no row for an
+	// omitted verse, and opened such a link at the top of the chapter.
+	if !strings.Contains(goSrc, "arrivalVerse = drawnArrivalVerse(verses, sp.Lo)") {
 		t.Fatal("Android explicit placement does not pass the selected note's anchor to the bridge")
 	}
 	if !strings.Contains(goSrc, "preserveTop = true") ||
@@ -172,7 +175,7 @@ func TestAndroidGoToOutranksSameChapterTopAndMidCarry(t *testing.T) {
 		t.Fatal("test contract lost the top-of-chapter carry branch")
 	}
 	if !strings.Contains(push, "if state.restore == nil && !preserveTop && here && forcedThisPush {") ||
-		!strings.Contains(push, "arrivalVerse = sp.Lo") {
+		!strings.Contains(push, "arrivalVerse = drawnArrivalVerse(verses, sp.Lo)") {
 		t.Fatal("Android explicit placement is not handed to the requested verse — " +
 			"and it must be EXPLICIT placement: a plain entry with a lit wash " +
 			"opens at the top, not at the mark")

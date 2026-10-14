@@ -887,7 +887,7 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// forceReposition a few lines up (pushNoteToOverlay runs first), so the
 	// pushed arrival class and this verse stay one answer.
 	if state.restore == nil && !preserveTop && here && forcedThisPush {
-		arrivalVerse = sp.Lo
+		arrivalVerse = drawnArrivalVerse(verses, sp.Lo)
 	}
 	if carryDataSwapArrival {
 		arrivalVerse = carriedVerse

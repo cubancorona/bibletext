@@ -768,12 +768,34 @@ func (p *styledReadingPane) highlightFirstLine() int {
 	return -1
 }
 
+// arrivalLine is the line an explicit arrival lands on: the first
+// highlighted line, or, where the mark lights none, the first line of the
+// verse the chrome says the arrival is going to (noteChrome.ArrivalVerse), as
+// the Apple panes fall back to it. A link to a verse this edition omits
+// lights nothing, and lands on the verse after the hole
+// (drawnArrivalVerse); with no fallback this pane opened such a link at the
+// top of the chapter. -1 when there is nowhere to land.
+func (p *styledReadingPane) arrivalLine() int {
+	if li := p.highlightFirstLine(); li >= 0 || p.lay == nil {
+		return li
+	}
+	if p.note.Arrival == arriveNothing || p.note.ArrivalVerse <= 0 {
+		return -1
+	}
+	for _, vl := range p.lay.VerseLines {
+		if vl.verse == p.note.ArrivalVerse {
+			return vl.line
+		}
+	}
+	return -1
+}
+
 // highlightY is the Y of the highlighted verse's first line (scroll-to target).
 func (p *styledReadingPane) highlightY() float32 {
 	if p.lay == nil {
 		return 0
 	}
-	li := p.highlightFirstLine()
+	li := p.arrivalLine()
 	if li < 0 || li >= len(p.lay.Lines) {
 		return 0
 	}
@@ -1250,7 +1272,7 @@ func (p *styledReadingPane) readAlongTop() (float32, bool) {
 // arriveNothing, and the chapter opens at the top like any other; asking only
 // "is a line lit" was the classifier's question answered a second time.
 func (p *styledReadingPane) highlightOwnsScroll() bool {
-	return p.lay != nil && p.note.Arrival != arriveNothing && p.highlightFirstLine() >= 0
+	return p.lay != nil && p.note.Arrival != arriveNothing && p.arrivalLine() >= 0
 }
 
 // setReadAlongVerse moves the narration wash, keeping raVerse and raSpans in

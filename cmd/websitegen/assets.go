@@ -847,7 +847,23 @@ const readerJSTemplate = `
       if (!first) first = el;
     }
     bridgeHighlightGaps();
+    // A link to a verse this edition omits (Matthew 17:21, made in an
+    // edition that prints it and opened in the BSB) lights nothing, and the
+    // page opened it at the top. It lands, unlit, on the verse after the
+    // hole, whose number the "[21]" mark stands before, as the app's panes
+    // do (drawnArrivalVerse). A verse past the chapter's last lands nowhere.
+    if (!first) return verseAfter(hi);
     return first && (hi > lo || location.hash !== '#v' + lo) ? first : null;
+  }
+
+  // verseAfter is the page's first verse numbered above n, or null.
+  function verseAfter(n) {
+    var best = null, bestN = 0;
+    document.querySelectorAll('.v').forEach(function (el) {
+      var k = parseInt(el.id.slice(1), 10);
+      if (k > n && (!best || k < bestN)) { best = el; bestN = k; }
+    });
+    return best;
   }
   /*__HIGHLIGHT_RANGE_END__*/
   // Clearing a highlight: tap the highlighted text and a small bubble appears at

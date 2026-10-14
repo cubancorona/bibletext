@@ -347,3 +347,45 @@ function lit() { return all('v.hl').map(function (el) { return el.id; }); }
 		}
 	}
 }
+
+// A link to a verse this edition omits (the NKJV's Matthew 17:21 opened in
+// the BSB, whose page draws "[21]" before verse 22) lights nothing, and the
+// page opened it at the top of the chapter. It lands, unlit, on the page's
+// first verse after the hole, as the app's panes do; a range that starts at
+// the hole lights and lands on the verse it has. The stand-in page here
+// lacks verse 4. Controls: a verse the page has lands as before (a bare
+// "#v3" is the browser's own scroll), and a verse past the chapter's last
+// lands nowhere.
+func TestTheWebPageLandsALinkToAnOmittedVerseOnTheVerseAfterIt(t *testing.T) {
+	var got map[string]struct {
+		Landed string
+		Lit    []string
+	}
+	runJS(t, landingPage(t)+`
+function omit(n) { var v = verses['v' + n]; v.remove(); delete verses['v' + n]; }
+['#v4', '#v4-5', '#v4&x=1', '#v3', '#v9'].forEach(function (h) {
+  load('#v1'); omit(4); hashchange(h);
+  var r = report();
+  out[h] = { landed: r.landed, lit: all('v.hl').map(function (el) { return el.id; }) };
+});
+`, &got)
+	for hash, want := range map[string]struct {
+		landed string
+		lit    string
+	}{
+		"#v4":     {"v5", ""},
+		"#v4-5":   {"v5", "v5"},
+		"#v4&x=1": {"v5", ""},
+		"#v3":     {"nothing", "v3"},
+		"#v9":     {"nothing", ""},
+	} {
+		g, ok := got[hash]
+		if !ok {
+			t.Errorf("%s: the page reported nothing", hash)
+			continue
+		}
+		if g.Landed != want.landed || strings.Join(g.Lit, " ") != want.lit {
+			t.Errorf("%s: the page landed on %s with %v lit, want %s with [%s] lit", hash, g.Landed, g.Lit, want.landed, want.lit)
+		}
+	}
+}
