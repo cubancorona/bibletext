@@ -206,13 +206,17 @@ func drawnArrivalVerse(verses []Verse, verse int) int {
 // the Apple panes reserve it at the top when the mark lights nothing, and
 // the website parks it above the text and lands on it. Moved on past the
 // hole, the arrival scrolled the note out of view; there it places nothing
-// (0), and the chapter opens at its top with the card in view. For a note on
-// a range that starts at the hole (21-22) the Apple panes and the website
-// put the card above the first lit verse's paragraph instead, and the
-// canvas pane and the bridge keep it at the top (PLATFORM_MATRIX.md,
-// divergence 34); the arrival places nothing there too, as it did before
-// drawnArrivalVerse. Android pushes this verse to the bridge beside the
-// class chapterNoteArrival gives, so the two stay one answer.
+// (0), and the chapter opens at its top with the card in view. A note on a
+// range that starts at the hole (21-22) is filed by the chapter's plan at
+// the first verse the page has (displayCopy), so its card stands above
+// that verse's paragraph on every surface and the arrival lands on its
+// band. Only a note shown from the link alone, filed on another passage or
+// refused by the store, keeps the verse the link named; the Apple panes and
+// the website then put its card above the first lit verse's paragraph, the
+// canvas pane and the bridge at the top (PLATFORM_MATRIX.md, divergence
+// 34), and the arrival places nothing, as it did before drawnArrivalVerse.
+// Android pushes this verse to the bridge beside the class
+// chapterNoteArrival gives, so the two stay one answer.
 func arrivalVerseOnPage(c noteChrome, verses []Verse, verse int) int {
 	drawn := drawnArrivalVerse(verses, verse)
 	if drawn != verse && c.present() && c.Anchor > 0 && !paraCarriesVerse(verses, c.Anchor) {

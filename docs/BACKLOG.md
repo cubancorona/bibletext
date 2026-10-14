@@ -853,8 +853,8 @@ the web reader lands an unlit link on the page's next verse. A verse past
 the chapter's last is left as named. `TestALinkToAnOmittedVerseArrivesAtTheVerseAfterTheHole`,
 `TestTheCanvasPaneLandsALinkToAnOmittedVerseOnTheVerseAfterIt` and
 `TestTheWebPageLandsALinkToAnOmittedVerseOnTheVerseAfterIt`. The website's
-half reaches readers with the next `scripts/publish-site.sh`. Not seen on a
-device. Whether the mark lights is unchanged and still open.
+half reaches readers with the next `scripts/publish-site.sh`. Seen on the
+emulator, below. Whether the mark lights is unchanged and still open.
 
 A note sent on the omitted verse is the exception. Its card's own verse is
 missing too, so every surface draws the card at the chapter top, and moving
@@ -863,12 +863,27 @@ surface, while the website still landed on it. Where the page omits both the
 arrival's verse and the open card's own verse, the arrival places nothing,
 as it did before the fix, and Android pushes no verse
 (`arrivalVerseOnPage`, `notes_arrival.go`; `TestANoteOnAnOmittedVerseKeepsItsCardInView`,
-`TestTheCanvasPaneOpensANoteOnAnOmittedVerseAtItsCard`). For a note on a
-range that starts at the hole, the Apple panes and the website draw the card
-above the first lit verse's paragraph and Android and the canvas pane at the
-top; PLATFORM_MATRIX.md records it as divergence 34. Drawing the card in one
-place on every surface, at the verse after the hole or at the top, is a
-choice of design, still open.
+`TestTheCanvasPaneOpensANoteOnAnOmittedVerseAtItsCard`). A note on a range
+that starts at the hole is filed by the chapter's plan at the first verse the
+page has, so its card stands above that verse's paragraph and the arrival
+lands on its band. Only a note shown from the link alone (filed on another
+passage, or refused by the store) keeps the named verse, and then the Apple
+panes and the website draw its card above the first lit verse's paragraph and
+Android and the canvas pane at the top; PLATFORM_MATRIX.md records it as
+divergence 34. Drawing such a card in one place on every surface is a choice
+of design, still open.
+
+Seen on 14 October 2026 on the Android emulator (Pixel 7, API 35), with
+development builds of the branch before this exception and after it, the
+reader on the WEB, which omits Acts 8:37, and the NKJV switched off: links to
+`/nkjv/acts/8/#v37`, `#v37-38` and `#v38` land on verse 38 in both builds,
+Acts 8 ending four verses later, so the view stands at the end of the
+chapter; a note link on 8:37 alone lands on verse 38 with its card parked out
+of view above it before the exception, and at the top of the chapter with the
+card in view after it; a note link on 8:37–38 is filed at verse 38 and lands
+on its band in both. Seen beside it, older and not changed: the bridge parks
+such a card over the chapter's first line, where the iPhone and iPad reserve
+an inset for it (the parked sticker reserves no band, `refreshNoteSticker`).
 
 ### RL-NKJV-1 and RL-NKJV-2. The NKJV red-letter generator places a run after its cursor, and retries from the verse's start
 
@@ -885,8 +900,8 @@ ships black.
 Latent: reproducing the public-domain tables through the same logic, no
 retry fires and 3 of 16,830 run locates have the shape; the realistic
 trigger, drift at the run's place with an earlier copy, exists once in 713
-later runs (BSB Matthew 13:15). The shipped NKJV table was not checked, there
-being no NKJV cache to check it against.
+later runs (BSB Matthew 13:15). The shipped NKJV table was not checked:
+that needs the NKJV opened once (ROADMAP.md, Decisions still open, 43).
 
 Fix, 0.5 day: anchor each run by the parser's running count of non-space
 characters and only verify the text; delete the retry; regenerate and require
@@ -910,8 +925,8 @@ Fix, 1 day: carry the run's alphanumeric offset from the USFM walk, verify at
 that position, and fail generation on an ambiguity or an edge inside a word;
 regenerate byte-identical. Not made on 14 October 2026 with the other
 generator fix: the regeneration that proves it needs the publisher's
-`bsb_usfm.zip`, which is not on the machine, and downloading it waits for an
-OK (ROADMAP.md, Decisions still open, 43).
+`bsb_usfm.zip`, and downloading it waits for an OK (ROADMAP.md, Decisions
+still open, 43).
 
 ### RL-WEB-1. The WEB red-letter generator takes the first copy too
 
@@ -959,7 +974,8 @@ real relocation as the control, and
 `TestTheVersificationGeneratorReproducesTheShippedTables_LocalOnly` holds its
 output on the local caches to the BSB's and the WEB Catholic's rows of both
 shipped tables, byte for byte before and after. The NKJV's rows were not
-regenerated, its cache being licensed, and the shipped tables are unchanged.
+regenerated, since no NKJV source was opened for it (ROADMAP.md, Decisions
+still open, 43), and the shipped tables are unchanged.
 Seeding moves from the SIL mapping was not needed for the shape found, and
 the row sets are pinned only by the local-only test.
 
@@ -1107,6 +1123,25 @@ after an em dash; the dash comes off as a clause mark does at a cut.
 `TestAPhraseEndingOnADashKeepsItsWords`; the local phrase sweep's known count
 for the BSB falls from 4 to none.
 
+**Beside it, FIXED 14 October 2026, for 1.2.22** (ROADMAP.md, 1.2.22, row
+22). A drag that stops one letter or more into the word AFTER a closed-up
+dash was cut back to the last space, losing the whole word before the dash
+("was morning—t", Genesis 1:5, shared "was"), and with no space in it was
+shared as a fragment ("shut—o"). The start repair had the mirror fault: a
+drag begun inside the word before such a dash lost the word after it
+("g—the first" shared "first"). Older than the change above, and with the
+span and the lead alike: at every closed-up dash between words of two
+letters or more, each shape lost its word at the dash, with the span and
+with the lead, in all 2,052 of the BSB's drags, 428 of the WEB's and 476 of
+the WEB Catholic's. The end repair now cuts back to the later of the last
+space and the last such dash, the start repair forward to the earlier of
+the first space and the first such dash, and the dash comes off as above.
+`TestAPhraseEndingOnADashKeepsItsWords` gains both cases,
+`TestADragCutInsideAWordAtADashKeepsTheWholeWordOverLocalCaches_LocalOnly`
+sweeps every such dash in the three caches, none wrong, and the model in
+`TestEveryDragBegunOrEndedInsideAWordIsCutBackAtItsOwnPlace` takes the
+whole word across a dash too.
+
 ## A heading that opens as its verse does is shared whole (the BSB's "The LORD Is My Shepherd") — deferred from 1.2.20, 7 October 2026; FIXED 14 October 2026, for 1.2.22
 
 Planned for: 1.2.22, fixed on its release branch (the end of this entry) —
@@ -1170,6 +1205,22 @@ such drag now shares its verse's words, cited to that verse
 selected inside a heading on its own is the different defect P4 (ROADMAP.md,
 Later, row 29), which waits on what selecting a heading means.
 
+**Beside it, FIXED 14 October 2026, for 1.2.22** (ROADMAP.md, 1.2.22, row
+23). A drag from the end of a verse across a STACK of two headings over the
+next verse, into that verse's first words, with no lead, was not placed and
+was quoted with both headings as Scripture: each heading was removed whole
+only where the number of the verse beneath stood straight after it, which
+the upper heading of a stack never has. The BSB has the shape over Proverbs
+22:17 ("Thirty Sayings of the Wise", "Saying 1") and Hebrews 11:30; with the
+lead, or with one heading, the drag was right. Older than the change above.
+The heading repair now takes a stack off whole, joined as a flattened
+selection joins it, as `cutOpeningMatter` takes one a drag begins inside.
+`TestADragAcrossAStackOfHeadingsSharesTheVersesOnEitherSide`, and
+`TestEveryDragAcrossTheHeadingsBetweenTwoVersesOverLocalCaches_LocalOnly`
+over the three caches, where all 24 of the BSB's 22,728 drags across the
+headings between two verses that cross a stack were wrong, with the span and
+without, and none is now.
+
 ## The NKJV's card route and selection route disagree in the opt-in walk — deferred from 1.2.20, 7 October 2026; the test FIXED 14 October 2026, for 1.2.22
 
 Planned for: 1.2.22, the test's stand-in fixed on its release branch (the end
@@ -1192,15 +1243,17 @@ ROADMAP.md, 1.2.22, row 20). `selectionRouteRaw`, the test's stand-in for
 what a pane hands the selection route, built each verse from `v.Text`, the
 publisher's "Lord"; every pane hands over the drawn form, `smallCapsText`,
 "Lᴏʀᴅ" (`android_chapter_html.go`, `reading.go`,
-`reading_styled_layout.go`). With no NKJV cache on the machine, the WEB was
+`reading_styled_layout.go`). No NKJV cache was opened for this: the WEB was
 given the NKJV's shape, "LORD" written "Lord" under a small-capitals span: in
 its Genesis, Exodus, Psalms and Isaiah 11,884 of 29,441 passages differ with
 the old stand-in and none with the drawn text, and the WEB as it is, the
 control, none with either. The stand-in now draws the verse, and
 `TestPassageShareEqualsSelectionRoute` gains a fixture with the divine name in
 small capitals, which the old stand-in fails in all 26 of its 40 passages
-that reach a marked verse. Left: the opt-in walk over a real NKJV cache,
-when one is on the machine.
+that reach a marked verse. That the NKJV's 46,837 come from the stand-in is
+therefore shown on the WEB given the NKJV's marking, not on the NKJV: the
+opt-in walk over an NKJV cache is still to run, and until it passes this
+entry is not closed (ROADMAP.md, Later minor releases, row 45).
 
 ## Explicit permission before text goes to a third-party AI (App Store guideline 5.1.2(i)) — found 13 October 2026
 
@@ -1633,8 +1686,22 @@ then have opened a compose; it now ends the share (`xdgEmailExit`, in the
 shared `share_email.go` so every platform's test run holds it). Exits 1, 2,
 3 and 5 refuse before anything is launched and still hand on to the
 `mailto:` link. `TestXDGEmailEndsTheComposeOnlyWhereItMayHaveOpenedOne`.
-Still not seen on a desktop. The line under the buttons waits on its
-wording.
+The line under the buttons waits on its wording.
+
+Seen on 14 October 2026 on the Linux VM (Ubuntu 24.04, GNOME on X11,
+xdg-utils 1.1.3), with stand-in mail handlers in place of a client, each
+recording a compose when started. A handler named thunderbird, which
+`xdg-email` runs itself with `-compose`, that composes and exits 1: `xdg-email`
+exits 4 after its compose, and the `mailto:` link through `xdg-open` then
+opened a second, the double compose the stop ends. Any other handler is
+opened through `gio`, and `xdg-email` exits 0 once it is launched, whatever
+the handler then returns; with the default handler's program missing it
+exited 0 as well, `gio` opening another program. Exit 4 with nothing
+launched was not seen. The trade-off the stop carries: should another
+desktop's launcher fail with nothing opened and exit 4, the share now ends
+with no compose and no word, where the `mailto:` link was tried, likely
+through the same failing launcher. That silence is the one the line under
+the buttons answers.
 
 ## A dropped session bus spins a core until the portal wait ends (Linux) — FIXED 6 October 2026, for 1.2.20
 
@@ -3103,9 +3170,9 @@ there. Held by `TestAppearanceChangeDropsTheCaretAndPutsItBack`.
 
 ## A light/dark change with a sheet open left the app half in each theme — FIXED 27 September 2026
 
-Still open: the Mac's follow-scroll with the pane hidden and the Android
-night-mode patch's race (1.2.23+), and the iOS fallback's old colour
-(stays); see docs/ROADMAP.md.
+Still open: the iOS fallback's old colour (stays); see docs/ROADMAP.md. The
+Mac's follow-scroll with the pane hidden and the Android night-mode patch's
+race were FIXED 14 October 2026, for 1.2.22 (the bullets below).
 
 With a sheet open — Go to, Verse of the day, the translation list, Settings —
 a system switch between light and dark left the app in both at once. The sheet
@@ -3288,7 +3355,14 @@ preserving entered questions and notes and completed study answers.
   zero-height viewport and scrolls each verse to the very top instead of
   keeping it in the comfortable band. From the code alone: whether follow is
   asked while the pane is hidden was not traced. The fix would be the
-  capture's, reading the clip view.
+  capture's, reading the clip view. FIXED 14 October 2026, for 1.2.22
+  (`79089f7df`; ROADMAP.md, 1.2.22, row 28): follow is asked while the pane
+  is hidden (the audio controller's `onTimeUpdate` passes follow whatever
+  the pane shows), and the follow-scroll reads the clip view now.
+  `TestTheMacFollowScrollReadsTheClipViewNotVisibleRect`. Seen with
+  development builds, narration following Psalm 119:60 with the reader on
+  Books: before, the verse 0 points below the top of the view; after, 191
+  points down a 636-point view, where it still stood back on Read.
 
 - On Android, an activity destroyed while the process lives on (a swipe-away
   with the audio service holding the process) sends `OnStopped`, which sets
@@ -3301,7 +3375,17 @@ preserving entered questions and notes and completed study answers.
   hands the change to that branch) BEFORE `updateTheme` writes `darkMode`: the
   read races the write, unsynchronised, and when it loses a foreground change
   waits for the next redraw. Reading the night bit from the `AConfiguration`
-  the branch already builds (`AConfiguration_getUiModeNight`) removes the race.
+  the branch already builds (`AConfiguration_getUiModeNight`) was the fix
+  proposed here, and does not work: the asset manager's configuration does
+  not carry the switch, and a build with it (`8c5677310`) stayed light
+  through `scripts/test-android-dark-mode.sh`. FIXED 14 October 2026, for
+  1.2.22 (`a0e5975b8`; ROADMAP.md, 1.2.22, row 29): the patch moves
+  `updateTheme` ahead of `super` in `onConfigurationChanged`, so the flag is
+  written before the configuration is sent and the send orders the two.
+  `TestAndroidNightModePatchWritesTheFlagBeforeTheConfigurationIsSent`; the
+  dark-mode check passes both ways, and 20 switches 1.5 s apart on the
+  emulator were each followed, as by the build before. The race itself was
+  not seen there.
 
 ## An Android activity destroyed with the process alive left the app stopping — DONE 27 September 2026
 
@@ -4289,9 +4373,10 @@ What the spec work left, each one a known difference rather than a guess:
 
 ## iOS 27: after the scene life-cycle fix — FIXED 23 September 2026
 
-Still open: the tab bar's style and the scale on iPhones whose nativeScale
-is not their scale (1.2.23+); the iPadOS window buttons, an external
-display's scale and Android's cancelled touch (stay); see docs/ROADMAP.md.
+Still open: the scale on iPhones whose nativeScale is not their scale
+(1.2.23+); the iPadOS window buttons, an external display's scale and
+Android's cancelled touch (stay); see docs/ROADMAP.md. The tab bar's style
+was FIXED 14 October 2026, for 1.2.22 (the bullet below).
 
 The launch failure itself (an Xcode 27 build refused at launch on every iOS 27
 device) is fixed by `patches/fyne-2.7.4-ios-scene-lifecycle.patch` and
@@ -4350,6 +4435,13 @@ Still open, from the same work:
   one line. The concern that held it back, an iPhone rebuilding on rotation on
   Books and Search, no longer applies: a phone held sideways draws the rail,
   never the bar, and its rotation rebuilds for the rail already (1.2.18).
+  FIXED 14 October 2026, for 1.2.22 (`ecf49e80c`; ROADMAP.md, 1.2.22, row
+  25): `renderedLayout` carries the dress where a bar is drawn, read from
+  the canvas as the bar and the rail read it, since the width the watcher
+  is handed is the canvas's less the safe area and a term read from each
+  could disagree for ever. `TestATallWindowResizedAcrossTheBarsWidthRebuildsTheBar`.
+  Not seen on a device: the iPad simulator's windowing mode refuses an
+  app's own request to change its window.
 - **On a device whose nativeScale is not its scale, a Fyne unit is not a
   point.** The 12 and 13 mini, the Plus models and Display Zoom. The canvas is
   counted in `nativeScale` pixels (nativeBounds) while Fyne's canvas scale and
@@ -4370,8 +4462,9 @@ Still open, from the same work:
 
 ## A note link that opened the chapter and stayed at the top — FIXED 23 September 2026
 
-Still open: a reader who scrolled away from a note they arrived at is taken
-back by the next width change — planned for 1.2.23+; see docs/ROADMAP.md.
+The last open part, a reader who scrolled away from a note they arrived at
+taken back by the next width change, was FIXED 14 October 2026, for 1.2.22
+(the end of this entry; ROADMAP.md, 1.2.22, row 26).
 
 Reported on iOS three times: 10 August (a note tapped in the dev Links tab
 while on its chapter), 18 September (a note link from Messages, the app
@@ -4446,6 +4539,33 @@ Android was checked by reading and is not affected in this way: it captures
 the reader's top line before a theme re-render and preserves it across the
 re-render (reading_android.go), rather than re-asserting from a class a later
 render can overwrite.
+
+**A reader who scrolls away from a note they arrived at, FIXED 14 October
+2026, for 1.2.22** (`e16733c5f`; ROADMAP.md, 1.2.22, row 26). The fix
+recorded in the first bullet above: the reader's scroll sets the arrival
+class to nothing beside the restore's disarm, in `scrollViewDidScroll`
+(`btIOSEndArrival`) and `btMacUserScrolled`, as the next push would.
+`TestAReadersScrollEndsTheArrival`. Seen with development builds before and
+after, arriving at Psalm 119:100 (WEB) and scrolled 1,500 points on, to verse
+121: on the iPad Pro 13-inch (M5) simulator in full-screen reading, whose
+windowing mode refuses an app's request to rotate, a 250-point narrowing of
+the pane through `bibleTextTVSetFrame` put the build before back at verse 100
+and left the fix at 121; on the Mac a window narrowed from 1280 to 1000
+points put the build before back at verse 100.
+
+An older defect on the Mac, which the arrival's re-assert had hidden: a
+change of the pane's width moved any reader who had scrolled. Setting the scroll view's
+frame wrapped the text at the old insets first, AppKit moved the clip with
+that passing wrap, and the insets put right straight after left the clip
+there: a reader 5,000 points into Psalm 119, at verse 73, was at verse 112
+after the window narrowed, and one at verse 121 at the end of the psalm.
+FIXED the same day (`332b4d752`; ROADMAP.md, 1.2.22, row 27):
+`btMacApplyFrame` reads the verse at the top and how far into it before a
+change of width and puts it back after the insets and the note's bands, and
+the re-assert still places a restore or an arrival over it.
+`TestTheMacFrameChangeKeepsTheReadersPlace`. With it the Mac kept verse 73
+and verse 121 through the narrowing and back. The iPad's frame path kept
+the reader's place before the change, as UIKit keeps the content offset.
 
 ## The NKJV's missing spaces: report upstream, and decide on a correction list
 

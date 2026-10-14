@@ -76,8 +76,10 @@ func TestANoteOnAnOmittedVerseKeepsItsCardInView(t *testing.T) {
 		verse          int
 	}{
 		{"a note on the omitted verse", 21, 21, 21, arriveNothing, 0},
-		{"a note on a range that starts at the hole", 21, 22, 21, arriveNothing, 0},
-		{"a note anchored at the verse after the hole", 21, 22, 22, arriveBand, 22},
+		// The plan files a note on 21-22 at 22, the first verse the page
+		// has (displayCopy); one shown from the link alone keeps 21.
+		{"a note on a range from the hole, filed by the plan", 21, 22, 22, arriveBand, 22},
+		{"a note on a range from the hole, shown from the link alone", 21, 22, 21, arriveNothing, 0},
 		{"a note on a verse the page has", 22, 22, 22, arriveBand, 22},
 	} {
 		st, verses := omittedVerseLinkState(t, c.lo, c.hi)

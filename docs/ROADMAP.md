@@ -117,9 +117,12 @@ The rows are in order of what a reader gains per day of work, so if the time
 runs short the last rows move to the next release first. Rows 8 and 9 reach
 readers with the next `scripts/publish-site.sh`, whenever that runs. All
 eleven are done; where each stands is after the table. On 14 October 2026
-ten more rows followed them (rows 12 to 21, after that): the defect the
-device checks found under row 2, and each item deferred to a later release
-that is a bug needing neither a decision nor new wording, AND-4 among them.
+more rows followed them (rows 12 to 29, after that): the defect the device
+checks found under row 2; the bugs among Later minor releases rows 26 to 44
+that need neither a decision nor new wording, AND-4 among them; two older
+defects in the same share repairs; and, in a second pass, the bugs among
+Later rows 1 to 23 and Stays in the backlog that could be fixed and shown
+here, with the reason each of the others stayed.
 
 | # | Item (BACKLOG.md entry) | What a reader notices | Size / risk | Platforms | Decision | Notes |
 |---|---|---|---|---|---|---|
@@ -160,49 +163,110 @@ data, makes a reader download a translation again or adds wording.
 ### Added 14 October 2026: the defect the device checks found, and the deferred items that are bugs
 
 On 14 October 2026 the items deferred to later minor releases were triaged
-against `rel/1.2.22` at `10b6cbf19`, and every one that is a bug and needs
-neither a decision nor new wording was fixed for 1.2.22 on `fu/1222-bugs`,
-with the defect the device checks found under row 2. Each row was a row of
-Later minor releases, named beside it, and has left that table. FIXED means
-the change is in with a test that fails on the tree before it. Nothing here
-changes stored data, makes a reader download a translation again or adds
-wording. Rows 15 and 16 change the website too, whose half reaches readers
-with the next `scripts/publish-site.sh`; their pinned digests moved with
-`reader.js` in both states of the switch.
+against `rel/1.2.22` at `10b6cbf19`, on `fu/1222-bugs`, in two passes. The
+first took Later minor releases rows 26 to 44, with the decisions and the
+BACKLOG entries they point to: every one of them that is a bug and needs
+neither a decision nor new wording was fixed for 1.2.22 (rows 13 to 21),
+with the defect the device checks found under row 2 (row 12), except AI-4
+and P3, below. Row 15 had a regression, put right in the same row, and the
+repairs of rows 13 and 17 two older defects (rows 22 and 23). The second
+pass took the bugs in Later rows 1 to 23 and in Stays in the backlog that
+the first had left out, and fixed those a test here can tell apart and a
+device or simulator here can show (rows 24 to 29, with an older Mac defect
+that row 26's arrival had hidden, row 27); what it left, and why, is after
+the table. Each row taken from Later minor releases has left that table.
+FIXED means the change is in with a test that fails on the tree before it.
+Nothing here changes stored data, makes a reader download a translation
+again or adds wording. Rows 15 and 16 change the website too, whose half
+reaches readers with the next `scripts/publish-site.sh`; their pinned
+digests moved with `reader.js` in both states of the switch.
 
 | # | Item (where it was) | What a reader notices | Platforms | Outcome |
 |---|---|---|---|---|
 | 12 | Android keeps a link's arrival point as the reading position (found by row 2's device check) | On Android, after following a link or closing Settings, a reader who scrolls on and then turns the phone or reopens the app keeps their place, instead of going back to where the link landed (a relaunch asked for John 3:13 landed at 11). | Android | FIXED (`b45fc17c0`, `d473150aa`). The phone chapter header asks for more than a phone is wide, so the mobile driver's paint laid the reading host out wider than the canvas and then at its real width, and both frames reached the bridge: a reflow was armed that nothing applied, the scroll listener dropped every scroll until the next chapter, and a placement pending then was made at the wide width. Go now hands the phone panes only a frame that fits the canvas (`nativeHostFrame`; `TestAReadingHostWiderThanItsCanvasIsNotHandedToThePane`). The bridge re-places an arrival or a restore when the text lays out at another width straight after it, carries it into a reflow armed meanwhile, and drops a reflow whose width comes back before the text laid out (`TestAPlacementMadeAtOneWidthIsKeptWhenTheTextLaysOutAtAnother`, `TestAReflowArmedByAFrameThatComesBackIsDropped`). On the emulator with each case forced, the build before kept John 3:14 in 1 of 3 runs and dropped 62 scrolls in each of 3; the fix kept it in 3 of 3 and dropped none, and four rotations kept the top verse. The defect reached 1.2.21. |
 | 13 | A drag from a heading into its verse (Later, row 36: the heading repair) | A drag from inside a publisher's heading through the next verse's number into its first words shares that verse's words, cited to it, instead of the heading as Scripture or the verse cut short ("The LORD Is My Shepherd The LORD", Genesis 4's "And" for "And Cain"). | All six (the BSB: 15,081 of 189,996 such drags under 682 headings; the WEB Catholic: 7) | FIXED (`7d304b96f`). The heading repair takes the front off first, then only a heading below that verse may lose its front from the end; a piece confirmed by the verse beneath comes off before the search; a stack of title and headings is one piece; a heading holding its own verse's number is confirmed after it. `TestADragFromAHeadingIntoItsVerseSharesTheVersesWords`, `TestAHeadingPieceRunOnToAVerseWithNoWordsQuotesNothing` and `TestTheHeadingRepairKeepsTheOtherDrags`; over the three local caches every such drag now shares its verse's words (`TestEveryDragFromAHeadingIntoItsVerseOverLocalCaches_LocalOnly`). The lead does not reach it: the selection begins inside the heading. |
-| 14 | Share with note's popover arrow (Later, row 41) | On the iPad and the Mac, Share with note's popover points at the selected words, below the new "Note from you" card, instead of into the card above them. | iPad, Mac | FIXED (`0e0b7ddb2`). The share carries the words' place in the pane's text, and both Apple panes present the sheet beside them after the re-import that puts the card on the page; without a re-import within a second, at the selection as before. `TestShareWithNoteIsAnchoredToTheSelectedWords`. Seen with development builds: the Mac's picker 0.8 pt below the words, the iPad simulator's source rectangle on them, against 88 and 89 pt above them before. |
-| 15 | A link to a verse the edition omits (Later, row 30: AND-4) | A link to a verse the open edition leaves out (Matthew 17:21 in the BSB) opens at the verse after the hole, where its "[21]" mark is, instead of at the top of the chapter with nothing lit. | All six and the website | FIXED (`24e9bb0ec`). Go resolves the arrival verse once (`drawnArrivalVerse`) for every surface; Android pushes it, the canvas pane falls back to the arrival verse's line, and the web reader lands an unlit link on the next verse. `TestALinkToAnOmittedVerseArrivesAtTheVerseAfterTheHole`, `TestTheCanvasPaneLandsALinkToAnOmittedVerseOnTheVerseAfterIt` and `TestTheWebPageLandsALinkToAnOmittedVerseOnTheVerseAfterIt`. Whether the mark itself lights stays open (decision 18). Not seen on a device. |
+| 14 | Share with note's popover arrow (Later, row 41) | On the iPad and the Mac, Share with note's popover points at the selected words, below the new "Note from you" card, instead of into the card above them. | iPad, Mac | FIXED (`0e0b7ddb2`). The share carries the words' place in the pane's text, and both Apple panes present the sheet beside them after the re-import that puts the card on the page; without a re-import within a second, at the selection as before. `TestShareWithNoteIsAnchoredToTheSelectedWords`. Seen with development builds: the Mac's picker 0.8 pt below the words, the iPad simulator's source rectangle on them, against 88 and 89 pt above them before. The distance before is the new card's height, which follows the note's length: the 7 October 2026 check, with a shorter note, measured 52 pt. |
+| 15 | A link to a verse the edition omits (Later, row 30: AND-4) | A link to a verse the open edition leaves out (Matthew 17:21 in the BSB) opens at the verse after the hole, where its "[21]" mark is, instead of at the top of the chapter with nothing lit. | All six and the website | FIXED (`24e9bb0ec`). Go resolves the arrival verse once (`drawnArrivalVerse`) for every surface; Android pushes it, the canvas pane falls back to the arrival verse's line, and the web reader lands an unlit link on the next verse. `TestALinkToAnOmittedVerseArrivesAtTheVerseAfterTheHole`, `TestTheCanvasPaneLandsALinkToAnOmittedVerseOnTheVerseAfterIt` and `TestTheWebPageLandsALinkToAnOmittedVerseOnTheVerseAfterIt`. A note on the omitted verse alone, whose card every surface parks at the chapter top, was then scrolled out of view on every app surface, while the website still landed on it; it keeps the arrival it had before, none, so the chapter opens at its top with the card in view (`3d8240697`, `arrivalVerseOnPage`; `TestANoteOnAnOmittedVerseKeepsItsCardInView`, `TestTheCanvasPaneOpensANoteOnAnOmittedVerseAtItsCard`). PLATFORM_MATRIX.md, divergence 34, records where a card shown from its link alone stands. Whether the mark itself lights stays open (decision 18). Seen on 14 October 2026 on the emulator (Pixel 7, API 35), the reader on the WEB, which omits Acts 8:37, with the NKJV switched off: `/nkjv/` links to 8:37, 8:37–38 and 8:38 land on verse 38; a note link on 8:37 opens at the chapter top with its card in view, where the build before the exception landed on 38 with the card out of view; a note link on 8:37–38 lands on its card above verse 38. |
 | 16 | Four rules for a shared note's link (Later, row 35) | The app and the website read every shared note link alike: white space inside a payload is damage on both, a payload's ends lose ASCII white space only, the website cleans a note's text as the app does, and a note the app opens also opens on the website. | All six and the website | FIXED (`67f90c576`). 10 of 16 probe payloads decoded differently in the app and on the website; the four rules now hold in both decoders. `TestTheAppAndTheWebReaderReadNoteLinksAlike` runs the app, the shipped decoder under node and the Go mirror over the payloads a corpus line cannot hold, and `testdata/note_vectors.txt` gains append-only cleaning and empty-table vectors. |
-| 17 | A phrase ending on a dash (Later, row 37: the dash end repair) | A phrase that ends on a closing dash keeps its last word ("defiled herself—" stops being shared as "defiled"; a drag ending on "If the gate is shut—" keeps "shut"). | All six (the BSB) | FIXED (`251e04633`). The end repair no longer cuts after an em dash. `TestAPhraseEndingOnADashKeepsItsWords`; the local phrase sweep's known count for the BSB falls from 4 to none. |
-| 18 | A Linux text share opens two mail composes (Later, row 2, in part) | Email… on Linux opens one compose, where `xdg-email` launched the mail program and then reported the launch failed and the `mailto:` link opened a second (not seen). | Linux | FIXED (`f4f09bc04`). `xdg-email`'s exit 4 now ends the share; exits 1, 2, 3 and 5, which refuse before launching anything, still hand on. `TestXDGEmailEndsTheComposeOnlyWhereItMayHaveOpenedOne`. The rest of row 2 waits on its wording (decision 7). |
+| 17 | A phrase ending on a dash (Later, row 37: the dash end repair) | A phrase that ends on a closing dash keeps its last word ("defiled herself—" stops being shared as "defiled"; a drag ending on "If the gate is shut—" keeps "shut"). | All six (the BSB) | FIXED (`251e04633`). The end repair no longer cuts after an em dash. `TestAPhraseEndingOnADashKeepsItsWords`; the local phrase sweep's known count for the BSB falls from 4 to none. A drag cut inside a word at such a dash is row 22. |
+| 18 | A Linux text share opens two mail composes (Later, row 2, in part) | Email… on Linux opens one compose, where `xdg-email` launched the mail program and then reported the launch failed and the `mailto:` link opened a second. | Linux | FIXED (`f4f09bc04`). `xdg-email`'s exit 4 now ends the share; exits 1, 2, 3 and 5, which refuse before launching anything, still hand on. `TestXDGEmailEndsTheComposeOnlyWhereItMayHaveOpenedOne`. Seen on 14 October 2026 on the Linux virtual machine (Ubuntu 24.04, GNOME on X11, xdg-utils 1.1.3) with stand-in mail handlers in place of a client: one named thunderbird, which `xdg-email` runs itself, composes and exits 1, and `xdg-email` exits 4 after its compose, where the `mailto:` link through `xdg-open` then opened a second; through `gio`, the path for any other client, `xdg-email` exits 0 once the handler is launched, whatever it returns, and with the default handler's program missing it exited 0 too, `gio` opening another. Exit 4 with nothing launched was not seen there. The trade-off: should another desktop's launcher fail with nothing opened and exit 4, the share now ends with no compose and no word, where the `mailto:` link was tried; that silence is the case row 2's approved line answers. The rest of row 2 waits on its wording (decision 7). |
 | 19 | The versification generator moves a missing verse to a repeat (Later, row 34: VERS-1) | Nothing today: no shipped edition has the shape, and the tables are unchanged. | None until a regeneration | FIXED (`276929af1`). A move is refused when the candidate slot matches a verse the edition kept at least as well; the dropped verse is absent and the slot extra. `TestTheVersificationGeneratorDoesNotMoveAVerseToARepeat` runs the generator on invented editions of both shapes, with Romans' doxology as the control; `TestTheVersificationGeneratorReproducesTheShippedTables_LocalOnly` holds its output on the local caches to the BSB's and the WEB Catholic's rows of both shipped tables byte for byte. The NKJV's rows were not regenerated. Seeding moves from the SIL mapping, in the recorded fix, was not needed for the shape found. |
-| 20 | The NKJV's card route and selection route in the opt-in walk (Later, row 38) | Nothing (internal). | The suite | FIXED (`4af99b741`): the test's stand-in, not the app. It handed the selection route the publisher's "Lord" where every pane hands over the drawn "Lᴏʀᴅ"; given the NKJV's shape, the WEB's Genesis, Exodus, Psalms and Isaiah differ in 11,884 of 29,441 passages with the old stand-in and in none with the drawn text. A fixture with the divine name in small capitals joins `TestPassageShareEqualsSelectionRoute`. Not yet run on an NKJV cache. |
+| 20 | The NKJV's card route and selection route in the opt-in walk (Later, row 38) | Nothing (internal). | The suite | FIXED (`4af99b741`): the test's stand-in, not the app. It handed the selection route the publisher's "Lord" where every pane hands over the drawn "Lᴏʀᴅ"; given the NKJV's shape, the WEB's Genesis, Exodus, Psalms and Isaiah differ in 11,884 of 29,441 passages with the old stand-in and in none with the drawn text. A fixture with the divine name in small capitals joins `TestPassageShareEqualsSelectionRoute`. That the NKJV's 46,837 come from the stand-in is shown on the WEB given the NKJV's marking: the walk has not been run on an NKJV cache, and that run is Later minor releases, row 45. |
 | 21 | Two comments describing the code before 1.2.20 (Later, row 43) | Nothing (internal). | The code | FIXED (`cdd6a2a3a`): `notes_sticker_native_on.go` and `bibleTextDismissMenu` (`reading_ios.go`) say what the code does. |
+| 22 | A drag cut inside a word at a closed-up dash (the end repair of row 17) | A drag that stops inside the word after a closed-up dash keeps the word before it ("was morning—t", Genesis 1:5, stops being shared as "was"), and one begun inside the word before such a dash keeps the word after it ("g—the first" stops being shared as "first"). | All six (the BSB; the WEB and the WEB Catholic where they close a dash up) | FIXED (`6fdd95736`). Older than row 17, and with the span and the lead alike: at every closed-up dash between words of two letters or more in the three local caches, each shape lost its word at the dash in all of the BSB's 2,052 drags, the WEB's 428 and the WEB Catholic's 476. The end repair cuts back to the later of the last space and the last such dash, the start repair forward to the earlier of the first space and the first, and the dash comes off as a clause mark does. `TestAPhraseEndingOnADashKeepsItsWords`; `TestADragCutInsideAWordAtADashKeepsTheWholeWordOverLocalCaches_LocalOnly` finds none wrong; every other local sweep passes as before. |
+| 23 | A drag across a stack of headings (the heading repair of row 13) | A drag from the end of a verse across two headings over the next verse into its first words shares the words on either side, cited to both verses, instead of quoting both headings as Scripture (the BSB's Proverbs 22:16–17 across "Thirty Sayings of the Wise" and "Saying 1"). | All six, on the pages that send no lead: the Apple plain-text fallback and the legacy pane | FIXED (`6437ef777`). Each heading was removed whole only where the number of the verse beneath stood straight after it, which the upper heading of a stack never has; the repair now takes the stack off whole. `TestADragAcrossAStackOfHeadingsSharesTheVersesOnEitherSide`; over the three caches, all 24 of the BSB's 22,728 drags across the headings between two verses that cross a stack (over Proverbs 22:17 and Hebrews 11:30), with the span and without, were wrong and none is now (`TestEveryDragAcrossTheHeadingsBetweenTwoVersesOverLocalCaches_LocalOnly`). |
+| 24 | Two verse pictures saved in the same second overwrite each other (Later, row 3) | Two pictures shared within one second are both kept, the second named " (2)" as browsers name a second download. | Linux; the Windows fallback and the Windows Share sheet's copy | FIXED (`ca540fbad`, `freeShareImagePath`). `TestTwoPicturesSharedInOneSecondAreBothKept`. |
+| 25 | The tab bar's dress is chosen when the window is built (Later, row 17) | An iPad or Android tablet window resized across 560 points while taller than wide rebuilds in the other dress at once. | iPad, Android tablets | FIXED (`ecf49e80c`). `renderedLayout` carries the dress where a bar is drawn, read from the canvas as the bar and the rail read it, so the watcher's two readings cannot disagree; the rail and the full-screen tree carry none. `TestATallWindowResizedAcrossTheBarsWidthRebuildsTheBar`. Not seen on a device: the iPad simulator in its windowing mode refuses an app's own request to change its window. A sheet open at the rebuild is taken and reopened, as for any layout change. |
+| 26 | A reader who scrolled away from a link's arrival is taken back by the next width change (Later, row 18) | After scrolling on from a link's verse or note, a window resize or a rotation that rebuilds nothing leaves the reader where they are. | iPhone, iPad, Mac | FIXED (`e16733c5f`). The reader's scroll ends the arrival as it ends the restore (`btIOSEndArrival`; `btMacUserScrolled`). `TestAReadersScrollEndsTheArrival`. Seen on 14 October 2026 with development builds before and after, each arriving at Psalm 119:100 (WEB) and then scrolled 1,500 points on as the reader, to verse 121: on the iPad Pro 13-inch (M5) simulator, in full-screen reading, a 250-point narrowing of the pane through its frame path put the build before back at verse 100 and left the fix at 121; on the Mac, a window narrowed from 1280 to 1000 points put the build before back at verse 100 and, with row 27, left the fix at 121. |
+| 27 | A Mac window resize moves a reader who scrolled (hidden by row 26's arrival) | On the Mac, a window resized narrower or wider keeps the verse at the top of the view. | Mac | FIXED (`332b4d752`). Setting the pane's frame wrapped the text at the old insets first, AppKit moved the clip with that passing wrap, and the insets put right after left the clip there: a reader at Psalm 119:73 was at verse 112 after a window narrowed from 1280 to 1000 points, and one at verse 121 at the end of the psalm. `btMacApplyFrame` reads the verse at the top and how far into it before a change of width and puts it back after; a restore or an arrival still places over it. `TestTheMacFrameChangeKeepsTheReadersPlace`. Seen with the development builds: verse 73 and verse 121 kept through narrowing and widening. The iPad's frame path kept the reader's place before the change and was not touched. |
+| 28 | Mac narration that follows with the reading view hidden puts each verse at the very top (Later, row 20) | On the Mac, narration that follows the text while Books or Search is open, or under a sheet, keeps the verse in the comfortable band. | Mac | FIXED (`79089f7df`). Follow runs while the pane is hidden, and the follow-scroll read where the view stands from `visibleRect`, which AppKit gives a hidden view as zero; it reads the clip view now, as the capture does. `TestTheMacFollowScrollReadsTheClipViewNotVisibleRect`. Seen with the development builds, narration following Psalm 119:60 with the reader on Books: the build before put the verse 0 points below the top of the view, the fix 191 points down a 636-point view, the band's 30%, where it still stood back on Read. |
+| 29 | Android's night-mode patch reads its flag before it is written (Later, row 21) | Switching between light and dark while the app is in front always takes effect at once. | Android | FIXED (`a0e5975b8`). Stock Fyne's activity sends the configuration to the driver before it writes the flag the driver reads; the patch writes the flag first, so the send orders the two. `TestAndroidNightModePatchWritesTheFlagBeforeTheConfigurationIsSent`. `8c5677310` read the night bit of the configuration the driver builds instead, which the asset manager's configuration does not carry: built with it, the app stayed light through `scripts/test-android-dark-mode.sh`. With `a0e5975b8` the app follows both ways in that check, and 20 switches 1.5 s apart were each followed, as by the build before; the race was not seen on the emulator in either. |
 
-What the triage found and left, and why:
+What the triage found and left, and why. The first pass:
 
 - **Study verbs that lose their chapter** (Later, row 27, AI-4) and **the
   Apple plain-text fallback page** (Later, row 28, P3) are bugs that need no
-  decision, but each is about 2.5 days and changes every pane's seam or both
-  Apple panes' Objective-C: whether either joins 1.2.22 is open (decision 2).
-  AI-4's Go half, about a day, would fix Windows and Linux alone, with a
-  recorded divergence.
+  decision of their own and were left all the same, for their size and
+  risk: each is about 2.5 days, AI-4 changes every pane's seam and P3 both
+  Apple panes' Objective-C, which was more than the rest of the set
+  together. Whether either joins 1.2.22 is decision 2. AI-4's Go half,
+  about a day, would fix Windows and Linux alone, with a recorded
+  divergence.
 - **The marker strip with no lead** (Later, row 26, M) now happens only on
-  the fallback page, and goes with row 28.
+  the fallback page or where the lead fails its check, as it does for a
+  drag begun inside a heading, and goes with row 28.
 - **The red-letter generators** (Later, rows 31 to 33) can be fixed only
   with the regeneration that proves a byte-identical table, which needs the
   publishers' USFM downloaded and the NKJV opened once (decision 43).
-- **An emoji in Share with note on Android** (a scan candidate) is not a bug
-  where it can be checked: on the API 35 emulator with CheckJNI on, a message
-  holding two emoji crossed `btaShareText`'s `NewStringUTF` whole, with no JNI
-  error. API 24 to 30 images are not installed.
+- **An emoji in Share with note on Android**, which `btaShareText` passes
+  through `NewStringUTF`, where CheckJNI may refuse four-byte UTF-8, is not
+  a bug where it can be checked: on the API 35 emulator with CheckJNI on, a
+  message holding two emoji crossed it whole, with no JNI error. API 24 to
+  30 images are not installed.
 - The bugs that wait on a decision or on wording are Later rows 29, 2 (its
   line), 15, 22, 23, 11 and 9, Next major row 3 and Stays row 8, worst first
   row 29 (decision 23). Rows 39, 40, 42 and 44 are not bugs.
+
+The second pass, Later rows 1 to 23 and Stays in the backlog. Rows 3, 17,
+18, 20 and 21 of Later are rows 24 to 26, 28 and 29 above. The rest:
+
+- **Later 4**, an iPhone opened sideways that draws the bottom bar for
+  about 0.4 s: its decision is the technical route (answer the first layout
+  from the orientation the scene reports, or hold it until the canvas has a
+  size), and it changes the first frame at launch, which a simulator
+  launched in landscape could show only with input on the host.
+- **Later 8**, search results breaking a word where a highlight starts: large,
+  and its recorded condition (ship only if the search-card count falls to
+  zero, and weigh drawing results with row 7's word model) is still to be
+  weighed.
+- **Later 12**, taps that may land 8 points high: not established as a bug;
+  it was seen once through a synthetic tap, and measuring it needs a real
+  touch on a device this work does not use.
+- **Later 16**, the Android tablet's column half a rail off centre: one
+  condition, in rotation code that has gone wrong before; it needs emulator
+  passes on a phone with a camera cut-out in both rotations and on the
+  10-inch tablet, which this pass did not make.
+- **Later 19**, the reading pane 4% off on iPhones whose screen scale is not
+  the drawing scale: a toolkit patch that changes touch mapping on those
+  devices, to be checked on one before it ships.
+- **Stays 18**, Windows' first window not centred: needs the Windows virtual
+  machine, which was not reachable for row 40 either.
+- **Stays 21 and 22**, the iPadOS window buttons over the title and an
+  external display's scale: toolkit patches that need a Stage Manager window
+  and an external display to show them.
+- **Stays 23**, Android never ending a cancelled touch: no reader effect is
+  known and it cannot panic; a toolkit patch, with the tap measurement of
+  Later 12 as its check.
+- **Stays 24**, the plain-text fallback keeping the old palette's colour if
+  all three imports of a rebuild fail: theoretical, and it needs the
+  palette's ink pushed to both Apple panes; it goes with row 28 (decision
+  2).
+- **Stays 26**, iOS shipping `CFBundleExecutable: main`: renaming the
+  executable changes the store package and `release-ios.sh`, which only a
+  store build and upload can prove, and this work makes neither.
+- Seen on the emulator with row 15, older, and not changed: Android parks a
+  card whose verse the page lacks over the chapter's first line, where the
+  iPhone and iPad reserve an inset for it (BACKLOG.md, AND-4).
 
 ### Beside 1.2.22: the account holder's console and policy work
 
@@ -244,9 +308,11 @@ The order:
   the WEB Catholic Daniel 3 heading (row 15), permission before text goes to
   a third-party AI (row 39), and the Greek Esther if it is decided to leave
   the switch (Next major version, row 3).
-- The small native fixes (rows 17 to 22) can fill any minor release, and so
-  can the red-letter generators' fixes (rows 31 to 33), which change no
-  table readers have.
+- Rows 3, 17, 18, 20 and 21 went into 1.2.22 on 14 October 2026 (rows 24
+  to 26, 28 and 29 there). The small native fixes left (rows 19 and 22) can
+  fill any minor release, and so can the red-letter generators' fixes (rows
+  31 to 33), which change no table readers have, and the NKJV walk (row
+  45).
 - The rest follow as their decisions arrive.
 
 Rows 26 to 33 come from the same work as 1.2.22's rows. Each is a fix to what
@@ -256,8 +322,7 @@ minor release and none behind `next`; each row says why it is not in 1.2.22.
 | # | Item (BACKLOG.md entry) | What a reader notices | Size / risk | Platforms | Decision | Notes |
 |---|---|---|---|---|---|---|
 | 1 | The desktop takes the phones' navigation rule | A Mac, Windows or Linux window taller than it is wide shows Read, Books and Search on a bar along the bottom, as phones and tablets do, instead of a rail down its narrow side. | L / medium | Mac, Windows, Linux (retires divergence 29) | Approved 1 October 2026 for a minor release. Open: the dead zone (proposed: the rail from 10% wider than tall, the bar from 10% taller) and the settle of about 250 ms; and whether it ships unswitched as approved (recommended: a minor release's headline; which one is Decisions still open, 3) or is built behind `next` and graduates early, which NEXT.md does not yet describe. | The exception to "new goes in the major". A bar appears on tall desktop windows, and rebuilding the window mid-resize on the Mac's native reading view is new, so it needs a pass on the Mac and on both virtual machines. Tiled window managers are its main audience and one of the watch triggers of the closed first-frame entry, so centring is checked there in the same pass. |
-| 2 | Shares that cannot finish say so, in one approved line | When a share cannot finish, the app says so in one short line instead of ending without a word: a picture never saved, a picture no folder took, a card that cannot be drawn, a mail program that fails behind Email…. | M / medium | Linux, the Windows fallback sheet and the macOS mimic for the save and Email… cases; all six for a card that cannot be drawn; iOS for a refused presentation | Recorded: a line under the buttons when the compose fails, its wording to be approved. Stopping at the first route that may have started a compose, which needed no wording, went into 1.2.22 on 14 October 2026 (row 18 there). Open: one heading and line for every desktop case; whether "Could not share the card." (the phones' approved words) is reused where it fits; whether to detect iOS refusing to show the sheet. | Gathers "Email… on the desktop share sheet fails without a word", the open tails of "Android: a text share has no failure path" and "Linux and Windows: an in-app share sheet in place of the 1.4-second notice", and the line 1.2.20's row 1 leaves out. The 20 September rule, that a share the reader started does not end in silence, and the desktop's no-sheet rule pull opposite ways here; one change with one approved line settles both on every platform. A mail program on the Linux virtual machine would show the double compose that 1.2.22 stops, which has not been seen. A drawing failure cannot really happen with the fonts the app bundles. |
-| 3 | Two verse pictures saved in the same second overwrite each other | Two pictures saved within one second are both kept, instead of the second replacing the first. | S / low | Linux; the Windows fallback | None (a " (2)" suffix, as browsers use) | `shareImageName` (`share_parts.go`) names a picture to the second. Each share passes a preview first, so it is almost impossible to reach. Done with row 2. *Not in BACKLOG.md.* |
+| 2 | Shares that cannot finish say so, in one approved line | When a share cannot finish, the app says so in one short line instead of ending without a word: a picture never saved, a picture no folder took, a card that cannot be drawn, a mail program that fails behind Email…. | M / medium | Linux, the Windows fallback sheet and the macOS mimic for the save and Email… cases; all six for a card that cannot be drawn; iOS for a refused presentation | Recorded: a line under the buttons when the compose fails, its wording to be approved; stop at the first route that started a compose. The stop, which needed no wording, went into 1.2.22 on 14 October 2026 (row 18 there), reading `xdg-email`'s exit 4 as such a start; the trade-off that reading carries is written there. Open: one heading and line for every desktop case; whether "Could not share the card." (the phones' approved words) is reused where it fits; whether to detect iOS refusing to show the sheet. | Gathers "Email… on the desktop share sheet fails without a word", the open tails of "Android: a text share has no failure path" and "Linux and Windows: an in-app share sheet in place of the 1.4-second notice", and the line 1.2.20's row 1 leaves out. The 20 September rule, that a share the reader started does not end in silence, and the desktop's no-sheet rule pull opposite ways here; one change with one approved line settles both on every platform. The double compose that 1.2.22 stops was seen on the Linux virtual machine with a stand-in mail client (1.2.22, row 18). A drawing failure cannot really happen with the fonts the app bundles. |
 | 4 | An iPhone launched sideways draws the bottom bar first (in "One navigation rule on phones and tablets") | An iPhone opened while held sideways shows the bottom bar for about 0.4 s before the rail or the full-screen page. | S / medium | iPhone (an Android phone must still never flash a rail) | The technical route only: answer the first layout from the orientation the scene reports at launch, or hold it until the canvas has a size | Minor, at launch only, and it touches the first-frame layout. |
 | 5 | The Windows and Linux footnote section stays ragged (in "The reading page: what is left after 24 September 2026") | On Windows and Linux, the notes at the foot of a chapter are justified like the text above them. | M / medium | Windows, Linux | None | A parity improvement. Clicking within the notes has to follow the separately drawn words. The hyphenation half is the next major's (row 12 there). |
 | 6 | Website and apps: the remaining layout differences (in "The reading page: what is left after 24 September 2026") | The website and the apps space two headings in a row alike and share a column width, and a paragraph that opens in prose and turns to poetry follows one rule for justification. | M / low | The website and every app | Open: one gap for two headings in a row (site 1.1em, iPhone 0.35em, Windows and Linux 1.45em); the column width; and whether such a paragraph stops being justified (and hyphenated) whole on the website and Android 15+, which the 24 September reading-page record makes their shared rule while the worklist's 7 September defects list counts the website's 990 such paragraphs as a defect. | One rule everywhere, and no data changes. The gap for a title followed by a heading is in the next major (row 7 there), because which gap applies depends on which comes first. |
@@ -271,11 +336,7 @@ minor release and none behind `next`; each row says why it is not in 1.2.22.
 | 14 | Recapture the App Store and Play screenshots: the Play phone set | People browsing the Play listing see light shots with dark, legible status-bar icons, and perhaps the phone shots at the display size most phones use. | M / low | The Google Play listing | Open, and discussed before any retake: retake the phone set at 420 (where Books shows one column by design), or keep 356 and retake only the light images; and whether the tablet's light images are retaken too. | What it waited for shipped in 1.2.18. The shots are taken from 1.2.21, the first release on Play with 1.2.20's features, after it clears Play's review: one Play edit at a time. Three reviewers and approval of the images come before the upload (SCREENSHOT_PLAYBOOK.md). |
 | 15 | WEB Catholic Daniel 3: a translator's note fused into the heading (SCRIPTURE_WORKLIST.md, S15's guard) | In the World English Bible (Catholic) at Daniel 3, in the app and on the website, a paragraph about the addition stops running into "THE SONG OF THE THREE HOLY CHILDREN" as one long bold heading. | S / medium | All six and the website (WEB Catholic only) | Open: (1) keep the title and set the note apart from it (recommended, nothing dropped), drop the whole heading (the recorded shape guard, which loses the real title too), or leave it; (2) at drawing (recommended: nobody downloads again) or at decoding (every WEB Catholic reader downloads again). The choice is recorded in ADDITIONS_AND_DROPS.md. | A visible text fault, confirmed live, but with two open decisions; it touches all six and needs `scripts/publish-site.sh`. The recommended option restructures publisher text under the worklist's standard: nothing dropped without an explicit decision, nothing added. The first minor release after it is decided, by default. |
 | 16 | Android centres the book page on the window, the iPad on its pane (in "The reading page: what is left after 24 September 2026") | On an Android tablet with the side rail, the reading column sits centred beside the rail, as on the iPad, instead of about half the rail's width to the left. | S / medium | Android tablets (a phone held sideways must not change) | None. The entry's rule: centre on the window only when the pane spans it less the system insets. | One condition, but this rotation code has gone wrong before: emulator passes on a phone with a camera cut-out in both rotations and on the 10-inch tablet, too much for 1.2.20's week. |
-| 17 | iPad: the tab bar's style is chosen when the window is built (in "iOS 27: after the scene life-cycle fix") | An iPad window resized across 560 points wide while it stays taller than wide switches to the right tab-bar style at once. | S / low | iPad | None | Adding the style to `renderedLayout` (`layout.go`, which holds class, rail and landscape) is one line. Check on the iPad simulator what a rebuild at 560 points does to an open sheet; rebuilds wait while an overlay is open since 27 September (`deferOrRebuild`). |
-| 18 | A reader who scrolled away from a note they arrived at is taken back by the next width change (in "A note link that opened the chapter and stayed at the top") | After scrolling away from a note reached by a link, a rotation or a window resize leaves the reader where they are. | S / low | iPhone, iPad, Mac | None | The reader's own scroll clears the restore and the marker (`scrollViewDidScroll`, `reading_ios.go`) but not `gNoteArrival`. The recorded fix sets it to nothing beside the restore disarm there and in the Mac's `btMacUserScrolled`. The iPad simulator and the Mac can both show it. |
 | 19 | On iPhones whose screen scale is not the drawing scale, the reading pane is off by about 4% (in "iOS 27: after the scene life-cycle fix") | On the iPhone 12 and 13 mini, the Plus models and any iPhone with Display Zoom on, the reading pane's frame and clipping line up exactly. | M / medium | iPhone (those models and Display Zoom) | None | The recorded fix measures with the drawable's scale in `goAppReportSize` and `sendTouches`, a toolkit patch; `patches/fyne-2.7.4-ios-window-size.patch` does not cover it. Look in the simulator with Display Zoom first; touch mapping changes on those devices, so check on one before shipping. |
-| 20 | Mac: narration with the reading view hidden scrolls each verse to the very top (in "A light/dark change with a sheet open left the app half in each theme") | On the Mac, narration that follows the text while Books or Search is open, or under a sheet, keeps the verse in the comfortable band. | S / low | Mac | None | `bibleTextMacHighlightVerse` reads `gTextView.visibleRect` (`reading_macos.go`), which a hidden pane gives as zero; the capture code already reads the clip view. First check, with narration playing while Books is open, whether follow runs while the pane is hidden at all. |
-| 21 | Android: the night-mode patch races a foreground light/dark change (in the same entry) | Switching between light and dark while the app is in front always takes effect at once, instead of sometimes waiting for the next redraw. | S / low | Android | None | `patches/fyne-2.7.4-android-night-mode.patch` compares `currentSize.DarkMode != darkMode` before `updateTheme` writes it. Reading the night bit from the configuration the branch already builds (`AConfiguration_getUiModeNight`) removes the race. A toolkit patch, so with its patch test. |
 | 22 | The narration card's ✕: a double tap opens full screen (in "The open narration card covers the phone header's controls") | A double tap on the open card's ✕ only closes the card; today the second tap opens full screen in 45 of 48 phone layouts measured. | S / low | iPhone, Android phones | Open: a `fyne.DoubleTappable` ✕, which closes on either tap at the cost of the double-tap interval on every close, or a shield over the card's place for that interval, which leaves the controls it covered unreachable for that time. | Separable from the narration bar (Next major version, row 6), and need not wait for it. |
 | 23 | A reader who cleared their key on purpose is told at every launch that the NKJV could not be opened (VERSION_STATES.md, *Open decisions*) | A reader who deliberately cleared their key in Settings stops being told, at every launch, that the NKJV could not be opened. | S / low | All six | Open: skip the record when the store's negative is deliberate; the launch cells `L-A` and `L-D` then fire on `key-cleared` and have to say the reader gave the translation up, which needs wording. | Safe as it stands. Small once decided; the version-state walks already hold the cell. The other two version-state questions stay in the backlog (row 19 there). |
 | 26 | The marker strip confirms a verse number by any overlap with that verse's opening (M) | Nothing in the shipped translations. A number that is part of a verse's text, followed by a word that opens the verse it names, would be stripped as that verse's number and the rest looked for elsewhere. | S–M, 2.5 days / low | All six | None | `stripVerseMarkersAnchored` (`share.go:1723`) accepts an "N " token when what follows overlaps verse N's opening by any length (an invented "The city had 12 gates" cited verse 3). No such digit token in the WEB, the BSB or the WEB Catholic; the NKJV not measured. With a lead, 1.2.22's row 11 reads the selection from the lead's place and removes a number only where its verse starts and the token is that verse's number (`walkSelectionFrom`; `TestAFigureInAVerseIsNotTakenForAVerseNumber`), so what is left is the text strip for a selection with no lead or whose walk fails. The recorded fix: the panes pass the number runs' positions and the strip removes exactly those. Latent, so not in 1.2.22. |
@@ -289,6 +350,7 @@ minor release and none behind `next`; each row says why it is not in 1.2.22.
 | 40 | Windows: the Store checks deferred from 1.2.20, and a look at its share fallback (in "Windows: use the native Share sheet"; "The Windows audio smoke is probably testing a silent sink"; "Microsoft Store: from the reserved name to the first submission") | Nothing if they pass. If not, a picture share from the Store install fails or saves somewhere unexpected. | S / low | Windows (the Store install and the direct download, on the Windows 11 arm64 virtual machine) | Decided 7 October 2026: moved to the release after 1.2.20. Which release now is open (Decisions still open, 2). | 1.2.20's row 11, not run: the virtual machine's guest agent was unavailable, SSH timed out and its console dropped keys, so the machine has to be reachable first. Then the share from the Store install; the three Store checks (`WINDOWS_STORE_LISTING.md`, *Resuming with a Windows machine*), of which the browsers' prompts for `bibletext:` need a local page; and step 3 of the audio smoke, which needs a Windows ARM build with cgo or a stub. The three entries then close and PLATFORM_MATRIX's Sharing notes are corrected. In the same sitting, a picture share whose card could not be read, through the in-app sheet's fallback (1.2.20, row 1; in the entry on Share as image saying "Picture saved" for a card it could not read): it ends the share by the code and by `TestACardThatCouldNotBeReadOpensNoSheet` under Windows' rules, and has not been seen on Windows. |
 | 42 | 1.2.20's rows: the checks still to run on hardware (in "1.2.20's roadmap rows with no entry of their own"; "Android: an activity destroyed with the process alive stops the narration") | Nothing if they pass. | M / low | iPhone, iPad, Android, Windows | None | Back on Android 11 and older (1.2.20, row 4): narration plays on after Back finishes the root activity, on an emulator at API 30 or below, none having been run; Android 7.0 to 11 (API 24 to 30) are still supported. Ask (1.2.20, row 18): reading, dictation and VoiceOver on a physical device. The shared panel (row 19): a native Windows run, and the physical hit region of the 44-point control under the toolkit's eight-point touch compensation. iOS rendering during app switching and font memory (rows 20 and 21): the cause of the physical exits seen before them, which the simulator runs do not establish. |
 | 44 | The release procedure does not say why Play's publish-on-approval is checked by hand (in "The release pipeline: what still waits on something it need not") | None (internal). | S / low | Google Play release procedure | None | Apple's release type is set by `appstore/submit-version.py` and read back before a submission; Play's, Managed publishing off, is read in the Publishing overview and recorded (RELEASING.md stage 6; PLAY_LISTING.md, *Publishing mode*), with no reason given for its being a hand check. The only asymmetry between the Apple and Play legs of the release procedure still open at `6bf27aee4`. |
+| 45 | The NKJV's card route and selection route: the opt-in walk on an NKJV cache (in "The NKJV's card route and selection route disagree in the opt-in walk") | Nothing (internal). | S / low | The suite | With decision 43: the walk needs the NKJV opened in the app once, so that a cache is there to walk, compared without printing the text. | 1.2.22's row 20 fixed the test's stand-in and showed, on the WEB given the NKJV's marking, that the stand-in accounts for differences of the NKJV's shape. `TestPassageShareEqualsSelectionRouteOverLocalCaches_LocalOnly` has not been run on an NKJV cache; the entry closes when it passes there, or names what is left. |
 
 ---
 
@@ -366,20 +428,22 @@ The seven decisions 1.2.20 needed were taken on 6 October 2026 and went out
 with it; each is in its BACKLOG.md entry. On 7 October 2026 the items then
 in Later minor releases, rows 25, 35 to 38 and 40, were moved to the release
 after 1.2.20, and row 24 was deferred with no release named. 1.2.21 went out
-without those six items, and what is left of them is decision 2. On 13 October
-2026 1.2.22's set was approved, with the cross-references panel taking the
-share card's order
-(1.2.22, row 6), and Later minor releases, row 24, was started on its own
-branch. On 14 October 2026 the ten fixes were merged for the release, which
-took decision 1, and row 24 joined 1.2.22 as its row 11, one change on all
-four panes, with row 25, which took decision 4 and left decision 3 one
-candidate. Later that day every deferred item that is a bug and needs no
-decision or wording was fixed for 1.2.22 (rows 13 to 21 there, beside row
-12, the defect the device checks found), but for the two larger ones that
-decision 2 now holds. What is still open, by when it is
-needed. A recommendation
-is marked where one is made. Rows are cited by section: *1.2.22*, *Later* for
-later minor releases, *Next major* and *Stays*.
+without those six items, and what is left of them is decision 2. On 13
+October 2026 1.2.22's set was approved, with the cross-references panel
+taking the share card's order (1.2.22, row 6), and Later minor releases, row
+24, was started on its own branch. On 14 October 2026 the ten fixes were
+merged for the release, which took decision 1, and row 24 joined 1.2.22 as
+its row 11, one change on all four panes, with row 25, which took decision 4
+and left decision 3 one candidate. Later that day the deferred items were
+triaged in two passes. The bugs among Later rows 26 to 44 that need no
+decision or wording were fixed for 1.2.22 (rows 13 to 21 there, beside row
+12, the defect the device checks found), but for AI-4 and P3, the two larger
+ones decision 2 now holds; and of the bugs in Later rows 1 to 23 and Stays,
+those a check here could show were fixed too (rows 24 to 29 there), with the
+reason each of the others stayed given under that table. What is still
+open, by when it is needed. A recommendation is marked where one is made.
+Rows are cited by section: *1.2.22*, *Later* for later minor releases, *Next
+major* and *Stays*.
 
 ### Before the 1.2.22 work starts
 
@@ -391,10 +455,12 @@ later minor releases, *Next major* and *Stays*.
    (rows 13, 16, 17 and 20 there), as the digit, row 25 until then, had with
    row 11. Row 40 can join 1.2.22 or follow 1.2.23's lead, and needs the
    Windows virtual machine reachable first. AI-4 and P3 (Later, rows 27 and
-   28) are bugs that need no decision of their own, about 2.5 days each, and
-   each changes every pane's seam or both Apple panes' Objective-C: whether
-   each joins 1.2.22, or AI-4's Go half alone (about a day, Windows and Linux,
-   with a recorded divergence), or neither.
+   28) are bugs that need no decision of their own and were left out of
+   1.2.22's fixes all the same, for their size and risk: about 2.5 days
+   each, AI-4 changing every pane's seam and P3 both Apple panes'
+   Objective-C. What is open is whether each joins 1.2.22, or AI-4's Go half
+   alone (about a day, Windows and Linux, with a recorded divergence), or
+   neither.
 
 ### Before the work after 1.2.22 starts
 
@@ -440,9 +506,12 @@ later minor releases, *Next major* and *Stays*.
 17. **Store builds CI cannot run** (Later, row 13): what "tested" should mean
     for them.
 18. **An omitted verse's mark under a mark that covers it** (AND-4, apart
-    from its fix, which is 1.2.22's row 15): every surface ties the "[21]" mark to the verse
-    after it, so a one-verse mark on an omitted verse lights nothing; whether
-    such a mark lights it, as a change of its own.
+    from its fix, which is 1.2.22's row 15): every surface ties the "[21]"
+    mark to the verse after it, so a one-verse mark on an omitted verse
+    lights nothing; whether such a mark lights it, as a change of its own.
+    With it, where a note shown from its link alone on a range that starts
+    at such a verse is drawn (PLATFORM_MATRIX.md, divergence 34): at the
+    verse after the hole or at the chapter top, on every surface.
 
 ### For the next major version
 
@@ -507,9 +576,10 @@ later minor releases, *Next major* and *Stays*.
 42. **The repository's GitHub branches:** the merged branch
     `publisher-paragraphs-only` is still on GitHub; deleting it is a push,
     so it waits for an OK.
-43. **The red-letter regenerations** (Later, rows 31 to 33): an OK to open
-    the NKJV in the app once, to regenerate its table and compare, and to
-    download the eBible USFM zips for the WEB's and the publisher's
-    `bsb_usfm.zip` for the BSB's. None of the three sources is on the
-    machine, and each generator's fix is proven only by regenerating its
-    table byte for byte.
+43. **The red-letter regenerations** (Later, rows 31 to 33) **and the NKJV
+    walk** (Later, row 45): an OK to open the NKJV in the app once, to
+    regenerate its table and compare and to walk its card route against its
+    selection route, and to download the eBible USFM zips for the WEB's
+    table and the publisher's `bsb_usfm.zip` for the BSB's. None of the
+    three sources has been opened or downloaded for this work, and each
+    generator's fix is proven only by regenerating its table byte for byte.

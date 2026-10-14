@@ -294,7 +294,12 @@ place a fix on one does not reach the others.
     request's answer watched, `share_portal_linux.go:67`
     (`case sig, open := <-responses:`), and only its 2 — no mail client —
     handing on to xdg-email and a `mailto:` link, `share_email_linux.go:156`
-    (`return portalEmailResponse(code)`); the image goes as a descriptor,
+    (`return portalEmailResponse(code)`); xdg-email's exit 4 ends the share
+    there instead of handing on, since the mail client it ran may already
+    have opened a compose (`xdgEmailExit`, `share_email.go`; seen with a
+    stand-in client named thunderbird on the arm64 VM, 14 October 2026,
+    where the `mailto:` link after it opened a second compose, and exit 4
+    with nothing launched was not seen); the image goes as a descriptor,
     `share_email_linux.go:147` (`"attachment_fds"`), and the image's Email…
     is offered only outside the snap, and only where the
     desktop's mailto: handler is a mail client rather than a browser,
@@ -489,11 +494,17 @@ place a fix on one does not reach the others.
     fraction too, or clamp the offset to the verse's new height
     (docs/BACKLOG.md, "Where the app re-finds the reader's position from
     text", AND-3).
-34. **A note on a range that starts at a verse the edition omits is drawn
-    above the first lit verse's paragraph on the iPhone, iPad, Mac and the
-    website, and at the chapter top on Android and the Windows and Linux
-    pane.** A note sent on Matthew 17:21–22 from an edition that prints
-    verse 21, opened in the BSB, has no verse of its own on the page. The
+34. **A note shown from its link alone, on a range that starts at a verse
+    the edition omits, is drawn above the first lit verse's paragraph on
+    the iPhone, iPad, Mac and the website, and at the chapter top on
+    Android and the Windows and Linux pane.** A note sent on Matthew
+    17:21–22 from an edition that prints verse 21, opened in the BSB, is
+    filed by the chapter's plan at verse 22, the first verse the page has
+    (`displayCopy`, `notes_plan.go`), and its card stands above verse 22's
+    paragraph on every surface; seen so on the Android emulator with Acts
+    8:37–38 in the WEB on 14 October 2026. Only a note shown from the link
+    alone, because it is filed on another passage or the store refused the
+    write (`share_link_open.go`), keeps verse 21, which has no line. The
     Apple panes then take the card's place from the mark's lit range
     (`btIOSNoteAnchorRange`, `reading_ios.go`, and its Mac twin in
     `reading_macos.go`), and the website from the first verse of the
@@ -505,12 +516,13 @@ place a fix on one does not reach the others.
     (`arrivalVerseOnPage`, `notes_arrival.go`), so the chapter opens at its
     top, where the card is on Android and the canvas pane; the website
     lands on its card. A note on the omitted verse alone lights nothing, and
-    every surface parks its card at the top. By the code; not seen on a
-    device. *Risk:* on the iPhone, iPad and Mac such a card can stand below
-    the opening screen, where the reader does not see it. Closes when every
-    surface draws the card in one place, at the verse after the hole or at
-    the chapter top, a choice of design (docs/BACKLOG.md, "Where the app
-    re-finds the reader's position from text", AND-4).
+    every surface parks its card at the top. The two paths are by the code;
+    not seen on a device. *Risk:* on the iPhone, iPad and Mac such a card
+    can stand below the opening screen, where the reader does not see it.
+    Closes when every surface draws such a card in one place, at the verse
+    after the hole or at the chapter top, a choice of design
+    (docs/BACKLOG.md, "Where the app re-finds the reader's position from
+    text", AND-4).
 
 ## Deliberate exclusions
 
