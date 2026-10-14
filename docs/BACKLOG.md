@@ -130,8 +130,9 @@ What 1.2.21 (13 October 2026) adds:
 ## Where the app re-finds the reader's position from text — found 13 October 2026
 
 Planned for: eleven fixes in 1.2.22, made on 13 October 2026, the eleventh
-(P1) on its own branch and merged for the release on 14 October 2026, and the
-rest in later minor releases, each item below naming its own — see
+(P1) on its own branch and merged for the release on 14 October 2026; AND-4,
+VERS-1 and AND-3's arrival point, fixed for 1.2.22 on 14 October 2026; and
+the rest in later minor releases, each item below naming its own — see
 docs/ROADMAP.md.
 
 Each item is a place where the app decides where the reader is — the verse,
@@ -196,12 +197,15 @@ from the offset as before. docs/ANDROID.md says where the band goes.
 `TestAndroidBandsHangAboveTheParagraphNotThePoemLine` holds every verse's
 band to its block's first character on the phone page and the book page, and
 `TestBtBridgeReadsTheParagraphFromThePushedOpeners` holds the bridge to the
-openers at all five places; both fail on `6bf27aee4`. Not yet run on the
-emulator.
+openers at all five places; both fail on `6bf27aee4`. Seen on the emulator
+on 14 October 2026 (Pixel 7, API 35, the WEB's Psalm 121, whose stanzas open
+at verses 1 and 3): notes on verses 5 and 7 hang one card, labelled "1 of 2
+in this chapter", and its pill above verse 3, a note on verse 2 above verse
+1, and a link to verse 5 scrolls from the stanza.
 
-### AND-3. Android restores the reading position by a fraction of the scroll range — FIXED 13 October 2026 on Android, for 1.2.22
+### AND-3. Android restores the reading position by a fraction of the scroll range — FIXED 13 October 2026 on Android, for 1.2.22; the arrival point FIXED 14 October 2026
 
-Planned for: 1.2.22, the Android change fixed on its release branch (the end of this entry);
+Planned for: 1.2.22, the Android change and the arrival point fixed on its release branch (the end of this entry);
 the same change on iOS is not yet placed — see docs/ROADMAP.md.
 
 `captureReadingAnchor` (`reading_android.go:923`) reads only the bridge's
@@ -257,10 +261,57 @@ the verse, and `TestAVerseAnchorKeepsTheTopVerseWhereAFractionMovesIt` runs
 the bridge's arithmetic over a wrapped-layout model across both rotations and
 both text-size changes: the verse anchor keeps a verse of the top line at
 every position short of the end of the range, where the fraction moves it at
-39 to 120 positions of each change. Not yet run on the emulator. iOS was not
+39 to 120 positions of each change. iOS was not
 changed: the iPhone, iPad, Mac and the Windows and Linux pane keep the offset
 into the verse in pixels, and PLATFORM_MATRIX.md records the difference as
 divergence 33 until they take the fraction.
+
+Seen on the emulator on 14 October 2026 (Pixel 7, API 35): in Psalm 119,
+four rotations and the Large, Extra large and Normal text sizes kept verse 61
+within 0.002 of its place, 0.266 into its band, where placing by the fraction
+alone would have put the view 286 to 365 px away; John 3:14 held through a
+rotation. After a link's arrival it failed: the reader's later scrolls were
+dropped, and a rotation or a relaunch put them back at the arrival point.
+
+**The arrival point, FIXED 14 October 2026, for 1.2.22** (`b45fc17c0`,
+`d473150aa`; ROADMAP.md, 1.2.22, row 12). The phone chapter header asks for
+more than a phone is wide (about 432 units with John 3 on the page, against a
+360-unit canvas), so wherever its minimum changed the mobile driver's paint
+laid the reading host out about 425 units wide and then at its real 339, and
+both frames reached the bridge in one UI tick. With no placement pending the
+wide frame armed a reflow that the narrow one undid before the text laid out,
+so `applyPendingReflow` never ran: until the next chapter the scroll listener
+dropped every scroll and `lastAnchor` stayed at the arrival point, which a
+background save kept (1.2.21 saved the live fraction instead). With a
+placement pending, the placement was made in the wide layout and nothing
+re-placed it: a relaunch asked for John 3:13 landed at 11. The same paint
+reached 1.2.21. Two changes:
+
+- Go hands the phone panes only a frame that fits the canvas
+  (`nativeHostFrame`, `reading_host_frame.go`); the settled frame follows in
+  the same paint. `TestAReadingHostWiderThanItsCanvasIsNotHandedToThePane`
+  lays the real phone header out over a stand-in host at 320 to 402 units
+  and replays the paint.
+- The bridge keeps a one-shot placement through a relayout at another width:
+  for 600 ms after an arrival or a restore, until the reader scrolls or a
+  chapter arrives, a change of the text's width re-places it
+  (`replaceAfterWidth`) and a reflow armed meanwhile carries it rather than
+  the scroll position read against the other layout
+  (`placementAwaitsReplace`); and `setFrame` drops an armed reflow when a
+  frame brings the width back before the text laid out.
+  `TestAPlacementMadeAtOneWidthIsKeptWhenTheTextLaysOutAtAnother` runs the
+  bridge's arithmetic over the wrapped-layout model, where the scroll
+  position read against the other layout moves the top verse at 13 of 91
+  placements and the carried placement at none, and holds BtBridge.java to
+  the change; `TestAReflowArmedByAFrameThatComesBackIsDropped` holds the drop.
+
+On the emulator, with scratch builds forcing each case: a restore of John
+3:14 made at 1017 px with the text laid out at 954 px straight after landed
+at 13 in 2 of 3 runs before the bridge's change and left a reflow armed in
+the third, and kept 14 in 3 of 3 after it; a 1276 px frame and the real one
+pushed together after the reader's first scroll dropped 62 scrolls in each of
+3 runs before, saving 14 with the reader on 17, and none after, saving and
+restoring 17. Four rotations then kept verse 17 at 0.728 into it.
 
 ### AI-1. The fixed study actions resolve their passage again on every request — FIXED 13 October 2026, for 1.2.22
 
@@ -300,7 +351,11 @@ prompt, the cache key, the header and Report read the one capture.
 `TestFixedStudyActionsRetainTheirPassage` moves the reader to the next
 chapter under the open panel and holds every fixed action's requests, header
 and Report to the selected verse through Try again, the rebuild of an
-answered panel and the eviction of one in flight.
+answered panel and the eviction of one in flight. Seen on 14 October 2026 on
+the iPhone simulator, with the request seam stubbed so no provider was
+called: Explain on John 3:16, the reader moved to John 4 under the open
+panel, and Try again still sent John 3:16, under the header "John 3:16
+(BSB)", where resolving the passage again gives John 4:16.
 
 ### D. A selection the positional path declines borrows another copy's ending — the interim FIXED 13 October 2026, for 1.2.22
 
@@ -629,8 +684,15 @@ Without a lead every path is the one the other fixes in this entry leave,
 and the counts without it are pinned: the pieces of a word that share
 another place's answer are 12,925, 11,218 and 13,764 there, where completing
 them from the chapter's first copy, before D's interim, gave 118,136,
-106,972 and 127,888. Not yet seen on a simulator, the Mac or the emulator: a
-double-click on the second "Abraham" of Genesis 22:11 sharing "Abraham!".
+106,972 and 127,888. Seen on 14 October 2026 on the iPhone 16 Pro
+simulator (iOS 26.5, the BSB), a development build on the Mac and the
+emulator (API 35), both of those in the WEB: the second "Abraham" of Genesis
+22:11, the second "you" of Matthew 25:12 and a later word of John 3 (the
+second "flesh" of verse 6; the BSB's second "born" of verse 4) share from the
+reader's copy, "Abraham!" and "[Y]ou." where the first copy gives "Abraham
+. . . !" and "[Y]ou . . . .", each byte for byte what Go gives for that lead.
+The phrase sweep run with the lead places none of the WEB's 2,047,710, the
+BSB's 1,956,416 and the WEB Catholic's 2,328,087 phrases wrong.
 
 ### M. The marker strip confirms a verse number by any overlap with that verse's opening
 
@@ -747,10 +809,10 @@ is clamped; Android the same for parity. (B) forecloses answers the headings'
 pass keeps open (docs/ROADMAP.md, Next major version, row 5), so its first
 question, what selecting a heading means, is answered first.
 
-### AND-4. A link to a verse the edition omits opens at the top
+### AND-4. A link to a verse the edition omits opens at the top — FIXED 14 October 2026, for 1.2.22
 
-Planned for: a later minor release, or 1.2.22 if the Google review cycle
-leaves room — see docs/ROADMAP.md.
+Planned for: 1.2.22, fixed on its release branch (the end of this entry);
+whether the mark itself lights stays open — see docs/ROADMAP.md.
 
 A link to a verse the open edition leaves out (Matthew 17:21 in the BSB)
 should open beside the "[21]" mark at verse 22. Android goes to the top with
@@ -775,6 +837,24 @@ that verse's tint or outside its highlight (`android_chapter_html.go:172`,
 lights nothing on any surface; lighting it is a change of its own. "Headings: quoting, notes and links need one
 deliberate pass" records the neighbouring mismatch, a gap mark before a verse
 washed by the markup but not by a single-verse mark's native range.
+
+**FIXED 14 October 2026, for 1.2.22** (`24e9bb0ec`; ROADMAP.md, 1.2.22, row
+15). Arriving at 21, Android's bridge found no row and opened the chapter at
+the top with nothing lit, and so did the canvas pane and the website; the
+Apple panes had no line for it either, and Android did the same for a link
+to 21–22, whose verse 22 the other surfaces lit. Of the 16 New Testament
+holes a link can name, the BSB omits all 16, the WEB and the WEB Catholic 4.
+The chrome now resolves the arrival verse once (`drawnArrivalVerse`,
+`notes_arrival.go`): the verse itself where the chapter has it, otherwise the
+first verse after it, where `gapsBefore` files the hole's mark. Android
+pushes that verse, the canvas pane falls back to the arrival verse's line
+when the mark lights none, as the Apple panes already fall back to it, and
+the web reader lands an unlit link on the page's next verse. A verse past
+the chapter's last is left as named. `TestALinkToAnOmittedVerseArrivesAtTheVerseAfterTheHole`,
+`TestTheCanvasPaneLandsALinkToAnOmittedVerseOnTheVerseAfterIt` and
+`TestTheWebPageLandsALinkToAnOmittedVerseOnTheVerseAfterIt`. The website's
+half reaches readers with the next `scripts/publish-site.sh`. Not seen on a
+device. Whether the mark lights is unchanged and still open.
 
 ### RL-NKJV-1 and RL-NKJV-2. The NKJV red-letter generator places a run after its cursor, and retries from the verse's start
 
@@ -814,7 +894,10 @@ Acts 9:10's run would move to the narration's copy of its words.
 
 Fix, 1 day: carry the run's alphanumeric offset from the USFM walk, verify at
 that position, and fail generation on an ambiguity or an edge inside a word;
-regenerate byte-identical.
+regenerate byte-identical. Not made on 14 October 2026 with the other
+generator fix: the regeneration that proves it needs the publisher's
+`bsb_usfm.zip`, which is not on the machine, and downloading it waits for an
+OK (ROADMAP.md, Decisions still open, 43).
 
 ### RL-WEB-1. The WEB red-letter generator takes the first copy too
 
@@ -829,9 +912,10 @@ one harmless double copy at Revelation 1:8). The seven pinned recoveries at
 Fix, 0.75 day: carry the run's offset within the USFM verse and verify there;
 regenerate byte-identical, which needs the eBible USFM zips downloaded.
 
-### VERS-1. The versification generator declares a missing verse moved to its best text match
+### VERS-1. The versification generator declares a missing verse moved to its best text match — FIXED 14 October 2026, for 1.2.22
 
-Planned for: a later minor release, any — see docs/ROADMAP.md.
+Planned for: 1.2.22, fixed on its release branch (the end of this entry) —
+see docs/ROADMAP.md.
 
 `scripts/gen-versification.py:246` declares a verse an edition lacks moved to
 the candidate scoring highest at 0.30 or more, so a repeated refrain would be
@@ -847,6 +931,23 @@ Fix, 1.5 days: seed moves from known positions (a hand list and the SIL
 `.vrs` mapping lines `scripts/check-versification-refs.py` already
 downloads), let similarity confirm them, refuse an ambiguous move, and pin
 each edition's complete row set.
+
+**FIXED 14 October 2026, for 1.2.22** (`276929af1`; ROADMAP.md, 1.2.22, row
+19). A new slot that repeats a verse the edition kept matches the dropped
+verse as well as any relocation would, and says nothing about where it went.
+A move is now refused when the candidate slot matches some verse the edition
+kept at least as well (`repeats_kept_verse`); the dropped verse is absent and
+the slot extra. Besides Mark 9, an edition numbering Romans' doxology
+16:25–27 and repeating 16:20's benediction at 16:28 had 16:24 moved to 16:28;
+it is now absent. `TestTheVersificationGeneratorDoesNotMoveAVerseToARepeat`
+runs the generator on invented editions of both shapes, with the doxology's
+real relocation as the control, and
+`TestTheVersificationGeneratorReproducesTheShippedTables_LocalOnly` holds its
+output on the local caches to the BSB's and the WEB Catholic's rows of both
+shipped tables, byte for byte before and after. The NKJV's rows were not
+regenerated, its cache being licensed, and the shipped tables are unchanged.
+Seeding moves from the SIL mapping was not needed for the shape found, and
+the row sets are pinned only by the local-only test.
 
 ### Of the same shape, and deliberate or not defects
 
@@ -905,11 +1006,11 @@ VERS-1. And the text-to-speech and chapter strings cross JNI as modified
 UTF-8 (`NewStringUTF`), which would shift later offsets for a character
 outside the Basic Multilingual Plane; none is known in the shipped texts.
 
-## Four rules for a shared note's link, in the app and on the website — decided 7 October 2026
+## Four rules for a shared note's link, in the app and on the website — decided 7 October 2026; FIXED 14 October 2026, for 1.2.22
 
-Planned for: a later minor release, the website's half with the next site
-publish — see docs/ROADMAP.md. Moved on 7 October 2026 to the release after
-1.2.20; 1.2.21 went out without it.
+Planned for: 1.2.22, fixed on its release branch (the end of this entry), the
+website's half with the next site publish — see docs/ROADMAP.md. Moved on 7
+October 2026 to the release after 1.2.20; 1.2.21 went out without it.
 
 The app's note decoder (`DecodeNote`, `share_note.go`) and the website's
 (`cmd/websitegen/assets.go`) must give every payload the same outcome
@@ -934,11 +1035,28 @@ Each goes into `testdata/note_vectors.txt`, which both decoders are held to,
 with a payload the rule changes. The website's half reaches readers with the
 next `scripts/publish-site.sh`.
 
-## A phrase ending on a dash, where its verse has the same words earlier, is cut short — deferred from 1.2.20, 7 October 2026
+**FIXED 14 October 2026, for 1.2.22** (`67f90c576`; ROADMAP.md, 1.2.22, row
+16). Of 16 probe payloads, 10 decoded differently: a line feed inside opened
+in the app and was damaged on the website, two spaces inside the reverse (Go's
+base64 decoder skipped CR and LF, the browser's `atob` spaces); a trailing
+U+FEFF or U+2028 came off on the website only and U+0085 or U+00A0 in the app
+only; the website kept the zero-width space, the word joiner, the tag
+characters and U+2028 and U+2029, so five U+2028 drew five blank lines; and a
+dynamic block with an empty distance table opened in the app and was damaged
+on the website. Each decoder now refuses a byte outside the url-safe alphabet
+and its padding, trims ASCII white space only, and the website's `cleanNote`
+does what `normalizeNote` does, U+2028 and U+2029 reading as line feeds
+before blank lines collapse; its table builder accepts the empty distance
+table. The corpus gains the cleaning and empty-table vectors, append-only;
+`TestTheAppAndTheWebReaderReadNoteLinksAlike` holds the app, the shipped
+decoder under node and the Go mirror to the white-space and newline payloads
+a corpus line cannot hold. NOTE_WIRE_FORMAT.md states the rules. The
+website's pinned digests moved with `reader.js` in both states of the switch.
 
-Planned for: a later minor release, closed by the selection's place in its
-verse or by a rule of its own — see docs/ROADMAP.md. Moved on 7 October 2026
-to the release after 1.2.20.
+## A phrase ending on a dash, where its verse has the same words earlier, is cut short — deferred from 1.2.20, 7 October 2026; FIXED 14 October 2026, for 1.2.22
+
+Planned for: 1.2.22, fixed on its release branch (the end of this entry) —
+see docs/ROADMAP.md. Moved on 7 October 2026 to the release after 1.2.20.
 
 Two BSB phrases end on a dash where their verse ends, and the verse has the
 same words earlier with a word straight after the dash ("herself—or" in
@@ -961,11 +1079,25 @@ no offset reaches, need the end repair's own rule, a dash that ends a word,
 which changes what other drags quote and wants the phrase sweep before and
 after. The known count goes to 0 only when both halves are done.
 
-## A heading that opens as its verse does is shared whole (the BSB's "The LORD Is My Shepherd") — deferred from 1.2.20, 7 October 2026
+**FIXED 14 October 2026, for 1.2.22** (`251e04633`; ROADMAP.md, 1.2.22, row
+17). The phrase sweep run with the lead the panes send places none of the
+6,332,213 phrases wrong, so P1 closed the two with the span. The two with no
+span, Numbers 5:14's "defiled herself—", placed at the verse's earlier
+"herself—or" and shared as "defiled", and 2 John 1's "the truth—" shared as
+"the", were the end repair's: it cut a selection back to its last whole word
+whenever the letter after it was a word rune, and the BSB sets its dashes
+closed up. A drag ending exactly on a dash inside a verse, which the sweep's
+whole-word phrases never form, was cut the same way with a span or a lead
+("If the gate is shut—" shared "If the gate is"). The repair no longer cuts
+after an em dash; the dash comes off as a clause mark does at a cut.
+`TestAPhraseEndingOnADashKeepsItsWords`; the local phrase sweep's known count
+for the BSB falls from 4 to none.
 
-Planned for: a later minor release — see docs/ROADMAP.md. Moved on 7 October
-2026 to the release after 1.2.20; it had been left with the headings'
-decision.
+## A heading that opens as its verse does is shared whole (the BSB's "The LORD Is My Shepherd") — deferred from 1.2.20, 7 October 2026; FIXED 14 October 2026, for 1.2.22
+
+Planned for: 1.2.22, fixed on its release branch (the end of this entry) —
+see docs/ROADMAP.md. Moved on 7 October 2026 to the release after 1.2.20; it
+had been left with the headings' decision.
 
 In 55 BSB psalms the heading under the title opens as verse 1 does ("The
 LORD Is My Shepherd", "The LORD is my shepherd"), and headings elsewhere open
@@ -991,10 +1123,44 @@ of a selection, no heading's start is cut from its end. The heading sweeps
 (`TestPsalmTitleDragSweep`, `TestADragRunOnIntoTheHeadingBelowSweep`) give
 the before and after.
 
-## The NKJV's card route and selection route disagree in the opt-in walk — deferred from 1.2.20, 7 October 2026
+**FIXED 14 October 2026, for 1.2.22** (`7d304b96f`; ROADMAP.md, 1.2.22, row
+13). Measured again on `10b6cbf19`, over drags of one to three words from
+inside a heading through the next verse's number: the BSB shared 15,081 of
+189,996 wrong, under 682 headings, 6,126 of them under a heading above a
+chapter's first verse; the WEB Catholic 7 of 1,824; the WEB none. The lead
+does not help: it reads through the heading and fails its check. Four
+causes, each fixed in the heading repair (`share.go`):
 
-Planned for: a later minor release — see docs/ROADMAP.md. Moved on 7 October
-2026 to the release after 1.2.20.
+- The end trim, with no verse number to confirm it, took the verse's first
+  words for the front of a heading ("The LORD Is My Shepherd 1 The LORD"
+  lost "The LORD"; Genesis 4's "Descendants of Cain 17 And Cain" lost "Cain"
+  to "Cain and Abel" above verse 1). The front now comes off first, after
+  which only a heading below that verse may lose its front from the end, and
+  what is left must end as the verse above that heading does.
+- A heading piece whose words stand together in another verse was found
+  there and never reached the repair. With a span that reaches the verse
+  beneath, a piece confirmed by that verse's number comes off before the
+  search, as a psalm title's does.
+- A stack of title and headings over one verse is matched as one piece, so a
+  drag begun in the upper one is recognised.
+- A heading holding its own verse's number as a word (the note fused into
+  the WEB Catholic's heading over Daniel 3:24) is confirmed at the number
+  after the heading.
+
+A piece run on to the number and to no word of the verse is answered as a
+heading selected on its own. `TestADragFromAHeadingIntoItsVerseSharesTheVersesWords`,
+`TestAHeadingPieceRunOnToAVerseWithNoWordsQuotesNothing` and
+`TestTheHeadingRepairKeepsTheOtherDrags`; over the three local caches every
+such drag now shares its verse's words, cited to that verse
+(`TestEveryDragFromAHeadingIntoItsVerseOverLocalCaches_LocalOnly`). A word
+selected inside a heading on its own is the different defect P4 (ROADMAP.md,
+Later, row 29), which waits on what selecting a heading means.
+
+## The NKJV's card route and selection route disagree in the opt-in walk — deferred from 1.2.20, 7 October 2026; the test FIXED 14 October 2026, for 1.2.22
+
+Planned for: 1.2.22, the test's stand-in fixed on its release branch (the end
+of this entry) — see docs/ROADMAP.md. Moved on 7 October 2026 to the release
+after 1.2.20.
 
 `TestPassageShareEqualsSelectionRouteOverLocalCaches_LocalOnly`
 (`share_passage_test.go`), opt-in by `BIBLETEXT_EXHAUSTIVE=1`, holds the
@@ -1006,6 +1172,21 @@ the test that no longer does what the app does, rather than the app; that is
 not yet shown. Settle which through `realCachePath`, comparing without
 printing the text, fix the test or the route, and the walk passes on all
 four translations.
+
+**The test's stand-in, FIXED 14 October 2026, for 1.2.22** (`4af99b741`;
+ROADMAP.md, 1.2.22, row 20). `selectionRouteRaw`, the test's stand-in for
+what a pane hands the selection route, built each verse from `v.Text`, the
+publisher's "Lord"; every pane hands over the drawn form, `smallCapsText`,
+"Lᴏʀᴅ" (`android_chapter_html.go`, `reading.go`,
+`reading_styled_layout.go`). With no NKJV cache on the machine, the WEB was
+given the NKJV's shape, "LORD" written "Lord" under a small-capitals span: in
+its Genesis, Exodus, Psalms and Isaiah 11,884 of 29,441 passages differ with
+the old stand-in and none with the drawn text, and the WEB as it is, the
+control, none with either. The stand-in now draws the verse, and
+`TestPassageShareEqualsSelectionRoute` gains a fixture with the divine name in
+small capitals, which the old stand-in fails in all 26 of its 40 passages
+that reach a marked verse. Left: the opt-in walk over a real NKJV cache,
+when one is on the machine.
 
 ## Explicit permission before text goes to a third-party AI (App Store guideline 5.1.2(i)) — found 13 October 2026
 
@@ -1064,10 +1245,10 @@ encrypted in transit. One Play edit at a time (docs/RELEASING.md, stage 6).
    Store's label can stay as it is: a message the reader chooses to send to
    support is the customer-service case Apple lets an app leave undeclared.
 
-## Three comments 1.2.20 left describing the code before it
+## Three comments 1.2.20 left describing the code before it — all three corrected for 1.2.22
 
-The website's was corrected on 13 October 2026, for 1.2.22. Planned for: the
-other two with any change to their files — see docs/ROADMAP.md.
+The website's was corrected on 13 October 2026, for 1.2.22, and the other two
+on 14 October 2026 (`cdd6a2a3a`; ROADMAP.md, 1.2.22, row 21).
 
 - The stylesheet's comment on the psalm title (`.text p.pst`,
   `cmd/websitegen/assets.go`) says Android from API 35 justifies a wrapped
@@ -1081,9 +1262,11 @@ other two with any change to their files — see docs/ROADMAP.md.
 - `notes_sticker_native_on.go` says the Windows and Linux pane has no
   sticker and so keeps the banner; that pane draws its own band, card and
   tail and the banner stands down for it (`notes_sticker_native_off.go`).
+  Corrected 14 October 2026.
 - `bibleTextDismissMenu`'s comment (`reading_ios.go`) says resigning first
   responder clears the selection; it hides it, and the text view keeps the
-  range ("iPad and Mac: where the share popover points").
+  range ("iPad and Mac: where the share popover points"). Corrected 14
+  October 2026.
 
 ## 1.2.20's roadmap rows with no entry of their own — released 13 October 2026
 
@@ -1428,6 +1611,16 @@ mail client is installed on the Linux VM.
 The fix: post the outcome back to the sheet — a line under the buttons when
 the compose fails, its wording to be approved — and stop at the first route
 that started a compose, rather than handing on after any non-zero exit.
+
+**The second compose, FIXED 14 October 2026, for 1.2.22** (`f4f09bc04`;
+ROADMAP.md, 1.2.22, row 18). `xdg-email`'s exit 4, "the action failed", is
+the launcher's failure reported after it ran the mail client, which may by
+then have opened a compose; it now ends the share (`xdgEmailExit`, in the
+shared `share_email.go` so every platform's test run holds it). Exits 1, 2,
+3 and 5 refuse before anything is launched and still hand on to the
+`mailto:` link. `TestXDGEmailEndsTheComposeOnlyWhereItMayHaveOpenedOne`.
+Still not seen on a desktop. The line under the buttons waits on its
+wording.
 
 ## A dropped session bus spins a core until the portal wait ends (Linux) — FIXED 6 October 2026, for 1.2.20
 
@@ -2550,10 +2743,10 @@ Go seam reaches it; the contract matches the request as a whole line, so a
 request commented out fails it as a missing one does. Device check:
 `docs/VISUAL_TESTS.md`, V12 (the note composer) and regression pin 20.
 
-## iPad and Mac: where the share popover points — seen on both; the verse of the day's share FIXED 7 October 2026
+## iPad and Mac: where the share popover points — seen on both; the verse of the day's share FIXED 7 October 2026; Share with note's arrow FIXED 14 October 2026
 
-Planned for: Share with note's arrow (the end of this entry) in a later
-minor release; the rest was looked at and fixed in 1.2.20 — see
+Planned for: Share with note's arrow (the end of this entry) fixed for 1.2.22
+(ROADMAP.md, 1.2.22, row 14); the rest was looked at and fixed in 1.2.20 — see
 docs/ROADMAP.md. The iPad half was looked at on 6 October 2026 (below):
 every selection verb points at the selection, and the verse of the day's
 Share pointed at the middle of the screen, not at its icon. The Mac half was
