@@ -10,7 +10,10 @@ package bibletext
 // at or after the end of the run before it, so a run could land inside a
 // longer word ("Go" in "Gospel") or on the same words earlier in the verse,
 // and the NKJV's searched again from the verse's start and folded what it
-// found into the run before, dropping the run and reporting success.
+// found into the run before, dropping the run and reporting success. A run
+// placed by its offset alone has the same defect where the runtime verse
+// differs before it: the offset can fall on a later copy of its words, so
+// the text before the run is compared too.
 
 import (
 	"encoding/json"
@@ -170,29 +173,65 @@ func TestTheBSBRedLetterGeneratorPlacesEachRunAtItsOwnPlace(t *testing.T) {
 	})
 }
 
-// Two refusals: the runtime text differs before the run and holds its words
-// twice, so nothing says which copy was marked; and the only place for the
-// run's letters is the start of a longer word.
+// redLetterGenModes are the two ways each refusal is run: it must stand
+// whether or not a run may be placed by the one copy of its words.
+var redLetterGenModes = []struct {
+	name  string
+	flags []string
+}{{"by default", nil}, {"with --allow-relocated", []string{"--allow-relocated"}}}
+
+// runBSBGen runs the BSB generator on an invented Matthew 1, as USFM, and its
+// runtime verses.
+func runBSBGen(t *testing.T, usfm string, text map[int]string, flags ...string) (string, string, error) {
+	t.Helper()
+	dir := t.TempDir()
+	writeRedLetterGenFile(t, filepath.Join(dir, "usfm", "MAT.usfm"), usfm)
+	cache := filepath.Join(dir, "bsb.json")
+	writeRedLetterGenCache(t, cache, text)
+	return runRedLetterGen(t, filepath.Join(dir, "out.go"), append([]string{
+		filepath.Join("scripts", "gen-bsb-redletter.py"), "--usfm", filepath.Join(dir, "usfm"), "--bsb", cache,
+	}, flags...)...)
+}
+
+// runWEBGen runs the WEB generator with the same invented source and runtime
+// verses standing for both editions.
+func runWEBGen(t *testing.T, usfm string, text map[int]string, flags ...string) (string, string, error) {
+	t.Helper()
+	dir := t.TempDir()
+	writeRedLetterGenFile(t, filepath.Join(dir, "web", "70-MATeng-web.usfm"), usfm)
+	writeRedLetterGenFile(t, filepath.Join(dir, "webc", "70-MATeng-web-c.usfm"), usfm)
+	writeRedLetterGenCache(t, filepath.Join(dir, "web.json"), text)
+	writeRedLetterGenCache(t, filepath.Join(dir, "webc.json"), text)
+	return runRedLetterGen(t, filepath.Join(dir, "out.go"), append([]string{
+		filepath.Join("scripts", "gen-web-redletter.py"),
+		"--web-usfm", filepath.Join(dir, "web"), "--web-cache", filepath.Join(dir, "web.json"),
+		"--webc-usfm", filepath.Join(dir, "webc"), "--webc-cache", filepath.Join(dir, "webc.json"),
+	}, flags...)...)
+}
+
+// The refusals: the runtime text differs before the run and holds its words
+// twice, so nothing says which copy was marked, whether the run's offset
+// falls on neither copy or on the later one; and the only place for the run's
+// letters is the start of a longer word.
 func TestTheBSBRedLetterGeneratorRefusesARunItCannotPlace(t *testing.T) {
 	for _, c := range []struct{ name, usfm, runtime string }{
 		{"two copies, and the text before the run differs",
 			`\v 1 They asked him, and he said, \wj “Go.”\wj*`, "He said, “Go.” They said, “Go.”"},
+		{"two copies, the text before the run differs, and its offset falls on the later copy",
+			`\v 1 Jesus answered them, \wj “Come.”\wj* And they, “Come.”`, "He said, “Come.” And they, “Come.”"},
 		{"an end inside a word", `\v 1 He said, \wj Go\wj* now.`, "He said, Gospel now."},
 	} {
-		t.Run(c.name, func(t *testing.T) {
-			dir := t.TempDir()
-			writeRedLetterGenFile(t, filepath.Join(dir, "usfm", "MAT.usfm"), "\\id MAT\n\\c 1\n\\p\n"+c.usfm+"\n")
-			cache := filepath.Join(dir, "bsb.json")
-			writeRedLetterGenCache(t, cache, map[int]string{1: c.runtime})
-			src, log, err := runRedLetterGen(t, filepath.Join(dir, "out.go"),
-				filepath.Join("scripts", "gen-bsb-redletter.py"), "--usfm", filepath.Join(dir, "usfm"), "--bsb", cache)
-			if err == nil {
-				t.Fatalf("the generator wrote a table:\n%s", src)
-			}
-			if !strings.Contains(log, "Matthew 1:1") {
-				t.Errorf("the refusal does not name the verse:\n%s", log)
-			}
-		})
+		for _, mode := range redLetterGenModes {
+			t.Run(c.name+", "+mode.name, func(t *testing.T) {
+				src, log, err := runBSBGen(t, "\\id MAT\n\\c 1\n\\p\n"+c.usfm+"\n", map[int]string{1: c.runtime}, mode.flags...)
+				if err == nil {
+					t.Fatalf("the generator wrote a table:\n%s", src)
+				}
+				if !strings.Contains(log, "Matthew 1:1") {
+					t.Errorf("the refusal does not name the verse:\n%s", log)
+				}
+			})
+		}
 	}
 }
 
@@ -247,27 +286,97 @@ func TestTheWEBRedLetterGeneratorRefusesARunItCannotPlace(t *testing.T) {
 	for _, c := range []struct{ name, usfm, runtime string }{
 		{"two copies, and the text before the run differs",
 			`\v 1 They asked him, and he said, \wj “Go.”\wj*`, "He said, “Go.” They said, “Go.”"},
+		{"two copies, the text before the run differs, and its offset falls on the later copy",
+			`\v 1 Jesus answered them, \wj “Come.”\wj* And they, “Come.”`, "He said, “Come.” And they, “Come.”"},
 		{"an end inside a word", `\v 1 He said, \wj Go\wj* now.`, "He said, Gospel now."},
 	} {
-		t.Run(c.name, func(t *testing.T) {
-			dir := t.TempDir()
-			usfm := "\\id MAT\n\\c 1\n\\p\n" + c.usfm + "\n"
-			writeRedLetterGenFile(t, filepath.Join(dir, "web", "70-MATeng-web.usfm"), usfm)
-			writeRedLetterGenFile(t, filepath.Join(dir, "webc", "70-MATeng-web-c.usfm"), usfm)
-			writeRedLetterGenCache(t, filepath.Join(dir, "web.json"), map[int]string{1: c.runtime})
-			writeRedLetterGenCache(t, filepath.Join(dir, "webc.json"), map[int]string{1: c.runtime})
-			src, log, err := runRedLetterGen(t, filepath.Join(dir, "out.go"),
-				filepath.Join("scripts", "gen-web-redletter.py"),
-				"--web-usfm", filepath.Join(dir, "web"), "--web-cache", filepath.Join(dir, "web.json"),
-				"--webc-usfm", filepath.Join(dir, "webc"), "--webc-cache", filepath.Join(dir, "webc.json"))
+		for _, mode := range redLetterGenModes {
+			t.Run(c.name+", "+mode.name, func(t *testing.T) {
+				src, log, err := runWEBGen(t, "\\id MAT\n\\c 1\n\\p\n"+c.usfm+"\n", map[int]string{1: c.runtime}, mode.flags...)
+				if err == nil {
+					t.Fatalf("the generator wrote a table:\n%s", src)
+				}
+				if !strings.Contains(log, "Matthew 1:1") {
+					t.Errorf("the refusal does not name the verse:\n%s", log)
+				}
+			})
+		}
+	}
+}
+
+// A run whose verse differs before it in the runtime text, and whose words the
+// verse holds once: by default generation fails and names the verse; with
+// --allow-relocated the run is placed on that copy and the summary lists it.
+func TestTheRedLetterGeneratorsPlaceARunByItsOnlyCopyOnlyWhenAllowed(t *testing.T) {
+	runtime := map[int]string{1: "He said, “Follow me.” And they went."}
+	usfm := "\\id MAT\n\\c 1\n\\p\n\\v 1 Jesus answered them, \\wj “Follow me.”\\wj* And they went.\n"
+	nkjv := `<p class="p">` + nkjvGenVerse(1, `Jesus answered them, <span class="wj">“Follow me.”</span> And they went.`) + `</p>`
+	for _, g := range []struct {
+		name, table, listed string
+		run                 func(t *testing.T, flags ...string) (string, string, error)
+	}{
+		{"bsb", "bsbRedLetterSpans", "placed by its only copy: Matthew 1:1", func(t *testing.T, flags ...string) (string, string, error) {
+			return runBSBGen(t, usfm, runtime, flags...)
+		}},
+		{"web", "webRedLetterSpans", "placed by its only copy: Matthew 1:1", func(t *testing.T, flags ...string) (string, string, error) {
+			return runWEBGen(t, usfm, runtime, flags...)
+		}},
+		{"nkjv", "nkjvRedLetterSpans", "not their place: Matthew 1:1 run 1", func(t *testing.T, flags ...string) (string, string, error) {
+			return runNKJVGen(t, nkjv, runtime, nil, flags...)
+		}},
+	} {
+		t.Run(g.name+", by default", func(t *testing.T) {
+			src, log, err := g.run(t)
 			if err == nil {
-				t.Fatalf("the generator wrote a table:\n%s", src)
+				t.Fatalf("the generator wrote a table:\n%s\n%s", src, log)
 			}
-			if !strings.Contains(log, "Matthew 1:1") {
-				t.Errorf("the refusal does not name the verse:\n%s", log)
+			if !strings.Contains(log, "Matthew 1:1") || !strings.Contains(log, "--allow-relocated") {
+				t.Errorf("the refusal does not name the verse and the option:\n%s", log)
+			}
+		})
+		t.Run(g.name+", with --allow-relocated", func(t *testing.T) {
+			src, log, err := g.run(t, "--allow-relocated")
+			if err != nil {
+				t.Fatalf("%v\n%s", err, log)
+			}
+			checkRedLetterGenSpans(t, redLetterGenSpans(t, src, g.table), map[string]string{
+				"Matthew 1:1": lastCopy(runtime[1], "“Follow me.”"),
+			})
+			if !strings.Contains(log, g.listed) {
+				t.Errorf("the summary does not list the run (%q):\n%s", g.listed, log)
 			}
 		})
 	}
+}
+
+// A chapter's label and description and a verse's alternate or published
+// number begin with the letters of the chapter and verse markers. They are
+// not chapter or verse numbers, and their contents are not the verse's text.
+func TestTheRedLetterGeneratorsReadChapterAndVerseMarkersExactly(t *testing.T) {
+	usfm := `\id MAT
+\cl Chapter
+\c 1
+\cd An invented description of the chapter.
+\p
+\v 1 \va 2\va* He said, \wj “Come.”\wj*
+\v 2 \vp 2a\vp* They went, and he said, \wj “Go.”\wj*
+`
+	text := map[int]string{1: "He said, “Come.”", 2: "They went, and he said, “Go.”"}
+	want := map[string]string{"Matthew 1:1": lastCopy(text[1], "“Come.”"), "Matthew 1:2": lastCopy(text[2], "“Go.”")}
+	t.Run("bsb", func(t *testing.T) {
+		src, log, err := runBSBGen(t, usfm, text)
+		if err != nil {
+			t.Fatalf("%v\n%s", err, log)
+		}
+		checkRedLetterGenSpans(t, redLetterGenSpans(t, src, "bsbRedLetterSpans"), want)
+	})
+	t.Run("web", func(t *testing.T) {
+		src, log, err := runWEBGen(t, usfm, text)
+		if err != nil {
+			t.Fatalf("%v\n%s", err, log)
+		}
+		checkRedLetterGenSpans(t, redLetterGenSpans(t, src, "webRedLetterSpans"), want)
+	})
 }
 
 // The BSB and WEB generators, run on the publishers' own USFM and the caches
@@ -363,15 +472,19 @@ func nkjvGenVerse(v int, inner string) string {
 		`<span data-number="%d" data-sid="MAT 1:%d" class="v">%d</span>%s</span>`, v, v, v, v, v, inner)
 }
 
-func runNKJVGen(t *testing.T, matthew1 string, text map[int]string, skip ...string) (string, string, error) {
+// runNKJVGen derives the NKJV's table from an invented Matthew 1, as API.Bible
+// serves it, and the app's verses, with the chapters named in skip left out of
+// the cache.
+func runNKJVGen(t *testing.T, matthew1 string, text map[int]string, skip []string, flags ...string) (string, string, error) {
 	t.Helper()
 	dir := t.TempDir()
 	writeNKJVGenCache(t, filepath.Join(dir, "html"), matthew1, skip...)
 	cache := filepath.Join(dir, "nkjv.json")
 	writeRedLetterGenCache(t, cache, text)
-	return runRedLetterGen(t, filepath.Join(dir, "out.go"),
+	return runRedLetterGen(t, filepath.Join(dir, "out.go"), append([]string{
 		filepath.Join("scripts", "gen-nkjv-redletter.py"), "--no-fetch",
-		"--html-cache", filepath.Join(dir, "html"), "--app-cache", cache)
+		"--html-cache", filepath.Join(dir, "html"), "--app-cache", cache,
+	}, flags...)...)
 }
 
 // The NKJV's markup is HTML, read for its text; a verse's number and a
@@ -396,7 +509,7 @@ func TestTheNKJVRedLetterGeneratorPlacesEachRunAtItsOwnPlace(t *testing.T) {
 		5: "He said, “Follow",
 		6: "me now.” And they went.",
 	}
-	src, log, err := runNKJVGen(t, matthew1, text)
+	src, log, err := runNKJVGen(t, matthew1, text, nil)
 	if err != nil {
 		t.Fatalf("gen-nkjv-redletter.py: %v\n%s", err, log)
 	}
@@ -413,9 +526,10 @@ func TestTheNKJVRedLetterGeneratorPlacesEachRunAtItsOwnPlace(t *testing.T) {
 // Each refusal is a table the generator used to write and report as made: a
 // second run whose words the app's verse holds only before the first (it
 // searched again from the start and folded the run into the first, so the
-// run shipped black); a run whose only place is the start of a longer word;
-// and a chapter missing from the cache, whose verses were left out of the
-// table, which reads as black letter.
+// run shipped black); a run whose verse differs before it, so that its count
+// falls on a later copy of its words; a run whose only place is the start of
+// a longer word; and a chapter missing from the cache, whose verses were left
+// out of the table, which reads as black letter.
 func TestTheNKJVRedLetterGeneratorRefusesWhatItCannotPlace(t *testing.T) {
 	for _, c := range []struct {
 		name, verse, text string
@@ -424,23 +538,59 @@ func TestTheNKJVRedLetterGeneratorRefusesWhatItCannotPlace(t *testing.T) {
 		{"a second run found only before the first",
 			nkjvGenVerse(1, `<span class="wj">Come.</span> He went on. <span class="wj">Come.</span>`),
 			"Come. He went on. Go.", nil},
+		{"two copies, the text before the run differs, and its count falls on the later copy",
+			nkjvGenVerse(1, `Then Jesus answered them, <span class="wj">“Come.”</span> And they, “Come.”`),
+			"He said, “Come.” And they, “Come.”", nil},
 		{"an end inside a word",
 			nkjvGenVerse(1, `He said, <span class="wj">Go</span> now.`), "He said, Gospel now.", nil},
 		{"a chapter missing from the cache",
 			nkjvGenVerse(1, `He said, <span class="wj">“Go.”</span>`), "He said, “Go.”", []string{"MRK.3"}},
 	} {
-		t.Run(c.name, func(t *testing.T) {
-			src, log, err := runNKJVGen(t, `<p class="p">`+c.verse+`</p>`, map[int]string{1: c.text}, c.skip...)
-			if err == nil {
-				t.Fatalf("the generator wrote a table:\n%s\n%s", src, log)
-			}
-			want := "Matthew 1:1"
-			if c.skip != nil {
-				want = c.skip[0]
-			}
-			if !strings.Contains(log, want) {
-				t.Errorf("the refusal does not name %s:\n%s", want, log)
-			}
-		})
+		for _, mode := range redLetterGenModes {
+			t.Run(c.name+", "+mode.name, func(t *testing.T) {
+				src, log, err := runNKJVGen(t, `<p class="p">`+c.verse+`</p>`, map[int]string{1: c.text}, c.skip, mode.flags...)
+				if err == nil {
+					t.Fatalf("the generator wrote a table:\n%s\n%s", src, log)
+				}
+				want := "Matthew 1:1"
+				if c.skip != nil {
+					want = c.skip[0]
+				}
+				if !strings.Contains(log, want) {
+					t.Errorf("the refusal does not name %s:\n%s", want, log)
+				}
+			})
+		}
+	}
+}
+
+// A derive-only run reads no key: the generator, loaded and run with
+// --no-fetch while an invented key is in its environment, holds the key in
+// none of its globals afterwards, and has taken it out of the environment of
+// what it starts.
+func TestTheNKJVRedLetterGeneratorKeepsNoKeyWhenItDoesNotFetch(t *testing.T) {
+	py := pythonForScripts(t)
+	dir := t.TempDir()
+	writeNKJVGenCache(t, filepath.Join(dir, "html"), `<p class="p">`+nkjvGenVerse(1, `He said, <span class="wj">“Go.”</span>`)+`</p>`)
+	cache := filepath.Join(dir, "nkjv.json")
+	writeRedLetterGenCache(t, cache, map[int]string{1: "He said, “Go.”"})
+	const invented = "invented-key-for-the-derive-only-test"
+	probe := `import importlib.util, os, sys
+spec = importlib.util.spec_from_file_location("gen_nkjv_redletter", sys.argv[1])
+gen = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(gen)
+sys.argv = sys.argv[1:]
+gen.main()
+held = sorted(name for name, value in vars(gen).items() if isinstance(value, str) and "` + invented + `" in value)
+print("globals holding the key:", held, "; in the environment:", "BIBLE_API_KEY" in os.environ)
+sys.exit(1 if held or "BIBLE_API_KEY" in os.environ else 0)
+`
+	// -B: loading the script as a module would otherwise leave its bytecode
+	// beside it in the checkout.
+	cmd := exec.Command(py, "-I", "-B", "-c", probe, filepath.Join("scripts", "gen-nkjv-redletter.py"), "--no-fetch",
+		"--html-cache", filepath.Join(dir, "html"), "--app-cache", cache, "--out", filepath.Join(dir, "out.go"))
+	cmd.Env = append(os.Environ(), "BIBLE_API_KEY="+invented)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("%v\n%s", err, out)
 	}
 }

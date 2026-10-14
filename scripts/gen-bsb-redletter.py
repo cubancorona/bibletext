@@ -13,15 +13,22 @@ The publisher USFM and runtime supplier are allowed to differ in whitespace and
 typography. Each run is placed by its offset in its verse, counted in letters
 and digits while walking the USFM, so a run's words that also occur earlier in
 the verse (in narration, or inside a longer word: "Go" in "Gospel") cannot
-take its place. At that offset, exact punctuation-preserving matching is
-attempted first. A case-insensitive alphanumeric match is used only when
-typography differs; its boundaries are expanded to include adjacent quotation
-punctuation. When the run's letters are not at its offset, the runtime text
-differs before the run, and the run is placed only if its letters occur once
-in the whole verse. Every publisher-marked run must place, with neither end
-inside a word. A source/runtime revision mismatch therefore fails generation
-instead of silently substituting another copy of the words or another
-edition's judgement.
+take its place. The walk carries the letters before the run as well as their
+count, and the run is placed at its offset only when the runtime verse's
+letters before it are the same ones. There, exact punctuation-preserving
+matching is attempted first. A case-insensitive alphanumeric match is used
+only when typography differs; its boundaries are expanded to include adjacent
+quotation punctuation.
+
+When the letters before the run differ, or the run's letters are not at its
+offset, the runtime text is another revision before the run, and generation
+fails. With --allow-relocated, such a run is placed instead where its letters
+occur once in the whole verse, after the run before it, and the summary lists
+it; with no copy, or two or more, nothing says which copy the publisher
+marked, and generation fails all the same. Every publisher-marked run must
+place, with neither end inside a word. A source/runtime revision mismatch
+therefore fails generation instead of silently substituting another copy of
+the words or another edition's judgement.
 
 Official source: https://berean.bible/downloads.htm
 Direct archive:  https://bereanbible.com/bsb_usfm.zip
@@ -58,12 +65,19 @@ NON_VERSE_PARAGRAPH = re.compile(
 )
 # Paragraph markers that resume verse text after one of those.
 VERSE_PARAGRAPH = re.compile(r"p|m|mi|nb|pc|pr|pm|pmo|pmc|pmr|pi\d*|ph\d*|li\d*|q\d*|qr|qc|qm\d*|qd|b")
+# A chapter or verse number token, exactly: \cl, \cd, \ca, \va and \vp begin
+# with the same letters and are other markers.
+CHAPTER_TOKEN = re.compile(r"\\c\s+(\d+)")
+VERSE_TOKEN = re.compile(r"\\v\s+(\d+)")
 
 
 def clean_usfm(text):
     """Remove non-verse payloads while retaining character-marker contents."""
     text = re.sub(r"\\f\s.*?\\f\*", "", text, flags=re.S)
     text = re.sub(r"\\x\s.*?\\x\*", "", text, flags=re.S)
+    # Alternate and published chapter and verse numbers are numbering, which
+    # the runtime verse does not hold.
+    text = re.sub(r"\\(ca|va|vp)\s.*?\\\1\*", "", text, flags=re.S)
     # The third-printing files use this literal placeholder at a handful of
     # paragraph-spanning quotation ends; it is editorial metadata, not text.
     text = text.replace("[’’]", "")
@@ -80,12 +94,13 @@ def book_code(path):
 
 
 def wj_texts(usfm_dir):
-    """Return {book: {(chapter, verse): [(offset, publisher-marked text), ...]}}.
+    """Return {book: {(chapter, verse): [(before, publisher-marked text), ...]}}.
 
-    offset is where the run begins in its verse, counted in letters and digits
-    as alphanumeric_map counts them: the verse's own text before the marker,
-    without footnotes, cross-references or heading lines. A run that carries
-    on into the next verse begins that verse at 0.
+    before is the verse's own letters and digits ahead of the run, casefolded
+    as alphanumeric_map gives them: its text before the marker, without
+    footnotes, cross-references or heading lines. Its length is the run's
+    offset in the verse. A run that carries on into the next verse begins
+    that verse with nothing before it.
     """
     out = {}
     for path in glob.glob(os.path.join(usfm_dir, "*.usfm")):
@@ -97,17 +112,20 @@ def wj_texts(usfm_dir):
         in_wj = False
         in_heading = False
         current = []
-        letters = run_start = 0
+        letters = []
+        run_before = ""
         marked = {}
 
         def flush():
             if in_wj and current and chapter and verse:
                 value = re.sub(r"\s+", " ", "".join(current)).strip()
                 if value:
-                    marked.setdefault((chapter, verse), []).append((run_start, value))
+                    marked.setdefault((chapter, verse), []).append((run_before, value))
 
         token_pattern = r"\\wj\*|\\wj\b|\\c\s+\d+|\\v\s+\d+|\\[+a-z0-9-]+\*?|[^\\]+"
         for token in re.findall(token_pattern, text):
+            chapter_token = CHAPTER_TOKEN.fullmatch(token)
+            verse_token = VERSE_TOKEN.fullmatch(token)
             if token.startswith("\\wj*"):
                 flush()
                 current = []
@@ -116,19 +134,20 @@ def wj_texts(usfm_dir):
                 flush()
                 current = []
                 in_wj = True
-                run_start = letters
-            elif token.startswith("\\c"):
+                run_before = "".join(letters)
+            elif chapter_token:
                 flush()
                 current = []
-                chapter = int(token.split()[1])
+                chapter = int(chapter_token.group(1))
                 verse = 0
-                letters = 0
+                letters = []
                 in_heading = False
-            elif token.startswith("\\v"):
+            elif verse_token:
                 flush()
                 current = []
-                verse = int(token.split()[1])
-                letters = run_start = 0
+                verse = int(verse_token.group(1))
+                letters = []
+                run_before = ""
                 in_heading = False
             elif token.startswith("\\"):
                 marker = token[1:].rstrip("*").lstrip("+")
@@ -140,7 +159,7 @@ def wj_texts(usfm_dir):
                 if in_wj and chapter and verse:
                     current.append(token)
                 if not in_heading:
-                    letters += len(alphanumeric_map(token)[0])
+                    letters.append(alphanumeric_map(token)[0])
         flush()
         out[BOOK[code]] = marked
     return out
@@ -242,27 +261,35 @@ def inside_word(text, index):
     return 0 < index < len(text) and text[index - 1].isalnum() and text[index].isalnum()
 
 
-def place(haystack, needle, offset, start):
+def place(haystack, needle, before, start, allow_relocated=False):
     """Place one publisher-marked run in its runtime verse.
 
-    Returns ((begin, end), mode, relocated, None), or (None, None, False, why).
-    The run goes at its carried offset when its letters are there. When they
-    are not, the runtime text differs from the publisher's before the run, and
-    the run is placed only where its letters occur once in the whole verse;
-    with no copy, or two or more, nothing says which copy the publisher marked.
-    A placement with either end inside a word is refused as well.
+    before is the verse's letters ahead of the run in the publisher's text
+    (wj_texts); its length is the run's offset. Returns ((begin, end), mode,
+    relocated, None), or (None, None, False, why). The run goes at its offset
+    when the runtime verse has the same letters before it and the run's
+    letters there. Otherwise the runtime text differs from the publisher's
+    before the run, and the run is refused, unless allow_relocated is set and
+    its letters occur once in the whole verse, after the run before it; with
+    no copy, or two or more, nothing says which copy the publisher marked. A
+    placement with either end inside a word is refused as well.
     """
-    found, mode = anchored_locate(haystack, needle, offset, start)
+    offset = len(before)
+    if alphanumeric_map(haystack)[0][:offset] == before:
+        found, mode = anchored_locate(haystack, needle, offset, start)
+    else:
+        found, mode = None, "missing"
     relocated = False
     if found is None:
+        why = f"the text before it differs from the publisher's, or its letters are not at its offset {offset}"
         copies = letter_copies(haystack, needle)
         if len(copies) != 1:
-            return None, None, False, (
-                f"its letters are not at its offset {offset}, and the verse holds {len(copies)} copies of them"
-            )
+            return None, None, False, f"{why}, and the verse holds {len(copies)} copies of them"
         found, mode = anchored_locate(haystack, needle, copies[0], start)
         if found is None:
-            return None, None, False, "its letters are not at its offset, and their one copy lies before the run before it"
+            return None, None, False, f"{why}, and their one copy lies before the run before it"
+        if not allow_relocated:
+            return None, None, False, f"{why}; their one copy is at {found}, taken only with --allow-relocated"
         relocated = True
     begin, end = found
     if inside_word(haystack, begin) or inside_word(haystack, end):
@@ -283,7 +310,7 @@ def load_runtime_bsb(cache_path):
     return (blob.get("data") or blob)["Verses"]
 
 
-def build(usfm_dir, cache_path):
+def build(usfm_dir, cache_path, allow_relocated=False):
     runtime = load_runtime_bsb(cache_path)
     spans = {}
     lengths = {}
@@ -305,8 +332,8 @@ def build(usfm_dir, cache_path):
             found_spans = []
             cursor = 0
             failed = False
-            for offset, source_text in source_runs:
-                found, mode, moved, why = place(runtime_text, source_text, offset, cursor)
+            for before, source_text in source_runs:
+                found, mode, moved, why = place(runtime_text, source_text, before, cursor, allow_relocated)
                 if found is None:
                     failures.append((key, f"{why}: {source_text[:100]!r}"))
                     failed = True
@@ -372,9 +399,16 @@ def main():
     parser.add_argument("--bsb", required=True, help="the app's BSB cache JSON")
     parser.add_argument("--out", default="red_letter_bsb_data.go")
     parser.add_argument("--verbose", action="store_true", help="show normalized source/runtime matches")
+    parser.add_argument(
+        "--allow-relocated",
+        action="store_true",
+        help="place a run whose verse differs before it by the one copy of its letters, and list it",
+    )
     args = parser.parse_args()
 
-    spans, lengths, hashes, exact, normalized, normalized_matches, relocated = build(args.usfm, args.bsb)
+    spans, lengths, hashes, exact, normalized, normalized_matches, relocated = build(
+        args.usfm, args.bsb, args.allow_relocated
+    )
     with open(args.out, "w", encoding="utf-8") as output:
         output.write(emit_go(spans, lengths, hashes))
     subprocess.run(["gofmt", "-w", args.out], check=True)
