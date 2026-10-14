@@ -140,6 +140,34 @@ func TestOnlyNothingToComposeWithFallsThrough(t *testing.T) {
 	})
 }
 
+// XDG-EMAIL'S "THE ACTION FAILED" ENDS THE COMPOSE. Its 4 is a failure the
+// launcher reported after xdg-email ran the mail client, which may by then
+// have opened a compose; the mailto: link after it opened a second. Its
+// other refusals come before anything is launched and hand on, as does a
+// clean exit's success. Mutation: every non-zero exit handing on, as it did.
+func TestXDGEmailEndsTheComposeOnlyWhereItMayHaveOpenedOne(t *testing.T) {
+	if xdgEmailExit(0) != nil {
+		t.Error("0 must be success")
+	}
+	for _, c := range []struct {
+		code      int
+		wantTried int
+	}{{1, 2}, {2, 2}, {3, 2}, {4, 1}, {5, 2}} {
+		tried := 0
+		mailto := func(string, string, string) error { tried++; return nil }
+		err := composeByRoutes([]mailRoute{
+			func(string, string, string) error { return xdgEmailExit(c.code) },
+			mailto,
+		}, "s", "b", "")
+		if want := c.wantTried - 1; tried != want {
+			t.Errorf("xdg-email exiting %d: the mailto: link was opened %d times, want %d", c.code, tried, want)
+		}
+		if (err == nil) != (c.wantTried == 2) {
+			t.Errorf("xdg-email exiting %d: composeByRoutes = %v", c.code, err)
+		}
+	}
+}
+
 // writeDesktopEntry writes applications/<id> under dir.
 func writeDesktopEntry(t *testing.T, dir, id, entry string) {
 	t.Helper()

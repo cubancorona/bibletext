@@ -298,12 +298,12 @@ place a fix on one does not reach the others.
     `share_email_linux.go:147` (`"attachment_fds"`), and the image's Email…
     is offered only outside the snap, and only where the
     desktop's mailto: handler is a mail client rather than a browser,
-    `share_email.go:296` (`return !f.confined && (f.portalEmail`): a
+    `share_email.go:313` (`return !f.confined && (f.portalEmail`): a
     browser, which is what a stock Ubuntu desktop names, is handed a
     `mailto:` link with the file's local path in it and opens a compose
     without the picture. Inside the snap the text's Email…
     is offered only where the portal can answer `SchemeSupported`,
-    `share_email.go:301` (`if f.confined {`), since `xdg-mime` there reads
+    `share_email.go:318` (`if f.confined {`), since `xdg-mime` there reads
     the sandbox's own handler, not the desktop's; Ubuntu 24.04's portal
     cannot, so the snap there offers no Email… at all. On Windows it is a
     `mailto:` link when the shell resolves a handler for the scheme,

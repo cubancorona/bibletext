@@ -157,8 +157,10 @@ func composeEmailViaPortal(subject, body, attachment string) error {
 }
 
 // composeEmailViaXDGEmail runs xdg-email, which finds the desktop's mail
-// client itself and passes an attachment to the clients it knows. It exits
-// non-zero, without opening anything, when there is no client.
+// client itself and passes an attachment to the clients it knows. Its exit
+// status means what xdgEmailExit says: a failure reported after it launched
+// the client ends the compose, since the client may have opened one, and
+// the mailto: link after it would open a second.
 func composeEmailViaXDGEmail(subject, body, attachment string) error {
 	path, err := exec.LookPath("xdg-email")
 	if err != nil {
@@ -168,7 +170,12 @@ func composeEmailViaXDGEmail(subject, body, attachment string) error {
 	if attachment != "" {
 		args = append(args, "--attach", attachment)
 	}
-	return exec.Command(path, args...).Run()
+	err = exec.Command(path, args...).Run()
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		return xdgEmailExit(exit.ExitCode())
+	}
+	return err
 }
 
 // composeEmailViaMailto opens a mailto: link the way every other link the

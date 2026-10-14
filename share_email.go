@@ -185,6 +185,23 @@ func portalEmailResponse(code uint32) error {
 	return mailRouteStop{fmt.Errorf("the Email portal answered %d", code)}
 }
 
+// xdgEmailExit is what xdg-email's exit status means for the compose. 0, a
+// compose was opened. 4 is xdg-utils' "the action failed": the launcher it
+// ran reported a failure, which it can do after the mail client has opened
+// a compose, so the compose ends there rather than open a second one from
+// the mailto: link. 1, 2, 3 and 5 refuse before anything is launched (bad
+// arguments, a missing file, no tool to launch with, an unreadable file),
+// and the next route is tried.
+func xdgEmailExit(code int) error {
+	switch code {
+	case 0:
+		return nil
+	case 4:
+		return mailRouteStop{fmt.Errorf("xdg-email exited %d after launching", code)}
+	}
+	return fmt.Errorf("xdg-email exited %d", code)
+}
+
 // mailHandler is the desktop's mailto: handler as the app can see it.
 type mailHandler int
 
