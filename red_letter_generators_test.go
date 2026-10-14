@@ -1,10 +1,10 @@
 package bibletext
 
-// scripts/gen-bsb-redletter.py, run on invented sources and invented runtime
-// text. It writes a table of rune spans; these tests run it into a temporary
-// file, never over the shipped table.
+// scripts/gen-bsb-redletter.py and gen-web-redletter.py, run on invented
+// sources and invented runtime text. Each writes a table of rune spans; these
+// tests run it into a temporary file, never over the shipped tables.
 //
-// The defect they guard against: the generator took the first copy of a run's
+// The defect they guard against: a generator took the first copy of a run's
 // words at or after the end of the run before it, so a run could land inside
 // a longer word ("Go" in "Gospel") or on the same words earlier in the verse.
 
@@ -190,4 +190,132 @@ func TestTheBSBRedLetterGeneratorRefusesARunItCannotPlace(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The WEB's generator matches the publisher's punctuation only, and reads both
+// editions; the same source stands for both here.
+func TestTheWEBRedLetterGeneratorPlacesEachRunAtItsOwnPlace(t *testing.T) {
+	dir := t.TempDir()
+	usfm := `\id MAT
+\c 1
+\p
+\v 1 The steward said, “I am he.” The teacher said, \wj “I am he.”\wj*
+\v 2 The Gospel he preached was this: he said, “\wj Go\wj*.”
+\v 3 He said, \wj “Come.”\wj* And they came, and he said again, \wj “Come.”\wj*
+\v 4 \wj “Ask, and it will be given\wj*\f + \fr 1:4 \ft An invented note.\f*\wj ”\wj* he said.
+\v 5 He answered them, come and see. Then he said,
+\s1 Come and See
+\p \wj “Come and see.”\wj*
+`
+	text := map[int]string{
+		1: "The steward said, “I am he.” The teacher said, “I am he.”",
+		2: "The Gospel he preached was this: he said, “Go.”",
+		3: "He said, “Come.” And they came, and he said again, “Come.”",
+		4: "“Ask, and it will be given” he said.",
+		5: "He answered them, come and see. Then he said, “Come and see.”",
+	}
+	writeRedLetterGenFile(t, filepath.Join(dir, "web", "70-MATeng-web.usfm"), usfm)
+	writeRedLetterGenFile(t, filepath.Join(dir, "webc", "70-MATeng-web-c.usfm"), usfm)
+	writeRedLetterGenCache(t, filepath.Join(dir, "web.json"), text)
+	writeRedLetterGenCache(t, filepath.Join(dir, "webc.json"), text)
+	src, log, err := runRedLetterGen(t, filepath.Join(dir, "out.go"),
+		filepath.Join("scripts", "gen-web-redletter.py"),
+		"--web-usfm", filepath.Join(dir, "web"), "--web-cache", filepath.Join(dir, "web.json"),
+		"--webc-usfm", filepath.Join(dir, "webc"), "--webc-cache", filepath.Join(dir, "webc.json"))
+	if err != nil {
+		t.Fatalf("gen-web-redletter.py: %v\n%s", err, log)
+	}
+	want := map[string]string{
+		"Matthew 1:1": lastCopy(text[1], "“I am he.”"),
+		"Matthew 1:2": lastCopy(text[2], "Go"),
+		// Both copies are marked, each its own span with the narration black.
+		"Matthew 1:3": lastCopy(text[3][:strings.Index(text[3], " And")], "“Come.”") + ", " + lastCopy(text[3], "“Come.”"),
+		// The WEB's table keeps the closing mark as a span of its own.
+		"Matthew 1:4": lastCopy(text[4], "“Ask, and it will be given") + ", " + lastCopy(text[4], "”"),
+		"Matthew 1:5": lastCopy(text[5], "“Come and see.”"),
+	}
+	for _, name := range []string{"webRedLetterSpans", "webcRedLetterSpans"} {
+		t.Run(name, func(t *testing.T) { checkRedLetterGenSpans(t, redLetterGenSpans(t, src, name), want) })
+	}
+}
+
+func TestTheWEBRedLetterGeneratorRefusesARunItCannotPlace(t *testing.T) {
+	for _, c := range []struct{ name, usfm, runtime string }{
+		{"two copies, and the text before the run differs",
+			`\v 1 They asked him, and he said, \wj “Go.”\wj*`, "He said, “Go.” They said, “Go.”"},
+		{"an end inside a word", `\v 1 He said, \wj Go\wj* now.`, "He said, Gospel now."},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			usfm := "\\id MAT\n\\c 1\n\\p\n" + c.usfm + "\n"
+			writeRedLetterGenFile(t, filepath.Join(dir, "web", "70-MATeng-web.usfm"), usfm)
+			writeRedLetterGenFile(t, filepath.Join(dir, "webc", "70-MATeng-web-c.usfm"), usfm)
+			writeRedLetterGenCache(t, filepath.Join(dir, "web.json"), map[int]string{1: c.runtime})
+			writeRedLetterGenCache(t, filepath.Join(dir, "webc.json"), map[int]string{1: c.runtime})
+			src, log, err := runRedLetterGen(t, filepath.Join(dir, "out.go"),
+				filepath.Join("scripts", "gen-web-redletter.py"),
+				"--web-usfm", filepath.Join(dir, "web"), "--web-cache", filepath.Join(dir, "web.json"),
+				"--webc-usfm", filepath.Join(dir, "webc"), "--webc-cache", filepath.Join(dir, "webc.json"))
+			if err == nil {
+				t.Fatalf("the generator wrote a table:\n%s", src)
+			}
+			if !strings.Contains(log, "Matthew 1:1") {
+				t.Errorf("the refusal does not name the verse:\n%s", log)
+			}
+		})
+	}
+}
+
+// The BSB and WEB generators, run on the publishers' own USFM and the caches
+// the app keeps, write the shipped tables byte for byte: a change to their
+// rules that would change a shipped span shows here before anyone
+// regenerates. LOCAL-ONLY: neither the USFM nor the caches are in a checkout.
+// BIBLETEXT_BSB_USFM names the bsb_usfm directory unpacked from the BSB's
+// download, and BIBLETEXT_WEB_USFM and BIBLETEXT_WEBC_USFM the directories
+// unpacked from eBible's eng-web and eng-web-c USFM zips (TEXTUAL-DATA.md,
+// section 4); each table is skipped without its sources. The NKJV is not
+// here: its text is licensed and is not read by the suite.
+func TestTheRedLetterGeneratorsReproduceTheShippedTables_LocalOnly(t *testing.T) {
+	sources := func(t *testing.T, vars ...string) []string {
+		var dirs []string
+		for _, name := range vars {
+			dir := os.Getenv(name)
+			if dir == "" {
+				t.Skipf("local-only: %s names no unpacked USFM", name)
+			}
+			dirs = append(dirs, dir)
+		}
+		return dirs
+	}
+	cache := func(t *testing.T, id string) string {
+		path := realCachePath(cachePathForVersion(id))
+		if _, err := os.Stat(path); err != nil {
+			t.Skipf("local-only: no %s cache at the current epoch", id)
+		}
+		return path
+	}
+	same := func(t *testing.T, script, shipped string, args ...string) {
+		src, log, err := runRedLetterGen(t, filepath.Join(t.TempDir(), shipped),
+			append([]string{filepath.Join("scripts", script)}, args...)...)
+		if err != nil {
+			t.Fatalf("%s: %v\n%s", script, err, log)
+		}
+		want, err := os.ReadFile(shipped)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if src != string(want) {
+			t.Errorf("%s, run on the publisher's USFM and the local caches, does not write %s", script, shipped)
+		}
+	}
+	t.Run("bsb", func(t *testing.T) {
+		usfm := sources(t, "BIBLETEXT_BSB_USFM")
+		same(t, "gen-bsb-redletter.py", "red_letter_bsb_data.go", "--usfm", usfm[0], "--bsb", cache(t, "bsb"))
+	})
+	t.Run("web", func(t *testing.T) {
+		usfm := sources(t, "BIBLETEXT_WEB_USFM", "BIBLETEXT_WEBC_USFM")
+		same(t, "gen-web-redletter.py", "red_letter_web_data.go",
+			"--web-usfm", usfm[0], "--web-cache", cache(t, "web"),
+			"--webc-usfm", usfm[1], "--webc-cache", cache(t, "webc"))
+	})
 }

@@ -2,8 +2,8 @@
 """Build the WEB's and WEB Catholic's red-letter spans from their own USFM.
 
     python3 scripts/gen-web-redletter.py \
-        --web-usfm  <dir of eng-web USFM>   --web-cache  ~/Library/Caches/bibletext/bibletext-web-v2.json \
-        --webc-usfm <dir of eng-web-c USFM> --webc-cache ~/Library/Caches/bibletext/bibletext-webc-v2.json
+        --web-usfm  <dir of eng-web USFM>   --web-cache  ~/Library/Caches/bibletext/bibletext-web-v9.json \
+        --webc-usfm <dir of eng-web-c USFM> --webc-cache ~/Library/Caches/bibletext/bibletext-webc-v9.json
 
 Both editions mark the words of Jesus themselves, with \\wj … \\wj* in the USFM
 eBible publishes, so nothing here is our editorial judgement — it is the
@@ -19,6 +19,11 @@ WHY THE SPANS ARE LOCATED BY TEXT rather than taken as USFM character positions:
 the runtime supplier's copy of the text is NOT byte-identical to eBible's
 revision. Matching each span's own text inside the app's verse text, tolerating
 whitespace differences, produces exact spans where every marked run locates.
+The match is made at the run's own place: its offset in the verse, counted in
+letters and digits while walking the USFM, so the same words earlier in the
+verse (another speaker's "I am he.", or "Go" inside "Gospel") cannot take it.
+When the run's letters are not at that offset, it is placed only where they
+occur once in the whole verse, and never with an end inside a word.
 Seven known revision differences use small, shape-checked boundary recoveries;
 generation fails on every other mismatch. A separate publisher-marked verse set
 provides a safe edition-local fallback if the runtime text later changes.
@@ -56,6 +61,14 @@ RECOVERY = {
 }
 
 
+# Paragraph markers whose lines are not verse text (headings, the references
+# under them, titles, identification lines): not counted in a run's offset.
+NON_VERSE_PARAGRAPH = re.compile(
+    r's\d*|ms\d*|mr|r|sr|sp|qa|cl|cd|mt\d*|mte\d*|h\d*|toc\d*|toca\d*|id|ide|usfm|rem|sts')
+# Paragraph markers that resume verse text after one of those.
+VERSE_PARAGRAPH = re.compile(r'p|m|mi|nb|pc|pr|pm|pmo|pmc|pmr|pi\d*|ph\d*|li\d*|q\d*|qr|qc|qm\d*|qd|b')
+
+
 def clean(t):
     t = re.sub(r'\\f\s.*?\\f\*', '', t, flags=re.S)     # footnotes are not verse text
     t = re.sub(r'\\x\s.*?\\x\*', '', t, flags=re.S)     # nor cross references
@@ -66,7 +79,10 @@ def clean(t):
 
 
 def wj_texts(usfm_dir):
-    """{book: {(chapter, verse): [span text, …]}} — each \\wj span's own words."""
+    """{book: {(chapter, verse): [(offset, span text), …]}} — each \\wj span's own
+    words, and where it begins in its verse: how many letters and digits
+    (alphanumeric_map) of the verse's own text, without notes or heading lines,
+    come before it. A span carried on into the next verse begins that one at 0."""
     out = {}
     for f in glob.glob(os.path.join(usfm_dir, '*.usfm')):
         code = re.search(r'-([A-Z0-9]{3})eng', os.path.basename(f))
@@ -74,35 +90,96 @@ def wj_texts(usfm_dir):
             continue
         t = clean(open(f, encoding='utf-8').read())
         ch = v = 0
-        inwj = False
+        inwj = heading = False
         cur, d = [], {}
+        letters = start = 0
         def flush():
             if inwj and cur:
-                d.setdefault((ch, v), []).append(re.sub(r'\s+', ' ', ''.join(cur)).strip())
+                d.setdefault((ch, v), []).append((start, re.sub(r'\s+', ' ', ''.join(cur)).strip()))
         for tok in re.findall(r'\\wj\*|\\wj\b|\\c\s+\d+|\\v\s+\d+|\\[a-z0-9]+\*?|[^\\]+', t):
             if tok.startswith('\\wj*'):
                 flush(); cur = []; inwj = False
             elif tok.startswith('\\wj'):
-                inwj = True; cur = []
+                inwj = True; cur = []; start = letters
             elif tok.startswith('\\c'):
-                flush(); cur = []; ch = int(tok.split()[1]); v = 0
+                flush(); cur = []; ch = int(tok.split()[1]); v = 0; letters = 0; heading = False
             elif tok.startswith('\\v'):
-                flush(); cur = []; v = int(tok.split()[1])
+                flush(); cur = []; v = int(tok.split()[1]); letters = start = 0; heading = False
             elif tok.startswith('\\'):
-                pass
-            elif inwj and ch and v:
-                cur.append(tok)
+                marker = tok[1:].rstrip('*')
+                if NON_VERSE_PARAGRAPH.fullmatch(marker):
+                    heading = True
+                elif VERSE_PARAGRAPH.fullmatch(marker):
+                    heading = False
+            else:
+                if inwj and ch and v:
+                    cur.append(tok)
+                if not heading:
+                    letters += len(alphanumeric_map(tok)[0])
         flush()
         out[BOOK[code.group(1)]] = d
     return out
 
 
-def locate(haystack, needle, frm):
-    """Find needle in haystack from frm, tolerating differing whitespace."""
+def alphanumeric_map(text):
+    """Casefolded letters and digits of text, and the rune each came from."""
+    letters, positions = [], []
+    for index, char in enumerate(text):
+        if char.isalnum():
+            for folded in char.casefold():
+                letters.append(folded)
+                positions.append(index)
+    return ''.join(letters), positions
+
+
+def locate(haystack, needle, offset, frm):
+    """Find needle in haystack at its offset-th letter, at or after rune frm,
+    tolerating differing whitespace: from a rune between the letter before the
+    offset and the one at it. None when it is not there."""
     if not needle:
         return None
-    m = re.compile(re.escape(needle).replace(r'\ ', r'\s+')).search(haystack, frm)
-    return (m.start(), m.end()) if m else None
+    letters, positions = alphanumeric_map(haystack)
+    wanted, _ = alphanumeric_map(needle)
+    if offset > len(letters) or (wanted and not letters.startswith(wanted, offset)):
+        return None
+    lowest = max(frm, positions[offset - 1] + 1 if offset else 0)
+    pattern = re.compile(re.escape(needle).replace(r'\ ', r'\s+'))
+    if not wanted:
+        # Punctuation alone, such as a closing quotation mark a note parted
+        # from its words: it lies between the letter before its offset and
+        # the letter at it.
+        m = pattern.search(haystack, lowest, positions[offset] if offset < len(positions) else len(haystack))
+        return (m.start(), m.end()) if m else None
+    for begin in range(lowest, positions[offset] + 1):
+        m = pattern.match(haystack, begin)
+        if m:
+            return (m.start(), m.end())
+    return None
+
+
+def inside_word(text, index):
+    """True when index falls between two letters or digits."""
+    return 0 < index < len(text) and text[index - 1].isalnum() and text[index].isalnum()
+
+
+def place(haystack, needle, offset, frm):
+    """(span, relocated) for one publisher-marked run, or (None, False).
+
+    The run goes at its carried offset. When its text is not there, the runtime
+    revision differs before it, and it is placed only where its letters occur
+    once in the whole verse: with no copy, or two or more, nothing says which
+    copy the publisher marked. A span with an end inside a word is refused."""
+    loc, relocated = locate(haystack, needle, offset, frm), False
+    if loc is None:
+        letters, _ = alphanumeric_map(haystack)
+        wanted, _ = alphanumeric_map(needle)
+        copies = [i for i in range(len(letters)) if wanted and letters.startswith(wanted, i)]
+        if len(copies) != 1:
+            return None, False
+        loc, relocated = locate(haystack, needle, copies[0], frm), True
+    if loc is None or inside_word(haystack, loc[0]) or inside_word(haystack, loc[1]):
+        return None, False
+    return loc, relocated
 
 
 def fnv1a64(text):
@@ -138,6 +215,7 @@ def build(edition, usfm_dir, cache_path):
     app = (blob.get('data') or blob)['Verses']
     spans, runes, hashes, marked = {}, {}, {}, set()
     exact = recovered = 0
+    relocated = []
     failures = []
     for book, d in wj_texts(usfm_dir).items():
         for (c, v), texts in sorted(d.items()):
@@ -148,25 +226,27 @@ def build(edition, usfm_dir, cache_path):
             if text is None:
                 failures.append(f'{key} (missing runtime verse)')
                 continue
-            found, at, bad = [], 0, False
-            for w in texts:
-                loc = locate(text, w, at)
+            found, at, bad, moved = [], 0, False, 0
+            for offset, w in texts:
+                loc, by_copy = place(text, w, offset, at)
                 if loc:
-                    found.append(loc); at = loc[1]
+                    found.append(loc); at = loc[1]; moved += by_copy
                 else:
                     bad = True
             if not found or bad:
                 found = recovered_spans(edition, key, text)
                 if not found:
-                    failures.append(f'{key} (unlocated publisher run)')
+                    failures.append(f'{key} (unplaced publisher run)')
                     continue
                 recovered += 1
             else:
                 exact += 1
+                if moved:
+                    relocated.append(key)
             spans[key], runes[key], hashes[key] = found, len(text), fnv1a64(text)
     if failures:
         raise RuntimeError(f"{edition}: incomplete mapping: " + ', '.join(failures))
-    return spans, runes, hashes, marked, (exact, recovered)
+    return spans, runes, hashes, marked, (exact, recovered), relocated
 
 
 def main():
@@ -192,10 +272,13 @@ def main():
            "// set preserves edition-local fallback if runtime text later changes.",
            ""]
     for name, usfm, cache in (('web', a.web_usfm, a.web_cache), ('webc', a.webc_usfm, a.webc_cache)):
-        spans, runes, hashes, marked, (exact, recovered) = build(name, usfm, cache)
+        spans, runes, hashes, marked, (exact, recovered), relocated = build(name, usfm, cache)
         run_count = sum(len(value) for value in spans.values())
         print(f"{name}: {len(spans)} span verses, {run_count} runs "
-              f"({exact} exact, {recovered} boundary-recovered)", file=sys.stderr)
+              f"({exact} exact, {recovered} boundary-recovered; "
+              f"{len(relocated)} with a run placed by its only copy, not its offset)", file=sys.stderr)
+        for key in relocated:
+            print(f"  placed by its only copy: {key}", file=sys.stderr)
         out.append(f"var {name}RedLetterSpans = map[string][]redLetterSpan{{")
         for k in sorted(spans):
             out.append('\t"%s": {%s},' % (k, ", ".join("{%d, %d}" % (s, e) for s, e in spans[k])))
