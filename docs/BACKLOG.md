@@ -885,9 +885,11 @@ on its band in both. Seen beside it, older and not changed: the bridge parks
 such a card over the chapter's first line, where the iPhone and iPad reserve
 an inset for it (the parked sticker reserves no band, `refreshNoteSticker`).
 
-### RL-NKJV-1 and RL-NKJV-2. The NKJV red-letter generator places a run after its cursor, and retries from the verse's start
+### RL-NKJV-1 and RL-NKJV-2. The NKJV red-letter generator places a run after its cursor, and retries from the verse's start — FIXED in the generator 14 October 2026; the table not yet regenerated
 
-Planned for: a later minor release, any — see docs/ROADMAP.md.
+Planned for: a later minor release, any; the generator fixed on 14 October
+2026, its run on the NKJV still to do (the end of this entry) — see
+docs/ROADMAP.md.
 
 `scripts/gen-nkjv-redletter.py:181` takes the first copy of a run's letters at
 or after the cursor, with no word boundary, so a run can land inside a longer
@@ -910,9 +912,41 @@ term, the decoder already walks the words-of-Jesus span
 (`apibible.go:934-981`) and could carry it as `Verse.Supplied` and
 `SmallCaps` are carried.
 
-### RL-BSB-1. The BSB red-letter generator takes the first copy from its cursor
+**FIXED in the generator, 14 October 2026; the table is not yet regenerated
+with it** (ROADMAP.md, Later minor releases, row 31). The HTML parser counts
+each verse's non-space characters as it reads them, leaving out what the
+app's decoder leaves out of a verse (the verse number, headings and the
+psalm title's paragraph), and records the count at which each run begins;
+`place` takes the run there and only there, and the retry from the verse's
+start is gone. A run whose characters are not at its count is placed only
+where they occur once in the whole verse and after the run before it; no
+copy, two or more, or an end inside a word fails generation, naming the
+verse and the run's number, never its words. A chapter missing from the
+cache fails it too: `derive()` used to skip it, leaving its verses out of
+the table, which reads as black letter. The key is read only to fetch, and
+`--no-fetch` with `--html-cache`, `--app-cache` and `--out` derives with no
+key read and no call.
+`TestTheNKJVRedLetterGeneratorPlacesEachRunAtItsOwnPlace` and
+`TestTheNKJVRedLetterGeneratorRefusesWhatItCannotPlace` run it on invented
+markup: "Go" in "Gospel", the narration's copy of a run (with a heading
+inside the verse), italic and small-capital words nested in a run, a run
+carried into the next verse, a second run the app's verse holds only before
+the first, an end inside a word and a missing chapter. Through the derive
+logic before the fix, run from a copy of the script with its fetch taken
+out, the first test finds the wrong copy in three verses and each refusal
+writes a table instead; the second run is folded into the first.
 
-Planned for: a later minor release, any — see docs/ROADMAP.md.
+Not done: no NKJV text was opened, so the generator has not been run on the
+app's NKJV cache, and the shipped `red_letter_nkjv_data.go` is unchanged and
+unchecked against it. That run, from the cached chapters with `--no-fetch`,
+must write the shipped table byte for byte; where the parser's count and the
+app's text disagree, it fails by verse instead of writing a table. It needs
+the NKJV opened in the app once (ROADMAP.md, Decisions still open, 43).
+
+### RL-BSB-1. The BSB red-letter generator takes the first copy from its cursor — FIXED 14 October 2026
+
+Planned for: a later minor release, any; fixed on 14 October 2026 (the end
+of this entry) — see docs/ROADMAP.md.
 
 `exact_locate` and `normalized_locate` (`scripts/gen-bsb-redletter.py:114`,
 :137) search unanchored from the cursor and the first copy wins; the runtime
@@ -923,14 +957,40 @@ Acts 9:10's run would move to the narration's copy of its words.
 
 Fix, 1 day: carry the run's alphanumeric offset from the USFM walk, verify at
 that position, and fail generation on an ambiguity or an edge inside a word;
-regenerate byte-identical. Not made on 14 October 2026 with the other
-generator fix: the regeneration that proves it needs the publisher's
-`bsb_usfm.zip`, and downloading it waits for an OK (ROADMAP.md, Decisions
-still open, 43).
+regenerate byte-identical.
 
-### RL-WEB-1. The WEB red-letter generator takes the first copy too
+**FIXED 14 October 2026** (ROADMAP.md, Later minor releases, row 32).
+`wj_texts` carries each run's offset in its verse, counted in letters and
+digits as `alphanumeric_map` counts them, with footnotes, cross-references
+and heading lines (`\s`, `\r` and the like) left out, and `place` puts the
+run at that offset: the exact match first, from a rune between the letter
+before the offset and the one at it, then the typography-normalized one.
+A run of punctuation alone lies between those two letters. A run whose
+letters are not at its offset is placed only where they occur once in the
+whole verse, and the summary counts it; no copy, two or more, or an end
+inside a word fails generation. `TestTheBSBRedLetterGeneratorPlacesEachRunAtItsOwnPlace`
+("Go" in "Gospel", the narration's copy on the exact path and on the
+normalized one, a heading inside the verse, a run carried into the next
+verse, a closing mark marked on its own) and
+`TestTheBSBRedLetterGeneratorRefusesARunItCannotPlace` (two copies after a
+changed lead-in, an end inside a word) fail on the generator before the fix
+and pass after it.
 
-Planned for: a later minor release, any — see docs/ROADMAP.md.
+The publisher's `bsb_usfm.zip`, downloaded on 14 October 2026 (1,598,038
+bytes, SHA-256 `f0c56438eb89c98e…`), differs from the copy recorded on 23
+August (TEXTUAL-DATA.md, section 4): its ACT.usfm and LUK.usfm are dated 2
+October 2026. Run on it and the local BSB cache (epoch 9), the generator
+before the fix and after it each write the shipped `red_letter_bsb_data.go`
+byte for byte: 2,042 verses and 2,294 runs, 2,251 exact and 43
+typography-normalized, every one at its offset and none by its only copy.
+`TestTheRedLetterGeneratorsReproduceTheShippedTables_LocalOnly` repeats the
+comparison where `BIBLETEXT_BSB_USFM` names the unpacked source; with one
+marker pair taken out of the source it fails.
+
+### RL-WEB-1. The WEB red-letter generator takes the first copy too — FIXED 14 October 2026
+
+Planned for: a later minor release, any; fixed on 14 October 2026 (the end
+of this entry) — see docs/ROADMAP.md.
 
 `locate` (`scripts/gen-web-redletter.py:104`) has RL-BSB-1's shape: in an
 invented verse it reddens Peter's "I am he." for Jesus's. Latent: the WEB and
@@ -940,6 +1000,32 @@ one harmless double copy at Revelation 1:8). The seven pinned recoveries at
 
 Fix, 0.75 day: carry the run's offset within the USFM verse and verify there;
 regenerate byte-identical, which needs the eBible USFM zips downloaded.
+
+**FIXED 14 October 2026** (ROADMAP.md, Later minor releases, row 33), as
+RL-BSB-1 with the punctuation-preserving match alone: `wj_texts` carries
+each run's offset in letters and digits, heading lines left out, and
+`locate` matches only at it. A run of punctuation alone, a closing mark a
+note parts from its words (John 8:58, Luke 12:59, Luke 14:24 and Revelation
+1:8 in the WEB), lies between the letters on either side of its offset. A
+run whose letters are not at its offset is placed only where they occur
+once in the verse, and anything else falls to the pinned recoveries or fails
+as before, as does an end inside a word.
+`TestTheWEBRedLetterGeneratorPlacesEachRunAtItsOwnPlace` (the other
+speaker's "I am he.", "Go" in "Gospel", a heading inside the verse) and
+`TestTheWEBRedLetterGeneratorRefusesARunItCannotPlace` fail on the generator
+before the fix and pass after it.
+
+eBible's zips, downloaded on 14 October 2026 (`eng-web_usfm.zip` 3,244,779
+bytes, SHA-256 `614f08ed7c1bf86e…`; `eng-web-c_usfm.zip` 3,082,467 bytes,
+`9fc9407dd8b3957f…`; both dated 13 October 2026), differ from the copies
+recorded on 23 August. Run on them and the local caches (epoch 9), the
+generator before the fix and after it each write the shipped
+`red_letter_web_data.go` byte for byte: the WEB's 2,059 verses, 2,053 at
+their offsets and 6 by the pinned recoveries, and the WEB Catholic's 2,059,
+2,052 and 7, none by its only copy.
+`TestTheRedLetterGeneratorsReproduceTheShippedTables_LocalOnly` repeats the
+comparison where `BIBLETEXT_WEB_USFM` and `BIBLETEXT_WEBC_USFM` name the
+unpacked sources.
 
 ### VERS-1. The versification generator declares a missing verse moved to its best text match — FIXED 14 October 2026, for 1.2.22
 

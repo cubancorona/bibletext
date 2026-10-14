@@ -361,6 +361,14 @@ five recovery shapes are wholly inside `\wj` in the publisher source. WEBC Mark
 9:47 is emitted as one semantic span although the source's footnote divides it
 into two adjacent `\wj` blocks. Any new or malformed mismatch fails generation.
 
+Each marked run is matched at its own place: its offset in its verse, counted
+in letters and digits on the USFM walk with footnotes and heading lines left
+out, so the same words earlier in the verse cannot take it. A run of
+punctuation alone, a closing mark a note parts from its words, lies between
+the letters on either side of its offset. A run whose letters are not at its
+offset is placed only by their one copy in the verse; no copy or several, or
+an end inside a word, falls to the recoveries above or fails generation.
+
 The generated 2,059-verse marked sets remain as edition-local protection for a
 future runtime text change that invalidates an offset fingerprint. Other
 editions never consult this fallback.
@@ -380,6 +388,15 @@ The website is the one place it can be: once `scripts/publish-site.sh` has
 published with the NKJV's text switched on, the public `gh-pages` branch holds
 the rendered pages, and its history keeps them after the switch goes off again.
 
+Each run is matched at its own place: the parser counts each verse's non-space
+characters, leaving out the verse number and headings as the app's decoder
+does, and a run must be found at its count, or by its one copy in the verse.
+No copy or several, an end inside a word, or a chapter missing from the cache
+fails generation. `--no-fetch` derives from the cached chapters with no key
+read and no call. This rule dates from 14 October 2026 and has been shown on
+invented markup only: the shipped table was made before it, and has not yet
+been regenerated with it (ROADMAP.md, Decisions still open, 43).
+
 An absent NKJV table entry is authoritative black letter. This matters for nine
 verses the WEB marks but the NKJV source does not: 1 Timothy 5:18; Matthew 8:32;
 Mark 10:49; Revelation 21:5–8; and Revelation 22:14–15.
@@ -391,10 +408,13 @@ not the unmarked eBible mirror. Its current third-printing USFM contains 1,420
 balanced `\wj … \wj*` blocks covering 2,042 verses and 2,294 per-verse runs.
 
 `scripts/gen-bsb-redletter.py` extracts those markers directly and locates their
-text in the runtime BSB cache. It first requires an exact punctuation-preserving
-match with flexible whitespace, then permits a case-insensitive alphanumeric
-match for typography differences such as spacing around em dashes. Generation
-fails if any marked run cannot be located.
+text in the runtime BSB cache, at each run's own place: its offset in its verse,
+counted in letters and digits as the WEB's generator counts them (section 3.3).
+There it first requires an exact punctuation-preserving match with flexible
+whitespace, then permits a case-insensitive alphanumeric match for typography
+differences such as spacing around em dashes. Generation fails if a marked
+run's letters are neither at its place nor once in the verse, or if either end
+falls inside a word.
 
 The generated result is 2,042 verses and 2,294 runs: 2,251 source runs locate
 exactly and 43 require typography normalization. There are no hand judgements
@@ -445,6 +465,14 @@ re-fetched and verified 2026-08-23. SHA-256 is shown as the first 16 hex digits.
 The eBible identifiers are the third column of the catalogue: `eng-web`,
 `eng-web-c`, `engbsb`. The catalogue is the right starting point for any further
 edition; do not guess identifiers.
+
+The three red-letter archives were fetched again on 14 October 2026, and all
+three differ from the copies above: `bsb_usfm.zip` 1,598,038 bytes,
+`f0c56438eb89c98e` (its ACT.usfm and LUK.usfm dated 2 October 2026);
+`eng-web_usfm.zip` 3,244,779 bytes, `614f08ed7c1bf86e`; `eng-web-c_usfm.zip`
+3,082,467 bytes, `9fc9407dd8b3957f` (both dated 13 October 2026). From them,
+with the epoch-9 caches, `scripts/gen-bsb-redletter.py` and
+`scripts/gen-web-redletter.py` write the shipped tables byte for byte.
 
 ---
 
@@ -564,15 +592,22 @@ python3 scripts/gen-versification.py \
 
 # red letters — the WEB and WEB Catholic, from their own USFM (no API calls)
 python3 scripts/gen-web-redletter.py \
-    --web-usfm  <unpacked eng-web_usfm.zip>   --web-cache  ~/Library/Caches/bibletext/bibletext-web-v2.json \
-    --webc-usfm <unpacked eng-web-c_usfm.zip> --webc-cache ~/Library/Caches/bibletext/bibletext-webc-v2.json
+    --web-usfm  <unpacked eng-web_usfm.zip>   --web-cache  ~/Library/Caches/bibletext/bibletext-web-v9.json \
+    --webc-usfm <unpacked eng-web-c_usfm.zip> --webc-cache ~/Library/Caches/bibletext/bibletext-webc-v9.json
 
 # red letters — BSB publisher markers (no API calls)
 python3 scripts/gen-bsb-redletter.py --usfm <unpacked bsb_usfm.zip>/bsb_usfm \
-    --bsb ~/Library/Caches/bibletext/bibletext-bsb-v3.json
+    --bsb ~/Library/Caches/bibletext/bibletext-bsb-v9.json
+
+# both, compared with the shipped tables without writing over them
+BIBLETEXT_BSB_USFM=<unpacked bsb_usfm.zip>/bsb_usfm \
+BIBLETEXT_WEB_USFM=<unpacked eng-web_usfm.zip> BIBLETEXT_WEBC_USFM=<unpacked eng-web-c_usfm.zip> \
+    go test -run 'TestTheRedLetterGeneratorsReproduceTheShippedTables_LocalOnly' -v .
 
 # red letters — the NKJV, from API.Bible. CACHED: a warm cache makes ZERO calls.
 python3 scripts/gen-nkjv-redletter.py
+# or from the cached chapters alone, with no key read and no call
+python3 scripts/gen-nkjv-redletter.py --no-fetch --app-cache <the app's bibletext-nkjv-v7.json>
 
 # the pinned consequences
 go test -run 'TestMapVerse|TestVerseExistsIn|WordsOfChrist|TestBSBRedLetter|TestNKJV|TestWEBAndWEBC|TestApplePane|TestAndroidPane|TestStyled|TestFyne' .
