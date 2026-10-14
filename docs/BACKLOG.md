@@ -129,8 +129,10 @@ What 1.2.21 (13 October 2026) adds:
 
 ## Where the app re-finds the reader's position from text — found 13 October 2026
 
-Planned for: ten fixes in 1.2.22, made on 13 October 2026, and the rest in
-later minor releases, each item below naming its own — see docs/ROADMAP.md.
+Planned for: eleven fixes in 1.2.22, made on 13 October 2026, the eleventh
+(P1) on its own branch and merged for the release on 14 October 2026, and the
+rest in later minor releases, each item below naming its own — see
+docs/ROADMAP.md.
 
 Each item is a place where the app decides where the reader is — the verse,
 the place in it, the paragraph, a heading, a note's anchor, the scroll
@@ -144,10 +146,11 @@ entry). The labels are the ones docs/ROADMAP.md uses. Lines are at
 WEB, the BSB and the WEB Catholic as the app downloads them; the NKJV was not
 measured.
 
-Most of it comes back to one fact every pane has and none hands over: the
-selection's place in its verse (P1, below). The ten changes for 1.2.22 need
-no change to the Apple panes; the rest wait for P1, for a decision, or for
-nothing in particular.
+Most of it comes back to one fact every pane has: the selection's place in
+its verse (P1, below). From 1.2.22 every shipping pane hands it over with the
+span; the plain-text fallback page, which has no span, does not (P3). Ten of
+the eleven changes for 1.2.22 leave the Apple panes alone, and P1 changes
+every pane's seam; the rest wait for a decision or for nothing in particular.
 
 ### AND-2. Android opens a note's band, card or pill inside a poem's stanza — FIXED 13 October 2026, for 1.2.22
 
@@ -332,6 +335,24 @@ and 0.85% of the BSB's, which need P1, also in 1.2.22: with the lead the
 fragment is completed at its own place. A selection with no span, or one its
 verses do not hold, keeps the chapter-wide search.
 `TestDeclinedSelectionIsPlacedInItsSpan`.
+
+**Run on into a heading, FIXED 14 October 2026, for 1.2.22** (`a2a6aafca`). A
+piece of a word run on from a verse's last word into the heading drawn below
+it is a selection its verses do not hold, and the chapter-wide search quoted
+the heading's words as the verse's: "aters.\nThe First Day", begun inside
+the last word of Genesis 1:2 in the BSB, was shared as "[A]ters. The First
+Day . . . .". Without a lead, 6,651 of the BSB's 50,680 drags into its
+headings, 23 of the WEB's 503 and 31 of the WEBC's 557 were shared so. The
+fallback now takes the heading's front off the end, as the located path
+does (`verseEndBeforeHeading`), and completes what is left where it ends the
+span's verses, so each of them is shared as it is with the lead
+(`TestAPieceOfAWordRunOnIntoTheHeadingBelowEndsWithItsVerse`; the heading
+sweeps of `share_lead_heading_test.go` pin the drags placed nowhere). Left
+without a lead: 46 BSB drags begun inside a verse's last word and run
+through a heading to the verse below still quote the heading's words, and so
+do the BSB's "im.\nThe" at Matthew 27:31 and Mark 15:20, whose verse has
+"Him. Then" earlier, where a drag inside the verse makes the same text.
+Every shipping pane sends the lead, with which none of them is wrong.
 
 ### E and AI-3. A verse number that ends another's is stripped from inside it — FIXED 13 October 2026, for 1.2.22
 
@@ -566,14 +587,15 @@ fallback. The seams: `reading_ios.go:272-296` and its externs (:31, :33);
 `reading_android_export.go:27-30`; `reading_styled_select.go:425-451`; the
 consumer, `share.go:956-971`. On the Mac, handing over the verse's words
 before the selection rather than a UTF-16 offset lets the normalisation the
-selection already goes through place it. It also closes D's root, M, the roots
-of E/AI-3 and AI-2, and "A drag begun inside a verse number shares the digit",
-and turns the trade-off `share_phrase_sweep_test.go` pins into a positive
-test. It is expected to close the two dash phrases of "A phrase ending on a
-dash, where its verse has the same words earlier, is cut short" that carry a
-span, which the phrase sweep run with the offset has to show. Open: one change
-on all four panes, or pane by pane with -1 as the fallback; taken 14 October
-2026, one change.
+selection already goes through place it. Where a span comes with the
+selection, it also closes D's root, M, the root of E/AI-3 and "A drag begun
+inside a verse number shares the digit", and turns the trade-off
+`share_phrase_sweep_test.go` pins into a positive test. It does not reach
+AI-2's root, whose page sends no span (P3). It is expected to close the two
+dash phrases of "A phrase ending on a dash, where its verse has the same words
+earlier, is cut short" that carry a span, which the phrase sweep run with the
+offset has to show. Open: one change on all four panes, or pane by pane with
+-1 as the fallback; taken 14 October 2026, one change.
 
 **FIXED 13 October 2026, for 1.2.22** (`28be4ea08` to `708542b7e`, merged
 for the release on 14 October 2026), as one change on all four panes. Each
@@ -934,10 +956,10 @@ position from text", P1, in 1.2.22) is expected to close the two with the
 span, placing the phrase at the reader's copy, but that is not shown: the
 chapter's next verse still follows that copy's dash, and
 `TestEveryPhraseInAVerseSharesItsOwnWordsOverLocalCaches_LocalOnly` sends no
-lead, so that sweep run with the lead settles it. The two with no span, which no offset reaches, need
-the end repair's own rule, a dash that ends a word, which changes what other
-drags quote and wants the phrase sweep before and after. The known count goes
-to 0 only when both halves are done.
+lead, so that sweep run with the lead settles it. The two with no span, which
+no offset reaches, need the end repair's own rule, a dash that ends a word,
+which changes what other drags quote and wants the phrase sweep before and
+after. The known count goes to 0 only when both halves are done.
 
 ## A heading that opens as its verse does is shared whole (the BSB's "The LORD Is My Shepherd") — deferred from 1.2.20, 7 October 2026
 

@@ -237,8 +237,10 @@ Without a lead nothing above runs, and every path is as it was.
 - **The fragment fallback:** at the root, for every pane that sends a
   lead. Without one, or for a lead that fails its check, the fallback places
   the fragment in the span's verses first (`placeInSpan`, 1.2.22), which
-  leaves the repeats inside them; the page with no span keeps the search of
-  the whole chapter.
+  leaves the repeats inside them, and ends a fragment run on into the
+  heading below them with their last verse (`verseEndBeforeHeading`, as the
+  located path does), which leaves one run on through a heading to the verse
+  below; the page with no span keeps the search of the whole chapter.
 - **The number strip by text:** at the root where the walk succeeds; the
   text strip stays for selections with no lead and for a walk that fails.
 - **The digit drag and the 12-rune probe, in the share and the AI preview:** a
@@ -284,8 +286,8 @@ beside the tests they extend):
   (`TestADragBegunInsideAVerseNumberSharesNoDigit`): WEB Exodus 20:13-14
   begun on the "3" of 13 shares what the two verses selected whole share, and
   the AI passage previews them without a digit; without the lead the stray
-  "3" is still there, and "14" comes off whole by the fallback's strip. The "9" of 29 selected alone cites
-  verse 29 with no quotation.
+  "3" is still there, and "14" comes off whole by the fallback's strip. The
+  "9" of 29 selected alone cites verse 29 with no quotation.
 - **The number strip** (`TestAFigureInAVerseIsNotTakenForAVerseNumber`): a
   figure followed by the words that open the verse with that number is kept
   with the lead; without it the strip still takes it.
@@ -353,7 +355,12 @@ beside the tests they extend):
   the same holds for the WEB's 503, the BSB's 50,680 and the WEBC's 557
   drags (BSB 16 placed outside without the lead, pinned, two of them placed
   in their verse by 1.2.22's fallback where the chapter-wide one gave no
-  place, 14 before it; 262 with such a walk).
+  place, 14 before it; 262 with such a walk). Without the lead the drags the
+  fallback places nowhere, quoting the heading's words, are pinned too: 480
+  in the Gospels and 0, 46 and 0 in the caches, each a piece of a word run
+  on through a heading to the verse below or a drag begun on a verse's
+  closing marks; 3,604, 23, 6,697 and 31 before a piece run on into the
+  heading below its verse ended with that verse.
 
 Every test of the placement above fails on 6bf27aee4 with only the field
 added (share.go and reading_styled_select.go as they were), which shows it
