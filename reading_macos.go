@@ -366,6 +366,12 @@ static NSTextView   *gTextView = nil;
 // result), or {NSNotFound, 0} for a plain chapter. bibleTextMacScrollTV uses it
 // to land the highlighted verse near the top instead of pinning to verse 1.
 static NSRange gMacHighlightRange = {NSNotFound, 0};
+// Share with note's picker, waiting for the re-import that puts the note's
+// card on the page (bibleTextShareTextAtWords; the iOS twin's gWordsShare*).
+static NSString *gMacWordsShareText = nil;
+static NSUInteger gMacWordsShareToken = 0;
+static int gMacWordsShareVerse = 0, gMacWordsShareAt = 0, gMacWordsShareLen = 0;
+static void btMacPresentWordsShare(NSUInteger token);
 
 // gReadingSuppressed is raised while a Fyne modal (chapter picker, AI panel, AI
 // settings) is open. The native NSTextView floats above the whole Fyne canvas,
@@ -1684,6 +1690,13 @@ static BOOL btMacApplyHTMLLatched(NSData *data) {
     // which needs the text present to resolve to a character location.
     btMacRefreshNote();
     bibleTextMacScrollTV();
+    // A Share with note waiting for this page presents beside its words once
+    // the page has settled (bibleTextShareTextAtWords).
+    if (gMacWordsShareText != nil) {
+        NSUInteger token = gMacWordsShareToken;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{ btMacPresentWordsShare(token); });
+    }
     return YES;
 }
 
@@ -3228,6 +3241,56 @@ void bibleTextShareTextAt(const char *text, double x, double y, double w, double
     });
 }
 
+// bibleTextShareTextAtWords is Share with note's share, the iOS twin's
+// reasoning: its message is handed over before the note it kept is put on
+// the page, and the re-import that puts it there sets the note's card above
+// the passage. Presented at once beside the selection, the picker's arrow
+// pointed into the new card, 52 points above the words, with its body over
+// the verse. So the picker waits for the re-import and is shown beside the
+// selected words as the re-imported text holds them: at UTF-16 units after
+// the start of verse's number, len long, the place the pane's lead measured
+// (the card's band is paragraph spacing and moves no character), 0.35 s after
+// the import. Should no import come, it is shown a second after the share,
+// beside the selection, which then still stands.
+static void btMacPresentWordsShare(NSUInteger token) {
+    if (token != gMacWordsShareToken || gMacWordsShareText == nil) return;
+    NSString *s = gMacWordsShareText;
+    gMacWordsShareText = nil;
+    if (gTextView == nil) return;
+    NSRect r = bibleTextMacSelectionRect();
+    NSTextStorage *ts = gTextView.textStorage;
+    NSUInteger loc = gMacWordsShareVerse > 0 ? btMacLocForVerse(ts, gMacWordsShareVerse) : NSNotFound;
+    NSUInteger start = loc == NSNotFound ? NSNotFound : loc + (NSUInteger)MAX(gMacWordsShareAt, 0);
+    if (start != NSNotFound && start < ts.length) {
+        NSUInteger n = MIN((NSUInteger)MAX(gMacWordsShareLen, 1), ts.length - start);
+        NSLayoutManager *lm = gTextView.layoutManager;
+        NSRange g = [lm glyphRangeForCharacterRange:NSMakeRange(start, n) actualCharacterRange:NULL];
+        NSRect w = [lm boundingRectForGlyphRange:g inTextContainer:gTextView.textContainer];
+        if (!NSIsEmptyRect(w)) {
+            w.origin.x += gTextView.textContainerInset.width;
+            w.origin.y += gTextView.textContainerInset.height;
+            r = w;
+        }
+    }
+    NSSharingServicePicker *p = [[NSSharingServicePicker alloc] initWithItems:@[s]];
+    [p showRelativeToRect:r ofView:gTextView preferredEdge:NSMaxYEdge];
+}
+
+void bibleTextShareTextAtWords(const char *text, int verse, int at, int len) {
+    if (text == NULL) return;
+    NSString *s = [NSString stringWithUTF8String:text];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (gTextView == nil || s.length == 0) return;
+        gMacWordsShareText = s;
+        gMacWordsShareVerse = verse;
+        gMacWordsShareAt = at;
+        gMacWordsShareLen = len;
+        NSUInteger token = ++gMacWordsShareToken;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{ btMacPresentWordsShare(token); });
+    });
+}
+
 void bibleTextShareImageFile(const char *path) {
     if (path == NULL) return;
     NSString *p = [NSString stringWithUTF8String:path];
@@ -3444,9 +3507,14 @@ func nativeShareText(s string) {
 	}
 	c := C.CString(s)
 	defer C.free(unsafe.Pointer(c))
-	// The verse-of-the-day card's share presents beside its icon; a
+	// The verse-of-the-day card's share presents beside its icon, and Share
+	// with note's beside the selected words once the page shows its note; a
 	// selection's share stays at the selection (shareAnchor, share.go).
 	if at, ok := shareAnchorNow(); ok {
+		if at.verse > 0 {
+			C.bibleTextShareTextAtWords(c, C.int(at.verse), C.int(at.wordsAt), C.int(at.wordsLen))
+			return
+		}
 		C.bibleTextShareTextAt(c, C.double(at.x), C.double(at.y), C.double(at.w), C.double(at.h))
 		return
 	}

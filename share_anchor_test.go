@@ -180,20 +180,24 @@ func TestTheApplePanesPresentTheCardShareAtItsAnchor(t *testing.T) {
 	pkg := loadSharePackage(t, repoRoot(t))
 	apple := map[string]bool{"reading_macos.go": true, "reading_ios.go": true}
 	const defined = "void bibleTextShareTextAt(const char *text, double x, double y, double w, double h)"
+	const definedWords = "void bibleTextShareTextAtWords(const char *text, int verse, int at, int len)"
 
 	var files []string
 	for _, d := range pkg.decls(t, "nativeShareText") {
 		files = append(files, d.file)
 		reads := callsFunc(d.fn, "shareAnchorNow")
 		presentsAt := callsSelector(d.fn, "C", "bibleTextShareTextAt")
+		presentsAtWords := callsSelector(d.fn, "C", "bibleTextShareTextAtWords")
 		presentsPlain := callsSelector(d.fn, "C", "bibleTextShareText")
 		switch {
-		case apple[d.file] && !(reads && presentsAt && presentsPlain):
-			t.Errorf("%s: nativeShareText reads the anchor %v, presents beside it %v, presents at the selection %v; "+
-				"want all three", d.file, reads, presentsAt, presentsPlain)
+		case apple[d.file] && !(reads && presentsAt && presentsAtWords && presentsPlain):
+			t.Errorf("%s: nativeShareText reads the anchor %v, presents beside it %v, beside the words %v, at the selection %v; "+
+				"want all four", d.file, reads, presentsAt, presentsAtWords, presentsPlain)
 		case apple[d.file] && !strings.Contains(pkg.src[d.file], defined):
 			t.Errorf("%s: the preamble does not define %q", d.file, defined)
-		case !apple[d.file] && (reads || presentsAt):
+		case apple[d.file] && !strings.Contains(pkg.src[d.file], definedWords):
+			t.Errorf("%s: the preamble does not define %q", d.file, definedWords)
+		case !apple[d.file] && (reads || presentsAt || presentsAtWords):
 			t.Errorf("%s: nativeShareText reads the anchor %v, presents beside it %v; this share has no anchor",
 				d.file, reads, presentsAt)
 		}
@@ -202,5 +206,54 @@ func TestTheApplePanesPresentTheCardShareAtItsAnchor(t *testing.T) {
 	want := []string{"reading_android.go", "reading_ios.go", "reading_macos.go", "share_other.go", "share_windows.go"}
 	if strings.Join(files, ",") != strings.Join(want, ",") {
 		t.Errorf("nativeShareText is defined in %v, want %v", files, want)
+	}
+}
+
+// SHARE WITH NOTE IS HANDED OVER WITH THE SELECTED WORDS AS ITS ANCHOR. Its
+// sheet goes out before the note it kept is put on the page, which re-imports
+// the chapter with the note's card above the passage, so the Mac and iPad
+// panes, anchored to the selection as it was, pointed the sheet's arrow into
+// the new card. The anchor names the words by their place in the pane's own
+// text, the verse the selection begins in, the lead's length in UTF-16 units
+// and the selection's, which the panes find again in the re-imported text.
+// A send with no note puts no card on the page and keeps the selection's
+// anchor, and so does a selection that came with no lead. Mutation: the
+// composer shares bare — no anchor, the arrow back in the card.
+func TestShareWithNoteIsAnchoredToTheSelectedWords(t *testing.T) {
+	for _, c := range []struct {
+		name, note string
+		span       selSpan
+		want       shareAnchor
+	}{
+		{"a note, with the lead", "fixture anchor note", selSpanWithLead(1, 1, "1 The Lord is my shepherd; "), shareAnchor{verse: 1, wordsAt: 27, wordsLen: 14}},
+		{"no note", "", selSpanWithLead(1, 1, "1 The Lord is my shepherd; "), shareAnchor{}},
+		{"a note, no lead", "fixture anchor note", selSpanFromNative(1, 1), shareAnchor{}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			st := sentNoteState()
+			win := noteSheetWindow(t, st, false, 900, 760)
+			holdNoteSheetTimers(t)
+			setNotesEnabled(true)
+			shares := catchAnchoredShares(t)
+			const words = "I shall not \U0001F600"
+			promptShareNote(st, words, c.span)
+			p := topPopup(t, win)
+			field := composerField(p)
+			if field == nil {
+				t.Fatalf("control: the composer has no field; texts %v", sheetTexts(p))
+			}
+			field.SetText(c.note)
+			test.Tap(findTreeButton(p.Content, "Share"))
+			if len(*shares) != 1 {
+				t.Fatalf("%d shares were handed over, want 1", len(*shares))
+			}
+			s := (*shares)[0]
+			if s.at != c.want || s.ok != (c.want.verse > 0) {
+				t.Errorf("the share was handed over with %+v (ok %v), want %+v", s.at, s.ok, c.want)
+			}
+			if _, ok := shareAnchorNow(); ok {
+				t.Error("an anchor was left behind")
+			}
+		})
 	}
 }

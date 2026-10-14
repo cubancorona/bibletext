@@ -286,10 +286,23 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 	// phone sheet. It shares and files the note against at, the passage the
 	// words were selected on, as the excerpt above shows it: a link arriving
 	// while the sheet is open moves the reader and leaves the sheet up.
+	//
+	// With a note, the sheet is anchored to the selected words rather than
+	// the selection (wordsAnchor): the note's card goes on the page above
+	// them as the sheet is handed its message, and the Mac and iPad panes
+	// present it beside the words once the page has settled.
 	send := func() {
 		note := strings.TrimSpace(noteText())
 		closeSheet()
-		if stored, kept := shareVerseLinkWithNote(state, selectedText, note, span, at); kept {
+		var stored StoredNote
+		var kept bool
+		share := func() { stored, kept = shareVerseLinkWithNote(state, selectedText, note, span, at) }
+		if note != "" {
+			shareAnchoredAt(wordsAnchor(selectedText, span), share)
+		} else {
+			share()
+		}
+		if kept {
 			showSentNote(state, stored, at)
 		}
 	}

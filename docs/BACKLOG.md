@@ -2703,12 +2703,21 @@ or an empty rectangle, has none; and, read as source, the two Apple panes'
 `nativeShareText` read the anchor and present beside it while the other
 three never read one.
 
-Left as seen: Share with note's arrow in the new note card on both. Moving
-the presentation after `showSentNote` is not enough, since by then the
-selection is gone with the replaced storage and the fallback would point
-at the middle of the view, which is worse; pointing at the words needs
-their rectangle read after the chapter's re-import and the arrival scroll
-have settled, new work in both panes, and it stays open here.
+Share with note's arrow in the new note card on both: **FIXED 14 October
+2026, for 1.2.22.** Moving the presentation after `showSentNote` was not
+enough, since by then the selection is gone with the replaced storage and
+the fallback would point at the middle of the view. The share now carries
+the selected words' place in the pane's own text (`wordsAnchor`,
+`share.go`: the verse the selection begins in, the lead's length and the
+selection's, in UTF-16 units), and the two panes hold the sheet back until
+the re-import, finding the words again in the new text 0.35 s after it and
+presenting beside them (`bibleTextShareTextAtWords`); with no import a
+second later, the sheet is presented at the selection as before. An iPhone
+presents its sheet at once, as before. Seen with development builds and
+the same kind of trigger, with and without the change: the Mac's picker
+0.8 pt below the words against 88 pt above them, the iPad's source
+rectangle on the words against 89 points above them (docs/PLATFORM_MATRIX.md,
+the Sharing table).
 
 ## Android: the status-bar icons were white on the light page — FIXED 30 September 2026
 

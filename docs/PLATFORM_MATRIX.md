@@ -649,8 +649,8 @@ anchored to the hidden reading view, fixed, and seen again at the card's icon.
 | Platform | Share with note | Share with citation | Share as link | Share as image | Verse of the day | Defined in | Proof |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | iOS | System share sheet, over the new note card | System share sheet | System share sheet | Preview, then the system share sheet | System share sheet | `reading_ios.go` | `builds` — code reading, 29–30 September 2026 |
-| iPadOS | Share popover beside where the selection was, the new note card now there | Share popover at the selection | Share popover at the selection | Preview, then a share popover beside where the selection was | Share popover at the card's Share icon, beside the card with its arrow at the icon | `reading_ios.go` | `runner` — simulator, iPad Pro 13-inch (M5), iPadOS 26.5, development builds of 1db51a02b (6 October 2026) and fa4072f73 (the verse of the day, 7 October 2026) |
-| macOS | Share picker beside where the selection was, its arrow in the new note card and its body over the verse, which is one card lower | Share picker at the selection, its arrow at the bottom centre of the selected words | Share picker at the selection, as for the citation | Preview, then the share picker at the selection with the image | Share picker at the card's Share icon, hanging below it, with or without a selection | `reading_macos.go` | `runner` — development builds of ebc9c98f3 (the selection verbs) and fa4072f73 (the verse of the day) driven by a throwaway trigger, macOS 26.6.2, light appearance, a 1280x892 window, 7 October 2026 |
+| iPadOS | Share popover beside the selected words, below the new note card | Share popover at the selection | Share popover at the selection | Preview, then a share popover beside where the selection was | Share popover at the card's Share icon, beside the card with its arrow at the icon | `reading_ios.go` | `runner` — simulator, iPad Pro 13-inch (M5), iPadOS 26.5, development builds of 1db51a02b (6 October 2026), fa4072f73 (the verse of the day, 7 October 2026) and the 1.2.22 fixes (Share with note, 14 October 2026) |
+| macOS | Share picker at the selected words, its arrow at their bottom edge, below the new note card | Share picker at the selection, its arrow at the bottom centre of the selected words | Share picker at the selection, as for the citation | Preview, then the share picker at the selection with the image | Share picker at the card's Share icon, hanging below it, with or without a selection | `reading_macos.go` | `runner` — development builds of ebc9c98f3 (the selection verbs) and fa4072f73 (the verse of the day) driven by a throwaway trigger, macOS 26.6.2, light appearance, a 1280x892 window, 7 October 2026; Share with note with development builds of the 1.2.22 fixes, 14 October 2026 |
 | Android | The note card, then the "Sharing text" sheet with the note, citation and link | "Sharing text" sheet with the quote and citation | "Sharing text" sheet with the link | Preview, then the "Sharing image" sheet | "Sharing text" sheet, by the citation's route; not driven | `reading_android.go` | `runner` — emulator, 1.2.17, 29–30 September 2026 |
 | Windows | The Windows Share sheet over the window, headed "Share link", with the citation, the link carrying the note, a QR-code button and a link button with no label (Copy link, by its icon), which shows a check when pressed; the new note card on the page beneath. By the code the note, the citation and the link go to the chosen app as text, and the link as a web link too; not seen (28) | The Windows Share sheet over the window, headed "Share", listing the apps to share to, with no title, preview or Copy on Windows 11. By the code the quote and its citation go to the chosen app as text; not seen (28) | The Windows Share sheet over the window, headed "Share link", with the citation, the link, a QR-code button and a link button with no label (Copy link, by its icon) (28) | Preview, then the Windows Share sheet over the window with the card as a file named "BibleText verse <date> <time>.png" in local time, shown in place of a title, with its thumbnail, its size and a size picker, Edit, and a copy button with no label (28) | The Windows Share sheet, as for Share with citation (28) | `share_windows.go` | `hardware` — arm64 VM, Windows 11 build 26200, the Store package workflow's arm64 package: its executable run unpackaged, 30 September 2026, and the package registered with package identity, 1 October 2026 (the proof note below) |
 | Linux | Copied; the "Copied — ready to paste" sheet over the new note card, with Email…, Copy again and Done (27) | Copied; the "Copied — ready to paste" sheet (27) | Copied; the "Copied — ready to paste" sheet (27) | Saved to the reader's Downloads folder, the XDG download directory under whatever name it has, inside the snap the one in the reader's own home (with none, in that home); the file manager shows it, through the desktop portal inside the snap; the "Picture saved" sheet, saying the file manager shows it only when the file manager said so, and Downloads only of a folder called Downloads, and not opening for a picture no folder took that the file manager did not show, or for a card that could not be read at the tap, with Email… attaching the file only where a mail client, not a browser, handles mailto:, and never in the snap (27) | Copied; the "Copied — ready to paste" sheet over the card (27) | `share_other.go`, handing on to `share_fallback.go` | `hardware` — arm64 VM, X11, 30 September 2026; Share as image in the snap, 1 October 2026; a card that could not be read at the tap, development builds before and after the fix, 6 October 2026 |
@@ -759,7 +759,12 @@ What each proof rests on:
   its centre, with and without a selection, and Share with citation's
   picker is where it was to the point. Not seen: the Control-click menu
   itself, a selection made with the mouse, the dark appearance, other
-  window sizes, the shipped artefact.
+  window sizes, the shipped artefact. Share with note again on 14 October
+  2026, with development builds of the 1.2.22 fixes with and without the
+  change that waits for the page, on the same trigger with a note typed:
+  with it the picker's top edge is 0.8 pt below the words' bottom edge and
+  3.4 pt from their centre, after the note card had moved the words 80 pt;
+  without it, 88 pt above that edge, inside the card.
 - **iPadOS, `runner`.** A development build of `main` at 1db51a02b on the
   iPad Pro 13-inch (M5) simulator, iPadOS 26.5, portrait, 6 October 2026,
   and of fa4072f73 on the same simulator for the verse of the day, 7
@@ -774,7 +779,12 @@ What each proof rests on:
   is, and the popover opened to the left of it with its arrow at the
   icon's left edge. Not seen: landscape, Split View, a selection made by
   touch, and the verse of the day with a selection made before the card
-  opened, which the Mac covered.
+  opened, which the Mac covered. Share with note again on 14 October 2026,
+  with development builds of the 1.2.22 fixes with and without the change
+  that waits for the page: with it the popover's source rectangle is the
+  selected words as the re-imported page holds them, 89 points lower than
+  before the note card went on the page; without it, the words' old place,
+  89 points above them and inside the card.
 - **Windows, `hardware`, as an exception to the rule that the artefact
   must be the shipped one.** This code is not yet in a release. The
   Microsoft Store package workflow built a tree that carries it,

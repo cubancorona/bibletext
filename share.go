@@ -231,8 +231,31 @@ var shareTextOut = func(s string) { nativeShareText(s) }
 // Share icon's rectangle over instead, and those panes present beside it. A
 // selection share hands none and keeps its selection anchor, and the
 // Android, Windows and Linux shares read none: their sheets have no anchor.
+//
+// verse names the other kind of anchor, the selected words themselves, for
+// Share with note. Its sheet is handed its message before the note it kept
+// is put on the page (showSentNote), and that re-imports the chapter and puts
+// the note's card above the passage: anchored to the selection as it was,
+// the popover's arrow pointed into the new card, 52 points above the words,
+// with the sheet over the verse. The words are given as their place in the
+// pane's own text, wordsAt UTF-16 units after the start of verse's number
+// and wordsLen long, as the pane's lead measures them (selSpan.lead), so
+// the pane can find them again in the re-imported text and present beside
+// them once the page has settled.
 type shareAnchor struct {
 	x, y, w, h float32
+
+	verse, wordsAt, wordsLen int
+}
+
+// wordsAnchor is the anchor of a selection's own words, for a share whose
+// sheet waits for the page to change under it, or no anchor when the span
+// does not say where in its first verse the selection begins.
+func wordsAnchor(text string, span selSpan) shareAnchor {
+	if !span.valid() || !span.hasLead {
+		return shareAnchor{}
+	}
+	return shareAnchor{verse: span.lo, wordsAt: utf16Len(span.lead), wordsLen: utf16Len(text)}
 }
 
 // currentShareAnchor is the anchor of the share being handed over, set for
@@ -251,7 +274,7 @@ var currentShareAnchor struct {
 // behind for the next share. An empty rectangle is no anchor: a control that
 // has not been laid out gets the selection path, not a point at the origin.
 func shareAnchoredAt(at shareAnchor, share func()) {
-	currentShareAnchor.at, currentShareAnchor.ok = at, at.w > 0 && at.h > 0
+	currentShareAnchor.at, currentShareAnchor.ok = at, (at.w > 0 && at.h > 0) || at.verse > 0
 	defer func() { currentShareAnchor.at, currentShareAnchor.ok = shareAnchor{}, false }()
 	share()
 }

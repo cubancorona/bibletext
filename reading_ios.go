@@ -163,6 +163,14 @@ static NSUInteger btIOSContentStart(void);
 // @implementation can reference it — the @implementation precedes the rest of the
 // statics in this file.
 static NSRange gReadingHighlightRange = {NSNotFound, 0};
+// Share with note's sheet on an iPad, waiting for the re-import that puts the
+// note's card on the page (bibleTextShareTextAtWords): its message, the place
+// of the selected words in their verse, and a token that lets one of the two
+// presentations scheduled for it run.
+static NSString *gWordsShareText = nil;
+static NSUInteger gWordsShareToken = 0;
+static int gWordsShareVerse = 0, gWordsShareAt = 0, gWordsShareLen = 0;
+static void btIOSPresentWordsShare(NSUInteger token);
 
 // btIOSPointInChapterWash asks the wash MODEL whether a container-space point
 // landed on washed text. Declared here, defined with the model below.
@@ -3475,6 +3483,13 @@ static BOOL bibleTextApplyHTML(NSData *data) {
             if (!gReadingTV.dragging && !gReadingTV.decelerating) btIOSReassertPlacement();
         });
     }
+    // A Share with note waiting for this page presents beside its words once
+    // the re-asserts above have placed the page (bibleTextShareTextAtWords).
+    if (gWordsShareText != nil) {
+        NSUInteger token = gWordsShareToken;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{ btIOSPresentWordsShare(token); });
+    }
     return YES;
 }
 
@@ -3818,6 +3833,76 @@ void bibleTextShareTextAt(const char *text, double x, double y, double w, double
         if (s.length == 0) return;
         UIEdgeInsets safe = bibleTextFindWindow().safeAreaInsets;
         bibleTextPresentShareAt(@[s], CGRectMake(x + safe.left, y + safe.top, w, h));
+    });
+}
+
+// bibleTextShareTextAtWords is Share with note's share. Its message is
+// handed over before the note it kept is put on the page, and putting it
+// there re-imports the chapter with the note's card above the passage:
+// presented at once, anchored to the selection, the iPad's popover pointed
+// into the new card, 52 points above the words, with its body over the verse.
+// So on an iPad the sheet waits for the re-import, and is presented beside
+// the selected words as the re-imported text holds them, at the place the
+// pane's lead measured: at UTF-16 units after the start of verse's number,
+// len units long, the card's band being paragraph spacing that moves no
+// character. It is presented 0.35 s after the import, past the re-asserts
+// that place the page. Should no import come (the note was not kept, or the
+// reader moved on), it is presented a second after the share as it was,
+// beside the selection, which then still stands. An iPhone presents a sheet
+// with no anchor, at once, as before.
+static void bibleTextPresentShareFrom(NSArray *items, UIView *view, CGRect r) {
+    if (items.count == 0) return;
+    UIViewController *top = bibleTextTopVC();
+    if (top == nil) return;
+    UIActivityViewController *av =
+        [[UIActivityViewController alloc] initWithActivityItems:items applicationActivities:nil];
+    if (av.popoverPresentationController != nil && view != nil) {
+        av.popoverPresentationController.sourceView = view;
+        av.popoverPresentationController.sourceRect = r;
+    }
+    [top presentViewController:av animated:YES completion:nil];
+}
+
+static void btIOSPresentWordsShare(NSUInteger token) {
+    if (token != gWordsShareToken || gWordsShareText == nil) return;
+    NSString *s = gWordsShareText;
+    gWordsShareText = nil;
+    UITextView *tv = gReadingTV;
+    if (tv != nil && !tv.hidden && gWordsShareVerse > 0) {
+        NSUInteger loc = btIOSLocForVerse(tv.textStorage, gWordsShareVerse);
+        NSUInteger total = tv.textStorage.length;
+        NSUInteger start = loc == NSNotFound ? NSNotFound : loc + (NSUInteger)MAX(gWordsShareAt, 0);
+        if (start != NSNotFound && start < total) {
+            NSUInteger n = MIN((NSUInteger)MAX(gWordsShareLen, 1), total - start);
+            UITextPosition *a = [tv positionFromPosition:tv.beginningOfDocument offset:(NSInteger)start];
+            UITextPosition *b = a ? [tv positionFromPosition:a offset:(NSInteger)n] : nil;
+            UITextRange *range = (a && b) ? [tv textRangeFromPosition:a toPosition:b] : nil;
+            CGRect r = range ? [tv firstRectForRange:range] : CGRectNull;
+            if (!CGRectIsNull(r) && !CGRectIsEmpty(r)) {
+                bibleTextPresentShareFrom(@[s], tv, r);
+                return;
+            }
+        }
+    }
+    bibleTextPresentShare(@[s]);
+}
+
+void bibleTextShareTextAtWords(const char *text, int verse, int at, int len) {
+    if (text == NULL) return;
+    NSString *s = [NSString stringWithUTF8String:text];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (s.length == 0) return;
+        if (UIDevice.currentDevice.userInterfaceIdiom != UIUserInterfaceIdiomPad) {
+            bibleTextPresentShare(@[s]);
+            return;
+        }
+        gWordsShareText = s;
+        gWordsShareVerse = verse;
+        gWordsShareAt = at;
+        gWordsShareLen = len;
+        NSUInteger token = ++gWordsShareToken;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{ btIOSPresentWordsShare(token); });
     });
 }
 
@@ -4203,9 +4288,14 @@ func hideNativeReadingOverlay() { C.bibleTextTVHide() }
 func nativeShareText(s string) {
 	c := C.CString(s)
 	defer C.free(unsafe.Pointer(c))
-	// The verse-of-the-day card's share presents beside its icon; a
+	// The verse-of-the-day card's share presents beside its icon, and Share
+	// with note's beside the selected words once the page shows its note; a
 	// selection's share stays at the selection (shareAnchor, share.go).
 	if at, ok := shareAnchorNow(); ok {
+		if at.verse > 0 {
+			C.bibleTextShareTextAtWords(c, C.int(at.verse), C.int(at.wordsAt), C.int(at.wordsLen))
+			return
+		}
 		C.bibleTextShareTextAt(c, C.double(at.x), C.double(at.y), C.double(at.w), C.double(at.h))
 		return
 	}
