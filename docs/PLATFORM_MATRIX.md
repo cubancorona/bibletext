@@ -468,6 +468,28 @@ place a fix on one does not reach the others.
     set, and the menu-source test that holds the four native menus to
     `aiStudyVerbs` (`study_verbs_source_test.go`) does not read this pane.
 
+**The reading position**
+
+33. **Android keeps the place in the top verse as a fraction of that
+    verse's height; the iPhone, iPad, Mac and the Windows and Linux pane
+    keep it in pixels.** Every pane saves and restores the reading position
+    verse-first (`readingState`, `reading_state.go`): the verse at the top
+    of the view, how far into it the top stands, and a fraction of the
+    scroll range as the fallback. Since 1.2.22 Android's "how far" is a
+    fraction of the verse's band, from the top of its first line to the top
+    of the next verse's line (`verseBand`, `android/BtBridge.java`); the
+    iPhone and iPad (`bibleTextTVCaptureAnchor`, `reading_ios.go`), the Mac
+    (`bibleTextMacCaptureAnchor`, `reading_macos.go`) and the Windows and
+    Linux pane (`captureStyledAnchor`, `reading_styled_area.go`) keep it in
+    points, so `AnchorDelta` is stored in two units, as its field comment
+    says. *Risk:* a turn or a resize that makes the top verse shorter can
+    put a pixel offset into the next verse; a model of the WEB's layout
+    showed that in 25% of positions from portrait to landscape, measured
+    for Android and not on the other panes. Closes when they take the
+    fraction too, or clamp the offset to the verse's new height
+    (docs/BACKLOG.md, "Where the app re-finds the reader's position from
+    text", AND-3).
+
 ## Deliberate exclusions
 
 Decisions, with the reason — so that none of these is ever mistaken for
