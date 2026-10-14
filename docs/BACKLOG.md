@@ -274,7 +274,7 @@ rotation. After a link's arrival it failed: the reader's later scrolls were
 dropped, and a rotation or a relaunch put them back at the arrival point.
 
 **The arrival point, FIXED 14 October 2026, for 1.2.22** (`b45fc17c0`,
-`d473150aa`; ROADMAP.md, 1.2.22, row 12). The phone chapter header asks for
+`74d1cd1f8`; ROADMAP.md, 1.2.22, row 12). The phone chapter header asks for
 more than a phone is wide (about 432 units with John 3 on the page, against a
 360-unit canvas), so wherever its minimum changed the mobile driver's paint
 laid the reading host out about 425 units wide and then at its real 339, and
@@ -723,9 +723,10 @@ lead, and where the walk from the lead fails.
 
 ### AI-4. The study verbs do not carry the chapter they were chosen in
 
-Planned for: a later minor release; the Go half in any, the native half
-through the seams P1 widened in 1.2.22, which do not carry the chapter — see
-docs/ROADMAP.md.
+Planned for: 1.2.23, both halves, decided 14 October 2026: 1.2.22 ships
+without it, and it is built on its own branch, `fu/ai4-chapter`. The native
+half goes through the seams P1 widened in 1.2.22, which do not carry the
+chapter — see docs/ROADMAP.md.
 
 The span carries verse numbers only, and the dispatch applies them to
 whichever chapter is current (`readerChapter`, `ai.go:185`). Continuous
@@ -748,7 +749,9 @@ passage, as AI-1 makes it.
 
 ### P3: C, IOS-PLAIN-FALLBACK-ZERO-SPAN, MAC-PLAIN-FALLBACK-ZERO-SPAN. The Apple plain-text fallback page has no verse geometry
 
-Planned for: a later minor release — see docs/ROADMAP.md.
+Planned for: 1.2.23, decided 14 October 2026: 1.2.22 ships without it, and
+it is built on its own branch, `fu/p3-fallback-geometry` — see
+docs/ROADMAP.md.
 
 When a chapter's HTML import fails three times, the iPhone and iPad empty the
 verse index (`btIOSBuildVerseIndex(nil)`, `reading_ios.go:3560-3564`) and the
@@ -913,7 +916,8 @@ term, the decoder already walks the words-of-Jesus span
 `SmallCaps` are carried.
 
 **FIXED in the generator, 14 October 2026; the table is not yet regenerated
-with it** (ROADMAP.md, Later minor releases, row 31). The HTML parser keeps
+with it** (`d98440704`, `c9149e93a`; ROADMAP.md, Later minor releases, row
+31). The HTML parser keeps
 each verse's non-space characters as it reads them, leaving out what the
 app's decoder leaves out of a verse (the verse number, headings and the
 psalm title's paragraph), and records those before each run; `place` takes
@@ -972,8 +976,9 @@ Fix, 1 day: carry the run's alphanumeric offset from the USFM walk, verify at
 that position, and fail generation on an ambiguity or an edge inside a word;
 regenerate byte-identical.
 
-**FIXED 14 October 2026** (ROADMAP.md, Later minor releases, row 32).
-`wj_texts` carries the letters and digits of each run's verse ahead of it,
+**FIXED 14 October 2026** (`78b9ce81b`, `c9149e93a`; ROADMAP.md, Later
+minor releases, row 32). `wj_texts` carries the letters and digits of each
+run's verse ahead of it,
 casefolded as `alphanumeric_map` gives them, with footnotes,
 cross-references, alternate and published numbers (`\va`, `\vp`, `\ca`) and
 heading lines (`\s`, `\r` and the like) left out; their count is the run's
@@ -1029,8 +1034,9 @@ one harmless double copy at Revelation 1:8). The seven pinned recoveries at
 Fix, 0.75 day: carry the run's offset within the USFM verse and verify there;
 regenerate byte-identical, which needs the eBible USFM zips downloaded.
 
-**FIXED 14 October 2026** (ROADMAP.md, Later minor releases, row 33), as
-RL-BSB-1 with the punctuation-preserving match alone: `wj_texts` carries
+**FIXED 14 October 2026** (`3a8bbe3e3`, `c9149e93a`; ROADMAP.md, Later
+minor releases, row 33), as RL-BSB-1 with the punctuation-preserving match
+alone: `wj_texts` carries
 the letters and digits of each run's verse ahead of it, heading lines and
 alternate or published numbers left out, and `locate` matches only at their
 count, when the runtime verse has the same letters before it. A run of
@@ -1363,7 +1369,7 @@ not yet shown. Settle which through `realCachePath`, comparing without
 printing the text, fix the test or the route, and the walk passes on all
 four translations.
 
-**The test's stand-in, FIXED 14 October 2026, for 1.2.22** (`4af99b741`;
+**The test's stand-in, FIXED 14 October 2026, for 1.2.22** (`abea88a87`;
 ROADMAP.md, 1.2.22, row 20). `selectionRouteRaw`, the test's stand-in for
 what a pane hands the selection route, built each verse from `v.Text`, the
 publisher's "Lord"; every pane hands over the drawn form, `smallCapsText`,
@@ -1437,10 +1443,98 @@ encrypted in transit. One Play edit at a time (docs/RELEASING.md, stage 6).
    Store's label can stay as it is: a message the reader chooses to send to
    support is the customer-service case Apple lets an app leave undeclared.
 
+## Android drops the zero-width joiner and non-joiner typed into a text field — found 14 October 2026
+
+Planned for: 1.2.23, a bug that needs no decision — see docs/ROADMAP.md
+(Later minor releases, row 46).
+
+On Android, a note typed with a joined emoji (a family, a profession, a flag
+joined by U+200D) is stored, shared in the message and encoded in its link
+as separate emoji, and Persian or Indic text loses its zero-width
+non-joiner. `normalizeNote` (`share_note.go`) keeps U+200C and U+200D on
+purpose, since joined emoji and Indic and Persian text need them, so this
+undoes a deliberate rule.
+
+The cause is in the toolkit's mobile driver: every typed character passes
+through `runeToPrintable` (`internal/driver/mobile/driver.go:594` in Fyne
+v2.7.4), which returns 0 for any character `strconv.IsPrint` rejects, and a
+0 is never sent to the field as `TypedRune`. Both joiners are format
+characters, which `strconv.IsPrint` rejects. The desktop driver hands typed
+characters on unfiltered (`processCharInput`,
+`internal/driver/glfw/window.go`), and the iPhone and iPad note composer is
+a native field (`note_entry_ios.go`), which was not checked. The filter is
+in the driver, so every Android version has it, in every text field the
+toolkit draws there, not only the note's.
+
+Seen on 14 October 2026 on an Android 11 (API 30) emulator image, with a
+debug build of the tree at `7a68743cb`: in Share with note, a note entered
+through a test input method's `commitText`, the call a keyboard's emoji
+panel makes, holding a family emoji (U+1F468 U+200D U+1F469 U+200D U+1F467)
+then U+1F64F and U+10437. The input method sent both joiners; the shared
+message carried the other five code points and no U+200D, and neither did
+the link's payload. A keyboard's own emoji panel was not tried.
+
+Fix: a toolkit patch that lets U+200C and U+200D through the mobile
+driver's filter (or every format character, which `normalizeNote` already
+sorts by its own rule), with a test that feeds the driver's typed-character
+path a joined sequence and reads the field's text back.
+
+## A space after an emoji or a fallback-font character draws wrongly in text the toolkit draws — found 14 October 2026
+
+Planned for: 1.2.23, a bug that needs no decision — see docs/ROADMAP.md
+(Later minor releases, row 47).
+
+In note text the toolkit draws, the Share with note field and the notes
+browser, "a 🙏 b" draws as "a 🙏b": the space after the emoji takes no
+width. A space after a character drawn from a fallback font, such as 𝔊
+(U+1D50A), draws as a missing-glyph box. "e🙏f" and "g é h" draw right. The
+stored and shared text is right, and the native note card draws the same
+note right. Seen on 14 October 2026 on an Android 11 (API 30) emulator
+image.
+
+It is not Android's. With the patched toolkit and its default theme on
+macOS, the toolkit's measurement gives "a 🙏 b" and "a 🙏b" the same width,
+where "a b" and "ab", and "g é h" and "g éh", differ by the width of a
+space; the test driver there has no font for 𝔊, so the box was seen on
+Android alone. So it should hold wherever the toolkit draws note text.
+
+Likely cause, not confirmed beyond those measurements: go-text's face split
+(`splitByFace` and `ignoreFaceChange`, `shaping/input.go`, v0.3.4) never
+changes face for a space, on the assumption that every font has one, so a
+space joins the run of the emoji or fallback face before it, and the
+toolkit's painter (`internal/painter/font.go`) shapes it with that face.
+
+Fix: from that cause, probably a toolkit patch that shapes such a space with
+the face the text would otherwise use; its test measures "a 🙏 b" against
+"a 🙏b".
+
+## The GitHub release notes are not among the release's coupled surfaces — found 14 October 2026
+
+Planned for: 1.2.22's version bump, which rewrites the notes; the guard
+added before it would fail — see docs/ROADMAP.md (Later minor releases, row
+48).
+
+The GitHub release's notes are the argument of the `printf` that fills
+`NOTES` in `.github/workflows/release.yml`. Stage 1 of `docs/RELEASING.md`
+lists nine coupled surfaces that must name the version being released,
+each held by a test; the notes are not among them, and no test ties their
+text to the release. `scripts/check-public-surfaces.py` holds their store
+links and their advice for the unsigned Mac download, not their version.
+The text, which opens "New study tools and improvements since 1.2.19", was
+set before v1.2.20 and has not changed since, so v1.2.21's GitHub release
+carries 1.2.20's notes word for word, and 1.2.22's would too.
+
+Fix: list the printf in stage 1 as a coupled surface, and add a test that
+holds its text to the release being made, as the stores' What's New files
+are held: for instance, that it names no earlier release as the current one
+and is not a copy of the last tag's notes. The test goes in with 1.2.22's
+version bump, when the notes are rewritten; added now, it would fail until
+then.
+
 ## Three comments 1.2.20 left describing the code before it — all three corrected for 1.2.22
 
 The website's was corrected on 13 October 2026, for 1.2.22, and the other two
-on 14 October 2026 (`cdd6a2a3a`; ROADMAP.md, 1.2.22, row 21).
+on 14 October 2026 (`9a71f9c60`; ROADMAP.md, 1.2.22, row 21).
 
 - The stylesheet's comment on the psalm title (`.text p.pst`,
   `cmd/websitegen/assets.go`) says Android from API 35 justifies a wrapped
@@ -1804,7 +1898,7 @@ The fix: post the outcome back to the sheet — a line under the buttons when
 the compose fails, its wording to be approved — and stop at the first route
 that started a compose, rather than handing on after any non-zero exit.
 
-**The second compose, FIXED 14 October 2026, for 1.2.22** (`f4f09bc04`;
+**The second compose, FIXED 14 October 2026, for 1.2.22** (`5165c3659`;
 ROADMAP.md, 1.2.22, row 18). `xdg-email`'s exit 4, "the action failed", is
 the launcher's failure reported after it ran the mail client, which may by
 then have opened a compose; it now ends the share (`xdgEmailExit`, in the
@@ -3481,7 +3575,7 @@ preserving entered questions and notes and completed study answers.
   keeping it in the comfortable band. From the code alone: whether follow is
   asked while the pane is hidden was not traced. The fix would be the
   capture's, reading the clip view. FIXED 14 October 2026, for 1.2.22
-  (`79089f7df`; ROADMAP.md, 1.2.22, row 28): follow is asked while the pane
+  (`e3104ec92`; ROADMAP.md, 1.2.22, row 28): follow is asked while the pane
   is hidden (the audio controller's `onTimeUpdate` passes follow whatever
   the pane shows), and the follow-scroll reads the clip view now.
   `TestTheMacFollowScrollReadsTheClipViewNotVisibleRect`. Seen with
@@ -3502,9 +3596,9 @@ preserving entered questions and notes and completed study answers.
   waits for the next redraw. Reading the night bit from the `AConfiguration`
   the branch already builds (`AConfiguration_getUiModeNight`) was the fix
   proposed here, and does not work: the asset manager's configuration does
-  not carry the switch, and a build with it (`8c5677310`) stayed light
-  through `scripts/test-android-dark-mode.sh`. FIXED 14 October 2026, for
-  1.2.22 (`a0e5975b8`; ROADMAP.md, 1.2.22, row 29): the patch moves
+  not carry the switch, and a first attempt built that way left the app
+  light through `scripts/test-android-dark-mode.sh`. FIXED 14 October 2026, for
+  1.2.22 (`aa2da8d5c`; ROADMAP.md, 1.2.22, row 29): the patch moves
   `updateTheme` ahead of `super` in `onConfigurationChanged`, so the flag is
   written before the configuration is sent and the send orders the two.
   `TestAndroidNightModePatchWritesTheFlagBeforeTheConfigurationIsSent`; the
@@ -3668,6 +3762,20 @@ and older now leaves the narration playing as the iPhone does when the
 reader leaves the app; it was not run, the emulators here being 13 and later.
 Android 7.0 to 11 (API 24 to 30) are still supported, so the check is open,
 on an emulator at API 30 or below — see docs/ROADMAP.md.
+
+**Back on Android 11, PASSED 14 October 2026** (ROADMAP.md, Later minor
+releases, row 42), on an Android 11 (API 30) emulator image, with a debug
+build of the tree at `7a68743cb`. With the WEB's John 3 narrated from its
+recording and the read-along on verse 4, one Back finished the root
+activity and destroyed it (`wm_finish_activity`, `wm_destroy_activity …
+finish-imm:idle`) in a process that lived on. Five and 35 seconds later, in
+the same process and with no activity, the media session was PLAYING, the
+player started, the app held audio focus and the audio service was in the
+foreground. Opened again about 75 seconds after Back, the app came up warm
+in the same process with the transport showing Pause and the read-along on
+verse 19, then on 22 with the pane following. The control: a swipe from
+Recents, the documented stop (`onTaskRemoved`), left no session, player,
+focus or service in the same reading.
 
 ## Rework the download page — DONE 26 September 2026; Google Play filled its slot, the release notes followed, and the APK row returned, 30 September 2026
 
@@ -4560,7 +4668,7 @@ Still open, from the same work:
   one line. The concern that held it back, an iPhone rebuilding on rotation on
   Books and Search, no longer applies: a phone held sideways draws the rail,
   never the bar, and its rotation rebuilds for the rail already (1.2.18).
-  FIXED 14 October 2026, for 1.2.22 (`ecf49e80c`; ROADMAP.md, 1.2.22, row
+  FIXED 14 October 2026, for 1.2.22 (`f49b25091`; ROADMAP.md, 1.2.22, row
   25): `renderedLayout` carries the dress where a bar is drawn, read from
   the canvas as the bar and the rail read it, since the width the watcher
   is handed is the canvas's less the safe area and a term read from each
@@ -4666,7 +4774,7 @@ re-render (reading_android.go), rather than re-asserting from a class a later
 render can overwrite.
 
 **A reader who scrolls away from a note they arrived at, FIXED 14 October
-2026, for 1.2.22** (`e16733c5f`; ROADMAP.md, 1.2.22, row 26). The fix
+2026, for 1.2.22** (`291c5c550`; ROADMAP.md, 1.2.22, row 26). The fix
 recorded in the first bullet above: the reader's scroll sets the arrival
 class to nothing beside the restore's disarm, in `scrollViewDidScroll`
 (`btIOSEndArrival`) and `btMacUserScrolled`, as the next push would.
@@ -4684,7 +4792,7 @@ frame wrapped the text at the old insets first, AppKit moved the clip with
 that passing wrap, and the insets put right straight after left the clip
 there: a reader 5,000 points into Psalm 119, at verse 73, was at verse 112
 after the window narrowed, and one at verse 121 at the end of the psalm.
-FIXED the same day (`332b4d752`; ROADMAP.md, 1.2.22, row 27):
+FIXED the same day (`d07557382`; ROADMAP.md, 1.2.22, row 27):
 `btMacApplyFrame` reads the verse at the top and how far into it before a
 change of width and puts it back after the insets and the note's bands, and
 the re-assert still places a restore or an arrival over it.
