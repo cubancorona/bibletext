@@ -4,6 +4,10 @@
     BIBLETEXT_PROVIDER_ID_NKJV=<provider-id> \
         python3 scripts/gen-nkjv-redletter.py      # fetch (cached), then derive
 
+    python3 scripts/gen-nkjv-redletter.py --no-fetch \
+        [--html-cache <dir>] [--app-cache <bibletext-nkjv-v7.json>] [--out <file>]
+                                                   # derive only: no key, no call
+
 The NKJV's own spans are served by API.Bible as <span class="wj">. This is the publisher's editorial
 judgement, not ours, which is the right basis for a licensed edition.
 
@@ -21,7 +25,18 @@ The offsets are located by matching each marked span's TEXT inside the app's own
 verse text, tolerating whitespace differences: API.Bible's HTML runs verses
 together without the space the app's copy has, so raw offsets from the HTML do
 not transfer. All 2,054 marked verses located cleanly at the time of writing.
+
+Each run is matched at its own place in the verse: the parser counts the
+verse's non-space characters as it reads them, leaving out what the app's
+decoder leaves out of the verse (verse numbers, headings), and the run's
+characters must be found at that count. The same words earlier in the verse,
+in narration or inside a longer word ("Go" in "Gospel"), cannot take its
+place. A run whose characters are not at its count is placed only where they
+occur once in the whole verse; one with no copy there, or two or more, or with
+an end inside a word, fails generation, as does a chapter missing from the
+cache. Nothing is searched for again from the verse's start.
 """
+import argparse
 import json
 import os
 import subprocess
@@ -36,32 +51,8 @@ KEY=os.environ.pop('BIBLE_API_KEY', '').strip()
 PID=os.environ.pop('BIBLETEXT_PROVIDER_ID_NKJV', '').strip()
 for personal_key_var in ('ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'XAI_API_KEY'):
     os.environ.pop(personal_key_var, None)
-
-# This generator never opens the repository's general-purpose .env.local,
-# which may contain unrelated personal provider credentials. On macOS it may
-# use the same dedicated API.Bible Keychain item as the release pipeline.
-if not KEY and sys.platform == 'darwin':
-    result = subprocess.run(
-        ['security', 'find-generic-password', '-a', 'release',
-         '-s', 'uk.co.bibletext.apibible-release', '-w'],
-        check=False, capture_output=True, text=True,
-    )
-    if result.returncode == 0:
-        KEY = result.stdout.strip()
-    result.stdout = ''
-    result.stderr = ''
-    del result
-
-if not KEY or not PID:
-    missing = []
-    if not KEY:
-        missing.append('BIBLE_API_KEY (or the dedicated macOS Keychain item)')
-    if not PID:
-        missing.append('BIBLETEXT_PROVIDER_ID_NKJV')
-    raise SystemExit('Missing ' + ' and '.join(missing))
 BOOKS={'Matthew':('MAT',28),'Mark':('MRK',16),'Luke':('LUK',24),'John':('JHN',21),'Acts':('ACT',28),
        '1 Corinthians':('1CO',16),'2 Corinthians':('2CO',13),'1 Timothy':('1TI',6),'Revelation':('REV',22)}
-calls=0
 
 
 class SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
@@ -74,22 +65,49 @@ class SameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-OPENER = urllib.request.build_opener(SameOriginRedirectHandler())
-for book,(code,n) in BOOKS.items():
-    for ch in range(1,n+1):
-        path=os.path.join(CACHE,f"{code}.{ch}.json")
-        if os.path.exists(path) and os.path.getsize(path)>200: continue   # never re-fetch
-        url=(f"https://api.scripture.api.bible/v1/bibles/{PID}/chapters/{code}.{ch}"
-             "?content-type=html&include-notes=false&include-verse-spans=true")
-        try:
-            with OPENER.open(urllib.request.Request(url,headers={'api-key':KEY}),timeout=45) as r:
-                raw=r.read()
-            open(path,'wb').write(raw); calls+=1
-        except Exception as e:
-            print(f"  {code}.{ch}: {type(e).__name__} {e}",file=sys.stderr)
-            time.sleep(2)
-print(f"API calls made this run: {calls}; cached chapters: {len(os.listdir(CACHE))}",file=sys.stderr)
-KEY = None
+def fetch(cache):
+    """Fetch every chapter not yet in the cache. The only part that reads the
+    key or calls API.Bible; a derive-only run (--no-fetch) never reaches it."""
+    global KEY
+    # This generator never opens the repository's general-purpose .env.local,
+    # which may contain unrelated personal provider credentials. On macOS it may
+    # use the same dedicated API.Bible Keychain item as the release pipeline.
+    if not KEY and sys.platform == 'darwin':
+        result = subprocess.run(
+            ['security', 'find-generic-password', '-a', 'release',
+             '-s', 'uk.co.bibletext.apibible-release', '-w'],
+            check=False, capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            KEY = result.stdout.strip()
+        result.stdout = ''
+        result.stderr = ''
+        del result
+
+    if not KEY or not PID:
+        missing = []
+        if not KEY:
+            missing.append('BIBLE_API_KEY (or the dedicated macOS Keychain item)')
+        if not PID:
+            missing.append('BIBLETEXT_PROVIDER_ID_NKJV')
+        raise SystemExit('Missing ' + ' and '.join(missing))
+    calls=0
+    opener = urllib.request.build_opener(SameOriginRedirectHandler())
+    for book,(code,n) in BOOKS.items():
+        for ch in range(1,n+1):
+            path=os.path.join(cache,f"{code}.{ch}.json")
+            if os.path.exists(path) and os.path.getsize(path)>200: continue   # never re-fetch
+            url=(f"https://api.scripture.api.bible/v1/bibles/{PID}/chapters/{code}.{ch}"
+                 "?content-type=html&include-notes=false&include-verse-spans=true")
+            try:
+                with opener.open(urllib.request.Request(url,headers={'api-key':KEY}),timeout=45) as r:
+                    raw=r.read()
+                open(path,'wb').write(raw); calls+=1
+            except Exception as e:
+                print(f"  {code}.{ch}: {type(e).__name__} {e}",file=sys.stderr)
+                time.sleep(2)
+    print(f"API calls made this run: {calls}; cached chapters: {len(os.listdir(cache))}",file=sys.stderr)
+    KEY = None
 
 # ---------------------------------------------------------------- derive
 # THE HALF THAT WAS MISSING. Until 20 Aug 2026 this script ended at the fetch,
@@ -111,25 +129,37 @@ KEY = None
 
 from html.parser import HTMLParser
 
+# Paragraph classes whose text the app's decoder keeps out of every verse
+# (apiBibleSkipPara, and "d", the psalm title): not counted in a run's place.
+NON_VERSE_BLOCK = {"qa", "cl", "cd", "mr", "sr", "r", "sp", "s", "s1", "s2", "s3", "s4",
+                   "ms", "ms1", "ms2", "ms3", "d"}
+
 class WJExtract(HTMLParser):
-    """Per verse, the contiguous red runs, as text fragments in document order."""
+    """Per verse, the contiguous red runs, as text fragments in document order,
+    and where each begins: the verse's count of non-space characters before it."""
     def __init__(self):
         super().__init__(convert_charrefs=True)
         self.stack = []          # class-list per open span, innermost last
+        self.blocks = []         # class-list per open element of any kind, in step
         self.verse = None        # current verse id, e.g. "MAT.11.30"
         self.runs = {}           # verse id -> [ [fragments...], ... ]
+        self.starts = {}         # verse id -> [ run's start count, ... ]
+        self.counts = {}         # verse id -> non-space characters read so far
         self._open = {}          # verse id -> True while its current run continues
 
     def handle_starttag(self, tag, attrs):
-        if tag != "span":
-            self.stack.append(set()); return
         a = dict(attrs)
         cls = set((a.get("class") or "").split())
+        self.blocks.append(cls)
+        if tag != "span":
+            self.stack.append(set()); return
         self.stack.append(cls)
         if "verse-span" in cls and a.get("data-verse-id"):
             self.verse = a["data-verse-id"]
 
     def handle_endtag(self, tag):
+        if self.blocks:
+            self.blocks.pop()
         if self.stack:
             cls = self.stack.pop()
             # closing a wj ends every verse's current run: red text after this
@@ -141,6 +171,10 @@ class WJExtract(HTMLParser):
         in_wj = any("wj" in c for c in self.stack)
         in_num = any("v" in c for c in self.stack)
         in_head = any("s" in c for c in self.stack)
+        before = self.counts.get(self.verse, 0)
+        if (self.verse is not None and not in_num and not in_head
+                and not any(c & NON_VERSE_BLOCK for c in self.blocks)):
+            self.counts[self.verse] = before + sum(not ch.isspace() for ch in data)
         if not in_wj or in_num or in_head or self.verse is None:
             return
         if not data.strip():
@@ -150,6 +184,7 @@ class WJExtract(HTMLParser):
             return
         if not self._open.get(self.verse):
             self.runs.setdefault(self.verse, []).append([])
+            self.starts.setdefault(self.verse, []).append(before)
             # a new run for THIS verse closes every other verse's run: the
             # quotation moved on, and fragments of another verse can no longer
             # be contiguous with their old run.
@@ -171,19 +206,38 @@ def rune_map(s):
             stripped.append(ch.lower()); idx.append(i)
     return "".join(stripped), idx
 
-def locate(run_text, verse_text, cursor_nospace):
-    """Find run_text in verse_text ignoring ALL whitespace differences.
-    Returns (start_rune, end_rune, new_cursor) or None."""
+def inside_word(text, index):
+    """True when index falls between two letters or digits."""
+    return 0 < index < len(text) and text[index - 1].isalnum() and text[index].isalnum()
+
+def place(run_text, verse_text, start, cursor_nospace):
+    """Place run_text in verse_text, ignoring ALL whitespace differences, at
+    start: its count of non-space characters in the verse. Returns
+    ((start_rune, end_rune, new_cursor, relocated), None), or (None, why).
+
+    When the run's characters are not at start, at or after the cursor, the
+    app's text differs from the HTML before the run, and the run is placed
+    only where its characters occur once in the whole verse: with no copy,
+    or two or more, nothing says which the publisher marked. A placement
+    with either end inside a word is refused."""
     needle = "".join(ch.lower() for ch in run_text if not ch.isspace())
     if not needle:
-        return None
+        return None, "it has no characters"
     hay, idx = rune_map(verse_text)
-    at = hay.find(needle, cursor_nospace)
-    if at < 0 and cursor_nospace:            # same phrase twice: retry from 0
-        at = hay.find(needle)
-    if at < 0:
-        return None
-    return idx[at], idx[at + len(needle) - 1] + 1, at + len(needle)
+    at, relocated = start, False
+    if at < cursor_nospace or not hay.startswith(needle, at):
+        relocated = True
+        copies = [i for i in range(len(hay)) if hay.startswith(needle, i)]
+        if len(copies) != 1:
+            return None, (f"its characters are not at its place ({start}), "
+                          f"and the verse holds {len(copies)} copies of them")
+        at = copies[0]
+        if at < cursor_nospace:
+            return None, "its characters are not at its place, and their one copy lies before the run before it"
+    a, b = idx[at], idx[at + len(needle) - 1] + 1
+    if inside_word(verse_text, a) or inside_word(verse_text, b):
+        return None, f"it would begin or end inside a word at ({a}, {b})"
+    return (a, b, at + len(needle), relocated), None
 
 def fnv1a64(text):
     value = 0xCBF29CE484222325
@@ -192,23 +246,33 @@ def fnv1a64(text):
         value = (value * 0x100000001B3) & 0xFFFFFFFFFFFFFFFF
     return value
 
-def derive():
+def derive(cache, app_cache=None, out_path=None):
     import glob
-    app_cache = None
     # The cache name carries the decoder's EPOCH — bibletext-nkjv-v7.json — so
     # a table can only ever be built against a text some decoder really
     # produced. Globbing the bare name found nothing once epochs arrived, and a
     # generator that silently finds no text is worse than one that stops.
-    for pat in (
+    patterns = () if app_cache else (
         os.path.expanduser("~/Library/Caches/bibletext/bibletext-nkjv*.json"),
         os.path.expanduser("~/Library/Developer/CoreSimulator/Devices/*/data/Containers/Data/Application/*/Library/Caches/bibletext/bibletext-nkjv*.json"),
-    ):
+    )
+    for pat in patterns:
         hits = sorted(glob.glob(pat), key=os.path.getmtime, reverse=True)
         if hits:
             app_cache = hits[0]; break
     if not app_cache:
         sys.exit("no bibletext-nkjv.json found — open the NKJV in the app or a simulator once")
     print(f"app text: {app_cache}", file=sys.stderr)
+
+    # Every chapter must be there. One the fetch could not get would otherwise
+    # leave its verses out of the table, which reads as black letter, and the
+    # run would still report success.
+    missing = [f"{code}.{ch}" for code, n in BOOKS.values() for ch in range(1, n + 1)
+               if not os.path.exists(os.path.join(cache, f"{code}.{ch}.json"))]
+    if missing:
+        print(f"FAILED: {len(missing)} chapters are not in {cache}: {', '.join(missing[:20])}",
+              file=sys.stderr)
+        sys.exit(1)
 
     data = json.load(open(app_cache))["data"]["Verses"]
     def app_text(book, ch, v):
@@ -218,12 +282,10 @@ def derive():
         return None
 
     code_to_book = {code: book for book, (code, _) in BOOKS.items()}
-    spans, lengths, hashes, failed = {}, {}, {}, []
+    spans, lengths, hashes, failed, relocated = {}, {}, {}, [], []
     for book, (code, n) in BOOKS.items():
         for ch in range(1, n + 1):
-            path = os.path.join(CACHE, f"{code}.{ch}.json")
-            if not os.path.exists(path):
-                continue
+            path = os.path.join(cache, f"{code}.{ch}.json")
             html = json.load(open(path))["data"]["content"]
             p = WJExtract(); p.feed(html)
             for vid, runs in p.runs.items():
@@ -234,12 +296,16 @@ def derive():
                 if text is None:
                     failed.append((key, "no app text")); continue
                 cursor, out = 0, []
-                for frags in runs:
-                    got = locate("".join(frags), text, cursor)
+                for number, (frags, start) in enumerate(zip(runs, p.starts[vid]), 1):
+                    # The reason names the run by number and place, never by
+                    # its words: they are licensed text.
+                    got, why = place("".join(frags), text, start, cursor)
                     if got is None:
-                        failed.append((key, repr("".join(frags))[:60])); out = None; break
-                    a, b, cursor = got
-                    # merge with the previous span when touching/overlapping
+                        failed.append((key, f"run {number}: {why}")); out = None; break
+                    a, b, cursor, moved = got
+                    if moved:
+                        relocated.append(f"{key} run {number}")
+                    # merge with the previous span when touching
                     if out and a <= out[-1][1]:
                         out[-1] = (out[-1][0], max(out[-1][1], b))
                     else:
@@ -250,12 +316,15 @@ def derive():
                     hashes[key] = fnv1a64(text)
 
     if failed:
-        print(f"FAILED to locate {len(failed)} runs:", file=sys.stderr)
+        print(f"FAILED to place {len(failed)} runs:", file=sys.stderr)
         for k, why in failed[:20]:
             print(f"  {k}: {why}", file=sys.stderr)
         sys.exit(1)
+    print(f"{len(relocated)} runs placed by their only copy, not their place: {', '.join(relocated[:20])}",
+          file=sys.stderr)
 
-    out_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "red_letter_nkjv_data.go")
+    if not out_path:
+        out_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "red_letter_nkjv_data.go")
     with open(out_path, "w") as f:
         f.write("""package bibletext
 
@@ -290,4 +359,17 @@ var nkjvRedLetterSpans = map[string][]redLetterSpan{
     subprocess.run(["gofmt", "-w", out_path], check=True)
     print(f"wrote {out_path}: {len(spans)} verses", file=sys.stderr)
 
-derive()
+def main():
+    ap = argparse.ArgumentParser(description="Build red_letter_nkjv_data.go from API.Bible's NKJV markup.")
+    ap.add_argument("--no-fetch", action="store_true",
+                    help="derive from the cached chapters alone: reads no key and makes no API call")
+    ap.add_argument("--html-cache", default=CACHE, help="the directory of cached chapter responses")
+    ap.add_argument("--app-cache", help="the app's NKJV cache file (default: the newest one found)")
+    ap.add_argument("--out", help="where to write the table (default: red_letter_nkjv_data.go in the repository)")
+    a = ap.parse_args()
+    if not a.no_fetch:
+        fetch(a.html_cache)
+    derive(a.html_cache, a.app_cache, a.out)
+
+if __name__ == "__main__":
+    main()

@@ -1,12 +1,16 @@
 package bibletext
 
-// scripts/gen-bsb-redletter.py and gen-web-redletter.py, run on invented
-// sources and invented runtime text. Each writes a table of rune spans; these
-// tests run it into a temporary file, never over the shipped tables.
+// scripts/gen-bsb-redletter.py, gen-web-redletter.py and gen-nkjv-redletter.py,
+// run on invented sources and invented runtime text. Each writes a table of
+// rune spans; these tests run it into a temporary file, never over the shipped
+// tables, and the NKJV's runs derive only (--no-fetch): no key is read and no
+// call is made.
 //
-// The defect they guard against: a generator took the first copy of a run's
-// words at or after the end of the run before it, so a run could land inside
-// a longer word ("Go" in "Gospel") or on the same words earlier in the verse.
+// The defect they guard against: a generator took the first copy of a run's words
+// at or after the end of the run before it, so a run could land inside a
+// longer word ("Go" in "Gospel") or on the same words earlier in the verse,
+// and the NKJV's searched again from the verse's start and folded what it
+// found into the run before, dropping the run and reporting success.
 
 import (
 	"encoding/json"
@@ -318,4 +322,125 @@ func TestTheRedLetterGeneratorsReproduceTheShippedTables_LocalOnly(t *testing.T)
 			"--web-usfm", usfm[0], "--web-cache", cache(t, "web"),
 			"--webc-usfm", usfm[1], "--webc-cache", cache(t, "webc"))
 	})
+}
+
+// nkjvGenChapters are the chapters the NKJV generator fetches and requires,
+// as BOOKS in the script lists them.
+var nkjvGenChapters = map[string]int{"MAT": 28, "MRK": 16, "LUK": 24, "JHN": 21, "ACT": 28,
+	"1CO": 16, "2CO": 13, "1TI": 6, "REV": 22}
+
+// writeNKJVGenCache writes every chapter response the generator reads, each
+// empty but Matthew 1, in the shape API.Bible serves ("data", "content"),
+// leaving out the chapters named in skip.
+func writeNKJVGenCache(t *testing.T, dir, matthew1 string, skip ...string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for code, n := range nkjvGenChapters {
+		for ch := 1; ch <= n; ch++ {
+			name := fmt.Sprintf("%s.%d", code, ch)
+			if strings.Contains(" "+strings.Join(skip, " ")+" ", " "+name+" ") {
+				continue
+			}
+			content := ""
+			if name == "MAT.1" {
+				content = matthew1
+			}
+			blob, err := json.Marshal(map[string]any{"data": map[string]any{"content": content}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, name+".json"), blob, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}
+
+func nkjvGenVerse(v int, inner string) string {
+	return fmt.Sprintf(`<span class="verse-span" data-verse-id="MAT.1.%d" data-verse-org-ids="MAT.1.%d">`+
+		`<span data-number="%d" data-sid="MAT 1:%d" class="v">%d</span>%s</span>`, v, v, v, v, v, inner)
+}
+
+func runNKJVGen(t *testing.T, matthew1 string, text map[int]string, skip ...string) (string, string, error) {
+	t.Helper()
+	dir := t.TempDir()
+	writeNKJVGenCache(t, filepath.Join(dir, "html"), matthew1, skip...)
+	cache := filepath.Join(dir, "nkjv.json")
+	writeRedLetterGenCache(t, cache, text)
+	return runRedLetterGen(t, filepath.Join(dir, "out.go"),
+		filepath.Join("scripts", "gen-nkjv-redletter.py"), "--no-fetch",
+		"--html-cache", filepath.Join(dir, "html"), "--app-cache", cache)
+}
+
+// The NKJV's markup is HTML, read for its text; a verse's number and a
+// heading inside it are not in the app's verse, italic supplied words and the
+// small capitals nest inside a run, and the HTML runs verses together where
+// the app's text has a space. The text here is invented.
+func TestTheNKJVRedLetterGeneratorPlacesEachRunAtItsOwnPlace(t *testing.T) {
+	matthew1 := `<p class="p">` +
+		nkjvGenVerse(1, `The Gospel he preached was this: he said, “<span class="wj">Go</span>.”`) +
+		nkjvGenVerse(2, `The steward said, I am he. Then the teacher said, <span class="wj">I am he.</span>`) +
+		nkjvGenVerse(3, `He answered them, come and see. Then he said,`) + `</p>` +
+		`<p class="s1">Come and See</p>` +
+		`<p class="p"><span class="verse-span" data-verse-id="MAT.1.3" data-verse-org-ids="MAT.1.3">“<span class="wj">Come and see.</span>”</span>` +
+		nkjvGenVerse(4, `He said, <span class="wj">“My yoke <span class="it">is</span> light, says the <span class="nd">Keeper</span>.”</span>`) +
+		nkjvGenVerse(5, `He said, <span class="wj">“Follow</span>`) +
+		nkjvGenVerse(6, `<span class="wj">me now.”</span> And they went.`) + `</p>`
+	text := map[int]string{
+		1: "The Gospel he preached was this: he said, “Go.”",
+		2: "The steward said, I am he. Then the teacher said, I am he.",
+		3: "He answered them, come and see. Then he said, “Come and see.”",
+		4: "He said, “My yoke is light, says the KEEPER.”",
+		5: "He said, “Follow",
+		6: "me now.” And they went.",
+	}
+	src, log, err := runNKJVGen(t, matthew1, text)
+	if err != nil {
+		t.Fatalf("gen-nkjv-redletter.py: %v\n%s", err, log)
+	}
+	checkRedLetterGenSpans(t, redLetterGenSpans(t, src, "nkjvRedLetterSpans"), map[string]string{
+		"Matthew 1:1": lastCopy(text[1], "Go"),
+		"Matthew 1:2": lastCopy(text[2], "I am he."),
+		"Matthew 1:3": lastCopy(text[3], "Come and see."),
+		"Matthew 1:4": lastCopy(text[4], "“My yoke is light, says the KEEPER.”"),
+		"Matthew 1:5": lastCopy(text[5], "“Follow"),
+		"Matthew 1:6": lastCopy(text[6], "me now.”"),
+	})
+}
+
+// Each refusal is a table the generator used to write and report as made: a
+// second run whose words the app's verse holds only before the first (it
+// searched again from the start and folded the run into the first, so the
+// run shipped black); a run whose only place is the start of a longer word;
+// and a chapter missing from the cache, whose verses were left out of the
+// table, which reads as black letter.
+func TestTheNKJVRedLetterGeneratorRefusesWhatItCannotPlace(t *testing.T) {
+	for _, c := range []struct {
+		name, verse, text string
+		skip              []string
+	}{
+		{"a second run found only before the first",
+			nkjvGenVerse(1, `<span class="wj">Come.</span> He went on. <span class="wj">Come.</span>`),
+			"Come. He went on. Go.", nil},
+		{"an end inside a word",
+			nkjvGenVerse(1, `He said, <span class="wj">Go</span> now.`), "He said, Gospel now.", nil},
+		{"a chapter missing from the cache",
+			nkjvGenVerse(1, `He said, <span class="wj">“Go.”</span>`), "He said, “Go.”", []string{"MRK.3"}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			src, log, err := runNKJVGen(t, `<p class="p">`+c.verse+`</p>`, map[int]string{1: c.text}, c.skip...)
+			if err == nil {
+				t.Fatalf("the generator wrote a table:\n%s\n%s", src, log)
+			}
+			want := "Matthew 1:1"
+			if c.skip != nil {
+				want = c.skip[0]
+			}
+			if !strings.Contains(log, want) {
+				t.Errorf("the refusal does not name %s:\n%s", want, log)
+			}
+		})
+	}
 }
