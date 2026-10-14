@@ -955,6 +955,10 @@ public final class BtBridge {
     private static float pendingReflowFrac = -1f;
     private static int pendingReflowVerse = 0;
     private static float pendingReflowWithin = 0f;
+    // The text's width when the reflow was armed. A frame that brings the
+    // width back to it before the text has laid out at any other width
+    // leaves nothing to reflow, and the reflow is dropped (setFrame).
+    private static int pendingReflowFromW = 0;
 
     // Last known scroll fraction, updated on every scroll change.
     private static volatile float lastFrac = 0f;
@@ -1451,6 +1455,7 @@ public final class BtBridge {
                 titleStart = titleEnd = -1;
                 pendingReflowFrac = -1f;
                 pendingReflowVerse = 0;
+                placedAtMs = 0;
                 activity = act;
                 installKeyboardWatcher(act);
                 deliverLaunchLink(act);
@@ -1710,6 +1715,7 @@ public final class BtBridge {
                     applyReadingPadding();
                     refreshNoteSticker();
                     applyPendingReflow();
+                    replaceAfterWidth(r - l);
                 }
             }
         });
@@ -1789,6 +1795,7 @@ public final class BtBridge {
                     // arrival verse alike), and the idle timer persists the new
                     // position once still.
                     lastOwnScrollY = -1;
+                    placedAtMs = 0;
                     pendingFrac = -1f;
                     pendingRestoreVerse = 0;
                     pendingVerse = 0;
@@ -3469,6 +3476,7 @@ public final class BtBridge {
                 // and supersedes any unfinished placement for the prior width.
                 pendingReflowFrac = -1f;
                 pendingReflowVerse = 0;
+                placedAtMs = 0;
                 // THE PARAGRAPH GAP IS THE IMPORTER'S. LEGACY mode separates two
                 // blocks with a blank line, COMPACT with a single newline — so
                 // the reporter page (a first-line indent and NO gap, the octavo
@@ -3641,6 +3649,9 @@ public final class BtBridge {
                         }
                         int y = text.getTotalPaddingTop() + top - dp(NOTE_LEAD);
                         ownScrollTo(Math.max(y, 0));
+                        float[] at = anchorAt(Math.max(y, 0));
+                        notePlacement(at != null ? (int) at[0] : 0, at != null ? at[1] : 0f,
+                                Math.max(y, 0));
                         // Consumed — BOTH of them. Clearing pendingVerse is what
                         // prevents later layout callbacks from applying it again.
                         // Clearing pendingPlace prevents the fresh chapter's
@@ -3666,10 +3677,12 @@ public final class BtBridge {
                     if (SCROLL_DEBUG) android.util.Log.i("BtScroll", "apply: placing at verse "
                             + pendingRestoreVerse + " +" + pendingRestoreWithin);
                     ownScrollTo(vy);
+                    notePlacement(pendingRestoreVerse, pendingRestoreWithin, vy);
                 } else if (pendingFrac >= 0) {
                     if (SCROLL_DEBUG) android.util.Log.i("BtScroll", "apply: placing at frac "
                             + pendingFrac);
                     ownScrollTo(Math.round(pendingFrac * scrollRange()));
+                    notePlacement(0, 0f, Math.round(pendingFrac * scrollRange()));
                 } else {
                     if (SCROLL_DEBUG) android.util.Log.i("BtScroll", "apply: placing at TOP");
                     ownScrollTo(0);
@@ -3726,13 +3739,36 @@ public final class BtBridge {
                 if (dialog == null) return;
                 if (frameW > 1 && w > 1 && frameW != w && pendingReflowFrac < 0
                         && pendingVerse <= 0 && !pendingPlace && scroll != null) {
-                    int range = scrollRange();
-                    float[] a = anchorAt(scroll.getScrollY());
-                    pendingReflowVerse = a != null ? (int) a[0] : 0;
-                    pendingReflowWithin = a != null ? a[1] : 0f;
-                    pendingReflowFrac = range > 0
-                            ? clamp01((float) scroll.getScrollY() / range) : lastFrac;
+                    if (placementAwaitsReplace()) {
+                        // The text has laid out at another width since the
+                        // placement and has not been put back yet, so the
+                        // scroll position reads that layout, not the place
+                        // the reader was given.
+                        pendingReflowVerse = placedVerse;
+                        pendingReflowWithin = placedWithin;
+                        pendingReflowFrac = placedFrac;
+                    } else {
+                        int range = scrollRange();
+                        float[] a = anchorAt(scroll.getScrollY());
+                        pendingReflowVerse = a != null ? (int) a[0] : 0;
+                        pendingReflowWithin = a != null ? a[1] : 0f;
+                        pendingReflowFrac = range > 0
+                                ? clamp01((float) scroll.getScrollY() / range) : lastFrac;
+                    }
+                    placedAtMs = 0; // the reflow carries the placement from here
+                    pendingReflowFromW = content != null ? content.getWidth() : 0;
                     lastAnchor = new float[]{pendingReflowVerse, pendingReflowWithin, pendingReflowFrac};
+                } else if (pendingReflowFrac >= 0 && w > 1 && content != null
+                        && w == pendingReflowFromW && content.getWidth() == pendingReflowFromW) {
+                    // The width came back before the text laid out at any
+                    // other: nothing will reflow, so applyPendingReflow never
+                    // runs, and a reflow left armed makes the scroll listener
+                    // drop every scroll of the reader's until the next
+                    // chapter. A frame wider than the canvas for one pass of
+                    // the mobile driver's paint did that, and the saved
+                    // position stayed where the reader had arrived.
+                    pendingReflowFrac = -1f;
+                    pendingReflowVerse = 0;
                 }
                 frameX = x;   // RAW Fyne pixel coords (relative to the activity window).
                 frameY = y;   // The decor's on-screen origin is added in applyFrame.
@@ -3743,6 +3779,62 @@ public final class BtBridge {
                 } else if (wantShown) {
                     applyShow(); // a show() arrived before the first real frame
                 }
+            }
+        });
+    }
+
+    // The last one-shot placement, an arrival or a restore: where it put the
+    // reader, the text's width it was made at, and when. setFrame arms no
+    // reflow while a placement is pending, and the placement runs at the
+    // layout the text has when it runs, which can be a width the frame has
+    // already left: the text then lays out again with nothing to re-place
+    // the reader, or a frame that arrives in between arms a reflow from the
+    // scroll position read against the other layout. A restore of John 3:14
+    // made at 1017 px, with the text laying out at 954 px straight after,
+    // put the reader at 13. For a moment after a placement, until the
+    // reader scrolls, a width change re-places it (replaceAfterWidth) and a
+    // reflow armed meanwhile carries it (setFrame).
+    private static final long PLACEMENT_WIDTH_WINDOW_MS = 600;
+    private static int placedVerse = 0;
+    private static float placedWithin = 0f, placedFrac = 0f;
+    private static int placedContentW = 0;
+    private static long placedAtMs = 0;
+
+    private static void notePlacement(int verse, float within, int y) {
+        int range = scrollRange();
+        placedVerse = verse > 0 ? verse : 0;
+        placedWithin = within;
+        placedFrac = range > 0 ? clamp01((float) y / range) : 0f;
+        placedContentW = content != null ? content.getWidth() : 0;
+        placedAtMs = android.os.SystemClock.uptimeMillis();
+    }
+
+    // placementAwaitsReplace: the text now lays out at a width other than
+    // the one a placement of moments ago was made at, and the placement has
+    // not been put back in it.
+    private static boolean placementAwaitsReplace() {
+        return placedAtMs != 0 && content != null && content.getWidth() != placedContentW
+                && android.os.SystemClock.uptimeMillis() - placedAtMs <= PLACEMENT_WIDTH_WINDOW_MS;
+    }
+
+    // replaceAfterWidth runs on a change of the text's width: a placement
+    // made at another width moments before is put back where it was, in the
+    // text as it now lays out, unless a reflow, a reader's scroll or a new
+    // chapter has taken it over by the time the post runs.
+    private static void replaceAfterWidth(int width) {
+        if (placedAtMs == 0 || width == placedContentW) return;
+        if (android.os.SystemClock.uptimeMillis() - placedAtMs > PLACEMENT_WIDTH_WINDOW_MS) {
+            placedAtMs = 0;
+            return;
+        }
+        if (scroll == null) return;
+        scroll.post(new Runnable() {
+            @Override public void run() {
+                if (scroll == null || text == null || placedAtMs == 0 || pendingReflowFrac >= 0
+                        || pendingVerse > 0 || pendingPlace) return;
+                int vy = placedVerse > 0 ? anchorY(placedVerse, placedWithin) : -1;
+                ownScrollTo(vy >= 0 ? vy : Math.round(placedFrac * scrollRange()));
+                if (content != null) placedContentW = content.getWidth();
             }
         });
     }
