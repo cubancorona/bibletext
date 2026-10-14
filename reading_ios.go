@@ -145,6 +145,7 @@ static CGFloat    gMarkerOrigR = 0, gMarkerOrigG = 0, gMarkerOrigB = 0, gMarkerO
 static BOOL       gMarkerApplied = NO;
 static void btIOSApplyMarker(void); // defined below; used in bibleTextApplyHTML + arm
 static void btIOSClearMarker(void); // forward decl: scrollViewDidScroll clears on drag
+static void btIOSEndArrival(void);  // forward decl: scrollViewDidScroll ends it on drag
 static NSUInteger btIOSLocForVerse(NSTextStorage *ts, NSInteger verse); // used by btIOSApplyMarker
 // The verse whose number run is the last at or before a character index — the
 // scroll-anchor mapping, reused by the selection menu to turn the selected
@@ -401,6 +402,11 @@ static void btIOSRebuildWash(void);
         // NOT poke the edit menu here — it self-dismisses on scroll, and calling it
         // every scroll frame is needless main-thread work during the gesture.)
         gReadingHasRestore = NO;
+        // And the arrival: a scroll of the reader's is the end of it, as it is
+        // of the restore. Left as Go pushed it, it took a reader who had
+        // scrolled away from a link's verse or note back there at the next
+        // width change (btIOSReassertPlacement).
+        btIOSEndArrival();
         // The "you left off here" marker has served its purpose once the reader
         // starts scrolling — clear it. After the first drag frame gMarkerVerse is 0,
         // so this is a single cheap comparison per frame thereafter.
@@ -1185,6 +1191,16 @@ static int       gNoteArrival = 0;   // kArriveNothing
 // as "nothing happened" and is the exact failure the pushed class exists to
 // remove.
 static int       gNoteArrivalVerse = 0;
+// btIOSEndArrival ends this render's arrival when the reader takes the view
+// (scrollViewDidScroll). The class is written only when Go pushes the note,
+// and every render after the one a link asked for pushes kArriveNothing, so
+// a width change with no push in between (a rotation that keeps the layout,
+// an iPad window resized) re-asserted the arrival and took a reader who had
+// scrolled on back to it. What it leaves is what the next push would bring.
+static void btIOSEndArrival(void) {
+    gNoteArrival = kArriveNothing;
+    gNoteArrivalVerse = 0;
+}
 static NSString *gNoteCounts = nil;
 static int       gNoteVerbs = 1;        // kNoteVerbsReceived
 static BOOL      gNoteTail = YES;

@@ -103,3 +103,41 @@ func TestDeferredReassertsNeverPinToTheTop(t *testing.T) {
 		t.Error("bibleTextMacScrollTV no longer pins — a plain entry would keep the previous chapter's offset")
 	}
 }
+
+// A SCROLL OF THE READER'S ENDS THE ARRIVAL, AS IT ENDS THE RESTORE.
+//
+// The arrival class is written only when Go pushes the note, and the width
+// re-asserts above resolve it whenever they run. A reader who scrolled away
+// from a link's verse or note and then turned the iPhone, or resized the iPad
+// or Mac window, was taken back to it, since nothing had pushed in between.
+// The reader's own scroll already disarmed the restore and cleared the "you
+// left off here" marker; it now sets the class to nothing beside them, which
+// is what the next push would bring. Programmatic scrolls do not reach either
+// place (UIKit's dragging or decelerating; the Mac's gMacOwnScroll), so an
+// arrival's own placement and its re-asserts are untouched.
+func TestAReadersScrollEndsTheArrival(t *testing.T) {
+	did := nativeFunctionSource(t, "reading_ios.go", "- (void)scrollViewDidScroll:(UIScrollView *)scrollView {")
+	drag := strings.Index(did, "if (scrollView.dragging || scrollView.decelerating) {")
+	disarm, end := strings.Index(did, "gReadingHasRestore = NO;"), strings.Index(did, "btIOSEndArrival();")
+	if drag < 0 || disarm < drag || end < drag {
+		t.Error("scrollViewDidScroll does not end the arrival beside the restore disarm, under the reader's drag")
+	}
+	endFn := nativeFunctionSource(t, "reading_ios.go", "static void btIOSEndArrival(void) {")
+	for _, want := range []string{"gNoteArrival = kArriveNothing;", "gNoteArrivalVerse = 0;"} {
+		if !strings.Contains(endFn, want) {
+			t.Errorf("btIOSEndArrival does not set %q", want)
+		}
+	}
+	mac := nativeFunctionSource(t, "reading_macos.go", "static void btMacUserScrolled(void) {")
+	for _, want := range []string{"gMacHasRestore = NO;", "gMacNoteArrival = kMacArriveNothing;", "gMacNoteArrivalVerse = 0;"} {
+		if !strings.Contains(mac, want) {
+			t.Errorf("btMacUserScrolled does not set %q", want)
+		}
+	}
+	// The control: the Mac reaches btMacUserScrolled only for a bounds change
+	// that is not one of the pane's own scrolls, and narration's follow.
+	watch := readNativeSource(t, "reading_macos.go")
+	if !strings.Contains(watch, "if (gMacOwnScroll == 0 && !gReadAlongOwnScroll) btMacUserScrolled();") {
+		t.Error("the Mac's bounds observer no longer tells the pane's own scrolls from the reader's; ending the arrival there would end it on its own placement")
+	}
+}

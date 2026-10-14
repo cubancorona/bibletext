@@ -419,6 +419,13 @@ static int gMacOwnScroll = 0;
 static unsigned gMacScrollSettleGen = 0;
 static void btMacUserScrolled(void) {
     gMacHasRestore = NO;
+    // The arrival ends here too, as the iOS twin's does (btIOSEndArrival):
+    // written only when Go pushes the note, it was re-asserted by the next
+    // frame change (btMacReassertPlacement), so a window resized after the
+    // reader had scrolled on, or narration had carried them, took them back
+    // to the link's verse or note.
+    gMacNoteArrival = kMacArriveNothing;
+    gMacNoteArrivalVerse = 0;
     unsigned gen = ++gMacScrollSettleGen;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         if (gen == gMacScrollSettleGen) bibleTextReadingScrolled();
