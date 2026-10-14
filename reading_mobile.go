@@ -161,11 +161,13 @@ func (s *selectableParagraph) absoluteTouchPos() fyne.Position {
 	return base.Add(s.pressPos)
 }
 
-// touchedVerse returns the verse closest to the touch Y inside the paragraph.
-// We slice the paragraph's height into len(verses) equal bands as a cheap
-// approximation. Verses tend to be similar lengths within a paragraph, so the
-// resulting "which verse did I press?" guess is usually right — and the menu
-// always also offers paragraph- and chapter-wide actions if the guess is off.
+// touchedVerse returns the verse closest to the touch Y inside the paragraph,
+// by slicing the paragraph's height into len(verses) equal bands. That is an
+// approximation, and a rough one: verses in a paragraph differ in length, and
+// over the WEB 16.1% of the touchable paragraph height falls in another
+// verse's band. The menu also offers paragraph- and chapter-wide actions, and
+// the pane is unreachable in every shipping build (PLATFORM_MATRIX.md,
+// divergence 32; docs/BACKLOG.md, H).
 func (s *selectableParagraph) touchedVerse() Verse {
 	if len(s.verses) == 1 {
 		return s.verses[0]

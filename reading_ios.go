@@ -3857,13 +3857,13 @@ void bibleTextShareTextAt(const char *text, double x, double y, double w, double
 // handed over before the note it kept is put on the page, and putting it
 // there re-imports the chapter with the note's card above the passage:
 // presented at once, anchored to the selection, the iPad's popover pointed
-// into the new card, 52 points above the words, with its body over the verse.
-// So on an iPad the sheet waits for the re-import, and is presented beside
-// the selected words as the re-imported text holds them, at the place the
-// pane's lead measured: at UTF-16 units after the start of verse's number,
-// len units long, the card's band being paragraph spacing that moves no
-// character. It is presented 0.35 s after the import, past the re-asserts
-// that place the page. Should no import come (the note was not kept, or the
+// into the new card, the card's height above the words, with its body over
+// the verse. So on an iPad the sheet waits for the re-import, and is
+// presented beside the selected words as the re-imported text holds them, at
+// the place the pane's lead measured: at UTF-16 units after the start of
+// verse's number, len units long, the card's band being paragraph spacing
+// that moves no character. It is presented 0.35 s after the import, past the
+// re-asserts that place the page. Should no import come (the note was not kept, or the
 // reader moved on), it is presented a second after the share as it was,
 // beside the selection, which then still stands. An iPhone presents a sheet
 // with no anchor, at once, as before.

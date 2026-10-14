@@ -3263,13 +3263,13 @@ void bibleTextShareTextAt(const char *text, double x, double y, double w, double
 // reasoning: its message is handed over before the note it kept is put on
 // the page, and the re-import that puts it there sets the note's card above
 // the passage. Presented at once beside the selection, the picker's arrow
-// pointed into the new card, 52 points above the words, with its body over
-// the verse. So the picker waits for the re-import and is shown beside the
-// selected words as the re-imported text holds them: at UTF-16 units after
-// the start of verse's number, len long, the place the pane's lead measured
-// (the card's band is paragraph spacing and moves no character), 0.35 s after
-// the import. Should no import come, it is shown a second after the share,
-// beside the selection, which then still stands.
+// pointed into the new card, the card's height above the words, with its
+// body over the verse. So the picker waits for the re-import and is shown
+// beside the selected words as the re-imported text holds them: at UTF-16
+// units after the start of verse's number, len long, the place the pane's
+// lead measured (the card's band is paragraph spacing and moves no
+// character), 0.35 s after the import. Should no import come, it is shown a
+// second after the share, beside the selection, which then still stands.
 static void btMacPresentWordsShare(NSUInteger token) {
     if (token != gMacWordsShareToken || gMacWordsShareText == nil) return;
     NSString *s = gMacWordsShareText;
