@@ -3707,9 +3707,10 @@ void bibleTextTVShow(void) {
 // element: hiding/suppressing the text view does NOT remove the menu, which would
 // otherwise keep floating on screen — orphaned — and stack up as the user selects
 // again (a Fyne modal opening on an AI/cross-ref action is the common trigger).
-// resignFirstResponder clears the selection and takes the menu down with it
-// (UITextView exposes no editMenuInteraction to dismiss directly); the view
-// becomes first responder again on the next tap when it's shown.
+// resignFirstResponder hides the selection and takes the menu down with it
+// (UITextView exposes no editMenuInteraction to dismiss directly); the text
+// view keeps the selected range, and becomes first responder again on the
+// next tap when it's shown.
 static void bibleTextDismissMenu(void) {
     if (gReadingTV == nil) return;
     [gReadingTV resignFirstResponder];
