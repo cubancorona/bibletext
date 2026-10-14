@@ -1558,6 +1558,30 @@ func stripHeadings(state *AppState, book string, chapter int, s string) string {
 	if t, v, ok := cutOpeningMatter(state, book, chapter, s); ok {
 		s, opened = t, v
 	}
+	// A STACK of headings over one verse comes off whole, joined as a
+	// flattened selection joins them, as cutOpeningMatter takes one a drag
+	// begins inside. One by one, each heading is confirmed by the number
+	// straight after it, which the upper heading of a stack never has: a
+	// drag from the verse above across the stack lost the lower heading and
+	// kept the upper, could not be placed, and was quoted with both. The
+	// BSB has the shape over Proverbs 22:17 and Hebrews 11:30.
+	stacks := map[int][]string{}
+	var order []int
+	for _, h := range state.Bible.Headings[book][chapter] {
+		text := collapseSpaces(h.DrawnText())
+		if text == "" || h.BeforeVerse <= 0 {
+			continue
+		}
+		if _, ok := stacks[h.BeforeVerse]; !ok {
+			order = append(order, h.BeforeVerse)
+		}
+		stacks[h.BeforeVerse] = append(stacks[h.BeforeVerse], text)
+	}
+	for _, v := range order {
+		if len(stacks[v]) > 1 {
+			s = removeWholeHeadings(s, strings.Join(stacks[v], " "), strconv.Itoa(v))
+		}
+	}
 	for _, h := range state.Bible.Headings[book][chapter] {
 		// As DRAWN: the selection is taken from the page, where the heading's
 		// divine name is set in small capitals.
