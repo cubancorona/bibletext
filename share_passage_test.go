@@ -20,15 +20,16 @@ import (
 
 // selectionRouteRaw is the text a native pane hands the selection route for
 // verses lo..hi: each verse's superscript number as a leading token, its text
-// with the source newlines, one verse per line. An empty verse renders nothing
-// and is skipped, as the pane skips it.
+// as the page draws it (smallCapsText: the divine name in small capitals where
+// the edition marks it) with the source newlines, one verse per line. An empty
+// verse renders nothing and is skipped, as the pane skips it.
 func selectionRouteRaw(verses []Verse, lo, hi int) string {
 	var parts []string
 	for _, v := range verses {
 		if v.Verse < lo || v.Verse > hi || strings.TrimSpace(v.Text) == "" {
 			continue
 		}
-		parts = append(parts, strconv.Itoa(v.Verse)+" "+v.Text)
+		parts = append(parts, strconv.Itoa(v.Verse)+" "+smallCapsText(v))
 	}
 	return strings.Join(parts, "\n")
 }
@@ -93,18 +94,44 @@ func fragmentShapesBible() *BibleData {
 	}
 }
 
+// smallCapsShapesBible is the fragment shapes with the divine name set as an
+// edition with small capitals sets it: the publisher's "Lord" under a
+// small-capitals span, which every pane draws, and hands over, as "Lᴏʀᴅ". The
+// text is invented; verse 4 carries the name on a poem line.
+func smallCapsShapesBible() *BibleData {
+	bd := fragmentShapesBible()
+	vs := bd.Verses["Isaiah"][40]
+	mark := func(i int, text string) {
+		var spans []TextSpan
+		rs := []rune(text)
+		for j := 0; j+4 <= len(rs); j++ {
+			if string(rs[j:j+4]) == "Lord" {
+				spans = append(spans, TextSpan{Start: j, End: j + 4})
+			}
+		}
+		vs[i].Text = text
+		vs[i].SmallCaps = spans
+	}
+	mark(2, "when the breath of the Lord blows on it")
+	mark(3, "surely the people are grass.\nThe word of the Lord stands.")
+	mark(5, "and the Lord gathers the lambs in his arms.")
+	return bd
+}
+
 // passageFixtures is every Bible the suite can build without a download: the
 // sample verses, the cache fixture, the edge chapter with an empty verse, the
-// two repeated-wording chapters (the span must pick the passage's copy), and
-// the fragment shapes.
+// two repeated-wording chapters (the span must pick the passage's copy), the
+// fragment shapes, and the fragment shapes with the divine name in small
+// capitals.
 func passageFixtures() map[string]*BibleData {
 	return map[string]*BibleData{
-		"sample":         sampleState().Bible,
-		"testBibleData":  testBibleData(),
-		"john3Edge":      john3EdgeState().Bible,
-		"twoCopy":        twoCopyState().Bible,
-		"refrain":        refrainChapterState().Bible,
-		"fragmentShapes": fragmentShapesBible(),
+		"sample":          sampleState().Bible,
+		"testBibleData":   testBibleData(),
+		"john3Edge":       john3EdgeState().Bible,
+		"twoCopy":         twoCopyState().Bible,
+		"refrain":         refrainChapterState().Bible,
+		"fragmentShapes":  fragmentShapesBible(),
+		"smallCapsShapes": smallCapsShapesBible(),
 	}
 }
 
