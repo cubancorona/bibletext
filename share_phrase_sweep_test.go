@@ -284,28 +284,63 @@ func TestASelectionItsVersesDoNotHoldIsNotMovedToAWholeCopyElsewhere(t *testing.
 	}
 }
 
+// A phrase that ends on a dash, as its verse does, where the verse has the
+// same words earlier with a word straight after the dash. The earlier copy
+// splits no word and is taken wherever nothing says otherwise: with no span,
+// and with a span whose verse holds both. The end repair read the letter
+// after that copy's dash as the rest of a word and cut the phrase to its
+// first word, "gate is" for "gate is shut—". The wording is invented, shaped
+// on Numbers 5:14 and 2 John 1 in the BSB.
+func TestAPhraseEndingOnADashKeepsItsWords(t *testing.T) {
+	st := &AppState{Bible: &BibleData{
+		Books: []string{"Numbers"},
+		Verses: map[string]map[int][]Verse{"Numbers": {5: {
+			{BookName: "Numbers", Book: "Numbers", Chapter: 5, Verse: 14,
+				Text: "If the gate is shut—or if the wall is broken, though the gate is shut—"},
+			{BookName: "Numbers", Book: "Numbers", Chapter: 5, Verse: 15,
+				Text: "then the watchman shall bring the key."},
+		}}},
+	}, CurrentBook: "Numbers", CurrentChapter: 5}
+	for _, sel := range []string{"gate is shut—", "the gate is shut—", "If the gate is shut—"} {
+		for _, span := range []selSpan{{}, selSpanFromNative(14, 14)} {
+			text, lo, hi, _, ok := normalizeShareSelectionIn(st, "Numbers", 5, sel, span)
+			if !ok || phraseWords(text) != phraseWords(sel) {
+				t.Errorf("%q, spanned %d to %d, shared %q (ok %v); want its own words", sel, span.lo, span.hi, text, ok)
+			}
+			if span.valid() && (lo != 14 || hi != 14) {
+				t.Errorf("%q, spanned 14 to 14, cited %d–%d", sel, lo, hi)
+			}
+		}
+	}
+	// The control: a drag that does stop inside a word is still cut back to
+	// the last whole word.
+	if text, _, _, _, ok := normalizeShareSelectionIn(st, "Numbers", 5, "the wall is bro", selSpanFromNative(14, 14)); !ok || text != "the wall is" {
+		t.Errorf("control: \"the wall is bro\" shared %q (ok %v), want \"the wall is\"", text, ok)
+	}
+}
+
 // The same sweep over the public-domain translations' caches the app keeps,
 // every verse of every book. LOCAL-ONLY and opt-in by BIBLETEXT_EXHAUSTIVE=1,
 // as TestPassageShareEqualsSelectionRouteOverLocalCaches_LocalOnly is: the
-// caches are downloaded data a CI checkout does not have. Two phrases of the
-// BSB, each with the span and without, are held apart: each ends on a dash
-// as its verse does, and the verse has the same words earlier with a word
-// straight after the dash ("herself—or" in Numbers 5:14, "truth—and" in 2
-// John 1). That copy splits no word and is taken, and the end repair reads
-// the letter after the dash as the rest of a word and cuts the phrase to its
-// first word, as it did before the search changed. With the search as it
-// was, the WEB had 12,161 wrong, the BSB 9,339 and the WEBC 13,855.
+// caches are downloaded data a CI checkout does not have. None is wrong.
+// Two phrases of the BSB, each with the span and without, were wrong while
+// the end repair read the letter after a closing dash as the rest of a word:
+// each ends on a dash as its verse does, and the verse has the same words
+// earlier with a word straight after the dash ("herself—or" in Numbers 5:14,
+// "truth—and" in 2 John 1). That copy splits no word and is taken, and the
+// phrase was cut to its first word (TestAPhraseEndingOnADashKeepsItsWords).
+// With the search as it was, the WEB had 12,161 wrong, the BSB 9,339 and the
+// WEBC 13,855.
 func TestEveryPhraseInAVerseSharesItsOwnWordsOverLocalCaches_LocalOnly(t *testing.T) {
 	if os.Getenv("BIBLETEXT_EXHAUSTIVE") == "" {
 		t.Skip("local-only and opt-in: about twelve million selections over three translation caches, half a minute; " +
 			"run with BIBLETEXT_EXHAUSTIVE=1")
 	}
-	known := map[string]int{"bsb": 4}
 	for _, c := range localPublicDomainCaches(t) {
 		selections, wrong := sweepPhrases(t, c.bd, c.bd.Books, 1, c.id)
 		t.Logf("%s: %d selections, %d wrong", c.id, selections, wrong)
-		if wrong != known[c.id] {
-			t.Errorf("%s: %d selections shared other words than the ones selected, or cited another verse with the span; want %d", c.id, wrong, known[c.id])
+		if wrong != 0 {
+			t.Errorf("%s: %d selections shared other words than the ones selected, or cited another verse with the span", c.id, wrong)
 		}
 	}
 }

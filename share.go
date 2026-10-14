@@ -1272,9 +1272,18 @@ func locateShareSelection(state *AppState, book string, chapter int, corpus stri
 	// word. A verse number the drag ended on never gets this far: the
 	// marker strip took it with the start of its verse, or the loop above
 	// dropped it with nothing after it, and what is left is verse text.
+	//
+	// Not after a dash. The BSB sets its dashes closed up, word—word, and a
+	// selection that ends on one ended at a word's end: the letter after it
+	// opens the next word. Read as the rest of a word, it cut the phrase back
+	// to its first word wherever the selection was placed before a word
+	// rather than at the verse's end. With no span, Numbers 5:14's "defiled
+	// herself—", the end of the verse, was placed at the verse's earlier
+	// "herself—or" and shared "defiled", and 2 John 1's "the truth—" shared
+	// "the". The dash itself comes off below, as a clause mark at a cut does.
 	for {
 		end := idx + len(s)
-		if end < len(corpus) {
+		if end < len(corpus) && !strings.HasSuffix(s, "—") {
 			if r, _ := utf8.DecodeRuneInString(corpus[end:]); isWordRune(r) {
 				cut := strings.LastIndexByte(s, ' ')
 				if cut <= 0 {
