@@ -37,6 +37,16 @@ version of it was wrong when measured:
           and has not moved anywhere. A genuine relocation lands in a NEW slot,
           which is exactly what Romans 16:25-27 is in the BSB and the NKJV.
 
+          And the new slot must not be a repeat of a verse the target kept. A
+          refrain the target prints again in a new slot matches every copy of
+          it equally: an edition dropping Mark 9:44 and 9:46, whose "where
+          their worm doesn't die" the WEB also has at 9:48, and adding a 9:51
+          with that line, had 9:44 recorded as moved to 9:51, and one that
+          numbered Romans' doxology 16:25-27 and printed 16:20's benediction
+          again at 16:28 had 16:24 moved there (repeats_kept_verse). No shipped
+          edition has either shape: regenerated from the caches, the BSB's and
+          the WEB Catholic's rows are the same in both tables.
+
   absent  Everything else the reference has and the target lacks: the
           textual-critical omissions, plus Romans 16:24.
 
@@ -165,6 +175,21 @@ def aligned_fraction(ref, tgt, shared):
     return lined_up / len(shared)
 
 
+def repeats_kept_verse(ref, tgt, shared, key, candidate, score):
+    """Whether the target's verse at candidate, which matches the reference's
+    missing verse key with score, matches as well a verse the reference has
+    that the target kept. Then it is a repeat of that verse, a refrain or a
+    formula the book uses more than once, and says nothing about where key
+    went: Mark 9's "where their worm doesn't die" stands at 9:44, 9:46 and
+    9:48, and an edition that drops the first two and repeats the refrain in a
+    new 9:51 has not moved 9:44 there. A relocated verse, Romans 16:25-27 in
+    the BSB, matches no verse the target kept as well as the one it left."""
+    return any(
+        k != key and similarity(ref[k], tgt[candidate]) >= score
+        for k in shared
+    )
+
+
 def delta(reference, target, target_id, next_release=False):
     absent, moved, extra, incommensurable = [], [], [], []
     for book in sorted(set(reference) | set(target)):
@@ -246,7 +271,7 @@ def delta(reference, target, target_id, next_release=False):
                 s = similarity(ref[key], tgt[candidate])
                 if s > score:
                     best, score = candidate, s
-            if best and score >= MOVE_MIN_SIMILARITY:
+            if best and score >= MOVE_MIN_SIMILARITY and not repeats_kept_verse(ref, tgt, shared, key, best, score):
                 moved.append((book, key[0], key[1], best[0], best[1]))
                 only_tgt.discard(best)
             else:
