@@ -157,21 +157,26 @@ func TestStyledPaneSelectedVerseSpan(t *testing.T) {
 	v2refrain := offOf(refrain, v2num)
 
 	// The refrain inside verse 2 resolves to verse 2, never verse 1's copy.
+	// Each span carries its lead as well: the layout's text from verse lo's
+	// number to the selection's first rune (selSpan.lead).
+	text := []rune(p.lay.Text)
 	p.setSelection(v2refrain, v2refrain+len([]rune(refrain)))
-	if s := p.selectedVerseSpan(); s != (selSpan{lo: 2, hi: 2}) {
-		t.Errorf("verse-2 refrain span = %+v, want {2 2}", s)
+	if s := p.selectedVerseSpan(); s != selSpanWithLead(2, 2, string(text[v2num:v2refrain])) {
+		t.Errorf("verse-2 refrain span = %+v, want {2 2} with the lead from verse 2's number", s)
 	}
 
-	// A selection touching only verse 2's NUMBER resolves to verse 2.
+	// A selection touching only verse 2's NUMBER resolves to verse 2, and
+	// begins on it: the empty lead.
 	p.setSelection(v2num, v2num+len([]rune(superscriptNumber(2))))
-	if s := p.selectedVerseSpan(); s != (selSpan{lo: 2, hi: 2}) {
-		t.Errorf("verse-number span = %+v, want {2 2}", s)
+	if s := p.selectedVerseSpan(); s != selSpanWithLead(2, 2, "") {
+		t.Errorf("verse-number span = %+v, want {2 2} with the empty lead", s)
 	}
 
 	// Crossing the 1→2 boundary carries both.
+	v1num := offOf(superscriptNumber(1), 0)
 	p.setSelection(v2num-4, v2refrain+4)
-	if s := p.selectedVerseSpan(); s != (selSpan{lo: 1, hi: 2}) {
-		t.Errorf("boundary span = %+v, want {1 2}", s)
+	if s := p.selectedVerseSpan(); s != selSpanWithLead(1, 2, string(text[v1num:v2num-4])) {
+		t.Errorf("boundary span = %+v, want {1 2} with the lead from verse 1's number", s)
 	}
 
 	// And the span the study menu would dispatch survives the whole pipeline:

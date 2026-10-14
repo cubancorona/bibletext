@@ -44,7 +44,7 @@ func sweepPhrases(t *testing.T, bd *BibleData, books []string, step int, label s
 				for _, n := range []int{2, 3, 5} {
 					for i := 0; i+n <= len(words); i++ {
 						sel := strings.Join(words[i:i+n], " ")
-						for _, span := range []selSpan{{sp.verse, sp.verse}, {}} {
+						for _, span := range []selSpan{selSpanFromNative(sp.verse, sp.verse), {}} {
 							selections++
 							text, lo, hi, _, ok := normalizeShareSelectionProse(st, book, ch, corpus, spans, sel, span)
 							bad := ""
@@ -123,34 +123,39 @@ func TestAPhraseFirstFoundInsideALongerWordSharesItsOwnWords(t *testing.T) {
 	}
 }
 
-// What the search costs. A drag begun or ended inside a word arrives as
-// letters, and the text alone cannot tell "leavened bread shall", begun two
-// letters into "Unleavened", from a phrase whose first copy stands inside a
-// longer word: the region's first copy that splits no word is taken. In a
-// verse that has the same letters as whole words further on, the drag is
-// quoted from there: the words the reader's letters spell, not the words the
-// drag took whole, and with the span the citation is the same verse. Where
-// the verse has no such copy, the reader's copy is taken and cut back to its
-// whole words, as before. This pins the trade-off, not a preference: telling
-// the two apart needs the selection's place in its verse, which the panes do
-// not hand over.
+// What the search costs, and what the lead removes. A drag begun or ended
+// inside a word arrives as letters, and the text alone cannot tell "leavened
+// bread shall", begun two letters into "Unleavened", from a phrase whose first
+// copy stands inside a longer word: the region's first copy that splits no
+// word is taken. In a verse that has the same letters as whole words further
+// on, the drag is quoted from there: the words the reader's letters spell,
+// not the words the drag took whole, and with the span the citation is the
+// same verse. Where the verse has no such copy, the reader's copy is taken
+// and cut back to its whole words, as before.
+//
+// A pane that sends the selection's lead (selSpan.lead) says where the drag
+// began, and the drag is then cut back at its own place: "bread shall", and
+// "that" for "that the" ended inside "they". Without a lead, from a page or
+// pane that sends none, the trade-off stands and is pinned here.
 func TestADragBegunOrEndedInsideAWordIsQuotedFromAWholeCopyInItsVerse(t *testing.T) {
 	for _, c := range []struct {
 		name, text, sel     string
-		wantQuote, wantCite string
+		lead                string // the pane's lead for the drag as the case describes it
+		wantQuote, wantCite string // without the lead
+		wantLeadQuote       string // with it
 	}{
 		{"begun inside a word, the letters whole later",
 			"Unleavened bread shall be eaten for seven days, and no leavened bread shall be seen with you.",
-			"leavened bread shall", "leavened bread shall", "Exodus 13:7"},
+			"leavened bread shall", "7 Un", "leavened bread shall", "Exodus 13:7", "bread shall"},
 		{"control: begun inside a word, no whole copy",
 			"Unleavened bread shall be eaten for seven days.",
-			"leavened bread shall", "bread shall", "Exodus 13:7"},
+			"leavened bread shall", "7 Un", "bread shall", "Exodus 13:7", "bread shall"},
 		{"ended inside a word, the letters whole later",
 			"He will command them that they keep the way, that the promise may come.",
-			"that the", "that the", "Exodus 13:7"},
+			"that the", "7 He will command them ", "that the", "Exodus 13:7", "that"},
 		{"control: ended inside a word, no whole copy",
 			"He will command them that they keep the way.",
-			"that the", "that", "Exodus 13:7"},
+			"that the", "7 He will command them ", "that", "Exodus 13:7", "that"},
 	} {
 		st := &AppState{Bible: &BibleData{
 			Books: []string{"Exodus"},
@@ -162,6 +167,10 @@ func TestADragBegunOrEndedInsideAWordIsQuotedFromAWholeCopyInItsVerse(t *testing
 		quote, cite, _, _ := prepareShareQuote(st, c.sel, selSpanFromNative(7, 7))
 		if quote != c.wantQuote || cite != c.wantCite {
 			t.Errorf("%s: %q with the span shared (%q, %q), want (%q, %q)", c.name, c.sel, quote, cite, c.wantQuote, c.wantCite)
+		}
+		quote, cite, _, _ = prepareShareQuote(st, c.sel, selSpanWithLead(7, 7, c.lead))
+		if quote != c.wantLeadQuote || cite != c.wantCite {
+			t.Errorf("%s: %q with the span and the lead %q shared (%q, %q), want (%q, %q)", c.name, c.sel, c.lead, quote, cite, c.wantLeadQuote, c.wantCite)
 		}
 	}
 }

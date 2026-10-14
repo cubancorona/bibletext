@@ -87,16 +87,19 @@ static BOOL btMacNotePresent(void);
 static NSRange btMacNoteAnchorRange(NSTextStorage *ts, NSUInteger len);
 
 // Implemented in Go (ai_menu_darwin.go, //export). Called when the reader picks
-// an AI study action; it copies both strings immediately. lo/hi is the
+// an AI study action; it copies every string immediately. lo/hi is the
 // selection's verse span, resolved against the verse-number runs of the text
 // storage at action time (0,0 = unresolved) — position, not text, decides which
-// verses a share or cross-reference cites.
-extern void bibleTextAIMenuTapped(char *action, char *text, int lo, int hi);
+// verses a share or cross-reference cites. lead is the selection's place in
+// verse lo: the text from lo's number to the selection's first character, NULL
+// when there is none (docs/SELECTION_OFFSET.md).
+extern void bibleTextAIMenuTapped(char *action, char *text, int lo, int hi, char *lead);
 // Sibling callback for the non-AI selection-menu actions (Share verse, …).
-extern void bibleTextStudyMenuTapped(char *action, char *text, int lo, int hi);
+extern void bibleTextStudyMenuTapped(char *action, char *text, int lo, int hi, char *lead);
 // Defined below with the rest of the verse-number machinery (it needs the font
 // threshold); declared here because the menu handlers above it use it.
-static void btMacVerseSpanForRange(NSTextStorage *ts, NSRange sel, int *outLo, int *outHi);
+static void btMacVerseSpanForRange(NSTextStorage *ts, NSRange sel, int *outLo, int *outHi, NSUInteger *outLoLoc);
+static NSString *btMacSelectionLead(NSTextStorage *ts, NSRange sel, int lo, NSUInteger loLoc);
 // Where scripture ends and the appended translators'-footnote section starts
 // (== length when there is none); defined beside the font threshold it shares
 // its derivation with. The selection menu and its verbs clamp to it — and to
@@ -274,24 +277,28 @@ void btMacSetAskEnabled(int on) { gBTMacAskEnabled = on; }
     return nil;
 }
 
-// hbSendAI / hbSendStudy read the selection ONCE — text and verse span from the
-// same selectedRange, at action time — so the words dispatched and the span
-// attributing them can never come from different selections.
+// hbSendAI / hbSendStudy read the selection ONCE — text, verse span and lead
+// from the same selectedRange, at action time — so the words dispatched and the
+// span and lead placing them can never come from different selections.
 - (void)hbSendAI:(const char *)action {
     NSRange sel = [self hbScriptureSelection];
     if (sel.location == NSNotFound || sel.length == 0) return;
     int lo = 0, hi = 0;
-    btMacVerseSpanForRange(self.textStorage, sel, &lo, &hi);
+    NSUInteger loLoc = NSNotFound;
+    btMacVerseSpanForRange(self.textStorage, sel, &lo, &hi, &loLoc);
     NSString *text = [self.textStorage.string substringWithRange:sel];
-    bibleTextAIMenuTapped((char *)action, (char *)text.UTF8String, lo, hi);
+    NSString *lead = btMacSelectionLead(self.textStorage, sel, lo, loLoc);
+    bibleTextAIMenuTapped((char *)action, (char *)text.UTF8String, lo, hi, (char *)lead.UTF8String);
 }
 - (void)hbSendStudy:(const char *)action {
     NSRange sel = [self hbScriptureSelection];
     if (sel.location == NSNotFound || sel.length == 0) return;
     int lo = 0, hi = 0;
-    btMacVerseSpanForRange(self.textStorage, sel, &lo, &hi);
+    NSUInteger loLoc = NSNotFound;
+    btMacVerseSpanForRange(self.textStorage, sel, &lo, &hi, &loLoc);
     NSString *text = [self.textStorage.string substringWithRange:sel];
-    bibleTextStudyMenuTapped((char *)action, (char *)text.UTF8String, lo, hi);
+    NSString *lead = btMacSelectionLead(self.textStorage, sel, lo, loLoc);
+    bibleTextStudyMenuTapped((char *)action, (char *)text.UTF8String, lo, hi, (char *)lead.UTF8String);
 }
 // One hbAI_<action>: method per pair above: the menu builds each selector from
 // the pair's action string by name, so a pair without its method is a silent
@@ -543,19 +550,22 @@ static NSRange btMacTitleRange(NSTextStorage *ts) {
 
 // btMacVerseSpanForRange maps a selected character range to its verse span:
 // lo/hi are the last verse-number runs at or before the range's first and last
-// characters. A selection that starts inside a verse's NUMBER run starts at or
-// after that run's location, so it resolves to that verse; one that starts
+// characters, and outLoLoc (may be NULL) gets the location of lo's run. A
+// selection that starts inside a verse's NUMBER run starts at or after that
+// run's location, so it resolves to that verse; one that starts
 // above verse 1's number (the chapter heading) reports lo=0 and the Go side
 // clamps to verse 1. macOS has no prebuilt verse index (unlike iOS's
 // gVerseIndex — see btIOSBuildVerseIndex, built to unhook an O(n) walk from
 // scroll-settle); this runs once per MENU ACTION, where one enumeration is
 // nothing.
-static void btMacVerseSpanForRange(NSTextStorage *ts, NSRange sel, int *outLo, int *outHi) {
+static void btMacVerseSpanForRange(NSTextStorage *ts, NSRange sel, int *outLo, int *outHi, NSUInteger *outLoLoc) {
     *outLo = 0; *outHi = 0;
+    if (outLoLoc) *outLoLoc = NSNotFound;
     if (ts == nil || sel.length == 0 || NSMaxRange(sel) > ts.length) return;
     CGFloat thr = btMacVerseFontThreshold(ts);
     NSUInteger start = sel.location, last = NSMaxRange(sel) - 1;
     __block NSInteger lo = 0, hi = 0;
+    __block NSUInteger loLoc = NSNotFound;
     [ts enumerateAttribute:NSFontAttributeName
                    inRange:NSMakeRange(0, ts.length)
                    options:0
@@ -564,11 +574,23 @@ static void btMacVerseSpanForRange(NSTextStorage *ts, NSRange sel, int *outLo, i
         if (val == nil || r.length == 0 || ((NSFont *)val).pointSize >= thr) return;
         NSInteger v = [[ts.string substringWithRange:r] integerValue];
         if (v <= 0) return;
-        if (r.location <= start) lo = v;
+        if (r.location <= start) { lo = v; loLoc = r.location; }
         hi = v;
     }];
     *outLo = (int)lo;
     *outHi = (int)hi;
+    if (outLoLoc) *outLoLoc = loLoc;
+}
+
+// btMacSelectionLead is the selection's lead: the storage's text from verse
+// lo's number run (loLoc, from btMacVerseSpanForRange) to the selection's
+// first character. The span says which verses; the lead says where in verse lo
+// the selection begins, which tells a later copy of wording the verse repeats
+// from the first (docs/SELECTION_OFFSET.md). nil, sent as NULL, when the
+// selection starts above verse 1's number.
+static NSString *btMacSelectionLead(NSTextStorage *ts, NSRange sel, int lo, NSUInteger loLoc) {
+    if (ts == nil || lo <= 0 || loLoc == NSNotFound || loLoc > sel.location || sel.location > ts.length) return nil;
+    return [ts.string substringWithRange:NSMakeRange(loLoc, sel.location - loLoc)];
 }
 
 // btMacLocForVerse returns the character location of `verse`'s number run, or

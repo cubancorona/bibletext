@@ -302,7 +302,7 @@ answered panel and the eviction of one in flight.
 ### D. A selection the positional path declines borrows another copy's ending — the interim FIXED 13 October 2026, for 1.2.22
 
 Planned for: the interim in 1.2.22, fixed on its release branch (the end of this entry);
-the root with P1 — see docs/ROADMAP.md.
+the root with P1, also in 1.2.22 — see docs/ROADMAP.md.
 
 When `normalizeShareSelectionProse` declines — a drag begun or ended inside a
 word, pieces either side of a mark, a drag begun inside a verse number — the
@@ -328,7 +328,8 @@ searches a region (the first copy there that splits no word, else the first
 of any kind) and hands that place on, so the completion, the retained
 terminal and the line-break restore take their positional branches. What is
 left is the repeats inside the span's own verses, 0.95% of those WEB drags
-and 0.85% of the BSB's, which need P1. A selection with no span, or one its
+and 0.85% of the BSB's, which need P1, also in 1.2.22: with the lead the
+fragment is completed at its own place. A selection with no span, or one its
 verses do not hold, keeps the chapter-wide search.
 `TestDeclinedSelectionIsPlacedInItsSpan`.
 
@@ -361,7 +362,8 @@ share's declined path and the AI preview alike.
 `TestFallbackMarkerStripLeavesALaterNumberWhole` holds the strip, the quote
 and the preview, with the span and without. The leading digit of a drag
 begun inside a verse number is not a marker and stays ("A drag begun inside
-a verse number shares the digit").
+a verse number shares the digit"), and P1's lead, also in 1.2.22, takes
+it off.
 
 ### B. The cross-references panel places a selection with no span by its opening words — tier 1 FIXED 13 October 2026, for 1.2.22
 
@@ -402,7 +404,8 @@ copy. Tier 2 stays with P3.
 ### AI-2. Study with AI takes a zero-span probe's range as the passage — tier 1 FIXED 13 October 2026, for 1.2.22
 
 Planned for: tier 1 in 1.2.22, fixed on its release branch (the end of this entry);
-tier 2 with P3, the root with P1 — see docs/ROADMAP.md.
+tier 2 with P3 — see docs/ROADMAP.md. P1, also in 1.2.22, does not reach it:
+a page with no span sends no lead.
 
 When the normalize declines on a zero span, `aiPassageFor` takes
 `selectionVersesIn`'s answer as the range (`ai.go:198-199`), so one partial
@@ -427,8 +430,8 @@ prompt does. Over the same selections the matching now answers 33,662 WEB and
 cost: a no-span drag begun on a later digit of a verse number and run into the
 next verse's first words, 301 of 19,421 in the WEB and 324 of 19,402 in the
 BSB, cites the chapter where it named those two verses.
-`TestAPieceOfAWordWithNoSpanNamesOneVerseOrTheChapter`. Tier 2 stays with P3,
-the root with P1.
+`TestAPieceOfAWordWithNoSpanNamesOneVerseOrTheChapter`. Tier 2 stays with P3;
+P1's lead does not reach a page with no span.
 
 ### W3. The website does not land on a verse whose link carries a note it cannot read — FIXED 13 October 2026, for 1.2.22
 
@@ -524,10 +527,10 @@ refrain selected in verse 3 of the Psalm 136 fixture as 136:3, and
 `TestLegacyPaneRecordsWhereEachVerseBegins` holds every recorded offset at
 five widths. The pane still ships in no build; deleting it stays possible.
 
-### P1: A, IOS-SEL-OFFSET-DROPPED, MAC-SEL-OFFSET-DROPPED, AND-1. Every pane drops the selection's place in its verse
+### P1: A, IOS-SEL-OFFSET-DROPPED, MAC-SEL-OFFSET-DROPPED, AND-1. Every pane drops the selection's place in its verse — FIXED 13 October 2026, for 1.2.22
 
-Planned for: a later minor release, on its own branch first — see
-docs/ROADMAP.md.
+Planned for: 1.2.22, made on its own branch and merged for the release on 14
+October 2026 (the end of this entry) — see docs/ROADMAP.md.
 
 Every pane works out where a selection lies in its verse and hands Go only
 the text and its verses (`selSpan`, `selection_span.go:16`): the iPhone and
@@ -569,11 +572,48 @@ and turns the trade-off `share_phrase_sweep_test.go` pins into a positive
 test. It is expected to close the two dash phrases of "A phrase ending on a
 dash, where its verse has the same words earlier, is cut short" that carry a
 span, which the phrase sweep run with the offset has to show. Open: one change
-on all four panes, or pane by pane with -1 as the fallback.
+on all four panes, or pane by pane with -1 as the fallback; taken 14 October
+2026, one change.
+
+**FIXED 13 October 2026, for 1.2.22** (`28be4ea08` to `708542b7e`, merged
+for the release on 14 October 2026), as one change on all four panes. Each
+pane sends, with the span, the selection's lead: its own text of verse lo
+from the first character of the verse's number to the selection's first
+character (docs/SELECTION_OFFSET.md has why that value and not an offset,
+and every seam). `selSpan` carries it (`lead`, `hasLead`; no lead is the
+zero value, so every caller that sends none behaves as before), and
+`leadStart` checks it byte for byte against verse lo before it is used.
+`placeByLead` and `walkSelectionFrom` (`share_lead.go`) read the selection
+against the chapter from that place, take a verse number out only where its
+verse starts, and read the headings a pane draws between two verses. The
+iPhone and iPad cut the lead at `btIOSVerseAtIndex`'s location, the Mac at
+the location `btMacVerseSpanForRange` reports, Android from `verseStarts`
+through `readerText`, and the Windows and Linux pane from its layout; the
+two Apple exports and `btaSelectionAction` take it as a fifth argument,
+`NULL` or `null` for none, held by
+`TestTheSelectionExportsMatchTheirCDeclarations` and
+`TestEverySelectionDispatchPassesTheLead`. With the lead nothing is placed
+wrong in CI: 229,224 selections of one to three words over the embedded
+Gospels, their 13,853 later copies and 123,177 pieces of a word
+(`TestEverySelectionInTheGospelsIsPlacedByItsLead`); the 90,264 drags of
+`TestSpannedBoundaryDragSweepWithLeads`, no digit drag among them sharing a
+stray digit; 156,594 selections made through the styled pane's own layout;
+23,567 drags into invented headings. Over the local WEB, BSB and WEBC caches
+(`BIBLETEXT_EXHAUSTIVE=1`) nothing is wrong with the lead either: 2,171,994,
+2,080,560 and 2,469,492 selections, 1,160,304, 1,125,726 and 1,325,427
+pieces of a word, 2,249,198, 2,163,292 and 2,560,919 drags begun or ended
+inside a word, and 503, 50,680 and 557 drags into the publishers' headings.
+Without a lead every path is the one the other fixes in this entry leave,
+and the counts without it are pinned: the pieces of a word that share
+another place's answer are 12,925, 11,218 and 13,764 there, where completing
+them from the chapter's first copy, before D's interim, gave 118,136,
+106,972 and 127,888. Not yet seen on a simulator, the Mac or the emulator: a
+double-click on the second "Abraham" of Genesis 22:11 sharing "Abraham!".
 
 ### M. The marker strip confirms a verse number by any overlap with that verse's opening
 
-Planned for: a later minor release, with P1 — see docs/ROADMAP.md.
+Planned for: a later minor release; with a lead, closed in 1.2.22 by P1 (the
+end of this entry) — see docs/ROADMAP.md.
 
 `stripVerseMarkersAnchored` (`share.go:1723`) takes an "N " token as verse
 N's number when what follows it overlaps verse N's opening by any length. A
@@ -589,10 +629,19 @@ Fix, 2.5 days, on P1's change: the panes pass the positions of the number
 runs inside the selection, which they all have, and the strip removes exactly
 those.
 
+**With a lead, closed 13 October 2026, for 1.2.22**, by P1: the walk from the
+lead (`walkSelectionFrom`) takes a verse number out only where its verse
+starts and the token is that verse's number, so a figure followed by the
+words that open the verse of that number is kept
+(`TestAFigureInAVerseIsNotTakenForAVerseNumber`, which also holds the strip
+without the lead). The text strip still decides for a selection with no
+lead, and where the walk from the lead fails.
+
 ### AI-4. The study verbs do not carry the chapter they were chosen in
 
-Planned for: a later minor release; the Go half in any, the native half with
-P1 — see docs/ROADMAP.md.
+Planned for: a later minor release; the Go half in any, the native half
+through the seams P1 widened in 1.2.22, which do not carry the chapter — see
+docs/ROADMAP.md.
 
 The span carries verse numbers only, and the dispatch applies them to
 whichever chapter is current (`readerChapter`, `ai.go:185`). Continuous
@@ -610,7 +659,7 @@ Fix, 2.5 days, about 1 of them Go: book and chapter travel with the span;
 `selectionStudyMenu` stamps them when the menu is built, which fixes Windows
 and Linux; the native pushes already key the chapter and can return it
 through `bibleTextAIMenuTapped`, `bibleTextStudyMenuTapped` and
-`btaSelectionAction`, the seams P1 widens; and the panel keeps one captured
+`btaSelectionAction`, the seams P1 widened; and the panel keeps one captured
 passage, as AI-1 makes it.
 
 ### P3: C, IOS-PLAIN-FALLBACK-ZERO-SPAN, MAC-PLAIN-FALLBACK-ZERO-SPAN. The Apple plain-text fallback page has no verse geometry
@@ -881,11 +930,11 @@ holds them as known.
 
 The four are two phrases, each wrong once with the span and once without.
 The selection's place in its verse ("Where the app re-finds the reader's
-position from text", P1) is expected to close the two with the span, placing
-the phrase at the reader's copy, but that is not shown: the chapter's next
-verse still follows that copy's dash, so
-`TestEveryPhraseInAVerseSharesItsOwnWordsOverLocalCaches_LocalOnly` run with
-the offset settles it. The two with no span, which no offset reaches, need
+position from text", P1, in 1.2.22) is expected to close the two with the
+span, placing the phrase at the reader's copy, but that is not shown: the
+chapter's next verse still follows that copy's dash, and
+`TestEveryPhraseInAVerseSharesItsOwnWordsOverLocalCaches_LocalOnly` sends no
+lead, so that sweep run with the lead settles it. The two with no span, which no offset reaches, need
 the end repair's own rule, a dash that ends a word, which changes what other
 drags quote and wants the phrase sweep before and after. The known count goes
 to 0 only when both halves are done.
@@ -4734,9 +4783,9 @@ not observed on a built bundle.
 Released in 1.2.20, 13 October 2026: all three findings and the test
 litter. What they left open is planned in entries of their own — the
 selection's place in its verse ("Where the app re-finds the reader's
-position from text", P1), the dash end repair, the BSB heading that opens as
-its verse does, and the digit a drag begun inside a verse number shares —
-see docs/ROADMAP.md.
+position from text", P1) and the digit a drag begun inside a verse number
+shares, both fixed for 1.2.22; the dash end repair and the BSB heading that
+opens as its verse does — see docs/ROADMAP.md.
 
 Prompted by a plain question — does the app really work out verse numbers by
 matching text, and what about verses that repeat? The short answer is that
@@ -5245,11 +5294,11 @@ logged what hostile anchor spellings parse to, is
 runs, a well-formed one a run per verse, and no run starts below verse 1 or
 ends before it starts.
 
-## A drag begun inside a verse number shares the digit — found 6 October 2026
+## A drag begun inside a verse number shares the digit — found 6 October 2026; FIXED with the lead 13 October 2026, for 1.2.22
 
-Planned for: a later minor release, with the selection's place in its verse
-("Where the app re-finds the reader's position from text", P1), which closes
-it — see docs/ROADMAP.md. Moved on 7 October 2026 to the release after
+Planned for: 1.2.22, closed by the selection's place in its verse ("Where
+the app re-finds the reader's position from text", P1), at the end of this
+entry — see docs/ROADMAP.md. Moved on 7 October 2026 to the release after
 1.2.20; 1.2.21 went out without it.
 
 A drag that begins on the second digit of a two-digit verse number hands over
@@ -5264,6 +5313,17 @@ same: "? 39" on its own shares "? 39", and "39 Wh" shares both. Readers see a
 digit, never a wrong verse. A fix would drop a leading run of digits that the
 span says is the end of its first verse's number; it is a change to what is
 quoted, so it wants its own sweep.
+
+**FIXED with the lead, 13 October 2026, for 1.2.22.** The lead says the drag
+began inside the number (it is a proper prefix of the number), so the rest
+of the number at the front of the selection is taken off as the page's
+apparatus; the rest of a number selected on its own cites its verse with no
+quotation. With the lead every pane sends, none of the spanned sweep's 8,931
+digit drags shares a stray digit (`TestSpannedBoundaryDragSweepWithLeads`),
+and `TestADragBegunInsideAVerseNumberSharesNoDigit` holds WEB Exodus
+20:13-14 begun on the "3" of 13 to what the two verses selected whole share.
+Without a lead, as from the legacy pane, the 8,769 are as before, pinned by
+`TestSpannedBoundaryDragSweep`; the Go-only interim was not needed.
 
 ## The web reader cannot render small capitals — DONE 2 October 2026, before it served an edition that uses them
 

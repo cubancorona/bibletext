@@ -60,6 +60,7 @@ Adding a document? Add its line here. One line, saying **when** to read it.
 - [NOTE_CHROME_UNIFICATION.md](NOTE_CHROME_UNIFICATION.md) — before adding a noteChrome field or changing the native note ABI — the rule is one appended field per commit
 - [NOTE_SPACING.md](NOTE_SPACING.md) — before changing note band, card or pill spacing on any surface — a map to the real source; it holds no numbers
 - [NOTES_DESIGN.md](NOTES_DESIGN.md) — only when you need why a notes option was rejected (cap-by-view vs cap-by-action, no Expanded field); superseded
+- [SELECTION_OFFSET.md](SELECTION_OFFSET.md) — before changing what a pane hands Go with a selection (`selSpan`, the selection exports) or how a share places it in its verse
 
 
 ## The reading surface

@@ -998,8 +998,9 @@ public final class BtBridge {
     // reader; text is the exact selected substring, lo/hi its verse span
     // resolved against the Spanned's verse index (verseAtOffset; 0,0 when the
     // index has nothing for it) — position, not text, decides which verses a
-    // share or cross-reference cites.
-    private static native void nativeSelectionAction(String action, String text, int lo, int hi);
+    // share or cross-reference cites. lead is the selection's place in verse
+    // lo (selectionLead), null when there is none (docs/SELECTION_OFFSET.md).
+    private static native void nativeSelectionAction(String action, String text, int lo, int hi, String lead);
     // Called on the UI thread after the reader's scroll has been idle ~200ms.
     private static native void nativeScrolled(float frac);
 
@@ -1178,7 +1179,7 @@ public final class BtBridge {
     // placed below the selection's line when it fits and above it when it
     // does not, and kept inside the overlay either way.
     private static void showStudyPopup(final ActionMode mode, final String sel, int selEnd,
-                                       final int selLo, final int selHi) {
+                                       final int selLo, final int selHi, final String selLead) {
         if (activity == null || root == null || text == null) return;
         float ax = 0; int lineTop = 0, lineBottom = 0;
         Layout lay = text.getLayout();
@@ -1247,7 +1248,7 @@ public final class BtBridge {
                 @Override public void onClick(View v) {
                     pw.dismiss();
                     try { mode.finish(); } catch (Throwable ignored) {}
-                    nativeSelectionAction(action, sel, selLo, selHi);
+                    nativeSelectionAction(action, sel, selLo, selHi, selLead);
                 }
             });
             list.addView(row, new android.widget.LinearLayout.LayoutParams(
@@ -1621,16 +1622,18 @@ public final class BtBridge {
                 s0 = Math.max(s0, contentStart);
                 if (s1 <= s0) { mode.finish(); return true; }
                 final String sel = readerText(text.getText(), s0, s1).toString();
-                // The verse span, resolved NOW from the same offsets the text was
-                // captured from (the popup below may collapse the selection).
+                // The verse span and the lead, resolved NOW from the same offsets
+                // the text was captured from (the popup below may collapse the
+                // selection).
                 final int selLo = verseAtOffset(s0);
                 final int selHi = s1 > s0 ? verseAtOffset(s1 - 1) : selLo;
+                final String selLead = selectionLead(text.getText(), s0);
                 if (item.getItemId() == 200) {
                     // The inline "Study with AI": open our popup of the study
                     // actions, anchored at the selection. The selected text is
                     // captured NOW — opening the popup may collapse the selection
                     // and end the action mode.
-                    showStudyPopup(mode, sel, s1, selLo, selHi);
+                    showStudyPopup(mode, sel, s1, selLo, selHi, selLead);
                     return true;
                 }
                 String action;
@@ -1643,7 +1646,7 @@ public final class BtBridge {
                     default: return false; // submenu header (201) or system item
                 }
                 mode.finish();
-                nativeSelectionAction(action, sel, selLo, selHi);
+                nativeSelectionAction(action, sel, selLo, selHi, selLead);
                 return true;
             }
             @Override public void onDestroyActionMode(ActionMode mode) {
@@ -2016,6 +2019,22 @@ public final class BtBridge {
             i++;
         }
         return any ? val : -1;
+    }
+
+    // selectionLead is the selection's lead: the reader text (readerText, as
+    // the selection itself is taken) from the number run verseAtOffset(s0)
+    // resolves to, up to s0. The span says which verses; the lead says where in
+    // verse lo the selection begins, which tells a later copy of wording the
+    // verse repeats from the first (docs/SELECTION_OFFSET.md). null when s0 is
+    // above verse 1's number.
+    private static String selectionLead(CharSequence cs, int s0) {
+        int start = -1;
+        for (int i = 0; i < verseNums.length; i++) {
+            if (verseStarts[i] > s0) break;
+            start = verseStarts[i];
+        }
+        if (start < 0 || s0 > cs.length()) return null;
+        return readerText(cs, start, s0).toString();
     }
 
     // verseAtOffset returns the verse whose number run is the last at or before

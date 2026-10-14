@@ -422,6 +422,13 @@ func (p *styledReadingPane) copyToClipboard() {
 // selEnd). Runs are in chapter order, so the first overlap is lo and the last
 // is hi. A selection covering only separator whitespace overlaps no run and
 // yields the zero span (the matching fallback applies).
+//
+// The span carries the selection's lead as well, the model's text from verse
+// lo's number run to the selection's first rune (selSpan.lead): it is what
+// tells a later copy of repeated wording in verse lo from the first. A
+// selection begun in the space before that number has the empty lead, as one
+// begun on the number does. Nothing else can stand between: a heading and an
+// omitted verse's mark are drawn outside the model.
 func (p *styledReadingPane) selectedVerseSpan() selSpan {
 	if p.selStart < 0 || p.selEnd <= p.selStart || p.lay == nil {
 		return selSpan{}
@@ -447,7 +454,42 @@ func (p *styledReadingPane) selectedVerseSpan() selSpan {
 			hi = r.Verse
 		}
 	}
+	if lead, ok := p.selectionLead(lo); ok {
+		return selSpanWithLead(lo, hi, lead)
+	}
 	return selSpanFromNative(lo, hi)
+}
+
+// selectionLead is the model's text from verse lo's number run to the
+// selection's first rune, ok false when verse lo has no number run, or when
+// the selection begins ahead of it on anything but space.
+func (p *styledReadingPane) selectionLead(lo int) (string, bool) {
+	if lo < 1 {
+		return "", false
+	}
+	numAt := -1
+	for _, ln := range p.lay.Lines {
+		for _, r := range ln.Runs {
+			if r.Kind == runVerseNum && r.Verse == lo {
+				numAt = r.Offset
+				break
+			}
+		}
+		if numAt >= 0 {
+			break
+		}
+	}
+	runes := []rune(p.lay.Text)
+	if numAt < 0 || numAt > len(runes) || p.selStart > len(runes) {
+		return "", false
+	}
+	if numAt <= p.selStart {
+		return string(runes[numAt:p.selStart]), true
+	}
+	if strings.TrimSpace(string(runes[p.selStart:numAt])) == "" {
+		return "", true
+	}
+	return "", false
 }
 
 // studyMenu serves the pane's right-click menu through the SAME shared
