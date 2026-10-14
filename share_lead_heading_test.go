@@ -185,6 +185,63 @@ func TestADragRunOnIntoAHeadingIsCitedByTheVerseItTouched(t *testing.T) {
 	}
 }
 
+// A piece of a word run on from inside a verse's last word into the heading
+// below it, with no lead. The span's verses do not hold it, and the
+// chapter-wide fallback read the heading's words as the verse's: "lood.\nThe"
+// was shared "[L]ood. The . . . ." from verse 1's end run on into verse 2.
+// The heading's front comes off and the piece ends where its verse ends, as
+// the lead places it. Where the verse itself holds the piece with the
+// heading's first word, inside "him. Then", a drag inside the verse makes the
+// same text, and without the lead it is placed there.
+func TestAPieceOfAWordRunOnIntoTheHeadingBelowEndsWithItsVerse(t *testing.T) {
+	texts := map[int]string{
+		1: "These are the generations of the sons, born to them after the flood.",
+		2: "The sons of the north were Gomer and Magog.",
+	}
+	for _, head := range []string{"The Table of Nations", "A Word on Rest"} {
+		f := headingFixture("Genesis", 10, texts, Heading{Text: head, BeforeVerse: 2})
+		v1 := spanOf(t, f.spans, 1)
+		lood := v1.start + strings.Index(f.corpus[v1.start:v1.end], "lood.")
+		for _, to := range []string{strings.Fields(head)[0], head} {
+			raw, span, _ := f.drag(t, 0, "lood.", "\n"+to)
+			if span.lo != 1 || span.hi != 1 {
+				t.Fatalf("fixture: %q spans %d–%d, want 1–1", raw, span.lo, span.hi)
+			}
+			withQuote, withCite := shareQuoteIn(f.st, f.book, f.ch, raw, span)
+			no := selSpanFromNative(1, 1)
+			quote, cite := shareQuoteIn(f.st, f.book, f.ch, raw, no)
+			_, _, at, baseLen := prepareShareQuoteIn(f.st, f.book, f.ch, raw, no)
+			if quote != "“[L]ood.”" || cite != "Genesis 10:1" || at != lood || baseLen != len("lood.") {
+				t.Errorf("%q without a lead: (%q, %q) at %d (%d bytes), want (“[L]ood.”, Genesis 10:1) at %d (%d bytes)", raw, quote, cite, at, baseLen, lood, len("lood."))
+			}
+			if quote != withQuote || cite != withCite {
+				t.Errorf("%q: without a lead (%q, %q), with it (%q, %q); want the same", raw, quote, cite, withQuote, withCite)
+			}
+		}
+	}
+
+	f := headingFixture("Genesis", 50, map[int]string{
+		1: "They clothed him. Then they led him out to the field, and they followed him.",
+		2: "The field lay quiet until the evening.",
+	}, Heading{Text: "The Field", BeforeVerse: 2})
+	v1 := spanOf(t, f.spans, 1)
+	last := v1.start + strings.LastIndex(f.corpus[v1.start:v1.end], "im.")
+	first := v1.start + strings.Index(f.corpus[v1.start:v1.end], "im. Then")
+	raw, span, _ := f.drag(t, f.pvs[0].body+strings.Index(f.page[f.pvs[0].body:], "followed"), "im.", "\nThe")
+	if quote, _ := shareQuoteIn(f.st, f.book, f.ch, raw, span); quote != "“[I]m.”" {
+		t.Errorf("%q with its lead shared %q, want “[I]m.”", raw, quote)
+	}
+	if _, _, at, _ := prepareShareQuoteIn(f.st, f.book, f.ch, raw, span); at != last {
+		t.Errorf("%q with its lead placed at %d, want its own place %d", raw, at, last)
+	}
+	if quote, _ := shareQuoteIn(f.st, f.book, f.ch, raw, selSpanFromNative(1, 1)); quote != "“[I]m. The . . . .”" {
+		t.Errorf("control: %q without a lead shared %q, want the verse's own “[I]m. The . . . .”", raw, quote)
+	}
+	if _, _, at, _ := prepareShareQuoteIn(f.st, f.book, f.ch, raw, selSpanFromNative(1, 1)); at != first {
+		t.Errorf("control: %q without a lead placed at %d, want inside the verse's “him. Then” at %d", raw, at, first)
+	}
+}
+
 // A piece of a word that the locate declines is completed at its own place
 // with the lead, and cited as it is without the lead: by the span, which is
 // what its link names. A drag from inside a verse's last word to the next
@@ -315,7 +372,7 @@ func inventHeadings(bd *BibleData) int {
 }
 
 type headingDragResult struct {
-	drags, outsideWith, outsideWithout, disagree int
+	drags, outsideWith, outsideWithout, unplacedWithout, disagree int
 }
 
 // headingDrags is every drag over the headings of every step-th chapter of
@@ -325,7 +382,8 @@ type headingDragResult struct {
 // ended one character early. With its lead each is placed, when it is
 // placed, inside the stretch of verse words it covers, and cited as its
 // link cites it. Those placed outside that stretch without the lead are
-// counted.
+// counted, and so are those that the path without the lead places nowhere
+// and quotes as they came, from the chapter's first copy of their words.
 func headingDrags(t *testing.T, bd *BibleData, step int, label string) headingDragResult {
 	t.Helper()
 	var r headingDragResult
@@ -405,8 +463,10 @@ func headingDrags(t *testing.T, bd *BibleData, step int, label string) headingDr
 								r.disagree++
 								show("%s %d %q with its lead cited %q, linked %d–%d", book, ch, raw, cite, lo, hi)
 							}
-							if _, _, at, bl := prepareShareQuoteIn(st, book, ch, raw, selSpanFromNative(span.lo, span.hi)); outside(at, bl) {
+							if text, _, at, bl := prepareShareQuoteIn(st, book, ch, raw, selSpanFromNative(span.lo, span.hi)); outside(at, bl) {
 								r.outsideWithout++
+							} else if at < 0 && text != "" {
+								r.unplacedWithout++
 							}
 						}
 					}
@@ -414,8 +474,8 @@ func headingDrags(t *testing.T, bd *BibleData, step int, label string) headingDr
 			}
 		}
 	}
-	t.Logf("%s: %d drags into a heading; with the lead %d placed outside the drag and %d cited otherwise than linked; without it %d placed outside",
-		label, r.drags, r.outsideWith, r.disagree, r.outsideWithout)
+	t.Logf("%s: %d drags into a heading; with the lead %d placed outside the drag and %d cited otherwise than linked; without it %d placed outside and %d nowhere",
+		label, r.drags, r.outsideWith, r.disagree, r.outsideWithout, r.unplacedWithout)
 	return r
 }
 
@@ -423,8 +483,13 @@ func headingDrags(t *testing.T, bd *BibleData, step int, label string) headingDr
 // into a heading. With the lead none is placed outside the stretch it
 // covers and each is cited as its link cites it. Without it 75 are
 // placed outside, at an earlier copy of their words or with the heading's
-// words read as the verse's; the count is pinned, so the path without a
-// lead is held unchanged.
+// words read as the verse's, and 480 are placed nowhere and quoted with the
+// heading's words: 478 pieces of a word run on through a heading to the
+// verse below, and two drags begun on the closing marks that end a verse.
+// Both counts are pinned, so the path without a lead is held. A piece of a
+// word run on into the heading below its verse and no further ends with its
+// verse (TestAPieceOfAWordRunOnIntoTheHeadingBelowEndsWithItsVerse); 3,604
+// drags were placed nowhere while it did not.
 func TestEveryDragIntoAHeadingIsPlacedInsideItselfWithItsLead(t *testing.T) {
 	bd, err := loadSeedGospels()
 	if err != nil {
@@ -444,25 +509,30 @@ func TestEveryDragIntoAHeadingIsPlacedInsideItselfWithItsLead(t *testing.T) {
 	if r.outsideWithout == 0 {
 		t.Errorf("control: without the lead none of %d drags into a heading was placed outside the drag; some are expected there", r.drags)
 	}
-	if step == 1 && (r.drags != 23567 || r.outsideWithout != 75) {
-		t.Errorf("%d drags, %d placed outside without the lead; want 23,567 and 75", r.drags, r.outsideWithout)
+	if step == 1 && (r.drags != 23567 || r.outsideWithout != 75 || r.unplacedWithout != 480) {
+		t.Errorf("%d drags, %d placed outside and %d nowhere without the lead; want 23,567, 75 and 480", r.drags, r.outsideWithout, r.unplacedWithout)
 	}
 }
 
 // The same drags over the publishers' own headings in the WEB, BSB and WEBC
 // caches: 503, 50,680 and 557 of them. LOCAL-ONLY and opt-in by
 // BIBLETEXT_EXHAUSTIVE=1. With the lead none is placed outside the drag or
-// cited otherwise than linked. Without it the BSB's 16 are placed outside,
-// pinned. Two of them are a piece of a word run on into the heading below,
-// "im.\nThe" from the last word of Matthew 27:31 and of Mark 15:20, which
-// the fallback places at "im. The" inside the verse's earlier "Him. Then"
-// (placeInSpan) and quotes as it came; completed from the chapter's first
-// copy instead, as before that, it had no place to count and quoted the same.
+// cited otherwise than linked. Without it, pinned, the BSB's 16 are placed
+// outside, and 46 of its drags, each a piece of a word run on through a
+// heading to the verse below, are placed nowhere and quoted with the
+// heading's words; 23, 6,697 and 31 were placed nowhere while a piece run on
+// into the heading below its verse alone did not end with its verse. Two of
+// the 16 are "im.\nThe" from the last word of Matthew 27:31 and of Mark
+// 15:20. The verse has "Him. Then" earlier, and a drag inside it makes the
+// same text, so the fallback places the piece there (placeInSpan) and shares
+// the heading's first word as the start of "Then", "[I]m. The . . . ."; the
+// lead shares "[I]m.".
 func TestEveryDragIntoAHeadingIsPlacedInsideItselfOverLocalCaches_LocalOnly(t *testing.T) {
 	if os.Getenv("BIBLETEXT_EXHAUSTIVE") == "" {
 		t.Skip("local-only and opt-in: every drag into a heading of three translation caches; run with BIBLETEXT_EXHAUSTIVE=1")
 	}
 	without := map[string]int{"web": 0, "bsb": 16, "webc": 0}
+	nowhere := map[string]int{"web": 0, "bsb": 46, "webc": 0}
 	for _, c := range localPublicDomainCaches(t) {
 		r := headingDrags(t, c.bd, 1, c.id)
 		if r.drags == 0 || r.outsideWith != 0 || r.disagree != 0 {
@@ -470,6 +540,9 @@ func TestEveryDragIntoAHeadingIsPlacedInsideItselfOverLocalCaches_LocalOnly(t *t
 		}
 		if want, ok := without[c.id]; ok && r.outsideWithout != want {
 			t.Errorf("%s: without the lead %d drags into a heading were placed outside; pinned %d", c.id, r.outsideWithout, want)
+		}
+		if want, ok := nowhere[c.id]; ok && r.unplacedWithout != want {
+			t.Errorf("%s: without the lead %d drags into a heading were placed nowhere; pinned %d", c.id, r.unplacedWithout, want)
 		}
 	}
 }

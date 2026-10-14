@@ -431,7 +431,9 @@ func cleanQuoteTextIn(state *AppState, book string, chapter int, raw string) str
 // chapter's prose, it falls back to the selection as it stands, its verse
 // numbers stripped only as whole tokens (cleanQuoteTextIn), and completed
 // from its copy in the span's verses where it can be placed there
-// (placeInSpan), else from its first copy in the chapter.
+// (placeInSpan), or, run on into the heading below them, at their end with
+// the heading's words taken off (verseEndBeforeHeading), else from its first
+// copy in the chapter.
 // The last two returns carry the LOCATION so the pipeline's later stages never
 // re-find the text: at = the located start of the quote in chapterProse's
 // coordinates (-1 when the fallback could not place it), baseLen = the byte
@@ -487,6 +489,26 @@ func prepareShareQuoteIn(state *AppState, book string, chapter int, raw string, 
 		if at := placeInSpan(corpus, spans, cleaned, span); at >= 0 {
 			return completeTrailingSentenceProse(corpus, cleaned, at), citationForSelectionIn(state, book, chapter, raw, span), at, len(cleaned)
 		}
+		// A piece of a word run on past the end of the span's last verse
+		// into the heading drawn below it is not in the span's verses, and
+		// the chapter-wide search below quoted the heading's words as the
+		// verse's: "aters.\nThe First Day", begun inside the last word of
+		// Genesis 1:2 in the BSB, was shared as "[A]ters. The First Day
+		// . . . .". So the front of the heading comes off its end, as it
+		// does on the located path (verseEndBeforeHeading), and what is
+		// left, when it is how the span's verses end, is completed there.
+		// Without a lead 6,651 of the BSB's 50,680 drags into its headings,
+		// 23 of the WEB's 503 and 31 of the WEBC's 557 were shared so, and
+		// each is now shared as it is with the lead. Where the span's verses
+		// hold the selection with the heading's word ("im.\nThe" from
+		// Matthew 27:31 in the BSB, whose verse has "Him. Then"), a drag
+		// inside the verse makes the same text, so placeInSpan answers
+		// above; only the lead tells the two apart.
+		if start, end, ok := spanRegion(spans, span); ok {
+			if rest, at, ok := verseEndBeforeHeading(state, book, chapter, corpus, spans, start, end, cleaned); ok {
+				return completeTrailingSentenceProse(corpus, rest, at), citationForSelectionIn(state, book, chapter, raw, span), at, len(rest)
+			}
+		}
 	}
 	cleaned := completeTrailingSentenceIn(state, book, chapter, cleanQuoteTextIn(state, book, chapter, raw), -1)
 	return cleaned, citationForSelectionIn(state, book, chapter, raw, span), -1, 0
@@ -497,18 +519,10 @@ func prepareShareQuoteIn(state *AppState, book string, chapter int, raw string, 
 // word, else the first copy of any kind. It is -1 when the span is not valid,
 // names no verse the corpus holds, or its verses do not hold s.
 func placeInSpan(corpus string, spans []verseSpan, s string, span selSpan) int {
-	if s == "" || !span.valid() {
+	if s == "" {
 		return -1
 	}
-	rStart, rEnd, haveRegion := 0, 0, false
-	for _, sp := range spans {
-		if sp.verse >= span.lo && sp.verse <= span.hi {
-			if !haveRegion {
-				rStart, haveRegion = sp.start, true
-			}
-			rEnd = sp.end
-		}
-	}
+	rStart, rEnd, haveRegion := spanRegion(spans, span)
 	if !haveRegion {
 		return -1
 	}
@@ -519,6 +533,24 @@ func placeInSpan(corpus string, spans []verseSpan, s string, span selSpan) int {
 		return rStart + i
 	}
 	return -1
+}
+
+// spanRegion is the stretch [start, end) of the corpus that the span's verses
+// cover; ok is false when the span is not valid or names no verse the corpus
+// holds.
+func spanRegion(spans []verseSpan, span selSpan) (start, end int, ok bool) {
+	if !span.valid() {
+		return 0, 0, false
+	}
+	for _, sp := range spans {
+		if sp.verse >= span.lo && sp.verse <= span.hi {
+			if !ok {
+				start, ok = sp.start, true
+			}
+			end = sp.end
+		}
+	}
+	return start, end, ok
 }
 
 // Every stage of the pipeline from here down reads ONE chapter, and the
