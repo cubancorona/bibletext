@@ -158,6 +158,47 @@ func TestAReflowArmedByAFrameThatComesBackIsDropped(t *testing.T) {
 	}
 }
 
+// The two tests above hold BtBridge.java's source, and the first models the
+// arithmetic; neither runs the bridge. The behaviour rests on the emulator
+// runs that forced each case: the John 3:14 restore at 1017 px with the text
+// laying out at 954 px, and the 1276 px frame pushed with the real one.
+//
+// The drop also compares a frame's width with the reading content's width,
+// which is the same quantity only while the content fills the overlay's
+// window: the window takes the frame's width (setFrame), the root fills the
+// window, the scroll fills the root and the content fills the scroll, and
+// none of the three has side padding. The reading page's padding is the
+// TextView's own (applyReadingPadding). A margin or padding on any of the
+// three would make every frame differ from the content by its size, and the
+// comparison would never drop a reflow again; this holds the layout to that.
+func TestTheReadingContentIsAsWideAsTheOverlaysFrame(t *testing.T) {
+	java := readNativeSource(t, "android/BtBridge.java")
+	for _, want := range []string{
+		"dialog.setContentView(root);",
+		"root.addView(scroll, new FrameLayout.LayoutParams(\n" +
+			"                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));",
+		"scroll.addView(content, new FrameLayout.LayoutParams(\n" +
+			"                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT));",
+		"lp.width = frameW;",
+	} {
+		if !strings.Contains(java, want) {
+			t.Errorf("BtBridge.java lacks %q: the content's width is no longer the frame's", want)
+		}
+	}
+	for _, view := range []string{"root", "scroll", "content"} {
+		for _, call := range []string{".setPadding(", ".setPaddingRelative("} {
+			if strings.Contains(java, view+call) {
+				t.Errorf("BtBridge.java pads %s (%s%s): the content is then narrower than the frame, "+
+					"and setFrame's width comparison never drops a reflow", view, view, call)
+			}
+		}
+	}
+	if !strings.Contains(javaMethodBody(t, java, "private static boolean applyReadingPadding("), "text.setPadding(") {
+		t.Error("applyReadingPadding no longer pads the TextView; the reading page's side padding has moved, " +
+			"so re-check that the content still spans the frame")
+	}
+}
+
 // javaMethodBody is the source of the Java method whose declaration begins
 // with decl, up to the first line that closes a method at four spaces.
 func javaMethodBody(t *testing.T, java, decl string) string {
