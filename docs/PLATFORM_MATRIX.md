@@ -378,7 +378,7 @@ place a fix on one does not reach the others.
     sheet shows it, the text sheet shows none, and the picture sheet shows
     the file's name in its place. The picture is taken at the tap,
     `share_windows.go:75` (`img := takeSharedImage(path, time.Now())`), and
-    copied to a file named for the reader, `share_parts.go:98`
+    copied to a file named for the reader, `share_parts.go:118`
     (`if file, err := copyShareImage(path, now); err != nil {`), so that a
     later preview, which renders over the renderer's file, cannot change
     what is shared or what its fallback saves; the copy is resolved as a

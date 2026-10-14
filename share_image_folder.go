@@ -222,7 +222,8 @@ type savedImage struct {
 }
 
 // saveSharedImage writes card, the rendered card read from path at the tap,
-// under the reader's name for it (shareImageName), into the first of the
+// under the reader's name for it (shareImageName), numbered where a picture
+// of that name is there already (freeShareImagePath), into the first of the
 // place's folders that is there and takes the copy. Where none does, the
 // picture is still the file at path, in no folder that keeps it. It waits
 // on the disk, and inside the snap can wait on a permission prompt, so it
@@ -234,7 +235,7 @@ func saveSharedImage(card []byte, path string, p sharePlace, now time.Time) save
 		if serr != nil || !st.IsDir() {
 			continue
 		}
-		target := filepath.Join(f.dir, shareImageName(now))
+		target := freeShareImagePath(f.dir, shareImageName(now))
 		if err = writeFileContents(target, card); err == nil {
 			return savedImage{file: target, folder: f.dir, downloads: f.downloads}
 		}

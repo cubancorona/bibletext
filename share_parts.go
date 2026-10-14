@@ -3,6 +3,7 @@
 package bibletext
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -47,6 +48,25 @@ func shareImageName(t time.Time) string {
 	return ProductName() + " verse " + t.Format("2006-01-02 15.04.05") + ".png"
 }
 
+// freeShareImagePath is where a picture named name goes in dir: that name,
+// or, where a file of that name is there already, the name with " (2)",
+// " (3)" and so on before its extension, as browsers name a second download
+// of one file. The name is to the second, and the second of two pictures
+// shared within one second replaced the first. A name that cannot be looked
+// at is returned as it is, and the write reports why.
+func freeShareImagePath(dir, name string) string {
+	ext := filepath.Ext(name)
+	stem := strings.TrimSuffix(name, ext)
+	path := filepath.Join(dir, name)
+	for n := 2; n <= 1000; n++ {
+		if _, err := os.Lstat(path); err != nil {
+			return path
+		}
+		path = filepath.Join(dir, fmt.Sprintf("%s (%d)%s", stem, n, ext))
+	}
+	return path
+}
+
 // shareImageKeep is how long a copy made for the Windows Share sheet is kept
 // (copyShareImage).
 const shareImageKeep = 24 * time.Hour
@@ -73,7 +93,7 @@ func copyShareImage(path string, now time.Time) (string, error) {
 			}
 		}
 	}
-	dst := filepath.Join(dir, shareImageName(now))
+	dst := freeShareImagePath(dir, shareImageName(now))
 	if err := copyFileContents(path, dst); err != nil {
 		return "", err
 	}

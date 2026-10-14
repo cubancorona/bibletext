@@ -106,6 +106,62 @@ func TestTheSharedPictureIsCopiedUnderItsName(t *testing.T) {
 	}
 }
 
+// TWO PICTURES SHARED WITHIN ONE SECOND ARE BOTH KEPT. A picture is named to
+// the second (shareImageName), so the second of two saved into Downloads, or
+// copied for the Windows Share sheet, within one second replaced the first.
+// The second now takes " (2)" before its extension, a third " (3)", as
+// browsers name a second download of one file, and the first is left as it
+// was.
+func TestTwoPicturesSharedInOneSecondAreBothKept(t *testing.T) {
+	now := time.Date(2026, 10, 14, 9, 30, 5, 0, time.Local)
+	name := shareImageName(now)
+	numbered := func(n int) string {
+		return strings.TrimSuffix(name, ".png") + fmt.Sprintf(" (%d).png", n)
+	}
+
+	home := t.TempDir()
+	downloads := filepath.Join(home, "Downloads")
+	if err := os.MkdirAll(downloads, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	place := sharePlace{goos: "linux", home: home, configHome: t.TempDir()}
+	for i, want := range []string{name, numbered(2), numbered(3)} {
+		saved := saveSharedImage([]byte(fmt.Sprintf("card %d", i+1)), "", place, now)
+		if saved.err != nil || saved.file != filepath.Join(downloads, want) {
+			t.Errorf("save %d went to %q (%v), want %q in Downloads", i+1, saved.file, saved.err, want)
+		}
+	}
+	for i, file := range []string{name, numbered(2), numbered(3)} {
+		if b, err := os.ReadFile(filepath.Join(downloads, file)); err != nil || string(b) != fmt.Sprintf("card %d", i+1) {
+			t.Errorf("%s holds %q (%v), want card %d's bytes", file, b, err, i+1)
+		}
+	}
+
+	dir := t.TempDir()
+	prev := imageRenderDir
+	imageRenderDir = func() string { return dir }
+	t.Cleanup(func() { imageRenderDir = prev })
+	var copies []string
+	for i := 1; i <= 2; i++ {
+		card := filepath.Join(dir, "bibletext-verse-0.png")
+		if err := os.WriteFile(card, []byte(fmt.Sprintf("card %d", i)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		got, err := copyShareImage(card, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		copies = append(copies, got)
+	}
+	if filepath.Base(copies[0]) != name || filepath.Base(copies[1]) != numbered(2) {
+		t.Errorf("the Windows Share sheet's copies are %q and %q, want %q and %q",
+			filepath.Base(copies[0]), filepath.Base(copies[1]), name, numbered(2))
+	}
+	if b, err := os.ReadFile(copies[0]); err != nil || string(b) != "card 1" {
+		t.Errorf("the first copy holds %q (%v), want card 1's bytes: the second was written over it", b, err)
+	}
+}
+
 // winrtIID derives a parameterized interface's id from its type signature:
 // SHA-1 over the Windows Runtime's pinterface namespace id, in network byte
 // order, then the signature in UTF-8; the first 16 bytes, with the version
