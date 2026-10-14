@@ -362,12 +362,18 @@ five recovery shapes are wholly inside `\wj` in the publisher source. WEBC Mark
 into two adjacent `\wj` blocks. Any new or malformed mismatch fails generation.
 
 Each marked run is matched at its own place: its offset in its verse, counted
-in letters and digits on the USFM walk with footnotes and heading lines left
-out, so the same words earlier in the verse cannot take it. A run of
-punctuation alone, a closing mark a note parts from its words, lies between
-the letters on either side of its offset. A run whose letters are not at its
-offset is placed only by their one copy in the verse; no copy or several, or
-an end inside a word, falls to the recoveries above or fails generation.
+in letters and digits on the USFM walk with footnotes, alternate or published
+numbers and heading lines left out, so the same words earlier in the verse
+cannot take it. The walk carries those letters too, and the runtime verse
+must have the same ones before the run. A run of punctuation alone, a closing
+mark a note parts from its words, lies between the letters on either side of
+its offset. A run whose verse differs before it, or whose letters are not at
+its offset, falls to the recoveries above or fails generation; with
+`--allow-relocated` it is placed instead by the one copy of its letters in the
+verse, after the run before it, and listed. No copy or several, or an end
+inside a word, leaves it unplaced either way. Luke 8:8, a recovery, is the one
+marked verse in either edition whose runtime letters before a run differ from
+the source's.
 
 The generated 2,059-verse marked sets remain as edition-local protection for a
 future runtime text change that invalidates an offset fingerprint. Other
@@ -388,14 +394,18 @@ The website is the one place it can be: once `scripts/publish-site.sh` has
 published with the NKJV's text switched on, the public `gh-pages` branch holds
 the rendered pages, and its history keeps them after the switch goes off again.
 
-Each run is matched at its own place: the parser counts each verse's non-space
+Each run is matched at its own place: the parser keeps each verse's non-space
 characters, leaving out the verse number and headings as the app's decoder
-does, and a run must be found at its count, or by its one copy in the verse.
-No copy or several, an end inside a word, or a chapter missing from the cache
-fails generation. `--no-fetch` derives from the cached chapters with no key
-read and no call. This rule dates from 14 October 2026 and has been shown on
-invented markup only: the shipped table was made before it, and has not yet
-been regenerated with it (ROADMAP.md, Decisions still open, 43).
+does, and a run must be found at their count, with the same characters before
+it in the app's verse. Where those differ, or the run is not at its count,
+generation fails, naming the verse and the run's number; with
+`--allow-relocated` the run is placed instead by its one copy in the verse,
+after the run before it, and listed. No copy or several, an end inside a
+word, or a chapter missing from the cache fails generation either way.
+`--no-fetch` derives from the cached chapters with no key read and no call.
+This rule dates from 14 October 2026 and has been shown on invented markup
+only: the shipped table was made before it, and has not yet been regenerated
+with it (ROADMAP.md, Decisions still open, 43).
 
 An absent NKJV table entry is authoritative black letter. This matters for nine
 verses the WEB marks but the NKJV source does not: 1 Timothy 5:18; Matthew 8:32;
@@ -409,12 +419,14 @@ balanced `\wj … \wj*` blocks covering 2,042 verses and 2,294 per-verse runs.
 
 `scripts/gen-bsb-redletter.py` extracts those markers directly and locates their
 text in the runtime BSB cache, at each run's own place: its offset in its verse,
-counted in letters and digits as the WEB's generator counts them (section 3.3).
-There it first requires an exact punctuation-preserving match with flexible
-whitespace, then permits a case-insensitive alphanumeric match for typography
-differences such as spacing around em dashes. Generation fails if a marked
-run's letters are neither at its place nor once in the verse, or if either end
-falls inside a word.
+counted in letters and digits as the WEB's generator counts them (section 3.3),
+with the same letters before it in the runtime verse. There it first requires
+an exact punctuation-preserving match with flexible whitespace, then permits a
+case-insensitive alphanumeric match for typography differences such as
+spacing around em dashes. Generation fails if a marked run is not at its
+place, or if either end falls inside a word; with `--allow-relocated`, a run
+not at its place is placed instead by the one copy of its letters in the
+verse, after the run before it, and listed.
 
 The generated result is 2,042 verses and 2,294 runs: 2,251 source runs locate
 exactly and 43 require typography normalization. There are no hand judgements
@@ -608,6 +620,8 @@ BIBLETEXT_WEB_USFM=<unpacked eng-web_usfm.zip> BIBLETEXT_WEBC_USFM=<unpacked eng
 python3 scripts/gen-nkjv-redletter.py
 # or from the cached chapters alone, with no key read and no call
 python3 scripts/gen-nkjv-redletter.py --no-fetch --app-cache <the app's bibletext-nkjv-v7.json>
+# each red-letter generator refuses a run whose verse differs before it in the
+# runtime text; --allow-relocated places such a run by its one copy and lists it
 
 # the pinned consequences
 go test -run 'TestMapVerse|TestVerseExistsIn|WordsOfChrist|TestBSBRedLetter|TestNKJV|TestWEBAndWEBC|TestApplePane|TestAndroidPane|TestStyled|TestFyne' .

@@ -913,35 +913,48 @@ term, the decoder already walks the words-of-Jesus span
 `SmallCaps` are carried.
 
 **FIXED in the generator, 14 October 2026; the table is not yet regenerated
-with it** (ROADMAP.md, Later minor releases, row 31). The HTML parser counts
+with it** (ROADMAP.md, Later minor releases, row 31). The HTML parser keeps
 each verse's non-space characters as it reads them, leaving out what the
 app's decoder leaves out of a verse (the verse number, headings and the
-psalm title's paragraph), and records the count at which each run begins;
-`place` takes the run there and only there, and the retry from the verse's
-start is gone. A run whose characters are not at its count is placed only
-where they occur once in the whole verse and after the run before it; no
-copy, two or more, or an end inside a word fails generation, naming the
-verse and the run's number, never its words. A chapter missing from the
-cache fails it too: `derive()` used to skip it, leaving its verses out of
-the table, which reads as black letter. The key is read only to fetch, and
-`--no-fetch` with `--html-cache`, `--app-cache` and `--out` derives with no
-key read and no call.
-`TestTheNKJVRedLetterGeneratorPlacesEachRunAtItsOwnPlace` and
-`TestTheNKJVRedLetterGeneratorRefusesWhatItCannotPlace` run it on invented
-markup: "Go" in "Gospel", the narration's copy of a run (with a heading
-inside the verse), italic and small-capital words nested in a run, a run
-carried into the next verse, a second run the app's verse holds only before
-the first, an end inside a word and a missing chapter. Through the derive
-logic before the fix, run from a copy of the script with its fetch taken
-out, the first test finds the wrong copy in three verses and each refusal
-writes a table instead; the second run is folded into the first.
+psalm title's paragraph), and records those before each run; `place` takes
+the run at their count, and only when the app's verse has the same
+characters before it. The retry from the verse's start is gone. Where the
+app's text before a run differs from the markup's, or the run's characters
+are not at its count, generation fails, naming the verse and the run's
+number, never its words. With `--allow-relocated` such a run is placed
+instead where its characters occur once in the whole verse and after the
+run before it, and the summary lists it; no copy, two or more, or one
+before the run before it fails all the same. An end inside a word fails
+generation, and so does a chapter missing from the cache: `derive()` used
+to skip it, leaving its verses out of the table, which reads as black
+letter. Only `fetch()` reads the key; `--no-fetch` with `--html-cache`,
+`--app-cache` and `--out` derives with no key read and no call, and drops
+`BIBLE_API_KEY` from the environment unread so that nothing it starts
+inherits it.
+`TestTheNKJVRedLetterGeneratorPlacesEachRunAtItsOwnPlace` runs it on
+invented markup: "Go" in "Gospel", the narration's copy of a run, and the
+narration's copy with a heading inside the verse, fail on the derive logic
+before the fix (run from a copy of the script with its fetch taken out);
+italic and small-capital words nested in a run and a run carried into the
+next verse pass before and after. Each refusal in
+`TestTheNKJVRedLetterGeneratorRefusesWhatItCannotPlace` wrote a table
+before the fix: a second run the app's verse holds only before the first
+(it was folded into the first), a run whose verse differs before it so that
+its count falls on a later copy of its words, an end inside a word and a
+missing chapter; each is refused with and without `--allow-relocated`.
+`TestTheRedLetterGeneratorsPlaceARunByItsOnlyCopyOnlyWhenAllowed` holds the
+one-copy placement to the option, and
+`TestTheNKJVRedLetterGeneratorKeepsNoKeyWhenItDoesNotFetch` loads the
+script with an invented key in its environment and finds it in none of its
+globals after a `--no-fetch` run.
 
 Not done: no NKJV text was opened, so the generator has not been run on the
 app's NKJV cache, and the shipped `red_letter_nkjv_data.go` is unchanged and
-unchecked against it. That run, from the cached chapters with `--no-fetch`,
-must write the shipped table byte for byte; where the parser's count and the
-app's text disagree, it fails by verse instead of writing a table. It needs
-the NKJV opened in the app once (ROADMAP.md, Decisions still open, 43).
+unchecked against it. That run, from the cached chapters with `--no-fetch`
+and without `--allow-relocated`, must write the shipped table byte for byte;
+where the app's text before a run and the markup's disagree, it fails by
+verse and run number instead of writing a table. It needs the NKJV opened in
+the app once (ROADMAP.md, Decisions still open, 43).
 
 ### RL-BSB-1. The BSB red-letter generator takes the first copy from its cursor — FIXED 14 October 2026
 
@@ -960,21 +973,36 @@ that position, and fail generation on an ambiguity or an edge inside a word;
 regenerate byte-identical.
 
 **FIXED 14 October 2026** (ROADMAP.md, Later minor releases, row 32).
-`wj_texts` carries each run's offset in its verse, counted in letters and
-digits as `alphanumeric_map` counts them, with footnotes, cross-references
-and heading lines (`\s`, `\r` and the like) left out, and `place` puts the
-run at that offset: the exact match first, from a rune between the letter
-before the offset and the one at it, then the typography-normalized one.
-A run of punctuation alone lies between those two letters. A run whose
-letters are not at its offset is placed only where they occur once in the
-whole verse, and the summary counts it; no copy, two or more, or an end
-inside a word fails generation. `TestTheBSBRedLetterGeneratorPlacesEachRunAtItsOwnPlace`
-("Go" in "Gospel", the narration's copy on the exact path and on the
-normalized one, a heading inside the verse, a run carried into the next
-verse, a closing mark marked on its own) and
-`TestTheBSBRedLetterGeneratorRefusesARunItCannotPlace` (two copies after a
-changed lead-in, an end inside a word) fail on the generator before the fix
-and pass after it.
+`wj_texts` carries the letters and digits of each run's verse ahead of it,
+casefolded as `alphanumeric_map` gives them, with footnotes,
+cross-references, alternate and published numbers (`\va`, `\vp`, `\ca`) and
+heading lines (`\s`, `\r` and the like) left out; their count is the run's
+offset. `place` puts the run at that offset when the runtime verse has the
+same letters before it: the exact match first, from a rune between the
+letter before the offset and the one at it, then the typography-normalized
+one. A run of punctuation alone lies between those two letters. Where the
+runtime verse differs before the run, or the run's letters are not at its
+offset, generation fails; with `--allow-relocated` the run is placed instead
+where its letters occur once in the whole verse and after the run before
+it, and the summary lists it. No copy, two or more, or an end inside a word
+fails generation either way. Chapter and verse markers are read exactly, so
+`\cl` and `\cd` reach the heading rule and `\va` and `\vp` no longer stop the
+walk.
+
+`TestTheBSBRedLetterGeneratorPlacesEachRunAtItsOwnPlace` fails on the
+generator before the fix in three verses: "Go" in "Gospel", and the
+narration's copy on the exact path and on the normalized one. Its other
+verses, a heading inside the verse, a run carried into the next verse and a
+closing mark marked on its own, pass before and after; they hold the new
+count to the runtime text, and with heading lines counted the heading verse
+fails. `TestTheBSBRedLetterGeneratorRefusesARunItCannotPlace` refuses, with
+and without `--allow-relocated`, two copies after a changed lead-in, two
+copies where the changed lead-in puts the offset on the later one, and an
+end inside a word; each wrote a table before the fix.
+`TestTheRedLetterGeneratorsPlaceARunByItsOnlyCopyOnlyWhenAllowed` and
+`TestTheRedLetterGeneratorsReadChapterAndVerseMarkersExactly` fail before
+it too: the first because the one copy was taken unasked, the second
+because the walk stopped at `\cl`.
 
 The publisher's `bsb_usfm.zip`, downloaded on 14 October 2026 (1,598,038
 bytes, SHA-256 `f0c56438eb89c98e…`), differs from the copy recorded on 23
@@ -1003,17 +1031,28 @@ regenerate byte-identical, which needs the eBible USFM zips downloaded.
 
 **FIXED 14 October 2026** (ROADMAP.md, Later minor releases, row 33), as
 RL-BSB-1 with the punctuation-preserving match alone: `wj_texts` carries
-each run's offset in letters and digits, heading lines left out, and
-`locate` matches only at it. A run of punctuation alone, a closing mark a
-note parts from its words (John 8:58, Luke 12:59, Luke 14:24 and Revelation
-1:8 in the WEB), lies between the letters on either side of its offset. A
-run whose letters are not at its offset is placed only where they occur
-once in the verse, and anything else falls to the pinned recoveries or fails
-as before, as does an end inside a word.
-`TestTheWEBRedLetterGeneratorPlacesEachRunAtItsOwnPlace` (the other
-speaker's "I am he.", "Go" in "Gospel", a heading inside the verse) and
-`TestTheWEBRedLetterGeneratorRefusesARunItCannotPlace` fail on the generator
-before the fix and pass after it.
+the letters and digits of each run's verse ahead of it, heading lines and
+alternate or published numbers left out, and `locate` matches only at their
+count, when the runtime verse has the same letters before it. A run of
+punctuation alone, a closing mark a note parts from its words (John 8:58,
+Luke 12:59, Luke 14:24 and Revelation 1:8 in the WEB), lies between the
+letters on either side of its offset. Where the runtime verse differs before
+the run, or the run's letters are not at its offset, the run is unplaced,
+and its verse falls to the pinned recoveries or fails generation; with
+`--allow-relocated` it is placed instead where its letters occur once in the
+whole verse and after the run before it, and listed. An end inside a word
+leaves it unplaced either way. Chapter and verse markers are read exactly,
+as in RL-BSB-1.
+`TestTheWEBRedLetterGeneratorPlacesEachRunAtItsOwnPlace` fails on the
+generator before the fix in two verses, the other speaker's "I am he." and
+"Go" in "Gospel"; its two speeches, a closing mark marked on its own and a
+heading inside the verse pass before and after and hold the new count to
+the runtime text, the heading verse failing with heading lines counted.
+`TestTheWEBRedLetterGeneratorRefusesARunItCannotPlace` has RL-BSB-1's three
+refusals, each of which wrote a table before the fix, and the WEB runs
+under the two shared tests named there as well. Luke 8:8 is the one marked
+verse whose runtime letters before a run differ from eBible's (in both
+editions); it is a pinned recovery before and after.
 
 eBible's zips, downloaded on 14 October 2026 (`eng-web_usfm.zip` 3,244,779
 bytes, SHA-256 `614f08ed7c1bf86e…`; `eng-web-c_usfm.zip` 3,082,467 bytes,
