@@ -476,7 +476,8 @@ func TestEverySelectionIsPlacedByItsLeadOverLocalCaches_LocalOnly(t *testing.T) 
 // that later copy. With its lead each must be placed at its own place and
 // cut back there to its whole words: begun inside a word, from the token
 // after it; ended inside one, to the end of the token before it, without the
-// clause mark the end repair drops. It returns how many drags it made, how
+// clause mark the end repair drops; and where a closed-up dash joins the
+// word cut into to its neighbour, from or to the word across the dash. It returns how many drags it made, how
 // many were placed otherwise with the lead, and how many without it.
 func midWordDrags(t *testing.T, bd *BibleData, step int, label string) (drags, wrongWith, elsewhereWithout int) {
 	t.Helper()
@@ -498,14 +499,25 @@ func midWordDrags(t *testing.T, bd *BibleData, step int, label string) (drags, w
 						var ds []drag
 						if r := []rune(region[first.start:first.end]); len(r) >= 3 {
 							_, size := utf8.DecodeRuneInString(region[first.start:])
-							// Begun inside the first word: kept from the next token.
-							next := strings.IndexByte(region[first.start:], ' ')
-							ds = append(ds, drag{first.start + size, last.end, first.start + next + 1, last.end})
+							// Begun inside the first word: kept from the next token,
+							// or from the word after a closed-up dash inside it.
+							next := first.start + strings.IndexByte(region[first.start:], ' ') + 1
+							if dash := strings.Index(region[first.start+size:first.end], "—"); dash >= 0 {
+								after := first.start + size + dash + len("—")
+								if r, _ := utf8.DecodeRuneInString(region[after:]); isWordRune(r) {
+									next = after
+								}
+							}
+							ds = append(ds, drag{first.start + size, last.end, next, last.end})
 						}
 						if r := []rune(region[last.start:last.end]); len(r) >= 3 {
 							_, size := utf8.DecodeLastRuneInString(region[:last.end])
-							// Ended inside the last word: kept to the token before it.
+							// Ended inside the last word: kept to the token before it,
+							// or to the word before a closed-up dash inside it.
 							prev := strings.TrimRight(region[:strings.LastIndexByte(region[:last.start], ' ')], ",;:— ")
+							if dash := strings.LastIndex(region[last.start:last.end-size], "—"); dash > 0 {
+								prev = strings.TrimRight(region[:last.start+dash], ",;:— ")
+							}
 							ds = append(ds, drag{first.start, last.end - size, first.start, len(prev)})
 						}
 						for _, d := range ds {

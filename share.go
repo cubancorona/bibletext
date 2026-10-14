@@ -1304,11 +1304,25 @@ func locateShareSelection(state *AppState, book string, chapter int, corpus stri
 	// herself—", the end of the verse, was placed at the verse's earlier
 	// "herself—or" and shared "defiled", and 2 John 1's "the truth—" shared
 	// "the". The dash itself comes off below, as a clause mark at a cut does.
+	//
+	// And back to such a dash, not past it. A drag that stops inside the word
+	// after a closed-up dash stopped inside that word only, and the word
+	// before the dash is whole: cut back to the last space, Genesis 1:5's
+	// "was morning—t" was shared as "was", and "shut—o", with no space in
+	// it, as a fragment. Of the drags that take the two words before such a
+	// dash and one letter of the word after it, each with the span and with
+	// the lead, that lost the word before the dash in all 2,052 of the
+	// BSB's, 428 of the WEB's and 476 of the WEB Catholic's; the start repair
+	// below, the mirror, lost the word after the dash in as many.
 	for {
 		end := idx + len(s)
 		if end < len(corpus) && !strings.HasSuffix(s, "—") {
 			if r, _ := utf8.DecodeRuneInString(corpus[end:]); isWordRune(r) {
 				cut := strings.LastIndexByte(s, ' ')
+				if dash := strings.LastIndex(s, "—"); dash > 0 && dash > cut {
+					cutBack(dash + len("—"))
+					continue
+				}
 				if cut <= 0 {
 					// A single partial word — nothing left. When it opens a
 					// verse whose heading or title the drag also took, the
@@ -1365,13 +1379,22 @@ func locateShareSelection(state *AppState, book string, chapter int, corpus stri
 		break
 	}
 
-	// Mid-word START repair, symmetrically.
+	// Mid-word START repair, symmetrically, and forward to a closed-up dash
+	// before the first space as the end repair goes back to one: a drag begun
+	// inside "morning" of "was morning—the first day" began inside that word
+	// only, and "the" after the dash is whole.
 	for idx > 0 {
 		r, _ := utf8.DecodeLastRuneInString(corpus[:idx])
 		if !isWordRune(r) {
 			break
 		}
 		cut := strings.IndexByte(s, ' ')
+		if dash := strings.Index(s, "—"); dash >= 0 && (cut < 0 || dash < cut) {
+			if r, _ := utf8.DecodeRuneInString(s[dash+len("—"):]); isWordRune(r) {
+				cutFront(dash + len("—"))
+				continue
+			}
+		}
 		if cut < 0 {
 			return "", 0, 0, -1, false
 		}

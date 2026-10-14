@@ -10,9 +10,11 @@ package bibletext
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode"
+	"unicode/utf8"
 )
 
 // phraseWords is a phrase without the marks at either end, which the share
@@ -316,6 +318,121 @@ func TestAPhraseEndingOnADashKeepsItsWords(t *testing.T) {
 	// the last whole word.
 	if text, _, _, _, ok := normalizeShareSelectionIn(st, "Numbers", 5, "the wall is bro", selSpanFromNative(14, 14)); !ok || text != "the wall is" {
 		t.Errorf("control: \"the wall is bro\" shared %q (ok %v), want \"the wall is\"", text, ok)
+	}
+	// A drag that stops inside the word AFTER a closed-up dash stopped inside
+	// that word only: the word before the dash is whole. It is cut back to
+	// the dash, which comes off as a clause mark at a cut does. Cut back to
+	// the last space instead, it lost the word before the dash ("If the gate
+	// is" for "If the gate is shut—o"), and with no space in it the drag was
+	// shared as a fragment ("[S]hut—o . . . .").
+	// And the mirror at the start: a drag begun inside the word BEFORE such a
+	// dash began inside that word only, and the word after the dash is whole.
+	// Cut forward to the first space, it lost that word ("if the" for
+	// "hut—or if the").
+	for _, c := range []struct{ sel, want string }{
+		{"If the gate is shut—o", "If the gate is shut"},
+		{"the gate is shut—or i", "the gate is shut—or"},
+		{"shut—o", "shut"},
+		{"hut—or if the", "or if the"},
+		{"ut—or", "or"},
+	} {
+		verse := st.Bible.Verses["Numbers"][5][0].Text
+		lead := "14 " + verse[:strings.Index(verse, c.sel)]
+		for _, span := range []selSpan{{}, selSpanFromNative(14, 14), selSpanWithLead(14, 14, lead)} {
+			text, _, _, _, ok := normalizeShareSelectionIn(st, "Numbers", 5, c.sel, span)
+			if !ok || text != c.want {
+				t.Errorf("%q, spanned %d to %d (lead %v), shared %q (ok %v); want %q",
+					c.sel, span.lo, span.hi, span.hasLead, text, ok, c.want)
+			}
+		}
+	}
+}
+
+// The two cases above over the public-domain translations' caches, at every
+// closed-up dash between two words of two letters or more: a drag of the two
+// words before the dash, the dash and one letter of the word after it, and
+// a drag begun one letter before the dash through the two words after it,
+// each with the span and with the lead the panes send. Each must keep the
+// whole words on its side of the dash. LOCAL-ONLY and opt-in by
+// BIBLETEXT_EXHAUSTIVE=1, as the sweep below is. Cut at the last or the
+// first space, every one of them lost its whole word at the dash, the BSB's
+// 2,052 of each shape, the WEB's 428 and the WEB Catholic's 476: "was
+// morning—t" in Genesis 1:5 shared "was", and "g—the first" shared "first".
+func TestADragCutInsideAWordAtADashKeepsTheWholeWordOverLocalCaches_LocalOnly(t *testing.T) {
+	if os.Getenv("BIBLETEXT_EXHAUSTIVE") == "" {
+		t.Skip("local-only and opt-in: every closed-up dash in three translation caches; run with BIBLETEXT_EXHAUSTIVE=1")
+	}
+	for _, c := range localPublicDomainCaches(t) {
+		ending, endingLost, begun, begunLost := 0, 0, 0, 0
+		for _, book := range c.bd.Books {
+			for _, ch := range c.bd.GetChapterNumbersForBook(book) {
+				st := &AppState{Bible: c.bd, CurrentBook: book, CurrentChapter: ch}
+				corpus, spans := chapterProseIn(st, book, ch)
+				for _, sp := range spans {
+					body := corpus[sp.start:sp.end]
+					check := func(sel, want, lead string, counted, lost *int) {
+						for _, span := range []selSpan{selSpanFromNative(sp.verse, sp.verse), selSpanWithLead(sp.verse, sp.verse, lead)} {
+							*counted++
+							text, _, _, _, ok := normalizeShareSelectionProse(st, book, ch, corpus, spans, sel, span)
+							if ok && phraseWords(text) == phraseWords(want) {
+								continue
+							}
+							if *lost++; *lost <= 3 {
+								t.Errorf("%s: %s %d:%d %q (lead %v) shared %q (ok %v); want %q",
+									c.id, book, ch, sp.verse, sel, span.hasLead, text, ok, want)
+							}
+						}
+					}
+					for i := 0; i < len(body); {
+						j := strings.Index(body[i:], "—")
+						if j < 0 {
+							break
+						}
+						at := i + j
+						after := at + len("—")
+						i = after
+						if after >= len(body) || at == 0 {
+							continue
+						}
+						// Two letters at least on either side, so one letter of
+						// either word leaves the rest of it outside the drag.
+						r1, n1 := utf8.DecodeRuneInString(body[after:])
+						r2, _ := utf8.DecodeRuneInString(body[after+n1:])
+						l1, m1 := utf8.DecodeLastRuneInString(body[:at])
+						l2, _ := utf8.DecodeLastRuneInString(body[:at-m1])
+						if !isWordRune(r1) || !isWordRune(r2) || !isWordRune(l1) || !isWordRune(l2) {
+							continue
+						}
+						// Ending one letter into the word after the dash.
+						start := strings.LastIndexByte(body[:at], ' ')
+						if start > 0 {
+							if s2 := strings.LastIndexByte(body[:start], ' '); s2 >= 0 {
+								start = s2
+							}
+						}
+						start++
+						check(body[start:after+n1], body[start:at], strconv.Itoa(sp.verse)+" "+body[:start], &ending, &endingLost)
+						// Begun one letter before the dash, through two words after it.
+						end := len(body)
+						if k := strings.IndexByte(body[after:], ' '); k >= 0 {
+							end = after + k
+							if k2 := strings.IndexByte(body[end+1:], ' '); k2 >= 0 {
+								end = end + 1 + k2
+							} else {
+								end = len(body)
+							}
+						}
+						from := at - m1
+						check(body[from:end], body[after:end], strconv.Itoa(sp.verse)+" "+body[:from], &begun, &begunLost)
+					}
+				}
+			}
+		}
+		t.Logf("%s: %d drags ending one letter past a closed-up dash, %d lost the word before it; %d begun one letter before one, %d lost the word after it",
+			c.id, ending, endingLost, begun, begunLost)
+		if endingLost != 0 || begunLost != 0 {
+			t.Errorf("%s: %d of %d and %d of %d drags lost their whole word at the dash", c.id, endingLost, ending, begunLost, begun)
+		}
 	}
 }
 
