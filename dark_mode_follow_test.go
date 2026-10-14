@@ -49,6 +49,32 @@ var nightModeMustContain = map[string]string{
 	"adopts the new flag":              "currentSize.DarkMode = darkMode",
 	"sends it as a size event":         "theApp.events.In() <- currentSize",
 	"waits for a surface":              "surfaceInitialized",
+	"targets the activity":             "internal/driver/mobile/app/GoNativeActivity.java",
+}
+
+// THE FLAG IS WRITTEN BEFORE THE CONFIGURATION IS SENT. Stock Fyne's
+// GoNativeActivity.onConfigurationChanged calls super, which hands the
+// configuration to the driver's config-change branch above, and only then
+// updateTheme, which writes the flag that branch reads: the read raced the
+// write, unsynchronised, and when it came first a light or dark switch made
+// in the foreground waited for the next redraw. The patch moves updateTheme
+// ahead of super, so the send on windowConfigChange orders the write before
+// the read. Reading the night bit from the configuration the driver builds
+// instead does not work: the asset manager's configuration does not carry
+// the switch, and a build that read it stayed light through
+// scripts/test-android-dark-mode.sh.
+func TestAndroidNightModePatchWritesTheFlagBeforeTheConfigurationIsSent(t *testing.T) {
+	body := readRepoFile(t, nightModePatch)
+	want := "-        super.onConfigurationChanged(config);\n"
+	put := "         updateTheme(config);\n+        super.onConfigurationChanged(config);\n"
+	if !strings.Contains(body, want) || !strings.Contains(body, put) {
+		t.Errorf("%s does not move updateTheme ahead of super in onConfigurationChanged; "+
+			"the driver's config-change branch then reads the flag before it is written", nightModePatch)
+	}
+	if strings.Contains(body, "AConfiguration_getUiModeNight") {
+		t.Errorf("%s reads the night bit from the asset manager's configuration, which does not carry "+
+			"a light or dark switch; the running app stops following the system", nightModePatch)
+	}
 }
 
 func TestAndroidNightModePatchStillSaysWhatItMust(t *testing.T) {
@@ -64,7 +90,7 @@ func TestAndroidNightModePatchStillSaysWhatItMust(t *testing.T) {
 	// at the wrong moment: a rotation fires the config-change branch and then
 	// the redraw branch, so an unconditional send adds a size.Event carrying
 	// the pre-rotation dimensions.
-	if strings.Contains(body, "+\t\t\tcurrentSize.DarkMode = darkMode") &&
+	if strings.Contains(body, "+\t\t\t\tcurrentSize.DarkMode = darkMode") &&
 		!strings.Contains(body, "currentSize.DarkMode != darkMode") {
 		t.Error("the patch adopts the flag unconditionally; a rotation would gain a stale size.Event")
 	}
@@ -120,6 +146,12 @@ func TestPatchedToolkitFollowsTheSystemOnBothMobilePlatforms(t *testing.T) {
 			t.Errorf("the patched android driver no longer %s (%q absent) — "+
 				"a system theme switch will not reach a running app", claim, want)
 		}
+	}
+	activity := filepath.Join(root, "third_party", "fyne", "internal", "driver", "mobile", "app", "GoNativeActivity.java")
+	if body, err := os.ReadFile(activity); err != nil {
+		t.Errorf("reading the patched activity: %v", err)
+	} else if !strings.Contains(string(body), "        updateTheme(config);\n        super.onConfigurationChanged(config);") {
+		t.Error("the patched activity calls super before updateTheme; the driver reads the flag before it is written")
 	}
 
 	// iOS: upstream stamps the flag into the same size.Event a resize sends,

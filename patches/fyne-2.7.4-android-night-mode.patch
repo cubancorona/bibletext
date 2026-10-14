@@ -1,6 +1,6 @@
 --- a/internal/driver/mobile/app/android.go
 +++ b/internal/driver/mobile/app/android.go
-@@ -452,6 +452,24 @@
+@@ -452,6 +452,30 @@
  			return nil
  		case cfg := <-windowConfigChange:
  			pixelsPerPt = cfg.pixelsPerPt
@@ -18,6 +18,12 @@
 +			// Only a real change is forwarded. A rotation fires this branch
 +			// and then the redraw branch, so sending unconditionally would
 +			// add a size.Event carrying the pre-rotation dimensions.
++			//
++			// GoNativeActivity.onConfigurationChanged writes the flag
++			// (updateTheme, setDarkMode) before it calls super, which sends
++			// this configuration, so the send orders that write before this
++			// read. Written after super, as stock Fyne has it, the flag could
++			// still hold the old theme here.
 +			if surfaceInitialized && currentSize.DarkMode != darkMode {
 +				currentSize.DarkMode = darkMode
 +				theApp.events.In() <- currentSize
@@ -25,3 +31,21 @@
  		case w := <-windowCreated:
  			if surfaceInitialized && !wasDestroyed {
  				if errStr := C.destroyEGLSurface(); errStr != nil {
+--- a/internal/driver/mobile/app/GoNativeActivity.java
++++ b/internal/driver/mobile/app/GoNativeActivity.java
+@@ -364,8 +364,14 @@
+ 
+     @Override
+     public void onConfigurationChanged(Configuration config) {
+-        super.onConfigurationChanged(config);
++        // BibleText patch: the theme first. super hands the change to the Go
++        // driver's config-change branch, which reads the flag updateTheme
++        // writes; called after super, updateTheme raced that read, and a
++        // light or dark switch made in the foreground could wait for the
++        // next redraw. Written first, the flag is in place before the
++        // configuration is sent.
+         updateTheme(config);
++        super.onConfigurationChanged(config);
+     }
+ 
+     protected void updateTheme(Configuration config) {
