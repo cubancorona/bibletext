@@ -261,6 +261,26 @@ Recorded so nobody cargo-cults it later.
   trailing padding.** A `+` or `/` spelling, interior `=`, or wrong-length
   padding is damaged. The web reader initially forgave all three (atob accepts
   both alphabets); the conformance corpus pins the stricter boundary.
+- **A payload's ends lose ASCII white space only, and white space inside it is
+  damage.** ASCII white space is tab, line feed, form feed, carriage return
+  and space; anything else at an end, U+00A0 or U+FEFF say, is a character
+  outside the alphabet, and the payload is damaged. Both decoders check the
+  alphabet before decoding. Before they did, Go's base64 decoder skipped CR
+  and LF and the browser's atob skipped spaces, and Go's `TrimSpace` and
+  JavaScript's `trim` took different characters off the ends, so each opened
+  payloads the other called damaged. A browser's URL parser strips tabs and
+  line feeds and escapes spaces before the page reads its fragment, so these
+  arrive only in a hand-made or damaged link. Held by
+  `TestTheAppAndTheWebReaderReadNoteLinksAlike` (`cmd/websitegen`), since a
+  corpus line cannot hold white space.
+- **A note's text is cleaned alike.** The web reader's `cleanNote` drops what
+  `normalizeNote` drops, and reads U+2028 and U+2029 as line feeds before the
+  run of blank lines is collapsed. It kept the zero-width space, the word
+  joiner and the tag characters, and drew five U+2028 as five blank lines.
+- **An empty distance table is taken.** A dynamic block holding only literals
+  may give every distance code length zero; Go's `compress/flate` takes such a
+  table and fails only when a symbol is read from it, and the web reader now
+  does the same.
 
 ## Conformance corpus
 

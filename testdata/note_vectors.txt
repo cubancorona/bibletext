@@ -88,3 +88,16 @@ ZEpkZmRkTGIUSmYUL3nOWJKRqlCcmJuqUJ5flFKskF+WWqSQmJcCYQwfyTLm8tQkQAAAAP// damaged
 # 4k+2 must carry '==' or nothing; a single '=' is malformed in Go's
 # URLEncoding, and the web reader used to top it up and forgive it.
 cmEDARASYgEqYwEDdBVmaXh0dXJlIG1lc3NhZ2UgYWxwaGF2A2JzYg= damaged
+
+# --- a note's text is cleaned alike, and an empty distance table taken ----------
+# The zero-width space, the word joiner and a tag character (U+E0041) are
+# dropped from a note's text by both decoders, as normalizeNote drops them.
+# The web reader kept all three.
+cnQFYeKAi2I ok ab
+cnQFYeKBoGI ok ab
+cnQGYfOggYFi ok ab
+# A dynamic block whose distance table is empty, holding only literals. Go's
+# compress/flate takes an empty table and fails only if a symbol is read from
+# it; the web reader refused the table, so this was a note in the app and
+# damaged on the web.
+egXgAQQAAACAIAAAAAAYAAAAAAAAAAB4AAAAAAAAAAAAAAAAAAAAAAAAYDY ok hi

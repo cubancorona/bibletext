@@ -1229,7 +1229,12 @@ const readerJSTemplate = `
     // as raw 5-bit values without building a table at all. Applying the
     // dynamic rule to it made every fixed-Huffman block crash — the first
     // version of this very fix, caught by the conformance corpus.
-    if (!allowIncomplete && left > 0 && !(total === 1 && count[1] === 1)) return null;
+    //
+    // An EMPTY table is taken, as Go's huffmanDecoder.init takes it: an
+    // encoder whose block holds only literals may give every distance code
+    // length zero, and the table fails only if a symbol is read from it. This
+    // refused such a block, and a note the app opened was damaged here.
+    if (!allowIncomplete && left > 0 && total > 0 && !(total === 1 && count[1] === 1)) return null;
     var offs = [0, 0];
     for (len = 1; len < 15; len++) offs[len + 1] = offs[len] + count[len];
     var symbol = [];
@@ -1426,17 +1431,25 @@ const readerJSTemplate = `
     } catch (e) { return null; }
   }
 
-  // The browser half of normalizeNote (share_note.go): strip the control
-  // characters and bidi overrides that let text hide or reverse itself — and
-  // U+FFFD, which Go's rune walk drops — keep the newlines that make a note
-  // readable, and cap the length in code points.
+  // The browser half of normalizeNote (share_note.go), rule for rule: strip
+  // the control characters and bidi overrides that let text hide or reverse
+  // itself — and U+FFFD, which Go's rune walk drops — keep the newlines that
+  // make a note readable, and cap the length in code points. The line and
+  // paragraph separators are newlines, so the collapse below sees them, and
+  // the zero-width space, the word joiner and the tag characters go, as they
+  // do in the app: kept here, five U+2028 drew five blank lines.
   function cleanNote(s) {
     if (!s) return '';
     s = s.replace(/\r\n?/g, '\n')
+         .replace(/[\u2028\u2029]/g, '\n')
          // C0 and C1 controls, keeping tab (09) and newline (0a).
          .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g, '')
          // Bidi marks, embeddings, isolates, the BOM — and U+FFFD.
          .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff\ufffd]/g, '')
+         // The zero-width space and the word joiner.
+         .replace(/[\u200b\u2060]/g, '')
+         // The tag characters, U+E0000 to U+E007F, as UTF-16 pairs.
+         .replace(/\udb40[\udc00-\udc7f]/g, '')
          .replace(/\n{3,}/g, '\n\n')
          .trim();
     var runes = Array.from(s);
@@ -1504,8 +1517,13 @@ const readerJSTemplate = `
   // text}. Synchronous, pure, corpus-tested against the Go decoder.
   function decodeNotePayload(payload) {
     var damaged = { outcome: 'damaged', text: '' };
-    payload = (payload || '').trim();
-    if (!payload) return damaged;
+    // The ends lose ASCII white space only, and inside, a character outside
+    // the url-safe alphabet and its padding is damage, as the app reads it
+    // (share_note.go, DecodeNote). trim() took U+FEFF and U+2028 off the
+    // ends and atob skipped spaces inside, where the app skipped CR and LF
+    // and trimmed U+0085: each opened payloads the other called damaged.
+    payload = (payload || '').replace(/^[\t\n\f\r ]+|[\t\n\f\r ]+$/g, '');
+    if (!payload || /[^A-Za-z0-9_=-]/.test(payload)) return damaged;
     var bytes = noteBase64Bytes(payload);
     if (!bytes || bytes.length < 2) return damaged;
     var b0 = bytes[0], body = bytes.subarray(1);

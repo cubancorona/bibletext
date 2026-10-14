@@ -280,6 +280,15 @@ func validNoteVersionID(id string) bool {
 	return true
 }
 
+// noteASCIISpace is what comes off a payload's ends: ASCII white space as
+// the web defines it (tab, line feed, form feed, carriage return, space),
+// the same set on both decoders.
+const noteASCIISpace = "\t\n\f\r "
+
+// noteBase64Alphabet is every byte a payload may hold: the url-safe base64
+// alphabet and the '=' of its padding, whose placement the decoder checks.
+const noteBase64Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_="
+
 // DecodeNote is the inverse: the decoded record plus what to do about it.
 // On any outcome other than NoteOutcomeOK the DecodedNote is zero — it never
 // returns a partially decoded note, because the caller's next move is to
@@ -291,8 +300,15 @@ func validNoteVersionID(id string) bool {
 // caller must insert it as text (textContent, an escaped HTML write, an
 // attributed string), never as markup. See docs/SHARED_NOTES.md → Security.
 func DecodeNote(payload string) (DecodedNote, NoteOutcome) {
-	payload = strings.TrimSpace(payload)
-	if payload == "" {
+	// The ends lose ASCII white space only, and inside, a byte outside the
+	// url-safe alphabet and its padding is damage, as the web reader reads
+	// it (docs/NOTE_WIRE_FORMAT.md, "Accepted hazards"). The base64 decoder
+	// skips CR and LF wherever they stand, and strings.TrimSpace takes U+0085
+	// and U+00A0 off the ends, so the app opened payloads the website called
+	// damaged, and the website, whose atob skips spaces and whose trim takes
+	// U+FEFF off, opened others the app called damaged.
+	payload = strings.Trim(payload, noteASCIISpace)
+	if payload == "" || strings.TrimLeft(payload, noteBase64Alphabet) != "" {
 		return DecodedNote{}, NoteOutcomeDamaged
 	}
 	// Tolerate a padded payload: we never emit one, but a messenger or a

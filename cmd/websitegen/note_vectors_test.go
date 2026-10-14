@@ -63,6 +63,8 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	bibletext "github.com/cubancorona/bibletext"
 )
 
 const (
@@ -352,7 +354,7 @@ type jsHuff struct {
 
 // jsHuffConstruct is noteHuffConstruct: nil for an over-subscribed table and,
 // unless allowIncomplete, for an incomplete one other than a single code of
-// length 1. Only the fixed tables pass allowIncomplete.
+// length 1 or an empty one. Only the fixed tables pass allowIncomplete.
 func jsHuffConstruct(lengths []int, n int, allowIncomplete bool) *jsHuff {
 	h := &jsHuff{}
 	for i := 0; i < n; i++ {
@@ -371,7 +373,7 @@ func jsHuffConstruct(lengths []int, n int, allowIncomplete bool) *jsHuff {
 		}
 		total += h.count[l]
 	}
-	if !allowIncomplete && left > 0 && !(total == 1 && h.count[1] == 1) {
+	if !allowIncomplete && left > 0 && total > 0 && !(total == 1 && h.count[1] == 1) {
 		return nil
 	}
 	var offs [16]int
@@ -736,6 +738,8 @@ func jsCleanNote(s string) string {
 	}
 	s = strings.ReplaceAll(s, "\r\n", "\n")
 	s = strings.ReplaceAll(s, "\r", "\n")
+	s = strings.ReplaceAll(s, "\u2028", "\n")
+	s = strings.ReplaceAll(s, "\u2029", "\n")
 	var b strings.Builder
 	for _, r := range s {
 		switch {
@@ -745,6 +749,10 @@ func jsCleanNote(s string) string {
 		case r == 0x200e || r == 0x200f || (r >= 0x202a && r <= 0x202e) ||
 			(r >= 0x2066 && r <= 0x2069) || r == 0xfeff || r == 0xfffd:
 			// the JS bidi/BOM/U+FFFD class
+		case r == 0x200b || r == 0x2060:
+			// the zero-width space and the word joiner
+		case r >= 0xe0000 && r <= 0xe007f:
+			// the tag characters
 		default:
 			b.WriteRune(r)
 		}
@@ -827,9 +835,13 @@ func jsParseRecords(s []byte) jsNoteResult {
 	return jsLegacyText(textRaw)
 }
 
+// jsPayloadAlphabet is the JS's /[^A-Za-z0-9_=-]/: a payload may hold
+// nothing else once its ends are trimmed.
+var jsPayloadAlphabet = regexp.MustCompile(`[^A-Za-z0-9_=-]`)
+
 func jsDecodeNotePayload(payload string) jsNoteResult {
-	payload = jsTrim(payload)
-	if payload == "" {
+	payload = strings.Trim(payload, "\t\n\f\r ")
+	if payload == "" || jsPayloadAlphabet.MatchString(payload) {
 		return jsDamaged
 	}
 	bytes := jsBase64Bytes(payload)
@@ -1376,4 +1388,79 @@ func dynamicBlockRun(text string, litLens, distLens, clLens []int, sent, run int
 	}
 	w.code(litCodes[256], litLens[256])
 	return w.bytes()
+}
+
+// ---------------------------------------------------------------------------
+// The app and the page, payload by payload, where the corpus cannot hold the
+// payload: white space, which splits a corpus line, and text that decodes
+// with a newline in it, which a corpus line cannot hold either.
+// ---------------------------------------------------------------------------
+
+// TestTheAppAndTheWebReaderReadNoteLinksAlike decodes each payload with the
+// app's decoder (bibletext.DecodeNote), with the shipped span under node and
+// with the mirror, and holds all three to the rule docs/NOTE_WIRE_FORMAT.md
+// sets for it: white space inside a payload is damage, a payload's ends lose
+// ASCII white space only, and a note's text is cleaned alike. Before the
+// rules were written into both decoders, 10 of these 16 decoded differently
+// in the app and on the website: a line feed inside was ok in the app and
+// damaged on the web, two spaces inside the other way round; a trailing
+// U+FEFF was ok on the web, a trailing U+0085 in the app; and five U+2028
+// drew five blank lines on the web and one paragraph break in the app.
+func TestTheAppAndTheWebReaderReadNoteLinksAlike(t *testing.T) {
+	good := bibletext.EncodeNoteWire(bibletext.NoteWire{Text: "fixture message alpha", VerseLo: 3, Book: "John", Chapter: 3, Version: "web"})
+	mid := len(good) / 2
+	record := func(text string) string {
+		return base64.RawURLEncoding.EncodeToString(append(append([]byte{'r', 't'}, binaryUvarint(uint64(len(text)))...), text...))
+	}
+	cases := []struct {
+		label, payload, outcome, text string
+	}{
+		{"the payload as made", good, "ok", "fixture message alpha"},
+		{"a line feed inside", good[:mid] + "\n" + good[mid:], "damaged", ""},
+		{"CR LF inside", good[:mid] + "\r\n" + good[mid:], "damaged", ""},
+		{"a space inside", good[:mid] + " " + good[mid:], "damaged", ""},
+		{"a tab inside", good[:mid] + "\t" + good[mid:], "damaged", ""},
+		{"two spaces inside", good[:mid] + "  " + good[mid:], "damaged", ""},
+		{"ASCII white space at both ends", " \t\r\n\f" + good + "\f\n\r\t ", "ok", "fixture message alpha"},
+		{"a trailing U+FEFF", good + "\ufeff", "damaged", ""},
+		{"a trailing U+0085", good + "\u0085", "damaged", ""},
+		{"a trailing U+00A0", good + "\u00a0", "damaged", ""},
+		{"a trailing U+3000", good + "\u3000", "damaged", ""},
+		{"a trailing U+2028", good + "\u2028", "damaged", ""},
+		{"a trailing vertical tab", good + "\v", "damaged", ""},
+		{"five U+2028 in the text", record("a\u2028\u2028\u2028\u2028\u2028b"), "ok", "a\n\nb"},
+		{"U+2029 in the text", record("a\u2029b"), "ok", "a\nb"},
+		{"U+2028 at the text's ends", record("\u2028a b\u2029"), "ok", "a b"},
+	}
+	names := map[bibletext.NoteOutcome]string{
+		bibletext.NoteOutcomeOK: "ok", bibletext.NoteOutcomeNewer: "newer", bibletext.NoteOutcomeDamaged: "damaged",
+	}
+	var payloads []string
+	for _, c := range cases {
+		payloads = append(payloads, c.payload)
+	}
+	var web []nodeNoteResult
+	if node, err := exec.LookPath("node"); err == nil {
+		web = decodePayloadsUnderNode(t, node, payloads)
+	} else if os.Getenv("CI") != "" {
+		t.Fatalf("node not on PATH in CI, so the shipped reader.js is not held to these payloads: %v", err)
+	} else {
+		t.Log("node not on PATH: the app and the mirror only")
+	}
+	for i, c := range cases {
+		rec, o := bibletext.DecodeNote(c.payload)
+		app := jsNoteResult{outcome: names[o]}
+		if o == bibletext.NoteOutcomeOK {
+			app.text = rec.Text
+		}
+		if app.outcome != c.outcome || app.text != c.text {
+			t.Errorf("%s: the app reads %s %q, want %s %q", c.label, app.outcome, app.text, c.outcome, c.text)
+		}
+		if web != nil && (web[i].Outcome != c.outcome || web[i].Text != c.text) {
+			t.Errorf("%s: reader.js reads %s %q, want %s %q", c.label, web[i].Outcome, web[i].Text, c.outcome, c.text)
+		}
+		if m := jsDecodeNotePayload(c.payload); m.outcome != c.outcome || m.text != c.text {
+			t.Errorf("%s: the mirror reads %s %q, want %s %q", c.label, m.outcome, m.text, c.outcome, c.text)
+		}
+	}
 }
