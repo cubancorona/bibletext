@@ -4162,9 +4162,8 @@ func (h *nativeReadingHost) pushFrame() {
 var currentHost *nativeReadingHost
 
 func setFrameFromObject(h *nativeReadingHost) {
-	pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(h)
-	sz := h.Size()
-	if sz.Width <= 0 || sz.Height <= 0 {
+	pos, sz, _, ok := nativeHostFrame(h)
+	if !ok {
 		return
 	}
 	C.bibleTextTVSetFrame(

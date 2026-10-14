@@ -509,14 +509,9 @@ func (h *nativeReadingHost) pushFrame() {
 }
 
 func setFrameFromObject(h *nativeReadingHost) {
-	pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(h)
-	sz := h.Size()
-	if sz.Width <= 0 || sz.Height <= 0 {
+	pos, sz, scale, ok := nativeHostFrame(h)
+	if !ok {
 		return
-	}
-	scale := float32(1)
-	if c := fyne.CurrentApp().Driver().CanvasForObject(h); c != nil {
-		scale = c.Scale()
 	}
 	x := int(math.Round(float64(pos.X * scale)))
 	y := int(math.Round(float64(pos.Y * scale)))
