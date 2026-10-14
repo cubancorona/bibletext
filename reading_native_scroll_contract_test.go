@@ -95,6 +95,43 @@ func TestMacScrollHookIsBoundsShapedAndLatched(t *testing.T) {
 	}
 }
 
+// A change of the Mac pane's width keeps the reader's place. Setting the
+// scroll view's frame wraps the text at the old insets first, AppKit moves
+// the clip with that passing wrap, and the insets put right after wrap it at
+// the column again with the clip left where it was moved: on a development
+// build a reader 5,000 points into Psalm 119, at verse 73, was at verse 112
+// after the window narrowed from 1280 to 1000 points. The verse at the top
+// and how far into it the top stands are read before the frame is set and
+// put back after the insets and the note's bands, and before the re-assert,
+// so a restore or an arrival still places over them.
+func TestTheMacFrameChangeKeepsTheReadersPlace(t *testing.T) {
+	apply := nativeFunctionSource(t, "reading_macos.go", "static void btMacApplyFrame(double x, double y, double w, double h) {")
+	read := strings.Index(apply, "btMacTopOfView(&keepVerse, &keepDelta);")
+	frame := strings.Index(apply, "gScroll.frame = r;")
+	insets := strings.Index(apply, "btMacApplyInsets(gScroll.contentSize.width)")
+	note := strings.Index(apply, "if (changed || insetChanged) btMacRefreshNote();")
+	put := strings.Index(apply, "if (keepVerse > 0) btMacPutTopOfView(keepVerse, keepDelta);")
+	reassert := strings.Index(apply, "btMacReassertPlacement();")
+	if read < 0 || frame < 0 || insets < 0 || note < 0 || put < 0 || reassert < 0 ||
+		!(read < frame && frame < insets && insets < note && note < put && put < reassert) {
+		t.Error("btMacApplyFrame does not read the top of the view before the frame is set and put it back after " +
+			"the insets and the note's bands and before the re-assert")
+	}
+	if !strings.Contains(apply, "fabs(r.size.width - gScroll.frame.size.width) >= 0.5") {
+		t.Error("btMacApplyFrame keeps the place for a frame that keeps its width too; only a change of width rewraps")
+	}
+	// One reading of the top of the view: the capture the reading state saves
+	// is the same function the frame change keeps.
+	capture := nativeFunctionSource(t, "reading_macos.go", "BTAnchor bibleTextMacCaptureAnchor(void) {")
+	if !strings.Contains(capture, "btMacTopOfView(&verse, &delta);") {
+		t.Error("bibleTextMacCaptureAnchor no longer reads the top of the view through btMacTopOfView")
+	}
+	top := nativeFunctionSource(t, "reading_macos.go", "static void btMacTopOfView(NSInteger *verse, CGFloat *delta) {")
+	if !strings.Contains(top, "gScroll.contentView.bounds.origin.y - tv.frame.origin.y") {
+		t.Error("btMacTopOfView reads the scroll from somewhere other than the clip view, which a hidden pane keeps")
+	}
+}
+
 // Narration follows while the Mac's pane is hidden, on the Books and Search
 // tabs and under a sheet, and AppKit gives a hidden view's visibleRect as
 // NSZeroRect. Read from it, the follow-scroll took every narrated verse for

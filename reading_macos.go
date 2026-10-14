@@ -3106,6 +3106,53 @@ void bibleTextMacSetNote(const char *text, const char *who, int minimized, int n
     });
 }
 
+// btMacTopOfView reads the verse at the top of the view and how far into it,
+// in points, the top stands, FROM THE CLIP VIEW (bibleTextMacCaptureAnchor's
+// reason: a hidden pane keeps it). *verse is 0 at the top of the text, with
+// no text, or with no verse at the top.
+static void btMacTopOfView(NSInteger *verse, CGFloat *delta) {
+    *verse = 0;
+    *delta = 0;
+    if (gTextView == nil || gScroll == nil) return;
+    NSTextView *tv = gTextView;
+    NSTextStorage *ts = tv.textStorage;
+    if (ts.length == 0) return;
+    NSLayoutManager *lm = tv.layoutManager;
+    CGFloat offY = gScroll.contentView.bounds.origin.y - tv.frame.origin.y;
+    if (offY <= 0.5) return;
+    CGFloat insetH = tv.textContainerInset.height;
+    CGFloat tcY = offY - insetH + 2;
+    if (tcY < 0) tcY = 0;
+    NSUInteger gi = [lm glyphIndexForPoint:NSMakePoint(4, tcY) inTextContainer:tv.textContainer];
+    NSUInteger ci = [lm characterIndexForGlyphAtIndex:gi];
+    NSUInteger loc = 0;
+    NSInteger v = btMacVerseAtIndex(ts, ci, &loc);
+    if (v <= 0) return;
+    NSRange g = [lm glyphRangeForCharacterRange:NSMakeRange(loc, 1) actualCharacterRange:NULL];
+    NSRect rr = [lm boundingRectForGlyphRange:g inTextContainer:tv.textContainer];
+    *verse = v;
+    *delta = offY - (rr.origin.y + insetH);
+}
+
+// btMacPutTopOfView scrolls verse back to the top of the view, delta points
+// into it, the inverse of btMacTopOfView. The caller holds the own-scroll
+// latch.
+static void btMacPutTopOfView(NSInteger verse, CGFloat delta) {
+    if (gTextView == nil || gScroll == nil || verse <= 0) return;
+    NSUInteger loc = btMacLocForVerse(gTextView.textStorage, verse);
+    if (loc == NSNotFound) return;
+    NSLayoutManager *lm = gTextView.layoutManager;
+    NSRange g = [lm glyphRangeForCharacterRange:NSMakeRange(loc, 1) actualCharacterRange:NULL];
+    NSRect rr = [lm boundingRectForGlyphRange:g inTextContainer:gTextView.textContainer];
+    CGFloat y = rr.origin.y + gTextView.textContainerInset.height + delta + gTextView.frame.origin.y;
+    CGFloat maxY = gTextView.frame.size.height - gScroll.contentView.bounds.size.height;
+    if (maxY < 0) maxY = 0;
+    if (y > maxY) y = maxY;
+    if (y < 0) y = 0;
+    [[gScroll contentView] scrollToPoint:NSMakePoint(0, y)];
+    [gScroll reflectScrolledClipView:gScroll.contentView];
+}
+
 static void btMacApplyFrame(double x, double y, double w, double h) {
     bibleTextMacEnsureTV();
     if (gScroll == nil) return;
@@ -3117,6 +3164,20 @@ static void btMacApplyFrame(double x, double y, double w, double h) {
     if (getenv("BT_SCROLL_DEBUG"))
         fprintf(stderr, "[scroll] mac frame: %s (%.0f,%.0f %.0fx%.0f) armed=%d\n",
             changed ? "CHANGED" : "same", r.origin.x, r.origin.y, r.size.width, r.size.height, (int)gMacHasRestore);
+    // KEEP THE READER'S PLACE THROUGH A CHANGE OF WIDTH. Setting the frame
+    // wraps the text at the old insets first, AppKit moves the clip with that
+    // wrap, and the insets put right below wrap it at the column again, with
+    // the clip left where the passing wrap put it: a reader at Psalm 119:73,
+    // 5,000 points down, was at verse 112 after a window narrowed from 1280
+    // to 1000 points, and one at verse 121 at the end of the psalm. The verse
+    // at the top and how far into it the top stands are read before and put
+    // back after; a restore or an arrival re-asserted below still places
+    // over them.
+    NSInteger keepVerse = 0;
+    CGFloat keepDelta = 0;
+    if (changed && fabs(r.size.width - gScroll.frame.size.width) >= 0.5) {
+        btMacTopOfView(&keepVerse, &keepDelta);
+    }
     gScroll.frame = r;
     BOOL insetChanged = btMacApplyInsets(gScroll.contentSize.width); // recentre the reporter column at the new width
     // The width the text has — the scroll view's content, a legacy scroller
@@ -3133,6 +3194,7 @@ static void btMacApplyFrame(double x, double y, double w, double h) {
     // sized for it, which is the gap the reconcile in btMacLayoutNote exists
     // to close.
     if (changed || insetChanged) btMacRefreshNote();
+    if (keepVerse > 0) btMacPutTopOfView(keepVerse, keepDelta);
     // SetHTML may have scrolled to the highlighted verse / restore target
     // while the overlay was still at its initial width; once the real frame
     // lands the text rewraps, so re-assert that position. Only when a
@@ -3362,17 +3424,12 @@ BTAnchor bibleTextMacCaptureAnchor(void) {
             if (f > 1) f = 1;
             out.frac = f;
         }
-        CGFloat tcY = offY - insetH + 2;
-        if (tcY < 0) tcY = 0;
-        NSUInteger gi = [lm glyphIndexForPoint:NSMakePoint(4, tcY) inTextContainer:tv.textContainer];
-        NSUInteger ci = [lm characterIndexForGlyphAtIndex:gi];
-        NSUInteger loc = 0;
-        NSInteger verse = btMacVerseAtIndex(ts, ci, &loc);
+        NSInteger verse = 0;
+        CGFloat delta = 0;
+        btMacTopOfView(&verse, &delta);
         if (verse <= 0) return;
-        NSRange g = [lm glyphRangeForCharacterRange:NSMakeRange(loc, 1) actualCharacterRange:NULL];
-        NSRect rr = [lm boundingRectForGlyphRange:g inTextContainer:tv.textContainer];
         out.verse = (int)verse;
-        out.delta = offY - (rr.origin.y + insetH);
+        out.delta = delta;
     };
     // AppKit is main-thread-only, so this read must run on main. We deliberately do NOT
     // dispatch_sync to the main queue when off-main: Fyne runs the OnStopped reading-state
