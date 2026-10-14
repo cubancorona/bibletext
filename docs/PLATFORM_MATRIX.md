@@ -489,6 +489,28 @@ place a fix on one does not reach the others.
     fraction too, or clamp the offset to the verse's new height
     (docs/BACKLOG.md, "Where the app re-finds the reader's position from
     text", AND-3).
+34. **A note on a range that starts at a verse the edition omits is drawn
+    above the first lit verse's paragraph on the iPhone, iPad, Mac and the
+    website, and at the chapter top on Android and the Windows and Linux
+    pane.** A note sent on Matthew 17:21–22 from an edition that prints
+    verse 21, opened in the BSB, has no verse of its own on the page. The
+    Apple panes then take the card's place from the mark's lit range
+    (`btIOSNoteAnchorRange`, `reading_ios.go`, and its Mac twin in
+    `reading_macos.go`), and the website from the first verse of the
+    fragment the page has (`fragmentParagraph`, `cmd/websitegen/assets.go`);
+    the canvas pane opens the band above the first verse
+    (`noteAnchorVerse`, `reading_styled_pane.go`), and the bridge parks the
+    sticker at the top of the text (`android/BtBridge.java`). Every app
+    surface places nothing on arriving at such a note
+    (`arrivalVerseOnPage`, `notes_arrival.go`), so the chapter opens at its
+    top, where the card is on Android and the canvas pane; the website
+    lands on its card. A note on the omitted verse alone lights nothing, and
+    every surface parks its card at the top. By the code; not seen on a
+    device. *Risk:* on the iPhone, iPad and Mac such a card can stand below
+    the opening screen, where the reader does not see it. Closes when every
+    surface draws the card in one place, at the verse after the hole or at
+    the chapter top, a choice of design (docs/BACKLOG.md, "Where the app
+    re-finds the reader's position from text", AND-4).
 
 ## Deliberate exclusions
 

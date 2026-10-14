@@ -692,8 +692,9 @@ func androidDataSwapArrivalFor(state *AppState, span VerseSpan, here bool) (int,
 // next-tap between notes on the same verse) may change nothing the combined
 // render fingerprint folds, so the Java side compares the pushed tuple itself
 // and refreshes the sticker alone (BtBridge.setNote's `changed` gate, the
-// bibleTextSetNote pattern).
-func pushNoteToOverlay(state *AppState) {
+// bibleTextSetNote pattern). It returns the chrome it pushed, whose card the
+// arrival verse pushChapterHTML hands the bridge is read against.
+func pushNoteToOverlay(state *AppState) noteChrome {
 	// BOTH reading modes now, not full-screen alone (settled by comparing the
 	// two platforms side by side): iOS draws the note IN THE TEXT above its
 	// verse — one card carrying the byline, the counts, the verbs and the tail
@@ -780,6 +781,7 @@ func pushNoteToOverlay(state *AppState) {
 			C.int(argbInt(pal.TextMuted)), C.int(argbInt(pal.Accent)),
 			C.int(argbInt(pal.Border)), tailFlag, verbSet, cCounts, arrivalClass)
 	})
+	return c
 }
 
 // pushChapterHTML mirrors the iOS twin: fingerprint-gated re-import, restore
@@ -788,7 +790,7 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// The sticker tuple rides every push, ahead of the skip gate (see
 	// pushNoteToOverlay) — so presentation flips render even when the Spanned
 	// is byte-identical and the gate below returns early.
-	pushNoteToOverlay(state)
+	chrome := pushNoteToOverlay(state)
 
 	fp := chapterRenderFingerprint(state)
 	bc := fmt.Sprintf("%s|%d", state.CurrentBook, state.CurrentChapter)
@@ -885,9 +887,12 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// plain entry — the arrows, the picker — must open at the top even when
 	// the chapter's wash is still lit. The chrome consumed the same
 	// forceReposition a few lines up (pushNoteToOverlay runs first), so the
-	// pushed arrival class and this verse stay one answer.
+	// pushed arrival class and this verse stay one answer: the verse after
+	// the hole for a verse this edition omits, and none for a note whose own
+	// verse it omits too, whose card the bridge parks at the top
+	// (arrivalVerseOnPage).
 	if state.restore == nil && !preserveTop && here && forcedThisPush {
-		arrivalVerse = drawnArrivalVerse(verses, sp.Lo)
+		arrivalVerse = arrivalVerseOnPage(chrome, verses, sp.Lo)
 	}
 	if carryDataSwapArrival {
 		arrivalVerse = carriedVerse

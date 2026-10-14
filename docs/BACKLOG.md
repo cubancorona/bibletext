@@ -856,6 +856,20 @@ the chapter's last is left as named. `TestALinkToAnOmittedVerseArrivesAtTheVerse
 half reaches readers with the next `scripts/publish-site.sh`. Not seen on a
 device. Whether the mark lights is unchanged and still open.
 
+A note sent on the omitted verse is the exception. Its card's own verse is
+missing too, so every surface draws the card at the chapter top, and moving
+the arrival on to verse 22 scrolled the note out of view on every app
+surface, while the website still landed on it. Where the page omits both the
+arrival's verse and the open card's own verse, the arrival places nothing,
+as it did before the fix, and Android pushes no verse
+(`arrivalVerseOnPage`, `notes_arrival.go`; `TestANoteOnAnOmittedVerseKeepsItsCardInView`,
+`TestTheCanvasPaneOpensANoteOnAnOmittedVerseAtItsCard`). For a note on a
+range that starts at the hole, the Apple panes and the website draw the card
+above the first lit verse's paragraph and Android and the canvas pane at the
+top; PLATFORM_MATRIX.md records it as divergence 34. Drawing the card in one
+place on every surface, at the verse after the hole or at the top, is a
+choice of design, still open.
+
 ### RL-NKJV-1 and RL-NKJV-2. The NKJV red-letter generator places a run after its cursor, and retries from the verse's start
 
 Planned for: a later minor release, any — see docs/ROADMAP.md.
