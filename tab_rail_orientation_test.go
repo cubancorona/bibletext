@@ -156,28 +156,28 @@ func TestWatcherRebuildsWhenRailPlacementChanges(t *testing.T) {
 		built, want renderedLayout
 		rebuild     bool
 	}{
-		{"tablet portrait to landscape", renderedLayout{layoutCompact, false, false}, renderedLayout{layoutCompact, true, false}, true},
-		{"tablet landscape to portrait", renderedLayout{layoutCompact, true, false}, renderedLayout{layoutCompact, false, false}, true},
-		{"Android phone portrait to landscape", renderedLayout{layoutCompact, false, false}, renderedLayout{layoutCompact, true, false}, true},
+		{"tablet portrait to landscape", renderedLayout{layoutCompact, false, false, false}, renderedLayout{layoutCompact, true, false, false}, true},
+		{"tablet landscape to portrait", renderedLayout{layoutCompact, true, false, false}, renderedLayout{layoutCompact, false, false, false}, true},
+		{"Android phone portrait to landscape", renderedLayout{layoutCompact, false, false, false}, renderedLayout{layoutCompact, true, false, false}, true},
 		// An iPhone on Books or Search: the rail arrives with the landscape
 		// presentation's term, and either alone would rebuild.
-		{"iPhone Books upright to sideways", renderedLayout{layoutCompact, false, false}, renderedLayout{layoutCompact, true, true}, true},
-		{"iPhone Books sideways to upright", renderedLayout{layoutCompact, true, true}, renderedLayout{layoutCompact, false, false}, true},
-		{"rail unchanged", renderedLayout{layoutCompact, true, false}, renderedLayout{layoutCompact, true, false}, false},
-		{"bar unchanged", renderedLayout{layoutCompact, false, false}, renderedLayout{layoutCompact, false, false}, false},
+		{"iPhone Books upright to sideways", renderedLayout{layoutCompact, false, false, false}, renderedLayout{layoutCompact, true, true, false}, true},
+		{"iPhone Books sideways to upright", renderedLayout{layoutCompact, true, true, false}, renderedLayout{layoutCompact, false, false, false}, true},
+		{"rail unchanged", renderedLayout{layoutCompact, true, false, false}, renderedLayout{layoutCompact, true, false, false}, false},
+		{"bar unchanged", renderedLayout{layoutCompact, false, false, false}, renderedLayout{layoutCompact, false, false, false}, false},
 		// The phone-landscape presentation flips with no navigation to move —
 		// the full-screen tree draws none — and must still rebuild.
-		{"iPhone into landscape reading", renderedLayout{layoutCompact, false, false}, renderedLayout{layoutCompact, false, true}, true},
-		{"iPhone back to portrait", renderedLayout{layoutCompact, false, true}, renderedLayout{layoutCompact, false, false}, true},
+		{"iPhone into landscape reading", renderedLayout{layoutCompact, false, false, false}, renderedLayout{layoutCompact, false, true, false}, true},
+		{"iPhone back to portrait", renderedLayout{layoutCompact, false, true, false}, renderedLayout{layoutCompact, false, false, false}, true},
 		// An iPad in chosen full-screen: rail zeroed on both sides, landscape
 		// constant — a rotation rebuilds nothing.
-		{"iPad full-screen rotation", renderedLayout{layoutCompact, false, false}, renderedLayout{layoutCompact, false, false}, false},
+		{"iPad full-screen rotation", renderedLayout{layoutCompact, false, false, false}, renderedLayout{layoutCompact, false, false, false}, false},
 	} {
 		if changed := layoutWatcherNeedsRebuild(tc.built, tc.want); changed != tc.rebuild {
 			t.Errorf("%s: rebuild = %v, want %v", tc.name, changed, tc.rebuild)
 		}
 	}
-	if !layoutWatcherNeedsRebuild(renderedLayout{layoutCompact, false, false}, renderedLayout{layoutRegular, false, false}) {
+	if !layoutWatcherNeedsRebuild(renderedLayout{layoutCompact, false, false, false}, renderedLayout{layoutRegular, false, false, false}) {
 		t.Error("a layout-class change must still rebuild when navigation placement is unchanged")
 	}
 }

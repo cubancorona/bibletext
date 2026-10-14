@@ -135,18 +135,28 @@ func railForWindow(state *AppState) bool {
 // reading position exactly because nothing rebuilds on rotation). landscape is
 // its own term so a phone that had chosen full-screen still rebuilds when the
 // presentation flips: that rebuild re-pushes the chapter, at the page the new
-// width chooses (reading_page_width.go).
+// width chooses (reading_page_width.go). centred is the bottom bar's dress,
+// its tabs centred rather than spread, and is false wherever no bar is drawn:
+// the dress is chosen when the bar is built, and an iPad or Android tablet
+// window resized across tabBarSpreadMaxWidth while it stayed taller than wide
+// kept the old one until something else rebuilt it. It is read as the bar
+// reads it (tabBarStyleFor), from the canvas, as the rail is: the width the
+// watcher is handed is the canvas's less the safe area, and a term read from
+// one at the build and the other at a resize could disagree for ever.
 type renderedLayout struct {
 	class     layoutClass
 	rail      bool
 	landscape bool
+	centred   bool
 }
 
 func (s *AppState) renderedLayout(width float32) renderedLayout {
+	full, rail := s.readingFullScreen(), compactNavRail(s)
 	return renderedLayout{
 		class:     classifyLayout(width, deviceIsTablet()),
-		rail:      !s.readingFullScreen() && compactNavRail(s),
+		rail:      !full && rail,
 		landscape: phoneLandscapeReading(),
+		centred:   !full && !rail && tabBarStyleFor(s) == tabBarEdgeCentred,
 	}
 }
 
