@@ -481,12 +481,14 @@ func headingDrags(t *testing.T, bd *BibleData, step int, label string) headingDr
 
 // The Gospels with invented headings over every fourth verse: 23,567 drags
 // into a heading. With the lead none is placed outside the stretch it
-// covers and each is cited as its link cites it. Without it 75 are
+// covers and each is cited as its link cites it. Without it 66 are
 // placed outside, at an earlier copy of their words or with the heading's
-// words read as the verse's, and 480 are placed nowhere and quoted with the
-// heading's words: 478 pieces of a word run on through a heading to the
-// verse below, and two drags begun on the closing marks that end a verse.
-// Both counts are pinned, so the path without a lead is held. A piece of a
+// words read as the verse's, and two drags begun on the closing marks that
+// end a verse are placed nowhere and quoted with the heading's words. Both
+// counts are pinned, so the path without a lead is held. While the heading
+// repair could take the next verse's first word for the front of a heading
+// further down (stripHeadings), 75 were placed outside and 480 nowhere, 478
+// of them pieces of a word run on through a heading to the verse below. A piece of a
 // word run on into the heading below its verse and no further ends with its
 // verse (TestAPieceOfAWordRunOnIntoTheHeadingBelowEndsWithItsVerse); 3,604
 // drags were placed nowhere while it did not.
@@ -509,20 +511,23 @@ func TestEveryDragIntoAHeadingIsPlacedInsideItselfWithItsLead(t *testing.T) {
 	if r.outsideWithout == 0 {
 		t.Errorf("control: without the lead none of %d drags into a heading was placed outside the drag; some are expected there", r.drags)
 	}
-	if step == 1 && (r.drags != 23567 || r.outsideWithout != 75 || r.unplacedWithout != 480) {
-		t.Errorf("%d drags, %d placed outside and %d nowhere without the lead; want 23,567, 75 and 480", r.drags, r.outsideWithout, r.unplacedWithout)
+	if step == 1 && (r.drags != 23567 || r.outsideWithout != 66 || r.unplacedWithout != 2) {
+		t.Errorf("%d drags, %d placed outside and %d nowhere without the lead; want 23,567, 66 and 2", r.drags, r.outsideWithout, r.unplacedWithout)
 	}
 }
 
 // The same drags over the publishers' own headings in the WEB, BSB and WEBC
 // caches: 503, 50,680 and 557 of them. LOCAL-ONLY and opt-in by
 // BIBLETEXT_EXHAUSTIVE=1. With the lead none is placed outside the drag or
-// cited otherwise than linked. Without it, pinned, the BSB's 16 are placed
-// outside, and 46 of its drags, each a piece of a word run on through a
-// heading to the verse below, are placed nowhere and quoted with the
-// heading's words; 23, 6,697 and 31 were placed nowhere while a piece run on
-// into the heading below its verse alone did not end with its verse. Two of
-// the 16 are "im.\nThe" from the last word of Matthew 27:31 and of Mark
+// cited otherwise than linked. Without it, pinned, the BSB's 15 are placed
+// outside, and none is placed nowhere. 46 of its drags, each a piece of a
+// word run on through a heading to the verse below, were placed nowhere and
+// quoted with the heading's words while the heading repair could take the
+// next verse's first word for the front of a heading further down, and a
+// sixteenth, "LORD.\nThe Great Storm\n4 The" over Jonah 1:4, was placed
+// outside; 23, 6,697 and 31 were placed nowhere while a piece run on into
+// the heading below its verse alone did not end with its verse. Two of the
+// 15 are "im.\nThe" from the last word of Matthew 27:31 and of Mark
 // 15:20. The verse has "Him. Then" earlier, and a drag inside it makes the
 // same text, so the fallback places the piece there (placeInSpan) and shares
 // the heading's first word as the start of "Then", "[I]m. The . . . ."; the
@@ -531,8 +536,8 @@ func TestEveryDragIntoAHeadingIsPlacedInsideItselfOverLocalCaches_LocalOnly(t *t
 	if os.Getenv("BIBLETEXT_EXHAUSTIVE") == "" {
 		t.Skip("local-only and opt-in: every drag into a heading of three translation caches; run with BIBLETEXT_EXHAUSTIVE=1")
 	}
-	without := map[string]int{"web": 0, "bsb": 16, "webc": 0}
-	nowhere := map[string]int{"web": 0, "bsb": 46, "webc": 0}
+	without := map[string]int{"web": 0, "bsb": 15, "webc": 0}
+	nowhere := map[string]int{"web": 0, "bsb": 0, "webc": 0}
 	for _, c := range localPublicDomainCaches(t) {
 		r := headingDrags(t, c.bd, 1, c.id)
 		if r.drags == 0 || r.outsideWith != 0 || r.disagree != 0 {

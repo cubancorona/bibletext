@@ -963,6 +963,32 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 			}
 		}
 	}
+	// A drag begun inside a heading, or a stack of them, run on through the
+	// number of the verse beneath, with a span that reaches that verse: the
+	// heading's piece comes off the front here, as the title's does above,
+	// before anything searches. The search cannot place it. The piece is in
+	// no verse, so the selection is found only where its words happen to
+	// stand together elsewhere, the number stripped, and from there the
+	// repairs cut it: "d\n9 He" from the end of Isaiah 53's "A Grave
+	// Assigned" was quoted as "He" from verse 11, and "The Friends\n11 We
+	// will" from verse 4 of the BSB's Song of Solomon 1, where the same
+	// speaker's label stands inside the verse. The heading repair that
+	// follows a failed search never ran for them. The pane's lead cannot place
+	// it either, since it reads its way through the heading and fails its
+	// check.
+	//
+	// What is left may hold no word of the verse: the number alone, or the
+	// number and the ellipsis the BSB's Ephesians 3:14 opens with. Then the
+	// drag's words were the heading's, answered as a heading selected on its
+	// own is.
+	if !editorial && titleVerse == 0 && span.valid() {
+		if t, v, ok := cutOpeningMatter(state, book, chapter, out); ok && v >= span.lo && v <= span.hi {
+			if strings.IndexFunc(strings.TrimPrefix(t, strconv.Itoa(v)), isWordRune) < 0 {
+				return "", v, v, -1, true
+			}
+			out, editorial = t, true
+		}
+	}
 	// A heading further down selected whole, with no span. The heading-only
 	// answer below asks for a span naming the verse above the heading, which
 	// tells a heading from the same words in a verse, and a page with no span
@@ -1452,9 +1478,30 @@ func completeTrailingSentenceProse(corpus, s string, at int) string {
 // own opening and leave the selection unlocatable in a new way. The number is
 // left in place for stripVerseMarkers, which runs next and knows how to check
 // it against the verse body.
+//
+// The front comes off first, and it decides what the end may lose. A drag
+// that began inside the matter above verse N and ran on into it carries a
+// piece of that matter, N, and N's first words, and trimTrailingHeading,
+// which has no number to confirm it, would take those words for the front of
+// a heading: "The LORD Is My Shepherd 1 The LORD" lost "The LORD" to the very
+// heading it had just shed, and Genesis 4's "Descendants of Cain 17 And Cain"
+// lost "Cain" to "Cain and Abel" above verse 1, and shared "And". A heading
+// whose front a drag can end in stands below the verse the drag began in, so
+// once the front has come off at N only a heading below N can lose its front
+// from the end. And the drag reached that front through the end of the verse
+// the heading stands under, so what is left must end as that verse does:
+// Genesis 10's "The Japhethites 2 The" keeps its "The", which "The Hamites"
+// below verse 5 would otherwise take, since verse 5 does not end "The". Of
+// the BSB's 189,996 drags of one to three words from inside a heading
+// through the next verse's number, 15,081 shared the heading as Scripture or
+// cut the verse short, under 682 headings.
 func stripHeadings(state *AppState, book string, chapter int, s string) string {
 	if state == nil || state.Bible == nil {
 		return s
+	}
+	opened := 0 // the verse whose matter the selection opened in, once cut
+	if t, v, ok := cutOpeningMatter(state, book, chapter, s); ok {
+		s, opened = t, v
 	}
 	for _, h := range state.Bible.Headings[book][chapter] {
 		// As DRAWN: the selection is taken from the page, where the heading's
@@ -1463,24 +1510,91 @@ func stripHeadings(state *AppState, book string, chapter int, s string) string {
 		if text == "" || h.BeforeVerse <= 0 {
 			continue
 		}
-		num := strconv.Itoa(h.BeforeVerse)
-		s = trimLeadingHeading(s, text, num)
-		s = trimTrailingHeading(s, text)
-		s = removeWholeHeadings(s, text, num)
-	}
-	// A psalm's title is editorial matter too. A page that hands it over
-	// (the plain-text fallback of the Mac and the iPhone and iPad; the panes
-	// with verse geometry cut a selection at verse 1's number, see
-	// normalizeShareSelectionProse) has it above the chapter's first verse
-	// and any heading there, so a drag from it into the psalm carries the
-	// title, or the end of it, at its front. It is confirmed as a heading at
-	// the top of a chapter is, by the number of the verse it stands above,
-	// and it goes after the headings, which may stand between it and that
-	// number.
-	if title, first, ok := chapterTitle(state, book, chapter); ok {
-		s = trimLeadingHeading(s, title, strconv.Itoa(first))
+		if opened == 0 || h.BeforeVerse > opened {
+			if t := trimTrailingHeading(s, text); t != s && endsVerseAbove(state, book, chapter, h.BeforeVerse, t) {
+				s = t
+			}
+		}
+		s = removeWholeHeadings(s, text, strconv.Itoa(h.BeforeVerse))
 	}
 	return strings.TrimSpace(s)
+}
+
+// cutOpeningMatter takes off the front of s the piece of editorial matter a
+// drag begun inside it carries, and reports the verse the matter stands
+// above, v, whose number s then opens with. ok is false when s does not open
+// so.
+//
+// The matter above a verse is what the page draws there, top to bottom: a
+// psalm's title above the chapter's first verse and any heading there, then
+// the headings standing above the verse, a stack of them joined as a
+// flattened selection joins them. A drag begun inside it gives a piece that
+// ends it (trimLeadingHeading), confirmed by v's number after it.
+//
+// A psalm's title is editorial matter too. A page that hands it over (the
+// plain-text fallback of the Mac and the iPhone and iPad; the panes with
+// verse geometry cut a selection at verse 1's number, see
+// normalizeShareSelectionProse) has it above the chapter's first verse and
+// any heading there, so a drag from it into the psalm carries the title, or
+// the end of it, at its front.
+//
+// What stands before v's number on the page is the matter, and before that
+// the end of the verse above. A piece that is also how that verse ends ("d"
+// of a verse ending "and"), with nothing between it and the number, could be
+// either, and is left for the search to place.
+func cutOpeningMatter(state *AppState, book string, chapter int, s string) (rest string, v int, ok bool) {
+	above := map[int]string{}
+	var order []int
+	if title, first, ok := chapterTitle(state, book, chapter); ok {
+		above[first] = title
+		order = append(order, first)
+	}
+	for _, h := range state.Bible.Headings[book][chapter] {
+		text := collapseSpaces(h.DrawnText())
+		if text == "" || h.BeforeVerse <= 0 {
+			continue
+		}
+		if m, ok := above[h.BeforeVerse]; ok {
+			above[h.BeforeVerse] = m + " " + text
+			continue
+		}
+		above[h.BeforeVerse] = text
+		order = append(order, h.BeforeVerse)
+	}
+	for _, v := range order {
+		i := leadingHeadingNumber(s, above[v], strconv.Itoa(v))
+		if i < 0 || endsVerseAbove(state, book, chapter, v, strings.TrimSpace(s[:i])) {
+			continue
+		}
+		return strings.TrimSpace(s[i:]), v, true
+	}
+	return s, 0, false
+}
+
+// endsVerseAbove reports whether s, a selection in the shared form, ends as
+// the verse above verse n does: the words after its last number token, which
+// are those a drag carried out of that verse into the heading over n, are
+// how the verse's text ends. A heading at the top of a chapter has no verse
+// above it, and nothing ends that way.
+func endsVerseAbove(state *AppState, book string, chapter, n int, s string) bool {
+	above, ok := verseAbove(state, book, chapter, n)
+	if !ok {
+		return false
+	}
+	var text string
+	for _, v := range state.Bible.GetChapter(book, chapter) {
+		if v.Verse == above {
+			text = collapseSpaces(verseSharedText(v))
+			break
+		}
+	}
+	words := strings.Fields(s)
+	k := len(words)
+	for k > 0 && strings.IndexFunc(words[k-1], func(r rune) bool { return !unicode.IsDigit(r) }) >= 0 {
+		k--
+	}
+	tail := strings.Join(words[k:], " ")
+	return text != "" && strings.IndexFunc(tail, isWordRune) >= 0 && strings.HasSuffix(text, tail)
 }
 
 // chapterTitle is the chapter's psalm title as the page draws it, and the
@@ -1666,16 +1780,34 @@ func verseAbove(state *AppState, book string, chapter, n int) (int, bool) {
 // then the heading ENTIRE, so it is not a suffix of the heading at all. The
 // verse number still has to follow, as everywhere here, and the number is left
 // in place for stripVerseMarkers.
+//
+// The heading may hold the number itself as a word: the BSB's "Saying 12"
+// stands above verse 12, and the Catholic WEB's note fused into the heading
+// over Daniel 3:24 says "24 of the traditional Hebrew Bible". So each place
+// the number stands as a word is tried, from the front, and the first with
+// a piece of the heading before it is the one the drag ran through.
 func trimLeadingHeading(s, text, num string) string {
-	i := numberTokenIndex(s, num)
-	if i <= 0 {
-		return s
+	if i := leadingHeadingNumber(s, text, num); i >= 0 {
+		return strings.TrimSpace(s[i:])
 	}
-	head := strings.TrimSpace(s[:i])
-	if head == "" || !strings.HasSuffix(text, head) {
-		return s
+	return s
+}
+
+// leadingHeadingNumber is where num stands as a word in s after a piece of
+// text that s opens with, or -1 (trimLeadingHeading).
+func leadingHeadingNumber(s, text, num string) int {
+	for from := 0; from < len(s); {
+		i := numberTokenIndex(s[from:], num)
+		if i < 0 {
+			return -1
+		}
+		i += from
+		if head := strings.TrimSpace(s[:i]); head != "" && strings.HasSuffix(text, head) {
+			return i
+		}
+		from = i + len(num)
 	}
-	return strings.TrimSpace(s[i:])
+	return -1
 }
 
 // trimTrailingHeading removes a heading, or the FRONT of one, from the end of a
