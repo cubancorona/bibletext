@@ -95,6 +95,27 @@ func TestMacScrollHookIsBoundsShapedAndLatched(t *testing.T) {
 	}
 }
 
+// Narration follows while the Mac's pane is hidden, on the Books and Search
+// tabs and under a sheet, and AppKit gives a hidden view's visibleRect as
+// NSZeroRect. Read from it, the follow-scroll took every narrated verse for
+// one below the band and scrolled it to the very top of the view; the clip
+// view's bounds are the scroll itself and a hidden scroll view keeps them, as
+// the capture already reads them (bibleTextMacCaptureAnchor).
+func TestTheMacFollowScrollReadsTheClipViewNotVisibleRect(t *testing.T) {
+	follow := nativeFunctionSource(t, "reading_macos.go", "void bibleTextMacHighlightVerse(int verse, int follow) {")
+	band := strings.Index(follow, "if (vTop < vis.origin.y || vTop > vis.origin.y + vis.size.height * 0.70) {")
+	clip := strings.Index(follow, "NSRect clip = gScroll.contentView.bounds;")
+	from := strings.Index(follow, "vis = NSMakeRect(0, clip.origin.y - gTextView.frame.origin.y, clip.size.width, clip.size.height);")
+	if band < 0 || clip < 0 || from < 0 || !(clip < from && from < band) {
+		t.Error("bibleTextMacHighlightVerse does not take where the view stands from the clip view before it decides " +
+			"whether the narrated verse is in the band; a hidden pane's visibleRect is NSZeroRect")
+	}
+	capture := nativeFunctionSource(t, "reading_macos.go", "BTAnchor bibleTextMacCaptureAnchor(void) {")
+	if !strings.Contains(capture, "clip.bounds.origin.y - tv.frame.origin.y") {
+		t.Error("the capture no longer reads the clip view; re-check what the follow-scroll is held to")
+	}
+}
+
 // The note chrome follows layout completion on macOS: the card and the pills
 // are subviews placed from the layout, the text can move after they are
 // placed, and the watcher is what re-places them — both of them, every pass.

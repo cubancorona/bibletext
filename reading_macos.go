@@ -1263,7 +1263,18 @@ void bibleTextMacHighlightVerse(int verse, int follow) {
         NSRange g = [lm glyphRangeForCharacterRange:painted actualCharacterRange:NULL];
         NSRect rect = [lm boundingRectForGlyphRange:g inTextContainer:gTextView.textContainer];
         CGFloat vTop = rect.origin.y + gTextView.textContainerInset.height;
+        // Where the view stands, FROM THE CLIP VIEW, as the capture reads it
+        // (bibleTextMacCaptureAnchor): narration follows while the pane is
+        // hidden, on the Books and Search tabs and under a sheet, and AppKit
+        // answers NSZeroRect for a hidden view's visibleRect, so every verse
+        // narrated there was scrolled to the very top of the view, not into
+        // the band. Less the text view's frame origin, the clip's bounds are
+        // what visibleRect gives a shown pane.
         NSRect vis = gTextView.visibleRect;
+        if (gScroll != nil) {
+            NSRect clip = gScroll.contentView.bounds;
+            vis = NSMakeRect(0, clip.origin.y - gTextView.frame.origin.y, clip.size.width, clip.size.height);
+        }
         if (vTop < vis.origin.y || vTop > vis.origin.y + vis.size.height * 0.70) {
             CGFloat y = vTop - vis.size.height * 0.30;
             if (y < 0) y = 0;
