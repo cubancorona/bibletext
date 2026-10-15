@@ -2,5 +2,6 @@
 - A selection that begins or ends inside a word keeps its own ending, and one that starts partway through a verse number no longer carries a stray digit.
 - A selection from a heading into the verse below shares the verse's words, not the heading's, and a phrase that ends on a dash keeps its last word.
 - AI study answers keep the passage you chose through Try again, a faster model or a light/dark change, even if narration or a link has moved to another chapter.
+- With ChatGPT, “Switch to a faster model” now gives an answer instead of saying the model isn't available.
 - A link to a verse your translation leaves out, such as Matthew 17:21 in the Berean Standard Bible, now opens at the next verse instead of the top of the chapter.
 - Sharing two verse pictures within the same second no longer replaces the first with the second.
