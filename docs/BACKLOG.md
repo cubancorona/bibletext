@@ -1508,11 +1508,10 @@ Fix: from that cause, probably a toolkit patch that shapes such a space with
 the face the text would otherwise use; its test measures "a 🙏 b" against
 "a 🙏b".
 
-## The GitHub release notes are not among the release's coupled surfaces — found 14 October 2026
+## The GitHub release notes are not among the release's coupled surfaces — found 14 October 2026; FIXED 15 October 2026, for 1.2.22
 
-Planned for: 1.2.22's version bump, which rewrites the notes; the guard
-added before it would fail — see docs/ROADMAP.md (Later minor releases, row
-48).
+Planned for: 1.2.22, fixed with its version bump (the end of this entry) —
+see docs/ROADMAP.md (1.2.22, row 31).
 
 The GitHub release's notes are the argument of the `printf` that fills
 `NOTES` in `.github/workflows/release.yml`. Stage 1 of `docs/RELEASING.md`
@@ -1530,6 +1529,33 @@ are held: for instance, that it names no earlier release as the current one
 and is not a copy of the last tag's notes. The test goes in with 1.2.22's
 version bump, when the notes are rewritten; added now, it would fail until
 then.
+
+FIXED 15 October 2026 (`85bd257d2`), after 1.2.22's version bump
+(`618653cc0`) rewrote the notes. Stage 1 of `docs/RELEASING.md` lists the
+printf as its tenth coupled surface, and `github_release_notes_test.go`
+holds the notes' head, everything above the store and download footer
+every release carries, to the release:
+
+- `TestTheGitHubReleaseNotesAreForThisRelease`: the head's lead line names
+  the release before this one, read as the second `[[release]]` in
+  `linux/releases.toml` once the first is checked against the desktop
+  ledger, and no release but that one and this; and below that line the
+  head is not the previous release's, as `git show v<previous>:` gives the
+  workflow at that release's tag. The second check needs the tag in the
+  clone: CI's Linux job fetches the whole history and runs it, and a clone
+  without the tag logs that it did not run. The printf's text is read as
+  printf prints it, and an escape or conversion other than `\n`, `\\` and
+  `%%` is reported, since the text printed would not be the text read.
+- `TestStage1ListsTheGitHubReleaseNotes`: stage 1 names the workflow, the
+  `NOTES` printf and the test.
+- `TestGitHubReleaseNotesChecksFire`: each check against a workflow built
+  to trip it, beside the controls that must pass.
+
+On the tree before the bump (`149b85a91`) both checks fail: the notes for
+1.2.21 open "since 1.2.19", and below that line they are v1.2.20's word
+for word. With the bump both pass, and two changes to the bumped notes
+each fail: a lead line naming 1.2.20, and 1.2.21's bullets under 1.2.22's
+lead line.
 
 ## The faster-model offer for ChatGPT switched to a model that then read as unavailable — found 15 October 2026; FIXED 15 October 2026, for 1.2.22
 

@@ -124,6 +124,15 @@ defects in the same share repairs; and, in a second pass, the bugs among
 Later rows 1 to 23 and Stays in the backlog that could be fixed and shown
 here, with the reason each of the others stayed.
 
+What ships: 1.2.22, build 193, prepared on `main` on 15 October 2026, carries
+rows 1 to 31. Rows 1 to 11 are the set; rows 12 to 29 came on 14 October
+2026; row 30, the ChatGPT faster-model fix, and row 31, the guard on the
+GitHub release notes, on 15 October 2026. Rows 8 and 9 and the website
+halves of rows 15 and 16 reach readers with the next
+`scripts/publish-site.sh`, not with the release, and rows 10, 19 to 21 and
+31 change nothing a reader of the release sees. AI-4 and P3 (Later, rows 27
+and 28) are not in it: they went to 1.2.23 (Decisions still open, 2).
+
 | # | Item (BACKLOG.md entry) | What a reader notices | Size / risk | Platforms | Decision | Notes |
 |---|---|---|---|---|---|---|
 | 1 | Android opens a note's band, card or pill inside a poem's stanza (AND-2) | On Android, a note on a verse below its stanza's first line opens its band, card or pill above the stanza, as on every other surface, instead of in a gap it opens between two of the stanza's lines; a link to such a verse scrolls to the band. | S–M, 1.5 days / medium | Android | None | `paraStartAt` (`android/BtBridge.java:3004`, with an inline copy at :3488 for a link's arrival) finds a paragraph by walking back to the previous line break, and the Android page writes each poem line as a line break of its own, so in poetry it finds the line. 6,106 of the WEB's 31,098 verses (19.6%, 452 chapters) and 6,252 of the BSB's 31,086 (20.1%, 835 chapters) would open inside their paragraph; Psalms, Job, Proverbs, Isaiah and Jeremiah most. Fix: Go pushes the paragraph's first verse with the band specs (`notes_chrome.go:319`), the sticker (`reading_android.go:694`, :733) and the arrival (`notes_arrival.go`), and the five `paraStartAt` calls (`android/BtBridge.java:2423`, :2487, :2505, :2960, :2974) and the inline walk take `verseRange(firstVerse)[0]`. Checked with `scripts/check-android-pane.sh`, `scripts/check-android-java.sh` and a noted psalm, with a link into its stanza, on the emulator. With row 2, the two fixes here a reader is likeliest to see. |
@@ -170,16 +179,17 @@ neither a decision nor new wording was fixed for 1.2.22 (rows 13 to 21),
 with the defect the device checks found under row 2 (row 12), except AI-4
 and P3, below, which go to 1.2.23 (decision 2). Row 15 had a regression,
 put right in the same row, and the repairs of rows 13 and 17 two older
-defects (rows 22 and 23). The second pass took the bugs in Later rows 1 to 23 and in Stays in the backlog that
-the first had left out, and fixed those a test here can tell apart and a
-device or simulator here can show (rows 24 to 29, with an older Mac defect
-that row 26's arrival had hidden, row 27); what it left, and why, is after
-the table. Each row taken from Later minor releases has left that table.
-FIXED means the change is in with a test that fails on the tree before it.
-Nothing here changes stored data, makes a reader download a translation
-again or adds wording. Rows 15 and 16 change the website too, whose half
-reaches readers with the next `scripts/publish-site.sh`; their pinned
-digests moved with `reader.js` in both states of the switch.
+defects (rows 22 and 23). The second pass took the bugs in Later rows 1 to
+23 and in Stays in the backlog that the first had left out, and fixed
+those a test here can tell apart and a device or simulator here can show
+(rows 24 to 29, with an older Mac defect that row 26's arrival had hidden,
+row 27); what it left, and why, is after the table. Each row taken from
+Later minor releases has left that table. FIXED means the change is in
+with a test that fails on the tree before it. Nothing here changes stored
+data, makes a reader download a translation again or adds wording. Rows
+15 and 16 change the website too, whose half reaches readers with the next
+`scripts/publish-site.sh`; their pinned digests moved with `reader.js` in
+both states of the switch.
 
 | # | Item (where it was) | What a reader notices | Platforms | Outcome |
 |---|---|---|---|---|
@@ -278,17 +288,20 @@ The second pass, Later rows 1 to 23 and Stays in the backlog. Rows 3, 17,
   card whose verse the page lacks over the chapter's first line, where the
   iPhone and iPad reserve an inset for it (BACKLOG.md, AND-4).
 
-### Added 15 October 2026: the ChatGPT faster-model fix
+### Added 15 October 2026: the ChatGPT faster-model fix and the notes guard
 
-A defect found and fixed on 15 October 2026 for 1.2.23 (Later minor
-releases, row 49 until then) joined 1.2.22 the same day, before its version
-bump. FIXED means, as above, that the change is in with a test that fails on
-the tree before it (`149b85a91`). It adds no wording and changes no stored
+Two rows joined 1.2.22 on 15 October 2026: a defect found and fixed that day
+for 1.2.23 (row 30; Later minor releases, row 49 until then), which joined
+before the version bump, and the guard on the GitHub release notes (row 31;
+Later, row 48 until then), which went in with the bump that rewrote them.
+FIXED means, as above, that the change is in with a test that fails on the
+tree before it (`149b85a91`). Neither changes the app's wording or stored
 data.
 
 | # | Item (where it was) | What a reader notices | Platforms | Outcome |
 |---|---|---|---|---|
 | 30 | The faster-model offer for ChatGPT switched to a model that then read as unavailable (Later, row 49) | Taking "Switch to a faster model" with ChatGPT gets an answer from the economy model, instead of being told on every request that the model isn't available with the reader's key until the model is changed in Settings. | All six | FIXED (`c3e4c1c50`). `gpt-4o-mini` caps completion tokens at 16384 and refused the shared 32768 budget with a 400 that read as model-not-found. The refusal is now its own error category and the one request is sent again at the cap the provider named, which also serves devices that stored the old id; the economy model is `gpt-5-mini`, of the capable default's own family. `TestAPinnedModelWithALowerCompletionCapAnswersAtItsCap` and `TestTheChatGPTFastModelIsInTheCapableDefaultsFamily` fail on the tree before. Live on 15 October 2026: both models answered the pinned-defaults guard, and a stored `gpt-4o-mini` override answered by way of one 400 and one 200. Still open beside it: a 429 that means an exhausted quota or spending cap reads as a busy service (the same BACKLOG.md entry). |
+| 31 | The GitHub release notes are held to no release (Later, row 48) | Nothing in the app. The GitHub release page describes the release it carries, from 1.2.22's on, where v1.2.21's carried 1.2.20's notes word for word, from "New study tools and improvements since 1.2.19". | The GitHub release | FIXED (`85bd257d2`), with 1.2.22's version bump (`618653cc0`), which rewrote the notes. Stage 1 of RELEASING.md lists the `NOTES` printf in `.github/workflows/release.yml` as its tenth coupled surface. `TestTheGitHubReleaseNotesAreForThisRelease` holds the head, everything above the store and download footer: its lead line names the release before this one, the second `[[release]]` in `linux/releases.toml`, and no release but that one and this, and below that line the head is not the previous release's as its tag holds it, where the clone has the tag. `TestStage1ListsTheGitHubReleaseNotes` holds the stage to the list, and `TestGitHubReleaseNotesChecksFire` proves each check. On the tree before the bump (`149b85a91`) both checks fail: the notes for 1.2.21 open "since 1.2.19" and are v1.2.20's word for word. |
 
 ### Beside 1.2.22: the account holder's console and policy work
 
@@ -339,8 +352,8 @@ The order:
 - Rows 46 to 48 were found on 14 October 2026: two bugs in text the
   toolkit takes in and draws, from the Android 11 checks, and a release
   surface no test holds. None needs a decision. Rows 46 and 47 are planned
-  for 1.2.23; row 48 goes in with 1.2.22's version bump, which rewrites the
-  notes it guards.
+  for 1.2.23; row 48 went in with 1.2.22's version bump, which rewrote the
+  notes it guards (row 31 there).
 - Row 49, the faster-model offer for ChatGPT that switched readers to a
   model that then read as unavailable, was found and fixed on 15 October
   2026 and went into 1.2.22 the same day (row 30 there).
@@ -384,7 +397,6 @@ minor release and none behind `next`; each row says why it is not in 1.2.22.
 | 45 | The NKJV's card route and selection route: the opt-in walk on an NKJV cache (in "The NKJV's card route and selection route disagree in the opt-in walk") | Nothing (internal). | S / low | The suite | With decision 43: the walk needs the NKJV opened in the app once, so that a cache is there to walk, compared without printing the text. | 1.2.22's row 20 fixed the test's stand-in and showed, on the WEB given the NKJV's marking, that the stand-in accounts for differences of the NKJV's shape. `TestPassageShareEqualsSelectionRouteOverLocalCaches_LocalOnly` has not been run on an NKJV cache; the entry closes when it passes there, or names what is left. |
 | 46 | Android drops the zero-width joiner and non-joiner typed into a text field (in "Android drops the zero-width joiner and non-joiner typed into a text field") | On Android, a note typed with a joined emoji (a family, a profession, a flag) is stored, shared and linked as it was typed, instead of as separate emoji, and Persian and Indic text keep their zero-width non-joiner. | S / medium | Android (every version, every text field the toolkit draws) | None | Fyne's mobile driver passes each typed character through `runeToPrintable` (`internal/driver/mobile/driver.go:594` in Fyne v2.7.4), which drops whatever `strconv.IsPrint` rejects, U+200C and U+200D among them, so neither reaches the field, while `share_note.go`'s note cleaning keeps both on purpose. Seen on 14 October 2026 on an Android 11 (API 30) emulator image: the input method sent a family emoji's two joiners, and the shared message and the link's payload held neither. Fix: a toolkit patch that lets them through, with a test that types a joined sequence into a field. A bug that needs no decision, for 1.2.23. |
 | 47 | A space after an emoji, or after a character from a fallback font, draws wrongly in text the toolkit draws (in "A space after an emoji or a fallback-font character draws wrongly in text the toolkit draws") | In the Share with note field and the notes browser, "a 🙏 b" keeps its space instead of drawing as "a 🙏b", and a space after a character such as 𝔊 is a space, not a missing-glyph box. | M / medium | Wherever the toolkit draws note text; seen on Android | None | The stored and shared text is right, and the native note card draws it right. The toolkit's own measurement gives "a 🙏 b" the width of "a 🙏b", where "a b" and "ab" differ by a space, so the emoji case lies in the toolkit, not in Android. Likely cause, not confirmed: go-text's face split (`splitByFace`, `ignoreFaceChange`, v0.3.4) never changes face for a space, so a space is shaped with the emoji or fallback face before it. Fix from that cause, probably a toolkit patch, with a measurement as its test. A bug that needs no decision, for 1.2.23. |
-| 48 | The GitHub release notes are held to no release (in "The GitHub release notes are not among the release's coupled surfaces") | Nothing in the app. The GitHub release page describes the release it carries: v1.2.21's carries 1.2.20's notes word for word, from "New study tools and improvements since 1.2.19". | S / low | The GitHub release | None | The notes are the `NOTES` printf in `.github/workflows/release.yml`, which stage 1 of RELEASING.md does not list among its coupled surfaces and no test ties to the version being released, so it has stood unchanged since before v1.2.20. Fix: list it in stage 1 and guard it as the stores' What's New files are guarded. Both go in with 1.2.22's version bump, which rewrites the notes; the guard added before that would fail. |
 
 ---
 
@@ -477,10 +489,11 @@ could show were fixed too (rows 24 to 29 there), with the reason each of the
 others stayed given under that table. The same day decision 2 was taken for
 AI-4 and P3: 1.2.22 ships without them, and both go to 1.2.23. On 15
 October 2026 the ChatGPT faster-model fix, Later row 49 until then, joined
-1.2.22 as its row 30, and 1.2.22's release notes were approved. What is still
-open, by when it is needed. A recommendation is marked where one is made.
-Rows are cited by section: *1.2.22*, *Later* for later minor releases, *Next
-major* and *Stays*.
+1.2.22 as its row 30, 1.2.22's release notes were approved, and the guard
+on the GitHub release notes, Later row 48, went in with its version bump as
+its row 31. What is still open, by when it is needed. A recommendation is
+marked where one is made. Rows are cited by section: *1.2.22*, *Later* for
+later minor releases, *Next major* and *Stays*.
 
 ### Before the 1.2.22 work starts
 
