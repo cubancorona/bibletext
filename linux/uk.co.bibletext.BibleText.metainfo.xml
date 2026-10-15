@@ -75,6 +75,17 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.2.22" date="2026-10-15">
+      <description>
+        <p>More accurate quotations and study passages.</p>
+        <ul>
+          <li>Sharing, notes and AI study quote your selection more accurately, including a word that appears twice in a verse and a selection that begins inside a word, a verse number or a heading.</li>
+          <li>AI study answers keep the passage you chose through Try again, a faster model or a light/dark change, even if narration or a link has moved to another chapter.</li>
+          <li>A link to a verse your translation leaves out, such as Matthew 17:21 in the Berean Standard Bible, opens at the next verse.</li>
+          <li>Email… opens one compose window where some mail programs opened two, and two verse pictures shared within the same second are both kept.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.21" date="2026-10-13">
       <description>
         <p>AI study and platform maintenance.</p>

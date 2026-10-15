@@ -200,6 +200,10 @@ Also confirm from the final AAB:
 - target audience and Families eligibility are selected from the real intended
   audience, not to avoid or trigger a policy track.
 
+## Release notes — 1.2.22
+
+> Sharing, notes and AI study quote your selection more accurately, including a word that appears twice in a verse. AI answers keep your passage through Try again after narration or a link changes the chapter. Notes in a psalm or poem open above the stanza, not between its lines. Rotating, split screen, text size changes and returning to the app keep the verse at the top of the screen, also after following a link. Links to a verse your translation leaves out open at the next verse.
+
 ## Release notes — 1.2.21
 
 > Ask a question… and Compare perspectives for your selected passage with your own AI key. Collapse quotations while reading AI answers. Clearer previews and more accurate citations for study, sharing and notes; drafts survive rotation. Narration continues when Android closes the reading screen while the app runs. Better tablet and landscape spacing, psalm-title wrapping on Android 15+, and lower study-card memory use. Requires Android 7.0 or later.

@@ -1531,10 +1531,12 @@ and is not a copy of the last tag's notes. The test goes in with 1.2.22's
 version bump, when the notes are rewritten; added now, it would fail until
 then.
 
-## The faster-model offer for ChatGPT switched to a model that then read as unavailable — found 15 October 2026; FIXED 15 October 2026, for 1.2.23
+## The faster-model offer for ChatGPT switched to a model that then read as unavailable — found 15 October 2026; FIXED 15 October 2026, for 1.2.22
 
-Planned for: 1.2.23, a bug that needs no decision — see docs/ROADMAP.md
-(Later minor releases, row 49).
+Planned for: 1.2.22, fixed for it (`c3e4c1c50`) — see docs/ROADMAP.md
+(1.2.22, row 30). Fixed for 1.2.23 and moved into 1.2.22 the same day,
+before its version bump; the 429 question at the end of this entry stays
+open.
 
 The waiting screens offer "Switch to a faster model", which pins the
 provider's economy model as the Settings picker would. For ChatGPT the
