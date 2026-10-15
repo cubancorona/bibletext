@@ -156,7 +156,7 @@ check.
 
 ### 1 — Prepare, on main
 
-Nine coupled surfaces have to name the same version, each test-enforced:
+Ten coupled surfaces have to name the same version, each test-enforced:
 
 1. `cmd/mobile/FyneApp.toml` — Version and Build
 2. `cmd/bibletext/FyneApp.toml` — Version and Build
@@ -185,6 +185,15 @@ Nine coupled surfaces have to name the same version, each test-enforced:
    where the notes are drafted and read; the file is what
    `scripts/play-publish.py upload` sends, unless `--notes` names another,
    and the upload refuses without it (`play_whats_new_test.go`)
+10. `.github/workflows/release.yml` — the GitHub release notes, the `NOTES`
+    printf, which `gh release create` sends when the tag is pushed. Its head,
+    everything above the store and download footer every release carries,
+    is rewritten for each release: its lead line names the release before
+    this one, the second `[[release]]` in `linux/releases.toml`, and no
+    release but that one and this, and below that line it is not the
+    previous release's head as that release's tag holds it
+    (`github_release_notes_test.go`). The printf is its own format string,
+    so the notes carry no single quote and no percent sign (stage 11)
 
 ### 2 — Push and wait for green
 
