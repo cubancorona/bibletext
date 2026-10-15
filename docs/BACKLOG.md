@@ -1531,6 +1531,58 @@ and is not a copy of the last tag's notes. The test goes in with 1.2.22's
 version bump, when the notes are rewritten; added now, it would fail until
 then.
 
+## The faster-model offer for ChatGPT switched to a model that then read as unavailable — found 15 October 2026; FIXED 15 October 2026, for 1.2.23
+
+Planned for: 1.2.23, a bug that needs no decision — see docs/ROADMAP.md
+(Later minor releases, row 49).
+
+The waiting screens offer "Switch to a faster model", which pins the
+provider's economy model as the Settings picker would. For ChatGPT the
+economy model was `gpt-4o-mini`, and every request sends the shared output
+budget, `aiMaxOutputTokens` (32768), as `max_completion_tokens`. That model
+accepts at most 16384 completion tokens, so OpenAI refused each request with
+an HTTP 400 whose message names the cap ("This model supports at most 16384
+completion tokens"). `safeAIErrorDetail` (`ai_providers.go`) filed any 400
+whose message contains "model" as "model unavailable", `isModelNotFound`
+(`ai_model_resolve.go`) took that as the model being gone, and because the
+pin is an explicit override the resolver returned `modelGoneError`: a reader
+who took the offer was told the model isn't available with their key, on
+every request, until they changed model in Settings. The live guard
+`TestLivePinnedDefaultsExist` reported the fast model as not callable.
+Verified live on 15 October 2026: the same request with
+`max_completion_tokens` 16384 answers, and `gpt-5-mini` accepts 32768.
+
+The fix has two halves. A 400 refusing the completion budget is filed under
+its own category, `completionCapDetail` with the figure the provider named
+and nothing else of the message, so it is not model-not-found; and the
+OpenAI client, which Grok shares, sends that one request again at the cap,
+once and only downwards (`openAIClient.generate`, `completionCapIn`,
+`completionCapOf`). This also serves every device that stored the old
+override, since `applyFasterModel` wrote the literal id. And
+`openAIFastModel` is now `gpt-5-mini`, the economy model of the capable
+default's own family, which takes the budget and, through
+`openAIFixedTemperature`, is sent no temperature. The self-heal semantics
+are otherwise unchanged: a 404 on a pinned model still reads as gone with no
+retry, and a 404 on the Recommended path still self-heals. No wording
+changes; README.md's model table names the new economy model.
+
+Tests: `TestAPinnedModelWithALowerCompletionCapAnswersAtItsCap` (two
+requests against a stand-in for OpenAI's endpoint, the second at 16384, no
+self-heal, the pin kept), `TestAPinnedModelTheProviderLacksStillReadsAsGone`,
+`TestTheRecommendedPathStillSelfHealsOnA404`,
+`TestTheChatGPTFastModelIsInTheCapableDefaultsFamily`,
+`TestACompletionCapRefusalIsFiledUnderItsOwnCategory` and
+`TestACapAtOrAboveTheBudgetIsNotRetried`; the first and the fourth fail on
+the tree before (`149b85a91`). Live on 15 October 2026: `gpt-5` and
+`gpt-5-mini` answered the pinned-defaults guard, and a stored `gpt-4o-mini`
+override answered by way of one 400 and one 200, where the tree before got
+the 400 alone and reported the model gone.
+
+Still open, found beside it: every HTTP 429 reads to the reader as the
+service being busy, where a provider's 429 can also mean the reader's own
+quota or spending cap is exhausted, which no retry will mend. Telling the two
+apart per provider, and the line for the cap, need a decision.
+
 ## Three comments 1.2.20 left describing the code before it — all three corrected for 1.2.22
 
 The website's was corrected on 13 October 2026, for 1.2.22, and the other two

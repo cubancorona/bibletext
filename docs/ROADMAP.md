@@ -1,6 +1,6 @@
 # Roadmap
 
-The plan as of **14 October 2026**: which release each open item in
+The plan as of **15 October 2026**: which release each open item in
 [BACKLOG.md](BACKLOG.md) is planned for, in what order, and the decisions still
 open. It is the plan, not a promise, and it is updated as releases go out: a
 row leaves when its release ships, an item moves when a decision settles it,
@@ -329,6 +329,9 @@ The order:
   surface no test holds. None needs a decision. Rows 46 and 47 are planned
   for 1.2.23; row 48 goes in with 1.2.22's version bump, which rewrites the
   notes it guards.
+- Row 49 was found on 15 October 2026 and fixed the same day, for 1.2.23:
+  the faster-model offer for ChatGPT switched readers to a model that then
+  read as unavailable. It needs no decision.
 - The rest follow as their decisions arrive.
 
 Rows 26 to 33 come from the same work as 1.2.22's rows. Each is a fix to what
@@ -370,6 +373,7 @@ minor release and none behind `next`; each row says why it is not in 1.2.22.
 | 46 | Android drops the zero-width joiner and non-joiner typed into a text field (in "Android drops the zero-width joiner and non-joiner typed into a text field") | On Android, a note typed with a joined emoji (a family, a profession, a flag) is stored, shared and linked as it was typed, instead of as separate emoji, and Persian and Indic text keep their zero-width non-joiner. | S / medium | Android (every version, every text field the toolkit draws) | None | Fyne's mobile driver passes each typed character through `runeToPrintable` (`internal/driver/mobile/driver.go:594` in Fyne v2.7.4), which drops whatever `strconv.IsPrint` rejects, U+200C and U+200D among them, so neither reaches the field, while `share_note.go`'s note cleaning keeps both on purpose. Seen on 14 October 2026 on an Android 11 (API 30) emulator image: the input method sent a family emoji's two joiners, and the shared message and the link's payload held neither. Fix: a toolkit patch that lets them through, with a test that types a joined sequence into a field. A bug that needs no decision, for 1.2.23. |
 | 47 | A space after an emoji, or after a character from a fallback font, draws wrongly in text the toolkit draws (in "A space after an emoji or a fallback-font character draws wrongly in text the toolkit draws") | In the Share with note field and the notes browser, "a 🙏 b" keeps its space instead of drawing as "a 🙏b", and a space after a character such as 𝔊 is a space, not a missing-glyph box. | M / medium | Wherever the toolkit draws note text; seen on Android | None | The stored and shared text is right, and the native note card draws it right. The toolkit's own measurement gives "a 🙏 b" the width of "a 🙏b", where "a b" and "ab" differ by a space, so the emoji case lies in the toolkit, not in Android. Likely cause, not confirmed: go-text's face split (`splitByFace`, `ignoreFaceChange`, v0.3.4) never changes face for a space, so a space is shaped with the emoji or fallback face before it. Fix from that cause, probably a toolkit patch, with a measurement as its test. A bug that needs no decision, for 1.2.23. |
 | 48 | The GitHub release notes are held to no release (in "The GitHub release notes are not among the release's coupled surfaces") | Nothing in the app. The GitHub release page describes the release it carries: v1.2.21's carries 1.2.20's notes word for word, from "New study tools and improvements since 1.2.19". | S / low | The GitHub release | None | The notes are the `NOTES` printf in `.github/workflows/release.yml`, which stage 1 of RELEASING.md does not list among its coupled surfaces and no test ties to the version being released, so it has stood unchanged since before v1.2.20. Fix: list it in stage 1 and guard it as the stores' What's New files are guarded. Both go in with 1.2.22's version bump, which rewrites the notes; the guard added before that would fail. |
+| 49 | The faster-model offer for ChatGPT switched to a model that then read as unavailable (in "The faster-model offer for ChatGPT switched to a model that then read as unavailable") | Taking "Switch to a faster model" with ChatGPT gets an answer from the economy model, instead of being told on every request that the model isn't available with the reader's key until the model is changed in Settings. | S / low | All six | None | FIXED 15 October 2026, on `fu/1223-openai-fast`. `gpt-4o-mini` caps completion tokens at 16384 and refused the shared 32768 budget with a 400 that read as model-not-found. The refusal is now its own error category and the one request is sent again at the cap the provider named, which also serves devices that stored the old id; the economy model is `gpt-5-mini`, of the capable default's own family. Live on 15 October 2026: both models answered the pinned-defaults guard, and a stored `gpt-4o-mini` override answered by way of one 400 and one 200. |
 
 ---
 
