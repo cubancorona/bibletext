@@ -306,6 +306,9 @@ func TestMain(m *testing.M) {
 	arrivalRepaintAfter = func(time.Duration, func()) { arrivalRepaintsArmed.Add(1) }
 	startUpgradeFetch = func(BibleVersion, func(*BibleData, dataMode, error)) { upgradeFetchesStarted.Add(1) }
 	startVersionLoad = func(BibleVersion, *BibleData, func(*BibleData, dataMode, error)) {}
+	// Set once, for the whole binary, because a render reads it from a
+	// goroutine of its own that a test does not own (muteEngines).
+	engineSetArtwork = artworkHookReached
 	realCacheDir = filepath.Dir(defaultCachePath())
 	suiteCache, err := os.MkdirTemp("", "bibletext-test-cache-")
 	if err != nil {

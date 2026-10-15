@@ -1,25 +1,156 @@
 package bibletext
 
-import "testing"
+import (
+	"reflect"
+	"runtime"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+)
 
 // muteEngines swaps the per-platform audio engines for no-ops so controller
 // tests are deterministic: the real engines would fetch and play the chapter,
 // and how far they get before an assert is runner-dependent (network + audio
 // device). Restores the real engines when the test ends.
+//
+// It leaves the artwork hook alone, which TestMain sets once for the whole
+// binary (artworkHookReached). startChapter starts the engine and then
+// renders the lock-screen artwork on a goroutine of its own, which reads
+// imageRenderDir and then the artwork hook, so a render still running when
+// its test ended read both while the next test wrote them. Each engine start
+// here counts the render that follows it, and the test does not end until
+// every render counted has reached the hook.
 func muteEngines(t *testing.T) {
 	t.Helper()
 	origURL, origTTS, origToggle := engineStartURL, engineStartTTS, engineToggle
-	origStop, origSkip, origArt := engineStop, engineSkip, engineSetArtwork
-	engineStartURL = func(string, string, string) {}
-	engineStartTTS = func(string, string, string) {}
+	origStop, origSkip := engineStop, engineSkip
+	engineStartURL = func(string, string, string) { artworkRenderBegun() }
+	engineStartTTS = func(string, string, string) { artworkRenderBegun() }
 	engineToggle = func() {}
 	engineStop = func() {}
 	engineSkip = func(float64) {}
-	engineSetArtwork = func(string) {}
 	t.Cleanup(func() {
+		awaitArtworkRenders(t)
 		engineStartURL, engineStartTTS, engineToggle = origURL, origTTS, origToggle
-		engineStop, engineSkip, engineSetArtwork = origStop, origSkip, origArt
+		engineStop, engineSkip = origStop, origSkip
 	})
+}
+
+// artworkRenders counts the artwork renders begun under muted engines and
+// those that have reached the artwork hook.
+var artworkRenders struct {
+	sync.Mutex
+	begun, reached int
+}
+
+// artworkRenderBegun counts the render startChapter begins after it starts
+// the engine.
+func artworkRenderBegun() {
+	artworkRenders.Lock()
+	artworkRenders.begun++
+	artworkRenders.Unlock()
+}
+
+// artworkHookReached is the artwork hook for the whole test binary.
+func artworkHookReached(string) {
+	artworkRenders.Lock()
+	artworkRenders.reached++
+	artworkRenders.Unlock()
+}
+
+// awaitArtworkRenders returns once every render begun has reached the hook.
+// Taking the lock the hook takes orders everything a render read before
+// whatever the caller writes next. A render that fails returns before the
+// hook, so after 30 s the test fails and the count is settled, which keeps
+// the tests after it from waiting for that render too.
+func awaitArtworkRenders(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		artworkRenders.Lock()
+		begun, reached := artworkRenders.begun, artworkRenders.reached
+		late := reached < begun && time.Now().After(deadline)
+		if late {
+			artworkRenders.reached = begun
+		}
+		artworkRenders.Unlock()
+		switch {
+		case reached >= begun:
+			return
+		case late:
+			t.Errorf("%d of %d artwork renders begun under muted engines never reached the artwork hook in 30 s", begun-reached, begun)
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// A narration test ends only once the lock-screen artwork it started has
+// been rendered. startChapter draws the artwork on a goroutine of its own,
+// which reads imageRenderDir when it writes the file and then the artwork
+// hook; a render left running read them while the next test wrote them, a
+// narration test through muteEngines and a share test through
+// imageRenderDir. The first subtest starts narration as those tests do. The
+// second checks no render is still running, and that muteEngines leaves the
+// artwork hook as it found it. It then writes what the next test writes and
+// goes on while any render runs, waiting for it without synchronising with
+// it, so under the race detector a render still running then is reported
+// here. The control shows the wait sees the render goroutine while it runs.
+func TestANarrationTestEndsOnlyOnceItsArtworkIsRendered(t *testing.T) {
+	rendering := funcName(renderChapterArtwork) + "("
+	artwork := funcName((*audioController).startChapter) + ".func"
+	hook := reflect.ValueOf(engineSetArtwork).Pointer()
+	dir := t.TempDir()
+	t.Run("narration starts", func(t *testing.T) {
+		muteEngines(t)
+		gAudio.stop()
+		t.Cleanup(gAudio.stop)
+		gAudio.startChapter(&AppState{CurrentVersion: "web", CurrentBook: "John", CurrentChapter: 20},
+			chapterAudio{Kind: audioRecorded, URL: "https://example.invalid/WEB_43_020.mp3",
+				Title: "John 20", Subtitle: "World English Bible"}, "web|John|20")
+		if !goroutineIn(artwork) {
+			t.Fatal("control: no goroutine of startChapter's is running just after it started the artwork, so the wait below sees nothing")
+		}
+	})
+	t.Run("the next test", func(t *testing.T) {
+		if goroutineIn(rendering) {
+			t.Error("the artwork the previous test started is still rendering")
+		}
+		muteEngines(t)
+		if reflect.ValueOf(engineSetArtwork).Pointer() != hook {
+			t.Error("muteEngines swapped the artwork hook, which a render reads from its own goroutine")
+		}
+		prev := imageRenderDir
+		imageRenderDir = func() string { return dir }
+		t.Cleanup(func() { imageRenderDir = prev })
+		deadline := time.Now().Add(30 * time.Second)
+		for goroutineIn(artwork) {
+			if time.Now().After(deadline) {
+				t.Fatal("the artwork goroutine was still running 30 s after narration started")
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	})
+}
+
+// funcName is the name the runtime prints in a stack for fn.
+func funcName(fn any) string {
+	return runtime.FuncForPC(reflect.ValueOf(fn).Pointer()).Name()
+}
+
+// goroutineIn reports whether any goroutine's stack holds a frame whose
+// printed form contains frame. It reads the stacks without synchronising with
+// the goroutines, so it orders nothing for the race detector.
+func goroutineIn(frame string) bool {
+	buf := make([]byte, 1<<20)
+	for {
+		n := runtime.Stack(buf, true)
+		if n < len(buf) {
+			return strings.Contains(string(buf[:n]), frame)
+		}
+		buf = make([]byte, 2*len(buf))
+	}
 }
 
 func TestChapterAudioFingerprint(t *testing.T) {
