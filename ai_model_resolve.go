@@ -162,7 +162,10 @@ func (r *modelResolver) rediscover(ctx context.Context, tried string) (string, e
 // model doesn't exist — the trigger for self-heal. All four providers return 404
 // for a retired/unknown model; Gemini can also answer 400 with "model" in the
 // message. Anything else (401 bad key, 429 busy, 5xx) is NOT model-not-found, so
-// self-heal never fires on a transient problem or masks a real one.
+// self-heal never fires on a transient problem or masks a real one. A 400
+// refusing the completion budget names the model too, but safeAIErrorDetail
+// files it under completionCapDetail, so it does not reach here as "model":
+// the model exists, and the OpenAI client has already retried at its cap.
 func isModelNotFound(err error) bool {
 	var he *apiHTTPError
 	if !errors.As(err, &he) {

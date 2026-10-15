@@ -380,7 +380,7 @@ separate API.Bible fallback used to fetch the licensed NKJV is described above.)
 | Provider | Model | Get a key |
 |---|---|---|
 | Gemini (Google) | `gemini-pro-latest` (faster: `gemini-2.5-flash`) | <https://aistudio.google.com/apikey> |
-| ChatGPT (OpenAI) | `gpt-5` (faster: `gpt-4o-mini`) | <https://platform.openai.com/api-keys> |
+| ChatGPT (OpenAI) | `gpt-5` (faster: `gpt-5-mini`) | <https://platform.openai.com/api-keys> |
 | Claude (Anthropic) | `claude-opus-5` (faster: `claude-haiku-4-5`) | <https://platform.claude.com/settings/keys> |
 | Grok (SpaceXAI) | `grok-4.5` (faster: `grok-4.3`) | <https://console.x.ai> |
 

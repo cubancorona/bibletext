@@ -14,6 +14,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -82,9 +83,17 @@ const (
 	anthropicModel = "claude-opus-5"
 
 	// The economy option per provider — offered from the waiting screens, never
-	// selected automatically. These were the defaults before 2026-08-08.
+	// selected automatically. Three were the defaults before 2026-08-08.
+	// ChatGPT's is the economy model of the capable default's own family:
+	// gpt-4o-mini, the economy pick until 2026-10-15, caps completion tokens
+	// at 16384 and answered the aiMaxOutputTokens budget with a 400 that read
+	// as the model being gone, so the offer switched readers to a model that
+	// then reported itself unavailable. gpt-5-mini accepts the budget
+	// (verified live 2026-10-15); openAIFixedTemperature covers it, so no
+	// temperature is sent. Devices that stored the old id keep working through
+	// the budget retry in openAIClient.generate.
 	geminiFastModel    = "gemini-2.5-flash"
-	openAIFastModel    = "gpt-4o-mini"
+	openAIFastModel    = "gpt-5-mini"
 	anthropicFastModel = "claude-haiku-4-5"
 	grokFastModel      = "grok-4.3"
 	grokModel          = "grok-4.5"
@@ -130,7 +139,11 @@ const (
 	// tokens); at 32768, 76. So the budget was not just a floor, it was
 	// capping how complete an answer could be.
 	//
-	// All four providers accept this value (verified live).
+	// Every default and every fast model accepts this value (verified live
+	// 2026-10-15). A model whose own cap is lower refuses it with a 400 that
+	// names the cap, and the OpenAI client sends that one request again at the
+	// cap (openAIClient.generate), so an override naming such a model answers
+	// rather than reading as gone.
 	aiMaxOutputTokens = 32768
 )
 
@@ -461,30 +474,95 @@ func (c *openAIClient) generate(ctx context.Context, prompt string) (string, err
 	if strings.TrimSpace(c.apiKey) == "" {
 		return "", errNoAPIKey
 	}
+	body, err := c.send(ctx, prompt, aiMaxOutputTokens)
+	// A model whose own completion cap is below the budget refuses the
+	// request with a 400 that names the cap (gpt-4o-mini: 16384). The model
+	// is there and nothing about the request is wrong but that one figure,
+	// so the request goes once more at the cap the provider stated. Without
+	// this the refusal, whose message names the model, read as the model
+	// being gone, and a reader whose override named such a model was told it
+	// was unavailable with their key. One retry, and only downwards: a cap at
+	// or above what was sent is not this condition and would loop.
+	if limit, ok := completionCapOf(err); ok && limit < aiMaxOutputTokens {
+		body, err = c.send(ctx, prompt, limit)
+	}
+	if err != nil {
+		return "", err
+	}
+	return parseOpenAIText(body)
+}
+
+// send posts one chat completion with the given completion-token budget and
+// returns the response body.
+func (c *openAIClient) send(ctx context.Context, prompt string, budget int) ([]byte, error) {
 	reqBody := openAIRequest{
 		Model:               c.model,
 		Messages:            []openAIMessage{{Role: "user", Content: prompt}},
-		MaxCompletionTokens: aiMaxOutputTokens,
+		MaxCompletionTokens: budget,
 	}
 	if !openAIFixedTemperature(c.model) {
 		reqBody.Temperature = 0.4
 	}
 	payload, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/chat/completions", bytes.NewReader(payload))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	return doAIRequest(c.http, req)
+}
 
-	body, err := doAIRequest(c.http, req)
-	if err != nil {
-		return "", err
+// completionCapDetail prefixes the error category for a 400 that refuses the
+// completion budget as more than the model allows. The figure after it is the
+// cap the provider named; no other part of the message is kept.
+const completionCapDetail = "completion cap "
+
+// completionCapIn reads the model's completion-token cap out of the refusal
+// of a too-large budget, which OpenAI words as "max_tokens is too large:
+// 32768. This model supports at most 16384 completion tokens, whereas you
+// provided 32768.", and reports false for any other message.
+func completionCapIn(message string) (int, bool) {
+	const lead = "supports at most "
+	low := strings.ToLower(message)
+	i := strings.Index(low, lead)
+	if i < 0 {
+		return 0, false
 	}
-	return parseOpenAIText(body)
+	rest := low[i+len(lead):]
+	j := 0
+	for j < len(rest) && rest[j] >= '0' && rest[j] <= '9' {
+		j++
+	}
+	if j == 0 || !strings.HasPrefix(rest[j:], " completion tokens") {
+		return 0, false
+	}
+	n, err := strconv.Atoi(rest[:j])
+	if err != nil || n <= 0 {
+		return 0, false
+	}
+	return n, true
+}
+
+// completionCapOf reports the cap a provider's 400 named, when err is that
+// refusal and nothing else.
+func completionCapOf(err error) (int, bool) {
+	var he *apiHTTPError
+	if !errors.As(err, &he) || he.StatusCode != http.StatusBadRequest {
+		return 0, false
+	}
+	digits, ok := strings.CutPrefix(he.Details, completionCapDetail)
+	if !ok {
+		return 0, false
+	}
+	n, convErr := strconv.Atoi(digits)
+	if convErr != nil || n <= 0 {
+		return 0, false
+	}
+	return n, true
 }
 
 func parseOpenAIText(body []byte) (string, error) {
@@ -663,9 +741,14 @@ func doAIRequest(client httpClient, req *http.Request) ([]byte, error) {
 // aiRetrySleep is a seam for tests.
 var aiRetrySleep = time.Sleep
 
-// safeAIErrorDetail maps an authenticated response to a fixed local category.
-// Gemini may report an unavailable model as HTTP 400 rather than 404; retaining
-// only that category preserves model self-healing without exposing body text.
+// safeAIErrorDetail maps an authenticated response to a fixed local category:
+// completionCapDetail with the figure when the message refuses the completion
+// budget as more than the model allows, "model unavailable" when it names a
+// model (Gemini may report an unavailable model as HTTP 400 rather than 404),
+// else "". Retaining only the category preserves model self-healing and the
+// budget retry without exposing body text. The cap is checked first because
+// its message names the model too, and filed under "model unavailable" it
+// made a model with a smaller cap read as gone.
 func safeAIErrorDetail(body []byte) string {
 	var env struct {
 		Error struct {
@@ -677,6 +760,9 @@ func safeAIErrorDetail(body []byte) string {
 		message = env.Error.Message
 	} else {
 		message = string(body)
+	}
+	if n, ok := completionCapIn(message); ok {
+		return completionCapDetail + strconv.Itoa(n)
 	}
 	if strings.Contains(strings.ToLower(message), "model") {
 		return "model unavailable"

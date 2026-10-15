@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 // stubClient is an aiClient whose reply depends only on the model it was built
@@ -71,6 +72,7 @@ func TestIsModelNotFound(t *testing.T) {
 		{"404 → yes", &apiHTTPError{StatusCode: 404}, true},
 		{"400 mentioning model → yes", &apiHTTPError{StatusCode: 400, Details: "The model `x` does not exist"}, true},
 		{"400 without model → no", &apiHTTPError{StatusCode: 400, Details: "input too long"}, false},
+		{"400 refusing the budget → no", &apiHTTPError{StatusCode: 400, Details: completionCapDetail + "16384"}, false},
 		{"401 bad key → no", &apiHTTPError{StatusCode: 401, Details: "invalid model? no"}, false},
 		{"429 busy → no", &apiHTTPError{StatusCode: 429}, false},
 		{"500 → no", &apiHTTPError{StatusCode: 500}, false},
@@ -81,6 +83,74 @@ func TestIsModelNotFound(t *testing.T) {
 		if got := isModelNotFound(c.err); got != c.want {
 			t.Errorf("%s: isModelNotFound=%v want %v", c.name, got, c.want)
 		}
+	}
+}
+
+// OpenAI refuses a completion budget above a model's cap with a 400 whose
+// message names the model. The error category keeps the cap and nothing else
+// of the message, is not model-not-found, and is read back by the client's
+// retry; a model-not-found message and a budget message in other words keep
+// their categories.
+func TestACompletionCapRefusalIsFiledUnderItsOwnCategory(t *testing.T) {
+	refusal := []byte(`{"error":{"message":"max_tokens is too large: 32768. This model supports at most 16384 completion tokens, whereas you provided 32768.","type":"invalid_request_error","param":"max_tokens","code":null}}`)
+	detail := safeAIErrorDetail(refusal)
+	if detail != completionCapDetail+"16384" {
+		t.Fatalf("safeAIErrorDetail = %q, want %q", detail, completionCapDetail+"16384")
+	}
+	if strings.Contains(detail, "provided") || strings.Contains(detail, "32768") {
+		t.Errorf("the category carries words or figures of the message beyond the cap: %q", detail)
+	}
+	err := &apiHTTPError{StatusCode: http.StatusBadRequest, Details: detail}
+	if isModelNotFound(err) {
+		t.Error("a cap refusal read as model-not-found")
+	}
+	if limit, ok := completionCapOf(err); !ok || limit != 16384 {
+		t.Errorf("completionCapOf = %d, %v; want 16384, true", limit, ok)
+	}
+
+	gone := []byte(`{"error":{"message":"The model 'gpt-9' does not exist or you do not have access to it.","type":"invalid_request_error","param":null,"code":"model_not_found"}}`)
+	if got := safeAIErrorDetail(gone); got != "model unavailable" {
+		t.Errorf("a model-not-found message filed as %q, want \"model unavailable\"", got)
+	}
+	for _, other := range []string{
+		"max_tokens is too large: 32768.",
+		"This model supports at most 16384 output tokens.",
+		"supports at most completion tokens",
+	} {
+		if n, ok := completionCapIn(other); ok {
+			t.Errorf("completionCapIn(%q) = %d, true; want no cap", other, n)
+		}
+	}
+	for _, notACap := range []error{
+		&apiHTTPError{StatusCode: http.StatusNotFound, Details: completionCapDetail + "16384"},
+		&apiHTTPError{StatusCode: http.StatusBadRequest, Details: "model unavailable"},
+		&apiHTTPError{StatusCode: http.StatusBadRequest, Details: completionCapDetail + "many"},
+		errors.New(completionCapDetail + "16384"),
+	} {
+		if n, ok := completionCapOf(notACap); ok {
+			t.Errorf("completionCapOf(%v) = %d, true; want none", notACap, n)
+		}
+	}
+}
+
+// The retry goes only downwards: a refusal naming a cap at or above the
+// budget sent is returned as it is, after one request, since sending the same
+// figure again could not succeed.
+func TestACapAtOrAboveTheBudgetIsNotRetried(t *testing.T) {
+	old := aiRetrySleep
+	aiRetrySleep = func(time.Duration) {}
+	t.Cleanup(func() { aiRetrySleep = old })
+
+	m := &mockHTTP{statusCode: http.StatusBadRequest,
+		body: `{"error":{"message":"max_tokens is too large: 32768. This model supports at most 32768 completion tokens, whereas you provided 32768."}}`}
+	c := &openAIClient{apiKey: "k", model: "gpt-x", baseURL: "https://x.test/v1", http: m}
+	_, err := c.generate(context.Background(), "p")
+	var apiErr *apiHTTPError
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusBadRequest {
+		t.Fatalf("want the 400 back, got %v", err)
+	}
+	if m.calls != 1 {
+		t.Errorf("%d requests, want 1", m.calls)
 	}
 }
 
