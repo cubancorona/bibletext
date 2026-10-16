@@ -21,6 +21,7 @@ package bibletext
 #include <string.h>
 
 static jclass    btaClass = NULL;   // global ref to org.bibletext.BtBridge
+static jobject  btaActivity = NULL; // our global ref, independent of Fyne's context ref
 static jmethodID btaInitM, btaSetStyleM, btaSetHtmlM, btaArmRestoreM, btaGetAnchorM,
                  btaSetFrameM, btaShowM, btaHideM, btaSuppressM, btaUnsuppressM,
                  btaShareTextM, btaShareImageM, btaSetAIEnabledM, btaSetAskEnabledM, btaSetNotesEnabledM,
@@ -49,6 +50,7 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 		return 0; // classes2.dex missing (plain `fyne package` build) — overlay stays off
 	}
 	btaClass = (jclass)(*env)->NewGlobalRef(env, cls);
+	if (btaClass == NULL) return 0; // leave an allocation exception for RunNative
 
 	btaInitM       = (*env)->GetStaticMethodID(env, btaClass, "init", "(Landroid/app/Activity;)V");
 	btaSetStyleM   = (*env)->GetStaticMethodID(env, btaClass, "setStyle", "(IIFFIIIIFF)V");
@@ -120,13 +122,32 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	return 1;
 }
 
+// Fyne replaces and deletes its global context reference on every resume, even
+// for the same Activity. Keep our own reference and compare Java objects, not
+// JNI handles; a borrowed handle cannot be retained after RunNative returns.
+static int btaSameActivity(uintptr_t jni_env, uintptr_t ctx) {
+	JNIEnv *env = (JNIEnv*)jni_env;
+	return btaActivity != NULL && ctx != 0 &&
+	       (*env)->IsSameObject(env, btaActivity, (jobject)ctx);
+}
+
+// 1 = initialized, 0 = bridge absent, -1 = JNI failure. Remember an absent
+// bridge for this Activity too, so a fallback build does not probe every call.
 static int btaInit(uintptr_t jni_env, uintptr_t ctx) {
 	JNIEnv *env = (JNIEnv*)jni_env;
-	if (!btaEnsureClass(env, (jobject)ctx)) {
-		return 0;
+	jobject next = (*env)->NewGlobalRef(env, (jobject)ctx);
+	if (next == NULL) return -1;
+	int available = btaEnsureClass(env, next);
+	if (available) {
+		(*env)->CallStaticVoidMethod(env, btaClass, btaInitM, next);
 	}
-	(*env)->CallStaticVoidMethod(env, btaClass, btaInitM, (jobject)ctx);
-	return 1;
+	if ((*env)->ExceptionCheck(env)) {
+		(*env)->DeleteGlobalRef(env, next);
+		return -1; // RunNative reports it; do not publish a successful attempt
+	}
+	if (btaActivity != NULL) (*env)->DeleteGlobalRef(env, btaActivity);
+	btaActivity = next;
+	return available;
 }
 
 static int btaReady() { return btaClass != NULL; }
@@ -365,6 +386,7 @@ import (
 	"math"
 	"os"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -383,7 +405,9 @@ import (
 // case the reading pane falls back to the Fyne widget path.
 var btaAvailable = false
 var btaInitTried = false
-var btaCtx uintptr // the activity jobject the bridge was last (re-)initialised for
+var btaInitialized = false // a previous Activity successfully had a native pane
+var btaMissingLogged = false
+var btaMu sync.Mutex // guards bridge state, JNI class initialization and dispatch
 
 // btaRecreated is raised when runBta detects Android handed us a NEW activity
 // (recreation: swipe-away-with-live-process relaunch, rotation, memory pressure).
@@ -398,32 +422,46 @@ var btaRecreated atomic.Bool
 // pending Java exceptions as errors — log them (Go's log reaches logcat under
 // GoLog), or a broken bridge would silently no-op every overlay call.
 func runBta(fn func(env uintptr)) {
+	// Lock before RunNative borrows Fyne's live context, rather than leaving
+	// that borrowed reference waiting while another bridge call finishes.
+	btaMu.Lock()
+	defer btaMu.Unlock()
 	err := driver.RunNative(func(c any) error {
 		ac, ok := c.(*driver.AndroidContext)
 		if !ok {
 			return nil
 		}
-		// (Re-)init when first seen OR when the activity changed. Android
-		// recreates the activity (rotation, background→foreground), handing a
-		// new Ctx; BtBridge.init then rebuilds its Dialog against the live
-		// activity — a Dialog cached against a dead activity would throw
-		// BadTokenException on show(). The C class + method IDs are cached, so
-		// re-init is just a BtBridge.init(newActivity) call.
-		if !btaInitTried || ac.Ctx != btaCtx {
-			recreated := btaInitTried // a CHANGED Ctx = activity recreation, not first init
-			btaInitTried = true
-			btaCtx = ac.Ctx
+		// RunNative callbacks use separate goroutines. Keep an init and its
+		// dispatch together so a concurrent call cannot overtake the new pane.
+		if ac.Ctx == 0 {
+			return nil
+		}
+		// A new JNI handle can still name the same Activity after a resume.
+		// Only a different Java object needs a blank Dialog and recovery.
+		if !btaInitTried || C.btaSameActivity(C.uintptr_t(ac.Env), C.uintptr_t(ac.Ctx)) == 0 {
+			recreated := btaInitialized
 			// BEFORE the bridge initialises: it looks for the reading faces
 			// when it comes up, and a face written afterwards would not be
 			// found until the next launch.
 			androidReadingFontDir()
-			btaAvailable = C.btaInit(C.uintptr_t(ac.Env), C.uintptr_t(ac.Ctx)) == 1
+			result := C.btaInit(C.uintptr_t(ac.Env), C.uintptr_t(ac.Ctx))
+			btaInitTried = result >= 0
+			btaAvailable = result == 1
+			if result < 0 {
+				return nil // pending JNI exception is reported by RunNative
+			}
 			if !btaAvailable {
 				// Bridge dex missing (plain `fyne package` build) — the reading
 				// pane fell back to the Fyne widget path; note it once.
-				log.Printf("bibletext: BtBridge dex not present; using Fyne reading fallback")
-			} else if recreated {
-				btaRecreated.Store(true) // fresh (blank) Dialog — needs a re-render
+				if !btaMissingLogged {
+					log.Printf("bibletext: BtBridge dex not present; using Fyne reading fallback")
+					btaMissingLogged = true
+				}
+			} else {
+				btaInitialized = true
+				if recreated {
+					btaRecreated.Store(true) // fresh (blank) Dialog — needs a re-render
+				}
 			}
 		}
 		if btaAvailable {
@@ -1183,9 +1221,14 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 
 // btaBridgePresent triggers a lazy init probe so the fallback decision is real.
 func btaBridgePresent() bool {
-	if !btaInitTried {
+	btaMu.Lock()
+	tried := btaInitTried
+	btaMu.Unlock()
+	if !tried {
 		runBta(func(env uintptr) {}) // side effect: btaInit
 	}
+	btaMu.Lock()
+	defer btaMu.Unlock()
 	return btaAvailable
 }
 
