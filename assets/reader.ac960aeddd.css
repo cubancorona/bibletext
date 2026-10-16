@@ -287,17 +287,17 @@ body{
    web the one surface that differs. The gap below is the same 0.45 of a line
    the panes measure. It is set in the face's true italic, as every app pane
    sets it; a page with no title never downloads the cut.
-   It is set ragged, as the Apple panes (reading.go, p.pst) and the Windows
-   and Linux pane (reading_styled_super.go) set it, and unhyphenated, as the
-   Windows and Linux pane sets it. The title is a <p> inside .text, so without
-   rules of its own it takes the prose paragraph's justification and
-   hyphenation: a title long enough to wrap, such as Psalm 18's, was spread to
-   the measure and broken mid-word. The prefixed name is turned off as well as
-   the plain one because .text p turns both on, and a browser that reads only
-   the prefixed name would keep it. Two known differences remain
-   (docs/READING_TYPOGRAPHY.md, "Justified prose"): Android from API 35
-   justifies a wrapped title's lines, and the Apple panes and Android
-   hyphenate the title as they hyphenate the prose. */
+   It is set ragged and unhyphenated, as every app pane sets it: the Apple
+   panes (reading.go, p.pst), the Windows and Linux pane
+   (reading_styled_super.go) and Android (android/BtBridge.java). The title
+   is a <p> inside .text, so without rules of its own it takes the prose
+   paragraph's justification and hyphenation: a title long enough to wrap,
+   such as Psalm 18's, was spread to the measure and broken mid-word. The
+   prefixed name is turned off as well as the plain one because .text p turns
+   both on, and a browser that reads only the prefixed name would keep it. One
+   known difference remains (docs/READING_TYPOGRAPHY.md; divergence 31 of
+   docs/PLATFORM_MATRIX.md): Android 7 to 14 cannot turn hyphenation off for
+   the title alone, so there a title that wraps can still break a word. */
 .text p.pst{font-style:italic; text-align:left; text-indent:0; hyphens:none; -webkit-hyphens:none; margin:0 0 0.55em}
 /* THE FOOTNOTE SECTION. The translators' apparatus, after the chapter and
    outside the article, because the article is the scripture and this is about

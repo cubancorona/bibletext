@@ -4,6 +4,7 @@
   // span, written bare as "v16" / "v16-18", plus optional keys like "n=<note>".
   // Unknown keys are ignored — that rule is what lets a future key be added
   // without stranding the links already sent, and it has to hold here too.
+  /*__FRAGMENT_BEGIN__*/
   function fragKeys() {
     var out = { v: '' };
     var raw = (location.hash || '').replace(/^#/, '');
@@ -22,8 +23,10 @@
   }
 
   function verseSpan() { return spanOf(fragKeys().v); }
+  /*__FRAGMENT_END__*/
 
-  // 1) Verse RANGES (#v16-18). A single verse needs no help — :target has it.
+  // 1) Verse RANGES (#v16-18). A bare single verse (#v16) needs no help —
+  // :target has it; one with a key beside it does (highlightRange).
   // THE JOINING SPACE BETWEEN TWO VERSES BELONGS TO THE BAND.
   //
   // paragraphBody writes that space BETWEEN two <span class="v"> elements, so it
@@ -109,10 +112,25 @@
   }
   /*__HIGHLIGHT_BAND_END__*/
 
+  // highlight_landing_test.go runs the lines between the HIGHLIGHT_RANGE
+  // markers, with the fragment's and the note's, against a stand-in DOM.
+  /*__HIGHLIGHT_RANGE_BEGIN__*/
   function highlightRange() {
     unlightVerses();
+    var land = lightFragment();
+    if (land) land.scrollIntoView({ block: 'center' });
+  }
+
+  // lightFragment lights the fragment's verses and returns the verse the page
+  // has to scroll to itself, or null. The browser scrolls to the verse itself
+  // only for a bare "#v16", the one fragment that is an element's id. A
+  // range, and any fragment that carries a key beside the verse
+  // ("#v16&n=..."), matches no id, so the page lands there or nowhere: a link
+  // to one verse with a note the page could not read used to open at the top
+  // of the chapter, the verse and the notice beside it off-screen.
+  function lightFragment() {
     var m = verseSpan();
-    if (!m) return;
+    if (!m) return null;
     // A fresh fragment re-lights the verse: drop the suppression flag a
     // previous clear may have set.
     document.documentElement.classList.remove('nohl');
@@ -125,8 +143,25 @@
       if (!first) first = el;
     }
     bridgeHighlightGaps();
-    if (first && hi > lo) first.scrollIntoView({ block: 'center' });
+    // A link to a verse this edition omits (Matthew 17:21, made in an
+    // edition that prints it and opened in the BSB) lights nothing, and the
+    // page opened it at the top. It lands, unlit, on the verse after the
+    // hole, whose number the "[21]" mark stands before, as the app's panes
+    // do (drawnArrivalVerse). A verse past the chapter's last lands nowhere.
+    if (!first) return verseAfter(hi);
+    return first && (hi > lo || location.hash !== '#v' + lo) ? first : null;
   }
+
+  // verseAfter is the page's first verse numbered above n, or null.
+  function verseAfter(n) {
+    var best = null, bestN = 0;
+    document.querySelectorAll('.v').forEach(function (el) {
+      var k = parseInt(el.id.slice(1), 10);
+      if (k > n && (!best || k < bestN)) { best = el; bestN = k; }
+    });
+    return best;
+  }
+  /*__HIGHLIGHT_RANGE_END__*/
   // Clearing a highlight: tap the highlighted text and a small bubble appears at
   // the tap; the bubble clears it. Removing the fragment is what does the work —
   // it un-targets the CSS :target rule (single verse) as well as letting us drop
@@ -506,7 +541,12 @@
     // as raw 5-bit values without building a table at all. Applying the
     // dynamic rule to it made every fixed-Huffman block crash — the first
     // version of this very fix, caught by the conformance corpus.
-    if (!allowIncomplete && left > 0 && !(total === 1 && count[1] === 1)) return null;
+    //
+    // An EMPTY table is taken, as Go's huffmanDecoder.init takes it: an
+    // encoder whose block holds only literals may give every distance code
+    // length zero, and the table fails only if a symbol is read from it. This
+    // refused such a block, and a note the app opened was damaged here.
+    if (!allowIncomplete && left > 0 && total > 0 && !(total === 1 && count[1] === 1)) return null;
     var offs = [0, 0];
     for (len = 1; len < 15; len++) offs[len + 1] = offs[len] + count[len];
     var symbol = [];
@@ -703,17 +743,25 @@
     } catch (e) { return null; }
   }
 
-  // The browser half of normalizeNote (share_note.go): strip the control
-  // characters and bidi overrides that let text hide or reverse itself — and
-  // U+FFFD, which Go's rune walk drops — keep the newlines that make a note
-  // readable, and cap the length in code points.
+  // The browser half of normalizeNote (share_note.go), rule for rule: strip
+  // the control characters and bidi overrides that let text hide or reverse
+  // itself — and U+FFFD, which Go's rune walk drops — keep the newlines that
+  // make a note readable, and cap the length in code points. The line and
+  // paragraph separators are newlines, so the collapse below sees them, and
+  // the zero-width space, the word joiner and the tag characters go, as they
+  // do in the app: kept here, five U+2028 drew five blank lines.
   function cleanNote(s) {
     if (!s) return '';
     s = s.replace(/\r\n?/g, '\n')
+         .replace(/[\u2028\u2029]/g, '\n')
          // C0 and C1 controls, keeping tab (09) and newline (0a).
          .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g, '')
          // Bidi marks, embeddings, isolates, the BOM — and U+FFFD.
          .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff\ufffd]/g, '')
+         // The zero-width space and the word joiner.
+         .replace(/[\u200b\u2060]/g, '')
+         // The tag characters, U+E0000 to U+E007F, as UTF-16 pairs.
+         .replace(/\udb40[\udc00-\udc7f]/g, '')
          .replace(/\n{3,}/g, '\n\n')
          .trim();
     var runes = Array.from(s);
@@ -781,8 +829,13 @@
   // text}. Synchronous, pure, corpus-tested against the Go decoder.
   function decodeNotePayload(payload) {
     var damaged = { outcome: 'damaged', text: '' };
-    payload = (payload || '').trim();
-    if (!payload) return damaged;
+    // The ends lose ASCII white space only, and inside, a character outside
+    // the url-safe alphabet and its padding is damage, as the app reads it
+    // (share_note.go, DecodeNote). trim() took U+FEFF and U+2028 off the
+    // ends and atob skipped spaces inside, where the app skipped CR and LF
+    // and trimmed U+0085: each opened payloads the other called damaged.
+    payload = (payload || '').replace(/^[\t\n\f\r ]+|[\t\n\f\r ]+$/g, '');
+    if (!payload || /[^A-Za-z0-9_=-]/.test(payload)) return damaged;
     var bytes = noteBase64Bytes(payload);
     if (!bytes || bytes.length < 2) return damaged;
     var b0 = bytes[0], body = bytes.subarray(1);
@@ -804,13 +857,16 @@
   }
   /*__NOTE_DECODER_END__*/
 
+  /*__NOTE_PLACE_BEGIN__*/
   var noteBox = null, noteChip = null;
 
   var ICON_MINIMIZE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.75h10a.75.75 0 0 0 0-1.5H3a.75.75 0 0 0 0 1.5z"/></svg>';
   var ICON_TRASH = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 1.75a.75.75 0 0 0-.75.75V3H3a.75.75 0 0 0 0 1.5h.4l.62 8.06A1.75 1.75 0 0 0 5.77 14h4.46a1.75 1.75 0 0 0 1.75-1.44l.62-8.06H13A.75.75 0 0 0 13 3h-2.75v-.5a.75.75 0 0 0-.75-.75h-3zm.75 1.25h1.5V3h-1.5v-.0zM5.9 4.5h4.2l-.6 7.9a.25.25 0 0 1-.25.1H6.75a.25.25 0 0 1-.25-.1L5.9 4.5z"/></svg>';
   var ICON_NOTE = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.75A1.75 1.75 0 0 1 4.75 1h6.5A1.75 1.75 0 0 1 13 2.75v10.5A1.75 1.75 0 0 1 11.25 15h-6.5A1.75 1.75 0 0 1 3 13.25V2.75zM5.5 4.5a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 0-1.5h-5zm0 3a.75.75 0 0 0 0 1.5h5a.75.75 0 0 0 0-1.5h-5zm0 3a.75.75 0 0 0 0 1.5h3a.75.75 0 0 0 0-1.5h-3z"/></svg>';
 
-  function showNote(text) {
+  // showNote places the note before para, the paragraph of the passage it is
+  // about (fragmentParagraph), or at the chapter top when para is null.
+  function showNote(text, para) {
     hideNote();
     var wrap = document.querySelector('.wrap');
     if (!wrap || !text) return;
@@ -846,8 +902,9 @@
     }));
 
     box.appendChild(tools); box.appendChild(who); box.appendChild(body);
-    anchorToPassage(box);
+    anchorToPassage(box, para);
     noteBox = box;
+    notePara = para;
     activeNoteText = text;
     rescrollToHighlight();
   }
@@ -867,7 +924,11 @@
   // it, so the reader gets the passage as it would normally read. Nothing is
   // lost — the fragment still carries both, so this survives a reload and the
   // marker puts everything back.
+  // The marker takes the note's own place: minimizing clears the highlight,
+  // and the reader may have cleared it before, taking the verse out of the
+  // fragment, so neither can say where the note stood.
   function minimizeNote(text) {
+    var para = notePara;
     hideNote();
     // suppressHighlight(true) is UNCONDITIONAL where the app's hide clears
     // only the mark the note itself owns. Reasoned: this page has no other
@@ -889,10 +950,11 @@
     chip.addEventListener('click', function (e) {
       e.preventDefault();
       suppressHighlight(false);
-      showNote(text);
+      showNote(text, para);
     });
-    anchorToPassage(chip);
+    anchorToPassage(chip, para);
     noteChip = chip;
+    notePara = para;
     activeNoteText = text;
   }
 
@@ -913,14 +975,20 @@
       document.documentElement.classList.add('nohl');
       unlightVerses();
     } else {
+      // The marker is what puts the highlight back, and showNote then lands
+      // on the note it restores, so the verse is lit without a scroll of its
+      // own: scrolling to it on the way made the page jump to the verse and
+      // then, two frames later, to the note.
       document.documentElement.classList.remove('nohl');
-      highlightRange();
+      unlightVerses();
+      lightFragment();
     }
   }
 
   function hideNote() {
     if (noteBox) { noteBox.remove(); noteBox = null; }
     if (noteChip) { noteChip.remove(); noteChip = null; }
+    notePara = null;
   }
 
   // The note belongs to the passage, so it goes into the FLOW immediately above
@@ -928,17 +996,32 @@
   // top of the chapter. Two reasons: it can never cover the words it is about,
   // and a reader arriving on a shared link lands mid-chapter at their verse, so
   // a note parked at the top of the page is a note they never see.
-  // The paragraph the note belongs to, remembered the first time we can see it.
-  // It has to be remembered: minimizing CLEARS the highlight, so by the time the
-  // marker is placed there is no .v.hl left to anchor to and the marker would
-  // jump to the top of the chapter — which is exactly what it did.
-  var noteAnchorPara = null;
+  //
+  // The paragraph comes from the fragment the note arrived with
+  // (fragmentParagraph), and the marker keeps the note's own (notePara). The
+  // placement used to fall back to the paragraph it had last been given, kept
+  // for as long as the page was open, so a later fragment that lit no verse
+  // (Back to a note link with no verse, a second note link pasted into the
+  // tab, a verse the page lacks) put its note, with a tail, before the
+  // paragraph the previous link had lit, and scrolled there; a reload of the
+  // same address parked it at the top.
+  var notePara = null;
 
-  function anchorToPassage(el) {
-    var lit = document.querySelector('.v.hl') || document.querySelector('.v:target');
-    var para = (lit && lit.closest ? lit.closest('p') : null) || noteAnchorPara;
+  // fragmentParagraph is the paragraph holding the first verse of the
+  // fragment's span the page has, the verse highlightRange lights first, or
+  // null when the fragment names no verse the page has.
+  function fragmentParagraph() {
+    var m = verseSpan();
+    if (!m) return null;
+    for (var n = m[0]; n <= m[1]; n++) {
+      var el = document.getElementById('v' + n);
+      if (el) return el.closest ? el.closest('p') : null;
+    }
+    return null;
+  }
+
+  function anchorToPassage(el, para) {
     if (para && para.parentNode) {
-      noteAnchorPara = para;
       para.parentNode.insertBefore(el, para);
       el.classList.remove('notail');
       return;
@@ -966,15 +1049,16 @@
   function rescrollToHighlight() {
     var go = function () {
       var lit = document.querySelector('.v.hl') || document.querySelector('.v:target');
-      var card = noteBox || noteChip;
+      var card = noteBox || noteChip || noticeBox;
       // THE SAME QUESTION THE OTHER FOUR SURFACES ASK, and this one used to ask
       // nothing at all: its only gate was a null-check on an element
       // assigned two statements before the call, so the note always won. That is
       // right on a fresh arrival — anchorToPassage inserts the card immediately
       // before the paragraph holding the lit verse — and wrong the moment the
-      // anchor is STALE, which is exactly what the noteAnchorPara fallback
-      // there produces: a hashchange to another passage then scrolled the reader
-      // back to a note about the one they had left.
+      // anchor is STALE, which a placement remembered from an earlier fragment
+      // produced: a hashchange to another passage then scrolled the reader
+      // back to a note about the one they had left. The card is now placed
+      // from the fragment being arrived at, and the question stays.
       //
       // So: the card wins when it belongs to the paragraph being arrived at.
       // Asking the DOM for that paragraph is not re-deriving the rule — these <p>
@@ -1008,13 +1092,17 @@
   // phishing template in our own typeface on our own domain.
   var noticeBox = null;
   function hideNotice() { if (noticeBox) { noticeBox.remove(); noticeBox = null; } }
-  function showNotice(msg) {
+  // It lands as the note does (rescrollToHighlight): the passage opens in
+  // all three cases, NOTE_WIRE_FORMAT.md rule 5, and a notice placed with no
+  // scroll left the reader at the top of the chapter.
+  function showNotice(msg, para) {
     hideNotice();
     var box = document.createElement('aside');
     box.className = 'notenotice';
     box.textContent = msg;                 // our own fixed sentence, still TEXT
-    anchorToPassage(box);
+    anchorToPassage(box, para);
     noticeBox = box;
+    rescrollToHighlight();
   }
 
   function renderNote() {
@@ -1026,12 +1114,14 @@
     // damaged — exactly as in the app's parser (share_link_parse.go).
     if (!('n' in keys)) return;
     var got = decodeNotePayload(keys.n);
-    if (got.outcome === 'ok') { showNote(got.text); return; }
-    showNotice(got.outcome === 'newer' ? NOTE_MSG_NEWER : NOTE_MSG_DAMAGED);
+    var para = fragmentParagraph();
+    if (got.outcome === 'ok') { showNote(got.text, para); return; }
+    showNotice(got.outcome === 'newer' ? NOTE_MSG_NEWER : NOTE_MSG_DAMAGED, para);
   }
 
   renderNote();
   window.addEventListener('hashchange', renderNote);
+  /*__NOTE_PLACE_END__*/
 
   // 2) Carry the verse across a translation switch. The switcher's hrefs are
   // plain chapter links (they must be: the fragment is not known at build
