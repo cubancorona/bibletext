@@ -481,4 +481,5 @@ jobs:
             build/msstore/smoke-scheme.png
             build/msstore/*.diagnostic.png
             build/msstore/render-capture-controls/*.png
+            build/msstore/render-capture-controls/*.log
           if-no-files-found: ignore

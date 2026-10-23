@@ -15,6 +15,10 @@ param(
   [long]$CoveredWindow
 )
 $ErrorActionPreference = 'Stop'
+function Write-FixturePhase([string]$phase) {
+  Write-Host ('{0:o} synthetic {1}: {2}' -f [DateTime]::UtcNow, $Mode, $phase)
+}
+if ($Mode -ne 'run') { Write-FixturePhase 'script started' }
 Add-Type -Namespace Fixture -Name Native -MemberDefinition @"
 [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
 [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int command);
@@ -24,14 +28,18 @@ Add-Type -Namespace Fixture -Name Native -MemberDefinition @"
 "@
 
 if ($Mode -ne 'run') {
+  Write-FixturePhase 'native types ready'
   if ($Mode -eq 'no-window') {
     [IO.File]::WriteAllText($ReadyFile, 'ready')
-    Start-Sleep 90
+    Write-FixturePhase 'ready file written'
+    Start-Sleep 180
     return
   }
   Add-Type -AssemblyName System.Windows.Forms
+  Write-FixturePhase 'Windows Forms loaded'
   Add-Type -AssemblyName System.Drawing
   $form = New-Object System.Windows.Forms.Form
+  Write-FixturePhase 'form created'
   $form.Text = 'Synthetic capture fixture'
   $form.StartPosition = 'Manual'
   $form.Location = New-Object System.Drawing.Point 120, 120
@@ -54,6 +62,7 @@ if ($Mode -ne 'run') {
   }
   $form.TopMost = $Mode -eq 'cover'
   $form.Add_Shown({
+    Write-FixturePhase 'Shown event'
     [void][Fixture.Native]::ShowWindow($form.Handle, 5) # SW_SHOW, preserve fixture geometry.
     $form.Activate()
     $form.Refresh()
@@ -61,9 +70,11 @@ if ($Mode -ne 'run') {
     # The negative case must exercise pixel ownership, not focus alone.
     if ($CoveredWindow) { [void][Fixture.Native]::SetForegroundWindow([IntPtr]$CoveredWindow) }
     [IO.File]::WriteAllText($ReadyFile, $form.Handle.ToInt64().ToString())
+    Write-FixturePhase 'ready file written'
   })
   $timer = New-Object System.Windows.Forms.Timer
-  $timer.Interval = 90000
+  # The target must outlive a cold covering fixture's bounded startup too.
+  $timer.Interval = 180000
   $timer.Add_Tick({ $form.Close() })
   $timer.Start()
   try { [System.Windows.Forms.Application]::Run($form) }
@@ -81,18 +92,29 @@ $guard = Join-Path $PSScriptRoot 'assert-windows-render.ps1'
 $children = [System.Collections.Generic.List[System.Diagnostics.Process]]::new()
 
 function Start-Fixture([string]$kind, [long]$covered = 0) {
-  $ready = Join-Path $OutputDir ($kind + '-' + [Guid]::NewGuid() + '.ready')
+  $stem = $kind + '-' + [Guid]::NewGuid()
+  $ready = Join-Path $OutputDir ($stem + '.ready')
+  $stdout = Join-Path $OutputDir ($stem + '.stdout.log')
+  $stderr = Join-Path $OutputDir ($stem + '.stderr.log')
   $fixtureArgs = @('-NoProfile', '-STA', '-File', ('"' + $PSCommandPath + '"'),
     '-Mode', $kind, '-ReadyFile', ('"' + $ready + '"'))
   if ($covered) { $fixtureArgs += @('-CoveredWindow', $covered.ToString()) }
   # A hidden startup window can suppress the first native form as well.
   # Reuse the console so the visible, unowned form is the child main window.
-  $process = Start-Process -FilePath $pwsh -ArgumentList $fixtureArgs -NoNewWindow -PassThru
+  $watch = [Diagnostics.Stopwatch]::StartNew()
+  $process = Start-Process -FilePath $pwsh -ArgumentList $fixtureArgs -NoNewWindow -PassThru `
+    -RedirectStandardOutput $stdout -RedirectStandardError $stderr
   $children.Add($process)
   $readiness = 'ready file absent'
-  for ($i = 0; $i -lt 100; $i++) {
+  $failure = 'did not become ready'
+  # Include native type compilation and first Windows Forms load in a real
+  # elapsed deadline; the ready file still requires the Shown event.
+  while ($watch.Elapsed.TotalSeconds -lt 60) {
     $process.Refresh()
-    if ($process.HasExited) { throw "synthetic $kind fixture exited before readiness" }
+    if ($process.HasExited) {
+      $failure = "exited before readiness (exit $($process.ExitCode))"
+      break
+    }
     if (Test-Path -LiteralPath $ready) {
       $process.Refresh()
       if ($kind -eq 'no-window') { return $process }
@@ -107,14 +129,20 @@ function Start-Fixture([string]$kind, [long]$covered = 0) {
         $main = $process.MainWindowHandle
         $readiness = "PID=$($process.Id) ready HWND=$window visible=$visible window PID=$windowProcess owner HWND=$owner main HWND=$main"
         if ($visible -and $windowProcess -eq $process.Id -and $owner -eq [IntPtr]::Zero -and $main -eq $window) {
-          Write-Host "synthetic $kind ready: $readiness"
+          Write-Host "synthetic $kind ready after $($watch.Elapsed.TotalSeconds.ToString('F1'))s: $readiness"
           return $process
         }
       } else { $readiness = 'ready file has no complete HWND' }
     }
     Start-Sleep -Milliseconds 100
   }
-  throw "synthetic $kind fixture did not become ready: $readiness"
+  $process.Refresh()
+  $state = if ($process.HasExited) { "exited=$($process.ExitCode)" } else { "alive main HWND=$($process.MainWindowHandle)" }
+  foreach ($log in @($stdout, $stderr)) {
+    Write-Host "synthetic $kind child log: $log"
+    if (Test-Path -LiteralPath $log) { Get-Content -LiteralPath $log -Tail 20 | ForEach-Object { Write-Host $_ } }
+  }
+  throw "synthetic $kind fixture $failure after $($watch.Elapsed.TotalSeconds.ToString('F1'))s (PID=$($process.Id) $state): $readiness"
 }
 
 function Probe-Fixture([System.Diagnostics.Process]$process, [string]$expect, [string]$name) {
