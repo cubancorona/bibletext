@@ -119,12 +119,12 @@ jobs:
       - name: go vet
         run: go vet ./...
 
-      # -timeout guards against a hung test; it is not a time budget. The
-      # root package is the longest race run: about 430 s measured locally
-      # (30 Sep 2026), about 1.7x that (some 12 min) on the macOS runner.
-      # Keep the same value in the linux, macOS and windows race steps.
+      # -timeout guards a hung package. The full UI suite took 1281 s locally
+      # (23 Oct 2026) and reached 30 min on a shared Linux runner while still
+      # actively rendering. Keep a bounded 45 min deadline in every shipping
+      # race step and the next-release race step below.
       - name: go test
-        run: go test -race -timeout 30m ./...
+        run: go test -race -timeout 45m ./...
 
       # Compile tag-gated evaluation translations and development-link panels
       # explicitly. Plain tagged tests are sufficient because the default race
@@ -168,7 +168,7 @@ jobs:
       # --dev --next. -timeout as on the runs above.
       - name: go test (next release)
         run: |
-          go test -race -timeout 30m -tags next ./...
+          go test -race -timeout 45m -tags next ./...
           go test -timeout 20m -tags next,bibletextdev ./...
 
   # The Linux job never compiles the darwin-tagged cgo (the native NSTextView
@@ -191,12 +191,10 @@ jobs:
           go vet ./...
           go vet -tags next ./...
 
-      # -timeout guards against a hung test; it is not a time budget. The
-      # root package is the longest race run: about 430 s measured locally
-      # (30 Sep 2026), about 1.7x that (some 12 min) on the macOS runner.
-      # Keep the same value in the linux, macOS and windows race steps.
+      # Match the bounded race deadline in the Linux job, which also covers
+      # the full UI suite on slower shared runners.
       - name: go test
-        run: go test -race -timeout 30m ./...
+        run: go test -race -timeout 45m ./...
 
       # The same script a developer runs locally after touching reading_ios.go
       # (under a minute), so the check here and the check there cannot drift.
@@ -247,9 +245,7 @@ jobs:
       - name: go vet (next release)
         run: go vet -tags next ./...
 
-      # -timeout guards against a hung test; it is not a time budget. The
-      # root package is the longest race run: about 430 s measured locally
-      # (30 Sep 2026), about 1.7x that (some 12 min) on the macOS runner.
-      # Keep the same value in the linux, macOS and windows race steps.
+      # Match the bounded race deadline in the Linux job, which also covers
+      # the full UI suite on slower shared runners.
       - name: go test
-        run: go test -race -timeout 30m ./...
+        run: go test -race -timeout 45m ./...
