@@ -19,8 +19,9 @@ data, that document is right and this one needs fixing.
 
 ## Why one switch and not a branch
 
-The three pieces in the register below were built on branches of their own
-while 1.2.19 was prepared, and parked there. By the time they were wanted,
+The three pieces numbered in the register below (one of them since
+graduated) were built on branches of their own while 1.2.19 was prepared, and
+parked there. By the time they were wanted,
 `main` had moved under them. It held earlier work from the same lines as
 copies under other commits, so none of them could be merged; and 1.2.19's
 cross-reference fixes had changed the code the Gospel parallels were built on
@@ -122,12 +123,13 @@ states readable:
    The next state's is a generated `<name>_next.go` with `//go:build next`
    that declares its own table and installs it in place of the current one
    in an `init` function, so every reader of the table reads it and nothing
-   else changes (`versification_data_next.go`). An embedded asset no
+   else changes (the Greek Esther's two tables did this until they left the
+   switch for 1.2.23). An embedded asset no
    generator owns gets a second asset beside the first, embedded by a
    `//go:build next` file whose `init` puts it in place the same way
    (`parallels_next.go`). A test reads both files and fails if they differ
-   anywhere the piece does not say they should (`versification_states_test.go`,
-   `parallels_states_test.go`), so a fix made to one and not the other fails.
+   anywhere the piece does not say they should (`parallels_states_test.go`),
+   so a fix made to one and not the other fails.
 5. **Tests.** A test that holds in both states stays untagged. One that pins
    current behaviour the next release changes gets `//go:build !next`, and its
    counterpart for the next release goes in a `_next_test.go` file with
@@ -239,14 +241,15 @@ switch over it (the store build put back on an iPhone or iPad, or
 
 ## What is behind the switch now
 
-Three pieces, reviewed and parked while 1.2.19 was prepared, then ported onto
-`main` as changes, not merged (*Why one switch and not a branch*). All three
-are ported. None has been tried on a device yet.
+Three pieces were reviewed and parked while 1.2.19 was prepared, then ported
+onto `main` as changes, not merged (*Why one switch and not a branch*). Two
+are behind the switch; neither has been tried on a device yet. The second,
+the Greek Esther, left the switch for 1.2.23 (*Work graduated for 1.2.23*,
+below), and keeps its number here so that references to piece 3 still hold.
 
 | Piece | What readers will see | Status | Tests | Open decisions |
 |---|---|---|---|---|
 | 1. The NKJV refreshed at cache epoch 8, with an offline bridge | One fresh download of the NKJV (about 13 MB) on the first launch that can reach API.Bible, bringing corrected headings after a 200-verse passage boundary and the divine name in small capitals inside headings and psalm titles; a reader offline at that launch keeps the previous copy for up to 30 days instead of falling back to the WEB | Ported; both states pass; not tried on a device | `licensed_epoch_bridge_test.go` (both states), `licensed_epoch_bridge_next_test.go`, `licensed_epoch_bridge_current_test.go`, `nkjv_epoch_next_test.go`, `nkjv_epoch_current_test.go`; switch-aware checks in `version_launch_flow_test.go` and `red_letter_epoch_test.go` | N1 |
-| 2. The Greek Esther mapped verse for verse, like Daniel 3 | WEB Catholic's Esther lines up with the other editions: notes, highlights, shared links and cross-references cross between them, the three verses it lacks show gap marks, and the cross-references panel says why it lists nothing for verses the Treasury does not cover | Ported; both states pass; not tried on a device | `greek_esther_current_test.go` and `greek_esther_next_test.go` (here and in `cmd/websitegen/`), `crossref_coverage_test.go` with its `_current` and `_next` pair, `versification_states_test.go`, the site pins in `cmd/websitegen/testdata/` | E-A, E-B, E-C |
 | 3. "Same saying, another occasion" among the Gospel parallels | The cross-references panel lists, after the synopsis rows, the passages that carry the same saying on another occasion, under a label of their own; and the twenty-two Gospel verses that belonged to no synopsis set each find one | Ported; both states pass; seen only in test renders | `parallels_occasions_test.go` and `parallels_states_test.go` (both states), `parallels_next_test.go`, `parallels_current_test.go`, the kingdom woe in `crossrefs_versification_test.go`, the depth in `crossrefs_realdata_test.go` | P1 to P6 |
 
 ### Open decisions
@@ -263,22 +266,6 @@ switch on.
   Either the words change, or a tap on its checked row fetches
   (`VERSION_STATES.md`, *Open decisions*). The tree keeps the sentence and
   does not fetch.
-
-**2. The Greek Esther**
-
-- **E-A. The gap marks.** Keep the gap marks [6] in Esther 4 and [5], [30] in
-  Esther 9: the three verses the Greek Esther does not have. The tree shows
-  them.
-- **E-B. One line for every uncovered addition.** Show the same "Nothing is
-  listed for verses …" line for the Song of the Three, Susanna, Bel and the
-  NKJV's extra verses, which today show the panel's first line alone. The
-  tree gives the line to Esther only (`crossRefNotedAdditions`).
-- **E-C. Two drafted sentences.** Approve the two sentences drafted for any
-  book whose numbering does not correspond: the web reader's caveat
-  (`incommensurableCaveat`, `cmd/websitegen/notice.go`) and the line under a
-  note that cannot be placed (`placementCopyIncommensurable`,
-  `notes_anchor.go`). No book reaches them in the next release; the shipping
-  build keeps 1.2.19's sentences.
 
 **3. Same saying, another occasion**
 
@@ -362,83 +349,6 @@ names older public-domain epochs than the shipping build's, and is rewritten
 when the snapshot is next regenerated.
 
 Open decision: N1.
-
-### 2. The Greek Esther mapped verse for verse, like Daniel 3
-
-**Ported, behind the switch.** WEB Catholic's Greek Esther is translated from
-a different text from the Hebrew Esther the other editions print, and the
-shipping table records the whole book as incommensurable: no reference, note,
-highlight or cross-reference crosses between them. Measured on the downloaded
-texts, it keeps the Hebrew book's verse numbers: 164 of the WEB's 167 verses
-are there under their own numbers, it has nothing at 4:6, 9:5 and 9:30, and
-its additions are numbered 4:18-47 and 10:4-14 or sit inside 1:1, 3:13, 5:1-2
-and 8:13 (`TEXTUAL-DATA.md` §2.2). In the next release it maps verse for verse,
-and the cross-references panel says why it lists nothing for a selection the
-Treasury does not cover.
-
-The data, generated for both states from the same caches:
-
-- `scripts/gen-versification.py --next` writes `versification_data_next.go`.
-  It decides a different text by whether its numbers line up with the
-  reference's instead of calling it incommensurable outright (§2.3 rule 4):
-  the Greek Esther scores 0.92, against 0.06 to 0.58 for every control. Its
-  table differs from `versification_data.go` only in WEB Catholic's Esther:
-  three verses absent, forty-one its own, none incommensurable.
-- `scripts/gen-omitted-verses.py --next` writes `omitted_verses_data_next.go`,
-  which records the Greek Esther's three gaps as holes. The script now reads
-  which books to leave out from the versification table it checks against.
-- `versification_data.go` and `omitted_verses_data.go` are byte for byte
-  1.2.19's, and each script without `--next` reproduces them from the same
-  caches. `versification_states_test.go` fails if the two states' tables
-  differ anywhere but WEB Catholic's Esther.
-
-Where the switch is read:
-
-- The two tables, through the generated files' `init` (seam 4).
-- `buildCrossRefList` and `showCrossRefs`: the coverage line under "No
-  cross-references for this selection." (`crossRefCoverage`), and the answer
-  given before the Treasury loads for a selection it cannot cover at all.
-- `placementCopy` (`notes_anchor.go`) and the web reader's caveat
-  (`cmd/websitegen/notice.go`, through `bibletext.NextRelease`): the
-  sentences for a book whose numbering does not correspond. No book reaches
-  them in the next release; the shipping build keeps 1.2.19's, which its
-  Greek Esther readers see.
-
-Everything else follows the table: notes and highlights carried between
-translations, shared links, the gap marks, the cross-references' rows, the
-web reader's notice pages and version switcher, and its completeness check
-for the NKJV. Read-along narration stays off for WEB Catholic's Esther in both
-states: its words are not the recording's.
-
-The tests: `greek_esther_current_test.go` pins the shipping build's Greek
-Esther (incommensurable everywhere, its gaps not called omissions, the 1.2.19
-sentences) and `greek_esther_next_test.go` the next release's, with a pair of
-the same names under `cmd/websitegen/` for the web reader. Tests that only
-needed a note or a highlight that cannot be placed now use one of the Greek
-Esther's additions, which cannot be placed in either state, and expect the
-state's own sentence (`greekAdditionUnplacedSentence`); the incommensurable
-arms are exercised on a book a test marks as one (`withIncommensurableBook`).
-`crossref_coverage_next_test.go` and `crossref_coverage_current_test.go` hold
-the panel in each state. The web reader's fixture tree is pinned per state
-(`cmd/websitegen/testdata/nkjv_off_site.sha256` and
-`nkjv_off_site_next.sha256`), and the
-next one differs only on the four Esther 1 pages the piece names.
-
-The deepest cross-reference row a panel reads (`crossRefDeepestRead`) is the
-twentieth in the shipping build, WEB Catholic's Genesis 41:42, whose rows into
-the Greek Esther it cannot show. With the Greek Esther mapped it was the
-eighteenth, first at the WEB's Matthew 10:1; with the third piece too it is
-the twenty-first (below). The notice pages leave the verse off 28 chapters'
-links in the shipping build and 20 in the next release. On the real site the
-next release rewrites the forty Esther chapter pages, ten in each of the four
-editions, and no other.
-
-Trying it: nothing a build with the switch on writes is read differently by the
-store build. A note or highlight carried into or out of the Greek Esther is
-stored as any other is, and the store build shows it wherever its own table
-can place it.
-
-Open decisions: E-A, E-B, E-C.
 
 ### 3. "Same saying, another occasion" among the Gospel parallels
 
@@ -592,6 +502,104 @@ contracts. [VISUAL_TESTS.md](VISUAL_TESTS.md) holds the native checks, including
 physical-device dictation/accessibility and actual iPad multitasking windows.
 The request flow and prompts are documented in [README.md](../README.md).
 
+## Work graduated for 1.2.23
+
+### The Greek Esther mapped verse for verse, like Daniel 3 (piece 2)
+
+Taken out of the switch on 15 October 2026 for 1.2.23, rather than left for
+the major release as approved on 6 October 2026: every release through 1.2.22
+tells WEB Catholic readers that its Esther's verses do not correspond to the
+other editions', which is untrue, and nothing in the piece needs the major
+release. It reads `nextRelease` nowhere. It passed its device checks on 15
+and 16 October 2026 against `rel/1.2.23`: the Mac, the iPhone and iPad
+simulators, the emulator at API 35, the Linux and Windows virtual machines
+and the site built offline (`ROADMAP.md`, 1.2.23, row 10; Next major
+version, row 3 until it was merged into `rel/1.2.23` on 21 October 2026).
+The emulator at API 30 and the NKJV on a device were not run.
+
+WEB Catholic's Greek Esther is translated from a different text from the
+Hebrew Esther the other editions print, and until 1.2.23 the table recorded
+the whole book as incommensurable: no reference, note, highlight or
+cross-reference crossed between them. Measured on the downloaded texts, it
+keeps the Hebrew book's verse numbers: 164 of the WEB's 167 verses are there
+under their own numbers, it has nothing at 4:6, 9:5 and 9:30, and its
+additions are numbered 4:18-47 and 10:4-14 or sit inside 1:1, 3:13, 5:1-2 and
+8:13 (`TEXTUAL-DATA.md` §2.2). It now maps verse for verse, and everything
+that follows the table follows it: notes and highlights carried between
+translations, shared links, the gap marks, the cross-references' rows, and
+the web reader's notice pages, version switcher and completeness check.
+Read-along narration stays off for WEB Catholic's Esther: its words are not
+the recording's.
+
+The decisions, taken 15 October 2026 (`ROADMAP.md`, decision 9):
+
+- **E-A. The gap marks stay**: [6] in Esther 4, [5] and [30] in Esther 9, the
+  three verses the Greek Esther does not have.
+- **E-B. One line for every uncovered addition.** The cross-references panel
+  names, by one rule (`crossRefCoverage`), every verse a translation prints
+  that the reference does not have, which the Treasury, keyed by the
+  reference's numbering, has no rows for: the Greek Esther's additions, the
+  Song of the Three (Daniel 3:24-90), Susanna and Bel (Daniel 13 and 14), and
+  the NKJV's Acts 8:37, 15:34 and 24:7 and Luke 17:36. The line is "Nothing is
+  listed for …, which the cross-references don't cover." A selection none of
+  whose verses can be covered, these or a deuterocanonical book's, is answered
+  before the Treasury loads, so a reader who is offline is not told to check
+  the connection for it. A deuterocanonical book's second line, "The
+  cross-references don't cover the deuterocanonical books.", came with the
+  piece, and its wording was approved on 21 October 2026. An edition whose
+  own apparatus the panel shows (the NKJV in a build with the `nkjvxrefs`
+  tag) gets neither the line nor the early answer, since its block answers
+  for the selection without the network (`panelCoverage`).
+- **E-C. The two sentences for a book whose numbering does not correspond**,
+  approved as drafted: under a note that cannot be placed, "The translation
+  being read numbers the whole of this book differently."
+  (`placementCopyIncommensurable`, `notes_anchor.go`); and on the web reader,
+  "{Translation} numbers the whole of {Book} differently, so that link opens
+  {Book} {chapter} rather than the verse." (`incommensurableCaveat`,
+  `cmd/websitegen/notice.go`). No book of the shipped translations reaches
+  them now; they replace the sentences that said the Greek Esther's verses do
+  not correspond.
+
+What was made unconditional, as *Release day* below does for every piece:
+
+- **The tables.** `scripts/gen-versification.py` and
+  `scripts/gen-omitted-verses.py` have no `--next`: asking whether a different
+  text's numbers line up (`TEXTUAL-DATA.md` §2.3, rule 4) is the first one's
+  only rule. `versification_data.go` and `omitted_verses_data.go` are the
+  tables `versification_data_next.go` and `omitted_verses_data_next.go` held,
+  and each script, run on the caches, writes them again
+  (`TestTheVersificationGeneratorReproducesTheShippedTables_LocalOnly`, the
+  NKJV's rows aside, since its cache is licensed). The two `_next.go` files and
+  `versification_states_test.go` are gone.
+- **The panel's coverage line and its answer before loading**
+  (`buildCrossRefList`, `showCrossRefs`), and **the two sentences**.
+- **The tests.** `greek_esther_test.go`, here and in `cmd/websitegen/`, and
+  `crossref_coverage_test.go` hold the piece and run in both states of the
+  switch; the `_current` files are gone. `selection_chapter_book_test.go`,
+  which was `selection_chapter_next_test.go`, runs in both states too: it
+  holds the panel to the selection's book after narration turns into the
+  next book. The web reader's two pinned fixture trees
+  (`nkjv_off_site.sha256`, `nkjv_off_site_next.sha256`) are the same again,
+  and `nextReleaseSitePages` is empty.
+- **The deepest cross-reference row a panel reads** (`crossRefDeepestRead`):
+  without the tag the eighteenth, first at the WEB's Matthew 10:1, where it was
+  the twentieth, WEB Catholic's Genesis 41:42, whose rows into the Greek Esther
+  it could not show; with the tag the twenty-first, as before. Measured on 15
+  October 2026 over the WEB, the BSB and the WEB Catholic, and on 16 October
+  2026 with the NKJV, fetched through the app's own path, as well.
+
+The site changes with it. Built offline from the public-domain feeds with the
+NKJV's text off, the generator writes the forty Esther chapter pages, ten in
+each of the four editions, differently, and no other file: the version
+switcher carries the verse between the Greek Esther and the Hebrew, and the
+NKJV's Esther pages lose the caveat in all ten chapters but 4 and 9, where it
+now says that the WEB Catholic does not carry every verse. The published site
+changes at its next publish (`scripts/publish-site.sh`).
+
+Trying it: nothing this writes is read differently by an earlier build. A
+note or highlight carried into or out of the Greek Esther is stored as any
+other is, and an earlier build shows it wherever its own table can place it.
+
 ---
 
 ## The major release
@@ -646,7 +654,8 @@ major release ships goes out by `RELEASING.md`, with these differences:
      constraint;
    - each generator's next rule becomes its only rule and its `--next` option
      goes; its shipping file is regenerated from it and its `_next.go` file
-     deleted (`versification_data_next.go`, `omitted_verses_data_next.go`);
+     deleted (none is behind the switch now: the two the Greek Esther had
+     went this way for 1.2.23);
    - each next asset replaces the shipping one under its name
      (`gospel_parallels_next.json` becomes `gospel_parallels.json`), an asset
      the shipping build lacks is embedded where the rest are
@@ -658,8 +667,7 @@ major release ships goes out by `RELEASING.md`, with these differences:
 5. **Tests collapse to one state.** `!next` tests are deleted and `next` tests
    lose their constraint; a value a test chooses by the switch
    (`crossRefDeepestRead`) keeps its next one; the tests that compare two
-   states' data (`versification_states_test.go`, `parallels_states_test.go`)
-   go with the second copy.
+   states' data (`parallels_states_test.go`) go with the second copy.
 6. **Nothing is left behind.**
    `grep -rli 'nextrelease\|go:build.*next' --include='*.go' .` finds the two
    switch files, the release guard (`next_release_guard_test.go`) and the site

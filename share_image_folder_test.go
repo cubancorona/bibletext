@@ -427,8 +427,10 @@ func TestOutsideASnapWithNoDownloadsThePictureIsSavedInTheHome(t *testing.T) {
 // is still the file the share was handed, in the temp folder, which keeps
 // it only until the next card, and inside the snap is one the reader cannot
 // open; so the line never names that folder or says the picture is saved,
-// and, unless the file manager said it shows the picture, the sheet does
-// not open at all. Shown, the sheet opens under its one heading, Picture
+// and, unless the file manager said it shows the picture, the Picture saved
+// sheet does not open at all (what the share says instead is
+// TestAPictureNoFolderTookSaysTheCardCouldNotBeShared's). Shown, the sheet
+// opens under its one heading, Picture
 // saved, which every image sheet carries and which this check passes over
 // (docs/BACKLOG.md lists that case for a decision). In the snap no folder
 // takes it when the home plug is disconnected and SNAP_USER_COMMON takes no
@@ -515,8 +517,9 @@ func captureLog(t *testing.T) *logLines {
 }
 
 // A CARD THAT COULD NOT BE READ AT THE TAP IS NEITHER SAVED NOR SHOWN, AND
-// NO SHEET OPENS — the desktop's rule for a picture nothing true can be said
-// of — and why is logged. The renderer's file is gone between the preview
+// NO PICTURE SAVED SHEET OPENS, and why is logged; what the share says
+// instead is TestACardThatCouldNotBeReadSaysTheCardCouldNotBeShared's. The
+// renderer's file is gone between the preview
 // and the tap, and the file manager answers yes, as xdg-open does on the
 // temp folder, which is there, and Explorer once it starts: before, the
 // file manager was asked to show the missing file, and the Picture saved

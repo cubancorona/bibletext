@@ -524,14 +524,12 @@ func parallelSection(n noticeSpec) string {
 	return b.String()
 }
 
-// incommensurableCaveat is the next major release's sentence for a link into
-// a book whose verse numbers do not correspond to this page's anywhere
-// (bibletext.NextRelease, docs/NEXT.md), worded for any book: the
+// incommensurableCaveat is the sentence for a link into a book whose verse
+// numbers do not correspond to this page's anywhere, worded for any book: the
 // translations, whether they number or numbers, the book, that link or those
-// links, opens or open, and the chapter. A draft awaiting approval: in that
-// release no book of the published translations is one, since the WEB
-// Catholic's Greek Esther keeps the Hebrew numbers, so no page prints it. The
-// shipping build keeps 1.2.19's sentence, which its Esther pages print.
+// links, opens or open, and the chapter. No book of the published translations
+// is one, since the WEB Catholic's Greek Esther keeps the Hebrew numbers, so
+// no page prints it today: it is a safety net.
 const incommensurableCaveat = "%s %s the whole of %s differently, so %s %s %s rather than the verse."
 
 // caveat is the one sentence that explains a chapter-level link. It says what
@@ -546,11 +544,7 @@ func (n noticeSpec) caveat(kind string, names []string) string {
 	}
 	switch kind {
 	case bibletext.NumberingIncommensurable:
-		if bibletext.NextRelease {
-			return fmt.Sprintf(incommensurableCaveat, list, pick(plural, "number", "numbers"), n.Book, those, opens, n.ref())
-		}
-		return fmt.Sprintf("%s in %s is a different text whose verses don't correspond to these, so %s "+
-			"opens the chapter.", n.Book, lower(list), those)
+		return fmt.Sprintf(incommensurableCaveat, list, pick(plural, "number", "numbers"), n.Book, those, opens, n.ref())
 	case bibletext.NumberingAbsent:
 		return fmt.Sprintf("%s %s carry every verse the %s numbers here, so %s %s %s rather than the "+
 			"verse.", list, pick(plural, "don't", "doesn't"), n.VersionName, those, opens, n.ref())
@@ -583,13 +577,6 @@ func englishList(names []string) string {
 		s = strings.Join(parts[:len(parts)-1], ", ") + " and " + parts[len(parts)-1]
 	}
 	return strings.ToUpper(s[:1]) + s[1:]
-}
-
-func lower(s string) string {
-	if s == "" {
-		return s
-	}
-	return strings.ToLower(s[:1]) + s[1:]
 }
 
 // fragAttr says how much of the fragment notice.js may put on this link.

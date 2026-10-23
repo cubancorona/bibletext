@@ -698,7 +698,7 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 	if footnotesEnabled() {
 		footnotes = chapterFootnoteEntries(verses,
 			state.Bible.OrphanNotesFor(state.CurrentBook, state.CurrentChapter),
-			super.Footnotes)
+			super.Footnotes, headingsFor(state.Bible, state.CurrentBook, state.CurrentChapter))
 		gaps = gapsBefore(state.CurrentVersion, state.CurrentBook, state.CurrentChapter, verses)
 	}
 	// ONE tint answer for the whole chapter (tint.go), asked per verse below.
@@ -921,7 +921,7 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 				switch {
 				case poeticJoin(para[i-1].Text, v.Text):
 					b.WriteString("<br>")
-				case tints.joins(para[i-1], v):
+				case tints.joinsAhead(para[i-1], v, gaps[v.Verse]):
 					// THE JOINING SPACE IS PART OF THE BAND. Written bare it
 					// belongs to neither verse's span, so a highlighted range
 					// came out with a notch punched through it at every join
@@ -933,7 +933,10 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 					// inside the band only when BOTH verses are under the SAME
 					// wash. Identical at k=1 (there is one tint), and the rule
 					// that stops one note's band running into another's.
-					b.WriteString(mk.JoinSpace)
+					// Ahead, because what follows the space may be a hole's
+					// mark rather than this verse's number, lit or not on
+					// its own (gapOf).
+					b.WriteString(markupFor(appleTintHTML[:], tints.of(para[i-1])).JoinSpace)
 				default:
 					b.WriteByte(' ')
 				}
@@ -943,9 +946,9 @@ func buildChapterHTML(state *AppState, verses []Verse) string {
 			// of its own, which at i == 0 would be the em-space leak all over
 			// again) and before this verse's number. Its trailing space is the
 			// row's, outside the small span, so the two small runs never touch.
-			for _, n := range gaps[v.Verse] {
-				fmt.Fprintf(&b, mk.Gap, n)
-			}
+			// Each mark takes its own tint, which only a span naming the
+			// omitted verse lights (gapOf).
+			writeGapMarks(&b, appleTintHTML[:], tints, v, gaps[v.Verse])
 			// The number joins the wash when its verse carries one: leaving it
 			// out punched a pale hole in the middle of the band, which reads as
 			// a rendering fault rather than as a highlight. Which of those two
@@ -1586,6 +1589,16 @@ func (c *chapterText) selectionSpan() selSpan {
 	return selSpanFromNative(at(start), at(end-1))
 }
 
+// paneChapter is the chapter of the verses the pane laid out (versesChapter).
+func (c *chapterText) paneChapter() (book string, chapter int) {
+	for _, para := range c.paragraphs {
+		if b, ch := versesChapter(para); b != "" {
+			return b, ch
+		}
+	}
+	return "", 0
+}
+
 // superToDigit reverses superscriptNumber's mapping, so a selection's rendered
 // verse markers (⁴²) become plain digits (42) before matching or prompting.
 var superToDigit = map[rune]rune{
@@ -1624,8 +1637,9 @@ func (c *chapterText) menuForSelection(sel string) *fyne.Menu {
 	// before, every verb placed the words by their first copy in the chapter:
 	// Psalm 136:20's refrain was shared as 136:1, and 0.34% of whole verses
 	// and 6.2% of drags over a verse's last four words in the WEB were cited
-	// at another verse.
-	return selectionStudyMenu(c.state, sel, c.selectionSpan(),
+	// at another verse. The span names the chapter of the verses the pane
+	// laid out, which the reader may have left before a verb is chosen.
+	return selectionStudyMenu(c.state, sel, c.selectionSpan().inChapter(c.paneChapter()),
 		func() {
 			if c.clipboard != nil {
 				c.clipboard.SetContent(c.copySelection())
@@ -1636,11 +1650,21 @@ func (c *chapterText) menuForSelection(sel string) *fyne.Menu {
 
 // selectionStudyMenu builds the desktop selection menu — Copy / Select all,
 // then (with a selection) Study with AI, Share, Cross-references, in the same
-// order and gating as the native menus. Shared by BOTH desktop panes
+// order and gating as the native menus; Study with AI only for a selection
+// that holds a word of Scripture. Shared by BOTH desktop panes
 // (chapterText and the styled pane), so the verb set can never diverge. span is
 // the selection's positionally-resolved verse range, as each pane reads it
-// from its own layout (zero when the pane cannot place the selection).
+// from its own layout (zero when the pane cannot place the selection), with
+// the chapter of the verses it laid out.
+//
+// The menu stays open while the reader's chapter moves under it — continuous
+// narration turns the chapter when one ends, and a popup menu outlives the
+// refresh — so each verb reads the selection in the chapter the span names
+// (selectionChapter), not the one current when it is clicked. A span the pane
+// could not name a chapter for is stamped here, with the chapter on screen
+// as the menu is built.
 func selectionStudyMenu(state *AppState, sel string, span selSpan, copyFn, selectAllFn func()) *fyne.Menu {
+	span = span.inChapter(readerChapter(state))
 	copyItem := fyne.NewMenuItem("Copy", copyFn)
 	copyItem.Disabled = sel == ""
 	selectAll := fyne.NewMenuItem("Select all", selectAllFn)
@@ -1674,17 +1698,25 @@ func selectionStudyMenu(state *AppState, sel string, span selSpan, copyFn, selec
 		})
 
 		if aiFeaturesEnabled(state) {
-			aiItem := fyne.NewMenuItem("Study with AI", nil)
-			// One item per study verb, in the order every surface offers them
-			// (aiStudyVerbs), each dispatching its own action string.
-			verbs := make([]*fyne.MenuItem, 0, len(aiStudyVerbs))
-			for _, v := range aiStudyVerbs {
-				verbs = append(verbs, fyne.NewMenuItem(v.Label, func() {
-					dispatchAIAction(state, v.Action, sel, span)
-				}))
+			// A selection that holds no word of Scripture gets no study verb
+			// (aiStudyOffered): on these panes a verse number or a mark of a
+			// verse's words alone, since neither has a heading or a psalm's
+			// title in the text a reader selects. Share and Cross-references
+			// keep their places.
+			if aiStudyOffered(state, sel, span) {
+				aiItem := fyne.NewMenuItem("Study with AI", nil)
+				// One item per study verb, in the order every surface offers
+				// them (aiStudyVerbs), each dispatching its own action string.
+				verbs := make([]*fyne.MenuItem, 0, len(aiStudyVerbs))
+				for _, v := range aiStudyVerbs {
+					verbs = append(verbs, fyne.NewMenuItem(v.Label, func() {
+						dispatchAIAction(state, v.Action, sel, span)
+					}))
+				}
+				aiItem.ChildMenu = fyne.NewMenu("", verbs...)
+				items = append(items, aiItem)
 			}
-			aiItem.ChildMenu = fyne.NewMenu("", verbs...)
-			items = append(items, aiItem, shareItem, xrefItem)
+			items = append(items, shareItem, xrefItem)
 		} else {
 			items = append(items, xrefItem, shareItem)
 		}
@@ -2242,6 +2274,10 @@ func pickerCanvas(state *AppState) fyne.Canvas {
 	return nil
 }
 
+// pickerSplitMaxHeight is the split picker's height on a screen with room to
+// spare: the height its book and chapter lists take when nothing limits them.
+const pickerSplitMaxHeight = 680
+
 // pickerSplitSize gives the split picker a roomy size (it needs width for the
 // book column plus the chapter grid) capped to the screen.
 func pickerSplitSize(cnv fyne.Canvas) (float32, float32) {
@@ -2255,8 +2291,8 @@ func pickerSplitSize(cnv fyne.Canvas) (float32, float32) {
 			w = 320
 		}
 		h = sz.Height * 0.8
-		if h > 680 {
-			h = 680
+		if h > pickerSplitMaxHeight {
+			h = pickerSplitMaxHeight
 		}
 		if h < 300 {
 			h = 300

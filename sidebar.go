@@ -89,6 +89,9 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 			state.refresh() // → aiNoKeyView
 			return
 		}
+		if findAsksPermission(state, gen, q, state.refresh, runAsk) {
+			return // the pane says nothing was sent; Allow runs this search
+		}
 		state.aiSearchResults = nil
 		state.aiSearchLoading = true
 		state.aiSearchCancelled = false

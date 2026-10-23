@@ -265,35 +265,45 @@ place a fix on one does not reach the others.
     `reading_ios.go`, `reading_android.go` or `share_windows.go`; windows
     takes them from `share_windows.go`, whose fallbacks are the same two
     functions. Every text
-    verb ends in `share.go:222` (`var shareTextOut`); the fallback copies,
+    verb ends in `share.go:226` (`var shareTextOut`); the fallback copies,
     `share_fallback.go:37` (`setShareClipboard(s)`), and opens the sheet,
     `share_fallback.go:38` (`showShareCopiedSheet(state, shareDoneForText(s))`):
-    the heading, `share_sheet_desktop.go:67` (`"Copied — ready to paste"`),
+    the heading, `share_sheet_desktop.go:73` (`"Copied — ready to paste"`),
     one line saying what to do next, by verb, the clipboard's text in a
-    read-only scrolling box, `share_sheet_desktop.go:226`
+    read-only scrolling box, `share_sheet_desktop.go:256`
     (`boxScroll = container.NewVScroll(`), Email… when the desktop has a
-    mail client, `share_sheet_desktop.go:394`
+    mail client, `share_sheet_desktop.go:495`
     (`shareEmailProbe(attachment != "", func(ok bool) {`), at the row's
     left end so that its late arrival moves nothing,
-    `share_sheet_desktop.go:300`
+    `share_sheet_desktop.go:383`
     (`buttons = container.NewHBox(email, copyAgain, done)`), Copy again,
     whose "Copied again." keeps the line's height,
-    `share_sheet_desktop.go:210`
+    `share_sheet_desktop.go:240`
     (`lineSlot := container.New(heldLineLayout{held: held}, line)`), and
-    Done, with Escape and Return, `share_sheet_desktop.go:326`
+    Done, with Escape and Return, `share_sheet_desktop.go:413`
     (`cnv.SetOnTypedKey(`), and after Tab has put the caret on a button,
-    `share_sheet_desktop.go:428`
+    `share_sheet_desktop.go:550`
     (`func (b *shareSheetButton) TypedKey(`). It is modal,
-    `share_sheet_desktop.go:312` (`widget.NewModalPopUp(card, cnv)`),
+    `share_sheet_desktop.go:399` (`widget.NewModalPopUp(card, cnv)`),
     registered for the light/dark reopen and the window refit, opens below
-    the header, `share_sheet_desktop.go:363` (`room := clearOfHeader(`),
+    the header, or covers it on a window too short for that,
+    `share_sheet_desktop.go:438`
+    (`fitBelowOrOverHeader(state, popup, func(room float32) {`),
     and over the verse-of-the-day card comes back with the card beneath it,
-    `share_sheet_desktop.go:384` (`under := takeReopenBeneath(state, popup)`).
+    `share_sheet_desktop.go:482` (`under := takeReopenBeneath(state, popup)`).
+    An Email… whose compose fails says so in one line under the buttons,
+    "Could not open your email program.", `share_sheet_desktop.go:364`
+    (`mail.failed = shareEmailFailed(err)`), the rest of the sheet as it
+    was, and on the sheet a light/dark change brought back where the
+    answer comes after the change; a compose the reader cancelled at the
+    portal says nothing, `share_email.go:236` (`case 1:`), and nor does one
+    the portal took and gave no answer to, `share_email.go:251`
+    (`case err != nil && taken:`).
     Email… on Linux is the desktop portal's Email interface,
     `share_email_linux.go:149` (`portalEmailIface+".ComposeEmail"`), its
     request's answer watched, `share_portal_linux.go:67`
     (`case sig, open := <-responses:`), and only its 2 — no mail client —
-    handing on to xdg-email and a `mailto:` link, `share_email_linux.go:156`
+    handing on to xdg-email and a `mailto:` link, `share_email.go:256`
     (`return portalEmailResponse(code)`); xdg-email's exit 4 ends the share
     there instead of handing on, since the mail client it ran may already
     have opened a compose (`xdgEmailExit`, `share_email.go`; seen with a
@@ -303,19 +313,19 @@ place a fix on one does not reach the others.
     `share_email_linux.go:147` (`"attachment_fds"`), and the image's Email…
     is offered only outside the snap, and only where the
     desktop's mailto: handler is a mail client rather than a browser,
-    `share_email.go:313` (`return !f.confined && (f.portalEmail`): a
+    `share_email.go:384` (`return !f.confined && (f.portalEmail`): a
     browser, which is what a stock Ubuntu desktop names, is handed a
     `mailto:` link with the file's local path in it and opens a compose
     without the picture. Inside the snap the text's Email…
     is offered only where the portal can answer `SchemeSupported`,
-    `share_email.go:318` (`if f.confined {`), since `xdg-mime` there reads
+    `share_email.go:389` (`if f.confined {`), since `xdg-mime` there reads
     the sandbox's own handler, not the desktop's; Ubuntu 24.04's portal
     cannot, so the snap there offers no Email… at all. On Windows it is a
     `mailto:` link when the shell resolves a handler for the scheme,
     `share_email_windows.go:33` (`schemeHandlerRegistered("mailto")`). A
     `mailto:` link, on either platform, carries line breaks as CRLF,
-    `share_email.go:85` (`strings.ReplaceAll(b, "\n", "\r\n")`), and is
-    kept to 2,000 characters, `share_email.go:73`
+    `share_email.go:97` (`strings.ReplaceAll(b, "\n", "\r\n")`), and is
+    kept to 2,000 characters, `share_email.go:85`
     (`const mailtoMaxLen = 2000`): past that the passage or the note is cut
     at a word and ends in an ellipsis, and the citation, with a link
     share's link, is kept whole; the whole text is still on the clipboard.
@@ -326,20 +336,40 @@ place a fix on one does not reach the others.
     (`share_reveal_linux.go`), and once the file manager has answered ends
     in the same sheet, "Picture saved", which says the picture is shown only
     when the file manager said so,
-    `share_fallback.go:90` (`showShareCopiedSheet(state, shareDone{line: line`),
+    `share_fallback.go:95` (`showShareCopiedSheet(state, shareDone{line: line`),
     whose Email… carries the quote and its citation as the mail's text.
     A card that cannot be read at the tap, gone from the temp folder
-    between the preview and the tap, is neither saved nor shown and opens
-    no sheet; why is logged, `share_fallback.go:74`
-    (`fyne.LogError("the shared picture's card could not be read`). The
+    between the preview and the tap, is neither saved nor shown; why is
+    logged, `share_fallback.go:75`
+    (`fyne.LogError("the shared picture's card could not be read`), and the
+    sheet opens with "Could not share the card." and Done alone,
+    `share_fallback.go:76` (`sayShareFailed(state, shareFailedCard)`), the
+    words iOS and Android say on the same case. A picture no folder took
+    that the file manager did not show says the same,
+    `share_fallback.go:90` (`sayShareFailed(state, shareFailedCard)`). The
     Windows fallback ends the same way (28): when the copy made at the tap
     for its Share sheet cannot read the card, `share_windows.go:410`
     (`if pic.err != nil {`), the share falls back with the renderer's
-    file, which cannot be read either (by the code; not seen on Windows).
-    That is a divergence: iOS and Android say "Could not share the card."
-    on the same case, and the Mac hands its share picker the missing file's
-    address (not seen); the desktop's line for a share that cannot finish
-    is still to be worded (`docs/ROADMAP.md`, Later minor releases, row 2).
+    file, which cannot be read either; that fallback was seen on the
+    Windows virtual machine on 15 October 2026 with 1.2.21, where it then
+    ended without a sheet.
+    The Mac's own share says it too, and hands its picker nothing,
+    `reading_macos.go:3903` (`if shareCardGone(path) {`), where it handed
+    the picker the missing file's address; and on all six a card the
+    preview cannot draw opens no preview and says it,
+    `share_preview.go:60` (`sayShareFailed(state, shareFailedCard)`), on
+    the desktops in this sheet, on iOS in an alert and on Android in a
+    toast (`share_failed.go`). Until 1.2.23 each of these ended without a
+    word (`docs/ROADMAP.md`, Later minor releases, row 2). Held by
+    `share_failed_desktop_test.go`, `share_failed_macos_test.go` and
+    `share_failed_test.go`. Seen on the arm64 VM (X11) on 21 October
+    2026, in development builds of the 1.2.23 change driven by a throwaway
+    trigger: the line after a stand-in `xdg-email` that exits 4 and none
+    after one that exits 0, the line on the sheet a light/dark change
+    brought back, and "Could not share the card." with Done for a card
+    gone at the tap, a card that cannot be drawn and a picture no folder
+    took; and the same Email… cases on the Mac in the Linux mimic. The
+    Windows fallback's sheet is this file's and has not been seen there.
 
     Until 30 September 2026 the text verbs ended instead in a 13 pt
     "Copied to the clipboard" pill at the window's foot for 1.4 s, 1.07:1
@@ -398,9 +428,9 @@ place a fix on one does not reach the others.
     that has not asked within `share_session.go:46`
     (`const shareSessionWait = 5 * time.Second`), ends the share in its
     fallback, once, `share_session.go:232` (`s.fallback()`), which for a
-    picture whose card could not be read at the tap opens no sheet and logs
-    why (27); a reader's cancel is a choice, as on the other platforms, and
-    opens nothing. A sheet asked to open, `share_windows.go:287`
+    picture whose card could not be read at the tap says only that the card
+    could not be shared and logs why (27); a reader's cancel is a choice,
+    as on the other platforms, and opens nothing. A sheet asked to open, `share_windows.go:287`
     (`s.sheetOpening()`), does not know when the app stops waiting, so its
     handler stays registered after that fallback for a sheet that asks
     late, which then still gets the share, until it asks, a newer share
@@ -495,34 +525,140 @@ place a fix on one does not reach the others.
     (docs/BACKLOG.md, "Where the app re-finds the reader's position from
     text", AND-3).
 34. **A note shown from its link alone, on a range that starts at a verse
-    the edition omits, is drawn above the first lit verse's paragraph on
+    the edition omits, was drawn above the first lit verse's paragraph on
     the iPhone, iPad, Mac and the website, and at the chapter top on
-    Android and the Windows and Linux pane.** A note sent on Matthew
+    Android and the Windows and Linux pane.** Closed for 1.2.23 by
+    decision 18 (15 October 2026; `a86fcd9c2`): every surface now draws
+    such a card above the verse after the hole. A note sent on Matthew
     17:21–22 from an edition that prints verse 21, opened in the BSB, is
     filed by the chapter's plan at verse 22, the first verse the page has
-    (`displayCopy`, `notes_plan.go`), and its card stands above verse 22's
+    (`displayCopy`, `notes_plan.go`), and its card stood above verse 22's
     paragraph on every surface; seen so on the Android emulator with Acts
     8:37–38 in the WEB on 14 October 2026. Only a note shown from the link
     alone, because it is filed on another passage or the store refused the
     write (`share_link_open.go`), keeps verse 21, which has no line. The
-    Apple panes then take the card's place from the mark's lit range
+    Apple panes took the card's place from the mark's lit range
     (`btIOSNoteAnchorRange`, `reading_ios.go`, and its Mac twin in
-    `reading_macos.go`), and the website from the first verse of the
-    fragment the page has (`fragmentParagraph`, `cmd/websitegen/assets.go`);
-    the canvas pane opens the band above the first verse
-    (`noteAnchorVerse`, `reading_styled_pane.go`), and the bridge parks the
-    sticker at the top of the text (`android/BtBridge.java`). Every app
-    surface places nothing on arriving at such a note
-    (`arrivalVerseOnPage`, `notes_arrival.go`), so the chapter opens at its
-    top, where the card is on Android and the canvas pane; the website
-    lands on its card. A note on the omitted verse alone lights nothing, and
-    every surface parks its card at the top. The two paths are by the code;
-    not seen on a device. *Risk:* on the iPhone, iPad and Mac such a card
-    can stand below the opening screen, where the reader does not see it.
-    Closes when every surface draws such a card in one place, at the verse
-    after the hole or at the chapter top, a choice of design
-    (docs/BACKLOG.md, "Where the app re-finds the reader's position from
-    text", AND-4).
+    `reading_macos.go`), the website from the first verse of the fragment
+    the page has (`fragmentParagraph`, `cmd/websitegen/assets.go`), the
+    canvas pane opened the band above the first verse (`noteAnchorVerse`,
+    `reading_styled_pane.go`), and the bridge parked the sticker at the top
+    of the text (`android/BtBridge.java`); a note on the omitted verse alone
+    lit nothing, and every surface parked its card at the top. Now the
+    chrome hands every pane the verse the page draws for the note
+    (`drawnNoteAnchor`, `notes_arrival.go`): verse 22 for a note on 17:21 or
+    on 17:21–22, where the hole's "[21]" mark stands, lit with the note
+    when the footnotes draw it. The
+    Apple panes and Android push that verse in place of the note's own
+    (`reading_ios.go`, `reading_macos.go`, `reading_android.go`), the
+    canvas pane opens its band above it, the website's `fragmentParagraph`
+    takes the paragraph of the verse after the hole when the fragment names
+    no verse the page has, and every surface's arrival lands on the card's
+    band. A card past the chapter's last verse still parks at the top on
+    every surface, with the arrival placing nothing. By the code and the
+    host tests (docs/BACKLOG.md, "Where the app re-finds the reader's
+    position from text", AND-4), and seen on 15 and 16 October 2026 on the
+    Mac, the iPhone and iPad simulators, the emulator (API 35 and 30), the
+    Windows and Linux virtual machines and the website, each against the
+    tree before the change.
+
+**Deleting in a field the toolkit draws**
+
+35. **A backspace on Android removes what the keyboard removed; elsewhere
+    it removes one character.** On Android the keyboard edits a hidden
+    `EditText`, and the field loses the characters the keyboard removed
+    from it (patches/README.md, mobile typing): a backspace sent as
+    `KEYCODE_DEL` after a family emoji removed the whole emoji on the API
+    35 and API 30 emulator images. The toolkit's `widget.Entry` removes one
+    character per backspace, which is what the Mac, Windows and Linux
+    give it, and what the fields the toolkit draws on the iPhone and iPad
+    give it (`deleteBackward`), so there one backspace after a family emoji
+    leaves the man, a joiner, the woman and a joiner. By the code, a
+    backspace on Android over text typed before the keyboard last opened,
+    which is not in the hidden field, removes one character as elsewhere.
+    The iPhone and iPad note composer is a native `UITextView`, whose
+    deletion is UIKit's. *Risk:* a reader who backspaces over a joined
+    emoji on the desktop or in an iPhone search field sees part of it
+    remain. Closes when the toolkit's entry deletes a whole grapheme
+    cluster, a change to text editing on every platform (docs/BACKLOG.md,
+    "Android drops the zero-width joiner and non-joiner typed into a text
+    field").
+
+**Selecting a heading's words**
+
+36. **On Windows and Linux a heading's words cannot be selected; on the
+    iPhone, iPad, Mac and Android a word selected in a heading is answered
+    by the verse below.** Decision 23 (15 October 2026) gives a heading's
+    words the section the heading introduces. Each pane that draws headings
+    in its selectable text hands a selection wholly inside one over as the
+    verse below, with the heading flag and no lead (`selSpan.heading`;
+    `btIOSHeadingSelectionVerse`, `reading_ios.go`;
+    `btMacHeadingSelectionVerse`, `reading_macos.go`;
+    `headingSelectionVerse`, `android/BtBridge.java`), and Go cites that
+    verse and quotes nothing. The Windows and Linux pane draws a heading
+    outside its text model (`appendHeadingLines`,
+    `reading_styled_layout.go`), so its words cannot be selected there, and
+    a double-click on a heading line selects nothing (`DoubleTapped`,
+    `reading_styled_select.go`), where it selected the last word of the
+    verse above; `TestADoubleClickOnAHeadingSelectsNothingOnTheStyledPane`
+    holds it. *Risk:* none to what is shared; a reader there cannot cite a
+    section by selecting its heading. Closes with the next major version's
+    headings pass (docs/ROADMAP.md, Next major version, row 5).
+
+**Translate in the selection menu**
+
+37. **The iPhone, iPad and Android offer Translate on a selection in the
+    reading text; the Mac, Windows and Linux do not.** The iPhone's and the
+    iPad's menus keep the system's actions after the app's own, Look Up and
+    Translate among them (`reading_ios.go`). Android's reading toolbar
+    offers, in its overflow, each action on selected text an installed app
+    offers (`ACTION_PROCESS_TEXT`), Translate where a translation app offers
+    it, from 1.2.23 (docs/ROADMAP.md, 1.2.23, row 18): the
+    reading view has an id, without which the platform offers none, and
+    `cmd/mobile/AndroidManifest.xml` a `<queries>` entry, without which
+    Android 11 and later list none. A Translate a text classifier would
+    suggest stays off with smart selection (`TextClassifier.NO_OP`), so a
+    phone with no such app shows none. Each item, and each matching
+    accessibility action, is handed the text as Copy gives it, marked
+    read-only, and nothing an app returns is read (`processTextAsRead`,
+    `android/BtBridge.java`); the Apple pages carry no layout character, so
+    their Translate hands on what their Copy does. The Mac's menu is cut to
+    Copy and Look Up, with the Services menu suppressed (`menuForEvent:`,
+    `reading_macos.go`); the Windows and Linux pane's menu
+    (`selectionStudyMenu`, `reading.go`) has Copy, Select all and the app's
+    own verbs. The website leaves a selection to the browser's own menu.
+    Android's was seen on the API 35 and API 30 emulators on 22 October
+    2026, with a stand-in app offering an action on selected text, which
+    was handed Copy's text; its accessibility actions were not run there.
+    Whether the Mac, Windows and Linux offer Translate as well is open
+    (docs/ROADMAP.md, Decisions still open, 14).
+    *Risk:* a reader on the Mac, Windows or Linux has no Translate from the
+    page, only Copy into another app; on Android a text an app returns,
+    which the platform shows in a toast for text that cannot be edited, is
+    not shown.
+
+**A missing saved key**
+
+38. **Resolved in the 1.2.23 candidate: Android and signed Apple builds
+    use the same missing-key condition.** Under an empty key field the
+    line is "Your saved key isn't available on this device. Paste it
+    again here." It requires a saved mark in Preferences, a separate
+    credential store answering definitively that the key is absent, and
+    no remaining Preferences copy (`keyLeftOnOldDevice`). Store errors
+    do not qualify. The app does not infer a restore or why the key is
+    missing. This covers iPhone, iPad and signed Mac builds, including
+    the Mac App Store edition; restoring a Mac container alone or making
+    its login keychain anew can leave the same state. Windows, Linux and
+    the Mac's direct download keep the key in Preferences itself, so
+    they have no separate missing item to compare with the saved mark.
+    The field's ✕ is device-scoped and per account. Android keeps the
+    record in `no_backup/`; Apple keeps it in a ThisDeviceOnly Keychain
+    item. A backup restored to the same Apple device can preserve that
+    dismissal, while a move to another device does not. Android loses
+    the record after reinstall or reset. This storage difference is
+    deliberate; no promise is made that every restore resets a dismissal.
+    Integrated locally in `rel/1.2.23`, uncommitted; combined-candidate
+    validation remains.
 
 ## Deliberate exclusions
 
@@ -603,18 +739,29 @@ The honest to-do list, in proof-level terms.
 Where the Read / Books / Search destinations sit. Every phone and tablet
 answers by one rule over the window's shape: a rail on the leading edge
 while the window is wider than it is tall, and a bottom bar otherwise,
-`layout.go:112` (`return w >= h`), a square window counting as wide. iOS and
+`layout.go:115` (`return w >= h`), a square window counting as wide. iOS and
 Android ask it of the live canvas through the same function,
-`ui_mobile.go:99` (`func compactNavRail(state *AppState) bool { return railForWindow(state) }`),
+`ui_mobile.go:102` (`func compactNavRail(state *AppState) bool { return railForWindow(state) }`),
 and both install the layout watcher that rebuilds when the answer changes,
-`ui_mobile.go:77` (`return newLayoutWatcher(state, root)`). Before the canvas
-has a size the device answers, `layout.go:110` (`return tablet`): an iPad's
-first frame is the rail, an iPhone's and any Android window's the bar. The
+`ui_mobile.go:80` (`return newLayoutWatcher(state, root)`). Before the canvas
+has a size both decide by the size the platform reports for the window,
+`layout.go:132` (`w, h = layoutSize(w, h)`): iOS by its window scene's size,
+read once on a goroutine of its own so the layout never waits for the main
+thread, `device_ios.go:57` (`bounds = windowScene.effectiveGeometry.coordinateSpace.bounds;`),
+and Android by its activity's configured size in dp,
+`device_android.go:46` (`w, h = float32(androidWindowWidthDp()), float32(androidWindowHeightDp())`).
+So an iPhone or an Android phone opened while held sideways draws the rail,
+or on the Read tab the full-screen page, from its first frame, and an iPad
+or an Android tablet opened upright the bar; a tree built before the iOS read
+lands is rebuilt when it lands, before the first paint,
+`ui_regular.go:164` (`rebuildForLayoutChange(w.state)`). With no report the
+device answers, `layout.go:113` (`return tablet`): an iPad's rail, an
+iPhone's and an Android window's bar. The
 desktop draws the rail whatever its window's shape,
 `ui_compact_desktop.go:114` (`func compactNavRail(*AppState) bool { return desktopNav() == desktopNavRail }`),
 which is divergence 29, and takes the phones' rule in 1.2.19.
 
-A bar wider than 560 points, `ui_compact.go:1091`
+A bar wider than 560 points, `ui_compact.go:1094`
 (`const tabBarSpreadMaxWidth float32 = 560`), centres its tabs at their
 designed slots, as UIKit's own tab bar does on an iPad; a narrower one
 spreads them across its width. Under the one rule only a window taller than
@@ -668,14 +815,24 @@ alone. It holds two claims in the cells to the code as well: a row names
 the desktop confirmation sheet by its heading, "Copied — ready to paste",
 for the text verbs exactly when the function they end in calls
 `showShareCopiedSheet`, and says "Downloads" for the image exactly when it
-calls `revealInFileManager`. Numbers in a cell are divergences.
+calls `revealInFileManager`.
+`TestTheSharingTableSaysOfAnUnreadableCardWhatTheFallbackSays`
+(`share_unreadable_card_doc_test.go`) holds the Linux and Windows image
+cells, where they name a card that could not be read at the tap, to the
+words `fallbackShareImage` has the reader told for it, or to none, since
+both rows reach that code. Numbers in a cell are divergences.
 
 Recorded 29–30 September 2026: the Apple and Android rows from the share
 code as it shipped in 1.2.17, the Linux row from the desktop confirmation
 sheet built on 30 September 2026, and the Windows row from its native Share
 sheet built the same day and driven in the app on the Windows VM that day,
-and again as a packaged app on 1 October 2026. Both shipped in 1.2.18, and
-neither row has yet been driven from the shipped artefact. The iPadOS row was
+and again as a packaged app on 1 October 2026. Both shipped in 1.2.18. The
+Linux row has not yet been driven from the shipped artefact. In the Windows
+row, Share as image was driven on 15 October 2026 from 1.2.21's package as
+submitted to the Store, registered under a renamed identity, and from its
+executable without package identity, but not from the Store's own install
+or the zip itself.
+The iPadOS row was
 seen in the simulator on 6 October 2026 and the macOS row with development
 builds on 7 October 2026, when the verse of the day's share on both was seen
 anchored to the hidden reading view, fixed, and seen again at the card's icon.
@@ -686,8 +843,8 @@ anchored to the hidden reading view, fixed, and seen again at the card's icon.
 | iPadOS | Share popover beside the selected words, below the new note card | Share popover at the selection | Share popover at the selection | Preview, then a share popover beside where the selection was | Share popover at the card's Share icon, beside the card with its arrow at the icon | `reading_ios.go` | `runner` — simulator, iPad Pro 13-inch (M5), iPadOS 26.5, development builds of 1db51a02b (6 October 2026), fa4072f73 (the verse of the day, 7 October 2026) and the 1.2.22 fixes (Share with note, 14 October 2026) |
 | macOS | Share picker at the selected words, its arrow at their bottom edge, below the new note card | Share picker at the selection, its arrow at the bottom centre of the selected words | Share picker at the selection, as for the citation | Preview, then the share picker at the selection with the image | Share picker at the card's Share icon, hanging below it, with or without a selection | `reading_macos.go` | `runner` — development builds of ebc9c98f3 (the selection verbs) and fa4072f73 (the verse of the day) driven by a throwaway trigger, macOS 26.6.2, light appearance, a 1280x892 window, 7 October 2026; Share with note with development builds of the 1.2.22 fixes, 14 October 2026 |
 | Android | The note card, then the "Sharing text" sheet with the note, citation and link | "Sharing text" sheet with the quote and citation | "Sharing text" sheet with the link | Preview, then the "Sharing image" sheet | "Sharing text" sheet, by the citation's route; not driven | `reading_android.go` | `runner` — emulator, 1.2.17, 29–30 September 2026 |
-| Windows | The Windows Share sheet over the window, headed "Share link", with the citation, the link carrying the note, a QR-code button and a link button with no label (Copy link, by its icon), which shows a check when pressed; the new note card on the page beneath. By the code the note, the citation and the link go to the chosen app as text, and the link as a web link too; not seen (28) | The Windows Share sheet over the window, headed "Share", listing the apps to share to, with no title, preview or Copy on Windows 11. By the code the quote and its citation go to the chosen app as text; not seen (28) | The Windows Share sheet over the window, headed "Share link", with the citation, the link, a QR-code button and a link button with no label (Copy link, by its icon) (28) | Preview, then the Windows Share sheet over the window with the card as a file named "BibleText verse <date> <time>.png" in local time, shown in place of a title, with its thumbnail, its size and a size picker, Edit, and a copy button with no label (28) | The Windows Share sheet, as for Share with citation (28) | `share_windows.go` | `hardware` — arm64 VM, Windows 11 build 26200, the Store package workflow's arm64 package: its executable run unpackaged, 30 September 2026, and the package registered with package identity, 1 October 2026 (the proof note below) |
-| Linux | Copied; the "Copied — ready to paste" sheet over the new note card, with Email…, Copy again and Done (27) | Copied; the "Copied — ready to paste" sheet (27) | Copied; the "Copied — ready to paste" sheet (27) | Saved to the reader's Downloads folder, the XDG download directory under whatever name it has, inside the snap the one in the reader's own home (with none, in that home); the file manager shows it, through the desktop portal inside the snap; the "Picture saved" sheet, saying the file manager shows it only when the file manager said so, and Downloads only of a folder called Downloads, and not opening for a picture no folder took that the file manager did not show, or for a card that could not be read at the tap, with Email… attaching the file only where a mail client, not a browser, handles mailto:, and never in the snap (27) | Copied; the "Copied — ready to paste" sheet over the card (27) | `share_other.go`, handing on to `share_fallback.go` | `hardware` — arm64 VM, X11, 30 September 2026; Share as image in the snap, 1 October 2026; a card that could not be read at the tap, development builds before and after the fix, 6 October 2026 |
+| Windows | The Windows Share sheet over the window, headed "Share link", with the citation, the link carrying the note, a QR-code button and a link button with no label (Copy link, by its icon), which shows a check when pressed; the new note card on the page beneath. By the code the note, the citation and the link go to the chosen app as text, and the link as a web link too; not seen (28) | The Windows Share sheet over the window, headed "Share", listing the apps to share to, with no title, preview or Copy on Windows 11. By the code the quote and its citation go to the chosen app as text; not seen (28) | The Windows Share sheet over the window, headed "Share link", with the citation, the link, a QR-code button and a link button with no label (Copy link, by its icon) (28) | Preview, then the Windows Share sheet over the window with the card as a file named "BibleText verse <date> <time>.png" in local time, shown in place of a title, with its thumbnail, its size and a size picker, Edit, and a copy button with no label (28) | The Windows Share sheet, as for Share with citation (28) | `share_windows.go` | `hardware` — arm64 VM, Windows 11 build 26200, the Store package workflow's arm64 package: its executable run unpackaged, 30 September 2026, and the package registered with package identity, 1 October 2026; Share as image from 1.2.21's arm64 package as submitted to the Store, registered under a renamed identity and its executable run unpackaged, 15 October 2026 (the proof note below) |
+| Linux | Copied; the "Copied — ready to paste" sheet over the new note card, with Email…, Copy again and Done (27) | Copied; the "Copied — ready to paste" sheet (27) | Copied; the "Copied — ready to paste" sheet (27) | Saved to the reader's Downloads folder, the XDG download directory under whatever name it has, inside the snap the one in the reader's own home (with none, in that home); the file manager shows it, through the desktop portal inside the snap; the "Picture saved" sheet, saying the file manager shows it only when the file manager said so, and Downloads only of a folder called Downloads, with Email… attaching the file only where a mail client, not a browser, handles mailto:, and never in the snap; for a picture no folder took that the file manager did not show, or a card that could not be read at the tap, a sheet saying only "Could not share the card.", with Done (27) | Copied; the "Copied — ready to paste" sheet over the card (27) | `share_other.go`, handing on to `share_fallback.go` | `hardware` — arm64 VM, X11, 30 September 2026; Share as image in the snap, 1 October 2026; a card that could not be read at the tap, development builds before and after the fix, 6 October 2026; the sheet saying "Could not share the card." for a card gone at the tap, a card that cannot be drawn and a picture no folder took, development builds of the 1.2.23 change driven by a throwaway trigger, 21 October 2026 |
 
 What each proof rests on:
 
@@ -766,7 +923,22 @@ What each proof rests on:
   verse of the day was driven to its share sheet; no share target was tapped.
 - **iOS, `builds`.** Read from the code; nothing was launched for this
   row. The iPhone presents every share as a sheet, which has no anchor, so
-  the iPad's and the Mac's anchoring is not its concern.
+  the iPad's and the Mac's anchoring is not its concern. On the iPhone and
+  the iPad alike, a share sheet iOS will not show because the sheet before
+  it is still opening or closing is presented from the top view controller
+  once that has ended, is judged taken or refused only 5 seconds after it
+  was presented, since the share sheet holds its own presentation back while
+  its services load, and, refused twice, the share says "Could not share
+  the passage." or "Could not share the card." (`btIOSPresent`,
+  `reading_ios.go`; 1.2.23, held at the source by `share_failed_test.go`).
+  Seen in the iPhone 16 Pro and iPad Air 13-inch (M4) simulators, iOS 26.5,
+  on 21 October 2026, in development builds driven by a throwaway trigger:
+  a share chosen as the sheet before it closed opened its sheet and said
+  nothing, 12 runs of 12 on each, and in every run on a freshly booted
+  simulator (6 on the iPhone, 5 on the iPad), where the first build of the
+  change, which judged at 0.35 seconds, said the share could not be made
+  over the sheet that had opened in every run; refused twice, the share
+  said so.
 - **macOS, `runner`, as an exception to the rule that the artefact must
   be the shipped one.** Development builds of ebc9c98f3, the release
   tree before the verse-of-the-day fix, and of fa4072f73, which carries
@@ -820,7 +992,10 @@ What each proof rests on:
   before the note card went on the page; without it, the words' old place,
   89 points above them and inside the card.
 - **Windows, `hardware`, as an exception to the rule that the artefact
-  must be the shipped one.** This code is not yet in a release. The
+  must be the shipped one.** This code shipped in 1.2.18. The runs of 30
+  September and 1 October 2026 came before that release, and the run of 15
+  October 2026 used 1.2.21's package as submitted to the Store, not the
+  Store's own install. The
   Microsoft Store package workflow built a tree that carries it,
   1517e3771, in the release configuration — cgo, `-tags gles`, the
   patched Fyne, the GLFW window and its RunNative — and packed and
@@ -882,8 +1057,8 @@ What each proof rests on:
   is Windows 11's sheet. The app's standard error went to a file that
   held only the line written before launch, which says nothing either way
   about a fallback; the screenshots after each close are what show none
-  opened. The row moves to the shipped artefact with the release that
-  carries it.
+  opened. The row moves to the shipped artefact once a release, as the
+  Store installs it or as the zip, has been driven the same way.
 
   The package, with package identity, was driven on 1 October 2026. The
   Microsoft Store package workflow built faae44ef1 (run 36840901241), and
@@ -935,6 +1110,32 @@ What each proof rests on:
   registered in place; x64; and what an app chosen in the sheet receives.
   The registration was removed after the run.
 
+  On 15 October 2026 a release's package was driven the same way for
+  Share as image. 1.2.21's arm64 MSIX as submitted to the Store (sha256
+  39d71225…327d) was registered on the same VM by the recipe above, under
+  the same renamed identity. The Store's own install there is now 1.2.19,
+  Store-signed, which carries this code; it was not launched. The running
+  process had the renamed package's identity. With "loved" in John 3:16
+  selected, in the dark theme, Share as image opened Windows' Share sheet
+  with "BibleText verse 2026-10-15 10.43.18.png" (the VM's local time),
+  22.6 KB, the card's thumbnail, Edit and the copy button; the copy was in
+  `%LOCALAPPDATA%\Temp\bibletext-share` again, nothing was saved to the
+  reader's download folder, and no in-app sheet opened. The package's
+  executable, with ANGLE beside it, was also run from a folder without
+  package identity, as the direct download runs, for a card that could not
+  be read at the tap (27), which 1.2.21's fallback ends without a sheet:
+  with the renderer's file deleted between the preview and Share,
+  standard error held the share handed to its fallback and the fallback's
+  cause, that the card could not be read, so it was neither saved nor
+  shown, both at 10:34:21 by the VM's clock; neither Windows' sheet nor
+  the in-app sheet was open in a screenshot showing that clock at 10:35,
+  at least 39 s later, nothing was saved, and no share copy was made. The
+  control, the card in place, opened Windows' sheet with "BibleText verse
+  2026-10-15 10.32.31.png", 26 KB. Not seen this
+  way: the Store's own install, a card that could not be read with
+  package identity, and the other verbs, which were not driven that day.
+  The registration was removed after the run.
+
   Before the app, the mechanism was seen from a standalone probe
   executable, without package identity, on the same VM the same day, for
   text, a link and a picture, natively and under x64 emulation, every
@@ -977,8 +1178,11 @@ What each proof rests on:
   packaged app's — and which a link cannot carry a file through, so the
   image sheet has no Email… there. The link is kept to 2,000 characters,
   a longer share's passage cut at a word. None of that has run in the app
-  on Windows, where the Share sheet opened every time: neither the in-app
-  sheet, Explorer's reveal, the handler check nor a long share's link;
+  on Windows, where the Share sheet opened every time it was asked to:
+  neither the in-app sheet, Explorer's reveal, the handler check nor a
+  long share's link. The fallback itself has run there once, with 1.2.21
+  on 15 October 2026, for a card that could not be read at the tap, which
+  1.2.21's fallback ended without a sheet (above);
   `share_email_windows_test.go` holds the check against handlers it
   registers itself, in the Windows CI job.
 

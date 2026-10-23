@@ -410,9 +410,9 @@ func navBar(v loadedVersion, all []loadedVersion, book, slug string, chapter int
 // among that chapter's verses, counted from 0, which is what lets reader.js
 // tell a range that lands as one passage from one that would take in verses
 // nobody sent. A verse other lacks, or a book whose numbering does not
-// correspond at all (WEBC's Greek Esther; in the next major release, where it
-// maps verse for verse, no book), is left out, so an empty map is a chapter no
-// verse of which can be carried.
+// correspond at all (no book of the published translations; the WEBC's Greek
+// Esther keeps the Hebrew numbers), is left out, so an empty map is a chapter
+// no verse of which can be carried.
 func switcherVerseMap(v, other loadedVersion, all []loadedVersion, book string, chapter int) (string, bool) {
 	if numberingDiff(v.ID, other.ID, book, chapter, all) == bibletext.NumberingSame {
 		return "", false
@@ -542,7 +542,8 @@ func writeNotFound(site *siteWriter, versions []loadedVersion) error {
 
 // chapterNotes writes the chapter's footnote section — the translators' own
 // wording-and-manuscript notes, the ones explaining a verse the translation
-// omits, and any riding on a psalm's title.
+// omits, any riding on a psalm's title, and a note the feed ran into a
+// section heading's words.
 //
 // ALWAYS VISIBLE, not a disclosure. The site has no settings and no scripting,
 // so there is no toggle to honour and nothing to remember a choice in; a
@@ -557,10 +558,11 @@ func writeNotFound(site *siteWriter, versions []loadedVersion) error {
 // Ordering, keying and the cross-reference exclusion all come from
 // bibletext.ChapterFootnoteEntries rather than being worked out again here, so
 // the page cannot drift from the app. That exclusion is why the NKJV
-// contributes nothing when its text is published (nkjv_text.go) — its entire
-// apparatus is cross-references, whose display is an open licensing question —
-// and with its text off a licensed chapter has no page here at all (notice.go,
-// which never calls chapterBody).
+// contributes nothing when its text is published (nkjv_text.go) — its verses'
+// apparatus is cross-references, whose display is an open licensing question,
+// and the notes kept on its headings are not listed at all — and with its
+// text off a licensed chapter has no page here at all (notice.go, which never
+// calls chapterBody).
 func chapterNotes(bd *bibletext.BibleData, book string, chapter int, verses []bibletext.Verse) string {
 	entries := bibletext.ChapterFootnoteEntries(bd, book, chapter, verses)
 	if len(entries) == 0 {

@@ -21,8 +21,8 @@ package bibletext
 // apartment, an HRESULT from any step, a sheet that never asks, a package
 // that will not fill — ends the share, once (shareSession, share_session.go),
 // in the verb's in-app confirmation sheet (share_fallback.go,
-// share_sheet_desktop.go), the one Linux shares through, which opens for
-// any share but a picture it has nothing true to say of (fallbackShareImage).
+// share_sheet_desktop.go), the one Linux shares through, which for a picture
+// neither saved nor shown says only that the card could not be shared.
 //
 // Threads. Every call is made on the window's thread. That is the Fyne UI
 // goroutine's, which the toolkit locks to the main thread and makes the

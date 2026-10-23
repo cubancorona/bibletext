@@ -222,11 +222,14 @@ func chapterNoteChrome(state *AppState, plan chapterPlan, verses []Verse) noteCh
 	}
 	text, who, pill, next := appleStickerPush(state, plan)
 	c := noteChrome{
-		Text:   text,
-		Who:    who,
-		Pill:   pill,
-		Next:   next,
-		Anchor: state.NoteVerseLo,
+		Text: text,
+		Who:  who,
+		Pill: pill,
+		Next: next,
+		// The note's own verse, as the page draws it (drawnNoteAnchor): a
+		// verse this edition omits hangs the card above the verse after the
+		// hole, where its mark stands, on every surface.
+		Anchor: drawnNoteAnchor(verses, state.NoteVerseLo),
 		// The predicate the VERBS branch on. Asking the plan instead gave a
 		// second answer that disagreed wherever the mirror still named an own
 		// note the plan no longer offered — a bin drawn on a note the press

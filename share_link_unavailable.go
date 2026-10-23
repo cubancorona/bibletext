@@ -134,7 +134,17 @@ func showLinkNoticeWhile(state *AppState, heading, subheading, para string, hold
 	card := surface(container.NewPadded(form), pal.SurfaceAlt, pal.Border, fyne.Size{})
 	popup = widget.NewModalPopUp(card, cnv)
 	popup.Show()
-	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+	// Sized from its content, which does not scroll, so on a short desktop
+	// window it covers the header rather than starting inside it, as tall as
+	// its content; sized again when the window changes size, at the size it
+	// opened at.
+	size := fyne.NewSize(w, card.MinSize().Height)
+	fit := func() {
+		popup.Resize(size)
+		coverHeaderUnlessClear(state, popup, 0)
+	}
+	fit()
+	registerSheetRefit(state, popup, fit)
 	// Asked when the reopen runs, after the rebuild: the rebuild is what may
 	// have kept the promise.
 	registerSheetReopen(state, popup, func() {

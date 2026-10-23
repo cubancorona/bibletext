@@ -77,9 +77,11 @@ func TestDoAIRequestDoesNotRetryExpiredBudget(t *testing.T) {
 // search keeps the connection open and the tokens billing.
 func TestStartAISearchCancelAbandonsRequest(t *testing.T) {
 	st := psalm23State()
-	// A key must be present or runAISearch short-circuits before the seam.
+	// A key must be present or runAISearch short-circuits before the seam,
+	// and the reader's permission, or it refuses there (ai_permission.go).
 	st.aiKeys = newKeyStoreWith(newFakePrefs())
 	st.aiKeys.setAPIKey(defaultProviderID, "test-key")
+	grantAIPermission(st.aiKeys, defaultProviderID)
 
 	seen := make(chan context.Context, 1)
 	release := make(chan struct{})
@@ -196,6 +198,7 @@ func sidebarFindState(t *testing.T) *AppState {
 	st := sampleState()
 	st.aiKeys = newKeyStoreWith(newFakePrefs())
 	st.aiKeys.setAPIKey(defaultProviderID, "test-key")
+	grantAIPermission(st.aiKeys, defaultProviderID) // a reader who has allowed it (ai_permission.go)
 	st.aiSearchMode = true
 	st.aiSearchQuery = "mercy"
 	buildSidebar(st) // installs retryAISearch + the Find submit path
@@ -394,6 +397,7 @@ func studyPanelState(t *testing.T, w fyne.Window) *AppState {
 	st.window = w
 	st.aiKeys = newKeyStoreWith(newFakePrefs())
 	st.aiKeys.setAPIKey(defaultProviderID, "test-key")
+	grantAIPermission(st.aiKeys, defaultProviderID) // a reader who has allowed it (ai_permission.go)
 	return st
 }
 

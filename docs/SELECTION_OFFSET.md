@@ -159,6 +159,32 @@ Every consumer of the span takes the lead without a change of its own:
 (share_note_ui.go:499) all pass the span to `normalizeShareSelectionIn` or
 `prepareShareQuoteIn`.
 
+## The selection's chapter
+
+The verses and the lead are the chapter the selection was made in, and
+Go's reader may no longer be on that chapter when a verb runs: continuous
+narration turns the chapter when one ends, and a desktop menu built over
+the old chapter stays open across the turn. Read against the chapter then
+current, Psalm 135:3's words were cited as Psalms 136:3. So the span also
+carries the chapter (`selSpan.book`, `selSpan.chapter`), and every function
+that takes a span reads the selection in it (`selectionChapter`), the
+reader's own chapter only where the span names none. The change is for
+1.2.23, not in 1.2.22 (ROADMAP.md, Later minor releases, row 27). Every pane
+hands it over by one rule:
+
+| Seam | Where | What |
+|---|---|---|
+| The span | selection_span.go | `book` and `chapter`; `inChapter`, which keeps a chapter already named; `selectionChapter`; `paneSelSpan`, which the native exports build the span with; `versesChapter` |
+| iOS, iPhone and iPad | reading_ios.go | `bibleTextTVSetChapter` announces the chapter on the main queue just ahead of `bibleTextTVSetHTML`, whose block takes it and keys the text with it (`gTVBook`, `gTVChapter`) on each path that installs a page, each import and the fallback page a failed import leaves (`btIOSInstallPage`); the edit menu reads the key with the selection's text, span and lead |
+| Mac | reading_macos.go | the same through `bibleTextMacTVSetChapter` (`gMacTextBook`, `gMacTextChapter`), on each import and the fallback page (`btMacInstallPage`); `hbSendAI` and `hbSendStudy` read the key when the action runs, with the rest of the selection |
+| Apple, Go side | ai_menu_darwin.go, reading_ios.go, reading_macos.go | `bibleTextAIMenuTapped` and `bibleTextStudyMenuTapped` take `char *book, int chapter` after the lead; `NULL` and 0 name no chapter; each push calls the chapter's setter before the HTML's |
+| Android | android/BtBridge.java | `setChapter`, called just before `setHtml` on the same thread, which keys the text it sets (`textBook`, `textChapter`); `onActionItemClicked` captures the key with the span and the lead, and `showStudyPopup` carries it to its rows; `nativeSelectionAction(…, String book, int chapter)` |
+| | reading_jni_android.c, reading_android_export.go, reading_android.go | the thunk converts a non-null book and releases it; `btaSelectionAction` takes `char *book, int chapter`; the push calls `setChapter` before `setHtml` |
+| Windows and Linux | reading_styled_select.go, reading.go | the styled pane and the legacy Entry pane name the chapter of the verses they laid out; `selectionStudyMenu` stamps the chapter on screen on a span that has none, as the menu is built |
+
+`selection_chapter_contract_test.go` holds each of these seams, and every
+Go function that takes a span to reading it in the span's chapter.
+
 ## How Go uses it
 
 **Resolution** (`selSpan.leadStart` in selection_span.go, against the
@@ -249,17 +275,29 @@ Without a lead nothing above runs, and every path is as it was.
   1.2.22: without a lead the stray digit stays, and no later number is
   eaten.
 - **The no-span probe in the AI passage:** not by this change. The
-  plain-text page the Apple panes show when a chapter fails to import has no
-  verse geometry, so it sends no span and no lead; once that page keeps the
-  numerals' geometry it sends both like any other page. Meanwhile 1.2.22
-  takes the probe's answer only when it names one verse, and otherwise cites
-  the chapter.
-- **Not addressed:** the chapter a dispatch was made in (the span carries
-  verse numbers only, so a chapter that advances between the menu and the
-  click is cited instead); it crosses the same externs and is a separate
-  change. A selection inside a publisher's heading still resolves to the
-  verse above; its lead runs through the heading, fails the check, and the
-  selection is placed as it is without a lead.
+  plain-text page the Apple panes show when a chapter fails to import had no
+  verse geometry, so it sent no span and no lead. It now carries its verse
+  numbers, title and headings (`reading_apple_fallback.go`) and is installed
+  as an imported page is, so it sends both like any other page. 1.2.22 takes
+  the probe's answer only when it names one verse, and otherwise cites the
+  chapter; that rule stays for any selection that still arrives with no
+  span.
+- **The chapter a dispatch was made in:** not by this change, which carries
+  verse numbers only; a chapter that advanced between the menu and the
+  click was cited instead. The span now carries its chapter too, through
+  the same externs (The selection's chapter, above).
+- **A selection inside a publisher's heading** (1.2.23, decision 23): each
+  pane that draws headings in its selectable text hands a selection wholly
+  inside one over as the verse below, with the heading flag and no lead
+  (`selSpan.heading`), and Go answers it by that verse with nothing
+  quoted. The flag travels after `hi` in every native seam: `heading C.int`
+  in `bibleTextAIMenuTapped` and `bibleTextStudyMenuTapped`
+  (`ai_menu_darwin.go`) and in `btaSelectionAction`
+  (`reading_android_export.go`), `boolean heading` in
+  `nativeSelectionAction` (`android/BtBridge.java`) and `jboolean jHeading`
+  in its JNI thunk (`reading_jni_android.c`). Before it, such a selection
+  resolved to the verse above, its lead ran through the heading and failed
+  the check, and the selection was placed as it was without a lead.
 
 ## Tests
 

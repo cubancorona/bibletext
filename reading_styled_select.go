@@ -322,12 +322,25 @@ func (p *styledReadingPane) Tapped(e *fyne.PointEvent) {
 }
 
 // DoubleTapped selects the word under the pointer.
+//
+// Not on a publisher's heading. Its words are drawn outside the text model
+// (appendHeadingLines), and the model offset under a heading's line is the
+// end of the verse above it, so a double-click on a heading's word selected
+// that verse's last word, and the verbs quoted it and cited the verse above.
+// A word of a heading means the section the heading introduces, cited by the
+// verse below with nothing quoted (selSpan.heading); this pane cannot select
+// a heading's words, so it selects nothing there.
 func (p *styledReadingPane) DoubleTapped(ev *fyne.PointEvent) {
 	if ev != nil && (p.noteGeom.hits(ev.Position) || p.hitsAnyPill(ev.Position)) {
 		return // no word-select under the bubble
 	}
 	if ev != nil && (p.fnGeom.hits(ev.Position) || p.superGeom.hits(ev.Position)) {
 		return // no word-select in the apparatus or the title
+	}
+	if ev != nil && p.lay != nil {
+		if li := p.lineAtY(ev.Position.Y); li >= 0 && p.lay.Lines[li].Heading != "" {
+			return // no word-select in a heading
+		}
 	}
 	off := p.offsetAtPos(ev.Position)
 	runes := []rune(p.lay.Text)
@@ -494,8 +507,10 @@ func (p *styledReadingPane) selectionLead(lo int) (string, bool) {
 
 // studyMenu serves the pane's right-click menu through the SAME shared
 // builder chapterText uses (selectionStudyMenu, reading.go) — the milestone-4
-// unification that retired this file's temporary duplicate.
+// unification that retired this file's temporary duplicate. The span names
+// the chapter of the verses the pane laid out (versesChapter).
 func (p *styledReadingPane) studyMenu() *fyne.Menu {
-	return selectionStudyMenu(p.state, plainSelection(p.selectedRaw()), p.selectedVerseSpan(),
+	return selectionStudyMenu(p.state, plainSelection(p.selectedRaw()),
+		p.selectedVerseSpan().inChapter(versesChapter(p.verses)),
 		p.copyToClipboard, p.selectAll)
 }

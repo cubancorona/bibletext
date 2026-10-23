@@ -101,8 +101,7 @@ func TestResolveNoteAnchorMeasuredCases(t *testing.T) {
 			note: note("esv", "Romans", 16, 25, 0), reading: "bsb",
 			want: placement{Kind: placedExact, Here: []anchorRun{{Chapter: 16, Lo: 25, Hi: 25}}},
 		},
-		// The Greek Esther's cases are the switch's: greek_esther_current_test.go
-		// and greek_esther_next_test.go.
+		// The Greek Esther's cases are in greek_esther_test.go.
 		{
 			// The reading translation IS the note's own: home, byte-exact, no
 			// mapping — even where the tables are wrong about it. Existence
@@ -155,10 +154,9 @@ func TestResolveNoteAnchorMeasuredCases(t *testing.T) {
 		}
 	}
 
-	// A book whose numbering does not correspond: the shipping table's one is
-	// the Greek Esther and the next major release's has none, so one is
-	// marked for the rest of this test. A verse note and a chapter note both
-	// have nowhere to land, and say why.
+	// A book whose numbering does not correspond: the shipped tables have
+	// none, so one is marked for the rest of this test. A verse note and a
+	// chapter note both have nowhere to land, and say why.
 	withIncommensurableBook(t, "bsb", "John")
 	for _, n := range []StoredNote{note("web", "John", 3, 16, 0), note("web", "John", 3, 0, 0)} {
 		if got := resolveNoteAnchor(n, "bsb", bible); got.Kind != unplacedIncommensurable || len(got.Here) != 0 {

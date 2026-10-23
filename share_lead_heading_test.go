@@ -398,7 +398,7 @@ func headingDrags(t *testing.T, bd *BibleData, step int, label string) headingDr
 	n := 0
 	for _, book := range bd.Books {
 		for _, ch := range bd.GetChapterNumbersForBook(book) {
-			heads := bd.Headings[book][ch]
+			heads := headingsFor(bd, book, ch) // as the page draws them
 			if len(heads) == 0 {
 				continue
 			}

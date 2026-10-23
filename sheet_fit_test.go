@@ -62,6 +62,8 @@ func TestScrollingSheetHeight(t *testing.T) {
 // widget.PopUp keeps its box in unexported innerPos/innerSize, so it is
 // reconstructed from the laid-out content: the renderer resizes the content to
 // innerSize minus one innerPadding and moves it to innerPos plus half of one.
+// The content's position is the popup's own, which is the canvas's top left
+// but for a desktop sheet raised to cover the header (raiseSheet).
 func sheetBox(t *testing.T, popup *widget.PopUp) (top, bottom float32) {
 	t.Helper()
 	// popUpRenderer.Layout ignores the size it is passed and works from
@@ -69,7 +71,7 @@ func sheetBox(t *testing.T, popup *widget.PopUp) (top, bottom float32) {
 	// scheduling to wait on.
 	test.WidgetRenderer(popup).Layout(popup.Size())
 	pad := popup.Theme().Size(theme.SizeNameInnerPadding)
-	top = popup.Content.Position().Y - pad/2
+	top = popup.Position().Y + popup.Content.Position().Y - pad/2
 	return top, top + popup.Content.Size().Height + pad
 }
 

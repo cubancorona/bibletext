@@ -48,11 +48,11 @@ func TestDeferredReassertsNeverPinToTheTop(t *testing.T) {
 
 	// The import: the synchronous call keeps the top-pin (the control), and
 	// everything scheduled after it is a re-assert.
-	apply := nativeFunctionSource(t, "reading_ios.go", "static BOOL bibleTextApplyHTML(NSData *data) {")
+	apply := nativeFunctionSource(t, "reading_ios.go", "static void btIOSInstallPage(NSAttributedString *as) {")
 	const gate = "if (gReadingHighlightRange.location != NSNotFound || gReadingHasRestore) {"
 	i := strings.LastIndex(apply, gate)
 	if i < 0 {
-		t.Fatal("bibleTextApplyHTML no longer schedules its deferred re-asserts behind the highlight-or-restore gate")
+		t.Fatal("btIOSInstallPage no longer schedules its deferred re-asserts behind the highlight-or-restore gate")
 	}
 	if !strings.Contains(apply[:i], "bibleTextScrollReadingTV();") {
 		t.Error("the import's synchronous placement no longer calls bibleTextScrollReadingTV — a plain entry would not open at the top")

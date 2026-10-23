@@ -94,16 +94,16 @@ func TestIOSImageShareSaysWhenTheCardCannotBeRead(t *testing.T) {
 		t.Fatal("control: the check passes the bare return")
 	}
 
-	// The notice is an alert presented from the view controller the share
-	// sheet would have used, and says nothing with none (no window on screen).
+	// The notice is an alert presented from the top view controller, as the
+	// share sheet is (btIOSPresent, which says nothing with none: no window
+	// on screen; TestIOSSaysWhenItWillNotShowTheShareSheet).
 	notice := javaBlockAfter(t, src, "static void bibleTextShareNotice(NSString *msg)")
 	steps := []string{
-		"UIViewController *top = bibleTextTopVC();",
-		"if (top == nil) return;",
+		"btIOSPresent(^UIViewController *(UIViewController *top) {",
 		"[UIAlertController alertControllerWithTitle:nil",
 		"message:msg",
 		`[ac addAction:[UIAlertAction actionWithTitle:@"OK"`,
-		"[top presentViewController:ac animated:YES completion:nil];",
+		"return ac;",
 	}
 	if !inSequence(notice, steps...) {
 		t.Errorf("bibleTextShareNotice must present an alert from the top view controller:\n%s", notice)

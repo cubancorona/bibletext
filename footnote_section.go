@@ -108,7 +108,16 @@ func footnoteEntryKey(e footnoteEntry) string {
 // apparatus) are excluded: whether they ever display is an open decision
 // (docs/FOOTNOTES.md §8), and a wall of "John 7:50; 19:39" rows is a
 // different feature from wording-and-manuscript notes.
-func chapterFootnoteEntries(verses []Verse, orphans []OrphanFootnote, titleNotes []Footnote) []footnoteEntry {
+//
+// A heading's notes (heads, as headingsFor gives them) are filed under the
+// verse the heading stands above, which is the reference the publisher gives
+// them (the WEB Catholic's note on its Daniel 3 heading is 3:24), and ahead
+// of that verse's own notes, as the heading stands ahead of the verse. Only a
+// heading the page draws contributes: one whose verse is among verses. And
+// only a helloao heading's notes are listed (feedHeadingStyle): the ones the
+// feed ran into the heading's words, which headingsFor sets apart. The notes
+// the API.Bible decoder keeps on an NKJV heading stay unlisted.
+func chapterFootnoteEntries(verses []Verse, orphans []OrphanFootnote, titleNotes []Footnote, heads []Heading) []footnoteEntry {
 	var entries []footnoteEntry
 	for _, fn := range titleNotes {
 		if fn.Kind != "" {
@@ -119,6 +128,25 @@ func chapterFootnoteEntries(verses []Verse, orphans []OrphanFootnote, titleNotes
 			continue
 		}
 		entries = append(entries, footnoteEntry{Verse: 0, Title: true, Text: text})
+	}
+	if len(heads) > 0 {
+		drawn := make(map[int]bool, len(verses))
+		for _, v := range verses {
+			drawn[v.Verse] = true
+		}
+		for _, h := range heads {
+			if h.Style != feedHeadingStyle || h.BeforeVerse <= 0 || h.Text == "" || !drawn[h.BeforeVerse] {
+				continue
+			}
+			for _, fn := range h.Footnotes {
+				if fn.Kind != "" {
+					continue
+				}
+				if text := strings.TrimSpace(fn.Text); text != "" {
+					entries = append(entries, footnoteEntry{Verse: h.BeforeVerse, Text: text})
+				}
+			}
+		}
 	}
 	for _, v := range verses {
 		for _, fn := range v.Footnotes {
@@ -152,29 +180,18 @@ func chapterFootnoteEntries(verses []Verse, orphans []OrphanFootnote, titleNotes
 // chapterHasFootnotes reports whether the current chapter has anything the
 // section would show — the gate for the header toggle, mirroring
 // chapterAudioAvailable: no chapter gets a dead control. Orphans count: a
-// chapter whose ONLY note explains an omitted verse still has a section.
+// chapter whose ONLY note explains an omitted verse still has a section, and
+// so do a title's notes and a heading's. It asks the section's own collector,
+// so the gate and the section cannot disagree.
 func chapterHasFootnotes(state *AppState) bool {
 	if state == nil || state.Bible == nil {
 		return false
 	}
-	for _, v := range state.Bible.GetChapter(state.CurrentBook, state.CurrentChapter) {
-		for _, fn := range v.Footnotes {
-			if fn.Kind == "" && strings.TrimSpace(fn.Text) != "" {
-				return true
-			}
-		}
-	}
-	for _, o := range state.Bible.OrphanNotesFor(state.CurrentBook, state.CurrentChapter) {
-		if o.Kind == "" && strings.TrimSpace(o.Text) != "" {
-			return true
-		}
-	}
-	for _, fn := range state.Bible.SuperscriptionFor(state.CurrentBook, state.CurrentChapter).Footnotes {
-		if fn.Kind == "" && strings.TrimSpace(fn.Text) != "" {
-			return true
-		}
-	}
-	return false
+	book, chapter := state.CurrentBook, state.CurrentChapter
+	return len(chapterFootnoteEntries(state.Bible.GetChapter(book, chapter),
+		state.Bible.OrphanNotesFor(book, chapter),
+		state.Bible.SuperscriptionFor(book, chapter).Footnotes,
+		headingsFor(state.Bible, book, chapter))) > 0
 }
 
 // The feature's ONE control is the TRANSLATORS' FOOTNOTES card at the top of

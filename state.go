@@ -322,6 +322,19 @@ type AppState struct {
 	// (D13, D19: the cause is an argument of the load, not a field). The
 	// launch carries it to the live state (adoptLaunch, D18).
 	preferredVersion string
+	// keyRemovedVersion is the translation the reader gave up by removing the
+	// API.Bible key that alone opens it: set by the launch that could not
+	// open it for that reason (restoreReadingState), or by emptying the key
+	// field while it was remembered (giveUpKeyedTranslation). While it is set
+	// it is no record of a choice: nothing saves it and nothing tries the
+	// translation again, so the next save names what is on screen. It exists
+	// so the picker can say why the default is shown in its place
+	// (fullPendingNotice), and any landing spends it. A key entered in the
+	// field again moves it back to preferredVersion, since the key was the
+	// only reason it was given up (takeBackKeyedTranslation). Decision 11 in
+	// docs/ROADMAP.md; the launch carries it to the live state (adoptLaunch,
+	// D18).
+	keyRemovedVersion string
 	// notesScroll is the notes browser's scroll position, kept for the WHOLE
 	// session — the browser remembers its place — so any
 	// return to the list — a rebuild while in Notes, opening a note and coming

@@ -375,6 +375,35 @@ func TestTheLinuxReleaseDateIsTheBuildDay(t *testing.T) {
 	}
 }
 
+// A privacy policy that changed since the last publish carries the day of the
+// publish as its effective date, which no tree knows before stage 11. The
+// stage says so, names the date line and the check, and the publish runs that
+// check; neither may go without the other. The change the step names is the
+// one the check compares, the words a reader reads and where the links lead,
+// not any change of the file, which a change of markup or style is too; and
+// the stage says the check also stops a date moved with nothing changed.
+// Mutation: the step taken out of stage 11, or the check taken out of
+// scripts/publish-site.sh; the step put back to any change of the file.
+func TestStage11DatesAChangedPrivacyPolicyOnThePublishDay(t *testing.T) {
+	stage := strings.Join(strings.Fields(releasingStage(t, "11")), " ")
+	for _, want := range []string{"`docs/privacy.html`", "effective date is the day of this publish",
+		"London time", "-check-policy-date", "`cmd/sitepages/policy_date.go`",
+		"as a reader reads them", "where a link in it leads",
+		"whatever the live copy's date", "neither the live copy's nor the day of the run"} {
+		if !strings.Contains(stage, want) {
+			t.Errorf("stage 11 of docs/RELEASING.md does not say %q: a changed policy is published "+
+				"with the day of the publish as its effective date", want)
+		}
+	}
+	if strings.Contains(stage, "in anything but its date") {
+		t.Error("stage 11 of docs/RELEASING.md dates a policy changed in anything but its date, " +
+			"where the check compares its words and links, not its markup")
+	}
+	if !strings.Contains(readRepoFile(t, "scripts/publish-site.sh"), "go run ./cmd/sitepages -check-policy-date") {
+		t.Error("scripts/publish-site.sh does not run the policy-date check stage 11 names")
+	}
+}
+
 // CONTROL: the filter matcher must have GitHub's semantics and the parsers
 // must see the real files, or the tests above pass by checking nothing.
 func TestTheWorkflowParsersSeeTheRealFiles(t *testing.T) {

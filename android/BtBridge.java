@@ -308,6 +308,14 @@ public final class BtBridge {
         FootnoteSizeSpan() { super(FN_EM); }
     }
 
+    // GapMarkSpan is an omitted verse's mark's size ("[21]", <btgap>), a class
+    // of its own so the verse index can find the mark: a verse ends at the mark
+    // after it (buildVerseIndex), as on the Apple panes, so no verse's
+    // narration lights it.
+    private static final class GapMarkSpan extends android.text.style.RelativeSizeSpan {
+        GapMarkSpan() { super(GAP_MARK_EM); }
+    }
+
     // SizeMark holds an open size tag's start until the tag closes.
     private static final class SizeMark {
         final String tag;
@@ -335,7 +343,7 @@ public final class BtBridge {
                 out.setSpan(new android.text.style.RelativeSizeSpan(NUM_EM), st, en, flags);
                 out.setSpan(new NumeralSpan(Math.round(NUM_LIFT_EM * lastTextPx)), st, en, flags);
             } else if ("btgap".equals(tag)) {
-                out.setSpan(new android.text.style.RelativeSizeSpan(GAP_MARK_EM), st, en, flags);
+                out.setSpan(new GapMarkSpan(), st, en, flags);
             } else if ("btfn".equals(tag)) {
                 out.setSpan(new FootnoteSizeSpan(), st, en, flags);
             }
@@ -539,6 +547,10 @@ public final class BtBridge {
     // drops the mark again.
     static final char PARA_LTR_MARK = '\u200E';
 
+    // The em dash, which the BSB sets closed up between two words: a word a
+    // selection ends inside reaches back to it (selectionHoldsScripture).
+    static final char EM_DASH = (char) 0x2014;
+
     // readerText is [s0, s1) of the pane's text as the reader reads it: the
     // gaps of a heading or the title are spaces again, a paragraph's opening
     // direction mark is gone, and so is the title's no-hyphenation span
@@ -583,26 +595,40 @@ public final class BtBridge {
         return sb;
     }
 
-    // The floating toolbar's ActionMode while it is up, so a Copy this bridge
-    // performs itself can close it as the platform's own Copy does.
+    // The floating toolbar's ActionMode while it is up, so a Copy or a drag
+    // this bridge performs itself can close it as the platform's own does.
     private static ActionMode selectionMode;
 
-    // copyAsRead performs Copy with readerText's answer when that differs from
-    // the text in the view — the gaps of a heading or the title, a
-    // paragraph's direction mark, the title's no-hyphenation span, which the
-    // characters alone do not show — and otherwise reports false, leaving the
-    // platform's own Copy to run. It sets the clip as that Copy does, the
-    // styled text under ClipData.newPlainText, so bold and italic paste where
-    // the platform's would.
-    private static boolean copyAsRead() {
-        if (text == null) return false;
+    // selectionAsRead is the selection as the reader reads it (readerText)
+    // when that differs from the text in the view — the gaps of a heading or
+    // the title, a paragraph's direction mark, the title's no-hyphenation
+    // span, which the characters alone do not show — and otherwise null,
+    // leaving the platform's own verb to run on the view's text. Copy
+    // (copyAsRead), the drag a long press starts (dragAsRead) and another
+    // app the selection is handed to, Translate among them
+    // (selectionTextAsRead, processTextAsRead), take their text from here,
+    // so they cannot disagree. A drag started with a mouse is the
+    // platform's own (Editor's SelectionModifierCursorController) and takes
+    // the view's text.
+    private static CharSequence selectionAsRead() {
+        if (text == null) return null;
         int a = text.getSelectionStart(), b = text.getSelectionEnd();
-        if (a < 0 || b < 0 || a == b) return false;
+        if (a < 0 || b < 0 || a == b) return null;
         int s0 = Math.min(a, b), s1 = Math.max(a, b);
         CharSequence cs = text.getText();
         CharSequence read = readerText(cs, s0, s1);
         if (android.text.TextUtils.equals(read, cs.subSequence(s0, s1))
-                && !holdsPageOnlySpan(cs, s0, s1)) return false;
+                && !holdsPageOnlySpan(cs, s0, s1)) return null;
+        return read;
+    }
+
+    // copyAsRead performs Copy with selectionAsRead's text, and otherwise
+    // reports false, leaving the platform's own Copy to run. It sets the clip
+    // as that Copy does, the styled text under ClipData.newPlainText, so bold
+    // and italic paste where the platform's would.
+    private static boolean copyAsRead() {
+        CharSequence read = selectionAsRead();
+        if (read == null) return false;
         android.content.ClipboardManager cm = (android.content.ClipboardManager)
                 text.getContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE);
         if (cm == null) return false;
@@ -613,6 +639,252 @@ public final class BtBridge {
         }
         if (selectionMode != null) selectionMode.finish();
         return true;
+    }
+
+    // The lowest and the highest text offset under the fingers of the touch
+    // on the reading view, or -1 for none: dragAsRead's test for a long
+    // press inside the selection, kept as the platform keeps its own for the
+    // same test (Editor.SelectionModifierCursorController's min and max
+    // touch offsets). noteTouch sets both where the first finger goes down
+    // and widens them as another finger goes down or lifts, on a screen that
+    // tells fingers apart; resetTouchOffsets clears them where the platform
+    // clears its own: once a long press inside the selection starts a drag,
+    // when the view loses focus, when its text changes, and when it is
+    // attached to a window.
+    private static int touchMinOffset = -1, touchMaxOffset = -1;
+
+    private static void resetTouchOffsets() {
+        touchMinOffset = touchMaxOffset = -1;
+    }
+
+    // noteTouch reads a touch event before the reading view handles it, as
+    // the platform reads its own offsets from it
+    // (SelectionModifierCursorController.onTouchEvent).
+    private static void noteTouch(TextView v, android.view.MotionEvent ev) {
+        switch (ev.getActionMasked()) {
+            case android.view.MotionEvent.ACTION_DOWN:
+                touchMinOffset = touchMaxOffset = v.getOffsetForPosition(ev.getX(), ev.getY());
+                break;
+            case android.view.MotionEvent.ACTION_POINTER_DOWN:
+            case android.view.MotionEvent.ACTION_POINTER_UP:
+                if (!v.getContext().getPackageManager().hasSystemFeature(
+                        PackageManager.FEATURE_TOUCHSCREEN_MULTITOUCH_DISTINCT)) break;
+                for (int i = 0; i < ev.getPointerCount(); i++) {
+                    int o = v.getOffsetForPosition(ev.getX(i), ev.getY(i));
+                    if (o < touchMinOffset) touchMinOffset = o;
+                    if (o > touchMaxOffset) touchMaxOffset = o;
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    // The most of the dragged text the drag's shadow shows, the platform's
+    // (Editor.DRAG_SHADOW_MAX_TEXT_LENGTH).
+    private static final int DRAG_SHADOW_MAX_CHARS = 20;
+
+    // dragAsRead starts the drag the platform starts on a long press inside
+    // the selection while the toolbar is up (Editor.performLongClick ->
+    // startDragAndDrop): the selection as a styled plain-text clip any app
+    // may take (View.DRAG_FLAG_GLOBAL), under a shadow of its first words,
+    // with the toolbar closed after, as the platform closes it. The clip
+    // holds selectionAsRead's text. It reports false, leaving the long press
+    // to the platform, for every other long press: no toolbar up, a press
+    // outside the selection, which selects the word there, and a selection
+    // the platform's drag already carries as read. Inside the selection is
+    // the platform's test (Editor.touchPositionIsInSelection): every offset
+    // under the touch's fingers, from the selection's start up to but not
+    // including its end. A press that passes it goes to a drag, this one
+    // or, where there is nothing to clean, the platform's, so the touch's
+    // offsets are cleared there, as the platform clears its own after its
+    // drag. A shadow that measures nothing ends the long press with the
+    // selection and its menu as they were, as performLongClick does when the
+    // platform's measures nothing.
+    private static boolean dragAsRead() {
+        if (text == null || selectionMode == null) return false;
+        int a = text.getSelectionStart(), b = text.getSelectionEnd();
+        if (a < 0 || b < 0 || a == b) return false;
+        if (touchMinOffset < Math.min(a, b) || touchMaxOffset >= Math.max(a, b)) return false;
+        resetTouchOffsets();
+        CharSequence read = selectionAsRead();
+        if (read == null) return false;
+        TextView shadow = dragShadowView(read);
+        if (shadow == null) return true;
+        text.startDragAndDrop(android.content.ClipData.newPlainText(null, read),
+                new HeldShadow(shadow), null, View.DRAG_FLAG_GLOBAL);
+        if (selectionMode != null) selectionMode.finish();
+        return true;
+    }
+
+    // dragShadowView is the drag's shadow, as the platform draws its own
+    // (Editor.getTextThumbnailBuilder): the first DRAG_SHADOW_MAX_CHARS of the
+    // dragged text on one line, large, in the page's text colour; or null
+    // where that measures nothing, which startDragAndDrop refuses.
+    private static TextView dragShadowView(CharSequence read) {
+        int end = Math.min(read.length(), DRAG_SHADOW_MAX_CHARS);
+        if (end < read.length() && Character.isHighSurrogate(read.charAt(end - 1))) end--;
+        TextView shadow = new TextView(text.getContext());
+        shadow.setTextAppearance(android.R.style.TextAppearance_Large);
+        shadow.setTextColor(text.getTextColors());
+        shadow.setSingleLine(true);
+        shadow.setGravity(Gravity.CENTER);
+        shadow.setText(read.subSequence(0, end));
+        int any = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+        shadow.measure(any, any);
+        int w = shadow.getMeasuredWidth(), h = shadow.getMeasuredHeight();
+        if (w <= 0 || h <= 0) return null;
+        shadow.layout(0, 0, w, h);
+        return shadow;
+    }
+
+    // HeldShadow is a DragShadowBuilder that keeps its view. The platform's
+    // builder holds its view only weakly, and nothing else holds the shadow,
+    // which no window shows; a shadow collected before the drag measures it
+    // has no size, and startDragAndDrop throws for that.
+    private static final class HeldShadow extends View.DragShadowBuilder {
+        private final View held;
+
+        HeldShadow(View v) {
+            super(v);
+            held = v;
+        }
+    }
+
+    // The request code processTextAsRead starts the chosen app with. Nothing
+    // reads the result. The reading text is never edited, and the intent
+    // says so (EXTRA_PROCESS_TEXT_READONLY); a result an app returns all the
+    // same goes to Fyne's activity, which reads only the codes of its file
+    // pickers (GoNativeActivity.onActivityResult: FILE_OPEN_CODE and
+    // FILE_SAVE_CODE), so it never reaches the page.
+    private static final int PROCESS_TEXT_REQUEST = 100;
+
+    // The most of the selection the platform hands another app
+    // (TextUtils.PARCEL_SAFE_TEXT_LENGTH), so one transaction carries it.
+    private static final int PARCEL_SAFE_TEXT_LENGTH = 100000;
+
+    // selectionTextAsRead is the selection as Copy gives it, as plain text,
+    // for another app it is handed to: selectionAsRead's text where that
+    // differs from the view's, and otherwise the view's own, as the
+    // platform's Copy takes it then; null with nothing selected.
+    private static String selectionTextAsRead() {
+        if (text == null) return null;
+        int a = text.getSelectionStart(), b = text.getSelectionEnd();
+        if (a < 0 || b < 0 || a == b) return null;
+        CharSequence read = selectionAsRead();
+        if (read == null) read = text.getText().subSequence(Math.min(a, b), Math.max(a, b));
+        return read.toString();
+    }
+
+    // handProcessTextAsRead gives processTextAsRead to each toolbar item
+    // that hands the selection to another app: Translate, and any app that
+    // offers to act on selected text (Intent.ACTION_PROCESS_TEXT). The
+    // platform adds those items after this callback's onCreateActionMode, on
+    // a view with an id (TextView.canProcessText), which the reading view is
+    // given, and of the apps the manifest's queries entry lets it see, and,
+    // when one is chosen, fills its intent with the view's own text
+    // (TextView.getSelectedText) before any callback here hears of it. An
+    // item's own click listener runs before the toolbar hands the click on
+    // (MenuItem.OnMenuItemClickListener), so onPrepareActionMode, which runs
+    // once the items are in, sets one on each. A Translate a text classifier
+    // suggests, a smart action, stays off with smart selection
+    // (TextClassifier.NO_OP); a Translate item an app offers is one of these.
+    private static void handProcessTextAsRead(Menu menu) {
+        for (int i = 0; i < menu.size(); i++) {
+            MenuItem item = menu.getItem(i);
+            Intent in = item.getIntent();
+            if (in == null || !Intent.ACTION_PROCESS_TEXT.equals(in.getAction())) continue;
+            item.setOnMenuItemClickListener(new MenuItem.OnMenuItemClickListener() {
+                @Override public boolean onMenuItemClick(MenuItem it) {
+                    return processTextAsRead(it.getIntent());
+                }
+            });
+        }
+    }
+
+    // processTextAsRead starts the app a toolbar item or an accessibility
+    // action names, as the platform starts it (Editor's
+    // ProcessTextIntentActionsHandler.fireIntent): a copy of its intent, with
+    // the selection as Copy gives it (selectionTextAsRead), cut to
+    // PARCEL_SAFE_TEXT_LENGTH, as EXTRA_PROCESS_TEXT, started for a result.
+    // The intent says the text cannot be replaced
+    // (EXTRA_PROCESS_TEXT_READONLY), as the platform's says for text that
+    // cannot be edited; it is set here whatever the intent carried. Every
+    // such click comes here, a selection with nothing to clean included, so
+    // each app gets its text one way, and nothing it returns is read
+    // (PROCESS_TEXT_REQUEST). It reports false for any other intent, and
+    // ends the click with nothing started where there is nothing to send or
+    // the start throws, rather than handing it on with the view's text.
+    private static boolean processTextAsRead(Intent in) {
+        if (in == null || !Intent.ACTION_PROCESS_TEXT.equals(in.getAction())) return false;
+        String sent = selectionTextAsRead();
+        if (sent == null || !(text.getContext() instanceof Activity)) return true;
+        if (sent.length() > PARCEL_SAFE_TEXT_LENGTH) {
+            int end = PARCEL_SAFE_TEXT_LENGTH;
+            if (Character.isHighSurrogate(sent.charAt(end - 1))) end--;
+            sent = sent.substring(0, end);
+        }
+        Intent out = new Intent(in);
+        out.putExtra(Intent.EXTRA_PROCESS_TEXT_READONLY, true);
+        out.putExtra(Intent.EXTRA_PROCESS_TEXT, sent);
+        try {
+            ((Activity) text.getContext()).startActivityForResult(out, PROCESS_TEXT_REQUEST);
+        } catch (Throwable ignored) {
+            // Nothing started; the click ends here.
+        }
+        return true;
+    }
+
+    // The ids the platform gives the accessibility actions of other apps'
+    // text actions (TextView.ACCESSIBILITY_ACTION_PROCESS_TEXT_START_ID), up
+    // to the first id of its smart actions
+    // (TextView.ACCESSIBILITY_ACTION_SMART_START_ID).
+    private static final int A11Y_PROCESS_TEXT_FIRST = 0x10000100;
+    private static final int A11Y_PROCESS_TEXT_END = 0x10001000;
+
+    // The intents of the actions processTextActions last put in the reading
+    // view's accessibility node, by action id.
+    private static final android.util.SparseArray<Intent> a11yProcessText = new android.util.SparseArray<>();
+
+    // processTextActions puts the reading view's own accessibility actions
+    // for other apps' text actions where the platform put its own. On a view
+    // with an id the platform offers each such app as an accessibility action
+    // as well as a toolbar item, and performs it with the view's own text
+    // (ProcessTextIntentActionsHandler.performAccessibilityAction), past the
+    // listeners handProcessTextAsRead sets. So where the platform's node
+    // offers them, they are taken out, and the apps the platform would list,
+    // by the same query and test (loadSupportedActivities: this app's own,
+    // or exported and asking no permission this app lacks), are offered
+    // under their labels, with ids from the same range, which the view
+    // performs itself (performAccessibilityAction -> processTextAsRead) with
+    // the text as read. The apps are listed again at each node build that
+    // finds the platform's actions, where the platform lists them once per
+    // accessibility focus, and a build that finds none empties the list, so
+    // an id from an earlier node then performs nothing and reports false,
+    // where the platform would start the app with whatever is selected.
+    private static void processTextActions(TextView v, android.view.accessibility.AccessibilityNodeInfo info) {
+        boolean offered = false;
+        for (android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction a
+                : new java.util.ArrayList<>(info.getActionList())) {
+            if (a.getId() < A11Y_PROCESS_TEXT_FIRST || a.getId() >= A11Y_PROCESS_TEXT_END) continue;
+            info.removeAction(a);
+            offered = true;
+        }
+        a11yProcessText.clear();
+        if (!offered) return;
+        android.content.Context c = v.getContext();
+        PackageManager pm = c.getPackageManager();
+        Intent query = new Intent(Intent.ACTION_PROCESS_TEXT).setType("text/plain");
+        int id = A11Y_PROCESS_TEXT_FIRST;
+        for (android.content.pm.ResolveInfo ri : pm.queryIntentActivities(query, 0)) {
+            android.content.pm.ActivityInfo ai = ri.activityInfo;
+            if (!c.getPackageName().equals(ai.packageName) && !(ai.exported && (ai.permission == null
+                    || c.checkSelfPermission(ai.permission) == PackageManager.PERMISSION_GRANTED))) continue;
+            if (id >= A11Y_PROCESS_TEXT_END) break;
+            a11yProcessText.put(id, new Intent(query).setClassName(ai.packageName, ai.name));
+            info.addAction(new android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction(id, ri.loadLabel(pm)));
+            id++;
+        }
     }
 
     // applyParagraphAir attaches the air spans for one chapter's Spanned. Runs
@@ -1002,9 +1274,14 @@ public final class BtBridge {
     // reader; text is the exact selected substring, lo/hi its verse span
     // resolved against the Spanned's verse index (verseAtOffset; 0,0 when the
     // index has nothing for it) — position, not text, decides which verses a
-    // share or cross-reference cites. lead is the selection's place in verse
-    // lo (selectionLead), null when there is none (docs/SELECTION_OFFSET.md).
-    private static native void nativeSelectionAction(String action, String text, int lo, int hi, String lead);
+    // share or cross-reference cites. heading is true when the whole
+    // selection lies in a publisher's heading (headingSelectionVerse), and lo
+    // and hi are then the verse below it. lead is the selection's place in
+    // verse lo (selectionLead), null when there is none
+    // (docs/SELECTION_OFFSET.md). book and chapter are the chapter the text
+    // holds (textBook, textChapter), null and 0 before the first chapter lands.
+    private static native void nativeSelectionAction(String action, String text, int lo, int hi, boolean heading,
+                                                     String lead, String book, int chapter);
     // Called on the UI thread after the reader's scroll has been idle ~200ms.
     private static native void nativeScrolled(float frac);
 
@@ -1183,7 +1460,8 @@ public final class BtBridge {
     // placed below the selection's line when it fits and above it when it
     // does not, and kept inside the overlay either way.
     private static void showStudyPopup(final ActionMode mode, final String sel, int selEnd,
-                                       final int selLo, final int selHi, final String selLead) {
+                                       final int selLo, final int selHi, final boolean selHeading,
+                                       final String selLead, final String selBook, final int selChapter) {
         if (activity == null || root == null || text == null) return;
         float ax = 0; int lineTop = 0, lineBottom = 0;
         Layout lay = text.getLayout();
@@ -1252,7 +1530,7 @@ public final class BtBridge {
                 @Override public void onClick(View v) {
                     pw.dismiss();
                     try { mode.finish(); } catch (Throwable ignored) {}
-                    nativeSelectionAction(action, sel, selLo, selHi, selLead);
+                    nativeSelectionAction(action, sel, selLo, selHi, selHeading, selLead, selBook, selChapter);
                 }
             });
             list.addView(row, new android.widget.LinearLayout.LayoutParams(
@@ -1510,10 +1788,10 @@ public final class BtBridge {
         // positive") out of the long-press callback, which nothing catches:
         // Play's vitals recorded it on 1.2.11, a Vivo phone on Android 14.
         // startDragAndDrop is final, so the long press is where it can be
-        // held. Nothing in a reader needs Scripture dragged out of the page,
-        // so that one exception ends the long press rather than the app; the
-        // selection and its menu stay as they were. Any other exception from
-        // the long press still surfaces.
+        // held: that one exception ends the long press rather than the app,
+        // and the selection and its menu stay as they were. Any other
+        // exception from the long press still surfaces. A drag dragAsRead
+        // starts measures its own shadow first and never reaches it.
         text = new TextView(activity) {
             @Override public boolean performLongClick() {
                 try {
@@ -1536,10 +1814,81 @@ public final class BtBridge {
                 if (id == android.R.id.copy && copyAsRead()) return true;
                 return super.onTextContextMenuItem(id);
             }
+            // The offsets under a touch's fingers, for the long press that
+            // may follow (dragAsRead), read from the events the platform
+            // reads its own from, before the view handles them; and cleared
+            // where the platform clears its own (resetTouchOffsets).
+            @Override public boolean onTouchEvent(android.view.MotionEvent ev) {
+                noteTouch(this, ev);
+                return super.onTouchEvent(ev);
+            }
+            @Override protected void onFocusChanged(boolean focused, int direction, Rect previous) {
+                super.onFocusChanged(focused, direction, previous);
+                if (!focused) resetTouchOffsets();
+            }
+            @Override protected void onTextChanged(CharSequence t, int start, int before, int after) {
+                super.onTextChanged(t, start, before, after);
+                resetTouchOffsets();
+            }
+            @Override protected void onAttachedToWindow() {
+                super.onAttachedToWindow();
+                resetTouchOffsets();
+            }
+            // From Android 13 the platform tells accessibility services that
+            // selectable text it cannot edit takes no long click, unless a
+            // long-click listener is set
+            // (TextView.onInitializeAccessibilityNodeInfoInternal). The
+            // view's listener below is there for the drag alone, so the node
+            // says what the platform says without it. The reading text is
+            // never editable, so being selectable is the whole of the
+            // platform's test here. The actions that hand the selection to
+            // another app are the view's own (processTextActions).
+            @Override public void onInitializeAccessibilityNodeInfo(
+                    android.view.accessibility.AccessibilityNodeInfo info) {
+                super.onInitializeAccessibilityNodeInfo(info);
+                if (Build.VERSION.SDK_INT >= 33 && isTextSelectable()) {
+                    info.setLongClickable(false);
+                    info.removeAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction.ACTION_LONG_CLICK);
+                }
+                processTextActions(this, info);
+            }
+            // An accessibility action that hands the selection to another
+            // app is performed here, with the text as read, and never by the
+            // platform, which would send the view's own text.
+            @Override public boolean performAccessibilityAction(int action, android.os.Bundle arguments) {
+                if (action >= A11Y_PROCESS_TEXT_FIRST && action < A11Y_PROCESS_TEXT_END) {
+                    return processTextAsRead(a11yProcessText.get(action));
+                }
+                return super.performAccessibilityAction(action, arguments);
+            }
         };
+        // An id, though nothing finds the view by it: the platform offers
+        // other apps' text actions, Translate among them, in the toolbar and
+        // as accessibility actions only on a view with one
+        // (TextView.canProcessText). Each hands on the text as read
+        // (handProcessTextAsRead, processTextActions).
+        text.setId(View.generateViewId());
+        // A drag from a long press gives the text as read, as Copy does:
+        // dragAsRead starts the drag a long press inside the selection
+        // starts. The drag is taken from a long-click listener, which runs
+        // inside the view's own long press, so the press keeps the
+        // platform's handling around it (its accessibility event and haptic
+        // feedback, and the touch's lifting ignored after it), and where
+        // dragAsRead declines the platform's long press runs as it did.
+        // Setting the listener changes one thing outside the press, which
+        // the view's onInitializeAccessibilityNodeInfo undoes: the
+        // accessibility node of the text on Android 13 and later would
+        // otherwise offer a long click.
+        text.setOnLongClickListener(new View.OnLongClickListener() {
+            @Override public boolean onLongClick(View v) {
+                return dragAsRead();
+            }
+        });
         text.setFocusable(true);
         text.setFocusableInTouchMode(true);
         text.setText(" ", TextView.BufferType.SPANNABLE); // Editor needs content before selectable arms
+        textBook = null; // no chapter until the next setHtml
+        textChapter = 0;
         text.setTextIsSelectable(true);
         text.setLongClickable(true);
         text.setVerticalScrollBarEnabled(false);
@@ -1549,6 +1898,11 @@ public final class BtBridge {
         // toolbar in a WindowManager-added overlay window — the word selects
         // but no menu appears. NO_OP keeps selection synchronous so the toolbar
         // shows immediately. We don't need smart-selection for scripture anyway.
+        // NO_OP also keeps out the actions a classifier suggests, a Translate
+        // among them, from the toolbar and from the accessibility node: the
+        // platform starts those with intents the classifier builds from the
+        // view's own text, layout characters and all, past processTextAsRead
+        // (TestAndroidReadingToolbarOffersOtherAppsTextActions).
         if (android.os.Build.VERSION.SDK_INT >= 26) {
             text.setTextClassifier(android.view.textclassifier.TextClassifier.NO_OP);
         }
@@ -1573,6 +1927,10 @@ public final class BtBridge {
                 if (aiOn) {
                     MenuItem ai = menu.add(0, 200, 100, "Study with AI");
                     ai.setShowAsAction(MenuItem.SHOW_AS_ACTION_ALWAYS);
+                    // Shown only while the selection holds a word of
+                    // Scripture (studyOffered), here and each time the
+                    // toolbar is prepared again (onPrepareActionMode).
+                    ai.setVisible(studyOffered());
                 }
                 SubMenu sh = menu.addSubMenu(0, 201, 101, "Share");
                 sh.add(0, 106, 0, "Share with citation");
@@ -1587,7 +1945,24 @@ public final class BtBridge {
                 selectionMode = mode;
                 return true;
             }
-            @Override public boolean onPrepareActionMode(ActionMode mode, Menu menu) { return false; }
+            // Each time the toolbar is prepared again, the items that hand
+            // the selection to another app are given processTextAsRead
+            // (handProcessTextAsRead), and Study with AI follows the
+            // selection it then holds: hidden for one that holds no word of
+            // Scripture, a heading's words or a verse number alone, shown
+            // again once it takes a verse's words. Should a handle move the
+            // selection without the toolbar being prepared again, choosing
+            // the item asks once more (onActionItemClicked). Nothing else
+            // here changes with the selection.
+            @Override public boolean onPrepareActionMode(ActionMode mode, Menu menu) {
+                handProcessTextAsRead(menu);
+                MenuItem ai = menu.findItem(200);
+                if (ai == null) return false;
+                boolean show = studyOffered();
+                if (ai.isVisible() == show) return false;
+                ai.setVisible(show);
+                return true;
+            }
             @Override public boolean onActionItemClicked(ActionMode mode, MenuItem item) {
                 int a = text.getSelectionStart(), b = text.getSelectionEnd();
                 if (a < 0 || b < 0) return true;
@@ -1611,9 +1986,10 @@ public final class BtBridge {
                 // appended footnote section gets none of them — the
                 // translators' words must never be dispatched or attributed
                 // as scripture — and a straddling selection is cut at the
-                // boundary. Clamped HERE, at click time: onPrepareActionMode
-                // returns false, so handle drags and Select all move the
-                // offsets without rebuilding the menu.
+                // boundary. Clamped here, at click time, from the offsets the
+                // selection holds when the item is chosen: handle drags and
+                // Select all move them, and onPrepareActionMode only shows or
+                // hides Study with AI as they move (studyOffered).
                 int ce = contentEnd > 0 ? Math.min(contentEnd, text.getText().length()) : text.getText().length();
                 if (s0 >= ce) {
                     mode.finish();
@@ -1629,16 +2005,33 @@ public final class BtBridge {
                 final String sel = readerText(text.getText(), s0, s1).toString();
                 // The verse span and the lead, resolved NOW from the same offsets
                 // the text was captured from (the popup below may collapse the
-                // selection).
-                final int selLo = verseAtOffset(s0);
-                final int selHi = s1 > s0 ? verseAtOffset(s1 - 1) : selLo;
-                final String selLead = selectionLead(text.getText(), s0);
+                // selection). A selection wholly inside a publisher's heading
+                // is the verse below it, with no lead: it means the section
+                // the heading introduces (headingSelectionVerse), where the
+                // number before it named the verse above.
+                final int headVerse = headingSelectionVerse(text.getText(), s0, s1);
+                final boolean selHeading = headVerse > 0;
+                final int selLo = selHeading ? headVerse : verseAtOffset(s0);
+                final int selHi = selHeading ? headVerse : s1 > s0 ? verseAtOffset(s1 - 1) : selLo;
+                final String selLead = selHeading ? null : selectionLead(text.getText(), s0);
+                // And the chapter the text holds, with them: the reader's
+                // chapter can move before the verb is chosen (narration
+                // turns it when a chapter ends, with the popup up), and Go
+                // reads the verses in this one.
+                final String selBook = textBook;
+                final int selChapter = textChapter;
                 if (item.getItemId() == 200) {
                     // The inline "Study with AI": open our popup of the study
                     // actions, anchored at the selection. The selected text is
                     // captured NOW — opening the popup may collapse the selection
-                    // and end the action mode.
-                    showStudyPopup(mode, sel, s1, selLo, selHi, selLead);
+                    // and end the action mode. Not for a selection that holds no
+                    // word of Scripture, should the item still stand for one
+                    // the toolbar was not prepared again for.
+                    if (!selectionHoldsScripture(text.getText(), s0, s1)) {
+                        mode.finish();
+                        return true;
+                    }
+                    showStudyPopup(mode, sel, s1, selLo, selHi, selHeading, selLead, selBook, selChapter);
                     return true;
                 }
                 String action;
@@ -1651,7 +2044,7 @@ public final class BtBridge {
                     default: return false; // submenu header (201) or system item
                 }
                 mode.finish();
-                nativeSelectionAction(action, sel, selLo, selHi, selLead);
+                nativeSelectionAction(action, sel, selLo, selHi, selHeading, selLead, selBook, selChapter);
                 return true;
             }
             @Override public void onDestroyActionMode(ActionMode mode) {
@@ -1952,7 +2345,8 @@ public final class BtBridge {
     // turns each <sup> into one), in document order. A verse's span runs from its
     // number through just before the next verse's number (or end of text) — number +
     // words, so the tint covers the whole verse, matching the iOS read-along range —
-    // or through just before a publisher's heading between them (endBeforeHeading).
+    // or through just before a publisher's heading between them (endBeforeHeading),
+    // or through just before an omitted verse's mark between them (endAtMark).
     private static void buildVerseIndex(CharSequence cs) {
         verseNums = new int[0];
         verseStarts = new int[0];
@@ -1966,6 +2360,10 @@ public final class BtBridge {
         int[] starts = new int[n];
         for (int i = 0; i < n; i++) starts[i] = sp.getSpanStart(sups[i]);
         Arrays.sort(starts);
+        GapMarkSpan[] gaps = sp.getSpans(0, sp.length(), GapMarkSpan.class);
+        int[] marks = new int[gaps == null ? 0 : gaps.length];
+        for (int i = 0; i < marks.length; i++) marks[i] = sp.getSpanStart(gaps[i]);
+        Arrays.sort(marks);
         int[] nums = new int[n];
         int[] ends = new int[n];
         int count = 0;
@@ -1983,13 +2381,29 @@ public final class BtBridge {
             }
             nums[count] = num;
             starts[count] = st;
-            ends[count] = endBeforeHeading(sp, st, en);
+            ends[count] = endBeforeHeading(sp, st, endAtMark(marks, st, en));
             count++;
         }
         verseNums = Arrays.copyOf(nums, count);
         verseStarts = Arrays.copyOf(starts, count);
         verseEnds = Arrays.copyOf(ends, count);
         contentStart = count > 0 ? verseStarts[0] : 0;
+    }
+
+    // endAtMark: where a verse whose number starts at `st` ends, given the next
+    // number at `en` and the sorted starts of the omitted verses' marks — at the
+    // first mark between the two, or at `en`. The mark ("[21]") stands for the
+    // hole and belongs to no verse, so the narration of the verse before it
+    // leaves it bare, as the Apple panes' does (btIOSBuildVerseIndex,
+    // btMacReadAlongRange); the verse after it starts at its own number. The
+    // mark stands in the next verse's paragraph, after any heading before it,
+    // so endBeforeHeading still finds a heading wholly before it.
+    private static int endAtMark(int[] marks, int st, int en) {
+        for (int m : marks) {
+            if (m >= en) break;
+            if (m > st) return m;
+        }
+        return en;
     }
 
     // endBeforeHeading: where a verse whose number starts at `st` ends, given the
@@ -2056,6 +2470,158 @@ public final class BtBridge {
             v = verseNums[i];
         }
         return v;
+    }
+
+    // headingSelectionVerse is the verse below the publisher's heading that
+    // holds the whole selection [s0, s1), or 0 when no heading does. The
+    // selection's characters, less the white space and a paragraph's
+    // direction mark at either end, must lie between a verse's end, where
+    // endBeforeHeading stopped it at the first heading after it (verseEnds),
+    // and the next verse's number, and every line of them that is not blank
+    // must be a heading's (isHeadingParagraph). verseAtOffset names the verse
+    // above for such a selection, since its number is the last before it; but
+    // a word of a heading means the section the heading introduces, which is
+    // cited by the verse below and quotes nothing (selSpan.heading in Go). The
+    // Apple panes keep the same rule (btIOSHeadingSelectionVerse,
+    // btMacHeadingSelectionVerse). A heading above verse 1 never reaches this:
+    // it stands before contentStart, where the app's verbs are not offered.
+    private static int headingSelectionVerse(CharSequence cs, int s0, int s1) {
+        if (!(cs instanceof Spanned) || s0 < 0 || s1 > cs.length()) return 0;
+        Spanned sp = (Spanned) cs;
+        int a = s0, b = s1;
+        while (a < b && isBlankBesideHeading(cs.charAt(a))) a++;
+        while (b > a && isBlankBesideHeading(cs.charAt(b - 1))) b--;
+        if (a >= b) return 0;
+        int k = -1;
+        for (int i = 0; i < verseNums.length; i++) {
+            if (verseStarts[i] > a) break;
+            k = i;
+        }
+        if (k < 0 || k + 1 >= verseNums.length) return 0;
+        if (verseEnds[k] >= verseStarts[k + 1] || a < verseEnds[k] || b > verseStarts[k + 1]) return 0;
+        int p = android.text.TextUtils.lastIndexOf(cs, '\n', a - 1) + 1;
+        while (p < b) {
+            int pe = android.text.TextUtils.indexOf(cs, '\n', p);
+            if (pe < 0) pe = cs.length();
+            boolean blank = true;
+            for (int i = p; i < pe && blank; i++) blank = isBlankBesideHeading(cs.charAt(i));
+            if (!blank && !isHeadingParagraph(sp, p, pe)) return 0;
+            p = pe + 1;
+        }
+        return verseNums[k + 1];
+    }
+
+    // isBlankBesideHeading: white space, the gaps a heading is set with
+    // (HEADING_GAP) and a paragraph's direction mark, none of them a
+    // character of the heading's words.
+    private static boolean isBlankBesideHeading(char c) {
+        return Character.isWhitespace(c) || Character.isSpaceChar(c) || c == PARA_LTR_MARK;
+    }
+
+    // selectionHoldsScripture reports whether [s0, s1) holds a letter or
+    // figure of a verse's words: one that stands after a verse's number
+    // (numberEnd) and before that verse's end (verseEnds). Everything else
+    // from contentStart to contentEnd is a verse number, a publisher's
+    // heading (from a verse's end to the next number), an omitted verse's
+    // mark (endAtMark), or the blanks and punctuation of the verses' words. A
+    // selection of those alone holds no Scripture, and the study verbs are
+    // not offered for it: Go quotes nothing for a heading's words, a verse
+    // number or an omitted verse's mark, and punctuation alone for the rest,
+    // and studies neither (aiStudyOffered), and its dispatch drops the verbs
+    // too. A selection that crosses a heading, with no letter or figure of a
+    // verse's words before the first character of the heading's words
+    // (isHeadingParagraph) it holds,
+    // h, does not count a word it ends inside, which reaches back to the
+    // blank or the closed-up dash before it, as Go's end repair cuts back: Go
+    // quotes nothing for a drag from a heading that ends inside the first
+    // word of the verse below ("Solomon’" of "Solomon’s", "Well-" of
+    // "Well-being"). One begun on punctuation in the verse above follows
+    // the same rule. A complete word before or after the heading still
+    // offers study. The Apple panes keep the same rule (btIOSSelectionHoldsScripture,
+    // btMacSelectionHoldsScripture). With no verse index to read, the pane
+    // cannot tell a verse's number from its words, so it asks only for a
+    // letter or figure and leaves the rest to Go.
+    private static boolean selectionHoldsScripture(CharSequence cs, int s0, int s1) {
+        if (!(cs instanceof Spanned) || s0 < 0 || s1 > cs.length() || s0 >= s1) return false;
+        if (verseNums.length == 0) return holdsLetterOrDigit(cs, s0, s1);
+        Spanned sp = (Spanned) cs;
+        int h = s1; // s1 while no heading's words are found
+        boolean above = false; // a letter or figure of a verse's words stands before h
+        for (int k = 0; k + 1 < verseNums.length && verseStarts[k] < s1 && h == s1; k++) {
+            if (!above) above = verseWordsHold(sp, k, s0, s1, true);
+            int a = Math.max(verseEnds[k], s0), b = Math.min(verseStarts[k + 1], s1);
+            for (int i = a; i < b; i++) {
+                if (isBlankBesideHeading(cs.charAt(i))) continue;
+                int ls = android.text.TextUtils.lastIndexOf(cs, '\n', i) + 1;
+                int le = android.text.TextUtils.indexOf(cs, '\n', i);
+                if (le < 0) le = cs.length();
+                if (isHeadingParagraph(sp, ls, le)) {
+                    h = i;
+                    break;
+                }
+            }
+        }
+        int end = s1;
+        if (h < s1 && !above && end < cs.length() && Character.isLetterOrDigit(cs.charAt(end))) {
+            while (end > h && !isBlankBesideHeading(cs.charAt(end - 1)) && cs.charAt(end - 1) != EM_DASH) end--;
+        }
+        for (int k = 0; k < verseNums.length && verseStarts[k] < end; k++) {
+            if (verseWordsHold(sp, k, s0, end, true)) return true;
+        }
+        return false;
+    }
+
+    // verseWordsHold reports whether verse k's words, after its number
+    // (numberEnd) and before its end (verseEnds), hold within [s0, s1) a
+    // letter or figure (letters) or any character that is not blank
+    // (isBlankBesideHeading).
+    private static boolean verseWordsHold(Spanned sp, int k, int s0, int s1, boolean letters) {
+        if (verseEnds[k] <= s0 || verseStarts[k] >= s1) return false;
+        int a = Math.max(numberEnd(sp, verseStarts[k]), s0), b = Math.min(verseEnds[k], s1);
+        for (int i = a; i < b; i++) {
+            char c = sp.charAt(i);
+            if (letters ? Character.isLetterOrDigit(c) : !isBlankBesideHeading(c)) return true;
+        }
+        return false;
+    }
+
+    // holdsLetterOrDigit reports whether [s0, s1) of cs holds a letter or
+    // figure.
+    private static boolean holdsLetterOrDigit(CharSequence cs, int s0, int s1) {
+        for (int i = s0; i < s1; i++) {
+            if (Character.isLetterOrDigit(cs.charAt(i))) return true;
+        }
+        return false;
+    }
+
+    // numberEnd: where the number of the verse whose number starts at st
+    // ends, the end of the superscript it is set in (buildVerseIndex).
+    private static int numberEnd(Spanned sp, int st) {
+        int end = st;
+        SuperscriptSpan[] sups = sp.getSpans(st, st + 1, SuperscriptSpan.class);
+        if (sups != null) {
+            for (SuperscriptSpan s : sups) {
+                if (sp.getSpanStart(s) == st && sp.getSpanEnd(s) > end) end = sp.getSpanEnd(s);
+            }
+        }
+        return end;
+    }
+
+    // studyOffered: whether the selection toolbar offers Study with AI for
+    // the reading text's selection as it now stands, cut to scripture as the
+    // app's verbs cut it (onActionItemClicked): only while it holds a word of
+    // Scripture (selectionHoldsScripture). A selection inside the Psalm
+    // superscription or the footnote section is cut to nothing, and holds
+    // none.
+    private static boolean studyOffered() {
+        if (text == null) return false;
+        CharSequence cs = text.getText();
+        int a = text.getSelectionStart(), b = text.getSelectionEnd();
+        if (a < 0 || b < 0) return false;
+        int s0 = Math.max(Math.min(a, b), contentStart);
+        int ce = contentEnd > 0 ? Math.min(contentEnd, cs.length()) : cs.length();
+        int s1 = Math.min(Math.max(a, b), ce);
+        return s1 > s0 && selectionHoldsScripture(cs, s0, s1);
     }
 
     /**
@@ -2421,10 +2987,10 @@ public final class BtBridge {
         // reads as a different surface's furniture.
         int side = Math.max(dp(10), text != null ? text.getPaddingLeft() : dp(10));
         int sideR = Math.max(dp(10), text != null ? text.getPaddingRight() : dp(10));
-        // Both paddings, not twice the left: the reporter column is centred on
-        // the WINDOW (applyReadingPadding), so on the cutout side of a landscape
-        // phone the two differ, and a card sized from the left alone would run
-        // past the column on the right.
+        // Both paddings, not twice the left: a landscape phone's reporter
+        // column is centred on the window (applyReadingPadding), so on the
+        // cutout side the two differ, and a card sized from the left alone
+        // would run past the column on the right.
         int wpx = content.getWidth() - side - sideR;
         if (wpx < dp(60)) {
             // No real layout yet. The width LISTENER only fires when the width
@@ -3262,6 +3828,8 @@ public final class BtBridge {
      * in textContainerInset (btIOSApplyInsets): Go pushes the WIDTH the column
      * should occupy and this side owns both the density and the live view
      * width, so a width change re-centres without re-importing the chapter.
+     * Which centre the column takes, the pane's or the window's, is
+     * BtReadingColumn's.
      *
      * measureDp <= 0 is the phone page — the pushed padding stands. A measure
      * wider than the view (a large text size on a narrow window) would compute
@@ -3277,7 +3845,8 @@ public final class BtBridge {
             int w = text.getWidth();
             int measurePx = Math.round(lastMeasureDp * density);
             if (w > 0) {
-                // CENTRED ON THE WINDOW, NOT ON THIS VIEW. The overlay takes
+                // On the window where the pane stands evenly in it, on the
+                // pane otherwise (BtReadingColumn.sides). The overlay takes
                 // its frame from the Fyne reading object, and in landscape the
                 // canvas keeps that object out of the display cutout — so the
                 // frame sits 42px from one edge and 178px from the other on the
@@ -3285,9 +3854,13 @@ public final class BtBridge {
                 // the screen's centre, to the side the cutout is not on. The
                 // iPhone centres its column on the screen (its text view spans
                 // the width; the measure keeps the words clear of the island),
-                // and this matches it: the column's left edge is placed at the
-                // window's centre minus half the measure, in window
-                // coordinates, and the view's own offset is subtracted.
+                // and the window's centre matches it: the column's left edge is
+                // placed at the window's centre minus half the measure, in
+                // window coordinates, and the view's own offset is subtracted.
+                // Beside a rail the pane does not stand evenly in the window,
+                // and the column takes the pane's centre, as the iPad's does;
+                // the window's set it about half the rail's width left of the
+                // pane's centre.
                 //
                 // The view's place in the window is taken from the FRAME the
                 // overlay was given (frameX, plus the inset the canvas sits
@@ -3300,28 +3873,28 @@ public final class BtBridge {
                 // frame-driven also means applyFrame re-centres after every
                 // move, which the width listener alone never would (the width
                 // does not change when the window moves).
-                int base = padL;
-                boolean placed = false;
+                //
+                // A window whose width cannot be read is passed as 0, and the
+                // column takes the pane's centre.
+                int windowW = 0, insetL = 0, insetR = 0;
                 try {
                     android.view.View decor = activity != null ? activity.getWindow().getDecorView() : null;
-                    if (decor != null && decor.getWidth() > 0) {
-                        int addLeft = 0;
+                    if (decor != null) {
                         android.view.WindowInsets wi = decor.getRootWindowInsets();
-                        if (wi != null) addLeft = wi.getSystemWindowInsetLeft();
-                        int viewLeft = frameX + addLeft;
-                        int wantLeft = (decor.getWidth() - measurePx) / 2 - viewLeft;
-                        int wantRight = w - wantLeft - measurePx;
-                        // Only when the column fits with at least the phone
-                        // page's margin on both sides; otherwise the view's own
-                        // centre below, and failing that the legacy padding.
-                        if (wantLeft >= base && wantRight >= base) {
-                            padL = wantLeft; padR = wantRight; placed = true;
+                        if (wi != null) {
+                            insetL = wi.getSystemWindowInsetLeft();
+                            insetR = wi.getSystemWindowInsetRight();
                         }
+                        windowW = decor.getWidth();
                     }
-                } catch (Throwable ignored) {}
-                if (!placed) {
-                    int side = (w - measurePx) / 2;
-                    if (side > base) { padL = side; padR = side; }
+                } catch (Throwable ignored) {
+                    windowW = 0;
+                }
+                int[] sides = BtReadingColumn.sides(w, measurePx, padL, windowW,
+                        insetL, insetR, frameX, frameW);
+                if (sides != null) {
+                    padL = sides[0];
+                    padR = sides[1];
                 }
             }
         }
@@ -3332,7 +3905,7 @@ public final class BtBridge {
             // The "Follow narration" pill is centred in the overlay by its
             // gravity, and the overlay is where the canvas put the reading
             // object — clear of the cutout, so off the window's centre by half
-            // the inset. The column is centred on the window now, and the pill
+            // the inset. There the column is centred on the window, and the pill
             // should sit under the COLUMN, whose centre is half the padding
             // difference from the overlay's. FrameLayout moves a centred child
             // by the WHOLE of leftMargin - rightMargin (its onLayout adds the
@@ -3460,6 +4033,29 @@ public final class BtBridge {
         });
     }
 
+    // The chapter the text holds, as Go named it when it pushed the chapter:
+    // the selection menu hands it to Go with every selection, beside the
+    // verses and the lead, which are this chapter's whatever the reader is on
+    // by the time a verb is chosen. Written only where the text is replaced
+    // (setHtml), from the chapter announced just ahead of it on the UI queue
+    // (setChapter). UI thread only.
+    private static String textBook = null;
+    private static int textChapter = 0;
+    private static String nextBook = null;
+    private static int nextChapter = 0;
+
+    /** setChapter names the chapter of the HTML that follows it. Go calls it
+     *  straight before setHtml, on the same thread, so the two land on the UI
+     *  queue in that order and setHtml keys its text with it. */
+    public static void setChapter(final String book, final int chapter) {
+        UI.post(new Runnable() {
+            @Override public void run() {
+                nextBook = book;
+                nextChapter = chapter;
+            }
+        });
+    }
+
     /** setHtml atomically replaces a chapter and its initial placement: an
      *  arrival verse outranks frac, frac>=0 restores, otherwise the chapter
      *  starts at the top. */
@@ -3547,6 +4143,8 @@ public final class BtBridge {
                 }
                 if (s instanceof Spannable) liftWashToLineBackground((Spannable) s);
                 text.setText(s, TextView.BufferType.SPANNABLE);
+                textBook = nextBook;
+                textChapter = nextChapter;
                 // The prior chapter's highlight span belonged to the old text; drop
                 // the reference (the span itself went with the replaced Spanned) and
                 // re-index the verses for read-along on the fresh content.
@@ -3727,6 +4325,18 @@ public final class BtBridge {
         }
     }
 
+    /** windowHeightDp is the activity window's height in dp, from the same
+     *  configuration (screenHeightDp): with the width, the window's size and
+     *  shape before the Fyne canvas has a size, read by the Go side. 0 before
+     *  an activity exists. */
+    public static float windowHeightDp() {
+        try {
+            return activity != null ? activity.getResources().getConfiguration().screenHeightDp : 0f;
+        } catch (Throwable t) {
+            return 0f;
+        }
+    }
+
     /** timeZoneID is the device's zone database name (Europe/London), read by the
      *  Go side to set its local zone: Go's own Android start-up leaves that at
      *  UTC, and fyne's launch-time repair fixes only the offset then in force. */
@@ -3865,7 +4475,7 @@ public final class BtBridge {
             lp.width = frameW;
             lp.height = frameH;
             w.setAttributes(lp);
-            // The reporter column is centred on the WINDOW, against this frame
+            // The reporter column is placed against this frame
             // (applyReadingPadding), so a frame that moves re-centres it — and
             // the note card is laid out against the column, so a move that
             // changed the padding re-derives the card as a width change would.
@@ -4053,6 +4663,18 @@ public final class BtBridge {
         try {
             if (activity != null) Toast.makeText(activity, msg, Toast.LENGTH_LONG).show();
         } catch (Throwable ignored) {}
+    }
+
+    /**
+     * shareFailed says msg in the share's toast (shareNotice) for a share the
+     * Go side could not finish before anything reached this bridge: a card
+     * the preview could not draw, said in the words shareImage says for a
+     * card it cannot share (sayShareFailed, share_failed.go).
+     */
+    public static void shareFailed(final String msg) {
+        UI.post(new Runnable() {
+            @Override public void run() { shareNotice(msg); }
+        });
     }
 
     private static boolean needsLegacyStoragePermission() {

@@ -939,6 +939,10 @@ func applyLoadedVersion(state *AppState, v BibleVersion, data *BibleData, mode d
 	if cause == byReader || v.ID == state.preferredVersion {
 		state.preferredVersion = ""
 	}
+	// A translation given up with its key records no choice to keep: any
+	// landing ends the default's being shown in its place, which is all the
+	// picker's sentence says (keyRemovedVersion).
+	state.keyRemovedVersion = ""
 
 	// SEARCH RESULTS ARE THE TRANSLATION'S, NOT THE READER'S. Every row in the
 	// list is a Verse carrying the OLD translation's wording, and the list

@@ -121,6 +121,39 @@ case "$NKJV_TEXT" in
   off) echo "==> NKJV text: off (notice pages)"; NKJV_PAGES=1189 ;;
 esac
 
+# --- The privacy policy's effective date ---------------------------------------
+# A policy whose words or links differ from the live copy's carries the day of
+# the publish, London time, as its date, and one whose do not, the live copy's
+# date or that day (docs/RELEASING.md, stage 11;
+# cmd/sitepages/policy_date.go). Checked before the reader is generated, since
+# a publish it refuses should spend no API.Bible quota: a publish stops here,
+# and so does one that cannot read the live copy. A dry run goes on, to give
+# its drift report, and ends refused. The policy is rendered as the site's
+# pages are below, from the same clean tree, into the live copy's temporary
+# directory, which the exit path removes however the run ends.
+echo "==> checking the privacy policy's effective date against the live copy"
+POLICY_REFUSED=""
+if git fetch --quiet origin gh-pages 2>/dev/null; then
+  LIVE_TREE=$(mktemp -d)
+  mkdir "$LIVE_TREE/live" "$LIVE_TREE/built"
+  if git cat-file -e origin/gh-pages:privacy.html 2>/dev/null; then
+    git show origin/gh-pages:privacy.html > "$LIVE_TREE/live/privacy.html"
+  fi
+  go run ./cmd/sitepages -source docs -out "$LIVE_TREE/built" -nkjv-text "$NKJV_TEXT"
+  if ! go run ./cmd/sitepages -check-policy-date -live "$LIVE_TREE/live" -out "$LIVE_TREE/built" \
+      -today "$(TZ=Europe/London date +%F)"; then
+    $DRY_RUN ||
+      fail "the privacy policy's effective date does not match its words (above); set it as docs/RELEASING.md, stage 11, says"
+    POLICY_REFUSED=yes
+    echo "    --dry-run: going on to build and compare; the run ends refused"
+  fi
+  rm -rf "$LIVE_TREE"
+  LIVE_TREE=""
+else
+  $DRY_RUN || fail "origin/gh-pages could not be fetched, so the privacy policy cannot be held to the live copy"
+  echo "    origin/gh-pages could not be fetched; the policy's date is not checked"
+fi
+
 echo "==> generating the reader"
 if [[ "$NKJV_TEXT" == on ]]; then
   # The London date on both sides of the fetch: the pages must state one of
@@ -349,6 +382,10 @@ else
 fi
 
 if $DRY_RUN; then
+  # The policy-date check refused (above, before the reader was built): the
+  # dry run went on to build and compare, and ends refused.
+  [[ -z "$POLICY_REFUSED" ]] ||
+    fail "the privacy policy's effective date does not match its words; set it as docs/RELEASING.md, stage 11, says"
   echo "==> --dry-run: built and verified $OUT; nothing pushed"
   exit 0
 fi

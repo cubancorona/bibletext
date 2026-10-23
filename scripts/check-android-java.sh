@@ -19,6 +19,10 @@
 #
 #   scripts/check-android-java.sh
 #
+# It also compiles the toolkit's GoNativeActivity as patches/ leave it, which
+# scripts/build-android.sh compiles over the class the fyne tool packages, and
+# runs the mobile typing patch's check against it on this host's JVM.
+#
 # Output is thrown away; nothing is dexed, packaged or signed.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -60,10 +64,13 @@ if [ -z "$JAR" ]; then
 fi
 
 command -v javac >/dev/null || { echo "javac not on PATH" >&2; exit 2; }
+command -v java >/dev/null || { echo "java not on PATH" >&2; exit 2; }
 
 out="$(mktemp -d)"
 log="$(mktemp)"
-trap 'rm -rf "$out" "$log"' EXIT
+# The generated toolkit starts as a copy of the read-only module cache, and a
+# run stopped mid-copy leaves directories rm cannot empty until unlocked.
+trap 'chmod -R u+w "$out" 2>/dev/null; rm -rf "$out" "$log"' EXIT
 
 if javac --release "$RELEASE" -Xlint:-options -cp "$JAR" -d "$out" android/*.java >"$log" 2>&1; then
   classes="$(find "$out" -name '*.class' | wc -l | tr -d ' ')"
@@ -80,3 +87,27 @@ else
   cat "$log" >&2
   exit 1
 fi
+
+# The toolkit's activity, generated into this check's own directory (never
+# third_party/fyne) and compiled with android/goapp's receiver, as
+# scripts/build-android.sh compiles them. Without this a patch to it was first
+# compiled by a packaging run.
+if ! BIBLETEXT_FYNE_DEST="$out/fyne" scripts/setup-fyne-patch.sh >"$log" 2>&1; then
+  echo "the patched toolkit could not be generated:" >&2
+  cat "$log" >&2
+  exit 1
+fi
+mkdir "$out/activity"
+if ! javac --release "$RELEASE" -Xlint:-options -cp "$JAR" -d "$out/activity" \
+    "$out/fyne/internal/driver/mobile/app/GoNativeActivity.java" \
+    android/goapp/FyneNotificationReceiver.java \
+    patches/testdata/BtTypedDeletesCheck.java >"$log" 2>&1; then
+  echo "the patched GoNativeActivity does NOT compile:" >&2
+  cat "$log" >&2
+  exit 1
+fi
+echo "the patched GoNativeActivity compiles"
+
+# A keyboard's deletion removes as many characters from the field as the
+# keyboard removed (patches/fyne-2.7.4-mobile-typed-characters.patch).
+java -cp "$out/activity:$JAR" org.golang.app.BtTypedDeletesCheck

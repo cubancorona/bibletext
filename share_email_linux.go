@@ -20,7 +20,6 @@ package bibletext
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -123,7 +122,8 @@ func composeShareEmail(subject, body, attachment string) error {
 // share_portal_linux.go). The answer means what portalEmailResponse says.
 // Once the portal has taken the call, no answer in time ends the compose
 // too: a slow portal may yet open one, and a second from the next route
-// would make two.
+// would make two. Nor does the sheet say the mail program could not be
+// opened, since it may have been (portalComposeOutcome).
 func composeEmailViaPortal(subject, body, attachment string) error {
 	conn, err := dbus.ConnectSessionBus()
 	if err != nil {
@@ -146,14 +146,7 @@ func composeEmailViaPortal(subject, body, attachment string) error {
 		defer f.Close()
 		options["attachment_fds"] = dbus.MakeVariant([]dbus.UnixFD{dbus.UnixFD(f.Fd())})
 	}
-	code, taken, err := portalRequest(conn, portalEmailIface+".ComposeEmail", options, portalAnswerWait, "")
-	switch {
-	case err != nil && taken:
-		return mailRouteStop{fmt.Errorf("the Email portal: %w", err)}
-	case err != nil:
-		return err
-	}
-	return portalEmailResponse(code)
+	return portalComposeOutcome(portalRequest(conn, portalEmailIface+".ComposeEmail", options, portalAnswerWait, ""))
 }
 
 // composeEmailViaXDGEmail runs xdg-email, which finds the desktop's mail

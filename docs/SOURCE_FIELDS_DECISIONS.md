@@ -194,9 +194,12 @@ Capture and rendering both shipped, and the shared-model-first order held: one
 block model decides a chapter's order as heading-then-paragraph and all four
 surfaces read it. The toggle and the shape guard did not ship. So a heading is
 drawn on every surface with no way to turn it off, and the fused 510-character
-Greek Daniel 3 string is drawn whole, which is the one case this recommendation
-was written to catch. Both are still worth doing, and the guard is the cheaper
-and the more urgent of the two.
+Greek Daniel 3 string was drawn whole, the one case this recommendation was
+written to catch, until 1.2.23. The publisher's own USFM marks that note as a
+footnote on the heading, reference 3:24, so 1.2.23 draws the 35-character
+title as the heading and the note among the chapter's footnotes
+(docs/ROADMAP.md, decision 8). The guard then has no case left in the WEB,
+the BSB or the WEB Catholic; the setting is still worth doing.
 
 ### Source paragraph boundaries
 

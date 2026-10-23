@@ -148,14 +148,15 @@ func promptShareNote(state *AppState, selectedText string, span selSpan) {
 	if state == nil {
 		return
 	}
-	promptShareNoteWith(state, selectedText, span, "", readerPassage(state))
+	promptShareNoteWith(state, selectedText, span, "", selectionPassage(state, span))
 }
 
 // promptShareNoteWith opens the composer with note already in the field — ""
 // for every ordinary open. The light/dark reopen passes what the reader had
 // written when the rebuild drained the sheet (sheet_reopen.go). at is the
-// passage the selection was made on, taken when the composer first opened and
-// carried through a reopen, so a sent note is shown only there (showSentNote).
+// passage the selection was made on (selectionPassage), taken when the
+// composer first opened and carried through a reopen, so a sent note is shown
+// only there (showSentNote).
 func promptShareNoteWith(state *AppState, selectedText string, span selSpan, note string, at notePassage) {
 	if state == nil || state.window == nil {
 		return
@@ -290,14 +291,18 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 	// With a note, the sheet is anchored to the selected words rather than
 	// the selection (wordsAnchor): the note's card goes on the page above
 	// them as the sheet is handed its message, and the Mac and iPad panes
-	// present it beside the words once the page has settled.
+	// present it beside the words once the page has settled. Only while the
+	// page holds at: the panes find the words by verse number in the text
+	// on screen, and once narration or a link has moved the reader that
+	// text is another chapter's, where the note is not shown either. The
+	// share then goes out as one with no note does.
 	send := func() {
 		note := strings.TrimSpace(noteText())
 		closeSheet()
 		var stored StoredNote
 		var kept bool
 		share := func() { stored, kept = shareVerseLinkWithNote(state, selectedText, note, span, at) }
-		if note != "" {
+		if note != "" && at.onScreen(state) {
 			shareAnchoredAt(wordsAnchor(selectedText, span), share)
 		} else {
 			share()
@@ -365,27 +370,29 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 		// header's edge at about 400pt to partway down the Go to chip at
 		// 440pt. Where the card is taller than the room below the header the
 		// excerpt gives up rows, one at a time down to one, until the card
-		// clears it or has nothing left to give; a card of one row is the
-		// card the sheet had before the excerpt, which no window the app
-		// allows puts inside the header. The sheet's box is the card plus the
+		// clears it or has nothing left to give. Where even one row leaves
+		// it too tall, from about 400pt down to the 386pt the window allows,
+		// the card keeps its rows and covers the header instead
+		// (fitBelowOrOverHeader). The sheet's box is the card plus the
 		// popup's own padding (its MinSize), so that is what is measured
 		// against the room. Sized again the same way when the window changes
 		// size (sheet_refit.go), so the rows come back with the room.
 		rows := excerpt.maxLines
 		fit := func() {
-			excerpt.setMaxLines(rows)
-			setPassagePreviewCompact(passageView, false)
-			popup.Resize(fyne.NewSize(w, card.MinSize().Height))
-			popup.Resize(fyne.NewSize(w, card.MinSize().Height))
-			room := clearOfHeader(cnv.Size().Height, cnv.Size().Height, headerClearance(state))
-			for n := rows; n > 1 && excerpt.Visible() && popup.MinSize().Height > room; n-- {
-				excerpt.setMaxLines(n - 1)
+			fitBelowOrOverHeader(state, popup, func(room float32) {
+				excerpt.setMaxLines(rows)
+				setPassagePreviewCompact(passageView, false)
 				popup.Resize(fyne.NewSize(w, card.MinSize().Height))
-			}
-			if popup.MinSize().Height > room {
-				setPassagePreviewCompact(passageView, true)
 				popup.Resize(fyne.NewSize(w, card.MinSize().Height))
-			}
+				for n := rows; n > 1 && excerpt.Visible() && popup.MinSize().Height > room; n-- {
+					excerpt.setMaxLines(n - 1)
+					popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+				}
+				if popup.MinSize().Height > room {
+					setPassagePreviewCompact(passageView, true)
+					popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+				}
+			})
 		}
 		fit()
 		registerSheetReopen(state, popup, reopen)
@@ -491,10 +498,11 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 }
 
 // shareNoteReference is the passage label on the compose sheet for a
-// selection on the reader's chapter — the same citation the share itself will
-// carry, so the writer can see what they are attaching the note to.
+// selection, read in the chapter it was made in — the same citation the
+// share itself will carry, so the writer can see what they are attaching the
+// note to.
 func shareNoteReference(state *AppState, selection string, span selSpan) string {
-	_, ref := shareNoteQuote(state, selection, span, readerPassage(state))
+	_, ref := shareNoteQuote(state, selection, span, selectionPassage(state, span))
 	return ref
 }
 

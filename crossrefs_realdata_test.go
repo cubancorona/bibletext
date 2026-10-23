@@ -15,22 +15,20 @@ import (
 // walk fails if the dataset ever reads deeper, so the margin is re-judged
 // rather than assumed.
 //
-// In the shipping build it is the twentieth row, for WEB Catholic's Genesis
-// 41:42, whose twenty rows include eight into Greek Esther, which that
-// translation cannot show.
+// In the shipping build it is the eighteenth row, first at the WEB's Matthew
+// 10:1. It was the twentieth, for WEB Catholic's Genesis 41:42, whose twenty
+// rows include eight into the Greek Esther, until the Greek Esther came to
+// map verse for verse.
 //
 // In the next major release (docs/NEXT.md) it is the twenty-first, for
 // Matthew 10:17 in all four: five of its best rows lie inside passages its
 // chapter lists as the same saying on another occasion (parallels.go), two
 // of them its own, and a selection of the whole chapter hides all five.
-// Genesis 41:42 no longer reads so deep there, because the Greek Esther maps
-// verse for verse; with that alone, before the other-occasion rows, the
-// deepest was the eighteenth, first at the WEB's Matthew 10:1.
 var crossRefDeepestRead = func() int {
 	if nextRelease {
 		return 21
 	}
-	return 20
+	return 18
 }()
 
 // crossRefDeepestReadable is the furthest down a verse's rows any selection

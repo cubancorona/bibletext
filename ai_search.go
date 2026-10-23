@@ -279,6 +279,12 @@ func runAISearch(ctx context.Context, state *AppState, query string) ([]Verse, e
 	cacheKey := aiCacheKey(id+"|search", "", 0, strings.ToLower(q))
 	raw, cached := aiCacheGet(cacheKey)
 	if !cached {
+		// The search leaves the device only for a provider the reader has
+		// allowed with this key (ai_permission.go), however the search was
+		// started.
+		if !store.aiAllowed(id, key) {
+			return nil, &aiPermissionError{provider: info}
+		}
 		out, err := aiSearchGenerate(ctx, info, store, key, buildAISearchPrompt(q))
 		if err != nil {
 			return nil, err

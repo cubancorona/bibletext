@@ -10,8 +10,8 @@ package bibletext
 // Cross-checked against versification_data.go: every verse recorded there
 // as absent from an edition appears here as a hole.
 //
-// Books whose numbering corresponds to nothing are excluded, so a gap in
-// Greek Esther is not reported as an omission.
+// No book's numbering fails to correspond, so none is excluded: the Greek
+// Esther's three gaps are holes like any other.
 
 var omittedVerses = map[string]map[string]map[int][]int{
 	"bsb": {
@@ -28,6 +28,7 @@ var omittedVerses = map[string]map[string]map[int][]int{
 	},
 	"webc": {
 		"Acts":   {8: {37}, 15: {34}, 24: {7}},
+		"Esther": {4: {6}, 9: {5, 30}},
 		"Luke":   {17: {36}},
 		"Sirach": {1: {5, 7, 21}, 3: {19}, 10: {21}, 11: {15, 16}, 13: {14}, 16: {15, 16}, 17: {5, 9, 16, 18, 21}, 18: {3}, 19: {18, 19, 21}, 20: {3}, 22: {9, 10}, 24: {18, 24}, 25: {12}, 26: {19, 20, 21, 22, 23, 24, 25, 26, 27}},
 	},

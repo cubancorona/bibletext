@@ -209,6 +209,12 @@ jobs:
         working-directory: build/ios-check/fyne
         run: go test -race ./internal/painter -run '^TestBTFont' -count=1
 
+      # patches/fyne-2.7.4-mobile-typed-characters.patch: a keyboard's joiners
+      # and other characters reach a field on Android and iOS.
+      - name: Patched mobile typing regressions
+        working-directory: build/ios-check/fyne
+        run: go test -race ./internal/driver/mobile -run '^TestBTTyped' -count=1
+
       # The darwin-tagged native pane and its tests in the next major release
       # (docs/NEXT.md); the linux job cannot compile them.
       - name: go test (next release)

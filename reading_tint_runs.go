@@ -24,6 +24,11 @@ const nativeTintRunCap = 32
 // nativeTintRun is one contiguous stretch of verses under one wash, in the
 // numbering of the verses being drawn.
 //
+// A number the page omits stands for that hole's mark: Lo 21 on the BSB's
+// Matthew 17 starts the run at "[21]", before verse 22's number. The native
+// side resolves such a number to the mark (btIOSRunSpanRange,
+// btMacRunSpanRange); no drawn verse can have it, since the page omits it.
+//
 // VERSES, not character ranges. The character range is the native side's own
 // business: it holds a verse index built from the imported attributed string
 // (btIOSBuildVerseIndex / btMacLocForVerse), it is the only side that knows
@@ -53,30 +58,51 @@ type nativeTintRun struct {
 // same AND the verse numbers are consecutive: a gap in the numbering ends the
 // run, because the native side fills a run by walking lo..hi and would
 // otherwise wash a verse the tint answer says nothing about.
+//
+// The marks the page draws for omitted verses (pageGaps) are walked in their
+// place, before the verse they are filed under, each in its own tint
+// (gapOf), as the HTML writes them. A mark fills the hole in the numbering,
+// so a span across Matthew 17:21 in the BSB is one run, 20-22, the mark
+// inside it; a link to 17:21 alone is the run 21-21, the mark alone; and a
+// span on verse 20 alone stops before the mark. With the footnotes off the
+// page draws no marks, and the hole ends the run as before.
 func nativeTintRuns(state *AppState, verses []Verse) []nativeTintRun {
 	tints := chapterTint(state)
 	if tints.tint == tintNone {
 		return nil // the overwhelmingly common case: nothing marked, no allocation
 	}
 	pal := state.pal()
+	gaps := pageGaps(state, verses)
 	var runs []nativeTintRun
 	last := tintNone
-	for _, v := range verses {
-		t := tints.of(v)
+	// add extends the runs by one drawn number under tint t, and reports
+	// false once the cap is reached.
+	add := func(n int, t verseTint) bool {
 		wash, painted := t.wash(pal)
 		if !painted {
 			last = tintNone
-			continue
+			return true
 		}
-		if t == last && len(runs) > 0 && runs[len(runs)-1].Hi == v.Verse-1 {
-			runs[len(runs)-1].Hi = v.Verse
-			continue
+		if t == last && len(runs) > 0 && runs[len(runs)-1].Hi == n-1 {
+			runs[len(runs)-1].Hi = n
+			return true
 		}
 		if len(runs) >= nativeTintRunCap {
-			break
+			return false
 		}
-		runs = append(runs, nativeTintRun{Lo: v.Verse, Hi: v.Verse, Wash: wash})
+		runs = append(runs, nativeTintRun{Lo: n, Hi: n, Wash: wash})
 		last = t
+		return true
+	}
+	for _, v := range verses {
+		for _, n := range gaps[v.Verse] {
+			if !add(n, tints.gapOf(v, n)) {
+				return runs
+			}
+		}
+		if !add(v.Verse, tints.of(v)) {
+			return runs
+		}
 	}
 	return runs
 }

@@ -98,6 +98,12 @@ fi
 # the same tree with one parameter dropped from setNote must be rejected — the
 # exact skew that otherwise reaches a device as a silently dead bridge.
 #
+# The bridge is compiled with every other android/*.java, as
+# scripts/build-android.sh and scripts/check-android-java.sh compile it: it
+# calls classes kept in files of their own (BtReadingColumn), and alone it
+# does not compile. Each compile and dex keeps its output and prints it when
+# the step fails, so a failure names its cause.
+#
 # The portable half of this contract is TestJNIDescriptorsMatchBtBridge, which
 # compares the two SOURCES and runs on every platform with no SDK. This block is
 # the stronger check against real bytecode, and needs an Android SDK; where
@@ -184,10 +190,36 @@ if [ -z "$ANDROID_JAR" ] || [ -z "$D8" ] || ! command -v javac >/dev/null 2>&1; 
 else
   export BIBLETEXT_ANDROID_BUILD_TOOLS="$(dirname "$D8")"
   mkdir -p "$JNI_DIR/classes-good" "$JNI_DIR/classes-skew"
-  javac -nowarn --release 17 -classpath "$ANDROID_JAR" \
-    -d "$JNI_DIR/classes-good" android/BtBridge.java >/dev/null 2>&1
-  "$D8" --min-api 24 --output "$JNI_DIR" \
-    $(find "$JNI_DIR/classes-good" -name '*.class') >/dev/null 2>&1
+
+  # Runs one compile or dex step with its output in a log, and on failure
+  # prints that log and stops the script.
+  run_jni_step() {
+    local what="$1" log="$2"
+    shift 2
+    if ! "$@" >"$log" 2>&1; then
+      echo "ERROR: $what failed:" >&2
+      cat "$log" >&2
+      exit 1
+    fi
+  }
+
+  # The sources the bridge is compiled with: android/*.java but BtBridge.java,
+  # which each run supplies, the tree's own or the skewed copy.
+  BRIDGE_PEERS=()
+  for source in android/*.java; do
+    [ "$source" = android/BtBridge.java ] || BRIDGE_PEERS+=("$source")
+  done
+  if [ "${#BRIDGE_PEERS[@]}" -eq 0 ]; then
+    echo "ERROR: no android/*.java beside BtBridge.java; the glob or the tree moved" >&2
+    exit 1
+  fi
+
+  run_jni_step "javac of android/*.java" "$JNI_DIR/javac-good.log" \
+    javac -nowarn --release 17 -classpath "$ANDROID_JAR" \
+    -d "$JNI_DIR/classes-good" android/BtBridge.java "${BRIDGE_PEERS[@]}"
+  run_jni_step "d8 of the compiled android/*.java" "$JNI_DIR/d8-good.log" \
+    "$D8" --min-api 24 --output "$JNI_DIR" \
+    $(find "$JNI_DIR/classes-good" -name '*.class')
   mv "$JNI_DIR/classes.dex" "$JNI_DIR/good.dex"
   verify_android_jni_descriptors "$JNI_DIR/good.dex" reading_android.go
 
@@ -219,10 +251,13 @@ PY_SKEW
     echo "ERROR: the JNI skew control edited nothing, so it is not a control" >&2
     exit 1
   fi
-  javac -nowarn --release 17 -classpath "$ANDROID_JAR" \
-    -d "$JNI_DIR/classes-skew" "$JNI_DIR/BtBridge.java" >/dev/null 2>&1
-  "$D8" --min-api 24 --output "$JNI_DIR" \
-    $(find "$JNI_DIR/classes-skew" -name '*.class') >/dev/null 2>&1
+  run_jni_step "javac of the skewed BtBridge.java with android/*.java" \
+    "$JNI_DIR/javac-skew.log" \
+    javac -nowarn --release 17 -classpath "$ANDROID_JAR" \
+    -d "$JNI_DIR/classes-skew" "$JNI_DIR/BtBridge.java" "${BRIDGE_PEERS[@]}"
+  run_jni_step "d8 of the skewed compile" "$JNI_DIR/d8-skew.log" \
+    "$D8" --min-api 24 --output "$JNI_DIR" \
+    $(find "$JNI_DIR/classes-skew" -name '*.class')
   mv "$JNI_DIR/classes.dex" "$JNI_DIR/skew.dex"
   if verify_android_jni_descriptors "$JNI_DIR/skew.dex" reading_android.go \
     >/dev/null 2>&1; then

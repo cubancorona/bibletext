@@ -1,14 +1,10 @@
-//go:build next
-
 package main
 
-// THE GREEK ESTHER ON THE NEXT MAJOR RELEASE'S SITE (docs/NEXT.md). WEB
-// Catholic's Greek Esther keeps the Hebrew book's verse numbers, so the next
-// release's versification table maps it verse for verse: a chapter it adds
-// nothing to and lacks nothing of carries the verse across like any other, and
-// a chapter where it lacks a verse opens the chapter and says a verse is
-// missing. The shipping site's behaviour is pinned in
-// greek_esther_current_test.go.
+// THE GREEK ESTHER ON THE SITE. WEB Catholic's Greek Esther keeps the Hebrew
+// book's verse numbers, so the versification table maps it verse for verse: a
+// chapter it adds nothing to and lacks nothing of carries the verse across
+// like any other, and a chapter where it lacks a verse opens the chapter and
+// says a verse is missing.
 
 import (
 	"os"
@@ -96,9 +92,8 @@ func TestTheGreekEstherLinkCarriesTheVerseWhereTheNumbersAgree(t *testing.T) {
 	}
 }
 
-// No published translation's book fails to correspond in the next release, so
-// no page prints the incommensurable caveat; it is a draft awaiting approval
-// (docs/NEXT.md, decision C), pinned here word for word so that its wording
+// No published translation's book fails to correspond, so no page prints the
+// incommensurable caveat; it is pinned here word for word so that its wording
 // changes only on purpose. Reader-facing the day a book needs it.
 func TestTheIncommensurableCaveatIsPinned(t *testing.T) {
 	if incommensurableCaveat != "%s %s the whole of %s differently, so %s %s %s rather than the verse." {

@@ -8,6 +8,10 @@ package bibletext
 // sw600dp-style dimension heuristic (device_android.go).
 func deviceIsTablet() bool { return false }
 
+// launchWindowSize: a desktop window has a size from its first layout, and
+// reports none before it (layoutSize, launch_window.go).
+func launchWindowSize() (w, h float32, ok bool) { return 0, 0, false }
+
 // No phone, no landscape reading mode (phone_landscape.go).
 func phoneLandscapeReadingSupported() bool { return false }
 

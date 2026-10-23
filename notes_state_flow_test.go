@@ -1614,8 +1614,7 @@ func TestArrivingNoteSurvivesItsOwnSaveOnAFullStore(t *testing.T) {
 //     correspond (incommensurable), and a book the new translation does not
 //     contain: cleared, every one.
 //
-// The Greek Esther's own cases are the switch's: greek_esther_current_test.go
-// and greek_esther_next_test.go.
+// The Greek Esther's own cases are in greek_esther_test.go.
 func TestHighlightRenumberedAcrossVersionSwitch(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -1707,9 +1706,8 @@ func TestHighlightRenumberedAcrossVersionSwitch(t *testing.T) {
 	})
 
 	t.Run("incommensurable clears", func(t *testing.T) {
-		// The shipping table records the Greek Esther as incommensurable and
-		// the next major release's records no book, so it is marked so for
-		// the subtest, which then holds in both.
+		// The shipped tables record no book as incommensurable, so the
+		// Greek Esther is marked so for the subtest.
 		withIncommensurableBook(t, "webc", "Esther")
 		if _, _, res := MapVerse("webc", "web", "Esther", 4, 17); res != verseMapIncommensurable {
 			t.Fatalf("precondition: webc Esther should be INCOMMENSURABLE with web, got %v", res)

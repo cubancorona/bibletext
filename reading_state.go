@@ -407,7 +407,20 @@ func restoreReadingState(state *AppState, rs readingState, base *BibleData) (boo
 			// the reader's chosen translation is gone for good — from a
 			// condition that fixed itself seconds later. See D9 in
 			// docs/VERSION_STATES.md.
-			state.preferredVersion = v.ID
+			//
+			// The exception is a translation the reader gave up. A key the
+			// reader removed in Settings is a definitive, deliberate absence,
+			// not a store that has yet to unlock: remembering the translation
+			// only promised a launch that would try it again, and none can
+			// until they add a key. So it is given up with the key, and the
+			// picker says why (keyRemovedVersion; decision 11 in
+			// docs/ROADMAP.md). A key entered in the field again makes it the
+			// remembered choice again (takeBackKeyedTranslation).
+			if apiBibleKeyRemoved(v) {
+				state.keyRemovedVersion = v.ID
+			} else {
+				state.preferredVersion = v.ID
+			}
 		case known:
 			data, loadedMode, err := loadVersionForRestore(v, base)
 			if err != nil {

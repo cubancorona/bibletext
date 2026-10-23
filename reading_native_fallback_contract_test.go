@@ -1,28 +1,25 @@
 package bibletext
 
-// THE PLAIN-TEXT FALLBACK'S CONTRACT on the native panes, pinned at the
-// source: the host cannot execute either cgo preamble, so the contract is held
-// the way the house holds every native contract
-// (readalong_title_native_contract_test.go, reading_native_scroll_contract_test.go)
-// — by parsing the source, with each check carrying a control that proves it
-// can fail.
+// The fallback page's contract on the native panes, pinned at the source: the
+// host cannot execute either cgo preamble, so the contract is held the way
+// the house holds every native contract (readalong_title_native_contract_test.go,
+// reading_native_scroll_contract_test.go), by reading the source, with each
+// check carrying a control that proves it can fail.
 //
-// The latched import derives every cached range from the storage it has just
-// installed, each after the one it depends on: the content boundaries; the
-// title range, bounded by the content start; the highlight union, which
-// resolves verse 0 through the title range; and the note, whose anchor falls
-// back to the highlight. A failed import returns before any of that, and the
-// fallback that then replaces the text is the ONE path where those
-// derivations are skipped — so each range has to be re-derived (or cleared)
-// there, in the import's own order, or the previous chapter's value survives
-// under the plain text. Every reader clamps on length alone, so a stale
-// range passes the clamp wherever the tag-stripped string is long enough to
-// hold it: the read-along painted verse 0 over the wrong text,
-// a resize or a reposition scrolled to the old highlight and anchored the
-// note card on it, and the pills were placed from paragraph ranges of a
-// storage that no longer existed.
+// When every import of a chapter fails, each pane shows the page Go built
+// from the same HTML (reading_apple_fallback.go). The page used to be set as
+// untyped text, after which the pane re-derived, or cleared, each cached range
+// in a list of its own that had to follow the import's order by hand, and
+// nothing could find a verse on it: every verb sent no span. Now the pane sets
+// the page in the faces the importer gives the same markup and installs it
+// through the very function the import installs through, so every range is
+// derived from it in the import's order, and the selection verbs read the
+// same geometry from it as from an imported page. reading_native_fallback_page_test.go
+// and reading_apple_fallback_test.go hold the page and what a selection on
+// it is answered with.
 
 import (
+	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -51,108 +48,221 @@ func swapOnce(body, a, b string) string {
 	return strings.Replace(body, "\x00", b, 1)
 }
 
-// The fallback's steps on each pane, in the order the import derives them:
-// the new text, then the content boundaries, the title range, the highlight
-// union, the note — and on iOS the resume marker, the one cached run a scroll
-// writes BACK onto the storage, forgotten as the import forgets it.
-var (
-	macFallbackSteps = []string{
-		"[gTextView setString:bibleTextMacPlainFromHTML(plainSrc)];",
-		"gMacContentEnd = gTextView.textStorage.length;",
-		"gMacContentStart = 0;",
-		"btMacFindTitleRange(nil);",
-		"btMacRefreshHighlightRange(gTextView.textStorage);",
-		"btMacRefreshNote();",
+// withoutLineComments is src with every // comment taken out, string
+// literals passed over, so a statement quoted in a comment is not counted as
+// one.
+func withoutLineComments(src string) string {
+	var b strings.Builder
+	inString := false
+	for i := 0; i < len(src); i++ {
+		c := src[i]
+		switch {
+		case inString:
+			b.WriteByte(c)
+			if c == '\\' && i+1 < len(src) {
+				i++
+				b.WriteByte(src[i])
+			} else if c == '"' || c == '\n' {
+				inString = false
+			}
+		case c == '/' && i+1 < len(src) && src[i+1] == '/':
+			for i < len(src) && src[i] != '\n' {
+				i++
+			}
+			b.WriteByte('\n')
+		default:
+			if c == '"' {
+				inString = true
+			}
+			b.WriteByte(c)
+		}
 	}
-	iosFallbackSteps = []string{
-		"gReadingTV.text = bibleTextPlainFromHTML(plainSrc);",
-		"gContentEnd = gReadingTV.textStorage.length;",
-		"btIOSBuildVerseIndex(nil);",
-		"btIOSFindTitleRange(nil);",
-		"btIOSRefreshHighlightRange(gReadingTV.textStorage);",
-		"btIOSRefreshNote();",
-		"gHasLastTouch = NO;",
-		"gMarkerApplied = NO;",
-	}
-)
+	return b.String()
+}
 
-// F1: each fallback re-derives (or clears) every cached range, in the import's
-// order, after the text that invalidated them is in place.
-func TestNativeFallbacksRederiveEveryCachedRangeInImportOrder(t *testing.T) {
-	for _, tc := range []struct {
-		path, fn string
-		steps    []string
-	}{
-		{"reading_macos.go", "void bibleTextMacTVSetHTML(const char *html) {", macFallbackSteps},
-		{"reading_ios.go", "void bibleTextTVSetHTML(const char *html) {", iosFallbackSteps},
-	} {
-		body := nativeFunctionSource(t, tc.path, tc.fn)
-		if !inSequence(body, tc.steps...) {
-			t.Errorf("%s: the plain-text fallback does not run, in this order:\n  %s", tc.path, strings.Join(tc.steps, "\n  "))
+// appleFallbackPane names the functions each pane's import and fallback are
+// made of, and the statements that join them.
+type appleFallbackPane struct {
+	path       string
+	setHTML    string   // the push's entry, with the retry ladder
+	apply      string   // one import attempt
+	importHTML string   // the import proper
+	install    string   // the one install, for both pages
+	page       string   // Go's fallback page set in its faces
+	font       string   // the face maker the page uses
+	tryImport  string   // an attempt, as the ladder writes it
+	importOK   []string // the attempt: import, refuse on nil, install
+	fallback   string   // the ladder's last step
+	textWrite  *regexp.Regexp
+	derive     []string // the install's derivations, in the import's order
+	menu       []string // where the selection verbs read the span and lead
+}
+
+var appleFallbackPanes = []appleFallbackPane{
+	{
+		path:       "reading_ios.go",
+		setHTML:    "void bibleTextTVSetHTML(const char *html, const char *fallbackText, const int *fallbackRuns,",
+		apply:      "static BOOL bibleTextApplyHTML(NSData *data) {",
+		importHTML: "static NSAttributedString *btIOSImportHTML(NSData *data) {",
+		install:    "static void btIOSInstallPage(NSAttributedString *as) {",
+		page:       "static NSAttributedString *btIOSFallbackPage(NSString *text, NSData *runs, BTFallbackStyle st) {",
+		font:       "btIOSFallbackFont",
+		tryImport:  "if (bibleTextApplyHTML(data)) { gTVBook = book; gTVChapter = chapter; return; }",
+		importOK:   []string{"NSAttributedString *as = btIOSImportHTML(data);", "if (as == nil) return NO;", "btIOSInstallPage(as);", "return YES;"},
+		fallback:   "btIOSInstallPage(btIOSFallbackPage(fbText, fbRuns, fallbackStyle));",
+		textWrite:  regexp.MustCompile(`gReadingTV\.(?:text|attributedText)\s*=[^=]|\[gReadingTV(?:\.textStorage)? (?:setAttributedString|replaceCharactersInRange|setText|setAttributedText):`),
+		derive: []string{
+			"gReadingTV.attributedText = as;",
+			"btIOSFindContentEnd(gReadingTV.textStorage);",
+			"btIOSBuildVerseIndex(gReadingTV.textStorage);",
+			"btIOSFindTitleRange(gReadingTV.textStorage);",
+			"gBodyGenApplied = gBodyGenPending;",
+			"btIOSRefreshHighlightRange(gReadingTV.textStorage);",
+			"btIOSInstallNote();",
+			"btIOSLayoutPillViews();",
+			"btIOSRebuildWash();",
+			"gHasLastTouch = NO;",
+			"gMarkerApplied = NO;",
+			"btIOSApplyMarker();",
+			"bibleTextScrollReadingTV();",
+		},
+		menu: []string{
+			"NSUInteger contentStart = btIOSContentStart();",
+			"int spanLo = (int)btIOSVerseAtIndex(textView.textStorage, range.location, &loLoc);",
+			"int spanHi = (int)btIOSVerseAtIndex(textView.textStorage, NSMaxRange(range) - 1, NULL);",
+			"? [[textView.text substringWithRange:NSMakeRange(loLoc, range.location - loLoc)] copy]",
+			"bibleTextAIMenuTapped((char *)act.UTF8String, (char *)captured.UTF8String, spanLo, spanHi,",
+			"(char *)lead.UTF8String, (char *)book.UTF8String, chapter);",
+			"bibleTextStudyMenuTapped((char *)act.UTF8String, (char *)captured.UTF8String, spanLo, spanHi,",
+			"(char *)lead.UTF8String, (char *)book.UTF8String, chapter);",
+		},
+	},
+	{
+		path:       "reading_macos.go",
+		setHTML:    "void bibleTextMacTVSetHTML(const char *html, const char *fallbackText, const int *fallbackRuns,",
+		apply:      "static BOOL bibleTextMacApplyHTML(NSData *data) {",
+		importHTML: "static NSMutableAttributedString *btMacImportHTML(NSData *data) {",
+		install:    "static void btMacInstallPageLatched(NSAttributedString *as) {",
+		page:       "static NSAttributedString *btMacFallbackPage(NSString *text, NSData *runs, BTFallbackStyle st) {",
+		font:       "btMacFallbackFont",
+		tryImport:  "if (bibleTextMacApplyHTML(data)) { gMacTextBook = book; gMacTextChapter = chapter; return; }",
+		importOK:   []string{"NSMutableAttributedString *as = btMacImportHTML(data);", "if (as == nil) return NO;", "btMacInstallPage(as);", "return YES;"},
+		fallback:   "btMacInstallPage(btMacFallbackPage(fbText, fbRuns, fallbackStyle));",
+		textWrite:  regexp.MustCompile(`\[gTextView(?:\.textStorage)? (?:setString|setAttributedString|replaceCharactersInRange|insertText):|gTextView\.string\s*=[^=]`),
+		derive: []string{
+			"[gTextView.textStorage setAttributedString:as];",
+			"btMacFindContentEnd(gTextView.textStorage);",
+			"btMacFindContentStart(gTextView.textStorage);",
+			"btMacFindTitleRange(gTextView.textStorage);",
+			"gBodyGenApplied = gBodyGenPending;",
+			"btMacRefreshHighlightRange(gTextView.textStorage);",
+			"btMacRefreshNote();",
+			"bibleTextMacScrollTV();",
+		},
+		menu: []string{
+			"btMacVerseSpanForRange(self.textStorage, sel, &lo, &hi, &loLoc);",
+			"NSString *lead = btMacSelectionLead(self.textStorage, sel, lo, loLoc);",
+			"bibleTextStudyMenuTapped((char *)action, (char *)text.UTF8String, lo, hi, heading, (char *)lead.UTF8String,",
+			"(char *)gMacTextBook.UTF8String, gMacTextChapter);",
+		},
+	},
+}
+
+// F1: the fallback installs Go's page, set in its faces, through the import's
+// own install, as the ladder's last step; it copies the page before the push
+// returns; and nothing on the way writes the text view's text. The text is
+// written in one place in the whole pane, the install.
+func TestTheFallbackInstallsGosPageAsTheImportInstallsItsOwn(t *testing.T) {
+	for _, p := range appleFallbackPanes {
+		set := nativeFunctionSource(t, p.path, p.setHTML)
+		ladder := []string{p.tryImport, p.tryImport, p.tryImport, p.fallback}
+		if !inSequence(set, ladder...) {
+			t.Errorf("%s: the push does not try the import three times and then install the fallback page:\n  %s", p.path, strings.Join(ladder, "\n  "))
 		}
-		// CONTROL: taking any one step out fails the check, so every step is
-		// held — not only the first and last.
-		for _, s := range tc.steps {
-			if inSequence(strings.Replace(body, s, "", 1), tc.steps...) {
-				t.Fatalf("%s: the sequence check still passes with %q removed; it proves nothing", tc.path, s)
+		copies := []string{
+			"NSString *fbText = fallbackText != NULL ? [NSString stringWithUTF8String:fallbackText] : nil;",
+			"[NSData dataWithBytes:fallbackRuns length:(NSUInteger)fallbackRunCount * 3 * sizeof(int)]",
+			"dispatch_async(dispatch_get_main_queue(), ^{",
+		}
+		if !inSequence(set, copies...) {
+			t.Errorf("%s: the push does not copy the fallback page before it leaves the caller's thread", p.path)
+		}
+		if n := len(p.textWrite.FindAllString(withoutLineComments(set), -1)); n != 0 {
+			t.Errorf("%s: the push writes the text view's text %d time(s) itself", p.path, n)
+		}
+		src := withoutLineComments(readNativeSource(t, p.path))
+		install := withoutLineComments(nativeFunctionSource(t, p.path, p.install))
+		if n, m := len(p.textWrite.FindAllString(src, -1)), len(p.textWrite.FindAllString(install, -1)); n != 1 || m != 1 {
+			t.Errorf("%s: the text view's text is written %d time(s), %d of them in the install; want once, there", p.path, n, m)
+		}
+		// The Mac's wash is an attribute the importer paints from the
+		// stylesheet, and the fallback page has none: the install must paint
+		// it from the model. iOS draws it from the model on every install.
+		if p.path == "reading_macos.go" {
+			unpainted := []string{"gTintUnpainted = YES;", p.fallback}
+			if !inSequence(set, unpainted...) {
+				t.Errorf("%s: the fallback page is not marked unpainted before the install, so the chapter's wash is not on it", p.path)
+			}
+			install := nativeFunctionSource(t, p.path, p.install)
+			if !inSequence(install, "gBodyGenApplied = gBodyGenPending;", "if (gTintUnpainted) { btMacRepaintChapterWashFromModel(); gTintUnpainted = NO; }") {
+				t.Errorf("%s: the install does not paint an unpainted wash from the model once the chapter is confirmed", p.path)
+			}
+			if inSequence(strings.Replace(set, "gTintUnpainted = YES;", "", 1), unpainted...) {
+				t.Fatalf("%s: the wash check passes with the mark taken out; it proves nothing", p.path)
 			}
 		}
-		// CONTROL: exchanging any two neighbours fails the check, so the ORDER
-		// is held, not only the presence.
-		for i := 1; i < len(tc.steps); i++ {
-			if inSequence(swapOnce(body, tc.steps[i-1], tc.steps[i]), tc.steps...) {
-				t.Fatalf("%s: the sequence check still passes with %q and %q exchanged; it proves nothing", tc.path, tc.steps[i-1], tc.steps[i])
-			}
+		// CONTROLS: the ladder without its fallback, the copies after the
+		// dispatch, and a second write of the text are each seen.
+		if inSequence(strings.Replace(set, p.fallback, "", 1), ladder...) {
+			t.Fatalf("%s: the ladder check passes with the fallback taken out; it proves nothing", p.path)
+		}
+		if inSequence(swapOnce(set, copies[0], copies[2]), copies...) {
+			t.Fatalf("%s: the copy check passes with the copy after the dispatch; it proves nothing", p.path)
+		}
+		planted := strings.Replace(src, p.fallback, p.fallback+"\n"+"[gTextView setString:@\"\"]; gReadingTV.text = @\"\";", 1)
+		if len(p.textWrite.FindAllString(planted, -1)) == 1 {
+			t.Fatalf("%s: the write counter misses a planted write; it proves nothing", p.path)
 		}
 	}
 }
 
-// F2: the fallback's order is the IMPORT's order, on both panes — the
-// reference the fallback mirrors, not an order of its own. The iOS import
-// inlines the note's steps; its fallback reaches the same steps through
-// btIOSRefreshNote, whose body is pinned to run them in the import's order.
-func TestNativeImportsDeriveTheCachedRangesInTheOrderTheFallbacksMirror(t *testing.T) {
-	latched := nativeFunctionSource(t, "reading_macos.go", "static BOOL btMacApplyHTMLLatched(NSData *data) {")
-	macImport := []string{
-		"[gTextView.textStorage setAttributedString:as];",
-		"btMacFindContentEnd(gTextView.textStorage);",
-		"btMacFindContentStart(gTextView.textStorage);",
-		"btMacFindTitleRange(gTextView.textStorage);",
-		"btMacRefreshHighlightRange(gTextView.textStorage);",
-		"btMacRefreshNote();",
-	}
-	if !inSequence(latched, macImport...) {
-		t.Errorf("macOS: the latched import does not derive, in this order:\n  %s", strings.Join(macImport, "\n  "))
-	}
-	apply := nativeFunctionSource(t, "reading_ios.go", "static BOOL bibleTextApplyHTML(NSData *data) {")
-	iosImport := []string{
-		"btIOSFindContentEnd(gReadingTV.textStorage);",
-		"btIOSBuildVerseIndex(gReadingTV.textStorage);",
-		"btIOSFindTitleRange(gReadingTV.textStorage);",
-		"btIOSRefreshHighlightRange(gReadingTV.textStorage);",
-		"btIOSInstallNote();",
-		"btIOSLayoutPillViews();",
-		"gHasLastTouch = NO;",
-		"gMarkerApplied = NO;",
-	}
-	if !inSequence(apply, iosImport...) {
-		t.Errorf("iOS: the import does not derive, in this order:\n  %s", strings.Join(iosImport, "\n  "))
+// F2: an import attempt installs through the same function, after the
+// import succeeds; and that install derives every cached range in the
+// import's order: the text, the content boundaries, the title, the
+// generation that confirms the chapter, the highlight union, the note, the
+// wash and the resume marker, then the placement.
+func TestTheInstallDerivesTheCachedRangesInTheImportsOrder(t *testing.T) {
+	for _, p := range appleFallbackPanes {
+		apply := nativeFunctionSource(t, p.path, p.apply)
+		if !inSequence(apply, p.importOK...) {
+			t.Errorf("%s: an import attempt does not import, refuse a failure and install, in that order:\n  %s", p.path, strings.Join(p.importOK, "\n  "))
+		}
+		install := nativeFunctionSource(t, p.path, p.install)
+		if !inSequence(install, p.derive...) {
+			t.Errorf("%s: the install does not derive, in this order:\n  %s", p.path, strings.Join(p.derive, "\n  "))
+		}
+		// CONTROLS: any step taken out, or two neighbours exchanged, fails.
+		for _, s := range p.derive {
+			if inSequence(strings.Replace(install, s, "", 1), p.derive...) {
+				t.Fatalf("%s: the sequence check still passes with %q removed; it proves nothing", p.path, s)
+			}
+		}
+		for i := 1; i < len(p.derive); i++ {
+			if inSequence(swapOnce(install, p.derive[i-1], p.derive[i]), p.derive...) {
+				t.Fatalf("%s: the sequence check still passes with %q and %q exchanged; it proves nothing", p.path, p.derive[i-1], p.derive[i])
+			}
+		}
 	}
 	refresh := nativeFunctionSource(t, "reading_ios.go", "static void btIOSRefreshNote(void) {")
 	if !inSequence(refresh, "btIOSInstallNote();", "btIOSLayoutNote();", "btIOSLayoutPillViews();") {
-		t.Error("iOS: btIOSRefreshNote must install the bands, then place the card, then the pills — the import's own order")
-	}
-	// CONTROL: a step out of place fails.
-	if inSequence(swapOnce(latched, macImport[2], macImport[3]), macImport...) {
-		t.Fatal("inSequence still passes with the macOS content start and title finders exchanged; the check proves nothing")
+		t.Error("iOS: btIOSRefreshNote must install the bands, then place the card, then the pills — the install's own order")
 	}
 }
 
 // F3: the highlight union has ONE writer on each pane — the refresh that
-// derives it from the model — and the fallback goes through that writer rather
-// than assigning the range itself. A second writer is how a range and its
-// model drift; the fallback's clear is a derivation that resolves to nothing,
-// so the same code is right the day the fallback gains geometry.
+// derives it from the model — and the install goes through that writer
+// rather than assigning the range itself. A second writer is how a range and
+// its model drift.
 func TestHighlightRangeHasOneWriterOnEachPane(t *testing.T) {
 	for _, tc := range []struct{ path, global, refresh string }{
 		{"reading_macos.go", "gMacHighlightRange", "static void btMacRefreshHighlightRange(NSTextStorage *ts) {"},
@@ -186,49 +296,223 @@ func TestHighlightRangeHasOneWriterOnEachPane(t *testing.T) {
 	}
 }
 
-// F4: the premise that makes the fallback's derivation resolve to nothing.
-// Against the plain string every verse lookup has to fail, or the union would
-// be built from whatever the lookup happened to accept: iOS resolves verses
-// from the index alone, which the fallback has just emptied; macOS walks the
-// font runs and skips every run at or above the largest font's threshold,
-// which a uniform-font string never falls below.
-func TestVerseLookupsFindNothingInPlainText(t *testing.T) {
-	iosIndex := nativeFunctionSource(t, "reading_ios.go", "static void btIOSBuildVerseIndex(NSTextStorage *ts) {")
-	if !strings.Contains(iosIndex, "if (ts == nil) { gVerseIndexCount = 0; return; }") {
-		t.Error("iOS: btIOSBuildVerseIndex(nil) must empty the index")
+// fractionOf reads the number a pattern's first group captures in src.
+func fractionOf(t *testing.T, src, pattern, what string) float64 {
+	t.Helper()
+	m := regexp.MustCompile(pattern).FindStringSubmatch(src)
+	if m == nil {
+		t.Fatalf("%s is not written as this test reads it", what)
 	}
-	for _, fn := range []string{
-		"static NSUInteger btIOSLocForVerse(NSTextStorage *ts, NSInteger verse) {",
-		"static NSRange btIOSReadAlongRange(NSTextStorage *ts, NSInteger verse) {",
-	} {
-		body := nativeFunctionSource(t, "reading_ios.go", fn)
-		if !strings.Contains(body, "gVerseIndexCount") || strings.Contains(body, "enumerateAttribute") {
-			t.Errorf("iOS: %s must resolve from the index alone", fn)
+	f, err := strconv.ParseFloat(m[1], 64)
+	if err != nil {
+		t.Fatalf("%s: %v", what, err)
+	}
+	return f
+}
+
+// F4: the page is set in the faces the walks read. The run kinds cross as
+// numbers and are equal on both sides; a verse number is set at the
+// numeral's size, bold, a title italic and a heading bold, at the body's
+// size, and the body face is the page's largest; and the numeral's size, as
+// Go sends it, is below the fraction of the largest size under which each
+// pane takes a run for a verse number, and outside the band by which it
+// finds the translators' notes, so the page ends where its text does.
+func TestTheFallbackPageIsSetInTheFacesTheWalksRead(t *testing.T) {
+	kinds := regexp.MustCompile(`enum \{ kBTFallbackNumeral = (\d+), kBTFallbackTitle = (\d+), kBTFallbackHeading = (\d+) \};`)
+	st := appleFallbackStyleFor(&AppState{})
+	ratio := st.numeralPt / st.bodyPt
+	for _, p := range appleFallbackPanes {
+		src := readNativeSource(t, p.path)
+		m := kinds.FindStringSubmatch(src)
+		if m == nil {
+			t.Fatalf("%s: the fallback run kinds are not declared as this test reads them", p.path)
+		}
+		for i, want := range []appleFallbackRunKind{appleFallbackNumeral, appleFallbackTitle, appleFallbackHeading} {
+			if m[1+i] != strconv.Itoa(int(want)) {
+				t.Errorf("%s: kind %d is %s in C and %d in Go", p.path, i, m[1+i], want)
+			}
+		}
+		page := nativeFunctionSource(t, p.path, p.page)
+		faces := []string{
+			"NSFontAttributeName: " + p.font + "(st.bodyPt, 0),",
+			"*numeral = " + p.font + "(st.numeralPt, kCTFontTraitBold);",
+			"*italic = " + p.font + "(st.bodyPt, kCTFontTraitItalic);",
+			"*bold = " + p.font + "(st.bodyPt, kCTFontTraitBold);",
+			"case kBTFallbackNumeral:", "[as addAttribute:NSFontAttributeName value:numeral range:rr];",
+			"case kBTFallbackTitle:", "[as addAttribute:NSFontAttributeName value:italic range:rr];",
+			"case kBTFallbackHeading:", "[as addAttribute:NSFontAttributeName value:bold range:rr];",
+		}
+		if !inSequence(page, faces...) {
+			t.Errorf("%s: the fallback page does not set its runs in these faces, in this order:\n  %s", p.path, strings.Join(faces, "\n  "))
+		}
+		if inSequence(swapOnce(page, "value:italic range:rr", "value:bold range:rr"), faces...) {
+			t.Fatalf("%s: the face check passes with the title set bold and the heading italic; it proves nothing", p.path)
+		}
+		prefix := "btIOS"
+		if p.path == "reading_macos.go" {
+			prefix = "btMac"
+		}
+		thr := fractionOf(t, nativeFunctionSource(t, p.path, "static CGFloat "+prefix+"VerseFontThreshold(NSTextStorage *ts) {"),
+			`return maxSize > 0 \? maxSize \* ([0-9.]+) :`, p.path+": the verse-number threshold")
+		end := nativeFunctionSource(t, p.path, "static void "+prefix+"FindContentEnd(NSTextStorage *ts) {")
+		lo := fractionOf(t, end, `p >= maxSize \* ([0-9.]+) && p < maxSize \* [0-9.]+`, p.path+": the notes' band")
+		hi := fractionOf(t, end, `p >= maxSize \* [0-9.]+ && p < maxSize \* ([0-9.]+)`, p.path+": the notes' band")
+		if !(ratio > 0 && ratio < thr) || (ratio >= lo && ratio < hi) || thr <= 0 || thr >= 1 {
+			t.Errorf("%s: a number at %.3f of the body is not below the threshold %.2f and outside the notes' band [%.2f, %.2f)", p.path, ratio, thr, lo, hi)
+		}
+		// CONTROL: a number at the body's size would not be found.
+		if 1.0 < thr {
+			t.Fatalf("%s: a number at the body's size passes the threshold; the check proves nothing", p.path)
 		}
 	}
-	macLoc := nativeFunctionSource(t, "reading_macos.go", "static NSUInteger btMacLocForVerse(NSTextStorage *ts, NSInteger verse) {")
-	if !strings.Contains(macLoc, "((NSFont *)val).pointSize >= thr) return;") {
-		t.Error("macOS: btMacLocForVerse must skip every run at or above the threshold")
+}
+
+// F5: Go builds the fallback page from the very HTML it pushes, and hands
+// it over with that HTML, so the two cannot be of different chapters.
+func TestGoPushesTheFallbackPageOfTheHTMLItPushes(t *testing.T) {
+	for _, tc := range []struct{ path, fn, call string }{
+		{"reading_ios.go", "pushChapterHTML", "C.bibleTextTVSetHTML(c, fbText, fbRuns, C.int(len(fb.runs)), cFallbackStyle(appleFallbackStyleFor(state)), gen)"},
+		{"reading_macos.go", "newMacReadingHost", "C.bibleTextMacTVSetHTML(c, fbText, fbRuns, C.int(len(fb.runs)), cFallbackStyle(appleFallbackStyleFor(state)), gen)"},
+	} {
+		body := funcBody(t, readSourceFile(t, tc.path), tc.fn)
+		steps := []string{"html := buildChapterHTML(state, verses)", "c := C.CString(html)", "fb := appleFallbackPageOf(html)",
+			"fbText := C.CString(fb.text)", "runs := fb.flatRuns()", "fbRuns = (*C.int)(unsafe.Pointer(&runs[0]))", tc.call}
+		if !inSequence(body, steps...) {
+			t.Errorf("%s: %s does not build the fallback page from the HTML it pushes and pass both:\n  %s", tc.path, tc.fn, strings.Join(steps, "\n  "))
+		}
+		if strings.Count(body, "buildChapterHTML(") != 1 {
+			t.Errorf("%s: %s builds the chapter's HTML more than once", tc.path, tc.fn)
+		}
+		if inSequence(strings.Replace(body, "fb := appleFallbackPageOf(html)", "fb := appleFallbackPageOf(other)", 1), steps...) {
+			t.Fatalf("%s: the check passes a page built from other HTML; it proves nothing", tc.path)
+		}
 	}
-	// The premise, not the literal: the threshold is SOME fraction of the
-	// largest font strictly inside (0, 1), so a uniform font is never below it.
-	thr := nativeFunctionSource(t, "reading_macos.go", "static CGFloat btMacVerseFontThreshold(NSTextStorage *ts) {")
-	fraction := regexp.MustCompile(`return maxSize > 0 \? maxSize \* ([0-9.]+) :`)
-	m := fraction.FindStringSubmatch(thr)
-	if m == nil {
-		t.Fatal("macOS: the threshold must be the largest font scaled by a fraction")
+}
+
+// F6: every import step and the fallback act only for the latest push. The
+// install confirms the chapter (gBodyGenApplied), so a step left over from a
+// push that a later one has replaced must not put the older chapter in. The
+// generation each step checks is the one the push's announcement issued and
+// Go handed over with the push. Read on the main queue it is shared by two
+// pushes made in one main-thread turn, where the announcement moves it at
+// once and the push's blocks run later, so a retry of the first could install
+// the older chapter over the second; that is the shape the controls plant.
+func TestEveryImportStepActsOnlyForTheLatestPush(t *testing.T) {
+	for _, tc := range []struct {
+		pane              appleFallbackPane
+		begin, goFn, goAt string
+	}{
+		{appleFallbackPanes[0], "int bibleTextIOSBeginChapterPush(int sameChapter) {", "pushChapterHTML", "gen := C.bibleTextIOSBeginChapterPush(sameChapter)"},
+		{appleFallbackPanes[1], "int bibleTextMacBeginChapterPush(int sameChapter) {", "newMacReadingHost", "gen := C.bibleTextMacBeginChapterPush(sameChapter)"},
+	} {
+		p := tc.pane
+		set := nativeFunctionSource(t, p.path, p.setHTML)
+		const guard = "if (gen != gBodyGenPending) return;"
+		steps := []string{"BTFallbackStyle fallbackStyle, int gen) {", guard, p.tryImport, guard, p.tryImport, guard, p.tryImport, p.fallback}
+		// The generation is the push's own: nothing in the push reads the
+		// pending one into it.
+		readsPending := regexp.MustCompile(`\bgen\s*=\s*gBodyGenPending\b`)
+		check := func(set string) error {
+			if !inSequence(set, steps...) {
+				return fmt.Errorf("the steps are not each behind the push's generation:\n  %s", strings.Join(steps, "\n  "))
+			}
+			if readsPending.MatchString(withoutLineComments(set)) {
+				return fmt.Errorf("the push reads the pending generation for its own")
+			}
+			return nil
+		}
+		if err := check(set); err != nil {
+			t.Errorf("%s: %v", p.path, err)
+		}
+		// The announcement issues the generation on the caller's thread,
+		// moves the pending one only forward (an announcement made off the
+		// main thread can reach the queue after a later one made on it), and
+		// returns it.
+		begin := nativeFunctionSource(t, p.path, tc.begin)
+		issued := []string{"int gen = __atomic_add_fetch(&gBodyGenIssued, 1, __ATOMIC_SEQ_CST);",
+			"if (gen <= gBodyGenPending) return;", "gBodyGenPending = gen;", "return gen;"}
+		if !inSequence(begin, issued...) || strings.Contains(begin, "gBodyGenPending++") {
+			t.Errorf("%s: the announcement does not issue the push's generation, move the pending one forward to it and return it:\n  %s", p.path, strings.Join(issued, "\n  "))
+		}
+		body := funcBody(t, readSourceFile(t, p.path), tc.goFn)
+		if !inSequence(body, tc.goAt, "cFallbackStyle(appleFallbackStyleFor(state)), gen)") {
+			t.Errorf("%s: %s does not hand the generation the announcement returned to the push", p.path, tc.goFn)
+		}
+		// CONTROLS: a guard taken out, the first attempt left unguarded with
+		// the generation read on the main queue after it, as the ladder first
+		// had it, and an announcement that only counts, are each seen.
+		if check(strings.Replace(set, guard, "", 1)) == nil {
+			t.Fatalf("%s: the check passes with a guard taken out; it proves nothing", p.path)
+		}
+		readInBlock := strings.Replace(strings.Replace(set, guard, "", 1), p.tryImport, p.tryImport+"\n        int gen = gBodyGenPending;\n        "+guard, 1)
+		if check(readInBlock) == nil {
+			t.Fatalf("%s: the check passes a generation read on the main queue; it proves nothing", p.path)
+		}
+		if inSequence(strings.Replace(begin, "gBodyGenPending = gen;", "gBodyGenPending++;", 1), issued...) {
+			t.Fatalf("%s: the announcement check passes one that only counts; it proves nothing", p.path)
+		}
+		if inSequence(strings.Replace(begin, "if (gen <= gBodyGenPending) return;", "", 1), issued...) {
+			t.Fatalf("%s: the announcement check passes one that can move the generation back; it proves nothing", p.path)
+		}
 	}
-	if f, err := strconv.ParseFloat(m[1], 64); err != nil || f <= 0 || f >= 1 {
-		t.Errorf("macOS: the threshold fraction %q must lie strictly between 0 and 1", m[1])
+}
+
+// F7: the selection verbs read the span and the lead from the geometry the
+// install derives, the verse index on iOS and the numeral runs on the Mac,
+// and hand both over, so a selection on the installed fallback page sends
+// them as one on an imported page does.
+func TestTheSelectionVerbsSendTheSpanAndLeadTheInstallGives(t *testing.T) {
+	for _, p := range appleFallbackPanes {
+		src := readNativeSource(t, p.path)
+		if !inSequence(src, p.menu...) {
+			t.Errorf("%s: the selection verbs do not read and send the span and lead as:\n  %s", p.path, strings.Join(p.menu, "\n  "))
+		}
 	}
-	// CONTROLS: the skip is seen to be missing when it is taken out, and a
-	// fraction that would let a uniform font through is seen for what it is.
-	if strings.Contains(strings.Replace(macLoc, "((NSFont *)val).pointSize >= thr) return;", "", 1), "pointSize >= thr) return;") {
-		t.Fatal("the skip check still passes with the skip removed; the check proves nothing")
+	index := nativeFunctionSource(t, "reading_ios.go", "static NSInteger btIOSVerseAtIndex(NSTextStorage *ts, NSUInteger ci, NSUInteger *outLoc) {")
+	if !strings.Contains(index, "gVerseIndex[mid].loc <= ci") {
+		t.Error("iOS: btIOSVerseAtIndex must read the verse index the install builds")
 	}
-	if p := fraction.FindStringSubmatch("return maxSize > 0 ? maxSize * 1.0 : 15.0;"); p == nil || p[1] != "1.0" {
-		t.Fatal("the fraction reader cannot read a planted fraction; the check proves nothing")
-	} else if f, _ := strconv.ParseFloat(p[1], 64); !(f <= 0 || f >= 1) {
-		t.Fatal("a fraction of 1.0 passed the bound; the check proves nothing")
+	span := nativeFunctionSource(t, "reading_macos.go", "static void btMacVerseSpanForRange(NSTextStorage *ts, NSRange sel, int *outLo, int *outHi, NSUInteger *outLoLoc) {")
+	if !strings.Contains(span, "((NSFont *)val).pointSize >= thr) return;") || !strings.Contains(span, "btMacVerseFontThreshold(ts)") {
+		t.Error("macOS: btMacVerseSpanForRange must find the numbers by the size the fallback page sets them at")
+	}
+	if inSequence(swapOnce(readNativeSource(t, "reading_ios.go"), appleFallbackPanes[0].menu[1], appleFallbackPanes[0].menu[2]), appleFallbackPanes[0].menu...) {
+		t.Fatal("the menu check passes with the span's two ends exchanged; it proves nothing")
+	}
+}
+
+// F8: the development switch only makes an import fail. The import refuses
+// first thing while it is on; the setter is its only writer; and Go calls the
+// setter only when a development build was asked to
+// (devFailImportsRequested, false in every release build,
+// TestDevFailImportIsInertInReleaseBuilds).
+func TestTheFailImportSwitchOnlyRefusesTheImport(t *testing.T) {
+	for _, tc := range []struct{ path, global, importHTML, setter, goCall, goFn string }{
+		{"reading_ios.go", "gBTFailImports", appleFallbackPanes[0].importHTML, "bibleTextIOSFailImports", "C.bibleTextIOSFailImports(1)", "pushChapterHTML"},
+		{"reading_macos.go", "gBTMacFailImports", appleFallbackPanes[1].importHTML, "bibleTextMacFailImports", "C.bibleTextMacFailImports(1)", "newMacReadingHost"},
+	} {
+		src := readNativeSource(t, tc.path)
+		imp := nativeFunctionSource(t, tc.path, tc.importHTML)
+		refusal := "if (" + tc.global + ") return nil;"
+		refusesFirst := func(imp string) bool {
+			return strings.HasPrefix(strings.TrimSpace(imp[strings.Index(imp, "{")+1:]), refusal)
+		}
+		if !refusesFirst(imp) {
+			t.Errorf("%s: the import does not refuse first thing while the switch is on", tc.path)
+		}
+		// CONTROL: the refusal moved below the import is seen.
+		if refusesFirst(strings.Replace(imp, refusal, "", 1)) {
+			t.Fatalf("%s: the refusal check passes with the refusal taken out; it proves nothing", tc.path)
+		}
+		writes := regexp.MustCompile(`\b` + tc.global + `\s*=[^=]`)
+		if got := writes.FindAllString(src, -1); len(got) != 2 || !strings.Contains(src, "static int "+tc.global+" = 0;") ||
+			!strings.Contains(src, "^{ "+tc.global+" = on; }") {
+			t.Errorf("%s: %s is written %d time(s); want its declaration and the setter's", tc.path, tc.global, len(got))
+		}
+		goSrc := readSourceFile(t, tc.path)
+		if strings.Count(goSrc, tc.goCall) != 1 || !strings.Contains(funcBody(t, goSrc, tc.goFn), "if devFailImportsRequested() {\n\t\t"+tc.goCall) &&
+			!strings.Contains(funcBody(t, goSrc, tc.goFn), "if devFailImportsRequested() {\n\t\t\t"+tc.goCall) {
+			t.Errorf("%s: %s is not called only behind devFailImportsRequested", tc.path, tc.setter)
+		}
 	}
 }

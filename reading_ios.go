@@ -27,12 +27,15 @@ package bibletext
 // transient UTF8String pointers is safe. lo/hi is the selection's verse span,
 // resolved here against the verse-number index of the attributed string the
 // selection was made in (0,0 = unresolved) — position, not text, decides which
-// verses a share or cross-reference cites. lead is the selection's place in
-// verse lo: the text from lo's number to the selection's first character, NULL
-// when there is none (docs/SELECTION_OFFSET.md).
-extern void bibleTextAIMenuTapped(char *action, char *text, int lo, int hi, char *lead);
+// verses a share or cross-reference cites. heading is 1 when the whole
+// selection lies in a publisher's heading (btIOSHeadingSelectionVerse), and lo
+// and hi are then the verse below it. lead is the selection's place in verse
+// lo: the text from lo's number to the selection's first character, NULL when
+// there is none (docs/SELECTION_OFFSET.md). book and chapter are the chapter
+// the storage holds (gTVBook), NULL and 0 before one lands.
+extern void bibleTextAIMenuTapped(char *action, char *text, int lo, int hi, int heading, char *lead, char *book, int chapter);
 // Sibling callback for the non-AI selection-menu actions (Share verse, …).
-extern void bibleTextStudyMenuTapped(char *action, char *text, int lo, int hi, char *lead);
+extern void bibleTextStudyMenuTapped(char *action, char *text, int lo, int hi, int heading, char *lead, char *book, int chapter);
 // Called when the reader finishes scrolling, to persist the live scroll position.
 // iOS's app-background lifecycle hook is unreliable, so we save continuously
 // (on scroll-end) instead, keeping the saved position current even on a hard kill.
@@ -115,7 +118,7 @@ static BOOL      gReadingHasRestore   = NO;
 // (content-y of the initial touch). Set once per gesture in
 // scrollViewWillBeginDragging — NOT per frame — and read at scroll-end /
 // lifecycle flush as "the last scroll's initial touch". Reset on each chapter
-// render (bibleTextApplyHTML) so a touch never carries across chapters. The verse
+// render (btIOSInstallPage) so a touch never carries across chapters. The verse
 // mapping is deferred to bibleTextTVCaptureTouch (one place); the content-y is
 // stable through a gesture (no re-layout mid-scroll).
 static CGFloat gLastTouchContentY = 0;
@@ -143,7 +146,7 @@ static CGFloat    gMarkerR = 0, gMarkerG = 0, gMarkerB = 0;
 static NSUInteger gMarkerLoc = 0, gMarkerLen = 0;
 static CGFloat    gMarkerOrigR = 0, gMarkerOrigG = 0, gMarkerOrigB = 0, gMarkerOrigA = 1;
 static BOOL       gMarkerApplied = NO;
-static void btIOSApplyMarker(void); // defined below; used in bibleTextApplyHTML + arm
+static void btIOSApplyMarker(void); // defined below; used in btIOSInstallPage + arm
 static void btIOSClearMarker(void); // forward decl: scrollViewDidScroll clears on drag
 static void btIOSEndArrival(void);  // forward decl: scrollViewDidScroll ends it on drag
 static NSUInteger btIOSLocForVerse(NSTextStorage *ts, NSInteger verse); // used by btIOSApplyMarker
@@ -151,6 +154,12 @@ static NSUInteger btIOSLocForVerse(NSTextStorage *ts, NSInteger verse); // used 
 // scroll-anchor mapping, reused by the selection menu to turn the selected
 // range into a verse span.
 static NSInteger btIOSVerseAtIndex(NSTextStorage *ts, NSUInteger ci, NSUInteger *outLoc);
+// The verse below the publisher's heading that holds a whole selection, 0
+// when none does (defined with the verse index it reads).
+static NSInteger btIOSHeadingSelectionVerse(NSTextStorage *ts, NSRange r);
+// Whether a selection holds a character of a verse's words (defined with the
+// verse index it reads).
+static BOOL btIOSSelectionHoldsScripture(NSTextStorage *ts, NSRange r);
 // Where scripture ends and the appended translators'-footnote section starts
 // (== length when there is none) — the selection menu clamps to it — and
 // where it STARTS (past the Psalm superscription; 0 when there is none).
@@ -172,6 +181,16 @@ static NSString *gWordsShareText = nil;
 static NSUInteger gWordsShareToken = 0;
 static int gWordsShareVerse = 0, gWordsShareAt = 0, gWordsShareLen = 0;
 static void btIOSPresentWordsShare(NSUInteger token);
+// The chapter the text view's storage holds, as Go named it when it pushed
+// the chapter (bibleTextTVSetChapter): the selection menu hands it to Go
+// with the selection, beside the span and the lead, which are this chapter's
+// whatever the reader is on by the time a verb is chosen. Written only where
+// the storage is replaced (bibleTextTVSetHTML), from the chapter announced
+// just ahead of that HTML on the main queue (gTVNextBook). Main thread only.
+static NSString *gTVBook = nil;
+static int gTVChapter = 0;
+static NSString *gTVNextBook = nil;
+static int gTVNextChapter = 0;
 
 // btIOSPointInChapterWash asks the wash MODEL whether a container-space point
 // landed on washed text. Declared here, defined with the model below.
@@ -180,7 +199,8 @@ static BOOL btIOSPointInChapterWash(CGPoint inContainer);
 // The single-tap "clear highlight" recognizer (created in bibleTextEnsureTV). It is
 // ENABLED only while a verse is highlighted; during ordinary reading it stays
 // disabled, so it never participates in touch handling and can add no latency to
-// scrolling. bibleTextApplyHTML toggles it to match gReadingHighlightRange.
+// scrolling. The install (btIOSInstallPage, through btIOSRefreshHighlightRange)
+// toggles it to match gReadingHighlightRange.
 static UITapGestureRecognizer *gHighlightTap = nil;
 
 // --- Where the chapter wash is PAINTED on this pane ---------------------------
@@ -291,12 +311,27 @@ static void btIOSRebuildWash(void);
     NSString *lead = (spanLo > 0 && loLoc <= range.location)
         ? [[textView.text substringWithRange:NSMakeRange(loLoc, range.location - loLoc)] copy]
         : nil;
+    // A selection wholly inside a publisher's heading is the verse below it,
+    // with no lead: a heading's words mean the section it introduces
+    // (btIOSHeadingSelectionVerse), where the number before them named the
+    // verse above.
+    int headVerse = (int)btIOSHeadingSelectionVerse(textView.textStorage, range);
+    int heading = headVerse > 0 ? 1 : 0;
+    if (heading) {
+        spanLo = spanHi = headVerse;
+        lead = nil;
+    }
+    // And the chapter that storage holds, captured with them: an action is
+    // chosen later, after continuous narration may have turned the reader's
+    // chapter, and Go reads the span and the words in this one.
+    NSString *book = gTVBook;
+    int chapter = gTVChapter;
 
     UIAction * (^make)(NSString *, NSString *) = ^UIAction *(NSString *title, NSString *act) {
         return [UIAction actionWithTitle:title image:nil identifier:nil
                                  handler:^(__kindof UIAction *_Nonnull a) {
-            bibleTextAIMenuTapped((char *)act.UTF8String, (char *)captured.UTF8String, spanLo, spanHi,
-                                  (char *)lead.UTF8String);
+            bibleTextAIMenuTapped((char *)act.UTF8String, (char *)captured.UTF8String, spanLo, spanHi, heading,
+                                  (char *)lead.UTF8String, (char *)book.UTF8String, chapter);
         }];
     };
 
@@ -314,8 +349,8 @@ static void btIOSRebuildWash(void);
     UIAction * (^study)(NSString *, NSString *) = ^UIAction *(NSString *title, NSString *act) {
         return [UIAction actionWithTitle:title image:nil identifier:nil
                                  handler:^(__kindof UIAction *_Nonnull a) {
-            bibleTextStudyMenuTapped((char *)act.UTF8String, (char *)captured.UTF8String, spanLo, spanHi,
-                                     (char *)lead.UTF8String);
+            bibleTextStudyMenuTapped((char *)act.UTF8String, (char *)captured.UTF8String, spanLo, spanHi, heading,
+                                     (char *)lead.UTF8String, (char *)book.UTF8String, chapter);
         }];
     };
     NSMutableArray *shareKids = [NSMutableArray arrayWithArray:@[
@@ -374,7 +409,12 @@ static void btIOSRebuildWash(void);
     // With AI on (an assistant chosen in Settings): Study with AI, Share,
     // Cross-references. With AI off ("None"): Cross-references takes the study
     // slot, then Share. (The ai menu is still built above; it's just not attached.)
-    [children addObjectsFromArray:(gBTAIEnabled ? @[ai, share, xref] : @[xref, share])];
+    // A selection that holds no word of Scripture, a heading's words, a
+    // verse number or a mark of a verse's words alone, cut as above, gets no
+    // Study with AI, and Share and Cross-references keep their places
+    // (btIOSSelectionHoldsScripture).
+    BOOL offerStudy = gBTAIEnabled && btIOSSelectionHoldsScripture(textView.textStorage, range);
+    [children addObjectsFromArray:(offerStudy ? @[ai, share, xref] : gBTAIEnabled ? @[share, xref] : @[xref, share])];
     [children addObjectsFromArray:systemRest];
     return [UIMenu menuWithChildren:children];
 }
@@ -428,9 +468,10 @@ static void btIOSRebuildWash(void);
 // in. Every path that can move a line rebuilds where it moves it (the import,
 // btIOSApplyInsets, btIOSRefreshNote, the wash mutation); this is the safety
 // net for anything that does not — a width the frame push changed with the
-// insets unchanged, a storage of another length put in place. The plain-text
-// fallback rebuilds through btIOSRefreshNote itself, since its text can be
-// as long as the import it replaces. Two scalar compares per frame, and a
+// insets unchanged, a storage of another length put in place. The fallback
+// page a failed import leaves is installed as an imported page is
+// (btIOSInstallPage), so it rebuilds where the import does. Two scalar
+// compares per frame, and a
 // rebuild records the key it built against, so the pass after it finds the
 // key equal and cannot loop.
 - (void)layoutSubviews {
@@ -617,6 +658,9 @@ static void btIOSApplyInsets(CGFloat w) {
 // Defined in reading_fonts_apple.go. Returns the shipped reading face at a
 // run's own size and traits, with a cascade to the Hebrew face.
 extern CTFontRef btReadingFontLike(CTFontRef src);
+// Also there: the reading face at a size with the traits asked for, for the
+// page set without the importer (btIOSFallbackPage).
+extern CTFontRef btReadingFontOfSize(CGFloat size, CTFontSymbolicTraits traits);
 
 static CGFloat gReporterIndent = 0;
 
@@ -668,11 +712,11 @@ void bibleTextSetReadingMeasure(double m) {
 // Setting attributedText (and especially the WebKit HTML importer's retry path)
 // can land after bibleTextTVSetReadingBG and revert the view toward a transparent,
 // non-opaque state — which brings back the per-frame compositor blend and the
-// scroll lag. Re-asserting from these cached values inside bibleTextApplyHTML makes
+// scroll lag. Re-asserting from these cached values inside btIOSInstallPage makes
 // opaque the LAST word after any content change, immune to the runloop ordering.
 static CGFloat gReadingPaperR = 1.0, gReadingPaperG = 1.0, gReadingPaperB = 1.0;
 static BOOL gReadingPaperSet = NO;
-static void btIOSApplyReadingBG(void); // defined below; used in bibleTextApplyHTML above it
+static void btIOSApplyReadingBG(void); // defined below; used in btIOSInstallPage above it
 
 // gReadingSuppressed is raised while a Fyne modal (chapter picker, AI panel, AI
 // settings) is open. The UITextView floats above the whole Fyne canvas, so it
@@ -721,6 +765,30 @@ static CGFloat btIOSVerseFontThreshold(NSTextStorage *ts) {
 typedef struct { NSInteger verse; NSUInteger loc; NSUInteger len; NSUInteger end; NSUInteger tail; } BTVerseLoc;
 static BTVerseLoc *gVerseIndex = NULL;
 static NSUInteger  gVerseIndexCount = 0;
+
+// The marks omitted verses leave ("[21]", verse_gaps.go), in document order,
+// keyed by the omitted number: `verse` is 21 for "[21]", `loc` and `len` the
+// mark's own small run. Kept apart from the verse index, which a mark must
+// never enter (it would invent verse 21), and read only where a tint run names
+// an omitted number (btIOSRunSpanRange). A chapter has a handful at most.
+enum { kBTMaxGaps = 16 };
+static BTVerseLoc gGapIndex[kBTMaxGaps];
+static NSUInteger gGapIndexCount = 0;
+
+// btGapMarkNumber is the omitted number a small run spells as a hole's mark,
+// "[21]" -> 21, and 0 for any other run: digits in square brackets, nothing
+// else, the shape verseGapMark writes.
+static NSInteger btGapMarkNumber(NSString *run) {
+    NSUInteger len = run.length;
+    if (len < 3 || [run characterAtIndex:0] != '[' || [run characterAtIndex:len - 1] != ']') return 0;
+    NSInteger v = 0;
+    for (NSUInteger i = 1; i + 1 < len; i++) {
+        unichar c = [run characterAtIndex:i];
+        if (c < '0' || c > '9' || v > 100000) return 0;
+        v = v * 10 + (c - '0');
+    }
+    return v;
+}
 
 // The scripture content's end: the character index where the appended
 // translators'-footnote section starts, or the full length when there is none.
@@ -837,7 +905,7 @@ static BOOL btIOSIsHeadingParagraph(NSTextStorage *ts, NSRange para, CGFloat thr
 // btIOSBuildVerseIndex captures every verse-number run (those below the 0.8x
 // threshold, which is derived per render and not an absolute size) into
 // gVerseIndex. Called on every text assignment; the single buffer is reused for the
-// app's life. ts==nil (plain-text fallback) clears the table. The walk stops at the
+// app's life. ts==nil clears the table. The walk stops at the
 // content end: the footnote section's 0.85em runs sit above the 0.8× threshold, so
 // they could never match anyway — bounding the range makes that a structural fact
 // rather than a typographic one.
@@ -854,27 +922,44 @@ static BOOL btIOSIsHeadingParagraph(NSTextStorage *ts, NSRange para, CGFloat thr
 // multi-verse mark on plain paper, as the markup does (reading.go writes it as
 // a <p class="sec"> with no wash class). The Go model of this rule is endOf and
 // bareRanges in reading_tint_wash_shape_test.go.
+//
+// An omitted verse's mark ("[21]", verse_gaps.go) belongs to no verse either:
+// it stands for the hole. The walk records each mark in gGapIndex, never in the
+// verse index, and a verse's `end` stops at the first mark after its number, so
+// a mark on verse 20 alone leaves "[21]" bare, as the markup does. A tint run
+// that names the omitted number starts or ends at its mark (btIOSRunSpanRange).
 static void btIOSBuildVerseIndex(NSTextStorage *ts) {
     const NSUInteger CAP = 512; // far above any chapter's verse count (max ~176)
     if (gVerseIndex == NULL) gVerseIndex = malloc(CAP * sizeof(BTVerseLoc));
-    if (ts == nil) { gVerseIndexCount = 0; return; }
+    if (ts == nil) { gVerseIndexCount = 0; gGapIndexCount = 0; return; }
     CGFloat thr = btIOSVerseFontThreshold(ts);
     __block NSUInteger n = 0;
+    __block NSUInteger g = 0;
     [ts enumerateAttribute:NSFontAttributeName
                    inRange:NSMakeRange(0, btIOSContentEnd(ts))
                    options:0
                 usingBlock:^(id val, NSRange r, BOOL *stop) {
         if (n >= CAP) { *stop = YES; return; }
         if (val == nil || r.length == 0 || ((UIFont *)val).pointSize >= thr) return;
-        NSInteger v = [[ts.string substringWithRange:r] integerValue];
-        if (v > 0) { gVerseIndex[n].verse = v; gVerseIndex[n].loc = r.location; gVerseIndex[n].len = r.length; n++; }
+        NSString *run = [ts.string substringWithRange:r];
+        NSInteger v = [run integerValue];
+        if (v > 0) { gVerseIndex[n].verse = v; gVerseIndex[n].loc = r.location; gVerseIndex[n].len = r.length; n++; return; }
+        NSInteger hole = btGapMarkNumber(run);
+        if (hole > 0 && g < kBTMaxGaps) { gGapIndex[g].verse = hole; gGapIndex[g].loc = r.location; gGapIndex[g].len = r.length; g++; }
     }];
     gVerseIndexCount = n;
+    gGapIndexCount = g;
     NSString *s = ts.string;
     NSUInteger contentEnd = btIOSContentEnd(ts);
     NSCharacterSet *seps = [NSCharacterSet characterSetWithCharactersInString:@"\n\r\u2029"];
+    NSUInteger gi = 0; // the marks are in document order, as the verses are
     for (NSUInteger k = 0; k < n; k++) {
         NSUInteger bound = (k + 1 < n) ? gVerseIndex[k + 1].loc : contentEnd;
+        // A hole's mark after this verse's number ends the verse there. It
+        // stands in the next verse's paragraph, after any heading before it,
+        // so the heading scan below still finds what lies wholly before it.
+        while (gi < g && gGapIndex[gi].loc <= gVerseIndex[k].loc) gi++;
+        if (gi < g && gGapIndex[gi].loc < bound) bound = gGapIndex[gi].loc;
         gVerseIndex[k].end = bound;
         gVerseIndex[k].tail = bound;
         // The paragraphs after the one holding this verse's number, up to the
@@ -939,8 +1024,8 @@ static void btIOSApplyMarker(void) {
 // done) — and is a no-op if no marker is currently applied.
 //
 // gMarkerApplied==YES implies gMarkerLoc/Len are valid for the CURRENT text storage:
-// the two paths that replace textStorage — bibleTextApplyHTML and the plain-text
-// fallback in bibleTextTVSetHTML — both reset gMarkerApplied=NO with the new
+// the one path that replaces textStorage, btIOSInstallPage (for an imported page
+// and for the fallback page alike), resets gMarkerApplied=NO with the new
 // storage. So the bounds check below never fails while
 // applied; it is a crash-guard, not a real branch. The metadata is forgotten
 // UNCONDITIONALLY (outside the guard) on purpose: dropping the marker is always the
@@ -987,6 +1072,102 @@ static NSInteger btIOSVerseAtIndex(NSTextStorage *ts, NSUInteger ci, NSUInteger 
     BTVerseLoc e = gVerseIndex[lo - 1];
     if (outLoc) *outLoc = e.loc;
     return e.verse;
+}
+
+// btIOSHeadingSelectionVerse is the verse below the publisher's heading that
+// holds the whole of range r, or 0 when no heading does: r's characters, less
+// the white space at either end, lie in one verse's heading matter, from
+// where the verse ends to where the headings after it end (the entry's `end`
+// and `tail`, btIOSBuildVerseIndex). btIOSVerseAtIndex names the verse above
+// for such a selection, since its number is the last before it; but a word
+// of a heading means the section the heading introduces, which is cited by
+// the verse below and quotes nothing (selSpan.heading in Go). The Mac and
+// Android keep the same rule (btMacHeadingSelectionVerse,
+// BtBridge.headingSelectionVerse). A heading above verse 1 never reaches
+// this: it stands before btIOSContentStart, where the app's verbs are not
+// offered.
+static NSInteger btIOSHeadingSelectionVerse(NSTextStorage *ts, NSRange r) {
+    if (ts == nil || r.length == 0 || NSMaxRange(r) > ts.length) return 0;
+    NSString *s = ts.string;
+    NSCharacterSet *blank = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+    NSUInteger a = r.location, b = NSMaxRange(r);
+    while (a < b && [blank characterIsMember:[s characterAtIndex:a]]) a++;
+    while (b > a && [blank characterIsMember:[s characterAtIndex:b - 1]]) b--;
+    if (a >= b) return 0;
+    NSUInteger lo = 0, hi = gVerseIndexCount; // first entry with loc > a
+    while (lo < hi) {
+        NSUInteger mid = lo + (hi - lo) / 2;
+        if (gVerseIndex[mid].loc <= a) lo = mid + 1; else hi = mid;
+    }
+    if (lo == 0 || lo >= gVerseIndexCount) return 0;
+    BTVerseLoc e = gVerseIndex[lo - 1];
+    if (e.tail <= e.end || a < e.end || b > e.tail) return 0;
+    return gVerseIndex[lo].verse;
+}
+
+// btIOSSelectionHoldsScripture reports whether range r holds a letter or
+// figure of a verse's words: one that stands after a verse's number run and
+// before that verse's end (the entry's loc + len and `end`,
+// btIOSBuildVerseIndex). Everything else between the content's start and
+// end is a verse number, a publisher's heading (from a verse's `end` to its
+// `tail`), an omitted verse's mark, which ends the verse before it, or the
+// white space and punctuation of the verses' words. A selection of those
+// alone holds no Scripture, and the study verbs are not offered for it: Go
+// quotes nothing for a heading's words, a verse number or an omitted
+// verse's mark, and punctuation alone for the rest, and studies neither
+// (aiStudyOffered), and its dispatch drops the verbs too. A selection that
+// crosses a heading, with no letter or figure of a verse's words before the
+// first character of the heading's words it holds (h), does not count a
+// word it ends inside, which reaches back to the white space or the
+// closed-up dash before it, as Go's end repair cuts back: Go quotes nothing
+// for a drag from a heading that ends inside the first word of the verse
+// below ("Solomon’" of "Solomon’s", "Well-" of "Well-being"). Closing
+// punctuation above a heading does not make that unfinished word complete.
+// A complete word before or after the heading still offers study. The Mac
+// and Android keep the same rule
+// (btMacSelectionHoldsScripture, BtBridge.selectionHoldsScripture). With no
+// verse index to read, the pane cannot tell a verse's number from its
+// words, so it asks only for a letter or figure and leaves the rest to Go.
+static BOOL btIOSSelectionHoldsScripture(NSTextStorage *ts, NSRange r) {
+    if (ts == nil || r.length == 0 || NSMaxRange(r) > ts.length) return NO;
+    NSString *s = ts.string;
+    NSCharacterSet *blank = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+    NSCharacterSet *word = [NSCharacterSet alphanumericCharacterSet];
+    if (gVerseIndexCount == 0) return [s rangeOfCharacterFromSet:word options:0 range:r].location != NSNotFound;
+    const unichar dash = 0x2014; // the em dash, set closed up between words
+    NSUInteger a = r.location, b = NSMaxRange(r);
+    NSUInteger lo = 0, hi = gVerseIndexCount; // first entry with loc > a
+    while (lo < hi) {
+        NSUInteger mid = lo + (hi - lo) / 2;
+        if (gVerseIndex[mid].loc <= a) lo = mid + 1; else hi = mid;
+    }
+    NSUInteger first = lo > 0 ? lo - 1 : 0;
+    NSUInteger h = NSNotFound;
+    BOOL above = NO; // a letter or figure of a verse's words stands before h
+    for (NSUInteger k = first; k < gVerseIndexCount && gVerseIndex[k].loc < b && h == NSNotFound; k++) {
+        NSUInteger from = gVerseIndex[k].loc + gVerseIndex[k].len > a ? gVerseIndex[k].loc + gVerseIndex[k].len : a;
+        NSUInteger to = gVerseIndex[k].end < b ? gVerseIndex[k].end : b;
+        for (NSUInteger i = from; i < to && !above; i++) {
+            if ([word characterIsMember:[s characterAtIndex:i]]) above = YES;
+        }
+        from = gVerseIndex[k].end > a ? gVerseIndex[k].end : a;
+        to = gVerseIndex[k].tail < b ? gVerseIndex[k].tail : b;
+        for (NSUInteger i = from; i < to; i++) {
+            if (![blank characterIsMember:[s characterAtIndex:i]]) { h = i; break; }
+        }
+    }
+    if (h != NSNotFound && !above && b < s.length && [word characterIsMember:[s characterAtIndex:b]]) {
+        while (b > h && ![blank characterIsMember:[s characterAtIndex:b - 1]] && [s characterAtIndex:b - 1] != dash) b--;
+    }
+    for (NSUInteger k = first; k < gVerseIndexCount && gVerseIndex[k].loc < b; k++) {
+        NSUInteger from = gVerseIndex[k].loc + gVerseIndex[k].len, to = gVerseIndex[k].end;
+        if (from < a) from = a;
+        if (to > b) to = b;
+        for (NSUInteger i = from; i < to; i++) {
+            if ([word characterIsMember:[s characterAtIndex:i]]) return YES;
+        }
+    }
+    return NO;
 }
 
 // ---- Read-along: highlight the verse being narrated + gently follow-scroll -------
@@ -1045,7 +1226,7 @@ static int  gBodyGenApplied = 0;
 
 // The verse the narration is on, for the import to put BACK.
 //
-// bibleTextApplyHTML zeroes the read-along globals because a wash from the
+// btIOSInstallPage zeroes the read-along globals because a wash from the
 // PREVIOUS chapter must not be "restored" against new storage — but a body
 // rebuild also happens mid-playback and does not change the chapter: hiding or
 // deleting a note, a theme flip, a text-size change, a background data swap. The
@@ -2471,12 +2652,44 @@ static NSUInteger btIOSHeadingTailAt(NSUInteger at) {
     return (e->end == at && e->tail > e->end) ? e->tail : NSNotFound;
 }
 
-// btIOSRunSpanRange is the whole character span of verses lo..hi, untrimmed.
+// btIOSGapRange is the mark of omitted verse n ("[n]"), or NSNotFound when the
+// page draws none: the footnotes are off, or the page is the plain fallback,
+// which draws the mark at body size.
+static NSRange btIOSGapRange(NSTextStorage *ts, NSInteger n) {
+    for (NSUInteger i = 0; i < gGapIndexCount; i++) {
+        if (gGapIndex[i].verse != n) continue;
+        if (NSMaxRange(NSMakeRange(gGapIndex[i].loc, gGapIndex[i].len)) > ts.length) break;
+        return NSMakeRange(gGapIndex[i].loc, gGapIndex[i].len);
+    }
+    return NSMakeRange(NSNotFound, 0);
+}
+
+// btIOSRunElementRange is what number k of a tint run covers: verse k's span,
+// or, where the page omits verse k, the mark that stands for it. A run names
+// an omitted number only where Go walked its mark (nativeTintRuns).
+static NSRange btIOSRunElementRange(NSTextStorage *ts, int k) {
+    NSRange r = btIOSReadAlongRange(ts, k);
+    return r.location != NSNotFound ? r : btIOSGapRange(ts, k);
+}
+
+// btIOSRunSpanRange is the whole character span of verses lo..hi, untrimmed:
+// from the first of its numbers the page draws, a verse or a hole's mark, to
+// the end of the last. A run from a mark the page does not draw (the plain
+// fallback) starts at the verse after it rather than painting nothing.
 static NSRange btIOSRunSpanRange(NSTextStorage *ts, int lo, int hi) {
-    NSRange a = btIOSReadAlongRange(ts, lo);
+    NSRange a = NSMakeRange(NSNotFound, 0);
+    int first = lo;
+    for (; first <= hi; first++) {
+        a = btIOSRunElementRange(ts, first);
+        if (a.location != NSNotFound) break;
+    }
     if (a.location == NSNotFound) return NSMakeRange(NSNotFound, 0);
-    NSRange b = (hi > lo) ? btIOSReadAlongRange(ts, hi) : a;
-    NSUInteger end = (b.location == NSNotFound) ? NSMaxRange(a) : NSMaxRange(b);
+    NSRange b = a;
+    for (int k = hi; k > first; k--) {
+        NSRange r = btIOSRunElementRange(ts, k);
+        if (r.location != NSNotFound) { b = r; break; }
+    }
+    NSUInteger end = NSMaxRange(b);
     if (end < NSMaxRange(a)) end = NSMaxRange(a);
     if (end > ts.length) end = ts.length;
     if (a.location >= end) return NSMakeRange(NSNotFound, 0);
@@ -2863,13 +3076,29 @@ void bibleTextIOSSetTintRuns(const BTTintRun *runs, int n, int repaint) {
 //
 // Ordered ahead of bibleTextTVSetHTML by the main queue's FIFO, whichever thread
 // Go calls from — and read here, BEFORE the import zeroes it.
-void bibleTextIOSBeginChapterPush(int sameChapter) {
+//
+// It returns the push's generation, issued here on the caller's thread, and Go
+// hands it to bibleTextTVSetHTML with the push, whose steps act only while it is
+// still the one pending. Read on the main queue instead, it would be shared by
+// two pushes Go makes in one main-thread turn, where this block runs at once and
+// the push's blocks run later: both would read the second's, and a retry of the
+// first could install the older chapter over the second and confirm it. The
+// block only ever moves the generation forward: one announced off the main
+// thread can reach the queue after a later one made on it, and moved back, the
+// later push would find its generation superseded and never be shown. A push
+// whose generation is not the newest is superseded, and its narration verse is
+// not parked either.
+static int gBodyGenIssued = 0;
+int bibleTextIOSBeginChapterPush(int sameChapter) {
+    int gen = __atomic_add_fetch(&gBodyGenIssued, 1, __ATOMIC_SEQ_CST);
     void (^block)(void) = ^{
-        gBodyGenPending++;
+        if (gen <= gBodyGenPending) return;
+        gBodyGenPending = gen;
         gPendingReadAlongVerse = sameChapter ? gReadAlongVerse : kBTReadAlongNone;
     };
     if ([NSThread isMainThread]) block();
     else dispatch_async(dispatch_get_main_queue(), block);
+    return gen;
 }
 
 // bibleTextIOSReadAlongClear takes the narration wash off. The attribute is
@@ -3315,8 +3544,25 @@ static void btIOSSetHighlightUIEnabled(BOOL on) {
     }
 }
 
-static BOOL bibleTextApplyHTML(NSData *data) {
-    if (gReadingTV == nil || data == nil) return NO;
+// A development build's switch that makes every import fail, so the page a
+// failed import leaves (btIOSFallbackPage) can be seen and driven on a
+// simulator: BIBLETEXT_DEV_FAIL_IMPORT=1 (dev_fail_import_on.go). Nothing in
+// a release build sets it. Set on the main queue, ahead of the push it is
+// meant for.
+static int gBTFailImports = 0;
+void bibleTextIOSFailImports(int on) {
+    dispatch_async(dispatch_get_main_queue(), ^{ gBTFailImports = on; });
+}
+
+static void btIOSInstallPage(NSAttributedString *as);
+
+// btIOSImportHTML parses `data` as HTML into the page this pane shows: the
+// importer's string with the first paragraph's phantom spacing zeroed, the
+// leading and the reporter indent set, the reading face swapped in and the
+// wash's background lifted off. nil when the import fails, having touched
+// nothing.
+static NSAttributedString *btIOSImportHTML(NSData *data) {
+    if (gBTFailImports) return nil;
     NSDictionary *opts = @{
         NSDocumentTypeDocumentAttribute: NSHTMLTextDocumentType,
         NSCharacterEncodingDocumentAttribute: @(NSUTF8StringEncoding),
@@ -3336,9 +3582,9 @@ static BOOL bibleTextApplyHTML(NSData *data) {
     // because the Go side had already recorded the chapter as pushed.
     //
     // Failing instead costs nothing when a chapter really is empty: the ladder
-    // retries twice more and lands on the plain-text fallback, which for an
-    // empty chapter draws the same nothing, a quarter of a second later.
-    if (as == nil || as.length == 0) return NO;
+    // retries twice more and lands on the fallback page, which for an empty
+    // chapter draws the same nothing, a quarter of a second later.
+    if (as == nil || as.length == 0) return nil;
     btIOSPerfLog("html-import", t0);
     // NSAttributedString's HTML importer routinely injects a non-zero
     // paragraphSpacingBefore (and sometimes a minimumLineHeight) on the FIRST
@@ -3413,7 +3659,32 @@ static BOOL bibleTextApplyHTML(NSData *data) {
     // both Apple panes; .hl/.hlm are the only backgrounds the dialect emits,
     // and a host test holds that premise (reading_ios_wash_guard_test.go).
     [mas removeAttribute:NSBackgroundColorAttributeName range:NSMakeRange(0, mas.length)];
-    as = mas;
+    return mas;
+}
+
+// bibleTextApplyHTML imports `data` and installs the result, returning YES on
+// success and NO, with the view untouched, when the import fails, so the
+// caller can retry. Main-thread only.
+static BOOL bibleTextApplyHTML(NSData *data) {
+    if (gReadingTV == nil || data == nil) return NO;
+    NSAttributedString *as = btIOSImportHTML(data);
+    if (as == nil) return NO;
+    btIOSInstallPage(as);
+    return YES;
+}
+
+// btIOSInstallPage puts a chapter's page into the view and derives every
+// cached range from it, each after the one it depends on. It is the one path
+// for both pages a push can leave: the imported one (bibleTextApplyHTML) and
+// the one set from Go's fallback page when every import fails
+// (btIOSFallbackPage, bibleTextTVSetHTML). The fallback used to set its text
+// and re-derive the ranges in a list of its own, which had to be kept in this
+// order by hand and could only clear what plain text could not answer;
+// through here the fallback page has the verse index, the title, the
+// highlight, the note, the wash, the resume marker and the placement an
+// imported page has.
+static void btIOSInstallPage(NSAttributedString *as) {
+    if (gReadingTV == nil || as == nil) return;
     // New chapter text: a read-along tint from the previous chapter must not be
     // "restored" against the new storage (audio already stopped via stopAudioForNav).
     // All three, because gReadAlongActive left YES with nothing painted is a lie
@@ -3478,7 +3749,7 @@ static BOOL bibleTextApplyHTML(NSData *data) {
     // New text: the prior chapter's initial-touch is no longer valid, and the fresh
     // attributed string carries the original verse-number colours (the marker is not
     // applied to it yet). Reset both, then (re-)apply the marker if one is intended —
-    // bibleTextApplyHTML can run several times during a restore, so re-applying here
+    // the install can run several times during a restore, so re-applying here
     // keeps the "you left off here" tint pinned through the relayouts.
     gHasLastTouch = NO;
     gMarkerApplied = NO;
@@ -3506,39 +3777,76 @@ static BOOL bibleTextApplyHTML(NSData *data) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{ btIOSPresentWordsShare(token); });
     }
-    return YES;
 }
 
-// bibleTextPlainFromHTML strips tags + the few entities buildChapterHTML emits —
-// a readable last resort so the reader never sees raw markup. Poem-line <br>
-// must become a real newline BEFORE the tag strip, or poetry lines jam
-// together ("shepherd;I shall") and selections there can no longer locate.
-// So must the end of every paragraph: the title, a heading and each paragraph
-// of verses are a <p> apiece, and stripped bare they ran together ("his
-// son.1 LORD"), so verse 1's number was glued to the title, a share could not
-// confirm the title by it, and a drag from the title into the psalm shared
-// the title's words as Scripture. The stylesheet is text inside <head>, not
-// a tag, and the strip left it standing at the top of the page.
-static NSString *bibleTextPlainFromHTML(NSString *html) {
-    html = [html stringByReplacingOccurrencesOfString:@"<br>" withString:@"\n" options:NSLiteralSearch range:NSMakeRange(0, html.length)];
-    html = [html stringByReplacingOccurrencesOfString:@"</p>" withString:@"</p>\n" options:NSLiteralSearch range:NSMakeRange(0, html.length)];
-    NSRegularExpression *head = [NSRegularExpression regularExpressionWithPattern:@"<head>[\\s\\S]*?</head>" options:0 error:nil];
-    html = [head stringByReplacingMatchesInString:html options:0
-                                            range:NSMakeRange(0, html.length) withTemplate:@""];
-    NSRegularExpression *re = [NSRegularExpression regularExpressionWithPattern:@"<[^>]+>" options:0 error:nil];
-    NSString *t = [re stringByReplacingMatchesInString:html options:0
-                                                 range:NSMakeRange(0, html.length) withTemplate:@""];
-    // &amp; is read last, so an entity the text itself spells out
-    // ("&amp;lt;" for a verse's "&lt;") is read once, as the importer reads
-    // it, and not twice. Every replacement is literal: the default compare
-    // matches only whole composed characters, so an entity followed by a
-    // combining mark was left standing.
-    t = [t stringByReplacingOccurrencesOfString:@"&nbsp;" withString:@" " options:NSLiteralSearch range:NSMakeRange(0, t.length)];
-    t = [t stringByReplacingOccurrencesOfString:@"&quot;" withString:@"\"" options:NSLiteralSearch range:NSMakeRange(0, t.length)];
-    t = [t stringByReplacingOccurrencesOfString:@"&lt;" withString:@"<" options:NSLiteralSearch range:NSMakeRange(0, t.length)];
-    t = [t stringByReplacingOccurrencesOfString:@"&gt;" withString:@">" options:NSLiteralSearch range:NSMakeRange(0, t.length)];
-    t = [t stringByReplacingOccurrencesOfString:@"&amp;" withString:@"&" options:NSLiteralSearch range:NSMakeRange(0, t.length)];
-    return t;
+// ---- The page shown when every import of a chapter fails --------------------
+//
+// Go builds it with every push, from the HTML it pushes
+// (reading_apple_fallback.go): the chapter's text, cut before the
+// translators' notes, its paragraphs and poem lines ended with the
+// characters the importer writes (a line feed, U+2028), with runs that say
+// where each verse number, the psalm's title and each heading stand, in
+// UTF-16 units.
+// The run kinds are Go's appleFallbackRunKind; a host test holds the two
+// lists equal. The style is the stylesheet's sizes and colours, from the
+// palette the HTML was built in.
+enum { kBTFallbackNumeral = 1, kBTFallbackTitle = 2, kBTFallbackHeading = 3 };
+typedef struct { double bodyPt, numeralPt, inkR, inkG, inkB, numR, numG, numB; } BTFallbackStyle;
+
+// btIOSFallbackFont is the reading face at a size with the traits asked for
+// (Georgia with them when the reading faces are not registered), or the
+// system font when no font can be made.
+static UIFont *btIOSFallbackFont(CGFloat size, CTFontSymbolicTraits traits) {
+    CTFontRef f = btReadingFontOfSize(size, traits);
+    if (f == NULL) return [UIFont systemFontOfSize:size];
+    return (__bridge_transfer UIFont *)f;
+}
+
+// btIOSFallbackPage sets Go's fallback page in the faces the importer gives
+// the same markup: the body face and the text's colour throughout, each verse
+// number at the numeral's size, bold, in the numbers' colour, the title
+// italic and each heading bold, all at the import's leading. The faces are
+// what the derivations read: a number is a run below 0.8 of the largest size
+// (btIOSVerseFontThreshold), the title the italic paragraph above verse 1
+// (btIOSFindTitleRange), a heading a bold paragraph at body size
+// (btIOSIsHeadingParagraph). Installed through btIOSInstallPage, the page
+// then has every range an imported page has, and a selection on it sends its
+// span and lead. A run that does not fit the text is skipped.
+static NSAttributedString *btIOSFallbackPage(NSString *text, NSData *runs, BTFallbackStyle st) {
+    NSMutableParagraphStyle *ps = [[NSMutableParagraphStyle alloc] init];
+    if (gReadingLinePitchEm > 0) {
+        ps.minimumLineHeight = st.bodyPt * gReadingLinePitchEm;
+        ps.maximumLineHeight = st.bodyPt * gReadingLinePitchEm;
+    }
+    NSMutableAttributedString *as = [[NSMutableAttributedString alloc] initWithString:text attributes:@{
+        NSFontAttributeName: btIOSFallbackFont(st.bodyPt, 0),
+        NSForegroundColorAttributeName: [UIColor colorWithRed:st.inkR green:st.inkG blue:st.inkB alpha:1.0],
+        NSParagraphStyleAttributeName: ps,
+    }];
+    UIFont *numeral = btIOSFallbackFont(st.numeralPt, kCTFontTraitBold);
+    UIColor *numeralColor = [UIColor colorWithRed:st.numR green:st.numG blue:st.numB alpha:1.0];
+    UIFont *italic = btIOSFallbackFont(st.bodyPt, kCTFontTraitItalic);
+    UIFont *bold = btIOSFallbackFont(st.bodyPt, kCTFontTraitBold);
+    const int *r = (const int *)runs.bytes;
+    NSUInteger n = runs.length / (3 * sizeof(int));
+    for (NSUInteger i = 0; i < n; i++) {
+        int kind = r[3 * i], loc = r[3 * i + 1], len = r[3 * i + 2];
+        if (loc < 0 || len <= 0 || (NSUInteger)loc + (NSUInteger)len > as.length) continue;
+        NSRange rr = NSMakeRange((NSUInteger)loc, (NSUInteger)len);
+        switch (kind) {
+        case kBTFallbackNumeral:
+            [as addAttribute:NSFontAttributeName value:numeral range:rr];
+            [as addAttribute:NSForegroundColorAttributeName value:numeralColor range:rr];
+            break;
+        case kBTFallbackTitle:
+            [as addAttribute:NSFontAttributeName value:italic range:rr];
+            break;
+        case kBTFallbackHeading:
+            [as addAttribute:NSFontAttributeName value:bold range:rr];
+            break;
+        }
+    }
+    return as;
 }
 
 // bibleTextTVSetReadingBG paints the reading view's background with the theme's
@@ -3550,7 +3858,7 @@ static NSString *bibleTextPlainFromHTML(NSString *html) {
 // drawing the canvas beneath it entirely), which is the classic iOS scroll-perf win.
 // btIOSApplyReadingBG paints the cached paper colour into the text view and marks
 // it opaque. Called both from bibleTextTVSetReadingBG (when the theme pushes a new
-// colour) AND from bibleTextApplyHTML right after attributedText is set, so the
+// colour) AND from btIOSInstallPage right after attributedText is set, so the
 // opaque state always survives the content assignment. Main-thread only.
 static void btIOSApplyReadingBG(void) {
     if (gReadingTV == nil || !gReadingPaperSet) return;
@@ -3572,70 +3880,70 @@ void bibleTextTVSetReadingBG(double r, double g, double b) {
     });
 }
 
-void bibleTextTVSetHTML(const char *html) {
+// bibleTextTVSetChapter names the chapter of the HTML that follows it. Go
+// calls it straight before bibleTextTVSetHTML, so the two blocks reach the
+// main queue in that order and the HTML's block takes this chapter with it.
+void bibleTextTVSetChapter(const char *book, int chapter) {
+    NSString *b = book != NULL ? [NSString stringWithUTF8String:book] : nil;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        gTVNextBook = b;
+        gTVNextChapter = chapter;
+    });
+}
+
+// bibleTextTVSetHTML shows a chapter: html is buildChapterHTML's page, and
+// the fallback arguments are the page Go built from it for the case where it
+// will not import (reading_apple_fallback.go). Every argument is copied
+// before this returns, since Go frees them then. The chapter is the one
+// bibleTextTVSetChapter announced just ahead of it, and the page installed,
+// imported or the fallback, is keyed with it (gTVBook). gen is the generation
+// bibleTextIOSBeginChapterPush issued for this push.
+void bibleTextTVSetHTML(const char *html, const char *fallbackText, const int *fallbackRuns,
+                        int fallbackRunCount, BTFallbackStyle fallbackStyle, int gen) {
     if (html == NULL) return;
     NSString *s = [NSString stringWithUTF8String:html];
     NSData *data = [s dataUsingEncoding:NSUTF8StringEncoding];
+    NSString *fbText = fallbackText != NULL ? [NSString stringWithUTF8String:fallbackText] : nil;
+    NSData *fbRuns = (fallbackRuns != NULL && fallbackRunCount > 0)
+        ? [NSData dataWithBytes:fallbackRuns length:(NSUInteger)fallbackRunCount * 3 * sizeof(int)]
+        : [NSData data];
     dispatch_async(dispatch_get_main_queue(), ^{
+        // Each step, the first import included, runs only while this push is
+        // still the latest: its generation is still the one pending. A push
+        // made since owns the view, and an install from this one would put the
+        // older chapter over it and confirm it as the pushed one
+        // (gBodyGenApplied).
+        if (gen != gBodyGenPending) return;
+        // This HTML's chapter, taken now: a retry below runs after the next
+        // chapter's announcement may have landed.
+        NSString *book = gTVNextBook;
+        int chapter = gTVNextChapter;
         bibleTextEnsureTV();
         if (gReadingTV == nil) return;
-        if (bibleTextApplyHTML(data)) return;
+        // Each path that replaces the storage keys it with the chapter.
+        if (bibleTextApplyHTML(data)) { gTVBook = book; gTVChapter = chapter; return; }
         // The WebKit-backed HTML importer fails intermittently — most often right
         // after the app returns to the foreground. NEVER drop raw markup into the
         // view (the old code did `gReadingTV.text = rawHTML`); retry on later
-        // runloop turns and, only if every attempt fails, show tag-stripped text.
+        // runloop turns and, only if every attempt fails, show the fallback page.
         dispatch_async(dispatch_get_main_queue(), ^{
-            if (bibleTextApplyHTML(data)) return;
+            if (gen != gBodyGenPending) return;
+            if (bibleTextApplyHTML(data)) { gTVBook = book; gTVChapter = chapter; return; }
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)),
                            dispatch_get_main_queue(), ^{
-                if (bibleTextApplyHTML(data)) return;
+                if (gen != gBodyGenPending) return;
+                if (bibleTextApplyHTML(data)) { gTVBook = book; gTVChapter = chapter; return; }
                 NSLog(@"bibletext: HTML import failed after retries; showing plain text");
-                if (gReadingTV != nil) {
-                    // The translators'-footnote section must not ride into the
-                    // plain fallback: the font-geometry boundary cannot exist
-                    // in untyped text, so with the section present every
-                    // selection clamp would silently disarm and the app verbs
-                    // could dispatch translators' words as scripture. Cut the
-                    // HTML at the section's opening tag instead — purity by
-                    // construction on the one path the detector cannot cover.
-                    NSString *plainSrc = s;
-                    NSRange fnsep = [plainSrc rangeOfString:@"<p class=\"fnsep\">"];
-                    if (fnsep.location != NSNotFound) plainSrc = [plainSrc substringToIndex:fnsep.location];
-                    gReadingTV.text = bibleTextPlainFromHTML(plainSrc);
-                    btIOSApplyReadingBG(); // keep the view opaque on the fallback path too
-                    gContentEnd = gReadingTV.textStorage.length; // apparatus stripped above — all scripture
-                    btIOSBuildVerseIndex(nil); // plain text has no verse runs — clear the stale table
-                    btIOSFindTitleRange(nil);  // and no title range either
-                    // The two derivations the import makes AFTER those, made
-                    // here too, in its order (the macOS twin carries the full
-                    // reasoning). The highlight union is written only by the
-                    // import and by the wash mutation, and
-                    // bibleTextIOSSetTintRuns defers the mutation while the
-                    // generations disagree — which they do from here until the
-                    // next successful import — so the previous chapter's union
-                    // would otherwise survive under the plain text for
-                    // bibleTextIOSScrollToHighlight and the note anchor, both
-                    // clamped on length alone. Against the emptied index every
-                    // run resolves to NSNotFound, so the union is nothing, and
-                    // the highlight tap and its edit menu go with it.
-                    btIOSRefreshHighlightRange(gReadingTV.textStorage);
-                    // And the note, whose band list still holds the previous
-                    // storage's paragraph ranges — the next frame change would
-                    // place the pills from them. On plain text the verse
-                    // anchors resolve to nothing, so the sticker takes the
-                    // chapter top and every pill whose verse the string
-                    // cannot place hides; a chapter-top pill keeps its inset
-                    // tenancy, which needs no verse.
-                    btIOSRefreshNote();
-                    // And the resume marker, the one cached run a scroll can
-                    // write BACK: applied, its saved colour is painted over
-                    // [gMarkerLoc, +gMarkerLen) on the reader's first drag
-                    // (btIOSClearMarker) within a guard on length alone. The
-                    // import forgets it before every fresh storage for that
-                    // reason; so does this path. Nothing re-applies it here:
-                    // the plain string has no verse run to put it on.
-                    gHasLastTouch = NO;
-                    gMarkerApplied = NO;
+                // Installed as an imported page is, so it has the verse index,
+                // the title, the highlight, the note, the wash, the marker and
+                // the placement (btIOSInstallPage), and keyed with its chapter
+                // as an imported page is. The translators' notes are not on
+                // it: Go cut them off, since their size, which ends Scripture
+                // on an imported page, is not set here.
+                if (gReadingTV != nil && fbText != nil) {
+                    btIOSInstallPage(btIOSFallbackPage(fbText, fbRuns, fallbackStyle));
+                    gTVBook = book;
+                    gTVChapter = chapter;
                 }
             });
         });
@@ -3772,34 +4080,212 @@ static UIViewController *bibleTextTopVC(void) {
     return vc;
 }
 
+// A PRESENTATION IOS REFUSES. UIKit shows nothing, and only logs, when a
+// view controller is asked to present while it is still being presented or
+// dismissed, or while a presentation asked of it is still on its way: a
+// share chosen while the share sheet before it, or the notice below, was
+// still closing ended so, without a word. So every share sheet and every
+// notice is presented by btIOSPresent, from the top view controller once the
+// transition it is in, if any, has ended (at most btIOSPresentWaits
+// transitions in a row).
+//
+// Whether UIKit took a presentation is known only late. The share sheet
+// holds its own presentation back while its share services load, and
+// meanwhile has no presenter, no view in a window and no completion; UIKit
+// refuses it, when it does, only as that wait ends, about three seconds
+// after it was asked for. Judged by its presenter 0.35 seconds after it was
+// presented, a sheet still held back was taken for refused, presented a
+// second time, and said to have failed over the first once that opened. So
+// a presentation counts as taken once its completion has run with its view
+// in a window, or while it has a presenter, its view is in a window or it
+// stands among the view controllers presented from the window's root
+// (btIOSPresentTaken), and as refused only when none of that holds of any
+// view controller presented for it btIOSPresentSettle seconds after it was
+// presented. Refused, it is tried once more from the top view controller as
+// it then stands; and if that is refused too, refused runs: for a share
+// sheet, the notice that the share could not be made.
+//
+// One presentation is on its way at a time (gBTIOSPresenting). Another asked
+// for meanwhile, a second tap on Share while the first sheet is held back
+// among them, is not made, and is logged: UIKit would refuse it while the
+// first is held back, and its second try would stack a sheet on the first
+// once that opened.
+static const int btIOSPresentWaits = 3;
+static const double btIOSPresentRetry = 0.35;
+static const double btIOSPresentSettle = 5.0;
+static const double btIOSPresentStale = 30.0;
+
+// BTIOSMakePresented builds what is to be presented from top, the view
+// controller it will be presented from, in which an iPad's popover is
+// anchored. A fresh one for every attempt.
+typedef UIViewController *(^BTIOSMakePresented)(UIViewController *top);
+
+// BTIOSPresentation is one presentation on its way: how to build what is
+// presented, what runs when UIKit refuses it twice, every view controller
+// presented for it, whether UIKit has been seen to take one, and when it was
+// asked for.
+@interface BTIOSPresentation : NSObject
+@property (nonatomic, copy) BTIOSMakePresented make;
+@property (nonatomic, copy) dispatch_block_t refused;
+@property (nonatomic, strong) NSMutableArray<UIViewController *> *tried;
+@property (nonatomic) BOOL taken;
+@property (nonatomic) CFAbsoluteTime asked;
+@end
+
+@implementation BTIOSPresentation
+@end
+
+// gBTIOSPresenting is the presentation on its way, nil when there is none. It
+// is let go once UIKit has taken it or it has been judged refused, and one
+// asked for btIOSPresentStale seconds ago holds no other back.
+static BTIOSPresentation *gBTIOSPresenting = nil;
+
+static void btIOSPresentLetGo(BTIOSPresentation *p) {
+    if (gBTIOSPresenting == p) gBTIOSPresenting = nil;
+}
+
+// btIOSPresentTaken reports whether UIKit has taken a view controller
+// presented for p: its completion ran with its view in a window, or it has a
+// presenter now, or its view is in a window, or it stands among the view
+// controllers presented from the window's root.
+static BOOL btIOSPresentTaken(BTIOSPresentation *p) {
+    if (p.taken) return YES;
+    UIViewController *root = bibleTextFindWindow().rootViewController;
+    for (UIViewController *vc in p.tried) {
+        if (vc.presentingViewController != nil) return YES;
+        if (vc.viewIfLoaded.window != nil) return YES;
+        for (UIViewController *up = root.presentedViewController; up != nil; up = up.presentedViewController) {
+            if (up == vc) return YES;
+        }
+    }
+    return NO;
+}
+
+static void btIOSPresentTry(BTIOSPresentation *p, int waits) {
+    UIViewController *top = bibleTextTopVC();
+    // No view controller means no window on screen, so there is nothing to
+    // present in and nothing can be said either; Android's missing activity,
+    // and the return is bare.
+    if (top == nil) {
+        btIOSPresentLetGo(p);
+        return;
+    }
+    id<UIViewControllerTransitionCoordinator> tc = top.transitionCoordinator;
+    if (tc != nil && waits > 0) {
+        dispatch_block_t again = ^{ btIOSPresentTry(p, waits - 1); };
+        BOOL queued = [tc animateAlongsideTransition:nil
+                                          completion:^(id<UIViewControllerTransitionCoordinatorContext> ctx) {
+            // Past the transition's own completion, which UIKit still counts
+            // as inside it.
+            dispatch_async(dispatch_get_main_queue(), again);
+        }];
+        if (!queued) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(btIOSPresentRetry * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), again);
+        }
+        return;
+    }
+    UIViewController *vc = p.make(top);
+    if (vc == nil) {
+        btIOSPresentLetGo(p);
+        return;
+    }
+    [p.tried addObject:vc];
+    __weak UIViewController *shown = vc;
+    [top presentViewController:vc animated:YES completion:^{
+        if (shown.viewIfLoaded.window != nil) {
+            p.taken = YES;
+            btIOSPresentLetGo(p);
+        }
+    }];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(btIOSPresentSettle * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        if (btIOSPresentTaken(p)) {
+            btIOSPresentLetGo(p);
+            return;
+        }
+        if (p.tried.count < 2) {
+            btIOSPresentTry(p, btIOSPresentWaits);
+            return;
+        }
+        btIOSPresentLetGo(p);
+        if (p.refused != nil) p.refused();
+    });
+}
+
+static void btIOSPresent(BTIOSMakePresented make, dispatch_block_t refused) {
+    CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+    if (gBTIOSPresenting != nil && now - gBTIOSPresenting.asked < btIOSPresentStale) {
+        NSLog(@"BibleText: a presentation is still on its way, so another is not made");
+        return;
+    }
+    BTIOSPresentation *p = [BTIOSPresentation new];
+    p.make = make;
+    p.refused = refused;
+    p.tried = [NSMutableArray array];
+    p.asked = now;
+    gBTIOSPresenting = p;
+    btIOSPresentTry(p, btIOSPresentWaits);
+}
+
 // bibleTextShareNotice says that a share the reader started cannot complete.
 // A share must not end in silence (docs/BACKLOG.md, "Share as image failed
 // silently on Android"); Android says it in a toast (BtBridge.shareNotice),
 // and iOS, which has no toast, in an alert with one button, the platform's
-// way of saying an action did not happen. It is presented from the view
-// controller the share sheet would have used. With none there is no window on
-// screen to say anything in (bibleTextFindWindow found no attached scene with
-// a window), which is Android's missing activity, and the return is bare.
+// way of saying an action did not happen. It is presented from the top view
+// controller, as a share sheet is (btIOSPresent). With none there is no
+// window on screen to say anything in (bibleTextFindWindow found no attached
+// scene with a window), which is Android's missing activity, and the return
+// is bare; an alert UIKit refuses twice is logged.
 static void bibleTextShareNotice(NSString *msg) {
-    UIViewController *top = bibleTextTopVC();
-    if (top == nil) return;
-    UIAlertController *ac = [UIAlertController alertControllerWithTitle:nil
-                                                                message:msg
-                                                         preferredStyle:UIAlertControllerStyleAlert];
-    [ac addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
-    [top presentViewController:ac animated:YES completion:nil];
+    btIOSPresent(^UIViewController *(UIViewController *top) {
+        UIAlertController *ac = [UIAlertController alertControllerWithTitle:nil
+                                                                    message:msg
+                                                             preferredStyle:UIAlertControllerStyleAlert];
+        [ac addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
+        return ac;
+    }, ^{
+        NSLog(@"BibleText: iOS refused the share notice twice: %@", msg);
+    });
 }
 
-static void bibleTextPresentShare(NSArray *items) {
+// bibleTextShareFailed is bibleTextShareNotice for the Go side: a share that
+// could not finish before anything reached the share sheet, a card the
+// preview could not draw (sayShareFailed).
+void bibleTextShareFailed(const char *msg) {
+    if (msg == NULL) return;
+    NSString *s = [NSString stringWithUTF8String:msg];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (s.length == 0) return;
+        bibleTextShareNotice(s);
+    });
+}
+
+// BTIOSAnchor anchors an iPad's share popover, pc, given the view controller
+// it is presented from.
+typedef void (^BTIOSAnchor)(UIPopoverPresentationController *pc, UIViewController *top);
+
+// bibleTextPresentShareSaying presents the share sheet for items from the
+// top view controller (btIOSPresent), its popover anchored by anchor on an
+// iPad; refused twice, it says failed, the words for the share it is.
+static void bibleTextPresentShareSaying(NSArray *items, NSString *failed, BTIOSAnchor anchor) {
     if (items.count == 0) return;
-    UIViewController *top = bibleTextTopVC();
-    // No view controller means no window on screen, so nothing can be said
-    // either (bibleTextShareNotice).
-    if (top == nil) return;
-    UIActivityViewController *av =
-        [[UIActivityViewController alloc] initWithActivityItems:items applicationActivities:nil];
-    if (av.popoverPresentationController != nil && gReadingTV != nil) {
-        av.popoverPresentationController.sourceView = gReadingTV;
+    btIOSPresent(^UIViewController *(UIViewController *top) {
+        UIActivityViewController *av =
+            [[UIActivityViewController alloc] initWithActivityItems:items applicationActivities:nil];
+        if (av.popoverPresentationController != nil && anchor != nil) {
+            anchor(av.popoverPresentationController, top);
+        }
+        return av;
+    }, ^{
+        bibleTextShareNotice(failed);
+    });
+}
+
+static void bibleTextPresentShare(NSArray *items, NSString *failed) {
+    bibleTextPresentShareSaying(items, failed, ^(UIPopoverPresentationController *pc, UIViewController *top) {
+        if (gReadingTV == nil) return;
+        pc.sourceView = gReadingTV;
         CGRect r = CGRectZero;
         if (gReadingTV.selectedTextRange != nil) {
             r = [gReadingTV firstRectForRange:gReadingTV.selectedTextRange];
@@ -3807,9 +4293,8 @@ static void bibleTextPresentShare(NSArray *items) {
         if (CGRectIsEmpty(r) || CGRectIsNull(r)) {
             r = CGRectMake(CGRectGetMidX(gReadingTV.bounds), CGRectGetMidY(gReadingTV.bounds), 1, 1);
         }
-        av.popoverPresentationController.sourceRect = r;
-    }
-    [top presentViewController:av animated:YES completion:nil];
+        pc.sourceRect = r;
+    });
 }
 
 void bibleTextShareText(const char *text) {
@@ -3817,7 +4302,7 @@ void bibleTextShareText(const char *text) {
     NSString *s = [NSString stringWithUTF8String:text];
     dispatch_async(dispatch_get_main_queue(), ^{
         if (s.length == 0) return;
-        bibleTextPresentShare(@[s]);
+        bibleTextPresentShare(@[s], @"Could not share the passage.");
     });
 }
 
@@ -3827,17 +4312,12 @@ void bibleTextShareText(const char *text) {
 // card's share: the reading view is hidden under the card and answers no
 // rectangle, so a share anchored to it pointed at the middle of the screen,
 // over the card, and not at the card's Share icon.
-static void bibleTextPresentShareAt(NSArray *items, CGRect r) {
-    if (items.count == 0) return;
-    UIViewController *top = bibleTextTopVC();
-    if (top == nil) return;
-    UIActivityViewController *av =
-        [[UIActivityViewController alloc] initWithActivityItems:items applicationActivities:nil];
-    if (av.popoverPresentationController != nil && top.view != nil) {
-        av.popoverPresentationController.sourceView = top.view;
-        av.popoverPresentationController.sourceRect = [top.view convertRect:r fromView:top.view.window];
-    }
-    [top presentViewController:av animated:YES completion:nil];
+static void bibleTextPresentShareAt(NSArray *items, CGRect r, NSString *failed) {
+    bibleTextPresentShareSaying(items, failed, ^(UIPopoverPresentationController *pc, UIViewController *top) {
+        if (top.view == nil) return;
+        pc.sourceView = top.view;
+        pc.sourceRect = [top.view convertRect:r fromView:top.view.window];
+    });
 }
 
 // bibleTextShareTextAt is bibleTextShareText anchored to a rectangle of the
@@ -3849,7 +4329,8 @@ void bibleTextShareTextAt(const char *text, double x, double y, double w, double
     dispatch_async(dispatch_get_main_queue(), ^{
         if (s.length == 0) return;
         UIEdgeInsets safe = bibleTextFindWindow().safeAreaInsets;
-        bibleTextPresentShareAt(@[s], CGRectMake(x + safe.left, y + safe.top, w, h));
+        bibleTextPresentShareAt(@[s], CGRectMake(x + safe.left, y + safe.top, w, h),
+                                @"Could not share the passage.");
     });
 }
 
@@ -3867,17 +4348,12 @@ void bibleTextShareTextAt(const char *text, double x, double y, double w, double
 // reader moved on), it is presented a second after the share as it was,
 // beside the selection, which then still stands. An iPhone presents a sheet
 // with no anchor, at once, as before.
-static void bibleTextPresentShareFrom(NSArray *items, UIView *view, CGRect r) {
-    if (items.count == 0) return;
-    UIViewController *top = bibleTextTopVC();
-    if (top == nil) return;
-    UIActivityViewController *av =
-        [[UIActivityViewController alloc] initWithActivityItems:items applicationActivities:nil];
-    if (av.popoverPresentationController != nil && view != nil) {
-        av.popoverPresentationController.sourceView = view;
-        av.popoverPresentationController.sourceRect = r;
-    }
-    [top presentViewController:av animated:YES completion:nil];
+static void bibleTextPresentShareFrom(NSArray *items, UIView *view, CGRect r, NSString *failed) {
+    bibleTextPresentShareSaying(items, failed, ^(UIPopoverPresentationController *pc, UIViewController *top) {
+        if (view == nil) return;
+        pc.sourceView = view;
+        pc.sourceRect = r;
+    });
 }
 
 static void btIOSPresentWordsShare(NSUInteger token) {
@@ -3896,12 +4372,12 @@ static void btIOSPresentWordsShare(NSUInteger token) {
             UITextRange *range = (a && b) ? [tv textRangeFromPosition:a toPosition:b] : nil;
             CGRect r = range ? [tv firstRectForRange:range] : CGRectNull;
             if (!CGRectIsNull(r) && !CGRectIsEmpty(r)) {
-                bibleTextPresentShareFrom(@[s], tv, r);
+                bibleTextPresentShareFrom(@[s], tv, r, @"Could not share the passage.");
                 return;
             }
         }
     }
-    bibleTextPresentShare(@[s]);
+    bibleTextPresentShare(@[s], @"Could not share the passage.");
 }
 
 void bibleTextShareTextAtWords(const char *text, int verse, int at, int len) {
@@ -3910,7 +4386,7 @@ void bibleTextShareTextAtWords(const char *text, int verse, int at, int len) {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (s.length == 0) return;
         if (UIDevice.currentDevice.userInterfaceIdiom != UIUserInterfaceIdiomPad) {
-            bibleTextPresentShare(@[s]);
+            bibleTextPresentShare(@[s], @"Could not share the passage.");
             return;
         }
         gWordsShareText = s;
@@ -3934,7 +4410,7 @@ void bibleTextShareImageFile(const char *path) {
             bibleTextShareNotice(@"Could not share the card.");
             return;
         }
-        bibleTextPresentShare(@[img]);
+        bibleTextPresentShare(@[img], @"Could not share the card.");
     });
 }
 
@@ -4028,12 +4504,12 @@ BTTouch bibleTextTVCaptureTouch(void) {
 // bibleTextTVArmMarker sets (verse>0) or clears (verse<=0) the "you left off here"
 // marker on the given verse, in the accent colour (r,g,b in 0..1). Applied
 // immediately if the chapter is already laid out, and re-applied by
-// bibleTextApplyHTML across restore relayouts.
+// btIOSInstallPage across restore relayouts.
 //
 // SYNCHRONOUS on the main thread (mirrors bibleTextTVCaptureAnchor): pushChapterHTML
 // arms the marker and THEN submits the chapter text (bibleTextTVSetHTML) in the same
 // pass. Running the arm inline sets/clears gMarkerVerse BEFORE that text is queued,
-// so bibleTextApplyHTML can never observe a stale marker from the previous chapter —
+// so btIOSInstallPage can never observe a stale marker from the previous chapter —
 // correctness does not rely on main-queue ordering between the two async submissions.
 void bibleTextTVArmMarker(int verse, double r, double g, double b) {
     dispatch_block_t block = ^{
@@ -4326,6 +4802,14 @@ func nativeShareImage(path string) {
 	C.bibleTextShareImageFile(c)
 }
 
+// sayShareFailed says line in an alert with one button, as the share sheet
+// says a share it cannot make (bibleTextShareNotice, share_failed.go).
+func sayShareFailed(_ *AppState, line string) {
+	c := C.CString(line)
+	defer C.free(unsafe.Pointer(c))
+	C.bibleTextShareFailed(c)
+}
+
 // lastPushedBookChapter is the "book|chapter" of the chapter currently held by the
 // native text view — distinct from lastPushedBodyFP (which also folds in theme,
 // red-letter and the data identity; this pane no longer writes the combined
@@ -4498,12 +4982,33 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// — which is what lets the next wash-only change be a mutation.
 	setNativeTint(state, verses)
 	// Announce the push. Besides the same-chapter answer above it moves the
-	// generation that tells a landed chapter from a failed import.
-	C.bibleTextIOSBeginChapterPush(sameChapter)
+	// generation that tells a landed chapter from a failed import, and returns
+	// it for the push to carry.
+	gen := C.bibleTextIOSBeginChapterPush(sameChapter)
 	html := buildChapterHTML(state, verses)
 	c := C.CString(html)
 	defer C.free(unsafe.Pointer(c))
-	C.bibleTextTVSetHTML(c)
+	// The page shown if this HTML will not import, built from the same HTML
+	// (reading_apple_fallback.go). The pane copies the text and the runs
+	// before the call returns; the runs are Go memory that holds no pointer.
+	fb := appleFallbackPageOf(html)
+	fbText := C.CString(fb.text)
+	defer C.free(unsafe.Pointer(fbText))
+	runs := fb.flatRuns()
+	var fbRuns *C.int
+	if len(runs) > 0 {
+		fbRuns = (*C.int)(unsafe.Pointer(&runs[0]))
+	}
+	if devFailImportsRequested() {
+		C.bibleTextIOSFailImports(1)
+	}
+	// The chapter first: the pane keys the page it installs with it, the
+	// imported one or the fallback, and the selection menu hands it back with
+	// every selection (selSpan.book).
+	cb := C.CString(state.CurrentBook)
+	defer C.free(unsafe.Pointer(cb))
+	C.bibleTextTVSetChapter(cb, C.int(state.CurrentChapter))
+	C.bibleTextTVSetHTML(c, fbText, fbRuns, C.int(len(fb.runs)), cFallbackStyle(appleFallbackStyleFor(state)), gen)
 
 	// Keep the native text view OPAQUE with the current theme's reading-ground colour
 	// (the same pal.Background parchment the Fyne layer paints behind it) so scrolling
@@ -4645,8 +5150,10 @@ func pushNoteToPane(state *AppState) {
 	// The note's OWN verse, not the highlight's — minimizing clears the
 	// highlight, and a marker without an anchor jumps to the top of the chapter.
 	// (An unplaced-only chapter pushes verse 0: its pill parks at the top,
-	// which is the only honest place for notes with no verses here.)
-	C.bibleTextSetNote(cText, cWho, min, nx, ownFlag, C.int(state.NoteVerseLo),
+	// which is the only honest place for notes with no verses here.) As the
+	// page draws it (c.Anchor, drawnNoteAnchor): a verse this edition omits
+	// hangs the card above the verse after the hole.
+	C.bibleTextSetNote(cText, cWho, min, nx, ownFlag, C.int(c.Anchor),
 		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB,
 		tailFlag, verbSet, cCounts, arrivalClass, arrivalVerse)
 }
@@ -4726,6 +5233,21 @@ func pushFollowButtonColors(p palette) {
 	C.bibleTextSetFollowButtonColors(
 		C.double(float64(p.Accent.R)/255), C.double(float64(p.Accent.G)/255), C.double(float64(p.Accent.B)/255),
 		C.double(float64(p.AccentText.R)/255), C.double(float64(p.AccentText.G)/255), C.double(float64(p.AccentText.B)/255))
+}
+
+// cFallbackStyle is the fallback page's style as the pane reads it, the
+// colours as 0..1 components.
+func cFallbackStyle(s appleFallbackStyle) C.BTFallbackStyle {
+	return C.BTFallbackStyle{
+		bodyPt:    C.double(s.bodyPt),
+		numeralPt: C.double(s.numeralPt),
+		inkR:      C.double(float64(s.ink.R) / 255),
+		inkG:      C.double(float64(s.ink.G) / 255),
+		inkB:      C.double(float64(s.ink.B) / 255),
+		numR:      C.double(float64(s.numeral.R) / 255),
+		numG:      C.double(float64(s.numeral.G) / 255),
+		numB:      C.double(float64(s.numeral.B) / 255),
+	}
 }
 
 // buildChapterHTML, nrgbaToHex and htmlEscape moved to reading.go so the macOS

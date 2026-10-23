@@ -26,8 +26,8 @@ func phraseWords(s string) string {
 
 // sweepPhrases selects every phrase of two, three and five words inside each
 // step-th verse of bd, once with the span a pane reports for a drag inside
-// one verse and once with none, as the plain-text fallback the Mac and the
-// iPhone and iPad show hands a selection over. Each must be placed, and
+// one verse and once with none, as a page with no verse geometry hands a
+// selection over. Each must be placed, and
 // share its own words; with the span it must cite its verse. With no span
 // the citation is that of the first copy that splits no word, which for
 // wording the chapter repeats need not be the reader's (BACKLOG.md, "A

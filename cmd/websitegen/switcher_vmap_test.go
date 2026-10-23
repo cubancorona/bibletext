@@ -12,8 +12,8 @@ package main
 //
 // The fixture below numbers its chapters as the real editions do, as the
 // tables record them: the doxology, the Song of the Three, the BSB's omitted
-// Mark 9:44 and 9:46, the NKJV's Acts 8:37, and the Greek Esther (which the
-// shipping build cannot map and the next major release maps verse for verse).
+// Mark 9:44 and 9:46, the NKJV's Acts 8:37, and the Greek Esther (which maps
+// verse for verse).
 // The cases run the shipped bytes between reader.js's VERSE_CARRY markers,
 // under node or JavaScriptCore as highlight_band_test.go does, with the
 // data-vmap and href each page was really built with, in both states of the
@@ -310,8 +310,7 @@ func publicDomainCarryCases(t *testing.T, root string) []carryCase {
 	add(casesOn(t, root, "bsb/mark/9/index.html", "web",
 		[3]string{"43-45", "", "../../../web/mark/9/#v43-45"},
 	))
-	// The Greek Esther's are the switch's: greek_esther_current_test.go and
-	// greek_esther_next_test.go.
+	// The Greek Esther's are in greek_esther_test.go.
 	add(greekEstherCarryCases(t, root))
 	// A chapter every edition numbers alike.
 	add(casesOn(t, root, "web/john/3/index.html", "bsb",

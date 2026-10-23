@@ -447,7 +447,7 @@ breaks survive a copy is too easy to get wrong to leave where no test can reach.
 | id | item | editions | effort | epoch | status |
 |---|---|---|---|---|---|
 | S14 | honour the publishers' paragraph breaks | all | M–L | all four | done |
-| S15 | section headings: captured | all | M | all four | done; drawn by S16; the setting and the shape guard left to decide |
+| S15 | section headings: captured | all | M | all four | done; drawn by S16; the Daniel 3 note set apart as the publisher sets it, for 1.2.23 (ROADMAP.md, decision 8); the setting left to decide |
 | S16 | section headings: drawing them | all | M–L | none | done |
 | S17 | NKJV supplied words: captured | NKJV | M | nkjv | done; captured, and drawn in italic on every surface |
 | S18 | speech reads the Psalm title | all | M | none | done |
@@ -510,8 +510,24 @@ Catholic heading in Greek Daniel 3 and nothing in the BSB. One of the three
 shipped and the other two did not. The shared model was built first, as planned,
 and it is what let all four surfaces follow; but a heading draws
 unconditionally, with neither the setting nor the shape guard, so the fused
-510-character Greek Daniel 3 string is drawn whole and a reader has no way to
-turn headings off. Both remain to be decided rather than done.
+510-character Greek Daniel 3 string was drawn whole, and a reader has no way
+to turn headings off. Both remain to be decided rather than done.
+
+What the Daniel 3 string is, the publisher's own text says. In eBible's WEB
+Catholic USFM the line is a section heading carrying a footnote: "THE SONG OF
+THE THREE HOLY CHILDREN", with a note whose reference is 3:24. The helloao
+feed runs the note's reference and words into the heading's, and that string
+is what every cache holds. `fu/1223-heading-footnote` sets it as the
+publisher does, on every surface and the website: the title as the heading,
+the note as that heading's footnote, filed under 24 in the chapter's footnote
+section and shown whenever the section is (`settleHeadingNote`, read through
+`headingsFor`, so the cache keeps the feed's string and nobody downloads
+again). Nothing is dropped, and no guard is needed for it. That settles
+decision 8 in ROADMAP.md (Later minor releases, row 15): the fused string was
+a decoding defect, fixed to match the source for 1.2.23. In the WEB, the WEB Catholic and the BSB sources this is
+the only section heading with a footnote; psalm titles carry them in all
+three, and the app already lists every one under "Title". The setting to turn
+headings off is still open (ROADMAP.md, Stays in the backlog, row 13).
 
 **S16.** DONE. A heading is not a fact about a verse — it stands BETWEEN two of
 them, which is why it fitted none of the run machinery that carries the red
@@ -581,24 +597,20 @@ have the app assert, in its own voice, an omission the publisher never made.
 
 So the holes are resolved OFFLINE, from the publishers' own complete feeds, and
 shipped as `omitted_verses_data.go` — the same shape the red-letter and
-paragraph tables use. **58 verses across three editions**: Berean 16, World
-English 4, WEB Catholic 38. The licensed edition has no table at all, so it
+paragraph tables use. **61 verses across three editions**: Berean 16, World
+English 4, WEB Catholic 41. The licensed edition has no table at all, so it
 answers nothing rather than guessing.
 
-Greek Esther is excluded. Its numbering corresponds to nothing —
-`versification.go` already records the book as incommensurable — so its three
-gaps are not omissions and are not reported as any.
-
-In the next major release (`docs/NEXT.md`) they are: **61 verses**, WEB
-Catholic 41, in `omitted_verses_data_next.go`. The Greek Esther's three gaps —
-4:6, 9:5 and 9:30 — are holes like any other there. It is translated from a
-different text from the Hebrew Esther, but it keeps the Hebrew book's verse
-numbers and has nothing at those three, which `versification_data_next.go`
-records as absent (15 absent verses for the generator's check, not 12).
+The Greek Esther's three gaps — 4:6, 9:5 and 9:30 — are among them, holes like
+any other. It is translated from a different text from the Hebrew Esther, but
+it keeps the Hebrew book's verse numbers and has nothing at those three, which
+`versification_data.go` records as absent. Until 1.2.23 the versification
+table recorded the whole book as incommensurable, so its gaps were left out
+and the table held 58 verses, WEB Catholic 38.
 
 Two independent checks, because one derivation checking itself proves nothing.
 The generator refuses to write the table unless every verse
-`versification_data.go` records as absent appears as a hole (12 of them, derived
+`versification_data.go` records as absent appears as a hole (15 of them, derived
 from a different source by a different script), and a test re-walks the feeds
 and requires the table to name every interior hole and no other.
 

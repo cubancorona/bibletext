@@ -56,6 +56,16 @@ func gapsBefore(versionID, book string, chapter int, verses []Verse) map[int][]i
 	return out
 }
 
+// pageGaps is the holes an app pane marks on the chapter it draws: gapsBefore
+// for the chapter on screen, on the footnotes toggle, as buildChapterHTML,
+// buildChapterHTMLAndroid and layoutChapter ask it. nil with the toggle off.
+func pageGaps(state *AppState, verses []Verse) map[int][]int {
+	if state == nil || !footnotesEnabled() {
+		return nil
+	}
+	return gapsBefore(state.CurrentVersion, state.CurrentBook, state.CurrentChapter, verses)
+}
+
 // verseGapMark is the mark's text: the omitted number in square brackets.
 // Brackets rather than a bare number, so the iOS and macOS verse indexes —
 // which read a small run's integerValue — read zero and skip it, and so a reader

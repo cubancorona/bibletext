@@ -1,13 +1,14 @@
 package bibletext
 
-// THE PLAIN-TEXT FALLBACK'S PAGE, run from the source. When a chapter's HTML
-// will not import, the Mac and the iPhone and iPad show that HTML with its
-// tags stripped (bibleTextMacPlainFromHTML, bibleTextPlainFromHTML), and a
-// share from that page reaches Go with no span: the selected text, and
-// nothing to say where it stood. Whatever the strip makes of the page is
-// therefore all the share code has. The host cannot run either cgo
-// preamble, so these tests run each converter's own steps, read from its
-// source, on the HTML buildChapterHTML writes.
+// The fallback page, as Go builds it (reading_apple_fallback.go) and checked
+// here on the host, where the panes' Objective-C cannot run. When a chapter's
+// HTML will not import, the Mac and the iPhone and iPad set this page in the
+// faces its runs name and install it as an imported page is
+// (btIOSFallbackPage, btMacFallbackPage); reading_native_fallback_contract_test.go
+// holds the panes to that. These tests hold the page to the chapter's text,
+// in the paragraphs and line breaks the importer gives it, and its runs to
+// where the verse numbers, the title and the headings stand, in the UTF-16
+// units the panes count in.
 
 import (
 	"fmt"
@@ -15,243 +16,274 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"unicode/utf16"
+
+	"fyne.io/fyne/v2/test"
 )
 
-// appleFallbackConverters are the two converters, by file and signature.
-var appleFallbackConverters = []struct{ path, signature string }{
-	{"reading_macos.go", "static NSString *bibleTextMacPlainFromHTML(NSString *html) {"},
-	{"reading_ios.go", "static NSString *bibleTextPlainFromHTML(NSString *html) {"},
+// fallbackPageFor is the page the panes would show for st's chapter.
+func fallbackPageFor(st *AppState) appleFallbackPage {
+	return appleFallbackPageOf(buildChapterHTML(st, st.Bible.GetChapter(st.CurrentBook, st.CurrentChapter)))
 }
 
-const objcLiteral = `@"((?:[^"\\]|\\.)*)"`
+// pageUnits is the page as NSString holds it.
+func pageUnits(p appleFallbackPage) []uint16 { return utf16.Encode([]rune(p.text)) }
 
-var (
-	objcReplaceLiteral = regexp.MustCompile(`^(\w+) = \[(\w+) stringByReplacingOccurrencesOfString:` + objcLiteral + ` withString:` + objcLiteral + ` options:NSLiteralSearch range:NSMakeRange\(0, (\w+)\.length\)\]$`)
-	objcRegex          = regexp.MustCompile(`^NSRegularExpression \*(\w+) = \[NSRegularExpression regularExpressionWithPattern:` + objcLiteral + ` options:0 error:nil\]$`)
-	objcReplaceRegex   = regexp.MustCompile(`^(?:NSString \*)?(\w+) = \[(\w+) stringByReplacingMatchesInString:(\w+) options:0 range:NSMakeRange\(0, (\w+)\.length\) withTemplate:` + objcLiteral + `\]$`)
-	objcReturn         = regexp.MustCompile(`^return (\w+)$`)
-)
-
-// objcStatements splits a function's source into its statements, with the
-// comments and the line breaks taken out, and string literals kept whole: an
-// entity such as "&nbsp;" carries the semicolon that ends a statement.
-func objcStatements(t *testing.T, src string) []string {
-	t.Helper()
-	open := strings.IndexByte(src, '{')
-	if open < 0 {
-		t.Fatal("no function body")
+// unitText is the text of units [start, start+length), read as the panes
+// read a run; a range outside the page reads as a marker no page holds.
+func unitText(units []uint16, start, length int) string {
+	if start < 0 || length < 0 || start+length > len(units) {
+		return "\x00out of range"
 	}
-	src = src[open+1:]
-	var out []string
-	var b strings.Builder
-	inString := false
-	for i := 0; i < len(src); i++ {
-		c := src[i]
-		switch {
-		case inString:
-			b.WriteByte(c)
-			if c == '\\' && i+1 < len(src) {
-				i++
-				b.WriteByte(src[i])
-			} else if c == '"' {
-				inString = false
-			}
-		case c == '/' && i+1 < len(src) && src[i+1] == '/':
-			for i < len(src) && src[i] != '\n' {
-				i++
-			}
-			b.WriteByte(' ')
-		case c == '"':
-			inString = true
-			b.WriteByte(c)
-		case c == ';':
-			out = append(out, strings.Join(strings.Fields(b.String()), " "))
-			b.Reset()
-		default:
-			b.WriteByte(c)
-		}
-	}
-	if rest := strings.TrimSpace(b.String()); rest != "" && rest != "}" {
-		t.Fatalf("the function ends in something that is not a statement: %q", rest)
-	}
-	return out
+	return string(utf16.Decode(units[start : start+length]))
 }
 
-// objcString is the value of a string literal's contents as the compiler
-// reads them.
-func objcString(t *testing.T, lit string) string {
-	t.Helper()
-	var b strings.Builder
-	for i := 0; i < len(lit); i++ {
-		if lit[i] != '\\' {
-			b.WriteByte(lit[i])
-			continue
+// fallbackVerseNumbers checks that each of the first n verse numbers stands
+// on the page as a word of its own, after a space, a line feed or a line
+// separator, and says which does not.
+func fallbackVerseNumbers(page string, n int) error {
+	pos := 0
+	for v := 1; v <= n; v++ {
+		num := strconv.Itoa(v) + " "
+		i := strings.Index(page[pos:], num)
+		if i < 0 {
+			return fmt.Errorf("verse %d's number is not on the page as a word", v)
 		}
-		i++
-		switch lit[i] {
-		case '\\', '"':
-			b.WriteByte(lit[i])
-		case 'n':
-			b.WriteByte('\n')
-		case 't':
-			b.WriteByte('\t')
-		default:
-			t.Fatalf("an escape this test does not read: \\%c", lit[i])
+		i += pos
+		if before := page[:i]; before != "" && !strings.HasSuffix(before, " ") && !strings.HasSuffix(before, "\n") &&
+			!strings.HasSuffix(before, appleFallbackLineSeparator) {
+			return fmt.Errorf("verse %d's number is joined to what stands before it: %q", v, page[max(0, i-20):i+len(num)])
 		}
-	}
-	return b.String()
-}
-
-// runAppleFallbackConverter runs a converter's statements on html. It reads
-// the three kinds the converters are written in, a literal replacement, a
-// regular expression and its replacement, and the return, and fails on any
-// other, so a step added in another form cannot be passed over unseen. A
-// replacement is read only with NSLiteralSearch over the whole string, which
-// compares code units as strings.ReplaceAll compares bytes; without it the
-// compare matches only whole composed characters, and an entity followed by
-// a combining mark is left standing where ReplaceAll would replace it. The
-// expressions are ones ICU and Go read alike.
-func runAppleFallbackConverter(t *testing.T, body, html string) string {
-	t.Helper()
-	vars := map[string]string{"html": html}
-	res := map[string]*regexp.Regexp{}
-	for _, st := range objcStatements(t, body) {
-		if m := objcReplaceLiteral.FindStringSubmatch(st); m != nil {
-			v, ok := vars[m[2]]
-			if !ok || m[1] != m[2] || m[5] != m[2] {
-				t.Fatalf("a replacement this test does not read: %s", st)
-			}
-			vars[m[1]] = strings.ReplaceAll(v, objcString(t, m[3]), objcString(t, m[4]))
-			continue
-		}
-		if m := objcRegex.FindStringSubmatch(st); m != nil {
-			res[m[1]] = regexp.MustCompile(objcString(t, m[2]))
-			continue
-		}
-		if m := objcReplaceRegex.FindStringSubmatch(st); m != nil {
-			re, ok := res[m[2]]
-			v, have := vars[m[3]]
-			if !ok || !have || m[3] != m[4] || strings.Contains(m[5], "$") {
-				t.Fatalf("a replacement this test does not read: %s", st)
-			}
-			vars[m[1]] = re.ReplaceAllLiteralString(v, objcString(t, m[5]))
-			continue
-		}
-		if m := objcReturn.FindStringSubmatch(st); m != nil {
-			v, ok := vars[m[1]]
-			if !ok {
-				t.Fatalf("returns what it never set: %s", st)
-			}
-			return v
-		}
-		t.Fatalf("a step this test cannot run: %s", st)
-	}
-	t.Fatal("the converter returns nothing")
-	return ""
-}
-
-// fallbackCut is where both panes cut the chapter's HTML before the strip:
-// the opening of the translators' notes.
-const fallbackCut = `<p class="fnsep">`
-
-// fallbackPageHTML is the HTML the fallback strips: the chapter's page, cut
-// at the translators' notes, as both panes cut it before the strip
-// (TestTheFallbackSetsTheConvertersPageOfTheCutHTML holds the panes to it).
-func fallbackPageHTML(st *AppState) string {
-	html := buildChapterHTML(st, st.Bible.GetChapter(st.CurrentBook, st.CurrentChapter))
-	if i := strings.Index(html, fallbackCut); i >= 0 {
-		html = html[:i]
-	}
-	return html
-}
-
-// appleFallbackCallSites are the two panes' fallbacks, by file, function and
-// the statement that sets the page.
-var appleFallbackCallSites = []struct{ path, fn, assign string }{
-	{"reading_macos.go", "void bibleTextMacTVSetHTML(const char *html) {", "[gTextView setString:bibleTextMacPlainFromHTML(plainSrc)]"},
-	{"reading_ios.go", "void bibleTextTVSetHTML(const char *html) {", "gReadingTV.text = bibleTextPlainFromHTML(plainSrc)"},
-}
-
-// objcTextWrite matches a statement that writes a text view's characters.
-var objcTextWrite = regexp.MustCompile(`\.text\s*=[^=]|\.attributedText\s*=[^=]|\bset(?:String|AttributedString|Text|AttributedText):|\b(?:replace|delete)CharactersInRange:|\b(?:insert|append)AttributedString:`)
-
-// objcBlockEnd is the offset of the brace that closes the block holding
-// offset from in src, or -1. String literals and line comments are passed
-// over.
-func objcBlockEnd(src string, from int) int {
-	depth := 0
-	for i := from; i < len(src); i++ {
-		switch c := src[i]; {
-		case c == '"':
-			for i++; i < len(src) && src[i] != '"'; i++ {
-				if src[i] == '\\' {
-					i++
-				}
-			}
-		case c == '/' && i+1 < len(src) && src[i+1] == '/':
-			for i < len(src) && src[i] != '\n' {
-				i++
-			}
-		case c == '{':
-			depth++
-		case c == '}':
-			if depth == 0 {
-				return i
-			}
-			depth--
-		}
-	}
-	return -1
-}
-
-// fallbackCallSiteError checks a pane's fallback block, from the copy of
-// the HTML it cuts to the end of the block: it opens with exactly the cut
-// fallbackPageHTML models and the statement that sets the page to the
-// converter's output, and nothing else in it writes the text view's text.
-func fallbackCallSiteError(t *testing.T, body, assign string) error {
-	t.Helper()
-	const open = "NSString *plainSrc = s;"
-	if strings.Count(body, open) != 1 {
-		return fmt.Errorf("%q is not in the function once", open)
-	}
-	i := strings.Index(body, open)
-	end := objcBlockEnd(body, i)
-	if end < 0 {
-		return fmt.Errorf("the block holding the fallback does not close")
-	}
-	sts := objcStatements(t, "{"+body[i:end])
-	want := []string{
-		"NSString *plainSrc = s",
-		`NSRange fnsep = [plainSrc rangeOfString:@"` + strings.ReplaceAll(fallbackCut, `"`, `\"`) + `"]`,
-		"if (fnsep.location != NSNotFound) plainSrc = [plainSrc substringToIndex:fnsep.location]",
-		assign,
-	}
-	if len(sts) < len(want) {
-		return fmt.Errorf("the fallback block has %d statements, want at least %d", len(sts), len(want))
-	}
-	for k, w := range want {
-		if sts[k] != w {
-			return fmt.Errorf("statement %d of the fallback is %q, want %q", k+1, sts[k], w)
-		}
-	}
-	writes := 0
-	for _, st := range sts {
-		if objcTextWrite.MatchString(st) {
-			writes++
-		}
-	}
-	if writes != 1 {
-		return fmt.Errorf("the fallback block writes the text %d times, want once", writes)
+		pos = i + len(num)
 	}
 	return nil
 }
 
-// fallbackPsalmTitlePage is psalmTitleState's chapter as a converter writes
-// it, with where each verse's number and text stand, found and checked
-// against the chapter's prose.
-func fallbackPsalmTitlePage(t *testing.T, st *AppState, body string, withHeading bool) psalmTitlePage {
+// flatLines is s with its line feeds and line separators read as spaces,
+// as a verse's text stands in the chapter's prose.
+func flatLines(s string) string {
+	return strings.NewReplacer("\n", " ", appleFallbackLineSeparator, " ").Replace(s)
+}
+
+// The page is the chapter's text and nothing else: the title, a heading,
+// and the verses each stand apart, a line feed after each paragraph, so
+// verse 1's number arrives as a word of its own, and no rule of the
+// stylesheet or entity of the markup is left in it, while an entity the
+// text itself spells out stands as spelled. The controls show the check sees
+// each of those go wrong.
+func TestTheFallbackPageIsTheChaptersTextAndNothingElse(t *testing.T) {
+	const spelled = `Its marks are spelled &quot;, &lt;b&gt;, &nbsp; and &amp;.`
+	st := psalmTitleState(true)
+	st.Bible.Verses["Psalms"][3][2].Text = `But you, Yahweh, are a "shield" around me, my glory & my <help>. ` + spelled
+	_, spans := chapterProse(st)
+	title := collapseSpaces(st.Bible.SuperscriptionFor("Psalms", 3).DrawnText())
+	check := func(page string) error {
+		want := title + "\n" + psalmHeading + "\n1 "
+		if !strings.HasPrefix(page, want) {
+			return fmt.Errorf("the page opens %q, want %q", page[:min(len(page), len(want)+20)], want)
+		}
+		if !strings.Contains(page, `my glory & my <help>.`) || !strings.Contains(page, `"shield"`) || strings.ContainsAny(page, "{}") {
+			return fmt.Errorf("the page carries markup or the stylesheet: %q", page)
+		}
+		if !strings.Contains(page, spelled) {
+			return fmt.Errorf("the text's own spelling of an entity is not on the page as spelled: %q", page)
+		}
+		return fallbackVerseNumbers(page, len(spans))
+	}
+	page := fallbackPageFor(st).text
+	if err := check(page); err != nil {
+		t.Error(err)
+	}
+	readTwice := strings.NewReplacer("&quot;", `"`, "&lt;", "<", "&gt;", ">", "&nbsp;", " ", "&amp;", "&").Replace(spelled)
+	for _, bad := range []struct{ what, page string }{
+		{"the title run into the heading", strings.Replace(page, title+"\n", title, 1)},
+		{"the stylesheet left on it", "p { margin: 0 }\n" + page},
+		{"a quotation mark left as its entity", strings.Replace(page, `"shield"`, `&quot;shield&quot;`, 1)},
+		{"the text's own entities read twice", strings.Replace(page, spelled, readTwice, 1)},
+		{"verse 2's number joined to verse 1", strings.Replace(page, appleFallbackLineSeparator+"2 ", "2 ", 1)},
+	} {
+		if bad.page == page || check(bad.page) == nil {
+			t.Fatalf("the check passes the page with %s; it proves nothing", bad.what)
+		}
+	}
+}
+
+// The runs say where the title, the heading and each verse number stand, in
+// UTF-16 units: the panes set those runs in the title's, the heading's and
+// the numeral's faces, and find the verses by them. The fixture puts a
+// character outside the Basic Multilingual Plane in verse 1 and curly quotes
+// in verse 2, so a run counted in bytes or in runes lands elsewhere, which
+// the control shows the check can tell.
+func TestTheFallbackPageRecordsWhereEachVerseNumberTitleAndHeadingStand(t *testing.T) {
+	st := psalmTitleState(true)
+	st.Bible.Verses["Psalms"][3][0].Text = "Yahweh, how my adversaries have increased! \U0001D11E\nMany are those who rise up against me."
+	p := fallbackPageFor(st)
+	corpus, spans := chapterProse(st)
+	title := st.Bible.SuperscriptionFor("Psalms", 3).DrawnText()
+
+	check := func(p appleFallbackPage) error {
+		units := pageUnits(p)
+		if len(p.runs) != 2+len(spans) {
+			return fmt.Errorf("%d runs, want the title, the heading and %d numbers: %+v", len(p.runs), len(spans), p.runs)
+		}
+		if r := p.runs[0]; r.kind != appleFallbackTitle || unitText(units, r.start, r.length) != title {
+			return fmt.Errorf("the first run is %+v %q, want the title %q", r, unitText(units, r.start, r.length), title)
+		}
+		if r := p.runs[1]; r.kind != appleFallbackHeading || unitText(units, r.start, r.length) != psalmHeading {
+			return fmt.Errorf("the second run is %+v %q, want the heading %q", r, unitText(units, r.start, r.length), psalmHeading)
+		}
+		for i, sp := range spans {
+			r := p.runs[2+i]
+			if r.kind != appleFallbackNumeral || unitText(units, r.start, r.length) != strconv.Itoa(sp.verse) {
+				return fmt.Errorf("run %d is %+v %q, want verse %d's number", 2+i, r, unitText(units, r.start, r.length), sp.verse)
+			}
+			// The verse's text follows its number and a space, as far as
+			// the next number, its poem lines broken as the importer
+			// breaks them.
+			end := len(units)
+			if 3+i < len(p.runs) {
+				end = p.runs[3+i].start
+			}
+			body := unitText(units, r.start+r.length, end-r.start-r.length)
+			if !strings.HasPrefix(body, " ") || flatLines(strings.TrimSpace(body)) != corpus[sp.start:sp.end] {
+				return fmt.Errorf("verse %d's number is followed by %q, not its text", sp.verse, body)
+			}
+		}
+		return nil
+	}
+	if err := check(p); err != nil {
+		t.Fatal(err)
+	}
+	// CONTROL: the same runs counted in bytes put verses 2 and 3 elsewhere.
+	inBytes := appleFallbackPage{text: p.text, runs: append([]appleFallbackRun(nil), p.runs...)}
+	moved := 0
+	for i, r := range inBytes.runs {
+		prefix := string(utf16.Decode(pageUnits(p)[:r.start]))
+		if len(prefix) != r.start {
+			inBytes.runs[i].start = len(prefix)
+			moved++
+		}
+	}
+	if moved == 0 || check(inBytes) == nil {
+		t.Fatalf("runs counted in bytes pass the check (%d moved); it proves nothing", moved)
+	}
+}
+
+// The page ends where the translators' notes begin: the panes find the end
+// of Scripture on an imported page by the notes' size, which this page does
+// not set, so a note on it would be taken for Scripture by every verb. The
+// control is the same HTML with its notes' opening renamed, which the walk
+// then reads through.
+func TestTheFallbackPageEndsBeforeTheTranslatorsNotes(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	setFootnotesEnabled(true)
+	defer setFootnotesEnabled(false)
+	verses := footnoteFixtureVerses()
+	st := footnoteFixtureState(verses)
+	html := buildChapterHTML(st, verses)
+	const note = "Or God loved the world in this way."
+	if !strings.Contains(html, appleFallbackCut) || !strings.Contains(html, note) {
+		t.Fatalf("the fixture's HTML carries no notes section to cut:\n%s", html)
+	}
+	p := appleFallbackPageOf(html)
+	if strings.Contains(p.text, note) || !strings.HasSuffix(p.text, "Whoever believes in him is not condemned.\n") {
+		t.Errorf("the page does not end with the last verse: %q", p.text)
+	}
+	if n := len(p.runs); n != 3 {
+		t.Errorf("%d runs, want the three verse numbers: %+v", n, p.runs)
+	}
+	renamed := appleFallbackPageOf(strings.Replace(html, appleFallbackCut, `<p class="fnsep-renamed">`, 1))
+	if !strings.Contains(renamed.text, note) {
+		t.Fatal("the notes are not on the page even with their opening renamed; the check proves nothing")
+	}
+}
+
+// nsParagraphOrdinal is how many paragraphs end before unit at of units, as
+// NSString ends them (paragraphRangeForRange:): at a line feed, a carriage
+// return, the two together, and U+2029 (PARAGRAPH SEPARATOR). A line
+// separator, U+2028, breaks a line inside a paragraph.
+func nsParagraphOrdinal(units []uint16, at int) int {
+	n := 0
+	for i := 0; i < at && i < len(units); i++ {
+		switch units[i] {
+		case '\n':
+			if i == 0 || units[i-1] != '\r' {
+				n++
+			}
+		case '\r', 0x2029:
+			n++
+		}
+	}
+	return n
+}
+
+// Each verse number stands in the paragraph its <p> makes, as on an
+// imported page: the importer ends a paragraph at each </p> and nowhere
+// else, and writes a <br> as U+2028, which NSString does not end a paragraph
+// at. Both panes reserve a note's band, place its sticker, card and pills,
+// and test which notes share a paragraph, by the paragraph that holds the
+// anchor verse's number, so a page that ends a paragraph at each poem line
+// opens a note between two lines of a stanza. Psalm 136 is one <p> of
+// verses of two poem lines each, Psalm 3 has a title and a heading above
+// its verses, and Genesis 1 is prose. The control is the same page with its
+// line separators made line feeds, as the page was first built.
+func TestTheFallbackPageEndsAParagraphWhereTheImportedPageDoes(t *testing.T) {
+	numberSup := regexp.MustCompile(`<sup class="v(?: [^"]*)?">`)
+	controlled := false
+	for _, st := range []*AppState{psalm136State(), psalmTitleState(true), genesis1State()} {
+		name := fmt.Sprintf("%s %d", st.CurrentBook, st.CurrentChapter)
+		html := buildChapterHTML(st, st.Bible.GetChapter(st.CurrentBook, st.CurrentChapter))
+		if i := strings.Index(html, appleFallbackCut); i >= 0 {
+			html = html[:i]
+		}
+		var want []int // the paragraph each verse number's <p> is, from 0
+		for _, m := range numberSup.FindAllStringIndex(html, -1) {
+			want = append(want, strings.Count(html[:m[0]], "</p>"))
+		}
+		wantEnds := strings.Count(html, "</p>")
+		if len(want) != len(st.Bible.GetChapter(st.CurrentBook, st.CurrentChapter)) {
+			t.Fatalf("%s: %d verse numbers found in the HTML, want one per verse", name, len(want))
+		}
+		paragraphs := func(p appleFallbackPage) (got []int, ends int) {
+			units := pageUnits(p)
+			for _, r := range p.runs {
+				if r.kind == appleFallbackNumeral {
+					got = append(got, nsParagraphOrdinal(units, r.start))
+				}
+			}
+			return got, nsParagraphOrdinal(units, len(units))
+		}
+		p := fallbackPageFor(st)
+		if got, ends := paragraphs(p); fmt.Sprint(got) != fmt.Sprint(want) || ends != wantEnds {
+			t.Errorf("%s: the verse numbers stand in paragraphs %v of the page's %d; the imported page's are %v of %d, one to a </p>",
+				name, got, ends, want, wantEnds)
+		}
+		if !strings.Contains(html, "<br>") {
+			continue // prose: no poem line to break
+		}
+		controlled = true
+		asFeeds := appleFallbackPage{text: strings.ReplaceAll(p.text, appleFallbackLineSeparator, "\n"), runs: p.runs}
+		if got, ends := paragraphs(asFeeds); fmt.Sprint(got) == fmt.Sprint(want) && ends == wantEnds {
+			t.Fatalf("%s: the page with a line feed at each poem line passes; the check proves nothing", name)
+		}
+	}
+	if !controlled {
+		t.Fatal("no fixture has a poem line, so the control never ran")
+	}
+}
+
+// fallbackPsalmTitlePage is psalmTitleState's chapter as the fallback page
+// lays it out, the title, the heading and each paragraph on lines of their
+// own, with where each verse's number and text stand, found and checked
+// against the chapter's prose. Its line separators are read as line feeds:
+// the share pipeline takes both for white space alike
+// (TestShareSelectionPoetryDisplayShape), and a line feed is one byte, as
+// the prose's space is, so a page offset inside a verse's text maps to the
+// prose by the sweep's arithmetic (sweepPsalmTitleDrags).
+func fallbackPsalmTitlePage(t *testing.T, st *AppState, withHeading bool) psalmTitlePage {
 	t.Helper()
-	page := runAppleFallbackConverter(t, body, fallbackPageHTML(st))
+	page := strings.ReplaceAll(fallbackPageFor(st).text, appleFallbackLineSeparator, "\n")
 	title := collapseSpaces(st.Bible.SuperscriptionFor(st.CurrentBook, st.CurrentChapter).DrawnText())
 	if !strings.HasPrefix(page, title+"\n") {
 		t.Fatalf("the page does not open with the title on a line of its own: %q", page[:min(len(page), 120)])
@@ -283,145 +315,47 @@ func fallbackPsalmTitlePage(t *testing.T, st *AppState, body string, withHeading
 	return p
 }
 
-// The fallback's page is the chapter's text and nothing else, a paragraph to
-// a line: the title, a heading, and the verses each stand apart, so verse
-// 1's number arrives as a word of its own, and no rule of the stylesheet or
-// entity of the markup is left in it, while an entity the text itself spells
-// out stands as spelled. It began with the stylesheet, and ran the title, the
-// heading and verse 1's number together ("his son.A Morning Prayer1
-// Yahweh"); with &amp; read before &lt; and &gt;, the text's own "&lt;b&gt;"
-// became "<b>". The controls take the converter's steps out, or move one, and
-// show each is what the check sees.
-func TestTheFallbackPageIsTheChaptersTextAParagraphToALine(t *testing.T) {
-	const (
-		spelled  = `Its marks are spelled &quot;, &lt;b&gt;, &nbsp; and &amp;.`
-		paraStep = `html = [html stringByReplacingOccurrencesOfString:@"</p>" withString:@"</p>\n" options:NSLiteralSearch range:NSMakeRange(0, html.length)];`
-		quotStep = `t = [t stringByReplacingOccurrencesOfString:@"&quot;" withString:@"\"" options:NSLiteralSearch range:NSMakeRange(0, t.length)];`
-		nbspStep = `t = [t stringByReplacingOccurrencesOfString:@"&nbsp;" withString:@" " options:NSLiteralSearch range:NSMakeRange(0, t.length)];`
-		ampStep  = `t = [t stringByReplacingOccurrencesOfString:@"&amp;" withString:@"&" options:NSLiteralSearch range:NSMakeRange(0, t.length)];`
-	)
-	st := psalmTitleState(true)
-	st.Bible.Verses["Psalms"][3][2].Text = `But you, Yahweh, are a "shield" around me, my glory & my <help>. ` + spelled
-	_, spans := chapterProse(st)
-	for _, c := range appleFallbackConverters {
-		body := nativeFunctionSource(t, c.path, c.signature)
-		page := runAppleFallbackConverter(t, body, fallbackPageHTML(st))
-		title := collapseSpaces(st.Bible.SuperscriptionFor("Psalms", 3).DrawnText())
-		want := title + "\n" + psalmHeading + "\n1 "
-		if !strings.HasPrefix(page, want) {
-			t.Errorf("%s: the page opens %q, want %q", c.path, page[:min(len(page), len(want)+20)], want)
-		}
-		if !strings.Contains(page, `my glory & my <help>.`) || !strings.Contains(page, `"shield"`) || strings.ContainsAny(page, "{}") {
-			t.Errorf("%s: the page carries markup or the stylesheet: %q", c.path, page)
-		}
-		if !strings.Contains(page, spelled) {
-			t.Errorf("%s: the text's own spelling of an entity is not on the page as spelled: %q", c.path, page)
-		}
-		if err := fallbackVerseNumbers(page, len(spans)); err != nil {
-			t.Errorf("%s: %v", c.path, err)
-		}
-
-		// CONTROL: without the paragraph step the title runs into the
-		// heading; without the head's removal the stylesheet opens the page;
-		// without the quotation mark's entity the mark is not on the page;
-		// with &amp; read first the text's own spelling is read twice.
-		for _, step := range []struct{ line, what string }{
-			{paraStep, "the paragraph step"},
-			{`html = [head stringByReplacingMatchesInString:html options:0`, "the head's removal"},
-			{quotStep, "the quotation mark's entity"},
-			{nbspStep, "the first entity"},
-			{ampStep, "the ampersand's entity"},
-		} {
-			if !strings.Contains(body, step.line) {
-				t.Fatalf("%s: %s is not in the converter as this test knows it", c.path, step.what)
-			}
-		}
-		without := strings.Replace(body, paraStep, "", 1)
-		if p := runAppleFallbackConverter(t, without, fallbackPageHTML(st)); strings.HasPrefix(p, title+"\n") {
-			t.Fatalf("%s: the title stands on its own line with the paragraph step taken out; the check proves nothing", c.path)
-		}
-		i := strings.Index(body, `NSRegularExpression *head =`)
-		j := strings.Index(body, `NSRegularExpression *re =`)
-		if i < 0 || j < i {
-			t.Fatalf("%s: the head's removal is not where this test knows it", c.path)
-		}
-		if p := runAppleFallbackConverter(t, body[:i]+body[j:], fallbackPageHTML(st)); strings.HasPrefix(p, title) || !strings.ContainsAny(p, "{}") {
-			t.Fatalf("%s: the page opens with the title with the head's removal taken out; the check proves nothing", c.path)
-		}
-		without = strings.Replace(body, quotStep, "", 1)
-		if p := runAppleFallbackConverter(t, without, fallbackPageHTML(st)); strings.Contains(p, `"shield"`) {
-			t.Fatalf("%s: the quotation marks are on the page with their entity left alone; the check proves nothing", c.path)
-		}
-		ampFirst := strings.Replace(strings.Replace(body, ampStep, "", 1), nbspStep, ampStep+"\n"+nbspStep, 1)
-		if p := runAppleFallbackConverter(t, ampFirst, fallbackPageHTML(st)); strings.Contains(p, spelled) {
-			t.Fatalf("%s: the text's own spelling stands with &amp; read first; the check proves nothing", c.path)
-		}
+// The share's rules for a selection with no span, on a psalm's title laid
+// out as the fallback page lays it out: a drag from the title into the psalm is
+// answered as TestPsalmTitleDragSweep answers it with a span, the psalm's
+// words alone, cited by their verses, and the title never quoted. The
+// fallback page used to hand such drags over with no span; it now cuts them
+// at verse 1's number, as an imported page does
+// (TestOnTheFallbackPageATitleIsCutAtVerseOne), and the rules stay for any
+// selection that still arrives without one.
+func TestADragFromATitleWithNoSpanSharesThePsalmsWordsAlone(t *testing.T) {
+	for _, withHeading := range []bool{false, true} {
+		st := psalmTitleState(withHeading)
+		p := fallbackPsalmTitlePage(t, st, withHeading)
+		name := fmt.Sprintf("heading=%v", withHeading)
+		drags, copies := sweepPsalmTitleDrags(t, st, p, func(int) selSpan { return selSpan{} }, name)
+		t.Logf("%s: %d drags, %d of them inside the title and quoted from the psalm", name, drags, copies)
 	}
 }
 
-// fallbackVerseNumbers checks that each of the first n verse numbers stands
-// on the page as a word of its own, after a space or a line break, and says
-// which does not.
-func fallbackVerseNumbers(page string, n int) error {
-	pos := 0
-	for v := 1; v <= n; v++ {
-		num := strconv.Itoa(v) + " "
-		i := strings.Index(page[pos:], num)
-		if i < 0 {
-			return fmt.Errorf("verse %d's number is not on the page as a word", v)
-		}
-		i += pos
-		if i > 0 && page[i-1] != ' ' && page[i-1] != '\n' {
-			return fmt.Errorf("verse %d's number is joined to what stands before it: %q", v, page[max(0, i-20):i+len(num)])
-		}
-		pos = i + len(num)
-	}
-	return nil
-}
-
-// A drag from a psalm's title into the psalm on the fallback's page, where
-// nothing has a span, is answered as TestPsalmTitleDragSweep answers it on
-// the page the panes draw: the psalm's words alone, cited by their verses,
-// and the title never quoted. The page ran the title into verse 1's number,
-// which could then not confirm the title, so every such drag was shared
-// whole, the title's words as Scripture under the chapter.
-func TestTheFallbackPageAnswersADragFromATitleAsThePanesWould(t *testing.T) {
-	seen := map[string]bool{}
-	for _, c := range appleFallbackConverters {
-		body := nativeFunctionSource(t, c.path, c.signature)
-		for _, withHeading := range []bool{false, true} {
-			st := psalmTitleState(withHeading)
-			p := fallbackPsalmTitlePage(t, st, body, withHeading)
-			if seen[p.page] {
-				continue // the other pane's converter wrote the same page
-			}
-			seen[p.page] = true
-			name := fmt.Sprintf("%s, heading=%v", c.path, withHeading)
-			drags, copies := sweepPsalmTitleDrags(t, st, p, func(int) selSpan { return selSpan{} }, name)
-			t.Logf("%s: %d drags, %d of them inside the title and quoted from the psalm", name, drags, copies)
+// What the walk reads of the markup beyond the chapter's own: a "<" with no
+// ">" after it, and an empty "<>", stay as text, as a tag-stripping
+// expression leaves them; a closing tag and a tag with attributes are read
+// by name; and an unknown entity stays as spelled.
+func TestTheFallbackWalkReadsTagsByNameAndLeavesStrayMarksAsText(t *testing.T) {
+	for _, tc := range []struct{ html, text string }{
+		{`<p>a <> b</p>`, "a <> b\n"},
+		{`<p>a &copy; b</p>`, "a &copy; b\n"},
+		{`<p>tail <`, "tail <"},
+		{`<p class="sec">Head</p><p><sup class="v hl">7</sup><span class="hl"> </span>x<br/>y</p>`, "Head\n7 x\u2028y\n"},
+	} {
+		if got := appleFallbackPageOf(tc.html).text; got != tc.text {
+			t.Errorf("%q: the page is %q, want %q", tc.html, got, tc.text)
 		}
 	}
-}
-
-// The page the converter tests run on is the page the panes set: each pane's
-// fallback cuts the chapter's HTML where fallbackPageHTML does, sets the text
-// view to the converter's output for what is left, and writes the text
-// nowhere else in the block. The converter tests follow the converter alone,
-// so a change at the call site could otherwise change the page unseen. The
-// controls invert the cut and write the text a second time.
-func TestTheFallbackSetsTheConvertersPageOfTheCutHTML(t *testing.T) {
-	for _, c := range appleFallbackCallSites {
-		body := nativeFunctionSource(t, c.path, c.fn)
-		if err := fallbackCallSiteError(t, body, c.assign); err != nil {
-			t.Errorf("%s: %v", c.path, err)
-		}
-		inverted := strings.Replace(body, "fnsep.location != NSNotFound", "fnsep.location == NSNotFound", 1)
-		if inverted == body || fallbackCallSiteError(t, inverted, c.assign) == nil {
-			t.Fatalf("%s: the check passes with the cut inverted; it proves nothing", c.path)
-		}
-		twice := strings.Replace(body, c.assign+";", c.assign+"; "+c.assign+";", 1)
-		if twice == body || fallbackCallSiteError(t, twice, c.assign) == nil {
-			t.Fatalf("%s: the check passes with the text written twice; it proves nothing", c.path)
-		}
+	p := appleFallbackPageOf(`<p class="sec">Head</p><p><sup class="v hl">7</sup><span class="hl"> </span>x</p>`)
+	want := []appleFallbackRun{{appleFallbackHeading, 0, 4}, {appleFallbackNumeral, 5, 1}}
+	if fmt.Sprint(p.runs) != fmt.Sprint(want) {
+		t.Errorf("the runs of a washed verse under a heading are %+v, want %+v", p.runs, want)
+	}
+	// A gap mark is drawn at the numeral's size on an imported page, but it is
+	// not a number: [21] reads as 0, so no run is recorded for it.
+	if p := appleFallbackPageOf(`<p><span class="vg">[21]</span> <sup class="v">22</sup> x</p>`); len(p.runs) != 1 || p.runs[0].start != 5 {
+		t.Errorf("a gap mark before a number gives the runs %+v, want the number's alone at 5", p.runs)
 	}
 }

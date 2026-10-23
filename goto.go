@@ -525,9 +525,12 @@ func gotoPickerModalFrom(state *AppState, withVerse bool, seed gotoPickerSeed) {
 		fit := func() {
 			w, h := pickerSplitSize(cnv)
 			// Centred, so on a short desktop window it is kept below the
-			// header like every desktop sheet (headerClearance).
+			// header like every desktop sheet (headerClearance), or, where
+			// its lists' least height leaves no room for that, covers it,
+			// its lists filling the room they are given.
 			h = clearOfHeader(h, cnv.Size().Height, headerClearance(state))
 			popup.Resize(fyne.NewSize(w, h))
+			coverHeaderUnlessClear(state, popup, pickerSplitMaxHeight)
 		}
 		fit()
 		// Sized again when a desktop window changes size (sheet_refit.go);

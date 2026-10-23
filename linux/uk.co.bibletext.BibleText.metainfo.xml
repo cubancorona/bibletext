@@ -75,6 +75,18 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.2.23" date="2026-10-23">
+      <description>
+        <p>More accurate selections and clearer study screens.</p>
+        <ul>
+          <li>Sharing and AI study leave heading words out of Scripture quotations, and study actions require Scripture in the selection.</li>
+          <li>AI study asks before sending text to the chosen provider and keeps the selected chapter through follow-up actions.</li>
+          <li>Waiting and error messages fit short windows better, with the quotation collapsed when its space is needed.</li>
+          <li>Greek Esther in World English Bible (Catholic) supports verse matching across translations.</li>
+          <li>Notes and highlights on omitted verses are more consistent, and sharing failures give a clearer message.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.22" date="2026-10-15">
       <description>
         <p>More accurate quotations and study passages.</p>

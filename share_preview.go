@@ -38,12 +38,26 @@ var shareImageOut = func(path string) { nativeShareImage(path) }
 // costs.
 var previewCardRender = renderVerseImage
 
+// showShareImagePreview opens the preview on the card for quote. A card that
+// cannot be drawn — its fonts unreadable, or its file not written — leaves
+// nothing to preview or share: no preview opens, and the reader is told,
+// "Could not share the card.", each platform its own way (sayShareFailed,
+// share_failed.go). A card Regenerate cannot draw leaves the one shown in
+// place, which is the one Share shares.
 func showShareImagePreview(state *AppState, quote, cite, version string) {
 	if state == nil || state.window == nil {
 		return
 	}
 	cnv := state.window.Canvas()
 	if cnv == nil {
+		return
+	}
+
+	variant := 0
+	curPath, err := previewCardRender(state, quote, cite, version, variant)
+	if err != nil {
+		fyne.LogError("the card to share could not be drawn", err)
+		sayShareFailed(state, shareFailedCard)
 		return
 	}
 	pal := state.pal()
@@ -62,15 +76,15 @@ func showShareImagePreview(state *AppState, quote, cite, version string) {
 	ps := sheetPanelSize(state, cnv)
 	side := shareImageSide(ps, headerClearance(state) > 0)
 
-	// The card is square; scale it to fit the preview box.
-	img := &canvas.Image{FillMode: canvas.ImageFillContain}
+	// The card is square; scale it to fit the preview box. Variant 0 is the
+	// verse's default treatment.
+	img := &canvas.Image{FillMode: canvas.ImageFillContain, File: curPath}
 	imgBox := container.NewGridWrap(fyne.NewSize(side, side), img)
 
-	variant := 0
-	curPath := ""
 	render := func() {
 		path, err := previewCardRender(state, quote, cite, version, variant)
 		if err != nil {
+			fyne.LogError("the regenerated card could not be drawn; the card shown stays", err)
 			return
 		}
 		curPath = path
@@ -78,7 +92,6 @@ func showShareImagePreview(state *AppState, quote, cite, version string) {
 		img.File = path
 		img.Refresh()
 	}
-	render() // initial card (variant 0 = the verse's default treatment)
 
 	var popup *widget.PopUp
 	closePanel := func() {
@@ -105,11 +118,9 @@ func showShareImagePreview(state *AppState, quote, cite, version string) {
 	shareBtn := widget.NewButtonWithIcon("Share", theme.MailSendIcon(), func() {
 		p := curPath
 		closePanel()
-		if p != "" {
-			shareImageMail.subject = cite + " (" + version + ")"
-			shareImageMail.body = composeShareText(quote, cite, version)
-			shareImageOut(p)
-		}
+		shareImageMail.subject = cite + " (" + version + ")"
+		shareImageMail.body = composeShareText(quote, cite, version)
+		shareImageOut(p)
 	})
 	shareBtn.Importance = widget.HighImportance
 

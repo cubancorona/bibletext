@@ -62,6 +62,7 @@ func TestAndroidPsalmTitleIsNotHyphenatedFromAPI35(t *testing.T) {
 	// And the text that leaves the page drops it.
 	drops := func(src string) bool {
 		read := javaBlockAfter(t, src, "readerText(CharSequence cs, int s0, int s1)")
+		asRead := javaBlockAfter(t, src, "private static CharSequence selectionAsRead()")
 		copyAs := javaBlockAfter(t, src, "private static boolean copyAsRead()")
 		return whole(src, "private static boolean holdsPageOnlySpan(",
 			"private static boolean holdsPageOnlySpan(CharSequence cs, int s0, int s1) {",
@@ -81,10 +82,14 @@ func TestAndroidPsalmTitleIsNotHyphenatedFromAPI35(t *testing.T) {
 				"android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder(cs, s0, s1);",
 				"dropPageOnlySpans(sb);",
 				"return sb;") &&
-			hasLinesInOrder(copyAs,
+			hasLinesInOrder(asRead,
 				"CharSequence read = readerText(cs, s0, s1);",
 				"if (android.text.TextUtils.equals(read, cs.subSequence(s0, s1))",
-				"&& !holdsPageOnlySpan(cs, s0, s1)) return false;",
+				"&& !holdsPageOnlySpan(cs, s0, s1)) return null;",
+				"return read;") &&
+			hasLinesInOrder(copyAs,
+				"CharSequence read = selectionAsRead();",
+				"if (read == null) return false;",
 				"cm.setPrimaryClip(android.content.ClipData.newPlainText(null, read));")
 	}
 	if !sets(java) {
@@ -116,8 +121,8 @@ func TestAndroidPsalmTitleIsNotHyphenatedFromAPI35(t *testing.T) {
 		{"kept by readerText", "        dropPageOnlySpans(sb);\n", "", drops},
 		{"returned as it stands with the span", "\n                    && !holdsPageOnlySpan(cs, s0, s1))) return raw;",
 			")) return raw;", drops},
-		{"the platform's Copy with the span", "\n                && !holdsPageOnlySpan(cs, s0, s1)) return false;",
-			") return false;", drops},
+		{"the platform's Copy with the span", "\n                && !holdsPageOnlySpan(cs, s0, s1)) return null;",
+			") return null;", drops},
 		{"looked for below API 35", "if (android.os.Build.VERSION.SDK_INT < 35 || !(cs instanceof Spanned)) return false;",
 			"if (!(cs instanceof Spanned)) return false;", drops},
 		{"only some removed", "            sb.removeSpan(o);\n", "            sb.removeSpan(o);\n            break;\n", drops},

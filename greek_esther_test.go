@@ -1,16 +1,10 @@
-//go:build next
-
 package bibletext
 
-// THE GREEK ESTHER IN THE NEXT MAJOR RELEASE (docs/NEXT.md). WEB Catholic
-// prints the Greek Esther, translated from a different text from the Hebrew
-// Esther the other editions print, and it keeps the Hebrew book's verse
-// numbers, so the next release's versification table
-// (versification_data_next.go) maps it verse for verse: references, notes,
-// highlights and cross-references cross between the two wherever both have
-// the verse. The shipping build's behaviour is pinned beside this file, in
-// greek_esther_current_test.go; on the day the next release ships that file
-// is deleted and this one loses its constraint.
+// THE GREEK ESTHER. WEB Catholic prints the Greek Esther, translated from a
+// different text from the Hebrew Esther the other editions print, and it
+// keeps the Hebrew book's verse numbers, so the versification table maps it
+// verse for verse: references, notes, highlights and cross-references cross
+// between the two wherever both have the verse.
 
 import (
 	"reflect"
@@ -22,31 +16,20 @@ import (
 
 // greekAdditionUnplacedSentence is the line under a note on one of the Greek
 // Esther's additions read in the WEB, and greekAdditionUnplacedSeen the start
-// of it a banner shows, as seenText reads it. Here the book maps verse for
-// verse, and the addition is a verse the Hebrew Esther does not have.
+// of it a banner shows, as seenText reads it. The book maps verse for verse,
+// and the addition is a verse the Hebrew Esther does not have.
 const (
 	greekAdditionUnplacedSentence = "These verses are not in the translation being read."
 	greekAdditionUnplacedSeen     = "these verses are not in the trans"
 )
-
-// The next release's tables are the ones in force: each generated file's init
-// puts its table in place of the shipping one before any test runs.
-func TestTheTablesInForceAreTheNextReleases(t *testing.T) {
-	if reflect.ValueOf(versificationDeltas).Pointer() != reflect.ValueOf(nextVersificationDeltas).Pointer() {
-		t.Error("versificationDeltas is not versification_data_next.go's table")
-	}
-	if reflect.ValueOf(omittedVerses).Pointer() != reflect.ValueOf(nextOmittedVerses).Pointer() {
-		t.Error("omittedVerses is not omitted_verses_data_next.go's table")
-	}
-}
 
 // THE GREEK ESTHER, VERSE FOR VERSE. WEB Catholic prints the Greek Esther,
 // translated from a different text from the Hebrew Esther the WEB prints, and
 // keeps the Hebrew book's verse numbers: 164 of the WEB's 167 verses are there
 // under their own numbers, the three it has nothing at are absent, and its
 // additions are numbered after the Hebrew verses or set inside one. Pinned
-// whole, because the table is generated (scripts/gen-versification.py --next)
-// and a regeneration must not be able to change it unnoticed.
+// whole, because the table is generated (scripts/gen-versification.py) and a
+// regeneration must not be able to change it unnoticed.
 func TestTheGreekEstherMapsVerseForVerse(t *testing.T) {
 	d := versificationDeltas["webc"]
 	var absent, extra []verseRef
@@ -174,7 +157,7 @@ func TestTheGreekEstherNumbersItsChaptersAsTheHebrewDoes(t *testing.T) {
 
 // The Greek Esther keeps the Hebrew book's verse numbers, so the three it
 // skips are holes like any other: the numbers between verses it prints that
-// it has nothing at, which versification_data_next.go records as absent. Its
+// it has nothing at, which versification_data.go records as absent. Its
 // additions are numbered after the Hebrew verses (4:18-47, 10:4-14), so a
 // chapter's last Hebrew verse is not a hole either.
 func TestGreekEsthersGapsAreHoles(t *testing.T) {
@@ -288,9 +271,9 @@ func TestAHighlightFollowsTheGreekEstherVerseForVerse(t *testing.T) {
 }
 
 // The sentence for a note on a book whose numbering does not correspond,
-// word for word. A draft awaiting approval (docs/NEXT.md, decision C): no
-// translation pair in the next release has such a book, so no reader would
-// see it; it is pinned so that its wording changes only on purpose.
+// word for word. No shipped translation pair has such a book, so no reader
+// sees it today; it is reader-facing the day a book needs it, and pinned so
+// that its wording changes only on purpose.
 func TestTheIncommensurableSentenceIsPinned(t *testing.T) {
 	const want = "The translation being read numbers the whole of this book differently."
 	if placementCopyIncommensurable != want || placementCopy(unplacedIncommensurable) != want {

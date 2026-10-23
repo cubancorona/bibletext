@@ -223,12 +223,14 @@ large. By width, never by device or orientation — a narrow Mac or iPad window
 reads like a phone, a wide Android tablet like a book. The pane is the width the
 text itself can occupy, with rails, sidebars and scrollers already taken away.
 The one exception is a push made with no width known at all — a native pane
-that has not reported one, in a window that has no size yet. On iOS it takes
-the device's resting page (`readingUnsizedPage`): the phone page on an iPhone,
-the book page on an iPad. The Mac takes the book page. Android is not in this
-case: before its canvas has a size it reads its activity's configured width
-over the bridge (`readingColdWidth`), and takes the phone page only without the
-bridge. The pane's first report corrects any of them.
+that has not reported one, in a window that has no size yet. The Mac takes the
+book page. iOS and Android are rarely in this case: before the canvas has a
+size iOS reads its window scene's width less the side safe-area insets
+(`launchPaneWidth`) once the scene has been read, and Android its activity's
+configured width over the bridge (`readingColdWidth`). Without that width an
+iPhone takes the phone page and an iPad the book page, the device's resting
+page (`readingUnsizedPage`), and Android the phone page. The pane's first
+report corrects any of them.
 
 **R** is the reading size before the optical scale, `readingBodyBase × the
 reader's setting` (21, 24.15, 27.3); the body is set at `R × readingOpticalScale()`.
@@ -357,12 +359,17 @@ This list is kept current as each surface is brought to the spec.
   A rotation pushes the right page first time: until the rotated pane reports,
   its last width moved by the window's change stands in
   (`readingPaneWidthNow`), which the emulator showed landing within 60dp of
-  the real width both ways, one import per rotation. **One difference,
-  flagged:** Android centres the book page on the WINDOW (so a landscape
-  phone's column clears the camera cutout evenly); on a tablet with the side
-  rail that sets the column about half the rail's width left of the pane's
-  centre, where the iPad centres on its pane. The sizes inside the page are the
-  spec's since the same day: the dialect carries them in tags of its own
+  the real width both ways, one import per rotation. Android centres the
+  book page on the window only while the pane stands evenly in it, less the
+  system insets, to within 2 px (`BtReadingColumn.sides`), so a landscape
+  phone's column clears the camera cutout evenly; otherwise it centres it on
+  the pane, as the iPad does, so beside a tablet's side rail the column
+  stands on the pane's centre, where 1.2.22 set it about half the rail's
+  width to the left. A tablet held upright keeps the reading body's right
+  theme pad in the pane's right margin, so its column too is centred on the
+  pane, as the iPad's is (docs/ROADMAP.md, 1.2.23, row 2). The sizes inside
+  the page are the spec's since the same day: the dialect carries them in
+  tags of its own
   (`<btnum>`, `<btgap>`, `<btfn>`) that the bridge's `READING_SIZES` tag
   handler turns into spans — the numeral 0.66 raised a third of the body (the
   emulator measured 21px on a 63.5px body), the gap mark 0.66 on the baseline,

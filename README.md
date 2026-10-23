@@ -371,9 +371,16 @@ any output) and the AI-settings sheet shows an in-app note explaining what leave
 the device.
 
 You supply your own AI-provider key per provider. AI-provider keys are stored **only on this device**
-— in the Apple Keychain on iOS (encrypted at rest, and carried across an encrypted
-backup or a move to a new device) and in the local preferences store on macOS,
-Windows, Linux, and Android — no AI-provider key is embedded in the app. (The
+— in the Apple Keychain on iPhone and iPad and in the Mac App Store edition (encrypted at
+rest; on iPhone and iPad carried across an encrypted backup or a move to a new device);
+on Android encrypted under a key held in the Android Keystore, in a folder Android's backup
+leaves out, so after a restore onto another phone, or a reinstall, the key is pasted again,
+and where the restored settings show a key was saved the empty key field says it wasn't
+restored; and in the app's local preferences store on the directly downloaded Mac build,
+Windows and Linux — no AI-provider key is embedded in the app. For each provider you allow
+to receive your text, the app's preferences, on every platform, also keep a fingerprint of
+the key it was allowed with, never the key: changing or clearing that key, or choosing **None**, ends the
+permission, and the app asks again before its next request. (The
 separate API.Bible fallback used to fetch the licensed NKJV is described above.) Open the header
 **gear → AI study** sheet to pick a provider and paste a key:
 

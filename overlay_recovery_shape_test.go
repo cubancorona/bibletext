@@ -99,13 +99,11 @@ func TestOnlyOneForegroundRecoveryCompilesForIOS(t *testing.T) {
 // went blank in the first place; the foreground recovery above only repairs it
 // afterwards.
 func TestTheIOSHTMLImportTreatsAnEmptyResultAsFailure(t *testing.T) {
-	src, err := os.ReadFile("reading_ios.go")
-	if err != nil {
-		t.Fatalf("cannot read the iOS pane: %v", err)
-	}
-	text := string(src)
+	// The import proper (btIOSImportHTML) answers nil for a failure, and the
+	// attempt (bibleTextApplyHTML) returns NO for that nil before installing.
+	text := nativeFunctionSource(t, "reading_ios.go", "static NSAttributedString *btIOSImportHTML(NSData *data) {")
 
-	if !strings.Contains(text, "if (as == nil || as.length == 0) return NO;") {
+	if !strings.Contains(text, "if (as == nil || as.length == 0) return nil;") {
 		t.Error("the HTML import no longer rejects a zero-length result. A non-nil empty " +
 			"string would be written into the view as a successful push, blanking the " +
 			"pane and stopping the retry ladder that would otherwise recover it")
@@ -113,8 +111,12 @@ func TestTheIOSHTMLImportTreatsAnEmptyResultAsFailure(t *testing.T) {
 
 	// The control: the bare nil-only form must be gone, or both could be present
 	// and the check above would pass while the old path still ran.
-	if strings.Contains(text, "\n    if (as == nil) return NO;") {
-		t.Error("the old nil-only guard is still in the file")
+	if strings.Contains(text, "\n    if (as == nil) return nil;") {
+		t.Error("the old nil-only guard is still in the import")
+	}
+	apply := nativeFunctionSource(t, "reading_ios.go", "static BOOL bibleTextApplyHTML(NSData *data) {")
+	if !inSequence(apply, "btIOSImportHTML(data);", "if (as == nil) return NO;", "btIOSInstallPage(as);") {
+		t.Error("an import attempt does not refuse the import's failure before it installs")
 	}
 }
 

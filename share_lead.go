@@ -25,9 +25,10 @@ type leadPlacement struct {
 	// taken out by position (walkSelectionFrom); "" when the walk could not
 	// cover the whole selection.
 	text string
-	// number reports a selection that was nothing but the rest of verse lo's
-	// number: apparatus, answered by the verse it labels.
+	// number reports a selection that was nothing but a verse's number, or a
+	// piece of one: apparatus, answered by the verse it labels, verse.
 	number bool
+	verse  int
 }
 
 // pageHeading is a publisher's heading as a selection carries it: the verse
@@ -63,10 +64,11 @@ func placeByLead(corpus string, spans []verseSpan, heads []pageHeading, span sel
 	}
 	if tail != "" {
 		// Begun inside the number: what the drag took of it opens the
-		// selection, and is the page's apparatus, not a word.
+		// selection, and is the page's apparatus, not a word. So is a drag
+		// that also ends inside it, before its last digit.
 		switch {
-		case out == tail:
-			p.number = true
+		case out != "" && strings.HasPrefix(tail, out):
+			p.number, p.verse = true, span.lo
 			return p
 		case strings.HasPrefix(out, tail+" "):
 			p.out = out[len(tail)+1:]
@@ -74,9 +76,42 @@ func placeByLead(corpus string, spans []verseSpan, heads []pageHeading, span sel
 			return p // the selection does not open as the lead says
 		}
 	}
+	// Begun on a verse's number, verse lo's or, after a lead that holds all
+	// of verse lo, the next verse's, and nothing but that number or its
+	// first digits, as a double-tap or a long-press on it selects it, or a
+	// drag that ends inside it: apparatus too, told by where it stands.
+	// Searched for among the verse's words it was found wherever they hold
+	// the same figure, the "3" of "130" when verse 3's number was selected
+	// in the BSB's Genesis 5, and quoted as Scripture; a first digit the
+	// words do not hold went out as the selection, a figure alone.
+	if onNumber && out != "" {
+		if v := leadNumberVerse(spans, span.lo, at); v > 0 && strings.HasPrefix(strconv.Itoa(v), out) {
+			p.number, p.verse = true, v
+			return p
+		}
+	}
 	p.at = at
 	p.text = walkSelectionFrom(corpus, spans, heads, at, onNumber, p.out)
 	return p
+}
+
+// leadNumberVerse is the verse whose number stands at corpus offset at, as
+// leadStart places a selection begun on a number: verse lo's, or the next
+// verse's after a lead that holds all of verse lo. 0 for neither.
+func leadNumberVerse(spans []verseSpan, lo, at int) int {
+	for k, sp := range spans {
+		if sp.verse != lo {
+			continue
+		}
+		switch {
+		case sp.start == at:
+			return lo
+		case k+1 < len(spans) && spans[k+1].start == at:
+			return spans[k+1].verse
+		}
+		return 0
+	}
+	return 0
 }
 
 // walkSelectionFrom reads out against the corpus from at and returns the

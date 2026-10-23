@@ -21,17 +21,27 @@ import (
 // untagged AI/share/cross-reference code. lo/hi is the selection's verse span,
 // resolved in Java against the Spanned's verse index (BtBridge.verseAtOffset)
 // — same contract as the Apple exports: position decides which verses are
-// cited, 0,0 = unresolved. cLead is the selection's lead
-// (BtBridge.selectionLead, selSpan.lead), nil when the pane has none.
+// cited, 0,0 = unresolved. heading is 1 when the pane found the whole
+// selection inside the publisher's heading matter standing above verse lo
+// (BtBridge.headingSelectionVerse, selSpan.heading), 0 otherwise. cLead is
+// the selection's lead (BtBridge.selectionLead, selSpan.lead), nil when the
+// pane has none. cBook and chapter are the chapter the pane's text holds, as
+// Go pushed it (BtBridge.setChapter), captured with the selection; nil and 0
+// when it holds none. The same contract as the Apple exports (paneSelSpan).
 //
 //export btaSelectionAction
-func btaSelectionAction(cAction, cText *C.char, lo, hi C.int, cLead *C.char) {
+func btaSelectionAction(cAction, cText *C.char, lo, hi, heading C.int, cLead, cBook *C.char, chapter C.int) {
 	action := C.GoString(cAction)
 	text := C.GoString(cText)
-	span := selSpanFromNative(int(lo), int(hi))
+	lead := ""
 	if cLead != nil {
-		span = selSpanWithLead(int(lo), int(hi), C.GoString(cLead))
+		lead = C.GoString(cLead)
 	}
+	book := ""
+	if cBook != nil {
+		book = C.GoString(cBook)
+	}
+	span := paneSelSpan(int(lo), int(hi), lead, cLead != nil, book, int(chapter)).inHeading(heading != 0)
 	state := activeAIState
 	if state == nil || text == "" {
 		return

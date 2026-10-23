@@ -61,7 +61,7 @@ func TestNativeVerseRangesStopAtAHeading(t *testing.T) {
 			[]string{"kCTFontTraitBold", "f.pointSize < thr", "integerValue"}, nil},
 		// Android washes from the markup; its verse ranges are the narration's.
 		{"Android index", "android/BtBridge.java", "private static void buildVerseIndex(CharSequence cs) {", true,
-			[]string{"ends[count] = endBeforeHeading(sp, st, en)"}, nil},
+			[]string{"ends[count] = endBeforeHeading(sp, st, endAtMark(marks, st, en))"}, nil},
 		{"Android verse end", "android/BtBridge.java", "private static int endBeforeHeading(Spanned sp, int st, int en) {", true,
 			[]string{"isHeadingParagraph(sp, ls, le)", "if (le > en) break;"}, nil},
 	} {

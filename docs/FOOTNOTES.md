@@ -362,9 +362,11 @@ could carry those 34 notes, but they are dropped at decode today.
 
 Two hardenings the first cut needed: (1) the plain-text HTML-import-failure
 fallback used to carry the whole section into the untyped string with the
-boundary disarmed — both panes now cut the HTML at `<p class="fnsep">` before
-stripping tags, so the apparatus never enters the fallback at all (pinned in
-TestFootnoteSectionNativeContract); (2) a toggle beside full-screen in the
+boundary disarmed — the HTML is now cut at `<p class="fnsep">` before the
+tags are stripped (by Go, `appleFallbackPageOf`, since the fallback page
+carries its verse numbers), so the apparatus never enters the fallback at
+all (pinned in TestFootnoteSectionNativeContract and
+TestTheFallbackPageEndsBeforeTheTranslatorsNotes); (2) a toggle beside full-screen in the
 mobile header widened the right column into the expanded audio card's
 permanently reserved centre footprint (overlapping on 375pt phones with long
 book names) — the stacked-under-full-screen placement in pinned 36pt cells was

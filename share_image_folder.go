@@ -253,9 +253,9 @@ func saveSharedImage(card []byte, path string, p sharePlace, now time.Time) save
 // one way left to find it. The line does not say a picture no folder took
 // is saved anywhere: the temp folder it is in keeps it only until the next
 // card, and inside the snap is one the reader cannot open. Shown, the line
-// says only that, under the sheet's heading; not shown, there is nothing
-// true to say of it, and line is "": the sheet does not open
-// (fallbackShareImage).
+// says only that, under the sheet's heading; not shown, the picture was not
+// shared, and line is "": the Picture saved sheet does not open, and the
+// share says only that it could not share the card (fallbackShareImage).
 func (s savedImage) line(shown bool) string {
 	switch {
 	case s.downloads && shown:

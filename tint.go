@@ -190,7 +190,12 @@ type tintHTML struct {
 	// clamping Android's content end. The trailing space is written OUTSIDE
 	// the mark's span at body size, so the mark's small run can never sit
 	// adjacent to a verse number's small run and coalesce with it.
-	Gap string
+	//
+	// Gap carries that space inside this tint's wash, for a mark followed by
+	// something under the same wash; GapEnd leaves it bare, for a mark the
+	// band ends at (writeGapMarks chooses). They differ only under a wash.
+	Gap    string
+	GapEnd string
 
 	// CSS is this tint's stylesheet rule, ONE %s for its wash colour, and ""
 	// for a tint that needs none. Class dialects only — the Android dialect
@@ -226,6 +231,7 @@ var appleTintHTML = func() [tintCount]tintHTML {
 				Number: `<sup class="v">%d</sup> `,
 				BodyWJ: `<span class="wj">%s</span>`,
 				Gap:    `<span class="vg">[%d]</span> `,
+				GapEnd: `<span class="vg">[%d]</span> `,
 			}
 			continue // and no CSS rule: there is no wash to define
 		}
@@ -242,6 +248,7 @@ var appleTintHTML = func() [tintCount]tintHTML {
 			Body:      fmt.Sprintf(`<span class="%s">%%s</span>`, cls),
 			BodyWJ:    fmt.Sprintf(`<span class="%s wj">%%s</span>`, cls),
 			Gap:       fmt.Sprintf(`<span class="vg %s">[%%d]</span><span class="%s"> </span>`, cls, cls),
+			GapEnd:    fmt.Sprintf(`<span class="vg %s">[%%d]</span> `, cls),
 			// NO font-weight, and NO colour override. Bold Georgia sets ~17%%
 			// wider than the regular face, so a wash that bolded re-wrapped the
 			// paragraph and the text jumped when it cleared; and recolouring
@@ -287,6 +294,7 @@ func androidTintHTML(pal palette, numHex, redHex, mutedHex string) [tintCount]ti
 				Number: fmt.Sprintf(`<sup><btnum><font color="%s"><b>%%d</b></font></btnum></sup> `, numHex),
 				BodyWJ: fmt.Sprintf(`<font color="%s">%%s</font>`, redHex),
 				Gap:    fmt.Sprintf(`<btgap><font color="%s">[%%d]</font></btgap> `, mutedHex),
+				GapEnd: fmt.Sprintf(`<btgap><font color="%s">[%%d]</font></btgap> `, mutedHex),
 			}
 			continue
 		}
@@ -306,6 +314,8 @@ func androidTintHTML(pal palette, numHex, redHex, mutedHex string) [tintCount]ti
 				`<span style="background-color:%s"><font color="%s">%%s</font></span>`, bg, redHex),
 			Gap: fmt.Sprintf(
 				`<span style="background-color:%s"><btgap><font color="%s">[%%d]</font></btgap> </span>`, bg, mutedHex),
+			GapEnd: fmt.Sprintf(
+				`<span style="background-color:%s"><btgap><font color="%s">[%%d]</font></btgap></span> `, bg, mutedHex),
 		}
 	}
 	return t
@@ -442,4 +452,59 @@ func (t chapterTints) fingerprint() string {
 func (t chapterTints) joins(prev, cur Verse) bool {
 	a := t.of(prev)
 	return a != tintNone && a == t.of(cur)
+}
+
+// gapOf is the tint of the mark an omitted verse n leaves, drawn just before
+// verse v's number (gapsBefore files it there). The mark stands for verse n
+// alone, so it lights only where the span names n: an /nkjv/ link to Matthew
+// 17:21 opened in the BSB lights "[21]", and one to 17:20-21 lights verse 20
+// and the mark. A span that names v and not n leaves the mark bare: a link
+// to Sirach 26:28 in the WEB Catholic Edition lights verse 28 alone, and the
+// nine marks "[19]" to "[27]" before its number stay bare (docs/ROADMAP.md,
+// decision 18). The website's rule too (cmd/websitegen, lightMarksIn).
+func (t chapterTints) gapOf(v Verse, n int) verseTint {
+	if t.tint == tintNone || !t.at.sameChapter(v.BookName, v.Chapter) || !t.at.covers(n) {
+		return tintNone
+	}
+	return t.tint
+}
+
+// leadOf is the tint of the first thing drawn for verse v: the mark of the
+// first hole filed before it, or v's number when there is none.
+func (t chapterTints) leadOf(v Verse, holes []int) verseTint {
+	if len(holes) > 0 {
+		return t.gapOf(v, holes[0])
+	}
+	return t.of(v)
+}
+
+// joinsAhead is joins for a verse that may have holes' marks before its
+// number: the joining space after prev is inside the band when what is
+// drawn next, a mark or the number, is under prev's wash. A span ending at
+// the hole (Matthew 17:20-21 in the BSB) lights verse 20, the space and the
+// "[21]" mark as one band; written by joins alone the space stayed bare,
+// since verse 22 is not lit.
+func (t chapterTints) joinsAhead(prev, cur Verse, holes []int) bool {
+	a := t.of(prev)
+	return a != tintNone && a == t.leadOf(cur, holes)
+}
+
+// writeGapMarks writes the marks of the holes filed before verse v, in one
+// HTML dialect's table, each in its own tint (gapOf). The space after a mark
+// is inside the band only when what follows it, the next mark or v's
+// number, is under the same wash; otherwise the band ends at the mark.
+func writeGapMarks(b *strings.Builder, table []tintHTML, t chapterTints, v Verse, holes []int) {
+	for i, n := range holes {
+		tn := t.gapOf(v, n)
+		next := t.of(v)
+		if i+1 < len(holes) {
+			next = t.gapOf(v, holes[i+1])
+		}
+		mk := markupFor(table, tn)
+		if tn != tintNone && tn == next {
+			fmt.Fprintf(b, mk.Gap, n)
+		} else {
+			fmt.Fprintf(b, mk.GapEnd, n)
+		}
+	}
 }

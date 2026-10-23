@@ -112,7 +112,7 @@ const (
 	placedHere              placementKind = iota // exact-key hit
 	placedByMapping                              // followed, renumbered by MapVerse
 	unplacedAbsent                               // verseMapAbsent
-	unplacedIncommensurable                      // Greek Esther: a different book (none in the next major release)
+	unplacedIncommensurable                      // the Greek Esther until 1.2.23; no book since
 	unplacedOtherChapter                         // maps into a chapter that is not this one
 )
 

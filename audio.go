@@ -83,20 +83,19 @@ func webAudioURL(book string, chapter int) (string, bool) {
 
 // webcAudioURL is the WEB-Catholic's view of the Williams recording: the WEB
 // narration minus the chapters whose WEBC text is NOT the text he narrated.
-// WEBC's Esther is the GREEK Esther — a different underlying book with no
-// verse-to-verse correspondence (versification marks it incommensurable) — and
-// WEBC's Daniel 3 carries the Prayer of Azariah and the Song of the Three as
+// WEBC's Esther is the GREEK Esther — translated from a different underlying
+// text, with additions the Hebrew book lacks — and WEBC's Daniel 3 carries
+// the Prayer of Azariah and the Song of the Three as
 // verses 24–90 (97 verses to the WEB's 30), so the recording would skip 67
 // on-screen verses and highlight the wrong ones from verse 24 on. Playing audio
 // of different words than the screen shows breaks the contract at the top of
 // this file, so those chapters report false and fall back to TTS, which always
 // reads the on-screen text exactly.
 //
-// In the next major release (docs/NEXT.md) the versification maps the Greek
-// Esther verse for verse, since it keeps the Hebrew numbers. Its words are
-// still not the words he read in any chapter, and it adds verses he never read
-// (4:18-47, 10:4-14), so the recording would read one text while the screen
-// shows another: Esther stays excluded in both states.
+// The versification maps the Greek Esther verse for verse, since it keeps the
+// Hebrew numbers. Its words are still not the words he read in any chapter,
+// and it adds verses he never read (4:18-47, 10:4-14), so the recording would
+// read one text while the screen shows another: Esther stays excluded.
 func webcAudioURL(book string, chapter int) (string, bool) {
 	if book == "Esther" || (book == "Daniel" && chapter == 3) {
 		return "", false

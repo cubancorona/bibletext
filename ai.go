@@ -64,6 +64,10 @@ func friendlyAIError(err error) string {
 	if errors.As(err, &nk) {
 		return "No API key for " + nk.provider.Name + " yet. Open AI settings to add one."
 	}
+	var np *aiPermissionError
+	if errors.As(err, &np) {
+		return aiPermissionNotSent
+	}
 	var mg modelGoneError
 	if errors.As(err, &mg) {
 		// Most often a PINNED model the key can't invoke (providers list models —
@@ -140,10 +144,12 @@ type aiPassage struct {
 	Chapter int
 	Lo, Hi  int
 	Ref     string
+	// Text is the provider's input: the share's quotation of the selection
+	// in the form a machine reads (aiPassageFor).
 	Text    string
 	Version string
-	// Preview fields are captured with the selection. Text remains the
-	// provider's input; HasPreview preserves an intentionally empty quote.
+	// Preview fields are captured with the selection; HasPreview preserves
+	// an intentionally empty quote.
 	VersionAbbrev string
 	PreviewText   string
 	HasPreview    bool
@@ -167,10 +173,9 @@ func aiPassageFromContext(ctx context.Context) (aiPassage, bool) {
 // the share card all cite the same verses for one and the same drag. The
 // share pipeline's normalize places the selection first: a span positionally,
 // dropping a verse that contributes no words; a selection that arrives with
-// no position (the plain-text page the Mac and the iPhone and iPad show when
-// a chapter fails to import, a whitespace-only selection on the styled pane,
-// a legacy Entry pane selection it cannot place) at its first copy in the
-// chapter that splits no word. Only where that declines does
+// no position (a whitespace-only selection on the styled pane, a legacy
+// Entry pane selection it cannot place) at its first copy in the chapter
+// that splits no word. Only where that declines does
 // selectionVersesIn answer: the raw span for a single partial word, the
 // probe matching for the zero span. The probe alone over-attributes a
 // selection with no position — it matches the first 24 runes of every verse,
@@ -178,13 +183,36 @@ func aiPassageFromContext(ctx context.Context) (aiPassage, bool) {
 // words open another verse is both — which is why it answers only after the
 // normalize, here and in the cross-references panel (selectionVerses). A
 // state without a Bible, or a selection nothing resolves, cites the chapter
-// alone.
+// alone. The chapter is the one the selection was made in
+// (selectionChapter), wherever the reader has been moved since.
+//
+// A selection whose quotation holds no letter or figure, one the normalize
+// answers with nothing quoted or one of punctuation alone, holds no word of
+// Scripture, and no study verb is offered or sent for it (aiStudyOffered).
+//
+// The passage the prompt quotes holds only Scripture: it is the share's
+// quotation of the same selection (selectionQuotationIn), in the form a
+// machine reads (outboundText). A drag from the end of one verse, through a
+// publisher's heading or a psalm's title, into the next carries the
+// heading's words, and they went to the provider inside the quotation marks
+// as the cited verses' words: in the BSB, "waters.\nThe First Day\n3 And God
+// said," was sent with "The First Day" as words of Genesis 1:2–3. The share
+// takes them out (cutOpeningMatter, stripHeadings, removeWholeHeadings,
+// verseEndBeforeHeading, a title by trimLeadingHeading), and the prompt now
+// quotes what the share quotes, "waters.\n\nAnd God said". The verse numbers
+// the selection carries come out with them, as the citation names the
+// verses, a word cut short is trimmed back, and the line breaks are the
+// chapter's own. text is the selection as the share reads it, the divine
+// name's small capitals as drawn, which is the form the chapter's prose is
+// located in; it is written as capitals for the provider only here, after
+// the reading. Without a Bible there is no chapter to read the selection
+// against, and it goes as it came.
 func aiPassageFor(state *AppState, text string, span selSpan) aiPassage {
-	p := aiPassage{Text: text}
+	p := aiPassage{Text: outboundText(text)}
 	if state == nil {
 		return p
 	}
-	p.Book, p.Chapter = readerChapter(state)
+	p.Book, p.Chapter = selectionChapter(state, span)
 	version := state.currentVersion()
 	p.Version = version.Name
 	p.VersionAbbrev = version.Abbrev
@@ -203,7 +231,57 @@ func aiPassageFor(state *AppState, text string, span selSpan) aiPassage {
 	if p.Lo > 0 {
 		p.Ref = verseRangeCitation(p.Book, p.Chapter, p.Lo, p.Hi)
 	}
+	quotation, _, _ := selectionQuotationIn(state, p.Book, p.Chapter, text, span)
+	p.Text = outboundText(quotation)
 	return p
+}
+
+// aiStudyOffered reports whether the study verbs, every one of them, are
+// offered for a selection, text as a pane hands it over with its span:
+// whether it holds a word of Scripture, a letter or a figure of a verse's
+// words. Read in its chapter, a selection is the quotation the share makes
+// of it, which is the passage a study prompt sends (selectionQuotationIn,
+// aiPassageFor), and it is studied when that quotation holds a letter or a
+// figure. A selection the share pipeline cites by a verse and quotes
+// nothing from holds none: a publisher's heading or a word of one, a
+// psalm's title, a verse number selected on its own
+// (normalizeShareSelectionIn). Nor does one whose only Scripture is
+// punctuation: a verse's closing full stop or any other mark of its words
+// selected alone, or a drag from a verse's closing punctuation into the
+// heading below it that ends in the heading, which the share quotes as that
+// mark alone. A study verb reads Scripture, and such a selection has none to
+// read. The words of a heading, put in quotation marks as the passage of the
+// verse below, went to the provider as Scripture that verse does not hold
+// (the BSB's "Fourth" of "The Fourth Day" as Genesis 1:14), and that
+// verse's own text in their place answered a selection the reader had not
+// made; a mark alone went to it as the whole passage ("." under Genesis 1:2
+// for a drag from that verse's full stop into "The First Day"). So no verb
+// is offered for one: the desktop panes' menu leaves Study with AI out
+// (selectionStudyMenu), each native pane keeps a rule of its own over the
+// page it draws (btIOSSelectionHoldsScripture, btMacSelectionHoldsScripture,
+// BtBridge.selectionHoldsScripture), and dispatchAIAction drops one that a
+// menu delivers anyway. A share of such a selection is unchanged: its
+// citation alone, or the mark and its citation. The text is read as the
+// share pipeline reads it, before the dispatch writes the divine name's
+// small capitals as capitals for the provider, which a psalm's title drawn
+// with them would no longer match. A text with no letter or figure holds no
+// Scripture with or without a Bible; otherwise a state with no Bible cannot
+// tell, and offers the verbs.
+func aiStudyOffered(state *AppState, text string, span selSpan) bool {
+	if !holdsWordRune(outboundText(text)) {
+		return false
+	}
+	if state == nil || state.Bible == nil {
+		return true
+	}
+	book, chapter := selectionChapter(state, span)
+	quotation, _, _ := selectionQuotationIn(state, book, chapter, strings.TrimSpace(text), span)
+	return holdsWordRune(quotation)
+}
+
+// holdsWordRune reports whether s holds a letter or a figure (isWordRune).
+func holdsWordRune(s string) bool {
+	return strings.IndexFunc(s, isWordRune) >= 0
 }
 
 // --- Prompts ----------------------------------------------------------------
@@ -469,7 +547,8 @@ var aiActionRun = func(ctx context.Context, state *AppState, action, selectedTex
 
 // The panel always sends the passage it captured (showAIPanel); resolving it
 // here from the text and the span serves only a caller with no panel, such as
-// a test, and reads the reader's chapter as it is now.
+// a test, and reads the span's chapter, or the reader's as it is now where
+// the span names none.
 func runAIAction(ctx context.Context, state *AppState, action, selectedText, question string, span selSpan) (string, error) {
 	p, captured := aiPassageFromContext(ctx)
 	if !captured {
@@ -510,13 +589,26 @@ func runAIActionForPassage(ctx context.Context, state *AppState, action string, 
 	if strings.TrimSpace(key) == "" {
 		return "", &noKeyError{provider: info}
 	}
+	// The last step before the reader's text leaves the device: whatever path
+	// reached here, nothing goes to a provider the reader has not allowed
+	// with this key (ai_permission.go).
+	if !store.aiAllowed(id, key) {
+		return "", &aiPermissionError{provider: info}
+	}
 
-	out, err := info.New(store, key).generate(ctx, prompt)
+	out, err := aiStudyGenerate(ctx, info, store, key, prompt)
 	if err != nil {
 		return "", err
 	}
 	aiCacheSet(cacheKey, out)
 	return out, nil
+}
+
+// aiStudyGenerate is the study request's provider call, a seam like
+// aiSearchGenerate below the permission check, so a test can stand a provider
+// in for the network and count what reaches it.
+var aiStudyGenerate = func(ctx context.Context, info providerInfo, store *keyStore, key, prompt string) (string, error) {
+	return info.New(store, key).generate(ctx, prompt)
 }
 
 // dispatchAIAction is the entry point the native selection-menu callback calls
@@ -548,12 +640,27 @@ func dispatchAIAction(state *AppState, action, selectedText string, span selSpan
 	if !aiStudyActionKnown(action) {
 		return
 	}
+	// A selection that holds no word of Scripture, a heading's words, a
+	// psalm's title, a verse number or a mark of a verse's words alone: no
+	// menu offers the verbs for it (aiStudyOffered), so a menu built for
+	// another selection, or a pane's rule that let one through, is answered
+	// here by opening nothing and sending nothing. Asked of the selection as
+	// the pane handed it over, as the menus ask.
+	if !aiStudyOffered(state, selectedText, span) {
+		return
+	}
 	// The reader's selection carries the page's own typography with it — the
 	// superscript verse number, the no-break space glued to it, the reporter
 	// layout's indent. None of that is the publisher's, and this text leaves
 	// the machine, so it is cleaned exactly as the share pipeline cleans its
-	// own copy of the same selection (outbound_text.go).
-	selectedText = strings.TrimSpace(outboundText(selectedText))
+	// own copy of the same selection (outbound_text.go). The divine name's
+	// small capitals stay as drawn here: the passage is read against the
+	// chapter as the share reads it, in that form, and aiPassageFor writes
+	// them as capitals for the provider once it has been read. Written as
+	// capitals first, a selection holding the divine name set in small
+	// capitals was not found in the chapter, and a drag across a heading kept
+	// the heading's words in its passage.
+	selectedText = strings.TrimSpace(sharedText(selectedText))
 	if selectedText == "" {
 		return
 	}

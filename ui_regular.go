@@ -117,7 +117,8 @@ func buildRegularWidthUI(state *AppState) fyne.CanvasObject {
 // window is wider than tall, mobileRailWanted) or a phone's landscape
 // presentation flips. The retained layout-class comparison also makes any
 // future deliberate classifier change rebuild safely. It adds no chrome; only
-// Resize acts.
+// Resize acts, and the landing of the platform's report on a window whose
+// canvas has no size yet (relayoutUnsized).
 type layoutWatcher struct {
 	widget.BaseWidget
 	state   *AppState
@@ -126,6 +127,12 @@ type layoutWatcher struct {
 	pending bool
 }
 
+// liveLayoutWatcher is the watcher most recently built, the one around the
+// tree on screen: every rebuild builds a new one (UI goroutine only).
+var liveLayoutWatcher *layoutWatcher
+
+func init() { launchReportRelayout = relayoutUnsized }
+
 func newLayoutWatcher(state *AppState, content fyne.CanvasObject) *layoutWatcher {
 	w := &layoutWatcher{
 		state:   state,
@@ -133,7 +140,29 @@ func newLayoutWatcher(state *AppState, content fyne.CanvasObject) *layoutWatcher
 		built:   state.renderedLayout(state.canvasWidth()),
 	}
 	w.ExtendBaseWidget(w)
+	liveLayoutWatcher = w
 	return w
+}
+
+// relayoutUnsized asks the layout again when the platform's report of the
+// window is kept (keepWindowReport, launch_window.go) and the canvas still
+// has no size: a tree built before the report, from the device's answer, is
+// rebuilt now, before the first paint, instead of at it. A sized canvas is
+// the Resize's business, and an unchanged answer rebuilds nothing, so an
+// upright iPhone, whose report agrees with its device answer, builds nothing
+// more.
+func relayoutUnsized() {
+	w := liveLayoutWatcher
+	if w == nil || w.pending || w.state == nil || w.state.window == nil {
+		return
+	}
+	if sz := w.state.window.Canvas().Size(); canvasSized(sz.Width, sz.Height) {
+		return
+	}
+	if layoutWatcherNeedsRebuild(w.built, w.state.renderedLayout(w.state.canvasWidth())) {
+		w.pending = true
+		rebuildForLayoutChange(w.state)
+	}
 }
 
 func (w *layoutWatcher) CreateRenderer() fyne.WidgetRenderer {

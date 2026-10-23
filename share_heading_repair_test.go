@@ -199,7 +199,7 @@ func TestEveryDragAcrossTheHeadingsBetweenTwoVersesOverLocalCaches_LocalOnly(t *
 		drags, wrong, stacked := 0, 0, 0
 		for _, book := range c.bd.Books {
 			for _, ch := range c.bd.GetChapterNumbersForBook(book) {
-				hs := c.bd.Headings[book][ch]
+				hs := headingsFor(c.bd, book, ch) // as the page draws them
 				if len(hs) == 0 {
 					continue
 				}
@@ -268,7 +268,7 @@ func TestEveryDragFromAHeadingIntoItsVerseOverLocalCaches_LocalOnly(t *testing.T
 		drags, wrong := 0, 0
 		for _, book := range c.bd.Books {
 			for _, ch := range c.bd.GetChapterNumbersForBook(book) {
-				hs := c.bd.Headings[book][ch]
+				hs := headingsFor(c.bd, book, ch) // as the page draws them
 				if len(hs) == 0 {
 					continue
 				}

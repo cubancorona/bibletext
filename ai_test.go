@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -32,18 +33,34 @@ func (m *mockHTTP) Do(req *http.Request) (*http.Response, error) {
 	}, nil
 }
 
-// fakePrefs is an in-memory prefStore for keyStore tests.
-type fakePrefs struct{ m map[string]string }
+// fakePrefs is an in-memory prefStore for keyStore tests. Locked, as the
+// toolkit's preferences are: the Settings sheet's model-list debounce reads
+// the key on a timer goroutine (the test driver runs fyne.Do inline), while
+// the test goes on writing settings on its own.
+type fakePrefs struct {
+	mu sync.Mutex
+	m  map[string]string
+}
 
-func newFakePrefs() *fakePrefs                { return &fakePrefs{m: map[string]string{}} }
-func (f *fakePrefs) String(key string) string { return f.m[key] }
+func newFakePrefs() *fakePrefs { return &fakePrefs{m: map[string]string{}} }
+func (f *fakePrefs) String(key string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.m[key]
+}
 func (f *fakePrefs) StringWithFallback(key, fb string) string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if v, ok := f.m[key]; ok {
 		return v
 	}
 	return fb
 }
-func (f *fakePrefs) SetString(key, value string) { f.m[key] = value }
+func (f *fakePrefs) SetString(key, value string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.m[key] = value
+}
 
 type fakeSecrets struct {
 	m         map[string]string
@@ -506,23 +523,29 @@ func TestAIPassageRefNamesVerses(t *testing.T) {
 	}
 }
 
-func TestAIPassageCapturesDisplayWithoutChangingRequestText(t *testing.T) {
+// The passage captured with a selection: the provider's text is the share's
+// quotation of it, the verse number left out as the citation names the
+// verse, and the display is the selected words. Navigation changes neither.
+// Whitespace alone quotes nothing and displays nothing. Without a state there
+// is no chapter to read the selection against, and it is sent as it came.
+func TestAIPassageSendsTheShareQuotationAndCapturesItsDisplay(t *testing.T) {
 	st := psalm23NoteState()
 	version := st.currentVersion()
 	const raw = "3 He restoreth my"
+	const words = "He restoreth my"
 	p := aiPassageFor(st, raw, selSpanFromNative(3, 3))
-	if p.Text != raw || p.PreviewText != "He restoreth my" || !p.HasPreview ||
+	if p.Text != words || p.PreviewText != words || !p.HasPreview ||
 		p.VersionAbbrev != version.Abbrev || p.Ref != "Psalms 23:3" {
-		t.Fatalf("request text and cleaned display were not captured separately: %+v", p)
+		t.Fatalf("the passage did not capture the share's quotation and the display: %+v", p)
 	}
 	st.CurrentBook, st.CurrentChapter, st.CurrentVersion = "John", 1, "bsb"
 	if p.Ref != "Psalms 23:3" || p.Version != version.Name || p.VersionAbbrev != version.Abbrev ||
-		!strings.HasSuffix(buildAskPrompt(p, "What does this selected phrase mean?"), "“"+raw+"”") {
+		!strings.HasSuffix(buildAskPrompt(p, "What does this selected phrase mean?"), "“"+words+"”") {
 		t.Errorf("navigation changed the captured passage or provider text: %+v", p)
 	}
 	blank := aiPassageFor(st, " \n\t", selSpan{})
-	if !blank.HasPreview || blank.PreviewText != "" || blank.Text != " \n\t" {
-		t.Errorf("an intentionally empty display must not fall back to raw whitespace: %+v", blank)
+	if !blank.HasPreview || blank.PreviewText != "" || blank.Text != "" {
+		t.Errorf("whitespace alone must quote and display nothing: %+v", blank)
 	}
 	if bare := aiPassageFor(nil, raw, selSpan{}); bare.Text != raw || bare.HasPreview || bare.PreviewText != "" {
 		t.Errorf("a state-less passage must retain only its request text: %+v", bare)
@@ -558,28 +581,49 @@ func openingChapterState() *AppState {
 // citation, held here so that the two cannot drift together. The
 // cross-references panel's header and the verses it pulls references for
 // are the same answer, with a position and without one.
+//
+// The prompt's passage is the share's quotation of the same drag, before
+// the share frames it, in the form a machine reads: the quoted column, held
+// here too. A verse number the drag carries is not quoted, nor a heading's
+// words or a psalm's title a drag runs across: from the last word of one
+// verse through a heading, or a stack of two, into the next, begun inside a
+// heading's word, and from a psalm's title, with a heading under it, into
+// the psalm with no span. The prompt quoted the selection as it came, the
+// heading and the numbers inside it.
 func TestAIPassageRefAgreesWithShareCitation(t *testing.T) {
 	refrainState, opening := refrainChapterState(), openingChapterState()
 	john3 := opening.Bible.GetChapter("John", 3)[0].Text
+	f := aiHeadingFixture()
+	acrossHeading, acrossSpan, _ := f.drag(t, 0, "flood.", "said")
+	acrossStack, stackSpan, _ := f.drag(t, 0, "coasts.", "went out")
+	fromHeading, fromSpan, _ := f.drag(t, strings.Index(f.page, "The Table of Nations"), "ations", "said")
+	psalm := psalmTitleState(true)
+	fromTitle := psalm.Bible.SuperscriptionFor("Psalms", 3).DrawnText() + "\n" + psalmHeading + "\n1" + nb + "Yahweh, how my adversaries"
 	for _, c := range []struct {
-		st   *AppState
-		text string
-		span selSpan
-		want string
+		st     *AppState
+		text   string
+		span   selSpan
+		want   string
+		quoted string
 	}{
-		{refrainState, refrain, selSpanFromNative(2, 2), "Psalms 136:2"},
-		{refrainState, refrain, selSpanFromNative(3, 3), "Psalms 136:3"},
-		{refrainState, "gods; " + refrain + " 3 Give thanks to the Lord of lords;", selSpanFromNative(2, 3), "Psalms 136:2–3"},
-		{refrainState, "gods;", selSpanFromNative(2, 2), "Psalms 136:2"},
-		{refrainState, "words this chapter never says", selSpanFromNative(2, 2), "Psalms 136:2"},
-		{refrainState, "words this chapter never says", selSpan{}, "Psalms 136"},
-		{refrainState, "gods;", selSpan{}, "Psalms 136:2"},
-		{refrainState, refrain, selSpan{}, "Psalms 136:1"},
-		{refrainState, "Give thanks", selSpan{}, "Psalms 136:1"},
-		{refrainState, "Give thanks to the God of gods; " + refrain, selSpan{}, "Psalms 136:2"},
-		{opening, john3, selSpanFromNative(3, 3), "John 3:3"},
-		{opening, john3, selSpan{}, "John 3:3"},
-		{opening, "Most certainly I tell you", selSpan{}, "John 3:3"},
+		{refrainState, refrain, selSpanFromNative(2, 2), "Psalms 136:2", refrain},
+		{refrainState, refrain, selSpanFromNative(3, 3), "Psalms 136:3", refrain},
+		{refrainState, "gods; " + refrain + " 3 Give thanks to the Lord of lords;", selSpanFromNative(2, 3), "Psalms 136:2–3",
+			"gods; " + refrain + " Give thanks to the Lord of lords"},
+		{refrainState, "gods;", selSpanFromNative(2, 2), "Psalms 136:2", "gods"},
+		{refrainState, "words this chapter never says", selSpanFromNative(2, 2), "Psalms 136:2", "words this chapter never says"},
+		{refrainState, "words this chapter never says", selSpan{}, "Psalms 136", "words this chapter never says"},
+		{refrainState, "gods;", selSpan{}, "Psalms 136:2", "gods"},
+		{refrainState, refrain, selSpan{}, "Psalms 136:1", refrain},
+		{refrainState, "Give thanks", selSpan{}, "Psalms 136:1", "Give thanks"},
+		{refrainState, "Give thanks to the God of gods; " + refrain, selSpan{}, "Psalms 136:2", "Give thanks to the God of gods; " + refrain},
+		{opening, john3, selSpanFromNative(3, 3), "John 3:3", john3},
+		{opening, john3, selSpan{}, "John 3:3", john3},
+		{opening, "Most certainly I tell you", selSpan{}, "John 3:3", "Most certainly I tell you"},
+		{f.st, acrossHeading, acrossSpan, "Genesis 10:1–2", "flood. The Lord said"},
+		{f.st, acrossStack, stackSpan, "Genesis 10:3–4", "coasts. From these the coastland peoples went out"},
+		{f.st, fromHeading, fromSpan, "Genesis 10:2", "The Lord said"},
+		{psalm, fromTitle, selSpan{}, "Psalms 3:1", "Yahweh, how my adversaries"},
 	} {
 		got := aiPassageFor(c.st, c.text, c.span).Ref
 		if got != c.want {
@@ -588,10 +632,14 @@ func TestAIPassageRefAgreesWithShareCitation(t *testing.T) {
 		if _, cite, _, _ := prepareShareQuote(c.st, c.text, c.span); cite != got {
 			t.Errorf("%q %+v: prompt cites %q, the share card %q", c.text, c.span, got, cite)
 		}
+		p := aiPassageFor(c.st, c.text, c.span)
+		quotation, _, _ := selectionQuotationIn(c.st, p.Book, p.Chapter, c.text, c.span)
+		if p.Text != c.quoted || outboundText(quotation) != c.quoted {
+			t.Errorf("%q %+v: the prompt quotes %q and the share %q, want %q", c.text, c.span, p.Text, quotation, c.quoted)
+		}
 		if cite := citationForSelection(c.st, c.text, c.span); cite != got {
 			t.Errorf("%q %+v: prompt cites %q, the cross-references panel %q", c.text, c.span, got, cite)
 		}
-		p := aiPassageFor(c.st, c.text, c.span)
 		vs := selectionVerses(c.st, c.text, c.span)
 		pulled := len(vs) > 0
 		if pulled != (p.Lo > 0) || (pulled && (vs[0].Verse != p.Lo || vs[len(vs)-1].Verse != p.Hi)) {
@@ -689,8 +737,11 @@ func TestRunAIActionCacheKeyCarriesVerseSpan(t *testing.T) {
 	t.Setenv("GEMINI_API_KEY", "") // no key: a request not answered from the cache ends in noKeyError
 	st := refrainChapterState()    // no aiKeys -> inert store, active=gemini
 	base := providerGemini + "|" + geminiModel + "|" + aiActionExplain
+	// An answer is filed under the passage the prompt quotes, the share's
+	// quotation of the selection, which is the same with a span and without
+	// one for every selection here.
 	seed := func(scope, text, answer string) {
-		key := aiCacheKey(scope, "Psalms", 136, text)
+		key := aiCacheKey(scope, "Psalms", 136, aiPassageFor(st, text, selSpan{}).Text)
 		aiCacheSet(key, answer)
 		t.Cleanup(func() {
 			aiCacheMu.Lock()

@@ -56,6 +56,20 @@ func readerPassage(state *AppState) notePassage {
 	}
 }
 
+// onScreen reports whether p is the passage the reader is on now, so that
+// the page holds its text.
+func (p notePassage) onScreen(state *AppState) bool {
+	return readerPassage(state) == p
+}
+
+// selectionPassage is the passage a selection was made on: its chapter as
+// the pane recorded it (selectionChapter), in the reader's translation.
+// The reader's own passage where the span names no chapter.
+func selectionPassage(state *AppState, span selSpan) notePassage {
+	book, chapter := selectionChapter(state, span)
+	return notePassage{versionID: state.currentVersion().ID, book: book, chapter: chapter}
+}
+
 // showSentNote puts the note the reader has just sent on the passage, as
 // opening it from the notes browser does (openNote): a foreign mark stands
 // aside, focus names the note, the projection draws it with its own wash and
@@ -85,7 +99,7 @@ func readerPassage(state *AppState) notePassage {
 //
 // It reports whether the note was shown.
 func showSentNote(state *AppState, stored StoredNote, at notePassage) bool {
-	if state == nil || stored.ID == 0 || readerPassage(state) != at {
+	if state == nil || stored.ID == 0 || !at.onScreen(state) {
 		return false
 	}
 	before := state.noteFocus

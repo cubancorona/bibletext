@@ -228,9 +228,21 @@ udid_re='[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]
 # empty grep match (no booted device / device name missing) exits 1 and would
 # kill the script BEFORE its own fallback logic — the failure mode is a silent
 # stop right after the "==> fyne package" line.
-BOOTED=$(xcrun simctl list devices booted | awk '/^-- iOS/{ios=1; next} /^--/{ios=0} ios && /\(Booted\)/ {print; exit}' | grep -oE "$udid_re" | head -1 || true)
+DEVICE_UDID=""
+if [ -n "${BIBLETEXT_SIM_DEVICE:-}" ]; then
+    DEVICE_UDID=$(xcrun simctl list devices available | awk '/^-- iOS/{ios=1; next} /^--/{ios=0} ios {print}' | grep -F "$DEVICE_NAME (" | grep -oE "$udid_re" | head -1 || true)
+    if [ -z "$DEVICE_UDID" ]; then
+        echo "Requested iOS simulator '$DEVICE_NAME' is unavailable; refusing to install on another device." >&2
+        exit 2
+    fi
+    BOOTED=$(xcrun simctl list devices booted | grep -F "$DEVICE_UDID" | grep -oE "$udid_re" | head -1 || true)
+else
+    BOOTED=$(xcrun simctl list devices booted | awk '/^-- iOS/{ios=1; next} /^--/{ios=0} ios && /\(Booted\)/ {print; exit}' | grep -oE "$udid_re" | head -1 || true)
+fi
 if [ -z "${BOOTED:-}" ]; then
-    DEVICE_UDID=$(xcrun simctl list devices available | grep -F "$DEVICE_NAME (" | grep -oE "$udid_re" | head -1 || true)
+    if [ -z "$DEVICE_UDID" ]; then
+        DEVICE_UDID=$(xcrun simctl list devices available | grep -F "$DEVICE_NAME (" | grep -oE "$udid_re" | head -1 || true)
+    fi
     if [ -z "${DEVICE_UDID:-}" ]; then
         # Requested device isn't available (e.g. a newer Xcode ships newer
         # models and dropped "$DEVICE_NAME"). Fall back to the first available

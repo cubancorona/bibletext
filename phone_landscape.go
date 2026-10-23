@@ -50,17 +50,19 @@ func setPhoneLandscapeReadingEnabled(v bool) {
 
 // phoneLandscapeReadingWanted is the decision with every input stated: a phone
 // (not a tablet) on a platform that supports the mode, with the gate on and a
-// canvas that is wider than tall. An unsized canvas — the first build, before
-// Fyne's first layout — answers false: portrait is a phone's resting
-// orientation, and the watcher asks again once the size lands. Landscape is
-// `w >= h`, the same reading canvasIsLandscape and mobileRailWanted use.
+// canvas that is wider than tall. An unsized canvas (canvasSized) answers
+// false: portrait is a phone's resting orientation, and the watcher asks again
+// once the size lands. Landscape is `w >= h`, the same reading
+// canvasIsLandscape and mobileRailWanted use.
 func phoneLandscapeReadingWanted(phone, enabled bool, w, h float32) bool {
-	return phone && enabled && w > 0 && h > 0 && w >= h
+	return phone && enabled && canvasSized(w, h) && w >= h
 }
 
 // phoneLandscapeReadingActive answers the decision for the live canvas. It
 // reads the window rather than an AppState because reporterLayoutActive, one
-// of its callers, has none.
+// of its callers, has none. Before the canvas has a size, the size the
+// platform reports for the window stands in for it (layoutSize), so a phone
+// opened while held sideways reads full-screen from its first frame.
 func phoneLandscapeReadingActive() bool {
 	if !phoneLandscapeReadingSupported() || deviceIsTablet() {
 		return false
@@ -72,6 +74,7 @@ func phoneLandscapeReadingActive() bool {
 			w, h = sz.Width, sz.Height
 		}
 	}
+	w, h = layoutSize(w, h)
 	return phoneLandscapeReadingWanted(true, phoneLandscapeReadingEnabled(), w, h)
 }
 

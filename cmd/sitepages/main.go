@@ -10,6 +10,10 @@
 // the pages and the reader cannot be built in different states. A page with no
 // marked passage renders exactly as it did before markers existed, and so does
 // a marked page in the state its passage describes.
+//
+// With -check-policy-date it renders nothing: it holds the rendered privacy
+// policy's effective date to its words against the live copy
+// (policy_date.go), for scripts/publish-site.sh.
 package main
 
 import (
@@ -48,7 +52,20 @@ func main() {
 	nkjvText := flag.String("nkjv-text", "",
 		"the state of the site's NKJV switch, on or off; required, and passed by scripts/publish-site.sh "+
 			"from the generator's own -print-nkjv-text")
+	checkDate := flag.Bool("check-policy-date", false,
+		"render nothing; hold the privacy policy in -out to the one in -live: a policy whose words or links changed "+
+			"must carry -today as its effective date, and one whose did not, the live copy's date or -today (policy_date.go)")
+	live := flag.String("live", "", "with -check-policy-date: the live site's tree")
+	today := flag.String("today", "", "with -check-policy-date: the day of the publish, YYYY-MM-DD, London time")
 	flag.Parse()
+	if *checkDate {
+		said, err := checkPolicyDateInTrees(*live, *out, *today)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println("    " + said)
+		return
+	}
 	if err := renderSitePages(
 		*source,
 		*out,

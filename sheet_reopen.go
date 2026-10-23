@@ -83,6 +83,11 @@ package bibletext
 //     leaves it alone once a newer composer owns it (share_note_ui.go);
 //   - an AI answer once it has landed: the reopen reads it back from aiCache,
 //     so it costs no second request (ai_panel.go);
+//   - the question whether the reader's text may go to a provider, asked over
+//     the study panel: its reopen is the panel's, a new panel about the same
+//     passage, with Ask's question as typed, which says nothing was sent and
+//     asks again. Nothing is sent across the change, and nothing until Allow
+//     (ai_permission.go, ai_panel.go);
 //   - the "Downloading…" modal, for as long as its download runs: the
 //     download's dismissal closes whichever copy is showing, so a change no
 //     longer leaves the reader free to open a sheet the landing's rebuild
@@ -103,7 +108,12 @@ package bibletext
 //     (ai_panel.go); a second reopen here would stack two panels;
 //   - the AI panel showing an error or asking for a key: an error is not an
 //     answer aiCache holds, so reopening it would send the request again, on
-//     the reader's key (ai_panel.go);
+//     the reader's key (ai_panel.go). The panel left saying nothing was sent
+//     after Not now closes the same way: the reader has declined, and its
+//     reopen would ask again;
+//   - the same question asked over a Find pane: the pane comes back from
+//     state with the search in its field, saying nothing was sent, with Try
+//     again, which asks again (ai_permission.go);
 //   - the share-image preview: it carries rendered image files and the
 //     Regenerate cycle the reader has been stepping through;
 //   - the model picker and the notes keep-or-delete and delete-all questions:

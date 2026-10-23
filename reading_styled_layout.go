@@ -550,9 +550,14 @@ func layoutChapter(state *AppState, verses []Verse, p styledLayoutParams, measur
 			// The marks for verses this one follows a hole after, laid out as
 			// ghosts ahead of the verse's own number. Measured at the number's
 			// size, in the pane's ruler, so hit-testing agrees with the pixels.
+			// Each in its own tint (gapOf): only a span naming the omitted
+			// verse lights its mark. The wash runs
+			// on through the space to the next run only where that run is
+			// under the same tint (runSpansForLayout), so a span ending at
+			// the hole lights the verse before it, the space and the mark.
 			for _, n := range gaps[v.Verse] {
 				mark := verseGapMark(n)
-				place([]styledRun{{Text: mark, Kind: runVerseGap, Verse: v.Verse, Tint: tint,
+				place([]styledRun{{Text: mark, Kind: runVerseGap, Verse: v.Verse, Tint: tints.gapOf(v, n),
 					W: measure(mark, runVerseGap, false)}})
 			}
 
@@ -678,12 +683,17 @@ func tintSpansForLayout(lay *chapterLayout) []tintSpan {
 // lost: one full-column rectangle over a line range, washing whatever verse
 // happened to share the narrated verse's first and last lines, and drawn ON TOP
 // of the corrected highlight so it won wherever they met.
+//
+// An omitted verse's mark is filed under the verse after the hole, but no
+// verse narrates it: the recording has no such verse, so the narration of
+// verse 22 in the BSB's Matthew 17 starts at 22's number and leaves "[21]"
+// bare, as the Apple panes and Android end a verse at the mark after it.
 func verseSpansForLayout(lay *chapterLayout, verse int) []tintSpan {
 	if verse <= 0 {
 		return nil
 	}
 	return runSpansForLayout(lay, func(r styledRun) verseTint {
-		if r.Verse == verse {
+		if r.Verse == verse && r.Kind != runVerseGap {
 			return tintReadAlong
 		}
 		return tintNone

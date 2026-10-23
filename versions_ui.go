@@ -295,18 +295,44 @@ func fullPendingNotice(state *AppState) string {
 	// and the reader choosing it or a link to it. The sentence offers the
 	// choice only while its row can be chosen; otherwise the row says what
 	// unlocks it. See D24 in docs/VERSION_STATES.md.
+	//
+	// Where the app knows why, it says why. When a translation that only the
+	// reader's own API.Bible key opens cannot be opened, and the default is
+	// on screen in its place, the app can establish one of two reasons: the
+	// reader removed the key (decision 11), or a saved-key mark remains while
+	// the credential store definitively lacks the key (decision 13). The
+	// latter establishes absence, not what caused it.
+	// The first is not remembered while the key is gone (keyRemovedVersion,
+	// below). Off the default, a link put what is on screen there, so "so ...
+	// is shown in place of" would not be true, and the general sentence
+	// stands.
+	shown := state.CurrentVersion
+	if cur, ok := versionByID(state.CurrentVersion); ok {
+		shown = cur.Name
+	}
 	if pref := state.preferredVersion; pref != "" && pref != state.CurrentVersion {
 		if v, ok := versionByID(pref); ok {
-			shown := state.CurrentVersion
-			if cur, ok := versionByID(state.CurrentVersion); ok {
-				shown = cur.Name
-			}
 			line := v.Name + " could not be opened this time — " + shown +
 				" is shown instead. Your choice is remembered and tried again each time the app starts."
-			if v.canSelect() {
+			switch {
+			case v.canSelect():
 				line += " To try now, choose it above."
+			case onDefault && apiBibleKeyRemoved(v):
+				line = keyRemovedLine(v.Name, shown, sharedKeys().removedBibleKeyWasIncluded())
+			case onDefault && apiBibleKeyLeftBehind(v):
+				line = keyNotRestoredPickerLine(v.Name, shown)
 			}
 			said = append(said, line)
+		}
+	}
+	// A translation given up with its key. The launch that could not open it
+	// because the reader removed its key records it here and not in
+	// preferredVersion, so nothing tries it again; the sentence says why the
+	// default is shown in its place, for as long as it is and the key is
+	// still gone (decision 11 in docs/ROADMAP.md).
+	if gone := state.keyRemovedVersion; gone != "" && gone != state.CurrentVersion && onDefault {
+		if v, ok := versionByID(gone); ok && apiBibleKeyRemoved(v) {
+			said = append(said, keyRemovedLine(v.Name, shown, sharedKeys().removedBibleKeyWasIncluded()))
 		}
 	}
 	if onDefault && state.fullPending {
@@ -337,6 +363,78 @@ func fullPendingNotice(state *AppState) string {
 			" showing a previous edition until the update can be downloaded.")
 	}
 	return strings.Join(said, "\n")
+}
+
+// keyRemovedLine is the picker's sentence for a translation given up with the
+// API.Bible key the reader removed (decision 11 in docs/ROADMAP.md). It names
+// the key they removed: the one included with BibleText when that was the
+// key in force (removedBibleKeyWasIncluded), and otherwise their own.
+func keyRemovedLine(chosen, shown string, included bool) string {
+	if included {
+		return "You removed the included API.Bible key, so " + shown + " is shown in place of " + chosen + "."
+	}
+	return "You removed your API.Bible key, so " + shown + " is shown in place of " + chosen + "."
+}
+
+// keyNotRestoredPickerLine describes a remembered translation whose saved
+// API.Bible key is definitively absent. The settings retain the saved-key
+// mark, but cannot establish why the credential store lacks the key
+// (decision 13 in docs/ROADMAP.md).
+func keyNotRestoredPickerLine(chosen, shown string) string {
+	return "Your saved API.Bible key isn't available on this device, so " + shown + " is shown in place of " + chosen + "."
+}
+
+// apiBibleKeyRemoved reports that v cannot be opened because the reader
+// removed the API.Bible key that alone opens it (bibleKeyRemovedOnPurpose). A
+// translation that needs an operator's licence too is not v: the key would not
+// be the whole reason.
+func apiBibleKeyRemoved(v BibleVersion) bool {
+	return byokCapable(v) && !v.canSelect() && sharedKeys().bibleKeyRemovedOnPurpose()
+}
+
+// apiBibleKeyLeftBehind reports that v cannot be opened because the saved
+// API.Bible key is absent from a separate credential store while its settings
+// marker remains (keyLeftOnOldDevice).
+func apiBibleKeyLeftBehind(v BibleVersion) bool {
+	return byokCapable(v) && !v.canSelect() && sharedKeys().keyLeftOnOldDevice(bibleKeyID)
+}
+
+// giveUpKeyedTranslation runs when the reader empties the API.Bible key field.
+// A translation remembered because a launch could not open it
+// (preferredVersion, D9), which only that key opens, is given up with the key,
+// as the next launch would give it up: it moves to keyRemovedVersion, so the
+// next save names what is on screen and the picker says why rather than
+// promising a launch that will try it again.
+func giveUpKeyedTranslation(state *AppState) {
+	if state == nil || state.preferredVersion == "" {
+		return
+	}
+	v, ok := versionByID(state.preferredVersion)
+	if !ok || !apiBibleKeyRemoved(v) {
+		return
+	}
+	state.preferredVersion = ""
+	state.keyRemovedVersion = v.ID
+}
+
+// takeBackKeyedTranslation runs when the reader enters an API.Bible key in
+// the field again. A translation given up with the key (keyRemovedVersion)
+// was given up only because nothing could open it without one; with a key in
+// the field that no longer holds, so it is the reader's remembered choice
+// again, as D9 records it (preferredVersion): the next save names it and the
+// next launch tries it. Without this, emptying the field and entering the key
+// again, as a reader replacing their key does, would cost them the
+// translation they chose with nothing said.
+func takeBackKeyedTranslation(state *AppState) {
+	if state == nil || state.keyRemovedVersion == "" || state.preferredVersion != "" {
+		return
+	}
+	v, ok := versionByID(state.keyRemovedVersion)
+	if !ok || apiBibleKeyRemoved(v) {
+		return
+	}
+	state.keyRemovedVersion = ""
+	state.preferredVersion = v.ID
 }
 
 // noticeOnPickerOpen is what the picker footer says when the picker opens: the

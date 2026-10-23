@@ -321,9 +321,9 @@ front of it**.
 **`UNREACHABLE`** — a note exists for this passage but `MapVerse` answers
 `Absent` or `Incommensurable`, so `noteFromAnotherTranslation` skips it
 (`notes_store.go:221-222`). Measured: a WEBC Greek-Esther note, read back under
-WEB, is not returned — and is still in the store. (In the next major release,
-`docs/NEXT.md`, the Greek Esther maps verse for verse: a WEBC note on one of
-its additions, such as 4:20, is the one not returned.)
+WEB, was not returned — and was still in the store. (Since 1.2.23 the Greek
+Esther maps verse for verse: a WEBC note on one of its additions, such as 4:20,
+is the one not returned.)
 *The reader sees:* a bare chapter. No separator, no explanation, no trace.
 
 > **Corrected 2026-08-15.** This entry used to include "or maps it into another
@@ -1012,9 +1012,9 @@ transient anchor from the mark's span and resolves it through
 `resolveNoteAnchor` — the SAME machinery the note beside it uses — into the new
 translation. A clean landing (exact, moved, or the doxology's cross-chapter
 move, as long as it lands in ONE run) renumbers the span and restamps its
-frame; anything else — book absent, incommensurable (Greek Esther), verses
-absent (the BSB's omissions; in the next major release also the Greek Esther's
-additions read in a Hebrew Esther), a partial landing, a split landing — CLEARS the
+frame; anything else — book absent, incommensurable (the Greek Esther until
+1.2.23), verses absent (the BSB's omissions; since 1.2.23 also the Greek
+Esther's additions read in a Hebrew Esther), a partial landing, a split landing — CLEARS the
 mark rather than lighting the wrong text. An `hlNote` mark is skipped on
 purpose: the note projection re-derives it (or clears it, when the note's
 passage left the chapter), and the same change stamped the note-mark's span

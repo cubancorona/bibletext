@@ -62,15 +62,22 @@ func bibleTextKeyboardChanged(height C.double) {
 // numbers of the attributed string the selection was made in — the position is
 // authoritative for which verses are cited, and it would otherwise be discarded
 // at this boundary and re-derived (wrongly, on repeated wording) from the text.
-// 0,0 = unresolved. cLead is the selection's lead, the pane's text from verse
-// lo's number to the selection's first character (selSpan.lead), nil when the
-// pane has none.
+// 0,0 = unresolved. heading is 1 when the pane found the whole selection
+// inside the publisher's heading matter standing above verse lo, which lo and
+// hi then both name (selSpan.heading), and 0 otherwise. cLead is the
+// selection's lead, the pane's text from verse lo's number to the
+// selection's first character (selSpan.lead), nil when the pane has none.
+// cBook and chapter are the chapter the pane's text holds, as Go pushed it
+// (bibleTextTVSetChapter, bibleTextMacTVSetChapter), read with the text; nil
+// and 0 when the pane holds none. The reader's chapter can have moved on by
+// the time this runs, and the verb reads the selection in this one
+// (selSpan.book).
 //
 //export bibleTextAIMenuTapped
-func bibleTextAIMenuTapped(cAction, cText *C.char, lo, hi C.int, cLead *C.char) {
+func bibleTextAIMenuTapped(cAction, cText *C.char, lo, hi, heading C.int, cLead, cBook *C.char, chapter C.int) {
 	action := C.GoString(cAction)
 	text := C.GoString(cText)
-	span := nativeSelSpan(lo, hi, cLead)
+	span := nativeSelSpan(lo, hi, heading, cLead, cBook, chapter)
 	state := activeAIState
 	if state == nil {
 		return
@@ -83,13 +90,14 @@ func bibleTextAIMenuTapped(cAction, cText *C.char, lo, hi C.int, cLead *C.char) 
 // bibleTextStudyMenuTapped is the sibling callback for the non-AI selection-menu
 // actions (Share verse, and — as they land — Cross-references and Word study).
 // Same threading contract as above: copy the C strings, then hop to Fyne's UI
-// goroutine before touching any state. Same lo/hi and lead contract as above.
+// goroutine before touching any state. Same lo/hi, heading, lead and chapter
+// contract as above.
 //
 //export bibleTextStudyMenuTapped
-func bibleTextStudyMenuTapped(cAction, cText *C.char, lo, hi C.int, cLead *C.char) {
+func bibleTextStudyMenuTapped(cAction, cText *C.char, lo, hi, heading C.int, cLead, cBook *C.char, chapter C.int) {
 	action := C.GoString(cAction)
 	text := C.GoString(cText)
-	span := nativeSelSpan(lo, hi, cLead)
+	span := nativeSelSpan(lo, hi, heading, cLead, cBook, chapter)
 	state := activeAIState
 	if state == nil {
 		return
@@ -99,12 +107,19 @@ func bibleTextStudyMenuTapped(cAction, cText *C.char, lo, hi C.int, cLead *C.cha
 	})
 }
 
-// nativeSelSpan is the span a pane reported, with its lead when it sent one.
-func nativeSelSpan(lo, hi C.int, cLead *C.char) selSpan {
-	if cLead == nil {
-		return selSpanFromNative(int(lo), int(hi))
+// nativeSelSpan is the span a pane reported, with whether it lies in a
+// heading, its lead when it sent one and the chapter its text holds
+// (paneSelSpan).
+func nativeSelSpan(lo, hi, heading C.int, cLead, cBook *C.char, chapter C.int) selSpan {
+	lead := ""
+	if cLead != nil {
+		lead = C.GoString(cLead)
 	}
-	return selSpanWithLead(int(lo), int(hi), C.GoString(cLead))
+	book := ""
+	if cBook != nil {
+		book = C.GoString(cBook)
+	}
+	return paneSelSpan(int(lo), int(hi), lead, cLead != nil, book, int(chapter)).inHeading(heading != 0)
 }
 
 // bibleTextNoteHidden is the tap menu's "Hide note": the note and its highlight

@@ -410,8 +410,12 @@ func TestADroppedSessionBusEndsThePortalWaitAtOnce(t *testing.T) {
 
 // EMAIL… THROUGH THE PORTAL HEARS THE SAME ANSWER: 0 is a compose, carrying
 // the subject and the body; 2 and an error in place of a request hand on to
-// the next route; 1, and an answer with no code once the portal has taken
-// the call, end the compose there (mailRouteStop). 0 is the control. The
+// the next route; 1, 3, and an answer with no code once the portal has taken
+// the call, end the compose there (mailRouteStop). Of those only 3 is said
+// under Email… as a mail program that could not be opened
+// (shareEmailFailed): 1 is the reader's cancel, and an answer with no code,
+// like no answer at all, says nothing of how the compose went. 0 is the
+// control. The
 // picture a mail attaches is not handed to the test's portal: it goes as an
 // array of descriptors inside the options, and godbus, which the test's
 // portal is built on, cuts the message short where it reads such an array
@@ -436,15 +440,17 @@ func TestTheEmailPortalIsHeardAsItAnswers(t *testing.T) {
 	}
 
 	for _, c := range []struct {
-		name string
-		a    fakeAnswer
-		stop bool
+		name   string
+		a      fakeAnswer
+		stop   bool
+		failed bool // said under Email…, where the compose ends there
 	}{
-		{"2, nothing to compose with", fakeAnswer{code: 2}, false},
-		{"an error in place of a request", fakeAnswer{refuse: true}, false},
-		{"1, cancelled", fakeAnswer{code: 1}, true},
-		{"an answer with no code", fakeAnswer{noCode: true}, true},
-		{"a 0 to another request, then 2 to this one", fakeAnswer{decoy: true, code: 2}, false},
+		{"2, nothing to compose with", fakeAnswer{code: 2}, false, false},
+		{"an error in place of a request", fakeAnswer{refuse: true}, false, false},
+		{"1, cancelled", fakeAnswer{code: 1}, true, false},
+		{"3, a failure", fakeAnswer{code: 3}, true, true},
+		{"an answer with no code", fakeAnswer{noCode: true}, true, false},
+		{"a 0 to another request, then 2 to this one", fakeAnswer{decoy: true, code: 2}, false, false},
 	} {
 		portal.set(c.a)
 		err := composeEmailViaPortal("Psalm 23:1 (Sample)", "The Lord is my shepherd", "")
@@ -455,6 +461,9 @@ func TestTheEmailPortalIsHeardAsItAnswers(t *testing.T) {
 		var stop mailRouteStop
 		if got := errors.As(err, &stop); got != c.stop {
 			t.Errorf("%s: ends the compose %v, want %v (%v)", c.name, got, c.stop, err)
+		}
+		if got := shareEmailFailed(err); c.stop && got != c.failed {
+			t.Errorf("%s: said not to have opened %v, want %v (%v)", c.name, got, c.failed, err)
 		}
 	}
 }

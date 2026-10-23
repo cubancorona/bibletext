@@ -22,12 +22,12 @@ package bibletext
 
 static jclass    btaClass = NULL;   // global ref to org.bibletext.BtBridge
 static jobject  btaActivity = NULL; // our global ref, independent of Fyne's context ref
-static jmethodID btaInitM, btaSetStyleM, btaSetHtmlM, btaArmRestoreM, btaGetAnchorM,
+static jmethodID btaInitM, btaSetStyleM, btaSetChapterM, btaSetHtmlM, btaArmRestoreM, btaGetAnchorM,
                  btaSetFrameM, btaShowM, btaHideM, btaSuppressM, btaUnsuppressM,
-                 btaShareTextM, btaShareImageM, btaSetAIEnabledM, btaSetAskEnabledM, btaSetNotesEnabledM,
-                 btaOpenBrowserM,
+                 btaShareTextM, btaShareImageM, btaShareFailedM, btaSetAIEnabledM, btaSetAskEnabledM,
+                 btaSetNotesEnabledM, btaOpenBrowserM,
                  btaRAHighlightM, btaRAClearM, btaRAFollowM, btaRAColorsM,
-                 btaSetNoteM, btaSetNoteBandsM, btaTimeZoneIDM, btaWindowWidthM,
+                 btaSetNoteM, btaSetNoteBandsM, btaTimeZoneIDM, btaWindowWidthM, btaWindowHeightM,
                  btaSetSystemBarsLightM;
 
 // Resolve BtBridge through the ACTIVITY's classloader. FindClass on a
@@ -54,6 +54,9 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 
 	btaInitM       = (*env)->GetStaticMethodID(env, btaClass, "init", "(Landroid/app/Activity;)V");
 	btaSetStyleM   = (*env)->GetStaticMethodID(env, btaClass, "setStyle", "(IIFFIIIIFF)V");
+	// The book and chapter of the HTML that follows, which the selection
+	// menu hands back with every selection.
+	btaSetChapterM = (*env)->GetStaticMethodID(env, btaClass, "setChapter", "(Ljava/lang/String;I)V");
 	// The chapter, the restore fraction, the arrival verse, then the restore
 	// verse and how far into it (a fraction of its height).
 	btaSetHtmlM    = (*env)->GetStaticMethodID(env, btaClass, "setHtml", "(Ljava/lang/String;FIIF)V");
@@ -67,6 +70,9 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	btaUnsuppressM = (*env)->GetStaticMethodID(env, btaClass, "unsuppress", "()V");
 	btaShareTextM  = (*env)->GetStaticMethodID(env, btaClass, "shareText", "(Ljava/lang/String;)V");
 	btaShareImageM = (*env)->GetStaticMethodID(env, btaClass, "shareImage", "(Ljava/lang/String;)V");
+	// A share the Go side could not finish, said in the share's toast
+	// (sayShareFailed, share_failed.go).
+	btaShareFailedM = (*env)->GetStaticMethodID(env, btaClass, "shareFailed", "(Ljava/lang/String;)V");
 	// Selection-menu AI gate — mirrors the Settings → Assistant choice; when off,
 	// onCreateActionMode omits the "Study with AI" submenu (Share/Cross-refs stay).
 	btaSetAIEnabledM = (*env)->GetStaticMethodID(env, btaClass, "setAIEnabled", "(Z)V");
@@ -96,6 +102,9 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	btaTimeZoneIDM = (*env)->GetStaticMethodID(env, btaClass, "timeZoneID", "()Ljava/lang/String;");
 	// The activity window's width in dp, for the reading page (reading_page_width.go).
 	btaWindowWidthM = (*env)->GetStaticMethodID(env, btaClass, "windowWidthDp", "()F");
+	// Its height in dp, which with the width is the window's size before the
+	// Fyne canvas has one (launchWindowSize, device_android.go).
+	btaWindowHeightM = (*env)->GetStaticMethodID(env, btaClass, "windowHeightDp", "()F");
 	// The system bars' icons: dark over a light page, light over a dark one
 	// (title_bar_android.go).
 	btaSetSystemBarsLightM = (*env)->GetStaticMethodID(env, btaClass, "setSystemBarsLight", "(Z)V");
@@ -106,14 +115,15 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	// skew as "bridge absent" — clear the exception, drop the class, fall back to
 	// the Fyne reading pane (mirrors Fyne's own find_static_method helper).
 	if ((*env)->ExceptionCheck(env) ||
-	    btaInitM == NULL || btaSetStyleM == NULL || btaSetHtmlM == NULL ||
+	    btaInitM == NULL || btaSetStyleM == NULL || btaSetChapterM == NULL || btaSetHtmlM == NULL ||
 	    btaArmRestoreM == NULL || btaGetAnchorM == NULL || btaSetFrameM == NULL ||
 	    btaShowM == NULL || btaHideM == NULL || btaSuppressM == NULL ||
-	    btaUnsuppressM == NULL || btaShareTextM == NULL || btaShareImageM == NULL ||
+	    btaUnsuppressM == NULL || btaShareTextM == NULL || btaShareImageM == NULL || btaShareFailedM == NULL ||
 	    btaSetAIEnabledM == NULL || btaSetAskEnabledM == NULL || btaSetNotesEnabledM == NULL || btaOpenBrowserM == NULL ||
 	    btaRAHighlightM == NULL || btaRAClearM == NULL || btaRAFollowM == NULL ||
 	    btaRAColorsM == NULL || btaSetNoteM == NULL || btaSetNoteBandsM == NULL ||
-	    btaTimeZoneIDM == NULL || btaWindowWidthM == NULL || btaSetSystemBarsLightM == NULL) {
+	    btaTimeZoneIDM == NULL || btaWindowWidthM == NULL || btaWindowHeightM == NULL ||
+	    btaSetSystemBarsLightM == NULL) {
 		(*env)->ExceptionClear(env);
 		(*env)->DeleteGlobalRef(env, btaClass);
 		btaClass = NULL;
@@ -162,6 +172,14 @@ static void btaSetStyle(uintptr_t jni_env, int textColor, int paperColor, float 
 	                             opticalScale);
 }
 
+static void btaSetChapter(uintptr_t jni_env, const char *book, int chapter) {
+	JNIEnv *env = (JNIEnv*)jni_env;
+	if (btaClass == NULL) return;
+	jstring b = (*env)->NewStringUTF(env, book);
+	(*env)->CallStaticVoidMethod(env, btaClass, btaSetChapterM, b, chapter);
+	(*env)->DeleteLocalRef(env, b);
+}
+
 static void btaSetHtml(uintptr_t jni_env, const char *html, float frac, int arrivalVerse,
                        int restoreVerse, float restoreWithin) {
 	JNIEnv *env = (JNIEnv*)jni_env;
@@ -205,6 +223,19 @@ static float btaWindowWidthDp(uintptr_t jni_env) {
 		return 0.0f;
 	}
 	return w;
+}
+
+// btaWindowHeightDp is the activity window's height in dp; 0 when the bridge
+// is absent or Java threw.
+static float btaWindowHeightDp(uintptr_t jni_env) {
+	JNIEnv *env = (JNIEnv*)jni_env;
+	if (btaClass == NULL) return 0.0f;
+	jfloat h = (*env)->CallStaticFloatMethod(env, btaClass, btaWindowHeightM);
+	if ((*env)->ExceptionCheck(env)) {
+		(*env)->ExceptionClear(env);
+		return 0.0f;
+	}
+	return h;
 }
 
 // btaTimeZoneID copies the device's zone database name into buf; empty when
@@ -255,6 +286,14 @@ static void btaShareImage(uintptr_t jni_env, const char *path) {
 	if (btaClass == NULL) return;
 	jstring s = (*env)->NewStringUTF(env, path);
 	(*env)->CallStaticVoidMethod(env, btaClass, btaShareImageM, s);
+	(*env)->DeleteLocalRef(env, s);
+}
+
+static void btaShareFailed(uintptr_t jni_env, const char *msg) {
+	JNIEnv *env = (JNIEnv*)jni_env;
+	if (btaClass == NULL) return;
+	jstring s = (*env)->NewStringUTF(env, msg);
+	(*env)->CallStaticVoidMethod(env, btaClass, btaShareFailedM, s);
 	(*env)->DeleteLocalRef(env, s);
 }
 
@@ -748,8 +787,11 @@ func pushNoteToOverlay(state *AppState) noteChrome {
 	text, who, pill, next := c.Text, c.Who, c.Pill, c.Next
 	// The note's OWN verse, not the highlight's — minimizing clears the
 	// highlight, and a marker without an anchor jumps to the top of the
-	// chapter (the iOS lesson). Verse 0 (unplaced-only) parks at the top.
-	anchor := state.NoteVerseLo
+	// chapter (the iOS lesson). Verse 0 (unplaced-only) parks at the top. As
+	// the page draws it (c.Anchor, drawnNoteAnchor): a verse this edition
+	// omits, which the bridge has no row for, hangs the card above the verse
+	// after the hole instead of parking it at the top.
+	anchor := c.Anchor
 	pal := state.pal()
 	p, n := C.int(0), C.int(0)
 	if pill {
@@ -890,6 +932,7 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	}
 
 	html := buildChapterHTMLAndroid(state, verses)
+	book, chapter := state.CurrentBook, state.CurrentChapter
 	pal := state.pal()
 	// DENSITY-INDEPENDENT PIXELS, converted on the Java side with the display's
 	// real density. This used to multiply by the Fyne canvas scale, which the
@@ -926,8 +969,8 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// the chapter's wash is still lit. The chrome consumed the same
 	// forceReposition a few lines up (pushNoteToOverlay runs first), so the
 	// pushed arrival class and this verse stay one answer: the verse after
-	// the hole for a verse this edition omits, and none for a note whose own
-	// verse it omits too, whose card the bridge parks at the top
+	// the hole for a verse this edition omits, and none for a card the page
+	// has no line for, which the bridge parks at the top
 	// (arrivalVerseOnPage).
 	if state.restore == nil && !preserveTop && here && forcedThisPush {
 		arrivalVerse = arrivalVerseOnPage(chrome, verses, sp.Lo)
@@ -977,6 +1020,11 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 			C.float(referenceDp), C.float(page.PitchEm),
 			C.int(padL), C.int(padT), C.int(padL), C.int(padT),
 			C.float(measureDp), C.float(readingOpticalScale()))
+		// The chapter first, on the same thread: the bridge keys the text
+		// setHtml puts up with it, and the selection menu hands it back.
+		cb := C.CString(book)
+		C.btaSetChapter(C.uintptr_t(env), cb, C.int(chapter))
+		C.free(unsafe.Pointer(cb))
 		ch := C.CString(html)
 		C.btaSetHtml(C.uintptr_t(env), ch, C.float(frac), C.int(arrivalVerse),
 			C.int(restoreVerse), C.float(restoreWithin))
@@ -1030,6 +1078,21 @@ func androidWindowWidthDp() float64 {
 		w = float32(C.btaWindowWidthDp(C.uintptr_t(env)))
 	})
 	return float64(w)
+}
+
+// androidWindowHeightDp is the activity window's height in dp, from its
+// configuration, as androidWindowWidthDp is its width: with it, the window's
+// size before the Fyne canvas has one (launchWindowSize, device_android.go).
+// A call into Java, asked only then. 0 without the bridge.
+func androidWindowHeightDp() float64 {
+	if !btaBridgePresent() {
+		return 0
+	}
+	h := float32(0)
+	runBta(func(env uintptr) {
+		h = float32(C.btaWindowHeightDp(C.uintptr_t(env)))
+	})
+	return float64(h)
 }
 
 // deviceTimeZoneName is the zone database name Java reports for the device
@@ -1110,6 +1173,16 @@ func nativeShareImage(path string) {
 	runBta(func(env uintptr) {
 		cs := C.CString(path)
 		C.btaShareImage(C.uintptr_t(env), cs)
+		C.free(unsafe.Pointer(cs))
+	})
+}
+
+// sayShareFailed says line in a toast, as the share sheet says a share it
+// cannot make (BtBridge.shareFailed, share_failed.go).
+func sayShareFailed(_ *AppState, line string) {
+	runBta(func(env uintptr) {
+		cs := C.CString(line)
+		C.btaShareFailed(C.uintptr_t(env), cs)
 		C.free(unsafe.Pointer(cs))
 	})
 }

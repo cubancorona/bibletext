@@ -166,22 +166,25 @@ func callArgCounts(src, fn string) []int {
 	}
 }
 
-// Every call site of the selection's exports passes the lead: the two Apple
-// panes' four calls and BtBridge's two. A call left at four arguments would
-// not compile in C or Java, but a declaration widened without its call sites
-// is exactly what this guards together with the tests above.
+// Every call site of the selection's exports passes whether the selection
+// lies in a heading and the lead, and after them the chapter the pane's text
+// holds (selection_chapter_contract_test.go holds which values,
+// heading_word_selection_contract_test.go the heading's): the two Apple
+// panes' four calls and BtBridge's two. A call left short would not compile
+// in C or Java, but a declaration widened without its call sites is exactly
+// what this guards together with the tests above.
 func TestEverySelectionDispatchPassesTheLead(t *testing.T) {
 	for _, c := range []struct {
 		file, fn string
 		args     int
 		calls    int
 	}{
-		{"reading_ios.go", "bibleTextAIMenuTapped", 5, 2},
-		{"reading_ios.go", "bibleTextStudyMenuTapped", 5, 2},
-		{"reading_macos.go", "bibleTextAIMenuTapped", 5, 2},
-		{"reading_macos.go", "bibleTextStudyMenuTapped", 5, 2},
-		{"android/BtBridge.java", "nativeSelectionAction", 5, 3},
-		{"reading_jni_android.c", "btaSelectionAction", 5, 2},
+		{"reading_ios.go", "bibleTextAIMenuTapped", 8, 2},
+		{"reading_ios.go", "bibleTextStudyMenuTapped", 8, 2},
+		{"reading_macos.go", "bibleTextAIMenuTapped", 8, 2},
+		{"reading_macos.go", "bibleTextStudyMenuTapped", 8, 2},
+		{"android/BtBridge.java", "nativeSelectionAction", 8, 3},
+		{"reading_jni_android.c", "btaSelectionAction", 8, 2},
 	} {
 		b, err := os.ReadFile(c.file)
 		if err != nil {

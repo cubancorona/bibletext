@@ -257,8 +257,9 @@ func adoptLaunch(live, loaded *AppState) {
 	live.restore = loaded.restore // the one-shot scroll target
 	live.fullPending = loaded.fullPending
 	live.seedOnly = loaded.seedOnly
-	live.preferredVersion = loaded.preferredVersion // D9's record; D10's sentence and every save read it
-	live.staleVersions = loaded.staleVersions       // D3's mark; the refresh's work list (D17)
+	live.preferredVersion = loaded.preferredVersion   // D9's record; D10's sentence and every save read it
+	live.keyRemovedVersion = loaded.keyRemovedVersion // a translation given up with its key: the picker says why
+	live.staleVersions = loaded.staleVersions         // D3's mark; the refresh's work list (D17)
 	live.loadPhase = loadReady
 }
 

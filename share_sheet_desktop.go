@@ -42,6 +42,12 @@ package bibletext
 // manager said so (share_fallback.go), and Email… attaches it where the
 // platform can, with the quote and its citation as the mail's text.
 //
+// A share that cannot finish ends in the same sheet too, with its one line
+// and Done and nothing else (sayShareFailed); and an Email… whose compose
+// fails says so in one line under the buttons, the sheet staying as it was
+// otherwise, since the share itself has already succeeded. A share the
+// reader started does not end in silence (docs/ROADMAP.md, Later, row 2).
+//
 // UI goroutine only, like every sheet.
 
 import (
@@ -79,6 +85,11 @@ const (
 	shareButtonDone        = "Done"
 )
 
+// shareLineEmailFailed is the line under the buttons when Email…'s compose
+// fails (shareEmailFailed), approved on 15 October 2026 with the reuse of
+// the phones' words for a share that cannot finish (share_failed.go).
+const shareLineEmailFailed = "Could not open your email program."
+
 // shareCopiedAgainFor is how long the line reads "Copied again." after Copy
 // again before the verb's own line returns.
 const shareCopiedAgainFor = 1500 * time.Millisecond
@@ -109,6 +120,25 @@ type shareDone struct {
 	subject    string // the mail's subject: the citation
 	body       string // the mail's body
 	attachment string // a file the mail attaches: the image share's PNG
+	// failed: the share could not finish, and the sheet says line and offers
+	// Done, with no heading, box, Email… or Copy again (sayShareFailed).
+	failed bool
+	// email is what the line under the buttons answers, shared with the
+	// sheet a light/dark rebuild brings back in this one's place; nil until
+	// the sheet first opens.
+	email *shareEmailLine
+}
+
+// shareEmailLine is Email…'s state on one share's sheet, kept across the
+// light/dark rebuilds that bring the sheet back: how many times Email… has
+// been pressed, whether the compose of the last press that has answered
+// failed, and how the sheet up now shows that, nil until one opens. A
+// compose still running when the sheet is rebuilt answers to the sheet that
+// replaced it.
+type shareEmailLine struct {
+	presses int
+	failed  bool
+	show    func(failed bool)
 }
 
 // shareVerbOf tells which verb composed a text share from the message's own
@@ -275,15 +305,65 @@ func showShareCopiedSheet(state *AppState, d shareDone) {
 	// (composeShareEmail). It is shown only once the platform has answered
 	// that there is one to hand it to, asked off the UI goroutine so the
 	// sheet never waits on the desktop bus (shareEmailProbe); a compose runs
-	// there too, and reports nothing back but a log line, the copy having
-	// already succeeded.
+	// there too. A compose that fails is logged, and said in one line under
+	// the buttons (emailFailedLine) once its answer is back on the UI
+	// goroutine, while the sheet is still open, or the sheet a light/dark
+	// rebuild brought back in its place (shareEmailLine). The line says what
+	// the last press came to: it goes again when a later compose opens, when
+	// the reader cancels one, or when the desktop takes one and gives no
+	// answer (shareEmailFailed), and an earlier press answering late changes
+	// nothing. The rest of the sheet stays as it was: the copy, or the save,
+	// has succeeded.
 	subject, body, attachment := d.subject, d.body, d.attachment
+	mail := d.email
+	if mail == nil {
+		mail = &shareEmailLine{}
+		d.email = mail
+	}
+	var form *fyne.Container
+	var refit func()
+	var emailFail *widget.Label
+	emailFailed := false
+	setEmailFailed := func(failed bool) {
+		if failed == emailFailed {
+			return
+		}
+		emailFailed = failed
+		switch {
+		case failed && emailFail == nil:
+			emailFail = emailFailedLine()
+			form.Add(emailFail)
+		case failed:
+			emailFail.Show()
+		case emailFail != nil:
+			emailFail.Hide()
+		}
+		if refit != nil {
+			refit()
+		}
+	}
+	mail.show = func(failed bool) {
+		if closed || popup == nil || !popup.Visible() {
+			return
+		}
+		setEmailFailed(failed)
+	}
 	email := newShareSheetButton(shareButtonEmail, closeSheet, func() {
-		go func() {
-			if err := shareEmailCompose(subject, body, attachment); err != nil {
+		mail.presses++
+		n := mail.presses
+		shareEmailAside(func() error {
+			err := shareEmailCompose(subject, body, attachment)
+			if err != nil {
 				fyne.LogError("could not hand the share to a mail client", err)
 			}
-		}()
+			return err
+		}, func(err error) {
+			if n != mail.presses {
+				return
+			}
+			mail.failed = shareEmailFailed(err)
+			mail.show(mail.failed)
+		})
 	})
 	email.Hide()
 
@@ -296,17 +376,24 @@ func showShareCopiedSheet(state *AppState, d shareDone) {
 	// pushed Copy again left by its own width and took its place, under a
 	// pointer already on its way there.
 	buttons := container.NewHBox(email, done)
-	if d.text != "" {
+	switch {
+	case d.failed:
+		buttons = container.NewHBox(done)
+	case d.text != "":
 		buttons = container.NewHBox(email, copyAgain, done)
 	}
 	actions := container.NewBorder(nil, nil, nil, buttons)
 
-	parts := []fyne.CanvasObject{title, lineSlot}
+	var parts []fyne.CanvasObject
+	if !d.failed {
+		parts = append(parts, title)
+	}
+	parts = append(parts, lineSlot)
 	if box != nil {
 		parts = append(parts, box)
 	}
 	parts = append(parts, actions)
-	form := container.NewVBox(parts...)
+	form = container.NewVBox(parts...)
 
 	card := surface(container.NewPadded(form), pal.SurfaceAlt, pal.Border, fyne.Size{})
 	popup = widget.NewModalPopUp(card, cnv)
@@ -344,42 +431,53 @@ func showShareCopiedSheet(state *AppState, d shareDone) {
 	// text wraps to, capped, and the second pass takes the height that gives.
 	// Where the sheet would still start inside the header (headerClearance)
 	// the box gives up height, a step at a time down to its least, and the
-	// scroll shows the rest.
+	// scroll shows the rest. Where even its least leaves the sheet too tall,
+	// on the shortest windows the app allows, the box keeps its height and
+	// the sheet covers the header instead (fitBelowOrOverHeader).
 	fit := func() {
-		popup.Resize(fyne.NewSize(w, card.MinSize().Height))
-		if boxScroll == nil {
+		fitBelowOrOverHeader(state, popup, func(room float32) {
 			popup.Resize(fyne.NewSize(w, card.MinSize().Height))
-			return
-		}
-		want := boxText.MinSize().Height + 2*theme.Padding()
-		if want > shareBoxMaxHeight {
-			want = shareBoxMaxHeight
-		}
-		if want < shareBoxMinHeight {
-			want = shareBoxMinHeight
-		}
-		boxScroll.SetMinSize(fyne.NewSize(0, want))
-		popup.Resize(fyne.NewSize(w, card.MinSize().Height))
-		room := clearOfHeader(cnv.Size().Height, cnv.Size().Height, headerClearance(state))
-		for want > shareBoxMinHeight && popup.MinSize().Height > room {
-			want -= shareBoxHeightStep
+			if boxScroll == nil {
+				popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+				return
+			}
+			want := boxText.MinSize().Height + 2*theme.Padding()
+			if want > shareBoxMaxHeight {
+				want = shareBoxMaxHeight
+			}
 			if want < shareBoxMinHeight {
 				want = shareBoxMinHeight
 			}
 			boxScroll.SetMinSize(fyne.NewSize(0, want))
 			popup.Resize(fyne.NewSize(w, card.MinSize().Height))
-		}
+			for want > shareBoxMinHeight && popup.MinSize().Height > room {
+				want -= shareBoxHeightStep
+				if want < shareBoxMinHeight {
+					want = shareBoxMinHeight
+				}
+				boxScroll.SetMinSize(fyne.NewSize(0, want))
+				popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+			}
+		})
 	}
 	fit()
+	// The line under the buttons is sized in by the sheet's own fit, the one a
+	// window resize runs (registerSheetRefit), so the sheet keeps to the
+	// header's rule with the line as it does without it.
+	refit = fit
+	if mail.failed {
+		setEmailFailed(true)
+	}
 
 	state.dismissSheet = func() {
 		if popup != nil && popup.Visible() {
 			closeSheet()
 		}
 	}
-	// A light/dark rebuild brings the sheet back showing the same thing, and
-	// the sheet it was opened over beneath it (takeReopenBeneath): the card
-	// is where the reader was, and Done returns them to it.
+	// A light/dark rebuild brings the sheet back showing the same thing, the
+	// line under the buttons among it, and the sheet it was opened over
+	// beneath it (takeReopenBeneath): the card is where the reader was, and
+	// Done returns them to it.
 	registerSheetReopenCapture(state, popup, func() func() {
 		under := takeReopenBeneath(state, popup)
 		return func() {
@@ -391,6 +489,9 @@ func showShareCopiedSheet(state *AppState, d shareDone) {
 	})
 	registerSheetRefit(state, popup, fit)
 
+	if d.failed {
+		return
+	}
 	shareEmailProbe(attachment != "", func(ok bool) {
 		if !ok || closed || popup == nil || !popup.Visible() {
 			return
@@ -399,6 +500,27 @@ func showShareCopiedSheet(state *AppState, d shareDone) {
 		buttons.Refresh()
 		fit()
 	})
+}
+
+// emailFailedLine is the line under the buttons when Email…'s compose
+// failed, set at the row's end, under the buttons, wrapping where a narrow
+// sheet needs it to.
+func emailFailedLine() *widget.Label {
+	l := widget.NewLabel(shareLineEmailFailed)
+	l.Alignment = fyne.TextAlignTrailing
+	l.Wrapping = fyne.TextWrapWord
+	return l
+}
+
+// sayShareFailed tells the reader that a share they started could not
+// finish, in line: on the desktop, the share sheet with that line and Done
+// (shareDone.failed), as the Copied sheet would have opened. Each platform
+// says it its own way (share_failed.go). UI goroutine.
+func sayShareFailed(state *AppState, line string) {
+	if state == nil {
+		state = activeAIState
+	}
+	showShareCopiedSheet(state, shareDone{line: line, failed: true})
 }
 
 // shareSheetButton is a button on the confirmation that keeps Escape and

@@ -117,8 +117,8 @@ func TestAndroidColdStartArrivalSurvivesSeedDataSwap(t *testing.T) {
 	// The mark's first verse, resolved to the verse after the hole when this
 	// edition omits it (drawnArrivalVerse): the bridge has no row for an
 	// omitted verse, and opened such a link at the top of the chapter. Read
-	// against the chrome just pushed, so a note whose own verse the edition
-	// omits keeps its card in view (arrivalVerseOnPage).
+	// against the chrome just pushed, whose card hangs above the verse after
+	// the hole too, so the two land on one place (arrivalVerseOnPage).
 	if !strings.Contains(goSrc, "chrome := pushNoteToOverlay(state)") ||
 		!strings.Contains(goSrc, "arrivalVerse = arrivalVerseOnPage(chrome, verses, sp.Lo)") {
 		t.Fatal("Android explicit placement does not pass the selected note's anchor to the bridge")

@@ -14,9 +14,11 @@
 // Implemented in Go (reading_android_export.go). The char* arguments are
 // only valid for the duration of the call — Go copies them immediately.
 // lo/hi is the selection's verse span, resolved in Java (0,0 = unresolved);
-// lead is the selection's place in verse lo, NULL when there is none
-// (docs/SELECTION_OFFSET.md).
-extern void btaSelectionAction(char *action, char *text, int lo, int hi, char *lead);
+// heading is 1 when the whole selection lies in the heading matter above
+// verse lo (selSpan.heading); lead is the selection's place in verse lo, NULL
+// when there is none (docs/SELECTION_OFFSET.md); book and chapter are the
+// chapter the pane's text holds, NULL and 0 when it holds none.
+extern void btaSelectionAction(char *action, char *text, int lo, int hi, int heading, char *lead, char *book, int chapter);
 extern void btaScrolled(float frac);
 extern void btaReadAlongUserScrolled(void);
 extern void btaReadAlongFollowTapped(void);
@@ -29,15 +31,18 @@ extern void btaNoteRestored(void);
 extern void btaNoteAction(int verb, int key);
 
 JNIEXPORT void JNICALL
-Java_org_bibletext_BtBridge_nativeSelectionAction(JNIEnv *env, jclass clazz, jstring jAction, jstring jText, jint jLo, jint jHi, jstring jLead) {
+Java_org_bibletext_BtBridge_nativeSelectionAction(JNIEnv *env, jclass clazz, jstring jAction, jstring jText, jint jLo, jint jHi, jboolean jHeading, jstring jLead, jstring jBook, jint jChapter) {
 	const char *action = (*env)->GetStringUTFChars(env, jAction, NULL);
 	const char *text = (*env)->GetStringUTFChars(env, jText, NULL);
-	// A null lead is no lead, and GetStringUTFChars must not see it.
+	// A null lead is no lead, and GetStringUTFChars must not see it; nor a
+	// null book, a pane that holds no pushed chapter.
 	const char *lead = jLead != NULL ? (*env)->GetStringUTFChars(env, jLead, NULL) : NULL;
-	btaSelectionAction((char *)action, (char *)text, (int)jLo, (int)jHi, (char *)lead);
+	const char *book = jBook != NULL ? (*env)->GetStringUTFChars(env, jBook, NULL) : NULL;
+	btaSelectionAction((char *)action, (char *)text, (int)jLo, (int)jHi, jHeading ? 1 : 0, (char *)lead, (char *)book, (int)jChapter);
 	(*env)->ReleaseStringUTFChars(env, jAction, action);
 	(*env)->ReleaseStringUTFChars(env, jText, text);
 	if (lead != NULL) (*env)->ReleaseStringUTFChars(env, jLead, lead);
+	if (book != NULL) (*env)->ReleaseStringUTFChars(env, jBook, book);
 }
 
 JNIEXPORT void JNICALL

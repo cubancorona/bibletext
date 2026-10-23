@@ -34,8 +34,16 @@ PATCH_SCENE="patches/fyne-2.7.4-ios-scene-lifecycle.patch"
 PATCH_TOUCH_CANCEL="patches/fyne-2.7.4-ios-touch-cancel.patch"
 PATCH_WINDOW_SIZE="patches/fyne-2.7.4-ios-window-size.patch"
 PATCH_FONT_CACHE="patches/fyne-2.7.4-font-resource-cache.patch"
+# Made against the font-cache patch (both change internal/painter/font.go).
+PATCH_FALLBACK_SPACE="patches/fyne-2.7.4-fallback-space.patch"
+# Made against the mobile driver.go the drawloop patch leaves and the
+# GoNativeActivity.java the newintent and night-mode patches leave, so it
+# applies after them.
+PATCH_TYPED="patches/fyne-2.7.4-mobile-typed-characters.patch"
 ATOMIC_TEST="patches/testdata/atomic-prefs_test.go"   # copied in, not diffed (a new file); testdata/ so the go tool ignores it here
 FONT_CACHE_TEST="patches/testdata/font-resource-cache_test.go"
+FALLBACK_SPACE_TEST="patches/testdata/fallback-space_test.go"
+TYPED_TEST="patches/testdata/mobile-typed-characters_test.go"
 EMOJI_FONT="patches/NotoColorEmoji.ttf"
 # Where the patched copy goes, relative to the repository root. The packaging
 # scripts build from third_party/fyne; scripts/check-ios-pane.sh passes its own
@@ -83,6 +91,8 @@ patch -p1 -d "$DEST" < "$PATCH_SCENE"
 patch -p1 -d "$DEST" < "$PATCH_TOUCH_CANCEL"
 patch -p1 -d "$DEST" < "$PATCH_WINDOW_SIZE"
 patch -p1 -d "$DEST" < "$PATCH_FONT_CACHE"
+patch -p1 -d "$DEST" < "$PATCH_FALLBACK_SPACE"
+patch -p1 -d "$DEST" < "$PATCH_TYPED"
 # The emoji swap is patch + binary: the .patch retargets the embed directive, and
 # the font itself (a binary; it cannot ride a unified diff) is copied in here.
 # Noto Color Emoji, OFL 1.1 — licence tracked beside it in patches/.
@@ -94,6 +104,8 @@ cp "$EMOJI_FONT" "$DEST/theme/font/NotoColorEmoji.ttf"
 # Run it with: ( cd third_party/fyne && go test ./app/ -run TestBT -v )
 cp "$ATOMIC_TEST" "$DEST/app/bt_atomic_prefs_test.go"
 cp "$FONT_CACHE_TEST" "$DEST/internal/painter/bt_font_resource_cache_test.go"
+cp "$FALLBACK_SPACE_TEST" "$DEST/internal/painter/bt_fallback_space_test.go"
+cp "$TYPED_TEST" "$DEST/internal/driver/mobile/bt_typed_characters_test.go"
 rm -f "$DEST/theme/font/EmojiOneColor.otf"   # no longer embedded; leaving it would ship 4 MB of nothing
 
 # 3. Verify the patches actually landed.
@@ -157,4 +169,20 @@ if ! grep -q "BibleText patch: share immutable parsed font tables" "$DEST/intern
   echo "ERROR: font resource caching or scoped cache bound did not land." >&2
   exit 1
 fi
-echo "OK: ${DEST} regenerated and patched (fyne ${FYNE_VERSION}: drawloop 100ms -> 2ms, discrete caret blink, Noto emoji, atomic preferences write, Windows EGL context, Android night-mode follow, iOS scene life cycle, iOS touch cancel, iOS window size, shared font tables and bounded scoped glyph caches)."
+# A space after an emoji or a fallback-font character keeps its width.
+if ! grep -q "BibleText patch: a space shaped in a face other than its own" "$DEST/internal/painter/font.go" \
+   || ! grep -q "paint.FixDrawnAdvances" "$DEST/widget/richtext.go" \
+   || [ ! -s "$DEST/internal/painter/bt_fallback_space_test.go" ]; then
+  echo "ERROR: the fallback-space patch did not land." >&2
+  exit 1
+fi
+# A mobile keyboard's joiners, spaces and newer characters reach the field,
+# and an Android keyboard's deletion removes as many characters as it removed.
+if ! grep -q "BibleText patch: type every character but a control" "$DEST/internal/driver/mobile/driver.go" \
+   || grep -q "if strconv.IsPrint(r)" "$DEST/internal/driver/mobile/driver.go" \
+   || ! grep -q "BibleText patch: delete what the keyboard deleted" "$DEST/internal/driver/mobile/app/GoNativeActivity.java" \
+   || [ ! -s "$DEST/internal/driver/mobile/bt_typed_characters_test.go" ]; then
+  echo "ERROR: patch did not apply — the mobile driver still drops typed format characters, or Android still deletes a UTF-16 unit at a time." >&2
+  exit 1
+fi
+echo "OK: ${DEST} regenerated and patched (fyne ${FYNE_VERSION}: drawloop 100ms -> 2ms, discrete caret blink, Noto emoji, atomic preferences write, Windows EGL context, Android night-mode follow, iOS scene life cycle, iOS touch cancel, iOS window size, shared font tables and bounded scoped glyph caches, spaces after emoji and fallback-font characters, mobile typing of every character but a control, Android deletion by character)."

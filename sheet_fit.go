@@ -32,6 +32,8 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 )
 
 // sheetBottomMargin is the breathing room left under a sheet, matching the 16pt
@@ -235,17 +237,209 @@ const sheetHeaderGap = 8
 // starting partway down one is the defect. The Go to picker and the
 // translation picker already opened below the header at that size, so every
 // desktop sheet now does, and is sized again when the window changes size
-// (sheet_refit.go).
+// (sheet_refit.go). A sheet that cannot, on a window too short for it, covers
+// the header instead (coverHeaderUnlessClear).
 func headerClearance(state *AppState) float32 {
-	if state == nil || state.header == nil || state.window == nil || fyne.CurrentDevice().IsMobile() {
+	_, bottom, ok := headerEdges(state)
+	if !ok {
 		return 0
+	}
+	return bottom + sheetHeaderGap
+}
+
+// headerEdges is where the header's top and bottom edges stand on a desktop
+// window's canvas. ok is false wherever headerClearance is zero.
+func headerEdges(state *AppState) (top, bottom float32, ok bool) {
+	if state == nil || state.header == nil || state.window == nil || fyne.CurrentDevice().IsMobile() {
+		return 0, 0, false
 	}
 	h := state.header
 	if !h.Visible() || !objectInTree(state.window.Canvas().Content(), h) {
-		return 0
+		return 0, 0, false
 	}
-	top := fyne.CurrentApp().Driver().AbsolutePositionForObject(h).Y
-	return top + h.Size().Height + sheetHeaderGap
+	top = fyne.CurrentApp().Driver().AbsolutePositionForObject(h).Y
+	return top, top + h.Size().Height, true
+}
+
+// coverHeaderUnlessClear makes a desktop sheet that Fyne centres on the window,
+// and that starts above headerClearance as it has been sized, cover the header
+// instead: the sheet's top edge is the header's top edge, and it takes its
+// natural height, capped at the room from there to as far above the window's
+// foot. A sheet either leaves the header and the gap below it uncovered or
+// covers the whole header, on every window the app allows, as a phone or
+// tablet sheet at its cap starts above the header's controls; no window is
+// made taller to avoid it.
+//
+// The defect this prevents: a desktop window can be as short as 386pt, and
+// below about 440pt the parts of some sheets that do not scroll are taller
+// than the room below the header and its gap (clearOfHeader). Fyne never sizes
+// a modal below its content's MinSize and centres it, so those sheets started
+// in the gap or inside the header: at 386pt Go to and the AI answer in the
+// gap, the cross-references while their list loads 7pt below the Go to chip,
+// and a link notice partway down the chip.
+//
+// The natural height is the sheet's preferred height, what it would take with
+// unlimited room, never less than its content's least height once that has
+// settled. preferred is what the sheet asks for beyond its content: a card
+// sized from its content passes 0, so a covering link notice, note-link offer
+// or Ask is only as tall as its content, with no blank band under its last
+// row; a sheet whose lists or scroll areas use the room they are given passes
+// the height it takes on a window with room to spare, so Go to's book and
+// chapter lists still fill the room. Covering at the room's height, a link
+// notice, the note-link offer, Ask and the note composer showed 108.7 to
+// 131.7pt of blank under their last rows on 386 and 401pt windows.
+//
+// Call it after the sheet's last Resize, each time the sheet is sized, its
+// refit included: it judges where the sheet settles (sheetStartsClearOf),
+// centred on the window again first (centreOnWindow). The covering height is
+// a Resize like any other, so the sheet's next fit starts from its own size
+// again, and a sheet that can clear the header then does. A no-op on a phone
+// or tablet and with no header on screen.
+func coverHeaderUnlessClear(state *AppState, popup *widget.PopUp, preferred float32) {
+	top, bottom, ok := headerEdges(state)
+	if !ok || popup == nil || popup.Content == nil || popup.Canvas == nil {
+		return
+	}
+	cnv := centreOnWindow(popup)
+	if sheetStartsClearOf(popup, bottom) {
+		return
+	}
+	pad := popup.Theme().Size(theme.SizeNameInnerPadding)
+	room := cnv.Size().Height - 2*top
+	h := min(max(preferred, popup.MinSize().Height), room)
+	// The sheet keeps the width it settled at, so nothing in it wraps again
+	// and the Resize lays it out at its final height.
+	popup.Resize(fyne.NewSize(popup.Content.Size().Width+pad, h))
+	raiseSheet(popup, cnv, room-(popup.Content.Size().Height+pad))
+}
+
+// raisedCanvas is the window's canvas as a covering sheet shorter than the
+// room from the header's top is laid out on: above points taller, the extra
+// above the window's top edge.
+//
+// Fyne centres a modal sheet on the size its popup has, and gives the popup
+// its canvas's size whenever it is refreshed, so a sheet can stand only
+// where its centre is the canvas's centre. Raised by above, on a canvas
+// taller by above, the popup still covers the window from top to foot, so
+// its shade dims the whole page, and the sheet centred on it, frame and
+// shadow included, stands above/2 higher than on the window: its top edge at
+// the header's top when above is the room from the header's top less the
+// sheet's height. A tap anywhere on the window goes to the top overlay
+// alone, as under any modal sheet, so none reaches the page.
+//
+// This rests on Fyne 2.7.4's PopUp: the popup is itself the overlay, it is
+// given its Canvas's size on each Refresh, BaseWidget.Move places it
+// (PopUp.Move does nothing for a modal one), and nothing else moves it. Fyne
+// 2.8 wraps a popup in an overlay container that the canvas's overlay stack
+// sizes and places from the window's own canvas, and a hidden popup is moved
+// back to the canvas's top left, so the raise has to be built again for it.
+type raisedCanvas struct {
+	fyne.Canvas
+	above float32
+}
+
+func (c *raisedCanvas) Size() fyne.Size {
+	s := c.Canvas.Size()
+	s.Height += c.above
+	return s
+}
+
+// raiseSheet lays a covering sheet out on the window's canvas cnv raised by
+// above (raisedCanvas). A sheet as tall as the room from the header's top
+// already starts at the header's top centred on the window, and stays there.
+func raiseSheet(popup *widget.PopUp, cnv fyne.Canvas, above float32) {
+	if above < 0.5 {
+		return
+	}
+	popup.Canvas = &raisedCanvas{Canvas: cnv, above: above}
+	popup.BaseWidget.Move(fyne.NewPos(0, -above))
+	popup.Refresh()
+}
+
+// centreOnWindow lays a sheet raiseSheet raised out on the window's canvas
+// again, centred on it, and returns that canvas. A sheet never raised is
+// left as it is.
+func centreOnWindow(popup *widget.PopUp) fyne.Canvas {
+	if rc, ok := popup.Canvas.(*raisedCanvas); ok {
+		popup.Canvas = rc.Canvas
+		popup.BaseWidget.Move(fyne.NewPos(0, 0))
+		popup.Refresh()
+	}
+	return popup.Canvas
+}
+
+// sheetStartsClearOf reports whether a sheet Fyne centres, as last sized,
+// starts at or below headerBottom and the gap below it, to within half a
+// point, once its layout has settled. It is the one test of clearing the
+// header that coverHeaderUnlessClear and fitBelowOrOverHeader share; both
+// centre the sheet on the window first (centreOnWindow).
+//
+// Settled, because a Resize lays the content out at its MinSize as measured
+// before the content took the sheet's width. A wrapped label measures the
+// line count of the width it had until then, so the content can measure
+// shorter once it has its width, and the layout that follows, the next
+// frame's on a real window, centres the shorter box lower down: a link
+// notice judged at a 441 to 448pt window, where it settles 79 to 82pt down,
+// was judged 4pt higher, inside the gap, and covered the header it clears.
+// So the sheet is laid out again, through Refresh, until its content keeps
+// its place and size (settleSheet).
+func sheetStartsClearOf(popup *widget.PopUp, headerBottom float32) bool {
+	settleSheet(popup)
+	pad := popup.Theme().Size(theme.SizeNameInnerPadding)
+	return popup.Content.Position().Y-pad/2 >= headerBottom+sheetHeaderGap-0.5
+}
+
+// settleSheet lays a sheet out again, through Refresh, until its content
+// keeps its place and size: a wrapped label measures its lines at the width
+// it had before the sheet's last Resize (sheetStartsClearOf).
+func settleSheet(popup *widget.PopUp) {
+	for i := 0; i < 4; i++ {
+		pos, size := popup.Content.Position(), popup.Content.Size()
+		popup.Refresh()
+		if popup.Content.Position() == pos && popup.Content.Size() == size {
+			break
+		}
+	}
+}
+
+// fitBelowOrOverHeader sizes a desktop sheet whose card gives up height to
+// clear the header — excerpt rows, a box's height — and stays the height of its
+// content. fitIn sizes the card to fit in room, giving up only what it must.
+// It is given the room below the header first; where the card, with all it can
+// give up given up, still does not clear the header (sheetStartsClearOf), it
+// is given the room from the header's top edge instead, so it keeps what it
+// gave up, and covers the header at the height of its content
+// (coverHeaderUnlessClear).
+func fitBelowOrOverHeader(state *AppState, popup *widget.PopUp, fitIn func(room float32)) {
+	canvasH := centreOnWindow(popup).Size().Height
+	room := clearOfHeader(canvasH, canvasH, headerClearance(state))
+	fitIn(room)
+	top, bottom, ok := headerEdges(state)
+	if !ok || sheetStartsClearOf(popup, bottom) {
+		return
+	}
+	fitIn(canvasH - 2*top)
+	coverHeaderUnlessClear(state, popup, 0)
+}
+
+// sheetMostHeight is the tallest a sheet Fyne centres on the canvas may be and
+// still lie wholly in the reader's reach. On a desktop window with the header
+// on screen it is the room a sheet covering the header may take, from the
+// header's top edge to as far above the window's foot, which caps its
+// natural height (coverHeaderUnlessClear). Elsewhere it is the canvas less
+// the deeper of its top and bottom safe insets at both edges, so a centred
+// sheet stays inside the safe area (sheetArea); a desktop window reports
+// none, so there it is the canvas.
+func sheetMostHeight(state *AppState, cnv fyne.Canvas) float32 {
+	canvasH := cnv.Size().Height
+	if top, _, ok := headerEdges(state); ok {
+		return canvasH - 2*top
+	}
+	pos, sz := sheetArea(cnv)
+	if sz.Height <= 0 {
+		return canvasH
+	}
+	return canvasH - 2*max(pos.Y, canvasH-pos.Y-sz.Height, 0)
 }
 
 // objectInTree reports whether target is root or sits under it through

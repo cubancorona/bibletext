@@ -252,9 +252,8 @@ func TestACrossBookRangeKeepsItsEndBook(t *testing.T) {
 func TestTheCapCountsOnlyRowsTheReaderCanSee(t *testing.T) {
 	var rows strings.Builder
 	// The two best rows point at Esther 4:6 and 9:5, which WEB Catholic
-	// cannot show: the shipping build cannot map its Greek Esther at all
-	// (versification: incommensurable), and in the next major release, where
-	// it maps verse for verse, those are verses it has nothing at (absent).
+	// cannot show: its Greek Esther maps verse for verse and has nothing at
+	// either (absent).
 	rows.WriteString("Gen.41.42\tEsth.4.6\t90\nGen.41.42\tEsth.9.5\t80\n")
 	for v := 1; v <= 16; v++ {
 		fmt.Fprintf(&rows, "Gen.41.42\tDan.5.%d\t%d\n", v, 40-v)
@@ -320,8 +319,8 @@ func TestTheCapCountsOnlyRowsTheReaderCanSee(t *testing.T) {
 // THE INDEX KEEPS EACH VERSE'S BEST maxCrossRefsKept ROWS, EIGHT BYTES EACH.
 // It is held for as long as the app runs, on every platform. As crossRefs,
 // every row kept, it came to some 53 MB; the panel never reads past a
-// verse's twentieth row in the shipping build, or its twenty-first in the next
-// major release (crossRefDeepestRead), so the rest need not be kept, and a row
+// verse's eighteenth row in the shipping build, or its twenty-first in the
+// next major release (crossRefDeepestRead), so the rest need not be kept, and a row
 // needs only its books, numbers and votes.
 func TestTheIndexKeepsEachVersesBestRows(t *testing.T) {
 	var rows strings.Builder

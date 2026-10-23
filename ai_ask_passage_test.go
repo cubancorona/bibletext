@@ -318,6 +318,7 @@ func TestFixedStudyActionsRetainTheirPassage(t *testing.T) {
 				state.window = w
 				state.aiKeys = newKeyStoreWith(newFakePrefs())
 				state.aiKeys.setAPIKey(defaultProviderID, "test-key")
+				grantAIPermission(state.aiKeys, defaultProviderID) // a reader who has allowed it (ai_permission.go)
 				selected := aiPassageFor(state, text, span)
 				if selected.Ref != "Probe 1:1" {
 					t.Fatalf("the selection resolves to %q, want Probe 1:1", selected.Ref)

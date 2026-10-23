@@ -98,7 +98,7 @@ func TestChapterNumberingDifferenceNamesTheRightKind(t *testing.T) {
 		{"web", "Luke", 17, 37, NumberingAbsent},  // 17:36
 		{"bsb", "Mark", 9, 50, NumberingAbsent},   // the BSB omits 9:44 and 9:46
 		{"webc", "Daniel", 3, 30, NumberingMoved}, // the Song of the Three pushes 24-30 to 91-97
-		// The Greek Esther's: greek_esther_current_test.go, greek_esther_next_test.go.
+		// The Greek Esther's: greek_esther_test.go.
 		// Same numbers, opposite order: the two woes of Matthew 23:13-14, and
 		// the BSB's Philippians 1:16-17. A carried verse number there opens
 		// the other half of the pair.

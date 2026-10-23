@@ -219,8 +219,7 @@ func TestPlanOrderAndTheUnplacedGroup(t *testing.T) {
 	newer, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "bsb", Book: "Esther", Chapter: 4,
 		VerseLo: 1, Text: "newer"})
 	// A note on Mordecai's prayer, which only the Greek Esther has — the
-	// unplaced arm in both states of the next switch, for different reasons
-	// (greekAdditionUnplacedSentence).
+	// unplaced arm (greekAdditionUnplacedSentence).
 	unpl, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "webc", Book: "Esther", Chapter: 4,
 		VerseLo: 20, Text: "greek esther"})
 
@@ -497,7 +496,7 @@ func TestAppleStickerPushComposition(t *testing.T) {
 	// Three placed notes plus one the translation cannot show. The reading
 	// book must be one the sample bible carries; the unplaced note rides on
 	// the same BOOK, on a verse only the Greek Esther has, which no Hebrew
-	// Esther can show in either state of the next switch.
+	// Esther can show.
 	st := planTestState(t)
 	st.Bible.Verses["Esther"] = map[int][]Verse{4: {{BookName: "Esther", Chapter: 4, Verse: 1, Text: "esther"}}}
 	st.CurrentBook, st.CurrentChapter = "Esther", 4

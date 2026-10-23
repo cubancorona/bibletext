@@ -1060,8 +1060,7 @@ func TestBannerKeepsWhatTheStickerCannot(t *testing.T) {
 	st.NoteNotice = ""
 
 	// The R4 group keeps the banner: its sentence (greekAdditionUnplacedSentence,
-	// "The numbering here does not correspond to the note's" or, in the next
-	// major release, "These verses are not in the translation being read")
+	// "These verses are not in the translation being read")
 	// does not fit a one-band sticker without
 	// doubling its height, so those rows survive as the banner's whole residue.
 	// A note on a Greek addition to Esther is the unplaced arm

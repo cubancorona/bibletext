@@ -22,8 +22,8 @@ func TestTheOmissionTableIsNotEmpty(t *testing.T) {
 			}
 		}
 	}
-	// 58 across three editions when generated, 61 in the next major release's
-	// table (omitted_verses_data_next.go). A table that silently emptied
+	// 61 across three editions when generated, the Greek Esther's three gaps
+	// among them. A table that silently emptied
 	// would make every lookup answer "nothing is omitted", which is the failure
 	// this whole item exists to prevent.
 	if total < 50 {

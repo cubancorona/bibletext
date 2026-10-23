@@ -53,7 +53,9 @@ func withoutMailProbe(t *testing.T) {
 // shareSheetHarness is the appearance harness with the desktop share path
 // wired as Linux and Windows wire it, the platform seams the sheet reaches
 // out through replaced — the mail probe answers at once with emailOK, a
-// compose lands on composed instead of opening a client, the file-manager
+// compose lands on composed instead of opening a client and answers
+// composeErr, in place rather than off the UI goroutine (shareEmailAside),
+// so the sheet has its answer when the tap returns, the file-manager
 // reveal is recorded instead of run and answers at once with revealShown,
 // and the image share's save and reveal run in place rather than off the
 // UI goroutine (shareImageAside), so the sheet is up when the share returns —
@@ -67,6 +69,7 @@ type shareSheetHarness struct {
 	revealShown bool   // what the file manager answers to a reveal
 	probed      []bool // withAttachment, as each sheet asked the mail probe
 	composed    chan shareCompose
+	composeErr  error // what a compose answers
 	revealed    []string
 	restored    int // calls to showReadingOverlay, the desktop sheet-close consume point
 	timers      *[]func()
@@ -106,9 +109,12 @@ func newShareSheetHarness(t *testing.T) *shareSheetHarness {
 	prevCompose := shareEmailCompose
 	shareEmailCompose = func(subject, body, attachment string) error {
 		h.composed <- shareCompose{subject, body, attachment}
-		return nil
+		return h.composeErr
 	}
 	t.Cleanup(func() { shareEmailCompose = prevCompose })
+	prevEmailAside := shareEmailAside
+	shareEmailAside = func(compose func() error, done func(error)) { done(compose()) }
+	t.Cleanup(func() { shareEmailAside = prevEmailAside })
 	prevReveal, prevAside := revealInFileManager, shareImageAside
 	revealInFileManager = func(p string) bool {
 		h.revealed = append(h.revealed, p)

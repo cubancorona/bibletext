@@ -956,10 +956,11 @@ func sweepPsalmTitleDrags(t *testing.T, st *AppState, p psalmTitlePage, spanAt f
 // every character boundary through it, a heading set under it, verse 1 and
 // into verse 2, on a page drawn as the Apple and Android panes draw it: the
 // title, the heading, then "1 …". Those panes never hand such a drag over
-// (their verbs start at verse 1's number, see psalmTitle); a page with no
-// verse geometry, the plain-text fallback of the Mac and the iPhone and
-// iPad, does, and TestTheFallbackPageAnswersADragFromATitleAsThePanesWould
-// sweeps that page as the fallback writes it. The span here is what a verse
+// (their verbs start at verse 1's number, see psalmTitle), and since the
+// Apple panes' fallback page carries its verse numbers it does not either;
+// TestADragFromATitleWithNoSpanSharesThePsalmsWordsAlone sweeps that page's
+// layout with no span, the shape a selection with no position still has.
+// The span here is what a verse
 // lookup on the page would give (nothing at or before the start, so no span
 // until the drag reaches verse 1's number, then 1 to the verse at its end).
 // Three answers are possible, and the drag's own verse words say which:
@@ -990,8 +991,8 @@ func TestPsalmTitleDragSweep(t *testing.T) {
 
 // TestPsalmTitleWordsWithNoSpanSweep selects every piece of a psalm's title,
 // from every character to every later boundary, with no span, as a page
-// with no verse geometry hands a selection over (the plain-text fallback the
-// Mac and the iPhone and iPad show when a chapter fails to import). The
+// with no verse geometry hands a selection over (the Apple panes' fallback
+// page did until it carried its verse numbers). The
 // psalm shares words with its title (psalmWordsState), and with no span
 // nothing tells the title's letters from the same letters in the psalm. Two
 // answers are possible:

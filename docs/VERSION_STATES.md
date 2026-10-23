@@ -31,7 +31,8 @@
 > `D24` (a promise on the picker that nothing in the running app kept).
 > Anything a future change breaks appears as an unpinned violation, by name.
 > Three questions that came with them are the owner's, and are recorded under
-> *Open decisions*.
+> *Open decisions*: one, a key cleared on purpose, was decided on 15 October
+> 2026 and is recorded there with what it changed.
 
 ## Why a state machine and not a checklist
 
@@ -168,6 +169,8 @@ kept or broken over time and every way it breaks is a sequence.
 | `AppState.seedOnly` | memory | what serves is the 4-book seed |
 | `AppState.staleVersions` | memory | the translations recorded as showing a previous edition (`D3`'s mark); with `fullPending`, the refresh's work list (`D17`) |
 | `AppState.preferredVersion` | memory | the translation the reader chose when the launch had to show another (`D9`'s record); carried to the live state by `adoptLaunch` (`D18`) |
+| `AppState.keyRemovedVersion` | memory | a licensed translation the reader gave up by removing the key that alone opens it: while set, no record of a choice, never saved, there only for the picker's sentence; spent by any landing, and moved back to `preferredVersion` by a key entered in the field again (*Open decisions*, a key cleared on purpose) |
+| the `ai.keysaved.<account>` preference | settings, which back up | the reader saved a key for that account in the platform credential store (or in the settings, where that store refused the write); it holds no part of the key. With a separate Android or Apple store that answers item-not-found and no copy in the settings, the saved key is definitively absent (`keyLeftOnOldDevice`). That state can follow an Android backup restored onto another device or onto the same one after a reinstall or a factory reset, an iOS backup that did not transfer its Keychain items, or a signed Mac's container-only restore or reset keychain. The condition does not detect or infer a restore. Store errors do not qualify. |
 | `AppState.fullDownloading` | memory | single-flight guard |
 | `AppState.fullRetryDelay` | memory | bounded backoff, 0 when settled |
 | `dataMode` | memory | `modeReal` vs a `modeTesting` placeholder |
@@ -1066,7 +1069,8 @@ decisions*.
 
 Verifying the change that closed `D17`–`D21` raised three questions that
 are the owner's rather than defects. Each follows from a rule this document
-already holds, and each is safe as it stands.
+already holds, and each is safe as it stands. The second was decided on 15
+October 2026; the first and third are open.
 
 - **Accepting a substitution.** While the WEB is shown in place of a
   remembered NKJV, the WEB's row is checked, and tapping it does nothing:
@@ -1075,16 +1079,39 @@ already holds, and each is safe as it stands.
   another translation and come back. A tap on the checked row could spend the
   record as the reader's own choice of what is shown; it could also be a
   habit of closing the picker, and cost a reader the choice they made.
-- **A key cleared on purpose.** `D9` records the choice for any launch that
-  cannot select the translation, including one after the reader cleared their
-  key in Settings, which the store records as a definitive, deliberate
-  absence. Such a reader is told at every launch that the NKJV could not be
-  opened, and the NKJV comes back if they add a key. The record could be
-  skipped when the store's negative is deliberate and kept for the
-  unreadable-transient case `D9` was written for. The launch cells have that
-  state, `key-cleared`, where the record is kept today; skipping it would
-  make `L-A` and `L-D` fire there, and they would have to say the reader
-  gave the translation up.
+- **A key cleared on purpose — decided 15 October 2026** (decision 11 in
+  `docs/ROADMAP.md`, for 1.2.23). `D9` recorded the choice for any launch
+  that could not select the translation, including one after the reader
+  cleared their key in Settings, which the store records as a definitive,
+  deliberate absence, so such a reader was told at every launch that the NKJV
+  "could not be opened this time" and would be "tried again each time the
+  app starts", which nothing could do until they added a key. Now, where the
+  store answers that it holds no key and the reader emptied the field
+  (`bibleKeyRemovedOnPurpose`), the launch gives the translation up: it is
+  recorded in `keyRemovedVersion`, which nothing saves, rather than
+  `preferredVersion`, so the next save names the default and no launch tries
+  it again, and the picker says "You removed your API.Bible key, so World
+  English Bible is shown in place of New King James Version." while the
+  default is on screen in its place and the key is still gone; where the
+  key in force when the field went empty was the one included with the
+  app, it says "You removed the included API.Bible key, so World English
+  Bible is shown in place of New King James Version." (decided on 21
+  October 2026; the record that keeps the included key off says which,
+  `removeBibleKey`). Emptying the field while a launch's record of it
+  stands gives it up the same way (`giveUpKeyedTranslation`), and a key
+  entered in the field again before anything else lands makes it the
+  remembered choice again, since the key was the only reason it was given
+  up (`takeBackKeyedTranslation`). A store that cannot answer keeps `D9`'s
+  record, as before. In the launch cells, `L-A` asks of `key-cleared` and
+  `key-cleared-included`, the second a release build whose included key
+  was the one in force when the reader cleared it, that the next save name
+  the default, and `L-H` that the picker say why, naming the key removed,
+  and promise no launch that will try it. The same cells hold the key a
+  restore did not bring back (`key-on-old-device`, decision 13): there the
+  record is kept, since the reader did not give the translation up, and the
+  picker's sentence says the key was not restored. In the credential cells
+  the included key removed is a knowledge state of its own, where `C-C`
+  asks that the field not say the key was not restored.
 - **A fallback that keeps the place.** When the remembered translation cannot
   be opened and the saved place is in a wider canon (`D22`), the launch shows
   the default at its start. It could prefer a public-domain translation
@@ -1131,7 +1158,7 @@ couplings that are real get crossed.
 | | Machine | States |
 |---|---|---|
 | **M1** | Per-version storage *(enumerated)* | absent · current · superseded · unusable · licensed-stale — **a vector over versions, not a scalar** |
-| **M2** | Credential and licence *(enumerated)* | unconfigured · bundled · BYOK · cleared-sticky · **unreadable-transient** · recency fresh/expired |
+| **M2** | Credential and licence *(enumerated)* | unconfigured · bundled · BYOK · cleared-sticky · **unreadable-transient** · restored without the key (Android) · recency fresh/expired |
 | **M3** | Refresh and download | settled · pending · downloading · backoff(n) · unpersistable-loop — over a work list (`owedUpgrades`) |
 | **M4** | Active selection *(enumerated)* | `CurrentVersion` + the `loadedVersions` map — **memory and disk can disagree** |
 | **M5** | App lifecycle *(enumerated, with M6+M7)* | loadPending · loadReady · loadFailed · foreground · background · teardown |
@@ -1206,10 +1233,10 @@ not named in its register, and each test logs its own count when run with
 | Space | Test | Cells / journeys |
 |---|---|---|
 | **M1** storage | `version_state_flow_test.go` | 18 cells — six disk shapes × three events, the sixth a current path no write can land on (`D23`), plus the licensed recency boundary from both sides and the four unusable-file shapes |
-| **M2** credentials | `version_credentials_flow_test.go` | 10 cells — five knowledge states (absent, held, unreadable, legacy-only, unreadable-with-legacy) × two events, including the irreversible one |
+| **M2** credentials | `version_credentials_flow_test.go` | 30 cells — ten knowledge states (absent, held, unreadable, legacy-only, unreadable-with-legacy; the settings of a phone that saved a key restored onto one whose store holds none, on Android's store, on a store whose keys travel and on an Android store that cannot answer; and the key removed on purpose, the reader's own and, in a release build, the one included with the app) × three events: the read, the irreversible purge, and the key field's line, where `C-C` asks that the field say the key was not restored exactly when the app knows it (decision 13) |
 | **M3** refresh | `version_refresh_flow_test.go` | 160 cells across pending × seed × downloading × backoff × active version, and **310 journeys** to depth 4 from the two starting states a launch can produce; `R-D` asked after every step since 2026-09-25, and the picker's retry the real `noticeOnPickerOpen`, its fetch held at the door `TestMain` shuts |
 | **M4** selection | `version_selection_flow_test.go` | 8 cells — memory (absent, current epoch, previous epoch) × disk (absent, current, previous), one unserveable combination skipped |
-| **M5 × M6 × M7** launch | `version_launch_flow_test.go` | 24 cells — the saved choice (default, wider canon, licensed) × its fate at launch (loads, load fails, superseded only, unselectable, and for the licensed translation its key cleared on purpose and its superseded copy past its own window) × the saved book (Genesis, or Tobit under the wider canon or beside the remembered licensed translation, `D22`) — through the real tail (`startAtDefault`) and observed on the live state, through the hand-off `adoptLaunch` (`D18`), with `L-E`/`L-F` asked of the cells that put a previous edition on screen: two in the shipping build, which asks besides that no cell puts a licensed one there; four in the next major release, where `L-G`, the window, is asked of the two that are the **Licensed bridge**, and `L-F` asks that the restore asked the provider before the copy served and that the reader's next choice of the translation loads it again |
+| **M5 × M6 × M7** launch | `version_launch_flow_test.go` | 28 cells — the saved choice (default, wider canon, licensed) × its fate at launch (loads, load fails, superseded only, unselectable, and for the licensed translation its key cleared on purpose, its superseded copy past its own window, its key not brought back by a restore of the settings, onto another phone or onto the same one after a reinstall or a factory reset, and, in a release build, the key included with the app cleared on purpose while it was the one in force) × the saved book (Genesis, or Tobit under the wider canon or beside the remembered licensed translation, `D22`) — through the real tail (`startAtDefault`) and observed on the live state, through the hand-off `adoptLaunch` (`D18`), with `L-E`/`L-F` asked of the cells that put a previous edition on screen: two in the shipping build, which asks besides that no cell puts a licensed one there; four in the next major release, where `L-G`, the window, is asked of the two that are the **Licensed bridge**, and `L-F` asks that the restore asked the provider before the copy served and that the reader's next choice of the translation loads it again; and `L-H`, of the six cells whose fate has a cause the app knows (the reader's own key removed, the included key removed, the key a restore did not bring back), that the picker says it word for word, and of every cell that it names no cause the launch did not have |
 | **Arrivals** | `version_arrivals_flow_test.go` | **1142 journeys / 4780 steps** to depth 5 over nine events — a link naming another translation, its fetch failing with nothing to fall back on or with the previous edition serving, the load in flight landing, the reader picking that translation or a different one, the reader picking either while it is still loading at the next step, and the refresh's owed upgrade landing — in six worlds: three disks for the link's translation (its current edition: 107 journeys / 420 steps; only the previous one: 198 / 826; none: 266 / 1144), each with nothing remembered and with the reader's licensed translation remembered. Every event goes through the app's own entry point, and what the app starts on a goroutine — a translation's load, the refresh's fetch, its retry timer — is held at its door and landed through the tail the app built (`D17`, `D19`). The invariants are asserted after every step and liveness over the walk. A journey is a sequence of events that each did something; the walk used to count events that could not happen in the state they met, such as a fetch failing with nothing loading, which walked the same states again, and that is why 4662 journeys at depth 4 became fewer at depth 5 |
 
 The cells found `V1`, `V2`, `D1`–`D3`, `D6`–`D11`; the journeys found `D4`,

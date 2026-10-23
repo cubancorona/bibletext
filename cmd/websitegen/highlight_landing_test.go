@@ -172,7 +172,7 @@ function hashchange(hash) {
 }
 function label(el) {
   if (!el) return 'nothing';
-  if (el.tagName === 'p') return 'the paragraph of v' + el.childNodes.filter(function (c) { return c.nodeType === 1; })[0].id.slice(1);
+  if (el.tagName === 'p') return 'the paragraph of v' + el.childNodes.filter(function (c) { return c.nodeType === 1 && c.classList.contains('v'); })[0].id.slice(1);
   if (el === text) return 'the chapter top';
   if (el.classList && el.classList.contains('v')) return el.id;
   return el.className || el.tagName;
@@ -386,6 +386,62 @@ function omit(n) { var v = verses['v' + n]; v.remove(); delete verses['v' + n]; 
 		}
 		if g.Landed != want.landed || strings.Join(g.Lit, " ") != want.lit {
 			t.Errorf("%s: the page landed on %s with %v lit, want %s with [%s] lit", hash, g.Landed, g.Lit, want.landed, want.lit)
+		}
+	}
+}
+
+// The page draws an omitted verse's mark, "[4]" here, in the paragraph of
+// the verse after the hole, before its number, as the BSB's Matthew 17 draws
+// "[21]" before verse 22. A link that names the omitted verse lights the
+// mark, so the reader sees where the link pointed, where it lit nothing; and
+// a note shown with it hangs above the paragraph the mark stands in, as on
+// every app pane, where a note on the omitted verse alone parked at the
+// chapter top (docs/ROADMAP.md, decision 18). A link to the verse after the
+// hole, which does not name the omitted verse, leaves the mark bare.
+// Controls: a range from the hole lights the verse after it as before, and a
+// verse past the chapter's last parks its note at the top.
+func TestTheWebPageLightsAnOmittedVersesMarkAndHangsItsNoteThere(t *testing.T) {
+	type got struct {
+		Card, Before, Landed string
+		Tail                 bool
+		Lit                  []string
+		Marks                int
+	}
+	var res map[string]got
+	runJS(t, landingPage(t)+`
+function omitWithMark(n) {
+  var v = verses['v' + n], gap = v.previousSibling;
+  if (gap && gap.nodeType === 3) gap.remove();
+  v.remove(); delete verses['v' + n];
+  var after = verses['v' + (n + 1)], p = after.parentNode;
+  var mark = new El('span', 'vg'); mark.appendChild(new Txt('[' + n + ']'));
+  p.insertBefore(mark, after);
+  p.insertBefore(new Txt(' '), after);
+}
+['#v4', '#v4&n=OK', '#v4-5&n=OK', '#v3-4', '#v5', '#v9&n=OK'].forEach(function (h) {
+  load('#v1'); omitWithMark(4); hashchange(h);
+  var r = report();
+  r.lit = all('v.hl').map(function (el) { return el.id; });
+  r.marks = all('vg.hlmark').length;
+  out[h] = r;
+});
+`, &res)
+	for hash, want := range map[string]got{
+		"#v4":        {Card: "none", Before: "none", Landed: "v5", Marks: 1},
+		"#v4&n=OK":   {Card: "note", Before: "the paragraph of v5", Tail: true, Landed: "the note", Marks: 1},
+		"#v4-5&n=OK": {Card: "note", Before: "the paragraph of v5", Tail: true, Landed: "the note", Lit: []string{"v5"}, Marks: 1},
+		"#v3-4":      {Card: "none", Before: "none", Landed: "v3", Lit: []string{"v3"}, Marks: 1},
+		"#v5":        {Card: "none", Before: "none", Landed: "nothing", Lit: []string{"v5"}},
+		"#v9&n=OK":   {Card: "note", Before: "the chapter top", Landed: "the note"},
+	} {
+		g, ok := res[hash]
+		if !ok {
+			t.Errorf("%s: the page reported nothing", hash)
+			continue
+		}
+		if g.Card != want.Card || g.Before != want.Before || g.Tail != want.Tail || g.Landed != want.Landed ||
+			strings.Join(g.Lit, " ") != strings.Join(want.Lit, " ") || g.Marks != want.Marks {
+			t.Errorf("%s: %+v, want %+v", hash, g, want)
 		}
 	}
 }

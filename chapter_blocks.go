@@ -86,10 +86,30 @@ func chapterBlocksFor(bd *BibleData, book string, chapter int, verses []Verse) [
 	return out
 }
 
-// headingsFor returns the publisher's headings for one chapter, or nil.
+// headingsFor returns the publisher's headings for one chapter as the page sets
+// them, or nil: a note the feed ran into a heading's words is set apart from
+// them (settleHeadingNote, heading_note.go). Every surface that draws a heading
+// or compares a selection with one reads the chapter's headings here, so the
+// page and the selection agree on what the heading's words are.
 func headingsFor(bd *BibleData, book string, chapter int) []Heading {
 	if bd == nil || bd.Headings == nil {
 		return nil
 	}
-	return bd.Headings[book][chapter]
+	heads := bd.Headings[book][chapter]
+	var out []Heading
+	for i, h := range heads {
+		settled, ok := settleHeadingNote(h, chapter)
+		if !ok {
+			continue
+		}
+		if out == nil {
+			// The stored headings stay as the feed sent them.
+			out = append([]Heading(nil), heads...)
+		}
+		out[i] = settled
+	}
+	if out != nil {
+		return out
+	}
+	return heads
 }

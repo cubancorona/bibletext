@@ -7,13 +7,14 @@ package bibletext
 //
 //	MapVerse(web->bsb,  Romans 14:24) = 16:25 moved     one span, two chapters
 //	MapVerse(web->bsb,  Mark   9:44)  = 0:0   absent    a hole INSIDE a span
-//	MapVerse(webc->web, Esther 1:1)   = 0:0   incommensurable
+//	MapVerse(webc->web, Esther 4:20)  = 0:0   absent    a Greek addition
 //	MapVerse(webc->web, Tobit  1:1)   = 1:1   EXACT     <- the table LIES
 //	MapVerse(esv->bsb,  Romans 16:25) = 16:25 EXACT     <- unknown id, silent
 //
-// (In the next major release, docs/NEXT.md, the Greek Esther keeps the Hebrew
-// numbers: MapVerse(webc->web, Esther 1:1) = 1:1 EXACT, and Esther 4:20, a
-// Greek addition, is 0:0 absent.)
+// (The Greek Esther keeps the Hebrew numbers, so MapVerse(webc->web, Esther
+// 1:1) is 1:1 EXACT. No book in the shipped tables answers incommensurable,
+// a book whose numbering corresponds to nothing; the arm is kept for one that
+// would.)
 //
 // The last two are why this file exists. versificationDeltas has no entry for
 // "web" at all, so nothing stops a WEBC Tobit note claiming an exact landing
@@ -82,10 +83,9 @@ const (
 	// unplacedAbsent — the book is here, none of the note's verses are.
 	unplacedAbsent
 	// unplacedIncommensurable — the book is here and does not correspond
-	// verse by verse (WEBC's Greek Esther: a different book, not a
-	// renumbering). In the next major release no book in the shipped tables
-	// is one (the Greek Esther keeps the Hebrew numbers), so this arm answers
-	// only for a book a future table records as one.
+	// verse by verse. No book in the shipped tables is one (the Greek Esther
+	// keeps the Hebrew numbers), so this arm answers only for a book a future
+	// table records as one.
 	unplacedIncommensurable
 	// unplacedNoBook — this translation does not contain the book at all.
 	//
@@ -153,22 +153,17 @@ func placementCopy(k placementKind) string {
 	case unplacedNoBook:
 		return "This book is not in the translation being read."
 	case unplacedIncommensurable:
-		if nextRelease {
-			return placementCopyIncommensurable
-		}
-		return "The numbering here does not correspond to the note's."
+		return placementCopyIncommensurable
 	case unplacedAbsent:
 		return "These verses are not in the translation being read."
 	}
 	return ""
 }
 
-// placementCopyIncommensurable is the next major release's sentence for a
-// note on a book whose verse numbers do not correspond between its
-// translation and the one being read (nextRelease, docs/NEXT.md), worded for
-// any book. A draft awaiting approval: no shipped translation pair has such a
-// book in that release, so no reader would see it. The shipping build keeps
-// 1.2.19's sentence, which its readers meet at the Greek Esther.
+// placementCopyIncommensurable is the sentence for a note on a book whose verse
+// numbers do not correspond between its translation and the one being read,
+// worded for any book. No shipped translation pair has such a book, so it is
+// a safety net no reader meets today.
 const placementCopyIncommensurable = "The translation being read numbers the whole of this book differently."
 
 // anchorWalkCap bounds how many verses of one run the resolver will ask the

@@ -1,9 +1,9 @@
 package bibletext
 
 // scripts/gen-versification.py, run on invented editions and on the caches
-// the app keeps. It writes versification_data.go and its next-release twin
-// from the app's own cache files; these tests run it into a temporary file,
-// never over the shipped tables.
+// the app keeps. It writes versification_data.go from the app's own cache
+// files; these tests run it into a temporary file, never over the shipped
+// table.
 
 import (
 	"encoding/json"
@@ -159,12 +159,12 @@ func TestTheVersificationGeneratorDoesNotMoveAVerseToARepeat(t *testing.T) {
 	}
 }
 
-// The generator, run on the caches the app keeps, writes the shipped tables
-// byte for byte once formatted, both the shipping one and the next release's:
-// a change to its rules that changes a shipped row shows here before anyone
-// regenerates. LOCAL-ONLY: the caches are downloaded data a CI checkout does
-// not have, and the test is skipped without them. The NKJV's rows are left
-// out on both sides, since its cache is licensed and is not read here.
+// The generator, run on the caches the app keeps, writes the shipped table
+// byte for byte once formatted: a change to its rules that changes a shipped
+// row shows here before anyone regenerates. LOCAL-ONLY: the caches are
+// downloaded data a CI checkout does not have, and the test is skipped
+// without them. The NKJV's rows are left out on both sides, since its cache
+// is licensed and is not read here.
 func TestTheVersificationGeneratorReproducesTheShippedTables_LocalOnly(t *testing.T) {
 	var args []string
 	for _, id := range []string{"web", "bsb", "webc"} {
@@ -175,27 +175,19 @@ func TestTheVersificationGeneratorReproducesTheShippedTables_LocalOnly(t *testin
 		args = append(args, "--"+id, path)
 	}
 	nkjv := regexp.MustCompile(`(?s)\t"nkjv": \{\n.*?\n\t\},\n`)
-	for _, c := range []struct {
-		shipped string
-		flags   []string
-	}{
-		{"versification_data.go", nil},
-		{"versification_data_next.go", []string{"--next"}},
-	} {
-		got, err := format.Source([]byte(runGenVersification(t, append(append([]string(nil), c.flags...), args...)...)))
-		if err != nil {
-			t.Fatalf("%s: the generated source does not format: %v", c.shipped, err)
-		}
-		want, err := os.ReadFile(c.shipped)
-		if err != nil {
-			t.Fatal(err)
-		}
-		shipped := nkjv.ReplaceAllString(string(want), "")
-		if shipped == string(want) {
-			t.Fatalf("%s: no NKJV entry was found to leave out; the comparison would not be like for like", c.shipped)
-		}
-		if string(got) != shipped {
-			t.Errorf("%s: the generator, run on the local caches, does not write the shipped table (the NKJV's rows aside)", c.shipped)
-		}
+	got, err := format.Source([]byte(runGenVersification(t, args...)))
+	if err != nil {
+		t.Fatalf("the generated source does not format: %v", err)
+	}
+	want, err := os.ReadFile("versification_data.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	shipped := nkjv.ReplaceAllString(string(want), "")
+	if shipped == string(want) {
+		t.Fatal("no NKJV entry was found to leave out; the comparison would not be like for like")
+	}
+	if string(got) != shipped {
+		t.Error("the generator, run on the local caches, does not write the shipped table (the NKJV's rows aside)")
 	}
 }

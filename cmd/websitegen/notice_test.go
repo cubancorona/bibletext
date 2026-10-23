@@ -402,8 +402,7 @@ func TestVersificationCaveatsSayWhichKindOfDifference(t *testing.T) {
 	if !strings.Contains(read("nkjv/romans/16"), "number this chapter differently") {
 		t.Error("Romans 16 differs because the doxology MOVED; the page does not say so")
 	}
-	// The Greek Esther's caveats are the switch's: greek_esther_current_test.go
-	// and greek_esther_next_test.go.
+	// The Greek Esther's caveats are in greek_esther_test.go.
 }
 
 // A canon-gap page is not about a licence, so it must not offer the app: the app

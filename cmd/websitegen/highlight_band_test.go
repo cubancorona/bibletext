@@ -2,8 +2,9 @@ package main
 
 // THE HIGHLIGHT BAND, RUN. The lines between reader.js's HIGHLIGHT_BAND markers
 // light a verse range the way the app panes wash one: the lit verses, the
-// spaces between them, and an omitted verse's mark with the verse after it
-// (verse_gaps.go). They are run here — the shipped bytes, against a small
+// spaces between them, and an omitted verse's mark (verse_gaps.go) where the
+// fragment names that verse, and only there (gapOf, tint.go). They are
+// run here — the shipped bytes, against a small
 // stand-in DOM — because what they do to the page is the order of two passes
 // over its nodes, and a check that the source names the right classes passed
 // while a range across a mark left the mark unlit and a minimized note left the
@@ -95,7 +96,13 @@ function para(tokens) {
   return p;
 }
 function byId(p, id) { return p.childNodes.filter(function (c) { return c.id === id; })[0]; }
-function light(p, ids) { ids.forEach(function (id) { byId(p, id).classList.add('hl'); }); bridgeHighlightGaps(); }
+// lightSpan lights a fragment's span lo..hi as lightFragment does: the verses
+// the page has, the marks it names (lightMarksIn), then the band.
+function lightSpan(p, ids, lo, hi) {
+  ids.forEach(function (id) { byId(p, id).classList.add('hl'); });
+  lightMarksIn(lo, hi);
+  bridgeHighlightGaps();
+}
 function show(p) {
   return p.childNodes.map(function (c) {
     return c.nodeType === 3 ? JSON.stringify(c.textContent) : c.className.replace(/ /g, '.') + (c.id ? '#' + c.id : '');
@@ -107,31 +114,98 @@ function expect(name, got, want) { count++; if (got !== want) bad.push(name + ':
 var hole = ['v20', ' ', '[21]', ' ', 'v22', ' ', 'v23'];
 var p = para(hole), text = p.textContent, plain = show(p);
 
-light(p, ['v20', 'v22']);
+lightSpan(p, ['v20', 'v22'], 20, 22);
 expect('a range across the hole lights its mark', show(p),
   'v.hl#v20 hl.hlgap vg.hlmark hl.hlgap v.hl#v22 " " v#v23');
 unlightVerses();
 expect('taking the band down leaves nothing lit', show(p), plain);
 expect('taking the band down leaves the text as it was', p.textContent, text);
 
-light(p, ['v22']);
-expect('a verse lights the mark before it', show(p),
-  'v#v20 " " vg.hlmark hl.hlgap v.hl#v22 " " v#v23');
+// A mark stands for its omitted verse alone: a verse lit beside it, and
+// not named, leaves it bare.
+lightSpan(p, ['v22'], 22, 22);
+expect('the verse after the hole leaves its mark bare', show(p),
+  'v#v20 " " vg " " v.hl#v22 " " v#v23');
 unlightVerses();
-light(p, ['v23']);
+lightSpan(p, ['v22', 'v23'], 22, 23);
+expect('a range from the verse after the hole leaves its mark bare', show(p),
+  'v#v20 " " vg " " v.hl#v22 hl.hlgap v.hl#v23');
+unlightVerses();
+lightSpan(p, ['v20'], 20, 20);
+expect('the verse before the hole leaves its mark bare', show(p),
+  'v.hl#v20 " " vg " " v#v22 " " v#v23');
+unlightVerses();
+lightSpan(p, ['v23'], 23, 23);
 expect('a verse after the hole leaves its mark alone', show(p),
   'v#v20 " " vg " " v#v22 " " v.hl#v23');
 unlightVerses();
 expect('re-lighting leaves nothing stale', show(p), plain);
 
 p = para(['v20', ' ', '[21]', ' ', '[22]', ' ', 'v23']);
-light(p, ['v23']);
-expect('two marks before a verse are both its', show(p),
-  'v#v20 " " vg.hlmark hl.hlgap vg.hlmark hl.hlgap v.hl#v23');
+lightSpan(p, ['v23'], 23, 23);
+expect('two marks before a lit verse stay bare', show(p),
+  'v#v20 " " vg " " vg " " v.hl#v23');
 unlightVerses();
-light(p, ['v20', 'v23']);
+lightSpan(p, ['v20', 'v23'], 20, 23);
 expect('a range across two holes lights both marks', show(p),
   'v.hl#v20 hl.hlgap vg.hlmark hl.hlgap vg.hlmark hl.hlgap v.hl#v23');
+
+// The WEB Catholic Edition's Sirach 26 omits verses 19 to 27 and draws their
+// nine marks before verse 28. A link to 26:28 lights the verse alone.
+var nine = ['v18', ' '], bare = ['v#v18', '" "'], across = ['v.hl#v18'];
+for (var k = 19; k <= 27; k++) {
+  nine.push('[' + k + ']', ' ');
+  bare.push('vg', '" "');
+  across.push('hl.hlgap', 'vg.hlmark');
+}
+nine.push('v28', ' ', 'v29');
+bare.push('v.hl#v28', '" "', 'v#v29');
+across.push('hl.hlgap', 'v.hl#v28', '" "', 'v#v29');
+p = para(nine);
+lightSpan(p, ['v28'], 28, 28);
+expect('the verse after nine holes leaves their marks bare', show(p), bare.join(' '));
+unlightVerses();
+lightSpan(p, ['v18', 'v28'], 18, 28);
+expect('a range across nine holes lights every mark', show(p), across.join(' '));
+
+// The WEB omits Acts 8:37: a link to 37 lights its mark, one to 38 does not.
+p = para(['v36', ' ', '[37]', ' ', 'v38']);
+lightSpan(p, [], 37, 37);
+expect('a link to Acts 8:37 lights its mark', show(p), 'v#v36 " " vg.hlmark " " v#v38');
+unlightVerses();
+lightSpan(p, ['v38'], 38, 38);
+expect('a link to Acts 8:38 leaves the mark bare', show(p), 'v#v36 " " vg " " v.hl#v38');
+
+// A fragment that names an omitted verse lights its mark (lightMarksIn), as
+// lightFragment calls it, before the band is bridged.
+p = para(hole); plain = show(p);
+lightSpan(p, [], 21, 21);
+expect('a fragment naming the omitted verse lights its mark alone', show(p),
+  'v#v20 " " vg.hlmark " " v#v22 " " v#v23');
+unlightVerses();
+expect('taking the mark down leaves nothing lit', show(p), plain);
+lightSpan(p, ['v20'], 20, 21);
+expect('a range ending at the hole runs through the space to its mark', show(p),
+  'v.hl#v20 hl.hlgap vg.hlmark " " v#v22 " " v#v23');
+unlightVerses();
+lightSpan(p, ['v22'], 21, 22);
+expect('a range from the hole lights its mark and the space after it', show(p),
+  'v#v20 " " vg.hlmark hl.hlgap v.hl#v22 " " v#v23');
+unlightVerses();
+lightSpan(p, ['v23'], 23, 23);
+expect('a verse after the hole still leaves its mark alone', show(p),
+  'v#v20 " " vg " " v#v22 " " v.hl#v23');
+unlightVerses();
+expect('re-lighting the mark leaves nothing stale', show(p), plain);
+
+p = para(['v20', ' ', '[21]', ' ', '[22]', ' ', 'v23']);
+lightSpan(p, [], 21, 21);
+expect('one of two holes named lights its mark alone', show(p),
+  'v#v20 " " vg.hlmark " " vg " " v#v23');
+unlightVerses();
+lightSpan(p, [], 21, 22);
+expect('two holes named light both marks and the space between', show(p),
+  'v#v20 " " vg.hlmark hl.hlgap vg.hlmark " " v#v23');
 
 bad.length ? ('FAIL(' + count + '):\n' + bad.join('\n')) : ('PASS ' + count);
 `

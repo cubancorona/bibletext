@@ -46,8 +46,9 @@ func fallbackShareText(s string) {
 // file manager only when the file manager said it was (savedImage.line).
 // The sheet waits for that answer, at most revealAnswerWait, so that it
 // never says the picture is shown and then takes it back. A picture that no
-// folder took and the file manager did not show has nothing true to be said
-// of it, and no sheet opens; why is logged.
+// folder took and the file manager did not show was not shared: the sheet
+// says only that, "Could not share the card.", with Done (sayShareFailed),
+// and why is logged.
 //
 // The card is read here, as the tap left it, since the next card is
 // rendered over the same file; the save and the reveal then run off the UI
@@ -57,12 +58,12 @@ func fallbackShareText(s string) {
 // permission prompt, and the window must not freeze while it does.
 //
 // A card that cannot be read at the tap — gone from the temp folder between
-// the preview drawing it and the tap — is neither saved nor shown, and no
-// sheet opens; why is logged. There is no picture to say anything true of:
-// the file manager would be asked to show a file that is not there, and on
-// a desktop where it answers yes regardless, the sheet would say the picture
-// is shown and offer Email… for it. The snap already ended so, its portal
-// route opening the file before it asks.
+// the preview drawing it and the tap — is neither saved nor shown, and the
+// sheet says only that the card could not be shared; why is logged. The
+// file manager would be asked to show a file that is not there, and on a
+// desktop where it answers yes regardless, the Picture saved sheet would say
+// the picture is shown and offer Email… for it. iOS and Android say the
+// same words for the same case.
 // Each platform's share mechanism is recorded in docs/PLATFORM_MATRIX.md, Sharing.
 func fallbackShareImage(path string) {
 	state := activeAIState
@@ -72,6 +73,7 @@ func fallbackShareImage(path string) {
 	card, err := os.ReadFile(path)
 	if err != nil {
 		fyne.LogError("the shared picture's card could not be read, so it was neither saved nor shown", err)
+		sayShareFailed(state, shareFailedCard)
 		return
 	}
 	place, now := shareImagePlaceNow(), time.Now()
@@ -84,12 +86,32 @@ func fallbackShareImage(path string) {
 		line := saved.line(shown)
 		if line == "" {
 			fyne.LogError("the shared picture was saved nowhere the reader can find it", saved.err)
+			if state != nil {
+				sayShareFailed(state, shareFailedCard)
+			}
 			return
 		}
 		if state != nil {
 			showShareCopiedSheet(state, shareDone{line: line, subject: mail.subject, body: mail.body, attachment: saved.file})
 		}
 	})
+}
+
+// shareCardGone reports whether the card at path cannot be read at the tap,
+// and if so ends the share as every other platform ends it: the cause
+// logged, and the reader told that the card could not be shared
+// (sayShareFailed). It is the Mac's own share's check (reading_macos.go),
+// whose picker would otherwise be handed the address of a file that is not
+// there. UI goroutine.
+func shareCardGone(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		fyne.LogError("the shared picture's card could not be read, so it was not shared", err)
+		sayShareFailed(activeAIState, shareFailedCard)
+		return true
+	}
+	f.Close()
+	return false
 }
 
 // shareImageAside runs work off the UI goroutine and then done on it: the

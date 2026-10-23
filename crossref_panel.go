@@ -17,6 +17,10 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+// crossRefPanelHeight is the panel's height on a window with room to spare,
+// whatever its body holds.
+const crossRefPanelHeight = 460
+
 func showCrossRefs(state *AppState, text string, span selSpan) {
 	if state == nil || state.window == nil {
 		return
@@ -83,9 +87,14 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 	footerLines = append(footerLines, container.NewHBox(layout.NewSpacer(), closeBtn))
 	footer := container.NewVBox(footerLines...)
 
+	// fit sizes the panel to its cap (below); every change of body is
+	// followed by it, since the body decides whether the panel's least
+	// height leaves room below the header.
+	var fit func()
 	setCentered := func(o fyne.CanvasObject) {
 		body.Objects = []fyne.CanvasObject{container.NewVBox(layout.NewSpacer(), o, layout.NewSpacer())}
 		body.Refresh()
+		fit()
 	}
 	setMessage := func(msg string) {
 		stopThinking()
@@ -142,8 +151,8 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 		listBox.Objects = lst.Objects
 		listBox.Refresh()
 		body.Objects = []fyne.CanvasObject{scroll}
-		fitList()
 		body.Refresh()
+		fit()
 		scroll.ScrollToTop()
 	}
 
@@ -153,15 +162,24 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 		cnv,
 	)
 	popup.Show()
-	popup.Resize(fyne.NewSize(ps.Width, minF(ps.Height, 460)))
+	// Capped by the window, and on a short desktop window covering the header
+	// where the body's state leaves the panel too tall to clear it: the
+	// waiting state's message and bar do not scroll. Covering, it is the
+	// panel it is on a window with room to spare, crossRefPanelHeight tall
+	// with the body centred in it, capped at the room.
+	fit = func() {
+		if listShowing() {
+			fitList()
+		}
+		popup.Resize(fyne.NewSize(ps.Width, minF(ps.Height, crossRefPanelHeight)))
+		coverHeaderUnlessClear(state, popup, crossRefPanelHeight)
+	}
+	fit()
 	// Sized again from the height a desktop window now gives it whenever the
 	// window changes size, in whichever state it is (sheet_refit.go).
 	registerSheetRefit(state, popup, func() {
 		ps.Height = sheetPanelSize(state, cnv).Height
-		if listShowing() {
-			fitList()
-		}
-		popup.Resize(fyne.NewSize(ps.Width, minF(ps.Height, 460)))
+		fit()
 	})
 	// The same selection again after a light/dark rebuild. The dataset loads
 	// once and is guarded, so a reopen mid-load waits on the same load rather
@@ -170,14 +188,12 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 
 	// A selection the cross-references cannot cover at all is answered
 	// before anything loads: the answer cannot change, and a reader who is
-	// offline must not be told to check the connection for it. The next
-	// major release's (crossRefCoverage); the shipping build loads first.
-	if nextRelease {
-		book, _ := readerChapter(state)
-		if note, none := crossRefCoverage(state.currentVersion().ID, book, selectionVerses(state, text, span)); none {
-			setMessage(crossRefNoneLine + "\n" + note)
-			return
-		}
+	// offline must not be told to check the connection for it
+	// (panelCoverage).
+	book, _ := selectionChapter(state, span)
+	if note, none := panelCoverage(state, book, selectionVerses(state, text, span)); none {
+		setMessage(crossRefNoneLine + "\n" + note)
+		return
 	}
 
 	setThinking()

@@ -59,7 +59,14 @@ type importedChapter struct {
 	// recognises as a paragraph holding no verse number whose text is bold
 	// (btIOSIsHeadingParagraph / btMacIsHeadingParagraph).
 	heads [][2]int
+	// gaps are the marks omitted verses leave, "[21]" in a <span class="vg">:
+	// the omitted number and [start, end) of the mark's own small run, which
+	// the native side finds by its size and its brackets (btGapMarkNumber /
+	// btMacGapMarkNumber).
+	gaps []gapAt
 }
+
+type gapAt struct{ n, loc, end int }
 
 // verseAt is a verse number run: the character location the native side finds by
 // font size (btIOSBuildVerseIndex / btMacLocForVerse), which is where the digits
@@ -93,7 +100,9 @@ func importChapterHTML(t *testing.T, html string) importedChapter {
 	body = strings.TrimSuffix(body, "</body></html>")
 
 	var doc importedChapter
-	var stack []bool // one entry per open element that could carry .hl
+	var stack []bool   // one entry per open element that could carry .hl
+	var gapOpen []bool // parallel to stack's span entries: is it a mark's span
+	gapStart := -1
 	inSup, supStart := false, 0
 	paraSeen := false
 	headAt := -1 // the open heading's first character, or -1
@@ -190,8 +199,23 @@ func importChapterHTML(t *testing.T, html string) importedChapter {
 		case strings.HasPrefix(tag, "<span"):
 			stack = append(stack, strings.Contains(tag, `class="hl`) ||
 				strings.Contains(tag, ` hl"`) || strings.Contains(tag, ` hl `))
+			isGap := strings.Contains(tag, `class="vg`)
+			gapOpen = append(gapOpen, isGap)
+			if isGap {
+				gapStart = len(doc.text)
+			}
 		case tag == "</span>":
 			stack = stack[:len(stack)-1]
+			if g := gapOpen[len(gapOpen)-1]; g && gapStart >= 0 {
+				mark := string(doc.text[gapStart:])
+				n, err := strconv.Atoi(strings.TrimSuffix(strings.TrimPrefix(mark, "["), "]"))
+				if err != nil || !strings.HasPrefix(mark, "[") || !strings.HasSuffix(mark, "]") {
+					t.Fatalf("importChapterHTML: a mark's span holds %q", mark)
+				}
+				doc.gaps = append(doc.gaps, gapAt{n: n, loc: gapStart, end: len(doc.text)})
+				gapStart = -1
+			}
+			gapOpen = gapOpen[:len(gapOpen)-1]
 		default:
 			t.Fatalf("importChapterHTML: unhandled tag %q", tag)
 		}

@@ -197,26 +197,40 @@ func drawnArrivalVerse(verses []Verse, verse int) int {
 	return next
 }
 
+// drawnNoteAnchor is the verse a note's card hangs above on a chapter drawn
+// as verses: drawnArrivalVerse of the note's own verse, and 0, the chapter
+// top, for a note with none. A note on a verse the edition omits, sent on
+// Matthew 17:21 or on 17:21-22 from an edition that prints the verse and
+// shown in the BSB from its link alone (filed on another passage, or
+// refused by the store), keeps the verse the link named, which has no line.
+// Its card stood above the lit verse's paragraph on the iPhone, iPad, Mac
+// and the website, and at the chapter top on Android and the Windows and
+// Linux pane (PLATFORM_MATRIX.md, divergence 34); on the omitted verse
+// alone, whose mark lit nothing, at the top on every surface. It now
+// stands above the verse after the hole on every surface, the paragraph
+// where the hole's mark, lit with it (gapOf), stands. A note on a verse
+// the page has is unchanged, and so is one past the chapter's last verse,
+// which has nowhere to hang and parks at the top.
+func drawnNoteAnchor(verses []Verse, verse int) int {
+	if verse <= 0 {
+		return 0
+	}
+	return drawnArrivalVerse(verses, verse)
+}
+
 // arrivalVerseOnPage is the verse an explicit arrival at verse lands on, with
-// c the render's chrome: drawnArrivalVerse, except where the page omits both
-// the verse and the open card's own verse, as for a note sent on Matthew
-// 17:21 and opened in the BSB. Every surface draws that card at the chapter
-// top: the canvas pane opens its band above the first verse
-// (noteAnchorVerse), the bridge parks the sticker at the top of the text,
-// the Apple panes reserve it at the top when the mark lights nothing, and
-// the website parks it above the text and lands on it. Moved on past the
-// hole, the arrival scrolled the note out of view; there it places nothing
-// (0), and the chapter opens at its top with the card in view. A note on a
-// range that starts at the hole (21-22) is filed by the chapter's plan at
-// the first verse the page has (displayCopy), so its card stands above
-// that verse's paragraph on every surface and the arrival lands on its
-// band. Only a note shown from the link alone, filed on another passage or
-// refused by the store, keeps the verse the link named; the Apple panes and
-// the website then put its card above the first lit verse's paragraph, the
-// canvas pane and the bridge at the top (PLATFORM_MATRIX.md, divergence
-// 34), and the arrival places nothing, as it did before drawnArrivalVerse.
-// Android pushes this verse to the bridge beside the class
-// chapterNoteArrival gives, so the two stay one answer.
+// c the render's chrome: drawnArrivalVerse, except where the page has no line
+// for the open card's own verse either, and so parks the card at the chapter
+// top on every surface: the canvas pane opens its band above the first verse
+// (noteAnchorVerse), the bridge parks the sticker at the top of the text, and
+// the Apple panes reserve it at the top. Moved on past a hole, the arrival
+// would scroll that card out of view; there it places nothing (0), and the
+// chapter opens at its top with the card in view. The chrome's anchor is
+// drawnNoteAnchor's, so a card whose verse the edition omits stands above the
+// verse after the hole and the arrival lands on its band; only an anchor past
+// the chapter's last verse is left without a line. Android pushes this verse
+// to the bridge beside the class chapterNoteArrival gives, so the two stay
+// one answer.
 func arrivalVerseOnPage(c noteChrome, verses []Verse, verse int) int {
 	drawn := drawnArrivalVerse(verses, verse)
 	if drawn != verse && c.present() && c.Anchor > 0 && !paraCarriesVerse(verses, c.Anchor) {

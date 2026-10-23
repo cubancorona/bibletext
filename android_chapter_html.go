@@ -100,7 +100,7 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 	if footnotesEnabled() {
 		footnotes = chapterFootnoteEntries(verses,
 			state.Bible.OrphanNotesFor(state.CurrentBook, state.CurrentChapter),
-			super.Footnotes)
+			super.Footnotes, headingsFor(state.Bible, state.CurrentBook, state.CurrentChapter))
 		gaps = gapsBefore(state.CurrentVersion, state.CurrentBook, state.CurrentChapter, verses)
 	}
 	// ONE tint answer for the whole chapter (tint.go), asked per verse below,
@@ -195,13 +195,15 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 				switch {
 				case poeticJoin(para[i-1].Text, v.Text):
 					b.WriteString("<br>")
-				case tints.joins(para[i-1], v):
+				case tints.joinsAhead(para[i-1], v, gaps[v.Verse]):
 					// The joining space belongs to the band, or the highlight
 					// comes out notched at every join falling mid-line. Same
 					// fix, same reason, as the iOS dialect in reading.go — and
 					// the same SAME-TINT rule: a join between two different
-					// washes belongs to neither.
-					b.WriteString(mk.JoinSpace)
+					// washes belongs to neither. What follows may be a hole's
+					// mark, lit on its own (gapOf), so the space takes the
+					// wash of the verse before it.
+					b.WriteString(markupFor(markup[:], tints.of(para[i-1])).JoinSpace)
 				default:
 					b.WriteString(" ")
 				}
@@ -210,10 +212,9 @@ func buildChapterHTMLAndroid(state *AppState, verses []Verse) string {
 			// join already written above. <btgap>, never <sup>: BtBridge's verse
 			// index reads SuperscriptSpans alone and sets the chapter's content
 			// end at the first non-digit one, so a mark written as a <sup>
-			// would clamp every verb from here down (see tintHTML.Gap).
-			for _, n := range gaps[v.Verse] {
-				fmt.Fprintf(&b, mk.Gap, n)
-			}
+			// would clamp every verb from here down (see tintHTML.Gap). Each
+			// mark takes its own tint (gapOf, writeGapMarks).
+			writeGapMarks(&b, markup[:], tints, v, gaps[v.Verse])
 			// The number joins the band too — leaving it out punches a pale
 			// hole through the middle of the highlight (iOS parity). Whether it
 			// is wrapped is mk.Number's business.

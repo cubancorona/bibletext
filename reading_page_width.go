@@ -80,18 +80,24 @@ var readingWindowWidth = func() float64 { return 0 }
 // readingColdWidth is the pane's width, in its own unit, before the window has
 // any size: the canvas has none until its first paint, and a chapter can be
 // pushed before that. Android reads its activity's configured width
-// (androidWindowWidthDp) — a call into Java, made only then; 0 elsewhere.
+// (androidWindowWidthDp) — a call into Java, made only then — and iOS its
+// window scene's less the side safe-area insets (launchPaneWidth, kept from a
+// read made on a goroutine of its own); 0 elsewhere.
 var readingColdWidth = func() float64 { return 0 }
 
 // readingUnsizedPage is the page for a push made with no width known at all —
-// no report from the pane and no window size. The book page by default (the
-// Mac, the host tests); the phones answer from the device, as the layout
-// already does for a canvas with no size (phoneLandscapeReadingWanted): an
-// iPhone's resting page is the phone page, an iPad's the book page. The one
-// place a page is chosen by device, and only for want of a width.
+// no report from the pane, no window size and no cold width. The book page by
+// default (the Mac, the host tests); the phones answer from the device, as the
+// layout does for a canvas with no size and no report of the window
+// (phoneLandscapeReadingWanted): an iPhone's resting page is the phone page, an
+// iPad's the book page. The one place a page is chosen by device, and only for
+// want of a width.
 var readingUnsizedPage = func() readingPageKind { return readingPageBook }
 
-// widestWindowWidth is the widest open window's canvas width.
+// widestWindowWidth is the widest open window's canvas width. A canvas with
+// no size to decide by (canvasSized) has no width to offer: Android's first
+// surface, a single pixel, would otherwise be a third of a unit's estimate and
+// push the phone page to a pane that then imports the chapter again.
 func widestWindowWidth() float64 {
 	app := fyne.CurrentApp()
 	if app == nil {
@@ -99,8 +105,12 @@ func widestWindowWidth() float64 {
 	}
 	best := float32(0)
 	for _, w := range app.Driver().AllWindows() {
-		if c := w.Canvas(); c != nil && c.Size().Width > best {
-			best = c.Size().Width
+		c := w.Canvas()
+		if c == nil {
+			continue
+		}
+		if sz := c.Size(); canvasSized(sz.Width, sz.Height) && sz.Width > best {
+			best = sz.Width
 		}
 	}
 	return float64(best)

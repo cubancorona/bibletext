@@ -249,9 +249,8 @@ func TestExpectedVerseNumbersFollowTheDelta(t *testing.T) {
 		t.Error("an id with no delta was assumed to number like the reference")
 	}
 	// A book whose numbering does not correspond at all cannot be checked.
-	// The shipping table records the Greek Esther as one and the next major
-	// release's records none, so it is marked here and the check holds in
-	// both (greek_esther_current_test.go, greek_esther_next_test.go).
+	// The shipped tables record none, so one is marked here (the Greek
+	// Esther's own case is in greek_esther_test.go).
 	withIncommensurableBook(t, "webc", "Esther")
 	ref.Books = append(ref.Books, "Esther")
 	ref.Verses["Esther"] = map[int][]Verse{1: numbered("Esther", 1, span(1, 22)...)}

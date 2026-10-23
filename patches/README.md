@@ -31,6 +31,12 @@ application source.
 | **Patch 11** | [`fyne-2.7.4-font-resource-cache.patch`](fyne-2.7.4-font-resource-cache.patch) |
 | **Target** | `fyne.io/fyne/v2@v2.7.4` → `internal/painter/font.go` |
 | **Change 9 (temporary theme scopes retain bounded font data)** | A theme override parsed another complete copy of every font, including the emoji bitmap table, whenever its scope changed. Immutable font tables are now cached by resource; each scope retains independent mutable glyph caches. A 128-entry LRU bounds the scoped face cache while keeping the existing lifetimes of unscoped and explicit-font entries. |
+| **Patch 12** | [`fyne-2.7.4-fallback-space.patch`](fyne-2.7.4-fallback-space.patch) — applies after Patch 11 |
+| **Target** | `fyne.io/fyne/v2@v2.7.4` → `internal/painter/{font.go, font_test.go}` + `widget/richtext.go` |
+| **Change 10 (a space after an emoji or a fallback-font character is a space)** | A space after an emoji took no width, a space after a character from a fallback face without a space glyph drew as a missing-glyph box, and one after a character from macOS's LastResort face drew as a placeholder. A space alone in its cluster, shaped in a face other than the one the font map gives it, now takes its advance from that face and draws nothing. A missing glyph, drawn as U+FFFD, advanced by the run face's glyph 0, counted twice; it now advances once, by the U+FFFD drawn for it. See [Patch 12](#patch-12-spaces-after-an-emoji-or-a-fallback-font-character-fyne-274-fallback-spacepatch). |
+| **Patch 13** | [`fyne-2.7.4-mobile-typed-characters.patch`](fyne-2.7.4-mobile-typed-characters.patch) — applies after Patch 1, Patch 7 and `fyne-2.7.4-android-newintent.patch` |
+| **Target** | `fyne.io/fyne/v2@v2.7.4` → `internal/driver/mobile/driver.go` + `internal/driver/mobile/app/GoNativeActivity.java` |
+| **Change 11 (a mobile keyboard's joiners reach the field, and an Android keyboard deletes what it removed)** | The mobile driver typed only what `strconv.IsPrint` accepts, so a keyboard's zero-width joiner and non-joiner, its other format characters, every space but U+0020, private-use characters and characters newer than Go's Unicode tables never reached a field on Android or iOS. It now types every character but a control, the rule GLFW's `_glfwInputChar` applies on all three desktops (the Mac's GLFW also skips AppKit's function-key range). On Android a keyboard's deletion was sent to the field as one delete per UTF-16 unit it removed, so a backspace after an emoji also deleted the character before it; it is now one delete per character. See [Patch 13](#patch-13-mobile-typing-fyne-274-mobile-typed-characterspatch). |
 | **Applied by** | [`../scripts/setup-fyne-patch.sh`](../scripts/setup-fyne-patch.sh) |
 | **Patch (tools)** | [`fyne-tools-1.7.2-ios-deployment-target.patch`](fyne-tools-1.7.2-ios-deployment-target.patch) |
 | **Target** | `fyne.io/tools@v1.7.2` → `cmd/fyne/internal/mobile/build_iosapp.go` + `cmd/fyne/internal/commands/package-mobile.go` |
@@ -264,7 +270,8 @@ Most patches are independent — to drop just one (e.g. upstream ships one fix),
 delete its `.patch` file and its `patch -p1` + verify-grep lines in
 `setup-fyne-patch.sh`. The three iOS delegate patches (8, 9, 10) are the
 exception: they touch one file and each was made against the one before, so
-dropping an earlier one means regenerating the later ones. The Android CLI patch is removed separately by dropping
+dropping an earlier one means regenerating the later ones. Patch 12 was made
+against Patch 11 in `internal/painter/font.go` in the same way. The Android CLI patch is removed separately by dropping
 its setup call, script, and patch file. To remove everything after upstream
 ships equivalent fixes (or the pinned versions include them):
 
@@ -603,3 +610,208 @@ as a phone (header, chapter controls, re-wrapped text, tab bar), and dragged
 back to full size it matches the full-size layout again. Patches 8, 9 and 10
 touch the same file and apply in that order; each was made against the file
 the previous ones leave.
+
+## Patch 12: spaces after an emoji or a fallback-font character (`fyne-2.7.4-fallback-space.patch`)
+
+A space after an emoji drew with no width, so "a U+1F64F b" drew as
+"a U+1F64Fb"; a space after a character that only a fallback face has drew
+as a missing-glyph box followed by a gap, or, on macOS, as a placeholder.
+The stored text was right. go-text's segmenter (`splitByFace` and
+`ignoreFaceChange` in `shaping/input.go`, typesetting v0.3.4) never changes
+face for a space, on the assumption that every face has one, so a space
+joins the run of the face before it: the emoji face after an emoji, the
+fallback face after a fallback character. What the space becomes there
+depends on the face:
+
+- The emoji face is Patch 3's Noto Color Emoji, a bitmap font. Its space
+  glyph has an advance (2550 of 2048 units) and no bitmap, so it has no
+  extents, and `HarfbuzzShaper.Shape` (`shaping/shaping.go`) skips a glyph
+  without extents before it copies the advance: the space has no width.
+  Stock Fyne's EmojiOneColor gave its space an advance, so a build without
+  the patches does not show this case.
+- A fallback face without U+0020 shapes the space as glyph 0, which the
+  painter draws as U+FFFD in the face the font map gives that character.
+  `shapeCallback` advanced a missing glyph by the run face's glyph 0, and
+  added that advance to `x` when it drew the box and again to the pending
+  advance, so whatever followed the next flush (the next missing glyph, or
+  the end of the run) moved right by it, and the measured width was too
+  large by it. The box drawn is wider than Noto Sans's glyph 0 (40 px
+  against 24 at 40 px), so the extra advance was mostly taken up by the box
+  itself: there "a", a missing glyph and "b" left 13 px between the box and
+  the "b", and two missing glyphs in a row drew one box over the other.
+- macOS's LastResort face, which the system's font lookup gives a character
+  no other face has (U+1D50A among them on the host checked), has a glyph
+  for every character and draws each, the space included, as a placeholder.
+- Any other fallback face gives the space its own width, not the text's.
+
+Measured with the default text and emoji faces: at 18 px, "a U+1F64F b" and
+"a U+1F64Fb" both measured 48.25, where a space is 4.69. With the bundled
+symbol face, which has U+2318 and no U+0020, as the fallback, "c U+2318 d"
+measured 35.78 wider than "c U+2318d", two of that face's missing-glyph
+advances. With the bundled monospace face as the fallback for U+E0A0, the
+space after it measured 10.84. At 40 px, with LastResort as the fallback, the
+space after U+1D50A measured 44 against the text's 10.41, and drew as a
+placeholder.
+
+The change, in `internal/painter/font.go`: `shapeCallback` asks
+`spaceAdvance` about every glyph. When its character is a space separator
+(general category Zs, apart from U+1680, which has a visible glyph) alone in
+its cluster, and the font map resolves that character to a different face
+from the run's, the character is shaped alone in that face and its advance
+is used; the glyph is not drawn. The space then measures and draws as it
+does between two words of the text face, wherever it falls, including
+between words of a run in a fallback face (Hebrew or CJK text from a system
+face). A rule limited to spaces that are missing or have no advance would
+leave the LastResort placeholder drawn and the other faces' widths. A space
+followed by a combining mark (a Hebrew point or a Greek breathing typed
+after a space) shares its cluster with the mark, and is left as shaped so
+that the mark is still drawn on it. A run is not split: Fyne draws a
+string's runs left to right in logical order, so splitting a right-to-left
+run at its spaces would put its words in reverse order.
+
+A missing glyph now advances by the U+FFFD the painter draws for it, shaped
+alone in the face the font map gives U+FFFD (the run face's glyph-0 advance
+is kept only if that fails), and the missing-glyph branch ends with
+`continue`, so that advance is counted once. The box then ends before the next glyph starts and
+inside the measured width; counting the glyph-0 advance once instead would
+draw the box over the next glyph and past the end of the text. Fyne's own
+`TestMeasureString` "missing glyph" case, which encoded the double count,
+now expects 205.65625 instead of 213.65625 (at that size glyph 0 is 24 px,
+counted twice before, and U+FFFD 40 px). Within one string, each space or
+U+FFFD is shaped alone once for each face, script, language and direction,
+however often it appears, so text with many emoji measures in about the
+time it did without the patch. `widget/richtext.go`'s `truncateLimit`
+shapes text itself to place an ellipsis, so it calls the exported
+`FixDrawnAdvances` on its runs, which gives each glyph the advance the
+painter draws it with, and cuts where the text draws.
+
+Every surface that draws text through Fyne has it: the notes browser on all
+six platforms, and the Share with note field everywhere except iOS, where the
+field is a native view.
+
+The proof is `testdata/fallback-space_test.go`, copied in as
+`internal/painter/bt_fallback_space_test.go`. Its tests measure through
+`MeasureString`, `fyne.MeasureText` and a `widget.Label`; check the drawn
+image for the gap after the emoji, and for no ink where the space is after
+the symbol-face character and after the LastResort one (that case runs where
+`/System/Library/Fonts/LastResort.otf` is, and skips elsewhere); measure a
+missing glyph against the U+FFFD drawn for it and check that the box's ink
+ends where the next glyph starts, in the text face and in a face without
+U+FFFD; draw a combining mark on a space in a fallback-face run, left to
+right and right to left; hold the advances `FixDrawnAdvances` gives a cut
+equal to the painter's; count the allocations of a string with forty spaces
+after emoji against one with one; and cut a label with an ellipsis. The
+space and missing-glyph tests fail on the tree without this patch. The
+others pass there, because they guard against what the patch itself could
+break, and each fails with one part of it changed: the mark test with a
+rule that measures a space again whatever shares its cluster, the
+allocation test without the per-string store, the `FixDrawnAdvances` test
+with that function leaving missing glyphs as shaped, and the ellipsis test
+with the painter half alone. The monospace and LastResort cases also fail
+with a rule limited to spaces that are missing or have no advance. The
+tests are named `TestBTFont*`, so the macOS CI step that runs the
+font-cache tests runs them too. The host suite builds against stock Fyne
+and does not run them; built against the patched tree with a scratch
+`-modfile`, the app's suite passes, with and without `-tags next`.
+
+Fyne v2.8.1-rc3 uses the same go-text release and has no handling for such a
+space, and its `shapeCallback` counts a missing glyph's advance twice in the
+same way, so a move to 2.8 keeps this patch.
+
+## Patch 13: mobile typing (`fyne-2.7.4-mobile-typed-characters.patch`)
+
+A keyboard on Android or iOS hands the toolkit a string: Android's hidden
+`EditText` on every text change, iOS's hidden text field from
+`textField:shouldChangeCharactersInRange:replacementString:`, both through
+`keyboardTyped`, which makes a key press of each character. The driver types
+each press into the focused field (`typeDownCanvas`), and stock Fyne first
+passed the character through `runeToPrintable`, which kept only what
+`strconv.IsPrint` accepts. That refuses:
+
+- every format character, among them U+200D ZERO WIDTH JOINER and U+200C
+  ZERO WIDTH NON-JOINER, so a family, profession or flag emoji was typed as
+  its separate emoji, and Persian and Indic words lost their joiners;
+- every space but U+0020, among them U+00A0, U+202F and U+3000, the
+  ideographic space;
+- private-use characters;
+- characters the toolchain's Unicode tables (15.0.0) do not assign, such as
+  the Unicode 16.0 emoji U+1FAE9.
+
+The patch types every character but a control. C0 controls, DEL and C1
+controls are dropped, and so is a value that is not a character: Android's
+key-event path gives -1 for a key with none, and sets the sign bit for a
+dead key. That is the rule GLFW's `_glfwInputChar` applies on the Mac,
+Windows and Linux before the desktop driver types a character; the Mac's
+GLFW also skips U+F700 to U+F7FF, the range AppKit gives function keys.
+
+Every character rather than the two joiners, for two reasons. The desktop
+already types them all, so the mobile driver now follows the rule GLFW's
+`_glfwInputChar` applies on all three desktops (the Mac's GLFW also skips
+AppKit's function-key range, which no mobile path is known to send). And
+what a note keeps is the app's decision, made once, in `normalizeNote`
+(`share_note.go`), which drops bidirectional controls, the zero-width space,
+the word joiner, the byte-order mark and tag characters by its own rule and
+keeps the joiners. A driver filter that removed some of them first left
+Android, and the fields the toolkit draws on the iPhone and iPad, with less
+than the desktop kept.
+
+It reaches every field the toolkit draws on Android, the note composer and
+Ask among them, and those on the iPhone and iPad: search, AI Find, the notes
+search, the book filter and the key fields. The iPhone and iPad note
+composer and Ask are a
+native `UITextView` (`note_entry_ios.go`), whose text reaches Go unfiltered,
+so that path never had the defect.
+
+The patch's second half is Android's deletion. A keyboard edits the hidden
+`EditText`, and for the run each edit removes, `GoNativeActivity`'s
+`beforeTextChanged` sends the field `keyboardDelete` calls, each deleting one
+character. It sent one per UTF-16 unit of the run, while `keyboardTyped`
+types a run one character (code point) at a time. A character outside the Basic
+Multilingual Plane is two units, so a backspace after an emoji deleted the
+character before it as well, and one that removed a family emoji, five
+characters in eight units, deleted three characters typed before it.
+Without the first half it deleted more still, since the joiners it counted
+had never reached the field. The patch counts the removed run in code
+points (`deletedCharacters`), so the field loses what the keyboard removed:
+the whole emoji for a backspace sent as `KEYCODE_DEL`, whose key listener
+removes it whole, and one character for
+`deleteSurroundingTextInCodePoints(1, 0)`. iOS sends one `deleteBackward`
+per backspace and never had it.
+
+**Proof ships with the patch**: `patches/testdata/mobile-typed-characters_test.go`
+is copied into the generated toolkit as
+`internal/driver/mobile/bt_typed_characters_test.go`. It types joined emoji,
+a Persian word with U+200C, Devanagari with U+200C and with U+200D, the
+spaces and the newer characters through `typeDownCanvas` into a focused
+entry, and into a canvas with nothing focused; checks that controls stay
+out; and holds `runeToPrintable` to GLFW's rule at every code point. Against
+the driver without the patch every test but the control one fails. Run it
+from the generated directory with
+
+```bash
+go test ./internal/driver/mobile -run '^TestBTTyped' -count=1
+```
+
+The macOS CI job runs it in `build/ios-check/fyne`, which
+`scripts/check-ios-pane.sh` generates. The Android half's check,
+`patches/testdata/BtTypedDeletesCheck.java`, is compiled with the generated
+`GoNativeActivity.java` by `scripts/check-android-java.sh`, which the Linux
+CI job runs, and run on the host's JVM: it counts the deletes for a family
+emoji removed whole, for its last character, for a profession emoji, for
+U+1FAE9, for letters and for a Persian word. Against the activity without
+the patch it does not compile, and with the count in units it fails six of
+its nine cases. `mobile_typed_characters_test.go` holds the patch's
+substance, its order after Patch 1, Patch 7 and the newintent patch (it was
+made against the `driver.go` and `GoNativeActivity.java` they leave), the
+copied tests, the CI step, the Java check's place in
+`check-android-java.sh` and the app's half: what the note field holds is the
+message's note line, the link's note and the kept record's words, on the
+desktop card, the phone sheet's own field and the native field.
+
+Removal, when upstream types these characters and deletes by character:
+drop the `.patch`, its test file and `BtTypedDeletesCheck.java`; in
+`setup-fyne-patch.sh` drop `PATCH_TYPED`, `TYPED_TEST`, their `patch` and
+`cp` lines and the verify block; drop the CI step, the check's file from
+`check-android-java.sh`'s activity compile and its `java` run, and
+`mobile_typed_characters_test.go`. If upstream fixes only one half, keep the
+other's hunk, check and tests.

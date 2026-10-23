@@ -36,7 +36,7 @@ func notesXState(t *testing.T) *AppState {
 // translation, leaving the highlight it had placed behind with nothing to
 // explain it. The passage is the same passage in both, so the note goes with
 // it; where the verse is not there, the derive declines (see the Greek Esther
-// cases in greek_esther_current_test.go and greek_esther_next_test.go).
+// cases in greek_esther_test.go).
 func TestSwitchingTranslationCarriesTheNoteOver(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -204,9 +204,8 @@ var errOfflineForTest = errors.New("offline")
 // sees their verse highlighted and the message gone, which reads as data loss.
 // It shows up when switching translation, and is reached here through a note
 // that genuinely cannot follow: one on Esther 4:6, which WEB Catholic's Greek
-// Esther cannot show in either state of the next switch. The shipping build
-// cannot map the book at all, and in the next major release, where it maps
-// verse for verse, 4:6 is a verse the Greek text has nothing at.
+// Esther cannot show. It maps verse for verse, and 4:6 is a verse the Greek
+// text has nothing at.
 func TestLosingANoteAlsoClearsItsHighlight(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()

@@ -56,6 +56,25 @@ func (l aiPassageHeaderLayout) Layout(objects []fyne.CanvasObject, size fyne.Siz
 	l.box(objects).Layout(objects, size)
 }
 
+// aiErrorViewportLayout lets the message scroll use less than Fyne's 32pt
+// scroll minimum when the pinned action and the sheet's chrome need the room.
+// The scroll keeps its direction and its full content remains reachable.
+type aiErrorViewportLayout struct {
+	scroll *container.Scroll
+	height float32
+}
+
+func (l *aiErrorViewportLayout) MinSize([]fyne.CanvasObject) fyne.Size {
+	return fyne.NewSize(l.scroll.MinSize().Width, l.height)
+}
+
+func (l *aiErrorViewportLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	for _, o := range objects {
+		o.Move(fyne.NewPos(0, 0))
+		o.Resize(size)
+	}
+}
+
 // showAIPanel resolves the selection's passage once, here on the UI
 // goroutine, and the panel keeps it for every action: the request, its cache
 // key, the header, every Try again, the faster-model switch, the Report mail
@@ -280,23 +299,43 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 	// and the question. That shortfall is what clipped "Try again" out of the
 	// error state and put a scrollbar on a panel with room to spare.
 	//
-	// It keeps the body and the height it wanted, so a window resize can size
-	// the panel again, whichever state it is in, from the height the window
-	// now gives it (sheet_refit.go).
+	// least, where a state gives one, is the height under which the body
+	// would cut what the state must show whole (wholeThrough): the waiting
+	// line, or the error's message. The body keeps it even
+	// where the room below the header is less, and the panel then covers the
+	// header, as a sheet that cannot clear it does; it is held to what the
+	// window gives a sheet at most (sheetMostHeight).
+	//
+	// It keeps the body, the height it wanted and its least, so a window
+	// resize can size the panel again, whichever state it is in, from the
+	// height the window now gives it (sheet_refit.go).
 	var fittedBody *container.Scroll
 	var fittedWant float32
-	fitBody := func(sc *container.Scroll, want float32) {
+	var fittedLeast func() float32
+	var errorViewport *aiErrorViewportLayout
+	fitBody := func(sc *container.Scroll, want float32, least func() float32) {
 		if want < 1 {
 			want = 1
 		}
-		fittedBody, fittedWant = sc, want
-		sc.SetMinSize(fyne.NewSize(bodyW, want))
+		fittedBody, fittedWant, fittedLeast = sc, want, least
+		var leastH float32
+		if least != nil {
+			leastH = least()
+		}
+		setBodyHeight := func(height float32) {
+			if errorViewport != nil && errorViewport.scroll == sc {
+				errorViewport.height = height
+			}
+			sc.SetMinSize(fyne.NewSize(bodyW, height))
+		}
+		setBodyHeight(want)
 		if popup == nil {
 			return
 		}
 		if boundedContext {
 			// Measure expanded context before deciding whether it leaves several
-			// answer rows. An explicit disclosure choice survives window resizing.
+			// answer rows and the waiting or error state's required column.
+			// Explicit disclosure choices survive refits and state transitions.
 			detailsBox.Show()
 			contextW := header.Size().Width
 			if contextW <= 0 {
@@ -321,7 +360,7 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 				}
 			}
 			setContextHeight(minF(contextH, ps.Height/3))
-			need := minF(want, 96)
+			need := fyne.Max(minF(want, 96), leastH)
 			available := func() float32 {
 				return ps.Height - (popup.MinSize().Height - sc.MinSize().Height)
 			}
@@ -342,18 +381,25 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 		// Everything the panel needs that is NOT the body. Read after the
 		// SetMinSize above, so it is this panel's real chrome.
 		chrome := popup.MinSize().Height - want
+		// The panel's height with the room to show the whole body.
+		preferred := want + chrome
 		if max := ps.Height - chrome; want > max {
-			want = max
+			want = fyne.Max(max, minF(leastH, sheetMostHeight(state, cnv)-chrome))
 			if want < 1 {
 				want = 1
 			}
-			sc.SetMinSize(fyne.NewSize(bodyW, want))
+			setBodyHeight(want)
 		}
 		popup.Resize(fyne.NewSize(ps.Width, want+chrome))
+		// The chrome alone, or the chrome and the body's least, can be taller
+		// than the room below the header on a short desktop window; the panel
+		// then covers the header, as tall as the whole body needs, capped at
+		// the room, and never shorter than the chrome and the body's least.
+		coverHeaderUnlessClear(state, popup, preferred)
 	}
 	refitContext = func() {
 		if fittedBody != nil {
-			fitBody(fittedBody, fittedWant)
+			fitBody(fittedBody, fittedWant, fittedLeast)
 		}
 	}
 
@@ -439,9 +485,15 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 		// the scroll has room and never engages. Spacers are gone (inside a
 		// scroll they collapse to nothing anyway); squeezeWidthLayout stops the
 		// scroll widening the column sideways (sheet_fit.go).
+		//
+		// The scroll is never shorter than the column down to the foot of the
+		// waiting line (lead), Ask's question above it included: a scroll
+		// sized only from the room left over cut the line through the middle
+		// on a window, or a phone held sideways, just too short for the
+		// column (fitBody's least).
+		lead := container.NewVBox(spacer(8), container.NewCenter(msg))
 		waitCol := container.New(squeezeWidthLayout{}, container.NewVBox(
-			spacer(8),
-			container.NewCenter(msg), spacer(10),
+			lead, spacer(10),
 			// Bounded, not full-bleed: a panel-wide bar reads as a banner
 			// rather than a quiet progress hint, and it dwarfed the text.
 			container.NewCenter(container.NewGridWrap(fyne.NewSize(240, bar.MinSize().Height), bar)),
@@ -455,9 +507,10 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 		))
 		waitContent := withQuestion(waitCol)
 		waitScroll := container.NewVScroll(waitContent)
+		leadFoot := wholeThrough(waitContent, waitCol, lead)
 		// A model name that wraps makes the column taller: fit the panel to
 		// it again, as below, so Cancel stays inside the scroll's reach.
-		modelLine.relayout = func() { fitBody(waitScroll, waitContent.MinSize().Height+10) }
+		modelLine.relayout = func() { fitBody(waitScroll, waitContent.MinSize().Height+10, leadFoot) }
 		// Replace, don't layer. The answer scroll underneath is empty in this
 		// state, but it still carries the answer cap as its minimum size, and in
 		// a stack that minimum wins — so the panel was sized for an answer that
@@ -469,7 +522,7 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 		// size it to theirs. Re-entering this state from an error — Try again,
 		// or the faster-model switch — used to leave the panel at the height the
 		// previous state chose, which is what put Cancel under the footer.
-		fitBody(waitScroll, waitContent.MinSize().Height+10)
+		fitBody(waitScroll, waitContent.MinSize().Height+10, leadFoot)
 	}
 	setResult := func(text string) {
 		renderStarted := devDiagnosticNow()
@@ -501,7 +554,7 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 		answerScroll.ScrollToTop()
 		body.Objects = []fyne.CanvasObject{answerScroll}
 		body.Refresh()
-		fitBody(answerScroll, answerContent.MinSize().Height+10)
+		fitBody(answerScroll, answerContent.MinSize().Height+10, nil)
 		diagnose("render_fit_done", devDiagnosticSince(renderStarted))
 		// Re-measure once the real layout has landed so the height is exact.
 		studyRemeasure(func() {
@@ -513,7 +566,7 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 			diagnose("remeasure_start")
 			answerView.Refresh()
 			answerScroll.Refresh()
-			fitBody(answerScroll, answerContent.MinSize().Height+10)
+			fitBody(answerScroll, answerContent.MinSize().Height+10, nil)
 			diagnose("remeasure_done", devDiagnosticSince(started))
 		})
 	}
@@ -567,24 +620,47 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 		} else {
 			actBtn = widget.NewButton("Try again", func() { startFetch() })
 		}
-		// Scrolled for the same reason as the waiting column: a long provider
-		// error on a short canvas pushed the one actionable button into the
-		// footer.
+		// The action stays below the message's scroll: even a landscape phone
+		// too short for the whole error must show the way to retry or add a key.
+		// The message and Ask's question keep their natural height wherever a
+		// sheet has room for it, and scroll only once that room is exhausted.
 		errCol := container.New(squeezeWidthLayout{}, container.NewVBox(
-			spacer(8), lbl, container.NewCenter(actBtn),
+			spacer(8), lbl,
 		))
 		errContent := withQuestion(errCol)
 		errScroll := container.NewVScroll(errContent)
-		body.Objects = []fyne.CanvasObject{errScroll}
+		errorViewport = &aiErrorViewportLayout{scroll: errScroll, height: errScroll.MinSize().Height}
+		body.Objects = []fyne.CanvasObject{container.NewBorder(nil, container.NewCenter(actBtn), nil, nil,
+			container.New(errorViewport, errScroll))}
 		body.Refresh()
 		// Pre-wrap the message at the body width before measuring, for the same
 		// reason the answer is pre-wrapped: a word-wrapped label reports its
 		// true height only once it has wrapped at a known width.
 		lbl.Resize(fyne.NewSize(bodyW-16, lbl.MinSize().Height))
-		fitBody(errScroll, errContent.MinSize().Height+10)
+		fitBody(errScroll, errContent.MinSize().Height+10, wholeThrough(errContent, errCol, errCol))
 	}
 
 	startFetch = func() {
+		// Nothing leaves the device for a provider the reader has not allowed
+		// (ai_permission.go). The panel says nothing was sent before the
+		// question opens over it, so that is what is left after Not now, or
+		// after the question closes any other way; Try again asks again, and
+		// Allow records the permission and comes back here to ask the provider.
+		// A light/dark rebuild or a rotation drains the question with this
+		// panel, and the question's reopen is this panel's: a new panel about
+		// the same passage, with Ask's question as typed, which asks again
+		// and sends nothing until Allow (sheet_reopen.go).
+		if info, pending := aiPermissionPending(state); pending {
+			stopThinking()
+			fetchGen++ // nothing still on its way may land in this panel
+			setError(friendlyAIError(&aiPermissionError{provider: info}), false)
+			promptAIPermission(state, info, func() {
+				if !userClosed && sheetShowing(state, popup) {
+					startFetch()
+				}
+			}, nil, reopen)
+			return
+		}
 		// Abandon any request already in flight FIRST (the faster-model switch,
 		// Try again): cancel its context and stop its spinner, or the
 		// superseded request would keep billing the reader's key for the whole
@@ -708,7 +784,7 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 			popup.Resize(fyne.NewSize(ps.Width, minF(popup.Content.Size().Height, ps.Height)))
 			for range 2 {
 				fittedBody.Content.Resize(fyne.NewSize(fittedBody.Size().Width, fittedBody.Content.MinSize().Height))
-				fitBody(fittedBody, fittedBody.Content.MinSize().Height+10)
+				fitBody(fittedBody, fittedBody.Content.MinSize().Height+10, fittedLeast)
 			}
 			fittedBody.ScrollToOffset(offset)
 			if detailsScroll != nil {
@@ -726,6 +802,21 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 // that lands an answer runs the fit synchronously instead.
 var studyRemeasure = func(fit func()) {
 	time.AfterFunc(40*time.Millisecond, func() { fyne.Do(fit) })
+}
+
+// wholeThrough is the one rule the study panel's waiting and error states
+// keep their body by on a short window (fitBody's least): the body scroll is
+// never shorter than its content down to the foot of head, the part at the
+// top of col that the state must show whole. content is col with whatever
+// stands above it in the scroll, Ask's question. The waiting state's head is
+// its waiting line; the error state's is its whole column, the message and
+// the button that acts on it. Measured when the panel is fitted, so a
+// message, a question or a model name that wraps again is measured as it
+// now wraps.
+func wholeThrough(content, col, head fyne.CanvasObject) func() float32 {
+	return func() float32 {
+		return content.MinSize().Height - col.MinSize().Height + head.MinSize().Height
+	}
 }
 
 // aiReportMailBody is the body of the Report mail: the passage as the panel

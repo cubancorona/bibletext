@@ -9,9 +9,8 @@ import (
 // passage rather than a synthetic reference: the Romans doxology, the eleven
 // textual-critical omissions, the Textus Receptus verses the NKJV carries, the
 // Song of the Three pushing Daniel 3's tail down, and the Greek Esther, which
-// the shipping build cannot map at all and the next major release maps verse
-// for verse, since it keeps the Hebrew numbers and adds verses of its own
-// (greek_esther_current_test.go, greek_esther_next_test.go).
+// maps verse for verse, since it keeps the Hebrew numbers and adds verses of
+// its own (greek_esther_test.go).
 //
 // They are pinned here rather than left to the generator because a regeneration
 // (a translation's cache epoch bumps, a translation is added) must not be able
@@ -76,8 +75,7 @@ func TestMapVerseKnownDivergences(t *testing.T) {
 		{"the BSB's love verse in the NKJV", "bsb", "nkjv", "Philippians", 1, 16, 1, 17, verseMapMoved},
 		{"NKJV and WEB agree there", "nkjv", "web", "Philippians", 1, 16, 1, 16, verseMapExact},
 
-		// The Greek Esther's cases are the switch's: greek_esther_current_test.go
-		// and greek_esther_next_test.go.
+		// The Greek Esther's cases are in greek_esther_test.go.
 
 		// The ordinary case, which is ~31,000 verses.
 		{"John 3:16 is John 3:16 everywhere", "web", "bsb", "John", 3, 16, 3, 16, verseMapExact},
@@ -174,7 +172,7 @@ func TestVerseExistsIn(t *testing.T) {
 		{"bsb", "Mark", 9, 44, false},
 		{"nkjv", "Mark", 9, 44, true},
 		{"bsb", "John", 3, 16, true},
-		// The Greek Esther's: greek_esther_current_test.go, greek_esther_next_test.go.
+		// The Greek Esther's: greek_esther_test.go.
 	} {
 		if got := VerseExistsIn(tc.vid, tc.book, tc.ch, tc.v); got != tc.want {
 			t.Errorf("VerseExistsIn(%s, %s %d:%d) = %v, want %v", tc.vid, tc.book, tc.ch, tc.v, got, tc.want)
@@ -183,9 +181,8 @@ func TestVerseExistsIn(t *testing.T) {
 }
 
 // withIncommensurableBook records book as incommensurable between the
-// reference and vid until the test ends. The shipping table has one book that
-// is (the Greek Esther) and the next major release's none, so the arms that
-// answer for one are exercised, in both states, on a book marked here.
+// reference and vid until the test ends. The shipped tables have none, so the
+// arms that answer for one are exercised on a book marked here.
 func withIncommensurableBook(t *testing.T, vid, book string) {
 	t.Helper()
 	was, had := versificationDeltas[vid]

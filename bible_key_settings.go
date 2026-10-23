@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
@@ -22,6 +23,123 @@ import (
 
 // bibleKeyProbeBudget bounds the Test call — one metadata request.
 const bibleKeyProbeBudget = 12 * time.Second
+
+// keyNotRestoredLine describes the same definitive absence under each empty
+// key field: a saved mark remains, the credential store holds no key and no
+// copy remains in Preferences (keyLeftOnOldDevice). It does not infer a
+// restore or explain why the key is missing. A store error is not absence.
+// The line replaces the field's hint until dismissed with its ✕.
+const keyNotRestoredLine = "Your saved key isn't available on this device. Paste it again here."
+
+// keyStatusRow is a key field's status line with, to its right while the
+// line says keyNotRestoredLine, the ✕ that dismisses it (decision 13 in
+// docs/ROADMAP.md): a reader with no key to paste can put the line away, and
+// it stays away for that restore (keyNotRestoredDismissed). The same row
+// serves the API.Bible key's field and each AI provider's, so the rule is the
+// same wherever the line is said.
+//
+// The ✕ is an icon button of low importance with no words, as the Settings
+// header's close control is; the toolkit gives a control no accessibility
+// label, so there is none to name. It is small and level with the line's
+// first row (decision 13): its glyph is lineCloseGlyph, smaller than the
+// header's, and lineCloseLayout puts the glyph's centre on the centre of the
+// line's first row, however many rows the line breaks into, on every
+// platform and at every text size. The column keeps the previous button's
+// minimum size; only touch devices use its spare space for an invisible tap
+// target. Hidden, the column gives its width back to the line.
+type keyStatusRow struct {
+	row   *fyne.Container
+	close *fyne.Container
+}
+
+func newKeyStatusRow(status *statusLine, onDismiss func()) *keyStatusRow {
+	btn := widget.NewButtonWithIcon("", theme.CancelIcon(), onDismiss)
+	btn.Importance = widget.LowImportance
+	minimum := btn.MinSize()
+	small := container.NewThemeOverride(btn, lineCloseTheme{fyne.CurrentApp().Settings().Theme()})
+	target := newTappableArea(canvas.NewRectangle(color.Transparent), onDismiss)
+	if !fyne.CurrentDevice().IsMobile() {
+		target.Hide()
+	}
+	closeCol := container.New(lineCloseLayout{line: status, minimum: minimum}, target, small)
+	closeCol.Hide()
+	return &keyStatusRow{row: container.NewBorder(nil, nil, nil, closeCol, status), close: closeCol}
+}
+
+// lineCloseGlyph is the size the ✕ beside a key field's line draws its glyph
+// at: the size of the app's other small inline icon buttons, the results
+// trail's ✕ and the AI panel's passage disclosure (trailChipTheme,
+// aiPassageDisclosureTheme), where the Settings header's ✕ draws the theme's
+// inline icon, 20pt.
+const lineCloseGlyph float32 = 14
+
+// lineCloseBox is the side of the button drawn around that glyph, where its
+// hover and its press show: the glyph and the inner padding the results
+// trail's ✕ has, 5pt on each side.
+const lineCloseBox = lineCloseGlyph + 2*5
+
+// lineCloseTheme draws the ✕'s glyph at lineCloseGlyph. The button has no
+// words, so its subtree holds no text for an override's own font caches to
+// measure differently (showAISettings).
+type lineCloseTheme struct{ fyne.Theme }
+
+func (t lineCloseTheme) Size(name fyne.ThemeSizeName) float32 {
+	switch name {
+	case theme.SizeNameInlineIcon:
+		return lineCloseGlyph
+	case theme.SizeNameInnerPadding:
+		return (lineCloseBox - lineCloseGlyph) / 2
+	}
+	return t.Theme.Size(name)
+}
+
+// lineCloseLayout keeps the status row's original allocation while drawing
+// the smaller button level with its first line. The touch-only target starts
+// at the row's top and fits wholly inside its column, capped at minTapTarget.
+// A short line therefore keeps its original height rather than growing to
+// make room for a target, and no target extends into Clear above the line.
+//
+// On iOS and Android the toolkit's mobile driver moves each touch 8pt up
+// before it finds what is under it (tapYOffset), as it does for every
+// control. This layout does not shift its target towards another control to
+// compensate for that offset.
+type lineCloseLayout struct {
+	line    *statusLine
+	minimum fyne.Size
+}
+
+func (l lineCloseLayout) MinSize([]fyne.CanvasObject) fyne.Size {
+	return l.minimum
+}
+
+func (l lineCloseLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
+	if len(objs) != 2 {
+		return
+	}
+	target, button := objs[0], objs[1]
+	targetWidth := fyne.Min(size.Width, minTapTarget)
+	target.Move(fyne.NewPos((size.Width-targetWidth)/2, 0))
+	target.Resize(fyne.NewSize(targetWidth, fyne.Min(size.Height, minTapTarget)))
+	centre := l.line.rowHeight() / 2
+	button.Move(fyne.NewPos((size.Width-lineCloseBox)/2, centre-lineCloseBox/2))
+	button.Resize(fyne.NewSquareSize(lineCloseBox))
+}
+
+// showClose shows or hides the ✕ and reports whether that changed anything:
+// the width the line breaks in changes with it, and so can the sheet's
+// height.
+func (r *keyStatusRow) showClose(show bool) bool {
+	if r.close.Visible() == show {
+		return false
+	}
+	if show {
+		r.close.Show()
+	} else {
+		r.close.Hide()
+	}
+	r.row.Refresh()
+	return true
+}
 
 // bibleKeySection builds the Translations settings group: the rows that live
 // on the group card, and the footnote that sits below it. onKeyPresence is
@@ -198,7 +316,12 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 	})
 
 	saveOK := true
-	refreshStatus := func() {
+	var refreshStatus func()
+	statusRow := newKeyStatusRow(status, func() {
+		store.dismissKeyNotRestored(bibleKeyID)
+		refreshStatus()
+	})
+	refreshStatus = func() {
 		savedLabel := "✓ Saved on this device."
 		if store.keyInSecureStore(bibleKeyID) {
 			savedLabel = "✓ Saved in the " + store.secureStoreName() + "."
@@ -226,9 +349,21 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 			text, col = "Free for personal use — no card, no charge.", pal.TextMuted
 			clearBtn.Disable()
 		}
+		// An empty field whose key a restore did not bring back says so,
+		// whether or not the included key is working meanwhile: the field's
+		// placeholder already says that, and this reader has a key of their
+		// own to paste. Until they dismiss it with its ✕.
+		notRestored := saveOK && strings.TrimSpace(entry.Text) == "" && store.keyNotRestoredShown(bibleKeyID)
+		if notRestored {
+			text, col = keyNotRestoredLine, pal.Text
+		}
 		// A status that now takes a line more or less changes the section's
-		// height, and the sheet's with it.
-		if status.set(text, col) {
+		// height, and the sheet's with it; so can the ✕ coming or going.
+		changed := status.set(text, col)
+		if statusRow.showClose(notRestored) {
+			changed = true
+		}
+		if changed {
 			remeasure()
 		}
 	}
@@ -239,8 +374,10 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 	// remove it (README: "Clear removes it for good").
 	clearBibleKey = func() {
 		entry.SetText("")
-		saveOK = store.setBibleAPIKey("")
-		store.noteBibleKeyCleared(true)
+		// The record says which key went: the included one when it was in
+		// force, the field then being empty already (removeBibleKey).
+		saveOK = store.removeBibleKey()
+		giveUpKeyedTranslation(state)
 		entry.SetPlaceHolder(bibleKeyPlaceholder(store.usingBundledBibleKey()))
 		entry.Refresh()
 		refreshStatus()
@@ -253,11 +390,17 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 	}
 	entry.OnChanged = func(s string) {
 		s = strings.TrimSpace(s)
-		saveOK = store.setBibleAPIKey(s)
 		// Emptying the field is a decision, not an accident of state: record
-		// it so the bundled key is not quietly re-seeded next launch. Typing
-		// a key again cancels that.
-		store.noteBibleKeyCleared(s == "")
+		// it, and which key it removed, so the bundled key is not quietly
+		// re-seeded next launch. Typing a key again cancels that.
+		if s == "" {
+			saveOK = store.removeBibleKey()
+			giveUpKeyedTranslation(state)
+		} else {
+			saveOK = store.setBibleAPIKey(s)
+			store.noteBibleKeyCleared(false)
+			takeBackKeyedTranslation(state)
+		}
 		// Emptying the field by hand clears the bundled key for good, so the
 		// placeholder must stop advertising it — the Clear button is not the
 		// only way to reach that state.
@@ -286,8 +429,9 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 		entry,
 		// The same row as the assistant's (key_actions_row.go).
 		keyActionsRow(pasteBtn, testBtn, clearBtn),
-		// Status has the row to itself; the link is up on the label row.
-		status,
+		// Status has the row to itself, but for the ✕ of a key a restore did
+		// not bring back; the link is up on the label row.
+		statusRow.row,
 		result,
 	)
 	return rows, footer

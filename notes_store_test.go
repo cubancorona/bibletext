@@ -87,10 +87,9 @@ func TestNoteSurvivesARoundTrip(t *testing.T) {
 // ...but only where the passage genuinely corresponds. A book whose numbering
 // does not correspond at all keeps every note where it is: MapVerse calls that
 // incommensurable, and the note must stay where it is rather than being
-// planted on unrelated text. The shipping table's one such book is the Greek
-// Esther and the next major release's has none, so one is marked for the test,
-// which then holds in both; the Greek Esther's own cases are the switch's
-// (greek_esther_current_test.go, greek_esther_next_test.go).
+// planted on unrelated text. The shipped tables have no such book, so one is
+// marked for the test; the Greek Esther's own cases are in
+// greek_esther_test.go.
 func TestANoteDoesNotFollowAnIncommensurablePassage(t *testing.T) {
 	withIncommensurableBook(t, "webc", "Esther")
 	p := newNotePrefs()

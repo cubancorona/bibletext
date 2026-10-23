@@ -40,45 +40,29 @@ const (
 // What the panel says of a selection the cross-references cannot cover, in
 // two lines: the first is the one every empty panel shows, the second says
 // why. A selection they cover only in part shows its rows under the second
-// line alone. Pinned word for word (crossref_coverage_next_test.go). The
-// second line is the next major release's (nextRelease, docs/NEXT.md): the
-// shipping build shows the first alone, as 1.2.19 does.
+// line alone. Pinned word for word (crossref_coverage_test.go).
 const (
 	crossRefNoneLine         = "No cross-references for this selection."
 	crossRefDeuterocanonLine = "The cross-references don't cover the deuterocanonical books."
 	crossRefUncoveredLine    = "Nothing is listed for %s, which the cross-references don't cover."
 )
 
-// crossRefNotedAdditions are the books whose added verses crossRefCoverage
-// names: verses a translation prints that the reference, whose numbering
-// the Treasury is keyed by, does not have, so no row is filed under them.
-// Esther's are the WEB Catholic's Greek additions, 4:18-47 and 10:4-14. The
-// Song of the Three (Daniel 3:24-90), Susanna and Bel (Daniel 13 and 14) in
-// the WEB Catholic, and the four verses the NKJV prints and the reference
-// does not (Acts 8:37, 15:34 and 24:7, Luke 17:36), have no rows for the
-// same reason and show the first line alone.
-var crossRefNotedAdditions = map[string]bool{"Esther": true}
-
 // crossRefCoverage says what of a selection the Treasury cannot cover: note
 // is the sentence that says so, "" when it covers all of it, and none
 // reports that it covers none of it. A deuterocanonical book is not in the
-// dataset at all; a verse a translation adds to a book that is has no number
-// in the numbering the dataset is keyed by (crossRefSourceRef). verses lie in
-// one chapter of book, as a selection's do.
-//
-// The panel asks it only in the next major release (nextRelease,
-// docs/NEXT.md), where the Greek Esther maps verse for verse and its
-// additions are the verses it adds. The shipping build's panel says what
-// 1.2.19's does: the first line alone, after the Treasury has loaded.
+// dataset at all. A verse a translation adds to a book that is has no number
+// in the numbering the dataset is keyed by (crossRefSourceRef), so no row is
+// filed under it, and every such verse is named by the one rule: the WEB
+// Catholic's Greek Esther additions (4:18-47 and 10:4-14), its Song of the
+// Three (Daniel 3:24-90), Susanna and Bel (Daniel 13 and 14), and the four
+// verses the NKJV prints and the reference does not (Acts 8:37, 15:34 and
+// 24:7, Luke 17:36). verses lie in one chapter of book, as a selection's do.
 func crossRefCoverage(versionID, book string, verses []Verse) (note string, none bool) {
 	if len(verses) == 0 {
 		return "", false
 	}
 	if !protestantCanonBooks[book] {
 		return crossRefDeuterocanonLine, true
-	}
-	if !crossRefNotedAdditions[book] {
-		return "", false
 	}
 	var added []int
 	for _, v := range verses {
@@ -90,6 +74,20 @@ func crossRefCoverage(versionID, book string, verses []Verse) (note string, none
 		return "", false
 	}
 	return fmt.Sprintf(crossRefUncoveredLine, verseRunsPhrase(verses[0].Chapter, added)), len(added) == len(verses)
+}
+
+// panelCoverage is crossRefCoverage for the selection the panel is showing,
+// in the translation being read. An edition whose own apparatus the panel
+// shows (publisher_xrefs.go) is not asked: its block answers for the
+// selection whatever the Treasury covers, and needs no network, so neither
+// the note nor the answer given before the Treasury loads would be true of
+// it.
+func panelCoverage(state *AppState, book string, verses []Verse) (note string, none bool) {
+	v := state.currentVersion()
+	if v.PublisherCrossRefs {
+		return "", false
+	}
+	return crossRefCoverage(v.ID, book, verses)
 }
 
 // verseRunsPhrase names ascending verses of one chapter as runs: "verse
@@ -142,11 +140,10 @@ type crossRefList struct {
 // rows follow them, whatever order refs hands them over in.
 func buildCrossRefList(state *AppState, selected []Verse, refs []crossRef, tskErr error, pal palette, onTap func(crossRef)) crossRefList {
 	out := composeCrossRefList(state, selected, refs, tskErr, pal, onTap)
-	if !nextRelease {
-		return out
-	}
-	book, _ := readerChapter(state)
-	out.CoverageNote, _ = crossRefCoverage(state.currentVersion().ID, book, selected)
+	// The selected verses' own book: the selection's chapter, which the
+	// reader may have left (selectedChapter).
+	book, _ := selectedChapter(state, selected)
+	out.CoverageNote, _ = panelCoverage(state, book, selected)
 	if out.CoverageNote != "" && len(out.Objects) > 0 {
 		out.Objects = append([]fyne.CanvasObject{crossRefCaption(out.CoverageNote)}, out.Objects...)
 	}
@@ -183,9 +180,12 @@ func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tsk
 	}
 
 	// The edition's own block: heading, the notes verbatim, the legend the
-	// parenthesised citations need, and the edition's own credit.
+	// parenthesised citations need, and the edition's own credit. Its title
+	// notes and the passages it sets as the verse's own are the selected
+	// verses' chapter's, which the reader may have left (selectedChapter).
 	out.PublisherBlock = true
-	rows := publisherCrossRefsFor(state.Bible, state.CurrentBook, state.CurrentChapter, selected)
+	book, chapter := selectedChapter(state, selected)
+	rows := publisherCrossRefsFor(state.Bible, book, chapter, selected)
 	out.PublisherRows = len(rows)
 	out.Objects = append(out.Objects, crossRefBlockHeading(fmt.Sprintf("%s cross references", v.Abbrev), pal))
 	if len(rows) == 0 {

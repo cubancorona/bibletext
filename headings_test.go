@@ -118,9 +118,10 @@ func TestTheWorldEnglishFeedSetsNoHeadings(t *testing.T) {
 }
 
 // The Catholic edition's five are the names by which those passages are known,
-// and they include one malformed block: a title fused to a translator's note
-// with no space between them. It is captured as the publisher sent it — this
-// pins the shape so a decision about drawing it can be taken on the real data.
+// and one of them, over Daniel 3:24, carries a translators' note that the feed
+// runs into the heading's words with no space between them. It is captured as
+// the feed sent it; the page sets the note apart as that heading's footnote
+// (heading_note.go, TestTheSongOfTheThreeIsDrawnAsItsPublisherSetsIt).
 func TestTheCatholicEditionKeepsItsFiveHeadings(t *testing.T) {
 	bd := headingCapture(t, "build/biblecache/webc.json", decodeHelloAOCatholic)
 	n, acrostics := 0, 0

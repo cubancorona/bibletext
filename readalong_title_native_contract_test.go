@@ -123,13 +123,17 @@ func TestNativePanesFindTheTitleAsTheItalicParagraphBeforeVerseOne(t *testing.T)
 			t.Errorf("iOS finder lacks %q", want)
 		}
 	}
-	apply := nativeFunctionSource(t, "reading_ios.go", "static BOOL bibleTextApplyHTML(NSData *data) {")
+	// The install is the one place either page a push leaves, the imported
+	// one or the fallback page, gets its ranges (btIOSInstallPage), so the
+	// title found there is found for both, and a page that has none clears
+	// the previous chapter's.
+	apply := nativeFunctionSource(t, "reading_ios.go", "static void btIOSInstallPage(NSAttributedString *as) {")
 	if !inOrder(apply, "btIOSBuildVerseIndex(gReadingTV.textStorage);", "btIOSFindTitleRange(gReadingTV.textStorage);") {
 		t.Error("iOS: the title range must be found after the verse index that bounds it")
 	}
-	iosFallback := nativeFunctionSource(t, "reading_ios.go", "void bibleTextTVSetHTML(const char *html) {")
-	if !inOrder(iosFallback, "btIOSBuildVerseIndex(nil);", "btIOSFindTitleRange(nil);") {
-		t.Error("iOS: the plain-text fallback must clear the title range with the verse index")
+	iosFallback := nativeFunctionSource(t, "reading_ios.go", "void bibleTextTVSetHTML(const char *html, const char *fallbackText, const int *fallbackRuns,")
+	if !strings.Contains(iosFallback, "btIOSInstallPage(btIOSFallbackPage(") {
+		t.Error("iOS: the fallback page must find its title range through the install")
 	}
 
 	mac := nativeFunctionSource(t, "reading_macos.go", "static void btMacFindTitleRange(NSTextStorage *ts) {")
@@ -138,20 +142,18 @@ func TestNativePanesFindTheTitleAsTheItalicParagraphBeforeVerseOne(t *testing.T)
 			t.Errorf("macOS finder lacks %q", want)
 		}
 	}
-	latched := nativeFunctionSource(t, "reading_macos.go", "static BOOL btMacApplyHTMLLatched(NSData *data) {")
+	latched := nativeFunctionSource(t, "reading_macos.go", "static void btMacInstallPageLatched(NSAttributedString *as) {")
 	if !inOrder(latched, "btMacFindContentStart(gTextView.textStorage);", "btMacFindTitleRange(gTextView.textStorage);") {
 		t.Error("macOS: the title range must be found after the content start that bounds it")
 	}
-	// The same property as the iOS fallback check above. The latched import
-	// returns NO before writing any geometry global when the import fails, so
-	// the fallback is the only place the previous chapter's title range can be
-	// dropped — and btMacTitleRange clamps on length alone, which the LONGER
-	// plain string passes. macOS has no verse table to clear beside it
-	// (btMacLocForVerse walks the font runs live), so the reset rides on the
-	// content-start reset that bounds the finder instead.
-	macFallback := nativeFunctionSource(t, "reading_macos.go", "void bibleTextMacTVSetHTML(const char *html) {")
-	if !inOrder(macFallback, "gMacContentStart = 0;", "btMacFindTitleRange(nil);") {
-		t.Error("macOS: the plain-text fallback must clear the title range with the content start")
+	// The same property as the iOS fallback check above. A failed import
+	// returns before writing any geometry global, so the fallback page is
+	// the page whose install must find, or drop, the title range: else the
+	// previous chapter's survives, and btMacTitleRange clamps on length
+	// alone.
+	macFallback := nativeFunctionSource(t, "reading_macos.go", "void bibleTextMacTVSetHTML(const char *html, const char *fallbackText, const int *fallbackRuns,")
+	if !strings.Contains(macFallback, "btMacInstallPage(btMacFallbackPage(") {
+		t.Error("macOS: the fallback page must find its title range through the install")
 	}
 
 	java := readNativeSource(t, "android/BtBridge.java")
@@ -175,12 +177,10 @@ func TestNativePanesFindTheTitleAsTheItalicParagraphBeforeVerseOne(t *testing.T)
 	if inOrder(swapped, "btIOSBuildVerseIndex(gReadingTV.textStorage);", "btIOSFindTitleRange(gReadingTV.textStorage);") {
 		t.Fatal("inOrder still passes with the calls swapped; the check proves nothing")
 	}
-	// CONTROL: both fallback checks fail when their reset is taken out.
-	if inOrder(strings.Replace(iosFallback, "btIOSFindTitleRange(nil);", "", 1), "btIOSBuildVerseIndex(nil);", "btIOSFindTitleRange(nil);") {
-		t.Fatal("inOrder still passes with the iOS fallback reset removed; the check proves nothing")
-	}
-	if inOrder(strings.Replace(macFallback, "btMacFindTitleRange(nil);", "", 1), "gMacContentStart = 0;", "btMacFindTitleRange(nil);") {
-		t.Fatal("inOrder still passes with the macOS fallback reset removed; the check proves nothing")
+	// CONTROL: both fallback checks fail when the install is taken out.
+	if strings.Contains(strings.Replace(iosFallback, "btIOSInstallPage(btIOSFallbackPage(", "", 1), "btIOSInstallPage(btIOSFallbackPage(") ||
+		strings.Contains(strings.Replace(macFallback, "btMacInstallPage(btMacFallbackPage(", "", 1), "btMacInstallPage(btMacFallbackPage(") {
+		t.Fatal("a fallback check still passes with its install taken out; the check proves nothing")
 	}
 }
 

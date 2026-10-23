@@ -15,6 +15,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/widget"
 )
 
 func TestSettingsBodyEndsAboveTheFooter(t *testing.T) {
@@ -69,6 +70,53 @@ func TestSettingsBodyEndsAboveTheFooter(t *testing.T) {
 				t.Errorf("scrolled to the end, the last row still ends at %.1f, below the body's %.1f", lastBottom, viewBottom)
 			}
 			t.Logf("body %.0fpt in a %.0fpt view", scroll.Content.Size().Height, scroll.Size().Height)
+		})
+	}
+}
+
+// No rule sets the footer off from the body, on any platform: the sheet is
+// one component on all six, and the rule mirrored from the one under the
+// title is gone from every size of it, the iPad's included. The title keeps
+// its rule, and the walk must find it, so a walk that reaches no rule at all
+// fails.
+func TestTheSettingsFooterHasNoRule(t *testing.T) {
+	for _, sc := range []struct {
+		name string
+		w, h float32
+	}{
+		{"13-inch iPad portrait", 1032, 1376},
+		{"13-inch iPad landscape", 1376, 1032},
+		{"11-inch iPad portrait", 834, 1194},
+		{"phone", 390, 844},
+		{"desktop window", 1280, 800},
+	} {
+		t.Run(sc.name, func(t *testing.T) {
+			_, _, popup := settingsWithIncludedKey(t, sc.w, sc.h, 1, nil)
+			sheetBox(t, popup) // lays the popup out
+			drv := fyne.CurrentApp().Driver()
+			scroll := findScroll(popup.Content)
+			if scroll == nil {
+				t.Fatal("no scroll in the sheet")
+			}
+			viewTop := drv.AbsolutePositionForObject(scroll).Y
+			viewBottom := viewTop + scroll.Size().Height
+			var titleRule bool
+			walkTree(popup, func(o fyne.CanvasObject) {
+				r, ok := o.(*widget.Separator)
+				if !ok || !r.Visible() || objectUnder(scroll.Content, r) {
+					return
+				}
+				y := drv.AbsolutePositionForObject(r).Y
+				switch {
+				case y+r.Size().Height <= viewTop+0.5:
+					titleRule = true
+				case y >= viewBottom-0.5:
+					t.Errorf("a rule at %.1f, below the body (ends %.1f): the footer is ruled off", y, viewBottom)
+				}
+			})
+			if !titleRule {
+				t.Fatal("control: no rule under the title")
+			}
 		})
 	}
 }

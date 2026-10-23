@@ -40,6 +40,12 @@ copy there, or two or more, it fails all the same. An end inside a word fails
 generation too, as does a chapter missing from the cache. Nothing is searched
 for again from the verse's start.
 
+A place where the app's verse anchors a note is the edge of a word. At some
+of the NKJV's notes the publisher's text has no space on either side of the
+note, so two words run together in the markup fetched without notes and in
+the app's verse alike, and a run that ends or begins there, or two runs that
+touch there, would otherwise read as an end inside one word.
+
 The characters before each run are held in memory only, to be compared, and
 never printed: they are licensed text.
 """
@@ -213,24 +219,28 @@ def rune_map(s):
             stripped.append(ch.lower()); idx.append(i)
     return "".join(stripped), idx
 
-def inside_word(text, index):
-    """True when index falls between two letters or digits."""
-    return 0 < index < len(text) and text[index - 1].isalnum() and text[index].isalnum()
+def inside_word(text, index, edges=()):
+    """True when index falls between two letters or digits, unless it is one
+    of edges: the places where the app's verse anchors a note, each the edge
+    of a word even where the source runs two words together there."""
+    return (index not in edges and 0 < index < len(text)
+            and text[index - 1].isalnum() and text[index].isalnum())
 
-def place(run_text, verse_text, before, cursor_nospace, allow_relocated=False):
+def place(run_text, verse_text, before, cursor_nospace, allow_relocated=False, edges=()):
     """Place run_text in verse_text, ignoring ALL whitespace differences, after
     before: the verse's non-space characters ahead of the run in the markup
-    (WJExtract), whose count is the run's place. Returns ((start_rune,
-    end_rune, new_cursor, relocated), None), or (None, why); why names counts
-    only, never the text.
+    (WJExtract), whose count is the run's place. edges are the rune offsets
+    where the app's verse anchors a note. Returns ((start_rune, end_rune,
+    new_cursor, relocated), None), or (None, why); why names counts only,
+    never the text.
 
     When the app's verse has other characters before the run, or the run's
     characters are not at its place, at or after the cursor, the app's text
     differs from the HTML before the run, and the run is refused, unless
     allow_relocated is set and its characters occur once in the whole verse,
     after the run before it: with no copy, or two or more, nothing says which
-    the publisher marked. A placement with either end inside a word is
-    refused."""
+    the publisher marked. A placement with either end inside a word, at a
+    place that is not one of edges, is refused."""
     needle = "".join(ch.lower() for ch in run_text if not ch.isspace())
     if not needle:
         return None, "it has no characters"
@@ -248,7 +258,7 @@ def place(run_text, verse_text, before, cursor_nospace, allow_relocated=False):
             return None, f"{why}; their one copy is at {copies[0]}, taken only with --allow-relocated"
         at = copies[0]
     a, b = idx[at], idx[at + len(needle) - 1] + 1
-    if inside_word(verse_text, a) or inside_word(verse_text, b):
+    if inside_word(verse_text, a, edges) or inside_word(verse_text, b, edges):
         return None, f"it would begin or end inside a word at ({a}, {b})"
     return (a, b, at + len(needle), relocated), None
 
@@ -288,11 +298,13 @@ def derive(cache, app_cache=None, out_path=None, allow_relocated=False):
         sys.exit(1)
 
     data = json.load(open(app_cache))["data"]["Verses"]
-    def app_text(book, ch, v):
+    def app_verse(book, ch, v):
+        """The app's verse text and the rune offsets where it anchors a note
+        (Footnote.Anchor), or (None, None)."""
         for rec in data.get(book, {}).get(str(ch), []):
             if rec["Verse"] == v:
-                return rec["Text"]
-        return None
+                return rec["Text"], frozenset(f["anchor"] for f in rec.get("footnotes") or ())
+        return None, None
 
     code_to_book = {code: book for book, (code, _) in BOOKS.items()}
     spans, lengths, hashes, failed, relocated = {}, {}, {}, [], []
@@ -304,7 +316,7 @@ def derive(cache, app_cache=None, out_path=None, allow_relocated=False):
             for vid, runs in p.runs.items():
                 vcode, vch, vv = vid.split(".")
                 vbook = code_to_book[vcode]
-                text = app_text(vbook, int(vch), int(vv))
+                text, edges = app_verse(vbook, int(vch), int(vv))
                 key = f"{vbook} {int(vch)}:{int(vv)}"
                 if text is None:
                     failed.append((key, "no app text")); continue
@@ -312,7 +324,7 @@ def derive(cache, app_cache=None, out_path=None, allow_relocated=False):
                 for number, (frags, before) in enumerate(zip(runs, p.befores[vid]), 1):
                     # The reason names the run by number and place, never by
                     # its words: they are licensed text.
-                    got, why = place("".join(frags), text, before, cursor, allow_relocated)
+                    got, why = place("".join(frags), text, before, cursor, allow_relocated, edges)
                     if got is None:
                         failed.append((key, f"run {number}: {why}")); out = None; break
                     a, b, cursor, moved = got

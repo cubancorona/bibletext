@@ -191,7 +191,8 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 	// keepHeadingsRagged starting each paragraph on the '\n' before it, so no
 	// heading after the first is swapped; isHeadingParagraph asking for
 	// italic where a heading is bold; the title's trailing whitespace
-	// counted; copyAsRead's selection ends left unsorted; setStyle's two
+	// counted; the selection's ends left unsorted (selectionAsRead, which
+	// Copy and a drag take their text from); setStyle's two
 	// justification modes swapped. A change made on purpose to one of these
 	// functions changes its lines here with it.
 	type wholeFn struct {
@@ -283,16 +284,23 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 		"return sb;",
 		"}",
 	}}
-	copyFn := wholeFn{"private static boolean copyAsRead()", []string{
-		"private static boolean copyAsRead() {",
-		"if (text == null) return false;",
+	asReadFn := wholeFn{"private static CharSequence selectionAsRead()", []string{
+		"private static CharSequence selectionAsRead() {",
+		"if (text == null) return null;",
 		"int a = text.getSelectionStart(), b = text.getSelectionEnd();",
-		"if (a < 0 || b < 0 || a == b) return false;",
+		"if (a < 0 || b < 0 || a == b) return null;",
 		"int s0 = Math.min(a, b), s1 = Math.max(a, b);",
 		"CharSequence cs = text.getText();",
 		"CharSequence read = readerText(cs, s0, s1);",
 		"if (android.text.TextUtils.equals(read, cs.subSequence(s0, s1))",
-		"&& !holdsPageOnlySpan(cs, s0, s1)) return false;",
+		"&& !holdsPageOnlySpan(cs, s0, s1)) return null;",
+		"return read;",
+		"}",
+	}}
+	copyFn := wholeFn{"private static boolean copyAsRead()", []string{
+		"private static boolean copyAsRead() {",
+		"CharSequence read = selectionAsRead();",
+		"if (read == null) return false;",
 		"android.content.ClipboardManager cm = (android.content.ClipboardManager)",
 		"text.getContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE);",
 		"if (cm == null) return false;",
@@ -321,7 +329,7 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 	}
 	// Which function moved, and what it now reads, so the failures below
 	// can be read without diffing the bridge by hand.
-	for _, f := range []wholeFn{headingFn, titleFn, styleFn, raggedFn, keepFn, readFn, copyFn, menuFn} {
+	for _, f := range []wholeFn{headingFn, titleFn, styleFn, raggedFn, keepFn, readFn, asReadFn, copyFn, menuFn} {
 		if got := codeLines(javaBlockAfter(t, java, f.head)); !slices.Equal(got, f.body) {
 			t.Errorf("%s is held whole here and no longer reads as held; it now reads:\n%s",
 				f.head, strings.Join(got, "\n"))
@@ -353,13 +361,15 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 	// And the reader gets the spaces back, from the paragraphs the swap set
 	// them in: the app's own verbs, and Copy, which the view hands to
 	// copyAsRead for every copy and which takes it over when readerText
-	// changes anything. Each line is read as it stands, so a test turned
-	// round, or a Copy line that never reaches copyAsRead's answer, fails
-	// here and not only in a control.
+	// changes anything (selectionAsRead). Each line is read as it stands, so
+	// a test turned round, or a Copy line that never reaches readerText's
+	// answer, fails here and not only in a control.
 	givesBack := func(src string) bool {
 		copyAs := javaBlockAfter(t, src, "private static boolean copyAsRead()")
-		return heldWhole(src, readFn, raggedFn, menuFn) &&
-			inSequence(copyAs, "readerText(", "setPrimaryClip(") &&
+		asRead := javaBlockAfter(t, src, "private static CharSequence selectionAsRead()")
+		return heldWhole(src, readFn, raggedFn, menuFn, asReadFn) &&
+			inSequence(asRead, "readerText(", "return read;") &&
+			inSequence(copyAs, "selectionAsRead()", "setPrimaryClip(") &&
 			hasLinesInOrder(src, "final String sel = readerText(text.getText(), s0, s1).toString();") &&
 			!strings.Contains(src, "getText().subSequence(s0, s1).toString()")
 	}
@@ -377,11 +387,13 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 	// readerText therefore copies the selection with its spans and puts each
 	// helper right in place — a builder's replace and delete keep the spans
 	// around the character, counting the marks it has deleted so each later
-	// offset still lands — and copyAsRead hands the clipboard that styled
-	// text. A String anywhere on the way is plain text on the clipboard.
+	// offset still lands — and selectionAsRead hands it on, so copyAsRead
+	// hands the clipboard that styled text. A String anywhere on the way is
+	// plain text on the clipboard.
 	keepsStyle := func(src string) bool {
 		read := javaBlockAfter(t, src, "readerText(CharSequence cs, int s0, int s1)")
 		copyAs := javaBlockAfter(t, src, "private static boolean copyAsRead()")
+		asRead := javaBlockAfter(t, src, " selectionAsRead() {")
 		return hasLinesInOrder(src, "private static CharSequence readerText(CharSequence cs, int s0, int s1) {") &&
 			hasLinesInOrder(read,
 				"android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder(cs, s0, s1);",
@@ -394,8 +406,10 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 				`sb.replace(at, at + 1, " ");`,
 				"return sb;") &&
 			!strings.Contains(read, "append(") && !strings.Contains(read, "sb.toString()") &&
+			hasLinesInOrder(src, "private static CharSequence selectionAsRead() {") &&
+			hasLinesInOrder(asRead, "CharSequence read = readerText(cs, s0, s1);", "return read;") &&
 			hasLinesInOrder(copyAs,
-				"CharSequence read = readerText(cs, s0, s1);",
+				"CharSequence read = selectionAsRead();",
 				"cm.setPrimaryClip(android.content.ClipData.newPlainText(null, read));")
 	}
 	if !keepsStyle(java) {
@@ -408,38 +422,48 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 	// has. A copyAsRead that set the reader's text on the clipboard and still
 	// said false would hand Copy on to the platform, which sets the view's
 	// text over it; one whose comparison was turned round would take Copy
-	// over only for a selection with nothing to give back. So its ways out
-	// are read as they stand, in order, with the one that says true after
-	// the clipboard is set.
-	copies := func(src string) bool {
-		copyAs := javaBlockAfter(t, src, "private static boolean copyAsRead()")
+	// over only for a selection with nothing to give back. So its ways out,
+	// and selectionAsRead's, are read as they stand, in order, with the one
+	// that says true after the clipboard is set.
+	exitsOf := func(block string) []string {
 		var exits []string
-		for _, l := range codeLines(copyAs) {
+		for _, l := range codeLines(block) {
 			if strings.Contains(l, "return ") {
 				exits = append(exits, l)
 			}
 		}
-		return slices.Equal(exits, []string{
-			"if (text == null) return false;",
-			"if (a < 0 || b < 0 || a == b) return false;",
-			"&& !holdsPageOnlySpan(cs, s0, s1)) return false;",
+		return exits
+	}
+	copies := func(src string) bool {
+		copyAs := javaBlockAfter(t, src, "private static boolean copyAsRead()")
+		asRead := javaBlockAfter(t, src, "private static CharSequence selectionAsRead()")
+		return slices.Equal(exitsOf(asRead), []string{
+			"if (text == null) return null;",
+			"if (a < 0 || b < 0 || a == b) return null;",
+			"&& !holdsPageOnlySpan(cs, s0, s1)) return null;",
+			"return read;",
+		}) && slices.Equal(exitsOf(copyAs), []string{
+			"if (read == null) return false;",
 			"if (cm == null) return false;",
 			"return false;", // the clipboard threw
 			"return true;",
-		}) && hasLinesInOrder(copyAs,
+		}) && hasLinesInOrder(asRead,
 			"CharSequence read = readerText(cs, s0, s1);",
 			"if (android.text.TextUtils.equals(read, cs.subSequence(s0, s1))",
-			"&& !holdsPageOnlySpan(cs, s0, s1)) return false;",
+			"&& !holdsPageOnlySpan(cs, s0, s1)) return null;",
+			"return read;") && hasLinesInOrder(copyAs,
+			"CharSequence read = selectionAsRead();",
+			"if (read == null) return false;",
 			"cm.setPrimaryClip(android.content.ClipData.newPlainText(null, read));",
 			"} catch (Throwable t) {", "return false;", "}",
 			"if (selectionMode != null) selectionMode.finish();",
-			"return true;") && heldWhole(src, copyFn)
+			"return true;") && heldWhole(src, copyFn, asReadFn)
 	}
 	if !copies(java) {
 		t.Error("copyAsRead must say true once it has set the reader's text on the clipboard, and " +
-			"false only where it has not — no view, no selection, nothing readerText changes, no " +
-			"clipboard, a clipboard that threw — or the platform's Copy runs after it and the " +
-			"view's text is what pastes")
+			"false only where it has not — no view, no selection, nothing readerText changes " +
+			"(selectionAsRead's null), no clipboard, a clipboard that threw — or the platform's " +
+			"Copy runs after it and the view's text is what pastes")
 	}
 
 	// The controls: each check fails a bridge that lost the piece it holds,
@@ -473,13 +497,22 @@ func TestAndroidSetsAHeadingRaggedOnTheJustifiedPage(t *testing.T) {
 		{"a copy without the spans", "new android.text.SpannableStringBuilder(cs, s0, s1);",
 			"new android.text.SpannableStringBuilder(raw);", keepsStyle},
 		{"a deleted mark left uncounted", "gone++;", "", keepsStyle},
-		{"false once copied", "selectionMode.finish();\n        return true;",
-			"selectionMode.finish();\n        return false;", copies},
+		{"Copy's text not readerText's", "CharSequence read = readerText(cs, s0, s1);",
+			"CharSequence read = cs.subSequence(s0, s1);", givesBack},
+		{"Copy past selectionAsRead", "        CharSequence read = selectionAsRead();\n        if (read == null) return false;\n        android.content.ClipboardManager",
+			"        CharSequence read = text.getText();\n        if (read == null) return false;\n        android.content.ClipboardManager", givesBack},
+		{"selectionAsRead a String", "private static CharSequence selectionAsRead() {",
+			"private static String selectionAsRead() {", keepsStyle},
+		{"false once copied",
+			"newPlainText(null, read));\n        } catch (Throwable t) {\n            return false;\n        }\n        if (selectionMode != null) selectionMode.finish();\n        return true;",
+			"newPlainText(null, read));\n        } catch (Throwable t) {\n            return false;\n        }\n        if (selectionMode != null) selectionMode.finish();\n        return false;", copies},
 		{"false before copying", "private static boolean copyAsRead() {",
 			"private static boolean copyAsRead() {\n        if (true) return false;", copies},
 		{"the comparison turned round",
 			"if (android.text.TextUtils.equals(read, cs.subSequence(s0, s1))",
 			"if (!android.text.TextUtils.equals(read, cs.subSequence(s0, s1))", copies},
+		{"a page-only span let through", "\n                && !holdsPageOnlySpan(cs, s0, s1)) return null;",
+			") return null;", copies},
 		// The lines between the picked ones, which held whole now fail.
 		{"a heading read as italic", "if (st.getStyle() == android.graphics.Typeface.BOLD",
 			"if (st.getStyle() == android.graphics.Typeface.ITALIC", swaps},

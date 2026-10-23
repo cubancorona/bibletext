@@ -59,6 +59,19 @@ type blobSecretStore struct {
 
 func (s *blobSecretStore) Name() string { return s.name }
 
+// restoreCanLeaveKeys: the blobs sit beside the caches, outside every backup
+// and device transfer, and the key that opens them never leaves the device's
+// secure hardware, so a key saved here is on this device or nowhere, and
+// every restore leaves this store behind: onto another phone, or onto this one
+// after a reinstall or a factory reset, whose store starts empty
+// (keysLeftByRestore).
+func (s *blobSecretStore) restoreCanLeaveKeys() bool { return true }
+
+// writeThisDeviceOnly is Write: nothing this store holds leaves the device.
+func (s *blobSecretStore) writeThisDeviceOnly(account, value string) bool {
+	return s.Write(account, value)
+}
+
 // frameSecretBlob prefixes the version byte the reader is stored under.
 func frameSecretBlob(payload []byte) []byte {
 	out := make([]byte, 0, 1+len(payload))

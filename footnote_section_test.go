@@ -61,7 +61,7 @@ func stripFootnotes(verses []Verse) []Verse {
 }
 
 func TestChapterFootnoteEntries(t *testing.T) {
-	entries := chapterFootnoteEntries(footnoteFixtureVerses(), nil, nil)
+	entries := chapterFootnoteEntries(footnoteFixtureVerses(), nil, nil, nil)
 	if len(entries) != 2 {
 		t.Fatalf("want the 2 translator notes (crossref + blank excluded), got %d: %v", len(entries), entries)
 	}
@@ -87,7 +87,7 @@ func TestChapterFootnoteEntriesInterleavesOrphans(t *testing.T) {
 		{Verse: 17, Text: "A crossref orphan stays dark.", Kind: footnoteKindCrossref},
 		{Verse: 17, Text: "   "},
 	}
-	entries := chapterFootnoteEntries(verses, orphans, nil)
+	entries := chapterFootnoteEntries(verses, orphans, nil, nil)
 	if len(entries) != 3 {
 		t.Fatalf("want 2 verse notes + 1 orphan, got %d: %v", len(entries), entries)
 	}
@@ -340,11 +340,6 @@ func TestFootnoteSectionNativeContract(t *testing.T) {
 			"btIOSContentEnd(ts)",
 			"btIOSContentStart",
 			"maxSize * 0.95",
-			// The plain-text import-failure fallback must cut the section
-			// out of the HTML before stripping tags — the geometry boundary
-			// cannot exist in untyped text, so the clamps would silently
-			// disarm over apparatus the fallback string still carried.
-			"fnsep",
 		},
 		"reading_macos.go": {
 			"btMacFindContentEnd",
@@ -352,7 +347,16 @@ func TestFootnoteSectionNativeContract(t *testing.T) {
 			"btMacFindContentStart",
 			"maxSize * 0.95",
 			"hbScriptureSelection",
-			"fnsep",
+		},
+		// The import-failure fallback page does not set the section's size,
+		// so the boundary cannot be found on it; Go cuts the section off
+		// before building it, at the opening writeFootnoteSection writes
+		// (TestTheFallbackPageEndsBeforeTheTranslatorsNotes).
+		"reading_apple_fallback.go": {
+			"const appleFallbackCut = `<p class=\"fnsep\">`",
+		},
+		"footnote_section.go": {
+			`<p class="fnsep">`,
 		},
 	} {
 		src, err := os.ReadFile(file)

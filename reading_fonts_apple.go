@@ -62,34 +62,23 @@ static void btRegisterFontBytes(const void *bytes, int len) {
 #pragma clang diagnostic pop
 
 
-// btReadingFontLike returns the shipped reading face at the SAME point size and
-// the same bold/italic traits as src, carrying a cascade list to the Hebrew
-// face. Returns NULL when the faces are not registered, and the caller then
-// leaves the run alone.
-//
-// Same size, because the panes read meaning from point size: the verse number
-// is 0.66 of the body and the footnote section 0.85, and two thresholds tell
-// them apart. Changing a size here would break both.
-//
-// The cascade is why nothing has to recognise a Hebrew run. CoreText resolves
-// per GLYPH, so Latin and Greek come from the reading face and Hebrew falls
-// through to the Hebrew one inside the very same run.
-// NOT static: each pane's cgo preamble is its own translation unit, so the
-// two reading panes declare this extern and link against the one definition.
-CTFontRef btReadingFontLike(CTFontRef src) {
-    if (src == NULL) return NULL;
-    CGFloat size = CTFontGetSize(src);
-    CTFontSymbolicTraits t = CTFontGetSymbolicTraits(src);
-    const char *name = "Junicode-Regular";
-    if ((t & kCTFontTraitBold) && (t & kCTFontTraitItalic)) name = "Junicode-BoldItalic";
-    else if (t & kCTFontTraitBold)                          name = "Junicode-Bold";
-    else if (t & kCTFontTraitItalic)                        name = "Junicode-Italic";
-
+// btReadingFaceNamed is the face CoreText knows by the PostScript name `name`,
+// at `size`, carrying a cascade list to the Hebrew face; NULL when CoreText
+// does not have that face. Asked for a name it does not know,
+// CTFontCreateWithFontDescriptor does not fail: it gives another font
+// (Helvetica, upright and regular), which would replace every run of a page,
+// the italic title and the bold headings the panes find by their traits
+// among them. So what comes back is checked by its name, as btFontAvailable
+// checks a family.
+static CTFontRef btReadingFaceNamed(const char *name, CGFloat size) {
+    if (name == NULL) return NULL;
     CFStringRef ps = CFStringCreateWithCString(NULL, name, kCFStringEncodingUTF8);
     if (ps == NULL) return NULL;
     CTFontDescriptorRef base = CTFontDescriptorCreateWithNameAndSize(ps, size);
-    CFRelease(ps);
-    if (base == NULL) return NULL;
+    if (base == NULL) {
+        CFRelease(ps);
+        return NULL;
+    }
 
     CFStringRef heb = CFStringCreateWithCString(NULL, "EzraSIL", kCFStringEncodingUTF8);
     CTFontDescriptorRef hebDesc = heb ? CTFontDescriptorCreateWithNameAndSize(heb, size) : NULL;
@@ -117,7 +106,90 @@ CTFontRef btReadingFontLike(CTFontRef src) {
     }
     if (out == NULL) out = CTFontCreateWithFontDescriptor(base, size, NULL);
     CFRelease(base);
+    if (out != NULL) {
+        CFStringRef got = CTFontCopyPostScriptName(out);
+        int same = got != NULL && CFStringCompare(got, ps, 0) == kCFCompareEqualTo;
+        if (got != NULL) CFRelease(got);
+        if (!same) {
+            CFRelease(out);
+            out = NULL;
+        }
+    }
+    CFRelease(ps);
     return out;
+}
+
+// btReadingFontLike returns the shipped reading face at the SAME point size and
+// the same bold/italic traits as src, carrying a cascade list to the Hebrew
+// face. Returns NULL when the faces are not registered (btReadingFaceNamed),
+// and the caller then leaves the run alone.
+//
+// Same size, because the panes read meaning from point size: the verse number
+// is 0.66 of the body and the footnote section 0.85, and two thresholds tell
+// them apart. Changing a size here would break both.
+//
+// The cascade is why nothing has to recognise a Hebrew run. CoreText resolves
+// per GLYPH, so Latin and Greek come from the reading face and Hebrew falls
+// through to the Hebrew one inside the very same run.
+// NOT static: each pane's cgo preamble is its own translation unit, so the
+// two reading panes declare this extern and link against the one definition.
+CTFontRef btReadingFontLike(CTFontRef src) {
+    if (src == NULL) return NULL;
+    CGFloat size = CTFontGetSize(src);
+    CTFontSymbolicTraits t = CTFontGetSymbolicTraits(src);
+    const char *name = "Junicode-Regular";
+    if ((t & kCTFontTraitBold) && (t & kCTFontTraitItalic)) name = "Junicode-BoldItalic";
+    else if (t & kCTFontTraitBold)                          name = "Junicode-Bold";
+    else if (t & kCTFontTraitItalic)                        name = "Junicode-Italic";
+    return btReadingFaceNamed(name, size);
+}
+
+// btReadingFontOfSize is the reading face at a size with the bold and italic
+// traits asked for: what btReadingFontLike gives a run of the stylesheet's
+// family (Georgia, buildChapterHTML) set at that size and weight, and that
+// run itself, Georgia with those traits, when the reading faces are not
+// registered. For the page the panes set without the importer when a chapter
+// will not import (reading_apple_fallback.go). Not static, like
+// btReadingFontLike. The caller releases the result; NULL when no font can be
+// made.
+CTFontRef btReadingFontOfSize(CGFloat size, CTFontSymbolicTraits traits) {
+    CTFontRef base = CTFontCreateWithName(CFSTR("Georgia"), size, NULL);
+    if (base == NULL) return NULL;
+    if (traits != 0) {
+        CTFontRef styled = CTFontCreateCopyWithSymbolicTraits(base, size, NULL, traits, traits);
+        if (styled != NULL) {
+            CFRelease(base);
+            base = styled;
+        }
+    }
+    CTFontRef face = btReadingFontLike(base);
+    if (face == NULL) return base;
+    CFRelease(base);
+    return face;
+}
+
+// btFontNameOf writes f's PostScript name into buf and releases f; 0 when f is
+// NULL. It and the two below let the host tests read what the helpers above
+// give.
+static int btFontNameOf(CTFontRef f, char *buf, int len) {
+    if (f == NULL) return 0;
+    CFStringRef n = CTFontCopyPostScriptName(f);
+    CFRelease(f);
+    if (n == NULL) return 0;
+    int ok = CFStringGetCString(n, buf, len, kCFStringEncodingUTF8) ? 1 : 0;
+    CFRelease(n);
+    return ok;
+}
+
+static int btReadingFaceNamedName(const char *name, double size, char *buf, int len) {
+    return btFontNameOf(btReadingFaceNamed(name, (CGFloat)size), buf, len);
+}
+
+static int btReadingFontOfSizeName(double size, int bold, int italic, char *buf, int len) {
+    CTFontSymbolicTraits t = 0;
+    if (bold) t |= kCTFontTraitBold;
+    if (italic) t |= kCTFontTraitItalic;
+    return btFontNameOf(btReadingFontOfSize((CGFloat)size, t), buf, len);
 }
 
 // btFontAvailable reports whether CoreText can now resolve a family by name.
@@ -189,4 +261,34 @@ func fontFamilyAvailable(name string) bool {
 	c := C.CString(name)
 	defer C.free(unsafe.Pointer(c))
 	return C.btFontAvailable(c) == 1
+}
+
+// readingFaceName is the PostScript name of the face btReadingFaceNamed gives
+// for the PostScript name name at size, or "" when it gives none.
+func readingFaceName(name string, size float64) string {
+	c := C.CString(name)
+	defer C.free(unsafe.Pointer(c))
+	var buf [256]C.char
+	if C.btReadingFaceNamedName(c, C.double(size), &buf[0], C.int(len(buf))) == 0 {
+		return ""
+	}
+	return C.GoString(&buf[0])
+}
+
+// readingFontOfSizeName is the PostScript name of the font btReadingFontOfSize
+// gives at size with the traits asked for, the one the fallback page is set
+// in, or "" when it gives none.
+func readingFontOfSizeName(size float64, bold, italic bool) string {
+	var b, i C.int
+	if bold {
+		b = 1
+	}
+	if italic {
+		i = 1
+	}
+	var buf [256]C.char
+	if C.btReadingFontOfSizeName(C.double(size), b, i, &buf[0], C.int(len(buf))) == 0 {
+		return ""
+	}
+	return C.GoString(&buf[0])
 }

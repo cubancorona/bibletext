@@ -158,10 +158,12 @@ func TestAskCapturesSelectedPreviewBeforeNavigation(t *testing.T) {
 	}
 	test.Tap(findTreeButton(again, "Ask"))
 	r := nextCapturedStudyRequest(t, reqs, "captured preview Ask")
-	if !r.captured || r.passage.Text != selection || r.text != selection || !r.passage.HasPreview ||
+	// The provider's text is the share's quotation of the selection, which
+	// leaves the verse number out as the citation names the verse.
+	if !r.captured || r.passage.Text != previewText || r.text != previewText || !r.passage.HasPreview ||
 		r.passage.PreviewText != previewText || r.passage.VersionAbbrev != "WEB" || r.passage.Version != version.Name ||
 		r.passage.Book != "Psalms" || r.passage.Chapter != 23 || r.passage.Lo != 3 || r.passage.Hi != 3 || r.span != span {
-		t.Errorf("request changed its raw text or captured preview identity: %+v", r)
+		t.Errorf("request changed its text or captured preview identity: %+v", r)
 	}
 	finishCapturedStudyRequest(t, r, "A synthetic answer.", nil)
 	panel := topPopup(t, win)

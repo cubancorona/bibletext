@@ -100,13 +100,16 @@ func (s *AppState) canvasIsLandscape() bool {
 // phone_landscape.go), with no bar or rail, so the rail a phone held sideways
 // shows is the Books and Search tabs' (and the dev Links tab's).
 //
-// An unsized canvas, before the first layout, answers by the device: the
-// tablet's established first frame is the rail, and a phone's or an Android
-// window's is the bar (an Android window's idiom is its size, so before it has
-// one it reads as a phone). Taking the shape of a 0x0 canvas would answer
-// "wide" and flash a rail on an Android phone before its real size arrives.
+// An unsized canvas (canvasSized) answers by the device: the tablet's rail,
+// and a phone's or an Android window's bar (an Android window's idiom is its
+// size, so before it has one it reads as a phone). Taking the shape of a 0x0
+// canvas would answer "wide" and flash a rail on an Android phone before its
+// real size arrives. The live window rarely gets that far: before its canvas
+// has a size it answers by the size the platform reports for the window
+// (layoutSize, launch_window.go), and only a window with no report reaches
+// the device's answer.
 func mobileRailWanted(tablet bool, w, h float32) bool {
-	if w <= 0 || h <= 0 {
+	if !canvasSized(w, h) {
 		return tablet
 	}
 	return w >= h
@@ -118,13 +121,16 @@ func mobileRailWanted(tablet bool, w, h float32) bool {
 // layoutWatcher.Resize, which is the same trap and cost 3,000 rebuilds a
 // minute when it was got wrong. Phones and tablets ask it (compactNavRail,
 // ui_mobile.go); the desktop draws the rail whatever its shape until it takes
-// the same rule (docs/BACKLOG.md).
+// the same rule (docs/BACKLOG.md). Before the canvas has a size, the size the
+// platform reports for the window stands in for it (layoutSize).
 func railForWindow(state *AppState) bool {
-	if state == nil || state.window == nil {
-		return mobileRailWanted(deviceIsTablet(), 0, 0)
+	var w, h float32
+	if state != nil && state.window != nil {
+		sz := state.window.Canvas().Size()
+		w, h = sz.Width, sz.Height
 	}
-	sz := state.window.Canvas().Size()
-	return mobileRailWanted(deviceIsTablet(), sz.Width, sz.Height)
+	w, h = layoutSize(w, h)
+	return mobileRailWanted(deviceIsTablet(), w, h)
 }
 
 // renderedLayout is the layout as the watcher compares it: the class, whether

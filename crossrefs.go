@@ -55,18 +55,15 @@ const (
 	// first. The panel shows maxCrossRefsPerVerse of them, counted after the
 	// rows the reader's translation cannot show are dropped and the rows a
 	// Gospel parallel already shows are hidden, so it can read past the
-	// sixteenth. Measured over the 2026-08-31 dataset in all four
-	// translations, for every selection that can hold the verse, the deepest
-	// it reads is the twentieth row: WEB Catholic's Genesis 41:42, whose
-	// twenty rows include eight into Greek Esther, which that translation
-	// cannot show. In the next major release (docs/NEXT.md) it is the
-	// twenty-first, Matthew 10:17: the Greek Esther maps verse for verse
-	// there, and five of Matthew 10:17's best rows lie inside passages its
-	// chapter lists as the same saying on another occasion, which hide the
-	// Treasury rows inside them. Thirty-two leaves room for a dataset that
-	// drops or hides more; the opt-in walk of the downloaded texts measures
-	// the depth again and fails if a panel ever reads past it
-	// (crossRefDeepestRead).
+	// sixteenth. Measured over the 2026-08-31 dataset, for every selection
+	// that can hold the verse, the deepest it reads is the eighteenth row,
+	// first at the WEB's Matthew 10:1. In the next major release
+	// (docs/NEXT.md) it is the twenty-first, Matthew 10:17: five of its best
+	// rows lie inside passages its chapter lists as the same saying on
+	// another occasion, which hide the Treasury rows inside them. Thirty-two
+	// leaves room for a dataset that drops or hides more; the opt-in walk of
+	// the downloaded texts measures the depth again and fails if a panel ever
+	// reads past it (crossRefDeepestRead).
 	maxCrossRefsKept = 32
 )
 
@@ -783,8 +780,8 @@ func readCrossRefRows(r io.Reader, keep int) (map[string][]tskRow, []string, err
 	// rows the reader's translation cannot show are dropped and the ones a
 	// parallel already shows are hidden. Capping at sixteen here, before
 	// either, left those places empty: WEB Catholic's Genesis 41:42 showed 10
-	// of the 12 rows it can show, because six of its top sixteen point into
-	// Greek Esther (in the shipping build, which cannot map it), and Matthew
+	// of the 12 rows it could show, because six of its top sixteen pointed
+	// into the Greek Esther, which it could not then map, and Matthew
 	// 10:1 showed 14 in every translation because two of its top sixteen are
 	// the parallels listed above them. The app keeps maxCrossRefsKept, well
 	// past the deepest row any panel reads.
@@ -1375,17 +1372,17 @@ func treasuryRowsFor(rows []tskRow, resolve func(crossRef) []crossRef, hidden cr
 	return mine, read
 }
 
-// selectionVerses returns the verses of the current chapter that the selection
-// overlaps. A valid span is answered from POSITION alone — exactly the
-// chapter's verses lo..hi, clamped to the verses that exist — because the
-// matching below cannot be trusted with scripture's repetitions: Psalm 136's
-// refrain opens the same way in all 26 verses, so a probe match cites whichever
-// verse compares first, and the 8-rune floor resolves short selections to
-// nothing at all. Without a position (the zero span) the selection is placed
-// as the share card places it, and the matching survives only where that
-// declines.
+// selectionVerses returns the verses of the selection's chapter
+// (selectionChapter) that the selection overlaps. A valid span is answered
+// from POSITION alone — exactly the chapter's verses lo..hi, clamped to the
+// verses that exist — because the matching below cannot be trusted with
+// scripture's repetitions: Psalm 136's refrain opens the same way in all 26
+// verses, so a probe match cites whichever verse compares first, and the
+// 8-rune floor resolves short selections to nothing at all. Without a
+// position (the zero span) the selection is placed as the share card places
+// it, and the matching survives only where that declines.
 func selectionVerses(state *AppState, text string, span selSpan) []Verse {
-	book, chapter := readerChapter(state)
+	book, chapter := selectionChapter(state, span)
 	return selectionVersesIn(state, book, chapter, text, span)
 }
 
@@ -1427,10 +1424,11 @@ func selectionVersesIn(state *AppState, book string, chapter int, text string, s
 	// that declines. Taken first, the matching named every verse holding a
 	// repeated wording: Psalm 136's refrain pulled the cross-references of
 	// all 26 verses, and John 3:3 named 3:3–11, while the card cited one
-	// verse for the same drag. On the plain-text page the Mac, iPhone and
-	// iPad show when a chapter fails to import, 1,661 of the WEB's 31,098
-	// whole verses (5.34%) and 1,350 of the BSB's (4.34%) were named with
-	// other verses.
+	// verse for the same drag. On the page the Mac, iPhone and iPad showed
+	// when a chapter failed to import, before that page carried its verse
+	// numbers (reading_apple_fallback.go), 1,661 of the WEB's 31,098 whole
+	// verses (5.34%) and 1,350 of the BSB's (4.34%) were named with other
+	// verses.
 	if _, l, h, _, ok := normalizeShareSelectionIn(state, book, chapter, text, span); ok && l >= 1 && h >= l {
 		var out []Verse
 		for _, v := range state.Bible.GetChapter(book, chapter) {
@@ -1456,11 +1454,13 @@ func selectionVersesIn(state *AppState, book string, chapter int, text string, s
 	// of one word, and a piece of a word stands in one verse: naming
 	// several is naming every verse that holds the longer word. A drag one
 	// letter short of "righteousness" in Romans 3:26 named 3:5–26, and
-	// "commandment" in Psalm 119:176 named 119:6–176; on the plain-text
-	// page 43.5% of the WEB's matching answers (40.0% of the BSB's) named
-	// verses the selection was not made in, every one of them as a range.
-	// Such a selection cites the chapter alone, in the card, the panel and
-	// the prompt.
+	// "commandment" in Psalm 119:176 named 119:6–176; on the Apple panes'
+	// fallback page, before it carried its verse numbers, 43.5% of the WEB's
+	// matching answers (40.0% of the BSB's) named verses the selection was
+	// not made in, every one of them as a range. Such a selection cites the
+	// chapter alone, in the card, the panel and the prompt. The rule stays
+	// for every selection that still arrives with no span; the fallback page
+	// now sends one (reading_apple_fallback.go), so it decides nothing there.
 	if len(out) > 1 {
 		return nil
 	}

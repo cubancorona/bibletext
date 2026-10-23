@@ -344,8 +344,8 @@ func TestAHeadingSelectedOnItsOwnQuotesNothing(t *testing.T) {
 	}
 }
 
-// The same with no span, as the plain-text fallback the Mac and the iPhone
-// and iPad show when a chapter fails to import hands a selection over. That
+// The same with no span, as the Apple panes' fallback page handed a
+// selection over until it carried its verse numbers. That
 // page sets each heading on a line of its own, so selecting its paragraph
 // takes the heading whole, perhaps with the line break after it, or run on
 // to the number of the verse below. Each quotes nothing and cites that verse,
@@ -433,7 +433,7 @@ func TestEveryHeadingSelectedWholeWithNoSpanOverLocalCaches_LocalOnly(t *testing
 		headings, wrong := 0, 0
 		for _, book := range c.bd.Books {
 			for _, ch := range c.bd.GetChapterNumbersForBook(book) {
-				hs := c.bd.Headings[book][ch]
+				hs := headingsFor(c.bd, book, ch) // as the page draws them
 				if len(hs) == 0 {
 					continue
 				}
@@ -601,10 +601,11 @@ func TestAVerseNumberSelectedOnItsOwnQuotesNothing(t *testing.T) {
 // there (the Windows and Linux pane draws it outside the text, where no drag
 // reaches it), but their app verbs start at verse 1's number: a selection
 // inside the title gets none, and one that runs on into the psalm is cut at
-// that number before Go sees it. The page that does hand the title over is
-// the plain-text fallback of the Mac and the iPhone and iPad, where nothing
-// has a span, and these tests stand for it and for any caller that hands
-// over raw text. The text is the World English Bible's Psalm 3; the heading
+// that number before Go sees it, and so does the page the Mac and the iPhone
+// and iPad show when a chapter fails to import, since it carries its verse
+// numbers. These tests stand for any caller that hands over raw text with no
+// span, as that page did before. The text is the World English Bible's
+// Psalm 3; the heading
 // under the title is invented, as that edition sets none, and the small
 // capitals on the title are the fixture's own, so the title is matched as
 // the page draws it.
@@ -710,9 +711,8 @@ func TestAPsalmTitleSelectedOnItsOwnCitesTheFirstVerse(t *testing.T) {
 			if lo, hi := linkVersesForSelection(st, c.sel, c.span); lo != 1 || hi != 1 {
 				t.Errorf("heading=%v, %s: the link names verses %d–%d, want 1–1", withHeading, c.name, lo, hi)
 			}
-			// With no span the resolver matches words, the plain-text
-			// fallback page's path, as it does for a heading at the top of
-			// a chapter.
+			// With no span the resolver matches words, as it does for a
+			// heading at the top of a chapter.
 			if !c.span.valid() {
 				continue
 			}

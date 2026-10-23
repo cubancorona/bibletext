@@ -401,6 +401,73 @@ func displayCopy(d drawnNote, versionID string, chapter int) StoredNote {
 	return out
 }
 
+// noteMarkSpan is the span the note's own mark lights on the chapter: the
+// verses lo..hi displayCopy files it on, widened across the holes of this
+// edition the note names. An omitted verse's mark lights when a note names
+// the verse it stands for (docs/ROADMAP.md, decision 18), and the plan files
+// a note from another edition on the verses this edition has, so without this
+// an NKJV note on Matthew 17:21-22 read in the BSB lit verse 22 and left
+// "[21]" bare. Where a hole the note names stands between two of its runs, as
+// in a note on 17:20-22, the span runs on through it, the band the same span
+// draws from a link and on the website. A note from this edition keeps its
+// own numbers (displayCopy), which name its holes already.
+func noteMarkSpan(d drawnNote, versionID string, chapter, lo, hi int) (int, int) {
+	n := d.Note
+	if lo <= 0 || strings.EqualFold(n.VersionID, versionID) {
+		return lo, hi
+	}
+	if hi < lo {
+		hi = lo
+	}
+	holes := omittedVersesIn(versionID, n.Book, chapter)
+	if len(holes) == 0 {
+		return lo, hi
+	}
+	// A hole is named when one of the note's own runs on this chapter covers
+	// its number and the note's verse of that number has no home here: the
+	// verse this edition leaves out, not one it carries under another number.
+	named := func(m int) bool {
+		hole := false
+		for _, h := range holes {
+			hole = hole || h == m
+		}
+		if !hole {
+			return false
+		}
+		for _, r := range storedAnchorRuns(n) {
+			rhi := r.Hi
+			if rhi < r.Lo {
+				rhi = r.Lo
+			}
+			if r.Chapter == chapter && r.Lo > 0 && r.Lo <= m && m <= rhi {
+				_, _, res := MapVerse(n.VersionID, versionID, n.Book, chapter, m)
+				return res == verseMapAbsent
+			}
+		}
+		return false
+	}
+	for named(lo - 1) {
+		lo--
+	}
+	for {
+		if named(hi + 1) {
+			hi++
+			continue
+		}
+		// The note's next run here, just past a hole it names, joins the span.
+		joined := false
+		for _, r := range d.Placement.Here {
+			if r.Chapter == chapter && r.Lo == hi+1 && named(hi) {
+				hi, joined = max(r.Hi, r.Lo), true
+				break
+			}
+		}
+		if !joined {
+			return lo, hi
+		}
+	}
+}
+
 // foldFingerprint computes the plan's identity, into noteFP (the note half)
 // and Fingerprint (the whole, wash included).
 //

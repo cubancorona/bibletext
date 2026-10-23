@@ -237,8 +237,9 @@ type FootnoteEntry struct {
 }
 
 // ChapterFootnoteEntries is the chapter's apparatus in the order the app shows
-// it: title notes first, then verse notes in verse order, with an omitted
-// verse's note sorted into its natural place between its neighbours.
+// it: title notes first, then verse notes in verse order, a helloao heading's
+// notes under the verse it stands above, ahead of that verse's own, and an
+// omitted verse's note sorted into its natural place between its neighbours.
 //
 // Exported as a WHOLE ROW rather than as its parts so the website cannot
 // re-derive the ordering, the key or the cross-reference exclusion and drift
@@ -254,7 +255,7 @@ func ChapterFootnoteEntries(bd *BibleData, book string, chapter int, verses []Ve
 		orphans = bd.OrphanFootnotes[book][chapter]
 	}
 	titleNotes := bd.SuperscriptionFor(book, chapter).Footnotes
-	inner := chapterFootnoteEntries(verses, orphans, titleNotes)
+	inner := chapterFootnoteEntries(verses, orphans, titleNotes, headingsFor(bd, book, chapter))
 	if len(inner) == 0 {
 		return nil
 	}

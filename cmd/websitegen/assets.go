@@ -496,8 +496,9 @@ body{
    verse's id and :target paints it. reader.js only adds ranges. */
 /* Generous scroll-margin so a deep link lands the verse with the chapter
    heading still on screen, rather than pinning it to the very top edge. */
-/* .hlgap and .vg.hlmark are the band BETWEEN two lit verses: the joining space
-   reader.js wraps, and an omitted verse's mark standing in the range. */
+/* .hlgap is a joining space reader.js wraps where a lit verse or mark stands
+   on both sides of it, and .vg.hlmark an omitted verse's mark the fragment
+   names, lit on its own or with the verses beside it. */
 .v:target,.v.hl,.hlgap,.vg.hlmark{background:var(--verse-hl); border-radius:3px;
   box-shadow:0 0 0 .18em var(--verse-hl); scroll-margin-top:6.5rem}
 /* Browsers do NOT re-evaluate :target when history.replaceState drops the
@@ -743,10 +744,12 @@ const readerJSTemplate = `
   // width, so there is nothing to bridge and the band should stop at the line
   // end anyway.
   //
-  // An omitted verse's mark (.vg) belongs to the verse AFTER it, as the app
-  // panes wash it with that verse's tint (tint.go): a lit verse lights the
-  // marks standing just before it and the spaces between them, and a range
-  // lights the marks inside it.
+  // An omitted verse's mark (.vg) stands for that verse alone, as the app
+  // panes wash it (gapOf, tint.go): a fragment that names the omitted verse
+  // lights its mark (lightMarksIn), and a lit verse beside it does not. A
+  // space lights where what stands on both sides of it is lit, a verse or a
+  // mark, so a range is one band through its joins and the marks it names,
+  // and a range that ends at the hole runs through the space to its mark.
   //
   // The span between the markers touches the page only through document and
   // the nodes it is handed, so highlight_band_test.go runs these very lines
@@ -761,37 +764,37 @@ const readerJSTemplate = `
   function blank(n) {
     return n.nodeType === 3 && n.textContent.length && !n.textContent.trim();
   }
-  function isMark(n) { return n.nodeType === 1 && n.classList.contains('vg'); }
-  function bridgeHighlightGaps() {
-    var lit = document.querySelectorAll('.v.hl');
-    // Between two lit verses: every space, and every mark.
-    for (var i = 1; i < lit.length; i++) {
-      var n = lit[i - 1].nextSibling;
-      while (n && n !== lit[i]) {
-        var next = n.nextSibling;
-        if (blank(n)) wrapGap(n);
-        else if (isMark(n)) n.classList.add('hlmark');
-        n = next;
-      }
-    }
-    // Just before a lit verse: the marks standing there, and the spaces
-    // between them. (Where the verse before is lit too, the first pass has
-    // already lit them, and the walk stops at the first space it lit.)
-    lit.forEach(function (v) {
-      var n = v.previousSibling, spaces = [];
-      while (n) {
-        if (blank(n)) {
-          spaces.push(n);
-        } else if (isMark(n)) {
-          n.classList.add('hlmark');
-          spaces.forEach(wrapGap);
-          spaces = [];
-        } else {
-          break;
-        }
-        n = n.previousSibling;
-      }
+  function isLit(n) {
+    return n.nodeType === 1 && ((n.classList.contains('v') && n.classList.contains('hl')) ||
+      (n.classList.contains('vg') && n.classList.contains('hlmark')));
+  }
+  // markNumber is the omitted verse a mark stands for: "[21]" is 21.
+  function markNumber(el) {
+    var m = /^\[(\d+)\]$/.exec(el.textContent);
+    return m ? parseInt(m[1], 10) : 0;
+  }
+  // lightMarksIn lights the marks of the omitted verses lo..hi, before
+  // bridgeHighlightGaps runs: a link to Matthew 17:21 opened in the BSB
+  // lights "[21]", where the page has no verse 21 to light.
+  function lightMarksIn(lo, hi) {
+    document.querySelectorAll('.vg').forEach(function (el) {
+      var k = markNumber(el);
+      if (k >= lo && k <= hi) el.classList.add('hlmark');
     });
+  }
+  // bridgeAfter lights the spaces after a lit verse or mark when what stands
+  // after them is lit too; anything else there, a line break, an unlit verse
+  // or a mark the fragment did not name, ends the band. A range ending at the
+  // hole (#v20-21 where the page omits 21) runs from verse 20 through the
+  // space to "[21]", as the app panes draw it.
+  function bridgeAfter(n) {
+    var m = n.nextSibling, spaces = [];
+    while (m && blank(m)) { spaces.push(m); m = m.nextSibling; }
+    if (m && isLit(m)) spaces.forEach(wrapGap);
+  }
+  function bridgeHighlightGaps() {
+    document.querySelectorAll('.v.hl').forEach(function (v) { bridgeAfter(v); });
+    document.querySelectorAll('.vg.hlmark').forEach(function (m) { bridgeAfter(m); });
   }
 
   // Put the bridged spaces back to plain text and the marks back to unlit.
@@ -846,12 +849,14 @@ const readerJSTemplate = `
       el.classList.add('hl');
       if (!first) first = el;
     }
+    lightMarksIn(lo, hi);
     bridgeHighlightGaps();
     // A link to a verse this edition omits (Matthew 17:21, made in an
-    // edition that prints it and opened in the BSB) lights nothing, and the
-    // page opened it at the top. It lands, unlit, on the verse after the
-    // hole, whose number the "[21]" mark stands before, as the app's panes
-    // do (drawnArrivalVerse). A verse past the chapter's last lands nowhere.
+    // edition that prints it and opened in the BSB) lights that verse's
+    // "[21]" mark and no verse, and the page opened it at the top. It lands
+    // on the verse after the hole, whose number the mark stands before, as
+    // the app's panes do (drawnArrivalVerse). A verse past the chapter's
+    // last lands nowhere.
     if (!first) return verseAfter(hi);
     return first && (hi > lo || location.hash !== '#v' + lo) ? first : null;
   }
@@ -883,6 +888,8 @@ const readerJSTemplate = `
   function positionBubble(b) {
     var els = document.querySelectorAll('.v.hl');
     if (!els.length) els = document.querySelectorAll('.v:target');
+    // A link to an omitted verse lights its mark alone.
+    if (!els.length) els = document.querySelectorAll('.vg.hlmark');
     if (!els.length) return;
     var lines = [], i, j, rl;
     for (i = 0; i < els.length; i++) {
@@ -1712,8 +1719,11 @@ const readerJSTemplate = `
   var notePara = null;
 
   // fragmentParagraph is the paragraph holding the first verse of the
-  // fragment's span the page has, the verse highlightRange lights first, or
-  // null when the fragment names no verse the page has.
+  // fragment's span the page has, the verse highlightRange lights first, or,
+  // when the span names only verses this edition omits, the paragraph of the
+  // verse after them, where their marks stand and where the app panes hang
+  // such a note (drawnNoteAnchor). null when the fragment names no verse and
+  // the page has none after it.
   function fragmentParagraph() {
     var m = verseSpan();
     if (!m) return null;
@@ -1721,7 +1731,8 @@ const readerJSTemplate = `
       var el = document.getElementById('v' + n);
       if (el) return el.closest ? el.closest('p') : null;
     }
-    return null;
+    var after = verseAfter(m[1]);
+    return after && after.closest ? after.closest('p') : null;
   }
 
   function anchorToPassage(el, para) {

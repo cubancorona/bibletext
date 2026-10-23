@@ -40,11 +40,19 @@ func settingsPopup(t *testing.T, state *AppState) *widget.PopUp {
 	return popup
 }
 
+// sheetCloseButton is the sheet's own ✕, the one in its header. A key field's
+// status line has a smaller ✕ of the same icon beside it, which dismisses
+// that line rather than the sheet (keyStatusRow), and the form comes before
+// the header in the sheet's tree, so those are passed over.
 func sheetCloseButton(t *testing.T, popup *widget.PopUp) *widget.Button {
 	t.Helper()
+	lineCloses := map[*widget.Button]bool{}
+	for _, c := range keyStatusCloses(popup) {
+		lineCloses[c.btn] = true
+	}
 	var closeBtn *widget.Button
 	walkTree(popup, func(o fyne.CanvasObject) {
-		if b, ok := o.(*widget.Button); ok && closeBtn == nil && b.Text == "" &&
+		if b, ok := o.(*widget.Button); ok && closeBtn == nil && b.Text == "" && !lineCloses[b] &&
 			b.Icon != nil && b.Icon.Name() == theme.CancelIcon().Name() {
 			closeBtn = b
 		}

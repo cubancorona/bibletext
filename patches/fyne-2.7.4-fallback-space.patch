@@ -1,0 +1,227 @@
+--- a/internal/painter/font.go
++++ b/internal/painter/font.go
+@@ -9,6 +9,7 @@
+ 	"reflect"
+ 	"strings"
+ 	"sync"
++	"unicode"
+ 
+ 	"github.com/go-text/render"
+ 	"github.com/go-text/typesetting/di"
+@@ -316,6 +317,7 @@
+ 		spacew = scale * fixed266ToFloat32(out.Advance)
+ 	}
+ 	ins := segmenter.Split(in, faces)
++	var alone aloneGlyphs // BibleText patch: characters shaped alone, kept for this string
+ 	for _, in := range ins {
+ 		inEnd := in.RunEnd
+ 
+@@ -324,7 +326,7 @@
+ 			if r == '\t' {
+ 				if pending {
+ 					in.RunEnd = i
+-					x = shapeCallback(shaper, in, x, scale, cb)
++					x = shapeCallback(shaper, faces, in, x, scale, cb, &alone)
+ 				}
+ 				x = tabStop(spacew, x, style.TabWidth)
+ 
+@@ -336,7 +338,7 @@
+ 			}
+ 		}
+ 
+-		x = shapeCallback(shaper, in, x, scale, cb)
++		x = shapeCallback(shaper, faces, in, x, scale, cb, &alone)
+ 	}
+ 
+ 	*advance = x
+@@ -344,13 +346,27 @@
+ 		fixed266ToFloat32(out.LineBounds.Ascent)
+ }
+ 
+-func shapeCallback(shaper shaping.Shaper, in shaping.Input, x, scale float32, cb func(shaping.Output, float32)) float32 {
++func shapeCallback(shaper shaping.Shaper, faces shaping.Fontmap, in shaping.Input, x, scale float32, cb func(shaping.Output, float32), alone *aloneGlyphs) float32 {
+ 	out := shaper.Shape(in)
+ 	glyphs := out.Glyphs
+ 	start := 0
+ 	pending := false
+ 	adv := fixed.I(0)
+ 	for i, g := range out.Glyphs {
++		// BibleText patch: a space shaped in a face other than its own takes
++		// its advance from its own face, and draws nothing.
++		if space, ok := spaceAdvance(shaper, faces, in, g, alone); ok {
++			if pending {
++				out.Glyphs = glyphs[start:i]
++				cb(out, x)
++				x += fixed266ToFloat32(adv) * scale
++			}
++			x += fixed266ToFloat32(space) * scale
++			adv = 0
++			start = i + 1
++			pending = false
++			continue
++		}
+ 		if g.GlyphID == 0 {
+ 			if pending {
+ 				out.Glyphs = glyphs[start:i]
+@@ -361,14 +377,18 @@
+ 
+ 			out.Glyphs = glyphs[i : i+1]
+ 			cb(out, x)
+-			x += fixed266ToFloat32(glyphs[i].Advance) * scale
++			// BibleText patch: DrawString draws this glyph as U+FFFD, so it
++			// advances by that glyph.
++			x += fixed266ToFloat32(missingAdvance(shaper, faces, in, g, alone)) * scale
+ 			adv = 0
+ 
+ 			start = i + 1
+ 			pending = false
+-		} else {
+-			pending = true
++			// BibleText patch: x already holds this glyph's advance; adding
++			// it to adv as well counted it twice.
++			continue
+ 		}
++		pending = true
+ 		adv += g.Advance
+ 	}
+ 
+@@ -381,6 +401,113 @@
+ 	return x + fixed266ToFloat32(adv)*scale
+ }
+ 
++// BibleText patch: go-text's face split never changes face for a space, so a
++// space after an emoji or a fallback-font character is shaped in that face.
++// There it can have no advance (the emoji face's space glyph has no bitmap,
++// and the shaper gives a glyph it cannot measure no advance), no glyph (drawn
++// as a missing-glyph box), a visible placeholder glyph, or a width unlike the
++// text's. A space separator alone in its cluster, shaped in a face other than
++// the one the font map gives it, is measured in that face, shaped alone; ok is
++// false for every other glyph. A space that shares its cluster with a
++// combining mark after it is left as shaped, so the mark is drawn on it.
++func spaceAdvance(shaper shaping.Shaper, faces shaping.Fontmap, in shaping.Input, g shaping.Glyph, alone *aloneGlyphs) (advance fixed.Int26_6, ok bool) {
++	if g.ClusterIndex < 0 || g.ClusterIndex >= len(in.Text) || g.RuneCount != 1 || g.GlyphCount != 1 {
++		return 0, false
++	}
++	r := in.Text[g.ClusterIndex]
++	if r == '\u1680' || !unicode.Is(unicode.Zs, r) { // U+1680 has a visible glyph
++		return 0, false
++	}
++	face := faces.ResolveFace(r)
++	if face == nil || face == in.Face {
++		return 0, false
++	}
++	ref, ok := alone.shape(shaper, in, face, r)
++	if !ok || ref.GlyphID == 0 || ref.Advance <= 0 {
++		return 0, false
++	}
++	return ref.Advance, true
++}
++
++// BibleText patch: DrawString draws a missing glyph as U+FFFD in the face the
++// font map gives that character, so the advance is that glyph's, shaped
++// alone. The missing glyph's own advance is kept only when that fails.
++func missingAdvance(shaper shaping.Shaper, faces shaping.Fontmap, in shaping.Input, g shaping.Glyph, alone *aloneGlyphs) fixed.Int26_6 {
++	face := faces.ResolveFace(0xfffd)
++	if face == nil {
++		return g.Advance
++	}
++	ref, ok := alone.shape(shaper, in, face, 0xfffd)
++	if !ok || ref.Advance <= 0 {
++		return g.Advance
++	}
++	return ref.Advance
++}
++
++// BibleText patch: a character shaped alone, with the size, script, language
++// and direction of the run it is in.
++type aloneKey struct {
++	face   *font.Face
++	r      rune
++	script language.Script
++	lang   language.Language
++	dir    di.Direction
++}
++
++type aloneGlyph struct {
++	glyph shaping.Glyph
++	ok    bool
++}
++
++// aloneGlyphs keeps what one string's spaces and missing glyphs are shaped
++// alone to, so each character is shaped once in a string however often it
++// appears. All of a string's runs share one size. BibleText patch.
++type aloneGlyphs map[aloneKey]aloneGlyph
++
++func (a *aloneGlyphs) shape(shaper shaping.Shaper, in shaping.Input, face *font.Face, r rune) (shaping.Glyph, bool) {
++	key := aloneKey{face: face, r: r, script: in.Script, lang: in.Language, dir: in.Direction}
++	if got, ok := (*a)[key]; ok {
++		return got.glyph, got.ok
++	}
++	ref := in
++	ref.Text = []rune{r}
++	ref.RunStart, ref.RunEnd = 0, 1
++	ref.Face = face
++	out := shaper.Shape(ref)
++	var got aloneGlyph
++	if len(out.Glyphs) == 1 {
++		got = aloneGlyph{glyph: out.Glyphs[0], ok: true}
++	}
++	if *a == nil {
++		*a = make(aloneGlyphs)
++	}
++	(*a)[key] = got
++	return got.glyph, got.ok
++}
++
++// FixDrawnAdvances gives each glyph in out the advance the painter gives it
++// when it draws: a space spaceAdvance measures again takes that advance, and
++// a missing glyph the advance of the U+FFFD drawn for it. It is for a caller
++// that lays out shaped runs itself. BibleText patch.
++func FixDrawnAdvances(shaper shaping.Shaper, faces shaping.Fontmap, in shaping.Input, out *shaping.Output) {
++	var alone aloneGlyphs
++	changed := false
++	for i, g := range out.Glyphs {
++		advance, ok := spaceAdvance(shaper, faces, in, g, &alone)
++		if !ok && g.GlyphID == 0 {
++			advance, ok = missingAdvance(shaper, faces, in, g, &alone), true
++		}
++		if ok && advance != g.Advance {
++			out.Glyphs[i].XAdvance = advance
++			out.Glyphs[i].Advance = advance
++			changed = true
++		}
++	}
++	if changed {
++		out.RecalculateAll()
++	}
++}
++
+ type FontCacheItem struct {
+ 	Fonts shaping.Fontmap
+ }
+--- a/internal/painter/font_test.go
++++ b/internal/painter/font_test.go
+@@ -113,7 +113,10 @@
+ 			size:     40,
+ 			string:   "Missing: स",
+ 			tabWidth: 4,
+-			want:     213.65625,
++			// BibleText patch: was 213.65625, which counted the missing
++			// glyph's advance (24 at this size) twice. It now advances once,
++			// by the U+FFFD drawn for it (40).
++			want: 205.65625,
+ 		},
+ 	} {
+ 		t.Run(name, func(t *testing.T) {
+--- a/widget/richtext.go
++++ b/widget/richtext.go
+@@ -1126,6 +1126,9 @@
+ 	outs := make([]shaping.Output, len(ins))
+ 	for i, in := range ins {
+ 		outs[i] = shaper.Shape(in)
++		// BibleText patch: cut where the text draws, spaces after an emoji
++		// and missing glyphs included.
++		paint.FixDrawnAdvances(shaper, face.Fonts, in, &outs[i])
+ 	}
+ 
+ 	l.Prepare(conf, runes, shaping.NewSliceIterator(outs))

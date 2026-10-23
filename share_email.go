@@ -51,6 +51,18 @@ var shareEmailProbe = func(withAttachment bool, report func(bool)) {
 // goroutine.
 var shareEmailCompose = composeShareEmail
 
+// shareEmailAside runs compose off the UI goroutine, since a compose can wait
+// on the desktop bus or on the mail program, and then done with its outcome
+// back on the UI goroutine, where the sheet says how it went. A variable, as
+// shareImageAside is, so that a host test can run the two in place, in
+// order.
+var shareEmailAside = func(compose func() error, done func(error)) {
+	go func() {
+		err := compose()
+		fyne.Do(func() { done(err) })
+	}()
+}
+
 // mailSubjectMaxRunes is the Email portal's cap on a subject.
 const mailSubjectMaxRunes = 200
 
@@ -146,6 +158,47 @@ type mailRouteStop struct{ err error }
 func (e mailRouteStop) Error() string { return e.err.Error() }
 func (e mailRouteStop) Unwrap() error { return e.err }
 
+// mailCancelled marks a compose the reader ended: the desktop asked them,
+// and they cancelled. The compose ends there, and the sheet does not say
+// that the mail program could not be opened (shareEmailFailed).
+type mailCancelled struct{ err error }
+
+func (e mailCancelled) Error() string { return e.err.Error() }
+func (e mailCancelled) Unwrap() error { return e.err }
+
+// mailUnanswered marks a compose the desktop took and gave no answer to: the
+// Email portal took the request and then said nothing of how it went within
+// portalAnswerWait, or the session bus closed first, or its answer carried
+// no code. The portal may yet open a compose, so the compose ends there, and
+// the sheet says neither that it opened nor that it could not
+// (shareEmailFailed).
+type mailUnanswered struct{ err error }
+
+func (e mailUnanswered) Error() string { return e.err.Error() }
+func (e mailUnanswered) Unwrap() error { return e.err }
+
+// shareEmailFailed reports whether a compose's outcome is one the sheet says
+// under its buttons, "Could not open your email program.": every route
+// refused before reaching a mail program, or the one that reached the
+// desktop answered that it failed. Not a compose that opened (nil), not one
+// the reader cancelled (mailCancelled), and not one the desktop took and
+// gave no answer to (mailUnanswered), which may yet open.
+//
+// A failure the desktop answered is taken at its word. xdg-email's exit 4
+// is one (xdgEmailExit): where its launcher failed with nothing opened, the
+// line is true; where xdg-email ran the mail program itself, as it runs
+// Thunderbird, it waits for that program to exit, and a program that
+// opened a compose and then exits with a failure while the sheet is still
+// open is said not to have opened. The app cannot tell the two apart.
+func shareEmailFailed(err error) bool {
+	if err == nil {
+		return false
+	}
+	var cancelled mailCancelled
+	var unanswered mailUnanswered
+	return !errors.As(err, &cancelled) && !errors.As(err, &unanswered)
+}
+
 // mailRoute is one way of opening a compose.
 type mailRoute func(subject, body, attachment string) error
 
@@ -173,16 +226,34 @@ func composeByRoutes(routes []mailRoute, subject, body, attachment string) error
 // portalEmailResponse is what the Email portal's Response code means for the
 // compose (org.freedesktop.portal.Request): 0, a compose was opened; 2, the
 // backend had nothing to open one with — what the GTK backend answers with
-// no mailto: handler — so the next route is tried; anything else, 1 the
-// reader cancelling among them, ends the compose.
+// no mailto: handler — so the next route is tried; anything else ends the
+// compose: 1 as the reader's cancelling (mailCancelled), any other as a
+// failure.
 func portalEmailResponse(code uint32) error {
 	switch code {
 	case 0:
 		return nil
+	case 1:
+		return mailRouteStop{mailCancelled{errors.New("the Email portal answered 1: the reader cancelled the compose")}}
 	case 2:
 		return errors.New("the Email portal answered 2: the desktop has nothing to compose with")
 	}
 	return mailRouteStop{fmt.Errorf("the Email portal answered %d", code)}
+}
+
+// portalComposeOutcome is what a call to the Email portal comes to for the
+// compose, from what portalRequest returned for it: a call the portal did
+// not take hands on to the next route; one it took and gave no answer to
+// ends the compose, and is mailUnanswered, since the portal may yet open a
+// compose; an answer means what portalEmailResponse says.
+func portalComposeOutcome(code uint32, taken bool, err error) error {
+	switch {
+	case err != nil && taken:
+		return mailRouteStop{mailUnanswered{fmt.Errorf("the Email portal: %w", err)}}
+	case err != nil:
+		return err
+	}
+	return portalEmailResponse(code)
 }
 
 // xdgEmailExit is what xdg-email's exit status means for the compose. 0, a

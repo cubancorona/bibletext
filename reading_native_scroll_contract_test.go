@@ -78,9 +78,12 @@ func TestMacScrollHookIsBoundsShapedAndLatched(t *testing.T) {
 	if !strings.Contains(observer, "gMacOwnScroll == 0") || !strings.Contains(observer, "btMacUserScrolled();") {
 		t.Error("the bounds observer must call btMacUserScrolled for a movement that is not the pane's own")
 	}
+	// The install is where a page replaces the storage, for an imported page
+	// and for the fallback page alike (TestTheInstallDerivesTheCachedRangesInTheImportsOrder
+	// holds that both go through it).
 	for _, fn := range []string{
 		"static void bibleTextMacScrollTV(void) {",
-		"static BOOL bibleTextMacApplyHTML(NSData *data) {",
+		"static void btMacInstallPage(NSAttributedString *as) {",
 		"void bibleTextMacTVSetFrame(double x, double y, double w, double h) {",
 	} {
 		body := nativeFunctionSource(t, "reading_macos.go", fn)

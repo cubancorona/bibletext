@@ -126,6 +126,18 @@ func (k *keyStore) bundledBibleKeyCleared() bool {
 	return k == nil || k.prefs == nil || strings.TrimSpace(k.prefs.String(prefBibleKeyCleared)) != ""
 }
 
+// bibleKeyRemovedOnPurpose reports that the reader removed their API.Bible key
+// and no key is in force: they emptied the field (noteBibleKeyCleared), which
+// also keeps the included key off, and the store answered definitively that
+// it holds none. A store that could not answer is not this, since it may hold
+// the key (D9's case in docs/VERSION_STATES.md).
+func (k *keyStore) bibleKeyRemovedOnPurpose() bool {
+	if k == nil || k.prefs == nil {
+		return false
+	}
+	return k.bundledBibleKeyCleared() && k.bibleKeyKnownAbsent()
+}
+
 // noteBibleKeyCleared records that the reader emptied the field, so the bundled
 // fallback stays disabled on later launches. Re-entering any key cancels it:
 // that is a reader who wants a key again.
@@ -134,8 +146,56 @@ func (k *keyStore) noteBibleKeyCleared(cleared bool) {
 		return
 	}
 	if cleared {
-		k.prefs.SetString(prefBibleKeyCleared, "1")
+		k.prefs.SetString(prefBibleKeyCleared, bibleKeyClearedOwn)
 		return
 	}
 	k.prefs.SetString(prefBibleKeyCleared, "")
+}
+
+// The values of prefBibleKeyCleared, which say which key the reader removed
+// (decision 11 in docs/ROADMAP.md). Any value keeps the included key off, as
+// every release has read it. bibleKeyClearedIncluded is the key included with
+// BibleText, removed while it was the one in force; bibleKeyClearedOwn is the
+// reader's own. Releases before 1.2.23 wrote bibleKeyClearedOwn for either,
+// so for a removal recorded by one of them it stands for a key the app cannot
+// tell apart, and the picker says the reader's own.
+const (
+	bibleKeyClearedOwn      = "1"
+	bibleKeyClearedIncluded = "included"
+)
+
+// removeBibleKey is what Clear and an emptied field do: the stored key is
+// deleted, the included key is turned off with it, and the record says which
+// key the reader removed, the one in force when they removed it. That is the
+// included key when it was in force (usingBundledBibleKey: the release
+// fallback, or the copy an older release seeded on the device), and otherwise
+// the reader's own, including a key typed into the field and deleted again,
+// since the field saves each change. A removal with no key in force removes
+// nothing, so it keeps a record of the included key: Clear stays enabled
+// after a delete the store refused, and a second tap must not rename the key
+// the first one removed. It reports what setBibleAPIKey does: a delete the
+// store refused is still recorded as the reader's wish, as it was before the
+// record said which key.
+func (k *keyStore) removeBibleKey() bool {
+	included := k.usingBundledBibleKey() || (k.removedBibleKeyWasIncluded() && k.apiKey(bibleKeyID) == "")
+	ok := k.setBibleAPIKey("")
+	if k == nil || k.prefs == nil {
+		return ok
+	}
+	if included {
+		k.prefs.SetString(prefBibleKeyCleared, bibleKeyClearedIncluded)
+	} else {
+		k.prefs.SetString(prefBibleKeyCleared, bibleKeyClearedOwn)
+	}
+	return ok
+}
+
+// removedBibleKeyWasIncluded reports that the key the reader removed was the
+// one included with BibleText (removeBibleKey), which the picker names as
+// such.
+func (k *keyStore) removedBibleKeyWasIncluded() bool {
+	if k == nil || k.prefs == nil {
+		return false
+	}
+	return strings.TrimSpace(k.prefs.String(prefBibleKeyCleared)) == bibleKeyClearedIncluded
 }

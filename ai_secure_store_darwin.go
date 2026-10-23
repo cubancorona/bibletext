@@ -20,6 +20,25 @@
 //
 // Falling back is safe in both directions: getAPIKey erases the Preferences
 // copy only after a Write that returned true, and never after a store error.
+//
+// Both Apple platforms can retain a saved mark in Preferences without its
+// Keychain item (keysLeftByRestore). On the iPhone and iPad an unencrypted
+// computer backup restored onto another device can leave the key behind;
+// encrypted backups and direct transfers carry it. On the Mac a restore of
+// the app's container alone, or a login keychain made anew, can leave the
+// same state. The missing-key line describes only that state, without
+// attributing it to a restore (keyNotRestoredLine).
+//
+// The record of the reader's ✕ is the one item kept ThisDeviceOnly
+// (writeThisDeviceOnly). It scopes the dismissal to this account and device,
+// rather than resetting it for every restore. A backup restored to the same
+// device can retain it; Apple does not migrate it to another device. It holds
+// "1" and no part of a key. A file excluded from backup is less durable:
+// the system may empty Caches when storage runs low, which would bring a
+// dismissed line back without a restore, and a file elsewhere would need
+// its backup exclusion set and kept by hand. Like any Keychain item it can
+// outlive the app's deletion; the line also needs the settings' mark, which
+// the deletion takes with the app's container.
 
 package bibletext
 
@@ -92,7 +111,9 @@ static int btAIKeychainRead(const char *accountUTF8, char **valueUTF8) {
     }
 }
 
-static int btAIKeychainWrite(const char *accountUTF8, const char *valueUTF8) {
+// thisDeviceOnly is 0 for a key and 1 for the record of a dismissed line,
+// which must not migrate to another device (writeThisDeviceOnly).
+static int btAIKeychainWrite(const char *accountUTF8, const char *valueUTF8, int thisDeviceOnly) {
     @autoreleasepool {
         if (accountUTF8 == NULL || valueUTF8 == NULL) return 0;
         NSString *account = [NSString stringWithUTF8String:accountUTF8];
@@ -109,26 +130,31 @@ static int btAIKeychainWrite(const char *accountUTF8, const char *valueUTF8) {
             return status == errSecSuccess || status == errSecItemNotFound;
         }
 
-        // ACCESSIBILITY: AfterFirstUnlock, NOT ...ThisDeviceOnly. Apple excludes
-        // ThisDeviceOnly items from every backup and from device migration, so
+        // Accessibility: a key is AfterFirstUnlock, not ...ThisDeviceOnly.
+        // Apple never migrates a ThisDeviceOnly item to another device, so
         // migrating a key out of Preferences into a ThisDeviceOnly item and then
-        // erasing the Preferences copy would SILENTLY LOSE the reader's key when
-        // they restore a backup or move to a new iPhone — a regression against
-        // 1.1.5, where the key travelled with preferences.json.
+        // erasing the Preferences copy would silently lose the reader's key when
+        // they restore a backup onto, or move to, a new iPhone — a regression
+        // against 1.1.5, where the key travelled with preferences.json.
         // AfterFirstUnlock keeps it encrypted at rest and backup-restorable, and
         // also lets a background launch read it before the first unlock.
+        // The record of a dismissed line is the one item that must not travel,
+        // and it alone is written ThisDeviceOnly.
+        CFTypeRef accessible = thisDeviceOnly
+            ? kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            : kSecAttrAccessibleAfterFirstUnlock;
         NSData *data = [value dataUsingEncoding:NSUTF8StringEncoding];
         OSStatus status = SecItemUpdate(
             (__bridge CFDictionaryRef)query,
             (__bridge CFDictionaryRef)@{
                 (__bridge id)kSecValueData: data,
-                // Re-class any item an earlier build stored as ThisDeviceOnly:
+                // Re-class any key an earlier build stored as ThisDeviceOnly:
                 // SecItemAdd sets accessibility once, so only an update fixes it.
-                (__bridge id)kSecAttrAccessible: (__bridge id)kSecAttrAccessibleAfterFirstUnlock});
+                (__bridge id)kSecAttrAccessible: (__bridge id)accessible});
         if (status == errSecItemNotFound) {
             NSMutableDictionary *item = [NSMutableDictionary dictionaryWithDictionary:query];
             item[(__bridge id)kSecValueData] = data;
-            item[(__bridge id)kSecAttrAccessible] = (__bridge id)kSecAttrAccessibleAfterFirstUnlock;
+            item[(__bridge id)kSecAttrAccessible] = (__bridge id)accessible;
             status = SecItemAdd((__bridge CFDictionaryRef)item, NULL);
         }
         return status == errSecSuccess;
@@ -141,7 +167,21 @@ import "unsafe"
 
 type appleKeychainStore struct{}
 
+var _ keysLeftByRestore = appleKeychainStore{}
+
 func (appleKeychainStore) Name() string { return "Keychain" }
+
+// restoreCanLeaveKeys reports that settings can retain a saved mark without
+// the Keychain item on either Apple platform. The caller establishes only
+// that the key is absent, not the cause (keysLeftByRestore).
+func (appleKeychainStore) restoreCanLeaveKeys() bool { return true }
+
+// writeThisDeviceOnly writes an item Apple never migrates to another device
+// (kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly). An empty value deletes
+// it, as Write does.
+func (appleKeychainStore) writeThisDeviceOnly(account, value string) bool {
+	return keychainWrite(account, value, true)
+}
 
 func newPlatformSecretStore() secretStore {
 	// nil means "this platform has no credential store", which the keystore
@@ -173,9 +213,17 @@ func (appleKeychainStore) Read(account string) (string, bool, bool) {
 }
 
 func (appleKeychainStore) Write(account, value string) bool {
+	return keychainWrite(account, value, false)
+}
+
+func keychainWrite(account, value string, thisDeviceOnly bool) bool {
 	ca := C.CString(account)
 	cv := C.CString(value)
 	defer C.free(unsafe.Pointer(ca))
 	defer C.free(unsafe.Pointer(cv))
-	return C.btAIKeychainWrite(ca, cv) == 1
+	only := C.int(0)
+	if thisDeviceOnly {
+		only = 1
+	}
+	return C.btAIKeychainWrite(ca, cv, only) == 1
 }

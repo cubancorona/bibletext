@@ -59,11 +59,12 @@ var navDevices = []navDevice{
 // Android, phone and tablet, full screen and in a window. Upright every one
 // keeps the bottom bar it had; sideways every one has the rail, the iPhone
 // included, whose Books and Search kept the bar there before. A square window
-// counts as wide. Before the canvas has a size the idiom answers: an iPad's
-// first frame is the rail, and an iPhone's and any Android window's (whose
-// idiom is its size) the bar. Shown to fail on the rule before it, which gave
-// the rail to a phone only on Android: the three iPhones held sideways, and
-// only they, failed.
+// counts as wide. With no size to decide by the idiom answers: an iPad's rail,
+// and an iPhone's and any Android window's (whose idiom is its size) bar. The
+// live window rarely gets there, deciding by the size the platform reports
+// before its canvas has one (launch_window_test.go). Shown to fail on the
+// rule before it, which gave the rail to a phone only on Android: the three
+// iPhones held sideways, and only they, failed.
 func TestOneNavigationRuleOnEveryPhoneAndTablet(t *testing.T) {
 	type geometry struct {
 		how  string

@@ -10,9 +10,10 @@ and a fix's reasoning is the expensive half to reconstruct.
 Work built for the next major version is not listed here. It is on `main`
 behind the `next` build tag, and [NEXT.md](NEXT.md) is its register: each
 piece, what readers will see, its tests and its open decisions. The NKJV's
-epoch-8 refresh with its offline bridge, the Greek Esther mapped verse for
-verse, and the Gospel parallels' "same saying, another occasion" are there,
-not here.
+epoch-8 refresh with its offline bridge and the Gospel parallels' "same
+saying, another occasion" are there, not here. The Greek Esther mapped verse
+for verse left the switch for 1.2.23, and NEXT.md keeps its record too
+(*Work graduated for 1.2.23*).
 
 ## The release pipeline: what still waits on something it need not
 
@@ -129,10 +130,10 @@ What 1.2.21 (13 October 2026) adds:
 
 ## Where the app re-finds the reader's position from text — found 13 October 2026
 
-Planned for: eleven fixes in 1.2.22, made on 13 October 2026, the eleventh
+Released in 1.2.22 on 16 October 2026: eleven fixes, made on 13 October 2026, the eleventh
 (P1) on its own branch and merged for the release on 14 October 2026; AND-4,
-VERS-1 and AND-3's arrival point, fixed for 1.2.22 on 14 October 2026; and
-the rest in later minor releases, each item below naming its own — see
+VERS-1 and AND-3's arrival point, fixed for 1.2.22 on 14 October 2026.
+Planned for: the rest in later minor releases, each item below naming its own — see
 docs/ROADMAP.md.
 
 Each item is a place where the app decides where the reader is — the verse,
@@ -155,7 +156,7 @@ every pane's seam; the rest wait for a decision or for nothing in particular.
 
 ### AND-2. Android opens a note's band, card or pill inside a poem's stanza — FIXED 13 October 2026, for 1.2.22
 
-Planned for: 1.2.22, fixed on its release branch (the end of this entry) — see
+Released in 1.2.22 on 16 October 2026, fixed on its release branch (the end of this entry) — see
 docs/ROADMAP.md.
 
 `paraStartAt` (`android/BtBridge.java:3004`) finds a verse's paragraph by
@@ -205,7 +206,7 @@ in this chapter", and its pill above verse 3, a note on verse 2 above verse
 
 ### AND-3. Android restores the reading position by a fraction of the scroll range — FIXED 13 October 2026 on Android, for 1.2.22; the arrival point FIXED 14 October 2026
 
-Planned for: 1.2.22, the Android change and the arrival point fixed on its release branch (the end of this entry);
+Released in 1.2.22 on 16 October 2026: the Android change and the arrival point, fixed on its release branch (the end of this entry);
 the same change on iOS is not yet placed — see docs/ROADMAP.md.
 
 `captureReadingAnchor` (`reading_android.go:923`) reads only the bridge's
@@ -315,7 +316,7 @@ restoring 17. Four rotations then kept verse 17 at 0.728 into it.
 
 ### AI-1. The fixed study actions resolve their passage again on every request — FIXED 13 October 2026, for 1.2.22
 
-Planned for: 1.2.22, fixed on its release branch (the end of this entry) — see
+Released in 1.2.22 on 16 October 2026, fixed on its release branch (the end of this entry) — see
 docs/ROADMAP.md.
 
 Only Ask captures its passage when the panel opens (`ai_panel.go:63-64`,
@@ -359,8 +360,8 @@ panel, and Try again still sent John 3:16, under the header "John 3:16
 
 ### D. A selection the positional path declines borrows another copy's ending — the interim FIXED 13 October 2026, for 1.2.22
 
-Planned for: the interim in 1.2.22, fixed on its release branch (the end of this entry);
-the root with P1, also in 1.2.22 — see docs/ROADMAP.md.
+Released in 1.2.22 on 16 October 2026: the interim, fixed on its release branch (the end of this entry),
+and the root with P1 — see docs/ROADMAP.md.
 
 When `normalizeShareSelectionProse` declines — a drag begun or ended inside a
 word, pieces either side of a mark, a drag begun inside a verse number — the
@@ -411,7 +412,7 @@ Every shipping pane sends the lead, with which none of them is wrong.
 
 ### E and AI-3. A verse number that ends another's is stripped from inside it — FIXED 13 October 2026, for 1.2.22
 
-Planned for: 1.2.22, fixed on its release branch (the end of this entry) — see
+Released in 1.2.22 on 16 October 2026, fixed on its release branch (the end of this entry) — see
 docs/ROADMAP.md.
 
 `cleanQuoteTextIn` (`share.go:415`) removes each verse marker by replacing a
@@ -443,7 +444,7 @@ it off.
 
 ### B. The cross-references panel places a selection with no span by its opening words — tier 1 FIXED 13 October 2026, for 1.2.22
 
-Planned for: tier 1 in 1.2.22, fixed on its release branch (the end of this entry);
+Released in 1.2.22 on 16 October 2026: tier 1, fixed on its release branch (the end of this entry);
 tier 2 with P3 — see docs/ROADMAP.md.
 
 `crossRefsForSelection` (`crossrefs.go:1182`) never normalizes: with a zero
@@ -479,7 +480,7 @@ copy. Tier 2 stays with P3.
 
 ### AI-2. Study with AI takes a zero-span probe's range as the passage — tier 1 FIXED 13 October 2026, for 1.2.22
 
-Planned for: tier 1 in 1.2.22, fixed on its release branch (the end of this entry);
+Released in 1.2.22 on 16 October 2026: tier 1, fixed on its release branch (the end of this entry);
 tier 2 with P3 — see docs/ROADMAP.md. P1, also in 1.2.22, does not reach it:
 a page with no span sends no lead.
 
@@ -511,7 +512,7 @@ P1's lead does not reach a page with no span.
 
 ### W3. The website does not land on a verse whose link carries a note it cannot read — FIXED 13 October 2026, for 1.2.22
 
-Planned for: 1.2.22, with the next site publish; fixed on its release branch (the end of this entry) — see docs/ROADMAP.md.
+Released in 1.2.22 on 16 October 2026, the website with it; fixed on its release branch (the end of this entry) — see docs/ROADMAP.md.
 
 A shared note link's fragment is a key list (`#v16&n=…`), which matches no
 id (`cmd/websitegen/render.go:268` writes `v16`), so the browser's own
@@ -548,7 +549,7 @@ states, and the change reaches readers with the next
 
 ### W1. The website re-anchors a note to the previous link's paragraph — FIXED 13 October 2026, for 1.2.22
 
-Planned for: 1.2.22, with the next site publish; fixed on its release branch (the end of this entry) — see docs/ROADMAP.md.
+Released in 1.2.22 on 16 October 2026, the website with it; fixed on its release branch (the end of this entry) — see docs/ROADMAP.md.
 
 `anchorToPassage` (`cmd/websitegen/assets.go:1641-1658`) takes the paragraph
 of the lit verse, or else `noteAnchorPara` (:1643), which it sets (:1645) and
@@ -578,7 +579,7 @@ next `scripts/publish-site.sh`.
 
 ### G. The legacy Entry pane hands Go no span — FIXED 13 October 2026, for 1.2.22
 
-Planned for: 1.2.22, fixed on its release branch (the end of this entry) — see
+Released in 1.2.22 on 16 October 2026, fixed on its release branch (the end of this entry) — see
 docs/ROADMAP.md.
 
 `chapterText.menuForSelection` passes `selSpan{}` (`reading.go:1559`) while
@@ -605,7 +606,7 @@ five widths. The pane still ships in no build; deleting it stays possible.
 
 ### P1: A, IOS-SEL-OFFSET-DROPPED, MAC-SEL-OFFSET-DROPPED, AND-1. Every pane drops the selection's place in its verse — FIXED 13 October 2026, for 1.2.22
 
-Planned for: 1.2.22, made on its own branch and merged for the release on 14
+Released in 1.2.22 on 16 October 2026, made on its own branch and merged for the release on 14
 October 2026 (the end of this entry) — see docs/ROADMAP.md.
 
 Every pane works out where a selection lies in its verse and hands Go only
@@ -724,9 +725,11 @@ lead, and where the walk from the lead fails.
 ### AI-4. The study verbs do not carry the chapter they were chosen in
 
 Planned for: 1.2.23, both halves, decided 14 October 2026: 1.2.22 ships
-without it, and it is built on its own branch, `fu/ai4-chapter`. The native
-half goes through the seams P1 widened in 1.2.22, which do not carry the
-chapter — see docs/ROADMAP.md.
+without it. Fixed for 1.2.23 with P3: built first on its own branch,
+`fu/ai4-chapter`, then taken with P3 onto `fu/1223-ai4-p3`, where it sits
+on P3's fallback page (`b96c49c38`, `f407e5ded`, `5a9216df1`), and merged
+with it into `rel/1.2.23` on 15 October 2026 — see docs/ROADMAP.md, 1.2.23,
+row 3 (Later minor releases, row 27 until then).
 
 The span carries verse numbers only, and the dispatch applies them to
 whichever chapter is current (`readerChapter`, `ai.go:185`). Continuous
@@ -740,18 +743,119 @@ Rare to trigger; once it fires, 0 of 1,188 chapter pairs stay right (1,186
 cite the next chapter's verse, one the next chapter alone, and one quotes the
 next chapter's own words, Ezekiel 38:3 to 39:1).
 
-Fix, 2.5 days, about 1 of them Go: book and chapter travel with the span;
-`selectionStudyMenu` stamps them when the menu is built, which fixes Windows
-and Linux; the native pushes already key the chapter and can return it
-through `bibleTextAIMenuTapped`, `bibleTextStudyMenuTapped` and
-`btaSelectionAction`, the seams P1 widened; and the panel keeps one captured
-passage, as AI-1 makes it.
+The fix, as built: the span carries the book and chapter of the text the
+selection was made in (`selSpan.book` and `selSpan.chapter`), and every
+function that takes a span reads the selection in that chapter
+(`selectionChapter`), the reader's own only where the span names none: the
+study verbs, whose panel captures the passage once (AI-1), with its header,
+cache key and Report mail; Share with citation, as image and as link; Share
+with note's composer, its link and the record it keeps; and the
+cross-references, with their coverage note. Each pane names the
+chapter. The two Fyne panes read it off the verses they laid out, and
+`selectionStudyMenu` stamps the chapter on screen on a span that has none.
+The iPhone and iPad pane keys the page it installs, each import and P3's
+fallback page alike, with the chapter Go announces on the main queue just
+ahead of the chapter's HTML (`bibleTextTVSetChapter`), and the edit menu
+takes it with the selection's text, span and lead; the Mac pane does the
+same (`bibleTextMacTVSetChapter`) and reads it when the action runs. The
+HTML's block takes the announced chapter once, behind P3's check that its
+push is still the latest, so a push already replaced takes nothing and each
+retry keys the page with its own push's chapter; the fallback page is keyed
+in the branch that installs it, so a push with no fallback page leaves the
+text under the key it has. Android keys the text in `setHtml` from
+`BtBridge.setChapter` and captures it when the toolbar item is chosen,
+through the study popup. All three hand it on as the last two arguments of
+`bibleTextAIMenuTapped`, `bibleTextStudyMenuTapped` and
+`btaSelectionAction`, and Go builds the span with it in `paneSelSpan`. A
+function handed the selected verses rather than the span reads their own
+chapter (`selectedChapter`): the cross-references list, for the next
+release's coverage note and for the edition's own block, whose Psalm title
+notes and whose citations set as the verse's own passage were the chapter
+on screen's. Share with note anchors its sheet to the selected words only
+while the page holds the passage they were selected on
+(`notePassage.onScreen`): the Mac and iPad panes find the words by verse
+number in the text on screen, and after a turn they pointed the sheet at
+the same verse number in the next chapter, a second late, waiting for a
+note the page does not show there. Off the passage the sheet is presented
+as a share with no note is; the same holds for a link that moves the
+reader while the composer is open.
+
+Tests: `TestTheDesktopMenuReadsTheSelectionInItsChapterAfterNarrationTurnsIt`
+builds each desktop pane's menu over an invented Psalm 135:3, turns the
+chapter with the narration controller (`advanceAndContinue`) and clicks
+Explain, the three text shares, Share with note and Cross-references.
+`TestAVerbReadsTheSelectionInTheChapterItWasMadeIn` and
+`TestANativeSelectionDispatchedAfterTheTurnKeepsItsChapter` hold the
+consumers and the native route, with the reader's chapter as the control
+for a span with none. `selection_chapter_contract_test.go` holds each pane's
+dispatch to the chapter its text holds, each pane's text to the chapter it
+was pushed as, the chapter to being taken once behind the push's check and
+ahead of the first import and the retries, each push to announcing it
+first, and every Go function that takes a span, or the selected verses, to
+reading the selection in its own chapter; its checks of where the chapter
+is taken and where the fallback page is keyed carry controls that move
+each out of place.
+`TestTheEditionsCrossReferenceBlockIsTheSelectionsChapterAfterATurn` and
+`TestShareWithNoteIsAnchoredToTheWordsOnlyOnTheirPassage` hold the block
+and the anchor, each with the reader still on the passage as the control.
+`TestAMenuOverASpanWithNoChapterReadsItInTheChapterItWasBuiltIn` holds the
+menu's stamp: both desktop panes lay out the invented Psalm 135 with the
+book taken off its verses, hand the menu verse 3 with no chapter (its
+control), and Share with citation and Share as link, clicked after the
+turn, cite Psalms 135:3; with the stamp taken out of `selectionStudyMenu`
+they cite 136:3.
+On `main` at `149b85a91`, whose panes and Go are 1.2.22's, the desktop test
+names Psalms 136:3 for every verb on both panes, and the five contract tests
+fail, the parse naming 13 functions that read the reader's chapter; the
+tests that build a span with its chapter do not compile there, and with the
+span's chapter, or the selected verses', set aside for the reader's they
+fail on this tree (136:3 again; the edition's block linking 135:1-3), as
+the anchor test does with the anchor handed over off the passage. Opt-in
+over the local caches, none of the WEB's 1,188 chapter pairs, the BSB's
+1,188 or the WEB Catholic's 1,327 is read differently after the turn.
+
+Seen on 14 October 2026 with AI-4's first commit as made on its own branch
+from 1.2.22, before the two follow-ups above and before P3, with a
+throwaway trigger in a scratch build: Psalm 135 opened, verse 3 selected,
+the chapter turned as narration turns it, then Explain, the three text
+shares, Share with note (sent with no note) and Cross-references chosen.
+Every one cited Psalms 135:3 on the Mac (WEB), the iPhone 16 Pro simulator
+(WEB and BSB) and the emulator (API 35, WEB, one word selected with a real
+long-press and the verbs chosen with real taps), where the same trigger on
+1.2.22 cited Psalms 136:3 for all six on each. On the Mac and the simulator
+the verbs ran in the app, through the pane's own action methods and its
+edit menu's own actions. Not run: an iPad simulator, which runs the
+iPhone's pane; the Windows and Linux virtual machines, where the styled
+pane's test above stands; the BSB on the Mac and the emulator; and Share
+with note with a note after a turn on an iPad or a Mac.
+
+Seen again on 15 October 2026 on the combined tree, with development
+builds of this branch at `638bc88e8` and of `main` at `149b85a91` as the
+control, and the same steps. On the Mac and the iPhone 16 Pro simulator, in
+the WEB and the BSB, and on an iPad Air simulator in the WEB, every verb
+cited Psalms 135:3: Explain, whose request went to a stubbed provider that
+sends nothing and whose prompt names 135:3; the three text shares; Share
+with note, with a note typed into its composer, linking 135:3 and handed
+over with no anchor to the words; and Cross-references. The control cited
+Psalms 136:3 for every one and handed Share with note over anchored to
+verse 3 of the page then on screen, Psalm 136's. On the emulator (API 35,
+WEB, a real long-press, the note typed through an input method) the fix
+cited 135:3 for all six and the control 136:3. With every import refused
+(`BIBLETEXT_DEV_FAIL_IMPORT=1`), verse 3 selected on P3's fallback page
+was handed over on the Mac and the iPhone simulator, in both editions,
+with its verse, its lead and Psalm 135, and every verb cited 135:3; on the
+control the page gave no span and every verb cited the chapter, Psalms
+136. Not run: the Windows and Linux virtual machines, the BSB on the
+emulator, and the iPad with every import refused.
 
 ### P3: C, IOS-PLAIN-FALLBACK-ZERO-SPAN, MAC-PLAIN-FALLBACK-ZERO-SPAN. The Apple plain-text fallback page has no verse geometry
 
-Planned for: 1.2.23, decided 14 October 2026: 1.2.22 ships without it, and
-it is built on its own branch, `fu/p3-fallback-geometry` — see
-docs/ROADMAP.md.
+Planned for: 1.2.23, decided 14 October 2026: 1.2.22 ships without it.
+Fixed for 1.2.23 with AI-4: built first on its own branch,
+`fu/p3-fallback-geometry`, then taken with AI-4 onto `fu/1223-ai4-p3`
+(`12bd8ea67`, `51f7efe66`), and merged with it into `rel/1.2.23` on
+15 October 2026 — see docs/ROADMAP.md, 1.2.23, row 4 (Later minor
+releases, row 28 until then).
 
 When a chapter's HTML import fails three times, the iPhone and iPad empty the
 verse index (`btIOSBuildVerseIndex(nil)`, `reading_ios.go:3560-3564`) and the
@@ -782,10 +886,157 @@ that forces the import to fail gives a simulator check. It retires the no-span
 rules, is tier 2 of B and AI-2, and settles 1.2.20's open question whether such
 a selection should cite the chapter instead.
 
-### P4: APPLE-HEADING-MATTER-TO-VERSE-ABOVE. A selection inside a heading resolves to the verse above
+**Built 14 October 2026 on its own branch, `fu/p3-fallback-geometry`**
+from 1.2.22 (`7a68743cb`), and taken with AI-4 onto `fu/1223-ai4-p3` from
+`main` at `149b85a91`, where its first commit is `12bd8ea67` and the fixes
+after the device checks are `51f7efe66`, and where AI-4 keys the fallback
+page with its chapter as it keys an imported page; decision 2 puts both in
+1.2.23. As recorded above, with the walk in Go rather than in each pane:
 
-Planned for: a later minor release, after the headings' first decision — see
-docs/ROADMAP.md.
+- Go builds the page with every push, from the HTML it pushes
+  (`appleFallbackPageOf`, `reading_apple_fallback.go`): cut at the
+  translators' notes, the markup out, a line feed at the end of each
+  paragraph and U+2028 for each `<br>`, as the importer writes them, and
+  now with runs saying where each verse number, the title and each heading
+  stand, in UTF-16 units. The page and its style (the body's and the
+  numeral's sizes, the text's and the numbers' colours) cross with the HTML
+  (`bibleTextTVSetHTML`, `bibleTextMacTVSetHTML`). On a chapter the size of
+  Psalm 119 the walk costs about as much as building the HTML.
+- Each pane sets the runs in the faces the importer gives the same markup
+  (`btIOSFallbackPage`, `btMacFallbackPage`: the numeral at its size, bold,
+  in the numbers' colour; the title italic; headings bold) and installs the
+  page through the one install both pages now share, split out of the
+  import (`btIOSInstallPage`, `btMacInstallPage`). The verse index, content
+  start, title, highlight, note, wash, resume marker and placement are
+  derived from it as from an imported page, and the selection verbs read a
+  span and a lead from that geometry. The Mac paints the chapter's wash on
+  it from the model, since its wash otherwise comes from the stylesheet.
+- Every step of the ladder, the first import included, and the fallback act
+  only while their push is still the latest: the install confirms the
+  chapter, so a step left from a replaced push must not put the older
+  chapter in. The announcement (`bibleTextIOSBeginChapterPush`,
+  `bibleTextMacBeginChapterPush`) issues the push's generation on the
+  caller's thread, moves the pending one only forward and returns it, and Go
+  hands it over with the push. A generation read on the main queue would be
+  shared by two pushes made in one main-thread turn, as the Mac's are, and a
+  retry of the first could install the older chapter over the second.
+- The reading face is checked by its PostScript name
+  (`btReadingFaceNamed`, `reading_fonts_apple.go`). CoreText answers a face
+  it does not have with Helvetica, upright and regular, so had the faces'
+  registration failed, both pages would have lost the italic title and the
+  bold headings the panes find by their traits; such a face is now no face,
+  and the run keeps its own. Registration succeeds today.
+- A development build forces every import to fail with
+  `BIBLETEXT_DEV_FAIL_IMPORT=1` (`dev_fail_import_on.go`; a release build's
+  answer is always no, `TestDevFailImportIsInertInReleaseBuilds`).
+- The no-span rules stay, for any selection that still arrives without a
+  span: AI-2's one-verse rule (`selectionVersesIn`) and the title and
+  heading rules (`normalizeShareSelectionProse`). On this page they no
+  longer decide anything.
+
+Tests: the page and its runs (`reading_native_fallback_page_test.go`), what
+a selection on it is answered with, modelling the panes' clamp, verse lookup
+and lead over the page (`reading_apple_fallback_test.go`), and the panes'
+source (`reading_native_fallback_contract_test.go`, with
+`readalong_title_native_contract_test.go`). Over a WEB Psalm 136:1–11 and
+Genesis 1:1–5 fixture every double-clicked word is cited from its own verse
+(0 of 150 and 0 of 83 wrong; the same page without its runs, as it was
+shown, 97 and 30). With the runs taken out of the walk the reproducers fail
+as the defect did (136:10's refrain cited 136:3, "light" in 1:5 cited 1:3, a
+title handed over with no span). As P3 wrote them, six of the eight source
+tests in `reading_native_fallback_contract_test.go` fail on 1.2.22's panes,
+as does `TestNativePanesFindTheTitleAsTheItalicParagraphBeforeVerseOne`;
+the other two, `TestHighlightRangeHasOneWriterOnEachPane` and
+`TestTheSelectionVerbsSendTheSpanAndLeadTheInstallGives`, are guards that
+pass on both.
+
+Seen on 14 October 2026 on the iPhone 16 Pro simulator (iOS 26.5) and on
+the Mac, with development builds of P3's first commit as made on its own
+branch from 1.2.22 (its change is `12bd8ea67` here) and of 1.2.22
+(`7a68743cb`) as the control, every import refused for runs 1 to 5:
+
+| Run | P3's first commit | 1.2.22 |
+|---|---|---|
+| 0, Psalm 136:10's refrain on an imported page (WEB) | 136:10 by every verb | the same |
+| 1, the same refrain on the fallback page | span 10–10 with its lead; the share, link, cross-references and AI request cite 136:10 | no span; all cite 136:3 |
+| 2, "light" in Genesis 1:5 (WEB) | 1:5 by every verb | no span; 1:3 |
+| 3, a drag from Psalm 23's title into verse 1 (BSB) | cut at verse 1's number and handed over as 1:1 with its lead | the title and heading handed over with no span and sent to the AI request; the share the same as with the fix |
+| 4, Psalm 23's title alone | the system's verbs only | the app's verbs; the share an empty quotation under 23:1 |
+| 5, a link to Psalm 119:100 (WEB) | verse 100 lit and in view | nothing lit, the view at the top |
+
+In that commit the page broke each poem line with a line feed, which
+NSString takes for the end of a paragraph, where the importer writes U+2028
+and ends a paragraph only at `</p>`. Both panes reserve a note's band, place
+its sticker, card and pills, and test which notes share a paragraph, by the
+paragraph that holds the anchor verse's number, so on this page a note
+opened between two lines of a stanza, as on Android before AND-2's fix:
+6,106 of the WEB's 31,098 verses, 6,252 of the BSB's 31,086 and 7,610 of
+the WEB Catholic's 35,379 had their number's paragraph open elsewhere than
+on the imported page. With U+2028 for each
+`<br>` none does, and every selection's answer stays equal to the imported
+page's (`51f7efe66`;
+`TestTheFallbackPageEndsAParagraphWhereTheImportedPageDoes`). The same
+commit issues each push's generation at its announcement
+(`TestEveryImportStepActsOnlyForTheLatestPush`) and checks the reading face
+by its name (`TestAReadingFaceCoreTextDoesNotHaveIsNoFace`). The runs above
+were made before it and before AI-4.
+
+Seen again on 15 October 2026 on the combined tree, with development
+builds of this branch at `638bc88e8` and of `main` at `149b85a91` as the
+control, on the iPhone 16 Pro simulator and the Mac: runs 0 to 5 gave each
+build the answers in the table above, and run 1 did the same on an iPad Air
+simulator. A sixth run put a note on a verse inside a psalm's stanza (BSB
+Psalm 23:2, WEB Psalm 121:4). On the fallback page the paragraph holding
+the verse's number is the imported page's, the stanza that opens at verse
+1 in eleven lines and the one that opens at verse 3 in twelve, where
+1.2.22's fallback page has no such verse in its index. As first planned,
+the note written and the chapter left and opened again, the run shows no
+band on either build: the reader's own note is drawn only while it is
+focused, and navigating resets focus (`notes_plan.go`). Written on the
+page the launch opens and read while its card is open, the note's band
+sits on the stanza's paragraph on the imported page and the fallback page
+alike, on both panes, where on 1.2.22's fallback page it sits at the
+chapter's top. Not run on an iPad simulator: runs 0 and 2 to 6.
+
+On the combined tree the tests still tell the fix from the defect. With
+this tree's tests and Go over the two panes of `main` at `149b85a91`, which
+are 1.2.22's, seven of the eight source tests and the title test fail.
+AI-4 widened `TestTheSelectionVerbsSendTheSpanAndLeadTheInstallGives` to
+the book and chapter the panes now hand on, which 1.2.22's panes do not,
+so `TestHighlightRangeHasOneWriterOnEachPane` is the one guard that passes
+on both. The Go tests of the page do not compile on `main`, since the walk
+is new; on this tree, with the runs taken out of the walk the four
+reproducers fail as the defect did (97 of 150 words cited from another
+verse) and so does the runs test, with a line feed for each `<br>` the
+paragraph test fails (Psalm 136: 22 paragraphs against 1), and with the
+face's name check taken out the face test fails (Helvetica).
+
+The fallback page is still plainer than an imported page: no red letters,
+no justification, first-line indent or paragraph gaps, the verse number not
+raised, an omitted verse's mark at body size.
+
+### P4: APPLE-HEADING-MATTER-TO-VERSE-ABOVE. A selection inside a heading resolves to the verse above — FIXED 15 October 2026, for 1.2.23
+
+Planned for: 1.2.23. Decision 23 was taken on 15 October 2026 (A), and the
+fix is built on its own branch, `fu/1223-heading-words` (`b89c475c9`, from
+`be1440fe0`; the text share in `99dbcd728`, Share with note's anchor in
+`ca1f500a6`), merged into `rel/1.2.23` on 21 October 2026. Its follow-up,
+no study verb for a selection that holds no Scripture, is built on
+`fu/1223-no-scripture-study` and merged into `rel/1.2.23` on 22 October
+2026 (`a2cbc8c46`; below). The prompt's passage, taken on 22 October 2026,
+is built on `fu/1223-ai-no-headings` (`e86fc00be`, from `da90dfb55`) and
+merged into `rel/1.2.23` on 22 October 2026 (`a04829c5f`); it was seen
+on 22 October 2026 on the Android emulators, the iPhone and iPad
+simulators and the Mac, and on Windows and Linux only in the Mac's mimic
+(below). The follow-up's rules were confirmed on 22 October 2026, and a
+selection whose only Scripture is punctuation is offered no study verb
+since `ca86cca13`, on `fu/1223-no-study-punctuation` (from `91e1ec683`;
+below), not yet seen on a device. The device checks passed on 15 and 16
+October, and on 21 October for the later two commits on the Mac and the
+iPhone and iPad simulators; the follow-up's on 21 and 22 October on the
+Mac, the iPhone and iPad simulators and the Linux and Windows virtual
+machines, and on 22 October on the Android emulators (the end of this
+entry) — see docs/ROADMAP.md, 1.2.23, row 12.
 
 `btIOSVerseAtIndex` ignores the heading range the index keeps
 (`reading_ios.go:273`), the Mac never asks `btMacIsHeadingParagraph`
@@ -802,7 +1053,8 @@ need one deliberate pass" records the backward rule.
 
 The BSB: 2,023 of 7,373 single heading words (27.4%), and 1,301 of its 1,896
 headings (68.6%) have such a word. The WEB Catholic 27 of 113 (the fused
-Daniel 3 heading); the WEB none of 23.
+Daniel 3 heading), and 1 of 34 once 1.2.23 sets that heading's note apart
+(docs/ROADMAP.md, 1.2.23, row 11); the WEB none of 23.
 
 Fix, 2 days: each pane tests the selection against the heading range it
 already keeps (iOS's end and tail, the Mac's `btMacIsHeadingParagraph`), then
@@ -812,10 +1064,544 @@ is clamped; Android the same for parity. (B) forecloses answers the headings'
 pass keeps open (docs/ROADMAP.md, Next major version, row 5), so its first
 question, what selecting a heading means, is answered first.
 
+**The decision (23, 15 October 2026): A.** A word selected inside a
+publisher's heading means the section the heading introduces: it is cited
+by the verse below the heading and quotes nothing, the rule the app already
+applied to a heading selected whole on its own. The other options were to
+trim heading words out of a selection as a psalm title is trimmed, to quote
+the heading marked as the publisher's, or to wait for the major's pass.
+
+**The follow-up (21 October 2026).** A study verb, Explain, Compare, Ask
+and every other, is not offered for a selection that holds no Scripture:
+a publisher's heading's words alone, a psalm title alone or a verse
+number alone. Every pane's menu leaves Study with AI and its items out
+for one, and the dispatch refuses one as a backstop. A share of such a
+selection keeps A: the verse cited and nothing quoted. A selection that
+takes Scripture, a drag from a heading into its verse among them, is
+studied as before. This replaces the study prompt `99dbcd728` built,
+which read the verses such a selection is cited by; and the sentence
+approved for the prompt naming the heading is not needed, since no
+selection of a heading's words alone reaches it.
+
+**The prompt's passage (22 October 2026).** A study prompt's passage holds
+only Scripture. A selection that runs across a publisher's heading or a
+psalm's title, from the end of one verse into the next, sends the verses'
+words alone: the heading's words are left out as the share leaves them
+out.
+
+**Confirmed, and punctuation alone (22 October 2026).** The rules the
+follow-up built are confirmed as built: no study verb for a drag from a
+heading that ends inside the first word of the verse below or takes only
+the punctuation that verse opens with; on Android, Study with AI hidden
+for a selection inside a psalm's title or the footnote section; Share and
+Cross-references keeping the order they have beside Study with AI; and
+the verse-number share fixes. A selection whose only Scripture is
+punctuation, a verse's closing full stop or any other mark of its words
+selected alone, or a drag from a verse's closing punctuation into the
+heading below it that ends in the heading, is offered no study verb, the
+same rule as a selection that holds no Scripture, on every pane's menu,
+and the dispatch refuses one as a backstop. A selection with any complete
+words of Scripture is studied as before.
+
+**Unfinished boundary words (23 October 2026).** A drag from a verse's
+closing punctuation through a heading into an unfinished word below is
+offered no study verb. The same boundary rule applies on every pane:
+punctuation before the heading does not count as a complete word, and the
+unfinished word is trimmed back to its space or closed-up dash. The shared
+quotation keeps any source-located punctuation left by that trim rather
+than letting the fallback restore the unfinished word. This also keeps
+the Go and native rules together when punctuation and a space open the
+verse below. A complete word before or after the heading still offers
+study; a single partial word selected inside a verse keeps its existing
+fragment behavior. `TestAnUnfinishedWordAcrossAHeadingLeavesNoStudyableFragment`
+checks the shared quotation, menu, prompt and native rule model, with and
+without a positional lead; `TestACompleteWordAboveAHeadingKeepsStudyAfterTheBoundaryTrim`
+keeps the complete-word control. The existing dispatch regression also
+includes the punctuation-plus-unfinished-word shape. Source changes are
+integrated locally in `rel/1.2.23`, uncommitted; the updated tests and
+native platform checks have not yet run.
+
+**The fix.** Each pane that draws a heading in the text a reader selects
+tests the selection against the heading range it already keeps beside its
+verse numbers, after cutting it to the scripture its verbs may take, and
+hands a selection wholly inside a heading over as the verse below it, with
+a heading flag and no lead:
+
+- iOS (`btIOSHeadingSelectionVerse`, reading_ios.go): the selection, less
+  the white space at either end, lies between a verse entry's `end` and
+  `tail`, the heading block `btIOSBuildVerseIndex` records after the verse;
+  the verse below is the next entry's.
+- Mac (`btMacHeadingSelectionVerse`, reading_macos.go): the selection opens
+  in a heading paragraph (`btMacIsHeadingParagraph`) and ends inside the
+  block of headings that starts there (`btMacHeadingBlockEndAt`); the verse
+  below is the first number after the block. `hbSendAI` and `hbSendStudy`
+  ask it.
+- Android (`BtBridge.headingSelectionVerse`): the selection, less white
+  space, the heading's gaps and a paragraph's direction mark, lies between
+  a verse's end (`verseEnds`, where `endBeforeHeading` stopped it) and the
+  next verse's number, on heading lines only (`isHeadingParagraph`).
+  `onActionItemClicked` asks it and the study popup carries the answer.
+- The flag crosses `bibleTextAIMenuTapped`, `bibleTextStudyMenuTapped`, the
+  JNI thunk and `btaSelectionAction` as one more argument after `hi`, and
+  `selSpan.inHeading` marks the span with it (selection_span.go).
+- Go (`normalizeShareSelectionProse`, share.go) answers a span with the
+  flag before any search: the verse below and nothing quoted. Every verb
+  reads the selection through it, so the text and image shares, the link
+  and the note kept against it, the note composer, the cross-references and
+  the study panel's citation all name the verse below.
+- No study verb is offered for a selection the share answers with
+  nothing quoted, a heading's words, a psalm's title or a verse number
+  selected on its own (the follow-up). The study prompt put the selected
+  words in quotation marks as the cited verse's passage, so a heading's
+  words went to the provider as Scripture the verse does not hold: the
+  BSB's "Fourth" of "The Fourth Day" as Genesis 1:14. `99dbcd728` sent
+  the verses such a selection is cited by instead; that is taken out.
+  Go's rule is `aiStudyOffered` (ai.go): the desktop menu
+  (`selectionStudyMenu`, reading.go) leaves Study with AI out for such a
+  selection, Share and Cross-references keeping their places, and
+  `dispatchAIAction` drops a study verb for one, opening nothing and
+  sending nothing. Each native pane keeps the rule over the page it
+  draws, cut to the scripture its verbs take: a selection holds Scripture
+  when it holds a letter or figure of a verse's words, after the verse's
+  number and before its end, which leaves out verse numbers, headings, an
+  omitted verse's mark and, since `ca86cca13`, the verses' punctuation. A
+  selection that begins in a heading, with no character of a verse's
+  words before the first of the heading's words it holds, does not count
+  a word it ends inside, which reaches back to the white space or the
+  closed-up dash before it, as Go's end repair cuts back: Go quotes
+  nothing for a drag from a heading that ends inside the first word of
+  the verse below, "Solomon’" of "Solomon’s" or "Well-" of "Well-being"
+  among them, or takes only the punctuation that verse opens with. One
+  begun in the verse above, its closing punctuation among the rest, keeps
+  that word, as Go quotes it (`btIOSSelectionHoldsScripture` over the
+  verse index, `btMacSelectionHoldsScripture` over the font runs and
+  heading paragraphs, `BtBridge.selectionHoldsScripture` over the verse
+  index and `isHeadingParagraph`). Before `ca86cca13` any character of a
+  verse's words that was not white space counted until the first of a
+  heading's words, so a mark selected alone and a drag from the verse
+  above's closing punctuation into the heading were offered the verbs, as
+  Go offered them. Before `0f9ca1d57` the rule stepped back over
+  letters and figures only, and counted only them in the whole of a
+  selection that held a heading's words: it offered Study with AI for
+  "Solomon’", which the dispatch then dropped, and hid it for a drag from
+  the verse above's closing full stop into the heading, which Go studies.
+  The iPhone and iPad edit menu and the Mac context menu ask it when they
+  are built. Android's toolbar, built once per selection, is built to show
+  or hide the item each time it is prepared again (`onPrepareActionMode`),
+  which no device has yet shown as the handles move, and asks again when
+  the item is chosen. A selection that quotes words is studied as before.
+- The prompt's passage (`e86fc00be`) is the share's quotation of the same
+  selection, before the share frames it, in the form a machine reads
+  (`aiPassageFor`, ai.go; `selectionQuotationIn`, share.go, which
+  `shareQuoteIn` frames): a heading's or a psalm title's words a drag
+  runs across come out by the share's own repairs (`cutOpeningMatter`,
+  `stripHeadings`, `removeWholeHeadings`, `verseEndBeforeHeading`, the
+  title's `trimLeadingHeading`), and with them the verse numbers the
+  selection carries, as the citation names the verses; a word cut short
+  is trimmed back, and the line breaks are the chapter's. The prompt put
+  the selection inside its quotation marks as it came: in the BSB,
+  "waters." through "The First Day" into "And God said," went to the
+  provider with the heading and verse 3's number inside it, as Genesis
+  1:2–3; it now quotes "waters." and "And God said" a paragraph apart.
+  `dispatchAIAction` keeps the divine name's small capitals as drawn
+  (`sharedText`) until `aiPassageFor` has read the passage, and writes
+  them as capitals for the provider after: written as capitals first, on
+  a chapter that sets the name in small capitals, as the NKJV does, a
+  drag across a heading was not found in the chapter and kept the
+  heading's words in the prompt and the study panel, and one begun inside
+  the heading was cited by the verse above as well. The study panel's
+  preview is the selected words, as before, and shows the name as the
+  page draws it. Quoted without the share's framing, the passage differs
+  from the chapter's words in two ways the framing covers in the share.
+  Clause punctuation a selection of words ends on, a comma, a semicolon,
+  a colon or a dash, comes off for the share's closing ellipsis and is
+  sent with no ellipsis in its place: "gods;" goes as "gods"
+  (`TestAIPassageRefAgreesWithShareCitation`), and a whole verse that
+  ends on one, as 11,837 do over the WEB, BSB and WEB Catholic caches
+  (3,935, 3,497 and 4,405), goes without it, where `da90dfb55` sent each
+  with it. And a selection that stops just short of a sentence's end is
+  completed with the sentence's full stop, read past a closing quotation
+  mark (`completeTrailingSentenceProse`) that the prompt then leaves
+  out, where the share's balancing closes the quotation: in the WEB and
+  the WEB Catholic a drag from the middle of Isaiah 62:11 that ends after
+  "Redeemed" in 62:12 sends "Redeemed." with the quotation before it left
+  open, where the chapter reads "Redeemed”.". Of 91,919 drags from the
+  middle of one verse into the middle of the next with no heading between
+  (WEB 29,888, BSB 28,003, WEB Catholic 34,028), those two are the only
+  ones whose prompt is not a stretch of the chapter's words. A drag from
+  the closing punctuation of the verse above into a heading, ending
+  there, was studied and sent that punctuation alone, while the panel
+  showed the words selected, the heading's among them, and a mark of a
+  verse's words selected alone inside the verse was studied and sent that
+  mark, as on `da90dfb55`; since `ca86cca13` neither is offered a study
+  verb (the next item). One rule on all six; the web reader has no
+  selection verbs.
+- No study verb for punctuation alone (`ca86cca13`). Go studies a
+  selection only when the share's quotation of it, which is the prompt's
+  passage (`selectionQuotationIn`), holds a letter or figure
+  (`aiStudyOffered`); a text with no letter or figure is refused before
+  it is read, with a Bible or without. The desktop menu asks that rule,
+  and `dispatchAIAction` drops a study verb for a selection that fails
+  it. Each native pane counts only a letter or figure of a verse's words
+  (above), and with no verse index asks for a letter or figure anywhere
+  in the selection, where it offered the verbs for any selection. A drag
+  from the closing punctuation above a heading into the first word below
+  is studied only once it contains a complete word. Through that word,
+  its prompt quotes the word; ending inside it trims the unfinished word
+  and leaves no studyable fragment. Before the boundary fix above, Go's
+  fallback restored the full stop and the partial word, and the native
+  panes kept that word too. Share and Cross-references keep their places.
+- A verse number selected on its own where the verse's words hold the
+  same figure is read as the number: the pane's empty lead says the
+  selection begins on it (`placeByLead`, share_lead.go). Searched for
+  among the words, the BSB's Genesis 5:3 number was found in "130" and
+  quoted as "3", and the menu offered the study verbs for it. A piece of
+  a number is read as the number too (`0f9ca1d57`): its first digits with
+  that empty lead, the digits of a drag begun and ended inside it, and a
+  number begun in the white space after the verse above, which the Apple
+  and Android panes send with a lead that holds that verse, and which
+  cites the next verse (`leadPlacement.verse`). The first digit went out
+  as a figure quoted as Scripture, with the study verbs offered, the
+  Windows and Linux pane's among them; a number begun after the verse
+  above was quoted as the figure and cited by both verses.
+- A drag from a heading that ends inside the number of the verse below,
+  before its last digit, is answered as the heading is: the verse below
+  cited and nothing quoted (`openingMatterIntoNumber`, share.go,
+  `e5389ed3d`). Its digits are no verse number to confirm the heading by,
+  and the heading's words were quoted as the verse's: "The Fourth Day 1"
+  as Genesis 1:13–14, the WEB's "GIMEL 1" as Psalm 119:16–17. The native
+  panes' rule already offered no study verb for it; Go's menu did.
+- A text share that quotes nothing is the citation line alone
+  (`composeShareText`, `99dbcd728`), where it was that line under two empty
+  lines.
+- Share with note sent with a note on such a selection is anchored to the
+  number of the verse below (`wordsAnchor`, `ca1f500a6`), which the Mac and
+  iPad panes find again once the page has put the note's card in, as they
+  find a selection's words. With no lead it had no anchor and presented at
+  the selection as it stood; on the iPad the page moved to the card, the
+  selection was gone and the heading out of sight, and the popover hung
+  from the top of the reading view.
+- A heading above verse 1 stays outside the app's verbs on those panes, as
+  the psalm title does (each pane's content start), and is not changed.
+- The Windows and Linux pane draws a heading outside its text model
+  (`appendHeadingLines`), so no word of one can be selected; but the model
+  offset under a heading's line is the end of the verse above, and a
+  double-click there selected that verse's last word, which the verbs then
+  quoted and cited by the verse above. `DoubleTapped` now selects nothing on
+  a heading's line.
+- The web reader has no selection verbs and is not changed.
+
+**Tests.** heading_word_selection_test.go, on a page drawn as the native
+panes draw it with their rule modelled on it (`paneHeadingSpan`):
+`TestAWordSelectedInAHeadingMeansTheSectionBelowIt` (invented verses: each
+word of a heading, the heading whole, a drag begun inside a word and the
+break on either side, through every verb and Share with citation's
+message; the same words selected in the verses above and below, the
+controls, are quoted and cited where they stand),
+`TestASelectionThePaneFoundInAHeadingIsItsVerseAlone` (Go's half and
+`inHeading`), `TestAShareThatQuotesNothingIsItsCitationLineAlone`, the
+heading cases of `TestShareWithNoteIsAnchoredToTheSelectedWords`, and,
+opt-in by `BIBLETEXT_EXHAUSTIVE=1` over the local caches,
+`TestEveryWordOfEveryHeadingMeansTheSectionBelowOverLocalCaches_LocalOnly`,
+whose answers include that no study verb is offered, by the desktop menu
+or by the panes' rule modelled on the page (`paneHoldsScripture`). The
+follow-up's, in no_scripture_study_test.go:
+`TestNoStudyVerbIsOfferedForASelectionThatHoldsNoScripture` (the menu,
+for each word of a heading, the heading whole, a verse number and the end
+of one, a psalm's title alone and run on to verse 1's number, and verse
+1's number alone; the controls, words of the verses and a drag from the
+heading into the verse below, are offered it),
+`TestNoStudyVerbIsSentForASelectionThatHoldsNoScripture` (every verb,
+Ask among them, dispatched for the same selections opens nothing and
+reaches no request, with a key set and the provider allowed),
+`TestTheStyledPaneOffersNoStudyVerbForAVerseNumberAlone` (a double-click
+on a number on the Windows and Linux pane),
+`TestAVerseNumberAloneIsTheNumberWhereTheVerseHoldsTheFigure`, and the
+opt-in `TestNoStudyVerbForANumberOrATitleOverLocalCaches_LocalOnly`;
+no_scripture_study_contract_test.go holds each pane's rule and menu, with
+controls that mutate the source. Each fails on `rel/1.2.23` at
+`3261a1e13`. With `0f9ca1d57` and `e5389ed3d`:
+`TestThePanesRuleAgreesWithGoBesideAHeading` (a drag from a heading to
+every point of the first two words below, over openings with an
+apostrophe, a hyphen, a closed-up dash, an ellipsis and a space, and an
+opening quotation mark, and drags from the closing punctuation above into
+the heading and on: the panes' rule answers as the menu does, the one
+shape held apart excepted), `TestAPieceOfAVerseNumberIsTheNumber`,
+`TestTheStyledPaneReadsAVerseNumbersFirstDigitAsTheNumber` and
+`TestAHeadingRunOnIntoPartOfTheNextNumberQuotesNothing`, which fail on
+`6ef8ae9e3`, the first with the panes' rule modelled as it was there; the
+contract test holds the new step back and count, with a control for each.
+With `ca86cca13`: the menu, dispatch and model tests above take a
+verse's closing full stop and a comma selected alone, and drags from the
+full stop above the heading that end in it or on the number below, with
+a drag from that full stop into the verse below as a control;
+`TestThePanesRuleAgreesWithGoBesideAHeading` drags from the closing
+punctuation above to every point of the first two words below, offered
+the verbs by both once the drag takes a letter or figure; and the
+contract test holds each pane's count of letters and figures, its step
+back for a selection begun in a heading alone, and its test with no
+verse index, with a mutation control for each. On `91e1ec683` the menu,
+dispatch and agreement tests and the contract test fail.
+A host build of the two Apple rules as the source has them, on a page set
+as the panes set it, answers as the model does: on `6ef8ae9e3` both
+offered the verbs for "Solomon’" and for "Well-" through "Well-bein",
+and none for the full stop above the heading; now neither offers them for
+the first and both for the second.
+heading_word_selection_contract_test.go holds each pane's test and every
+seam the flag crosses, with controls that mutate the source. The prompt's
+passage, in ai_passage_heading_test.go:
+`TestAStudyPromptLeavesOutTheHeadingADragRunsAcross` (Explain dispatched
+with a key and the provider allowed, the prompt read where the provider
+receives it: drags from the last word above into the first words below,
+the verses above and below whole, begun inside a heading's last word,
+from the closing punctuation above, from the last word above into the
+heading, across a stack of two headings and from the stack into the
+verse below, each on a chapter with the divine name in small capitals
+too, which the panel must show as drawn; the controls are the share's
+messages of the same drags, which hold none of the headings' words and
+cite what the prompt cites), `TestAStudyPromptLeavesOutAPsalmTitleADragRunsFrom`
+(a psalm's title, with a heading under it and without, run on into the
+psalm with no span), and `TestAIPassageRefAgreesWithShareCitation`, which
+now holds the prompt's passage equal to the share's quotation as well as
+the citations, over its earlier selections and drags across a heading, a
+stack of two and a psalm's title. Each fails on `da90dfb55` with the
+share's quotation set apart as `selectionQuotationIn` (the share
+unchanged); with only the dispatch's reading form put back, the small
+capitals cases fail. `TestAIPassageSendsTheShareQuotationAndCapturesItsDisplay`
+and `TestAskCapturesSelectedPreviewBeforeNavigation` take the passage
+without the verse number, and `TestRunAIActionCacheKeyCarriesVerseSpan`
+files its answers under the passage the prompt quotes. Opt-in, `TestAStudyPromptQuotesNoHeadingOverLocalCaches_LocalOnly`:
+over the WEB, BSB and WEB Catholic caches, drags across the headings at
+every place between two verses that holds them (21, 1,894 and 23; the
+BSB's 1,894 hold 1,896 headings, a stack of two at two of them) as the
+native panes hand them over and from every psalm title into its psalm
+with no span (116 each), 284, 15,259 and 300 in all, each offered the
+study verbs, send the share's
+quotation, which stands in the chapter's verses as one stretch and keeps
+the verses' words the drag holds, with no heading's or title's word; on
+`da90dfb55` every one quoted otherwise, and 263, 13,374 and 277 held the
+headings' or the title's words. On `91e1ec683` the 21, 1,894 and 23
+drags from the closing punctuation above into the headings are studied
+and send that punctuation alone, and the study panel's preview of each
+shows the heading's words; since `ca86cca13` they are offered no study
+verb, and the sweep holds that no drag it studies sends punctuation
+alone (263, 13,365 and 277 studied). A probe outside the tree measured
+the same of a mark of a verse's words selected alone inside the verse,
+with the span the panes send, with `e86fc00be` and on `da90dfb55` alike:
+the menu and the panes' rule modelled on the page offer it the study
+verbs, and its prompt quotes that mark alone, for each verse's closing
+punctuation, 96,992 selections (WEB 31,000, BSB 30,727, WEB Catholic
+35,265), and for every other mark of a verse's words, 326,721 more
+(112,846, 89,088 and 124,787). Opt-in,
+`TestNoStudyVerbForPunctuationAloneOverLocalCaches_LocalOnly` holds them
+since `ca86cca13`: no study verb, by the menu or the panes' rule
+modelled on the page, for those 96,992 closing marks and 326,721 other
+marks, each selected alone, and for the 1,938 drags from a closing mark
+into the headings below; the same drags run on through the first word
+below are offered the verbs, and their prompts quote that word. On
+`91e1ec683` the menu offers the verbs for all 425,651 punctuation
+selections.
+`TestADoubleClickOnAHeadingSelectsNothingOnTheStyledPane` holds the Windows
+and Linux pane. The seam tests (`TestEverySelectionDispatchPassesTheLead`,
+`TestTheNativeExportsBuildTheSpanWithItsChapter`,
+`TestTheSelectionVerbsSendTheSpanAndLeadTheInstallGives`) take the new
+argument.
+
+The sweep, over the WEB, BSB and WEB Catholic caches: every word of every
+heading between two verses (23 words under 21 headings, 7,373 under 1,896,
+113 under 23) and every such heading whole is cited by the verse below with
+nothing quoted, through every verb. With the span the panes sent before,
+the verse above and a lead through the heading, 2,023 of the BSB's words
+under 1,301 headings and 27 of the WEB Catholic's under 2 were cited by the
+verse above, and 3,903 and 38 were quoted; the WEB's none. On `be1440fe0`
+with only the flag's plumbing added (selection_span.go), the sweep and the
+two Go tests above fail (BSB 9,267 of its 9,269 selections answered
+otherwise), as do the contract tests and the double-click test. On
+`005c19143`, before `99dbcd728`, every one of the sweep's 9,449 selections
+(WEB 44, BSB 9,269, WEB Catholic 136) sent the selected words as the
+prompt's passage. With the Daniel 3 heading set apart the sweep holds
+9,370 (WEB 44, BSB 9,269, WEB Catholic 57); on `3261a1e13` the menu
+offers every one of them the study verbs, and with the follow-up none.
+The follow-up's own sweep, as `e5389ed3d` widens it to every chapter,
+offers no study verb for 97,563 verse numbers selected alone (WEB 31,098,
+BSB 31,086, WEB Catholic 35,379), 159,878 pieces of numbers (their first
+digits, a number begun after the verse above, and a drag from a heading
+into the first digits of the number below, each of which also shares
+nothing quoted) and 696 psalm-title selections (232 in each), and answers
+36,489 drags beside a heading as the rule says, the menu and the panes'
+rule alike, 7,253 of them offered none. On `6ef8ae9e3`, 5,155 of them are
+answered otherwise. With the panes' rule modelled as it was there, it
+answered 7,693 of the 28,737 drags from a heading into the first two
+words below and from the punctuation above otherwise than the menu: 2
+offered a verb the dispatch then dropped, at the BSB's 1 Chronicles 3:10
+and 27:32, and 7,691 offered none that Go studies, all but the 2 below
+from the punctuation above. Since `ca86cca13` the sweep offers none for
+the drags from the closing punctuation above that end in the headings or
+on the number below, or take only the punctuation the verse below opens
+with: 13,105 of the 36,489 are offered none (WEB 137, BSB 12,817, WEB
+Catholic 151), and on `91e1ec683` 5,852 are answered otherwise. Two
+drags are measured apart and not held,
+both at the BSB's Ephesians 3:14: from the heading through the ellipsis
+and space that verse opens with into one or two letters of its first
+word, which the panes' rule offers no study verb and Go would study as a
+fragment. For each of the two the share quotes the heading's words with
+the letters, as Scripture under Ephesians 3:13–14 ("Paul’s Prayer for
+the Ephesians ... f"), and Go's prompt would quote the same; a drag on
+through the whole first word quotes "for" alone under 3:14.
+
+A host probe, not in the tree, compiled the Mac pane's preamble as it
+stands and the iOS verse-index functions read with AppKit's fonts, imported
+each of the 805 chapters holding those 1,940 headings from its own HTML
+(`buildChapterHTML`) through the Mac pane's importer, and selected each
+word of each heading, the heading whole and the heading with the break
+before or after it: 13,329 selections. Both tests named the verse below for
+all of them, where the span each pane sent named the verse above for all of
+them; the first word of the verse above and of the verse below, 3,880
+selections, were taken for a heading's by neither.
+
+**Device checks, 15 and 16 October 2026, on `005c19143`.** Throwaway
+triggers in scratch copies, each build against `rel/1.2.23` as the control.
+On the Mac app, the iPhone 16 Pro and iPad Air 11 simulators and the
+Android emulators (API 35 and 30), words selected in the BSB's headings
+"The Descendants of Cain" and "The Fourth Day" were answered by Genesis
+4:17 and 1:14 with no words through every verb tried, where the control
+quoted "Cain" from 4:16 and "The" from 1:13; "Cain" selected in verse 16
+was quoted from 4:16 on both. On the Linux and Windows virtual machines a
+double-click on a heading's line selected nothing, where the control
+selected the last word of the verse above. The study check read the
+panel's citation and words, not the prompt the provider was sent, and the
+text share then had two empty lines above the citation.
+
+**Device checks, 21 October 2026, on `99dbcd728` and `ca1f500a6`.** The
+same triggers, now logging the study prompt's passage, each build against
+`005c19143` as the control, on the Mac app and the iPhone 16 Pro and iPad
+Air 11 simulators. For "Cain" in "The Descendants of Cain" and "The" and
+"Fourth" in "The Fourth Day", Share with citation sent the citation line
+alone ("— Genesis 4:17 (Berean Standard Bible)", "— Genesis 1:14 (…)")
+and Explain's prompt read the text of Genesis 4:17 or 1:14 as the
+passage; the control sent the same line under two empty lines and the
+passages "Cain", "The" and "Fourth". "Cain" selected in verse 16 was
+quoted from 4:16 and sent as the passage under 4:16 by both. Share with
+note with a note typed on the heading's "Cain": on the iPad, before
+`ca1f500a6`, the popover hung from the top of the reading view, as above;
+with it, beside verse 17's number. On the Mac the page did not move, the
+selection stayed on the heading's word, and verse 17's number, which the
+picker is now anchored to, was in view.
+
+**Device checks of the follow-up, 21 October 2026, on `6ef8ae9e3`.**
+Throwaway triggers in scratch copies, against `rel/1.2.23` at `3261a1e13`,
+in the BSB, with a stand-in key and the study request and the text share
+logged, not sent. The pane's own menu was built over each selection. On
+the Mac app and the iPhone 16 Pro simulator (its menus also put on
+screen), and for most of the cases on the iPad Pro 13-inch simulator:
+"Cain" in "The Descendants of Cain", "The Fourth Day" whole, verse 17's
+number and a drag from the heading into one letter of verse 17 got no
+Study with AI, Share and Cross-references kept, where the control offered
+it; Psalm 3's title the system's verbs alone on both; Genesis 5:3's number
+shared the citation line alone, where the control quoted "3"; a drag from
+the heading through "And" and "Cain" in verse 16 were studied by both;
+and a study verb handed to the dispatch for the heading's "Cain" opened
+nothing, where the control opened the panel on Genesis 4:17. On the
+Windows and Linux pane, in the Mac's Linux mimic and the Linux and Windows
+virtual machines, where a heading or a title cannot be selected: verse
+17's number and Genesis 5:3's number as above, and "Cain" in verse 16
+studied by both.
+
+**Device checks, 22 October 2026, on `e5389ed3d`.** The same triggers with
+eight cases more, against `6ef8ae9e3`, on the Mac app, the iPhone 16 Pro
+and iPad Pro 13-inch simulators, the Mac's Linux mimic and the Linux and
+Windows virtual machines. On the Mac, the iPhone and the iPad: drags from
+the headings over 1 Chronicles 3:10 and 27:32 that end at "Solomon’" and
+"David’" got no Study with AI, where the control offered it and its
+Explain opened nothing; ending at "Solomon" both studied. Drags from
+Genesis 1:2's closing full stop into "The First Day", and on into "An" of
+verse 3, were offered Study with AI, and the first studied under 1:2,
+where the control offered none. "The Fourth Day" run on into
+the first digit of verse 14's number, the first digit of Genesis 5:16's
+number, and verse 3's number begun after verse 2 got no study verb on
+either and shared the citation line alone, under 1:14, 5:16 and 5:3,
+where the control quoted "The Fourth Day 1", "1" and "3" (the last under
+5:2–3). On the Windows and Linux pane, in the Mac's Linux mimic and the
+Linux and Windows virtual machines, the first digit of 5:16's number got
+no Study with AI and shared the citation line alone, where the control
+offered Study with AI and quoted "1". The first pass's cases gave the
+same answers as before: all of them on the Mac and the iPhone, five on
+the iPad, and on the Windows and Linux pane verse 17's number, Genesis
+5:3's number and "Cain" in verse 16.
+
+**Device checks of the prompt's passage, 22 October 2026, on
+`a244cb2ed`.** Throwaway triggers in scratch copies, against `rel/1.2.23`
+at `da90dfb55`, with stand-in AI keys and the study request and the text
+share logged, not sent. On the Android emulators (API 35 and 30), through
+the toolbar's own Study with AI and its popup, the iPhone 16 Pro and iPad
+Pro 13-inch simulators, through the pane's edit menu, and the Mac app,
+through its context menu, in the BSB: Explain for a drag from "waters."
+across "The First Day" into "And God said" sent "waters." and "And God
+said" a paragraph apart under Genesis 1:2–3, where the control sent the
+heading and verse 3's number between them; a drag across "The
+Descendants of Cain" (Genesis 4:16–17), one begun inside that heading's
+last word, one across the two headings above Proverbs 22:17, one from
+Psalm 3's title into verse 1 and one from John 3:16 into 3:17 sent the
+verses' words alone, where the control sent the headings' words or the
+verse numbers; Ask with a one-line question and Compare quoted the
+first drag as Explain did; and a drag from Genesis 1:2's full stop into
+"The First Day" was offered Study with AI on both builds and sent "."
+under Genesis 1:2, where the control sent the heading with it, the
+panel showing ". The First Day" on both. The
+shares of the same drags and the panel's words and citation were the
+same on both builds. On the NKJV, on the Mac and the iPhone simulator, a
+drag from the end of Genesis 2:7 across the chapter's one heading into
+the divine name in 2:8 sent none of the heading's words and the name in
+capitals, cited Genesis 2:7–8 as the share does, and the panel showed
+the name in small capitals; the control sent the heading's words, and
+its panel showed them, with the name in capitals. The Windows and Linux
+pane was run only in the Mac's Linux and Windows mimic: the drags from
+John 3:16 into 3:17 and from Genesis 4:16 into 4:17 sent no verse
+number, where the control sent "17". The virtual machines were not run,
+and no case was on the WEB.
+
+**On the Android emulators**, on 22 October 2026 at `da90dfb55` against
+`9a308352d`, on API 35 and API 30 with real long presses on the BSB, the
+toolbar read from the action mode's menu and in screenshots: no Study
+with AI for "Cain" in the heading "The Descendants of Cain", for verse
+17's number alone, for "Psalm" in Psalm 3's title or for Genesis 5:3's
+number alone, whose Share with citation sent the citation line alone,
+"— Genesis 5:3 (Berean Standard Bible)", where the control offered
+Study with AI for each and its share quoted "3"; and "Cain" in verse 16
+kept Study with AI on both. On API 30 a selection moved in code under a
+toolbar that was up, not dragged by its handles, hid Study with AI on
+the heading's words, showed it once it reached verse 17 and hid it
+again, where the control kept it throughout.
+
+**Still to do.** That the toolbar's item follows the handles as a finger
+drags them on Android, which depends on the toolbar being prepared again
+as they move. For `ca86cca13`, against `rel/1.2.23` at `91e1ec683`: the
+device checks on every pane, a closing full stop and a comma selected
+alone, drags from Genesis 1:2's full stop into "The First Day" and
+through verse 3's number, and the controls run on into "And". The share
+and the prompt of the two drags at the BSB's Ephesians 3:14 above, which
+quote the heading's words. For the prompt's passage (`e86fc00be`), against
+`rel/1.2.23`: the Linux and Windows virtual machines, where it was seen
+only in the Mac's mimic, and a drag across one of the WEB's headings on
+any pane. The follow-up was merged into `rel/1.2.23` on 22 October
+2026, and the prompt's passage the same day (`a04829c5f`). docs/SELECTION_OFFSET.md
+describes the heading flag in every native seam, and
+docs/PLATFORM_MATRIX.md records divergence 36: on Windows and Linux a
+heading's words cannot be selected and a double-click on one selects
+nothing. Not changed, and open for the major's headings
+pass (docs/ROADMAP.md, Next major version, row 5): a heading above verse 1,
+which gets no app verbs on the native panes, and the Windows and Linux
+pane, where a heading's words cannot be selected at all.
+
 ### AND-4. A link to a verse the edition omits opens at the top — FIXED 14 October 2026, for 1.2.22
 
-Planned for: 1.2.22, fixed on its release branch (the end of this entry);
-whether the mark itself lights stays open — see docs/ROADMAP.md.
+Released in 1.2.22 on 16 October 2026, fixed on its release branch (the end of this entry).
+Whether the mark itself lights, and where a note on the hole is drawn, were
+decided on 15 October 2026 (decision 18), built for 1.2.23 on
+`fu/1223-omitted-verse-mark` and merged into `rel/1.2.23` on 21 October
+2026 (the end of this entry); of the three rules the build added, two were
+confirmed that day and one rejected, and taken out on
+`fu/1223-gap-marks-named` — see docs/ROADMAP.md, 1.2.23, row 7.
 
 A link to a verse the open edition leaves out (Matthew 17:21 in the BSB)
 should open beside the "[21]" mark at verse 22. Android goes to the top with
@@ -832,14 +1618,16 @@ does) for all six; Android takes the first verse after the omitted one on a
 miss; the website scrolls the `.vg` mark. `reading_legacy_band_test.go:14-36`
 pins the legacy pane's behaviour as not decided.
 
-Open, apart from the fix: whether the omitted verse's mark is lit when a mark
-covers that verse. Every page ties the mark to the verse after it, drawn in
-that verse's tint or outside its highlight (`android_chapter_html.go:172`,
-:193-194; `reading.go:946-947`; `reading_styled_layout.go:553-556`;
-`cmd/websitegen/render.go:265-266`), so a one-verse mark on an omitted verse
-lights nothing on any surface; lighting it is a change of its own. "Headings: quoting, notes and links need one
-deliberate pass" records the neighbouring mismatch, a gap mark before a verse
-washed by the markup but not by a single-verse mark's native range.
+Open, apart from the fix, until decision 18 (15 October 2026, below): whether
+the omitted verse's mark is lit when a mark covers that verse. In 1.2.22 every
+page tied the mark to the verse after it, drawn in that verse's tint or
+outside its highlight (`android_chapter_html.go:172`, :193-194;
+`reading.go:946-947`; `reading_styled_layout.go:553-556`;
+`cmd/websitegen/render.go:265-266`, as they stood in 1.2.22), so a one-verse
+mark on an omitted verse lit nothing on any surface. "Headings: quoting, notes
+and links need one deliberate pass" recorded the neighbouring mismatch, a gap
+mark before a verse washed by the markup but not by a single-verse mark's
+native range, which the 1.2.23 change below removes.
 
 **FIXED 14 October 2026, for 1.2.22** (`24e9bb0ec`; ROADMAP.md, 1.2.22, row
 15). Arriving at 21, Android's bridge found no row and opened the chapter at
@@ -857,24 +1645,29 @@ the chapter's last is left as named. `TestALinkToAnOmittedVerseArrivesAtTheVerse
 `TestTheCanvasPaneLandsALinkToAnOmittedVerseOnTheVerseAfterIt` and
 `TestTheWebPageLandsALinkToAnOmittedVerseOnTheVerseAfterIt`. The website's
 half reaches readers with the next `scripts/publish-site.sh`. Seen on the
-emulator, below. Whether the mark lights is unchanged and still open.
+emulator, below. Whether the mark lights was left for decision 18.
 
-A note sent on the omitted verse is the exception. Its card's own verse is
-missing too, so every surface draws the card at the chapter top, and moving
-the arrival on to verse 22 scrolled the note out of view on every app
-surface, while the website still landed on it. Where the page omits both the
-arrival's verse and the open card's own verse, the arrival places nothing,
-as it did before the fix, and Android pushes no verse
-(`arrivalVerseOnPage`, `notes_arrival.go`; `TestANoteOnAnOmittedVerseKeepsItsCardInView`,
+In 1.2.22 a note sent on the omitted verse was the exception. Its card's own
+verse was missing too, so every surface drew the card at the chapter top, and
+moving the arrival on to verse 22 scrolled the note out of view on every app
+surface, while the website still landed on it. Where the page omitted both
+the arrival's verse and the open card's own verse, the arrival placed
+nothing, as it did before the fix, and Android pushed no verse
+(`arrivalVerseOnPage`, `notes_arrival.go`; the test then named
+`TestANoteOnAnOmittedVerseKeepsItsCardInView`, and
 `TestTheCanvasPaneOpensANoteOnAnOmittedVerseAtItsCard`). A note on a range
 that starts at the hole is filed by the chapter's plan at the first verse the
 page has, so its card stands above that verse's paragraph and the arrival
 lands on its band. Only a note shown from the link alone (filed on another
-passage, or refused by the store) keeps the named verse, and then the Apple
-panes and the website draw its card above the first lit verse's paragraph and
-Android and the canvas pane at the top; PLATFORM_MATRIX.md records it as
-divergence 34. Drawing such a card in one place on every surface is a choice
-of design, still open.
+passage, or refused by the store) kept the named verse, and then the Apple
+panes and the website drew its card above the first lit verse's paragraph and
+Android and the canvas pane at the top; PLATFORM_MATRIX.md recorded it as
+divergence 34. Drawing such a card in one place on every surface was left for
+decision 18. For 1.2.23 such a card, and the card of a note on the omitted
+verse alone, hangs above the verse after the hole on every surface and the
+arrival lands on it (the 1.2.23 section below;
+`TestANoteOnAnOmittedVerseArrivesAtItsCard`, the 1.2.22 test renamed with
+the rule).
 
 Seen on 14 October 2026 on the Android emulator (Pixel 7, API 35), with
 development builds of the branch before this exception and after it, the
@@ -888,11 +1681,176 @@ on its band in both. Seen beside it, older and not changed: the bridge parks
 such a card over the chapter's first line, where the iPhone and iPad reserve
 an inset for it (the parked sticker reserves no band, `refreshNoteSticker`).
 
-### RL-NKJV-1 and RL-NKJV-2. The NKJV red-letter generator places a run after its cursor, and retries from the verse's start — FIXED in the generator 14 October 2026; the table not yet regenerated
+**Decided 15 October 2026 (decision 18), built for 1.2.23** (`a86fcd9c2` and
+`67c199afc`, on `fu/1223-omitted-verse-mark`). As recommended: the mark lights
+when a link or a note names the verse it stands for, and a note shown from its
+link alone on a range that starts at such a verse is drawn above the verse
+after the hole on every surface, which closes divergence 34.
 
-Planned for: a later minor release, any; the generator fixed on 14 October
-2026, its run on the NKJV still to do (the end of this entry) — see
-docs/ROADMAP.md.
+Three rules in the build went beyond what the decision names. On 21 October
+2026 the first and the third were confirmed as built, and the second was
+rejected:
+
+1. Confirmed. A note on the omitted verse alone follows the rule for a range
+   that starts there: its card hangs above the verse after the hole, where in
+   1.2.22 every surface parked it at the chapter top. Keeping it at the top
+   would need an exception on the Apple panes once the mark lights.
+2. Rejected. The build kept the mark tied to the verse after it as well, as
+   every surface but the Apple panes drew it in 1.2.22: a link to 17:22 lit
+   "[21]" with verse 22, and where holes stand together a link to the one
+   verse after them lit every mark: in the WEB Catholic Edition a link to
+   Sirach 26:28 lit the nine marks "[19]" to "[27]" with verse 28 as one
+   band, where in 1.2.22 the iPhone, iPad and Mac left them bare. A mark now
+   lights only when a link or a note names its own verse (below).
+3. Confirmed. No verse's narration lights a mark (below). In 1.2.22 the
+   narration of the verse before a hole lit its mark on the iPhone, iPad, Mac
+   and Android, and the narration of the verse after it did on the Windows
+   and Linux pane.
+
+- **The mark.** It takes its own tint (`gapOf`, `tint.go`): lit only when the
+  span names the omitted verse. A link to Matthew 17:21 lights "[21]" alone.
+  A span ending at the hole (17:20–21) lights verse 20, the space and the
+  mark as one band (`joinsAhead`, `writeGapMarks`); 17:21–22 and 17:20–22
+  draw as before. A span on the verse after the hole alone leaves the mark
+  bare (choice 2, rejected; `2aa12b083`, on `fu/1223-gap-marks-named`): a
+  link to 17:22 lights verse 22, one to Sirach 26:28 in the WEB Catholic
+  Edition verse 28 with its nine marks bare, and one to Acts 8:38 in the WEB
+  verse 38, where one to 8:37 lights "[37]". That rule is the same in both
+  HTML dialects (`reading.go`, `android_chapter_html.go`), the Windows and
+  Linux pane (`layoutChapter`), the Apple panes' runs (`nativeTintRuns`) and
+  the website, where the fragment lights the marks it names (`lightMarksIn`,
+  `cmd/websitegen/assets.go`) and a space lights only where a lit verse or
+  mark stands on both sides of it (`bridgeAfter`); the band lit the marks
+  before a lit verse, and those between two, until `2aa12b083`. A note's
+  mark lights by the same rule. A note from another edition is filed by the
+  chapter's plan on the verses this edition has (`displayCopy`), and its
+  mark keeps the holes its own span names (`noteMarkSpan`, `notes_plan.go`;
+  `4ce5575e4`), running on through such a hole to the note's next run: an
+  NKJV note on 17:21–22 read in the BSB lights the mark and verse 22, one on
+  17:20–21 verse 20 and the mark, and one on 17:20–22 verse 20, the mark
+  and verse 22, as a link to the same span does. Its card stays where the
+  plan files it, above verse 22 for 17:21–22.
+- **The Apple panes' wash.** These panes paint from runs of verse numbers
+  resolved against the imported text, not from the markup, and a verse ran on
+  to the next verse's number, so the mark belonged to the verse before the
+  hole. A mark on verse 20 alone washed "[21]". One on 17:21–22 or 17:22 left
+  it bare where the markup lit it: the mismatch "Headings: quoting, notes and
+  links need one deliberate pass" records. Now `nativeTintRuns` walks each
+  mark in its place, the omitted number standing for it, so a span across the
+  hole is one run, 20–22, and a link to 21 is the run 21–21. Both panes index
+  the marks apart from the verses (`gGapIndex` and `btGapMarkNumber`,
+  `reading_ios.go`; `btMacGapMarkNumber` and `btMacGapRange`,
+  `reading_macos.go`), end a verse at the mark after it, and resolve an
+  omitted number in a run to its mark (`btIOSRunSpanRange`,
+  `btMacRunSpanRange`).
+- **The plain fallback page** (`appleFallbackPageOf`, shown when a chapter
+  fails to import three times) draws the mark at body size, so neither pane
+  indexes it there and 1.2.22's rule holds on that page: a run from the
+  omitted number starts at the verse after it, a link to the omitted verse
+  alone lights nothing, and where no heading stands between the mark and the
+  verse before it, a mark or the narration on that verse alone runs on over
+  the mark ("[37]" with Acts 8:36 in the WEB). By the code; not seen on a
+  device.
+- **The narration.** No verse's narration lights a hole's mark on any
+  surface (choice 3): the edition has no text for the omitted verse, so
+  nothing is read there. The Apple panes end a verse at the mark after it
+  (above). Android's import sizes the mark with a span class of its own
+  (`GapMarkSpan`, `android/BtBridge.java`), and `buildVerseIndex` ends a
+  verse at the first mark after its number (`endAtMark`), where the verse
+  before the hole ran on to the next verse's number. The Windows and Linux
+  pane files the mark's run under the verse after the hole, and its
+  narration band now skips that run (`verseSpansForLayout`).
+- **The note.** The chrome hands every pane the verse the page draws for the
+  note (`drawnNoteAnchor`, `notes_arrival.go`): verse 22 for a note shown from
+  its link alone on 17:21 or on 17:21–22. The iPhone, iPad, Mac and Android
+  push that verse in place of the note's own, the canvas pane opens its band
+  above it, the website hangs the note above the paragraph of the verse after
+  the hole (`fragmentParagraph`), and every arrival lands on the card's band.
+  A note on the omitted verse alone, which every surface parked at the chapter
+  top while its mark lit nothing, follows the same rule, above its mark
+  (choice 1). A card past the chapter's last verse still parks at the top,
+  the arrival placing nothing (`arrivalVerseOnPage`).
+
+Tests, each failing on `rel/1.2.23` at `be1440fe0` with the new tests copied
+in: `TestAMarkNamingAnOmittedVerseLightsItsMark` (both HTML dialects),
+`TestNativeTintRunsReachTheMarkOfAnOmittedVerse`,
+`TestTheWashCoversAnOmittedVersesMarkAsTheMarkupDoes` (the Apple panes' rule
+modelled in Go over the imported markup, in prose and across a paragraph, in
+both layouts, with the rule it replaced shown to disagree),
+`TestTheApplePanesResolveARunToAHolesMark` and
+`TestEveryPanePushesTheNotesDrawnVerse` (the native source),
+`TestTheCanvasPaneLightsTheMarkOfAnOmittedVerse`,
+`TestANoteOnAnOmittedVerseHangsAboveTheVerseAfterTheHole`,
+`TestANoteOnAnOmittedVerseArrivesAtItsCard`,
+`TestTheCanvasPaneOpensANoteOnAnOmittedVerseAtItsCard`, and on the website
+`TestTheWebPageLightsAnOmittedVersesMarkAndHangsItsNoteThere` and the
+highlight band's run. For the narration, failing on `3918e0e28`, the branch
+before it: `TestTheCanvasPaneNarratesNoOmittedVersesMark` and
+`TestAndroidEndsAVerseAtAnOmittedVersesMark` (the bridge's source). The
+website's half reaches readers with the next
+`scripts/publish-site.sh`; its pinned digests moved with `reader.js` in both
+states of the next switch. Seen on 15 and 16 October 2026, before
+`67c199afc`, against `rel/1.2.23` at `be1440fe0`: on the Mac, the iPhone 16
+Pro and iPad Air 11 simulators, the emulator (API 35 and 30), the Linux and
+Windows virtual machines and the website built offline, a link to 17:21
+lit "[21]" alone, one to 17:20–21 lit verse 20 and the mark, one to 17:22
+lit the mark with verse 22 (the rejected rule), and a note link on 17:21 or
+17:21–22 hung its card above verse 22 with the arrival on its band, where
+the control lit nothing for 17:21 and anchored the note at 21. On the
+iPhone and iPad the case for where the verse before the hole ends could not
+fail, since a heading stands between verse 20 and the mark in Matthew 17;
+the WEB's Acts 8 is still to run there. The narration over a mark
+(`67c199afc`) has not been seen on a device. Merged into `rel/1.2.23` on 21
+October 2026 (docs/ROADMAP.md, 1.2.23, row 7).
+
+The rejected rule was taken out in `2aa12b083`, on `fu/1223-gap-marks-named`
+from `rel/1.2.23` at `3261a1e13`, merged into `rel/1.2.23` on 22 October
+2026 (`bf24fb6a3`). Tests, each failing on
+`3261a1e13` and passing after: `TestAnOmittedVersesMarkLightsOnlyWhereItsVerseIsNamed`
+(Matthew 17:21, 17:20–21 and 17:22 in the BSB, Sirach 26:28 in the WEB
+Catholic Edition, and Acts 8:37 and 8:38 in the WEB, on both HTML dialects,
+the Apple panes' wash modelled over the imported markup and the Windows and
+Linux pane), the 17:22 cases of `TestAMarkNamingAnOmittedVerseLightsItsMark`,
+`TestNativeTintRunsReachTheMarkOfAnOmittedVerse`,
+`TestTheCanvasPaneLightsTheMarkOfAnOmittedVerse` and
+`TestTheWashCoversAnOmittedVersesMarkAsTheMarkupDoes`, and on the website
+the highlight band's run (Sirach 26:28, Acts 8:38, 17:22 and 17:22–23
+leaving the marks bare) and the `#v5` case of
+`TestTheWebPageLightsAnOmittedVersesMarkAndHangsItsNoteThere`. The site's
+pinned digests moved with `reader.js` in both states of the next switch.
+Seen on 21 October 2026 with development builds of `19b1e1094` and of
+`3261a1e13`, on the Mac, the iPhone 16 Pro simulator and the emulator (API
+35), each pane's wash read back from the pane: links to Sirach 26:28 in the
+WEB Catholic Edition and to Acts 8:38 in the WEB leave the marks bare, where
+`3261a1e13` lit them, and links to 17:21, 17:20–21 and Acts 8:37 light the
+mark on both.
+
+Taking the rule out left a note from another edition on 17:21–22 with its
+mark bare. The chapter's plan files such a note on the verses this edition
+has, so its mark lit verse 22 alone, although the note names verse 21. A
+note on 17:20–21 lit verse 20 alone, and one on 17:20–22 verse 20 alone,
+before the rule was taken out as after. The same spans on a link lit the
+mark, in the app and on the website. Fixed in `4ce5575e4`, on the same
+branch, merged with it (the mark, above). Test, failing on `19b1e1094` and
+passing after: `TestANoteFromAnotherEditionLightsTheMarksItNames`, which
+opens each note on a real note link, by a reader without the NKJV
+(Matthew 17:21–22, 17:20–21, 17:20–22 and 17:22 in the BSB, and Acts
+8:37–38 and 8:38 in the WEB), and the reader's own note on 17:21–22, on
+both HTML dialects, the Apple panes' runs and wash and the Windows and
+Linux pane. Not yet seen on a device.
+
+Left open, outside the decision:
+
+- In the apps the mark is drawn only with the footnotes on, which is not the
+  default (`footnotesEnabled`). With them off a link to an omitted verse
+  still lands on the verse after the hole with nothing lit. The website always
+  draws the mark.
+
+### RL-NKJV-1 and RL-NKJV-2. The NKJV red-letter generator places a run after its cursor, and retries from the verse's start — FIXED in the generator 14 October 2026; its word check FIXED 15 October 2026; DONE, closed 15 October 2026
+
+Planned for: nothing left; the generator fixed on 14 and 15 October 2026,
+and its run on the NKJV after the fix writes the shipped table byte for byte
+(the end of this entry) — see docs/ROADMAP.md.
 
 `scripts/gen-nkjv-redletter.py:181` takes the first copy of a run's letters at
 or after the cursor, with no word boundary, so a run can land inside a longer
@@ -952,13 +1910,101 @@ one-copy placement to the option, and
 script with an invented key in its environment and finds it in none of its
 globals after a `--no-fetch` run.
 
-Not done: no NKJV text was opened, so the generator has not been run on the
-app's NKJV cache, and the shipped `red_letter_nkjv_data.go` is unchanged and
-unchecked against it. That run, from the cached chapters with `--no-fetch`
-and without `--allow-relocated`, must write the shipped table byte for byte;
-where the app's text before a run and the markup's disagree, it fails by
-verse and run number instead of writing a table. It needs the NKJV opened in
-the app once (ROADMAP.md, Decisions still open, 43).
+**Run on the NKJV, 15 October 2026: no table written; the placement proven,
+the check for an end inside a word refuses 18 verses** (ROADMAP.md,
+Decisions still open, 43). The NKJV was fetched once through the app's own
+path (`fetchAPIBible`, 197 requests: 66 books, 31,102 verses, saved as the
+app saves its cache) and the generator's 174 chapters with its own fetch,
+both outside the repository and deleted after; nothing below quotes the
+text. Run with `--no-fetch` and without `--allow-relocated`, the generator
+fails, naming 18 verses and no others: Matthew 5:3, 9:15, 10:17, 10:19,
+10:22, 15:8 and 22:44; Mark 7:9; Luke 4:18 and 6:24; Acts 1:8, 9:11, 9:15,
+9:16, 11:16, 23:11 and 26:18; Revelation 2:27, each because a run would
+begin or end inside a word.
+
+What the run shows, by counts:
+
+- Every run of the 2,054 marked verses is at its count, with the app's verse
+  holding the same characters before it: no run differs before it, so none
+  needs `--allow-relocated`, and the option would change nothing here.
+- The refused edges are 51 run edges at 26 places. At every one of the 26
+  the app's verse anchors a note, and the publisher's text has no space on
+  either side of the note, so two words run together in the markup fetched
+  without notes and in the app's text alike: the run-together class of the
+  NKJV's missing spaces (ROADMAP.md, Later minor releases, row 9).
+- In 17 of the verses each such place lies between two runs that touch (50
+  of the edges): one words-of-Jesus span closes and the next opens where
+  the note is, and the two merge into one span, which has no edge there. In
+  Matthew 15:8 a run ends at such a place and black text follows (one
+  edge), so the span's own end falls between the joined words. The black
+  text is one word, the second of the two run together, and the next run
+  begins after it: the publisher's markup leaves that word outside the
+  words-of-Jesus spans on either side, so the app draws the first of the
+  joined words red and the second black. Whether the publisher's printed
+  red-letter edition reddens it has not been checked.
+- Placed without that check, the runs write the shipped
+  `red_letter_nkjv_data.go` byte for byte, all 2,054 verses, and
+  `TestNKJVRedLetterTableIsAcceptedByItsOwnGuard`, pointed at the fetched
+  cache, accepts all 2,054 entries against that day's text. The shipped
+  table is what the fixed placement writes. The control: the table as it
+  stood before `a5e0ab738` differs from that output.
+
+The defect is the generator's, not the table's: its check for an end inside
+a word takes a place where the source runs two words together for the inside
+of one word. Reproduced on invented text with `--no-fetch`: a verse whose
+markup holds two touching runs with no space between them, and whose app
+text runs the two words together, is refused with and without
+`--allow-relocated`, and so is a run followed by black text with no space;
+the same two verses with the space present write a table.
+
+**FIXED, 15 October 2026: a place where the app's verse anchors a note is
+the edge of a word** (`b7f5cb9a7`). `derive()` reads each verse's note
+anchors from the app's cache (`Footnote.Anchor`), and `place` counts each as
+the edge of a word, so two runs that touch there make one span and a run may
+end there before black text; an edge between two letters or digits with no
+note there is still refused. Checking only the merged spans' ends would
+still have refused Matthew 15:8, where the run merges with nothing.
+`TestTheNKJVRedLetterGeneratorPlacesEachRunAtItsOwnPlace` gains the two
+invented verses above, each with a note anchored at the joined place, and
+runs with and without `--allow-relocated`: the generator before the fix
+refuses both verses in both modes. The fixtures write the notes with the
+app's own `Footnote` type. `TestTheNKJVRedLetterGeneratorRefusesWhatItCannotPlace`
+gains the same two shapes with no note there, and the touching runs with a
+note elsewhere in the verse, each refused in both modes.
+
+Those cases held the check at a run's end only: a generator that never
+checked a run's start, or that let a run's start or its end lie between two
+letters wherever the verse had any note, passed them all. Since `7d1950543`
+the refusal test has three shapes, two runs touching, a run ending at the
+joined place and a run beginning there, each with no note there and each
+with a note elsewhere in the verse, and the placement test a run beginning
+after black text at a place where a note is anchored, which the generator
+before the fix refuses in both modes. Each of those three weaker generators
+fails a new case in both modes. With the fix changed to take any note in
+the verse for an edge, the three cases with a note elsewhere fail; with the
+start check taken out, the two beginning cases fail; with the end check
+taken out, the two ending cases fail, as does the end inside a word; with
+the check taken out entirely, all six fail, as does the end inside a word.
+
+**Run again on the NKJV after the fix, 15 October 2026: the shipped table
+byte for byte; DONE, closed** (ROADMAP.md, Later minor releases, row 31;
+Decisions still open, 43). The NKJV was fetched once more through the app's
+own path (`fetchAPIBible`, 197 requests, each answered with HTTP 200: 66
+books, 31,102 verses, saved as the app saves its cache) and the generator's
+174 chapters with its own fetch (174 requests, none refused), 371 requests
+in all and no 429, both kept outside the repository and deleted after;
+nothing here quotes the text. Run with `--no-fetch` and without
+`--allow-relocated`, the generator writes `red_letter_nkjv_data.go` byte for
+byte, all 2,054 verses, none placed by its only copy. 51 run edges fall
+between two letters or digits, at 26 places in the 18 verses named above,
+and the app's verse anchors a note at every one of them; none falls between
+two letters or digits with no note there. The control: the generator before
+the fix, run the same way on the same text, fails naming the same 18 verses
+and no others. `TestNKJVRedLetterTableIsAcceptedByItsOwnGuard`, pointed at
+the fetched cache, accepts all 2,054 entries. A correction list for the
+missing spaces, if one is approved (ROADMAP.md, Later minor releases, row
+9), changes these verses' text and so their entries' fingerprints: the table
+is regenerated with it.
 
 ### RL-BSB-1. The BSB red-letter generator takes the first copy from its cursor — FIXED 14 October 2026
 
@@ -1074,7 +2120,7 @@ unpacked sources.
 
 ### VERS-1. The versification generator declares a missing verse moved to its best text match — FIXED 14 October 2026, for 1.2.22
 
-Planned for: 1.2.22, fixed on its release branch (the end of this entry) —
+Released in 1.2.22 on 16 October 2026, fixed on its release branch (the end of this entry) —
 see docs/ROADMAP.md.
 
 `scripts/gen-versification.py:246` declares a verse an edition lacks moved to
@@ -1169,8 +2215,8 @@ outside the Basic Multilingual Plane; none is known in the shipped texts.
 
 ## Four rules for a shared note's link, in the app and on the website — decided 7 October 2026; FIXED 14 October 2026, for 1.2.22
 
-Planned for: 1.2.22, fixed on its release branch (the end of this entry), the
-website's half with the next site publish — see docs/ROADMAP.md. Moved on 7
+Released in 1.2.22 on 16 October 2026, fixed on its release branch (the end of this entry), the
+website's half with it — see docs/ROADMAP.md. Moved on 7
 October 2026 to the release after 1.2.20; 1.2.21 went out without it.
 
 The app's note decoder (`DecodeNote`, `share_note.go`) and the website's
@@ -1216,7 +2262,7 @@ website's pinned digests moved with `reader.js` in both states of the switch.
 
 ## A phrase ending on a dash, where its verse has the same words earlier, is cut short — deferred from 1.2.20, 7 October 2026; FIXED 14 October 2026, for 1.2.22
 
-Planned for: 1.2.22, fixed on its release branch (the end of this entry) —
+Released in 1.2.22 on 16 October 2026, fixed on its release branch (the end of this entry) —
 see docs/ROADMAP.md. Moved on 7 October 2026 to the release after 1.2.20.
 
 Two BSB phrases end on a dash where their verse ends, and the verse has the
@@ -1275,7 +2321,7 @@ whole word across a dash too.
 
 ## A heading that opens as its verse does is shared whole (the BSB's "The LORD Is My Shepherd") — deferred from 1.2.20, 7 October 2026; FIXED 14 October 2026, for 1.2.22
 
-Planned for: 1.2.22, fixed on its release branch (the end of this entry) —
+Released in 1.2.22 on 16 October 2026, fixed on its release branch (the end of this entry) —
 see docs/ROADMAP.md. Moved on 7 October 2026 to the release after 1.2.20; it
 had been left with the headings' decision.
 
@@ -1352,11 +2398,11 @@ over the three caches, where all 24 of the BSB's 22,728 drags across the
 headings between two verses that cross a stack were wrong, with the span and
 without, and none is now.
 
-## The NKJV's card route and selection route disagree in the opt-in walk — deferred from 1.2.20, 7 October 2026; the test FIXED 14 October 2026, for 1.2.22
+## The NKJV's card route and selection route disagree in the opt-in walk — deferred from 1.2.20, 7 October 2026; the test FIXED 14 October 2026, for 1.2.22; DONE, closed 15 October 2026
 
-Planned for: 1.2.22, the test's stand-in fixed on its release branch (the end
-of this entry) — see docs/ROADMAP.md. Moved on 7 October 2026 to the release
-after 1.2.20.
+Planned for: nothing left; the test's stand-in fixed on 1.2.22's release
+branch, and the walk passes on an NKJV cache (the end of this entry) — see
+docs/ROADMAP.md. Moved on 7 October 2026 to the release after 1.2.20.
 
 `TestPassageShareEqualsSelectionRouteOverLocalCaches_LocalOnly`
 (`share_passage_test.go`), opt-in by `BIBLETEXT_EXHAUSTIVE=1`, holds the
@@ -1386,10 +2432,32 @@ therefore shown on the WEB given the NKJV's marking, not on the NKJV: the
 opt-in walk over an NKJV cache is still to run, and until it passes this
 entry is not closed (ROADMAP.md, Later minor releases, row 45).
 
-## Explicit permission before text goes to a third-party AI (App Store guideline 5.1.2(i)) — found 13 October 2026
+**DONE, closed 15 October 2026: the walk passes on the NKJV** (ROADMAP.md,
+Later minor releases, row 45; Decisions still open, 43). The NKJV was
+fetched once through the app's own path (`fetchAPIBible`) and saved as the
+app saves its cache, outside the repository, and deleted after; the walk
+was pointed at it by `BIBLETEXT_CACHE_PATH`, and only counts were read from
+it. `TestPassageShareEqualsSelectionRouteOverLocalCaches_LocalOnly` compares
+143,627 NKJV passages, every verse of every chapter at widths one to five,
+and none differs. The control, the same walk with `selectionRouteRaw` built
+from `v.Text` as before `abea88a87`, finds 46,837 of the 143,627 differing,
+the figure this entry recorded before the fix: the NKJV's differences were
+the stand-in's, and the card route and the selection route agree on the
+NKJV.
 
-Planned for: a later minor release, once its wording is approved — see
-docs/ROADMAP.md.
+## Explicit permission before text goes to a third-party AI (App Store guideline 5.1.2(i)) — found 13 October 2026; decided and built 15 October 2026, for 1.2.23; the key rule and the words settled 21 October 2026
+
+Planned for: 1.2.23; decided on 15 October 2026 (docs/ROADMAP.md, Decisions
+still open, 5) and built on `fu/1223-ai-consent` from `rel/1.2.23` at
+`be1440fe0` (`754107e49`, `3789c0eaf`), merged into `rel/1.2.23` on 21 October 2026 — see
+docs/ROADMAP.md, 1.2.23, row 13 (Later minor releases, row 39). What was
+settled on 21 October 2026 is built on `fu/1223-consent-2` from
+`rel/1.2.23` at `3261a1e13` (`7ef80e58b`), merged into `rel/1.2.23` on 22
+October 2026 (`442a21938`). The privacy policy's sections, its fourth
+sentence and its effective date, decided on 22 October 2026, are built on
+`fu/1223-privacy-2` from `rel/1.2.23` at `da90dfb55` (`612b32a84`,
+`7f77c510a`, `17abf2caa`, `478561c49`, `59f59be42`, `efd46978c`), merged
+into `rel/1.2.23` on 22 October 2026.
 
 Guideline 5.1.2(i) of the App Store Review Guidelines, as last updated on 8
 June 2026, asks an app to disclose clearly where personal data goes, naming
@@ -1404,18 +2472,324 @@ which sends text the reader types, first reached App Review with 1.2.21.
 
 The smallest change that gives the permission is a one-time confirmation for
 each provider, before the first request to it; until the reader allows it,
-nothing is sent. Its wording is to be approved, and a draft exists outside
-the repository; how the permission is withdrawn is part of the same
-decision. Setting the Settings note as body text rather than small muted
-text goes with it. Google Play's prominent-disclosure rule applies only to a
+nothing is sent. Google Play's prominent-disclosure rule applies only to a
 flow that would surprise the reader, which a request made on purpose is not,
 so the requirement is Apple's; the platform-parity rule asks for one rule on
 all six, or a divergence recorded in PLATFORM_MATRIX.md.
+
+The decision, 15 October 2026: before the first request to each provider,
+on all six platforms, the app asks once, with the provider's display name
+filled in (here Claude (Anthropic)):
+
+- title: "Send text to Claude (Anthropic)?"
+- body: "Study with AI sends the passage you select, the study action and
+  any question you type straight from this device to Claude (Anthropic),
+  using your key. They may keep it under your account terms. Nothing is
+  sent until you allow it. To withdraw, choose None in Settings or clear
+  your key."
+- buttons: "Not now" and "Allow".
+
+Choosing None as the assistant, or clearing that provider's key, withdraws
+the permission, and the app asks again next time. Find and Ask are covered
+too: nothing is sent to a provider without that provider's recorded
+permission. The note under the key field is set in body text, with the same
+words. One rule on all six, so no divergence is recorded.
+
+Settled on 21 October 2026:
+
+- the body names a search, which Find sends: "Study with AI sends the
+  passage you select, the study action, and any question or search you
+  type straight from this device to Claude (Anthropic), using your key.
+  They may keep it under your account terms. Nothing is sent until you
+  allow it. To withdraw, choose None in Settings or clear your key.";
+- the permission ends with its key: any change of that provider's key,
+  cleared, replaced by another, or missing after an Android restore that
+  brings the preferences back without it, ends the permission, and the
+  app asks again before the next request;
+- "Nothing is sent until you allow it." is approved as the study panel's
+  and Find's message after Not now;
+- Settings' Test key and model list may reach the provider with the key
+  before any Allow, since they send none of the reader's text;
+- the privacy policy gains three approved sentences on the question, its
+  withdrawal and the record the app keeps, in `docs/privacy.html`; they
+  reach readers with 1.2.23's publish of the site.
+
+Settled on 22 October 2026:
+
+- each of the policy's three sentences goes in the section it was drafted
+  for: the question in the AI section, its withdrawal in *Your choices,
+  retention, and deletion* and the record in *Information stored on your
+  device*; after the record's comes a fourth approved sentence, "On
+  Android this record is part of the app's settings, which Android may
+  include in your device backup; it holds no key and none of your text.";
+- the policy's effective date is the day 1.2.23 goes live, confirmed the
+  same day as the day the website is published with 1.2.23, which stage
+  11 of docs/RELEASING.md sets and which does not wait for the stores.
+
+Built on 15 October 2026 on `fu/1223-ai-consent` (`754107e49`, from
+`rel/1.2.23` at `be1440fe0`), merged into `rel/1.2.23` on 21 October 2026. `ai_permission.go` holds the
+question, a sheet the toolkit draws, so the same sheet is drawn on the
+iPhone, iPad, Mac, Android, Windows and Linux. The study panel asks in its
+`startFetch`, before any request: that covers the four study verbs from
+every pane's menu, and Ask, whose composer sends its question through the
+panel. The desktop sidebar's Find and the phone's Search tab ask through
+`findAsksPermission`, after the key check. Under the question, and after
+Not now, the panel and the Find pane show "Nothing is sent until you allow
+it." with Try again, which asks again. A light/dark change or a rotation
+with the question up over the study panel brings the panel back about the
+same passage, with Ask's question as typed, saying nothing was sent, and the
+question over it; nothing is sent or recorded across the change. Until
+`3789c0eaf` (16 October 2026) the change drained both and brought nothing
+back, so the reader lost the panel and the question they had typed, where
+the same change during a request keeps the panel. Over a Find pane the
+question closes, and the pane comes back from state with the search in its
+field, saying nothing was sent, with Try again. Allow records
+`ai.allowed.<provider>` in the app's preferences. As built on 15 October
+2026 the record held `1`, and only an empty key erased it, so a key
+replaced by another kept the permission, and on Android, whose restore
+brings the preferences back without the key (`no_backup/`), the same key
+pasted again was sent with no question.
+Since `7ef80e58b` the record holds a fingerprint of the key the question
+was asked about, never the key: a form tag, which a later wording can
+change to ask everyone again, and eight bytes of SHA-256 over the provider
+and the key (`aiAllowedRecord`). Every check compares it with the key the
+request would send (`keyStore.aiAllowed`), so it is no permission beside
+another key or none, however the key changed. `keyStore.setAPIKey` erases
+it on any change of the key, cleared, replaced, or entered where there was
+none, so a key put back after a change, or pasted again after a restore,
+asks again; the same key saved again, as the Settings field saves on every
+edit, keeps it. A clear erases it even where the credential store fails
+the delete, and `keyStore.setAIEnabled(false)` erases every one.
+`runAIActionForPassage` and `runAISearch` refuse a provider with no record
+for the key they send before the request leaves the device, whatever path
+reached them, and the refusal reads as the same message. Settings' Test key
+and its model list are not asked about: they send the key, and Test key a
+fixed probe, none of the reader's text.
+
+Tests. `ai_permission_test.go` sends to a stand-in provider on the test
+machine through the seams below the check (`aiStudyGenerate`, new, and
+`aiSearchGenerate`):
+
+- nothing reaches it before Allow for Explain, Ask and the desktop Find;
+- the phone's Find starts nothing before Allow, and comes back from state
+  after a rebuild;
+- Not now records nothing;
+- Allow sends once, with the passage and Ask's question, and the next
+  request asks nothing;
+- the permission is kept for each provider;
+- Clear and None in the Settings sheet withdraw it;
+- the question carries the approved words for all four providers on a
+  desktop window and a 320-point phone canvas, wrapped inside its card;
+- the Settings note is body text;
+- a light/dark change or a rotation with the question up over the panel
+  brings both back, with Ask's question as typed, sends and records
+  nothing, and Allow then sends the question with the passage once;
+- over a Find pane the same change closes the question, starts nothing,
+  and leaves the pane saying nothing was sent, with the search in its field;
+- a key replaced by another asks again before the next request, and the
+  first key put back asks again too, while the same key saved again asks
+  nothing (`TestAReplacedKeyAsksAgainBeforeTheNextRequest`,
+  `TestChangingTheKeyOrChoosingNoneWithdrawsThePermission`);
+- a key changed while the question is open: Allow records the permission
+  for the key the question was asked about, nothing is sent, and the
+  question is asked again for the changed key, whose Allow sends once
+  (`TestAKeyChangedWhileTheQuestionIsOpenIsAskedAboutAgain`, `79cfb6759`);
+- a key in the credential store other than the one allowed is refused by
+  both requests (`TestTheRequestsRefuseAKeyThePermissionWasNotGivenWith`);
+- preferences restored without the key, through Android's own store with
+  a fresh `no_backup/` directory, hold no permission, and the same key
+  pasted again asks again (`TestPreferencesRestoredWithoutTheKeyHoldNoPermission`);
+- the record holds no part of the key's text
+  (`TestThePermissionRecordHoldsNoKey`).
+
+Over `rel/1.2.23`'s code at `3261a1e13`, given an adapter for the old
+record calls, `TestAReplacedKeyAsksAgainBeforeTheNextRequest`,
+`TestAKeyChangedWhileTheQuestionIsOpenIsAskedAboutAgain`,
+`TestTheRequestsRefuseAKeyThePermissionWasNotGivenWith`,
+`TestPreferencesRestoredWithoutTheKeyHoldNoPermission` and the
+replaced-key half of `TestChangingTheKeyOrChoosingNoneWithdrawsThePermission`
+fail: the request goes out with the replaced key, with the key changed
+while the question was open and with the restored record, and a replaced
+key, or the first key put back, keeps the permission. The question tests
+fail there on the body. `TestThePermissionRecordHoldsNoKey` calls
+`aiAllowedRecord`, which that code does not have, so it has no such run
+and guards only the record's form.
+`TestAKeyChangedWhileTheQuestionIsOpenIsAskedAboutAgain` fails too with
+Allow recording the key in place at the tap instead of the one the
+question was asked about: the request reaches the provider at the first
+Allow.
+
+Over 1.2.23's code (`be1440fe0`, given only the study request's seam and
+the names the tests call), the ten tests of `754107e49` all fail: the
+requests reach the stand-in at once with no question, nothing is withdrawn,
+and the note is a muted caption.
+`TestTheQuestionComesBackOverItsPanelAfterARebuild` fails for both changes
+over `3789c0eaf` with only the question's reopen taken out: no question is
+left on top after the change.
+`TestAFindQuestionClosesOnARebuildAndThePaneSaysNothingWasSent` holds the
+Find pane's behaviour, which `3789c0eaf` leaves as it was.
+
+`ai_permission_contract_test.go` holds:
+
+- every pane's study menu to `dispatchAIAction`;
+- the reader's text to the two seams behind the check, with every call of a
+  client's `generate` accounted for, and, since `7ef80e58b`, each check
+  made with the key its request sends, which fails over `3261a1e13`'s
+  sources;
+- both Find panes to asking before a search starts;
+- the native sources to naming no provider host.
+
+The first three fail over 1.2.23's code. The fourth held before, and fails
+with a control Java file naming a host.
+
+Seen on devices on 15 and 16 October 2026, from scratch builds that answer
+every request in the app with a synthetic reply, each beside a 1.2.23
+control that sent at once with no question:
+
+- the question before any request, Not now sending nothing, Clear and None
+  withdrawing, Find asking first, and the Settings note as body text: on
+  the Mac, an iPhone 16 Pro, an iPad Air 11, the API 35 and API 30
+  emulators, and the Linux and Windows virtual machines;
+- every word of the question and both buttons on screen: an iPhone SE
+  (375 points, the narrowest simulator here) in portrait, and the API 30
+  phone in portrait and landscape;
+- with `3789c0eaf`, the panel and the question back after a rotation and
+  after night mode on both emulators, and after a light/dark change on the
+  iPhone 16 Pro, for Explain and for Ask with its typed question, with no
+  request sent.
+
+The key rule and the new body were seen on 21 October 2026, at
+`97bd47e73` beside `rel/1.2.23` at `3261a1e13`, in development builds
+with a throwaway probe in a scratch copy that answers both request seams
+in the app with a synthetic reply, on the Mac, the iPhone 16 Pro and
+iPhone SE simulators and the Linux virtual machine:
+
+- the question with the new body, word for word;
+- Allow recording the key's fingerprint, and the same key saved again
+  asking nothing;
+- a key replaced by another, the first key put back, and the key pasted
+  again after it was taken out of where the app keeps it, past
+  `keyStore.setAPIKey`, so the record stayed, each asking again, with
+  nothing sent until Allow;
+- on the Mac, relaunched with the preferences kept and only the key taken
+  out: no permission, and the key pasted again asking again; the Mac's
+  development build keeps its keys in the preferences, so this stands in
+  for a restore and is not one;
+- every word of the new body and both buttons on screen on the iPhone SE
+  in portrait and in landscape.
+
+The control showed the old body, and sent each of those requests with no
+question.
+
+Not run: on iOS, the panel and the question back after a rotation; Find
+in the iPad's sidebar, since the iPad Air in portrait draws the compact
+layout, where Find was seen; and Ask on the Mac, which the scripted run
+there does not reach.
+
+On the Android emulators, on 22 October 2026 at `da90dfb55` against
+`9a308352d`, API 35 and API 30 alike, with WEB Psalm 136, Gemini, two
+synthetic keys in the Keystore store, and each Explain a real long press
+on a verse's word, then the toolbar's Study with AI and the popup's
+Explain:
+
+- the first Explain showed the question with its new body above Not now
+  and Allow, with nothing sent, where the control showed the earlier
+  body;
+- Allow sent the request and recorded the key's fingerprint, where the
+  control recorded "1";
+- the second key saved cleared the record, and Explain with it asked
+  again with nothing sent, where the control kept "1" and sent with the
+  second key, no question;
+- after a restore made by uninstalling the app, which takes `no_backup/`
+  and the Keystore alias with it, installing it again and putting its
+  settings back, not through a backup transport: the record still held,
+  matching no key, and no key; Explain showed the panel that offers Open
+  AI settings, with no question and nothing sent, on both builds;
+- the second key pasted back asked again with nothing sent, where the
+  control sent with no question.
+
+On API 30 the body and both buttons fit whole in portrait; landscape was
+not captured.
+
+Three points of the rule as built on 15 October 2026 were answered on 21
+October 2026, as listed above: before a Find the question named the
+passage, the study action and any question typed, and now names a search
+too; Settings' model list, fetched whenever the key area shows with a key
+and whenever a key is pasted, and Test key, which sends a fixed prompt,
+may reach the provider with the key before any Allow; and the permission
+ends with its key.
+
+The policy's two points that waited for confirmation were answered on 22
+October 2026, as listed above. The three sentences, which stood together
+in one paragraph of the AI section, each go in the section they were
+drafted for, where the "also" of the second and third was written against
+those sections. The record holds eight bytes of SHA-256 over a fixed tag,
+the provider and the key, and on Android it is kept in the preferences
+under `files/`, which Auto Backup carries, while the key stays under
+`no_backup/`, so a backup holds a fingerprint against which a guessed key
+could be checked; the fourth sentence says the record may be in the
+device backup and holds no key and none of the reader's text.
+
+Built on `fu/1223-privacy-2` from `rel/1.2.23` at `da90dfb55`:
+
+- `17abf2caa` places the four sentences;
+  `TestThePrivacyPolicyPlacesEachPermissionSentenceInItsSection` holds
+  each once, in its section and on one source line, and the Android
+  sentence straight after the record's, and fails over `da90dfb55`'s
+  policy on the second, third and fourth;
+- `612b32a84` holds the effective date to the policy's words at publish.
+  `cmd/sitepages -check-policy-date` compares the policy about to be
+  published with the live copy by the words a reader reads, and refuses
+  one whose words differ while its date is the live copy's or is not the
+  day of the run; `scripts/publish-site.sh` runs it with London's date,
+  and stage 11 of docs/RELEASING.md gains the step that sets the date,
+  on the day of the site's publish, which does not wait for the stores.
+  Since `7f77c510a` the check runs before the reader is generated, so a
+  publish it refuses spends no API.Bible quota, and a publish that cannot
+  read the live copy stops there too; a dry run goes on to its drift
+  report and ends refused. Since `59f59be42` the day of the run is asked
+  first: a second change on the day the first went live, dated that day,
+  passes, where no date could pass until the next day. A policy whose
+  words are the live copy's carries the live copy's date or the day of
+  the run and no other, where a date moved back with nothing changed
+  passed; and where each link leads is compared too, where a link
+  pointed elsewhere kept the old date. Stage 11's step names the words a
+  reader reads and where a link leads, where it named any change of the
+  file but its date. Against
+  the policy live since 21 October 2026, a render of the commit it was
+  published from (`d03c3f36a`) is the live copy byte for byte and passes,
+  and a render of `da90dfb55` is refused.
+  `TestThePolicyDateIsHeldToItsWords` and the tests beside it hold the
+  comparison; `TestThePublishHoldsThePolicyDateToTheLiveCopy` and
+  `TestStage11DatesAChangedPrivacyPolicyOnThePublishDay` fail over
+  `da90dfb55`'s script and RELEASING.md, and the policy-date tests and the
+  stage 11 test over `14ee36e32`'s check and RELEASING.md;
+- `478561c49` makes README.md say where each platform keeps an AI key and
+  what the preferences keep of an allowed one, and docs/VERSION_STATES.md
+  say that a restore that does not bring a key back is also a reinstall or
+  a factory reset of the same phone; its two tests fail over `da90dfb55`.
+  `efd46978c` says the record is in the app's preferences on every
+  platform, where the sentence read as if it were kept only where the
+  directly downloaded Mac build, Windows and Linux keep the key; the
+  README test fails over `59f59be42`. The paragraph's wording is a draft
+  that waits for approval.
+
+Still to do: approval of README.md's paragraph; and the
+site's publish with 1.2.23, which carries the policy's sentences, with
+the policy's effective date, which still reads "Effective date: 11
+October 2026" (the Report sentence published on 21 October 2026,
+`d03c3f36a`, kept that date too), set to the day of that publish, which
+was confirmed on 22 October 2026 as the policy's effective date: the day
+the website is published with 1.2.23.
 
 ## Google Play's Data safety answers and the privacy policy: three corrections — found 13 October 2026
 
 Planned for: the account holder, in the Play Console and in
 `docs/privacy.html`, beside 1.2.22, with no build — see docs/ROADMAP.md.
+All three were made on 21 October 2026: corrections 1 and 2 in the Play
+Console, sent together for Google's review, and correction 3 in
+`docs/privacy.html` (`d03c3f36a`), which reaches readers with the next
+`scripts/publish-site.sh`.
 
 Google counts as collected whatever an app sends off the device, so Play's
 Data safety form rightly declares the in-app search history and other
@@ -1438,15 +2812,19 @@ encrypted in transit. One Play edit at a time (docs/RELEASING.md, stage 6).
 3. **The policy does not mention the AI panel's Report button**, which opens
    an email to the support address filled in with the passage, the question
    and the answer (`reportBtn`, `ai_panel.go`), beside the policy's sentence
-   that the developer does not receive AI requests. One sentence, its
-   wording to be approved, published with `scripts/publish-site.sh`. The App
+   that the developer does not receive AI requests. One sentence, published
+   with `scripts/publish-site.sh`. The sentence made names the passage and
+   the study action, with the question and the answer, since the mail
+   carries the passage's reference and not its text, and says it reaches the
+   developer only if the reader sends it. The App
    Store's label can stay as it is: a message the reader chooses to send to
    support is the customer-service case Apple lets an app leave undeclared.
 
-## Android drops the zero-width joiner and non-joiner typed into a text field — found 14 October 2026
+## Android drops the zero-width joiner and non-joiner typed into a text field — found 14 October 2026; FIXED 15 October 2026, for 1.2.23
 
-Planned for: 1.2.23, a bug that needs no decision — see docs/ROADMAP.md
-(Later minor releases, row 46).
+Planned for: 1.2.23, a bug that needs no decision; merged into
+`rel/1.2.23` on 15 October 2026 — see docs/ROADMAP.md (1.2.23, row 5;
+Later minor releases, row 46 until then).
 
 On Android, a note typed with a joined emoji (a family, a profession, a flag
 joined by U+200D) is stored, shared in the message and encoded in its link
@@ -1479,10 +2857,97 @@ driver's filter (or every format character, which `normalizeNote` already
 sorts by its own rule), with a test that feeds the driver's typed-character
 path a joined sequence and reads the field's text back.
 
-## A space after an emoji or a fallback-font character draws wrongly in text the toolkit draws — found 14 October 2026
+Built on 15 October 2026 on `fu/1223-android-joiners` (`078182df2`, from
+`149b85a91`, with the deletion fix below in `849b3ab8f`), merged into
+`rel/1.2.23` the same day.
+`patches/fyne-2.7.4-mobile-typed-characters.patch` makes the filter drop
+only C0 controls, DEL, C1 controls and values that are not characters, the
+rule GLFW applies before the desktop driver types a character. So besides
+the two joiners, the other format characters, every
+space (U+00A0, U+202F, U+3000), private-use characters and characters newer
+than Go's Unicode 15.0 tables (the Unicode 16.0 emoji U+1FAE9), all of which
+the filter also dropped, now reach the field. Every character rather than
+the two joiners, because the desktop already types them all, and
+`normalizeNote` sorts the format characters by its own rule, dropping the
+bidirectional controls, the zero-width space, the word joiner, the byte-order
+mark and tag characters; the mobile typing section of `patches/README.md`
+has the reasoning.
 
-Planned for: 1.2.23, a bug that needs no decision — see docs/ROADMAP.md
-(Later minor releases, row 47).
+Tests. The patch's own, `patches/testdata/mobile-typed-characters_test.go`,
+copied into the generated toolkit and run by the macOS CI job, type a
+family, a profession and a flag emoji, a Persian word with U+200C,
+Devanagari with each joiner, the spaces and the newer characters through
+`typeDownCanvas` into a focused entry, and a family emoji into a canvas with
+nothing focused; they keep controls out and hold the filter to GLFW's rule
+at every code point. Against the driver without the patch every one fails
+but the control-character guard. `mobile_typed_characters_test.go` holds the
+patch, its order after the patches it was made against, the copied tests and
+the CI step, and checks that the composer's text is the message's note
+line, the link's note and the kept record's words on the desktop card, the
+phone sheet's own field and the native field.
+
+Parity, from the code. On the Mac, Windows and Linux, GLFW hands the desktop
+driver every character but a C0 or C1 control (the Mac's also skips U+F700
+to U+F7FF, AppKit's function-key range), so the joiners were already typed
+there. The iPhone and iPad note composer and Ask are a native `UITextView`,
+whose text reaches Go unfiltered (`note_entry_ios.go`). Their other fields
+are drawn by the toolkit (search, AI Find, the notes search, the book filter,
+the key fields), take Android's path through the same filter, and are fixed
+by the same patch. With it, the mobile driver follows the rule GLFW's
+`_glfwInputChar` applies on all three desktops; only the Mac's skip of
+AppKit's function-key range is not on the phones, and no mobile path is
+known to send that range.
+
+Device checks, 15 October 2026, of a debug build of `6b065be44`, each
+against a build of `149b85a91` as the control, with one invented note of 29
+code points (a family and a profession emoji, U+1FAE9 and a Persian word with
+U+200C). On the API 35 and API 30 emulator images, a test input method's
+`commitText` of it into Share with note arrived whole in the shared
+message's note line and in the link's note; the control gave 24, with no
+joiner and no U+1FAE9. On the iPhone 17 and iPad Air simulators, typed into
+the search field through the toolkit's `keyboardTyped`, the field held 29
+against the control's 24. The native composer on both simulators, and the
+Mac's composer through GLFW's `insertText:`, kept all 29 on both builds, as
+the code says they would.
+
+A backspace after an emoji deleted the characters before it on Android,
+seen in the same checks and present on `main`. The keyboard edits a hidden
+`EditText`, and `GoNativeActivity.beforeTextChanged` sent the field one
+delete per UTF-16 unit of the run an edit removed, while each delete removes
+one character and `keyboardTyped` types one per code point. After "abcdef"
+and a family emoji (five characters in eight units), one backspace sent as
+`KEYCODE_DEL` left "abc", and one sent as
+`deleteSurroundingTextInCodePoints(1, 0)` removed two characters, U+200D and
+U+1F467. On `main` a backspace after "abc" and U+1F600 left "ab"; there the
+joiners never reached the field, so by the code a backspace after a joined
+emoji deletes more still. Fixed in `849b3ab8f`: the patch's second half
+counts the removed run in code points, so the field loses what the keyboard
+removed. `patches/testdata/BtTypedDeletesCheck.java`, run on the host's JVM
+by `scripts/check-android-java.sh` against the patched activity, counts the
+deletes for runs with and without characters outside the Basic Multilingual
+Plane; against the unpatched activity it does not compile, and with the
+count in units it fails six of its nine cases. On the API 35 and API 30
+emulator images, with a debug build of `bbd2bf066`, one `KEYCODE_DEL` after
+"abcdef" and the family emoji left "abcdef" in the message and the link,
+`deleteSurroundingTextInCodePoints(1, 0)` removed U+1F467 alone, and the
+29-character note still arrived whole. The control, a build of `6b065be44`,
+gave "abc" and lost two characters.
+
+What is left. On Android a backspace removes what the keyboard removed from
+its hidden field, which for `KEYCODE_DEL` is a whole joined emoji. The
+toolkit's entry removes one character per backspace, which is what the Mac,
+Windows and Linux and the fields the toolkit draws on the iPhone and iPad
+give it, so there one backspace after the family emoji leaves the man, a
+joiner, the woman and a joiner (seen in the toolkit's test driver). This is
+divergence 35 in `docs/PLATFORM_MATRIX.md`; closing it means the entry
+deleting a whole grapheme cluster on every platform, a change to text
+editing that is not part of this entry.
+
+## A space after an emoji or a fallback-font character draws wrongly in text the toolkit draws — found 14 October 2026; FIXED 15 October 2026, for 1.2.23
+
+Planned for: 1.2.23, a bug that needs no decision; merged into
+`rel/1.2.23` on 15 October 2026 — see docs/ROADMAP.md (1.2.23, row 6;
+Later minor releases, row 47 until then).
 
 In note text the toolkit draws, the Share with note field and the notes
 browser, "a 🙏 b" draws as "a 🙏b": the space after the emoji takes no
@@ -1498,19 +2963,89 @@ where "a b" and "ab", and "g é h" and "g éh", differ by the width of a
 space; the test driver there has no font for 𝔊, so the box was seen on
 Android alone. So it should hold wherever the toolkit draws note text.
 
-Likely cause, not confirmed beyond those measurements: go-text's face split
-(`splitByFace` and `ignoreFaceChange`, `shaping/input.go`, v0.3.4) never
-changes face for a space, on the assumption that every font has one, so a
-space joins the run of the emoji or fallback face before it, and the
-toolkit's painter (`internal/painter/font.go`) shapes it with that face.
+The cause, measured on the host with the patched toolkit: go-text's face
+split (`splitByFace` and `ignoreFaceChange`, `shaping/input.go`, v0.3.4)
+never changes face for a space, on the assumption that every font has one,
+so a space joins the run of the face before it, the emoji face after an
+emoji and the fallback face after a fallback character, and the toolkit's
+painter (`internal/painter/font.go`) measures and draws it in that face.
+What it becomes there depends on the face:
 
-Fix: from that cause, probably a toolkit patch that shapes such a space with
-the face the text would otherwise use; its test measures "a 🙏 b" against
-"a 🙏b".
+- The emoji face is the bundled Noto Color Emoji, a bitmap font. Its space
+  glyph has an advance in the font's metrics and no bitmap, so it has no
+  extents, and go-text's `HarfbuzzShaper.Shape` copies a glyph's advance only
+  after its extents: the space comes out with no advance. Stock Fyne's
+  EmojiOneColor gave its space an advance, so this case shows only in builds
+  that apply the toolkit patches, which are every mobile build and every
+  desktop release.
+- A fallback face with no U+0020 shapes the space as glyph 0, which the
+  painter draws as U+FFFD. The painter advanced a missing glyph by the run
+  face's glyph 0 and counted that advance twice, once when it drew the box
+  and again at the next missing glyph or the end of the run, so the text
+  after it moved right and the measured width grew by that advance. The box
+  drawn is wider than glyph 0 in the default face, so the second advance
+  was mostly taken up by the box itself: at 40 px in Noto Sans the box is 40
+  px against glyph 0's 24, and "a", a missing glyph and "b" left 13 px
+  between the box and the "b". With the bundled symbol face, which has
+  U+2318 and no space, as the fallback, "c ⌘ d" measured two of its
+  missing-glyph advances wider than "c ⌘d" instead of one space.
+- On macOS the toolkit takes 𝔊 from the system's LastResort face, which has
+  a glyph for every character and draws each as a placeholder, the space
+  after 𝔊 included: drawn with the app's theme, "c 𝔊 d" showed two
+  placeholders, and the space measured almost four times the text's.
+- Any other fallback face gives the space its own width, not the text's.
+
+Fixed on 15 October 2026 (`3b4041c9d` and `5df78e565`) by a toolkit
+patch, `patches/fyne-2.7.4-fallback-space.patch` (Patch 12 in
+patches/README.md), applied after the font-cache patch. A space separator
+alone in its cluster, shaped in a face other than the one the font map gives
+it, takes the advance it has in that face, shaped alone, and draws nothing,
+so it measures and draws as a space of the text wherever it falls; between
+words of a fallback face (Hebrew or CJK text from a system face) it now has
+the text face's width. A space with a combining mark after it shares the
+mark's cluster and is left as shaped, so the mark is still drawn on it. No
+run is split, so right-to-left text keeps its order. A missing glyph
+advances once, by the U+FFFD the painter draws for it, so the box ends
+before the next glyph and inside the text's measured width. Each such space
+or U+FFFD is shaped alone once in a string, so text with many emoji measures
+in about the time it did without the patch. RichText's ellipsis cut uses the
+same advances. A rule limited to spaces that are missing or have no advance
+would leave the LastResort placeholder.
+
+The patch's tests (`patches/testdata/fallback-space_test.go`) that fail on
+the tree without it: "a 🙏 b" is one space wider than "a 🙏b" through the
+painter's `MeasureString`, `fyne.MeasureText` and a `Label`; a space after a
+symbol-face, a monospace-face or a LastResort character has the text's
+width; drawn, the space after the emoji opens the gap before the next letter
+by a space, and the space after U+2318, or after 𝔊 in LastResort, holds no
+ink; and a missing glyph measures the U+FFFD drawn for it, with the box's
+ink ending where the next glyph starts. The monospace and LastResort cases
+also fail with the narrower rule. The rest pass on the tree without the
+patch and guard what it could break, each failing with one part of it
+changed: a combining mark on a space in a fallback-face run is drawn and
+keeps the run's shaped width, in left-to-right and right-to-left text; the
+advances the ellipsis cut is given equal the painter's, and a label is cut
+with an ellipsis where it draws; and forty spaces after emoji take about the
+allocations of one. The app's whole suite, with and without `-tags next`,
+passes against the patched toolkit, the reading-face and small-caps tests
+among them.
+
+Seen on 15 October 2026 at `01e83122b`, before the corrections in
+`5df78e565`, against `149b85a91` as the control: read in the app, a space
+after an emoji, after a fallback character and a no-break space measured
+as a space, the same widths on the Mac, the iPhone 17 Pro and iPad Air
+simulators and the API 35 and API 30 emulator images, where the control
+measured the space after an emoji at no width. In the notes browser
+"Amen 🙏 📖 end" drew the gap after 🙏 as wide as the space after "Amen",
+19 px against the control's 8 on the iPhone and both emulator images, and
+Share with note's field drew the spaces on the Mac and Android; on iOS that
+field is native and drew the same on both builds. The corrections in
+`5df78e565`, the box's advance and a mark on a space, were made after
+these checks.
 
 ## The GitHub release notes are not among the release's coupled surfaces — found 14 October 2026; FIXED 15 October 2026, for 1.2.22
 
-Planned for: 1.2.22, fixed with its version bump (the end of this entry) —
+Released in 1.2.22 on 16 October 2026, fixed with its version bump (the end of this entry) —
 see docs/ROADMAP.md (1.2.22, row 31).
 
 The GitHub release's notes are the argument of the `printf` that fills
@@ -1559,7 +3094,7 @@ lead line.
 
 ## The faster-model offer for ChatGPT switched to a model that then read as unavailable — found 15 October 2026; FIXED 15 October 2026, for 1.2.22
 
-Planned for: 1.2.22, fixed for it (`c3e4c1c50`) — see docs/ROADMAP.md
+Released in 1.2.22 on 16 October 2026, fixed for it (`c3e4c1c50`) — see docs/ROADMAP.md
 (1.2.22, row 30). Fixed for 1.2.23 and moved into 1.2.22 the same day,
 before its version bump; the 429 question at the end of this entry stays
 open.
@@ -1856,8 +3391,9 @@ name, or stops handling any of the five kinds.
 
 ## Share as image says "Picture saved" for a card it could not read — FIXED 6 October 2026, for 1.2.20
 
-Still open: a line telling the reader, planned for 1.2.23+ with the other
-shares that cannot finish — see docs/ROADMAP.md.
+The line telling the reader, "Could not share the card.", went in on 15
+October 2026, for 1.2.23, with the other shares that cannot finish (the
+entry on Email… below; docs/ROADMAP.md, Later minor releases, row 2).
 
 On the desktop, when the rendered card cannot be read at the Share tap, the
 image share still asks the file manager to show it, and can then open the
@@ -1933,13 +3469,23 @@ fixed build saved the picture in Downloads, showed it, and said so.
 iOS and Android say *Could not share the card.* on the same case; the
 Mac's share picker is handed the missing file's address (not seen). The
 Windows fallback ends the same way by the code and by the test under
-Windows' rules, and has not been seen on Windows; that look goes with the
-Windows checks still to run — see docs/ROADMAP.md.
+Windows' rules, and was seen doing so on 15 October 2026 on the Windows
+11 arm64 virtual machine, with 1.2.21's executable run without package
+identity, as the direct download runs: with the card's file deleted
+between the preview and Share, neither Windows' sheet nor the in-app
+sheet opened, nothing was saved, and the cause above was logged, where
+the control, the card in place, opened Windows' sheet. Not seen with
+package identity — see docs/ROADMAP.md, Later minor releases, row 40.
 
-## Email… on the desktop share sheet fails without a word — found 1 October 2026
+## Email… on the desktop share sheet fails without a word — found 1 October 2026; FIXED 15 October 2026, for 1.2.23
 
-Planned for: 1.2.23+, with the other shares that cannot finish — see
-docs/ROADMAP.md.
+Fixed with the other shares that cannot finish, on `fu/1223-share-fail-line`,
+merged into `rel/1.2.23` on 21 October 2026 (below, and docs/ROADMAP.md, 1.2.23, row 15).
+The three rules the build adds beyond decision 7, each described below,
+were confirmed on 21 October 2026: the Mac's own share of a card gone at
+the tap says "Could not share the card."; a compose the Email portal took
+and gave no answer to says nothing; and on iOS a second share asked for
+while the first sheet is still held back is not made.
 
 Email… on the in-app share sheet (Linux, and Windows where its own Share
 sheet cannot open) hands the share to the mail client on a goroutine and,
@@ -2001,6 +3547,105 @@ desktop's launcher fail with nothing opened and exit 4, the share now ends
 with no compose and no word, where the `mailto:` link was tried, likely
 through the same failing launcher. That silence is the one the line under
 the buttons answers.
+
+**FIXED 15 October 2026, for 1.2.23**, with the wording approved that day
+(decision 7, Draft A). A compose now runs through `shareEmailAside`, off
+the UI goroutine as before, and hands its outcome back to the sheet; one
+that failed adds "Could not open your email program." in one line under
+the buttons (`emailFailedLine`), and nothing else on the sheet changes,
+since the copy or the save has succeeded. The line answers the last press
+only, and only while the sheet is up: a later compose that opens takes it
+away, and so does one the reader cancelled at the portal, whose answer 1
+is now `mailCancelled` and says nothing (`shareEmailFailed`). Nor does a
+compose the Email portal took and then gave no answer to — none within
+the 15 seconds the app waits, the session bus closing first, or an answer
+with no code: it ends the compose, as before, since the portal may yet
+open one, and is `mailUnanswered` (`portalComposeOutcome`), since nothing
+says the mail program could not be opened; it takes away a line an
+earlier press left. Every failure the desktop answered is taken at its
+word: every route refusing before it reached a mail program, a portal
+answer other than 0, 1 and 2, and `xdg-email`'s exit 4, which the stop of
+1.2.22 keeps ending the compose. Where that exit 4 comes from a mail
+program `xdg-email` ran itself, as it runs Thunderbird, it arrives when the
+program exits, so a program that opened a compose and then exits with a
+failure while the sheet is still open is said not to have opened; the app
+cannot tell that from a launcher that failed with nothing opened. A
+light/dark change brings the line back with the sheet, and a compose still
+running across the change answers to the sheet it brought back
+(`shareEmailLine`, which the reopen carries): before, its answer went to
+the sheet the change had taken down, so a failure was never said and a
+compose that opened left the line in place.
+
+On a window too short for the sheet with the line to open below the
+header the line moves the sheet up into the gap kept under the header, or
+further: the sheet is centred, and its box is already at its least. At 420
+by 470 points the sheet clears the header without the line and starts at
+75.8 with it, against the 79.1 every sheet keeps; at 420 by 430, at 55.8,
+partway down Go to. The line is sized in by the sheet's own fit, the one a
+window resize runs, so the rule that a sheet which cannot clear the header
+covers it whole (decision 35, `fu/1223-short-windows`) holds for the line
+now both changes are in the release branch (21 October 2026): with the
+two merged, the sheet with the line covers the header at 420 by 470, 420
+by 430 and 360 by 380, and
+`TestTheEmailLineKeepsTheShareSheetClearOfOrOverTheHeader` (`b791120a4`)
+holds it; on the share-fail branch alone it fails at those three sizes.
+
+The same change ends the other desktop silences in the phones' words,
+"Could not share the card.", in the sheet with that line and Done alone
+(`sayShareFailed`, `shareDone.failed`): a card that cannot be read at the
+tap, and a picture no folder took that the file manager did not show
+(`fallbackShareImage`), on Linux, the Windows fallback and the macOS
+mimic; the Mac's own share of a card gone at the tap, whose picker was
+handed the missing file's address (`shareCardGone`); and, on all six, a
+card the preview cannot draw, which opens no preview (`showShareImagePreview`;
+on iOS in the share's alert, on Android in its toast, `BtBridge.shareFailed`).
+On iOS every share sheet and the notice are presented through
+`btIOSPresent`, which waits out the top view controller's transition and
+presents from the top view controller as it then stands. A presentation
+counts as taken once its completion has run, or while it has a presenter,
+its view is in a window or it stands among the presented view
+controllers, and is judged only 5 seconds after it was presented
+(`btIOSPresentSettle`): the share sheet holds its own presentation back
+while its share services load, with no presenter meanwhile, and UIKit
+refuses it, when it does, about three seconds after it was asked for.
+Judged at 0.35 seconds by its presenter, as first built, a sheet still
+held back was presented a second time and the share then said "Could not
+share the passage." over the first sheet once it opened. Refused, a
+presentation is tried once more, and refused again the share says "Could
+not share the passage." or "Could not share the card."; one presentation
+is on its way at a time, and another asked for meanwhile, such as a second
+tap on Share while the first sheet is held back, is not made and is
+logged. Held by
+`share_failed_desktop_test.go`, `share_failed_macos_test.go` and
+`share_failed_test.go`, whose behaviour tests fail on `rel/1.2.23` at `be1440fe0`:
+there Email…'s failure, the two picture failures and the Mac's gone card
+say nothing, the card that cannot be drawn opens an empty preview, and the
+iOS and Android sources have none of the new steps.
+
+Seen on 21 October 2026 in development builds of the change driven by a
+throwaway trigger, against `d7f6b9156`, its first build, and `be1440fe0`,
+before it. On the arm64 Linux VM (X11): Email…'s line after a stand-in
+`xdg-email` that exits 4 and none after one that exits 0; a failure, and a
+compose that opened, answered after a light/dark change, said on the sheet
+the change brought back, where `d7f6b9156` said nothing of either; and
+"Could not share the card." with Done for a card gone at the tap, a card
+that cannot be drawn and a picture no folder took. On the Mac, in the Linux
+mimic, the same Email… cases, twice each. On the iPhone 16 Pro and iPad Air
+13-inch (M4) simulators (iOS 26.5): a share chosen as the share sheet
+before it closed opened its sheet and said nothing in 12 runs of 12 on
+each, three from a fresh install, where `be1440fe0` showed no sheet and
+said nothing in every run; chosen as an alert before it closed on a freshly
+booted simulator, where the sheet held its presentation back 0.40 to 0.44
+seconds, it opened its sheet and said nothing in 6 runs of 6 on the iPhone
+and 5 of 5 on the iPad, where `d7f6b9156` presented a second sheet, which
+UIKit refused, and said "Could not share the passage." over the open
+sheet in every run (6 and 5); text and image shares opened their sheets;
+and with UIKit made to refuse the sheet, presented from a view controller
+with no window, it was tried again 5.4 seconds later and opened when
+refused once, and said "Could not share the passage." 10.8 seconds after
+the share when refused twice, UIKit logging each refusal 3.1 to 3.2
+seconds after its presentation. Not seen this time on Windows, whose sheet is the same
+file as Linux's, or on Android, which these fixes do not touch.
 
 ## A dropped session bus spins a core until the portal wait ends (Linux) — FIXED 6 October 2026, for 1.2.20
 
@@ -2423,9 +4068,11 @@ scripts. Not run against a phone: no device was attached for this change.
 
 Planned for: a later minor release, a check from the Store install on the
 Windows virtual machine, after which this entry is marked shipped — see
-docs/ROADMAP.md. Deferred from 1.2.20, whose run of it could not reach the
-virtual machine, and moved on 7 October 2026 to the release after 1.2.20,
-which went out without it.
+docs/ROADMAP.md, Later minor releases, row 40. Deferred from 1.2.20, whose
+run of it could not reach the virtual machine, and moved on 7 October 2026
+to the release after 1.2.20, which went out without it. On 15 October 2026
+1.2.21's package was checked there under a renamed identity (below); the
+Store's own install was not launched, so the check is still to make.
 
 On Windows every text share (Share with note, with citation, as link, and the
 verse of the day's Share) copied to the clipboard and opened the in-app
@@ -2601,14 +4248,46 @@ does not mention it.
 Developer Mode, the registration and its folder were removed afterwards.
 (`docs/PLATFORM_MATRIX.md`, the Windows proof note under Sharing.)
 
+**Seen from a release's package (15 October 2026).** 1.2.21's arm64 MSIX
+as submitted to the Store (sha256 39d71225…327d) was registered on the
+same virtual machine by the 1 October recipe: its layout, under the
+identity name `bibletext.co.uk.BibleText.ShareCheck`, with Developer Mode
+on for the run. The Store's own install there is 1.2.19, Store-signed,
+under the reserved identity; it carries this code, as every release since
+1.2.18 does, and it was not launched. The running process had the renamed
+package's identity (`GetPackageFullName`; Explorer answered no package,
+and the Start menu's host its own). With "loved" in John 3:16 selected,
+in the dark theme, Share as image opened Windows' Share sheet with
+"BibleText verse 2026-10-15 10.43.18.png", 22.6 KB, and the card's
+thumbnail; the copy was written to `%LOCALAPPDATA%\Temp\bibletext-share`,
+not the package's `LocalCache`, as on 1 October; nothing was saved to
+Downloads and no in-app sheet opened. The package's executable, with
+ANGLE beside it, was also run from a folder without package identity, as
+the direct download runs, for a picture whose card could not be read,
+which 1.2.21's fallback ends without a sheet: with the renderer's file,
+`bibletext-verse-0.png` in the temp folder, deleted between the preview
+and Share, the log held the share handed to its fallback
+(`share_session.go`) and the fallback's cause, "the shared picture's card
+could not be read, so it was neither saved nor shown"
+(`share_fallback.go`), both at 10:34:21 by the virtual machine's clock;
+neither Windows' sheet nor the in-app sheet was open in a screenshot
+showing that clock at 10:35, at least 39 s later, nothing was saved to
+Downloads, and no share copy was made. The control, the card left in
+place, opened Windows' sheet with "BibleText verse 2026-10-15
+10.32.31.png", 26 KB.
+That case was not run with package identity. No share target was
+pressed. The registration, its folder and Developer Mode were removed
+afterwards.
+
 **Still open.**
 
-- **The package as the Store installs it.** The run above registered the
-  package's layout in place, unsigned, in development mode; the
-  Store-signed install under `C:\Program Files\WindowsApps` has not run
-  this code, since no release carries it. The first release that does is
-  the check: Share as image from the Store's install, and where its copy
-  lands.
+- **The package as the Store installs it.** The runs above registered a
+  package's layout in place, unsigned, in development mode, on
+  15 October 2026 1.2.21's as submitted to the Store. The Store-signed
+  install under `C:\Program Files\WindowsApps` has not been launched for
+  this check, although every release since 1.2.18 carries the code and
+  the virtual machine's install is 1.2.19. Left: Share as image from the
+  Store's own install, and where its copy lands.
 - **What a target receives.** No app in the sheet was chosen, and
   Windows 11's text sheet shows neither the quote nor its citation, so
   the text each verb hands over has not been seen arriving. What the
@@ -2623,9 +4302,12 @@ Developer Mode, the registration and its folder were removed afterwards.
   selection, and no share was started over an open sheet
   (`docs/VISUAL_TESTS.md`, V12). The probe, not the app, ran under x64
   emulation.
-- **The in-app sheet on Windows.** The Share sheet opened every time, so
-  its fallback, the image share's Explorer reveal and Email… have not run
-  in the app on Windows.
+- **The in-app sheet on Windows.** The Share sheet opened every time it
+  was asked to. The fallback has run in the app on Windows once, with
+  1.2.21 on 15 October 2026, for a card that could not be read, which
+  1.2.21's fallback ended without a sheet; the in-app sheet itself, the
+  image share's Explorer reveal and Email… have not run in the app on
+  Windows.
 - **A sheet that asks late.** A request after the five seconds, which the
   kept handler answers, has not been seen: the probe's sheets all asked
   within 549 ms, and the app's were up within about 2–4 s of the click. A
@@ -2658,9 +4340,10 @@ Developer Mode, the registration and its folder were removed afterwards.
 
 ## Linux and Windows: an in-app share sheet in place of the 1.4-second notice — FIXED 30 September 2026
 
-Still open: a picture no folder could take ends without a word (1.2.23+,
-with the other shares that cannot finish), and GNOME on Wayland may open
-Files behind the window (stays); see docs/ROADMAP.md.
+Still open: GNOME on Wayland may open Files behind the window (stays); see
+docs/ROADMAP.md. A picture no folder could take, which the file manager did
+not show, says "Could not share the card." since 15 October 2026, for
+1.2.23 (the entry on Email… on the desktop share sheet).
 
 On Linux and Windows the text shares copied to the clipboard and showed
 "Copied to the clipboard" for 1.4 seconds: a 13 pt pill at the window's
@@ -3339,9 +5022,10 @@ fix (`docs/SCREENSHOT_PLAYBOOK.md`, §7).
 
 ## Android: a text share has no failure path — FIXED 30 September 2026
 
-Still open: a presentation iOS refuses and a card that fails to render end
-without a word — 1.2.23+, with the other shares that cannot finish; see
-docs/ROADMAP.md.
+A presentation iOS refuses and a card that fails to render say so since 15
+October 2026, for 1.2.23, with the other shares that cannot finish (the
+entry on Email… on the desktop share sheet; docs/ROADMAP.md, Later minor
+releases, row 2).
 
 `BtBridge.shareText` (`android/BtBridge.java`) calls `startActivity` with
 no try/catch, so a failure to start the chooser goes uncaught on the UI
@@ -3643,7 +5327,10 @@ preserving entered questions and notes and completed study answers.
   failure rate has never been measured and only single failures are known.
   Setting `textColor` explicitly on the fallback (and the macOS twin's
   foreground attribute), or recording the body fingerprint only once the
-  native side reports the import applied, would close it.
+  native side reports the import applied, would close it. P3, fixed for
+  1.2.23 (`12bd8ea67` on `fu/1223-ai4-p3`), sets the fallback page's text
+  and verse-number colours from the palette of the push that built it, on
+  both panes, which closes this with that release.
 
 **Found alongside, not fixed here** (all older than this change):
 
@@ -4270,7 +5957,10 @@ The plan:
 ## One navigation rule on phones and tablets — DONE 1 October 2026, for 1.2.18
 
 Still open: a sideways launch draws the bar first (the follow-up below) —
-planned for 1.2.23+; see docs/ROADMAP.md.
+fixed for 1.2.23 on its own branch for every phone and tablet, merged into
+`rel/1.2.23` on 15 October 2026, and seen fixed on the simulators and
+emulators; a launch on hardware is still to be seen; see docs/ROADMAP.md,
+1.2.23, row 1.
 
 Read, Books and Search sit on a rail along the leading edge while the window
 is wider than it is tall, and on a bottom bar otherwise, on every phone and
@@ -4352,11 +6042,12 @@ about 0.4 s before what its shape calls for (seen on the iOS simulator
 while the rule was built): the rail on Books and Search, and on the Read
 tab the full-screen page, not a rail. The first layout runs before the
 canvas has a size. `mobileRailWanted` answers an unsized canvas by the
-device (`layout.go:103-113`, reached through `railForWindow`, lines
-122-128): the rail for an iPad, the bar for an iPhone. On the Read tab
-`readingFullScreen` (`phone_landscape.go:90-92`) is false until then too,
-since `phoneLandscapeReadingWanted` needs a sized canvas
-(`w > 0 && h > 0`, line 58), so the Read tab gets the bar as well. When
+device (in 1.2.22's tree, `layout.go:103-113`, reached through
+`railForWindow`, lines 122-128): the rail for an iPad, the bar for an
+iPhone. On the Read tab `readingFullScreen` (`phone_landscape.go:90-92`
+there) is false until then too, since `phoneLandscapeReadingWanted` needs a
+sized canvas (`w > 0 && h > 0`, line 58), so the Read tab gets the bar as
+well. When
 the size arrives the watcher finds the rail, or the full-screen page,
 wanted and rebuilds. Minor, and at launch only. The fix: answer the first
 layout's two decisions, rail and full-screen page, from the size or
@@ -4364,6 +6055,123 @@ orientation the window scene reports at launch, or hold the first layout
 until the canvas has a size; either way an Android phone must still not
 flash a rail before its size arrives, which is why the unsized answer is
 the bar.
+
+Fixed for 1.2.23 on 15 October 2026, on `fu/1223-ios-sideways-launch`, by
+the first of those routes, on every phone and tablet. The same flash had two
+more forms: an iPad opened upright drew the rail for a few frames before the
+bar, and an Android phone opened sideways drew the bar first, or pushed the
+phone page and then imported the chapter again as the book page.
+
+- **The size the window reports.** Before the canvas has a size the layout
+  decides by the size the platform reports for the window, as it would by
+  the canvas's (`layoutSize`, `launch_window.go`): the rail, the phone's
+  landscape presentation, the bar's dress and, on Android, the tablet
+  idiom. The rule stays the canvas's own, `w >= h`, in Go; the platforms
+  report sizes, not orientations. iOS reports its window scene's size and
+  the left and right safe-area insets of the app's window
+  (`bibleTextWindowReport`, `device_ios.go`), the window's own size in Split
+  View and Stage Manager too, so it serves the iPad as it does the iPhone.
+  Android reports its activity's configured size in dp over the bridge
+  (`windowWidthDp`, and `windowHeightDp`, new). The desktop reports nothing.
+  With no report the device answers as before. A build asks for the report
+  once, at its first question, and decides by that answer throughout
+  (`heldLaunchSize`): a build decides its tree at its start and the layout
+  watcher records the decision at its end, and Android's configuration,
+  read live, could otherwise change between the two in a rotation, leaving
+  the watcher with a layout the tree does not have, which no later resize
+  would see as a change.
+- **The first chapter push** takes the same report: iOS gives the scene's
+  width less the side insets as the cold width (`launchPaneWidth`,
+  `readingColdWidth`), as Android gives its configured width, so a phone
+  held sideways opens on the page its full-screen pane reads.
+- **The iOS read never holds up the layout.** UIKit's scene belongs to the
+  main thread, which is busy with UIKit's own launch for the first few
+  hundred milliseconds. Read with a `dispatch_sync` from the Fyne goroutine
+  whenever the layout asks while the canvas is unsized (36 to 43 times a
+  launch), the first read waits about 400 ms and holds back every launch's
+  first build: measured that way, upright launches reached their first
+  paint about 45 ms (Read) and 85 ms (Books) later than main's. Rejected for
+  that. The scene is read once instead, on a goroutine of its own
+  (`keptWindowReport`), and the result is handed to the Fyne goroutine,
+  which keeps it between two of its tasks (`keepWindowReport`) so that it
+  cannot change in the middle of a build: a build decides its tree at its
+  start and the layout watcher records the decision at its end. Keeping it
+  asks the watcher again (`relayoutUnsized`, `ui_regular.go`), and a tree
+  built before it from the device's answer is rebuilt then, before the
+  first paint. An upright iPhone's report agrees with its device answer and
+  rebuilds nothing.
+- **A single-pixel canvas is not a size.** Android's first surface can be
+  one pixel, a third of a unit each way on the emulator: square, so it read
+  as wide, and its width chose the phone page. A canvas a unit or less on a
+  side now counts as unsized (`canvasSized`), for the layout and for the
+  window width the page is chosen from (`widestWindowWidth`).
+
+The simulator and emulator pass, 15 October 2026, with a launch probe in
+scratch builds of the branch and of main (none of it committed), on the
+iOS 26.5 simulators and the API 35 emulator. Two builds of the branch ran:
+the final one, and one without the one-answer-per-build hold, which changes
+nothing on iOS and on Android only a rotation in the middle of a build. A
+sideways iOS launch comes from a copy of the bundle that declares landscape
+only: an iPhone turned in the app and relaunched comes back upright. Bar
+and rail frames are counted in screen recordings at 30 frames a second.
+
+| Case | Branch | Main |
+|---|---|---|
+| iPhone 17 Pro sideways: Read, Books, Extra large, presentation off | no bar frame in 30 of 30 launches; the tree built before the read lands is rebuilt before the first paint, and the first paint rebuilds nothing; the first push after the read is at 750 points, the book page (the phone page at Extra large), with no second import | Read: the bar for 7 frames in 5 of 5, then a rebuild and a second import |
+| iPhone SE sideways, Normal and Large | no bar frame in 13 of 13; first push at 667 points (book page at Normal, phone page at Large), no second import | the device pass's 3 to 8 bar frames |
+| iPhone 17 Pro upright, Read and Books, launches interleaved with main | first paint 704 ms median (Read) and 814 ms (Books), 15 each; one read a launch, landing 545 to 594 ms after process start; no extra build | 716 ms and 820 ms |
+| iPad Pro 11-inch (M5) upright, Read and Books | no rail frame in 18 of 18; the bar, centred, before the first paint | the rail for 5 to 14 frames in 10 of 10, then the bar |
+| iPad Pro 11-inch (M5) sideways | the rail, unchanged, in 9 of 9 | the rail |
+| Android phone (`bibletext_test`) sideways | 35 launches; in the 6 whose first build had no canvas size it was the full-screen page from the configured 914 by 411 dp, with the book page pushed at 914 dp; no rebuild at the first paint and no second import in any | 13 launches; 6 whose first build had no canvas size: the bar first in 4, the phone page pushed at a third of a unit and imported again in 2 |
+| Android phone upright | 10 of 10 the bar from the first build (one unsized, by its configuration) | 5 of 5 |
+| Android tablet (`bibletext_tablet`) upright | 8 of 8 the centred bar from the first build, 2 of them unsized and answered a tablet by their configuration | one launch of 3 built unsized as a phone, with the spread bar, and rebuilt at the first paint |
+| Android tablet sideways | the rail in 6 of 6, one of them unsized | 3 of 3 |
+
+Left: on Android a canvas unit is a dp only approximately, because Fyne
+rounds the screen's density to a few scales (a unit is a dp at 160, 240,
+320, 480 and 640 dpi, and at 420 dpi it is 8/7 of one), so a window whose
+short side falls between 600 dp and 600 units, or an upright one whose
+width falls between 560 dp and 560 units, is answered one way by its
+configuration and the other by its canvas: the tablet idiom or the bar's
+dress changes at the first paint there. Removing it means either judging
+those two lines in dp once the window has a size too, which moves where
+some tablets and split-screen windows land today, or converting dp to
+canvas units with a copy of Fyne's density table; both are open. Not seen:
+the iOS 15 to 25 branch of the read (the scene's own `coordinateSpace`,
+deprecated from iOS 26), since only iOS 26.5 and 27.0 simulators are
+installed, and a launch of the shipping app held sideways on hardware.
+
+Tests: `TestASidewaysLaunchLaysOutSidewaysFromTheFirstFrame` lays out
+iPhones opened sideways on Books, Read and Search, and upright, first with
+no size and the reported window and then at their size, with a control
+that shows the rebuild the comparison catches;
+`TestAnUprightIPadLaunchDrawsTheBarFromTheFirstFrame`,
+`TestTheBarsDressTakesTheReportedWidth` and
+`TestRailForAnUnsizedWindowTakesTheReportedSize` hold the iPad, the dress
+and the rail; `TestASinglePixelCanvasIsNotASize` holds Android's first
+surface, for the layout and the page; `TestTheReportedPaneWidthIsTheWindowLessItsSideInsets`
+the cold width; `TestTheLayoutNeverWaitsForTheWindowRead` that the layout's
+question never waits for the read, that a read made before the scene is
+connected is made again, that only the Fyne goroutine keeps the report, and
+that keeping it asks the layout again once;
+`TestTheReportsLandingAsksTheLayoutAgain` the hand-off itself; and
+`TestAReportedSizeIsHeldThroughABuild` one answer through a build. Each was
+shown to fail with its part of the fix taken back out (`go test -overlay`):
+the report ignored, any positive size counted as a size, the read made where
+the layout asks, the report kept by the reading goroutine, the hand-off
+dropped, the side insets kept, the single pixel counted as a width, the
+dress read without the report, nothing held through a build, and a newly
+kept report leaving the old answer held. `TestTheLayoutNeverWaitsForTheWindowScene`
+and `TestAndroidReportsItsConfiguredWindow` hold the Objective-C, the
+bridge and the Go that consults them; they fail on a copy with any one of
+fourteen changes (the screen's bounds for the scene's, the right inset
+dropped, no wait for the app's window, the read made off the main queue, a
+read made where the layout asks, the dress without the report, a relayout
+of a sized canvas, the landing handed to nothing, Android's width for its
+height, its tablet idiom without the report, the bridge reading the width,
+a build keeping the last build's answer or releasing it only after its
+first decision, a kept report leaving the old answer held) and pass on the
+copy unchanged.
 
 ## Phone and tablet sheets over the header — BY DESIGN, not a bug (1 October 2026)
 
@@ -4603,12 +6411,52 @@ What the spec work left, each one a known difference rather than a guess:
   (`reading_styled_footnotes.go`) draws each wrapped line as one string;
   justifying it means drawing each line's words apart as the body does, with
   the section's hit-testing following. `readingJustifyProse`.
-- **Android centres the book page on the window, the iPad on its pane.** The
-  window is right for a landscape phone (the column clears the camera cutout
-  evenly, `BtBridge.applyReadingPadding`); on a tablet with the side rail it
-  sets the column about half the rail's width left of the pane's centre.
-  Centring on the window only when the pane spans it less the system insets
-  would give both.
+- **Android centres the book page on the window, the iPad on its pane —
+  FIXED 15 October 2026, for 1.2.23 (`60f26f5d2`); the tablet held upright
+  is open.** The window is right for a landscape phone (the column
+  clears the camera cutout evenly, `BtBridge.applyReadingPadding`); on a
+  tablet with the side rail it set the column about half the rail's width
+  left of the pane's centre. Centring on the window only when the pane spans
+  it less the system insets would give both, and that is the fix, with
+  "spans" read as standing evenly: a phone's pane held sideways keeps
+  margins of its own, the same on both sides, so the column takes the
+  window's centre where the pane's two margins in the window less its side
+  insets are equal to within 2 px, which the frame's rounding allows, and
+  the pane's centre otherwise, as on the iPad. The arithmetic is
+  `BtReadingColumn.sides` (`android/BtReadingColumn.java`), with no platform
+  types.
+
+  The emulator passes ran on 15 October, the column's centre read back from
+  the bridge and from the screenshot's ink. On the 10-inch tablet held
+  sideways both ways the pane stands 136 px from the window's left, beside
+  the rail, and 28 px from its right; the column stands on the pane's
+  centre, where main's stood 54.5 px left of it. Phones held sideways on
+  API 35, 33 and 30 take the padding main gives them. Held upright both ways
+  the tablet's pane stands 14 px from the window's left and 28 px from its
+  right: the right margin carries the reading body's own theme pad, which
+  `buildReadingViewMobile` sets on the right only, so the pane is not even
+  in the window and the column takes its centre, 7 px left of the screen's,
+  where main's took the screen's, 6.5 px right of the pane's. The iPad's
+  reading body has the same pad and centres its column in its text view, so
+  the upright tablet now matches it. Open: keep that, or count the reading
+  body's right pad as part of the pane (Go pushing it to the bridge) so the
+  upright column stays where main draws it.
+
+  `TestAndroidCentresTheBookPageOnItsPaneBesideARail` compiles and runs
+  `BtReadingColumn` with the JDK over the geometry the bridge logged on the
+  emulators, holding it to the padding logged there, and over geometry built
+  from it: the cutout on the other side, side insets on the tablet, the
+  reader's own full screen, a phone's rail, and panes 1, 2 and 3 px uneven,
+  which hold the slack to 2 px. The rule before is its control: beside the
+  rail it leaves the column 54.5 px off the pane's centre, and every phone
+  fixture takes the same padding under both rules. Without a JDK the test
+  skips, except on CI's Linux job.
+  `TestTheBridgeTakesTheColumnFromBtReadingColumn` holds the bridge to it. A
+  phone's Read tab shows a rail only with the landscape presentation switched
+  off, which only a development build can do; its column follows the rail's
+  rule. READING_TYPOGRAPHY.md's paragraph on Android's page and ANDROID.md's
+  sentence on the reporter column give this rule since the branch was
+  merged into `rel/1.2.23` on 15 October 2026.
 - **A note pill under a heading on Android's book page — FIXED 6 October
   2026.** It sat 7px higher than on the phone page (the entry below, which
   has the fix).
@@ -4840,10 +6688,17 @@ top of the chapter by the same re-assert. The view now stays put.
   fails, which the code's comments say is likeliest right after returning to
   the foreground; the failure rate has never been measured. The fix is to
   stamp each attempt with `gBodyGenPending` read on the main queue and drop a
-  superseded one.
+  superseded one. Fixed with P3 for 1.2.23, with the generation stamped at
+  the push instead: read on the main queue it is shared by two pushes made
+  in one main-thread turn, as the Mac's are, so the announcement issues it
+  and Go hands it over with the push, and every attempt and the fallback
+  check it before acting (`51f7efe66` on `fu/1223-ai4-p3`, P3's entry).
 - *The plain-text fallback never places the view* and does not tell Go the
   import failed. The owner saw a fully styled chapter each time, which rules
-  this path out for the reports so far.
+  this path out for the reports so far. P3's fallback page (for 1.2.23) is
+  installed as an imported page is, so it places the view
+  (`bibleTextScrollReadingTV`, `bibleTextMacScrollTV`); it still does not
+  tell Go the import failed.
 - *The fast path can consume an arrival on a pane that has gone blank*, and
   the foreground recovery then rebuilds without it. Rests on two premises
   nobody has verified.
@@ -5967,7 +7822,7 @@ ends before it starts.
 
 ## A drag begun inside a verse number shares the digit — found 6 October 2026; FIXED with the lead 13 October 2026, for 1.2.22
 
-Planned for: 1.2.22, closed by the selection's place in its verse ("Where
+Released in 1.2.22 on 16 October 2026, closed by the selection's place in its verse ("Where
 the app re-finds the reader's position from text", P1), at the end of this
 entry — see docs/ROADMAP.md. Moved on 7 October 2026 to the release after
 1.2.20; 1.2.21 went out without it.
@@ -6181,9 +8036,10 @@ number cost about 5ms per import on a psalm set as one paragraph (measured on
 an AppKit port). Seen on the iPadOS simulator with the `headwash` scenario. Still open from the same
 work: `btIOSNoteAnchorRange` falls back to the whole highlight range for a note
 with no verse, which would restyle a heading inside a multi-verse mark (no note
-has no verse today); and an omitted verse's gap mark before a verse is washed
+has no verse today). An omitted verse's gap mark before a verse was washed
 by the markup but not by a single-verse mark's native range, a mismatch older
-than this fix and untested.
+than this fix; 1.2.23 walks each mark in its place in the native panes, so
+the native range and the markup agree (AND-4, decision 18).
 
 Four heading defects were found and fixed on 18 September 2026 (selection led
 by a heading, a drag begun inside one, a drag that ended in one, and a heading
@@ -6250,11 +8106,11 @@ mechanism. Nobody has asked what selecting a heading should MEAN: the section it
 introduces, the heading as a label, or nothing at all. The answer probably
 differs by style, and it decides the rest.
 
-## The Windows audio smoke is probably testing a silent sink
+## The Windows audio smoke is probably testing a silent sink — DONE 15 October 2026
 
-Planned for: a later minor release, step 3 rerun on the Windows virtual
-machine with the Store checks deferred from 1.2.20, after which this entry
-closes — see docs/ROADMAP.md.
+Closed 15 October 2026: step 3 ran on the Windows virtual machine with the
+Store checks deferred from 1.2.20 (the end of this entry) — see
+docs/ROADMAP.md, Later minor releases, row 40.
 
 `windows-audio-smoke.yml` has failed repeatedly at the natural-end step, and
 the investigation has been looking for a defect in the app. The likelier
@@ -6302,6 +8158,19 @@ mapped when it finds none; `audio_backend_proof.go` holds the decision and
 its test. The workflow's header and docs/PLATFORM_MIMIC.md no longer say it
 proves WASAPI on a runner. Step 3, the natural end on a machine with an
 audio device, is what is left.
+
+**Step 3 DONE 15 October 2026.** On the Windows 11 arm64 virtual machine,
+which has an audio device, `TestDesktopAudioEndToEnd` (`-tags
+audiosmoke`) ran from a native arm64 test binary built in the guest with
+cgo, from `e52273ccd` (1.2.22 as prepared), against the toolkit as
+published, without the repository's patches, none of which touches audio.
+Run as the desktop user, it named WASAPI as the backend that carried the
+samples (`AUDIOSES.DLL` mapped), went through the skip, the pause and the
+resume, seeked to the end, and reached the natural end and then idle:
+PASS in 4.06 s, exit 0. No control run without an audio device was made
+there; that branch, the null sink's diagnosis, is held by
+`audio_backend_proof_test.go`. The natural end passes on a machine with
+an audio device, which is what step 3 was to show.
 
 ## The direct downloads do not register `bibletext:` links
 
@@ -6550,8 +8419,11 @@ the record. This entry was left open by mistake when that change landed.
 
 ## Microsoft Store: from the reserved name to the first submission — DONE
 
-Still open: the three checks of step 5 that need a Windows client — deferred
-from 1.2.20 to a later minor release; see docs/ROADMAP.md.
+Still open: parts of the three checks of step 5 that need a Windows client,
+deferred from 1.2.20 and run in part on 15 October 2026 on the Windows
+virtual machine (step 5, below). The firewall prompt passed; the https link
+and the browsers' prompts for `bibletext:` have parts still to run — see
+docs/ROADMAP.md, Later minor releases, row 40.
 
 **Closed 21 September 2026.** Submission 1 published on 17 September (1.2.10,
 x64) and submission 2 was committed on the 21st through `msstore/submit.py`,
@@ -6637,8 +8509,49 @@ is due by mid-December 2026. Left to do, in order:
    and the sideload script that installs the workflow's artifact, are in
    `docs/WINDOWS_STORE_LISTING.md` under "Resuming with a Windows machine".
    Still unproven anywhere: the window coming to the front under XWayland
-   on Linux, and whether the direct-download exe's loopback listener draws
-   a firewall prompt on Windows (both on that checklist).
+   on Linux (on that checklist).
+   Run on 15 October 2026 on the Windows 11 arm64 virtual machine, with
+   1.2.21's arm64 package as submitted to the Store, registered under a
+   renamed identity in development mode beside the Store's own install of
+   1.2.19, and with its executable run without package identity, as the
+   direct download runs. The release's zip itself was not run; its
+   executable is built by the same commands as the package's
+   (`scripts/build-windows-exe.sh`, held to the release job's by
+   `scripts/test-release-key-flow.sh`).
+   - The firewall prompt (the checklist's step 8): passed. The executable
+     run that way listened on 127.0.0.1 only; no Windows Security prompt
+     appeared and no firewall rule was made, where a control, a PowerShell
+     listener on every address, raised the prompt. Its handoff passed
+     there too: a second launch with a link while the window was
+     minimised kept one process and restored the window at the link's
+     verse, a cold launch opened at its verse, and
+     `single-instance.bibletext.direct.json` was there while the app ran
+     and gone after it quit.
+   - The web-to-app handler (step 4): pass (a) passed for the Run box.
+     Windows' lookup of the link's handlers named the renamed package
+     alone. The link pasted into the Run box brought up Windows' choice of
+     BibleText or Edge, and BibleText, chosen once, started with the whole
+     link, `#v16` included, on its command line and opened at John 3:16.
+     The same link clicked inside Edge stayed in Edge, and Settings → Apps
+     → Apps for websites lists two BibleText entries for bibletext.co.uk,
+     both on. Not run: a link clicked in Outlook or Teams, which had no
+     signed-in account there, and pass (b), which needs the Store's own
+     package family name, the only one the consent file names; so whether
+     Windows accepts the consent file, which the site serves with status
+     200 as `application/octet-stream`, is still open. Why the lookup did
+     not name the Store's install is not established.
+   - The browsers' prompts for `bibletext:` (step 3): run halfway, in
+     Edge, on a local page standing in for the notice page, with the link
+     shape the site uses on Windows. Edge's prompt said the site was
+     trying to open an app, offered to always allow that page to open such
+     links, and had Open and Cancel; Cancel was pressed. It named "Pick an
+     app"; two packages claimed the scheme there, where a reader with the
+     Store's install has one, and the prompt with one was not seen, so
+     why it named no app is not established. Not run: the prompt with one
+     package claiming the scheme, what it names and whether Open starts
+     the app, Chrome and Firefox, which are not installed there, and
+     pass (b) after uninstalling.
+
    Deferred from the same change: an "Open in BibleText" affordance on the
    reader pages, not only the notice pages. The Windows registry entry and
    the macOS `CFBundleURLTypes` moved to "The direct downloads do not
@@ -6696,7 +8609,8 @@ and the 1.2.10 release note that promised a Flatpak stands as shipped.
 ## Recapture the App Store and Play screenshots — App Store sets RECAPTURED 28 September 2026 and uploaded 29 September; the Play 1.2.17 set committed 30 September; the Play phone set waits on a decision
 
 Planned for: 1.2.23+, the Play phone set once its shape is decided and after
-1.2.21 clears Play's review; the short desktop window stays — see
+1.2.21 clears Play's review; the short desktop windows and the Settings
+footer, settled with no rule, in 1.2.23 (decision 35) — see
 docs/ROADMAP.md.
 
 1.2.7 shipped with the screenshot set inherited from 1.2.5, which in turn
@@ -6892,12 +8806,12 @@ confirm is in `docs/VISUAL_TESTS.md` V15:
   the window and reopens its registered top sheet; the Go to picker and the
   note composer refit themselves; the remaining sheets keep the size they
   opened at, which the modal clamps to the canvas.
-  Also left: a desktop window under about 420pt tall (the window allows
-  386pt) has too little room below the header for the fixed parts of some
+  Then left: a desktop window under about 420pt tall (the window allows
+  386pt) had too little room below the header for the fixed parts of some
   sheets, so cross-references while the list loads (below 418pt), the AI
-  answer and Go to (below about 400pt) start inside the
+  answer and Go to (below about 400pt) started inside the
   header's lower band, below the Go to chip; at 386pt cross-references
-  while the list loads reaches furthest in, its top 7pt below the chip's
+  while the list loads reached furthest in, its top 7pt below the chip's
   outline. Translation, which used to lead this list, clears the header at
   every height the window allows, in every build. The note composer's
   desktop card is sized from its content and centred, and the selected
@@ -6906,26 +8820,384 @@ confirm is in `docs/VISUAL_TESTS.md` V15:
   card is taller than the room below the header the excerpt now gives up
   rows down to one, and takes them back as the window grows
   (`share_note_ui.go`, `TestTheNoteComposerGivesUpExcerptRowsToClearTheHeader`),
-  so the card clears the header at 440pt and, at one row, stands at the
+  so the card clears the header at 440pt and, at one row, stood at the
   header's edge from 400pt down to 386pt as it did before the excerpt. The
   other content-sized modals — the link notices, the note-link offer and
-  Ask — are centred the same way with no cap and start inside the header's
-  lower band below about 400pt, and Ask below about 390pt (at 386pt the
-  link notice's top is 51pt down, partway down the chip); each is a few
-  fixed rows with nothing to scroll, unchanged since before 1.2.17, and
-  left with the sheets above. Raising the window's
-  minimum height to about 420pt, or letting a sheet that cannot clear the
-  header cover it entirely, is the owner's choice.
-- LEFT: the iPad Settings sheet ends on a SHARED NOTES heading with its
-  card below the pinned "Changes save automatically." footer. Not a defect:
-  the body is a scroll that ends above the footer, nothing is drawn under
-  the footer, and at that size the body is about 150pt taller than its view, so
-  the sheet opens at the top with the last sections below the fold, the
-  scroll bar showing it. Scrolled to the end, the last card sits wholly
-  above the footer. `settings_footer_test.go` holds both at the iPad sizes.
-  A separator above the footer, mirroring the one under the title, would
-  say more plainly that the body continues; that is a design choice, not a
-  fix.
+  Ask — are centred the same way with no cap and started inside the
+  header's lower band below about 400pt, and Ask below about 390pt (at
+  386pt the link notice's top was 51pt down, partway down the chip).
+- FIXED for 1.2.23, decision 35 (taken 15 October 2026), on its own branch,
+  `fu/1223-short-windows` (`b1daedf48`, `330f935ed`), merged into `rel/1.2.23` on 21 October 2026:
+  a sheet that cannot
+  clear the header on a short desktop window covers it, and no window is
+  made taller. Measured on the laid-out window at 1280x386 (the header
+  4..71.1pt, the Go to chip 17.5..56.5pt, the room for a sheet from 79.1pt,
+  below the 8pt gap): the cross-references while the list loads started at
+  63.5pt, a link notice at 51.2pt, the note-link offer at 62.3pt, the share
+  confirmation with a long text at 67.6pt (56.5pt at 507pt wide), the note
+  composer and Ask at 72.3pt, Go to at 73.7pt and the AI answer while it
+  waits at 75.4pt; a link notice still started at 78.2pt at 1280x440. A
+  sheet that starts above the room where it settles took, as merged, the
+  window's height from the header's top edge to as far above its foot,
+  4..382pt at 386pt (`coverHeaderUnlessClear`, `sheet_fit.go`); it now
+  takes its natural height from the header's top edge (below). It runs
+  after each such
+  sheet's sizing and its refit, so a sheet sized again in a taller window
+  opens below the header again. The composer and Ask give up excerpt rows,
+  and the share confirmation its box's height, only where that clears the
+  header, and otherwise keep them and cover it (`fitBelowOrOverHeader`): at
+  386pt the composer covers the header with all three rows. The
+  cross-references are sized again whenever their body changes, so they
+  cover the header at 386pt while the list loads and open below it once
+  listed. The link notice and the note-link offer now refit with the window,
+  at the size they opened at.
+  A sheet is judged where it settles, with half a point's allowance, the
+  same test for every sheet (`sheetStartsClearOf`, `330f935ed`). Judged
+  straight after its resize, before its wrapped paragraph had measured
+  itself at the card's width, a link notice was 4pt higher than where it
+  settles, and covered the header on 441 to 448pt windows that it clears
+  (78.7 to 82.2pt down), while one opened at another size and sized again
+  there cleared it; Ask, the composer and the share confirmation covered
+  the header at the one height where they clear it by less than half a
+  point (399pt, 408pt, and 431pt at 507pt wide).
+  Each sheet that can cover does so up to a height and clears the header
+  above it: the link notice up to 440pt, since it opens 14.3pt taller than
+  its content measures once laid out, as before; the note-link offer up to
+  418pt, the cross-references while loading up to 416pt, the share
+  confirmation up to 407pt (430pt at 507pt wide), the note composer and Ask
+  up to 398pt, Go to up to 395pt and the AI answer up to 392pt (since
+  `fu/1223-ai-answer-short`, the next entry, 413pt, and for Ask 434pt
+  with a one-line question and higher with a longer one).
+  As merged, a covering card sized from its content was grown to the
+  window's height and showed the extra as space under its last row: at
+  1280x386, 108.7pt in a link notice and 116.7pt in the note-link offer,
+  Ask and the composer.
+  Blank space in cards grown to cover the header was one reason the
+  30 September rule for phone and tablet sheets was taken out on 1 October
+  ("Phone and tablet sheets over the header" above). Whether a covering
+  card keeps that height was settled on 21 October 2026: it does not
+  (below).
+  Two sheets Settings opens over itself were not kept clear of the header,
+  before decision 35 as after it, and now are (`330f935ed`). The Delete all
+  notes question was sized once, before its paragraph had wrapped at the
+  card's width, so it was 81pt taller than its content and started inside
+  the header or its gap on every window from 386 to 462pt tall; it is now
+  sized twice, covers the header where it still cannot clear it, is sized
+  again with the window, and clears the header at 386pt. On a phone or
+  tablet it now takes its content's height too: laid out at 320x568,
+  390x844 and 834x1194, the space under its buttons is 21pt, where it was
+  35, 80 and 102pt. The model picker was capped by a
+  140pt margin alone, so a list longer than the window has room for put
+  its top 70pt down, 1.1pt inside the header, at any window height; it is
+  now capped below the header with its gap, as every desktop sheet is, and
+  sized again with the window.
+  Held by `sheet_header_cover_test.go`: every sheet below the header with
+  its gap or covering it at fifteen windows from 386 to 448pt, either side
+  of each sheet's last covering height, with the sheets that cover pinned
+  at each; the download card, the Delete all notes question and the model
+  picker with twenty models among them; a covering sheet sized again with
+  the window to where one opened at the new size sits, among the resizes
+  386 to 442pt and 800 to 445pt; the cross-references through their load;
+  the model picker below the header at 1280x860, 1280x800 and 507x600 and
+  through a resize. And by
+  `TestTheNoteComposerGivesUpExcerptRowsToClearTheHeader`. Each fails on the
+  code before. Seen on 15 and 16 October, before `330f935ed`: on Mac and
+  Linux windows 401 and 420 high and a Windows window 401, 420 and 800 high,
+  every sheet swept (Settings, Go to, the share confirmation, the notices,
+  the AI answer and the cross-references while they wait) clear of the
+  header or covering it whole; on the Windows window the code before left
+  Go to, a link notice, the share confirmation and the waiting
+  cross-references partway over it. Seen again on 21 October at
+  `f10f53496`, with the branch before `330f935ed` as the control, on a Mac
+  window and a Linux window laid out 401 (the least they allow), 420, 445
+  and 800 high, and a Windows window 760 wide laid out 401, 420, 445 and
+  560 high (its screen is 800x600), where the header ends at 74.1pt, 3pt
+  lower than in the tests: every sheet clears it from 82.1pt or covers it
+  whole. On both builds and all three, Go to, a link notice, the note-link
+  offer, the share confirmation, Ask and the waiting cross-references cover
+  it at 401, the link notice, the offer and the cross-references at 420, the
+  link notice alone at 445, and none above. The Delete all notes question
+  clears it at 88.6, 98.1 and 110.6pt on the 401, 420 and 445 windows,
+  where the control started it at 47.9, 57.4 and 69.9pt, the first two
+  partway down the Go to chip. On the Mac and Windows windows the model
+  picker with twenty models clears it at 82.1pt at every height, where the
+  control started it at 70.0pt, 4.1pt inside the header; on the Linux
+  window its list had not arrived when it opened, so it showed one row, and
+  cleared the header on both builds.
+- FIXED 21 October 2026 for 1.2.23, on its own branch,
+  `fu/1223-ai-answer-short`, merged into `rel/1.2.23` on 22 October 2026
+  (`f4460eb9b`): the AI answer's waiting line was
+  cut through the middle on a window just tall enough for the panel to
+  clear the header. The waiting column ("Reading the passage…", the bar,
+  the model line, the hint and Cancel, with Ask's question above them)
+  sits in a scroll, and the scroll was given only the room left once the
+  title, the citation and the footer were placed, down to its own 32pt
+  least. It was not a design choice: the column's comment has the scroll
+  engage so that Cancel stays in reach, and decision 35 has a sheet that
+  cannot clear the header cover it; neither leaves the line cut. In the
+  tests at 1280x401 the scroll was 39.6pt tall, where the line is 38.3pt
+  tall and starts 15pt down it; the line was cut on every 1280pt window
+  from 393 to 414pt high, and to 434pt for Ask with a one-line question,
+  at 507x401, and for Ask at 507x420. A Mac window laid out at 1280x401
+  had the panel at 82.1..318.9pt, 236.8pt tall; the tests give the same
+  with the header 3pt lower, where Mac, Linux and Windows windows put it,
+  and a scroll 33.6pt tall. On a 568x320 screen held sideways, the
+  smallest iPhone iOS 15 runs on, the scroll was 36.8pt. The waiting
+  scroll is now never shorter than its column down to the foot of the
+  waiting line, Ask's question included (`setThinking`'s `leadFoot`,
+  `fitBody`'s least), held to the most a
+  sheet may be there: on a desktop window with the header on screen the
+  height a sheet covering it takes, elsewhere the canvas less its deeper
+  safe inset at both edges (`sheetMostHeight`, `sheet_fit.go`). Where the
+  panel then cannot clear the header it covers it, as decision 35 has
+  every sheet do: in the tests Explain and Compare cover it up to 413pt
+  and Ask with a one-line question up to 434pt, where all three covered
+  it up to 392pt, and each clears it above that with the line whole; with
+  the header 3pt lower, up to 419 and 440pt. A longer question covers it
+  higher still. When the answer or an error arrives on a window in that
+  band, the panel moves from covering the header to clearing it, as
+  decision 35 has a sheet that can clear it do: at 1280x401 the waiting
+  panel spans 4.0..397.0pt and a one-line answer 79.1..321.9pt. On the
+  568x320 screen the panel is 256.5pt tall where it was 240pt. A question
+  too long for the line to show under it
+  gives the panel all a sheet may have, and no more: on a desktop window
+  it covers the header, and on a phone it reaches the safe area's edges
+  (20..420pt on an iPhone 17 Pro Max held sideways, where it was
+  40..400pt). Where even the most a sheet may be is too short for the
+  line, it can still be cut. Laid out as the tests lay out a phone, on a
+  640x320 canvas under a 24pt status bar, Explain and Compare show it
+  whole, but Ask with a
+  one-line question takes the most, 24.0..296.0pt, and its scroll ends
+  5.2pt above the line's foot; before the change all three were cut there
+  by a 36.8pt scroll. On a 732x240 canvas, a phone's split screen, the
+  sheet fills the canvas and all three are cut, on both builds. Showing
+  the line there means scrolling the column so that the line's foot meets
+  the scroll's, which puts the head of Ask's question out of sight, or
+  setting the line above the question: a decision, not built. The answer
+  and error states are sized as before. Held by
+  `ai_panel_waiting_line_test.go`: the line whole for Explain, Compare and
+  Ask on every 1280pt window from 386 to 440pt, at 507x386, 507x401 and
+  507x420 and at 1280x800, over the styled pane Windows and Linux ship at
+  1280 and 760pt wide, through five window resizes, and on four phones
+  held sideways; as the quote under the citation is opened and closed at
+  401, 410, 430 and 440pt, and as a model name too long for one line
+  wraps at 401, 410 and 420pt; and the long question on 386, 401 and
+  440pt windows, the 568x320 screen and an iPhone 17 Pro Max held
+  sideways, where the panel spans 20..420pt. On `rel/1.2.23` at
+  `3261a1e13` the tests fail on the windows named above, over the styled
+  pane at 401, 413 and 414pt and for Ask at 760x420, the resizes to 401
+  and 405pt, the 568x320 screen, at every height of the quote case, under
+  the wrapped model name at 401 and 410pt and for Ask at 420pt, and for
+  the long question at 401 and 440pt, on the 568x320 screen (240pt tall)
+  and on the Pro Max (40..400pt); at 386pt and on the three larger phones
+  the line was already whole. The sweep in `sheet_header_cover_test.go`
+  now lists the AI answer as covering on 393 to 413pt windows. Mutations
+  guarded: the least without Ask's question, without the bound, dropped
+  on a window resize, on the quote's refit or on the model line's
+  relayout, and the most a sheet may be taken from the canvas or from its
+  top inset alone. One rule on all six, so no divergence. Left as it was
+  then, for a decision taken on 22 October 2026 (the entry below): the
+  error state kept the short scroll. In the tests, with a passage of a
+  few words quoted, its two-line message was cut on 393 to 436pt windows
+  (at 1280x401 through its first line), and Try again was out of sight,
+  a scroll away, on 393 to 503pt windows; with the header 3pt lower, 399
+  to 442pt and 399 to 509pt. Seen on 21 October 2026 at `19d77ab22`,
+  against `3261a1e13`: on the Mac, over its own pane and the Linux and
+  Windows panes, and on the Linux virtual machine, the line whole at
+  1280x386 (laid out at 401) for Explain and Ask, and on the Mac for
+  Compare, at 1280x410 for Explain and at 1280x430 for Ask, and on the
+  Windows virtual machine at 760x401 and for Ask at 760x420; the control
+  cut it in each, its scroll 33.6pt tall at 401. The header there ends at
+  74.1pt, and the panel covering it spans 7.0..394.0pt at 401. Not run on
+  Android, whose test emulator reaches a canvas short enough only under a
+  display density override, or on an iPhone.
+- FIXED 22 October 2026 for 1.2.23, decision 35 as taken that day for
+  the AI answer's error state, on its own branch, `fu/1223-ai-error-short`
+  (`abba857dc`, `9e7eb94fd`), from `rel/1.2.23` at `91e1ec683`: the
+  error state's message was cut and its button out of sight
+  on a window just tall enough for the panel to clear the header. At
+  1280x401, the old panel showed a 39.6pt scroll for the message and Try
+  again, whose column needed 130.9pt. The error state now keeps its body
+  by the waiting line's rule (`wholeThrough`, `fitBody`'s least): never
+  shorter than its content down to the foot of what that state must show
+  whole, the waiting line or the error's whole column, Ask's question
+  included, held to the most a sheet may be there (`sheetMostHeight`).
+  Where the panel cannot clear the header it covers it at its natural
+  height (`coverHeaderUnlessClear`).
+  Settled 23 October 2026: the quote under the citation opens
+  automatically only where it leaves room for that minimum as well as
+  the usual few answer rows. The previous 96pt allowance was shorter
+  than the error's 108.6–153.2pt minimum: with a long quotation, it made
+  the panel cover the header at 1280x620 even though closing the quote
+  let the error clear it, and on an iPhone 16 Pro held sideways it cut
+  Ask's Try again and the three-line message's button. `fitBody` now
+  takes the larger of the usual allowance and the state's minimum, in
+  the waiting and error states alike. The citation and disclosure stay
+  visible, and the reader can open the quote; an explicit open or closed
+  choice survives a request failing, Try again, and window resizing.
+  No icon, button or spacing dimensions change.
+  A question too long for the window can still put the error below the
+  visible scroll, which opens at the head of the question. The panel
+  takes the most a sheet may be. Showing the error there would require
+  scrolling the question's head out of sight or setting the error above
+  it, as for the waiting line; that remains a separate decision.
+  Closing the quotation also cannot make a column taller than the whole
+  safe area fit. The existing cases on the first-generation iPhone SE
+  held sideways, a 640x320 canvas under a 24pt status bar and a 732x240
+  split screen retain their scroll and height cap. The iPhone 16 Pro's
+  landscape error no longer belongs in that expected-cut list: its
+  quotation can close to leave room for every tested error form.
+  Regression coverage is in `ai_panel_error_whole_test.go` and
+  `ai_panel_waiting_line_test.go`: the error stays whole on short
+  desktop windows and over the styled pane, on resizing and quote
+  toggles, and on phone safe areas; a long question keeps the sheet at
+  its height cap. `TestTheAIErrorClosesTheQuoteBeforeCoveringTheHeader`
+  covers long quotations at 1280x620 and the no-key error at 1280x480;
+  `TestTheAIWaitingQuoteClosesWhenItsQuestionNeedsTheRoom` covers the
+  waiting and error states under a long question; and
+  `TestTheAIQuoteChoiceSurvivesFailureAndRetry` covers both explicit
+  disclosure choices through failure, retry and resizing. The earlier
+  tests fail on `91e1ec683`, apart from the already-capped 732x240 cases.
+  Verification recorded on 22 October 2026 applies to the earlier
+  `a7b1b670d` build, before the automatic-quote change: on the Mac the
+  error was whole at 1280x401, 436, 470, 503 and 520, with its footer
+  buttons inside the sheet, through a resize from 401 to 800pt and back
+  and after Try again at 401pt. A quote that opened at 520pt made that
+  build cover the header again after clearing it at 503pt. The new
+  quote rule is integrated locally in `rel/1.2.23`, uncommitted; combined
+  checks and device verification remain.
+  Not run for this branch: the quote opened and closed in the app, the
+  Linux and Windows panes mimicked on the Mac, the Linux and Windows
+  virtual machines, an iPhone and Android.
+- CHANGED for 1.2.23, decision 35 as settled on 21 October 2026, on its own
+  branch, `fu/1223-short-windows-2` (`0c2e48e40`, `9c3da08a4`,
+  `5bc64cbb8`), from `rel/1.2.23` at `3261a1e13`, merged into
+  `rel/1.2.23` on 22 October 2026: a sheet that covers the header takes
+  its natural height, capped at the room from the header's top, with its
+  top edge at the header's. The natural height is the sheet's preferred
+  height, what it would take with unlimited room, never less than its
+  content's least height once that has settled (`coverHeaderUnlessClear`,
+  `sheet_fit.go`, one rule for every sheet). A card sized from its content
+  asks for nothing beyond it, so it is only as tall as its content; a sheet
+  whose lists or scroll areas use the room asks for the height it takes on
+  a window with room to spare: Go to the 680pt its lists take
+  (`pickerSplitMaxHeight`), the cross-references their 460pt panel
+  (`crossRefPanelHeight`), the AI answer its whole body. Where the room is
+  shorter those fill it, so Go to's book and chapter lists stay as usable
+  as before. The model picker asks for its whole list too, but its list
+  scrolls and it clears the header on every window the app allows, so it
+  never covers it. Fyne centres a modal on the size of its popup, which it
+  holds to its canvas's size, so a sheet shorter than the room centred
+  with its top inside the header; it is now laid out on the window's
+  canvas raised by the difference (`raisedCanvas`, `raiseSheet`): the
+  popup reaches that far above the window's top edge and still covers the
+  window to its foot, so its shade dims the whole page, and the sheet
+  centred on it starts at the header's top; with an overlay up, a tap goes
+  to the top overlay alone, so none reaches the page. The raise rests on
+  Fyne 2.7.4's popup, which is itself the overlay and is placed by nothing
+  else; Fyne 2.8 places a popup through an overlay container the overlay
+  stack sizes from the window's canvas, so the raise has to be built again
+  for it (`raisedCanvas`, `5bc64cbb8`). Each fit lays the sheet out on the
+  window again before judging where it settles (`centreOnWindow`), so a
+  sheet given room again clears the header as before. Laid out at
+  1280x386, a link notice, the note-link offer, Ask, the note composer and
+  the share confirmation cover the header as tall as their content, where
+  they were 108.7, 116.7, 116.7, 116.7 and 17.3pt taller than it, and the
+  study panel with a short answer or an error covers it with its whole
+  body shown, the body as tall as on a 1280x800 window and no taller; Go
+  to, the cross-references while they load and the AI answer while it
+  waits, whose waiting column scrolls and is taller than the room with the
+  panel's chrome, fill the room from the header's top.
+  At 1280x401, the least height a Mac window's canvas is laid out at, the
+  share confirmation, the link notice, the offer, the cross-references
+  while they load and the AI answer while it waits cover the header: the
+  first three as tall as their content, where they were 8.3, 123.7 and
+  131.7pt taller, and the cross-references and the waiting AI answer
+  filling the room; Go to and the AI answer with an answer or with an
+  error clear it there; with an error it covers it there to stay whole
+  on `fu/1223-ai-error-short` (the entry above). On the branch alone the
+  waiting AI answer cleared the header at 401pt, its waiting line cut by
+  the scroll; merged with `fu/1223-ai-answer-short` (the entry above) the
+  panel never covers shorter than its chrome and the line's least, and as
+  its whole column with the chrome is taller than the room on every
+  window where it covers, to 409pt for Explain and Compare and 430pt for
+  Ask with a one-line question in
+  `TestACoveringWaitingPanelTakesItsNaturalHeightWithItsLineWhole`, it
+  fills the room there. That test holds the line whole, the popup
+  spanning the window and no blank band under the column on every 1280pt
+  window from 386 to 440pt; it fails on `fu/1223-short-windows-2` alone,
+  the line cut from 393 to 414pt and for Ask to 434pt, and with the panel
+  covering at its least alone, as a card does, which stopped it short of
+  the room's foot with the column cut short.
+  `TestACoveringSheetTakesItsNaturalHeight` holds both windows and fails on
+  `3261a1e13` for the five cards; with Go to asking for nothing beyond its
+  content its Go to case fails, the sheet ending at 242.5pt of a room to
+  382pt; with the study panel asking for 10000pt beyond its whole body,
+  its short answer and its error fill the room, 4.0..382.0, and their
+  cases fail (`9c3da08a4`). The sweep
+  (`TestDesktopSheetsClearOrCoverTheHeaderOnShortWindows`) now requires a
+  covering sheet's top edge at the header's and its foot no lower than the
+  room, and every sheet's popup to span the window, takes the 401pt window
+  too, and measures a sheet's box in canvas coordinates; with the sheet
+  left centred at its natural height it fails, the cards starting 58 to
+  78pt down, in the header or the gap below it, and the share confirmation
+  7 to 16pt down; with the raised popup laid out at the window's top left
+  on a canvas shorter by the raise, each covering sheet still starts at
+  the header's top but its popup and shade stop short of the window's
+  foot, and the sweep, the natural-height test and the resize test fail
+  (`9c3da08a4`); and `TestASheetCoveringTheHeaderIsSizedAgainWithTheWindow`
+  fails with a raised sheet never laid out on the window again.
+  Seen on 21 October 2026 in scratch development builds of `0873d2665`
+  beside `3261a1e13`, values read back in the app. On the Mac, in a window
+  asked for at 1280x386 and laid out at 1280x401, the header at
+  7.0..74.1pt, 3pt lower than in the tests: the note-link offer, a link
+  notice, and Ask and the note composer, which cover there, cover the
+  header from 7.0pt to 268.3, 276.3, 311.5 and 311.5pt, as tall as their
+  content, where the control's ran to 394.0pt with 125.7, 117.7, 82.5 and
+  82.5pt of blank under their last rows (the tests' 401pt window, its
+  header 3pt higher, gives 131.7 and 123.7pt for the offer and the
+  notice); each raised popup spans the canvas from above its top edge to
+  its foot at 401.0pt; Go to and the waiting cross-references fill
+  7.0..394.0 and the waiting AI answer clears the header at 82.1pt, on
+  both builds, neither of which had the waiting line's least; the offer resized with it open from 401 to 800pt opens
+  below the header, at 269.3pt as one opened there does, and back at 401pt
+  covers it again from 7.0pt. At 1280x800 the offer, Ask, a link notice
+  and Go to open where the control opens them. The Linux and Windows panes,
+  mimicked on the Mac, gave the same numbers for the offer, Ask and Go to.
+  Not seen on the Linux and Windows virtual machines, so not under their
+  own window systems.
+- CHANGED for 1.2.23 by decision 35 (`b1daedf48`), not a defect: the iPad
+  Settings sheet ends on a SHARED NOTES heading with its card below the
+  pinned "Changes save automatically." footer. The body is a scroll that
+  ends above the footer, nothing is drawn under the footer, and at that
+  size the body is about 150pt taller than its view, so the sheet opens at
+  the top with the last sections below the fold, the scroll bar showing it.
+  Scrolled to the end, the last card sits wholly above the footer.
+  `settings_footer_test.go` holds both at the iPad sizes. A rule now sets
+  the footer off from the body, mirroring the one under the title, so it is
+  plain that the body continues: the same width and position across the
+  sheet, the same gap to the body (`TestSettingsFooterIsRuledOffLikeTheTitle`,
+  at the iPad sizes and on a desktop window; it fails on the code before).
+  The decision named the iPad's sheet; the sheet is one component on every
+  platform, so the rule was built on all six.
+  Seen on 15 and 16 October on Android (API 35 and 30), an iPhone 16 Pro, an
+  iPad Air 11 and an iPad Pro 13 held upright, and on the Mac, Linux and
+  Windows windows; not yet on the iPad Pro held sideways. Settled on
+  21 October 2026: the rule on no platform, the iPad included. It is taken
+  off on all six (`a4598d375`, on `fu/1223-short-windows-2`, merged into
+  `rel/1.2.23` on 22 October 2026), so the footer sits under the body as
+  in 1.2.22, and no
+  divergence is recorded. `TestTheSettingsFooterHasNoRule`, at the iPad
+  sizes, a phone and a desktop window, fails on `3261a1e13` at all five
+  with the rule 7pt below the body, and replaces
+  `TestSettingsFooterIsRuledOffLikeTheTitle`; `settings_footer_test.go`
+  still holds the body ending above the footer. Seen on 21 October 2026 in
+  scratch development builds of `0873d2665` beside `3261a1e13`: no rule
+  between the body and the footer on the Mac at 1280x800, under the Linux
+  and Windows panes mimicked there, on an iPhone 16 Pro simulator and on
+  the Android API 35 emulator, where the control draws one 7pt below the
+  body; the title keeps its rule. Not seen on an iPad, nor on the Linux and
+  Windows virtual machines.
 
 ## Settings: Clear runs past the key card at 320pt — DONE 28 September 2026
 
@@ -7350,8 +9622,24 @@ host, so the measurements are the evidence.
 
 ## Bible version states: transition diagram + comprehensive tests — DONE
 
-Still open: three questions in docs/VERSION_STATES.md — a key cleared on
-purpose in 1.2.23+ once decided, the other two stay; see docs/ROADMAP.md.
+Still open: two questions in docs/VERSION_STATES.md, which stay. The third,
+a key cleared on purpose, was decided on 15 October 2026, built for 1.2.23
+on `fu/1223-key-gone` (`e43d8e64e`) and merged into `rel/1.2.23` on 22
+October 2026 (`993b52639`): the launch gives the translation up and
+the picker says the reader removed their key (Later minor releases, row 23,
+in docs/ROADMAP.md). The launch walk now has 26 cells, with the key a
+restore did not bring back (row 10 there), and the credential walk 27.
+Decided on 21 October 2026: decision 11's line names the key removed,
+for the key included with the app "You removed the included API.Bible
+key, so World English Bible is shown in place of New King James
+Version.", and for the reader's own the words of 15 October. It is built
+on `fu/1223-key-gone-2` (`a206ffa18`; row 16 there), where the launch
+walk's `key-cleared-included` fate and a tenth knowledge state in the
+credential walk hold it, 28 and 30 cells (`fa89b14f5`). Confirmed on 22
+October 2026, as built: a key typed into the field over the included one
+and deleted again is named as the reader's own, since the field saved it
+as theirs, and a removal recorded by a release before 1.2.23, which wrote
+the same record for either key, is named as the reader's own.
 
 Both halves are in docs/VERSION_STATES.md: the storage diagram (M1–M3) and,
 since 2026-09-05, a second diagram for M4, the launch space and the arrivals
@@ -7580,9 +9868,11 @@ NKJV's italics for supplied words.
 **Closed 6 October 2026.** `docs/SCRIPTURE_WORKLIST.md` records the three
 defects and the decode-time checks as finished: S1 and S2 done, S3 closed
 as not a defect, S4 to S9 done. What remains of the larger questions is
-tracked there and in docs/ROADMAP.md: the WEB Catholic Daniel 3 heading
-(S15's shape guard), a setting to turn section headings off (S15), and
-in-text footnote markers (S22).
+tracked there and in docs/ROADMAP.md: a setting to turn section headings
+off (S15) and in-text footnote markers (S22). The WEB Catholic Daniel 3
+heading, which S15's shape guard was to catch, is drawn as the publisher
+sets it from 1.2.23, its note a footnote on the heading (docs/ROADMAP.md,
+decision 8).
 
 ## NKJV Psalm superscriptions — DONE 5 September 2026
 
@@ -8289,7 +10579,18 @@ example WHO line now reads "2 of 3 in this chapter", the count
 
 ## Target audience is 13+, and it was meant to include 9-12
 
-Planned for: stays; its recovery breadcrumb in 1.2.23+ — see docs/ROADMAP.md.
+Planned for: stays; its recovery breadcrumb built for 1.2.23 on
+`fu/1223-key-gone` and merged into `rel/1.2.23` on 22 October 2026 — see
+docs/ROADMAP.md, 1.2.23, row 17 (Later minor releases, row 10).
+The 23 October 2026 revisions are integrated locally in `rel/1.2.23`,
+uncommitted: iPhone, iPad and signed Mac builds use Android's same
+definitive-missing-key condition, a saved mark, an item-not-found answer
+and no remaining Preferences copy. The field says "Your saved key isn't
+available on this device. Paste it again here." It does not infer a
+restore or assign a cause. PLATFORM_MATRIX.md divergence 38 is resolved.
+Apple keeps the per-account dismissal ThisDeviceOnly: it may survive a
+same-device backup restore but does not migrate to another device.
+Android's `no_backup/` record is lost after reinstall or reset.
 
 The Play target-audience declaration was saved as **13-15, 16-17, 18 and over**.
 That is not the intended answer. The intent was to include **9-12** so the app
@@ -8313,7 +10614,15 @@ sitting.
 
 Before signing, the two things a Families reviewer would look at are worth
 having closed: the AI answer markdown vector (fixed) and the storage permissions
-(fixed), plus the recovery breadcrumb for a key that did not survive a device
-move, which is still outstanding. The app has no ads at all, which is the single
-biggest Families-policy failure mode, and the audit in docs/PLAY_LISTING.md
+(fixed), plus the recovery breadcrumb for a missing saved key, built for
+1.2.23 and not yet released. Its ✕ contains no new words. The 14pt glyph
+and 24pt face are aligned with the line's first row, while the original
+button minimum still sizes its row and column. An invisible mobile-only
+target fits within that allocated column, capped at 44pt on each axis;
+desktop has no extra proxy. No row growth, wider column or upward offset
+toward Clear is introduced. This refines the earlier branch's target
+geometry; its 22 October measurements do not validate the new geometry.
+The saved mark and separate per-account dismissal hold no key or personal
+identifier. The app has no ads at all, which is the single biggest
+Families-policy failure mode, and the audit in docs/PLAY_LISTING.md
 found no identifiers, analytics or crash reporting anywhere.

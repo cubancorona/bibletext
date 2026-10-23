@@ -765,6 +765,9 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 			renderFind() // → the no-key view
 			return
 		}
+		if findAsksPermission(state, gen, q, renderFind, runAsk) {
+			return // the pane says nothing was sent; Allow runs this search
+		}
 		// The submitted query is the live context NOW: persist it and drop the
 		// previous results immediately, so anything that re-renders this pane
 		// mid-flight (a tab return, a mode re-apply, a window rebuild) shows the
@@ -1099,11 +1102,18 @@ func tabBarGroupWidth(tabs int) float32 {
 }
 
 func tabBarStyleFor(state *AppState) tabBarStyle {
-	w := state.canvasWidth()
-	if w <= 0 {
-		// Before the first layout pass there is no width to judge. Trust the
-		// idiom so a tablet's first real frame is already correct rather than
-		// spreading once and snapping.
+	var w, h float32
+	if state != nil && state.window != nil {
+		sz := state.window.Canvas().Size()
+		w, h = sz.Width, sz.Height
+	}
+	// Before the canvas has a size, the size the platform reports for the
+	// window stands in for it (layoutSize), as it does for the rail.
+	w, h = layoutSize(w, h)
+	if !canvasSized(w, h) {
+		// With no report either there is no width to judge. Trust the idiom so
+		// a tablet's first real frame is already correct rather than spreading
+		// once and snapping.
 		if deviceIsTablet() {
 			return tabBarEdgeCentred
 		}

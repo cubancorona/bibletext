@@ -55,8 +55,8 @@ application has.
 - **moved** — the same passage, a different number.
 - **absent** — the target edition does not contain this verse at all.
 - **incommensurable** — the two editions' versions of this *book* do not
-  correspond verse by verse, and no mapping is possible. WEBC's Esther; in the
-  next major release's table, no book (§2.2).
+  correspond verse by verse, and no mapping is possible. No book in the
+  shipped table: WEBC's Greek Esther keeps the Hebrew numbers (§2.2).
 
 ### 2.1 What we found, per edition
 
@@ -66,12 +66,12 @@ Measured against the WEB as reference **[measured]**:
 | --- | --- | --- | --- | --- |
 | BSB | 12 | 6 | 0 | — |
 | NKJV | 0 | 5 | 4 | — |
-| WEBC | 0 | 7 | 173 | Esther |
-| WEBC, next major release | 3 | 7 | 214 | — |
+| WEBC | 3 | 7 | 214 | — |
 
-The last row is `versification_data_next.go`, the table a build with the
-`next` tag uses (`docs/NEXT.md`): the same caches read by the same rules, except
-that the Greek Esther maps verse for verse (§2.2, §2.3 rule 4).
+WEBC's three absent verses and forty-one of its extra ones are the Greek
+Esther's, which maps verse for verse (§2.2, §2.3 rule 4). Until 1.2.23 the
+table recorded the whole book as incommensurable instead, and its WEBC row
+read 0, 7, 173 and Esther.
 
 **The twelve the BSB lacks** **[measured]**: Matthew 17:21, 18:11, 23:13;
 Mark 7:16, 9:44, 9:46, 11:26, 15:28; Luke 23:17; John 5:4; Acts 28:29; and
@@ -153,10 +153,10 @@ Our derived table maps exactly those seven verses, 3:24-30 → 3:91-97
 stated outright by the publisher. Chapter 3 runs to 97 verses in that edition
 **[measured, source]**.
 
-**Greek Esther** is a different matter. Its additions are not appended but
-interleaved, and the resulting book does not correspond verse-by-verse to the
-Hebrew at any point: **[measured]** all ten chapters differ, and the opening
-verse is not the same sentence —
+**Greek Esther** is a different matter. It is translated from the Greek text
+rather than the Hebrew, so its wording differs in every chapter
+**[measured]**, and its additions are not appended but interleaved: the
+opening verse is not the same sentence —
 
 | | Esther 1:1 |
 | --- | --- |
@@ -164,15 +164,10 @@ verse is not the same sentence —
 | WEBC | "[In the second year of the reign of Ahasuerus the great king, on the first day of Nisan, Mordecai…" |
 
 The WEB's opening is the Hebrew book; the Catholic edition opens with Mordecai's
-dream, which is Addition A **[standard]**. There is no honest verse mapping
-between them, so the table marks the book *incommensurable* and the app is
-expected to say so rather than guess.
-
-**In the next major release** (`docs/NEXT.md`) the Greek Esther maps verse for
-verse. Measured more closely, the wording differs in every chapter because it
-is translated from the Greek text rather than the Hebrew **[measured]**, and
-its additions are interleaved rather than appended, but it keeps the Hebrew
-book's verse numbers **[measured]**:
+dream, which is Addition A **[standard]**. Until 1.2.23 the table took that for
+a book with no honest verse mapping, marked it *incommensurable*, and the app
+said so. Measured more closely, the Greek Esther keeps the Hebrew book's verse
+numbers **[measured]**, and since 1.2.23 it maps verse for verse:
 
 - **164 of the WEB's 167 verses are there under their own numbers.** A shared
   verse's text matches the WEBC verse of the same number at least as well as
@@ -181,8 +176,8 @@ book's verse numbers **[measured]**:
   shuffling its verses to 0.42, and an unrelated book under its own numbers
   scores 0.48 to 0.58 (§2.3, rule 4).
 - **Three are absent**: 4:6, 9:5 and 9:30, where the Greek text has nothing.
-  They are holes in its numbering like any other, and that release's omission
-  table (`omitted_verses_data_next.go`) records them.
+  They are holes in its numbering like any other, and the omission table
+  (`omitted_verses_data.go`) records them.
 - **Forty-one are its own.** Addition C, the prayers of Mordecai and Esther, is
   numbered 4:18-47, after the Hebrew chapter's seventeen verses, and Addition F,
   the reading of Mordecai's dream, is 10:4-14 **[standard]**.
@@ -199,16 +194,14 @@ the addition inside the same verse.
 | WEBC | "[In the second year of the reign of Ahasuerus the great king, on the first day of Nisan, Mordecai… ] And it came to pass after these things in the days of Ahasuerus, —(this Ahasuerus ruled over one hundred twenty-seven provinces from India)—" |
 
 A reference carried between the two therefore lands on the same passage, and
-that table records the three absent and forty-one extra verses as it records the
-Song of the Three's. Read-along narration is another matter, in both states: the
-words differ, so the WEB's recording is not offered for WEBC's Esther
-(`webcAudioURL`).
+the table records the three absent and forty-one extra verses as it records the
+Song of the Three's. Read-along narration is another matter: the words differ,
+so the WEB's recording is not offered for WEBC's Esther (`webcAudioURL`).
 
 ### 2.3 How the table is derived, and why the obvious rules were wrong
 
 `scripts/gen-versification.py` builds `versification_data.go` from the app's own
-cache files, and with `--next` the next major release's `versification_data_next.go`
-from the same files. Two of its rules exist only because the naive version was measured
+cache files. Two of its rules exist only because the naive version was measured
 and found wrong:
 
 1. **A move requires a destination the reference does not have.** Matching on
@@ -231,9 +224,9 @@ and found wrong:
    the three real cases cross-score 0.41-0.80 against 0.05-0.18 for their own
    numbers, and no other adjacent pair's crossed score beats its own at all —
    refrains such as Psalm 67:3/5 tie.
-4. **A different text is not a different numbering** (the next major release's
-   table, `--next`; the shipping table records a different text as
-   incommensurable without asking more). Within one translation a book whose
+4. **A different text is not a different numbering** (since 1.2.23; until then
+   the table recorded a different text as incommensurable without asking
+   more). Within one translation a book whose
    shared verses mostly disagree is translated from a different source —
    WEBC's Esther, from the Greek — and its text cannot say where a verse
    moved. Whether its numbers line up is measured instead: a shared verse lines
@@ -251,8 +244,7 @@ and found wrong:
 
 ### 2.4 Validation performed
 
-- **[measured]** All 207 table entries (251 in the next major release's)
-  checked against the actual verse text:
+- **[measured]** All 251 table entries checked against the actual verse text:
   every *moved* pair must be textually the same passage (≥0.85 token similarity
   within an edition, ≥0.30 across editions), every *absent* verse really missing,
   every *extra* verse really present. 0 problems.

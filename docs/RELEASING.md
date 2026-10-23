@@ -552,7 +552,8 @@ other listing field to the clone. If the PUT is refused over the notes,
 disk, so the correction is sent without a commit. After the tag it stays
 uncommitted until the release is done: a commit after the tag makes `<v>`
 unbuildable, which matters while a store build of it remains (stage 5), and
-moves `main` off the tag the site is published from. Stage 11 refuses the
+moves `main` off the tree the site is published from: the tag's, with at most
+the privacy policy's date moved (stage 11). Stage 11 refuses the
 dirty tree the file leaves, so set it aside for that stage rather than let it
 ride along:
 
@@ -614,6 +615,32 @@ page's badge and the printf's line go in together or CI fails. Play went live on
 the page and the README linked it that day, and the release notes, which this
 stage did not then name, went on offering Android readers only the APK until
 the printf gained its Play line later the same day.
+
+If the words of `docs/privacy.html`, as a reader reads them, or where a link in
+it leads, have changed since the last publish, its effective date is the day of
+this publish, whatever the live copy's date, so a second change on the day the
+first went live carries that day too; a change of its markup or style alone is
+not a change of the policy. Set its date line, written
+as `Effective date: 11 October 2026` is, to that day, London time; commit that
+line alone on `main`, with the Microsoft Store's What's New set aside first
+(stage 9); and push it (permission required) before publishing. The commit
+comes after the tag and waits for this stage because the day is not known
+before it: every store build of the release is done by now (stage 5), so it
+costs none of them, and the site is published from it, the tag's tree with the
+policy's date moved. The publish holds the policy to
+this: it compares the policy it renders with the live copy, by the words a
+reader reads and where each link leads, and stops one that differs unless its
+date is the day of the run, and one that does not differ whose date has moved
+to a day that is neither the live copy's nor the day of the run (`go run
+./cmd/sitepages -check-policy-date`, `cmd/sitepages/policy_date.go`). The check runs before
+the reader is generated, so a publish it refuses spends no API.Bible quota,
+and a publish that cannot read the live copy stops there too. A dry run is
+held to it as well: it goes on to its drift report and then ends refused, so
+a dry run on an earlier day refuses a changed policy whose date is already
+set, and one with no connection to `origin` says the date was not checked.
+The Report sentence published on 21 October 2026, before
+this step, kept the date it had; 1.2.23 changes the policy (docs/ROADMAP.md,
+1.2.23, row 13), so its publish sets the date.
 
 ```
 scripts/publish-site.sh --dry-run    # drift report

@@ -320,7 +320,7 @@ func TestTheSinglePillStillDisclosesUnplacedNotes(t *testing.T) {
 			Book: "Esther", Chapter: 4, VerseLo: p[0].Verse, Text: fmt.Sprintf("placed %d", i)})
 	}
 	// A note on Mordecai's prayer, which only the Greek Esther has — the
-	// unplaced arm in both states of the next switch.
+	// unplaced arm.
 	addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "webc",
 		Book: "Esther", Chapter: 4, VerseLo: 20, Text: "greek esther"})
 	for _, n := range allNotesForBrowsing(appPrefs()) {
@@ -1114,7 +1114,7 @@ func TestTheTopPillDisclosesUnplacedNotes(t *testing.T) {
 		setNoteMinimizedByID(appPrefs(), n.ID, true)
 	}
 	// A note on Mordecai's prayer, which only the Greek Esther has — the
-	// unplaced arm in both states of the next switch.
+	// unplaced arm.
 	n, _ := addNote(appPrefs(), StoredNote{Kind: noteKindReceived, VersionID: "webc",
 		Book: "Esther", Chapter: 4, VerseLo: 20, Text: "greek esther"})
 	setNoteMinimizedByID(appPrefs(), n.ID, true)

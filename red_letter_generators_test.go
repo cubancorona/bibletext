@@ -28,19 +28,32 @@ import (
 )
 
 // redLetterGenVerse is one verse of a runtime cache file as the generators
-// read it ("Verses": book, chapter, then the verses).
+// read it ("Verses": book, chapter, then the verses), with its notes in the
+// app's own shape.
 type redLetterGenVerse struct {
-	Verse int
-	Text  string
+	Verse     int
+	Text      string
+	Footnotes []Footnote `json:"footnotes,omitempty"`
 }
 
 // writeRedLetterGenCache writes Matthew 1's verses as a runtime cache file,
 // wrapped in "data" as the NKJV generator requires and the others accept.
 func writeRedLetterGenCache(t *testing.T, path string, texts map[int]string) {
 	t.Helper()
+	writeRedLetterGenCacheWithNotes(t, path, texts, nil)
+}
+
+// writeRedLetterGenCacheWithNotes is writeRedLetterGenCache with a note
+// anchored at each rune offset that notes lists for a verse.
+func writeRedLetterGenCacheWithNotes(t *testing.T, path string, texts map[int]string, notes map[int][]int) {
+	t.Helper()
 	var verses []redLetterGenVerse
 	for v := 1; v <= len(texts); v++ {
-		verses = append(verses, redLetterGenVerse{v, texts[v]})
+		verse := redLetterGenVerse{Verse: v, Text: texts[v]}
+		for _, at := range notes[v] {
+			verse.Footnotes = append(verse.Footnotes, Footnote{Anchor: at, Text: "An invented note.", Kind: "crossref", Caller: "-"})
+		}
+		verses = append(verses, verse)
 	}
 	blob, err := json.Marshal(map[string]any{"data": map[string]any{
 		"Verses": map[string]any{"Matthew": map[string]any{"1": verses}},
@@ -105,6 +118,11 @@ func lastCopy(text, part string) string {
 	i := strings.LastIndex(text, part)
 	start := utf8.RuneCountInString(text[:i])
 	return fmt.Sprintf("{%d, %d}", start, start+utf8.RuneCountInString(part))
+}
+
+// runeAt is the rune offset in text of the first copy of part.
+func runeAt(text, part string) int {
+	return utf8.RuneCountInString(text[:strings.Index(text, part)])
 }
 
 func checkRedLetterGenSpans(t *testing.T, got map[string]string, want map[string]string) {
@@ -322,7 +340,7 @@ func TestTheRedLetterGeneratorsPlaceARunByItsOnlyCopyOnlyWhenAllowed(t *testing.
 			return runWEBGen(t, usfm, runtime, flags...)
 		}},
 		{"nkjv", "nkjvRedLetterSpans", "not their place: Matthew 1:1 run 1", func(t *testing.T, flags ...string) (string, string, error) {
-			return runNKJVGen(t, nkjv, runtime, nil, flags...)
+			return runNKJVGen(t, nkjv, runtime, nil, nil, flags...)
 		}},
 	} {
 		t.Run(g.name+", by default", func(t *testing.T) {
@@ -473,14 +491,14 @@ func nkjvGenVerse(v int, inner string) string {
 }
 
 // runNKJVGen derives the NKJV's table from an invented Matthew 1, as API.Bible
-// serves it, and the app's verses, with the chapters named in skip left out of
-// the cache.
-func runNKJVGen(t *testing.T, matthew1 string, text map[int]string, skip []string, flags ...string) (string, string, error) {
+// serves it, and the app's verses with a note anchored at each offset notes
+// lists, with the chapters named in skip left out of the cache.
+func runNKJVGen(t *testing.T, matthew1 string, text map[int]string, notes map[int][]int, skip []string, flags ...string) (string, string, error) {
 	t.Helper()
 	dir := t.TempDir()
 	writeNKJVGenCache(t, filepath.Join(dir, "html"), matthew1, skip...)
 	cache := filepath.Join(dir, "nkjv.json")
-	writeRedLetterGenCache(t, cache, text)
+	writeRedLetterGenCacheWithNotes(t, cache, text, notes)
 	return runRedLetterGen(t, filepath.Join(dir, "out.go"), append([]string{
 		filepath.Join("scripts", "gen-nkjv-redletter.py"), "--no-fetch",
 		"--html-cache", filepath.Join(dir, "html"), "--app-cache", cache,
@@ -490,7 +508,13 @@ func runNKJVGen(t *testing.T, matthew1 string, text map[int]string, skip []strin
 // The NKJV's markup is HTML, read for its text; a verse's number and a
 // heading inside it are not in the app's verse, italic supplied words and the
 // small capitals nest inside a run, and the HTML runs verses together where
-// the app's text has a space. The text here is invented.
+// the app's text has a space. At some of the NKJV's notes the publisher's
+// text has no space on either side of the note, so two words run together in
+// the markup fetched without notes and in the app's verse alike; where the
+// app's verse anchors a note, that place is the edge of a word, whether two
+// runs touch there (verse 7), a run ends there before black text (verse 8) or
+// a run begins there after black text (verse 9). Each verse is placed the same
+// with --allow-relocated, which none needs. The text here is invented.
 func TestTheNKJVRedLetterGeneratorPlacesEachRunAtItsOwnPlace(t *testing.T) {
 	matthew1 := `<p class="p">` +
 		nkjvGenVerse(1, `The Gospel he preached was this: he said, “<span class="wj">Go</span>.”`) +
@@ -500,7 +524,10 @@ func TestTheNKJVRedLetterGeneratorPlacesEachRunAtItsOwnPlace(t *testing.T) {
 		`<p class="p"><span class="verse-span" data-verse-id="MAT.1.3" data-verse-org-ids="MAT.1.3">“<span class="wj">Come and see.</span>”</span>` +
 		nkjvGenVerse(4, `He said, <span class="wj">“My yoke <span class="it">is</span> light, says the <span class="nd">Keeper</span>.”</span>`) +
 		nkjvGenVerse(5, `He said, <span class="wj">“Follow</span>`) +
-		nkjvGenVerse(6, `<span class="wj">me now.”</span> And they went.`) + `</p>`
+		nkjvGenVerse(6, `<span class="wj">me now.”</span> And they went.`) +
+		nkjvGenVerse(7, `He said, <span class="wj">“Come</span><span class="wj">home now.”</span>`) +
+		nkjvGenVerse(8, `<span class="wj">“These</span>folk <span class="wj">come near.”</span>`) +
+		nkjvGenVerse(9, `He said<span class="wj">home now.</span>`) + `</p>`
 	text := map[int]string{
 		1: "The Gospel he preached was this: he said, “Go.”",
 		2: "The steward said, I am he. Then the teacher said, I am he.",
@@ -508,19 +535,33 @@ func TestTheNKJVRedLetterGeneratorPlacesEachRunAtItsOwnPlace(t *testing.T) {
 		4: "He said, “My yoke is light, says the KEEPER.”",
 		5: "He said, “Follow",
 		6: "me now.” And they went.",
+		7: "He said, “Comehome now.”",
+		8: "“Thesefolk come near.”",
+		9: "He saidhome now.",
 	}
-	src, log, err := runNKJVGen(t, matthew1, text, nil)
-	if err != nil {
-		t.Fatalf("gen-nkjv-redletter.py: %v\n%s", err, log)
+	notes := map[int][]int{7: {runeAt(text[7], "home")}, 8: {runeAt(text[8], "folk")}, 9: {runeAt(text[9], "home")}}
+	for _, mode := range redLetterGenModes {
+		t.Run(mode.name, func(t *testing.T) {
+			src, log, err := runNKJVGen(t, matthew1, text, notes, nil, mode.flags...)
+			if err != nil {
+				t.Fatalf("gen-nkjv-redletter.py: %v\n%s", err, log)
+			}
+			checkRedLetterGenSpans(t, redLetterGenSpans(t, src, "nkjvRedLetterSpans"), map[string]string{
+				"Matthew 1:1": lastCopy(text[1], "Go"),
+				"Matthew 1:2": lastCopy(text[2], "I am he."),
+				"Matthew 1:3": lastCopy(text[3], "Come and see."),
+				"Matthew 1:4": lastCopy(text[4], "“My yoke is light, says the KEEPER.”"),
+				"Matthew 1:5": lastCopy(text[5], "“Follow"),
+				"Matthew 1:6": lastCopy(text[6], "me now.”"),
+				// The two runs touch at the note's place and make one span.
+				"Matthew 1:7": lastCopy(text[7], "“Comehome now.”"),
+				// The run ends at the note's place; the words after it are black.
+				"Matthew 1:8": lastCopy(text[8], "“These") + ", " + lastCopy(text[8], "come near.”"),
+				// The run begins at the note's place; the words before it are black.
+				"Matthew 1:9": lastCopy(text[9], "home now."),
+			})
+		})
 	}
-	checkRedLetterGenSpans(t, redLetterGenSpans(t, src, "nkjvRedLetterSpans"), map[string]string{
-		"Matthew 1:1": lastCopy(text[1], "Go"),
-		"Matthew 1:2": lastCopy(text[2], "I am he."),
-		"Matthew 1:3": lastCopy(text[3], "Come and see."),
-		"Matthew 1:4": lastCopy(text[4], "“My yoke is light, says the KEEPER.”"),
-		"Matthew 1:5": lastCopy(text[5], "“Follow"),
-		"Matthew 1:6": lastCopy(text[6], "me now.”"),
-	})
 }
 
 // Each refusal is a table the generator used to write and report as made: a
@@ -529,26 +570,50 @@ func TestTheNKJVRedLetterGeneratorPlacesEachRunAtItsOwnPlace(t *testing.T) {
 // run shipped black); a run whose verse differs before it, so that its count
 // falls on a later copy of its words; a run whose only place is the start of
 // a longer word; and a chapter missing from the cache, whose verses were left
-// out of the table, which reads as black letter.
+// out of the table, which reads as black letter. Two words run together at a
+// run's edge are one word unless the app's verse anchors a note at that very
+// place: where two runs touch there, a run ends there or a run begins there,
+// with no note, or a note elsewhere in the verse, the run is refused.
 func TestTheNKJVRedLetterGeneratorRefusesWhatItCannotPlace(t *testing.T) {
+	const (
+		joined    = "He said, “Comehome now.”"
+		ending    = "“Thesefolk come near.”"
+		beginning = "He saidhome now."
+	)
 	for _, c := range []struct {
 		name, verse, text string
 		skip              []string
+		notes             []int
 	}{
 		{"a second run found only before the first",
 			nkjvGenVerse(1, `<span class="wj">Come.</span> He went on. <span class="wj">Come.</span>`),
-			"Come. He went on. Go.", nil},
+			"Come. He went on. Go.", nil, nil},
 		{"two copies, the text before the run differs, and its count falls on the later copy",
 			nkjvGenVerse(1, `Then Jesus answered them, <span class="wj">“Come.”</span> And they, “Come.”`),
-			"He said, “Come.” And they, “Come.”", nil},
+			"He said, “Come.” And they, “Come.”", nil, nil},
 		{"an end inside a word",
-			nkjvGenVerse(1, `He said, <span class="wj">Go</span> now.`), "He said, Gospel now.", nil},
+			nkjvGenVerse(1, `He said, <span class="wj">Go</span> now.`), "He said, Gospel now.", nil, nil},
 		{"a chapter missing from the cache",
-			nkjvGenVerse(1, `He said, <span class="wj">“Go.”</span>`), "He said, “Go.”", []string{"MRK.3"}},
+			nkjvGenVerse(1, `He said, <span class="wj">“Go.”</span>`), "He said, “Go.”", []string{"MRK.3"}, nil},
+		{"two runs touching where two words run together, with no note there",
+			nkjvGenVerse(1, `He said, <span class="wj">“Come</span><span class="wj">home now.”</span>`), joined, nil, nil},
+		{"two runs touching where two words run together, with a note elsewhere in the verse",
+			nkjvGenVerse(1, `He said, <span class="wj">“Come</span><span class="wj">home now.”</span>`), joined, nil,
+			[]int{runeAt(joined, "now")}},
+		{"a run ending where two words run together, with no note there",
+			nkjvGenVerse(1, `<span class="wj">“These</span>folk <span class="wj">come near.”</span>`), ending, nil, nil},
+		{"a run ending where two words run together, with a note elsewhere in the verse",
+			nkjvGenVerse(1, `<span class="wj">“These</span>folk <span class="wj">come near.”</span>`), ending, nil,
+			[]int{runeAt(ending, "near")}},
+		{"a run beginning where two words run together, with no note there",
+			nkjvGenVerse(1, `He said<span class="wj">home now.</span>`), beginning, nil, nil},
+		{"a run beginning where two words run together, with a note elsewhere in the verse",
+			nkjvGenVerse(1, `He said<span class="wj">home now.</span>`), beginning, nil,
+			[]int{runeAt(beginning, "now")}},
 	} {
 		for _, mode := range redLetterGenModes {
 			t.Run(c.name+", "+mode.name, func(t *testing.T) {
-				src, log, err := runNKJVGen(t, `<p class="p">`+c.verse+`</p>`, map[int]string{1: c.text}, c.skip, mode.flags...)
+				src, log, err := runNKJVGen(t, `<p class="p">`+c.verse+`</p>`, map[int]string{1: c.text}, map[int][]int{1: c.notes}, c.skip, mode.flags...)
 				if err == nil {
 					t.Fatalf("the generator wrote a table:\n%s\n%s", src, log)
 				}

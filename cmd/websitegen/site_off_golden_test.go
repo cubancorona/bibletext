@@ -58,16 +58,8 @@ func goldenPathFor(next bool) string {
 
 // nextReleaseSitePages are the fixture's pages the next major release writes
 // differently from the shipping build, each for the piece behind the switch
-// that changes it (docs/NEXT.md).
-var nextReleaseSitePages = map[string]string{
-	// The Greek Esther maps verse for verse: the NKJV's notice page needs no
-	// caveat for Esther 1, and the switcher carries the verse between WEB
-	// Catholic's Esther and the WEB's and the BSB's.
-	"bsb/esther/1/index.html":  "the Greek Esther",
-	"nkjv/esther/1/index.html": "the Greek Esther",
-	"web/esther/1/index.html":  "the Greek Esther",
-	"webc/esther/1/index.html": "the Greek Esther",
-}
+// that changes it (docs/NEXT.md). No piece behind it now changes the site.
+var nextReleaseSitePages = map[string]string{}
 
 // goldenFixtureVersions is the canon the golden site is built from: the three
 // published editions over a handful of books, with the Catholic edition's

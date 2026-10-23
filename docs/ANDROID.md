@@ -277,8 +277,11 @@ the tap); an unplaced-only pill parks at the top of the text with no band.
   and painting that strip black (from Android 15 the platform forces "always"
   for apps targeting 35 or later; this app targets 36). Painting the window
   or the system bars does nothing here — a NativeActivity window's view
-  hierarchy never draws. The reporter column is centred on the window from
-  the overlay's frame, not on the cutout-inset overlay itself.
+  hierarchy never draws. While the overlay stands evenly in the window less
+  its system insets, as a phone's does, the reporter column is centred on
+  the window from the overlay's frame, not on the cutout-inset overlay
+  itself; beside a rail, or wherever the overlay is uneven, it is centred on
+  the overlay, as the iPad centres it on its pane (`BtReadingColumn.sides`).
   Before a width change the bridge captures the reading position, the verse at
   the top of the view and how far into it the top stands as a fraction of the
   verse's height, then reapplies it after the TextView has reflowed at the new

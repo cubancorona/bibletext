@@ -277,13 +277,19 @@ func openAISettings(state *AppState) {
 		})
 
 		saveOK := true
-		refreshStatus := func() {
+		var refreshStatus func()
+		statusRow := newKeyStatusRow(status, func() {
+			store.dismissKeyNotRestored(info.ID)
+			refreshStatus()
+		})
+		refreshStatus = func() {
 			savedLabel := "✓ Saved on this device."
 			if store.keyInSecureStore(info.ID) {
 				savedLabel = "✓ Saved in the " + store.secureStoreName() + "."
 			}
 			var text string
 			var col color.Color
+			notRestored := false
 			if strings.TrimSpace(entry.Text) != "" {
 				if saveOK {
 					text, col = savedLabel, pal.Accent
@@ -299,12 +305,23 @@ func openAISettings(state *AppState) {
 				clearBtn.Enable()
 			} else {
 				text, col = info.KeyHint, pal.TextMuted
+				// A key this field held that a restore did not bring back is
+				// said in the place of the hint for getting one (decision 13),
+				// until the reader dismisses it with its ✕.
+				if store.keyNotRestoredShown(info.ID) {
+					text, col = keyNotRestoredLine, pal.Text
+					notRestored = true
+				}
 				clearBtn.Disable()
 			}
 			// A status that now takes a line more or less changes the
-			// sheet's height; re-measure it, twice for the wrapping reason
-			// applyAssistant gives.
-			if status.set(text, col) && fitSheet != nil {
+			// sheet's height, and so can the ✕ coming or going; re-measure
+			// it, twice for the wrapping reason applyAssistant gives.
+			changed := status.set(text, col)
+			if statusRow.showClose(notRestored) {
+				changed = true
+			}
+			if changed && fitSheet != nil {
 				fitSheet()
 				fitSheet()
 			}
@@ -423,10 +440,28 @@ func openAISettings(state *AppState) {
 			pickerPop.Show()
 			// Size to the content but ALWAYS leave a margin, so it reads as a
 			// sheet floating over the settings — never a full-screen takeover.
-			cs := cnv.Size()
-			w := min(cs.Width-48, 420)
-			h := min(cs.Height-140, float32(len(options))*rowHeight+72)
-			pickerPop.Resize(fyne.NewSize(w, h))
+			// On a desktop window it is also kept below the header with the
+			// gap every desktop sheet keeps (headerClearance): capped by the
+			// margin alone, a list too long for the window centred to a top
+			// edge 70pt down, inside the header, at every window height. It is
+			// sized again when the window changes size, as Settings under it
+			// is (sheet_refit.go).
+			pop := pickerPop
+			fitPicker := func() {
+				cs := cnv.Size()
+				w := min(cs.Width-48, 420)
+				// The height the whole list takes, which a covering picker
+				// would ask for (coverHeaderUnlessClear). The list scrolls, so
+				// the picker clears the header on every window the app allows
+				// and never covers it (TestDesktopSheetsClearOrCoverTheHeaderOnShortWindows).
+				whole := float32(len(options))*rowHeight + 72
+				h := min(cs.Height-140, whole)
+				h = clearOfHeader(h, cs.Height, headerClearance(state))
+				pop.Resize(fyne.NewSize(w, h))
+				coverHeaderUnlessClear(state, pop, whole)
+			}
+			fitPicker()
+			registerSheetRefit(state, pop, fitPicker)
 			for i, o := range options {
 				if o == selected {
 					list.ScrollTo(widget.ListItemID(i))
@@ -528,8 +563,9 @@ func openAISettings(state *AppState) {
 				// (key_actions_row.go).
 				keyActionsRow(pasteBtn, testBtn, clearBtn),
 				// Status now has the row to itself — the link moved up to the
-				// label row, so a long hint has the full width to be read in.
-				status,
+				// label row, so a long hint has the full width to be read in —
+				// but for the ✕ of a key a restore did not bring back.
+				statusRow.row,
 				result,
 				widget.NewSeparator(),
 				settingsRow("Model", container.NewThemeOverride(modelBtn,
@@ -745,11 +781,13 @@ func openAISettings(state *AppState) {
 
 	// In-app disclosure of where AI prompts go, shown right under the key field
 	// (Guideline 5.1.2 — be transparent before user content leaves the device). It
-	// mirrors the privacy policy and links to it.
+	// mirrors the privacy policy and links to it. Body text in the text colour,
+	// not a muted caption: the question asked before each provider's first
+	// request (ai_permission.go) rests on this disclosure, so it is set to be read.
 	aiNote := widget.NewRichText(&widget.TextSegment{
 		Text: "When you use AI study, your Find search or selected passage and study action, including any question you enter, are sent directly to the provider you choose, authenticated with your key. " +
 			"The provider may associate and retain the request under your account terms.",
-		Style: widget.RichTextStyle{ColorName: colorNameMuted, SizeName: theme.SizeNameCaptionText},
+		Style: widget.RichTextStyleParagraph,
 	})
 	aiNote.Wrapping = fyne.TextWrapWord
 	aiDisclosure := container.NewVBox(aiNote)
@@ -901,6 +939,9 @@ func openAISettings(state *AppState) {
 	// squeezeWidthLayout, not the bare form: a scroll widens its content to the
 	// content's MinSize and clips the overflow sideways, with no horizontal bar to
 	// reach it. See sheet_fit.go.
+	//
+	// No rule above the hint, on any platform; the title keeps the one under
+	// it.
 	formBody := container.New(squeezeWidthLayout{}, form)
 	formScroll := container.NewVScroll(formBody)
 	inner := container.NewBorder(

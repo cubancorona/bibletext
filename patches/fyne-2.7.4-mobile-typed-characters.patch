@@ -1,0 +1,73 @@
+--- a/internal/driver/mobile/driver.go
++++ b/internal/driver/mobile/driver.go
+@@ -3,8 +3,9 @@
+ import (
+ 	"math"
+ 	"runtime"
+-	"strconv"
+ 	"time"
++	"unicode"
++	"unicode/utf8"
+ 
+ 	"fyne.io/fyne/v2"
+ 	fynecanvas "fyne.io/fyne/v2/canvas"
+@@ -596,12 +597,23 @@
+ 	return ret
+ }
+ 
++// BibleText patch: type every character but a control. A keyboard's string
++// arrives here one character at a time (app.keyboardTyped), and stock Fyne
++// kept only what strconv.IsPrint accepts. That dropped the zero-width joiner
++// and non-joiner with every other format character, every space but U+0020,
++// private-use characters and characters newer than Go's Unicode tables: a
++// joined emoji was typed as separate emoji, and Persian and Indic text lost
++// its joiners. The rule is now the desktop driver's, GLFW's _glfwInputChar:
++// C0 controls, DEL and C1 controls are dropped, and so is a value that is not
++// a character (the Android key path gives -1 for a key with none, and sets
++// the sign bit for a dead key). Everything else is typed, and what a field
++// keeps is the application's to decide, as it is on the desktop.
+ func runeToPrintable(r rune) rune {
+-	if strconv.IsPrint(r) {
+-		return r
++	if !utf8.ValidRune(r) || unicode.IsControl(r) {
++		return 0
+ 	}
+ 
+-	return 0
++	return r
+ }
+ 
+ func (d *driver) typeDownCanvas(canvas *canvas, r rune, code key.Code, mod key.Modifiers) {
+--- a/internal/driver/mobile/app/GoNativeActivity.java
++++ b/internal/driver/mobile/app/GoNativeActivity.java
+@@ -268,6 +268,20 @@
+ 		});
+     }
+ 
++    // BibleText patch: delete what the keyboard deleted, a character at a
++    // time. A keyboard edits the hidden EditText that setupEntry makes, whose
++    // text is UTF-16, and beforeTextChanged gives the length of the run an
++    // edit removes in UTF-16 units. keyboardTyped types a run one character
++    // (code point) at a time, and each keyboardDelete deletes one character
++    // from the focused field, so the deletes for a run are counted in code
++    // points. Stock Fyne sent one per unit. A character outside the Basic
++    // Multilingual Plane is two units, so a backspace after an emoji deleted
++    // the character before it as well, and one that removed a family emoji,
++    // five characters in eight units, deleted the three characters before it.
++    static int deletedCharacters(CharSequence s, int start, int count) {
++        return Character.codePointCount(s, start, start + count);
++    }
++
+     private void setupEntry() {
+         runOnUiThread(new Runnable() {
+             @Override
+@@ -302,7 +316,8 @@
+                             return;
+                         }
+                         if (count > 0) {
+-                            for (int i = 0; i < count; i++) {
++                            int characters = deletedCharacters(s, start, count);
++                            for (int i = 0; i < characters; i++) {
+                                 // send a backspace
+                                 keyboardDelete();
+                             }

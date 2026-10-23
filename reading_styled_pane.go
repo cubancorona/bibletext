@@ -228,7 +228,7 @@ func newStyledReadingPaneAt(state *AppState, verses []Verse, width float32) *sty
 	if footnotesEnabled() {
 		p.fnEntries = chapterFootnoteEntries(verses,
 			state.Bible.OrphanNotesFor(state.CurrentBook, state.CurrentChapter),
-			super.Footnotes)
+			super.Footnotes, headingsFor(state.Bible, state.CurrentBook, state.CurrentChapter))
 	}
 	p.ExtendBaseWidget(p)
 	p.relayout(width)
@@ -483,7 +483,10 @@ func (p *styledReadingPane) relayout(width float32) {
 // real states with ONE answer rather than three special cases in the layout
 // engine: a chapter-level note (VerseLo == 0), an unplaced-only chapter (no
 // verse to point at), and a renumbering that left the note's verse outside the
-// chapter on screen.
+// chapter on screen. The chrome's anchor is already the verse the page draws
+// (drawnNoteAnchor), so a note on a verse this edition omits opens its band
+// above the verse after the hole, as on every other surface, and only an
+// anchor past the chapter's last verse falls back.
 func (p *styledReadingPane) noteAnchorVerse() int {
 	if !p.note.present() || len(p.verses) == 0 {
 		return 0
@@ -772,9 +775,11 @@ func (p *styledReadingPane) highlightFirstLine() int {
 // highlighted line, or, where the mark lights none, the first line of the
 // verse the chrome says the arrival is going to (noteChrome.ArrivalVerse), as
 // the Apple panes fall back to it. A link to a verse this edition omits
-// lights nothing, and lands on the verse after the hole
-// (drawnArrivalVerse); with no fallback this pane opened such a link at the
-// top of the chapter. -1 when there is nowhere to land.
+// lights that hole's mark, and lands on its line, beside the verse after the
+// hole (gapOf, drawnArrivalVerse); with the footnotes off the page draws no
+// mark, the link lights nothing, and the fallback lands it on that verse,
+// where with none this pane opened such a link at the top of the chapter.
+// -1 when there is nowhere to land.
 func (p *styledReadingPane) arrivalLine() int {
 	if li := p.highlightFirstLine(); li >= 0 || p.lay == nil {
 		return li

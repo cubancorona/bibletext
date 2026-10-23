@@ -447,7 +447,7 @@ func TestAPaneHoldingTheOtherPaletteIsNotShown(t *testing.T) {
 		t.Fatal("control: the order check passes a show before the refusal")
 	}
 	push := funcBody(t, src, "newMacReadingHost")
-	pushSteps := []string{"lastPushedBodyFP = body", "macPanePushed, macPaneDark = true, isDark()", "C.bibleTextMacTVSetHTML(c)"}
+	pushSteps := []string{"lastPushedBodyFP = body", "macPanePushed, macPaneDark = true, isDark()", "C.bibleTextMacTVSetHTML(c, "}
 	if !inSequence(push, pushSteps...) {
 		t.Error("the macOS push must record the palette it pushes in, with the fingerprint")
 	}

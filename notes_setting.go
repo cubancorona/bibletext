@@ -294,11 +294,24 @@ func promptDeleteAllNotes(state *AppState, onDone func()) {
 	card := surface(container.NewPadded(form), pal.SurfaceAlt, pal.Border, fyne.Size{})
 	popup = widget.NewModalPopUp(card, cnv)
 	popup.Show()
-	w := float32(420)
-	if cw := cnv.Size().Width - 40; cw > 260 && w > cw {
-		w = cw
+	// Sized from its content twice: the paragraph wraps, and until a layout
+	// has run it at the card's width it measures the lines of the narrower
+	// width it was first laid out at, which made a 420pt-wide card 81pt
+	// taller than its content (showVersionLoading has the same rule).
+	// On a short desktop window a card that still cannot clear the header
+	// covers it, as tall as its content, and it is sized again when the
+	// window changes size, as the Settings sheet under it is.
+	fit := func() {
+		w := float32(420)
+		if cw := cnv.Size().Width - 40; cw > 260 && w > cw {
+			w = cw
+		}
+		popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+		popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+		coverHeaderUnlessClear(state, popup, 0)
 	}
-	popup.Resize(fyne.NewSize(w, card.MinSize().Height))
+	fit()
+	registerSheetRefit(state, popup, fit)
 }
 
 // clearLiveNote drops the note AppState is currently showing, and the highlight

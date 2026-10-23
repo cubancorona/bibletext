@@ -200,6 +200,10 @@ Also confirm from the final AAB:
 - target audience and Families eligibility are selected from the real intended
   audience, not to avoid or trigger a policy track.
 
+## Release notes — 1.2.23
+
+> More accurate selections around headings, with Scripture-only quotations for AI study. AI study asks before sending text to your chosen provider. Clearer missing-key messages and better waiting/error screens. Android keeps emoji intact and gives Translate and drag-and-drop the same text as Copy. Improved tablet layout and verse matching for Greek Esther in World English Bible (Catholic).
+
 ## Release notes — 1.2.22
 
 > Sharing, notes and AI study quote your selection more accurately, including a word that appears twice in a verse. AI answers keep your passage through Try again after narration or a link changes the chapter. Notes in a psalm or poem open above the stanza, not between its lines. Rotating, split screen, text size changes and returning to the app keep the verse at the top of the screen, also after following a link. Links to a verse your translation leaves out open at the next verse.

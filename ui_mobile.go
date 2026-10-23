@@ -25,6 +25,9 @@ func dismissKeyboard(state *AppState) {
 // chapter navigation swaps the reading pane's content in place, so the chrome
 // around it stays put.
 func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.CanvasObject {
+	// The build reads the platform's report of the window once, and decides
+	// by that one answer throughout (heldLaunchSize, launch_window.go).
+	releaseLaunchSize()
 	state.app = app
 	state.window = window
 	state.header = nil // until buildHeader makes one for this tree

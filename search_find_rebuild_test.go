@@ -56,6 +56,7 @@ func findTab(t *testing.T) (*appearanceHarness, *[]*heldFind) {
 	h := newAppearanceHarness(t, true)
 	h.state.aiKeys = newKeyStoreWith(newFakePrefs())
 	h.state.aiKeys.setAPIKey(defaultProviderID, "test-key")
+	grantAIPermission(h.state.aiKeys, defaultProviderID) // a reader who has allowed it (ai_permission.go)
 	h.state.aiSearchMode = true
 	h.state.CurrentTab = 2
 	rebuildWindow(h.state)

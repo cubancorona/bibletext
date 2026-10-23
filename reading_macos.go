@@ -33,7 +33,7 @@ package bibletext
 #import <time.h>
 
 // The note sticker, defined far below beside the rest of its machinery. Declared
-// up here because bibleTextMacApplyHTML has to install the band right after it
+// up here because btMacInstallPageLatched has to install the band right after it
 // sets the text, and bibleTextMacScrollTV has to keep the sticker in view; both
 // come first.
 static void btMacRefreshNote(void);
@@ -90,16 +90,34 @@ static NSRange btMacNoteAnchorRange(NSTextStorage *ts, NSUInteger len);
 // an AI study action; it copies every string immediately. lo/hi is the
 // selection's verse span, resolved against the verse-number runs of the text
 // storage at action time (0,0 = unresolved) — position, not text, decides which
-// verses a share or cross-reference cites. lead is the selection's place in
-// verse lo: the text from lo's number to the selection's first character, NULL
-// when there is none (docs/SELECTION_OFFSET.md).
-extern void bibleTextAIMenuTapped(char *action, char *text, int lo, int hi, char *lead);
+// verses a share or cross-reference cites. heading is 1 when the whole
+// selection lies in a publisher's heading (btMacHeadingSelectionVerse), and lo
+// and hi are then the verse below it. lead is the selection's place in verse
+// lo: the text from lo's number to the selection's first character, NULL when
+// there is none (docs/SELECTION_OFFSET.md). book and chapter are the chapter
+// the storage holds (gMacTextBook), NULL and 0 before one lands.
+extern void bibleTextAIMenuTapped(char *action, char *text, int lo, int hi, int heading, char *lead, char *book, int chapter);
 // Sibling callback for the non-AI selection-menu actions (Share verse, …).
-extern void bibleTextStudyMenuTapped(char *action, char *text, int lo, int hi, char *lead);
+extern void bibleTextStudyMenuTapped(char *action, char *text, int lo, int hi, int heading, char *lead, char *book, int chapter);
+// The chapter the text view's storage holds, as Go named it when it pushed
+// the chapter (bibleTextMacTVSetChapter): the menu's actions read it from
+// the storage with the selection's text, span and lead, and hand it to Go
+// beside them, since the reader's chapter in Go can have moved on by then.
+// Written only where the storage is replaced (bibleTextMacTVSetHTML), from
+// the chapter announced just ahead of that HTML on the main queue. Main
+// thread only.
+static NSString *gMacTextBook = nil;
+static int gMacTextChapter = 0;
+static NSString *gMacNextBook = nil;
+static int gMacNextChapter = 0;
 // Defined below with the rest of the verse-number machinery (it needs the font
 // threshold); declared here because the menu handlers above it use it.
 static void btMacVerseSpanForRange(NSTextStorage *ts, NSRange sel, int *outLo, int *outHi, NSUInteger *outLoLoc);
 static NSString *btMacSelectionLead(NSTextStorage *ts, NSRange sel, int lo, NSUInteger loLoc);
+static NSInteger btMacHeadingSelectionVerse(NSTextStorage *ts, NSRange r);
+// Whether a selection holds a character of a verse's words (defined beside
+// the heading test it reads).
+static BOOL btMacSelectionHoldsScripture(NSTextStorage *ts, NSRange r);
 // Where scripture ends and the appended translators'-footnote section starts
 // (== length when there is none); defined beside the font threshold it shares
 // its derivation with. The selection menu and its verbs clamp to it — and to
@@ -220,7 +238,14 @@ void btMacSetAskEnabled(int on) { gBTMacAskEnabled = on; }
     NSMenuItem *xref = [[NSMenuItem alloc] initWithTitle:@"Cross-references" action:@selector(hbCrossRefs:) keyEquivalent:@""];
     xref.target = self;
 
-    if (aiOn) {
+    // A selection that holds no word of Scripture, a heading's words, a
+    // verse number or a mark of a verse's words alone, cut as the verbs cut
+    // it, gets no Study with AI, and Share and Cross-references keep their
+    // places (btMacSelectionHoldsScripture).
+    NSRange scripture = [self hbScriptureSelection];
+    BOOL study = aiOn && scripture.location != NSNotFound &&
+        btMacSelectionHoldsScripture(self.textStorage, scripture);
+    if (study) {
         NSMenu *ai = [[NSMenu alloc] initWithTitle:@"Study with AI"];
         for (NSArray *pair in @[@[@"Explain", @"explain"],
                                 @[@"Analyze context", @"context"],
@@ -236,7 +261,7 @@ void btMacSetAskEnabled(int on) { gBTMacAskEnabled = on; }
         NSMenuItem *aiItem = [[NSMenuItem alloc] initWithTitle:@"Study with AI" action:nil keyEquivalent:@""];
         aiItem.submenu = ai;
         [menu addItem:aiItem];
-    } else {
+    } else if (!aiOn) {
         [menu addItem:xref];
     }
 
@@ -279,7 +304,12 @@ void btMacSetAskEnabled(int on) { gBTMacAskEnabled = on; }
 
 // hbSendAI / hbSendStudy read the selection ONCE — text, verse span and lead
 // from the same selectedRange, at action time — so the words dispatched and the
-// span and lead placing them can never come from different selections.
+// span and lead placing them can never come from different selections; and
+// the chapter the same storage holds (gMacTextBook), so Go reads them in it.
+// A selection wholly inside a publisher's heading is the verse below it, with
+// no lead: a heading's words mean the section it introduces
+// (btMacHeadingSelectionVerse), where the number before them named the verse
+// above.
 - (void)hbSendAI:(const char *)action {
     NSRange sel = [self hbScriptureSelection];
     if (sel.location == NSNotFound || sel.length == 0) return;
@@ -288,7 +318,11 @@ void btMacSetAskEnabled(int on) { gBTMacAskEnabled = on; }
     btMacVerseSpanForRange(self.textStorage, sel, &lo, &hi, &loLoc);
     NSString *text = [self.textStorage.string substringWithRange:sel];
     NSString *lead = btMacSelectionLead(self.textStorage, sel, lo, loLoc);
-    bibleTextAIMenuTapped((char *)action, (char *)text.UTF8String, lo, hi, (char *)lead.UTF8String);
+    int heading = 0;
+    NSInteger headVerse = btMacHeadingSelectionVerse(self.textStorage, sel);
+    if (headVerse > 0) { lo = hi = (int)headVerse; lead = nil; heading = 1; }
+    bibleTextAIMenuTapped((char *)action, (char *)text.UTF8String, lo, hi, heading, (char *)lead.UTF8String,
+                          (char *)gMacTextBook.UTF8String, gMacTextChapter);
 }
 - (void)hbSendStudy:(const char *)action {
     NSRange sel = [self hbScriptureSelection];
@@ -298,7 +332,11 @@ void btMacSetAskEnabled(int on) { gBTMacAskEnabled = on; }
     btMacVerseSpanForRange(self.textStorage, sel, &lo, &hi, &loLoc);
     NSString *text = [self.textStorage.string substringWithRange:sel];
     NSString *lead = btMacSelectionLead(self.textStorage, sel, lo, loLoc);
-    bibleTextStudyMenuTapped((char *)action, (char *)text.UTF8String, lo, hi, (char *)lead.UTF8String);
+    int heading = 0;
+    NSInteger headVerse = btMacHeadingSelectionVerse(self.textStorage, sel);
+    if (headVerse > 0) { lo = hi = (int)headVerse; lead = nil; heading = 1; }
+    bibleTextStudyMenuTapped((char *)action, (char *)text.UTF8String, lo, hi, heading, (char *)lead.UTF8String,
+                             (char *)gMacTextBook.UTF8String, gMacTextChapter);
 }
 // One hbAI_<action>: method per pair above: the menu builds each selector from
 // the pair's action string by name, so a pair without its method is a silent
@@ -350,6 +388,9 @@ void btMacSetAskEnabled(int on) { gBTMacAskEnabled = on; }
 // Defined in reading_fonts_apple.go. Returns the shipped reading face at a
 // run's own size and traits, with a cascade to the Hebrew face.
 extern CTFontRef btReadingFontLike(CTFontRef src);
+// Also there: the reading face at a size with the traits asked for, for the
+// page set without the importer (btMacFallbackPage).
+extern CTFontRef btReadingFontOfSize(CGFloat size, CTFontSymbolicTraits traits);
 
 static CGFloat gMacReporterIndent = 0;
 
@@ -465,7 +506,7 @@ static CGFloat btMacVerseFontThreshold(NSTextStorage *ts) {
 // nowhere else in the storage (body 1.0em, verse superscripts 0.66em) — so
 // the boundary is derived from font geometry, exactly like the verse-number
 // threshold above: the FIRST run in the [0.8, 0.95) band of the largest font.
-// Recomputed on every import (bibleTextMacApplyHTML). The last verse's
+// Recomputed on every install (btMacInstallPageLatched). The last verse's
 // read-along/highlight range ends here instead of at ts.length, and the
 // selection menu's app verbs clamp to it — the apparatus can never inherit a
 // wash or be attributed to the last verse (see the iOS twin gContentEnd, and
@@ -604,6 +645,42 @@ static void btMacVerseSpanForRange(NSTextStorage *ts, NSRange sel, int *outLo, i
 static NSString *btMacSelectionLead(NSTextStorage *ts, NSRange sel, int lo, NSUInteger loLoc) {
     if (ts == nil || lo <= 0 || loLoc == NSNotFound || loLoc > sel.location || sel.location > ts.length) return nil;
     return [ts.string substringWithRange:NSMakeRange(loLoc, sel.location - loLoc)];
+}
+
+// btMacGapMarkNumber is the omitted number a small run spells as a hole's mark,
+// "[21]" -> 21, and 0 for any other run: digits in square brackets, nothing
+// else, the shape verseGapMark writes. The iOS twin is btGapMarkNumber. A mark
+// reads as 0 to integerValue, so it never enters a verse lookup.
+static NSInteger btMacGapMarkNumber(NSString *run) {
+    NSUInteger len = run.length;
+    if (len < 3 || [run characterAtIndex:0] != '[' || [run characterAtIndex:len - 1] != ']') return 0;
+    NSInteger v = 0;
+    for (NSUInteger i = 1; i + 1 < len; i++) {
+        unichar c = [run characterAtIndex:i];
+        if (c < '0' || c > '9' || v > 100000) return 0;
+        v = v * 10 + (c - '0');
+    }
+    return v;
+}
+
+// btMacGapRange is the mark of omitted verse n ("[n]"), its own small run, or
+// NSNotFound when the page draws none: the footnotes are off, or the page is
+// the plain fallback, which draws the mark at body size. Read only where a
+// tint run names an omitted number (btMacRunSpanRange).
+static NSRange btMacGapRange(NSTextStorage *ts, NSInteger n) {
+    __block NSRange found = NSMakeRange(NSNotFound, 0);
+    CGFloat thr = btMacVerseFontThreshold(ts);
+    [ts enumerateAttribute:NSFontAttributeName
+                   inRange:NSMakeRange(0, btMacContentEnd(ts))
+                   options:0
+                usingBlock:^(id val, NSRange r, BOOL *stop) {
+        if (val == nil || r.length == 0 || ((NSFont *)val).pointSize >= thr) return;
+        if (btMacGapMarkNumber([ts.string substringWithRange:r]) == n) {
+            found = r;
+            *stop = YES;
+        }
+    }];
+    return found;
 }
 
 // btMacLocForVerse returns the character location of `verse`'s number run, or
@@ -917,6 +994,112 @@ static NSUInteger btMacHeadingBlockEndAt(NSTextStorage *ts, NSUInteger at, NSUIn
     return end;
 }
 
+// btMacHeadingSelectionVerse is the verse below the publisher's heading that
+// holds the whole of range r, or 0 when no heading does: r's characters, less
+// the white space at either end, open in a heading paragraph
+// (btMacIsHeadingParagraph) and end inside the block of headings that starts
+// there (btMacHeadingBlockEndAt), and the verse is the first whose number
+// follows the block. btMacVerseSpanForRange names the verse above for such a
+// selection, since its number is the last before it; but a word of a heading
+// means the section the heading introduces, which is cited by the verse below
+// and quotes nothing (selSpan.heading in Go). The twin of iOS's
+// btIOSHeadingSelectionVerse, which reads the heading range its verse index
+// keeps; this pane has no index, so the paragraphs are asked, once per menu
+// action. A heading above verse 1 never reaches this: it stands before
+// gMacContentStart, which hbScriptureSelection cuts the selection to.
+static NSInteger btMacHeadingSelectionVerse(NSTextStorage *ts, NSRange r) {
+    if (ts == nil || r.length == 0 || NSMaxRange(r) > ts.length) return 0;
+    NSString *s = ts.string;
+    NSCharacterSet *blank = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+    NSUInteger a = r.location, b = NSMaxRange(r);
+    while (a < b && [blank characterIsMember:[s characterAtIndex:a]]) a++;
+    while (b > a && [blank characterIsMember:[s characterAtIndex:b - 1]]) b--;
+    if (a >= b) return 0;
+    CGFloat thr = btMacVerseFontThreshold(ts);
+    NSUInteger contentEnd = btMacContentEnd(ts);
+    NSRange para = [s paragraphRangeForRange:NSMakeRange(a, 0)];
+    NSUInteger end = btMacHeadingBlockEndAt(ts, para.location, contentEnd, thr);
+    if (end == NSNotFound || b > end || end >= contentEnd) return 0;
+    __block NSInteger below = 0;
+    [ts enumerateAttribute:NSFontAttributeName inRange:NSMakeRange(end, contentEnd - end)
+                   options:0 usingBlock:^(id val, NSRange run, BOOL *stop) {
+        if (val == nil || run.length == 0 || ((NSFont *)val).pointSize >= thr) return;
+        NSInteger v = [[s substringWithRange:run] integerValue];
+        if (v > 0) { below = v; *stop = YES; }
+    }];
+    return below;
+}
+
+// btMacVerseWordsHold reports whether range r, inside one paragraph that is
+// no publisher's heading, holds a character of set in a verse's words: in a
+// run set at or above the verse-number threshold, since a verse's number and
+// an omitted verse's mark are the only runs below it
+// (btMacVerseFontThreshold).
+static BOOL btMacVerseWordsHold(NSTextStorage *ts, NSRange r, CGFloat thr, NSCharacterSet *set) {
+    NSString *s = ts.string;
+    __block BOOL found = NO;
+    [ts enumerateAttribute:NSFontAttributeName inRange:r options:0
+                usingBlock:^(id val, NSRange run, BOOL *stop) {
+        if (val != nil && ((NSFont *)val).pointSize < thr) return;
+        for (NSUInteger i = run.location; i < NSMaxRange(run); i++) {
+            if ([set characterIsMember:[s characterAtIndex:i]]) { found = YES; *stop = YES; return; }
+        }
+    }];
+    return found;
+}
+
+// btMacSelectionHoldsScripture reports whether range r holds a letter or
+// figure of a verse's words: one set at or above the verse-number threshold
+// in no publisher's heading paragraph (btMacIsHeadingParagraph,
+// btMacVerseWordsHold). A selection of verse numbers, headings, omitted
+// verses' marks and the white space and punctuation of the verses' words
+// alone holds no Scripture, and the study verbs are not offered for it: Go
+// quotes nothing for the first three and punctuation alone for the rest,
+// and studies neither (aiStudyOffered), and its dispatch drops the verbs
+// too. A selection that crosses a heading, with no letter or figure of a
+// verse's words before the first of the heading's words it holds, does not count a
+// word it ends inside, back to the space or closed-up dash before it; one
+// begun on punctuation in the verse above follows the same rule. A complete
+// word before or after the heading still offers study. The twin of iOS's
+// btIOSSelectionHoldsScripture, which reads its verse index;
+// this pane has none, so the paragraphs and runs are asked, once per menu.
+static BOOL btMacSelectionHoldsScripture(NSTextStorage *ts, NSRange r) {
+    if (ts == nil || r.length == 0 || NSMaxRange(r) > ts.length) return NO;
+    NSString *s = ts.string;
+    NSCharacterSet *blank = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+    NSCharacterSet *word = [NSCharacterSet alphanumericCharacterSet];
+    const unichar dash = 0x2014; // the em dash, set closed up between words
+    CGFloat thr = btMacVerseFontThreshold(ts);
+    NSUInteger a = r.location, b = NSMaxRange(r);
+    NSUInteger h = NSNotFound;
+    BOOL above = NO; // a letter or figure of a verse's words stands before h
+    for (NSUInteger p = a; p < b && h == NSNotFound;) {
+        NSRange para = [s paragraphRangeForRange:NSMakeRange(p, 0)];
+        NSUInteger pe = NSMaxRange(para) < b ? NSMaxRange(para) : b;
+        if (pe <= p) break;
+        if (btMacIsHeadingParagraph(ts, para, thr)) {
+            for (NSUInteger i = p; i < pe; i++) {
+                if (![blank characterIsMember:[s characterAtIndex:i]]) { h = i; break; }
+            }
+        } else if (!above) {
+            above = btMacVerseWordsHold(ts, NSMakeRange(p, pe - p), thr, word);
+        }
+        p = pe;
+    }
+    if (h != NSNotFound && !above && b < s.length && [word characterIsMember:[s characterAtIndex:b]]) {
+        while (b > h && ![blank characterIsMember:[s characterAtIndex:b - 1]] && [s characterAtIndex:b - 1] != dash) b--;
+    }
+    for (NSUInteger p = a; p < b;) {
+        NSRange para = [s paragraphRangeForRange:NSMakeRange(p, 0)];
+        NSUInteger pe = NSMaxRange(para) < b ? NSMaxRange(para) : b;
+        if (pe <= p) break;
+        if (!btMacIsHeadingParagraph(ts, para, thr) &&
+            btMacVerseWordsHold(ts, NSMakeRange(p, pe - p), thr, word)) return YES;
+        p = pe;
+    }
+    return NO;
+}
+
 // btMacReadAlongRange returns verse's number-run start through just before the next
 // verse's number run (or end of text) — i.e. the whole verse, number + words —
 // or through just before a publisher's heading standing between the two. A
@@ -936,11 +1119,16 @@ static NSRange btMacReadAlongRange(NSTextStorage *ts, NSInteger verse) {
     // footnote section must never inherit its wash (see gMacContentEnd).
     __block NSUInteger nextLoc = btMacContentEnd(ts);
     CGFloat thr = btMacVerseFontThreshold(ts);
+    // The next verse's number, or an omitted verse's mark before it ("[21]",
+    // verse_gaps.go): the mark stands for the hole and belongs to no verse, so
+    // a mark on the verse before it leaves it bare, as the markup does. The
+    // iOS twin records the same end in its verse index.
     [ts enumerateAttribute:NSFontAttributeName inRange:NSMakeRange(start, ts.length - start)
                    options:0 usingBlock:^(id val, NSRange r, BOOL *stop) {
         if (r.location <= start || val == nil || r.length == 0 ||
             ((NSFont *)val).pointSize >= thr) return;
-        if ([[ts.string substringWithRange:r] integerValue] > 0) { nextLoc = r.location; *stop = YES; }
+        NSString *run = [ts.string substringWithRange:r];
+        if ([run integerValue] > 0 || btMacGapMarkNumber(run) > 0) { nextLoc = r.location; *stop = YES; }
     }];
     // The paragraphs after the one holding this verse's number and wholly before
     // the next number: the first heading among them ends the verse.
@@ -956,12 +1144,33 @@ static NSRange btMacReadAlongRange(NSTextStorage *ts, NSInteger verse) {
     return NSMakeRange(start, nextLoc - start);
 }
 
-// btMacRunSpanRange is the whole character span of verses lo..hi, untrimmed.
+// btMacRunElementRange is what number k of a tint run covers: verse k's span,
+// or, where the page omits verse k, the mark that stands for it. A run names
+// an omitted number only where Go walked its mark (nativeTintRuns). The iOS
+// twin is btIOSRunElementRange.
+static NSRange btMacRunElementRange(NSTextStorage *ts, int k) {
+    NSRange r = btMacReadAlongRange(ts, k);
+    return r.location != NSNotFound ? r : btMacGapRange(ts, k);
+}
+
+// btMacRunSpanRange is the whole character span of verses lo..hi, untrimmed:
+// from the first of its numbers the page draws, a verse or a hole's mark, to
+// the end of the last. A run from a mark the page does not draw (the plain
+// fallback) starts at the verse after it rather than painting nothing.
 static NSRange btMacRunSpanRange(NSTextStorage *ts, int lo, int hi) {
-    NSRange a = btMacReadAlongRange(ts, lo);
+    NSRange a = NSMakeRange(NSNotFound, 0);
+    int first = lo;
+    for (; first <= hi; first++) {
+        a = btMacRunElementRange(ts, first);
+        if (a.location != NSNotFound) break;
+    }
     if (a.location == NSNotFound) return NSMakeRange(NSNotFound, 0);
-    NSRange b = (hi > lo) ? btMacReadAlongRange(ts, hi) : a;
-    NSUInteger end = (b.location == NSNotFound) ? NSMaxRange(a) : NSMaxRange(b);
+    NSRange b = a;
+    for (int k = hi; k > first; k--) {
+        NSRange r = btMacRunElementRange(ts, k);
+        if (r.location != NSNotFound) { b = r; break; }
+    }
+    NSUInteger end = NSMaxRange(b);
     if (end < NSMaxRange(a)) end = NSMaxRange(a);
     if (end > ts.length) end = ts.length;
     if (a.location >= end) return NSMakeRange(NSNotFound, 0);
@@ -1161,13 +1370,25 @@ void bibleTextMacSetTintRuns(const BTTintRun *runs, int n, int repaint) {
 // sameChapter is 1 when it re-renders the chapter already on screen and 0 when it
 // replaces it; a same-chapter push carries the live narration verse across its own
 // re-import. The iOS twin, and see gPendingReadAlongVerse there for the whole of it.
-void bibleTextMacBeginChapterPush(int sameChapter) {
+//
+// It returns the push's generation, issued here on the caller's thread, which Go
+// hands to bibleTextMacTVSetHTML with the push (see the iOS twin). Go calls this
+// from the Fyne goroutine, which on macOS is the main thread, where the block
+// below runs at once and the push's blocks run later, so a generation read on
+// the main queue would be shared by two pushes made in one turn, and a retry of
+// the first could install the older chapter over the second and confirm it.
+// The block only ever moves the generation forward, as the iOS twin's does.
+static int gBodyGenIssued = 0;
+int bibleTextMacBeginChapterPush(int sameChapter) {
+    int gen = __atomic_add_fetch(&gBodyGenIssued, 1, __ATOMIC_SEQ_CST);
     dispatch_block_t block = ^{
-        gBodyGenPending++;
+        if (gen <= gBodyGenPending) return;
+        gBodyGenPending = gen;
         gPendingReadAlongVerse = sameChapter ? gReadAlongVerse : kBTReadAlongNone;
     };
     if ([NSThread isMainThread]) block();
     else dispatch_async(dispatch_get_main_queue(), block);
+    return gen;
 }
 
 // btMacRepaintChapterWashFromModel re-asserts the whole model over a freshly
@@ -1575,21 +1796,46 @@ static void bibleTextMacEnsureTV(void) {
     else dispatch_sync(dispatch_get_main_queue(), block);
 }
 
-// bibleTextMacApplyHTML parses `data` as HTML and applies it to the text view,
-// returning YES on success (NO without touching the view on failure, so the
-// caller can retry). Main-thread only.
-static BOOL btMacApplyHTMLLatched(NSData *data);
-static BOOL bibleTextMacApplyHTML(NSData *data) {
-    // The import replaces the storage, and a shorter chapter clamps the clip
-    // view's bounds before the restore below can place it — our scroll, not
-    // the reader's.
-    gMacOwnScroll++;
-    BOOL ok = btMacApplyHTMLLatched(data);
-    gMacOwnScroll--;
-    return ok;
+// A development build's switch that makes every import fail, so the page a
+// failed import leaves (btMacFallbackPage) can be seen and driven in a
+// scratch build: BIBLETEXT_DEV_FAIL_IMPORT=1 (dev_fail_import_on.go). Nothing
+// in a release build sets it. Set on the main queue, ahead of the push it is
+// meant for.
+static int gBTMacFailImports = 0;
+void bibleTextMacFailImports(int on) {
+    dispatch_async(dispatch_get_main_queue(), ^{ gBTMacFailImports = on; });
 }
-static BOOL btMacApplyHTMLLatched(NSData *data) {
+
+static NSMutableAttributedString *btMacImportHTML(NSData *data);
+static void btMacInstallPageLatched(NSAttributedString *as);
+
+// btMacInstallPage installs a chapter's page (btMacInstallPageLatched) under
+// the own-scroll latch: the new storage replaces the old, and a shorter
+// chapter clamps the clip view's bounds before the restore can place it —
+// our scroll, not the reader's.
+static void btMacInstallPage(NSAttributedString *as) {
+    gMacOwnScroll++;
+    btMacInstallPageLatched(as);
+    gMacOwnScroll--;
+}
+
+// bibleTextMacApplyHTML parses `data` as HTML and installs it in the text
+// view, returning YES on success (NO without touching the view on failure,
+// so the caller can retry). Main-thread only.
+static BOOL bibleTextMacApplyHTML(NSData *data) {
     if (gTextView == nil || data == nil) return NO;
+    NSMutableAttributedString *as = btMacImportHTML(data);
+    if (as == nil) return NO;
+    btMacInstallPage(as);
+    return YES;
+}
+
+// btMacImportHTML parses `data` as HTML into the page this pane shows: the
+// importer's string with the first paragraph's phantom spacing zeroed, the
+// leading and the reporter indent set and the reading face swapped in. nil
+// when the import fails, having touched nothing.
+static NSMutableAttributedString *btMacImportHTML(NSData *data) {
+    if (gBTMacFailImports) return nil;
     NSDictionary *opts = @{
         NSDocumentTypeDocumentAttribute: NSHTMLTextDocumentType,
         NSCharacterEncodingDocumentAttribute: @(NSUTF8StringEncoding),
@@ -1599,7 +1845,7 @@ static BOOL btMacApplyHTMLLatched(NSData *data) {
     NSMutableAttributedString *as =
         [[NSMutableAttributedString alloc] initWithData:data options:opts
                                      documentAttributes:nil error:&err];
-    if (as == nil) return NO;
+    if (as == nil) return nil;
     btMacPerfLog("html-import", t0);
     // The HTML importer injects a phantom paragraphSpacingBefore on the first
     // paragraph; zero it so the chapter starts flush at the top.
@@ -1661,6 +1907,21 @@ static BOOL btMacApplyHTMLLatched(NSData *data) {
         [as addAttribute:NSFontAttributeName value:(__bridge NSFont *)sub range:r];
         CFRelease(sub);
     }];
+    return as;
+}
+
+// btMacInstallPageLatched puts a chapter's page into the text view and
+// derives every cached range from it, each after the one it depends on. It is
+// the one path for both pages a push can leave: the imported one
+// (bibleTextMacApplyHTML) and the one set from Go's fallback page when every
+// import fails (btMacFallbackPage, bibleTextMacTVSetHTML). The fallback used
+// to set its text and re-derive the ranges in a list of its own, which had to
+// be kept in this order by hand and could only clear what plain text could
+// not answer; through here the fallback page has the content start, the
+// title, the highlight, the note and the placement an imported page has.
+// Called under the own-scroll latch (btMacInstallPage).
+static void btMacInstallPageLatched(NSAttributedString *as) {
+    if (gTextView == nil || as == nil) return;
     // New chapter text: a narration wash from the previous chapter must not be
     // "restored" against the new storage (audio already stopped via stopAudioForNav).
     // ALL THREE, like the iOS twin: gReadAlongActive left YES with nothing painted
@@ -1702,8 +1963,9 @@ static BOOL btMacApplyHTMLLatched(NSData *data) {
             gReadAlongActive = YES;
         }
     }
-    // AFTER the text and after the paragraphSpacingBefore-zeroing pass above —
-    // the note's band is a spacing-before on the anchor paragraph, so installing
+    // AFTER the text and after the import's paragraphSpacingBefore-zeroing
+    // pass (btMacImportHTML; the fallback page sets no spacing before) — the
+    // note's band is a spacing-before on the anchor paragraph, so installing
     // it any earlier would be wiped by that pass, and the anchor is a VERSE,
     // which needs the text present to resolve to a character location.
     btMacRefreshNote();
@@ -1715,106 +1977,138 @@ static BOOL btMacApplyHTMLLatched(NSData *data) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{ btMacPresentWordsShare(token); });
     }
-    return YES;
 }
 
-static NSString *bibleTextMacPlainFromHTML(NSString *html) {
-    // Poem-line <br> must become a real newline BEFORE the tag strip, or
-    // poetry lines jam together and selections there can no longer locate.
-    // So must the end of every paragraph: the title, a heading and each
-    // paragraph of verses are a <p> apiece, and stripped bare they ran
-    // together ("his son.1 LORD"), so verse 1's number was glued to the
-    // title, a share could not confirm the title by it, and a drag from the
-    // title into the psalm shared the title's words as Scripture.
-    html = [html stringByReplacingOccurrencesOfString:@"<br>" withString:@"\n" options:NSLiteralSearch range:NSMakeRange(0, html.length)];
-    html = [html stringByReplacingOccurrencesOfString:@"</p>" withString:@"</p>\n" options:NSLiteralSearch range:NSMakeRange(0, html.length)];
-    // The stylesheet is text inside <head>, not a tag, and the strip left it
-    // standing at the top of the page.
-    NSRegularExpression *head = [NSRegularExpression regularExpressionWithPattern:@"<head>[\\s\\S]*?</head>" options:0 error:nil];
-    html = [head stringByReplacingMatchesInString:html options:0
-                                            range:NSMakeRange(0, html.length) withTemplate:@""];
-    NSRegularExpression *re = [NSRegularExpression regularExpressionWithPattern:@"<[^>]+>" options:0 error:nil];
-    NSString *t = [re stringByReplacingMatchesInString:html options:0
-                                                 range:NSMakeRange(0, html.length) withTemplate:@""];
-    // &amp; is read last, so an entity the text itself spells out
-    // ("&amp;lt;" for a verse's "&lt;") is read once, as the importer reads
-    // it, and not twice. Every replacement is literal: the default compare
-    // matches only whole composed characters, so an entity followed by a
-    // combining mark was left standing.
-    t = [t stringByReplacingOccurrencesOfString:@"&nbsp;" withString:@" " options:NSLiteralSearch range:NSMakeRange(0, t.length)];
-    t = [t stringByReplacingOccurrencesOfString:@"&quot;" withString:@"\"" options:NSLiteralSearch range:NSMakeRange(0, t.length)];
-    t = [t stringByReplacingOccurrencesOfString:@"&lt;" withString:@"<" options:NSLiteralSearch range:NSMakeRange(0, t.length)];
-    t = [t stringByReplacingOccurrencesOfString:@"&gt;" withString:@">" options:NSLiteralSearch range:NSMakeRange(0, t.length)];
-    t = [t stringByReplacingOccurrencesOfString:@"&amp;" withString:@"&" options:NSLiteralSearch range:NSMakeRange(0, t.length)];
-    return t;
+// ---- The page shown when every import of a chapter fails --------------------
+//
+// The iOS twin's: Go builds it with every push, from the HTML it pushes
+// (reading_apple_fallback.go), with runs that say where each verse number,
+// the psalm's title and each heading stand, in UTF-16 units. The run kinds
+// are Go's appleFallbackRunKind; a host test holds the two lists equal.
+enum { kBTFallbackNumeral = 1, kBTFallbackTitle = 2, kBTFallbackHeading = 3 };
+typedef struct { double bodyPt, numeralPt, inkR, inkG, inkB, numR, numG, numB; } BTFallbackStyle;
+
+// btMacFallbackFont is the reading face at a size with the traits asked for
+// (Georgia with them when the reading faces are not registered), or the
+// system font when no font can be made.
+static NSFont *btMacFallbackFont(CGFloat size, CTFontSymbolicTraits traits) {
+    CTFontRef f = btReadingFontOfSize(size, traits);
+    if (f == NULL) return [NSFont systemFontOfSize:size];
+    return (__bridge_transfer NSFont *)f;
 }
 
-void bibleTextMacTVSetHTML(const char *html) {
+// btMacFallbackPage sets Go's fallback page in the faces the importer gives
+// the same markup: the body face and the text's colour throughout, each verse
+// number at the numeral's size, bold, in the numbers' colour, the title
+// italic and each heading bold, all at the import's leading. The faces are
+// what this pane's walks read: a number is a run below 0.8 of the largest size
+// (btMacVerseFontThreshold, read by btMacFindContentStart,
+// btMacVerseSpanForRange and btMacLocForVerse), the title the italic
+// paragraph above verse 1 (btMacFindTitleRange). Installed through
+// btMacInstallPage, the page then has every range an imported page has, and a
+// selection on it sends its span and lead. The colours are sRGB, as the
+// importer reads the stylesheet's (see btMacTintColor). A run that does not
+// fit the text is skipped.
+static NSAttributedString *btMacFallbackPage(NSString *text, NSData *runs, BTFallbackStyle st) {
+    NSMutableParagraphStyle *ps = [[NSMutableParagraphStyle alloc] init];
+    if (gReadingLinePitchEm > 0) {
+        ps.minimumLineHeight = st.bodyPt * gReadingLinePitchEm;
+        ps.maximumLineHeight = st.bodyPt * gReadingLinePitchEm;
+    }
+    NSMutableAttributedString *as = [[NSMutableAttributedString alloc] initWithString:text attributes:@{
+        NSFontAttributeName: btMacFallbackFont(st.bodyPt, 0),
+        NSForegroundColorAttributeName: [NSColor colorWithSRGBRed:st.inkR green:st.inkG blue:st.inkB alpha:1.0],
+        NSParagraphStyleAttributeName: ps,
+    }];
+    NSFont *numeral = btMacFallbackFont(st.numeralPt, kCTFontTraitBold);
+    NSColor *numeralColor = [NSColor colorWithSRGBRed:st.numR green:st.numG blue:st.numB alpha:1.0];
+    NSFont *italic = btMacFallbackFont(st.bodyPt, kCTFontTraitItalic);
+    NSFont *bold = btMacFallbackFont(st.bodyPt, kCTFontTraitBold);
+    const int *r = (const int *)runs.bytes;
+    NSUInteger n = runs.length / (3 * sizeof(int));
+    for (NSUInteger i = 0; i < n; i++) {
+        int kind = r[3 * i], loc = r[3 * i + 1], len = r[3 * i + 2];
+        if (loc < 0 || len <= 0 || (NSUInteger)loc + (NSUInteger)len > as.length) continue;
+        NSRange rr = NSMakeRange((NSUInteger)loc, (NSUInteger)len);
+        switch (kind) {
+        case kBTFallbackNumeral:
+            [as addAttribute:NSFontAttributeName value:numeral range:rr];
+            [as addAttribute:NSForegroundColorAttributeName value:numeralColor range:rr];
+            break;
+        case kBTFallbackTitle:
+            [as addAttribute:NSFontAttributeName value:italic range:rr];
+            break;
+        case kBTFallbackHeading:
+            [as addAttribute:NSFontAttributeName value:bold range:rr];
+            break;
+        }
+    }
+    return as;
+}
+
+// bibleTextMacTVSetChapter names the chapter of the HTML that follows it. Go
+// calls it straight before bibleTextMacTVSetHTML, so the two blocks reach
+// the main queue in that order and the HTML's block takes this chapter with
+// it (the iOS twin, bibleTextTVSetChapter).
+void bibleTextMacTVSetChapter(const char *book, int chapter) {
+    NSString *b = book != NULL ? [NSString stringWithUTF8String:book] : nil;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        gMacNextBook = b;
+        gMacNextChapter = chapter;
+    });
+}
+
+// bibleTextMacTVSetHTML shows a chapter: html is buildChapterHTML's page, and
+// the fallback arguments are the page Go built from it for the case where it
+// will not import (reading_apple_fallback.go). Every argument is copied
+// before this returns, since Go frees them then. The chapter is the one
+// bibleTextMacTVSetChapter announced just ahead of it, and the page
+// installed, imported or the fallback, is keyed with it (gMacTextBook). gen
+// is the generation bibleTextMacBeginChapterPush issued for this push.
+void bibleTextMacTVSetHTML(const char *html, const char *fallbackText, const int *fallbackRuns,
+                           int fallbackRunCount, BTFallbackStyle fallbackStyle, int gen) {
     if (html == NULL) return;
     NSString *s = [NSString stringWithUTF8String:html];
     NSData *data = [s dataUsingEncoding:NSUTF8StringEncoding];
+    NSString *fbText = fallbackText != NULL ? [NSString stringWithUTF8String:fallbackText] : nil;
+    NSData *fbRuns = (fallbackRuns != NULL && fallbackRunCount > 0)
+        ? [NSData dataWithBytes:fallbackRuns length:(NSUInteger)fallbackRunCount * 3 * sizeof(int)]
+        : [NSData data];
     dispatch_async(dispatch_get_main_queue(), ^{
+        // Each step, the first import included, runs only while this push is
+        // still the latest (see the iOS twin): a push made since owns the view.
+        if (gen != gBodyGenPending) return;
+        // This HTML's chapter, taken now: a retry below runs after the next
+        // chapter's announcement may have landed.
+        NSString *book = gMacNextBook;
+        int chapter = gMacNextChapter;
         bibleTextMacEnsureTV();
         if (gTextView == nil) return;
-        if (bibleTextMacApplyHTML(data)) return;
-        // Never drop raw markup into the view; retry, then fall back to plain text.
+        // Each path that replaces the storage keys it with the chapter.
+        if (bibleTextMacApplyHTML(data)) { gMacTextBook = book; gMacTextChapter = chapter; return; }
+        // Never drop raw markup into the view; retry, then show the fallback
+        // page.
         dispatch_async(dispatch_get_main_queue(), ^{
-            if (bibleTextMacApplyHTML(data)) return;
+            if (gen != gBodyGenPending) return;
+            if (bibleTextMacApplyHTML(data)) { gMacTextBook = book; gMacTextChapter = chapter; return; }
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)),
                            dispatch_get_main_queue(), ^{
-                if (bibleTextMacApplyHTML(data)) return;
+                if (gen != gBodyGenPending) return;
+                if (bibleTextMacApplyHTML(data)) { gMacTextBook = book; gMacTextChapter = chapter; return; }
                 NSLog(@"bibletext(mac): HTML import failed after retries; showing plain text");
-                if (gTextView != nil) {
-                    // Cut the translators'-footnote section before stripping
-                    // tags: the font-geometry boundary cannot exist in untyped
-                    // text, so the section must never enter the fallback
-                    // string at all (see the iOS twin for the failure this
-                    // prevents).
-                    NSString *plainSrc = s;
-                    NSRange fnsep = [plainSrc rangeOfString:@"<p class=\"fnsep\">"];
-                    if (fnsep.location != NSNotFound) plainSrc = [plainSrc substringToIndex:fnsep.location];
-                    [gTextView setString:bibleTextMacPlainFromHTML(plainSrc)];
-                    gMacContentEnd = gTextView.textStorage.length; // apparatus stripped above — all scripture
-                    gMacContentStart = 0; // plain text: no font geometry to find the title by
-                    // And no title range either. The finder runs only from the
-                    // latched import, which returns before touching any
-                    // geometry global when the import fails, so the previous
-                    // chapter's range would survive here — and btMacTitleRange
-                    // clamps on length alone, which a fallback string long
-                    // enough to hold the old range passes, so verse 0 would
-                    // paint (and follow-scroll to) whatever text now sits
-                    // under the old range. The iOS twin clears its title
-                    // range on this same path. (No verse table to drop beside
-                    // it: btMacLocForVerse walks the runs live.)
-                    btMacFindTitleRange(nil);
-                    // The two derivations the latched import makes AFTER those,
-                    // made here too, in its order, from the same model. The
-                    // highlight union is written only by the import and by the
-                    // wash mutation, and bibleTextMacSetTintRuns defers the
-                    // mutation while the generations disagree — which they do
-                    // from here until the next successful import — so the
-                    // previous chapter's union would otherwise survive under
-                    // the plain text, where a window resize (btMacApplyFrame)
-                    // or a reposition (bibleTextMacScrollToHighlight) scrolls
-                    // to it and the note card anchors on it, both clamped on
-                    // length alone. Against a uniform-font string every verse
-                    // resolves to NSNotFound (btMacLocForVerse skips runs at
-                    // the threshold), so the union is nothing — derived, not
-                    // assigned, so the model stays the range's only writer and
-                    // the highlight is real again the day the fallback gains
-                    // geometry.
-                    btMacRefreshHighlightRange(gTextView.textStorage);
-                    // And the note, whose band list still holds the previous
-                    // storage's paragraph ranges: the layout this setString:
-                    // provoked places the pills from them (HBLayoutWatcher,
-                    // btMacPlaceNoteAfterLayout, clamped on length alone)
-                    // unless the refresh runs first. On plain text the verse
-                    // anchors resolve to nothing, so the sticker takes the
-                    // chapter top and every pill whose verse the string cannot
-                    // place hides; a chapter-top pill keeps its inset tenancy,
-                    // which needs no verse. The note still shows, in the only
-                    // place this string can put it.
-                    btMacRefreshNote();
+                // Installed as an imported page is (btMacInstallPage), and
+                // keyed with its chapter as an imported page is. The
+                // translators' notes are not on it: Go cut them off, since
+                // their size, which ends Scripture on an imported page, is not
+                // set here. Nor is the chapter's wash, which the importer
+                // paints from the stylesheet's classes: marked unpainted, the
+                // install paints it from the model, as after a mutation it
+                // refused (iOS draws the wash from the model on every page).
+                if (gTextView != nil && fbText != nil) {
+                    gTintUnpainted = YES;
+                    btMacInstallPage(btMacFallbackPage(fbText, fbRuns, fallbackStyle));
+                    gMacTextBook = book;
+                    gMacTextChapter = chapter;
                 }
             });
         });
@@ -2221,7 +2515,7 @@ static void btMacApplyNoteInset(void) {
 // Reserve the band in the text. Runs AFTER the text is in the view, because the
 // anchor is a VERSE and the verse index is what turns that into a character
 // location — and after the pass that zeroes paragraphSpacingBefore across the
-// string (bibleTextMacApplyHTML), or the reservation would be wiped on every
+// string (btMacImportHTML), or the reservation would be wiped on every
 // render.
 // gMacNoteReservedPara: the paragraph currently carrying the band, or
 // NSNotFound — the iOS twin's gNoteReservedPara, for the same reason: the
@@ -3030,9 +3324,9 @@ static void btMacRefreshNote(void) {
 // — the iOS twin's compare, mirrored — so a presentation flip (suppression,
 // minimize, a count moving) repaints the sticker alone while an unchanged
 // push costs nothing. Colours alone never change without a body change (the
-// theme variant is folded there), so they do not join the compare; the apply
-// path's own btMacRefreshNote (bibleTextMacApplyHTML) restyles after every
-// import exactly as before.
+// theme variant is folded there), so they do not join the compare; the
+// install's own btMacRefreshNote (btMacInstallPageLatched) restyles after
+// every install exactly as before.
 // The band-spec push — the iOS twin (bibleTextSetNoteBands) with Mac names.
 typedef struct { int key; int verse; const char *label; } BTMacNoteBandSpecC;
 
@@ -3596,10 +3890,17 @@ func nativeShareText(s string) {
 	C.bibleTextShareText(c)
 }
 
+// A card gone from the temp folder between the preview drawing it and the
+// tap is not handed to the picker, which was given its address as a file
+// that is not there; the reader is told, as on iOS and Android
+// (shareCardGone).
 // Each platform's share mechanism is recorded in docs/PLATFORM_MATRIX.md, Sharing.
 func nativeShareImage(path string) {
 	if devMimicTarget() != "" {
 		fallbackShareImage(path)
+		return
+	}
+	if shareCardGone(path) {
 		return
 	}
 	c := C.CString(path)
@@ -3763,11 +4064,33 @@ func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 		// The model FIRST and unpainted: the HTML below carries this very wash.
 		setNativeTint(state, verses)
 		// Announce the push: the same-chapter answer above, plus the generation
-		// that tells a landed chapter from a failed import (gBodyGenPending).
-		C.bibleTextMacBeginChapterPush(sameChapter)
+		// that tells a landed chapter from a failed import (gBodyGenPending),
+		// returned for the push to carry.
+		gen := C.bibleTextMacBeginChapterPush(sameChapter)
 		html := buildChapterHTML(state, verses)
 		c := C.CString(html)
-		C.bibleTextMacTVSetHTML(c)
+		// The page shown if this HTML will not import, built from the same
+		// HTML (reading_apple_fallback.go). The pane copies the text and the
+		// runs before the call returns; the runs are Go memory that holds no
+		// pointer.
+		fb := appleFallbackPageOf(html)
+		fbText := C.CString(fb.text)
+		runs := fb.flatRuns()
+		var fbRuns *C.int
+		if len(runs) > 0 {
+			fbRuns = (*C.int)(unsafe.Pointer(&runs[0]))
+		}
+		if devFailImportsRequested() {
+			C.bibleTextMacFailImports(1)
+		}
+		// The chapter first: the pane keys the page it installs with it, the
+		// imported one or the fallback, and the selection menu hands it back
+		// with every selection (selSpan.book).
+		cb := C.CString(state.CurrentBook)
+		C.bibleTextMacTVSetChapter(cb, C.int(state.CurrentChapter))
+		C.free(unsafe.Pointer(cb))
+		C.bibleTextMacTVSetHTML(c, fbText, fbRuns, C.int(len(fb.runs)), cFallbackStyle(appleFallbackStyleFor(state)), gen)
+		C.free(unsafe.Pointer(fbText))
 		C.free(unsafe.Pointer(c))
 	} else {
 		if tintFP != lastPushedTintFP {
@@ -3907,8 +4230,10 @@ func pushNoteToPane(state *AppState) {
 	// The note's OWN verse, not the highlight's — minimizing clears the
 	// highlight, and a sticker without an anchor parks at the top of the
 	// chapter (an unplaced-only chapter pushes verse 0 on purpose: the top is
-	// the only honest place for notes with no verses here).
-	C.bibleTextMacSetNote(cText, cWho, min, nx, macOwnFlag(state), C.int(state.NoteVerseLo),
+	// the only honest place for notes with no verses here). As the page draws
+	// it (c.Anchor, drawnNoteAnchor): a verse this edition omits hangs the
+	// card above the verse after the hole.
+	C.bibleTextMacSetNote(cText, cWho, min, nx, macOwnFlag(state), C.int(c.Anchor),
 		bgR, bgG, bgB, fgR, fgG, fgB, muR, muG, muB, acR, acG, acB, boR, boG, boB,
 		macTailFlag, macVerbSet, macCounts, macArrival, macArrivalVerse)
 }
@@ -4081,4 +4406,19 @@ func setMacFrameFromObject(h *macReadingHost) {
 		C.double(pos.X), C.double(pos.Y),
 		C.double(sz.Width), C.double(sz.Height),
 	)
+}
+
+// cFallbackStyle is the fallback page's style as the pane reads it, the
+// colours as 0..1 components.
+func cFallbackStyle(s appleFallbackStyle) C.BTFallbackStyle {
+	return C.BTFallbackStyle{
+		bodyPt:    C.double(s.bodyPt),
+		numeralPt: C.double(s.numeralPt),
+		inkR:      C.double(float64(s.ink.R) / 255),
+		inkG:      C.double(float64(s.ink.G) / 255),
+		inkB:      C.double(float64(s.ink.B) / 255),
+		numR:      C.double(float64(s.numeral.R) / 255),
+		numG:      C.double(float64(s.numeral.G) / 255),
+		numB:      C.double(float64(s.numeral.B) / 255),
+	}
 }

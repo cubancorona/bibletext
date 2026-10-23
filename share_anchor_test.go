@@ -217,8 +217,13 @@ func TestTheApplePanesPresentTheCardShareAtItsAnchor(t *testing.T) {
 // text, the verse the selection begins in, the lead's length in UTF-16 units
 // and the selection's, which the panes find again in the re-imported text.
 // A send with no note puts no card on the page and keeps the selection's
-// anchor, and so does a selection that came with no lead. Mutation: the
-// composer shares bare — no anchor, the arrow back in the card.
+// anchor, and so does a selection that came with no lead. A selection the
+// pane found inside a heading has no lead and no words in the verse it is
+// cited by; it is anchored to that verse's number, which the panes find
+// again as they find words: kept at the selection, the iPad's sheet hung
+// from the top of the reading view once the page had moved to the note's
+// card and the heading was scrolled away. Mutation: the composer shares
+// bare — no anchor, the arrow back in the card.
 func TestShareWithNoteIsAnchoredToTheSelectedWords(t *testing.T) {
 	for _, c := range []struct {
 		name, note string
@@ -228,6 +233,8 @@ func TestShareWithNoteIsAnchoredToTheSelectedWords(t *testing.T) {
 		{"a note, with the lead", "fixture anchor note", selSpanWithLead(1, 1, "1 The Lord is my shepherd; "), shareAnchor{verse: 1, wordsAt: 27, wordsLen: 14}},
 		{"no note", "", selSpanWithLead(1, 1, "1 The Lord is my shepherd; "), shareAnchor{}},
 		{"a note, no lead", "fixture anchor note", selSpanFromNative(1, 1), shareAnchor{}},
+		{"a note, a heading's word", "fixture anchor note", paneSelSpan(3, 3, "", false, "Psalms", 23).inHeading(true), shareAnchor{verse: 3}},
+		{"no note, a heading's word", "", paneSelSpan(3, 3, "", false, "Psalms", 23).inHeading(true), shareAnchor{}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			st := sentNoteState()
@@ -253,6 +260,65 @@ func TestShareWithNoteIsAnchoredToTheSelectedWords(t *testing.T) {
 			}
 			if _, ok := shareAnchorNow(); ok {
 				t.Error("an anchor was left behind")
+			}
+		})
+	}
+}
+
+// Share with note is anchored to the words only on the passage they were
+// selected on. The anchor names a verse number and a place after it, and the
+// Mac and iPad panes find them in the text they hold when the sheet is
+// presented. Once the reader has left the passage, that text is another
+// chapter's: narration turned the chapter under an open menu, or a link moved
+// the reader while the composer was open, and the sheet pointed at the same
+// verse number in the chapter now on screen, after waiting a second for a
+// re-import that never comes, since the note is shown only on its own passage
+// (showSentNote). Off the passage the share is handed over with no anchor, as
+// a share with no note is, and the panes present it at the selection.
+// Mutation: the composer anchors every send with a note to the words.
+func TestShareWithNoteIsAnchoredToTheWordsOnlyOnTheirPassage(t *testing.T) {
+	const lead = "1 The Lord is my shepherd; "
+	words := shareAnchor{verse: 1, wordsAt: 27, wordsLen: 14}
+	for _, c := range []struct {
+		name string
+		// turned moves the reader before the composer opens, as narration
+		// turns the chapter under an open menu; moved, after it has opened,
+		// as a link does.
+		turned, moved bool
+		want          shareAnchor
+	}{
+		{"on the passage", false, false, words},
+		{"after narration turned the chapter", true, false, shareAnchor{}},
+		{"after a link moved the reader", false, true, shareAnchor{}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			st := sentNoteState()
+			win := noteSheetWindow(t, st, false, 900, 760)
+			holdNoteSheetTimers(t)
+			setNotesEnabled(true)
+			shares := catchAnchoredShares(t)
+			span := paneSelSpan(1, 1, lead, true, "Psalms", 23)
+			if c.turned && (!advanceToNextChapter(st) || st.CurrentChapter != 24) {
+				t.Fatal("control: narration must have turned the reader to Psalm 24")
+			}
+			promptShareNote(st, "I shall not \U0001F600", span)
+			p := topPopup(t, win)
+			field := composerField(p)
+			if field == nil {
+				t.Fatalf("control: the composer has no field; texts %v", sheetTexts(p))
+			}
+			if c.moved && (!moveChapter(st, 1) || st.CurrentChapter != 24) {
+				t.Fatal("control: the link must have moved the reader to Psalm 24")
+			}
+			field.SetText("fixture anchor note")
+			test.Tap(findTreeButton(p.Content, "Share"))
+			if len(*shares) != 1 {
+				t.Fatalf("%d shares were handed over, want 1", len(*shares))
+			}
+			s := (*shares)[0]
+			if s.at != c.want || s.ok != (c.want.verse > 0) {
+				t.Errorf("the reader on %s %d; the share was handed over with %+v (ok %v), want %+v",
+					st.CurrentBook, st.CurrentChapter, s.at, s.ok, c.want)
 			}
 		})
 	}

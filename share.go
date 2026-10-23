@@ -151,7 +151,8 @@ func shareVerseLink(state *AppState, text string, span selSpan) {
 	_, cite, _, _ := prepareShareQuote(state, text, span)
 	version := state.currentVersion()
 	lo, hi := linkVersesForSelection(state, text, span)
-	url := ShareLinkURL(version.ID, state.CurrentBook, state.CurrentChapter, lo, hi)
+	book, chapter := selectionChapter(state, span)
+	url := ShareLinkURL(version.ID, book, chapter, lo, hi)
 	if url == "" {
 		shareVerse(state, text, false, span) // no link possible — share the words instead
 		return
@@ -168,9 +169,10 @@ func shareVerseLink(state *AppState, text string, span selSpan) {
 // keeps the message coherent when normalize declines a selection the span still
 // resolves (a single partial word): the citation beside the URL names the
 // verse, so a chapter-level link under it read as a broken fragment. Both zero
-// = an honest chapter link, exactly as before.
+// = an honest chapter link, exactly as before. The verses are the
+// selection's chapter's (selectionChapter).
 func linkVersesForSelection(state *AppState, text string, span selSpan) (lo, hi int) {
-	book, chapter := readerChapter(state)
+	book, chapter := selectionChapter(state, span)
 	return linkVersesForSelectionIn(state, book, chapter, text, span)
 }
 
@@ -194,16 +196,18 @@ func linkVersesForSelectionIn(state *AppState, book string, chapter int, text st
 // rendered image. The translation is spelled OUT in the parenthetical, not given as
 // an initialism — the Bluebook always names the version in full (e.g. "(King
 // James)"), so we use "(World English Bible)" / "(Berean Standard Bible)".
+// Both read the selection in the chapter it was made in (selectionChapter).
 func shareVerse(state *AppState, text string, asImage bool, span selSpan) {
 	version := state.currentVersion().Name
+	book, chapter := selectionChapter(state, span)
 	if asImage {
-		quote, cite := shareQuoteIn(state, state.CurrentBook, state.CurrentChapter, text, span)
+		quote, cite := shareQuoteIn(state, book, chapter, text, span)
 		// Don't share blind: show the rendered card for review (with Regenerate)
 		// and only hand it to the OS share sheet once the reader taps Share.
 		showShareImagePreview(state, quote, cite, version)
 		return
 	}
-	shareVerseTextIn(state, state.CurrentBook, state.CurrentChapter, version, text, span)
+	shareVerseTextIn(state, book, chapter, version, text, span)
 }
 
 // shareVerseTextIn is the text share of a selection read against book/chapter
@@ -251,7 +255,17 @@ type shareAnchor struct {
 // wordsAnchor is the anchor of a selection's own words, for a share whose
 // sheet waits for the page to change under it, or no anchor when the span
 // does not say where in its first verse the selection begins.
+//
+// A selection inside a publisher's heading (selSpan.heading) has no lead,
+// and no words in the verse below that it is cited by; its anchor is that
+// verse's number, found again as words are. Without one the panes presented
+// at the selection as it stood, and once the page had moved to the note's
+// card the iPad's popover hung from the top of the reading view, the heading
+// scrolled out of sight.
 func wordsAnchor(text string, span selSpan) shareAnchor {
+	if span.heading && span.valid() {
+		return shareAnchor{verse: span.lo}
+	}
 	if !span.valid() || !span.hasLead {
 		return shareAnchor{}
 	}
@@ -307,10 +321,23 @@ func anchorOf(o fyne.CanvasObject) shareAnchor {
 // knows how (poemSegments) — a card is the one surface where a flattened
 // psalm is most conspicuous.
 func shareQuoteIn(state *AppState, book string, chapter int, raw string, span selSpan) (quote, cite string) {
+	text, terminal, cite := selectionQuotationIn(state, book, chapter, raw, span)
+	return formatBibleQuote(text, terminal), cite
+}
+
+// selectionQuotationIn is the quotation a selection makes, read against
+// book/chapter, before any framing: the located and normalized words
+// (prepareShareQuoteIn), with a publisher's heading, a psalm's title and the
+// verse numbers taken out and a word cut short trimmed back, and the
+// authored line breaks put back; with the punctuation that ends the sentence
+// it was cut from, and its citation. The share frames it (shareQuoteIn), and
+// the study prompt quotes it as its passage (aiPassageFor), so the two quote
+// the same words for one selection: only Scripture, and none of the
+// headings' words a drag across one carries.
+func selectionQuotationIn(state *AppState, book string, chapter int, raw string, span selSpan) (text string, terminal rune, cite string) {
 	cleaned, cite, at, baseLen := prepareShareQuoteIn(state, book, chapter, raw, span)
-	terminal := originalSentenceTerminalIn(state, book, chapter, cleaned, at, baseLen)
-	cleaned = restoreShareLineBreaksIn(state, book, chapter, cleaned, at, baseLen)
-	return formatBibleQuote(cleaned, terminal), cite
+	terminal = originalSentenceTerminalIn(state, book, chapter, cleaned, at, baseLen)
+	return restoreShareLineBreaksIn(state, book, chapter, cleaned, at, baseLen), terminal, cite
 }
 
 // shareQuoteForPassage returns exactly what the selection route would share
@@ -401,7 +428,15 @@ func citationLine(cite, version string) string {
 // breaks, so a citation on a bare next line reads as one more poem line — the
 // empty line is what marks it as attribution (and matches Rule 5.1's setting
 // the citation off from the quoted matter).
+//
+// A selection that quotes nothing, a publisher's heading or a word of one, a
+// psalm's title or a verse number selected on its own, shares the citation
+// line alone. The blank line sets a quotation off from its citation; with no
+// quotation it only put two empty lines at the top of the message.
 func composeShareText(quote, cite, version string) string {
+	if quote == "" {
+		return citationLine(cite, version)
+	}
 	return quote + "\n\n" + citationLine(cite, version)
 }
 
@@ -466,7 +501,7 @@ func cleanQuoteTextIn(state *AppState, book string, chapter int, raw string) str
 // repeated wording the completion and the line-break restore ran against the
 // EARLIER copy's surroundings (sweep findings share.go:332/:565/:846).
 func prepareShareQuote(state *AppState, raw string, span selSpan) (text, cite string, at, baseLen int) {
-	book, chapter := readerChapter(state)
+	book, chapter := selectionChapter(state, span)
 	return prepareShareQuoteIn(state, book, chapter, raw, span)
 }
 
@@ -578,8 +613,9 @@ func spanRegion(spans []verseSpan, span selSpan) (start, end int, ok bool) {
 
 // Every stage of the pipeline from here down reads ONE chapter, and the
 // ...In spelling names it outright as (book, chapter). The bare spelling is
-// the selection route's: it reads the reader's current chapter (readerChapter)
-// and is what every existing caller and test holds to. A passage the reader
+// the selection route's: one that takes the span reads the chapter the
+// selection was made in (selectionChapter), and the reader's current chapter
+// (readerChapter) where the span names none. A passage the reader
 // is not on — the verse-of-the-day card — runs the ...In spellings with its
 // own chapter (shareQuoteForPassage), so it is located, normalized and cited
 // in the chapter it belongs to, and the reader stays where they are.
@@ -877,7 +913,7 @@ func inWordAt(s string, i int) bool {
 // search places only a selection that comes without one, or whose lead does
 // not resolve.
 func normalizeShareSelection(state *AppState, raw string, span selSpan) (text string, lo, hi, at int, ok bool) {
-	book, chapter := readerChapter(state)
+	book, chapter := selectionChapter(state, span)
 	return normalizeShareSelectionIn(state, book, chapter, raw, span)
 }
 
@@ -893,6 +929,22 @@ func normalizeShareSelectionIn(state *AppState, book string, chapter int, raw st
 // has already built the chapter: corpus and spans must be
 // chapterProseIn(state, book, chapter). state must be non-nil with a Bible.
 func normalizeShareSelectionProse(state *AppState, book string, chapter int, corpus string, spans []verseSpan, raw string, span selSpan) (text string, lo, hi, at int, ok bool) {
+	// A selection the pane found wholly inside a publisher's heading means the
+	// section the heading introduces: verse lo, the verse below it, with
+	// nothing quoted, as a heading selected whole on its own is answered
+	// below (selSpan.heading). The heading's words are not searched for. A
+	// word of a heading is often a word of the verse above it too, and
+	// searched for in the verses the pane's numbers named, the verse above,
+	// it was quoted as Scripture and cited by that verse: "Cain" in the BSB's
+	// "The Descendants of Cain" as Genesis 4:16, and the "The" of "The Fourth
+	// Day" as 1:13. A verse the chapter does not hold is not taken.
+	if span.heading && span.valid() {
+		for _, sp := range spans {
+			if sp.verse == span.lo {
+				return "", span.lo, span.lo, -1, true
+			}
+		}
+	}
 	flat := collapseSpaces(raw)
 	// The app's own typography comes off here, and BEFORE stripVerseMarkers.
 	// That strip confirms a verse-number token by comparing the text after it
@@ -927,24 +979,24 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 	// titles were first drawn (btIOSContentStart, hbScriptureSelection,
 	// BtBridge's contentStart): a selection inside the title gets Copy and
 	// Look Up alone, and one from the title into the psalm is cut at verse
-	// 1's number before it gets here. What does hand a title over is a page
-	// with no verse geometry: the plain-text fallback the Mac and the iPhone
-	// and iPad show when the chapter fails to import (gMacContentStart is 0
-	// there, as btIOSContentStart is with its verse index emptied, and
-	// nothing has a span). The dead legacy pane does not: rewrap lays out
-	// the verses alone, with no title, and every verb gets the selection's
-	// span (chapterText.selectionSpan). The fallback sets each
-	// paragraph on a line of its own (bibleTextMacPlainFromHTML,
-	// bibleTextPlainFromHTML), so the title, a heading under it and verse 1's
-	// number reach a selection as separate words. For those pages, two drags
-	// are answered here:
+	// 1's number before it gets here. So is one on the page the Mac and the
+	// iPhone and iPad show when the chapter fails to import, which carries
+	// its verse numbers (reading_apple_fallback.go) and installs as an
+	// imported page does; before it did, it had no verse geometry, and it
+	// handed titles over with no span. The dead legacy pane does not hand
+	// one over either: rewrap lays out the verses alone, with no title, and
+	// every verb gets the selection's span (chapterText.selectionSpan). What
+	// is left is a selection that arrives with no span, from a page laid out
+	// as that one is, the title and a heading under it each a paragraph of
+	// its own, so they and verse 1's number reach it as separate words. For
+	// such a selection,
+	// two drags are answered here:
 	//
 	//   - a selection with no span inside the title is the title's only
-	//     where the psalm does not have it. Every selection on those pages
-	//     comes with no span, so nothing tells the title's letters from the
-	//     same letters selected in a verse, and a double-click on a verse's
-	//     word is far likelier there than a drag begun inside a word of the
-	//     title. So the psalm is searched first, for a copy that splits no
+	//     where the psalm does not have it. With no span nothing tells the
+	//     title's letters from the same letters selected in a verse, and a
+	//     double-click on a verse's word is far likelier than a drag begun
+	//     inside a word of the title. So the psalm is searched first, for a copy that splits no
 	//     word, and the selection is quoted from the first such copy, as any
 	//     selection with no span is placed at its first copy: "Yahweh" in a
 	//     psalm whose title names him is the psalm's word, and so is "is" in
@@ -1003,22 +1055,27 @@ func normalizeShareSelectionProse(state *AppState, book string, chapter int, cor
 	// What is left may hold no word of the verse: the number alone, or the
 	// number and the ellipsis the BSB's Ephesians 3:14 opens with. Then the
 	// drag's words were the heading's, answered as a heading selected on its
-	// own is.
+	// own is. So is a drag that ends inside that number, before its last
+	// digit (openingMatterIntoNumber), which holds no whole number to
+	// confirm the piece by.
 	if !editorial && titleVerse == 0 && span.valid() {
 		if t, v, ok := cutOpeningMatter(state, book, chapter, out); ok && v >= span.lo && v <= span.hi {
 			if strings.IndexFunc(strings.TrimPrefix(t, strconv.Itoa(v)), isWordRune) < 0 {
 				return "", v, v, -1, true
 			}
 			out, editorial = t, true
+		} else if v, ok := openingMatterIntoNumber(state, book, chapter, out, span.lo, span.hi); ok {
+			return "", v, v, -1, true
 		}
 	}
 	// A heading further down selected whole, with no span. The heading-only
 	// answer below asks for a span naming the verse above the heading, which
-	// tells a heading from the same words in a verse, and a page with no span
-	// has none: the plain-text fallback the Mac and the iPhone and iPad show
-	// when a chapter fails to import, which sets each heading on a line of its
-	// own, so that selecting its paragraph takes exactly the heading. There it
-	// was shared as Scripture under the chapter. So a selection that is a
+	// tells a heading from the same words in a verse, and a selection with no
+	// span has none. A page that sets each heading on a line of its own, as
+	// the Apple panes' fallback page does, lets a selection of its paragraph
+	// take exactly the heading; that page now sends a span, but before it
+	// carried its verse numbers such a heading was shared as Scripture under
+	// the chapter. So a selection that is a
 	// heading whole, perhaps run on to the number below it (the BSB's "Saying
 	// 12" stands above verse 12, so its own figure reads as that number), is
 	// answered as a heading selected on its own is, the verse below and no
@@ -1058,9 +1115,10 @@ func locateShareSelection(state *AppState, book string, chapter int, corpus stri
 		lead = placeByLead(corpus, spans, pageHeadingsIn(state, book, chapter), span, out)
 	}
 	if lead.number {
-		// The rest of verse lo's number alone, begun inside it: apparatus,
-		// as a verse number selected on its own is (below).
-		return "", span.lo, span.lo, -1, true
+		// A verse's number alone, or a piece of one, placed by where it
+		// stands: apparatus, as a verse number selected on its own is
+		// (below), answered by the verse it labels.
+		return "", lead.verse, lead.verse, -1, true
 	}
 	out = lead.out
 	s, anchor := stripVerseMarkersAnchored(corpus, spans, out)
@@ -1314,6 +1372,7 @@ func locateShareSelection(state *AppState, book string, chapter int, corpus stri
 	// the lead, that lost the word before the dash in all 2,052 of the
 	// BSB's, 428 of the WEB's and 476 of the WEB Catholic's; the start repair
 	// below, the mirror, lost the word after the dash in as many.
+	endTrimmed := false
 	for {
 		end := idx + len(s)
 		if end < len(corpus) && !strings.HasSuffix(s, "—") {
@@ -1321,6 +1380,7 @@ func locateShareSelection(state *AppState, book string, chapter int, corpus stri
 				cut := strings.LastIndexByte(s, ' ')
 				if dash := strings.LastIndex(s, "—"); dash > 0 && dash > cut {
 					cutBack(dash + len("—"))
+					endTrimmed = true
 					continue
 				}
 				if cut <= 0 {
@@ -1341,10 +1401,20 @@ func locateShareSelection(state *AppState, book string, chapter int, corpus stri
 					return "", 0, 0, -1, false
 				}
 				cutBack(cut)
+				endTrimmed = true
 				continue
 			}
 		}
 		break
+	}
+	// Keep a located punctuation remainder when the end repair removed its
+	// only word. Rejecting it would let the fallback restore the unfinished
+	// word, including after a drag through a heading. Punctuation alone is
+	// shareable, but offers no study verb.
+	if endTrimmed && !holdsWordRune(s) {
+		if lo, hi := leadVerses(spans, idx, len(s)); lo > 0 {
+			return s, lo, hi, idx, true
+		}
 	}
 
 	// Orphan punctuation the drag swept in from NEIGHBORING sentences: a
@@ -1567,7 +1637,7 @@ func stripHeadings(state *AppState, book string, chapter int, s string) string {
 	// BSB has the shape over Proverbs 22:17 and Hebrews 11:30.
 	stacks := map[int][]string{}
 	var order []int
-	for _, h := range state.Bible.Headings[book][chapter] {
+	for _, h := range headingsFor(state.Bible, book, chapter) {
 		text := collapseSpaces(h.DrawnText())
 		if text == "" || h.BeforeVerse <= 0 {
 			continue
@@ -1582,7 +1652,7 @@ func stripHeadings(state *AppState, book string, chapter int, s string) string {
 			s = removeWholeHeadings(s, strings.Join(stacks[v], " "), strconv.Itoa(v))
 		}
 	}
-	for _, h := range state.Bible.Headings[book][chapter] {
+	for _, h := range headingsFor(state.Bible, book, chapter) {
 		// As DRAWN: the selection is taken from the page, where the heading's
 		// divine name is set in small capitals.
 		text := collapseSpaces(h.DrawnText())
@@ -1610,9 +1680,9 @@ func stripHeadings(state *AppState, book string, chapter int, s string) string {
 // flattened selection joins them. A drag begun inside it gives a piece that
 // ends it (trimLeadingHeading), confirmed by v's number after it.
 //
-// A psalm's title is editorial matter too. A page that hands it over (the
-// plain-text fallback of the Mac and the iPhone and iPad; the panes with
-// verse geometry cut a selection at verse 1's number, see
+// A psalm's title is editorial matter too. A page that hands it over (a
+// selection with no span; the panes with verse geometry, the Apple panes'
+// fallback page among them, cut a selection at verse 1's number, see
 // normalizeShareSelectionProse) has it above the chapter's first verse and
 // any heading there, so a drag from it into the psalm carries the title, or
 // the end of it, at its front.
@@ -1622,13 +1692,27 @@ func stripHeadings(state *AppState, book string, chapter int, s string) string {
 // of a verse ending "and"), with nothing between it and the number, could be
 // either, and is left for the search to place.
 func cutOpeningMatter(state *AppState, book string, chapter int, s string) (rest string, v int, ok bool) {
-	above := map[int]string{}
-	var order []int
+	above, order := openingMatter(state, book, chapter)
+	for _, v := range order {
+		i := leadingHeadingNumber(s, above[v], strconv.Itoa(v))
+		if i < 0 || endsVerseAbove(state, book, chapter, v, strings.TrimSpace(s[:i])) {
+			continue
+		}
+		return strings.TrimSpace(s[i:]), v, true
+	}
+	return s, 0, false
+}
+
+// openingMatter is the editorial matter the page draws above each verse that
+// has some, keyed by that verse, and the verses in the order the page draws
+// them (cutOpeningMatter).
+func openingMatter(state *AppState, book string, chapter int) (above map[int]string, order []int) {
+	above = map[int]string{}
 	if title, first, ok := chapterTitle(state, book, chapter); ok {
 		above[first] = title
 		order = append(order, first)
 	}
-	for _, h := range state.Bible.Headings[book][chapter] {
+	for _, h := range headingsFor(state.Bible, book, chapter) {
 		text := collapseSpaces(h.DrawnText())
 		if text == "" || h.BeforeVerse <= 0 {
 			continue
@@ -1640,14 +1724,37 @@ func cutOpeningMatter(state *AppState, book string, chapter int, s string) (rest
 		above[h.BeforeVerse] = text
 		order = append(order, h.BeforeVerse)
 	}
-	for _, v := range order {
-		i := leadingHeadingNumber(s, above[v], strconv.Itoa(v))
-		if i < 0 || endsVerseAbove(state, book, chapter, v, strings.TrimSpace(s[:i])) {
-			continue
-		}
-		return strings.TrimSpace(s[i:]), v, true
+	return above, order
+}
+
+// openingMatterIntoNumber reports a selection s that is a piece of the
+// editorial matter above verse v, one of the span's verses lo to hi, a piece
+// that ends the matter as a drag begun inside it gives, run on into v's
+// number and ended inside it, before its last digit: "The Fourth Day 1"
+// from the BSB's Genesis 1, whose heading stands above verse 14. Such a
+// selection holds no word of Scripture. Its digits are no verse number, so
+// cutOpeningMatter cannot confirm the piece by them, and the heading's words
+// were quoted as the verse's. The span names the verse: "Day 2" ends the
+// headings above Genesis 1:20 and 1:24 alike. A piece that is also how the
+// verse above ends is left alone, as cutOpeningMatter leaves it.
+func openingMatterIntoNumber(state *AppState, book string, chapter int, s string, lo, hi int) (v int, ok bool) {
+	i := strings.LastIndexByte(s, ' ')
+	if i <= 0 {
+		return 0, false
 	}
-	return s, 0, false
+	head, digits := strings.TrimSpace(s[:i]), s[i+1:]
+	if head == "" || digits == "" {
+		return 0, false
+	}
+	above, order := openingMatter(state, book, chapter)
+	for _, v := range order {
+		num := strconv.Itoa(v)
+		if v >= lo && v <= hi && len(digits) < len(num) && strings.HasPrefix(num, digits) &&
+			strings.HasSuffix(above[v], head) && !endsVerseAbove(state, book, chapter, v, head) {
+			return v, true
+		}
+	}
+	return 0, false
 }
 
 // endsVerseAbove reports whether s, a selection in the shared form, ends as
@@ -1726,6 +1833,13 @@ func afterTitle(s, title string) (rest string, ok bool) {
 // though the same word appears in the heading. Without the span test this would
 // quietly move such a selection to the heading's verse.
 //
+// It is reached only where the words are not found first, so it answered a
+// heading's words that the verse above lacks and left the rest to that
+// verse. The native panes now say when a selection lies wholly inside a
+// heading (selSpan.heading), and normalizeShareSelectionProse answers that
+// before any search; this rule stays for a selection handed over without
+// that flag, and for a heading at the top of a chapter.
+//
 // A heading at the top of the chapter has no verse above it, so no span can
 // name one. The native panes report a drag inside it as no span at all (the
 // last verse number before it is none: iOS, macOS and Android alike), or,
@@ -1764,7 +1878,7 @@ func headingOnlySelectionVerse(state *AppState, book string, chapter int, s stri
 			s = rest
 		}
 	}
-	for _, h := range state.Bible.Headings[book][chapter] {
+	for _, h := range headingsFor(state.Bible, book, chapter) {
 		// As drawn, for the reason stripHeadings gives.
 		text := collapseSpaces(h.DrawnText())
 		if text == "" || h.BeforeVerse <= 0 {
@@ -1794,7 +1908,7 @@ func headingOnlySelectionVerse(state *AppState, book string, chapter int, s stri
 // when the chapter has more than one of those words.
 func wholeHeadingVerse(state *AppState, book string, chapter int, s string) (verse int, words string, ok bool) {
 	s = strings.TrimSpace(s)
-	for _, h := range state.Bible.Headings[book][chapter] {
+	for _, h := range headingsFor(state.Bible, book, chapter) {
 		text := collapseSpaces(h.DrawnText())
 		if text != "" && h.BeforeVerse > 0 && (s == text || s == text+" "+strconv.Itoa(h.BeforeVerse)) {
 			return h.BeforeVerse, sharedText(text), true
@@ -1936,7 +2050,7 @@ func verseEndBeforeHeading(state *AppState, book string, chapter int, corpus str
 		return "", -1, false
 	}
 	var heads []string
-	for _, h := range state.Bible.Headings[book][chapter] {
+	for _, h := range headingsFor(state.Bible, book, chapter) {
 		if h.BeforeVerse > above && h.BeforeVerse <= below {
 			if text := sharedText(collapseSpaces(h.DrawnText())); text != "" {
 				heads = append(heads, text)
@@ -2451,11 +2565,12 @@ func balanceQuoteMarks(s string) string {
 }
 
 // citationForSelection derives a "Book C:V" (or "…:V-W") reference for the
-// selected text by matching it against the verses of the current chapter, so a
-// shared selection carries an accurate citation. Falls back to "Book C" when the
-// selection can't be pinned to specific verses (e.g. a partial phrase).
+// selected text by matching it against the verses of the selection's chapter
+// (selectionChapter), so a shared selection carries an accurate citation.
+// Falls back to "Book C" when the selection can't be pinned to specific
+// verses (e.g. a partial phrase).
 func citationForSelection(state *AppState, text string, span selSpan) string {
-	book, chapter := readerChapter(state)
+	book, chapter := selectionChapter(state, span)
 	return citationForSelectionIn(state, book, chapter, text, span)
 }
 

@@ -1,0 +1,5 @@
+Sharing and AI study handle selections around headings more accurately, leaving heading words out of Scripture quotations. Study actions are offered only when a selection contains Scripture.
+
+AI study asks before sending text to your chosen provider and keeps the selected chapter through follow-up actions. Waiting and error messages, including Try again, fit short windows better; the selected quotation collapses when its space is needed.
+
+Greek Esther in World English Bible (Catholic) now supports verse matching across translations. Shared notes and highlights on omitted verses are more consistent, and sharing failures give a clearer message.

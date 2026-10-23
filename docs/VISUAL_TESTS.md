@@ -28,6 +28,10 @@ hand-written control comparison of Matthew 16:18 in place), `xrefs-waiting`,
 `version-error` (`devSheets` in `dev_open_sheets_on.go` says what each opens,
 and how the waiting and answered states are held without a download or an AI
 request).
+`SIMCTL_CHILD_BIBLETEXT_DEV_FAIL_IMPORT=1` (or `BIBLETEXT_DEV_FAIL_IMPORT=1`
+for the Mac) makes the Apple panes refuse every HTML import, so every chapter
+opens on the page shown when a chapter will not import
+(`reading_apple_fallback.go`, `dev_fail_import_on.go`).
 `SIMCTL_CHILD_BIBLETEXT_DEV_TAB=read|books|search` brings the launch up on
 that tab (`dev_open_tab_on.go`), so Books and Search, where a phone held
 sideways keeps its header and navigation, can be captured without a tap; a

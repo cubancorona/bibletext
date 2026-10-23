@@ -64,15 +64,21 @@ func (s holdingSecretStore) Write(string, string) bool        { return true }
 type credState int
 
 const (
-	credAbsent           credState = iota // the store works and holds nothing
-	credHeld                              // the store works and holds the reader's key
-	credUnreadable                        // THE STORE FAILED — we cannot tell
-	credLegacyOnly                        // nothing in the secure store, a pre-1.1.6 key in prefs
-	credUnreadableLegacy                  // the store failed AND a legacy key exists
+	credAbsent             credState = iota // the store works and holds nothing
+	credHeld                                // the store works and holds the reader's key
+	credUnreadable                          // THE STORE FAILED — we cannot tell
+	credLegacyOnly                          // nothing in the secure store, a pre-1.1.6 key in prefs
+	credUnreadableLegacy                    // the store failed AND a legacy key exists
+	credRestored                            // settings restored from a phone that saved a key; this phone's store, whose keys never leave it, holds none
+	credRestoredTravels                     // the same settings on a store whose keys travel with them: an empty store has some other cause
+	credRestoredUnreadable                  // the same settings on a store whose keys never leave it, and the store failed — we cannot tell
+	credRemoved                             // the reader removed their key in Settings: a definitive, deliberate absence
+	credRemovedIncluded                     // a release build: the reader removed the key included with the app, the one in force
 )
 
 func (c credState) String() string {
-	return [...]string{"absent", "held", "unreadable", "legacy-only", "unreadable+legacy"}[c]
+	return [...]string{"absent", "held", "unreadable", "legacy-only", "unreadable+legacy",
+		"restored", "restored-travels", "restored-unreadable", "removed", "removed-included"}[c]
 }
 
 // credEvent is what the app does with that knowledge.
@@ -81,11 +87,16 @@ type credEvent int
 const (
 	evReadKey      credEvent = iota // keyStore.bibleAPIKey — the effective read
 	evPurgeUnavail                  // purgeUnavailableLicensedCaches — IRREVERSIBLE
+	evSayWhy                        // the API.Bible key field's status line: what it tells the reader about their key
 )
 
 func (e credEvent) String() string {
-	return [...]string{"read-key", "purge-unavailable"}[e]
+	return [...]string{"read-key", "purge-unavailable", "say-why"}[e]
 }
+
+// keyNotRestoredSaid is the field's line for a saved key that is
+// definitively absent, without inferring a cause (decision 13).
+const keyNotRestoredSaid = "Your saved key isn't available on this device. Paste it again here."
 
 type credObs struct {
 	state credState
@@ -94,6 +105,7 @@ type credObs struct {
 	key           string // what the effective read returned
 	definitive    bool   // could the app actually TELL? (store ok, or a key in hand)
 	cacheSurvived bool   // after an irreversible event
+	saysLeftOn    bool   // does the key field say the saved key is unavailable?
 }
 
 type pinnedCredDefect struct {
@@ -114,9 +126,20 @@ var knownCredIncoherent = []pinnedCredDefect{}
 //
 //	C-A  A non-definitive answer never triggers an irreversible act.
 //	C-B  A store failure never reads as an absent key when a key is recoverable.
+//	C-C  The key field says the saved key is unavailable exactly when the
+//	     app knows it: a saved mark, a separate store's item-not-found answer,
+//	     and no remaining Preferences copy (decision 13).
 func checkCredInvariants(o credObs) []string {
 	var bad []string
 	switch o.event {
+	case evSayWhy:
+		if want := o.state == credRestored; o.saysLeftOn != want {
+			if want {
+				bad = append(bad, "C-C: the saved key is definitively absent and the field does not say so")
+			} else {
+				bad = append(bad, "C-C: the field says the saved key is unavailable without a definitive absence")
+			}
+		}
 	case evReadKey:
 		// The legacy fallback exists precisely so a store failure cannot
 		// strand a key the reader entered.
@@ -141,8 +164,8 @@ func TestVersionCredentialStateSpace(t *testing.T) {
 	seen := map[string]bool{}
 	cells := 0
 
-	for state := credAbsent; state <= credUnreadableLegacy; state++ {
-		for event := evReadKey; event <= evPurgeUnavail; event++ {
+	for state := credAbsent; state <= credRemovedIncluded; state++ {
+		for event := evReadKey; event <= evSayWhy; event++ {
 			name := fmt.Sprintf("%s/%s", state, event)
 			t.Run(name, func(t *testing.T) {
 				dir := t.TempDir()
@@ -168,6 +191,28 @@ func TestVersionCredentialStateSpace(t *testing.T) {
 				case credUnreadableLegacy:
 					ks.secrets = flakySecretStore{}
 					prefs.SetString(prefKeyPrefix+bibleKeyID, "legacy-key")
+				case credRestored:
+					ks = restoredOntoNewPhone(t, newDeviceBoundTestStore(), bibleKeyID)
+				case credRestoredTravels:
+					ks = restoredOntoNewPhone(t, emptySecretStore{}, bibleKeyID)
+				case credRestoredUnreadable:
+					ks = restoredOntoNewPhone(t, unreadableDeviceBoundStore{}, bibleKeyID)
+				case credRemoved:
+					ks.secrets = emptySecretStore{}
+					ks.setBibleAPIKey("")
+					ks.noteBibleKeyCleared(true)
+				case credRemovedIncluded:
+					// Through the call Clear and an emptied field make, with
+					// the included key the one in force.
+					withBundledKey(t, "cred-cell-included-key")
+					ks.secrets = emptySecretStore{}
+					if !ks.usingBundledBibleKey() {
+						t.Fatal("control: before the removal the included key must be the one in force, or the cell is not the state it names")
+					}
+					ks.removeBibleKey()
+					if !ks.removedBibleKeyWasIncluded() || !ks.bibleKeyRemovedOnPurpose() {
+						t.Fatal("control: the removal must be recorded as the included key's and read as on purpose, or the cell is not the state it names")
+					}
 				}
 				prev := sharedKeys
 				sharedKeys = func() *keyStore { return ks }
@@ -200,6 +245,13 @@ func TestVersionCredentialStateSpace(t *testing.T) {
 					purgeUnavailableLicensedCaches()
 					_, err := loadBibleFromCache(path)
 					obs.cacheSurvived = err == nil
+				case evSayWhy:
+					// The field the reader looks at for their key, as the
+					// Settings sheet builds it.
+					st := sampleState()
+					st.aiKeys = ks
+					rows, _ := bibleKeySection(st, lightPalette, nil)
+					obs.saysLeftOn = treeHasText(rows, keyNotRestoredSaid)
 				}
 				cells++
 

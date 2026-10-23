@@ -76,23 +76,123 @@ func (c savedChoice) id() string {
 type choiceFate int
 
 const (
-	fateLoads             choiceFate = iota // it loads normally
-	fateLoadFails                           // offline, no usable cache
-	fateSupersededOnly                      // current epoch gone, previous epoch on disk
-	fateUnselectable                        // canSelect() is false this launch
-	fateKeyCleared                          // the reader cleared their key: a definitive, deliberate no
-	fateSupersededExpired                   // current epoch gone, previous epoch on disk past its own recency window
+	fateLoads              choiceFate = iota // it loads normally
+	fateLoadFails                            // offline, no usable cache
+	fateSupersededOnly                       // current epoch gone, previous epoch on disk
+	fateUnselectable                         // canSelect() is false this launch
+	fateKeyCleared                           // the reader cleared their key: a definitive, deliberate no
+	fateSupersededExpired                    // current epoch gone, previous epoch on disk past its own recency window
+	fateKeyOnOldDevice                       // the settings came back from a backup and the key, which never leaves the device it was added on, did not
+	fateKeyClearedIncluded                   // a release build: the reader cleared the key while the one included with the app was in force
 )
 
 func (f choiceFate) String() string {
-	return [...]string{"loads", "load-fails", "superseded-only", "unselectable", "key-cleared", "superseded-expired"}[f]
+	return [...]string{"loads", "load-fails", "superseded-only", "unselectable", "key-cleared", "superseded-expired", "key-on-old-device", "key-cleared-included"}[f]
 }
+
+// lastFate is the last fate the enumeration walks.
+const lastFate = fateKeyClearedIncluded
 
 // fateIsLicensedOnly reports the fates that exist only for the licensed
 // translation: a key is a licensed translation's, and so is a recency
 // window — a public-domain previous epoch serves at any age.
 func fateIsLicensedOnly(f choiceFate) bool {
-	return f == fateKeyCleared || f == fateSupersededExpired
+	return f == fateKeyCleared || f == fateSupersededExpired || f == fateKeyOnOldDevice || f == fateKeyClearedIncluded
+}
+
+// fateGivesUp reports the fates in which the reader gave the translation up
+// by removing the key that opens it (decision 11): their own, or the one
+// included with the app.
+func fateGivesUp(f choiceFate) bool {
+	return f == fateKeyCleared || f == fateKeyClearedIncluded
+}
+
+// causeFates are the fates that have a cause the picker names.
+var causeFates = []choiceFate{fateKeyCleared, fateKeyOnOldDevice, fateKeyClearedIncluded}
+
+// launchCause is the sentence the picker owes the reader for a fate whose
+// cause the app can establish, with the default shown in the licensed
+// translation's place: a key the reader removed, their own or the one
+// included with the app (decision 11), or a saved key now absent from the
+// credential store (decision 13). Empty for every other fate, where the app
+// knows only that the translation could not be opened.
+func launchCause(f choiceFate) string {
+	def, _ := versionByID(defaultVersionID)
+	nk, _ := versionByID("nkjv")
+	switch f {
+	case fateKeyCleared:
+		return "You removed your API.Bible key, so " + def.Name + " is shown in place of " + nk.Name + "."
+	case fateKeyOnOldDevice:
+		return "Your saved API.Bible key isn't available on this device, so " + def.Name + " is shown in place of " + nk.Name + "."
+	case fateKeyClearedIncluded:
+		return "You removed the included API.Bible key, so " + def.Name + " is shown in place of " + nk.Name + "."
+	}
+	return ""
+}
+
+// noticeHasLine reports whether one of the notice's lines is exactly line.
+func noticeHasLine(notice, line string) bool {
+	for _, l := range strings.Split(notice, "\n") {
+		if l == line {
+			return true
+		}
+	}
+	return false
+}
+
+// deviceBoundTestStore is a credential store whose keys never leave the device
+// they were saved on, as Android's does: a restore brings back the settings
+// and not the store (keysLeftByRestore), and nothing it holds leaves the
+// device.
+type deviceBoundTestStore struct{ m map[string]string }
+
+func newDeviceBoundTestStore() *deviceBoundTestStore {
+	return &deviceBoundTestStore{m: map[string]string{}}
+}
+
+func (s *deviceBoundTestStore) Name() string { return "device-bound test store" }
+func (s *deviceBoundTestStore) Read(account string) (string, bool, bool) {
+	v, ok := s.m[account]
+	return v, ok, true
+}
+func (s *deviceBoundTestStore) Write(account, value string) bool {
+	if value == "" {
+		delete(s.m, account)
+	} else {
+		s.m[account] = value
+	}
+	return true
+}
+func (s *deviceBoundTestStore) restoreCanLeaveKeys() bool { return true }
+func (s *deviceBoundTestStore) writeThisDeviceOnly(account, value string) bool {
+	return s.Write(account, value)
+}
+
+// restoredOntoNewPhone saves a key for each account on the old phone, through
+// the calls the reader's Settings make, and returns the new phone: its
+// settings a copy of the old phone's, as a backup restores them, and its own
+// credential store empty, as a restore leaves it. store is the new phone's
+// store, which a test may make one whose keys travel or that cannot answer.
+func restoredOntoNewPhone(t *testing.T, store secretStore, accounts ...string) *keyStore {
+	t.Helper()
+	oldPrefs := newFakePrefs()
+	old := &keyStore{prefs: oldPrefs, secrets: newDeviceBoundTestStore()}
+	for _, a := range accounts {
+		if a == bibleKeyID {
+			old.setBibleAPIKey("old-phone-key")
+			old.noteBibleKeyCleared(false)
+		} else {
+			old.setAPIKey(a, "old-phone-key")
+		}
+		if old.apiKey(a) != "old-phone-key" {
+			t.Fatalf("control: the old phone did not keep the %s key", a)
+		}
+	}
+	newPrefs := newFakePrefs()
+	for k, v := range oldPrefs.m {
+		newPrefs.m[k] = v
+	}
+	return &keyStore{prefs: newPrefs, secrets: store}
 }
 
 // --- what the launch produced, and whether it told the truth -----------------
@@ -109,6 +209,7 @@ type launchObs struct {
 	keptHist int    // history entries that survived
 	wantHist int    // entries that were valid in the reader's OWN canon
 	told     bool   // does any surface say the chosen translation is not the one shown?
+	notice   string // the picker's notice, the one surface that says it
 	previous bool   // is the text on screen a previous edition of the chosen translation?
 	saidEd   bool   // does the picker footer say the edition on screen is a previous one?
 	owed     bool   // is the upgrade of the translation on screen on its way (L-F)?
@@ -138,7 +239,10 @@ var knownLaunchIncoherent = []pinnedLaunchDefect{}
 //
 //	L-A  The reader's chosen translation survives a launch that could not open
 //	     it. It is recorded in exactly one place, and a fallback must not be
-//	     what rewrites it.
+//	     what rewrites it. Except a translation the reader gave up by removing
+//	     the key that opens it (decision 11): nothing can open it until they
+//	     add a key, so the next save names the translation shown in its place
+//	     and no launch tries it again.
 //	L-B  A fallback never prunes history that is valid in the reader's own
 //	     canon. Validating a 73-book trail against 66 books is the erasure.
 //	L-C  The version named on screen is the version whose text is on screen.
@@ -152,6 +256,12 @@ var knownLaunchIncoherent = []pinnedLaunchDefect{}
 //	     memory (bridgeInMemory), as the next launch's restore will.
 //	L-G  A licensed previous edition on screen came from a copy inside its
 //	     own recency window, measured from that copy's saved-at stamp (V-E).
+//	L-H  Where the app knows why the chosen translation was not opened, the
+//	     picker says why: the reader removed its key, naming the key removed,
+//	     their own or the one included with the app (decision 11), or a
+//	     restore did not bring the key back (decision 13). It names no cause
+//	     the launch did not have, and promises no launch that will try a
+//	     translation given up with its key.
 //
 // Only the licensed bridge puts a licensed previous edition on screen, and it
 // is the next major release's (loadLicensedBridge, docs/NEXT.md). In the
@@ -161,7 +271,11 @@ func checkLaunchInvariants(o launchObs) []string {
 	if o.aborted {
 		return nil // the Retry screen: nothing was written, nothing can be wrong
 	}
-	if o.persists != o.choice.id() {
+	if fateGivesUp(o.fate) {
+		if o.persists != defaultVersionID {
+			bad = append(bad, fmt.Sprintf("L-A: the reader gave %s up with its key and the next save would write %q, which the next launch tries again", o.choice.id(), o.persists))
+		}
+	} else if o.persists != o.choice.id() {
 		bad = append(bad, fmt.Sprintf("L-A: the reader chose %s and the next save would write %q", o.choice.id(), o.persists))
 	}
 	if o.keptHist < o.wantHist {
@@ -182,6 +296,17 @@ func checkLaunchInvariants(o launchObs) []string {
 	if o.previous && o.licensed && !o.inWindow {
 		bad = append(bad, "L-G: a licensed previous edition is on screen from a copy past its own recency window")
 	}
+	if why := launchCause(o.fate); why != "" && o.onScreen != o.choice.id() && !noticeHasLine(o.notice, why) {
+		bad = append(bad, fmt.Sprintf("L-H: the picker does not say why the chosen translation was not opened: want the line %q in %q", why, o.notice))
+	}
+	for _, f := range causeFates {
+		if f != o.fate && strings.Contains(o.notice, launchCause(f)) {
+			bad = append(bad, fmt.Sprintf("L-H: the picker gives a cause the launch did not have: %q", launchCause(f)))
+		}
+	}
+	if fateGivesUp(o.fate) && strings.Contains(o.notice, "tried again") {
+		bad = append(bad, fmt.Sprintf("L-H: the picker promises a launch that will try a translation given up with its key: %q", o.notice))
+	}
 	return bad
 }
 
@@ -193,10 +318,10 @@ func TestVersionLaunchStateSpace(t *testing.T) {
 
 	var unexplained []string
 	seen := map[string]bool{}
-	cells, previousCells, licensedPreviousCells := 0, 0, 0
+	cells, previousCells, licensedPreviousCells, causeCells := 0, 0, 0, 0
 
 	for choice := savedDefault; choice <= savedLicensed; choice++ {
-		for fate := fateLoads; fate <= fateSupersededExpired; fate++ {
+		for fate := fateLoads; fate <= lastFate; fate++ {
 			// Only the licensed translation turns on a key or has a
 			// recency window.
 			if fateIsLicensedOnly(fate) && choice != savedLicensed {
@@ -222,6 +347,9 @@ func TestVersionLaunchStateSpace(t *testing.T) {
 					}
 					if obs.licensed {
 						licensedPreviousCells++
+					}
+					if launchCause(fate) != "" && obs.onScreen != choice.id() {
+						causeCells++
 					}
 					for _, bad := range checkLaunchInvariants(obs) {
 						explained := false
@@ -250,6 +378,11 @@ func TestVersionLaunchStateSpace(t *testing.T) {
 	// licensed one; a space with none would pass them without asking anything.
 	if previousCells == 0 {
 		t.Error("control: no launch cell put a previous edition on screen, so L-E and L-F were never put to it")
+	}
+	// L-H asks for a cause only where a fate has one and the default is shown.
+	if want := 2 * len(causeFates); causeCells != want {
+		t.Errorf("control: %d launch cells showed the default for a key removed or left on the old device, want %d (%d fates, two books), so L-H was not put to each",
+			causeCells, want, len(causeFates))
 	}
 	if nextRelease && licensedPreviousCells == 0 {
 		t.Error("control: no launch cell put a licensed previous edition on screen, so L-G and L-F's licensed arm were never put to it")
@@ -364,6 +497,7 @@ func launchCell(t *testing.T, rs readingState, choice savedChoice, fate choiceFa
 	// Every surface that could carry the news. There is exactly one.
 	notice := fullPendingNotice(live)
 	obs.told = notice != ""
+	obs.notice = notice
 	// A previous edition is on screen exactly when the fate left only the
 	// superseded file and the restore served the chosen translation from it.
 	// The default is left out: its restore has nothing to load, and its own
@@ -421,9 +555,12 @@ func restoreVersionFate(t *testing.T, choice savedChoice, fate choiceFate, wide 
 	// The licensed translation is selectable exactly while its licence
 	// configuration reads back. fateUnselectable withdraws it; fateKeyCleared
 	// keeps the licence and has the reader clear their key, which the store
-	// records as gone for good.
+	// records as gone for good; fateKeyOnOldDevice keeps the licence and
+	// restores onto a new phone the settings of one that held the key;
+	// fateKeyClearedIncluded keeps the licence in a release build, the key
+	// included with the app in force, and has the reader clear it.
 	switch {
-	case choice == savedLicensed && fate == fateKeyCleared:
+	case choice == savedLicensed && (fate == fateKeyCleared || fate == fateKeyOnOldDevice || fate == fateKeyClearedIncluded):
 		t.Setenv("BIBLE_API_KEY", "")
 		t.Setenv("BIBLETEXT_LICENSE_NKJV", "1")
 		t.Setenv("BIBLETEXT_PROVIDER_ID_NKJV", "test-provider-id")
@@ -438,13 +575,32 @@ func restoreVersionFate(t *testing.T, choice savedChoice, fate choiceFate, wide 
 	}
 	prev := sharedKeys
 	ks := &keyStore{prefs: newFakePrefs(), secrets: emptySecretStore{}}
+	if fate == fateKeyOnOldDevice {
+		ks = restoredOntoNewPhone(t, newDeviceBoundTestStore(), bibleKeyID)
+	}
 	sharedKeys = func() *keyStore { return ks }
 	t.Cleanup(func() { sharedKeys = prev })
-	if fate == fateKeyCleared {
+	switch fate {
+	case fateKeyCleared:
 		ks.setBibleAPIKey("")
 		ks.noteBibleKeyCleared(true)
 		if nk, _ := versionByID(choice.id()); !ks.bibleKeyKnownAbsent() || nk.canSelect() {
 			t.Fatal("control: a key cleared on purpose must read as a definitive absence and leave the translation unselectable, or the cell is not the state it names")
+		}
+	case fateKeyOnOldDevice:
+		if nk, _ := versionByID(choice.id()); !ks.bibleKeyKnownAbsent() || nk.canSelect() || ks.bundledBibleKeyCleared() {
+			t.Fatal("control: a restored phone must hold no key, leave the translation unselectable and carry no clearing of the key, or the cell is not the state it names")
+		}
+	case fateKeyClearedIncluded:
+		// Through the call Clear and an emptied field make (removeBibleKey),
+		// with the included key the one in force.
+		withBundledKey(t, "launch-cell-included-key")
+		if nk, _ := versionByID(choice.id()); !ks.usingBundledBibleKey() || !nk.canSelect() {
+			t.Fatal("control: before the key is cleared the included key must be the one in force and open the translation, or the cell is not the state it names")
+		}
+		ks.removeBibleKey()
+		if nk, _ := versionByID(choice.id()); !ks.removedBibleKeyWasIncluded() || !ks.bibleKeyRemovedOnPurpose() || nk.canSelect() {
+			t.Fatal("control: the included key cleared must be recorded as the included key, read as removed on purpose and leave the translation unselectable, or the cell is not the state it names")
 		}
 	}
 
@@ -459,7 +615,7 @@ func restoreVersionFate(t *testing.T, choice savedChoice, fate choiceFate, wide 
 		loadVersionForRestore = func(v BibleVersion, base *BibleData) (*BibleData, dataMode, error) {
 			return data, modeReal, nil
 		}
-	case fateLoadFails, fateUnselectable, fateKeyCleared:
+	case fateLoadFails, fateUnselectable, fateKeyCleared, fateKeyOnOldDevice, fateKeyClearedIncluded:
 		loadVersionForRestore = func(v BibleVersion, base *BibleData) (*BibleData, dataMode, error) {
 			return nil, modeReal, errors.New("offline")
 		}
@@ -888,10 +1044,25 @@ func TestTheLaunchCarriesWhatTheRestoreRecords(t *testing.T) {
 	for _, tc := range []struct {
 		saved, onScreen string
 		recorded        func(st *AppState) bool
+		keyRemoved      bool // the NKJV's licence configured and the reader's key removed on purpose (decision 11)
 	}{
-		{"nkjv", defaultVersionID, func(st *AppState) bool { return st.preferredVersion == "nkjv" }},
-		{"webc", "webc", func(st *AppState) bool { return st.staleVersions["webc"] }},
+		{"nkjv", defaultVersionID, func(st *AppState) bool { return st.preferredVersion == "nkjv" }, false},
+		{"webc", "webc", func(st *AppState) bool { return st.staleVersions["webc"] }, false},
+		// The record a translation given up with its key leaves is read where
+		// the reader meets it, the picker's sentence.
+		{"nkjv", defaultVersionID, func(st *AppState) bool { return noticeHasLine(fullPendingNotice(st), launchCause(fateKeyCleared)) }, true},
 	} {
+		if tc.keyRemoved {
+			t.Setenv("BIBLETEXT_LICENSE_NKJV", "1")
+			t.Setenv("BIBLETEXT_PROVIDER_ID_NKJV", "test-provider-id")
+			ks.noteBibleKeyCleared(true)
+		}
+		// A translation given up with its key is not the reader's choice any
+		// more: the next save names what is on screen (decision 11).
+		wantSaved := tc.saved
+		if tc.keyRemoved {
+			wantSaved = tc.onScreen
+		}
 		writeReadingState(appPrefs(), readingState{Version: tc.saved, Book: "John", Chapter: 1})
 		loaded, err := loadStateData()
 		if err != nil {
@@ -909,8 +1080,8 @@ func TestTheLaunchCarriesWhatTheRestoreRecords(t *testing.T) {
 		if n := fullPendingNotice(live); n != fullPendingNotice(loaded) {
 			t.Fatalf("with %s saved the live state's footer reads %q, and the restore's %q", tc.saved, n, fullPendingNotice(loaded))
 		}
-		if saved := snapshotReadingState(live, 0, 0, 0, 0, 0).Version; saved != tc.saved {
-			t.Fatalf("with %s saved the next save from the live state writes %q over the reader's choice", tc.saved, saved)
+		if saved := snapshotReadingState(live, 0, 0, 0, 0, 0).Version; saved != wantSaved {
+			t.Fatalf("with %s saved the next save from the live state writes %q, want %q", tc.saved, saved, wantSaved)
 		}
 	}
 

@@ -102,10 +102,15 @@ type statusLineRenderer struct {
 }
 
 // rowHeight is the height of one line: the height a canvas.Text of this size
-// reports, which is what the single canvas.Text before it measured.
-func (r *statusLineRenderer) rowHeight() float32 {
-	return fyne.MeasureText("M", r.line.size, r.line.style).Height
+// reports, which is what the single canvas.Text before it measured. The
+// first line is drawn from the top of the widget, so half of it is where the
+// first line's centre lies, which the ✕ beside a key field's line is placed
+// on (lineCloseLayout).
+func (s *statusLine) rowHeight() float32 {
+	return fyne.MeasureText("M", s.size, s.style).Height
 }
+
+func (r *statusLineRenderer) rowHeight() float32 { return r.line.rowHeight() }
 
 func (r *statusLineRenderer) Layout(size fyne.Size) {
 	lines := statusLinesStyled(r.line.text, size.Width, r.line.size, r.line.style)
