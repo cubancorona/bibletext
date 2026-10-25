@@ -24,7 +24,7 @@
 </head>
 <body>
   <h1>BibleText — Privacy Policy</h1>
-  <p class="eff">Effective date: 11 October 2026</p>
+  <p class="eff">Effective date: 25 October 2026</p>
 
   <p class="lead">BibleText is a Bible reading and study app, built to respect your privacy.
   This policy explains what information the app does and does not handle.</p>
@@ -46,7 +46,10 @@
   Because that Keystore key cannot be transferred, an Android key does not travel to a new
   phone: after restoring a backup you will need to enter it again. On a directly downloaded Mac
   build, and on Windows and Linux, the key is held in the app's own local settings store on that
-  device rather than a system keychain. These values are not transmitted
+  device rather than a system keychain.
+  The app also keeps a record, on your device, of each AI provider you have allowed it to send text to.
+  On Android this record is part of the app's settings, which Android may include in your device backup; it holds no key and none of your text.
+  These values are not transmitted
   to the developer.</p>
 
   <h2>Bible text, study data, and audio</h2>
@@ -89,6 +92,8 @@
   policy and terms. BibleText does not route the request through any server of ours, does not
   use it for tracking, and does not retain your prompts after the app closes.</p>
 
+  <p>Before the first request to each provider, the app asks whether it may send your text there, and sends nothing until you allow it.</p>
+
   <p>The developer operates no application server, accounts, or analytics and does not
   receive your AI requests. The provider you choose receives those requests directly
   under your own key. If you tap Report under an AI answer, your email app opens a
@@ -114,8 +119,9 @@
   <p>You can use every core reading feature without AI. Choose <strong>Assistant → None</strong>
   to stop AI features, and use <strong>Clear</strong> beside a provider key to remove that key
   from wherever it is stored on that device (the Keychain on iPhone, iPad, and the Mac App Store
-  edition; the Keystore-encrypted copy on Android; the app's local settings elsewhere). Removing the
-  app clears its ordinary reading preferences and cached
+  edition; the Keystore-encrypted copy on Android; the app's local settings elsewhere).
+  Choosing None, or clearing or changing a provider's key, also withdraws the permission you gave that provider; the app asks again before its next request.
+  Removing the app clears its ordinary reading preferences and cached
   data; clear provider keys in the app first if you also want those credentials removed.</p>
   <p>BibleText keeps AI results only in memory until the app closes. An AI provider may retain
   requests under your account terms. Use that provider's account controls or contact the provider
