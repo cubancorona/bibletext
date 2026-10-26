@@ -75,6 +75,14 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.2.24" date="2026-10-26">
+      <description>
+        <p>Compact supporting note in AI Settings.</p>
+        <ul>
+          <li>AI Settings now uses a compact supporting note, leaving more room for the controls.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.23" date="2026-10-24">
       <description>
         <p>More accurate selections and clearer study screens.</p>

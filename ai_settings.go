@@ -781,13 +781,12 @@ func openAISettings(state *AppState) {
 
 	// In-app disclosure of where AI prompts go, shown right under the key field
 	// (Guideline 5.1.2 — be transparent before user content leaves the device). It
-	// mirrors the privacy policy and links to it. Body text in the text colour,
-	// not a muted caption: the question asked before each provider's first
-	// request (ai_permission.go) rests on this disclosure, so it is set to be read.
+	// mirrors the privacy policy and links to it. Keep the supporting note at
+	// caption size so it does not compete with the settings controls.
 	aiNote := widget.NewRichText(&widget.TextSegment{
 		Text: "When you use AI study, your Find search or selected passage and study action, including any question you enter, are sent directly to the provider you choose, authenticated with your key. " +
 			"The provider may associate and retain the request under your account terms.",
-		Style: widget.RichTextStyleParagraph,
+		Style: widget.RichTextStyle{ColorName: colorNameMuted, SizeName: theme.SizeNameCaptionText},
 	})
 	aiNote.Wrapping = fyne.TextWrapWord
 	aiDisclosure := container.NewVBox(aiNote)

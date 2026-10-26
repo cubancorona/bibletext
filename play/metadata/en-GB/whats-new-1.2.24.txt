@@ -1,0 +1,1 @@
+AI Settings now uses a compact supporting note, leaving more room for the controls.

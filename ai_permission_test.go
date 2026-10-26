@@ -724,9 +724,9 @@ func TestAFindQuestionClosesOnARebuildAndThePaneSaysNothingWasSent(t *testing.T)
 	}
 }
 
-// The note under the key field is body text in the text colour, not a muted
-// caption.
-func TestTheSettingsNoteIsBodyText(t *testing.T) {
+// The supporting note stays readable at the same caption size and muted colour
+// as the other settings guidance.
+func TestTheSettingsNoteIsAMutedCaption(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	holdKeyTests(t)
@@ -750,11 +750,8 @@ func TestTheSettingsNoteIsBodyText(t *testing.T) {
 	if note == nil {
 		t.Fatalf("the note under the key field is not on the sheet; texts %v", treeTexts(popup))
 	}
-	if note.Style.ColorName == colorNameMuted || note.Style.SizeName == theme.SizeNameCaptionText {
-		t.Errorf("the note is still a muted caption: colour %q, size %q", note.Style.ColorName, note.Style.SizeName)
-	}
-	if note.Style.SizeName != theme.SizeNameText || note.Style.ColorName != theme.ColorNameForeground {
-		t.Errorf("the note is not body text: colour %q, size %q", note.Style.ColorName, note.Style.SizeName)
+	if note.Style.SizeName != theme.SizeNameCaptionText || note.Style.ColorName != colorNameMuted {
+		t.Errorf("the note is not a muted caption: colour %q, size %q", note.Style.ColorName, note.Style.SizeName)
 	}
 	test.Tap(sheetCloseButton(t, popup))
 }

@@ -200,6 +200,10 @@ Also confirm from the final AAB:
 - target audience and Families eligibility are selected from the real intended
   audience, not to avoid or trigger a policy track.
 
+## Release notes — 1.2.24
+
+> AI Settings now uses a compact supporting note, leaving more room for the controls.
+
 ## Release notes — 1.2.23
 
 > More accurate selections around headings, with Scripture-only quotations for AI study. AI study asks before sending text to your chosen provider. Clearer missing-key messages and better waiting/error screens. Android keeps emoji intact and gives Translate and drag-and-drop the same text as Copy. Improved tablet layout and verse matching for Greek Esther in World English Bible (Catholic).

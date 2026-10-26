@@ -1,11 +1,13 @@
-VERSION 1.2.23 (macOS)
+VERSION 1.2.24 (macOS)
 
 BibleText is a Bible reader. No account, login, or registration is required, and reading, search, navigation, notes, and cross-references need no AI-provider key. Downloaded scripture stays readable and searchable offline; downloads and optional provider services need connectivity when used.
 
 WHAT CHANGED IN THIS BUILD
-Sharing and AI study exclude headings and verse numbers from Scripture quotations; selections without Scripture offer no study action. Study keeps the selected chapter through follow-up actions and asks before sending text to an AI provider. Changing its key or choosing None withdraws that permission. Waiting/error panels fit short screens, missing saved keys have clearer guidance, Greek Esther in WEB Catholic maps verses across translations, and Daniel 3 separates a heading’s translators’ note. Dialogs fit short windows more closely.
+AI Settings now uses a compact supporting note, leaving more room for the controls.
 
-HOW TO EXERCISE 1.2.23
+HOW TO EXERCISE 1.2.24
+Open Settings and look below the AI key controls to see the compact supporting note.
+
 Reading, sharing, notes and cross-references need no AI setup. In World English Bible, select a heading word before Genesis 4:17: sharing cites the following verse without quoting the heading, and the selection offers no Study with AI. Select Scripture to use study. With a provider key in Settings → Assistant, choose Explain. Not now sends nothing; Allow remembers permission for that key. Changing or clearing the key withdraws it.
 
 STUDY GESTURE ON THE MAC

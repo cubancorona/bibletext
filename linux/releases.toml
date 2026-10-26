@@ -15,6 +15,14 @@
 # are each a day before their tags, and stand.
 
 [[release]]
+version = "1.2.24"
+date = "2026-10-26"
+head = "Compact supporting note in AI Settings."
+bullets = [
+  "AI Settings now uses a compact supporting note, leaving more room for the controls.",
+]
+
+[[release]]
 version = "1.2.23"
 date = "2026-10-24"
 head = "More accurate selections and clearer study screens."

@@ -2492,8 +2492,13 @@ filled in (here Claude (Anthropic)):
 Choosing None as the assistant, or clearing that provider's key, withdraws
 the permission, and the app asks again next time. Find and Ask are covered
 too: nothing is sent to a provider without that provider's recorded
-permission. The note under the key field is set in body text, with the same
-words. One rule on all six, so no divergence is recorded.
+permission. In 1.2.23 the note under the key field was set in body text,
+with the same words. One rule on all six, so no divergence is recorded.
+
+In 1.2.24 the supporting Settings note returns to the muted caption style
+used before 1.2.23, giving the account controls visual priority. The paragraph
+and Privacy Policy link remain available. The first-use permission question
+retains its presentation and behaviour.
 
 Settled on 21 October 2026:
 
@@ -2580,7 +2585,7 @@ machine through the seams below the check (`aiStudyGenerate`, new, and
 - Clear and None in the Settings sheet withdraw it;
 - the question carries the approved words for all four providers on a
   desktop window and a 320-point phone canvas, wrapped inside its card;
-- the Settings note is body text;
+- the supporting Settings note is a muted caption;
 - a light/dark change or a rotation with the question up over the panel
   brings both back, with Ask's question as typed, sends and records
   nothing, and Allow then sends the question with the passage once;

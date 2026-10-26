@@ -830,6 +830,12 @@ platform checks remain to run (BACKLOG, P4).
 
 ---
 
+## 1.2.24
+
+| # | Item | Behaviour and scope | Verification |
+|---|---|---|---|
+| 1 | Supporting AI Settings note | Restore the note under the AI key controls to muted caption text, as before 1.2.23, so it occupies less space and has the same weight as other settings guidance. | Settings and permission checks in both build states, plus native phone rendering in both appearances and orientations. |
+
 ## Later minor releases: 1.2.23 and after
 
 The order:
