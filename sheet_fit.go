@@ -94,7 +94,16 @@ const minSheetHeight = 160
 // as well (sheetArea). A seam, so a host test can give the test driver's
 // canvas — which has no insets and no keyboard — a phone's insets and a
 // keyboard.
-var canvasArea = func(c fyne.Canvas) (fyne.Position, fyne.Size) { return c.InteractiveArea() }
+// A native editor can own the IME in another window, while the activity's
+// interactive area remains unchanged. Other platforms keep the driver's area.
+var nativeComposeArea = func(_ fyne.Canvas, pos fyne.Position, size fyne.Size) (fyne.Position, fyne.Size) {
+	return pos, size
+}
+
+var canvasArea = func(c fyne.Canvas) (fyne.Position, fyne.Size) {
+	pos, size := c.InteractiveArea()
+	return nativeComposeArea(c, pos, size)
+}
 
 // keyboardFootFloor separates a safe inset from a keyboard: no device's
 // bottom safe inset — the home indicator's 34pt, a tablet's 20pt, an Android

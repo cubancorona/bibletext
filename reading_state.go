@@ -105,7 +105,8 @@ type restoreAnchor struct {
 	Verse   int
 	Delta   float64
 	Frac    float64
-	Marker  int // verse to softly mark on reopen ("you left off here"); 0 = none
+	Reflow  bool // transient same-chapter layout carry; never persisted
+	Marker  int  // verse to softly mark on reopen ("you left off here"); 0 = none
 }
 
 // rotationAnchorWanted is captureRotationAnchor's decision with every input
@@ -134,6 +135,7 @@ func captureRotationAnchor(state *AppState) {
 			Verse:   v,
 			Delta:   d,
 			Frac:    f,
+			Reflow:  true,
 		}
 	}
 }

@@ -160,18 +160,21 @@ func buildCompactUI(state *AppState) fyne.CanvasObject {
 	// THE NAVIGATION'S PLACE. The same destinations on one of two edges,
 	// decided by compactNavRail: on a phone or a tablet the leading rail while
 	// the window is wider than it is tall and the bottom bar otherwise
-	// (mobileRailWanted); on a desktop window the rail, whatever its shape
-	// (BIBLETEXT_DESKTOP_TABS overrides, ui_compact_desktop.go). Only the edge
-	// they sit on differs.
-	var body fyne.CanvasObject
-	if compactNavRail(state) {
-		body = container.NewBorder(header, nil, buildTabRail(state), nil, content)
-	} else {
-		body = container.NewBorder(header, buildMobileTabBar(state), nil, nil, content)
-	}
+	// (mobileRailWanted). Desktop windows follow the same rule unless
+	// BIBLETEXT_DESKTOP_TABS pins an edge (ui_compact_desktop.go).
+	body := compactNavigationBody(state, header, content)
 
 	base := canvas.NewRectangle(pal.Background)
-	return windowRoot(state, base, body)
+	return windowRoot(state, base, watchCompactNavigation(state, body, header, content))
+}
+
+// compactNavigationBody puts the shared destinations on the chosen edge without
+// replacing the header or the active tab's content.
+func compactNavigationBody(state *AppState, header, content fyne.CanvasObject) *fyne.Container {
+	if compactNavRail(state) {
+		return container.NewBorder(header, nil, buildTabRail(state), nil, content)
+	}
+	return container.NewBorder(header, buildMobileTabBar(state), nil, nil, content)
 }
 
 // compactReadingPane is the reading slot of the shared layout: the search
@@ -719,7 +722,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		case !hasAIKey(state) || (state.aiSearchErr != nil && isNoKeyError(state.aiSearchErr)):
 			view = aiNoKeyView(state)
 		case state.aiSearchErr != nil:
-			view = aiSearchMessageView(friendlyAIError(state.aiSearchErr), "Try again",
+			view = aiSearchErrorView(state, state.aiSearchErr,
 				func() { runAsk(state.aiSearchQuery) })
 		case state.aiSearchCancelled && len(state.aiSearchResults) == 0:
 			prompt, view = true, aiSearchPromptView(state)
@@ -1089,8 +1092,10 @@ const (
 // tablet window wider than 560. No phone gets it. A phone held sideways once
 // did: an iPhone's Books and Search kept the bar there, 874 or 956 points
 // wide, and wore this dress with its tabs bunched in the middle, until the
-// rail took its place. The desktop draws a bar only when
-// BIBLETEXT_DESKTOP_TABS asks for one.
+// rail took its place. A desktop window taller than wide draws the bar too,
+// once its canvas has a size, with the dress its width chooses here;
+// BIBLETEXT_DESKTOP_TABS=bar pins the bar in every shape
+// (ui_compact_desktop.go).
 const tabBarSpreadMaxWidth float32 = 560
 
 // tabBarGroupWidth is the width of the tabs THEMSELVES — no chrome. The pill

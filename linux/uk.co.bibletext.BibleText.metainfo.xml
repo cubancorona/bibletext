@@ -75,6 +75,14 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.2.25" date="2026-11-03">
+      <description>
+        <p>Clearer messages when AI study cannot answer: if the account behind your key has run out of credit or reached its spending limit, or a request takes too long, the message says so and offers Try again, the provider's billing page or a faster model.</p>
+        <ul>
+          <li>Navigation follows the window's shape: a tall window shows Read, Books and Search at the bottom, as on a phone; a square or wider window shows them in the rail on the left. Resizing keeps your place.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.24" date="2026-10-26">
       <description>
         <p>Compact supporting note in AI Settings.</p>

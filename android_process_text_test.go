@@ -138,12 +138,26 @@ func TestAndroidReadingToolbarOffersOtherAppsTextActions(t *testing.T) {
 				"private static final int A11Y_PROCESS_TEXT_END = 0x10001000;",
 				"private static final android.util.SparseArray<Intent> a11yProcessText = new android.util.SparseArray<>();") &&
 			strings.Count(code(src), "processTextActions(") == 2 && // the declaration and the node's call
-			strings.Count(code(src), "performAccessibilityAction(") == 2 // the override and its super call
+			strings.Count(code(view), "performAccessibilityAction(") == 2 // this TextView override and its super call
 	}
 	if !actions(java) {
 		t.Error("the reading view's accessibility actions for other apps' text actions must be its own: " +
 			"onInitializeAccessibilityNodeInfo ends with processTextActions, which replaces the platform's, " +
 			"and performAccessibilityAction performs every id of the platform's range with processTextAsRead")
+	}
+	// Another view may handle its own accessibility actions. Its override must
+	// neither satisfy nor invalidate the reading TextView's process-text rule.
+	unrelated := strings.Replace(java, "    private static void ensureView() {", `    private static ScrollView unrelatedAccessibilityView() {
+        return new ScrollView(activity) {
+            @Override public boolean performAccessibilityAction(int action, android.os.Bundle arguments) {
+                return super.performAccessibilityAction(action, arguments);
+            }
+        };
+    }
+
+    private static void ensureView() {`, 1)
+	if unrelated == java || !actions(unrelated) {
+		t.Fatal("another view's accessibility override changed the reading TextView contract")
 	}
 
 	// Scripture is never edited: nothing in the bridge reads what an app

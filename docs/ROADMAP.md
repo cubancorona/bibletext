@@ -1,6 +1,6 @@
 # Roadmap
 
-The plan as of **21 October 2026**: which release each open item in
+The plan as of **3 November 2026**: which release each open item in
 [BACKLOG.md](BACKLOG.md) is planned for, in what order, and the decisions still
 open. It is the plan, not a promise, and it is updated as releases go out: a
 row leaves when its release ships, an item moves when a decision settles it,
@@ -34,8 +34,8 @@ with the size. "All six" means iPhone, iPad, Mac, Android, Windows and Linux.
   the switch. A change no build tag can hold — a toolkit or module version,
   the minimum OS, how stored data is laid out — keeps a branch for the major
   (NEXT.md, *What needs a branch instead*), or ships unswitched in a minor
-  when readers need it sooner. The desktop navigation rule (Later minor
-  releases, row 1) and 1.2.20's AI study and passage-preview additions are
+  when readers need it sooner. The desktop navigation rule (Next minor
+  release, row 2) and 1.2.20's AI study and passage-preview additions are
   explicit exceptions.
 
 ---
@@ -344,10 +344,22 @@ corrections" (BACKLOG.md).
 
 ---
 
-## 1.2.23, on `rel/1.2.23`
+## 1.2.23, released 25 October 2026
 
-Eighteen rows, each built and reviewed on its own branch and merged into
-`rel/1.2.23`; none is on `main`. Rows 1 to 6, from Later minor releases,
+1.2.23 (build 194) is published on every release channel: the iPhone/iPad
+and Mac App Stores, Google Play production, Microsoft Store, both Snap
+stable architectures, GitHub and the website. Its immutable application tag
+is `v1.2.23` at `e0588cfc6`; the website's subsequent source change set the
+privacy policy's effective date. The eighteen rows below are its completed
+release scope. Their earlier branch and platform observations are historical
+preparation records, not outstanding release work or verification of the
+next minor candidate.
+
+### Preparation history
+
+Eighteen rows were built and reviewed on their own branches and merged into
+`rel/1.2.23`. At that preparation checkpoint none was on `main`.
+Rows 1 to 6, from Later minor releases,
 were built from `149b85a91` and merged on 15 October 2026, in this order:
 rows 3 and 4 (`ec5439c80`), row 6 (`3baf40bc9`), row 5 (`e47b3d628`),
 row 2 (`a9d64c6a6`) and row 1 (`837b07d4f`). The same day `rel/1.2.23`
@@ -355,8 +367,8 @@ took `main` at `9425d2b6d`, 1.2.22 as prepared for release (build 193).
 On 21 October 2026 it took `main` at `d03c3f36a`: 1.2.22 as released on
 16 October 2026 (`v1.2.22`, `ee9340f49`), its row 32 among them, and the
 privacy policy's sentence on the AI panel's Report email (Beside 1.2.22,
-row 3). So the branch holds every row of 1.2.22, and its version number
-is 1.2.22's until 1.2.23's bump. Rows 7 to 15, each built from
+row 3). At that point the branch held every row of 1.2.22, and its version
+number remained 1.2.22's until the 1.2.23 bump. Rows 7 to 15, each built from
 `rel/1.2.23` at `be1440fe0`, were merged on 21 October 2026, in this
 order: rows 8 and 9 (`ff87dcf96`); the record of the Windows checks of 15
 October 2026, which stays in Later minor releases, row 40, for what is
@@ -399,20 +411,21 @@ included key and row 17's two lines were approved on 21 October 2026
 (*Wording and decisions still open for 1.2.23*, below); row 17's ✕ has
 no words; the rest add none. Rows 5 and 6 are toolkit patches, Patches 13 and 12 in
 `patches/README.md`, applied by `scripts/setup-fyne-patch.sh` in that
-order after Patch 11. Rows 7, 10 and 11 change the website too, which
-reaches readers with the next `scripts/publish-site.sh`; its pinned
-digests moved with them in both states of the switch. Row 13 changes the
-privacy policy (`docs/privacy.html`), which the same publish carries, with
-its effective date set to the day of that publish (docs/RELEASING.md,
-stage 11).
+order after Patch 11. Rows 7, 10 and 11 changed the website too, and
+reached readers with the 1.2.23 website publish on 25 October 2026 through
+`scripts/publish-site.sh`; its pinned digests moved with them in both states
+of the switch. Row 13 changed the privacy policy (`docs/privacy.html`),
+which the same publish carried, with its effective date set to that day
+(docs/RELEASING.md, stage 11).
 
-The four round-four follow-ups are integrated locally in `rel/1.2.23`
-on 23 October 2026, uncommitted: unfinished words across headings,
-the small inline dismissal with confined touch-only geometry, the AI
-waiting/error quote fit, and the neutral missing-key rule on Android and
-signed Apple builds. Combined checks and runtime verification remain.
-Earlier branch hashes and 22 October measurements below are historical
-evidence for those earlier builds, not verification of these revisions.
+At the 23 October 2026 checkpoint the four round-four follow-ups were
+integrated locally in `rel/1.2.23` and still uncommitted: unfinished words
+across headings, the small inline dismissal with confined touch-only geometry,
+the AI waiting/error quote fit, and the neutral missing-key rule on Android
+and signed Apple builds. That checkpoint still required combined checks and
+runtime verification; these changes subsequently shipped in 1.2.23. Earlier
+branch hashes and 22 October measurements below remain evidence for those
+earlier builds and are not new runtime acceptance of later revisions.
 
 | # | Item (BACKLOG.md entry) | What a reader notices | Size / risk | Platforms | Decision | Notes |
 |---|---|---|---|---|---|---|
@@ -830,11 +843,42 @@ platform checks remain to run (BACKLOG, P4).
 
 ---
 
-## 1.2.24
+## 1.2.24 caption hotfix
+
+1.2.24 (build 195), the immutable `v1.2.24` tag at `a2d7022f7`, restores
+the supporting AI Settings note to its previous 11pt muted caption style
+without changing its words. The released hotfix excludes the larger
+account-error, desktop-navigation and native Android editor changes below.
+The table records its scope and validation requirements, not a test result
+for the next minor candidate.
 
 | # | Item | Behaviour and scope | Verification |
 |---|---|---|---|
 | 1 | Supporting AI Settings note | Restore the note under the AI key controls to muted caption text, as before 1.2.23, so it occupies less space and has the same weight as other settings guidance. | Settings and permission checks in both build states, plus native phone rendering in both appearances and orientations. |
+
+## Next minor release, in progress
+
+These rows are built without `next` and are not yet released; their version
+and build are assigned when the release is prepared. Each row's BACKLOG.md
+entry has what it does, what holds it, what has been seen on which platform
+and what has not.
+
+The combined reading reflow implementation also includes Mac geometry-owned
+scroll clamps and Android saved-request/event ownership. The latter separates
+an already-issued restore from a new equal-coordinate history visit and waits
+for current native layout before consuming pending placement. These changes
+do not alter visual dimensions. BACKLOG.md records the bounded native
+observations, including Android cold saved placement, iPad rotation at a fixed
+text measure, the calibrated TalkBack comparison and Linux/Windows rendered-position
+checks. These observations do not establish every device, OS input or normal
+startup. Contracts and broader checks are in ARCHITECTURE.md, ANDROID.md and
+VISUAL_TESTS.md; exact final CI and release-package acceptance remain separate.
+
+| # | Item | Behaviour and scope | Verification |
+|---|---|---|---|
+| 1 | AI account and timeout errors (BACKLOG.md, "AI account and timeout errors") | Confirmed exhausted credit or a spending limit names the provider, links its billing page and offers Try again. A request written whole and not answered before its deadline or within the wait for its response headers, and HTTP 504, names the provider and offers Try again or the faster model, after one attempt, the line naming the faster model only where the screen offers it; a connection never made, or lost, keeps 1.2.24's existing bounded automatic recovery and connection line. Confirmed 3 November 2026: retain seamless recovery, with up to three attempts while the request budget lasts. A resend after a connection fails may duplicate a request already received by the provider and its charge. HTTP 408 keeps the existing ordinary 4xx policy: one attempt and "The AI service returned an error. Please try again shortly.", without timeout-only faster-model recovery. Ordinary rate limits, authentication, cancellation and the output-token allowance stay distinct. The account-limit line, the timeout line that names the faster model, the quoted reason and the actions' labels were decided on 15 and 16 October 2026; the timeout line without the faster model, the line for a billing error that is not an exhausted balance or cap, the line for a cancelled request, the fallbacks with no provider captured and the vendor names on 2 November 2026, the same day as quoting only the recognised opening clause and placing Try again above the billing link; each line is held word for word (`ai_error_wording_test.go`). See [AI_ERRORS.md](AI_ERRORS.md). | Provider classification, cancellation and supersession, and the study, Find and Test key surfaces have synthetic coverage (`ai_errors_test.go`, `ai_error_ui_test.go`), and what counts as a timeout is held on real transports in the process (`ai_timeout_scope_test.go`); no live provider call. Seen on 2 November 2026 in development builds of `bb4b0ffd29`, beside the v1.2.24 tag: on the Mac under macOS 26.6.2, on Ubuntu 24.04 (arm64) in a virtual machine, and on the iPhone 16 Pro and iPad mini simulators under iOS 26.5, every provider request answered by a fake server (BACKLOG.md, which records what each showed and why the later spacing, timeout-scope and timeout-line changes leave it standing). The scope of a timeout and the timeout line's two forms seen on the Mac the same day at `6e10f7bfac`, beside `9207a08549` and the v1.2.24 tag (BACKLOG.md). Those 2 November observations did not include Android or Windows. The 3 November Linux and Windows fixtures separately checked account-error, explicit retry and result rendering; they did not cover every provider or timeout form. |
+| 2 | Adaptive desktop navigation (BACKLOG.md, "The desktop takes the phones' navigation rule") | On the Mac, Windows and Linux a tall window uses the existing bottom bar and a square or wider window the existing rail, with no dead zone, about 250 ms after the last resize; `BIBLETEXT_DESKTOP_TABS` still pins an edge. Only the navigation chrome is repacked: the reading page, open sheets, drafts, selection and in-flight work stay. Settled 21 October 2026; ships without `next`. No in-app words; README.md's Quick navigation sentences describe the rule (decided 2 November 2026: they stand as written). The bar, rail, icon and button dimensions are unchanged. Implemented locally on 3 November 2026: live same-chapter reflow carries a text character and fraction through its line on the native and styled panes, and Mac, iPhone/iPad and Android retain valid unchanged-text selections through a page-format import. Explicit arrivals and changed chapter/text refuse the carry. Saved reading/history anchors retain their existing units. The bounded native observations and their limits are recorded in BACKLOG.md and PLATFORM_MATRIX.md (historical divergence 39 and saved-anchor divergence 33; Later minor releases, row 50). Exact-source CI and release-package checks remain separate. | `desktop_navigation_test.go` (fake-clock settle, stale callbacks, both sides of square, forced modes, page, selection and sheet identity), `reading_styled_area_test.go` (styled-pane reflow placement) and `reading_selection_macos_test.go` (the Mac selection carry, over the chapter pages with the footnotes shown and hidden), plus `reading_reflow_position_test.go`, `reading_reflow_macos_test.go`, `reading_reflow_apple_test.go`, `reading_reflow_mobile_test.go` and `reading_reflow_intent_test.go` for semantic position and guarded selection carry. The following 2 November observations predate the combined semantic carry and do not verify it. Seen on 2 November 2026 in development builds of `01348dc7c1` on macOS 26.6.2 and on an Ubuntu 24.04 virtual machine: the rule at 600x900, 1280x700, 700x700 and 699x700, one move after the last of 40 resizes, 261 ms after it on the Mac and 274 to 330 ms on Linux, unchanged dimensions, and the sheets, draft and selection kept across a switch each way; a Go to placement (John 11:35) had verse 35 at the top on the Mac and kept its top verse on Linux after the switch, and was back at its verse and offset after the return. In the Linux mimic on the Mac the same day: the rule at those four sizes with the same dimensions, and the selection and the Go to placement's top verse kept (BACKLOG.md). With the footnotes shown, seen the same day in a development build of `5f8322fa19` on macOS 26.6.2: a selection of Scripture kept across a switch each way, where builds of `a12ab51d7a` and `a2d7022f7` left a caret; a place scrolled to 600 points in moved from verse 8, 105.5 points in, to verse 9, 22.2 points in, after the switch and stayed there after the return, as on `a12ab51d7a`, and on `a2d7022f7` from its own place, verse 7, 76.0 points in, to verse 8, 46.4 points in (the offset in points of divergence 33). That 2 November checkpoint did not include Windows native or mimic runs. On 3 November the combined Linux fixture retained its point and selection through 600x850, 700x700 and 1280x700 clients and return, with twelve raw-model proofs, 14 actual native images and the Note/in-flight/error/retry/Close cases recorded in BACKLOG.md. The matching 3 November Windows 11 arm64 fixture completed the same 15-acknowledgement matrix and 14 native images at DPI 96 with retained selection and mapped point. BACKLOG.md records its controller cleanup failure and independent task removal; the app OS exit code was not captured. OS input, normal startup and release-package acceptance remain separate. |
+| 3 | Native Android Note and Ask editors (BACKLOG.md, "Native Android Note and Ask editors") | Decided 2 November 2026: ships in 1.2.25. Share with note and Ask a question edit in a native multiline `EditText` inside the existing card, as the iPhone and iPad do in a `UITextView`. Decided 3 November 2026: keep the shared 112-unit slot, about five and a half Android lines at the existing font size; shared expanded-passage sizing stays unchanged. Android dismisses its keyboard for Show passage on dense composers and resumes editing on Hide passage, while iOS keeps its existing behavior (PLATFORM_MATRIX.md, divergence 40). The counter and actions stand 78.64 units lower than beside the toolkit field's one line, as on the iPhone; the 14pt text and every visible control dimension are unchanged. Return adds a newline and the existing Share or Ask action submits; Back hides the keyboard first, then closes the card; a rotation or a light/dark change keeps the editor's window, whose replacement left the field undrawn on the API 35 image. No new reader-facing words. | `note_entry_draft_test.go`, `note_entry_geometry_test.go`, `note_entry_layout_test.go` and `note_entry_android_contract_test.go`; the Android Go, JNI and Java sources compile under `scripts/check-android-pane.sh` and `scripts/check-android-java.sh`. Seen on API 24, 30 and 36 emulator images (27 to 29 October 2026), a physical API 37 phone (31 October 2026) and API 30 and API 35 emulator images (2 November 2026). With the window kept and the 112-unit field (2 November 2026): five turns through both landscape orientations with a one-line draft and five with a two-line draft, in both cards, drew and focused the same editor window after every rotation, with the draft kept and no ANR, TalkBack on and off, on the API 35, API 33, API 30 and API 36 phone images and the API 35 tablet image (the API 30 image has no TalkBack of its own; the API 33 image's was installed for the runs). On 3 November 2026, the keyboard-dismissal policy passed on the API 35 emulator for Note and Ask with synthetic ASCII drafts, TalkBack off: the 112-unit portrait slot, draft, owner and action sizes were retained; Show passage exposed a 64.83-unit passage viewport, and tapping the field resumed typing. The other images' older runs do not verify this newer policy. A calibrated API 35 phone comparison on 3 November observed no underlying chapter-word speech requests in released and candidate Note/Ask during four marked rotation intervals. Cards were opened through ordinary controls with TalkBack off, then it was enabled; both versions did not reproduce the earlier retained-caption observation. This is qualified nonreproduction, not a fix or full accessibility acceptance; ANDROID.md records the instrumentation and route limits. Unicode IME composition and dictation unverified. |
 
 ## Later minor releases: 1.2.23 and after
 
@@ -882,6 +926,10 @@ The order:
 - Row 49, the faster-model offer for ChatGPT that switched readers to a
   model that then read as unavailable, was found and fixed on 15 October
   2026 and went into 1.2.22 the same day (row 30 there).
+- Row 50 was recorded on 2 November 2026 with the desktop navigation rule
+  (Next minor release, row 2): the Mac keeps a selection through a
+  page-format import, which the iPhone, iPad and Android drop; whether they
+  take the Mac's rule, one pane at a time, is open.
 - The rest follow as their decisions arrive.
 
 Rows 26, 32 and 33 come from the same work as 1.2.22's rows. Each is a fix to what
@@ -890,7 +938,7 @@ minor release and none behind `next`; each row says why it is not in 1.2.22.
 
 | # | Item (BACKLOG.md entry) | What a reader notices | Size / risk | Platforms | Decision | Notes |
 |---|---|---|---|---|---|---|
-| 1 | The desktop takes the phones' navigation rule | A Mac, Windows or Linux window taller than it is wide shows Read, Books and Search on a bar along the bottom, as phones and tablets do, instead of a rail down its narrow side. | L / medium | Mac, Windows, Linux (retires divergence 29) | Approved 1 October 2026 for a minor release. Open: the dead zone (proposed: the rail from 10% wider than tall, the bar from 10% taller) and the settle of about 250 ms; and whether it ships unswitched as approved (recommended: a minor release's headline; which one is Decisions still open, 3) or is built behind `next` and graduates early, which NEXT.md does not yet describe. | The exception to "new goes in the major". A bar appears on tall desktop windows, and rebuilding the window mid-resize on the Mac's native reading view is new, so it needs a pass on the Mac and on both virtual machines. Tiled window managers are its main audience and one of the watch triggers of the closed first-frame entry, so centring is checked there in the same pass. |
+| 1 | The desktop takes the phones' navigation rule | Moved to Next minor release, row 2. | L / medium | Mac, Windows, Linux (retires the always-rail divergence 29) | Settled 21 October 2026: no dead zone, about 250 ms after the last resize, switched on without `next`. | The existing bar and rail keep their dimensions; the BACKLOG.md entry has what is kept across a resize, what has been seen on the Mac and on Linux, and that Windows has not yet been seen. |
 | 5 | The Windows and Linux footnote section stays ragged (in "The reading page: what is left after 24 September 2026") | On Windows and Linux, the notes at the foot of a chapter are justified like the text above them. | M / medium | Windows, Linux | None | A parity improvement. Clicking within the notes has to follow the separately drawn words. The hyphenation half is the next major's (row 12 there). |
 | 6 | Website and apps: the remaining layout differences (in "The reading page: what is left after 24 September 2026") | The website and the apps space two headings in a row alike and share a column width, and a paragraph that opens in prose and turns to poetry follows one rule for justification. | M / low | The website and every app | Open: one gap for two headings in a row (site 1.1em, iPhone 0.35em, Windows and Linux 1.45em); the column width; and whether such a paragraph stops being justified (and hyphenated) whole on the website and Android 15+, which the 24 September reading-page record makes their shared rule while the worklist's 7 September defects list counts the website's 990 such paragraphs as a defect. | One rule everywhere, and no data changes. The gap for a title followed by a heading is in the next major (row 7 there), because which gap applies depends on which comes first. |
 | 7 | One way to turn a verse into drawn words, not two | None (internal): the card's lost spaces were fixed on 22 September; this removes the duplicate code that caused them. | M / medium | The Windows and Linux reading view; the verse-of-the-day card on all six | None. Unify the word model, carrying the card's letter-by-letter colour splitting, or two BSB verses change colour; and run the `spacingaudit` guard in CI, which never runs today. | Readers see no change, so it is not bug-fix material. Row 8 builds on it. |
@@ -907,6 +955,7 @@ minor release and none behind `next`; each row says why it is not in 1.2.22.
 | 40 | Windows: the Store checks deferred from 1.2.20, and a look at its share fallback (in "Windows: use the native Share sheet"; "The Windows audio smoke is probably testing a silent sink"; "Microsoft Store: from the reserved name to the first submission") | Nothing if they pass. If not, a picture share from the Store install fails or saves somewhere unexpected. | S / low | Windows (the Store install and the direct download, on the Windows 11 arm64 virtual machine) | Decided 7 October 2026: moved to the release after 1.2.20. Which release now is open (Decisions still open, 2). | 1.2.20's row 11: the share from the Store install; the three Store checks (`WINDOWS_STORE_LISTING.md`, *Resuming with a Windows machine*, steps 3, 4 and 8); step 3 of the audio smoke; and a picture share whose card could not be read, through the fallback (1.2.20, row 1; in the entry on Share as image saying "Picture saved" for a card it could not read). Run in part on 15 October 2026 on the virtual machine, reached through its guest agent, with 1.2.21's arm64 package as submitted to the Store: its layout registered under a renamed identity, `bibletext.co.uk.BibleText.ShareCheck`, in development mode, as on 1 October 2026, and its executable, with ANGLE beside it, run from a folder without package identity, as the direct download runs; the release's zip itself was not run, and its executable is built by the same commands as the package's (`scripts/build-windows-exe.sh`, held to the release job's by `scripts/test-release-key-flow.sh`). The Store's own install there is 1.2.19, Store-signed, which carries the Share sheet; it was not launched. Passed: Share as image from the renamed package, the sheet showing the copy with its thumbnail and the copy in the user's own temp folder, as on 1 October; an https link to the site pasted into the Run box (step 4, pass (a)), which Windows offered to BibleText or Edge and which, given to BibleText, opened the app at John 3:16 with the whole link on its command line, while the same link clicked inside Edge stayed in Edge; that executable's listener, on 127.0.0.1 only, with no firewall prompt and no rule made, where a control listener on every address raised the prompt (step 8); its handoff, where a second launch with a link while the window was minimised kept one process and restored the window at the link's verse, and a cold launch opened at its verse (step 8); step 3 of the audio smoke, a test binary built in the guest with cgo, which reached the natural end and then idle with WASAPI in use, with no control run without an audio device; and, from that executable, a picture whose card was deleted between the preview and Share, which by 1.2.21's rule opened neither sheet, saved nothing and logged why, where the control with the card in place opened Windows' sheet. Run halfway: Edge's prompt for a `bibletext:` link on a local page (step 3), seen with its "Always allow" choice and cancelled; it named "Pick an app"; two packages claimed the scheme there, where a reader with the Store's install has one, and the prompt with one was not seen, so why it named no app is not established. Left: Share as image from the Store's own install, and where its copy lands; an https link clicked in Outlook or Teams, which had no signed-in account there, and pass (b), which needs the Store's package family name, the only one the consent file names, so whether Windows accepts the consent file is still open; why Windows' lookup of the link's handlers named the renamed package alone and not the Store's install, although Settings lists two BibleText entries for the site, both on, which is not established; Edge's prompt with one package claiming the scheme, what it names and whether Open starts the app, Chrome's and Firefox's, which are not installed there, and pass (b) after uninstalling; and the unreadable card with package identity, whose expected outcome row 2 changes from no sheet to a line. Outside the three entries, three passages are now out of date and are to be brought up to date: PLATFORM_MATRIX's *Not yet proven* bullet on Windows arm64, which names the runs of 30 September and 1 October 2026 only; its Sharing note that the Windows fallback for a card that could not be read has not been seen on Windows; and `WINDOWS_STORE_LISTING.md`'s *Resuming with a Windows machine*, still as of 16 September 2026, whose step 8 asks the firewall question answered here. The audio smoke's entry closes; the other two stay open for what is left. |
 | 42 | 1.2.20's rows: the checks still to run on hardware (in "1.2.20's roadmap rows with no entry of their own"; "Android: an activity destroyed with the process alive stops the narration") | Nothing if they pass. | M / low | iPhone, iPad, Windows (Android's part passed on 14 October 2026) | None | Back on Android 11 and older (1.2.20, row 4): PASSED 14 October 2026 on an Android 11 (API 30) emulator image. With the WEB's John 3 narrated, Back finished and destroyed the root activity in a process that lived on; 5 and 35 seconds later the media session was playing, the player started, audio focus held and the service in the foreground, and the app reopened about 75 seconds later on the narration still playing, its read-along following. A swipe from Recents, the control, ended all four. Ask (1.2.20, row 18): reading, dictation and VoiceOver on a physical device. The shared panel (row 19): a native Windows run, and the physical hit region of the 44-point control under the toolkit's eight-point touch compensation. iOS rendering during app switching and font memory (rows 20 and 21): the cause of the physical exits seen before them, which the simulator runs do not establish. |
 | 44 | The release procedure does not say why Play's publish-on-approval is checked by hand (in "The release pipeline: what still waits on something it need not") | None (internal). | S / low | Google Play release procedure | None | Apple's release type is set by `appstore/submit-version.py` and read back before a submission; Play's, Managed publishing off, is read in the Publishing overview and recorded (RELEASING.md stage 6; PLAY_LISTING.md, *Publishing mode*), with no reason given for its being a hand check. The only asymmetry between the Apple and Play legs of the release procedure still open at `6bf27aee4`. |
+| 50 | The iPhone, iPad and Android keep a selection through a page-format import | After a turn of the device, or a window resize, that moves the reading page between its book and phone formats, the words a reader selected stay selected on an iPhone, an iPad and Android, as on the Mac, Windows and Linux. | M / medium | iPhone and iPad (one pane), Android (historical divergence 39) | Implemented locally on 3 November 2026 in the combined candidate; bounded native observations and limits are recorded in BACKLOG.md. A same-chapter import carries a valid nonempty selection only when its text is unchanged and no explicit arrival is pending. Changed appended apparatus is allowed only for ranges in unchanged Scripture. | Native guards and mapping are in `reading_ios.go`, `reading_macos.go` and `android/BtReadingReflow.java`, with coverage in `reading_reflow_apple_test.go`, `reading_reflow_mobile_test.go` and `reading_selection_macos_test.go`. The same candidate includes transient semantic reading-position carry; saved reading/history units are unchanged. Native builds and bounded Mac, iPhone, iPad and Android observations are recorded in BACKLOG.md. The iPad rotation retained its fixed text measure, so wrap-changing iPad reflow remains an explicit validation limit; the shared iOS pane's changed-wrap cases were exercised on iPhone. The API 35 Android cold saved-position case and subsequent rotation checks passed with zero-pixel mapped error; the Linux and Windows native fixtures separately verified their text models, scroll translation and matching return pixels. These dated observations do not establish every device or input path, and source checks do not substitute for native evidence or exact final CI and package acceptance. |
 
 ---
 
@@ -1022,9 +1071,10 @@ later minor releases, *Next major* and *Stays*.
 
 ### Before the work after 1.2.22 starts
 
-3. **What leads 1.2.23**: the selection's place in its verse went into
-   1.2.22 on 14 October 2026 (row 11 there), so what is left is whether the
-   desktop's navigation rule (Later, row 1) leads it.
+3. **The desktop navigation release**: 1.2.23 has shipped. Adaptive desktop
+   navigation is built for the next minor release alongside the AI
+   account/timeout error handling and native Android editors listed above.
+   Final combined testing and release preparation remain.
 4. **The selection's place in its verse** (1.2.22, row 11): taken 14 October
    2026; one change on all four panes, as the parity rule asks, in 1.2.22.
 5. **Permission before text goes to a third-party AI** (Later, row 39):
@@ -1054,9 +1104,11 @@ later minor releases, *Next major* and *Stays*.
    of the site's publish (docs/RELEASING.md, stage 11), which does not
    wait for the stores. Confirmed on 22 October 2026: the effective date
    is the day the website is published with 1.2.23 (1.2.23, row 13).
-6. **The desktop's navigation rule** (Later, row 1): the dead zone and the
-   settle; whether it ships unswitched in a minor release as approved
-   (recommended) or is built behind `next` and graduates early.
+6. **The desktop's navigation rule** (Next minor release, row 2): settled
+   21 October 2026 for the next minor release, without `next`. Use the
+   phone/tablet boundary, including rail at square, no dead zone and a
+   250 ms settle. Move the existing navigation in place rather than
+   rebuilding the active page. Final combined acceptance remains.
 7. **Shares that cannot finish** (Later, row 2): taken 15 October 2026,
    Draft A: "Could not open your email program." under the buttons when
    Email… fails; "Could not share the card." reused for the picture

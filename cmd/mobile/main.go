@@ -7,8 +7,8 @@
 //	# Android (requires the Android SDK + NDK):
 //	fyne package -os android -appID uk.co.bibletext -src ./cmd/mobile
 //
-// On phones the mobile layout (bottom tabs: Read / Books / Search) is selected
-// automatically via the `//go:build ios || android` tag on ui_mobile.go.
+// On phones and tablets the mobile layout (Read / Books / Search, as a bar
+// or rail according to window shape) is selected by ui_mobile.go's build tag.
 package main
 
 import (

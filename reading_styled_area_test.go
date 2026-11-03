@@ -33,6 +33,7 @@ func resetStyledWiring() {
 	styledScroll, styledPane, styledState, styledFP = nil, nil, nil, ""
 	styledRestoreArmed, styledUserScrolled, styledApplyingScroll = false, false, false
 	styledRestoreVerse, styledRestoreDelta, styledRestoreFrac = 0, 0, 0
+	styledReflowAnchor = styledReadingReflowAnchor{}
 	styledFollowPill = nil
 	styledRAFollowPending = false
 	styledHighlightCeded = false
@@ -304,6 +305,138 @@ func TestStyledResizeIsNotAReaderScroll(t *testing.T) {
 		t.Error("a genuine reader scroll must still be recorded — the fix must " +
 			"not make the handler inert")
 	}
+}
+
+func TestStyledWidthReflowPreservesPendingPlacement(t *testing.T) {
+	for _, pending := range []string{"saved restore", "explicit arrival"} {
+		t.Run(pending, func(t *testing.T) {
+			app := test.NewApp()
+			t.Cleanup(app.Quit)
+			t.Cleanup(resetStyledWiring)
+			state := longPsalmState()
+			area := styledReadingScrollArea(state, state.Bible.GetChapter("Psalms", 119), lightPalette)
+			window := test.NewWindow(area)
+			t.Cleanup(window.Close)
+			window.Resize(fyne.NewSize(620, 300))
+			styledScroll.Offset = fyne.NewPos(0, 400)
+			if pending == "saved restore" {
+				armStyledRestore(20, 3, 0.5)
+			} else {
+				state.forceReposition = true
+				armStyledRestore(0, 0, 0)
+			}
+			window.Resize(fyne.NewSize(280, 300))
+			for pass := 0; pass < 4; pass++ {
+				area.Refresh()
+			}
+			if pending == "saved restore" {
+				verse, delta, _, ok := captureStyledAnchor()
+				if !ok || verse != 20 || delta < 2 || delta > 4 {
+					t.Errorf("width reflow replaced the pending restore: verse %d+%.1f", verse, delta)
+				}
+			} else if !state.forceReposition || styledRestoreArmed || styledRestoreVerse != 0 || styledScroll.Offset.Y != 400 {
+				// A captured anchor would already have been applied and
+				// disarmed by the settling passes, so the target and the
+				// offset are what show it.
+				t.Fatalf("width reflow captured the old page over an explicit arrival: restore verse %d, offset %.1f", styledRestoreVerse, styledScroll.Offset.Y)
+			}
+		})
+	}
+}
+
+func TestStyledWidthReflowRespectsArrivalOwnership(t *testing.T) {
+	for _, readerScrolled := range []bool{false, true} {
+		name := "arrival still owns placement"
+		if readerScrolled {
+			name = "reader has ceded arrival"
+		}
+		t.Run(name, func(t *testing.T) {
+			app := test.NewApp()
+			t.Cleanup(app.Quit)
+			t.Cleanup(resetStyledWiring)
+			state := longPsalmState()
+			state.setHL(hlSearch, "Psalms", 119, 20, 0)
+			state.forceReposition = true
+			area := styledReadingScrollArea(state, state.Bible.GetChapter("Psalms", 119), lightPalette)
+			window := test.NewWindow(area)
+			t.Cleanup(window.Close)
+			window.Resize(fyne.NewSize(620, 300))
+			area.Refresh()
+			if state.forceReposition || !styledPane.highlightOwnsScroll() {
+				t.Fatal("fixture must have consumed the explicit flag while retaining highlight placement")
+			}
+			if readerScrolled {
+				styledScroll.Offset = fyne.NewPos(0, 400)
+				styledScroll.OnScrolled(styledScroll.Offset)
+			}
+			character, lineFraction := styledReadingCharacterAtTop(t)
+			window.Resize(fyne.NewSize(280, 300))
+			for range 4 {
+				area.Refresh()
+			}
+			if styledRestoreArmed {
+				t.Fatal("reflow left a placement pending after geometry settled")
+			}
+			if readerScrolled {
+				assertStyledReadingCharacter(t, character, lineFraction)
+			} else {
+				want := styledPane.highlightY() - noteMetrics().Lead
+				if got := styledScroll.Offset.Y; got < want-1 || got > want+1 {
+					t.Fatalf("arrival after width change is %.1f, want new verse position %.1f", got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestStyledWidthReflowDoesNotArmOverLiveNarration(t *testing.T) {
+	app := test.NewApp()
+	t.Cleanup(app.Quit)
+	t.Cleanup(resetStyledWiring)
+	state := longPsalmState()
+	armControllerReadAlong(t, state)
+	window := buildStyledAreaWindow(t, state)
+	t.Cleanup(window.Close)
+	styledReadAlongApply(20, true)
+	if styledRAFollowPending || !styledHighlightCeded || !gAudio.readAlongFollowActive() {
+		t.Fatal("fixture must have an applied, live narration follow")
+	}
+	followed := styledScroll.Offset.Y
+	window.Resize(fyne.NewSize(280, 300))
+	window.Canvas().Content().Refresh()
+	// An anchor captured on the resize pass applies and disarms on the settling
+	// pass, so the restore target and the offset are checked, not only the arming.
+	if styledRestoreArmed || styledRestoreVerse != 0 || styledScroll.Offset.Y != followed {
+		t.Fatalf("width reflow placed a reading anchor over live narration: armed %v, restore verse %d, offset %.1f after the follow's %.1f",
+			styledRestoreArmed, styledRestoreVerse, styledScroll.Offset.Y, followed)
+	}
+	styledReadAlongApply(1, true)
+	window.Canvas().Content().Refresh()
+	if got := styledScroll.Offset.Y; got != 0 {
+		t.Fatalf("narration was displaced by a resize carry: offset %.1f, want 0", got)
+	}
+}
+
+func TestStyledWidthReflowKeepsReaderAnchorDuringSuspendedNarration(t *testing.T) {
+	app := test.NewApp()
+	t.Cleanup(app.Quit)
+	t.Cleanup(resetStyledWiring)
+	state := longPsalmState()
+	armControllerReadAlong(t, state)
+	window := buildStyledAreaWindow(t, state)
+	t.Cleanup(window.Close)
+	styledReadAlongApply(20, true)
+	styledScroll.Offset = fyne.NewPos(0, 400)
+	styledScroll.OnScrolled(styledScroll.Offset)
+	if gAudio.readAlongFollowActive() || styledPane.raVerse != 20 {
+		t.Fatal("fixture must retain the narration tint after the reader suspends follow")
+	}
+	character, lineFraction := styledReadingCharacterAtTop(t)
+	window.Resize(fyne.NewSize(280, 300))
+	for range 4 {
+		window.Canvas().Content().Refresh()
+	}
+	assertStyledReadingCharacter(t, character, lineFraction)
 }
 
 // An arrival near the END of a chapter must ask for an offset the scroll can

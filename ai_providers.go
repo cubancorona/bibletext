@@ -13,9 +13,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptrace"
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -694,27 +696,49 @@ func parseAnthropicText(body []byte) (string, error) {
 // server responses, which the providers return intermittently under load — so a
 // momentary blip doesn't surface as a hard error to the reader. 4xx (bad key,
 // bad request, rate limit) are returned immediately; retrying those wouldn't help.
+//
+// The request's deadline, or the transport's wait for the response headers,
+// met once the request was written whole, before the response headers or
+// inside the body, is the provider's: no answer came in time, so it is
+// reported once, marked (aiProviderTimeout), and never sent again. One met
+// before then — dialling, resolving the host, the TLS handshake — is a
+// connection never made, and a timeout the connection itself reports
+// (aiTransportTimeout) is that connection lost: each is handled as any
+// network error, retried while the budget lasts, and reported as it came.
+// Only the write tells a deadline's two phases apart: one that expires during
+// the TLS handshake and one that expires after the write reach the caller as
+// the same error (aiWriteTrace).
 func doAIRequest(client httpClient, req *http.Request) ([]byte, error) {
 	const attempts = 3
 	var lastErr error
 	for attempt := 0; attempt < attempts; attempt++ {
 		if attempt > 0 {
+			if err := req.Context().Err(); err != nil {
+				return nil, err
+			}
 			if req.GetBody != nil {
 				if b, err := req.GetBody(); err == nil {
 					req.Body = b
 				}
 			}
 			aiRetrySleep(time.Duration(attempt) * 600 * time.Millisecond)
+			if err := req.Context().Err(); err != nil {
+				return nil, err
+			}
 		}
 
-		resp, err := client.Do(req)
+		var sent aiWriteTrace
+		resp, err := client.Do(sent.attach(req))
 		if err != nil {
+			if sent.written() && aiTransportTimeout(err) {
+				return nil, aiProviderTimeout(err)
+			}
 			lastErr = err // network error — transient, retry
 			// …unless the caller's deadline passed or they cancelled. That is
 			// not transient: retrying burns what's left of the budget and can
 			// bill the reader a second time for a request the provider may
 			// already be completing. Give up and report it.
-			if ctxErr := req.Context().Err(); ctxErr != nil {
+			if req.Context().Err() != nil {
 				return nil, err
 			}
 			continue
@@ -722,11 +746,25 @@ func doAIRequest(client httpClient, req *http.Request) ([]byte, error) {
 		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 		resp.Body.Close()
 		if readErr != nil {
+			// The answer began and the request's deadline passed before it
+			// was whole: the provider's, whatever the read reports as it is
+			// cut off, an unexpected EOF included. Cut off with the deadline
+			// still ahead, the answer was lost with its connection, and the
+			// request is tried again as any network error is.
+			if errors.Is(req.Context().Err(), context.DeadlineExceeded) {
+				return nil, aiProviderTimeout(readErr)
+			}
+			if ctxErr := req.Context().Err(); ctxErr != nil {
+				return nil, ctxErr
+			}
 			lastErr = readErr
 			continue
 		}
 		if resp.StatusCode == http.StatusOK {
 			return body, nil
+		}
+		if failure := aiResponseFailure(resp.StatusCode, body); failure != nil {
+			return nil, failure
 		}
 		apiErr := &apiHTTPError{StatusCode: resp.StatusCode, Details: safeAIErrorDetail(body)}
 		if resp.StatusCode >= 500 {
@@ -740,6 +778,32 @@ func doAIRequest(client httpClient, req *http.Request) ([]byte, error) {
 
 // aiRetrySleep is a seam for tests.
 var aiRetrySleep = time.Sleep
+
+// aiWriteTrace records whether one attempt's request was written whole on
+// the latest connection the transport went to get for it. The transport
+// reports the write through the request's httptrace hooks, on HTTP/1.1 and
+// HTTP/2 alike, before it reports how that connection failed; a write that
+// failed counts for nothing. GetConn, called each time the transport goes to
+// get a connection, before one is dialled or taken from the pool, starts the
+// attempt unwritten again. The transport sends a request again by itself,
+// on another connection, when the first did not process it: nothing written
+// on a pooled HTTP/1.1 connection, or an HTTP/2 stream a GOAWAY left
+// unprocessed. A write reported on the first must not stand for a second
+// connection that is never made.
+type aiWriteTrace struct{ done atomic.Bool }
+
+func (w *aiWriteTrace) attach(req *http.Request) *http.Request {
+	return req.WithContext(httptrace.WithClientTrace(req.Context(), &httptrace.ClientTrace{
+		GetConn: func(string) { w.done.Store(false) },
+		WroteRequest: func(info httptrace.WroteRequestInfo) {
+			if info.Err == nil {
+				w.done.Store(true)
+			}
+		},
+	}))
+}
+
+func (w *aiWriteTrace) written() bool { return w.done.Load() }
 
 // safeAIErrorDetail maps an authenticated response to a fixed local category:
 // completionCapDetail with the figure when the message refuses the completion

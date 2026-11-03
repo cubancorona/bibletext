@@ -1227,6 +1227,111 @@ public final class BtBridge {
     private static float pendingReflowFrac = -1f;
     private static int pendingReflowVerse = 0;
     private static float pendingReflowWithin = 0f;
+
+    // Width changes use a semantic character and a fraction of its line.
+    // The original target survives intermediate layouts and scroll clamps.
+    private static BtReadingReflow.Anchor semanticReflow;
+    private static String semanticReflowBook;
+    private static int semanticReflowChapter, semanticReflowContentEnd;
+    private static RecreatedReading recreatedReading;
+
+    // Process-local carry across replacement of the activity window. Nothing
+    // is persisted, and a hidden/suppressed reading pane cannot park a selection.
+    private static final class RecreatedReading {
+        final String book, page;
+        final int chapter, end, start, finish;
+        final BtReadingReflow.Anchor anchor;
+        RecreatedReading() {
+            book = textBook; chapter = textChapter;
+            page = text.getText().toString(); end = contentEnd;
+            boolean visible = dialog != null && dialog.isShowing() && !suppressed;
+            start = visible ? text.getSelectionStart() : -1;
+            finish = visible ? text.getSelectionEnd() : -1;
+            anchor = semanticReflow;
+        }
+    }
+
+    private static void parkRecreatedReading() {
+        if (text == null || textBook == null || textChapter <= 0 || text.length() <= 1) return;
+        captureSemanticReflow();
+        recreatedReading = new RecreatedReading();
+    }
+
+
+    private static void clearSemanticReflow() {
+        semanticReflow = null;
+        semanticReflowBook = null;
+        semanticReflowChapter = 0;
+    }
+
+    private static void captureSemanticReflow() {
+        if (semanticReflow != null || text == null || scroll == null || textBook == null
+                || textChapter <= 0 || pendingVerse > 0 || pendingPlace) return;
+        Layout layout = text.getLayout();
+        if (layout == null || text.length() == 0) return;
+        int y = scroll.getScrollY() - text.getTop() - text.getTotalPaddingTop();
+        int line = layout.getLineForVertical(Math.max(0, y));
+        int height = Math.max(1, layout.getLineBottom(line) - layout.getLineTop(line));
+        semanticReflow = new BtReadingReflow.Anchor(text.getText(), layout.getLineStart(line),
+                (float) (y - layout.getLineTop(line)) / height, scroll.getScrollY() <= 0);
+        semanticReflowBook = textBook;
+        semanticReflowChapter = textChapter;
+        semanticReflowContentEnd = contentEnd;
+    }
+
+    private static boolean applySemanticReflow() {
+        if (semanticReflow == null || text == null || scroll == null) return false;
+        if (!semanticReflowBook.equals(textBook) || semanticReflowChapter != textChapter) {
+            clearSemanticReflow();
+            return false;
+        }
+        Layout layout = text.getLayout();
+        if (layout == null) return false;
+        int at = semanticReflow.map(text.getText(), semanticReflowContentEnd, contentEnd);
+        if (at < 0 || at > text.length()) {
+            clearSemanticReflow();
+            return false;
+        }
+        int line = layout.getLineForOffset(at);
+        int height = Math.max(1, layout.getLineBottom(line) - layout.getLineTop(line));
+        int y = semanticReflow.top ? 0 : text.getTop() + text.getTotalPaddingTop()
+                + layout.getLineTop(line) + Math.round(semanticReflow.lineFraction * height);
+        ownScrollTo(Math.max(0, Math.min(y, scrollRange())));
+        return true;
+    }
+    // Touch ownership belongs to the ScrollView, including its padding and
+    // sticker children. Merely touching or selecting text is not a scroll.
+    private static final class ReaderScrollIntent {
+        int pointer = -1;
+        private float startY;
+        private boolean dragging;
+
+        void begin(int id, float y) { pointer = id; startY = y; dragging = false; }
+        void replace(int id, float y) { pointer = id; startY = y; }
+        void end() { pointer = -1; dragging = false; }
+
+        boolean move(float y, int slop) {
+            return pointer >= 0 && !dragging && Math.abs(y - startY) > slop;
+        }
+
+        void acquired() { dragging = true; }
+    }
+
+    private static boolean readerScrollStarted() {
+        // Cold/explicit placement retains its existing priority until applied.
+        if (pendingVerse > 0 || pendingPlace) return false;
+        clearSemanticReflow();
+        pendingReflowFrac = -1f;
+        pendingReflowVerse = 0;
+        placedAtMs = 0;
+        pendingFrac = -1f;
+        pendingRestoreVerse = 0;
+        UI.removeCallbacks(clearOwnScroll);
+        ownScroll = false;
+        lastOwnScrollY = -1;
+        return true;
+    }
+
     // The text's width when the reflow was armed. A frame that brings the
     // width back to it before the text has laid out at any other width
     // leaves nothing to reflow, and the reflow is dropped (setFrame).
@@ -1266,9 +1371,24 @@ public final class BtBridge {
     // Quiet-timer for "scroll ended": Android has no deceleration-end callback
     // on ScrollView, so each scroll change re-arms a short timer and the save
     // fires when the view has been still for a beat.
+    private static long readingIntent, nextReadingIntent, scrollIdleIntent;
     private static final Runnable scrollIdle = new Runnable() {
-        @Override public void run() { nativeScrolled(lastFrac); }
+        @Override public void run() {
+            if (pendingVerse > 0 || pendingPlace || scrollIdleIntent == 0) return;
+            nativeScrolled(lastFrac, scrollIdleIntent);
+        }
     };
+
+    // The scheduled scroll event keeps the installed page's intent, not the
+    // newer request that may already be waiting on the UI queue.
+    public static void setReadingIntent(final long intent) {
+        UI.post(new Runnable() {
+            @Override public void run() {
+                if (nextReadingIntent != intent) UI.removeCallbacks(scrollIdle);
+                nextReadingIntent = intent;
+            }
+        });
+    }
 
     // Called from native (any thread). Selection/menu action chosen by the
     // reader; text is the exact selected substring, lo/hi its verse span
@@ -1283,7 +1403,29 @@ public final class BtBridge {
     private static native void nativeSelectionAction(String action, String text, int lo, int hi, boolean heading,
                                                      String lead, String book, int chapter);
     // Called on the UI thread after the reader's scroll has been idle ~200ms.
-    private static native void nativeScrolled(float frac);
+    private static native void nativeScrolled(float frac, long intent);
+    private static native void nativeNoteEntryDismiss(long owner);
+    private static native void nativeNoteEntryChanged(long owner, byte[] text);
+    private static native void nativeNoteEntryKeyboard(long owner, float pixels);
+
+    public static void noteEntryShow(long owner, byte[] initial, byte[] placeholder,
+                                     int textColor, int hintColor, int background, int border,
+                                     float textPx, float scale) {
+        BtNoteEntry.show(owner, initial, placeholder, textColor, hintColor, background, border, textPx, scale);
+    }
+
+    public static void noteEntryFrame(long owner, int x, int y, int width, int height) {
+        BtNoteEntry.frame(owner, x, y, width, height);
+    }
+
+    public static void noteEntryHide(long owner) { BtNoteEntry.hide(owner); }
+
+    public static void noteEntryFocus(long owner, boolean focus) { BtNoteEntry.focus(owner, focus); }
+
+    static void composeDismiss(long owner) { nativeNoteEntryDismiss(owner); }
+    static void composeChanged(long owner, byte[] value) { nativeNoteEntryChanged(owner, value); }
+    static void composeKeyboard(long owner, float pixels) { nativeNoteEntryKeyboard(owner, pixels); }
+    static int[] composeOrigin() { return windowContentOrigin(); }
 
     // The soft keyboard's on-screen overlap in RAW PIXELS, 0 when hidden. Not dp
     // and not Fyne units — those two differ (a dp is dpi/160, a Fyne unit is a
@@ -1589,6 +1731,7 @@ public final class BtBridge {
                     // ~2.2x. The Go side divides by the live canvas scale, the
                     // same px<->unit conversion pushChapterHTML already uses.
                     float px = insets.getInsets(android.view.WindowInsets.Type.ime()).bottom;
+                    BtNoteEntry.activityKeyboard(act, px);
                     if (px != lastImePx) {
                         lastImePx = px;
                         nativeKeyboardChanged(px);
@@ -1688,9 +1831,11 @@ public final class BtBridge {
         UI.post(new Runnable() {
             @Override public void run() {
                 if (activity == act && dialog != null) return;
+                parkRecreatedReading();
                 if (dialog != null) {
                     try { dialog.dismiss(); } catch (Throwable ignored) {}
                 }
+                clearSemanticReflow();
                 // A recreated activity is a fresh window; ask again.
                 extendIntoTheCutout(act);
                 applySystemBars(act);
@@ -1734,7 +1879,10 @@ public final class BtBridge {
                 pendingReflowFrac = -1f;
                 pendingReflowVerse = 0;
                 placedAtMs = 0;
+                readingIntent = nextReadingIntent = scrollIdleIntent = 0;
+                UI.removeCallbacks(scrollIdle);
                 activity = act;
+                BtNoteEntry.init(act);
                 installKeyboardWatcher(act);
                 deliverLaunchLink(act);
 
@@ -1750,6 +1898,7 @@ public final class BtBridge {
                             UI.post(new Runnable() {
                                 @Override public void run() {
                                     if (activity == a) {
+                                        parkRecreatedReading();
                                         if (dialog != null) {
                                             try { dialog.dismiss(); } catch (Throwable ignored) {}
                                         }
@@ -1763,6 +1912,7 @@ public final class BtBridge {
                                         noteView = null;
                                         notePillView = null;
                                         noteBandSpan = null;
+                                        BtNoteEntry.destroy(a);
                                         activity = null;
                                     }
                                 }
@@ -1821,6 +1971,34 @@ public final class BtBridge {
             @Override public boolean onTouchEvent(android.view.MotionEvent ev) {
                 noteTouch(this, ev);
                 return super.onTouchEvent(ev);
+            }
+            // Even a same-bounds measure can finish a cold saved placement.
+            @Override protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+                super.onLayout(changed, left, top, right, bottom);
+                if (pendingPlace) applyPendingScroll();
+            }
+            // TextView's configuration callback closes the selection toolbar
+            // and collapses its range before the replacement page can map it.
+            // Carry only this visible view's current range across that callback;
+            // the later chapter import still applies its own reflow guards.
+            @Override protected void onConfigurationChanged(android.content.res.Configuration config) {
+                boolean active = this == text && dialog != null && dialog.isShowing() && !suppressed;
+                String selectedPage = active ? getText().toString() : null;
+                int selectedStart = active ? getSelectionStart() : -1;
+                int selectedEnd = active ? getSelectionEnd() : -1;
+                int selectedContentEnd = contentEnd;
+                String selectedBook = textBook;
+                int selectedChapter = textChapter;
+                super.onConfigurationChanged(config);
+                boolean sameChapter = selectedBook != null && selectedBook.equals(textBook)
+                        && selectedChapter > 0 && selectedChapter == textChapter;
+                int[] kept = BtReadingReflow.selection(active && this == text && dialog != null
+                                && dialog.isShowing() && !suppressed, sameChapter,
+                        selectedPage, selectedContentEnd, selectedStart, selectedEnd,
+                        getText(), contentEnd);
+                if (kept != null && getText() instanceof Spannable) {
+                    Selection.setSelection((Spannable) getText(), kept[0], kept[1]);
+                }
             }
             @Override protected void onFocusChanged(boolean focused, int direction, Rect previous) {
                 super.onFocusChanged(focused, direction, previous);
@@ -2063,6 +2241,55 @@ public final class BtBridge {
         // intentional scroll uses scrollTo, so automatic bring-into-view must
         // be disabled.
         scroll = new ScrollView(activity) {
+            private final ReaderScrollIntent readerTouch = new ReaderScrollIntent();
+
+            @Override public boolean dispatchTouchEvent(android.view.MotionEvent event) {
+                int action = event.getActionMasked();
+                if (action == android.view.MotionEvent.ACTION_DOWN) {
+                    readerTouch.begin(event.getPointerId(0), event.getY(0));
+                } else if (action == android.view.MotionEvent.ACTION_POINTER_UP
+                        && event.getPointerId(event.getActionIndex()) == readerTouch.pointer) {
+                    int next = event.getActionIndex() == 0 ? 1 : 0;
+                    if (next < event.getPointerCount()) readerTouch.replace(event.getPointerId(next), event.getY(next));
+                    else readerTouch.end();
+                }
+                try {
+                    return super.dispatchTouchEvent(event);
+                } finally {
+                    if (action == android.view.MotionEvent.ACTION_UP
+                            || action == android.view.MotionEvent.ACTION_CANCEL) readerTouch.end();
+                }
+            }
+
+            @Override public boolean onTouchEvent(android.view.MotionEvent event) {
+                // This method receives child moves only once ScrollView has
+                // intercepted them; dispatch above also saw the child's Down.
+                if (event.getActionMasked() == android.view.MotionEvent.ACTION_MOVE) {
+                    int index = event.findPointerIndex(readerTouch.pointer);
+                    int slop = android.view.ViewConfiguration.get(getContext()).getScaledTouchSlop();
+                    if (index >= 0 && readerTouch.move(event.getY(index), slop) && readerScrollStarted()) {
+                        readerTouch.acquired();
+                    }
+                }
+                return super.onTouchEvent(event);
+            }
+
+            @Override public boolean onGenericMotionEvent(android.view.MotionEvent event) {
+                if (event.getActionMasked() == android.view.MotionEvent.ACTION_SCROLL
+                        && event.getAxisValue(android.view.MotionEvent.AXIS_VSCROLL) != 0) readerScrollStarted();
+                return super.onGenericMotionEvent(event);
+            }
+
+            @Override public boolean performAccessibilityAction(int action, android.os.Bundle args) {
+                if (action == android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD
+                        || action == android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+                        || action == android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_UP.getId()
+                        || action == android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_DOWN.getId()) {
+                    readerScrollStarted();
+                }
+                return super.performAccessibilityAction(action, args);
+            }
+
             @Override
             public boolean requestChildRectangleOnScreen(View child, Rect rectangle, boolean immediate) {
                 return false;
@@ -2173,6 +2400,7 @@ public final class BtBridge {
                     // reader gesture; applyPendingReflow owns this traversal,
                     // and the position stays the one setFrame captured.
                     if (pendingReflowFrac >= 0) return;
+                    if (pendingPlace) return;
                     float[] a = anchorAt(y);
                     lastAnchor = new float[]{a != null ? a[0] : 0f, a != null ? a[1] : 0f, lastFrac};
                     // Attaching and measuring a cold ScrollView can dispatch a
@@ -2188,11 +2416,13 @@ public final class BtBridge {
                     // arrival verse alike), and the idle timer persists the new
                     // position once still.
                     lastOwnScrollY = -1;
+                    clearSemanticReflow();
                     placedAtMs = 0;
                     pendingFrac = -1f;
                     pendingRestoreVerse = 0;
                     pendingVerse = 0;
                     UI.removeCallbacks(scrollIdle);
+                    scrollIdleIntent = readingIntent;
                     UI.postDelayed(scrollIdle, 200);
                     // Read-along: a hand scroll while following suspends the
                     // follow (the highlight keeps tracking; the pill offers a way
@@ -2320,9 +2550,11 @@ public final class BtBridge {
     // ownScrollTo is the ONLY way our code scrolls the view: it records the
     // target (the timing-independent guard) and brackets the timed latch.
     private static void ownScrollTo(int y) {
-        lastOwnScrollY = y;
+        int target = Math.max(0, Math.min(y, scrollRange()));
+        lastOwnScrollY = target;
         beginOwnScroll();
-        scroll.scrollTo(0, y);
+        scroll.scrollTo(0, target);
+        lastOwnScrollY = scroll.getScrollY();
         endOwnScroll();
     }
 
@@ -2747,6 +2979,7 @@ public final class BtBridge {
             int maxY = scrollRange();
             if (target < 0) target = 0;
             if (target > maxY) target = maxY;
+            clearSemanticReflow();
             ownScrollTo(target);
         }
     }
@@ -3934,6 +4167,7 @@ public final class BtBridge {
         UI.post(new Runnable() {
             @Override public void run() {
                 if (text == null) return;
+                captureSemanticReflow();
                 // The pushed sizes are dp; THIS side owns the display density.
                 // The Go side used to pre-multiply by the Fyne canvas scale,
                 // which is bucketed by dpi, so the same "Normal" drew a
@@ -4064,10 +4298,29 @@ public final class BtBridge {
     private static final char INDENT_MARKER = '\uE010';
 
     public static void setHtml(final String html, final float frac, final int arrivalVerse,
-                               final int restoreVerse, final float restoreWithin) {
+                               final int restoreVerse, final float restoreWithin,
+                               final boolean preservePosition, final boolean preserveSelection) {
         UI.post(new Runnable() {
             @Override public void run() {
                 if (text == null) return;
+                RecreatedReading parked = textBook == null && recreatedReading != null
+                        && recreatedReading.book.equals(nextBook) && recreatedReading.chapter == nextChapter
+                        ? recreatedReading : null;
+                boolean sameChapter = parked != null || (textBook != null && textBook.equals(nextBook)
+                        && textChapter > 0 && textChapter == nextChapter);
+                if (!preservePosition || !sameChapter || arrivalVerse > 0) clearSemanticReflow();
+                else if (parked != null) {
+                    semanticReflow = parked.anchor;
+                    semanticReflowBook = parked.book;
+                    semanticReflowChapter = parked.chapter;
+                    semanticReflowContentEnd = parked.end;
+                } else captureSemanticReflow();
+                CharSequence selectedPage = parked != null ? parked.page : text.getText();
+                int selectedStart = parked != null ? parked.start : text.getSelectionStart();
+                int selectedEnd = parked != null ? parked.finish : text.getSelectionEnd();
+                int selectedContentEnd = parked != null ? parked.end : contentEnd;
+                recreatedReading = null;
+                pendingPlace = true; // import/layout clamps are never reader input
                 // A chapter import carries its own top/restore/arrival placement
                 // and supersedes any unfinished placement for the prior width.
                 pendingReflowFrac = -1f;
@@ -4145,12 +4398,19 @@ public final class BtBridge {
                 text.setText(s, TextView.BufferType.SPANNABLE);
                 textBook = nextBook;
                 textChapter = nextChapter;
+                readingIntent = nextReadingIntent;
                 // The prior chapter's highlight span belonged to the old text; drop
                 // the reference (the span itself went with the replaced Spanned) and
                 // re-index the verses for read-along on the fresh content.
                 raSpan = null;
                 raVerse = RA_NONE;
                 buildVerseIndex(text.getText());
+                int[] keptSelection = BtReadingReflow.selection(preserveSelection && arrivalVerse <= 0,
+                        sameChapter, selectedPage, selectedContentEnd, selectedStart, selectedEnd,
+                        text.getText(), contentEnd);
+                if (keptSelection != null && text.getText() instanceof Spannable) {
+                    Selection.setSelection((Spannable) text.getText(), keptSelection[0], keptSelection[1]);
+                }
                 findTitleRange(text.getText());   // the read-along's verse 0, bounded by contentStart
                 // The note band went with the old Spanned too; re-derive the
                 // sticker against the fresh text + verse index (the pushed
@@ -4189,6 +4449,17 @@ public final class BtBridge {
      *  callers run on the UI thread. An armed verse remains pending until both
      *  the TextView layout and verse index exist; the TextView layout listener
      *  re-enters this method after a cold Dialog's first real measure. */
+    private static boolean placementLayoutReady() {
+        if (text == null || scroll == null || content == null || !text.isAttachedToWindow()
+                || !scroll.isAttachedToWindow() || text.isLayoutRequested() || scroll.isLayoutRequested()
+                || content.isLayoutRequested() || text.getWidth() <= 0 || text.getHeight() <= 0
+                || scroll.getWidth() <= 0 || scroll.getHeight() <= 0) return false;
+        Layout layout = text.getLayout();
+        int width = text.getWidth() - text.getCompoundPaddingLeft() - text.getCompoundPaddingRight();
+        return layout != null && width > 0 && layout.getWidth() == width
+                && android.text.TextUtils.equals(layout.getText(), text.getText());
+    }
+
     private static void applyPendingScroll() {
         if (scroll == null) return;
         scroll.post(new Runnable() {
@@ -4269,7 +4540,9 @@ public final class BtBridge {
                             + " (pendingVerse=" + pendingVerse + ") — leaving the scroll alone");
                     return;
                 }
+                if (!placementLayoutReady() || (pendingRestoreVerse > 0 && verseNums.length == 0)) return;
                 pendingPlace = false;
+                if (applySemanticReflow()) return;
                 int vy = pendingRestoreVerse > 0 ? anchorY(pendingRestoreVerse, pendingRestoreWithin) : -1;
                 if (vy >= 0) {
                     if (SCROLL_DEBUG) android.util.Log.i("BtScroll", "apply: placing at verse "
@@ -4292,13 +4565,19 @@ public final class BtBridge {
     /** armRestore arms/updates the one-shot scroll target without touching the
      *  text: the verse first, else the fraction; verse <= 0 and frac < 0
      *  disarm. */
-    public static void armRestore(final int verse, final float within, final float frac) {
+    public static void armRestore(final int verse, final float within, final float frac, final boolean reflow) {
         UI.post(new Runnable() {
             @Override public void run() {
                 pendingFrac = frac;
                 pendingRestoreVerse = verse > 0 ? verse : 0;
                 pendingRestoreWithin = within;
-                if (text == null) return;
+                if (!reflow) {
+                    clearSemanticReflow();
+                    UI.removeCallbacks(scrollIdle);
+                }
+                // A live repeat must capture where the reader is now. Its
+                // unchanged saved arguments remain the pending page's fallback.
+                if (text == null || reflow) return;
                 int vy = verse > 0 ? anchorY(verse, within) : -1;
                 if (vy >= 0) ownScrollTo(vy);
                 else if (frac >= 0) ownScrollTo(Math.round(frac * scrollRange()));
@@ -4349,6 +4628,7 @@ public final class BtBridge {
                 if (dialog == null) return;
                 if (frameW > 1 && w > 1 && frameW != w && pendingReflowFrac < 0
                         && pendingVerse <= 0 && !pendingPlace && scroll != null) {
+                    captureSemanticReflow();
                     if (placementAwaitsReplace()) {
                         // The text has laid out at another width since the
                         // placement and has not been put back yet, so the
@@ -4442,6 +4722,7 @@ public final class BtBridge {
             @Override public void run() {
                 if (scroll == null || text == null || placedAtMs == 0 || pendingReflowFrac >= 0
                         || pendingVerse > 0 || pendingPlace) return;
+                if (applySemanticReflow()) return;
                 int vy = placedVerse > 0 ? anchorY(placedVerse, placedWithin) : -1;
                 ownScrollTo(vy >= 0 ? vy : Math.round(placedFrac * scrollRange()));
                 if (content != null) placedContentW = content.getWidth();
@@ -4459,7 +4740,7 @@ public final class BtBridge {
                 int vy = pendingReflowVerse > 0 ? anchorY(pendingReflowVerse, pendingReflowWithin) : -1;
                 pendingReflowFrac = -1f;
                 pendingReflowVerse = 0;
-                ownScrollTo(vy >= 0 ? vy : Math.round(frac * scrollRange()));
+                if (!applySemanticReflow()) ownScrollTo(vy >= 0 ? vy : Math.round(frac * scrollRange()));
             }
         });
     }
@@ -4568,6 +4849,8 @@ public final class BtBridge {
         UI.post(new Runnable() {
             @Override public void run() {
                 wantShown = false;
+                recreatedReading = null;
+                clearSemanticReflow();
                 // The popup is a window of its own: hiding the Dialog leaves it
                 // up, over another tab or a Fyne sheet, acting on a selection
                 // dismissSelection is about to clear.
@@ -4584,6 +4867,8 @@ public final class BtBridge {
         UI.post(new Runnable() {
             @Override public void run() {
                 suppressed = true;
+                recreatedReading = null;
+                clearSemanticReflow();
                 dismissStudyPopup(); // as in hide(): never over the modal
                 if (dialog == null || !dialog.isShowing()) return;
                 dismissSelection();

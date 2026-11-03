@@ -13,16 +13,18 @@ The whole shared codebase is **one Go library package, `bibletext`** (every
 `go run .` here. Four programs under `cmd/` consume it — the two app entry
 points and the two site generators:
 
-- `cmd/bibletext/main.go` — desktop window (shared Read / Books / Search layout,
-  left navigation rail by default, plus keyboard shortcuts). The former
-  sidebar/HSplit remains an explicit diagnostic escape hatch.
+- `cmd/bibletext/main.go` — desktop window (shared Read / Books / Search layout
+  whose navigation follows the window's shape: a bottom bar while it is taller
+  than wide, a left rail while it is square or wider; plus keyboard shortcuts).
+  The former sidebar/HSplit remains an explicit diagnostic escape hatch.
 - `cmd/mobile/main.go` — iOS / Android; the OS owns the window size and the
   Bible loads on a background goroutine behind a spinner. Every touch device
   uses the same Read / Books / Search layout: a bottom bar while the window is
   taller than it is wide and the same destinations in a left rail while it is
-  wider (see UI architecture below and [docs/IPAD.md](docs/IPAD.md)). On the
-  Read tab a phone in landscape drops that navigation and reads full-screen by
-  default (`phone_landscape.go`); Books and Search keep the rail.
+  square or wider (see UI architecture below and
+  [docs/IPAD.md](docs/IPAD.md)). On the Read tab a phone in landscape drops
+  that navigation and reads full-screen by default (`phone_landscape.go`);
+  Books and Search keep the rail.
 
 Per-platform behaviour is selected at compile time by **Go build tags**, not at
 runtime, so each target links only the drivers and native code it needs:
@@ -158,7 +160,7 @@ real files; `*_test.go` files are omitted.
 | --- | --- |
 | `ui.go` | Shared header plus loading/error views |
 | `ui_compact.go` / `tab_rail.go` | Shared Read / Books / Search composition; the same destinations render as a bottom bar or left rail |
-| `ui_desktop.go` / `ui_compact_desktop.go` | `!ios && !android` — shared layout with a left rail by default plus keyboard shortcuts; `BIBLETEXT_DESKTOP_TABS=sidebar` retains the former HSplit for diagnostics |
+| `ui_desktop.go` / `ui_compact_desktop.go` | `!ios && !android` — shared layout with the window-shape navigation rule (a rail when square or wider, a bar when taller, moved by `desktop_navigation.go` after a resize settles) plus keyboard shortcuts; `BIBLETEXT_DESKTOP_TABS=sidebar` retains the former HSplit for diagnostics |
 | `ui_mobile.go` | `ios \|\| android` — shared touch layout with the platform-native reading pane; tablets move navigation to the left edge in landscape; phones present the Read tab full-screen in landscape (`phone_landscape.go`, on by default) |
 | `ui_regular.go` / `layout.go` | Retained former regular-layout helpers and the resize watcher; `classifyLayout` deliberately resolves every touch device to the shared layout |
 | `reporter_ios.go` / `reporter_android.go` / `reporter_macos.go` / `reporter_other.go` | `reporterLayoutActive()` — whether the native pane is on the book page (the U.S. Reports set), asked of the reading page by the pane's width (`reading_page.go`, `reading_page_width.go`), never by device — save for a push made before any width is known, which takes the device's resting page (`readingUnsizedPage`); false on Windows and Linux, whose styled pane lays its page out from its own width |
@@ -208,6 +210,9 @@ prose.
 | `reading_ios_visibility.go` | `ios` | overlay show/hide on lifecycle |
 | `reading_android.go` | `android` | cgo/JNI: native selectable `TextView` overlay (a `Dialog` over the GL surface), selection menu, native share, scroll capture/restore — Java half in `android/BtBridge.java` |
 | `reading_android_export.go` + `reading_jni_android.c` | `android` | Native → Go callbacks for the Android overlay (the `//export` twin of `ai_menu_darwin.go`) + the JNI thunk definitions |
+| `reading_reflow_intent.go` | (untagged) | Live-reflow priority plus Android request identity and dispatched scroll-event ownership; repeated saved requests retain their fallback without becoming fresh history visits; `restoreAnchor.Reflow` is not persisted |
+| `reading_reflow_styled.go` | (untagged) | Semantic character and signed line-fraction anchors for styled-pane reflow, including heading and footnote line maps; saved reading anchors keep their existing representation |
+| `android/BtReadingReflow.java` | (dex) | Maps transient position and selection through presentation-only whitespace changes; the bridge separately guards the displayed chapter |
 | `android_chapter_html.go` | (untagged) | `buildChapterHTMLAndroid` — the `Html.fromHtml`-safe chapter dialect; untagged so host tests pin it alongside `buildChapterHTML` |
 | `reading_styled_layout.go` / `reading_styled_pane.go` / `reading_styled_select.go` / `reading_styled_area.go` | (untagged) | The styled, selectable desktop reading pane (Windows/Linux since the milestone-4 swap): layoutChapter styled runs + flat selection text model, canvas.Text renderer with the iOS serif (Georgia/Gelasio via FontSource + RenderedTextSize), drag/keyboard selection + shared study menu, column/scroll assembly with exact verse-anchor persistence. Untagged for host-side testing; dispatched only where `styledPaneEnabledOnPlatform` (reading_styled_platform_*.go) is true |
 | `reading_fyne.go` | `ios \|\| !darwin` | `readingScrollArea`: dispatches the styled pane on Windows/Linux, else the legacy `chapterText` Entry pane (the desktop burn-in fallback). Compiled but unreachable on iOS and Android — the mobile layouts call `buildReadingViewMobile`, and Android's bridge-absent fallback is `reading_mobile.go`'s RichText pane |
@@ -239,6 +244,7 @@ prose.
 | --- | --- |
 | `ai.go` | Action constants + `buildAIPrompt`; `aiPassage` / `aiPassageFor` (the verses a request names, resolved once for the prompt, the panel header, the Report mail and the cache key); `runAIAction` (cache scope, dispatch) |
 | `ai_ask.go` | "Ask a question…" input sheet (`promptAskQuestion`); its question-focused prompt is built by `buildAskPrompt` in `ai.go` |
+| `note_entry_{ios,android,other}.go`, `note_entry_draft.go` | Shared Note/Ask native-editor seam: UIKit on iOS, an Android EditText Dialog with owner-stamped counted-UTF-8 JNI callbacks and a synchronized draft, Fyne fields elsewhere. Both native editors take the shared composer's rules (the 112-unit slot, `share_note_ui.go`; the expanded passage and keyboard rules, `compose_viewport.go`); Android keeps its 14pt text and keeps its Dialog when a card reopens over it; the shared cards still own actions and passage previews |
 | `ai_compare.go` | `buildComparePrompt` (the concise Compare perspectives prompt, with optional simple Markdown) and `aiStudyVerbs`, the ordered list of menu verbs every surface's Study with AI menu is held to |
 | `ai_compare_render.go` | Ask and Compare answer layout: Goldmark blocks, Fyne inline text, section spacing, hanging list markers and quote insets; children wrap at their assigned width before height measurement |
 | `ai_providers.go` | Gemini / OpenAI / Anthropic / Grok HTTP clients + models |
@@ -281,13 +287,12 @@ prose.
 `CreateMainUI` exists in exactly one of `ui_desktop.go` / `ui_mobile.go` per
 build — the Go build tag picks the *platform*. Both feed the shared composition
 in `ui_compact.go`. The platform seams choose the reading implementation and
-whether navigation is a bar or rail: every phone and tablet uses a left rail
-while its window is wider than it is tall and a bottom bar otherwise
-(`mobileRailWanted` in `layout.go`), which gives a short landscape window its
-reading height back. Desktop draws the left rail whatever the window's shape
-and can opt into the former sidebar or a bottom bar through
-`BIBLETEXT_DESKTOP_TABS` for comparison; it is to take the phones' rule in
-1.2.19 (docs/BACKLOG.md).
+the navigation edge. Phones and tablets use a left rail in a square or wider
+window and a bottom bar in a taller one (`mobileRailWanted` in `layout.go`);
+a phone's landscape Read tab has its separate full-screen presentation. The
+desktop uses the same shape boundary. `BIBLETEXT_DESKTOP_TABS=sidebar|0`,
+`bar|1` or `rail` can still pin the former sidebar or either shared
+navigation edge.
 
 ## UI architecture
 
@@ -304,6 +309,86 @@ function hooks that the active widgets install:
 - `focusSearch()` / `setSearchText()` — used by keyboard shortcuts.
 - `hideReadingOverlay()` / `showReadingOverlay()` — pull the native text overlay
   down while a Fyne modal is up (see Reading view).
+
+A desktop resize does not rebuild the active page. `desktop_navigation.go`
+waits 250 ms after the last canvas-size change, then repacks only the existing
+navigation edge. The reading host, header, open sheets, fields and requests
+remain alive; generation and tree-attachment checks discard stale timers.
+There is no dead zone around square. An unsized desktop starts with its rail,
+and explicit navigation overrides install no adaptive watcher. The existing
+bar, rail and control dimensions are reused. Mobile rotation retains its
+immediate layout watcher.
+
+Live reading reflow retains a semantic character and a signed fraction through
+its line, rather than a point distance from a verse number. The original target
+survives intermediate wraps and scroll clamps, so a resize burst does not
+accumulate drift. The styled pane also maps headings and its separate,
+nonselectable footnote apparatus. Its unchanged-text guard permits only a
+space/newline replacement at the same offset. Mac position anchors collapse
+presentation whitespace while retaining a map to the native UTF-16 locations.
+iOS position anchors retain the raw UTF-16 location and require identical whole
+text or an identical Scripture prefix containing it. Android's position and
+selection maps collapse presentation
+whitespace and omit paragraph-start direction marks; case, punctuation and
+surrogate pairs remain unchanged.
+
+This carry is transient. Saved reading and history anchors keep their existing
+representation. `readingReflowWanted` requires the same chapter, no explicit
+arrival, and either no pending restore or a restore marked `Reflow`. Rotation
+and native activity recovery mark their layout-only restores with that flag.
+A fresh saved/history request, explicit arrival, changed chapter or reader
+scroll supersedes the live target. The native implementations validate against
+the chapter actually displayed rather than only the latest Go request.
+
+Android separately recognises a repeat of an already dispatched saved request
+by its exact restore pointer, AppState, version, book and chapter. Equal anchor
+coordinates do not make a new history visit a repeat. A repeated request keeps
+its original saved arguments as fallback while permitting the native pane to
+carry its live semantic point and selection; arming the repeat does not first
+scroll back to the saved point. Pending placement remains armed until the
+attached view has a current, measured text layout and any required verse index.
+A same-bounds layout also retries it. Activity recovery retains a matching
+pending Go restore rather than replacing it with an unplaced native anchor.
+
+Each actual Android HTML dispatch has a fresh scroll-event generation, staged
+with the style, chapter and HTML in the same locked bridge dispatch, and
+recorded only on success. The native idle callback carries the generation of the
+page that scheduled it. On the Fyne goroutine, generation and exact request
+context must still match before the callback may retire a restore or save a
+reader position. A queued old-page callback cannot retire a newer equal-point
+history request. Pending placement blocks native idle reports, and a repeated
+request may retain its last successful carry after a later dispatch fails;
+a fresh explicit arrival revokes that permission. This scroll callback does not
+read or mutate AppState before entering the Fyne goroutine.
+
+On Mac, size changes and tiling own their synchronous scroll clamps through a
+balanced native counter. The bounds observer always records the new bounds but
+does not treat a simultaneous size change as reader movement. A separate origin
+change is a reader takeover only outside owned geometry and read-along work.
+This keeps intermediate layout clamps from discarding the semantic target while
+allowing a subsequent real scroll to replace it.
+
+A same-chapter page-format re-import can also preserve a nonempty selection on
+Mac, iPhone/iPad and Android when the push requests it. Mac selection intent is
+bound to the push generation and target chapter. A successful import or fallback
+reads the current native ranges before replacing the old page; failed imports
+capture no stale selection. Mac and iOS require identical whole text, or an
+identical Scripture prefix containing the range when only the appended footnote
+section differs. iOS and Android reject ranges that split a UTF-16 surrogate
+pair. Android maps the range through its presentation-whitespace model and
+requires the whole semantic page, or the containing Scripture prefix, to match.
+Changed words or an invalid range reject the carry. Android also brackets the
+framework configuration callback with a local selection snapshot: after the
+callback it restores only a valid range in the same active, visible,
+unsuppressed view and chapter. This protects the range from a framework
+collapse before the later HTML import can map it. Ordinary user deselection
+creates no retained range to resurrect. Activity recreation parks a
+process-local, one-shot page and position carry; only a visible, unsuppressed
+reading pane can park its selection.
+
+These are implementation contracts. Per-platform runtime acceptance and device
+limits are recorded separately in [PLATFORM_MATRIX.md](docs/PLATFORM_MATRIX.md)
+and [VISUAL_TESTS.md](docs/VISUAL_TESTS.md).
 
 Toggling light/dark performs a full rebuild (`palette`-coloured canvas objects
 are recreated), at once, even with a sheet open: the rebuild drains the sheet
@@ -602,6 +687,15 @@ keystroke supersedes it (pinned in `search_race_test.go`).
   goroutine, and each screen drops a report from a request it is no longer
   waiting on (the panel's fetch generation, Find's session token, the key
   test's sequence number).
+- AI request errors are classified at the transport boundary in
+  [ai_errors.go](ai_errors.go), retaining the HTTP cause and captured provider.
+  Confirmed credit/spend errors offer that provider's billing link; timeouts
+  offer retry and the existing faster-model action. Generic rate limits,
+  authentication, cancellation and the output-token allowance remain distinct.
+  Only recognized safe reason clauses are displayed, never raw provider error
+  bodies. [ai_error_ui.go](ai_error_ui.go) shares presentation across Study,
+  both Find layouts and Test key. See [docs/AI_ERRORS.md](docs/AI_ERRORS.md)
+  for the classification, privacy constraints and test matrix.
 - The `//export` callbacks are confined to two files: [ai_menu_darwin.go](ai_menu_darwin.go)
   (`bibleTextAIMenuTapped`, `bibleTextReadingScrolled`, and the other reading/AI
   callbacks) and [audio_export_apple.go](audio_export_apple.go)

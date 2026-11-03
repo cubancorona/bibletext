@@ -57,6 +57,10 @@ var (
 
 	styledApplyingScroll bool
 
+	// A resize burst retains one character target until the reader moves;
+	// recapturing each newly wrapped line start would accumulate drift.
+	styledReflowAnchor styledReadingReflowAnchor
+
 	// styledUserScrolled latches once the reader scrolls this wiring's pane;
 	// until then the highlight scroll-to re-asserts across layout passes (a
 	// resize between the first pass and the settled one moves the highlight —
@@ -142,6 +146,7 @@ func styledReadingScrollArea(state *AppState, verses []Verse, pal palette) fyne.
 func wireStyledReadingScroll(state *AppState, scroll *container.Scroll, pane *styledReadingPane) {
 	if pane == nil {
 		styledScroll, styledPane, styledState, styledFP = nil, nil, nil, ""
+		styledReflowAnchor = styledReadingReflowAnchor{}
 		styledFollowPill = nil
 		styledRAFollowPending = false
 		return
@@ -150,10 +155,15 @@ func wireStyledReadingScroll(state *AppState, scroll *container.Scroll, pane *st
 
 	carryVerse, carryDelta, carryFrac := 0, 0.0, 0.0
 	carry, carryTop := false, false
+	carryText := styledReadingReflowAnchor{}
 	if styledAnchorActive() && styledFP == newFP && styledViewportSettled {
 		if v, d, f, ok := captureStyledAnchor(); ok {
 			carryVerse, carryDelta, carryFrac, carry = v, d, f, true
 			carryTop = v <= 0 && f <= 0
+			carryText = styledReflowAnchor
+			if !carryText.valid {
+				carryText = captureStyledPaneReflow(styledPane, styledScroll.Offset.Y)
+			}
 		}
 	}
 
@@ -191,6 +201,7 @@ func wireStyledReadingScroll(state *AppState, scroll *container.Scroll, pane *st
 	case carry:
 		branch = "carry"
 		armStyledRestore(carryVerse, carryDelta, carryFrac)
+		styledReflowAnchor = carryText
 	default:
 		armStyledRestore(0, 0, 0)
 	}
@@ -236,6 +247,7 @@ func wireStyledReadingScroll(state *AppState, scroll *container.Scroll, pane *st
 			}
 		}
 		styledRestoreArmed = false
+		styledReflowAnchor = styledReadingReflowAnchor{}
 		styledScrollTrace("user scrolled (offset %.0f)", scroll.Offset.Y)
 		styledUserScrolled = true
 		state.restore = nil
@@ -278,6 +290,7 @@ func captureStyledAnchor() (verse int, delta, frac float64, ok bool) {
 
 // armStyledRestore arms (all-zero disarms) the styled restore target.
 func armStyledRestore(verse int, delta, frac float64) {
+	styledReflowAnchor = styledReadingReflowAnchor{}
 	styledRestoreVerse, styledRestoreDelta, styledRestoreFrac = verse, delta, frac
 	styledRestoreArmed = verse > 0 || frac > 0
 	styledRestoreLastContentH = -1
@@ -331,7 +344,9 @@ func applyStyledReadingRestore(col *styledColumn) {
 		return
 	}
 	var y float32
-	if styledRestoreVerse > 0 {
+	if textY, ok := styledReflowAnchor.paneY(col.pane); ok {
+		y = textY
+	} else if styledRestoreVerse > 0 {
 		if vy, ok := col.pane.yForVerse(styledRestoreVerse); ok {
 			y = vy + float32(styledRestoreDelta)
 		} else {
@@ -364,7 +379,9 @@ func applyStyledReadingRestore(col *styledColumn) {
 	styledHighlightCeded = true
 	styledRestoreArmed = false
 	if styledState != nil {
-		updateCurrentVisitAnchor(styledState, styledRestoreVerse, styledRestoreDelta, styledRestoreFrac)
+		if verse, delta, frac, ok := captureStyledAnchor(); ok {
+			updateCurrentVisitAnchor(styledState, verse, delta, frac)
+		}
 	}
 }
 
@@ -399,6 +416,27 @@ func (l *styledColumn) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 
 	// Width first so wrapping reflows, then size to the resulting height —
 	// the same two-pass idiom as readingColumn.
+	// Keep the character in the first visible line at the same fraction of
+	// its line after a width change. A verse-relative point offset names
+	// different words once that verse gains or loses wrapped lines.
+	// An arrival keeps placing through the provisional wrap passes after its
+	// explicit flag is consumed. Only a reader scroll or another owner cedes
+	// that highlight; carrying its provisional offset would freeze the wrong
+	// line before wrapping settles. Narration likewise owns its live follow.
+	if l.pane != nil && l.pane.lastWidth != w && l.scroll == styledScroll &&
+		styledViewportSettled && !styledRestoreArmed && !styledRAFollowPending &&
+		(!l.pane.highlightOwnsScroll() || styledUserScrolled || styledHighlightCeded) &&
+		!(l.pane.raVerse >= readAlongTitle && gAudio.readAlongFollowActive()) &&
+		(styledState == nil || !styledState.forceReposition) {
+		if verse, delta, frac, ok := captureStyledAnchor(); ok {
+			anchor := styledReflowAnchor
+			if _, reusable := anchor.paneY(l.pane); !reusable {
+				anchor = captureStyledPaneReflow(l.pane, l.scroll.Offset.Y)
+			}
+			armStyledRestore(verse, delta, frac)
+			styledReflowAnchor = anchor
+		}
+	}
 	child.Resize(fyne.NewSize(w, child.MinSize().Height))
 	child.Resize(fyne.NewSize(w, child.MinSize().Height))
 	child.Move(fyne.NewPos(x, 0))

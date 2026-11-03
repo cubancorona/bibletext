@@ -45,6 +45,12 @@ type noteEntrySlot struct {
 	owner uint64
 }
 
+// nativeNoteEntryHeight is the height of the slot a native editor is given,
+// on the iPhone, the iPad and Android alike: four comfortable lines of the
+// iPhone's 18pt text. Android's 14pt text shows more lines in it; the slot,
+// and so where the card's actions stand, is the same.
+const nativeNoteEntryHeight = 112
+
 func newNoteEntrySlot(open *bool) *noteEntrySlot {
 	s := &noteEntrySlot{open: open, owner: noteEntryOwner}
 	s.ExtendBaseWidget(s)
@@ -53,7 +59,7 @@ func newNoteEntrySlot(open *bool) *noteEntrySlot {
 
 func (s *noteEntrySlot) CreateRenderer() fyne.WidgetRenderer {
 	r := canvas.NewRectangle(color.Transparent)
-	r.SetMinSize(fyne.NewSize(0, 112)) // ~4 comfortable lines at 18px
+	r.SetMinSize(fyne.NewSize(0, nativeNoteEntryHeight))
 	return widget.NewSimpleRenderer(r)
 }
 
@@ -67,11 +73,21 @@ func (s *noteEntrySlot) Move(p fyne.Position) {
 	s.push()
 }
 
+func (s *noteEntrySlot) current() bool {
+	return s.open != nil && *s.open && s.owner == noteEntryOwner
+}
+
+func (s *noteEntrySlot) keyboard(show bool) {
+	if s.current() {
+		noteEntryKeyboard(s.owner, show)
+	}
+}
+
 // push projects the slot's rect immediately (responsive) and again a tick later
 // (Resize/Move can fire mid-layout, before siblings have their final heights —
 // same double-push the reading overlay uses).
 func (s *noteEntrySlot) push() {
-	if s.open == nil || !*s.open || s.quiet || s.owner != noteEntryOwner {
+	if !s.current() || s.quiet {
 		return
 	}
 	noteEntryFrameTo(s)
@@ -100,10 +116,11 @@ func (s *noteEntrySlot) settle(relayout func()) {
 // sheet iOS gets and read what its native field would be told:
 //
 //   - noteEntryNative says whether this platform floats a native field over
-//     the slot (iOS only; note_entry_ios.go);
+//     the slot (iOS and Android);
 //   - noteEntryFrameTo parks the native field over the slot, at the slot's
 //     absolute rect;
 //   - noteEntryTyped reads what the reader has typed into the native field;
+//   - noteEntryKeyboard changes only the requesting editor's keyboard focus;
 //   - noteSheetAfter runs f on the UI goroutine after d: the slot's second
 //     push and the phone sheet's watchdog. Under the test driver fyne.Do runs
 //     a closure on the timer's own goroutine, so a test that opens the phone
@@ -122,8 +139,11 @@ var (
 	noteEntryTyped   = nativeNoteEntryText
 	noteEntryShow    = showNativeNoteEntry
 	noteEntryHide    = hideNativeNoteEntry
-	noteSheetAfter   = func(d time.Duration, f func()) { sheetAfter(d, f) }
-	noteSheetArea    = func(c fyne.Canvas) (fyne.Position, fyne.Size) { return sheetArea(c) }
+	// Android can release its IME to make an expanded passage readable.
+	// Other native editors keep their existing keyboard behavior.
+	noteEntryKeyboard = func(owner uint64, show bool) {}
+	noteSheetAfter    = func(d time.Duration, f func()) { sheetAfter(d, f) }
+	noteSheetArea     = func(c fyne.Canvas) (fyne.Position, fyne.Size) { return sheetArea(c) }
 )
 
 // noteEntryOnChanged is installed by a compose sheet while it is open, and
@@ -131,11 +151,22 @@ var (
 // it drives the note's live character counter. Ask installs no counter.
 var noteEntryOnChanged func()
 
+// noteEntryOnDismiss closes the current shared card after native Back handling.
+// The Android callback checks the editor owner again on the UI goroutine.
+var noteEntryOnDismiss func()
+
+func dismissNoteEntry(owner uint64) {
+	if owner == noteEntryOwner && noteEntryOnDismiss != nil {
+		noteEntryOnDismiss()
+	}
+}
+
 // noteEntryOwner counts compose sheets, so the native field and its counter
 // hook belong to the NEWEST one. There is only one native field (a second show
-// replaces the first), and a composer drained by a rebuild runs its teardown
-// from a watchdog up to 150ms later — by which time the light/dark reopen has
-// already opened a new composer and put its own field up. Torn down
+// replaces the first on iOS, and on Android takes over the window that is
+// showing, android/BtNoteEntry.java), and a composer drained by a rebuild runs
+// its teardown from a watchdog up to 150ms later — by which time the light/dark
+// reopen has already opened a new composer and put its own field up. Torn down
 // unconditionally, the old sheet took the new sheet's field with it. So a
 // sheet tears down only what it still owns. UI goroutine only.
 var noteEntryOwner uint64
@@ -193,8 +224,9 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 		// composer — the reopen after a rebuild drained this one — has put up
 		// its own by the time a watchdog runs this.
 		if owner == noteEntryOwner {
+			noteEntryOnDismiss = nil
 			noteEntryOnChanged = nil
-			noteEntryHide() // no-op off iOS, and when the Fyne entry was used
+			noteEntryHide() // no-op when the Fyne entry was used
 		}
 		if popup != nil {
 			popup.Hide() // removes it from the overlay stack synchronously
@@ -207,6 +239,7 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 			state.showReadingOverlay()
 		}
 	}
+	noteEntryOnDismiss = closeSheet
 
 	title := canvas.NewText("Add a note", pal.Text)
 	title.TextStyle = fyne.TextStyle{Bold: true}
@@ -222,9 +255,8 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 	passageView, excerpt := newPassageExcerptPreview(cite, label, quote,
 		noteExcerptMaxLinesFor(mobile, cnv.Size().Height), pal)
 
-	// On iOS the field is a REAL UITextView floated over the sheet (dictation,
-	// autocorrect, system selection, undo, VoiceOver, system emoji — see
-	// note_entry_ios.go). Everywhere else it is the Fyne entry below. noteText
+	// iOS and Android use their native multiline editors over the same slot.
+	// Desktop keeps the Fyne entry below. noteText
 	// is the one place that knows which is live.
 	useNative := mobile && noteEntryNative()
 
@@ -319,9 +351,9 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 	actions := container.NewBorder(nil, nil, nil, container.NewHBox(cancelBtn, sendBtn))
 
 	// The field's slot in the form. With the native view in play the slot is a
-	// transparent tracking widget — the UITextView is parked exactly over it and
-	// FOLLOWS it through every relayout, so Fyne still owns the layout and the
-	// native view just wears it.
+	// transparent tracking widget — the UITextView or EditText is parked exactly
+	// over it and FOLLOWS it through every relayout, so Fyne still owns the
+	// layout and the native view just wears it.
 	entrySlot := fyne.CanvasObject(inputFrame(withCaret(state, entry), pal.Border))
 	if useNative {
 		entrySlot = newNoteEntrySlot(&sheetOpen)
@@ -494,6 +526,7 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 	// so mis-timing shows nothing rather than a box at (0,0).
 	noteEntryShow(note, "Say something about this passage…", pal)
 	noteEntryOnChanged = updateLeft
+	updateLeft()
 	entrySlot.(*noteEntrySlot).push()
 }
 

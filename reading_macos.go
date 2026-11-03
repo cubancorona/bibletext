@@ -167,10 +167,55 @@ void btMacSetAskEnabled(int on) { gBTMacAskEnabled = on; }
 // Analyze translation / Compare perspectives: the verbs of aiStudyVerbs, which a
 // source test holds this list to) to the right-click selection menu and hands
 // the selected text to Go.
+// BEGIN MAC GEOMETRY SCROLL OWNERSHIP
+// AppKit can adjust a clip origin while laying out a viewport or resizing its
+// document. These synchronous geometry effects belong to the pane, not to a
+// reader scroll. A counter nests with the bridge's existing scroll ownership.
+static int gMacOwnScroll = 0;
+
+@interface HBReadingScrollView : NSScrollView
+@end
+@implementation HBReadingScrollView
+- (void)setFrame:(NSRect)frame {
+    BOOL changed = !NSEqualSizes(frame.size, self.frame.size);
+    if (changed) gMacOwnScroll++;
+    @try { [super setFrame:frame]; }
+    @finally { if (changed) gMacOwnScroll--; }
+}
+- (void)setFrameSize:(NSSize)size {
+    BOOL changed = !NSEqualSizes(size, self.frame.size);
+    if (changed) gMacOwnScroll++;
+    @try { [super setFrameSize:size]; }
+    @finally { if (changed) gMacOwnScroll--; }
+}
+- (void)tile {
+    gMacOwnScroll++;
+    @try { [super tile]; }
+    @finally { gMacOwnScroll--; }
+}
+@end
+// END MAC GEOMETRY SCROLL OWNERSHIP
+
 @interface HBReadingTextView : NSTextView
 @end
 
 @implementation HBReadingTextView
+
+// BEGIN MAC TEXT GEOMETRY SCROLL OWNERSHIP
+- (void)setFrame:(NSRect)frame {
+    BOOL changed = !NSEqualSizes(frame.size, self.frame.size);
+    if (changed) gMacOwnScroll++;
+    @try { [super setFrame:frame]; }
+    @finally { if (changed) gMacOwnScroll--; }
+}
+- (void)setFrameSize:(NSSize)size {
+    BOOL changed = !NSEqualSizes(size, self.frame.size);
+    if (changed) gMacOwnScroll++;
+    @try { [super setFrameSize:size]; }
+    @finally { if (changed) gMacOwnScroll--; }
+}
+// END MAC TEXT GEOMETRY SCROLL OWNERSHIP
+
 
 - (NSString *)hbSelectedText {
     NSRange sel = self.selectedRange;
@@ -422,6 +467,111 @@ static void btMacPresentWordsShare(NSUInteger token);
 // steal its clicks. While suppressed, Show is a no-op; only Unsuppress clears it.
 static BOOL gReadingSuppressed = NO;
 
+// BEGIN MAC TEXT REFLOW ANCHOR
+// A live reflow keeps a character and a fraction through its line, not the
+// point distance from a verse number. The target survives a resize burst;
+// taking a new line start after each wrap would accumulate drift.
+typedef struct { BOOL valid, top; NSUInteger character; CGFloat lineFraction; } BTMacTextReflowAnchor;
+static BTMacTextReflowAnchor gMacTextReflowAnchor = {NO, NO, 0, 0};
+static NSString *gMacTextReflowModel = nil;
+
+// Page grammars may differ in presentation whitespace (notably before the
+// footnote section). Keep word boundaries but collapse whitespace runs, and
+// retain the actual UTF-16 location of every canonical character.
+static NSString *btMacReflowText(NSString *text, NSMutableArray<NSNumber *> *locations) {
+    NSMutableString *model = [NSMutableString string];
+    NSCharacterSet *space = NSCharacterSet.whitespaceAndNewlineCharacterSet;
+    BOOL pendingSpace = NO;
+    NSUInteger spaceStart = 0;
+    for (NSUInteger i = 0; i < text.length; i++) {
+        unichar ch = [text characterAtIndex:i];
+        if ([space characterIsMember:ch]) {
+            if (!pendingSpace) spaceStart = i;
+            pendingSpace = model.length > 0;
+            continue;
+        }
+        if (pendingSpace) {
+            [model appendString:@" "];
+            [locations addObject:@(spaceStart)];
+            pendingSpace = NO;
+        }
+        [model appendString:[text substringWithRange:NSMakeRange(i, 1)]];
+        [locations addObject:@(i)];
+    }
+    return model;
+}
+
+static BTMacTextReflowAnchor btMacCaptureTextReflow(NSTextView *tv, NSClipView *clip, NSString **model) {
+    BTMacTextReflowAnchor anchor = {NO, NO, 0, 0};
+    if (tv == nil || clip == nil || tv.textStorage.length == 0) return anchor;
+    NSLayoutManager *lm = tv.layoutManager;
+    [lm ensureLayoutForTextContainer:tv.textContainer];
+    if (lm.numberOfGlyphs == 0) return anchor;
+    CGFloat y = clip.bounds.origin.y - tv.frame.origin.y;
+    CGFloat textY = MAX(0, y-tv.textContainerInset.height);
+    NSUInteger glyph = [lm glyphIndexForPoint:NSMakePoint(0, textY) inTextContainer:tv.textContainer];
+    if (glyph >= lm.numberOfGlyphs) return anchor;
+    NSRange range;
+    [lm lineFragmentRectForGlyphAtIndex:glyph effectiveRange:&range];
+    NSUInteger character = [lm characterIndexForGlyphAtIndex:range.location];
+    NSMutableArray<NSNumber *> *locations = [NSMutableArray array];
+    NSString *canonical = btMacReflowText(tv.string, locations);
+    NSUInteger index = 0;
+    while (index < locations.count && locations[index].unsignedIntegerValue < character) index++;
+    if (index == locations.count) return anchor;
+    glyph = [lm glyphIndexForCharacterAtIndex:locations[index].unsignedIntegerValue];
+    NSRect line = [lm lineFragmentRectForGlyphAtIndex:glyph effectiveRange:NULL];
+    if (line.size.height <= 0) return anchor;
+    anchor.valid = YES;
+    anchor.top = y <= 0.5;
+    anchor.character = index;
+    anchor.lineFraction = (y-tv.textContainerInset.height-line.origin.y)/line.size.height;
+    if (!isfinite(anchor.lineFraction)) return (BTMacTextReflowAnchor){NO, NO, 0, 0};
+    if (model != NULL) *model = [canonical copy];
+    return anchor;
+}
+
+static BOOL btMacResolveTextReflow(NSTextView *tv, BTMacTextReflowAnchor anchor, NSString *model, CGFloat *y) {
+    if (!anchor.valid || tv == nil || model == nil || !isfinite(anchor.lineFraction)) return NO;
+    NSMutableArray<NSNumber *> *locations = [NSMutableArray array];
+    if (![btMacReflowText(tv.string, locations) isEqualToString:model] || anchor.character >= locations.count) return NO;
+    if (anchor.top) { *y = 0; return YES; }
+    NSLayoutManager *lm = tv.layoutManager;
+    [lm ensureLayoutForTextContainer:tv.textContainer];
+    NSUInteger glyph = [lm glyphIndexForCharacterAtIndex:locations[anchor.character].unsignedIntegerValue];
+    if (glyph >= lm.numberOfGlyphs) return NO;
+    NSRect line = [lm lineFragmentRectForGlyphAtIndex:glyph effectiveRange:NULL];
+    *y = line.origin.y+tv.textContainerInset.height+anchor.lineFraction*line.size.height;
+    return isfinite(*y);
+}
+
+static void btMacClearTextReflow(void) {
+    gMacTextReflowAnchor.valid = NO;
+    gMacTextReflowModel = nil;
+}
+
+static void btMacKeepTextReflow(void) {
+    CGFloat y;
+    if (btMacResolveTextReflow(gTextView, gMacTextReflowAnchor, gMacTextReflowModel, &y)) return;
+    NSString *model = nil;
+    gMacTextReflowAnchor = btMacCaptureTextReflow(gTextView, gScroll.contentView, &model);
+    gMacTextReflowModel = model;
+}
+
+static BOOL btMacPutTextReflow(void) {
+    CGFloat y;
+    if (gTextView == nil || gScroll == nil || !btMacResolveTextReflow(gTextView, gMacTextReflowAnchor, gMacTextReflowModel, &y)) {
+        btMacClearTextReflow();
+        return NO;
+    }
+    CGFloat maxY = MAX(0, gTextView.frame.size.height-gScroll.contentView.bounds.size.height);
+    y = MIN(MAX(0, y+gTextView.frame.origin.y), maxY);
+    [gScroll.contentView scrollToPoint:NSMakePoint(0, y)];
+    [gScroll reflectScrolledClipView:gScroll.contentView];
+    return YES;
+}
+// END MAC TEXT REFLOW ANCHOR
+
 // --- Reading-position restore -------------------------------------------------
 // A one-shot scroll target applied when reopening into the last-read chapter
 // (see reading_state.go). Verse numbers render as <sup> runs (buildChapterHTML),
@@ -438,11 +588,8 @@ static CGFloat   gMacRestoreDelta = 0;
 static CGFloat   gMacRestoreFrac  = 0;
 static BOOL      gMacHasRestore   = NO;
 
-// gMacOwnScroll counts the programmatic scrolls in flight — the restore, a
-// highlight, an import (whose clamp moves the clip), a frame change — so the
-// bounds observer can tell them from the reader's. A counter rather than a
-// flag because they nest (a frame change re-applies the restore).
-static int gMacOwnScroll = 0;
+// gMacOwnScroll, declared beside the native geometry subclasses, also owns
+// the restore, highlight, import and bridge frame-change scrolls below.
 
 // btMacUserScrolled ends a pending restore the moment the view moves for a
 // reason that is not the restore itself: the reader scrolling by any means,
@@ -459,6 +606,7 @@ static int gMacOwnScroll = 0;
 // the next window resize.
 static unsigned gMacScrollSettleGen = 0;
 static void btMacUserScrolled(void) {
+    btMacClearTextReflow();
     gMacHasRestore = NO;
     // The arrival ends here too, as the iOS twin's does (btIOSEndArrival):
     // written only when Go pushes the note, it was re-asserted by the next
@@ -512,8 +660,10 @@ static CGFloat btMacVerseFontThreshold(NSTextStorage *ts) {
 // wash or be attributed to the last verse (see the iOS twin gContentEnd, and
 // footnote_section.go for the Go side of the pact).
 static NSUInteger gMacContentEnd = 0;
-static void btMacFindContentEnd(NSTextStorage *ts) {
-    if (ts == nil) { gMacContentEnd = 0; return; }
+// btMacPageContentEnd finds that boundary on any page: the storage shown, or
+// a page about to replace it (btMacCanPreserveSelection reads both).
+static NSUInteger btMacPageContentEnd(NSAttributedString *ts) {
+    if (ts == nil) return 0;
     __block CGFloat maxSize = 0;
     [ts enumerateAttribute:NSFontAttributeName
                    inRange:NSMakeRange(0, ts.length)
@@ -532,7 +682,10 @@ static void btMacFindContentEnd(NSTextStorage *ts) {
             if (p >= maxSize * 0.8 && p < maxSize * 0.95) { end = r.location; *stop = YES; }
         }];
     }
-    gMacContentEnd = end;
+    return end;
+}
+static void btMacFindContentEnd(NSTextStorage *ts) {
+    gMacContentEnd = btMacPageContentEnd(ts);
 }
 
 // btMacContentEnd is gMacContentEnd clamped to the given storage — the safe
@@ -1379,16 +1532,37 @@ void bibleTextMacSetTintRuns(const BTTintRun *runs, int n, int repaint) {
 // the first could install the older chapter over the second and confirm it.
 // The block only ever moves the generation forward, as the iOS twin's does.
 static int gBodyGenIssued = 0;
+static BOOL gMacPreserveSelectionForPush = NO;
+static NSString *gMacSelectionTargetBook = nil;
+static int gMacSelectionTargetChapter = 0;
 int bibleTextMacBeginChapterPush(int sameChapter) {
     int gen = __atomic_add_fetch(&gBodyGenIssued, 1, __ATOMIC_SEQ_CST);
     dispatch_block_t block = ^{
         if (gen <= gBodyGenPending) return;
         gBodyGenPending = gen;
+        gMacPreserveSelectionForPush = NO;
+        gMacSelectionTargetBook = nil;
+        gMacSelectionTargetChapter = 0;
         gPendingReadAlongVerse = sameChapter ? gReadAlongVerse : kBTReadAlongNone;
+        if (!sameChapter) btMacClearTextReflow();
     };
     if ([NSThread isMainThread]) block();
     else dispatch_async(dispatch_get_main_queue(), block);
     return gen;
+}
+
+// Selection carry belongs to one page-grammar push, never to a later chapter.
+void bibleTextMacPreserveSelectionForPush(int gen, int preserve, const char *book, int chapter) {
+    NSString *target = book != NULL ? [NSString stringWithUTF8String:book] : nil;
+    dispatch_block_t block = ^{
+        if (gen != gBodyGenPending) return;
+        gMacPreserveSelectionForPush = preserve != 0;
+        if (!gMacPreserveSelectionForPush) btMacClearTextReflow();
+        gMacSelectionTargetBook = target;
+        gMacSelectionTargetChapter = chapter;
+    };
+    if ([NSThread isMainThread]) block();
+    else dispatch_async(dispatch_get_main_queue(), block);
 }
 
 // btMacRepaintChapterWashFromModel re-asserts the whole model over a freshly
@@ -1578,7 +1752,7 @@ static BOOL btMacScrollToHighlight(void) {
 void bibleTextMacScrollToHighlight(void) {
     // SetNote is queued on this same serial queue. Keeping placement queued
     // guarantees the new sticker anchor is installed before its scroll runs.
-    dispatch_async(dispatch_get_main_queue(), ^{ btMacScrollToHighlight(); });
+    dispatch_async(dispatch_get_main_queue(), ^{ btMacClearTextReflow(); btMacScrollToHighlight(); });
 }
 
 
@@ -1658,6 +1832,7 @@ static void btMacScrollTVLatched(BOOL pinTop) {
     // The restore only WINS if it resolves: the y >= 0 guard inside falls
     // through to the highlight when the verse is gone and no fraction is
     // usable, which is iOS's behaviour too.
+    if (gMacNoteArrival == kMacArriveNothing && btMacPutTextReflow()) return;
     if (gMacHasRestore) {
         NSLayoutManager *lm = gTextView.layoutManager;
         NSTextStorage *ts = gTextView.textStorage;
@@ -1718,6 +1893,18 @@ static NSWindow *bibleTextMacWindow(void) {
     return w;
 }
 
+// The bounds notification also reports viewport size changes. Keep the last
+// observed rectangle up to date even for owned geometry: only an unowned move
+// of the origin, with no size transition, says the reader changed position.
+// Geometry subclasses own origin clamps emitted separately from a resize.
+static BOOL btMacReadingOriginMoved(NSClipView *clip, NSRect *lastBounds) {
+    NSRect bounds = clip.bounds;
+    BOOL moved = !NSEqualPoints(bounds.origin, lastBounds->origin);
+    BOOL resized = !NSEqualSizes(bounds.size, lastBounds->size);
+    *lastBounds = bounds;
+    return moved && !resized;
+}
+
 // Ensure the scroll view + text view exist and are parented to the current
 // window's content view.
 static void bibleTextMacEnsureTV(void) {
@@ -1726,7 +1913,7 @@ static void bibleTextMacEnsureTV(void) {
         if (win == nil || win.contentView == nil) return;
 
         if (gScroll == nil) {
-            NSScrollView *sv = [[NSScrollView alloc] initWithFrame:NSMakeRect(0, 0, 200, 200)];
+            NSScrollView *sv = [[HBReadingScrollView alloc] initWithFrame:NSMakeRect(0, 0, 200, 200)];
             sv.borderType = NSNoBorder;
             sv.hasVerticalScroller = YES;
             sv.hasHorizontalScroller = NO;
@@ -1759,27 +1946,18 @@ static void bibleTextMacEnsureTV(void) {
             // (trackpad, mouse wheel, scroller drag — the live-scroll notification
             // alone misses discrete wheel events).
             sv.contentView.postsBoundsChangedNotifications = YES;
+            __block NSRect lastClipBounds = sv.contentView.bounds;
             [[NSNotificationCenter defaultCenter]
                 addObserverForName:NSViewBoundsDidChangeNotification
                             object:sv.contentView queue:nil usingBlock:^(NSNotification *n) {
-                // The pane's own scrolls — a restore or highlight re-applied
-                // on a frame change, an import's clamp — are not the reader
-                // taking narration over either; only their hand or a real
-                // user scroll ends follow.
+                // BEGIN MAC READING BOUNDS OBSERVER
+                if (!btMacReadingOriginMoved(sv.contentView, &lastClipBounds)) return;
                 if (gReadAlongActive && !gReadAlongOwnScroll && gMacOwnScroll == 0 && !gReadAlongUserLatch) {
                     gReadAlongUserLatch = YES;
                     bibleTextReadAlongUserScrolled();
                 }
-                // THE READER SCROLLED, by whatever means — wheel, trackpad,
-                // scroller drag or track click, keyboard paging, a drag-select
-                // autoscroll, an accessibility scrollbar write. A bounds change
-                // that is not one of OUR scrolls is the reader's, which is the
-                // iOS rule (scrollViewDidScroll under dragging/decelerating)
-                // in the only form AppKit offers it. Every programmatic scroll
-                // this pane makes runs under gMacOwnScroll or the read-along
-                // latch, so this never fires for a restore, a highlight, an
-                // import's clamp or a frame change.
                 if (gMacOwnScroll == 0 && !gReadAlongOwnScroll) btMacUserScrolled();
+                // END MAC READING BOUNDS OBSERVER
             }];
 
             gScroll = sv;
@@ -1910,6 +2088,36 @@ static NSMutableAttributedString *btMacImportHTML(NSData *data) {
     return as;
 }
 
+// Whether the storage holds the chapter of the push that asked for the carry.
+static BOOL btMacSelectionChapterMatches(NSString *storedBook, int storedChapter, NSString *targetBook, int targetChapter) {
+    return storedBook != nil && targetBook != nil && storedChapter > 0 && storedChapter == targetChapter && [storedBook isEqualToString:targetBook];
+}
+
+// A style-only import keeps the selection's UTF-16 offsets only where both
+// pages hold the same characters: the whole page when the two strings are
+// identical, otherwise the Scripture text before the content end
+// (btMacPageContentEnd), which must then be identical on both and hold every
+// range. With the footnotes shown the book page opens their section with a
+// line break the phone page does not (writeFootnoteSection), so the two pages
+// differ only after the Scripture text, and a range that reaches into the
+// section would name other characters on the new page.
+static BOOL btMacCanPreserveSelection(BOOL requested, BOOL sameChapter, NSAttributedString *before, NSAttributedString *after, NSArray<NSValue *> *ranges) {
+    if (!requested || !sameChapter || before == nil || after == nil || ranges.count == 0) return NO;
+    NSUInteger limit = before.length;
+    if (![before.string isEqualToString:after.string]) {
+        limit = btMacPageContentEnd(before);
+        if (limit != btMacPageContentEnd(after) ||
+            ![[before.string substringToIndex:limit] isEqualToString:[after.string substringToIndex:limit]]) return NO;
+    }
+    BOOL selected = NO;
+    for (NSValue *value in ranges) {
+        NSRange range = value.rangeValue;
+        if (range.location == NSNotFound || range.location > limit || range.length > limit-range.location) return NO;
+        if (range.length > 0) selected = YES;
+    }
+    return selected;
+}
+
 // btMacInstallPageLatched puts a chapter's page into the text view and
 // derives every cached range from it, each after the one it depends on. It is
 // the one path for both pages a push can leave: the imported one
@@ -1922,6 +2130,16 @@ static NSMutableAttributedString *btMacImportHTML(NSData *data) {
 // Called under the own-scroll latch (btMacInstallPage).
 static void btMacInstallPageLatched(NSAttributedString *as) {
     if (gTextView == nil || as == nil) return;
+    // Read only when an import or fallback has succeeded. A reader may have
+    // changed the selection while an earlier import attempt was being retried.
+    NSArray<NSValue *> *selected = gMacPreserveSelectionForPush ? [gTextView.selectedRanges copy] : nil;
+    NSSelectionAffinity affinity = gTextView.selectionAffinity;
+    BOOL sameChapter = btMacSelectionChapterMatches(gMacTextBook, gMacTextChapter,
+        gMacSelectionTargetBook, gMacSelectionTargetChapter);
+    BOOL preserveSelection = btMacCanPreserveSelection(gMacPreserveSelectionForPush, sameChapter,
+        gTextView.textStorage, as, selected);
+    if (gMacPreserveSelectionForPush && sameChapter && gMacNoteArrival == kMacArriveNothing) btMacKeepTextReflow();
+    else btMacClearTextReflow();
     // New chapter text: a narration wash from the previous chapter must not be
     // "restored" against the new storage (audio already stopped via stopAudioForNav).
     // ALL THREE, like the iOS twin: gReadAlongActive left YES with nothing painted
@@ -1969,6 +2187,7 @@ static void btMacInstallPageLatched(NSAttributedString *as) {
     // it any earlier would be wiped by that pass, and the anchor is a VERSE,
     // which needs the text present to resolve to a character location.
     btMacRefreshNote();
+    if (preserveSelection) [gTextView setSelectedRanges:selected affinity:affinity stillSelecting:NO];
     bibleTextMacScrollTV();
     // A Share with note waiting for this page presents beside its words once
     // the page has settled (bibleTextShareTextAtWords).
@@ -2157,15 +2376,23 @@ static BOOL btMacApplyInsets(CGFloat w) {
 
 void bibleTextMacSetReadingSideMin(double s) {
     dispatch_async(dispatch_get_main_queue(), ^{
+        gMacOwnScroll++;
+        if (gScroll != nil && fabs(gMacReadingSideMin-(CGFloat)s) >= 0.5 &&
+            gMacNoteArrival == kMacArriveNothing && (!gMacHasRestore || gMacTextReflowAnchor.valid)) btMacKeepTextReflow();
         gMacReadingSideMin = (CGFloat)s;
-        if (gScroll != nil && btMacApplyInsets(gScroll.contentSize.width)) btMacRefreshNote();
+        if (gScroll != nil && btMacApplyInsets(gScroll.contentSize.width)) { btMacRefreshNote(); btMacPutTextReflow(); }
+        gMacOwnScroll--;
     });
 }
 
 void bibleTextMacSetReadingMeasure(double m) {
     dispatch_async(dispatch_get_main_queue(), ^{
+        gMacOwnScroll++;
+        if (gScroll != nil && fabs(gMacReadingMeasure-(CGFloat)m) >= 0.5 &&
+            gMacNoteArrival == kMacArriveNothing && (!gMacHasRestore || gMacTextReflowAnchor.valid)) btMacKeepTextReflow();
         gMacReadingMeasure = (CGFloat)m;
-        if (gScroll != nil && btMacApplyInsets(gScroll.contentSize.width)) btMacRefreshNote();
+        if (gScroll != nil && btMacApplyInsets(gScroll.contentSize.width)) { btMacRefreshNote(); btMacPutTextReflow(); }
+        gMacOwnScroll--;
     });
 }
 
@@ -3389,6 +3616,7 @@ void bibleTextMacSetNote(const char *text, const char *who, int minimized, int n
         gMacNoteCounts = ct;
         gMacNoteArrival = arrival;
         gMacNoteArrivalVerse = arrivalVerse;
+        if (arrival != kMacArriveNothing) btMacClearTextReflow();
 
         gMacNoteShapeExtra = gMacNoteTail ? kMacNoteTail : 0;
         gMacNoteBg[0]=bgR; gMacNoteBg[1]=bgG; gMacNoteBg[2]=bgB;
@@ -3471,6 +3699,7 @@ static void btMacApplyFrame(double x, double y, double w, double h) {
     CGFloat keepDelta = 0;
     if (changed && fabs(r.size.width - gScroll.frame.size.width) >= 0.5) {
         btMacTopOfView(&keepVerse, &keepDelta);
+        if (gMacNoteArrival == kMacArriveNothing && (!gMacHasRestore || gMacTextReflowAnchor.valid)) btMacKeepTextReflow();
     }
     gScroll.frame = r;
     BOOL insetChanged = btMacApplyInsets(gScroll.contentSize.width); // recentre the reporter column at the new width
@@ -3488,7 +3717,7 @@ static void btMacApplyFrame(double x, double y, double w, double h) {
     // sized for it, which is the gap the reconcile in btMacLayoutNote exists
     // to close.
     if (changed || insetChanged) btMacRefreshNote();
-    if (keepVerse > 0) btMacPutTopOfView(keepVerse, keepDelta);
+    if (!btMacPutTextReflow() && keepVerse > 0) btMacPutTopOfView(keepVerse, keepDelta);
     // SetHTML may have scrolled to the highlighted verse / restore target
     // while the overlay was still at its initial width; once the real frame
     // lands the text rewraps, so re-assert that position. Only when a
@@ -3969,6 +4198,7 @@ func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 	// reference size), so Large/XL widen the column and keep its character
 	// count at the reporter's ~59.
 	page := currentReadingPage()
+	pageChanged := readingPagePushedValid && readingPagePushed != page.Kind
 	markReadingPagePushed(page.Kind)
 	C.bibleTextMacSetReadingLinePitch(C.double(page.PitchEm))
 	C.bibleTextMacSetReadingSideMin(C.double(readingPageSideMin))
@@ -4028,6 +4258,7 @@ func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 				Verse:   v,
 				Delta:   d,
 				Frac:    f,
+				Reflow:  true,
 			}
 		}
 	}
@@ -4053,6 +4284,11 @@ func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 		sameChapter := C.int(0)
 		if bc == lastPushedBookChapter {
 			sameChapter = 1
+		}
+		preserveSelection := C.int(0)
+		if macSelectionCarryWanted(sameChapter != 0, pageChanged, state.forceReposition) &&
+			readingReflowWanted(sameChapter != 0, state.forceReposition, state.restore) {
+			preserveSelection = 1
 		}
 		state.forceReposition = false
 		lastPushedBodyFP = body
@@ -4087,6 +4323,7 @@ func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 		// imported one or the fallback, and the selection menu hands it back
 		// with every selection (selSpan.book).
 		cb := C.CString(state.CurrentBook)
+		C.bibleTextMacPreserveSelectionForPush(gen, preserveSelection, cb, C.int(state.CurrentChapter))
 		C.bibleTextMacTVSetChapter(cb, C.int(state.CurrentChapter))
 		C.free(unsafe.Pointer(cb))
 		C.bibleTextMacTVSetHTML(c, fbText, fbRuns, C.int(len(fb.runs)), cFallbackStyle(appleFallbackStyleFor(state)), gen)
@@ -4110,6 +4347,12 @@ func newMacReadingHost(state *AppState, verses []Verse) *macReadingHost {
 	// Push the frame so the (possibly already-populated) text view shows.
 	C.bibleTextMacTVShow()
 	return h
+}
+
+// Only a same-chapter page reflow carries selection; explicit navigation owns
+// its own placement, and changed text is rejected by the native install guard.
+func macSelectionCarryWanted(sameChapter, pageChanged, explicitArrival bool) bool {
+	return sameChapter && pageChanged && !explicitArrival
 }
 
 // captureReadingAnchor / armReadingRestore bridge the reading-position restore

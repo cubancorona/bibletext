@@ -63,10 +63,16 @@ func openAIError(t *testing.T, reqs chan capturedStudyRequest, s *AppState, f ai
 	finishCapturedStudyRequest(t, nextCapturedStudyRequest(t, reqs, f.name), "", f.err)
 }
 
-// aiErrorIn finds the error's message, its scroll and its pinned button.
+// aiErrorIn finds the error's message, its scroll and its pinned button. A
+// timeout's message is found whether or not it names the faster model,
+// which it does only where the action is offered.
 func aiErrorIn(t *testing.T, popup *widget.PopUp, f aiErrorForm) (*container.Scroll, *widget.Label, *widget.Button) {
 	t.Helper()
 	msg := friendlyAIError(f.err)
+	withFaster := msg
+	if p, ok := aiSpecialError(f.err); ok {
+		withFaster = p.shown(true)
+	}
 	var sc *container.Scroll
 	var lbl *widget.Label
 	var btn *widget.Button
@@ -76,7 +82,7 @@ func aiErrorIn(t *testing.T, popup *widget.PopUp, f aiErrorForm) (*container.Scr
 			return
 		}
 		walkTree(s.Content, func(n fyne.CanvasObject) {
-			if l, ok := n.(*widget.Label); ok && l.Text == msg {
+			if l, ok := n.(*widget.Label); ok && (l.Text == msg || l.Text == withFaster) {
 				sc, lbl = s, l
 			}
 		})

@@ -45,9 +45,16 @@ func newComposeViewport(c fyne.Canvas, form *fyne.Container, compactLabel, passa
 	citeView := container.NewThemeOverride(cite, passageCitationTheme{fyne.CurrentApp().Settings().Theme()})
 	v.citation = citeView
 	v.disclosure = widget.NewButton("Show passage", func() {
+		slot, nativeSlot := entry.(*noteEntrySlot)
+		if nativeSlot && !slot.current() {
+			return
+		}
 		v.expanded = !v.expanded
-		if slot, ok := entry.(*noteEntrySlot); ok {
+		if nativeSlot {
 			slot.settle(v.root.Refresh)
+			// Android releases the IME when the expanded passage needs its
+			// room. The other native platforms keep their current behavior.
+			slot.keyboard(!v.dense || !v.expanded)
 		} else {
 			v.root.Refresh()
 			// Fyne buttons clear focus before their callback. Keep typing in
@@ -102,6 +109,7 @@ func (v *composeViewport) Layout(_ []fyne.CanvasObject, size fyne.Size) {
 	v.form.Resize(fyne.NewSize(size.Width, v.form.MinSize().Height))
 	v.form.Resize(fyne.NewSize(size.Width, v.form.MinSize().Height))
 	if v.form.MinSize().Height <= room && !v.expanded {
+		v.dense = false
 		v.form.Move(fyne.Position{})
 		return
 	}
@@ -182,11 +190,12 @@ func (l composeCompactLayout) Layout(objects []fyne.CanvasObject, size fyne.Size
 		gaps = gap
 	}
 	remaining := max(float32(0), size.Height-toolbarH-gaps)
-	// Two native text lines when there is room; the UITextView scrolls longer
-	// drafts itself. The fallback Fyne editor retains its usual line height.
+	// Cap expanded native fields to leave room for the passage without growing
+	// an editor whose minimum is shorter. The native view scrolls longer drafts
+	// itself; the fallback Fyne editor retains its usual line height.
 	entryH := entry.MinSize().Height
 	if l.native && l.expanded {
-		entryH = 60
+		entryH = min(entryH, float32(60))
 	}
 	passageH := l.metadataHeight
 	if entryH+passageH > remaining {

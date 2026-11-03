@@ -1,10 +1,9 @@
-//go:build !ios
+//go:build !ios && !android
 
 package bibletext
 
-// The native Share-with-note compose field exists only on iOS (see
-// note_entry_ios.go for why). Everywhere else the sheet keeps its Fyne Entry,
-// and these stubs let the untagged sheet code ask without build tags.
+// Desktop composers keep their existing Fyne entry. The native editor seam
+// is implemented separately for iOS and Android.
 
 import "fyne.io/fyne/v2"
 

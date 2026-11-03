@@ -30,8 +30,8 @@ func promptAskQuestionWith(state *AppState, selectedText, question string, span 
 }
 
 // promptAskQuestionForPassage reopens with the same passage and the question
-// typed so far. iOS uses the shared native multiline editor; other platforms
-// keep the Fyne field. Ask produces a prose answer, rather than Search's list
+// typed so far. iOS and Android share the native multiline-editor seam;
+// desktop keeps the Fyne field. Ask produces a prose answer, rather than Search's list
 // of matching verses.
 func promptAskQuestionForPassage(state *AppState, passage aiPassage, question string, span selSpan) {
 	if state == nil || state.window == nil || strings.TrimSpace(passage.Text) == "" {
@@ -66,6 +66,7 @@ func promptAskQuestionForPassage(state *AppState, passage aiPassage, question st
 		closed, sheetOpen = true, false
 		devDiagnosticEvent("composer_close", devDiagnosticMetric{Key: "panel_id", Value: int64(composerID)})
 		if owner == noteEntryOwner {
+			noteEntryOnDismiss = nil
 			noteEntryOnChanged = nil
 			noteEntryHide()
 		}
@@ -76,6 +77,7 @@ func promptAskQuestionForPassage(state *AppState, passage aiPassage, question st
 			state.showReadingOverlay()
 		}
 	}
+	noteEntryOnDismiss = closeAsk
 
 	title := canvas.NewText("Ask about this passage", pal.Text)
 	title.TextStyle = fyne.TextStyle{Bold: true}
@@ -107,7 +109,7 @@ func promptAskQuestionForPassage(state *AppState, passage aiPassage, question st
 		closeAsk()
 		showAIPanelForPassage(state, aiActionAsk, passage, q, span)
 	}
-	// The Fyne field retains Return-to-submit. The native UITextView is
+	// The Fyne field retains Return-to-submit. The native editor is
 	// multiline: Return inserts a newline and the Ask button submits it.
 	entry.OnSubmitted = func(string) { doAsk() }
 	askBtn := widget.NewButton("Ask", doAsk)

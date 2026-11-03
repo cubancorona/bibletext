@@ -49,7 +49,7 @@ func buildSearchResultsView(state *AppState) fyne.CanvasObject {
 		case !hasAIKey(state):
 			return aiNoKeyView(state)
 		case state.aiSearchErr != nil:
-			return aiSearchMessageView(friendlyAIError(state.aiSearchErr), "Try again", func() {
+			return aiSearchErrorView(state, state.aiSearchErr, func() {
 				if state.retryAISearch != nil {
 					state.retryAISearch()
 				}

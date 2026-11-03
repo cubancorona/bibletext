@@ -96,6 +96,7 @@ type appleFallbackPane struct {
 	textWrite  *regexp.Regexp
 	derive     []string // the install's derivations, in the import's order
 	menu       []string // where the selection verbs read the span and lead
+	contentEnd string   // where the notes' band is read
 }
 
 var appleFallbackPanes = []appleFallbackPane{
@@ -136,6 +137,7 @@ var appleFallbackPanes = []appleFallbackPane{
 			"bibleTextStudyMenuTapped((char *)act.UTF8String, (char *)captured.UTF8String, spanLo, spanHi,",
 			"(char *)lead.UTF8String, (char *)book.UTF8String, chapter);",
 		},
+		contentEnd: "static void btIOSFindContentEnd(NSTextStorage *ts) {",
 	},
 	{
 		path:       "reading_macos.go",
@@ -165,6 +167,7 @@ var appleFallbackPanes = []appleFallbackPane{
 			"bibleTextStudyMenuTapped((char *)action, (char *)text.UTF8String, lo, hi, heading, (char *)lead.UTF8String,",
 			"(char *)gMacTextBook.UTF8String, gMacTextChapter);",
 		},
+		contentEnd: "static void btMacFindContentEnd(NSTextStorage *ts) {",
 	},
 }
 
@@ -321,6 +324,10 @@ func TestTheFallbackPageIsSetInTheFacesTheWalksRead(t *testing.T) {
 	kinds := regexp.MustCompile(`enum \{ kBTFallbackNumeral = (\d+), kBTFallbackTitle = (\d+), kBTFallbackHeading = (\d+) \};`)
 	st := appleFallbackStyleFor(&AppState{})
 	ratio := st.numeralPt / st.bodyPt
+	safeNumeral := func(ratio, threshold, lo, hi float64) bool {
+		return ratio > 0 && ratio < threshold && threshold > 0 && threshold < 1 &&
+			lo > 0 && lo < hi && hi <= 1 && !(ratio >= lo && ratio < hi)
+	}
 	for _, p := range appleFallbackPanes {
 		src := readNativeSource(t, p.path)
 		m := kinds.FindStringSubmatch(src)
@@ -354,15 +361,35 @@ func TestTheFallbackPageIsSetInTheFacesTheWalksRead(t *testing.T) {
 		}
 		thr := fractionOf(t, nativeFunctionSource(t, p.path, "static CGFloat "+prefix+"VerseFontThreshold(NSTextStorage *ts) {"),
 			`return maxSize > 0 \? maxSize \* ([0-9.]+) :`, p.path+": the verse-number threshold")
-		end := nativeFunctionSource(t, p.path, "static void "+prefix+"FindContentEnd(NSTextStorage *ts) {")
+		// The cached boundary finder delegates to the page helper so selection
+		// guards can inspect both the installed and replacement attributed pages.
+		cache := "gContentEnd"
+		if prefix == "btMac" {
+			cache = "gMacContentEnd"
+		}
+		helper := prefix + "PageContentEnd"
+		assignment := cache + " = " + helper + "(ts);"
+		delegates := func(body string) bool {
+			return strings.Join(codeLines(body), "\n") == p.contentEnd+"\n"+assignment
+		}
+		finder := nativeFunctionSource(t, p.path, p.contentEnd)
+		if !delegates(finder) {
+			t.Fatalf("%s: the cached boundary finder does not use the page helper", p.path)
+		}
+		if delegates(strings.Replace(finder, assignment, cache+" = ts.length;", 1)) {
+			t.Fatalf("%s: the boundary check accepts bypassing the notes' band", p.path)
+		}
+		end := nativeFunctionSource(t, p.path, "static NSUInteger "+helper+"(NSAttributedString *ts) {")
 		lo := fractionOf(t, end, `p >= maxSize \* ([0-9.]+) && p < maxSize \* [0-9.]+`, p.path+": the notes' band")
 		hi := fractionOf(t, end, `p >= maxSize \* [0-9.]+ && p < maxSize \* ([0-9.]+)`, p.path+": the notes' band")
-		if !(ratio > 0 && ratio < thr) || (ratio >= lo && ratio < hi) || thr <= 0 || thr >= 1 {
+		if !safeNumeral(ratio, thr, lo, hi) {
 			t.Errorf("%s: a number at %.3f of the body is not below the threshold %.2f and outside the notes' band [%.2f, %.2f)", p.path, ratio, thr, lo, hi)
 		}
-		// CONTROL: a number at the body's size would not be found.
-		if 1.0 < thr {
-			t.Fatalf("%s: a number at the body's size passes the threshold; the check proves nothing", p.path)
+		// CONTROLS: body-sized numbers, an inclusive numeral threshold and a
+		// notes band containing the numeral must each violate the contract.
+		if safeNumeral(1, thr, lo, hi) || safeNumeral(ratio, ratio, lo, hi) ||
+			safeNumeral(ratio, thr, ratio, ratio+0.01) {
+			t.Fatalf("%s: an unsafe numeral passes the threshold or notes-band check", p.path)
 		}
 	}
 }

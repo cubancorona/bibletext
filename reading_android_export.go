@@ -12,6 +12,7 @@ import "C"
 
 import (
 	"fyne.io/fyne/v2"
+	"unsafe"
 )
 
 // btaSelectionAction is called (via the JNI thunk, on the Android UI thread)
@@ -63,14 +64,16 @@ func btaSelectionAction(cAction, cText *C.char, lo, hi, heading C.int, cLead, cB
 // any pending restore target, and the fresh position is persisted.
 //
 //export btaScrolled
-func btaScrolled(frac C.float) {
-	if state := activeAIState; state != nil {
-		fyne.Do(func() {
-			clearAndroidDataSwapArrival(state)
-			state.restore = nil
-			flushReadingStateAsync(state)
-		})
-	}
+func btaScrolled(frac C.float, intent C.longlong) {
+	id := uint64(intent)
+	fyne.Do(func() {
+		state := activeAIState
+		if !readingAndroidDispatch.readerScrolled(state, id) {
+			return
+		}
+		clearAndroidDataSwapArrival(state)
+		flushReadingStateAsync(state)
+	})
 }
 
 // btaReadAlongUserScrolled fires when the reader scrolls BY HAND while read-along
@@ -243,5 +246,46 @@ func btaKeyboardChanged(overlapPx C.float) {
 			}
 		}
 		gKeyboardInsetSetter(px / scale)
+	})
+}
+
+//export btaComposeChanged
+func btaComposeChanged(owner C.longlong, text *C.char, length C.int) {
+	id := uint64(owner)
+	if !androidComposeDraft.update(id, string(C.GoBytes(unsafe.Pointer(text), length))) {
+		return
+	}
+	fyne.Do(func() {
+		_, _, open := androidComposeDraft.read(id)
+		if open && id == noteEntryOwner {
+			if f := noteEntryOnChanged; f != nil {
+				f()
+			}
+		}
+	})
+}
+
+//export btaComposeKeyboard
+func btaComposeKeyboard(owner C.longlong, pixels C.float) {
+	id, px := uint64(owner), float32(pixels)
+	if !androidComposeDraft.keyboard(id, px) {
+		return
+	}
+	fyne.Do(func() {
+		_, _, open := androidComposeDraft.read(id)
+		if open && id == noteEntryOwner {
+			noteSoftKeyboard(px)
+		}
+	})
+}
+
+//export btaComposeDismiss
+func btaComposeDismiss(owner C.longlong) {
+	id := uint64(owner)
+	fyne.Do(func() {
+		_, _, open := androidComposeDraft.read(id)
+		if open {
+			dismissNoteEntry(id)
+		}
 	})
 }

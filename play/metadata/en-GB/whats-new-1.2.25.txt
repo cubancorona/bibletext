@@ -1,0 +1,1 @@
+Clearer messages when AI study cannot answer: if the account behind your key has run out of credit or reached its spending limit, or a request takes too long, the message says so and offers Try again, the provider's billing page or a faster model. Notes and questions use Android's own text editing, with Return adding a new line.

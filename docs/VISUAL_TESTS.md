@@ -546,18 +546,31 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       the editor and Share/Cancel stay above the keyboard. Show passage and
       Hide passage preserve the draft and reachable actions. Dismissing the
       keyboard restores the full form without shortening the sheet background.
-      Android: the same, with the Fyne field. On an especially short keyboard
-      viewport, citation, disclosure, live count and actions share one row;
-      Show passage puts the keyboard away to show the full quotation, and
-      returning to typing folds the passage without losing the note. Android,
-      with the keyboard up: Share and then Back out of the chooser, and
-      Cancel, each leave the page whole — the reading text fills the pane
+      Android: the same card with its native multiline field, retaining the
+      shared 112-unit slot (about five and a half Android lines). On an
+      especially short keyboard viewport, citation, disclosure, live count
+      and actions share one row; Show passage puts the keyboard away so the
+      quotation becomes readable without hiding or replacing the field. Hide
+      passage resumes editing; tapping the field can raise the keyboard.
+      The draft and every action's visual size stay unchanged. Check an
+      expanded native editor with room for its 60-unit cap, and a frame near
+      one font line: reduced padding must not clip the top while a whole line
+      fits; below one line, record the limit rather than expecting a whole line.
+      Android text starts 6 units from the side and UIKit text 11 points in;
+      check each platform's existing inset without forcing them equal.
+      On iPhone, iPad and Android, Return adds a newline and only the action
+      submits; the Mac, Windows and Linux fields remain single-line and Return
+      submits there. Android, with the keyboard up: Share and then Back out of
+      the chooser, and Cancel, each leave the page whole — the reading text fills the pane
       and the tab bar sits at the foot, not mid-screen with the bottom
       third empty (the Fyne driver's inset read raced the keyboard's
       departure); Back to put the keyboard away and then Cancel is the
-      same. Desktop:
-      the card ends under the buttons with its usual padding and no empty
-      row. Flip light/dark with the composer open: the words come back in
+      same. With TalkBack on, rotate Note and Ask and record fresh speech
+      and accessibility focus while the card is open. A retained speech caption
+      alone does not establish a new background-chapter announcement; distinguish
+      it from a fresh event before deciding whether the open observation is a
+      regression. Desktop: the card ends under the buttons with its usual
+      padding and no empty row. Flip light/dark with the composer open: the words come back in
       the new palette. Select a heading on its own, one in the middle of a
       chapter and one at its top (most NKJV chapters open with one), and
       then the heading with the number of the verse under it: each time
@@ -987,6 +1000,30 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       the text size) → the pane stays where the reader left it; drag the
       window corner → stays. Before 2026-09-05 the flip returned the reader
       to the launch anchor and the card sat a line high.
+- [ ] macOS live resize ownership: place a word at the top of the pane, resize
+      through several intermediate widths, including a clamp near the chapter
+      end, and return to the original size. Size changes and tiling must retain
+      the semantic target. Then scroll by hand immediately after resizing: that
+      new position must replace the target, including when the next resize has
+      the same outer bounds as an earlier one. Repeat with a selection and with
+      narration following and reader-suspended; record position in rendered
+      pixels rather than just the verse number.
+- [ ] Android cold saved placement: relaunch from a mid-chapter saved position
+      and select a word without first scrolling. Rotate through both landscape
+      orientations and back, across page-format changes and same-format refreshes.
+      Measure the semantic top line and exact UTF-16 selection, not only the
+      saved verse. Repeat at the scroll-range end and through a same-bounds
+      relayout. Pending placement must wait for current measured text and its
+      verse index. A real drag after placement must replace the carried point;
+      an ordinary deselection must stay deselected.
+- [ ] Android request ownership: visit the same chapter through history twice
+      with equal saved coordinates; the fresh visit must keep its own target.
+      Exercise a queued older scroll callback, a failed repeated dispatch and
+      activity recreation both before and after the first usable placement.
+      An old page must not clear the fresh restore or persist its position for
+      the new page. Keep these native timing checks separate from the executed
+      request/layout-helper controls. Record cold and iPad rotation acceptance
+      independently; earlier manual-scroll rotation checks do not cover them.
 - [ ] Desktop full-screen reading: the chapter toolbar's focus button drops the
       app header and the rail (or bottom bar), the "‹ Results" trail stays
       out, and the reading pane takes the whole window; its restore button

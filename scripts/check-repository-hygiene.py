@@ -133,6 +133,12 @@ PROCESS_PATTERNS = (
         rb"|\bagent\s+(?:panel|session|judge|audit)\b|\bpanel\s+of\s+agents\b"
         rb"|\baudit\s+verdict\b|\brefuter\b|\bfield[- ]report(?:ed)?\b"
     )),
+    ("unplaced-observation narration", re.compile(
+        # An observation recorded as made somewhere else and not here names a
+        # working copy, not a platform, a build or a date; a stranger cannot
+        # resolve either end of it.
+        rb"(?i)\bseen\s+elsewhere,\s+not\s+yet\s+reproduced\s+here\b"
+    )),
     ("App Store Connect private-key filename", re.compile(rb"\bAuthKey_[A-Z0-9]{10}\.p8\b")),
     ("realistic private-message fixture", re.compile(
         rb"(?i)\b(?:thinking|thought)\s+of\s+you\b|\bpraying\s+for\s+you\b"
@@ -200,9 +206,11 @@ PROCESS_POSITIVE_CASES = (
     ("working-session narration", b"An AI session captured the baseline."),
     ("working-session narration", b"Another agent did the color work."),
     ("AI authorship narration", b"Claude wrote the first draft of the parser."),
+    ("unplaced-observation narration", b"Seen elsewhere, not yet reproduced here: a resize run."),
 )
 PROCESS_NEGATIVE_CASES = (
     b"Run this command on the macOS build host.",
+    b"The failing case is reproduced here for reference.",
     b"GitHub issue #42 tracks the defect.",
     b"Review the invariant before merging.",
     b"The emulator reproduces the rendering behavior.",
@@ -506,6 +514,7 @@ REMEDIABLE_STATE_LABELS = {
     "internal task provenance",
     "named-person process attribution",
     "specific local-machine narration",
+    "unplaced-observation narration",
     "removed private/process-artifact reference",
     "signing process-record reference",
     "AI generated-by credit",

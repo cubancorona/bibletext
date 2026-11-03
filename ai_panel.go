@@ -1,6 +1,6 @@
 package bibletext
 
-// The AI study result panel: a modal popup that shows a spinner while Gemini
+// The AI study result panel: a modal popup that shows a spinner while the provider
 // answers, then the response (or a friendly error with a retry). It reuses the
 // chapter-picker modal approach — including hiding the native reading overlay
 // while it's open, since that overlay floats above the Fyne canvas and would
@@ -232,6 +232,7 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 	// --- Footer: copy, close, and an honesty note.
 	var current string
 	var popup *widget.PopUp
+	var content, footer *fyne.Container
 	// userClosed distinguishes the reader's own Close from a rebuildWindow
 	// drain-eviction (theme-variant flip): only the latter reopens the panel
 	// when an in-flight answer lands.
@@ -313,7 +314,11 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 	var fittedWant float32
 	var fittedLeast func() float32
 	var errorViewport *aiErrorViewportLayout
+	var errorOverflow *aiErrorOverflow
 	fitBody := func(sc *container.Scroll, want float32, least func() float32) {
+		if errorOverflow != nil {
+			errorOverflow.restore(content, header, footer, body)
+		}
 		if want < 1 {
 			want = 1
 		}
@@ -383,6 +388,19 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 		chrome := popup.MinSize().Height - want
 		// The panel's height with the room to show the whole body.
 		preferred := want + chrome
+		// When the fixed header, recovery rows and footer leave less than one
+		// readable message line, move their variable content into one scroll.
+		// The title and Close stay fixed, with their ordinary dimensions.
+		if errorOverflow != nil && errorOverflow.message == sc && chrome+errorOverflow.readable > sheetMostHeight(state, cnv) {
+			errorOverflow.show(content)
+			errorOverflow.scroll.SetMinSize(fyne.NewSize(bodyW, 32))
+			chrome := popup.MinSize().Height - errorOverflow.scroll.MinSize().Height
+			height := max(float32(32), sheetMostHeight(state, cnv)-chrome)
+			errorOverflow.scroll.SetMinSize(fyne.NewSize(bodyW, height))
+			popup.Resize(fyne.NewSize(ps.Width, height+chrome))
+			coverHeaderUnlessClear(state, popup, height+chrome)
+			return
+		}
 		if max := ps.Height - chrome; want > max {
 			want = fyne.Max(max, minF(leastH, sheetMostHeight(state, cnv)-chrome))
 			if want < 1 {
@@ -416,11 +434,18 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 	disclaimer := canvas.NewText("AI-generated — may be imperfect. Verify important details.", pal.TextMuted)
 	disclaimer.TextSize = 11
 
-	footer := container.NewVBox(
+	footer = container.NewVBox(
 		widget.NewSeparator(),
 		disclaimer,
 		container.NewHBox(reportBtn, layout.NewSpacer(), copyBtn, closeBtn),
 	)
+
+	clearErrorOverflow := func() {
+		if errorOverflow != nil {
+			errorOverflow.restore(content, header, footer, body)
+			errorOverflow = nil
+		}
+	}
 
 	// --- State transitions. Each of the three swaps the body for its own
 	// content and then sizes the panel to it; none inherits the height another
@@ -441,6 +466,7 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 	var modelLine *aiModelLine
 
 	setThinking := func() {
+		clearErrorOverflow()
 		// Same reason as setError: a re-run (the faster-model switch, Try again)
 		// leaves the previous answer on neither the screen nor the clipboard.
 		current = ""
@@ -525,6 +551,7 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 		fitBody(waitScroll, waitContent.MinSize().Height+10, leadFoot)
 	}
 	setResult := func(text string) {
+		clearErrorOverflow()
 		renderStarted := devDiagnosticNow()
 		diagnose("render_start", devDiagnosticMetric{Key: "bytes", Value: int64(len(text))})
 		stopThinking()
@@ -571,8 +598,11 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 		})
 	}
 
-	setError := func(msg string, needsSettings bool) {
+	setError := func(err error) {
+		clearErrorOverflow()
 		diagnose("panel_error")
+		msg, needsSettings := friendlyAIError(err), isNoKeyError(err)
+		presentation, special := aiSpecialError(err)
 		stopThinking()
 		// An error is not an answer aiCache holds, so reopening would ask
 		// again, on the reader's key: the error state never comes back after a
@@ -593,12 +623,9 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 		} else {
 			answer.ParseMarkdown("")
 		}
-		lbl := widget.NewLabel(msg)
-		lbl.Wrapping = fyne.TextWrapWord
-		lbl.Alignment = fyne.TextAlignCenter
-		var actBtn *widget.Button
+		var action fyne.CanvasObject
 		if needsSettings {
-			actBtn = widget.NewButton("Open AI settings", func() {
+			actBtn := widget.NewButton("Open AI settings", func() {
 				diagnose("panel_settings")
 				// Every dismiss path undoes what opening the panel did: mark it
 				// closed so a late reply cannot reopen it, and put the native
@@ -617,22 +644,37 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 				showAISettings(state)
 			})
 			actBtn.Importance = widget.HighImportance
+			action = container.NewCenter(actBtn)
 		} else {
-			actBtn = widget.NewButton("Try again", func() { startFetch() })
+			// Each action has a row of its own: Try again, then the billing
+			// link or the faster model, which a timeout's message names only
+			// when it is offered here.
+			shown, actions := aiErrorRecovery(state, presentation, func() { startFetch() })
+			if special {
+				msg = shown
+			}
+			action = container.NewCenter(actions)
 		}
+		lbl := widget.NewLabel(msg)
+		lbl.Wrapping = fyne.TextWrapWord
+		lbl.Alignment = fyne.TextAlignCenter
 		// The action stays below the message's scroll: even a landscape phone
 		// too short for the whole error must show the way to retry or add a key.
 		// The message and Ask's question keep their natural height wherever a
 		// sheet has room for it, and scroll only once that room is exhausted.
-		errCol := container.New(squeezeWidthLayout{}, container.NewVBox(
-			spacer(8), lbl,
-		))
+		errItems := []fyne.CanvasObject{spacer(8), lbl}
+		if special && presentation.detail != "" {
+			errItems = append(errItems, aiErrorDetail(presentation))
+		}
+		errCol := container.New(squeezeWidthLayout{}, container.NewVBox(errItems...))
 		errContent := withQuestion(errCol)
 		errScroll := container.NewVScroll(errContent)
 		errorViewport = &aiErrorViewportLayout{scroll: errScroll, height: errScroll.MinSize().Height}
-		body.Objects = []fyne.CanvasObject{container.NewBorder(nil, container.NewCenter(actBtn), nil, nil,
+		body.Objects = []fyne.CanvasObject{container.NewBorder(nil, action, nil, nil,
 			container.New(errorViewport, errScroll))}
 		body.Refresh()
+		errorOverflow = newAIErrorOverflow(title, headerItems[1:], errContent, action,
+			disclaimer, reportBtn, copyBtn, closeBtn, errScroll, body.Objects[0])
 		// Pre-wrap the message at the body width before measuring, for the same
 		// reason the answer is pre-wrapped: a word-wrapped label reports its
 		// true height only once it has wrapped at a known width.
@@ -653,7 +695,7 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 		if info, pending := aiPermissionPending(state); pending {
 			stopThinking()
 			fetchGen++ // nothing still on its way may land in this panel
-			setError(friendlyAIError(&aiPermissionError{provider: info}), false)
+			setError(&aiPermissionError{provider: info})
 			promptAIPermission(state, info, func() {
 				if !userClosed && sheetShowing(state, popup) {
 					startFetch()
@@ -694,9 +736,11 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 			modelLine.show(m)
 		})
 		cancelFetch = cancel // so Close / Cancel can abandon THIS request
+		requestProvider := activeAIProvider(state)
 		go func() {
 			defer cancelTimeout()
 			result, err := aiActionRun(ctx, state, action, passage.Text, question, span)
+			err = withAIErrorProvider(err, requestProvider)
 			completed := devDiagnosticNow()
 			var completionMetrics []devDiagnosticMetric
 			if devDiagnosticsEnabled {
@@ -741,7 +785,7 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 					return
 				}
 				if err != nil {
-					setError(friendlyAIError(err), isNoKeyError(err))
+					setError(err)
 					return
 				}
 				setResult(result)
@@ -749,7 +793,7 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 		}()
 	}
 
-	content := container.NewBorder(header, footer, nil, nil, body)
+	content = container.NewBorder(header, footer, nil, nil, body)
 	popup = widget.NewModalPopUp(
 		surface(container.NewPadded(content), pal.SurfaceAlt, pal.Border, fyne.Size{}),
 		cnv,
@@ -809,8 +853,8 @@ var studyRemeasure = func(fit func()) {
 // never shorter than its content down to the foot of head, the part at the
 // top of col that the state must show whole. content is col with whatever
 // stands above it in the scroll, Ask's question. The waiting state's head is
-// its waiting line; the error state's is its whole column, the message and
-// the button that acts on it. Measured when the panel is fitted, so a
+// its waiting line; the error state's is its message column, with recovery
+// controls pinned below the scroll. Measured when the panel is fitted, so a
 // message, a question or a model name that wraps again is measured as it
 // now wraps.
 func wholeThrough(content, col, head fyne.CanvasObject) func() float32 {

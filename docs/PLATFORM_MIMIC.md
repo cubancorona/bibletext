@@ -83,6 +83,14 @@ window capture (`InstallDebugCapture`) still works and is the right screenshot
 tool for mimic sessions — it captures the Fyne canvas the styled pane draws
 into.
 
+Adaptive desktop navigation uses the same canvas-shape rule and 250 ms
+resize settle in native Mac and both mimic modes. A tall window uses the
+existing bottom bar; square and wider windows use the existing rail. Test
+both crossings with a mid-chapter reading place, selected words and an open
+sheet, then repeat on the actual Windows and Linux builds. Mimic exercises
+the styled-pane reflow path; it does not establish native Mac text selection
+or either guest's pixels and window-manager behaviour.
+
 ## What the mode CANNOT prove (do not read mimic as evidence here)
 
 - **The OS side of links.** That Windows puts an activated URL on the

@@ -478,11 +478,15 @@ func takePageFieldCaret(state *AppState) (pageFieldCaret, bool) {
 }
 
 // softKeyboardShown is whether the soft keyboard was on screen at its last
-// report — iOS's keyboard-frame observer (bibleTextKeyboardChanged) and
-// Android's IME insets (btaKeyboardChanged), both on the UI goroutine. False
-// until a report comes, and on desktop, which has no soft keyboard, and on
-// Android before API 30, which reports nothing: there a caret is simply not
-// put back (pageCaretComesBack), and the reader taps the field again.
+// report — iOS's keyboard-frame observer (bibleTextKeyboardChanged),
+// Android's IME insets (btaKeyboardChanged) and the Android Note and Ask
+// editor's own keyboard report (btaComposeKeyboard), all on the UI
+// goroutine. False until a report comes, and on desktop, which has no soft
+// keyboard. Android before API 30 reports nothing for the toolkit's fields,
+// where the activity's keyboard watcher does not run: there a caret is
+// simply not put back (pageCaretComesBack), and the reader taps the field
+// again; the editor reports its keyboard on every Android release, from the
+// visible display frame before API 30.
 var softKeyboardShown bool
 
 // noteSoftKeyboard records the soft keyboard's latest on-screen overlap.

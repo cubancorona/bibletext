@@ -19,6 +19,7 @@ package bibletext
 
 #import <UIKit/UIKit.h>
 #import <CoreText/CoreText.h>
+#include <math.h>
 #include <stdlib.h>
 #include <time.h>
 
@@ -113,6 +114,22 @@ static NSInteger gReadingRestoreVerse = 0;
 static CGFloat   gReadingRestoreDelta = 0;
 static CGFloat   gReadingRestoreFrac  = 0;
 static BOOL      gReadingHasRestore   = NO;
+
+// A live reflow keeps a character and its place within a line. Persisted
+// verse/pixel anchors keep their existing format and remain the launch fallback.
+static NSString *gIOSReflowText = nil;
+static NSString *gIOSReflowBook = nil;
+static NSInteger gIOSReflowChapter = 0;
+static NSUInteger gIOSReflowOffset = 0, gIOSReflowContentEnd = 0;
+static CGFloat gIOSReflowLineFraction = 0;
+static BOOL gIOSReflowTop = NO;
+static BOOL gIOSReflowPrepared = NO;
+static BOOL gIOSPreserveSelectionForPush = NO;
+static NSString *gIOSSelectionTargetBook = nil;
+static NSInteger gIOSSelectionTargetChapter = 0;
+static void btIOSClearReflow(void);
+static void btIOSCaptureReflow(void);
+static BOOL btIOSApplyReflow(void);
 
 // gLastTouch* records where the reader's finger first landed on the CURRENT scroll
 // (content-y of the initial touch). Set once per gesture in
@@ -426,6 +443,7 @@ static void btIOSRebuildWash(void);
 // content-y of the initial touch. Fires once per gesture (not per frame), so it is
 // cheap; the verse mapping is deferred to scroll-end (bibleTextTVCaptureTouch).
 - (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
+    btIOSClearReflow();
     gLastTouchContentY = [scrollView.panGestureRecognizer locationInView:scrollView].y;
     gHasLastTouch = YES;
 }
@@ -802,8 +820,8 @@ static NSInteger btGapMarkNumber(NSString *run) {
 // can never inherit a wash or be attributed to the last verse
 // (footnote_section.go documents the pact from the Go side).
 static NSUInteger gContentEnd = 0;
-static void btIOSFindContentEnd(NSTextStorage *ts) {
-    if (ts == nil) { gContentEnd = 0; return; }
+static NSUInteger btIOSPageContentEnd(NSAttributedString *ts) {
+    if (ts == nil) return 0;
     __block CGFloat maxSize = 0;
     [ts enumerateAttribute:NSFontAttributeName
                    inRange:NSMakeRange(0, ts.length)
@@ -822,7 +840,116 @@ static void btIOSFindContentEnd(NSTextStorage *ts) {
             if (p >= maxSize * 0.8 && p < maxSize * 0.95) { end = r.location; *stop = YES; }
         }];
     }
-    gContentEnd = end;
+    return end;
+}
+
+static void btIOSFindContentEnd(NSTextStorage *ts) {
+    gContentEnd = btIOSPageContentEnd(ts);
+}
+
+// Selection and reflow offsets belong to the chapter actually displayed,
+// never merely to the last chapter requested by Go.
+static BOOL btIOSChapterMatches(NSString *beforeBook, NSInteger beforeChapter, NSString *afterBook, NSInteger afterChapter) {
+    return beforeBook != nil && afterBook != nil && beforeChapter > 0 &&
+        beforeChapter == afterChapter && [beforeBook isEqualToString:afterBook];
+}
+
+static BOOL btIOSRangeFits(NSRange range, NSUInteger limit) {
+    return range.location != NSNotFound && range.location <= limit && range.length <= limit - range.location;
+}
+
+// Phone/book imports can differ after Scripture where the footnote section
+// opens. Such a difference cannot move a Scripture range, but cannot safely
+// carry a range into that section either.
+static BOOL btIOSUTF16Boundary(NSString *text, NSUInteger offset) {
+    if (offset > text.length) return NO;
+    if (offset == 0 || offset == text.length) return YES;
+    unichar a = [text characterAtIndex:offset - 1], b = [text characterAtIndex:offset];
+    return !(a >= 0xD800 && a <= 0xDBFF && b >= 0xDC00 && b <= 0xDFFF);
+}
+
+static NSRange btIOSReflowCharacterRange(NSString *text, NSUInteger offset) {
+    if (text == nil || offset >= text.length || !btIOSUTF16Boundary(text, offset)) return NSMakeRange(NSNotFound, 0);
+    return [text rangeOfComposedCharacterSequenceAtIndex:offset];
+}
+
+static BOOL btIOSTextAllowsRange(NSString *before, NSUInteger beforeEnd, NSString *after, NSUInteger afterEnd, NSRange range) {
+    if (before == nil || after == nil || !btIOSRangeFits(range, before.length) || !btIOSRangeFits(range, after.length)) return NO;
+    if (!btIOSUTF16Boundary(before, range.location) || !btIOSUTF16Boundary(before, NSMaxRange(range)) ||
+        !btIOSUTF16Boundary(after, range.location) || !btIOSUTF16Boundary(after, NSMaxRange(range))) return NO;
+    if ([before isEqualToString:after]) return YES;
+    return beforeEnd == afterEnd && beforeEnd <= before.length && afterEnd <= after.length &&
+        btIOSRangeFits(range, beforeEnd) &&
+        [[before substringToIndex:beforeEnd] isEqualToString:[after substringToIndex:afterEnd]];
+}
+
+static BOOL btIOSCanPreserveSelection(BOOL requested, BOOL sameChapter, NSAttributedString *before, NSAttributedString *after, NSRange range) {
+    return requested && sameChapter && range.length > 0 && before != nil && after != nil &&
+        btIOSTextAllowsRange(before.string, btIOSPageContentEnd(before), after.string, btIOSPageContentEnd(after), range);
+}
+
+static void btIOSClearReflow(void) {
+    gIOSReflowText = nil;
+    gIOSReflowBook = nil;
+    gIOSReflowChapter = 0;
+    gIOSReflowPrepared = NO;
+}
+
+static void btIOSCaptureReflow(void) {
+    if (gIOSReflowText != nil || gReadingTV == nil || gReadingTV.dragging || gReadingTV.decelerating || gReadingHasRestore) return;
+    UITextView *tv = gReadingTV;
+    if (tv.textStorage.length == 0 || gTVBook == nil || gTVChapter <= 0) return;
+    NSLayoutManager *lm = tv.layoutManager;
+    [lm ensureLayoutForTextContainer:tv.textContainer];
+    CGFloat y = tv.contentOffset.y - tv.textContainerInset.top;
+    NSUInteger glyph = [lm glyphIndexForPoint:CGPointMake(4, MAX(0, y)) inTextContainer:tv.textContainer];
+    if (glyph >= lm.numberOfGlyphs) return;
+    NSRange line;
+    CGRect rect = [lm lineFragmentRectForGlyphAtIndex:glyph effectiveRange:&line];
+    NSUInteger offset = [lm characterIndexForGlyphAtIndex:line.location];
+    if (offset >= tv.textStorage.length || rect.size.height <= 0) return;
+    CGFloat fraction = (y - rect.origin.y) / rect.size.height;
+    if (!isfinite(fraction)) return;
+    gIOSReflowText = [tv.textStorage.string copy];
+    gIOSReflowContentEnd = btIOSContentEnd(tv.textStorage);
+    gIOSReflowBook = [gTVBook copy];
+    gIOSReflowChapter = gTVChapter;
+    gIOSReflowOffset = offset;
+    gIOSReflowLineFraction = fraction;
+    gIOSReflowTop = tv.contentOffset.y <= 0.5;
+}
+
+static BOOL btIOSApplyReflow(void) {
+    if (gIOSReflowText == nil || gReadingTV == nil) return NO;
+    UITextView *tv = gReadingTV;
+    NSRange character = btIOSReflowCharacterRange(gIOSReflowText, gIOSReflowOffset);
+    if (!btIOSChapterMatches(gIOSReflowBook, gIOSReflowChapter, gTVBook, gTVChapter) ||
+        !btIOSTextAllowsRange(gIOSReflowText, gIOSReflowContentEnd, tv.textStorage.string,
+            btIOSContentEnd(tv.textStorage), character)) {
+        btIOSClearReflow();
+        return NO;
+    }
+    NSLayoutManager *lm = tv.layoutManager;
+    [lm ensureLayoutForTextContainer:tv.textContainer];
+    NSUInteger glyph = [lm glyphIndexForCharacterAtIndex:gIOSReflowOffset];
+    if (glyph >= lm.numberOfGlyphs) return NO;
+    CGRect line = [lm lineFragmentRectForGlyphAtIndex:glyph effectiveRange:NULL];
+    CGFloat target = gIOSReflowTop ? 0 : tv.textContainerInset.top + line.origin.y + gIOSReflowLineFraction * line.size.height;
+    CGFloat maximum = MAX(0, tv.contentSize.height - tv.bounds.size.height);
+    tv.contentOffset = CGPointMake(0, MIN(maximum, MAX(0, target)));
+    return YES;
+}
+
+// Capture before style/note mutations, while the old line geometry is still
+// available. An explicit arrival or a different chapter cancels this carry.
+void bibleTextIOSPrepareReflow(int requested, const char *book, int chapter) {
+    NSString *target = book != NULL ? [NSString stringWithUTF8String:book] : nil;
+    void (^block)(void) = ^{
+        if (!requested || !btIOSChapterMatches(gTVBook, gTVChapter, target, chapter)) btIOSClearReflow();
+        else { btIOSCaptureReflow(); gIOSReflowPrepared = YES; }
+    };
+    if ([NSThread isMainThread]) block();
+    else dispatch_sync(dispatch_get_main_queue(), block);
 }
 
 // btIOSContentEnd is gContentEnd clamped to the given storage — the safe tail
@@ -3101,6 +3228,18 @@ int bibleTextIOSBeginChapterPush(int sameChapter) {
     return gen;
 }
 
+void bibleTextIOSPreserveSelectionForPush(int gen, int requested, const char *book, int chapter) {
+    NSString *target = book != NULL ? [NSString stringWithUTF8String:book] : nil;
+    void (^block)(void) = ^{
+        if (gen != gBodyGenPending) return;
+        gIOSPreserveSelectionForPush = requested != 0;
+        gIOSSelectionTargetBook = target;
+        gIOSSelectionTargetChapter = chapter;
+    };
+    if ([NSThread isMainThread]) block();
+    else dispatch_async(dispatch_get_main_queue(), block);
+}
+
 // bibleTextIOSReadAlongClear takes the narration wash off. The attribute is
 // simply removed: the chapter wash lives in the view beneath the text, not in
 // the storage, so nothing of the reader's is erased with it.
@@ -3182,6 +3321,7 @@ void bibleTextIOSHighlightVerse(int verse, int follow) {
             if (maxY < 0) maxY = 0;
             if (y < 0) y = 0;
             if (y > maxY) y = maxY;
+            btIOSClearReflow();
             tv.contentOffset = CGPointMake(0, y);
         }
     };
@@ -3322,6 +3462,7 @@ static void btIOSReassertPlacement(void) {
 // when none is armed or it cannot be resolved.
 static BOOL btIOSApplyRestore(void) {
     if (gReadingTV == nil) return NO;
+    if (btIOSApplyReflow()) return YES;
     NSUInteger len = gReadingTV.textStorage.length;
     // ORDER MATTERS, and it is restore-before-highlight.
     //
@@ -3374,7 +3515,7 @@ static BOOL btIOSApplyRestore(void) {
 void bibleTextIOSScrollToHighlight(void) {
     // SetNote is queued on this same serial queue. Keeping placement queued
     // guarantees the new sticker anchor is installed before its scroll runs.
-    dispatch_async(dispatch_get_main_queue(), ^{ btIOSScrollToHighlight(); });
+    dispatch_async(dispatch_get_main_queue(), ^{ btIOSClearReflow(); btIOSScrollToHighlight(); });
 }
 
 // Look up the foreground UIWindow that Fyne renders into. BibleText's minimum
@@ -3685,6 +3826,11 @@ static BOOL bibleTextApplyHTML(NSData *data) {
 // imported page has.
 static void btIOSInstallPage(NSAttributedString *as) {
     if (gReadingTV == nil || as == nil) return;
+    NSRange selection = gReadingTV.selectedRange;
+    BOOL sameChapter = btIOSChapterMatches(gTVBook, gTVChapter,
+        gIOSSelectionTargetBook, gIOSSelectionTargetChapter);
+    BOOL preserveSelection = btIOSCanPreserveSelection(gIOSPreserveSelectionForPush,
+        sameChapter, gReadingTV.attributedText, as, selection);
     // New chapter text: a read-along tint from the previous chapter must not be
     // "restored" against the new storage (audio already stopped via stopAudioForNav).
     // All three, because gReadAlongActive left YES with nothing painted is a lie
@@ -3755,6 +3901,7 @@ static void btIOSInstallPage(NSAttributedString *as) {
     gMarkerApplied = NO;
     btIOSApplyMarker();
     // Re-assert the scroll position across the relayout + frame push.
+    if (preserveSelection) gReadingTV.selectedRange = selection;
     [gReadingTV layoutIfNeeded];
     bibleTextScrollReadingTV();
     // The deferred re-asserts re-place a highlight / restore target after the relayout
@@ -3966,6 +4113,7 @@ void bibleTextTVSetFrame(float x, float y, float w, float h) {
         CGRect old = gReadingTV.frame;
         CGRect r = CGRectMake(x + safe.left, y + safe.top, w, h);
         BOOL changed = !CGRectEqualToRect(r, old);
+        if (r.size.width != old.size.width) btIOSCaptureReflow();
         gReadingTV.frame = r;
         btIOSApplyInsets(r.size.width); // reporter column re-centres on width change
         btIOSLayoutFollowBtn(); // the pill floats relative to the pane's bottom edge
@@ -3976,6 +4124,7 @@ void bibleTextTVSetFrame(float x, float y, float w, float h) {
         // width moves every line below it; the rects were measured against
         // the old lines. Once more, after the band settles.
         if (changed) btIOSRebuildWash();
+        if (changed && r.size.width != old.size.width) btIOSApplyReflow();
         // Only re-resolve the scroll position when a highlight (search jump) or a
         // pending restore is armed: those were computed at the old width and must be
         // re-placed after the rewrap. Without a target, bibleTextScrollReadingTV
@@ -4462,8 +4611,11 @@ void bibleTextTVArmRestore(int verse, double delta, double frac) {
         if (verse <= 0 && frac <= 0) {
             gReadingHasRestore = NO;
             gReadingRestoreVerse = 0; gReadingRestoreDelta = 0; gReadingRestoreFrac = 0;
+            gIOSReflowPrepared = NO;
             return;
         }
+        if (!gIOSReflowPrepared) btIOSClearReflow();
+        gIOSReflowPrepared = NO;
         gReadingRestoreVerse = verse;
         gReadingRestoreDelta = delta;
         gReadingRestoreFrac = frac;
@@ -4822,6 +4974,20 @@ var lastPushedBookChapter string
 // inline styling — superscript verse numbers, accent color, serif font) and
 // sends it across the CGO boundary.
 func pushChapterHTML(state *AppState, verses []Verse) {
+	page := currentReadingPage()
+	pageChanged := readingPagePushedValid && page.Kind != readingPagePushed
+	body := chapterBodyFingerprint(state)
+	bc := fmt.Sprintf("%s|%d", state.CurrentBook, state.CurrentChapter)
+	wantReflow := readingReflowWanted(bc == lastPushedBookChapter, state.forceReposition, state.restore)
+	if body != lastPushedBodyFP || state.forceReposition || bc != lastPushedBookChapter || (state.restore != nil && !state.restore.Reflow) {
+		keep := C.int(0)
+		if wantReflow {
+			keep = 1
+		}
+		book := C.CString(state.CurrentBook)
+		C.bibleTextIOSPrepareReflow(keep, book, C.int(state.CurrentChapter))
+		C.free(unsafe.Pointer(book))
+	}
 	// The tap-menu gate (noteOwnsHighlightMenu) rides pushNoteToPane now, so
 	// every note push — including a pill-tap restore that never rebuilds the
 	// chapter — refreshes it. Setting it only here left it stale on exactly
@@ -4840,7 +5006,6 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// THE PAGE, from the spec (reading_page.go), at the width this pane last
 	// reported (the window's until it has). reporterLayout, which the stylesheet
 	// and the body fingerprint read, answers from the same width.
-	page := currentReadingPage()
 	markReadingPagePushed(page.Kind)
 	C.bibleTextSetReadingLinePitch(C.double(page.PitchEm))
 	C.bibleTextSetReadingSideMin(C.double(readingPageSideMin))
@@ -4866,9 +5031,7 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// whole NSAttributedString; the WASH is a repaint over the string already
 	// on screen — a view rebuilt from the run model on iOS, one attribute over a
 	// known range on macOS (chapterBodyFingerprint, reading.go).
-	body := chapterBodyFingerprint(state)
 	tintFP := chapterTint(state).fingerprint()
-	bc := fmt.Sprintf("%s|%d", state.CurrentBook, state.CurrentChapter)
 
 	// Same-chapter RE-render — the fingerprint changed but the book+chapter did not.
 	// This fires on a light/dark flip, a red-letter toggle, and (the common one) when
@@ -4908,6 +5071,7 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 				Verse:   v,
 				Delta:   d,
 				Frac:    f,
+				Reflow:  true,
 			}
 		}
 	}
@@ -4972,6 +5136,10 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	if os.Getenv("BT_SCROLL_DEBUG") != "" && state.forceReposition {
 		fmt.Fprintln(os.Stderr, "[scroll] push: SLOW path clearing forceReposition (import cadence owns placement)")
 	}
+	preserveSelection := C.int(0)
+	if wantReflow && pageChanged {
+		preserveSelection = 1
+	}
 	state.forceReposition = false
 	lastPushedBodyFP = body
 	lastPushedTintFP = tintFP
@@ -5007,6 +5175,7 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// every selection (selSpan.book).
 	cb := C.CString(state.CurrentBook)
 	defer C.free(unsafe.Pointer(cb))
+	C.bibleTextIOSPreserveSelectionForPush(gen, preserveSelection, cb, C.int(state.CurrentChapter))
 	C.bibleTextTVSetChapter(cb, C.int(state.CurrentChapter))
 	C.bibleTextTVSetHTML(c, fbText, fbRuns, C.int(len(fb.runs)), cFallbackStyle(appleFallbackStyleFor(state)), gen)
 

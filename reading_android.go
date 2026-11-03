@@ -23,12 +23,12 @@ package bibletext
 static jclass    btaClass = NULL;   // global ref to org.bibletext.BtBridge
 static jobject  btaActivity = NULL; // our global ref, independent of Fyne's context ref
 static jmethodID btaInitM, btaSetStyleM, btaSetChapterM, btaSetHtmlM, btaArmRestoreM, btaGetAnchorM,
-                 btaSetFrameM, btaShowM, btaHideM, btaSuppressM, btaUnsuppressM,
+                 btaSetFrameM, btaShowM, btaHideM, btaSuppressM, btaUnsuppressM, btaSetReadingIntentM,
                  btaShareTextM, btaShareImageM, btaShareFailedM, btaSetAIEnabledM, btaSetAskEnabledM,
                  btaSetNotesEnabledM, btaOpenBrowserM,
                  btaRAHighlightM, btaRAClearM, btaRAFollowM, btaRAColorsM,
                  btaSetNoteM, btaSetNoteBandsM, btaTimeZoneIDM, btaWindowWidthM, btaWindowHeightM,
-                 btaSetSystemBarsLightM;
+                 btaSetSystemBarsLightM, btaNoteEntryShowM, btaNoteEntryFrameM, btaNoteEntryHideM, btaNoteEntryFocusM;
 
 // Resolve BtBridge through the ACTIVITY's classloader. FindClass on a
 // JNI-attached background thread uses the system classloader and cannot see
@@ -59,8 +59,9 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	btaSetChapterM = (*env)->GetStaticMethodID(env, btaClass, "setChapter", "(Ljava/lang/String;I)V");
 	// The chapter, the restore fraction, the arrival verse, then the restore
 	// verse and how far into it (a fraction of its height).
-	btaSetHtmlM    = (*env)->GetStaticMethodID(env, btaClass, "setHtml", "(Ljava/lang/String;FIIF)V");
-	btaArmRestoreM = (*env)->GetStaticMethodID(env, btaClass, "armRestore", "(IFF)V");
+	btaSetHtmlM    = (*env)->GetStaticMethodID(env, btaClass, "setHtml", "(Ljava/lang/String;FIIFZZ)V");
+	btaArmRestoreM = (*env)->GetStaticMethodID(env, btaClass, "armRestore", "(IFFZ)V");
+	btaSetReadingIntentM = (*env)->GetStaticMethodID(env, btaClass, "setReadingIntent", "(J)V");
 	// {verse, within, frac}: the reading position as of the last scroll.
 	btaGetAnchorM  = (*env)->GetStaticMethodID(env, btaClass, "getScrollAnchor", "()[F");
 	btaSetFrameM   = (*env)->GetStaticMethodID(env, btaClass, "setFrame", "(IIII)V");
@@ -108,6 +109,10 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	// The system bars' icons: dark over a light page, light over a dark one
 	// (title_bar_android.go).
 	btaSetSystemBarsLightM = (*env)->GetStaticMethodID(env, btaClass, "setSystemBarsLight", "(Z)V");
+	btaNoteEntryShowM = (*env)->GetStaticMethodID(env, btaClass, "noteEntryShow", "(J[B[BIIIIFF)V");
+	btaNoteEntryFrameM = (*env)->GetStaticMethodID(env, btaClass, "noteEntryFrame", "(JIIII)V");
+	btaNoteEntryHideM = (*env)->GetStaticMethodID(env, btaClass, "noteEntryHide", "(J)V");
+	btaNoteEntryFocusM = (*env)->GetStaticMethodID(env, btaClass, "noteEntryFocus", "(JZ)V");
 	// A missing method (a dex/JNI signature skew from editing BtBridge.java
 	// without updating these descriptors) returns NULL and leaves a pending
 	// NoSuchMethodError; every wrapper below guards only on btaClass==NULL, so an
@@ -116,14 +121,15 @@ static int btaEnsureClass(JNIEnv *env, jobject ctx) {
 	// the Fyne reading pane (mirrors Fyne's own find_static_method helper).
 	if ((*env)->ExceptionCheck(env) ||
 	    btaInitM == NULL || btaSetStyleM == NULL || btaSetChapterM == NULL || btaSetHtmlM == NULL ||
-	    btaArmRestoreM == NULL || btaGetAnchorM == NULL || btaSetFrameM == NULL ||
+	    btaArmRestoreM == NULL || btaGetAnchorM == NULL || btaSetFrameM == NULL || btaSetReadingIntentM == NULL ||
 	    btaShowM == NULL || btaHideM == NULL || btaSuppressM == NULL ||
 	    btaUnsuppressM == NULL || btaShareTextM == NULL || btaShareImageM == NULL || btaShareFailedM == NULL ||
 	    btaSetAIEnabledM == NULL || btaSetAskEnabledM == NULL || btaSetNotesEnabledM == NULL || btaOpenBrowserM == NULL ||
 	    btaRAHighlightM == NULL || btaRAClearM == NULL || btaRAFollowM == NULL ||
 	    btaRAColorsM == NULL || btaSetNoteM == NULL || btaSetNoteBandsM == NULL ||
 	    btaTimeZoneIDM == NULL || btaWindowWidthM == NULL || btaWindowHeightM == NULL ||
-	    btaSetSystemBarsLightM == NULL) {
+	    btaSetSystemBarsLightM == NULL || btaNoteEntryShowM == NULL ||
+	    btaNoteEntryFrameM == NULL || btaNoteEntryHideM == NULL || btaNoteEntryFocusM == NULL) {
 		(*env)->ExceptionClear(env);
 		(*env)->DeleteGlobalRef(env, btaClass);
 		btaClass = NULL;
@@ -180,20 +186,26 @@ static void btaSetChapter(uintptr_t jni_env, const char *book, int chapter) {
 	(*env)->DeleteLocalRef(env, b);
 }
 
-static void btaSetHtml(uintptr_t jni_env, const char *html, float frac, int arrivalVerse,
-                       int restoreVerse, float restoreWithin) {
+static int btaSetHtml(uintptr_t jni_env, const char *html, float frac, int arrivalVerse,
+                       int restoreVerse, float restoreWithin, int preservePosition, int preserveSelection) {
 	JNIEnv *env = (JNIEnv*)jni_env;
-	if (btaClass == NULL) return;
+	if (btaClass == NULL) return 0;
 	jstring s = (*env)->NewStringUTF(env, html);
 	(*env)->CallStaticVoidMethod(env, btaClass, btaSetHtmlM, s, frac, arrivalVerse,
-	                             restoreVerse, restoreWithin);
+	                             restoreVerse, restoreWithin, (jboolean)preservePosition, (jboolean)preserveSelection);
 	(*env)->DeleteLocalRef(env, s);
+	return (*env)->ExceptionCheck(env) ? 0 : 1;
 }
 
-static void btaArmRestore(uintptr_t jni_env, int verse, float within, float frac) {
+static void btaSetReadingIntent(uintptr_t jni_env, long long intent) {
+	JNIEnv *env = (JNIEnv*)jni_env;
+	if (btaClass != NULL) (*env)->CallStaticVoidMethod(env, btaClass, btaSetReadingIntentM, (jlong)intent);
+}
+
+static void btaArmRestore(uintptr_t jni_env, int verse, float within, float frac, int reflow) {
 	JNIEnv *env = (JNIEnv*)jni_env;
 	if (btaClass == NULL) return;
-	(*env)->CallStaticVoidMethod(env, btaClass, btaArmRestoreM, verse, within, frac);
+	(*env)->CallStaticVoidMethod(env, btaClass, btaArmRestoreM, verse, within, frac, (jboolean)reflow);
 }
 
 // btaGetAnchor fills out with {verse, within, frac}; frac is -1 when the
@@ -414,6 +426,38 @@ static void btaSetNoteBands(uintptr_t jni_env, const int *keys, const int *verse
 	(*env)->DeleteLocalRef(env, jv);
 	(*env)->DeleteLocalRef(env, jo);
 	if (jl != NULL) (*env)->DeleteLocalRef(env, jl);
+}
+
+static void btaNoteEntryShow(uintptr_t jni_env, long long owner,
+                           const char *initial, int initial_len, const char *placeholder, int placeholder_len,
+                           int text, int hint, int background, int border, float text_px, float scale) {
+	JNIEnv *env = (JNIEnv*)jni_env;
+	if (btaClass == NULL) return;
+	jbyteArray a = (*env)->NewByteArray(env, initial_len);
+	jbyteArray b = (*env)->NewByteArray(env, placeholder_len);
+	if (a == NULL || b == NULL) return;
+	if (initial_len > 0) (*env)->SetByteArrayRegion(env, a, 0, initial_len, (const jbyte*)initial);
+	if (placeholder_len > 0) (*env)->SetByteArrayRegion(env, b, 0, placeholder_len, (const jbyte*)placeholder);
+	(*env)->CallStaticVoidMethod(env, btaClass, btaNoteEntryShowM, (jlong)owner, a, b,
+	                             text, hint, background, border, text_px, scale);
+	(*env)->DeleteLocalRef(env, a);
+	(*env)->DeleteLocalRef(env, b);
+}
+
+static void btaNoteEntryFrame(uintptr_t jni_env, long long owner, int x, int y, int w, int h) {
+	JNIEnv *env = (JNIEnv*)jni_env;
+	if (btaClass != NULL) (*env)->CallStaticVoidMethod(env, btaClass, btaNoteEntryFrameM,
+	                                                  (jlong)owner, x, y, w, h);
+}
+
+static void btaNoteEntryHide(uintptr_t jni_env, long long owner) {
+	JNIEnv *env = (JNIEnv*)jni_env;
+	if (btaClass != NULL) (*env)->CallStaticVoidMethod(env, btaClass, btaNoteEntryHideM, (jlong)owner);
+}
+
+static void btaNoteEntryFocus(uintptr_t jni_env, long long owner, int focus) {
+	JNIEnv *env = (JNIEnv*)jni_env;
+	if (btaClass != NULL) (*env)->CallStaticVoidMethod(env, btaClass, btaNoteEntryFocusM, (jlong)owner, (jboolean)focus);
 }
 */
 import "C"
@@ -644,13 +688,15 @@ func foregroundOverlayRecovery(state *AppState) {
 			// far into it, the scroll fraction). Capture it as a one-shot
 			// restore anchor for the re-render (else the fingerprint reset
 			// below would re-open pinned to the top).
-			if v, d, f, ok := captureReadingAnchor(); ok {
-				state.restore = &restoreAnchor{
-					Book:    state.CurrentBook,
-					Chapter: state.CurrentChapter,
-					Verse:   v,
-					Delta:   d,
-					Frac:    f,
+			if !state.forceReposition {
+				if androidExistingRestoreCanRecover(state) {
+					androidRecreatedReadingCarry = true
+				} else if v, d, f, ok := captureReadingAnchor(); ok {
+					state.restore = &restoreAnchor{
+						Book: state.CurrentBook, Chapter: state.CurrentChapter,
+						Verse: v, Delta: d, Frac: f, Reflow: true,
+					}
+					androidRecreatedReadingCarry = true
 				}
 			}
 			// The Java TextView is empty; force pushChapterHTML past its gate.
@@ -702,6 +748,11 @@ func btScrollDebug() bool { return os.Getenv("BT_SCROLL_DEBUG") != "" }
 // --- Chapter rendering --------------------------------------------------------
 
 var lastPushedBookChapter string
+
+var readingAndroidDispatch androidReadingDispatch
+
+// A recreated native view may carry its old chapter only until the first push.
+var androidRecreatedReadingCarry bool
 
 // A first-run link can render once from the embedded seed and then render the
 // same chapter again when the full Bible replaces it. Keep that explicit
@@ -882,7 +933,10 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 		state.restore = nil
 	}
 	explicitArrival := state.forceReposition || carryDataSwapArrival
+	sameChapterPush := bc == lastPushedBookChapter
 	preserveTop := false
+	pushWanted := androidReadingPushWanted(state, fp == lastPushedChapterFP, explicitArrival)
+	repeatedRestore := (sameChapterPush || androidRecreatedReadingCarry) && !explicitArrival && readingAndroidDispatch.repeatsSavedRestore(state)
 
 	// A declared arrival (forceReposition) outranks "stay where you were": the
 	// capture below exists for re-renders the reader did not ask to move on (a
@@ -897,6 +951,7 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 					Verse:   v,
 					Delta:   d,
 					Frac:    f,
+					Reflow:  true,
 				}
 			} else {
 				// The top of the chapter is still reader intent. Preserve it for
@@ -907,12 +962,19 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 		}
 	}
 
-	armPendingRestore(state)
-
-	// forceReposition defeats the skip: an explicit arrival must place the view
-	// even when the render is byte-identical (see AppState.forceReposition).
-	if state.restore == nil && !explicitArrival && fp == lastPushedChapterFP {
+	// A no-op refresh must leave the native semantic reflow target intact.
+	// Saved restores and explicit arrivals still require native placement even
+	// when the rendered chapter is unchanged.
+	if !pushWanted {
 		return
+	}
+	intent, intentID := readingAndroidDispatch.prepare(state)
+	if repeatedRestore {
+		r := state.restore
+		armAndroidReadingRestore(r.Verse, r.Delta, r.Frac, true)
+		armReadingMarkerFor(state, r.Marker)
+	} else {
+		armPendingRestore(state)
 	}
 	forcedThisPush := state.forceReposition
 	state.forceReposition = false
@@ -957,7 +1019,15 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// phone page. The bridge owns the centring because it owns both the display
 	// density and the live view width (BtBridge.applyReadingPadding).
 	page := currentReadingPage()
+	pageChanged := readingPagePushedValid && page.Kind != readingPagePushed
 	markReadingPagePushed(page.Kind)
+	preservePosition, preserveSelection := C.int(0), C.int(0)
+	if readingReflowWanted(sameChapterPush || androidRecreatedReadingCarry, explicitArrival, state.restore) || repeatedRestore {
+		preservePosition = 1
+		if pageChanged || androidRecreatedReadingCarry || repeatedRestore {
+			preserveSelection = 1
+		}
+	}
 	padL, padT := int(readingPageSideMin), 14
 	measureDp := float32(0)
 	if page.Book() {
@@ -986,7 +1056,9 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 			state.CurrentBook, state.CurrentChapter, here, sp.Lo,
 			state.restore != nil, forcedThisPush, preserveTop, arrivalVerse)
 	}
+	issued := false
 	runBta(func(env uintptr) {
+		C.btaSetReadingIntent(C.uintptr_t(env), C.longlong(intentID))
 		C.btaSetStyle(C.uintptr_t(env),
 			C.int(argbInt(pal.Text)), C.int(argbInt(pal.Background)),
 			// The pitch as a multiple of the TEXT SIZE — the Java side turns it
@@ -1026,10 +1098,14 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 		C.btaSetChapter(C.uintptr_t(env), cb, C.int(chapter))
 		C.free(unsafe.Pointer(cb))
 		ch := C.CString(html)
-		C.btaSetHtml(C.uintptr_t(env), ch, C.float(frac), C.int(arrivalVerse),
-			C.int(restoreVerse), C.float(restoreWithin))
+		issued = C.btaSetHtml(C.uintptr_t(env), ch, C.float(frac), C.int(arrivalVerse),
+			C.int(restoreVerse), C.float(restoreWithin), preservePosition, preserveSelection) != 0
 		C.free(unsafe.Pointer(ch))
 	})
+	if issued {
+		readingAndroidDispatch.dispatched(intent, intentID)
+	}
+	androidRecreatedReadingCarry = false
 	if carryDataSwapArrival && (!state.seedOnly || !state.fullPending) {
 		pendingAndroidDataSwapArrival = androidDataSwapArrival{}
 	}
@@ -1114,6 +1190,11 @@ func deviceTimeZoneName() string {
 // is not in the text. verse<=0 && frac<=0 disarms. Not consumed on apply;
 // dropped on the reader's first scroll (BtBridge's scroll listener clears it).
 func armReadingRestore(verse int, delta, frac float64) {
+	liveReflow := currentHost != nil && currentHost.state != nil && currentHost.state.restore != nil && currentHost.state.restore.Reflow
+	armAndroidReadingRestore(verse, delta, frac, liveReflow)
+}
+
+func armAndroidReadingRestore(verse int, delta, frac float64, liveReflow bool) {
 	if !btaBridgePresent() {
 		return
 	}
@@ -1124,8 +1205,12 @@ func armReadingRestore(verse int, delta, frac float64) {
 	if verse < 0 {
 		verse = 0
 	}
+	reflow := C.int(0)
+	if liveReflow {
+		reflow = 1
+	}
 	runBta(func(env uintptr) {
-		C.btaArmRestore(C.uintptr_t(env), C.int(verse), C.float(delta), C.float(f))
+		C.btaArmRestore(C.uintptr_t(env), C.int(verse), C.float(delta), C.float(f), reflow)
 	})
 }
 
@@ -1314,4 +1399,33 @@ func argbInt(c color.NRGBA) int32 {
 // semi-transparent "Follow narration" pill (ignore the palette color's own alpha).
 func argbAlpha(c color.NRGBA, alpha uint8) int32 {
 	return int32(alpha)<<24 | int32(c.R)<<16 | int32(c.G)<<8 | int32(c.B)
+}
+
+func androidNoteEntryShow(owner uint64, initial, placeholder string, pal palette, textPx, scale float32) {
+	a, b := C.CBytes([]byte(initial)), C.CBytes([]byte(placeholder))
+	defer C.free(a)
+	defer C.free(b)
+	runBta(func(env uintptr) {
+		C.btaNoteEntryShow(C.uintptr_t(env), C.longlong(owner), (*C.char)(a), C.int(len(initial)),
+			(*C.char)(b), C.int(len(placeholder)), C.int(argbInt(pal.Text)), C.int(argbInt(pal.TextMuted)),
+			C.int(argbInt(pal.Input)), C.int(argbInt(pal.Border)), C.float(textPx), C.float(scale))
+	})
+}
+
+func androidNoteEntryFrame(owner uint64, x, y, w, h int) {
+	runBta(func(env uintptr) {
+		C.btaNoteEntryFrame(C.uintptr_t(env), C.longlong(owner), C.int(x), C.int(y), C.int(w), C.int(h))
+	})
+}
+
+func androidNoteEntryHide(owner uint64) {
+	runBta(func(env uintptr) { C.btaNoteEntryHide(C.uintptr_t(env), C.longlong(owner)) })
+}
+
+func androidNoteEntryFocus(owner uint64, focus bool) {
+	value := 0
+	if focus {
+		value = 1
+	}
+	runBta(func(env uintptr) { C.btaNoteEntryFocus(C.uintptr_t(env), C.longlong(owner), C.int(value)) })
 }

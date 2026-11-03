@@ -282,24 +282,49 @@ the tap); an unplaced-only pill parks at the top of the text with no band.
   the window from the overlay's frame, not on the cutout-inset overlay
   itself; beside a rail, or wherever the overlay is uneven, it is centred on
   the overlay, as the iPad centres it on its pane (`BtReadingColumn.sides`).
-  Before a width change the bridge captures the reading position, the verse at
-  the top of the view and how far into it the top stands as a fraction of the
-  verse's height, then reapplies it after the TextView has reflowed at the new
-  width; an explicit arrival or restore target still takes precedence. This
-  prevents the old portrait offset from clamping the short landscape pane to its
-  blank bottom. The same position is what the Go side saves and restores
-  (`getScrollAnchor`, `armRestore`, `setHtml`), with the fraction of the scroll
-  range only as the fallback for a verse the text does not hold: the fraction
-  alone leaves out the viewport's height, so it moved the verse at the top on
-  a rotation in 32 to 49% of positions and on a text-size change in 58 to 68%.
+  Live width reflow carries a semantic text character and signed fraction
+  through its line. `BtReadingReflow` maps presentation whitespace and
+  paragraph-start direction marks without changing words or UTF-16 boundaries;
+  intermediate wraps and scroll clamps retain the original target. Fresh
+  navigation and saved/history requests take precedence. The persisted format
+  is unchanged: verse, fraction through its band and scroll-range fallback
+  (`getScrollAnchor`, `armRestore`, `setHtml`). In the earlier verse-band
+  implementation, the scroll-range fraction alone moved the top verse on a
+  rotation in 32 to 49% of positions and on a text-size change in 58 to 68%.
+  Those are historical measurements, not acceptance results for semantic carry.
+- **Repeated saved requests and scroll ownership.** A first saved/history
+  request owns placement until an attached TextView has current measured
+  geometry and the required verse index. `pendingPlace` survives an unavailable
+  or stale layout; `onLayout` retries even when the outer bounds are unchanged.
+  A repeat of the exact successfully dispatched restore pointer, AppState,
+  version and chapter may carry the live semantic point and selection while
+  keeping the original saved arguments as fallback. It does not eagerly scroll
+  back before capturing the live point. A new history request at the same
+  coordinates is still a new request, and an explicit arrival revokes repeat
+  permission. A failed later repeat retains the earlier successful request's
+  carry; it does not make the failed page's scroll events current.
+  Each actual HTML dispatch gets a fresh event generation, installed with its
+  style, chapter and HTML. The idle callback reports the generation of the page
+  that scheduled it. Only a matching generation and exact current Go request
+  on the Fyne goroutine may clear a restore or persist a scroll. Pending
+  placement suppresses idle reports, and programmatic scroll targets are
+  clamped before their resulting position is recorded. Activity recovery keeps
+  a matching pending saved request instead of reading back an unplaced zero
+  anchor. The configuration callback separately restores a selection only in
+  the same active, visible, unsuppressed view and unchanged chapter/text.
+  These are implemented contracts. BACKLOG.md records the bounded API 35 cold
+  saved-position and live-reflow observations; [VISUAL_TESTS.md](VISUAL_TESTS.md)
+  keeps the broader native timing and device checks separate.
 - **First-run arrival gesture arbitration.** An explicit verse arrival is carried
   across the one-time seed-to-full-Bible data replacement. A reader scroll
   cancels that carry through the 200 ms scroll-idle callback. A gesture during
   that narrow first-load transition can therefore be superseded by the carried
   target and snap back to the requested verse. The state is recoverable and does
-  not affect cached launches. A future bridge revision should add immediate,
-  touch-slop-qualified cancellation plus a native placement acknowledgement and
-  an Android instrumentation test.
+  not affect cached launches. The native ScrollView now cancels its local
+  reflow target for a real drag, wheel or accessibility scroll; that local
+  cancellation does not synchronously retire Go's seed-to-full arrival carry.
+  Immediate cross-layer arbitration at this boundary and an Android
+  instrumentation check remain follow-up work.
 
 - **Bible cache**: `os.UserCacheDir()` has no writable target on Android, so
   `defaultCachePath()` asks `appStorageDir()` for one (`cache_path_android.go`
@@ -334,6 +359,116 @@ the tap); an unplaced-only pill parks at the top of the text with no band.
   closed under the keyboard (`docs/BACKLOG.md`, 30 September 2026). Older
   releases were not measured; where one lays the decor out for the
   keyboard's departure by itself, the request coalesces into that pass.
+
+## Note and question entry
+
+Share with note and Ask a question use the same native multiline `EditText`
+(`note_entry_android.go`, `android/BtNoteEntry.java`). The shared Fyne card
+still owns the excerpt, citation, counter and actions. Decided 3 November
+2026: keep the shared 112-unit native field height, which fits about five and
+a half Android lines at the existing 14pt text size, rather than shortening
+it to four Android lines. Android shares the slot and passage sizing with
+iPhone and iPad (`share_note_ui.go`, `compose_viewport.go`): the counter and
+actions stand 78.64 units lower than beside the toolkit field's one line;
+no control changes size. An expanded passage caps the editor at 60 units,
+without exceeding its slot's normal height, giving way to a 44-unit floor
+and then to the available room.
+
+Decided 3 November 2026: on a dense Android composer, Show passage dismisses
+the keyboard so the quotation has readable room; Hide passage resumes
+editing, and tapping the native field can bring the keyboard back. The
+field and draft remain in the same Dialog. iPhone and iPad retain their
+existing keyboard behavior (PLATFORM_MATRIX.md, divergence 40). The owner
+travels with the keyboard request through Go, JNI and Java, so a former
+card's disclosure cannot change a newer editor's keyboard.
+
+Android uses up to 10 units of vertical padding and 6 units at each side.
+The iOS `textContainerInset` has the same values, but `UITextView` also has
+5 points of line-fragment padding: its text and placeholder start 11 points
+from the side, while Android's start 6 units in. These existing horizontal
+insets remain different; neither platform's padding changes here. A longer
+draft scrolls inside the field. Where a dense composer leaves less than one
+font line inside the vertical padding, the padding gives way and the line
+is centred. Its top is not clipped while the frame holds a full line; a
+frame shorter than that cannot guarantee the whole line is visible.
+Return inserts a newline. Only the existing Share or Ask action submits.
+
+The editor requests `IME_FLAG_NO_PERSONALIZED_LEARNING` while retaining
+ordinary suggestions and autocorrection. This is an Android input-method
+request, not a guarantee about a keyboard's retention or synchronization;
+keyboard compliance has not been verified. The iOS bridge applies no matching
+request (PLATFORM_MATRIX.md, divergence 41). The request is separate from the
+editor's autofill and content-capture exclusions.
+
+The editor lives in a focusable, non-touch-modal Dialog above the GL canvas.
+Taps outside its frame continue to reach the card's actions. Back first hides
+its keyboard, then dismisses the owning card. Two handlers are installed for
+it. The Dialog's key listener serves every release that still dispatches
+`KEYCODE_BACK`, Android 13 to 15 included: the manifest does not opt in to
+the back-invoked callback, and without that those releases refuse the
+registration, with a warning in the log for each editor created, and
+dispatch the key instead. From API 33 the editor also registers with its
+window's back dispatcher, which takes over on Android 16 and later, where
+the target SDK of 36 enables it by default and `KEYCODE_BACK` is no longer
+dispatched. Opting in through the manifest would also move the reading
+overlay's Back (`BtBridge`) to the dispatcher on Android 13 to 15, so it is
+not done here. No activity/canvas resize is used for the editor.
+
+A rotation or a light/dark change rebuilds the window and reopens the card
+with the draft, and the reopened card takes over the editor's Dialog rather
+than removing it and adding another. While the keyboard is up the Dialog is
+the input method's target, and the window manager layers the keyboard's
+container relative to it. When the Dialog was removed and a new one added
+in its place during a rotation, the container stayed layered to the removed
+window and the new window was layered to the container, both outside the
+composited hierarchy (SurfaceFlinger's offscreen layers): the field went
+undrawn while the window manager reported its window shown and drawn, the
+input dispatcher never focused it, and the next key raised the
+input-dispatch ANR for an application with no focused window. The kept
+Dialog is restyled for the reopened card, which a light/dark change gives
+other colours; its text is set again only when the card brings other words;
+and the field's callbacks act for the card that owns the editor when they
+run. A Dialog whose activity has gone is still let go and made again for the
+new activity.
+
+Keyboard overlap comes from the full activity window, rather than the small
+Dialog's window-relative insets, which can be zero with the keyboard visible.
+API 30 and later use the activity's IME insets; older releases observe its
+visible display frame. The Go fit intersects that overlap with the driver's
+interactive area so an already-accounted-for keyboard is not subtracted twice.
+
+The field is labelled by its hint alone: TalkBack reads the hint for an empty
+field and the draft once there is text, on the API 30, API 33 and API 35
+images followed by the field's role and the hint. The draft is declared
+unimportant for autofill (API 26 and later) and content capture (API 29 and
+later), and the view has no id, so no instance state carries it; the field
+keeps the system keyboard's autocorrect and sentence capitals, as the
+iPhone's editor does.
+
+Historical accessibility observation, 2–3 November 2026: saved TalkBack
+captions show chapter text behind an open Note card after rotation on API 35
+phone and tablet images. Retained captions do not establish fresh speech.
+A calibrated API 35 phone comparison on 3 November covered Note and Ask in
+both released 1.2.24 and the native-editor candidate, with full public WEB
+text and cards opened through ordinary controls while TalkBack was off, then
+TalkBack enabled for portrait/landscape rotation. Fresh speech requests and
+semantic focus named only rotation, the editor and its hint; no underlying
+chapter-word request was observed in any of the four intervals. The
+released control also did not reproduce the earlier observation, so this
+is a qualified nonreproduction, not proof of a fix or globally clean
+accessibility. Candidate drafts survived with the keyboard visible, while
+the native owner token changed. TalkBack-only card opening, broader modal
+navigation, physical devices, numeric accessibility window IDs and audible
+output remain unverified; no deferral is accepted.
+
+Native text crosses JNI as counted UTF-8 bytes in both directions. A synchronized
+mirror makes the latest edit available before an action tap is handled, without
+blocking Android's UI thread on Fyne. Owner tokens guard the queued show, frame,
+hide and keyboard reports, and on the Go side the text, dismissal and counter
+work, so a card a rebuild superseded cannot move or close its successor's
+editor. Activity replacement detaches the old window; the draft remains
+available for the shared card's reopen path. The iOS native editor and desktop
+Fyne editor keep their existing platform behavior.
 
 ## Toolchain (installed under $HOME, no Homebrew/sudo)
 

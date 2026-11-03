@@ -1117,9 +1117,11 @@ fragment behavior. `TestAnUnfinishedWordAcrossAHeadingLeavesNoStudyableFragment`
 checks the shared quotation, menu, prompt and native rule model, with and
 without a positional lead; `TestACompleteWordAboveAHeadingKeepsStudyAfterTheBoundaryTrim`
 keeps the complete-word control. The existing dispatch regression also
-includes the punctuation-plus-unfinished-word shape. Source changes are
-integrated locally in `rel/1.2.23`, uncommitted; the updated tests and
-native platform checks have not yet run.
+includes the punctuation-plus-unfinished-word shape. At the 23 October 2026
+checkpoint the source changes were integrated locally in `rel/1.2.23` and
+uncommitted, with the updated tests and native checks still outstanding.
+The changes subsequently shipped in 1.2.23; that checkpoint's unrun checks
+are historical status, not acceptance of later changes.
 
 **The fix.** Each pane that draws a heading in the text a reader selects
 tests the selection against the heading range it already keeps beside its
@@ -3146,10 +3148,11 @@ the tree before (`149b85a91`). Live on 15 October 2026: `gpt-5` and
 override answered by way of one 400 and one 200, where the tree before got
 the 400 alone and reported the model gone.
 
-Still open, found beside it: every HTTP 429 reads to the reader as the
-service being busy, where a provider's 429 can also mean the reader's own
-quota or spending cap is exhausted, which no retry will mend. Telling the two
-apart per provider, and the line for the cap, need a decision.
+Found beside it: every HTTP 429 read to the reader as the service being
+busy, where a provider's 429 can also mean the reader's own quota or
+spending cap is exhausted, which no retry will mend. Telling the two apart
+per provider, and the line for the cap, are taken up in "AI account and
+timeout errors", below.
 
 ## Three comments 1.2.20 left describing the code before it — all three corrected for 1.2.22
 
@@ -5839,10 +5842,12 @@ that of its rows at the width it was last laid out at, which on a canvas 320pt
 wide (iPad Slide Over, a third of an 11-inch iPad in Split View) is narrower
 than the width an unsized excerpt wraps for; a selection that takes a row more
 there than at that width is what shows the field below the last row rather
-than over it. No other platform floats a native field: Android and the
-desktops draw the Fyne entry in the same place. The excerpt comes back with the
-composer after a light/dark change, in the new palette, since it is built from
-the selection on every open, the reopen's included.
+than over it. Through 1.2.24 no other platform floats a native field: Android
+and the desktops draw the Fyne entry in the same place; the native Android
+editor ("Native Android Note and Ask editors", below) floats one over the
+same slot. The excerpt comes back with the composer after a light/dark
+change, in the new palette, since it is built from the selection on every
+open, the reopen's included.
 
 The phone sheet also refits when the canvas changes size, which it did not
 before this item either. The toolkit never resizes a popup for a new canvas;
@@ -5892,72 +5897,608 @@ and give the canvas a device's safe insets and a raised keyboard. Pinned by
 each proved against a mutation. What only a screen can confirm is listed under
 V12 in `docs/VISUAL_TESTS.md`.
 
-## The desktop takes the phones' navigation rule — planned for a minor release after 1.2.22
+## The desktop takes the phones' navigation rule — implemented, unreleased
 
-Planned for: a minor release after 1.2.22, as its headline; which one is an
-open decision — see docs/ROADMAP.md. It was to lead 1.2.21, which went out
-as the privacy-declaration and Android 7.0 release instead.
+A tall Mac, Windows or Linux window uses the existing bottom Read / Books /
+Search bar. A square or wider window uses the existing left rail. This is
+`mobileRailWanted`'s boundary (`w >= h`), shared with phones and tablets,
+without a dead zone. An unsized desktop initially keeps its rail. The change
+ships without `next`: it is the exception docs/ROADMAP.md records under
+*What goes where*.
 
-Since 1.2.18 every phone and tablet puts Read, Books and Search on a rail
-while its window is wider than it is tall and on a bottom bar otherwise
-(`mobileRailWanted` in `layout.go`; the entry below). The desktop does not:
-`compactNavRail` in `ui_compact_desktop.go` answers the rail whatever the
-window's shape, so a window tiled to a phone's shape keeps a rail down its
-narrow side, and the desktop never installs the layout watcher, so nothing
-would notice a resize across square anyway (divergence 29 in
-`docs/PLATFORM_MATRIX.md`). One rule everywhere is simpler to explain and to
-hold, and the tiled phone-shaped window is exactly where the bar serves.
+Settled 21 October 2026: the phones' boundary with the rail at square, no
+dead zone, a settle of about 250 ms after the last resize, switched on
+without `next` on the Mac, Windows and Linux, and the existing bar, rail,
+icon and button dimensions unchanged. Decided 2 November 2026: README.md's
+Quick navigation sentences stand as written.
 
-The plan:
+`desktopNav` in `ui_compact_desktop.go` gives unset or unrecognised
+`BIBLETEXT_DESKTOP_TABS` the adaptive mode. Explicit `sidebar` / `0`,
+`bar` / `1` and `rail` retain their previous effect. The overrides bypass the
+adaptive watcher.
 
-- **The rule.** The desktop's `compactNavRail` asks `railForWindow`, as the
-  phones do, when `BIBLETEXT_DESKTOP_TABS` is unset or unrecognised. The
-  variable stays an override, so a gallery or a comparison can still pin
-  either: `sidebar`, `bar`, and `rail`, which exists today and keeps its
-  effect, the rail whatever the shape. What changes is that `rail` stops
-  meaning the default. `desktopNav` folds unset, `rail` and an unrecognised
-  value into one answer, `desktopNavRail`, and its doc comment documents
-  `rail` as "the rail, stated explicitly (same as unset)". `desktopNav`
-  needs a fourth answer for the shape rule, and its comment and
-  `announceDesktopNav`'s names change with it. That comment warns that the
-  variable's two readers, whether the compact layout runs at all and how
-  it draws its navigation, once disagreed over `rail`;
-  `desktop_nav_preview_test.go` pins their agreement, and its table (the
-  rail for unset, `rail` and `nonsense`) and
-  `TestDesktopDefaultsToTheRailWithNoEnvironment` are rewritten for the new
-  default while `TestRailImpliesTheCompactLayoutIsOn` keeps holding for
-  every value. An unsized desktop canvas must answer the rail, the
-  desktop's first frame today; `railForWindow` as it stands gives any
-  unsized window that is not a tablet the bar. The tests that set the
-  variable to `""` for the shipped desktop navigation
-  (`fullscreen_layout_test.go`) then get the shape rule and are rechecked;
-  those that set `rail` or `bar` keep what they force.
-- **The watcher.** `layoutWatcher` moves out of the mobile-only
-  `ui_regular.go` into an untagged file, and `CreateMainUI` in
-  `ui_desktop.go` wraps its root in it, so a resize that changes the answer
-  rebuilds the window.
-- **What a rebuild keeps.** A desktop window rebuilds today for a tab
-  change, a light/dark switch and the like; one in the middle of a resize is
-  new. It must keep the reading place, an open sheet and a live selection,
-  on the macOS native pane (`reading_macos.go`: its scroll restore and the
-  note card) and on the shared Windows/Linux styled pane, and it must not
-  re-push the chapter unless the page itself changes.
-- **No flapping.** A dead zone around square, so a window a few points
-  either side of it does not change navigation (for example the rail from
-  10% wider than tall, the bar from 10% taller, and the layout as built in
-  between), and a switch only when a live resize settles (one decision some
-  250 ms after the last size change), so dragging a corner across square
-  does not rebuild on every frame. The phones keep the plain rule: their
-  rotations are discrete.
-- **Tests.** The dead zone and the settle as pure functions over a fake
-  clock; the watcher installed on the desktop; the place, the sheet and the
-  selection kept across a resize rebuild on the styled pane, and the macOS
-  pane by its desktop test recipe; the desktop rows of the Navigation table
-  in `docs/PLATFORM_MATRIX.md` brought to the rule and divergence 29
-  retired.
-- **A pass on each desktop.** The Mac, the Windows VM and the Linux VM:
-  drag a window across square both ways mid-chapter, with a sheet open and
-  a selection live, and tile a window to a phone's shape.
+`desktop_navigation.go` waits 250 ms after the final canvas-size change,
+then moves only the shared navigation chrome between edges. The header,
+reading host, active tab content and overlay objects remain installed.
+A settle timer stopped by a later resize can already have queued its
+callback: the tree-attachment check rejects one from a window composition
+that has since been replaced, the generation check one from a settle a later
+resize re-armed, and a window resized back to its built shape is left alone
+by the callback's own reading of the live canvas. Mobile rotation keeps its
+existing immediate watcher. Existing icon, button, bar and rail dimensions
+do not change.
+
+A width change can rewrap the Windows/Linux styled pane even when the page
+object remains intact. Its text offsets retain selection only when the flat
+text model is unchanged, and its top verse and the offset into it, in
+points, are put back after reflow (`captureStyledAnchor`,
+`reading_styled_area.go`); an offset past the verse's new height leaves the
+view in the next verse, the effect divergence 33 of docs/PLATFORM_MATRIX.md
+describes. Pending explicit navigation or restoration takes
+precedence. A search/Go-to highlight retains placement through provisional
+wraps until the reader cedes it; active narration follow also retains its
+placement, while reader-suspended narration allows the saved reading anchor.
+Repacking navigation itself must not submit a chapter again, restart a request
+or dismiss a card. The pane's changed width can separately cross the reading
+page's book/phone boundary and require a Mac attributed-text import. That
+import preserves native selection only for a same-chapter reflow without an
+explicit arrival, with the target bound to its generation and checked against
+the installed chapter and the text. With the footnotes shown the book page
+writes a line break before the footnote separator that the phone page does
+not (`writeFootnoteSection`, `footnote_section.go`), so the two imports
+differ after the Scripture text; the check then compares the Scripture text
+before the footnote section (`btMacPageContentEnd`, `reading_macos.go`),
+which must be identical and hold every range. Changed words, another
+chapter, invalid UTF-16 ranges and a range that reaches into the footnote
+section, whose characters stand one place later on the book page, reject
+the carry. On 2 November 2026 the iOS and Android panes still discarded the
+selection through this import, as in 1.2.24. The 3 November implementation
+below adds their guarded carry. docs/PLATFORM_MATRIX.md divergence 39 keeps
+the historical difference and the outstanding final native acceptance.
+
+Held by `desktop_navigation_test.go` (the fake-clock settle and stale
+callbacks, both sides of square and square itself, the forced modes, and the
+page, pane, selection, sheet, draft and focus kept across a settled resize),
+`desktop_nav_preview_test.go` (the override values),
+`reading_styled_area_test.go` (the styled pane's placement through a width
+reflow) and `reading_selection_macos_test.go` (the Mac selection carry, with
+the Objective-C guard compiled and run, over synthetic pages and over the
+chapter pages `buildChapterHTML` writes, footnotes shown and hidden, imported
+by the pane's own `btMacImportHTML`).
+
+Seen on 2 November 2026 in development builds of `01348dc7c1` driven by a
+throwaway trigger, on macOS 26.6.2 and on an Ubuntu 24.04 ARM virtual
+machine (GNOME on X11), each beside a build of `a2d7022f7` made the same
+way: the bar at 600x900 (light and dark), the rail at 1280x700 and at
+700x700, the bar at 699x700, where the control drew the rail at every size;
+a drag of 40 resizes 30 ms apart from 600x900 to 1280x700 moved the
+navigation once, 261 ms after the last resize on the Mac and between 274 and
+330 ms on Linux (the tree held no cells during the 56 ms repack), and never
+on the control; bar cells 98.75x60.41, rail cells 46.02x98.75, icons 20x20
+and 10-point labels on both builds; `BIBLETEXT_DESKTOP_TABS=sidebar`
+restored the former sidebar on both. Across a switch each way the Settings,
+Go to, AI and note sheets kept their objects and texts and the note draft its
+words; the Mac's native selection kept its range (40,80) where the control's
+became a caret, and so did the styled pane's selection on Linux and in the
+Linux mimic on the Mac. A Go to placement (John 11:35) had verse 35 at the
+top on the Mac after the switch and kept its top verse on Linux and in the
+Linux mimic, and on each was back at its verse and offset after the return;
+on the Mac the control's ended a verse further on, in verse 35, where it had
+started in verse 34. None of these runs scrolled the view into the chapter
+before a switch other than by Go to.
+
+With the footnotes shown, seen on 2 November 2026 in a development build of
+`5f8322fa19` on macOS 26.6.2, beside builds of `a12ab51d7a` and `a2d7022f7`
+made the same way: the WEB's John 3, scrolled 600 points in at 600x900 with
+80 characters of Scripture selected ((925,80) on `5f8322fa19`, the end of
+verse 9 and the start of verse 10), switched to 1280x700, where the book
+page's text was one character longer, a line break standing before the
+footnote separator, and back. The selection kept its range and its words
+both ways on `5f8322fa19`, where both other builds left a caret at the end
+of the text; a selection reaching from the Scripture into the footnote
+section was replaced on all three. The place scrolled to moved alike on
+`5f8322fa19` and `a12ab51d7a`, from verse 8, 105.5 points in, to verse 9,
+22.2 points in, after the switch, and stayed there after the return, two
+lines (59.1 points) further into the chapter than it started: the restore's
+offset in points ran past verse 8, which is shorter on the wider page, the
+effect divergence 33 of docs/PLATFORM_MATRIX.md describes. It moved on
+`a2d7022f7`, the v1.2.24 tag, as well. There, with the rail that build draws
+at 600x900, the same 600 points stood at verse 7, 76.0 points in; the place
+moved to verse 8, 46.4 points in, and stayed there, one line (29.6 points)
+further in. The restore in those 2 November builds was unchanged from 1.2.24.
+
+The 2 November observations did not include Windows native or mimic runs,
+Books, Search or a full-screen return across a switch. Compilation and a
+mimic on another operating system do not establish Windows selection or
+pixels.
+
+Seen on 3 November 2026 in the combined development candidate on Ubuntu
+24.04 arm64 with GNOME on X11: a synthetic reading fixture changed between
+600x850, 700x700 and 1280x700 clients and returned to 600x850. All 15 protocol
+acknowledgements and 14 actual client images were checked. Twelve raw-text
+and geometry samples, including four selected-range samples, retained the
+mapped point with a maximum difference of about 4.1e-7 logical units; the scroll
+content's translation matched its offset exactly. The initial, returned and
+post-Close reading images were byte-for-byte identical. The Note card and
+its draft survived a resize, as did a waiting request. A synthetic account
+error, explicit retry answer and Close rendered correctly; the two synthetic
+POSTs had identical bodies and no unexpected request was sent. Icons, fonts
+and controls retained their dimensions.
+
+The fixture set selection and drafts and invoked app callbacks directly;
+it did not establish operating-system pointer or keyboard delivery, normal
+startup or a release package. The desktop Note editor retained the multiline
+draft but kept its existing one-line visible viewport, with part of the next
+line clipped. These bounded Linux observations do not substitute for Windows
+native evidence or exact-source CI and release-package checks.
+
+Seen on 3 November 2026 on Windows 11 arm64 at DPI 96: the same synthetic
+fixture completed all 15 acknowledgements and 14 unobscured client captures
+through 600x850, 700x700 and 1280x700 clients and return. Twelve raw-model
+samples, including four selections, retained the same range and mapped point
+with a maximum difference of about 4.1e-7 logical units and zero scroll
+translation error. Initial, returned and post-Close native images were
+byte-for-byte identical. The Note draft, waiting request, account error,
+explicit retry answer and Close rendered correctly, with unchanged controls
+and two identical synthetic POST bodies. The controller reported a missing
+process during cleanup after the app wrote its completed result; that failed
+controller flag was retained. Separate ready-task and absent-app checks
+allowed removal of only that task. The app's OS exit code was not captured.
+This is bounded UI evidence with the same input, startup and package limits
+as the Linux fixture, and does not establish a clean process exit.
+
+## The iPhone, iPad and Android keep a selection through a page-format import — implemented, bounded native verification
+
+A width change across the reading page's book/phone boundary
+(`readingBookPageFits`, `reading_page.go`) pushes the same chapter again in
+another format. Recorded on 2 November 2026: the Mac carried a selection of
+unchanged Scripture through that import, with footnotes shown or hidden,
+while the iPhone, iPad and Android dropped it as in 1.2.24. That historical
+implementation difference is recorded as PLATFORM_MATRIX.md divergence 39.
+Windows and Linux already retained selection through a width reflow whose
+text model remained unchanged.
+
+Implemented locally on 3 November 2026 in the combined candidate: iOS and
+Android also carry a nonempty same-chapter selection through the import,
+provided no explicit arrival is pending and the text still supports the
+range. The Apple guards validate actual UTF-16 boundaries and ranges
+(`btMacCanPreserveSelection`, `btIOSCanPreserveSelection`); Android maps
+semantic offsets through presentation whitespace without changing word
+boundaries, case, punctuation or surrogate pairs (`BtReadingReflow.selection`).
+A changed appended apparatus is tolerated only for a range in unchanged
+Scripture. Another chapter, an explicit arrival, changed text or an invalid
+range rejects the carry. The native paths bind it to the pending page and
+check it against the installed chapter before applying it.
+
+Coverage is in `reading_selection_macos_test.go`,
+`reading_reflow_apple_test.go` and `reading_reflow_mobile_test.go`. Android's
+configuration callback also protects a current selection against the framework
+collapsing it before HTML re-import; the snapshot is local to that callback
+and guarded by active view, visibility, chapter and text. It does not cache an
+old selection after a reader deselects. The executed callback controls are in
+`reading_android_configuration_selection_test.go`.
+
+The same candidate adds transient semantic reading-position anchors for live
+reflow; saved reading/history anchors retain their existing representation.
+Android distinguishes the exact already-issued saved request from a fresh
+history request, including one with equal coordinates. Repeats permit live
+native carry without first scrolling back to the saved point; those saved
+arguments remain the fallback while geometry is pending. Current attached
+layout/text/width and the verse index are required before pending placement is
+consumed, with a retry after same-bounds layout. A matching pending saved
+request also survives activity recreation. Each successful HTML dispatch owns
+a fresh scroll-event generation; stale callbacks cannot clear a newer restore
+or persist a position for its page. Coverage is in
+`reading_android_restore_request_test.go` and
+`reading_android_restore_protocol_test.go`.
+
+Mac geometry changes and tiling own their synchronous clamps, and the bounds
+observer distinguishes a size change from a subsequent reader origin change.
+`reading_reflow_macos_observer_test.go` exercises the native observer and
+geometry ownership, including the earlier observer as a negative control.
+The native observations on 3 November cover distinct cases. The API 35
+Android cold case restored its saved positive position after a
+fresh process launch, then retained the mapped point and selection through
+twelve rotation checkpoints with zero-pixel error. A later genuine reader
+drag supplied the new target; normal reactivation retained that position.
+These are bounded development-APK observations; later documentation and
+HTTP 408 changes do not extend their runtime scope. A Mac native
+saved-restore fixture retained the independently mapped point with zero-pixel
+error through a width roundtrip, without a preparatory reader scroll. Four
+public XCTest iPad mini orientation changes also retained the selected range
+and mapped point with zero-pixel error, but the text container stayed about
+589 points wide: this proves rotation retention, not a wrap-changing iPad
+reflow. Fresh calibrated TalkBack comparisons of released and candidate
+Note/Ask observed no underlying chapter-word speech requests in four marked
+intervals. Both versions failed to reproduce the earlier caption-only
+observation; broader accessibility acceptance and TalkBack-only opening remain
+unverified, rather than classified as fixed or accepted for deferral. See
+ANDROID.md for the route and instrumentation limits. Isolated checks and
+these bounded observations do not establish every device or configuration.
+The Linux fixture above separately checks raw-text mapping, rendered scroll
+translation and actual client images. Exact final CI and release-package
+acceptance are separate gates. No control, font or layout dimension changes
+with these implementations.
+
+## AI account and timeout errors — implemented, unreleased
+
+Account credit or a spending limit must not be described as a busy service;
+a request written whole that got no answer before its deadline, or within
+the wait for its response headers, must not be described as a lost
+connection, nor a connection never made, or lost, as the provider taking
+too long. The provider captured by the request supplies its name and
+recovery link even when Settings changes before that request ends.
+Confirmed account failures, generic billing issues and timeouts have
+separate guidance; authentication, ordinary rate limits, cancellation and
+the output-token allowance retain their own handling. The classification
+contract, safe reason text, actions, provider documentation and test
+matrix are in [AI_ERRORS.md](AI_ERRORS.md).
+
+Decided 15 and 16 October 2026: the wording of the account-limit line, its
+small "{Vendor} said" reason, the timeout line, and the "{Provider}
+billing", Try again and "Switch to a faster model" actions. Decided 2
+November 2026: the line for a billing error that is not an exhausted
+balance or cap, the line for a request the reader cancelled, the fallbacks
+when no provider was captured ("The AI service" and "the provider", with no
+billing link) and the vendor names OpenAI, Anthropic, Google and SpaceXAI;
+the "said" line quotes only the recognised opening clause, and Try again
+stands above the billing link. [AI_ERRORS.md](AI_ERRORS.md) gives every
+line, and `TestTheAIErrorWordingWordForWord` holds each byte for byte; a
+change of one character to any of them fails it.
+
+Held by `ai_errors_test.go` (every provider's credit, spend, rate-limit and
+permission bodies, malformed bodies and the timeout statuses; a Gemini
+free-tier quota whose message opens with the account clause stays a rate
+limit; the billing destinations are the four vendors' own pages; a
+recognised account limit or timeout is sent once; a cancellation during
+back-off is not resent; no untrusted response text reaches the displayed
+reason, and the quoted reason is the reply's own clause-length prefix) and
+`ai_error_ui_test.go` (the study panel, both Find layouts and Test key keep
+the captured passage, question and provider through Try again and the
+faster-model action, the panel names the provider of the request rather
+than the one active when the failure lands, the faster-model action never
+switches another provider, the Model row follows the model the Test key
+action pins, a billing error that is not an exhausted balance keeps its
+billing link without reading as exhausted credit, and on phones held
+sideways the error keeps the panel's spacing, as recorded below). The suite
+runs on synthetic responses; no live provider is called.
+
+Confirmed 3 November 2026: retain the existing bounded automatic recovery
+for a connection never made or lost, up to three attempts while the request
+budget lasts. A resend after a failed connection may duplicate a request
+already received by the provider and its charge. This preserves seamless
+recovery; it does not change the retry loop. HTTP 408 keeps its existing
+ordinary 4xx policy: one attempt, then "The AI service returned an error.
+Please try again shortly.", without timeout-only faster-model recovery.
+The request's deadline, or the transport's wait for the response
+headers, met after the request was written whole, before the response
+headers or inside the body, and HTTP 504, are the provider's: the
+timeout line, after one attempt. A connection never made, refused, reset
+before any response byte, a host not found, a DNS, dial or TLS handshake
+timeout, or the request's deadline before the request is written whole,
+keeps 1.2.24's attempts, three while the request's budget lasts, and its
+line "Couldn't reach the AI service. Check your connection and try
+again."; so does a connection lost once the provider has the request,
+reset or timed out by TCP when its peer stops answering (ETIMEDOUT),
+before the response or inside it. Inside the answer only the request's
+deadline is the provider's, whatever error the read reports as the answer
+is cut off. The write is read from the request's trace hooks, since the
+error alone cannot tell the phases apart ([AI_ERRORS.md](AI_ERRORS.md)).
+The write is what the transport reports, not delivery: a request whose
+network goes silent after it reads as the provider's timeout when its
+deadline passes, unless TCP gives up on the connection first. Held by
+`ai_timeout_scope_test.go`, on real transports against listeners and
+servers in the process, over HTTP/1.1 and HTTP/2. Its connection tests
+pass unchanged on the v1.2.24 tag's tree, attempts
+and line alike. On `9207a08549`, before this, the dial, TLS handshake and
+DNS timeouts and the request's deadline while connecting and during the
+TLS handshake failed them, each sent once and told as the provider taking
+too long. Two more cases failed them the same way until they were told
+apart: TCP's ETIMEDOUT after the write, over HTTP/1.1 and HTTP/2, before
+any response and inside it, taken for one of the request's own timers;
+and a pooled connection that sent nothing followed by the transport's own
+redial timing out, the write reported on the pooled connection standing
+for the connection never made.
+
+Decided 2 November 2026: the timeout line names the faster model only where
+the screen offers it. Beside the "Switch to a faster model" action it reads
+"{Provider} took too long to answer, so the request was stopped. Try again,
+or switch to a faster model."; without it, the provider being on its faster
+model already or no longer the active one, or none having been captured, it
+reads "{Provider} took too long to answer, so the request was stopped. Try
+again." The same on the study panel, Ask and Compare included, both Find
+layouts and Settings' Test key. Decided the same day: Test key keeps its
+faster-model action on a timeout. Held by
+`TestTheTimeoutLineNamesTheFasterModelOnlyWhereItIsOffered`, which fails on
+`23cda36b13`, where every screen named the faster model.
+
+Decided 3 November 2026: when the fixed error header, recovery rows and
+footer cannot leave one readable message line inside the sheet limit, keep
+the title and Close fixed and scroll context, question, message, recovery
+rows, disclaimer and disabled Report/Copy together. The normal composition
+returns when the canvas grows or the error changes to a waiting/result
+state. Text and control sizes, separate action rows and header gaps do not
+change. The local host regression covers safe bounds and reachability on
+640x320 and732x240 canvases; native-platform acceptance remains a release
+gate. The measurements below record the preceding layout, before that
+fallback, rather than the current exceptional-height behavior.
+
+Decided 2 November 2026: on a short phone the error state keeps the
+panel's spacing. The header's rows stay 7 points apart and each action has
+a row of its own; the column, the message and the quoted reason under it,
+is kept whole by the rule every state of the panel follows, held to the
+most a sheet may be, and where that is too short it scrolls under the
+actions. Measured as the tests lay out a phone held sideways, for every
+provider's own account-limit body on Explain, Compare and Ask with a
+one-line question (`aiRecoveryCutOn` in `ai_error_ui_test.go`; the earlier
+exceptional-height observations are now guarded by
+`TestAIErrorExceptionalHeightScrollsContextAndRecovery`):
+
+- An account limit, with Try again and the billing link, is cut on every
+  phone canvas measured. Its column is 119.6 points, 141.9 for Claude's
+  four-line message, and it scrolls in a viewport of 106.1 points on an
+  iPhone 17 Pro Max (956x440), where on Explain and Compare only the
+  quoted reason is out of sight, but for Claude's; 81.1 on a 667x375
+  phone; 69.1 on a 914x411 phone under 24-point bars; 68.1 on an iPhone
+  16 Pro (874x402); 66.1 on 803x360 and 800x360 phones; 26.1 on the
+  iPhone SE (1st generation, 568x320), where every provider's message
+  runs to four lines; and 18.1 on an 800x360 phone under 24-point bars.
+- A timeout, with Try again and the faster model, is whole on Explain and
+  Compare on the iPhone 17 Pro Max, the iPhone 16 Pro, the 914x411 phone
+  and the 667x375 phone, and on Ask on the iPhone 17 Pro Max; on Ask on
+  the other three, Ask's question above it pushes part of its last line
+  below the viewport. On the 803x360 and 800x360 phones the box of its
+  last line ends 0.8 points below a 74.8-point viewport; on the iPhone SE
+  (1st generation) its viewport is 34.8 points, and under the 800x360
+  phone's bars 26.8.
+- On two canvases the panel's chrome alone, its header, the two action
+  rows and its footer, is taller than a sheet may be: 294.9 points with
+  the billing link, 286.2 with the faster model. Under a 640x320 phone's
+  24-point status bar, where a sheet may be 272 points, the sheet is laid
+  out at the chrome's height, centred on the canvas: its top edge rises
+  11.4 points (7.1) above the safe area, only its padding under the bar,
+  and its message viewport is 1 point tall, so the message is out of
+  sight. v1.2.24's error there, with Try again alone, has a 23.5-point
+  message viewport inside the safe area, which shows none of the message
+  until it is scrolled. On a 732x240 split screen the sheet fills the
+  canvas and the message viewport has no height, as in v1.2.24, and Try
+  again is drawn over the header's lower part, from 61.4 to 99.7 points
+  (70.1 to 108.4 beside the faster model) where the header ends at 101.3;
+  v1.2.24's stands below it.
+- With the passage opened by hand under the 800x360 phone's bars, its
+  quotation at its 32-point least, the sheet reaches 7.4 points (3.1) past
+  the safe area at each edge, only its padding under the bars.
+- With the passage opened by hand on the 640x320 and 732x240 canvases,
+  measured on Explain with a short and a long passage and not held by a
+  test, the header grows by the quotation. Under the 640x320 phone's
+  status bar the sheet's top edge rises to between 0 and 1.8 points from
+  the canvas's top (0.9 and 6.1 beside the faster model), and the title,
+  starting between 15.0 and 16.8 points (15.9 and 21.1), lies under the
+  bar; Close stays inside the safe area. On the 732x240 split screen the header ends
+  at 122.9 points, 133.3 with the long passage, and both actions are drawn
+  over it. v1.2.24's error shows the same kinds there with the passage
+  opened by hand: under the 640x320 bar, with the long passage, its sheet
+  rises 4.8 points above the safe area, its title inside it, and on the
+  732x240 split screen its Try again, from 106.7 to 145.0 points, is
+  drawn over the header.
+
+Seen on 2 November 2026 in development builds (`-tags bibletextdev`) of
+`bb4b0ffd29`, beside the v1.2.24 tag built the same way, every provider
+request answered by a fake server in the process and no live provider
+called: on the Mac under macOS 26.6.2, on Ubuntu 24.04 (arm64) in a virtual
+machine under GNOME on X11, and on the iPhone 16 Pro and iPad mini (A17
+Pro) simulators under iOS 26.5. On the Mac, the study panel, Find and Test
+key account-limit and timeout screens, the panel's in 1280-point windows
+505 and 800 points tall (a 401-point window opens at the 505-point
+minimum) in both appearances, carried the lines decided above with the
+billing link or the faster-model action, and Try again on the panel and in
+Find (Test key's own button is its retry), where the tag showed its
+busy-service and lost-connection lines; the ordinary rate-limit screen
+was unchanged; the Gemini 402 and the HTTP 504 screens took the
+account-limit and timeout lines. On Linux the panel's account-limit and
+timeout screens in both appearances, the rate-limit screen and the Find and
+Test key account-limit screens read the same. On the iPhone 16 Pro
+simulator, upright and sideways (the sideways canvas asked of the window
+scene, not a device turn), and the iPad mini simulator, upright, the
+panel's account-limit and timeout screens carried the same lines and
+actions. On the Mac, with a timeout standing and the active provider
+changed, the faster-model action wrote no override and sent nothing, and
+Try again sent exactly one request, to the new provider. Those builds predate the spacing
+rule, the scope of a timeout and the timeout line's two forms recorded
+above, and none of the three changes what was seen: on those canvases the
+error is laid out the same with them, the second action already on a row
+of its own; every timeout seen offered the faster model and named it; and
+the timeout the fake server made, no response headers within 2.5 seconds
+of the request, is the provider's under the new scope too. Those 2 November
+runs did not include Android or Windows. The 3 November Linux and Windows fixtures above
+add current account-error, retry and result rendering evidence, not every
+provider or timeout case.
+
+Seen on 2 November 2026 on the Mac under macOS 26.6.2, in development
+builds of `6e10f7bfac`, of `9207a08549` and of the v1.2.24 tag made the
+same way, the provider ChatGPT, its requests answered in the process and
+the panel in a 1280x800 window. A request whose TLS handshake never
+completed, one second allowed for it, showed "Couldn't reach the AI
+service. Check your connection and try again." after three attempts, as the
+v1.2.24 build did, where the `9207a08549` build showed the timeout line and
+the faster model after one. With the provider on its faster model and no
+response headers within 2.5 seconds, the panel and Settings' Test key ended
+the timeout line at Try again, with no faster-model action, where the
+`9207a08549` build's panel named the faster model without offering it; with
+the faster model offered, the panel named it and offered it. The scope
+changes recorded above since those builds, a timeout the connection
+reports read as that connection lost, each attempt to get a connection
+starting unwritten and only the request's deadline counting inside the
+answer, leave what was seen standing: the two timeouts there, a TLS
+handshake that never completed and the transport's wait for the response
+headers over HTTP/1.1, are read the same way after them.
+
+## Native Android Note and Ask editors — implemented, unreleased
+
+Decided 2 November 2026: ships in 1.2.25 (ROADMAP.md, Next minor release,
+row 3). Decided 3 November 2026: keep the shared 112-unit native field height,
+about five and a half Android lines at 14pt. The toolkit field's one line is
+not kept, and no smaller four-Android-line field is required.
+
+Share with note and Ask a question use the same native multiline `EditText`
+through the existing editor seam (`note_entry_android.go`,
+`android/BtNoteEntry.java`). The shared Fyne card retains its excerpt,
+citation, counter and actions. Android takes the composer's native rules
+from the shared code as the iPhone and iPad do: the 112-unit slot
+(`nativeNoteEntryHeight`, `share_note_ui.go`), which stands the counter and
+the actions 78.64 units lower than beside the toolkit field's one line, as
+on the iPhone; two of the iPhone's lines, 60 units, for the editor under an
+expanded passage, giving way to a 44-unit floor and then to the room itself
+where the room is short (`compose_viewport.go`). Decided 3 November 2026:
+Show passage releases Android's keyboard on dense composers; Hide passage
+resumes editing. The native field remains in its Dialog, and owner guards
+reject stale focus requests. iOS keeps its existing keyboard behavior
+(PLATFORM_MATRIX.md, divergence 40). The text stays at 14pt. Android has
+up to 10 units of vertical padding and 6-unit side padding; UIKit's
+6-point `textContainerInset` plus its 5-point line-fragment padding puts
+text 11 points from the side. Neither platform's padding changes. Icon,
+button, bar and rail dimensions are unchanged. The iOS native editor and
+desktop Fyne editor retain their existing behaviour.
+
+On Android, iPhone and iPad, Return inserts a newline; the existing Share
+or Ask action submits. Mac, Windows and Linux keep the toolkit's single-line
+field, where Return submits. Back on Android first hides the keyboard, then
+closes the owning card. The Android editor requests no personalized keyboard
+learning while keeping suggestions and autocorrection. The request's effect
+on a particular keyboard has not been verified; it is separate from autofill
+and content-capture exclusions (PLATFORM_MATRIX.md, divergence 41). Counted UTF-8 JNI
+transport preserves supplementary characters and multiline drafts. Owner
+tokens reject stale geometry, keyboard reports, hides and dismissals.
+Keyboard fitting uses the activity window, intersecting its overlap with the
+driver's area rather than subtracting the keyboard twice. A card reopened
+over one a rebuild drained (a rotation, a light/dark change) takes over the
+editor's window; activity replacement detaches the old native window and
+retains the draft for the shared card's reopen path.
+
+The rotation defect and its cause. On the API 35 emulator image a rotation
+with the editor open could leave the field undrawn, in landscape and again
+back in portrait, although the window manager reported its window shown,
+drawn and visible with the draft intact; the next key raised the
+input-dispatch ANR for an application with no focused window, the main
+thread idle. A rotation rebuilds the window and reopens the card, and the
+editor then removed its Dialog and added a new one. With the keyboard up the
+removed Dialog was the input method's target, and the window manager layers
+the keyboard's container relative to that target: the container was left in
+SurfaceFlinger's offscreen hierarchy, layered to the removed window, and the
+new Dialog was layered to the container, so neither was composited, and the
+input dispatcher's focus request for the new window answered NO_WINDOW. It
+occurred with TalkBack on and with no accessibility service running. The
+editor now keeps its Dialog for a reopened card (ANDROID.md, "Note and
+question entry").
+
+Held by `note_entry_draft_test.go` (the synchronized draft keeps Unicode and
+the latest edit, rejects superseded owners and retains text for a reopen; a
+prefilled note refreshes its counter), `note_entry_geometry_test.go` (the
+keyboard overlap is not subtracted twice), `note_entry_layout_test.go` (the
+native slot is the iPhone's 112 units where the toolkit field stands, with
+the counter and actions moved down by the difference and no control resized,
+on an upright phone and on a tablet in both orientations; a phone held
+sideways with the keyboard reported by the native editor fits the card above
+it, the editor between the compact row and the keyboard and never over an
+action; the native field remains mounted through Show and Hide passage;
+Back dismisses only the current card), `note_entry_keyboard_policy_test.go`
+(the measured API 35 landscape room becomes readable for Note and Ask when
+Android releases the keyboard; the draft and action sizes are preserved,
+and closed or superseded disclosures cannot focus another editor) and
+`note_entry_android_contract_test.go` (Android installs its owner-bound
+keyboard focus and area seams; the editor
+keeps a live window for a reopened card and its callbacks act for the owner
+when they run; font- and frame-based vertical padding gives way so a line
+fits whenever the frame holds one; the hint alone labels the field; a dismiss
+that throws is survived). The Android
+Go, JNI and Java sources compile under `scripts/check-android-pane.sh` and
+`scripts/check-android-java.sh`.
+
+Seen on 27 to 29 October 2026 on API 24, 30 and 36 emulator images, phone
+and tablet: editing, Unicode, action taps, Back, dense landscape, rotation,
+theme rebuild and activity recreation, with the API 24 visible-display-frame
+keyboard fallback exercised directly and API 25 to 29 not run. Seen on 31
+October 2026 on a physical API 37 phone: ASCII input and Return newlines,
+on-screen keyboard taps, native word selection and copy and paste, keyboard
+hiding and Back, draft retention through a rotation with the keyboard
+hidden, and Cancel. Seen on 2 November 2026 on API 30 and API 35 emulator
+images, beside a control built from the 1.2.24 tag: injected typing lands
+once and Return adds a line, where the toolkit entry doubled injected
+characters and submitted on Return; the counter counts; Share reaches the
+system chooser and Ask the provider; Back hides the keyboard first and
+closes the card second; no word of the draft reaches the log. Every
+provider answer was synthetic and every share stopped at the system
+chooser.
+
+Seen on 2 November 2026 with the build from before the window was kept: on
+the API 35 phone image the rotation defect above, with TalkBack on and in a
+separate run with no accessibility service running; on the API 33 and API
+36 phone images and the API 35 tablet image, in Share with note for two
+turns each with TalkBack on and off, and on the API 30 image with it off,
+the replacement window was drawn and focused each time.
+
+Seen on 2 November 2026 with the window kept and the 112-unit field, on
+the API 35 (`bibletext_test`), API 33, API 30 and API 36 phone images and
+the API 35 tablet image, for Share with note and for Ask a question, with
+TalkBack on and off. The API 30 image has no TalkBack of its own, and the
+API 35 image's needs API 35: the API 33 image's (14.2, which supports API
+26 and later) was installed there for the runs with TalkBack on and
+removed after them. Five turns through both landscapes and back upright
+with a one-line draft and five more with a two-line draft: after every
+rotation the display took, the editor's window was the one the card opened
+with, held input focus, was among the layers SurfaceFlinger composited and
+kept the draft and the keyboard; Back then hid the keyboard and a second
+Back closed the card; no ANR, and no word of the draft in the log. With
+TalkBack on, the field was announced by its hint when empty and read with
+its draft once typed, and a double tap brought editing back after Back had
+put the keyboard away. A light/dark change with a draft open kept the same
+window, restyled, with the keyboard up. Upright the field is 112 units, the
+counter and actions 78.64 units lower than beside the one-line field and
+every action the same size, on every phone image and on the tablet in both
+orientations; at 14pt the field shows five lines and the top of a sixth. On
+a phone held sideways with the keyboard up the editor takes the room
+between the compact row and the keyboard: 43.35 units on the API 35 and API
+36 images, 53.19 on the API 33 one and 87.35 on the API 30 one. With the
+passage shown the keyboard stays up and the editor keeps 36.35 to 44 units,
+which left the passage no readable room on the API 33, API 35 and API 36
+images: 2.19 units on API 33, none on the other two, until the keyboard was
+put away; the API 30 image gave it 36.36 units. These measurements describe
+the keyboard-up policy before the 3 November change. The tablet kept the
+full card with the keyboard up in both orientations. Unicode IME composition
+and dictation were not verified.
+
+Historical accessibility observation, 2–3 November 2026: retained captions
+showed chapter text behind an open Note card after rotation on API 35 phone
+and tablet images. A calibrated API 35 phone comparison then checked fresh
+speech and semantic focus for released and candidate Note and Ask. None of
+the four marked intervals contained an underlying chapter-word speech
+request. Both versions did not reproduce the caption-only observation;
+this is not proof of a fix, globally clean accessibility or accepted
+deferral. Cards were opened through ordinary controls with TalkBack off,
+then it was enabled for rotation. ANDROID.md records the route and the
+remaining instrumentation and modal-navigation limits.
+
+Seen on 3 November 2026 with the approved keyboard-dismissal policy on a
+fresh API 35 emulator, TalkBack off: Note and Ask kept synthetic ASCII drafts
+and their card owners through Show passage and a tap back into the editor.
+The portrait slot remained 112 units. Show passage dismissed the keyboard
+and exposed a 64.83-unit passage viewport; tapping the field brought typing
+back, with the draft and action sizes unchanged. This was a development QA
+package with a fake-provider harness, not full reader, sharing or provider
+acceptance. The other images' 2 November runs do not verify this newer policy.
+
+## API 24 emulator loses Fyne GL content after rotation — open qualification
+
+Seen on 29 October 2026 on an API 24 `default` arm64 emulator image: an
+orientation or layout transition can blank the Fyne GL layer while native
+Android text and windows remain visible, with both emulator graphics modes, a
+reader-only scene without a native editor, operating-system screenshots with
+no canvas capture, and the 1.2.24 release build, which has no native editor.
+It is a qualification of that emulator image, which predates the native
+editors, not a demonstrated defect on API 24 hardware. Reproduce it on
+another image or a supported physical device before changing product
+rendering code; until then that image's landscape captures are evidence of
+nothing.
 
 ## One navigation rule on phones and tablets — DONE 1 October 2026, for 1.2.18
 
@@ -9069,11 +9610,13 @@ confirm is in `docs/VISUAL_TESTS.md` V15:
   buttons inside the sheet, through a resize from 401 to 800pt and back
   and after Try again at 401pt. A quote that opened at 520pt made that
   build cover the header again after clearing it at 503pt. The new
-  quote rule is integrated locally in `rel/1.2.23`, uncommitted; combined
-  checks and device verification remain.
-  Not run for this branch: the quote opened and closed in the app, the
-  Linux and Windows panes mimicked on the Mac, the Linux and Windows
-  virtual machines, an iPhone and Android.
+  quote rule was integrated locally in `rel/1.2.23` and uncommitted at the
+  23 October 2026 checkpoint; it subsequently shipped in 1.2.23.
+  At that checkpoint, combined checks and device verification remained:
+  the quote opened and closed in the app, the Linux and Windows panes
+  mimicked on the Mac, the Linux and Windows virtual machines, an iPhone
+  and Android. These are historical limits of that branch observation,
+  not new runtime acceptance of later revisions.
 - CHANGED for 1.2.23, decision 35 as settled on 21 October 2026, on its own
   branch, `fu/1223-short-windows-2` (`0c2e48e40`, `9c3da08a4`,
   `5bc64cbb8`), from `rel/1.2.23` at `3261a1e13`, merged into
@@ -10587,8 +11130,8 @@ example WHO line now reads "2 of 3 in this chapter", the count
 Planned for: stays; its recovery breadcrumb built for 1.2.23 on
 `fu/1223-key-gone` and merged into `rel/1.2.23` on 22 October 2026 — see
 docs/ROADMAP.md, 1.2.23, row 17 (Later minor releases, row 10).
-The 23 October 2026 revisions are integrated locally in `rel/1.2.23`,
-uncommitted: iPhone, iPad and signed Mac builds use Android's same
+The revisions integrated locally on 23 October 2026 subsequently shipped
+in 1.2.23: iPhone, iPad and signed Mac builds use Android's same
 definitive-missing-key condition, a saved mark, an item-not-found answer
 and no remaining Preferences copy. The field says "Your saved key isn't
 available on this device. Paste it again here." It does not infer a

@@ -120,8 +120,8 @@ func mobileRailWanted(tablet bool, w, h float32) bool {
 // laid-out height and would otherwise read as a rotation. See the note on
 // layoutWatcher.Resize, which is the same trap and cost 3,000 rebuilds a
 // minute when it was got wrong. Phones and tablets ask it (compactNavRail,
-// ui_mobile.go); the desktop draws the rail whatever its shape until it takes
-// the same rule (docs/BACKLOG.md). Before the canvas has a size, the size the
+// ui_mobile.go); the desktop uses the same rule unless its navigation override
+// pins an edge. Before the canvas has a size, the size the
 // platform reports for the window stands in for it (layoutSize).
 func railForWindow(state *AppState) bool {
 	var w, h float32

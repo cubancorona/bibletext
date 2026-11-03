@@ -200,6 +200,10 @@ Also confirm from the final AAB:
 - target audience and Families eligibility are selected from the real intended
   audience, not to avoid or trigger a policy track.
 
+## Release notes — 1.2.25
+
+> Clearer messages when AI study cannot answer: if the account behind your key has run out of credit or reached its spending limit, or a request takes too long, the message says so and offers Try again, the provider's billing page or a faster model. Notes and questions use Android's own text editing, with Return adding a new line.
+
 ## Release notes — 1.2.24
 
 > AI Settings now uses a compact supporting note, leaving more room for the controls.

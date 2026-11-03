@@ -19,7 +19,7 @@
 // when there is none (docs/SELECTION_OFFSET.md); book and chapter are the
 // chapter the pane's text holds, NULL and 0 when it holds none.
 extern void btaSelectionAction(char *action, char *text, int lo, int hi, int heading, char *lead, char *book, int chapter);
-extern void btaScrolled(float frac);
+extern void btaScrolled(float frac, long long intent);
 extern void btaReadAlongUserScrolled(void);
 extern void btaReadAlongFollowTapped(void);
 extern void btaKeyboardChanged(float overlapDp);
@@ -46,8 +46,8 @@ Java_org_bibletext_BtBridge_nativeSelectionAction(JNIEnv *env, jclass clazz, jst
 }
 
 JNIEXPORT void JNICALL
-Java_org_bibletext_BtBridge_nativeScrolled(JNIEnv *env, jclass clazz, jfloat frac) {
-	btaScrolled((float)frac);
+Java_org_bibletext_BtBridge_nativeScrolled(JNIEnv *env, jclass clazz, jfloat frac, jlong intent) {
+	btaScrolled((float)frac, (long long)intent);
 }
 
 JNIEXPORT void JNICALL
@@ -98,4 +98,30 @@ Java_org_bibletext_BtBridge_nativeNoteRestored(JNIEnv *env, jclass clazz) {
 JNIEXPORT void JNICALL
 Java_org_bibletext_BtBridge_nativeNoteAction(JNIEnv *env, jclass clazz, jint verb, jint key) {
 	btaNoteAction((int)verb, (int)key);
+}
+
+// Compose text uses UTF-8 byte arrays, including supplementary characters and
+// embedded NUL, rather than JNI's modified-UTF-8 string representation.
+extern void btaComposeChanged(long long owner, char *text, int length);
+extern void btaComposeKeyboard(long long owner, float pixels);
+
+JNIEXPORT void JNICALL
+Java_org_bibletext_BtBridge_nativeNoteEntryChanged(JNIEnv *env, jclass clazz, jlong owner, jbyteArray text) {
+	if (text == NULL) return;
+	jsize length = (*env)->GetArrayLength(env, text);
+	jbyte *bytes = (*env)->GetByteArrayElements(env, text, NULL);
+	if (bytes == NULL) return;
+	btaComposeChanged((long long)owner, (char*)bytes, (int)length);
+	(*env)->ReleaseByteArrayElements(env, text, bytes, JNI_ABORT);
+}
+
+JNIEXPORT void JNICALL
+Java_org_bibletext_BtBridge_nativeNoteEntryKeyboard(JNIEnv *env, jclass clazz, jlong owner, jfloat pixels) {
+	btaComposeKeyboard((long long)owner, (float)pixels);
+}
+
+extern void btaComposeDismiss(long long owner);
+JNIEXPORT void JNICALL
+Java_org_bibletext_BtBridge_nativeNoteEntryDismiss(JNIEnv *env, jclass clazz, jlong owner) {
+	btaComposeDismiss((long long)owner);
 }

@@ -307,6 +307,10 @@ func (p *styledReadingPane) styledLineHeight() float32 {
 }
 
 func (p *styledReadingPane) relayout(width float32) {
+	var selectedModel string
+	if p.lay != nil {
+		selectedModel = p.lay.Text
+	}
 	// THE PAGE COMES FROM THE SPEC (reading_page.go): the book page — the U.S.
 	// Reports set the iPad uses, a centred 27.5em column with first-line
 	// indents and no paragraph gap — whenever it fits with the side minimum
@@ -472,8 +476,25 @@ func (p *styledReadingPane) relayout(width float32) {
 	})
 	p.fnGeom.place(p.insetX(), p.lay.Height+p.styledLineHeight())
 	p.lastWidth = width
-	// Offsets shifted with the new layout — any selection is now meaningless.
-	p.selAnchor, p.selStart, p.selEnd = -1, -1, -1
+	// A width wrap replaces one model space with one newline, so rune offsets
+	// still name the same words. Preserve them through those replacements, but
+	// discard them when the underlying words change.
+	if !sameStyledSelectionModel(selectedModel, p.lay.Text) {
+		p.selAnchor, p.selStart, p.selEnd = -1, -1, -1
+	}
+}
+
+func sameStyledSelectionModel(before, after string) bool {
+	if len(before) != len(after) {
+		return false
+	}
+	for index := range len(before) {
+		a, b := before[index], after[index]
+		if a != b && !(a == ' ' && b == '\n') && !(a == '\n' && b == ' ') {
+			return false
+		}
+	}
+	return true
 }
 
 // noteAnchorVerse is the verse the band opens above: the note's own verse when

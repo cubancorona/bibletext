@@ -116,6 +116,53 @@ landscape capture may be stored in the native portrait buffer and need lossless
 rotation before App Store upload; confirm the final pixel dimensions and visual
 orientation rather than relying on the filename.
 
+### Native-frame trial — held outside the combined candidate
+
+A separate development experiment maps Fyne rectangles to their actual UIKit
+parent bounds for the reading pane and native Note/Ask fields. The experiment
+is excluded from the combined next-minor candidate and remains off. This
+section records its design, historical measurements and gates; it does not
+make the trial available in that candidate or clear it for release.
+
+The experiment uses the existing `bibletextdev` build tag and a default-off
+`BIBLETEXT_DEV_IOS_NATIVE_FRAMES=1` launch variable, with no Fyne source or
+version change. Normal builds remain on the legacy path regardless of that
+variable. Its design uses a fresh launch for each comparison, no persistent
+preference or in-app toggle, and a same-install relaunch with the variable
+cleared or `0` to return to legacy geometry. A shell variable cannot change an
+already-running app. Those are the experiment's controls, not instructions
+to enable a feature included in this candidate.
+
+The proposed conversion restores the captured Fyne interactive-area origin,
+then maps the full-canvas rectangle into the actual UIKit parent's bounds on
+the native main queue, avoiding a second safe-area inset. Applied UIKit width
+and unit ratio are reported to page-width calculation; stale host/layout
+replies must be rejected. The disabled path retains legacy frame and width
+reporting. Fyne control/slot dimensions, native font sizes and touch
+compensation stay unchanged, while native edges and text wrapping can move.
+Those differences require review before any release enablement.
+
+Historical measurements on 1 November 2026 covered iPhone 13 mini and SE
+simulator geometry in both orientations and an iPad portrait window. The
+mini's converted Note/Ask width was 337.5pt against legacy 324pt, with 18pt
+native fonts and unchanged Fyne slots. Further comparisons included iPhone
+12 mini and modern iPhone controls on iOS 26.5/27.0 and actual iPad rotation.
+These observations belong to the separate experiment, not the current
+combined candidate; they are not a new test pass or release acceptance.
+
+The experiment's acceptance gates remain: a physical affected iPhone,
+Display Zoom/More Space, actual iPad window resizing and a full software
+keyboard, true fallback rendering, and complete selection/reading-position
+checks. An assistant/prediction bar is not proof that full software keys
+were visible, and a requested import-failure switch is not proof that a
+fallback was actually installed. Earlier trial runs did not establish
+selection retention. The combined candidate's separate semantic reflow work
+has bounded native observations in PLATFORM_MATRIX.md, including actual iPad
+rotation at a fixed text measure; those checks do not enable this trial.
+Detached-host and stale-canvas
+rejection also need direct fault injection. External-display driver scaling
+is a separate issue. The trial stays excluded and off pending that work.
+
 ## Shipping to the App Store
 
 Every release since 1.1.0 is universal (`UIDeviceFamily=[1,2]`).

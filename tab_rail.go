@@ -23,8 +23,8 @@ package bibletext
 // vertical: a rail trades the bar's full strip of height, which is dear, for a
 // column of width, which is not. So every phone and tablet draws it while its
 // window is wider than tall and the bar otherwise (mobileRailWanted), and the
-// desktop, where a bottom bar is a phone convention a window would inherit
-// rather than choose, draws it whatever the window's shape.
+// desktop uses the same rule unless an explicit diagnostic override pins an
+// edge (ui_compact_desktop.go).
 //
 // It keeps clear of the screen's side insets — the Dynamic Island's side of an
 // iPhone held sideways, and the inset UIKit reports opposite it; an Android

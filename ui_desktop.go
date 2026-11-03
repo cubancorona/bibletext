@@ -43,10 +43,9 @@ func CreateMainUI(app fyne.App, state *AppState, window fyne.Window) fyne.Canvas
 		return buildLoadErrorView(state)
 	}
 
-	// The desktop draws the shared compact layout with a LEFT RAIL: the same
-	// chrome the phones and the iPad use, turned vertical, so one layout serves
-	// every platform and the rail keeps a pointer-and-window convention rather
-	// than a touch one.
+	// The desktop draws the same compact navigation as phones and tablets:
+	// a leading rail in wide or square windows and a bottom bar in tall ones.
+	// Its desktop watcher moves only that chrome after a live resize settles.
 	//
 	// BIBLETEXT_DESKTOP_TABS overrides it — sidebar|0 for the former sidebar +
 	// split below, 1|bar for the bottom bar — so the three can still be compared

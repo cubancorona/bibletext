@@ -56,19 +56,20 @@ func dismissKeyboard(*AppState) {}
 type desktopNavStyle int
 
 const (
-	desktopNavSidebar desktopNavStyle = iota // opt-out: the former sidebar + HSplit
-	desktopNavBar                            // comparison: compact layout, bottom bar
-	desktopNavRail                           // SHIPPED: compact layout, left rail
+	desktopNavSidebar  desktopNavStyle = iota // opt-out: the former sidebar + HSplit
+	desktopNavBar                             // comparison: compact layout, bottom bar
+	desktopNavRail                            // comparison: compact layout, left rail
+	desktopNavAdaptive                        // shared layout, navigation follows the window
 )
 
 // desktopNav is the ONLY reader of BIBLETEXT_DESKTOP_TABS.
 //
-// The left rail IS the desktop layout now, so the variable is an override
-// rather than a way in, and an unset or unrecognised value means "no override":
+// An unset or unrecognised value follows the window's shape, using the same
+// bar/rail rule as phones and tablets. Explicit values remain overrides:
 //
 //	sidebar | 0   the former sidebar + HSplit, for comparison or escape
 //	1 | bar       the compact layout with the phone/iPad bottom bar
-//	rail          the rail, stated explicitly (same as unset)
+//	rail          the compact layout with the left rail in every window shape
 //
 // Both readers of this decision — whether the compact layout runs at all, and
 // how it draws its navigation — must keep agreeing. They once disagreed, and
@@ -81,8 +82,10 @@ func desktopNav() desktopNavStyle {
 		return desktopNavSidebar
 	case "1", "bar":
 		return desktopNavBar
+	case "rail":
+		return desktopNavRail
 	}
-	return desktopNavRail
+	return desktopNavAdaptive
 }
 
 // announceDesktopNav names the layout on stderr, and only when the variable is
@@ -95,20 +98,35 @@ func desktopNav() desktopNavStyle {
 func announceDesktopNav() {
 	set := os.Getenv("BIBLETEXT_DESKTOP_TABS")
 	if set == "" {
-		return // the shipped rail, chosen by default: nothing to report
+		return
 	}
 	name := map[desktopNavStyle]string{
-		desktopNavSidebar: "the former sidebar + split",
-		desktopNavBar:     "compact layout, bottom bar",
-		desktopNavRail:    "compact layout, LEFT RAIL",
+		desktopNavSidebar:  "the former sidebar + split",
+		desktopNavBar:      "compact layout, bottom bar",
+		desktopNavRail:     "compact layout, LEFT RAIL",
+		desktopNavAdaptive: "compact layout, navigation follows the window",
 	}[desktopNav()]
 	fmt.Fprintf(os.Stderr, "BibleText: desktop navigation override — %s "+
 		"(BIBLETEXT_DESKTOP_TABS=%q)\n", name, set)
 }
 
 // compactNavRail reports whether the navigation draws as a left rail. The
-// desktop's answer is the rail whatever the window's shape, unless
-// BIBLETEXT_DESKTOP_TABS overrides it. Phones and tablets take the rail only
-// while the window is wider than it is tall (ui_mobile.go, mobileRailWanted);
-// the desktop is to take that rule in 1.2.19 (docs/BACKLOG.md).
-func compactNavRail(*AppState) bool { return desktopNav() == desktopNavRail }
+// desktop uses the same shape rule as phones and tablets unless an override
+// pins an edge. An unsized desktop keeps its initial rail until a real size
+// arrives; touch devices retain their own launch-window/device fallback.
+func compactNavRail(state *AppState) bool {
+	switch desktopNav() {
+	case desktopNavRail:
+		return true
+	case desktopNavBar, desktopNavSidebar:
+		return false
+	}
+	if state == nil || state.window == nil {
+		return true
+	}
+	size := state.window.Canvas().Size()
+	if !canvasSized(size.Width, size.Height) {
+		return true
+	}
+	return railForWindow(state)
+}

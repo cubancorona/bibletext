@@ -287,7 +287,7 @@ func runAISearch(ctx context.Context, state *AppState, query string) ([]Verse, e
 		}
 		out, err := aiSearchGenerate(ctx, info, store, key, buildAISearchPrompt(q))
 		if err != nil {
-			return nil, err
+			return nil, withAIErrorProvider(err, info)
 		}
 		raw = out
 		aiCacheSet(cacheKey, out)

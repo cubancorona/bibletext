@@ -182,6 +182,12 @@ func openAISettings(state *AppState) {
 		result := widget.NewRichText()
 		result.Wrapping = fyne.TextWrapWord
 		result.Hide()
+		resultExtras := container.NewVBox()
+		resultExtras.Hide()
+		var runKeyTest func()
+		// Assigned with the Model row below: it re-reads the store's model
+		// choice into the row after a change made outside the picker.
+		var syncModelChoice func()
 		setResult := func(text string) {
 			result.Segments = []widget.RichTextSegment{&widget.TextSegment{
 				Text:  text,
@@ -194,6 +200,7 @@ func openAISettings(state *AppState) {
 		// resolver may have had to replace, which the picker above cannot
 		// know yet — muted, like the model caption.
 		setTesting := func(m aiModelInUse) {
+			resultExtras.Hide()
 			segs := []widget.RichTextSegment{&widget.TextSegment{
 				Text:  "Testing…",
 				Style: widget.RichTextStyle{SizeName: theme.SizeNameCaptionText},
@@ -216,6 +223,8 @@ func openAISettings(state *AppState) {
 		// provider's key is not this row's.
 		slot := state.keyTest(keyTestAI)
 		slot.attach(func() {
+			resultExtras.Objects = nil
+			resultExtras.Hide()
 			t := slot.test
 			if t == nil || t.provider != info.ID {
 				result.Hide()
@@ -225,10 +234,36 @@ func openAISettings(state *AppState) {
 			if t.running {
 				setTesting(t.model)
 			} else {
-				setResult(t.text)
+				text := t.text
+				if p := t.failure; p != nil {
+					faster := aiErrorFasterModel(state, *p, func() {
+						// The action pins the economy model in the store;
+						// the Model row on this sheet must show it at once.
+						if syncModelChoice != nil {
+							syncModelChoice()
+						}
+						runKeyTest()
+					})
+					// Read with the offer as this paint finds it, so a
+					// timeout names the faster model only beside its action.
+					text = "✗ " + p.shown(faster != nil)
+					if p.detail != "" {
+						resultExtras.Add(aiErrorDetail(*p))
+					}
+					if link := aiBillingLink(*p); link != nil {
+						resultExtras.Add(link)
+					}
+					if faster != nil {
+						resultExtras.Add(faster)
+					}
+					if len(resultExtras.Objects) != 0 {
+						resultExtras.Show()
+					}
+				}
+				setResult(text)
 			}
 		})
-		testBtn := widget.NewButtonWithIcon("Test key", theme.MediaPlayIcon(), func() {
+		runKeyTest = func() {
 			key := strings.TrimSpace(entry.Text)
 			if key == "" {
 				slot.begin(info.ID, false, "Paste a key first.")
@@ -240,15 +275,17 @@ func openAISettings(state *AppState) {
 				defer cancel()
 				ctx = showAIModelOnUI(ctx, func(m aiModelInUse) { slot.report(t, m) })
 				err := aiKeyTestRun(ctx, info, store, key)
+				err = withAIErrorProvider(err, info)
 				fyne.Do(func() {
 					if err != nil {
-						slot.finish(t, "✗ "+friendlyAIError(err))
+						slot.finishAIError(t, err)
 					} else {
 						slot.finish(t, "✓ Key works.\nStudy with AI and Find are ready.")
 					}
 				})
 			}()
-		})
+		}
+		testBtn := widget.NewButtonWithIcon("Test key", theme.MediaPlayIcon(), runKeyTest)
 		// A normal-weight button with an icon, so it clearly reads as tappable. A
 		// low-importance button is borderless — it looks like a plain bold label and
 		// hides that it's interactive (and on touch there's no hover state to reveal
@@ -384,6 +421,23 @@ func openAISettings(state *AppState) {
 			}
 			selected = sel
 			modelBtn.SetText(sel)
+		}
+		// A model pinned outside the picker (the Test key verdict's
+		// faster-model action) is read back from the store: the row shows
+		// it, and the picker offers it even before the live list lands.
+		syncModelChoice = func() {
+			sel := recommended
+			if ov := store.overrideModel(id); ov != "" {
+				sel = ov
+				if !containsExact(options, ov) {
+					options = append(options, ov)
+				}
+			}
+			selected = sel
+			modelBtn.SetText(sel)
+			if pickerList != nil {
+				pickerList.Refresh()
+			}
 		}
 		closePicker := func() {
 			if pickerPop != nil {
@@ -567,6 +621,7 @@ func openAISettings(state *AppState) {
 				// but for the ✕ of a key a restore did not bring back.
 				statusRow.row,
 				result,
+				resultExtras,
 				widget.NewSeparator(),
 				settingsRow("Model", container.NewThemeOverride(modelBtn,
 					compactTheme{Theme: state.theme, text: 15})),

@@ -157,6 +157,9 @@ root), signing, emulator use, and distribution are covered in
   to that verse in context.
 - 🧭 **Quick navigation** — filterable book list, previous/next chapter, and a
   chapter picker grid.
+  On desktop the same Read / Books / Search destinations sit along the bottom
+  of a tall window and on the left of a square or wider one. Resizing moves
+  them after the window settles, retaining the reading place and open cards.
 - 🕮 **Recent history** — a slim, unobtrusive bar of recently read chapters you
   can jump back to, or clear.
 - 🌗 **Light & dark mode** — a warm "paper" light theme or an easy-on-the-eyes
@@ -360,8 +363,8 @@ Ask keeps the question below the divider, in the same scrolling area as the answ
 Expanding does not ask the AI for another answer. Short screens collapse the
 quotation automatically.
 Ask shows the selected passage excerpt above the question field and uses a native
-multiline editor on iOS. Its availability is controlled by one code constant,
-`askQuestionEnabled` in `ai_ask_gate.go`. The whole
+multiline editor on iOS and Android. Its availability is controlled by one code
+constant, `askQuestionEnabled` in `ai_ask_gate.go`. The whole
 AI surface can be turned off in Settings → Assistant → **None**. A separate AI
 **Find** on the Search
 tab (the **Search / Find** toggle) takes a plain-language request and returns
@@ -398,6 +401,12 @@ self-heals automatically if the provider retires it.
 
 A `<PROVIDER>_API_KEY` environment variable (`GEMINI_API_KEY`, `OPENAI_API_KEY`,
 `ANTHROPIC_API_KEY`, `XAI_API_KEY`) overrides the stored key when set.
+
+If a provider reports exhausted credit or a spending limit, the error names
+that provider and offers its billing page (for Grok, the SpaceXAI console)
+and **Try again**. A timeout offers retry or the existing faster-model
+option. Ordinary rate limits and missing keys retain their separate
+guidance. The app does not change a provider's billing settings.
 
 ### What gets sent
 

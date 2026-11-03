@@ -76,7 +76,7 @@ func TestAndroidColdStartArrivalSurvivesSeedDataSwap(t *testing.T) {
 
 	goSrc := readNativeSource(t, "reading_android.go")
 	for _, want := range []string{
-		`"setHtml", "(Ljava/lang/String;FIIF)V"`,
+		`"setHtml", "(Ljava/lang/String;FIIFZZ)V"`,
 		"explicitArrival := state.forceReposition || carryDataSwapArrival",
 		// The capture asks the SHARED predicate now, so the arrival clause cannot
 		// be omitted here without being omitted for every pane at once.
@@ -165,10 +165,13 @@ func TestAndroidGoToOutranksSameChapterTopAndMidCarry(t *testing.T) {
 	if !strings.Contains(push, "explicitArrival := state.forceReposition || carryDataSwapArrival") {
 		t.Fatal("Android does not classify Go-to's forceReposition as an explicit arrival")
 	}
-	capture := strings.Index(push, "if shouldCaptureScrollRestore(state, bc == lastPushedBookChapter")
-	arm := strings.Index(push, "\n\tarmPendingRestore(state)")
+	capture := strings.Index(push, "if shouldCaptureScrollRestore(state, bc == lastPushedBookChapter, fp != lastPushedChapterFP, explicitArrival) {")
+	arm := strings.Index(push, "armPendingRestore(state)")
 	if capture < 0 || arm < 0 || capture > arm {
 		t.Fatal("Android same-chapter carry is not guarded by !explicitArrival")
+	}
+	if !strings.Contains(push, "repeatedRestore := (sameChapterPush || androidRecreatedReadingCarry) && !explicitArrival && readingAndroidDispatch.repeatsSavedRestore(state)") {
+		t.Fatal("Android repeated saved carry can outrank an explicit arrival")
 	}
 	carry := push[capture:arm]
 	if !strings.Contains(carry, "state.restore = &restoreAnchor{") {

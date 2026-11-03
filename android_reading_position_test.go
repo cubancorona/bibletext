@@ -17,8 +17,8 @@ func TestAndroidKeepsTheReadingPositionByVerse(t *testing.T) {
 	java := readNativeSource(t, "android/BtBridge.java")
 	for _, want := range []string{
 		"public static float[] getScrollAnchor()",
-		"public static void armRestore(final int verse, final float within, final float frac)",
-		"final int restoreVerse, final float restoreWithin)",
+		"public static void armRestore(final int verse, final float within, final float frac, final boolean reflow)",
+		"final int restoreVerse, final float restoreWithin,",
 		"lastAnchor = new float[]{a != null ? a[0] : 0f, a != null ? a[1] : 0f, lastFrac};",
 		"pendingRestoreVerse = restoreVerse > 0 ? restoreVerse : 0;",
 	} {
@@ -44,10 +44,10 @@ func TestAndroidKeepsTheReadingPositionByVerse(t *testing.T) {
 	goSrc := readNativeSource(t, "reading_android.go")
 	for _, want := range []string{
 		`"getScrollAnchor", "()[F"`,
-		`"armRestore", "(IFF)V"`,
-		`"setHtml", "(Ljava/lang/String;FIIF)V"`,
+		`"armRestore", "(IFFZ)V"`,
+		`"setHtml", "(Ljava/lang/String;FIIFZZ)V"`,
 		"return int(a[0]), float64(a[1]), float64(a[2]), true",
-		"C.btaArmRestore(C.uintptr_t(env), C.int(verse), C.float(delta), C.float(f))",
+		"C.btaArmRestore(C.uintptr_t(env), C.int(verse), C.float(delta), C.float(f), reflow)",
 		"restoreVerse, restoreWithin = state.restore.Verse, float32(state.restore.Delta)",
 	} {
 		if !strings.Contains(goSrc, want) {

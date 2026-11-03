@@ -15,11 +15,13 @@ package bibletext
 // coupling: a value that selects a navigation style must not leave the desktop
 // on a layout that cannot draw it.
 //
-// The rail is now the default rather than something the variable turns on, so
-// the interesting case has inverted: an unset variable must give the RAIL, and
-// only an explicit opt-out returns the former sidebar.
+// The default follows the window; explicit values still pin either edge or
+// return to the former sidebar.
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestDesktopNavStyleValues(t *testing.T) {
 	for _, tc := range []struct {
@@ -27,9 +29,9 @@ func TestDesktopNavStyleValues(t *testing.T) {
 		want     desktopNavStyle
 		wantRail bool
 	}{
-		// Unset and unrecognised both mean "no override" — the shipped rail.
-		{"", desktopNavRail, true},
-		{"nonsense", desktopNavRail, true},
+		// No canvas yet: adaptive navigation starts with the desktop's rail.
+		{"", desktopNavAdaptive, true},
+		{"nonsense", desktopNavAdaptive, true},
 		{"rail", desktopNavRail, true},
 		// The opt-out, both spellings.
 		{"sidebar", desktopNavSidebar, false},
@@ -68,15 +70,61 @@ func TestRailImpliesTheCompactLayoutIsOn(t *testing.T) {
 	}
 }
 
-// The default is the rail, and it is reached without help. A regression that
-// restored the sidebar default would leave every other test in this file
-// passing, because they all set the variable.
-func TestDesktopDefaultsToTheRailWithNoEnvironment(t *testing.T) {
+// An unsized desktop starts with the rail, then follows its real canvas.
+func TestDesktopDefaultsToAdaptiveNavigationWithNoEnvironment(t *testing.T) {
 	t.Setenv("BIBLETEXT_DESKTOP_TABS", "")
-	if got := desktopNav(); got != desktopNavRail {
-		t.Errorf("with no override the desktop draws %v, want the rail", got)
+	if got := desktopNav(); got != desktopNavAdaptive {
+		t.Errorf("with no override the desktop draws %v, want adaptive navigation", got)
 	}
 	if !compactNavRail(nil) {
 		t.Error("with no override the navigation does not draw as a rail")
 	}
+}
+
+// ARCHITECTURE.md's list of the programs gives the desktop window the
+// navigation the code gives it. With BIBLETEXT_DESKTOP_TABS unset the mode is
+// adaptive (desktopNav), so neither edge is the desktop's default, and the
+// edge follows mobileRailWanted's boundary, the one the touch devices' line
+// gives them, with a square window on the rail's side. The code's answers are
+// the control: a change of default or of boundary brings both lines back to
+// be read.
+func TestTheArchitectureListGivesTheDesktopTheTouchDevicesRule(t *testing.T) {
+	t.Setenv("BIBLETEXT_DESKTOP_TABS", "")
+	if got := desktopNav(); got != desktopNavAdaptive {
+		t.Fatalf("an unset BIBLETEXT_DESKTOP_TABS gives %v: read ARCHITECTURE.md's line for cmd/bibletext/main.go against it", got)
+	}
+	if !mobileRailWanted(false, 700, 700) || mobileRailWanted(false, 699, 700) {
+		t.Fatal("mobileRailWanted no longer puts a square window on the rail's side and a taller one on the bar's: " +
+			"read ARCHITECTURE.md's lines for cmd/bibletext/main.go and cmd/mobile/main.go against it")
+	}
+	arch := readRepoFile(t, "ARCHITECTURE.md")
+	for _, program := range []string{"cmd/bibletext/main.go", "cmd/mobile/main.go"} {
+		item := architectureProgramItem(t, arch, program)
+		for _, want := range []string{"bottom bar while", "left rail while it is square or wider"} {
+			if !strings.Contains(item, want) {
+				t.Errorf("ARCHITECTURE.md's line for %s does not say %q:\n%s", program, want, item)
+			}
+		}
+	}
+	if desktop := architectureProgramItem(t, arch, "cmd/bibletext/main.go"); strings.Contains(desktop, "by default") {
+		t.Errorf("ARCHITECTURE.md's line for the desktop window calls an edge its default:\n%s", desktop)
+	}
+}
+
+// architectureProgramItem is ARCHITECTURE.md's list item for one program
+// under cmd/, white space collapsed.
+func architectureProgramItem(t *testing.T, arch, program string) string {
+	t.Helper()
+	start := strings.Index(arch, "- `"+program+"` — ")
+	if start < 0 {
+		t.Fatalf("ARCHITECTURE.md lists no %s", program)
+	}
+	item := arch[start+len("- "):]
+	if end := strings.Index(item, "\n- "); end >= 0 {
+		item = item[:end]
+	}
+	if end := strings.Index(item, "\n\n"); end >= 0 {
+		item = item[:end]
+	}
+	return strings.Join(strings.Fields(item), " ")
 }

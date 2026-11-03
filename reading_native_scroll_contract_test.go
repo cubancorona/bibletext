@@ -103,17 +103,17 @@ func TestMacScrollHookIsBoundsShapedAndLatched(t *testing.T) {
 // the clip with that passing wrap, and the insets put right after wrap it at
 // the column again with the clip left where it was moved: on a development
 // build a reader 5,000 points into Psalm 119, at verse 73, was at verse 112
-// after the window narrowed from 1280 to 1000 points. The verse at the top
-// and how far into it the top stands are read before the frame is set and
-// put back after the insets and the note's bands, and before the re-assert,
-// so a restore or an arrival still places over them.
+// after the window narrowed from 1280 to 1000 points. The first visible
+// character and fraction through its line are captured before the frame
+// changes and resolved after the insets and note bands. Explicit arrivals
+// and saved reading-state targets retain their placement precedence.
 func TestTheMacFrameChangeKeepsTheReadersPlace(t *testing.T) {
 	apply := nativeFunctionSource(t, "reading_macos.go", "static void btMacApplyFrame(double x, double y, double w, double h) {")
-	read := strings.Index(apply, "btMacTopOfView(&keepVerse, &keepDelta);")
+	read := strings.Index(apply, "btMacKeepTextReflow();")
 	frame := strings.Index(apply, "gScroll.frame = r;")
 	insets := strings.Index(apply, "btMacApplyInsets(gScroll.contentSize.width)")
 	note := strings.Index(apply, "if (changed || insetChanged) btMacRefreshNote();")
-	put := strings.Index(apply, "if (keepVerse > 0) btMacPutTopOfView(keepVerse, keepDelta);")
+	put := strings.Index(apply, "if (!btMacPutTextReflow() && keepVerse > 0) btMacPutTopOfView(keepVerse, keepDelta);")
 	reassert := strings.Index(apply, "btMacReassertPlacement();")
 	if read < 0 || frame < 0 || insets < 0 || note < 0 || put < 0 || reassert < 0 ||
 		!(read < frame && frame < insets && insets < note && note < put && put < reassert) {
@@ -123,8 +123,8 @@ func TestTheMacFrameChangeKeepsTheReadersPlace(t *testing.T) {
 	if !strings.Contains(apply, "fabs(r.size.width - gScroll.frame.size.width) >= 0.5") {
 		t.Error("btMacApplyFrame keeps the place for a frame that keeps its width too; only a change of width rewraps")
 	}
-	// One reading of the top of the view: the capture the reading state saves
-	// is the same function the frame change keeps.
+	// The saved reading state retains its existing verse-and-point format;
+	// only the live reflow uses a transient text-character target.
 	capture := nativeFunctionSource(t, "reading_macos.go", "BTAnchor bibleTextMacCaptureAnchor(void) {")
 	if !strings.Contains(capture, "btMacTopOfView(&verse, &delta);") {
 		t.Error("bibleTextMacCaptureAnchor no longer reads the top of the view through btMacTopOfView")

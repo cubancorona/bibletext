@@ -32,6 +32,7 @@ type keyTestProgress struct {
 	running  bool         // the request is in flight
 	model    aiModelInUse // the model it reported, if any (the AI key)
 	text     string       // the verdict, or the answer given without a request
+	failure  *aiErrorPresentation
 }
 
 // keyTestSlot is one key section's Test key line: the test it shows, and the
@@ -92,6 +93,20 @@ func (sl *keyTestSlot) finish(t *keyTestProgress, text string) {
 	}
 	t.running = false
 	t.text = text
+	t.failure = nil
+	sl.repaint()
+}
+
+func (sl *keyTestSlot) finishAIError(t *keyTestProgress, err error) {
+	if sl.test != t {
+		return
+	}
+	t.running = false
+	t.text = "✗ " + friendlyAIError(err)
+	t.failure = nil
+	if p, ok := aiSpecialError(err); ok {
+		t.failure = &p
+	}
 	sl.repaint()
 }
 

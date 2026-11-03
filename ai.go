@@ -56,6 +56,12 @@ func registerAIState(state *AppState) { activeAIState = state }
 var errBudgetExhausted = errors.New("ai: output budget exhausted by reasoning")
 
 func friendlyAIError(err error) string {
+	if p, ok := aiSpecialError(err); ok {
+		return p.message
+	}
+	if errors.Is(err, context.Canceled) {
+		return "The request was cancelled."
+	}
 	if errors.Is(err, errBudgetExhausted) {
 		return "The model spent its whole allowance thinking and didn't finish an answer. " +
 			"Try a narrower question, or switch to the faster model."
@@ -598,7 +604,7 @@ func runAIActionForPassage(ctx context.Context, state *AppState, action string, 
 
 	out, err := aiStudyGenerate(ctx, info, store, key, prompt)
 	if err != nil {
-		return "", err
+		return "", withAIErrorProvider(err, info)
 	}
 	aiCacheSet(cacheKey, out)
 	return out, nil

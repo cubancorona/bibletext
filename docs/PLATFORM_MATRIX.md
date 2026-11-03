@@ -3,7 +3,7 @@
 What BibleText can be built and shipped as, on which architecture, through
 which channel — and **how well each of those is actually proven**. Two features
 have tables of their own: [Navigation](#navigation), the layout's one rule for
-where Read, Books and Search sit, which the desktop has yet to take, and
+where Read, Books and Search sit, and
 [Sharing](#sharing), because Share is the verb whose mechanism differs on
 every platform.
 
@@ -137,8 +137,9 @@ place a fix on one does not reach the others.
     `fyne` command does not produce a shippable artefact. The CLI's prebuilt
     `classes.dex` is **replaced** with a locally compiled patched
     `GoNativeActivity`.
-11. **Four Java sources** (`BtBridge`, `BtAudio`, `BtAudioService`, `BtKeys`)
-    compiled with `javac --release 8` + `d8`, and a **custom
+11. **Six Java sources** (`BtBridge`, `BtAudio`, `BtAudioService`, `BtKeys`,
+    `BtReadingColumn`, `BtNoteEntry`) compiled with `javac --release 8` +
+    `d8`, and a **custom
     `cmd/mobile/AndroidManifest.xml` consumed verbatim**, whose `foregroundServiceType`
     is what makes background narration legal. From 1.2.21, all four Android
     ABIs require Android 7.0 / API 24; the native build and manifest share that
@@ -354,7 +355,7 @@ place a fix on one does not reach the others.
     Windows virtual machine on 15 October 2026 with 1.2.21, where it then
     ended without a sheet.
     The Mac's own share says it too, and hands its picker nothing,
-    `reading_macos.go:3903` (`if shareCardGone(path) {`), where it handed
+    `reading_macos.go:4132` (`if shareCardGone(path) {`), where it handed
     the picker the missing file's address; and on all six a card the
     preview cannot draw opens no preview and says it,
     `share_preview.go:60` (`sayShareFailed(state, shareFailedCard)`), on
@@ -452,13 +453,16 @@ place a fix on one does not reach the others.
 
 **Desktop (macOS, Windows, Linux)**
 
-29. **The navigation is the rail whatever the window's shape**, where every
-    phone and tablet takes it only while the window is wider than it is tall
-    (see [Navigation](#navigation)). A desktop window tiled to a phone's
-    shape keeps the rail down its narrow side. The desktop installs no
-    layout watcher, so nothing would notice a resize across square. To be
-    unified in 1.2.21: `docs/BACKLOG.md`, "The desktop takes the phones'
-    navigation rule".
+29. **Navigation moves only after a resize settles.** The desktop takes the
+    phones' rule, a rail while the window is square or wider and a bottom
+    bar while it is taller (see [Navigation](#navigation)), but applies a
+    change about 250 ms after the last canvas-size change and repacks only
+    the navigation chrome, where a phone or tablet rebuilds at once on
+    rotation. A timing difference, not a different layout: the bar, rail,
+    icon and button dimensions are the phones'. `BIBLETEXT_DESKTOP_TABS`
+    still pins an edge for comparison. The former always-rail divergence is
+    retired (`docs/BACKLOG.md`, "The desktop takes the phones' navigation
+    rule").
 
 **Android before 15**
 
@@ -505,9 +509,9 @@ place a fix on one does not reach the others.
 
 **The reading position**
 
-33. **Android keeps the place in the top verse as a fraction of that
+33. **Android stores the place in the top verse as a fraction of that
     verse's height; the iPhone, iPad, Mac and the Windows and Linux pane
-    keep it in pixels.** Every pane saves and restores the reading position
+    store it in points.** Every pane saves and restores the reading position
     verse-first (`readingState`, `reading_state.go`): the verse at the top
     of the view, how far into it the top stands, and a fraction of the
     scroll range as the fallback. Since 1.2.22 Android's "how far" is a
@@ -517,13 +521,22 @@ place a fix on one does not reach the others.
     (`bibleTextMacCaptureAnchor`, `reading_macos.go`) and the Windows and
     Linux pane (`captureStyledAnchor`, `reading_styled_area.go`) keep it in
     points, so `AnchorDelta` is stored in two units, as its field comment
-    says. *Risk:* a turn or a resize that makes the top verse shorter can
-    put a pixel offset into the next verse; a model of the WEB's layout
-    showed that in 25% of positions from portrait to landscape, measured
-    for Android and not on the other panes. Closes when they take the
-    fraction too, or clamp the offset to the verse's new height
-    (docs/BACKLOG.md, "Where the app re-finds the reader's position from
-    text", AND-3).
+    says. This remains the saved reading/history representation. Live
+    same-chapter reflow now carries the text character and a fraction through
+    its rendered line on the native and styled panes, rather than reusing
+    that verse's pixel offset (`reading_reflow_styled.go`, `reading_macos.go`,
+    `reading_ios.go`, `android/BtReadingReflow.java`). The transient carry
+    rejects changed text or an explicit arrival and yields to a new reading
+    position. BACKLOG.md records bounded native observations and their device,
+    startup and input-delivery limits; they do not replace exact final CI or
+    release-package checks. *Risk:* a saved pixel offset applied after a layout change
+    can still reach the next verse if the old verse became shorter. The
+    earlier verse-offset model of the WEB showed that in 25% of positions
+    from portrait to landscape, measured for Android and not on the other
+    panes; that measurement predates the live semantic carry. The stored-unit
+    difference closes when the other panes take the fraction too, or clamp
+    the offset to the verse's new height (docs/BACKLOG.md, "Where the app
+    re-finds the reader's position from text", AND-3).
 34. **A note shown from its link alone, on a range that starts at a verse
     the edition omits, was drawn above the first lit verse's paragraph on
     the iPhone, iPad, Mac and the website, and at the chapter top on
@@ -577,8 +590,10 @@ place a fix on one does not reach the others.
     backspace on Android over text typed before the keyboard last opened,
     which is not in the hidden field, removes one character as elsewhere.
     The iPhone and iPad note composer is a native `UITextView`, whose
-    deletion is UIKit's. *Risk:* a reader who backspaces over a joined
-    emoji on the desktop or in an iPhone search field sees part of it
+    deletion is UIKit's, and Android's Note and Ask editors are a native
+    `EditText`, whose deletion is Android's; the toolkit fields described
+    here remain in use elsewhere. *Risk:* a reader who backspaces over a
+    joined emoji on the desktop or in an iPhone search field sees part of it
     remain. Closes when the toolkit's entry deletes a whole grapheme
     cluster, a change to text editing on every platform (docs/BACKLOG.md,
     "Android drops the zero-width joiner and non-joiner typed into a text
@@ -639,8 +654,8 @@ place a fix on one does not reach the others.
 
 **A missing saved key**
 
-38. **Resolved in the 1.2.23 candidate: Android and signed Apple builds
-    use the same missing-key condition.** Under an empty key field the
+38. **Resolved in 1.2.23: Android and signed Apple builds use the same
+    missing-key condition.** Under an empty key field the
     line is "Your saved key isn't available on this device. Paste it
     again here." It requires a saved mark in Preferences, a separate
     credential store answering definitively that the key is absent, and
@@ -657,8 +672,61 @@ place a fix on one does not reach the others.
     dismissal, while a move to another device does not. Android loses
     the record after reinstall or reset. This storage difference is
     deliberate; no promise is made that every restore resets a dismissal.
-    Integrated locally in `rel/1.2.23`, uncommitted; combined-candidate
-    validation remains.
+    Shipped in 1.2.23; this is the released missing-key behavior, not an
+    uncommitted change in the next minor candidate.
+
+**A selection through a change of page format**
+
+39. **Same-chapter selection carry is implemented across the native panes;
+    bounded native observations are recorded separately.** Historically the Mac kept a selection
+    through a page-format import while the iPhone, iPad and Android dropped
+    it, as in 1.2.24. The Mac carry was seen with the footnotes shown on
+    2 November 2026 (docs/BACKLOG.md, "The desktop takes the phones'
+    navigation rule"). Implemented locally on 3 November 2026: the iOS and
+    Android panes also carry a nonempty selection through an unchanged
+    same-chapter re-import, with no explicit arrival pending. The Apple
+    guards validate actual UTF-16 ranges and text (`btMacCanPreserveSelection`,
+    `btIOSCanPreserveSelection`); Android maps ranges through presentation
+    whitespace while preserving word boundaries, case, punctuation and
+    surrogate pairs (`BtReadingReflow.selection`). A changed appended
+    footnote section is tolerated only for ranges in unchanged Scripture;
+    changed chapter/text, an invalid range or an explicit arrival refuses
+    the carry. Windows and Linux retain their unchanged-text styled-pane
+    selection (`sameStyledSelectionModel`). Coverage is in
+    `reading_selection_macos_test.go`, `reading_reflow_apple_test.go`,
+    `reading_reflow_mobile_test.go` and
+    `reading_android_configuration_selection_test.go`. BACKLOG.md records the
+    3 November native Mac, iPhone/iPad and API 35 Android observations, including
+    the iPad's fixed text measure and the Android cold saved-position case.
+    Exact final CI and package checks remain separate. This number records
+    the historical divergence and its implementation status, not
+    a current policy to discard mobile selection. No visible control or
+    font size changes (docs/ROADMAP.md, Later minor releases, row 50).
+
+**Showing a passage while composing**
+
+40. **Android releases its keyboard for a dense expanded passage; iPhone and
+    iPad retain theirs.** Decided 3 November 2026: keep the shared 112-unit
+    native field height, while restoring Android's keyboard-dismissal rule
+    where Show passage otherwise has no readable room. Hide passage resumes
+    editing, and the native field remains available to tap. The iOS keyboard
+    policy is unchanged. The shared composer requests focus with the card's
+    owner, which Go and the posted Android operation both check, so a closed
+    or superseded card cannot hide a newer editor's keyboard. *Risk:* switching
+    between reading the quotation and typing takes a keyboard transition on
+    Android. Platform runtime acceptance remains part of release smoke.
+
+**Keyboard learning requests**
+
+41. **Android requests no personalized keyboard learning; the iOS bridge
+    applies no corresponding request.** Decided 3 November 2026: keep ordinary
+    suggestions and autocorrection while Android sets
+    `IME_FLAG_NO_PERSONALIZED_LEARNING` in `BtNoteEntry`. This asks the input
+    method not to update personalized learning; it does not establish what
+    any keyboard retains or synchronizes. Keyboard compliance has not been
+    verified. Autofill/content-capture exclusions are separate. No iOS editor
+    behavior or visual dimension changes with this request. *Risk:* keyboard
+    implementations can handle the request differently.
 
 ## Deliberate exclusions
 
@@ -756,16 +824,48 @@ or an Android tablet opened upright the bar; a tree built before the iOS read
 lands is rebuilt when it lands, before the first paint,
 `ui_regular.go:164` (`rebuildForLayoutChange(w.state)`). With no report the
 device answers, `layout.go:113` (`return tablet`): an iPad's rail, an
-iPhone's and an Android window's bar. The
-desktop draws the rail whatever its window's shape,
-`ui_compact_desktop.go:114` (`func compactNavRail(*AppState) bool { return desktopNav() == desktopNavRail }`),
-which is divergence 29, and takes the phones' rule in 1.2.19.
+iPhone's and an Android window's bar. The desktop asks the same rule of its
+live canvas, `ui_compact_desktop.go:131` (`return railForWindow(state)`),
+once the window has a size, and keeps its rail before then; a resize that
+changes the answer is applied about 250 ms after the last size change by
+`desktop_navigation.go`, which repacks only the navigation chrome and leaves
+the header, the reading host, open sheets, fields and in-flight requests in
+place (divergence 29 records the settle). `BIBLETEXT_DESKTOP_TABS=sidebar|0`,
+`bar|1` and `rail` still pin an edge, and a pinned layout installs no
+watcher. Live width reflow uses a transient text character and fraction
+through its line to retain the reading position on the styled and native
+panes; saved reading/history anchors retain the units of divergence 33.
+Same-chapter page-format re-import also carries an unchanged-text selection
+on Mac, iPhone/iPad and Android, as the styled pane does. A changed appended
+footnote section is tolerated only for a selection in unchanged Scripture;
+`footnote_section.go` gives the book and phone pages different separator
+whitespace. Changed text, another chapter, an invalid range or an explicit
+arrival refuses selection carry. Mac geometry changes and tiling own their
+synchronous clamps; a bounds-size change does not count as reader movement
+(`reading_reflow_macos_observer_test.go`). Android distinguishes a repeated
+successfully dispatched saved request from fresh history by exact pointer and
+request context, keeping its saved arguments until current native layout can
+place them. Every actual HTML dispatch has a fresh event generation; only a
+matching current request on the Fyne goroutine accepts its scroll callback.
+The callback cannot retire a newer equal-coordinate request or one installed
+by another activity (`reading_android_restore_request_test.go`,
+`reading_android_restore_protocol_test.go`). These rules are implemented in the
+combined candidate. Native observations and their device, startup and input
+limits are recorded in BACKLOG.md (historical divergence 39). The API35 Android saved position survived a fresh process
+launch and the following rotation checks with zero-pixel mapped error;
+BACKLOG.md records the exact scope. Four iPad mini orientation changes
+on 3 November retained
+the selected range and mapped point, but the fixed text measure did not
+exercise meaningful wrap-width change. BACKLOG.md records the bounded Mac
+saved-restore result and remaining native gates. No bar,
+rail, icon, button or font dimension changes with the carry.
 
-A bar wider than 560 points, `ui_compact.go:1094`
+A bar wider than 560 points, `ui_compact.go:1099`
 (`const tabBarSpreadMaxWidth float32 = 560`), centres its tabs at their
 designed slots, as UIKit's own tab bar does on an iPad; a narrower one
 spreads them across its width. Under the one rule only a window taller than
-wide draws a bar, so the centred dress is an upright tablet's and no phone's.
+wide draws a bar, so the centred dress is an upright tablet's or a tall
+desktop window's, and no phone's.
 
 The rail and the content beside it keep clear of a sideways phone's side
 insets — the Dynamic Island's side of an iPhone and the inset UIKit reports
@@ -774,7 +874,7 @@ canvas reports them — because both mobile drivers lay the window's tree
 inside the insets they report; nothing in the layout adds or needs a
 padding of its own (`tab_rail.go`).
 
-Recorded 1 October 2026, for 1.2.18. Held by `tab_rail_orientation_test.go`
+The phone and tablet rows were recorded 1 October 2026, for 1.2.18. Held by `tab_rail_orientation_test.go`
 (the rule at every phone and tablet geometry, and the canvas it reads) and
 `tab_rail_side_insets_test.go` (the rail clear of the side insets; the
 bottom bar and its centred dress only upright). The iPhone row was also
@@ -785,15 +885,90 @@ safe area's edge 62 points in and its hairline at 122, with the Dynamic
 Island beside it or across the screen, and the bottom bar in all 10
 upright ones; the Read tab turned sideways read full-screen.
 
-| Platform | Taller than wide | Wider than tall | Read tab, wider than tall | Defined in | Proof |
+| Platform | Taller than wide | Square or wider | Read tab, square or wider | Defined in | Proof |
 | --- | --- | --- | --- | --- | --- |
 | iOS | Bottom bar, tabs spread | Rail, beside the Dynamic Island | Full-screen reading, no bar or rail (`phone_landscape.go`) | `ui_mobile.go`, `layout.go` | `runner` — host tests, and the simulator, 1 October 2026 |
 | iPadOS | Bottom bar, tabs centred (spread in a window 560 points wide or narrower) | Rail | Rail | `ui_mobile.go`, `layout.go` | `runner` — host tests, 1 October 2026 |
 | Android, phone | Bottom bar, tabs spread | Rail, beside a cutout or side navigation bar | Full-screen reading, no bar or rail (`phone_landscape.go`) | `ui_mobile.go`, `layout.go` | `runner` — host tests, 1 October 2026 |
 | Android, tablet | Bottom bar, tabs centred (spread in a window 560 points wide or narrower) | Rail | Rail | `ui_mobile.go`, `layout.go` | `runner` — host tests, 1 October 2026 |
-| macOS | Rail (29) | Rail | Rail | `ui_compact_desktop.go` | `runner` — host tests, 1 October 2026 |
-| Windows | Rail (29) | Rail | Rail | `ui_compact_desktop.go` | `runner` — host tests, 1 October 2026 |
-| Linux | Rail (29) | Rail | Rail | `ui_compact_desktop.go` | `runner` — host tests, 1 October 2026 |
+| macOS | Bottom bar, tabs centred (spread in a window 560 points wide or narrower), about 250 ms after the last resize (29) | Rail, about 250 ms after the last resize (29) | Rail | `ui_compact_desktop.go`, `desktop_navigation.go` | `runner` — host tests (`desktop_navigation_test.go`), 2 November 2026; development builds of 01348dc7c1 driven by a throwaway trigger, macOS 26.6.2, 2 November 2026: the bar at 600x900 (light and dark) and at 699x700, the rail at 1280x700 and at 700x700, one move 261 ms after the last of 40 resizes, cell, icon and label dimensions equal to a build of a2d7022f7 with the bar pinned, the sheets, draft and native selection kept across a switch each way, and a Go to placement (John 11:35) with verse 35 at the top after the switch and back at its verse and offset after the return; with the footnotes shown, a development build of 5f8322fa19, 2 November 2026: a selection of Scripture kept across a switch each way, where builds of a12ab51d7a and a2d7022f7 left a caret, and a place scrolled to 600 points in moved from verse 8, 105.5 points in, to verse 9, 22.2 points in, after the switch and stayed there after the return, as on a12ab51d7a; on a2d7022f7 its own place moved from verse 7, 76.0 points in, to verse 8, 46.4 points in (the offset in points of divergence 33) |
+| Windows | Bottom bar, tabs centred (spread in a window 560 points wide or narrower), about 250 ms after the last resize (29) | Rail, about 250 ms after the last resize (29) | Rail | `ui_compact_desktop.go`, `desktop_navigation.go` | `runner` — host tests (`desktop_navigation_test.go`), 2 November 2026. That checkpoint did not include Windows native or mimic runs. On 3 November 2026 a Windows 11 arm64 synthetic fixture at DPI 96 completed 15 acknowledgements and 14 native client captures through 600x850, 700x700 and 1280x700 clients and return. Twelve raw-model proofs included four retained selections, about 4.1e-7 logical mapped-point error and zero scroll-translation error; initial, returned and post-Close images were identical. Note/draft and waiting-request/account-error/retry/Close cases were checked. BACKLOG.md records the controller cleanup failure and independent task cleanup; the OS app exit code was not captured. OS input, normal startup and exact CI package acceptance remain separate. |
+| Linux | Bottom bar, tabs centred (spread in a window 560 points wide or narrower), about 250 ms after the last resize (29) | Rail, about 250 ms after the last resize (29) | Rail | `ui_compact_desktop.go`, `desktop_navigation.go` | `runner` — host tests (`desktop_navigation_test.go`), 2 November 2026; development builds of 01348dc7c1 driven by a throwaway trigger on an Ubuntu 24.04 ARM virtual machine (GNOME on X11), 2 November 2026: the same four sizes (600x900 light and dark), one move 274 to 330 ms after the last of 40 resizes, the same dimensions, the sheets, draft and styled-pane selection kept across a switch each way, and a Go to placement (John 11:35) with its top verse kept after the switch and back at its verse and offset after the return; the Linux mimic on macOS 26.6.2: the same four sizes (light) and dimensions, and the styled-pane selection and the Go to placement's top verse kept across a switch each way; on 3 November 2026 the combined candidate's synthetic GNOME/X11 fixture passed tall 600x850, square 700x700 and wide 1280x700 clients and return, with 15 acknowledgements, 14 actual client images, twelve raw-text/geometry proofs and four retained-selection samples. Maximum mapped-point difference was about 4.1e-7 logical units and rendered scroll translation error zero; initial, returned and post-Close reading images were identical. Note/draft, waiting request, account error, explicit retry answer and Close were checked. This fixture did not establish OS input, normal startup or package acceptance; BACKLOG.md records its limits. |
+
+## Note and question entry
+
+Share with note and Ask a question: on the iPhone and iPad the field is a
+native `UITextView` (`note_entry_ios.go`); on Android a native multiline
+`EditText` (`note_entry_android.go`, `android/BtNoteEntry.java`); on the Mac,
+Windows and Linux the toolkit's single-line entry (`note_entry_other.go`).
+Return submits the note or question on those three desktops. The native
+mobile fields are multiline, with Return adding a newline and only Share or
+Ask submitting. The shared card owns the passage, citation, counter and
+actions on all six. Decided 3 November 2026: keep the shared 112-unit slot (`share_note_ui.go`); it fits
+about five and a half Android lines at 14pt, compared with four comfortable
+iPhone lines at 18pt. Shared passage sizing remains unchanged. On a dense
+Android composer, Show passage releases the keyboard's room and Hide passage
+resumes editing; iPhone and iPad keep their existing behavior (divergence 40).
+Android installs owner-bound focus and keyboard-area seams. Visible icon,
+button, bar and rail dimensions do not change. Held by `note_entry_layout_test.go`,
+`note_entry_android_contract_test.go`, `note_entry_draft_test.go` and
+`note_entry_geometry_test.go`; the Android sources compile under
+`scripts/check-android-pane.sh` and `scripts/check-android-java.sh`. See
+[ANDROID.md](ANDROID.md), "Note and question entry", for the Android
+editor.
+
+Seen on 27 to 29 October 2026 on API 24, 30 and 36 emulator images, phone
+and tablet (editing, Unicode, action taps, keyboard fitting, Back, rotation,
+theme rebuild and activity recreation; the API 24 visible-display-frame
+keyboard fallback directly; API 25 to 29 not run); on 31 October 2026 on a
+physical API 37 phone (ASCII input and Return, on-screen keys, native
+selection and copy and paste, keyboard hiding and Back, draft retention
+through a rotation with the keyboard hidden, Cancel); and on 2 November 2026
+on API 30 and API 35 emulator images beside a control built from the 1.2.24
+tag (typing, Return, the counter, Share to the system chooser, Ask against a
+fake provider, Back order, rotation). On the API 35 image a rotation with
+the editor open could leave the field undrawn and the next key raised an
+input-dispatch ANR, with TalkBack on and with no accessibility service
+running: the editor's Dialog was replaced while it was the keyboard's
+target, and the replacement was left out of composition (ANDROID.md, "Note
+and question entry"). With the Dialog kept, five turns through both
+landscape orientations with a one-line draft and five with a two-line
+draft, in both cards, drew and focused the same editor window after every
+rotation, with the draft kept and no ANR, TalkBack on and off, on the API
+35, API 33, API 30 and API 36 phone images and the API 35 tablet image (the
+API 30 image has no TalkBack of its own; the API 33 image's was installed
+for the runs); TalkBack announced the empty field by its hint and the typed
+one with its draft, and a double tap brought editing back (BACKLOG.md,
+"Native Android Note and Ask editors"). Unicode IME composition and
+dictation were not verified. The API 24 image's loss of the GL layer after
+rotation also occurs with the 1.2.24 release build (BACKLOG.md, "API 24
+emulator loses Fyne GL content after rotation").
+
+In a composer too short for the passage and editor together (dense),
+Android releases its keyboard for Show passage and resumes typing on Hide
+passage or a field tap; iPhone and iPad retain their existing keyboard policy
+(divergence 40). Keeping Android's Dialog through a light/dark reopen still
+retains its keyboard when it was being used; the Dialog is restyled in place
+(`android/BtNoteEntry.java`). The shared slot does not imply identical native
+text insets: Android's text starts 6 units from each side, UIKit's 11 points
+including line-fragment padding. Android's no-personalized-learning request
+is specific to that platform (divergence 41).
+
+Historical accessibility observation, 2–3 November 2026: retained captions
+showed chapter text behind an open Note card after rotation on API 35 phone
+and tablet images. A calibrated API 35 phone comparison observed no fresh
+underlying chapter-word speech requests in released and candidate Note/Ask
+rotation intervals. Both versions did not reproduce the earlier observation;
+this is not a fix or full accessibility acceptance. ANDROID.md records the
+ordinary-opening route, instrumentation limits and unverified TalkBack-only
+opening and broader modal navigation. This is not an accepted deferral.
+
+Seen on 3 November 2026 on the API 35 emulator, TalkBack off, with synthetic
+ASCII drafts and the development QA harness: Show passage released the
+keyboard for Note and Ask, exposed a 64.83-unit passage viewport, and tapping
+the editor resumed typing with the draft, owner and action sizes unchanged.
+The portrait slot stayed 112 units. This check does not establish the newer
+keyboard policy on the other Android images or physical devices.
 
 ## Sharing
 
