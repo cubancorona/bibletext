@@ -291,8 +291,13 @@ the tap); an unplaced-only pill parks at the top of the text with no band.
   hidden or stale views. An eligible live import uses one Go carry flag for
   both position and selection, including when the book/phone grammar stays the
   same. The native importer still validates the actual chapter, text and
-  nonempty UTF-16 range. Fresh navigation and saved/history requests take
-  precedence. The persisted format
+  nonempty UTF-16 range. Before modal suppression, the visible pane captures
+  its position. Repeated hide/suppress calls, hidden width or keyboard clamps
+  and activity replacement retain it while live and parked selections are
+  dismissed. Hidden scroll notifications leave cached reading anchors untouched.
+  An ordinary unsuppressed hide clears the target; fresh navigation, saved/history
+  requests, changed Scripture and genuine reader scroll keep their existing
+  priority. The persisted format
   is unchanged: verse, fraction through its band and scroll-range fallback
   (`getScrollAnchor`, `armRestore`, `setHtml`). In the earlier verse-band
   implementation, the scroll-range fraction alone moved the top verse on a

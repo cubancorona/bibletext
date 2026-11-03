@@ -1249,6 +1249,12 @@ public final class BtBridge {
             finish = visible ? text.getSelectionEnd() : -1;
             anchor = semanticReflow;
         }
+        RecreatedReading(RecreatedReading position) {
+            book = position.book; page = position.page;
+            chapter = position.chapter; end = position.end;
+            anchor = position.anchor;
+            start = finish = -1;
+        }
     }
 
     private static void parkRecreatedReading() {
@@ -2404,6 +2410,8 @@ public final class BtBridge {
         scroll.getViewTreeObserver().addOnScrollChangedListener(
             new android.view.ViewTreeObserver.OnScrollChangedListener() {
                 @Override public void onScrollChanged() {
+                    // A hidden modal's layout/keyboard clamp is not reader input.
+                    if (suppressed) return;
                     int range = Math.max(1, scrollRange());
                     int y = scroll.getScrollY();
                     lastFrac = clamp01((float) y / range);
@@ -4861,8 +4869,10 @@ public final class BtBridge {
         UI.post(new Runnable() {
             @Override public void run() {
                 wantShown = false;
-                recreatedReading = null;
-                clearSemanticReflow();
+                if (!suppressed) {
+                    recreatedReading = null;
+                    clearSemanticReflow();
+                }
                 // The popup is a window of its own: hiding the Dialog leaves it
                 // up, over another tab or a Fyne sheet, acting on a selection
                 // dismissSelection is about to clear.
@@ -4878,12 +4888,14 @@ public final class BtBridge {
     public static void suppress() {
         UI.post(new Runnable() {
             @Override public void run() {
+                // Keep the original visible point while modal/keyboard layouts
+                // reflow the hidden reader. Repeated suppression must not sample
+                // an intermediate width; selection is still dismissed below.
+                if (!suppressed && dialog != null && dialog.isShowing()) captureSemanticReflow();
                 suppressed = true;
-                recreatedReading = null;
-                clearSemanticReflow();
                 dismissStudyPopup(); // as in hide(): never over the modal
-                if (dialog == null || !dialog.isShowing()) return;
                 dismissSelection();
+                if (dialog == null || !dialog.isShowing()) return;
                 dialog.hide();
             }
         });
@@ -4899,6 +4911,9 @@ public final class BtBridge {
     // Android analog of iOS resignFirstResponder before hiding, so the menu
     // never floats orphaned over a Fyne modal.
     private static void dismissSelection() {
+        // A replacement activity may still owe its first import. Retain only
+        // the parked position so closing a modal cannot revive its selection.
+        if (recreatedReading != null) recreatedReading = new RecreatedReading(recreatedReading);
         if (text == null) return;
         CharSequence cs = text.getText();
         if (cs instanceof Spannable) Selection.removeSelection((Spannable) cs);

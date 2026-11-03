@@ -116,7 +116,7 @@ public class RestoreProtocolHarness {
     static BtReadingReflow.Anchor semanticReflow;
     static int pendingVerse, pendingRestoreVerse, lastOwnScrollY = -1, placements;
     static float pendingFrac, pendingRestoreWithin, pendingReflowFrac = -1, lastFrac;
-    static boolean pendingPlace, ownScroll, raActive, raFollowing;
+    static boolean pendingPlace, ownScroll, raActive, raFollowing, suppressed;
     static long placedAtMs, readingIntent, nextReadingIntent, scrollIdleIntent;
     static float[] lastAnchor = new float[]{4,.375f,.2f};
     static int[] verseNums = new int[]{1,2,3,4,5};

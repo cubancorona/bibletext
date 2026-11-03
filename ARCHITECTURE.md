@@ -339,6 +339,13 @@ existing held-anchor and pending-placement guards still apply. An HTML import
 eligible for live position carry also requests selection carry through the
 same Go flag (`androidReadingCarryWanted`), even when its book/phone grammar
 stays unchanged. Actual chapter, text and range validation remains native.
+Modal suppression captures the visible position before hiding and retains it
+through repeated hide/suppress calls, hidden width or keyboard clamps and
+activity replacement. Live and parked selections are dismissed. Hidden scroll
+notifications leave cached reading anchors unchanged; a queued prior reader
+idle still reports its original fraction and request identity. Ordinary
+unsuppressed hiding clears the target, and the existing navigation, changed text
+and genuine scroll guards retain priority.
 
 This carry is transient. Saved reading and history anchors keep their existing
 representation. `readingReflowWanted` requires the same chapter, no explicit
