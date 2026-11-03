@@ -33,7 +33,8 @@ param(
   [int]$WindowTimeout = 60,
   [int]$Settle = 40,
   [ValidateRange(0, 60)][int]$ForegroundTimeout = 10,
-  [double]$FlatShare = 98.0
+  [double]$FlatShare = 98.0,
+  [switch]$ClearKnownStartupMenu
 )
 
 $ErrorActionPreference = 'Stop'
@@ -100,6 +101,11 @@ public static string ValidateCapture(IntPtr h, uint process, int left, int top, 
   return PointFailure(h, process, visible.Right - 1, visible.Bottom - 1);
 }
 "@
+
+if ($ClearKnownStartupMenu) {
+  . (Join-Path $PSScriptRoot 'clear-windows-start-menu.ps1')
+  Initialize-WindowsStartMenuSupport
+}
 
 if (@(@($Exe, $ProcessName, $TargetProcessId) | Where-Object { $_ }).Count -ne 1) {
   throw "give exactly one of -Exe, -ProcessName or -TargetProcessId"
@@ -172,6 +178,7 @@ try {
   $visibleBefore = New-Object Probe.Native+RECT
   $deadline = [DateTime]::UtcNow.AddSeconds($ForegroundTimeout)
   do {
+    if ($ClearKnownStartupMenu) { Clear-WindowsStartMenu -Deadline $deadline }
     [void][Probe.Native]::SetForegroundWindow($h)
     Start-Sleep -Milliseconds 100
     $failure = [Probe.Native]::ValidateCapture($h, [uint32]$app.Id,

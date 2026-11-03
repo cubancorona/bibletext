@@ -12,7 +12,8 @@ param(
   [ValidateSet('run', 'pattern', 'blank', 'cover', 'no-window')][string]$Mode = 'run',
   [string]$OutputDir,
   [string]$ReadyFile,
-  [long]$CoveredWindow
+  [long]$CoveredWindow,
+  [switch]$ClearKnownStartupMenu
 )
 $ErrorActionPreference = 'Stop'
 function Write-FixturePhase([string]$phase) {
@@ -152,8 +153,12 @@ function Probe-Fixture([System.Diagnostics.Process]$process, [string]$expect, [s
   try {
     $ErrorActionPreference = 'Continue'
     $PSNativeCommandUseErrorActionPreference = $false
-    $output = (& $pwsh -NoProfile -File $guard -TargetProcessId $process.Id `
-      -Expect $expect -WindowTimeout 1 -Settle 0 -ForegroundTimeout 2 -Shot $shot 2>&1 | Out-String)
+    $probeArgs = @('-NoProfile', '-File', $guard, '-TargetProcessId', $process.Id,
+      '-Expect', $expect, '-WindowTimeout', 1, '-Settle', 0, '-ForegroundTimeout', 2, '-Shot', $shot)
+    if ($ClearKnownStartupMenu -and $name -in @('visible-pattern', 'visible-blank')) {
+      $probeArgs += '-ClearKnownStartupMenu'
+    }
+    $output = (& $pwsh @probeArgs 2>&1 | Out-String)
     $code = $LASTEXITCODE
   } finally {
     $ErrorActionPreference = $previousEap
