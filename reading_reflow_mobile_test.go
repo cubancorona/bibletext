@@ -61,7 +61,7 @@ public class ReflowCheck {
 	if err := os.WriteFile(filepath.Join(dir, "ReflowCheck.java"), []byte(program), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if out, err := exec.Command(javac, "--release", "8", "-d", dir, filepath.Join(dir, "BtReadingReflow.java"), filepath.Join(dir, "ReflowCheck.java")).CombinedOutput(); err != nil {
+	if out, err := exec.Command(javac, "-encoding", "UTF-8", "--release", "8", "-d", dir, filepath.Join(dir, "BtReadingReflow.java"), filepath.Join(dir, "ReflowCheck.java")).CombinedOutput(); err != nil {
 		t.Fatalf("compile Java reflow mapper: %v\n%s", err, out)
 	}
 	java := filepath.Join(filepath.Dir(javac), "java")

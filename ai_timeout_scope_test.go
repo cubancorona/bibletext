@@ -245,16 +245,17 @@ func TestAIConnectionsNeverMadeKeepTheirRetriesAndLine(t *testing.T) {
 		return func(context.Context, string, string) (net.Conn, error) { return nil, err }
 	}
 	for _, tc := range []struct {
-		name     string
-		setup    func(t *testing.T, deadline *aiDeadline) (address string, tr *http.Transport, attempts *atomic.Int32)
-		deadline bool // the request's deadline passes before the request is written
-		attempts int32
-		isExpiry bool // control: the error satisfies errors.Is(err, context.DeadlineExceeded)
-		body     int  // the size of a body in place of the question, when one is needed
+		name       string
+		setup      func(t *testing.T, deadline *aiDeadline) (address string, tr *http.Transport, attempts *atomic.Int32)
+		deadline   bool // the request's deadline passes before the request is written
+		attempts   int32
+		isExpiry   bool // control: the error satisfies errors.Is(err, context.DeadlineExceeded)
+		dialExpiry bool // control: the error remains a dial timeout from the net package
+		body       int  // the size of a body in place of the question, when one is needed
 	}{
-		{name: "a dial timeout", attempts: 3, isExpiry: true,
+		{name: "a dial timeout", attempts: 3, isExpiry: true, dialExpiry: true,
 			setup: func(t *testing.T, _ *aiDeadline) (string, *http.Transport, *atomic.Int32) {
-				dial, dials := aiCountedDial((&net.Dialer{Timeout: time.Nanosecond}).DialContext)
+				dial, dials := aiCountedDial((&net.Dialer{Deadline: time.Unix(1, 0)}).DialContext)
 				return "http://127.0.0.1:9/v1/synthetic", &http.Transport{DialContext: dial}, dials
 			}},
 		{name: "a connection refused", attempts: 3,
@@ -321,7 +322,7 @@ func TestAIConnectionsNeverMadeKeepTheirRetriesAndLine(t *testing.T) {
 				})
 				return "http://" + address + "/v1/synthetic", &http.Transport{}, accepted
 			}},
-		{name: "a pooled connection that sends nothing, then a dial timeout", attempts: 3, isExpiry: true,
+		{name: "a pooled connection that sends nothing, then a dial timeout", attempts: 3, isExpiry: true, dialExpiry: true,
 			setup: func(t *testing.T, _ *aiDeadline) (string, *http.Transport, *atomic.Int32) {
 				served := new(atomic.Int32)
 				srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -341,7 +342,7 @@ func TestAIConnectionsNeverMadeKeepTheirRetriesAndLine(t *testing.T) {
 						return aiMuteConn{Conn: c, mute: mute}, nil
 					}
 					redials.Add(1)
-					return (&net.Dialer{Timeout: time.Nanosecond}).DialContext(ctx, network, address)
+					return (&net.Dialer{Deadline: time.Unix(1, 0)}).DialContext(ctx, network, address)
 				}}
 				// The first request is answered, and its connection waits in
 				// the pool for the next.
@@ -376,6 +377,12 @@ func TestAIConnectionsNeverMadeKeepTheirRetriesAndLine(t *testing.T) {
 			}
 			if tc.isExpiry && !errors.Is(err, context.DeadlineExceeded) {
 				t.Fatalf("control: %v does not satisfy errors.Is(err, context.DeadlineExceeded)", err)
+			}
+			if tc.dialExpiry {
+				var dialErr *net.OpError
+				if !errors.As(err, &dialErr) || dialErr.Op != "dial" || !dialErr.Timeout() {
+					t.Fatalf("control: %v is not a net dial timeout", err)
+				}
 			}
 			if got := friendlyAIError(err); got != aiConnectionLine {
 				t.Errorf("the reader is told %q, not the connection line", got)

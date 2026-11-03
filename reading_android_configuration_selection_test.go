@@ -39,7 +39,7 @@ func TestAndroidConfigurationChangeKeepsOnlyTheVisibleReadersSelection(t *testin
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		out, err := exec.CommandContext(ctx, javac, "--release", "8", "-d", dir,
+		out, err := exec.CommandContext(ctx, javac, "-encoding", "UTF-8", "--release", "8", "-d", dir,
 			filepath.Join(dir, "BtReadingReflow.java"), filepath.Join(dir, "ConfigurationSelectionHarness.java")).CombinedOutput()
 		if err != nil {
 			t.Fatalf("compile production configuration callback: %v\n%s", err, out)
