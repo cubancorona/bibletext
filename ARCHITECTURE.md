@@ -332,6 +332,14 @@ selection maps collapse presentation
 whitespace and omit paragraph-start direction marks; case, punctuation and
 surrogate pairs remain unchanged.
 
+On Android, the active, visible TextView captures the old layout's target
+before a change to its nonzero measured width reaches `super.onMeasure`.
+That measure callback skips unchanged widths and hidden or stale views;
+existing held-anchor and pending-placement guards still apply. An HTML import
+eligible for live position carry also requests selection carry through the
+same Go flag (`androidReadingCarryWanted`), even when its book/phone grammar
+stays unchanged. Actual chapter, text and range validation remains native.
+
 This carry is transient. Saved reading and history anchors keep their existing
 representation. `readingReflowWanted` requires the same chapter, no explicit
 arrival, and either no pending restore or a restore marked `Reflow`. Rotation

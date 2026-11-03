@@ -285,8 +285,14 @@ the tap); an unplaced-only pill parks at the top of the text with no band.
   Live width reflow carries a semantic text character and signed fraction
   through its line. `BtReadingReflow` maps presentation whitespace and
   paragraph-start direction marks without changing words or UTF-16 boundaries;
-  intermediate wraps and scroll clamps retain the original target. Fresh
-  navigation and saved/history requests take precedence. The persisted format
+  intermediate wraps and scroll clamps retain the original target. The active,
+  visible TextView captures before `super.onMeasure` can replace the old layout
+  at a changed nonzero width; that measure callback skips unchanged widths and
+  hidden or stale views. An eligible live import uses one Go carry flag for
+  both position and selection, including when the book/phone grammar stays the
+  same. The native importer still validates the actual chapter, text and
+  nonempty UTF-16 range. Fresh navigation and saved/history requests take
+  precedence. The persisted format
   is unchanged: verse, fraction through its band and scroll-range fallback
   (`getScrollAnchor`, `armRestore`, `setHtml`). In the earlier verse-band
   implementation, the scroll-range fraction alone moved the top verse on a

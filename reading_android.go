@@ -1019,14 +1019,10 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 	// phone page. The bridge owns the centring because it owns both the display
 	// density and the live view width (BtBridge.applyReadingPadding).
 	page := currentReadingPage()
-	pageChanged := readingPagePushedValid && page.Kind != readingPagePushed
 	markReadingPagePushed(page.Kind)
-	preservePosition, preserveSelection := C.int(0), C.int(0)
-	if readingReflowWanted(sameChapterPush || androidRecreatedReadingCarry, explicitArrival, state.restore) || repeatedRestore {
-		preservePosition = 1
-		if pageChanged || androidRecreatedReadingCarry || repeatedRestore {
-			preserveSelection = 1
-		}
+	carry := C.int(0)
+	if androidReadingCarryWanted(sameChapterPush || androidRecreatedReadingCarry, explicitArrival, state.restore, repeatedRestore) {
+		carry = 1
 	}
 	padL, padT := int(readingPageSideMin), 14
 	measureDp := float32(0)
@@ -1099,7 +1095,7 @@ func pushChapterHTML(state *AppState, verses []Verse) {
 		C.free(unsafe.Pointer(cb))
 		ch := C.CString(html)
 		issued = C.btaSetHtml(C.uintptr_t(env), ch, C.float(frac), C.int(arrivalVerse),
-			C.int(restoreVerse), C.float(restoreWithin), preservePosition, preserveSelection) != 0
+			C.int(restoreVerse), C.float(restoreWithin), carry, carry) != 0
 		C.free(unsafe.Pointer(ch))
 	})
 	if issued {

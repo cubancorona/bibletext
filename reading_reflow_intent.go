@@ -6,6 +6,13 @@ func readingReflowWanted(sameChapter, explicitArrival bool, restore *restoreAnch
 	return sameChapter && !explicitArrival && (restore == nil || restore.Reflow)
 }
 
+// androidReadingCarryWanted requests position and selection together for a live
+// re-import. The native importer validates the actual chapter, text and range.
+// repeatedRestore is granted by the existing successful-dispatch guard.
+func androidReadingCarryWanted(sameChapter, explicitArrival bool, restore *restoreAnchor, repeatedRestore bool) bool {
+	return readingReflowWanted(sameChapter, explicitArrival, restore) || repeatedRestore
+}
+
 // androidReadingPushWanted drops a stale chapter restore before deciding whether
 // a native import is needed. A no-op refresh must not send an empty restore arm:
 // that would discard the native view's live semantic reflow target.

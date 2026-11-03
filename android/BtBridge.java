@@ -1972,6 +1972,17 @@ public final class BtBridge {
                 noteTouch(this, ev);
                 return super.onTouchEvent(ev);
             }
+            // Capture against the old layout before TextView can rebuild it
+            // for a different measured width. Ordinary same-width measures do
+            // not pin a semantic target while a reader gesture is in progress.
+            @Override protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+                boolean active = this == text && dialog != null && dialog.isShowing() && !suppressed;
+                int previousWidth = getMeasuredWidth();
+                int incomingWidth = android.view.View.MeasureSpec.getSize(widthMeasureSpec);
+                if (active && previousWidth > 0 && incomingWidth > 0 && incomingWidth != previousWidth)
+                    captureSemanticReflow();
+                super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+            }
             // Even a same-bounds measure can finish a cold saved placement.
             @Override protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
                 super.onLayout(changed, left, top, right, bottom);
@@ -1983,6 +1994,7 @@ public final class BtBridge {
             // the later chapter import still applies its own reflow guards.
             @Override protected void onConfigurationChanged(android.content.res.Configuration config) {
                 boolean active = this == text && dialog != null && dialog.isShowing() && !suppressed;
+                if (active) captureSemanticReflow();
                 String selectedPage = active ? getText().toString() : null;
                 int selectedStart = active ? getSelectionStart() : -1;
                 int selectedEnd = active ? getSelectionEnd() : -1;

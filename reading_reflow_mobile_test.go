@@ -33,6 +33,11 @@ public class ReflowCheck {
                 newPage, newPage.length());
         need(selected(newPage,range).equals("First"), "selected text changed");
         need(range[0] == newPage.indexOf("First",5), "repeated text was matched to its first occurrence");
+        // A width reimport can keep either page kind and its raw text.
+        int[] samePage = BtReadingReflow.selection(true,true,oldPage,oldPage.length(),second,second+5,
+                oldPage,oldPage.length());
+        need(samePage != null && samePage[0] == second && samePage[1] == second+5,
+                "same-kind unchanged-page reimport lost its selected repeated phrase");
         int[] reverse = BtReadingReflow.selection(true,true,oldPage,oldPage.length(),second+5,second,newPage,newPage.length());
         need(reverse[0] == range[1] && reverse[1] == range[0], "selection direction changed");
         need(BtReadingReflow.selection(false,true,oldPage,oldPage.length(),second,second+5,newPage,newPage.length()) == null,"arrival carried selection");

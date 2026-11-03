@@ -184,8 +184,10 @@ func TestAndroidRestoreIntentAndCallbackWiringKeepsQueueOwnership(t *testing.T) 
 		t.Fatal("the intent and installed page must be dispatched under one native context before recording ownership")
 	}
 	if strings.Count(push, "C.btaSetReadingIntent(") != 1 ||
-		!strings.Contains(push, "if pageChanged || androidRecreatedReadingCarry || repeatedRestore {") {
-		t.Fatal("repeated same-grammar imports need selection carry and one final intent dispatch")
+		!strings.Contains(push, "if androidReadingCarryWanted(sameChapterPush || androidRecreatedReadingCarry, explicitArrival, state.restore, repeatedRestore) {") ||
+		!strings.Contains(push, "C.int(restoreVerse), C.float(restoreWithin), carry, carry)") ||
+		strings.Contains(push, "pageChanged") {
+		t.Fatal("same-grammar imports need the same position/selection carry request and one final intent dispatch")
 	}
 	export := readNativeSource(t, "reading_android_export.go")
 	callback := javaBlockAfter(t, strings.ReplaceAll(export, "func btaScrolled", "CALLBACK btaScrolled"), "CALLBACK btaScrolled")
@@ -218,5 +220,53 @@ func TestAndroidRecreationRetainsTheExistingRestoreRequest(t *testing.T) {
 	capture := strings.Index(source, "} else if v, d, f, ok := captureReadingAnchor(); ok {")
 	if keep < 0 || capture <= keep {
 		t.Fatal("recreation captures a possibly unmeasured anchor before preserving its pending target")
+	}
+}
+
+// This tests Go's request eligibility. Native text identity and selected-range
+// validation execute separately in the Java reflow mapper harness.
+func TestAndroidReadingCarryWithinEitherPage(t *testing.T) {
+	const reference = 21.0
+	cutoff := reporterMeasureEm*reference + 2*readingPageSideMin
+	for _, tc := range []struct {
+		name          string
+		before, after float64
+		kind          readingPageKind
+	}{
+		{"phone to phone", cutoff - 100, cutoff - 20, readingPagePhone},
+		{"book to book", cutoff + 20, cutoff + 200, readingPageBook},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if readingPageFor(tc.before, reference).Kind != tc.kind || readingPageFor(tc.after, reference).Kind != tc.kind {
+				t.Fatal("control: both widths must retain the same page grammar")
+			}
+			if !androidReadingCarryWanted(true, false, nil, false) {
+				t.Fatal("a live same-chapter import lost carry because its page grammar stayed the same")
+			}
+		})
+	}
+}
+
+func TestAndroidReadingCarryRetainsPlacementPriority(t *testing.T) {
+	for _, tc := range []struct {
+		name                    string
+		same, arrival, repeated bool
+		restore                 *restoreAnchor
+		want                    bool
+	}{
+		{"live same chapter", true, false, false, nil, true},
+		{"transient layout restore", true, false, false, &restoreAnchor{Reflow: true}, true},
+		{"first saved restore", true, false, false, &restoreAnchor{Verse: 4}, false},
+		{"same-coordinate history top", true, false, false, &restoreAnchor{}, false},
+		{"successfully repeated saved restore", true, false, true, &restoreAnchor{Verse: 4}, true},
+		{"explicit arrival", true, true, false, nil, false},
+		{"explicit arrival with restore", true, true, false, &restoreAnchor{Reflow: true}, false},
+		{"different chapter", false, false, false, nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := androidReadingCarryWanted(tc.same, tc.arrival, tc.restore, tc.repeated); got != tc.want {
+				t.Fatalf("carry request = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
