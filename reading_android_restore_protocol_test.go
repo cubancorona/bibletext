@@ -116,7 +116,7 @@ public class RestoreProtocolHarness {
     static BtReadingReflow.Anchor semanticReflow;
     static int pendingVerse, pendingRestoreVerse, lastOwnScrollY = -1, placements;
     static float pendingFrac, pendingRestoreWithin, pendingReflowFrac = -1, lastFrac;
-    static boolean pendingPlace, ownScroll, raActive, raFollowing, suppressed;
+    static boolean pendingPlace, ownScroll, raActive, raFollowing, suppressed, pendingModalResume;
     static long placedAtMs, readingIntent, nextReadingIntent, scrollIdleIntent;
     static float[] lastAnchor = new float[]{4,.375f,.2f};
     static int[] verseNums = new int[]{1,2,3,4,5};
@@ -180,7 +180,7 @@ public class RestoreProtocolHarness {
         StringBuilder b=new StringBuilder();for(int n=0;n<300;n++)b.append((char)('a'+n%26));
         text.value=b.toString();contentEnd=text.value.length();
         scroll=new ScrollView();content=new View();ready();
-        pendingPlace=true;pendingRestoreVerse=4;pendingRestoreWithin=.375f;pendingFrac=.2f;
+        pendingPlace=true;pendingRestoreVerse=4;pendingRestoreWithin=.375f;pendingFrac=.2f;pendingModalResume=false;
         readingIntent=nextReadingIntent=11;scrollIdleIntent=11;
     }
     static void apply(){applySaved();UI.drain();}
@@ -208,8 +208,8 @@ public class RestoreProtocolHarness {
             need(scroll.y==43,"reflow arm moved the live point");captureSemanticReflow();
             pendingPlace=true;apply();need(scroll.y==43 && pendingRestoreVerse==4,"live semantic point did not outrank unchanged saved fallback");
         }else if(s.equals("fresh-arm")){
-            pendingPlace=false;scroll.y=43;captureSemanticReflow();armRestore(4,.375f,.2f,false);UI.drain();
-            need(semanticReflow==null&&scroll.y==80,"fresh explicit saved request lost placement priority");
+            pendingPlace=false;scroll.y=43;captureSemanticReflow();pendingModalResume=true;armRestore(4,.375f,.2f,false);UI.drain();
+            need(semanticReflow==null&&!pendingModalResume&&scroll.y==80,"fresh explicit saved request lost placement priority");
         }else if(s.equals("cold-clamp-idle")){
             scroll.y=0;observer.onScrollChanged();
             need(pendingRestoreVerse==4&&pendingFrac==.2f,"cold clamp retired pending target");

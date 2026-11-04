@@ -79,7 +79,7 @@ public class ScrollIntentHarness {
     static Object activity = new Object(), semanticReflow;
     static String semanticReflowBook;
     static int semanticReflowChapter, pendingVerse, pendingReflowVerse, pendingRestoreVerse, lastOwnScrollY;
-    static boolean pendingPlace, ownScroll;
+    static boolean pendingPlace, ownScroll, pendingModalResume;
     static float pendingReflowFrac, pendingFrac;
     static long placedAtMs;
     static ScrollView scroll;
@@ -123,17 +123,17 @@ public class ScrollIntentHarness {
     static void need(boolean b,String s) { if(!b)throw new AssertionError(s); }
     static void reset() {
         semanticReflow=new Object(); semanticReflowBook="Synthetic"; semanticReflowChapter=3;
-        pendingVerse=0; pendingPlace=false; pendingReflowFrac=.4f; pendingReflowVerse=6;
+        pendingVerse=0; pendingPlace=false; pendingModalResume=true; pendingReflowFrac=.4f; pendingReflowVerse=6;
         pendingFrac=.4f; pendingRestoreVerse=6; placedAtMs=123; ownScroll=true; lastOwnScrollY=50; UI.removed=0;
         makeView();
     }
     static void changed() {
         need(!ownScroll,"real drag retained programmatic suppression");
-        need(semanticReflow==null && pendingReflowFrac<0 && pendingReflowVerse==0,"real reader scroll retained stale semantic/reflow target");
+        need(semanticReflow==null && !pendingModalResume && pendingReflowFrac<0 && pendingReflowVerse==0,"real reader scroll retained stale semantic/reflow target");
         need(placedAtMs==0 && pendingFrac<0 && pendingRestoreVerse==0 && lastOwnScrollY==-1 && UI.removed==1,"reader cancellation protocol incomplete");
     }
     static void kept() {
-        need(ownScroll && semanticReflow!=null && pendingReflowFrac==.4f && UI.removed==0,"non-scroll or priority placement lost protection");
+        need(ownScroll && semanticReflow!=null && pendingModalResume && pendingReflowFrac==.4f && UI.removed==0,"non-scroll or priority placement lost protection");
     }
     public static void main(String[] args) {
         String s=args[0]; reset();
