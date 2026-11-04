@@ -16,7 +16,7 @@
 
 [[release]]
 version = "1.2.25"
-date = "2026-11-03"
+date = "2026-11-04"
 head = "Clearer messages when AI study cannot answer: if the account behind your key has run out of credit or reached its spending limit, or a request takes too long, the message says so and offers Try again, the provider's billing page or a faster model."
 bullets = [
   "Navigation follows the window's shape: a tall window shows Read, Books and Search at the bottom, as on a phone; a square or wider window shows them in the rail on the left. Resizing keeps your place.",

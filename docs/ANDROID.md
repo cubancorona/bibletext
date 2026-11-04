@@ -295,6 +295,10 @@ the tap); an unplaced-only pill parks at the top of the text with no band.
   its position. Repeated hide/suppress calls, hidden width or keyboard clamps
   and activity replacement retain it while live and parked selections are
   dismissed. Hidden scroll notifications leave cached reading anchors untouched.
+  On return, a held point is applied once at the first ready visible pre-draw.
+  This also handles a same-width return whose hidden keyboard layout changed
+  the text height. Resume-induced scroll notifications cannot replace the
+  held point before that placement; subsequent reader input is independent.
   An ordinary unsuppressed hide clears the target; fresh navigation, saved/history
   requests, changed Scripture and genuine reader scroll keep their existing
   priority. The persisted format

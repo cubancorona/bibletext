@@ -1231,6 +1231,7 @@ public final class BtBridge {
     // Width changes use a semantic character and a fraction of its line.
     // The original target survives intermediate layouts and scroll clamps.
     private static BtReadingReflow.Anchor semanticReflow;
+    private static boolean pendingModalResume;
     private static String semanticReflowBook;
     private static int semanticReflowChapter, semanticReflowContentEnd;
     private static RecreatedReading recreatedReading;
@@ -1265,6 +1266,7 @@ public final class BtBridge {
 
 
     private static void clearSemanticReflow() {
+        pendingModalResume = false;
         semanticReflow = null;
         semanticReflowBook = null;
         semanticReflowChapter = 0;
@@ -1305,6 +1307,20 @@ public final class BtBridge {
         ownScrollTo(Math.max(0, Math.min(y, scrollRange())));
         return true;
     }
+    // A hidden reader can finish a provisional keyboard layout at the same
+    // width. Restore its held point once, after the visible traversal settles;
+    // width-change callbacks alone cannot place this return.
+    private static void applyModalResume() {
+        if (!pendingModalResume) return;
+        if (semanticReflow == null || pendingVerse > 0 || pendingPlace) {
+            pendingModalResume = false;
+            return;
+        }
+        if (suppressed || dialog == null || !dialog.isShowing() || !placementLayoutReady()) return;
+        pendingModalResume = false;
+        applySemanticReflow();
+    }
+
     // Touch ownership belongs to the ScrollView, including its padding and
     // sticker children. Merely touching or selecting text is not a scroll.
     private static final class ReaderScrollIntent {
@@ -2313,6 +2329,13 @@ public final class BtBridge {
                 return false;
             }
         };
+        scroll.getViewTreeObserver().addOnPreDrawListener(
+            new android.view.ViewTreeObserver.OnPreDrawListener() {
+                @Override public boolean onPreDraw() {
+                    applyModalResume();
+                    return true;
+                }
+            });
         scroll.setFillViewport(true);
         scroll.setVerticalScrollBarEnabled(true);
         // The scroll's one child is a FrameLayout holding the TextView AND the
@@ -2411,7 +2434,7 @@ public final class BtBridge {
             new android.view.ViewTreeObserver.OnScrollChangedListener() {
                 @Override public void onScrollChanged() {
                     // A hidden modal's layout/keyboard clamp is not reader input.
-                    if (suppressed) return;
+                    if (suppressed || pendingModalResume) return;
                     int range = Math.max(1, scrollRange());
                     int y = scroll.getScrollY();
                     lastFrac = clamp01((float) y / range);
@@ -4848,6 +4871,7 @@ public final class BtBridge {
         if (activity == null || activity.isFinishing()) return;
         try {
             if (!dialog.isShowing()) {
+                pendingModalResume = semanticReflow != null && pendingVerse <= 0 && !pendingPlace;
                 dialog.show();
             }
             applyFrame();
@@ -4892,6 +4916,7 @@ public final class BtBridge {
                 // reflow the hidden reader. Repeated suppression must not sample
                 // an intermediate width; selection is still dismissed below.
                 if (!suppressed && dialog != null && dialog.isShowing()) captureSemanticReflow();
+                pendingModalResume = false;
                 suppressed = true;
                 dismissStudyPopup(); // as in hide(): never over the modal
                 dismissSelection();

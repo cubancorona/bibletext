@@ -19,7 +19,8 @@ func TestAndroidModalReflowKeepsPositionWithoutRevivingSelection(t *testing.T) {
 	for _, declaration := range []string{
 		"private static final class RecreatedReading", "private static void parkRecreatedReading()",
 		"private static void clearSemanticReflow()", "private static void captureSemanticReflow()",
-		"private static boolean applySemanticReflow()", "private static boolean readerScrollStarted()", "private static float clamp01(float f)",
+		"private static boolean applySemanticReflow()", "private static void applyModalResume()", "private static void applyShow()",
+		"private static boolean readerScrollStarted()", "private static float clamp01(float f)",
 		"public static void armRestore(", "public static void hide()", "public static void suppress()",
 		"public static void unsuppress()", "private static void dismissSelection()",
 	} {
@@ -41,7 +42,8 @@ func TestAndroidModalReflowKeepsPositionWithoutRevivingSelection(t *testing.T) {
 	selection := importer[start:end]
 	onScroll := javaBlockAfter(t, source, "public void onScrollChanged()")
 	program := strings.NewReplacer("PRODUCTION_MEMBERS", members.String(), "PRODUCTION_IMPORT_PRELUDE", prelude,
-		"PRODUCTION_IMPORT_SELECTION", selection, "PRODUCTION_SCROLL", onScroll).Replace(androidModalReflowHarness)
+		"PRODUCTION_IMPORT_SELECTION", selection, "PRODUCTION_SCROLL", onScroll,
+		"PRODUCTION_MODAL_PREDRAW", javaBlockAfter(t, source, "public boolean onPreDraw()")).Replace(androidModalReflowHarness)
 	mapper, err := os.ReadFile("android/BtReadingReflow.java")
 	if err != nil {
 		t.Fatal(err)
@@ -83,18 +85,25 @@ func TestAndroidModalReflowKeepsPositionWithoutRevivingSelection(t *testing.T) {
 	dir := compile(t, program)
 	for _, scenario := range []string{"modal-roundtrip", "hidden-clamp", "repeated-suppression", "recreation", "recreation-then-modal",
 		"ordinary-hide", "fresh-arrival", "new-chapter", "changed-text", "empty-text", "reader-scroll",
-		"hidden-without-origin", "pending-placement", "pending-arrival", "null-view"} {
+		"hidden-without-origin", "pending-placement", "pending-arrival", "null-view",
+		"resume-same-width", "resume-touch-cancels", "resume-unowned-scroll", "resume-new-chapter", "resume-changed-text",
+		"resume-empty-text", "resume-explicit-placement", "resume-explicit-arrival", "resume-resuppress", "resume-stale-callback"} {
 		t.Run(scenario, func(t *testing.T) { run(t, dir, scenario, "") })
 	}
 	for _, control := range []struct{ name, before, after, scenario, rejected string }{
 		{"missing-modal-capture", "if (!suppressed && dialog != null && dialog.isShowing()) captureSemanticReflow();", "", "modal-roundtrip", "modal opening lost original semantic point"},
 		{"former-clearing-suppression", "suppressed = true;", "suppressed = true; clearSemanticReflow();", "repeated-suppression", "modal opening lost original semantic point"},
 		{"hidden-hide-clears-position", "if (!suppressed) {", "if (true) {", "modal-roundtrip", "hidden hide lost modal semantic point"},
-		{"hidden-clamp-is-reader-input", "if (suppressed) return;", "", "hidden-clamp", "hidden clamp changed cached reading position"},
-		{"late-hidden-clamp-guard", "if (suppressed) return;", "", "late-cache-clamp", "hidden clamp changed cached reading position"},
+		{"hidden-clamp-is-reader-input", "if (suppressed || pendingModalResume) return;", "", "hidden-clamp", "hidden clamp changed cached reading position"},
+		{"late-hidden-clamp-guard", "if (suppressed || pendingModalResume) return;", "", "late-cache-clamp", "hidden clamp changed cached reading position"},
 		{"parked-selection-not-dismissed", "if (recreatedReading != null) recreatedReading = new RecreatedReading(recreatedReading);", "", "recreation-then-modal", "modal retained a parked selection"},
 		{"ordinary-hide-retains-position", "if (!suppressed) {", "if (false) {", "ordinary-hide", "ordinary hide retained modal position"},
 		{"capture-hidden-origin", "if (!suppressed && dialog != null && dialog.isShowing()) captureSemanticReflow();", "captureSemanticReflow();", "hidden-without-origin", "hidden pane manufactured modal target"},
+		{"resume-not-armed", "pendingModalResume = semanticReflow != null && pendingVerse <= 0 && !pendingPlace;", "", "resume-same-width", "show clamp lost modal point or cached position"},
+		{"resume-clamp-is-reader-input", "if (suppressed || pendingModalResume) return;", "if (suppressed) return;", "resume-same-width", "show clamp lost modal point or cached position"},
+		{"resume-before-ready-layout", "!placementLayoutReady()", "false", "resume-same-width", "provisional layout consumed modal resume"},
+		{"resume-not-consumed", "pendingModalResume = false;\n        applySemanticReflow();", "applySemanticReflow();", "resume-same-width", "fresh visible layout did not consume modal resume exactly once"},
+		{"missing-resume-predraw-hook", "applyModalResume();", "", "resume-same-width", "fresh visible layout did not consume modal resume exactly once"},
 	} {
 		t.Run(control.name, func(t *testing.T) {
 			if strings.Count(program, control.before) != 1 {
@@ -106,7 +115,7 @@ func TestAndroidModalReflowKeepsPositionWithoutRevivingSelection(t *testing.T) {
 				if strings.Count(mutant, cacheWrite) != 1 {
 					t.Fatal("late cache guard mutation anchor is no longer unique")
 				}
-				mutant = strings.Replace(mutant, cacheWrite, cacheWrite+" if (suppressed) return;", 1)
+				mutant = strings.Replace(mutant, cacheWrite, cacheWrite+" if (suppressed || pendingModalResume) return;", 1)
 			}
 			run(t, compile(t, mutant), control.scenario, control.rejected)
 		})
@@ -124,7 +133,15 @@ public class ModalReflowHarness {
     static int textChapter, nextChapter, contentEnd, semanticReflowChapter, semanticReflowContentEnd;
     static BtReadingReflow.Anchor semanticReflow;
     static RecreatedReading recreatedReading;
-    static boolean suppressed, wantShown, pendingPlace, ownScroll, raActive, raFollowing;
+    static boolean suppressed, wantShown, pendingPlace, ownScroll, raActive, raFollowing, pendingModalResume;
+    static boolean layoutReady = true;
+    static int frameW = 1200, frameH = 800, showClampY = -1, focusClampY = -1, ownedPlacements;
+    static final Activity activity = new Activity();
+    static final Runnable reassertFrame = () -> applyFrame();
+    static class Activity { boolean isFinishing() { return false; } }
+    static void applyFrame() {}
+    static void applyFollowVisibility() {}
+    static boolean placementLayoutReady() { return layoutReady; }
     static int pendingVerse, pendingRestoreVerse, pendingReflowVerse, lastOwnScrollY = -1, range = 3000;
     static float pendingRestoreWithin, pendingFrac, pendingReflowFrac = -1, lastFrac;
     static long placedAtMs, readingIntent, scrollIdleIntent;
@@ -147,6 +164,7 @@ public class ModalReflowHarness {
         boolean showing = true;
         boolean isShowing() { return showing; }
         void hide() { showing = false; }
+        void show() { showing = true; if(showClampY>=0){scroll.y=showClampY;observer.onScrollChanged();} }
     }
     interface Spannable extends CharSequence {}
     static class Page implements Spannable {
@@ -171,6 +189,7 @@ public class ModalReflowHarness {
         int getTotalPaddingTop() { return padding; }
         int getSelectionStart() { return page.start; }
         int getSelectionEnd() { return page.finish; }
+        void requestFocus() { if(focusClampY>=0){scroll.y=focusClampY;observer.onScrollChanged();} }
     }
     static class Layout {
         final int[] starts;
@@ -185,7 +204,7 @@ public class ModalReflowHarness {
     static Layout wide() { return new Layout(0,50,100,150,200,254,300,350,400,450,500); }
     static class Scroll { int y; int getScrollY() { return y; } }
     static int scrollRange() { return range; }
-    static void ownScrollTo(int y) { scroll.y=Math.max(0,Math.min(y,range)); }
+    static void ownScrollTo(int y) { ownedPlacements++;scroll.y=Math.max(0,Math.min(y,range));lastOwnScrollY=scroll.y;ownScroll=true; }
     static int anchorY(int verse,float within) { return 80; }
     static float[] anchorAt(int y) { return new float[]{4,.375f}; }
     static void dismissStudyPopup() {}
@@ -193,6 +212,8 @@ public class ModalReflowHarness {
     static void nativeScrolled(float frac,long intent) { idleEvents++;emittedFrac=frac;emittedIntent=intent; }
     static class Observer { void onScrollChanged() {} }
     static Observer observer = new Observer() { PRODUCTION_SCROLL };
+    static class PreDraw { PRODUCTION_MODAL_PREDRAW }
+    static final PreDraw preDraw = new PreDraw();
     PRODUCTION_MEMBERS
     static void importPage(String value,boolean preservePosition,boolean preserveSelection,int arrivalVerse) {
         PRODUCTION_IMPORT_PRELUDE
@@ -224,8 +245,64 @@ public class ModalReflowHarness {
         need(applySemanticReflow() && scroll.y==931,"modal round trip lost original semantic point");
         unsuppress();UI.drain();dialog.showing=true;noSelection();
     }
+    static void resumeProtocol(String scenario) {
+        BtReadingReflow.Anchor held=openModal();
+        int unchangedWidth=frameW;
+        text.layout=wide();text.padding=57;scroll.y=540;
+        layoutReady=false;showClampY=162;focusClampY=181;
+        float[] cache=lastAnchor;float frac=lastFrac;
+        unsuppress();UI.drain();applyShow();
+        need(dialog.isShowing() && !suppressed && frameW==unchangedWidth,"same-width modal show was not exercised");
+        need(semanticReflow==held && lastAnchor==cache && lastFrac==frac,"show clamp lost modal point or cached position");
+        int before=ownedPlacements;
+        need(preDraw.onPreDraw(),"modal pre-draw blocked native drawing");
+        need(pendingModalResume && semanticReflow==held && ownedPlacements==before,"provisional layout consumed modal resume");
+        if(scenario.equals("resume-touch-cancels")) {
+            need(readerScrollStarted() && !pendingModalResume && semanticReflow==null,"genuine reader input retained modal resume");
+            scroll.y=603;
+        } else if(scenario.equals("resume-new-chapter")) {
+            nextChapter=4;importPage(raw(),true,true,0);
+            need(!pendingModalResume && semanticReflow==null,"new chapter retained modal resume");scroll.y=603;
+        } else if(scenario.equals("resume-changed-text")||scenario.equals("resume-empty-text")) {
+            importPage(scenario.equals("resume-empty-text")?"":raw()+"X",true,true,0);
+        } else if(scenario.equals("resume-explicit-placement")||scenario.equals("resume-explicit-arrival")) {
+            if(scenario.equals("resume-explicit-placement"))pendingPlace=true;else pendingVerse=4;
+            preDraw.onPreDraw();
+            need(!pendingModalResume && ownedPlacements==before,"explicit placement lost priority to modal resume");
+            pendingPlace=false;pendingVerse=0;scroll.y=603;
+        } else if(scenario.equals("resume-resuppress")) {
+            suppress();UI.drain();
+            need(!pendingModalResume && semanticReflow==held,"new suppression retained stale resume or lost held point");
+            preDraw.onPreDraw();need(ownedPlacements==before,"stale pre-draw placed a suppressed reader");
+            unsuppress();UI.drain();applyShow();
+        } else if(scenario.equals("resume-stale-callback")) {
+            clearSemanticReflow();scroll.y=603;
+            need(!pendingModalResume,"cleared point retained modal resume");
+        }
+        text.layout=narrow();text.padding=43;layoutReady=true;
+        int y=scroll.y;
+        need(preDraw.onPreDraw(),"settled modal pre-draw blocked native drawing");
+        boolean success=scenario.equals("resume-same-width")||scenario.equals("resume-unowned-scroll")||scenario.equals("resume-resuppress");
+        if(success) {
+            need(!pendingModalResume && semanticReflow==held && scroll.y==931 && ownedPlacements==before+1,
+                    "fresh visible layout did not consume modal resume exactly once");
+            noSelection();
+            if(scenario.equals("resume-unowned-scroll")) {
+                ownScroll=false;lastOwnScrollY=-1;scroll.y=603;observer.onScrollChanged();
+                need(semanticReflow==null && !pendingModalResume,"unowned key or accessibility scroll retained modal target");
+            } else scroll.y=603;
+        } else {
+            need(!pendingModalResume && scroll.y==y && ownedPlacements==before,"cancelled or invalid resume moved the reader");
+            if(scenario.equals("resume-changed-text")||scenario.equals("resume-empty-text"))
+                need(semanticReflow==null,"changed or empty page retained modal point");
+        }
+        int placed=ownedPlacements;int current=scroll.y;
+        preDraw.onPreDraw();preDraw.onPreDraw();UI.drainDelayed();
+        need(!pendingModalResume && scroll.y==current && ownedPlacements==placed,"stale pre-draw or later layout permanently pinned reading");
+    }
     public static void main(String[] args) {
         String s=args[0];reset();
+        if(s.startsWith("resume-")) { resumeProtocol(s);System.out.println("PASS "+s);return; }
         if(s.equals("hidden-without-origin")||s.equals("pending-placement")||s.equals("pending-arrival")||s.equals("null-view")) {
             if(s.equals("hidden-without-origin"))dialog.showing=false;
             if(s.equals("pending-placement"))pendingPlace=true;

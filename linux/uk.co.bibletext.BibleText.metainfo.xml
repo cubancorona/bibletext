@@ -75,7 +75,7 @@
     </screenshot>
   </screenshots>
   <releases>
-    <release version="1.2.25" date="2026-11-03">
+    <release version="1.2.25" date="2026-11-04">
       <description>
         <p>Clearer messages when AI study cannot answer: if the account behind your key has run out of credit or reached its spending limit, or a request takes too long, the message says so and offers Try again, the provider's billing page or a faster model.</p>
         <ul>
