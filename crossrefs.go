@@ -233,8 +233,12 @@ func crossRefCachePath() string {
 // before fetching, so a reader who opened the panel offline was answered
 // "check your connection and try again" for the rest of the run, with nothing
 // a retry could change; now the flag is set only once the index is built, and
-// the next open — or Try again — fetches afresh. A cached zip that will not
-// parse is removed, so a retry fetches rather than failing on the same bytes.
+// the next open — or Try again — fetches afresh. A fetched zip is cached
+// only once it has parsed, and a cached zip that will not parse is removed,
+// so a retry fetches rather than failing on the same bytes: a fetched body
+// that would not parse — a captive portal answering the fetch with a page
+// and HTTP 200 — used to be cached before it was read, and the first retry
+// failed on the cached copy.
 func ensureCrossRefs() error {
 	crossRefMu.Lock()
 	defer crossRefMu.Unlock()
@@ -252,6 +256,9 @@ func ensureCrossRefs() error {
 		}
 		return err
 	}
+	if !cached {
+		writeCrossRefCache(zipBytes)
+	}
 	for _, d := range drift {
 		crossRefLogf("bibletext: cross-references: %s", d)
 	}
@@ -265,10 +272,10 @@ func ensureCrossRefs() error {
 var crossRefLogf = log.Printf
 
 // readOrFetchCrossRefZip is the dataset's zip: the machine's cached copy when
-// there is one (cached true), else a fetch, kept for next time.
+// there is one (cached true), else a fetch, which the caller keeps for next
+// time once it has parsed (writeCrossRefCache).
 func readOrFetchCrossRefZip() (b []byte, cached bool, err error) {
-	path := crossRefCachePath()
-	if b, err := os.ReadFile(path); err == nil && len(b) > 0 {
+	if b, err := os.ReadFile(crossRefCachePath()); err == nil && len(b) > 0 {
 		return b, true, nil
 	}
 	client := &http.Client{Timeout: 60 * time.Second}
@@ -284,14 +291,20 @@ func readOrFetchCrossRefZip() (b []byte, cached bool, err error) {
 	if err != nil {
 		return nil, false, fmt.Errorf("read cross-references: %w", err)
 	}
+	return b, false, nil
+}
+
+// writeCrossRefCache keeps a fetched zip for next time, best-effort: a cache
+// that cannot be written costs a fetch on the next run and nothing else.
+func writeCrossRefCache(b []byte) {
+	path := crossRefCachePath()
 	if dir := filepath.Dir(path); dir != "." {
 		_ = os.MkdirAll(dir, 0o755)
 	}
 	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, b, 0o644); err == nil {
-		_ = os.Rename(tmp, path) // best-effort cache; ignore failure
+		_ = os.Rename(tmp, path)
 	}
-	return b, false, nil
 }
 
 func parseCrossRefZip(zipBytes []byte) (map[string][]tskRow, []string, error) {

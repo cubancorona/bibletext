@@ -112,3 +112,46 @@ func TestEnsureCrossRefsReplacesACorruptCache(t *testing.T) {
 		t.Errorf("the index was not built from the fetched zip: %+v", rows)
 	}
 }
+
+// A FETCHED BODY THAT WILL NOT PARSE IS NOT CACHED. A captive portal answers
+// the fetch with a page and HTTP 200; the body used to be cached before it
+// was parsed, and only a cached zip was removed on the failure, so the first
+// Try again failed again on the cached page and only the second fetched.
+func TestEnsureCrossRefsDoesNotCacheABodyThatWillNotParse(t *testing.T) {
+	t.Setenv("BIBLETEXT_CACHE_PATH", filepath.Join(t.TempDir(), cacheFileName))
+	resetCrossRefLoader(t)
+	good := makeCrossRefZip(t, "John.3.16\tRom.5.8\t10\n")
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if calls.Add(1) == 1 {
+			_, _ = w.Write([]byte("<html>a page in the zip's place</html>"))
+			return
+		}
+		_, _ = w.Write(good)
+	}))
+	t.Cleanup(srv.Close)
+	crossRefURL = srv.URL
+
+	if err := ensureCrossRefs(); err == nil {
+		t.Fatal("control: a body that is not a zip must fail the load")
+	}
+	if _, err := os.Stat(crossRefCachePath()); !os.IsNotExist(err) {
+		t.Fatalf("the body that would not parse was cached (stat: %v)", err)
+	}
+	if err := ensureCrossRefs(); err != nil {
+		t.Fatalf("the first retry did not fetch afresh: %v", err)
+	}
+	if n := calls.Load(); n != 2 {
+		t.Errorf("the host was asked %d times, want 2: the retry fetched afresh", n)
+	}
+	cached, err := os.ReadFile(crossRefCachePath())
+	if err != nil || string(cached) != string(good) {
+		t.Errorf("the zip that parsed was not cached (err %v, %d bytes)", err, len(cached))
+	}
+	crossRefMu.Lock()
+	rows := crossRefIndex[crossRefKey("John", 3, 16)]
+	crossRefMu.Unlock()
+	if len(rows) != 1 {
+		t.Errorf("the index was not built from the zip that parsed: %+v", rows)
+	}
+}
