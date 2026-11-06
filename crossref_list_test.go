@@ -374,6 +374,51 @@ func TestCrossRefListKeysTheRunOnlyWhereItInforms(t *testing.T) {
 	}
 }
 
+// A VERSE WHOSE NOTES LEAVE NOTHING ON SCREEN HAS NO LABEL. Two notes citing
+// one passage give one card, the first; a later verse whose notes cite only
+// passages already carded leaves no card and no words, and its keyed label
+// used to stand over the next label, or over the end of the list.
+func TestAVerseWhoseNotesAllVanishHasNoLabel(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	licenseNKJVForTest(t)
+	withPublisherCrossRefs(t, "nkjv", true)
+	st, _ := listFixtureState()
+	nop := func(crossRef) {}
+	x := footnoteKindCrossref
+	// John 3:3's note cites the passage 3:2's note already cards.
+	v3 := &st.Bible.Verses["John"][3][2]
+	v3.Footnotes = []Footnote{{Text: "John 7:50", Kind: x, Caller: "-", Refs: []NoteRef{{"JHN.7.50", 0, 9}}}}
+	sel := st.Bible.GetChapter("John", 3)[1:]
+	// Alone, and with a Treasury row whose label would have followed the
+	// orphan.
+	for _, refs := range [][]crossRef{nil, {{Book: "Galatians", Chapter: 6, Verse: 15, Votes: 3}}} {
+		lst := buildCrossRefList(st, sel, refs, nil, lightPalette, nop)
+		want := "NKJV REFERENCES · VERSE 2"
+		if len(refs) > 0 {
+			want += "|" + treasuryLabel
+		}
+		if got := sectionLabelsIn(lst.Objects); joined(got) != want {
+			t.Errorf("with %d Treasury rows: labels = %q, want %q (verse 3 has nothing left to show)", len(refs), got, want)
+		}
+		if got := cardLabelsIn(lst.Objects); lst.PublisherCards != 1 || len(got) == 0 || got[0] != "John 7:50" {
+			t.Errorf("with %d Treasury rows: cards = %q, %d publisher cards; want John 7:50 once", len(refs), got, lst.PublisherCards)
+		}
+	}
+	// CONTROL: the same note citing a second passage: verse 3's label and
+	// that passage's card, the shared passage still carded once, under
+	// verse 2.
+	v3.Footnotes[0] = Footnote{Text: "John 7:50; Gal. 6:15", Kind: x, Caller: "-", Refs: []NoteRef{{"JHN.7.50", 0, 9}, {"GAL.6.15", 11, 20}}}
+	sel = st.Bible.GetChapter("John", 3)[1:]
+	lst := buildCrossRefList(st, sel, nil, nil, lightPalette, nop)
+	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES · VERSE 2|NKJV REFERENCES · VERSE 3" {
+		t.Errorf("control: labels = %q", got)
+	}
+	if got := cardLabelsIn(lst.Objects); joined(got) != "John 7:50|Galatians 6:15" {
+		t.Errorf("control: cards = %q", got)
+	}
+}
+
 // A title note's card, and the Treasury rows the publisher's cards already
 // carry: dropped by containment, in both directions, and the section goes
 // when nothing of it is left.

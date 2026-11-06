@@ -299,9 +299,22 @@ func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tsk
 	}
 	var carded []crossRef     // the publisher's passages on screen, for the Treasury filter
 	seen := map[string]bool{} // two notes citing one passage give one card, the first
+	// A verse's label is held until the verse puts something on screen. A
+	// note whose every citation an earlier note already carded leaves no
+	// card and no words (split cuts the carded spans out whether or not a
+	// card was made of them), and a verse of such notes is silently absent,
+	// as a verse with no note is, rather than a label standing over the next
+	// label or over the end of the list.
+	pending := ""
+	flush := func() {
+		if pending != "" {
+			label(pending)
+			pending = ""
+		}
+	}
 	for i, n := range notes {
 		if i == 0 || (keyed && n.Verse != notes[i-1].Verse) {
-			label(publisherRunLabel(v.Abbrev, n.Verse, keyed))
+			pending = publisherRunLabel(v.Abbrev, n.Verse, keyed)
 		}
 		targets, remainder := n.split()
 		var cards []crossRefCard
@@ -318,11 +331,13 @@ func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tsk
 			// A note with no card: its words stand alone, then a rule, so a
 			// note ends in a rule whatever it holds.
 			if remainder != "" {
+				flush()
 				out.Objects = append(out.Objects, container.NewVBox(crossRefNoteCaption(remainder), widget.NewSeparator()))
 				out.PublisherLines++
 			}
 			continue
 		}
+		flush()
 		if remainder != "" {
 			cards[len(cards)-1].Caption = remainder
 			out.PublisherLines++
