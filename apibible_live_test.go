@@ -303,6 +303,18 @@ func TestLiveAPIBibleFullCanon(t *testing.T) {
 		}
 	}
 	t.Logf("books %d, verses %d, poetry %d, LORD %d, notes %d", len(data.Verses), verses, poetry, lord, notes)
+
+	// The cross-reference apparatus is citations and three words — title,
+	// LXX, DSS — each where the panel's resolver reads it (publisher_xrefs.go);
+	// any other word would reach a reader as a caption nothing explains. The
+	// census of 6 November 2026: 32,517 notes, title ×47, LXX ×3, DSS ×1.
+	census := noteApparatusCensus(data)
+	if census.Notes != 32517 {
+		t.Errorf("cross-reference notes = %d, want 32,517", census.Notes)
+	}
+	assertNoteCensus(t, census)
+	t.Logf("apparatus: words %v, %d whole-chapter ids, %d title citations, %d bases, %d tagged citations inside parentheses, %d cards and %d caption lines over whole chapters",
+		census.Words, census.WholeChapters, census.TitleCitations, census.Bases, census.InParentheses, census.Cards, census.Lines)
 	// The counts, re-measured 9 September 2026. The small-capital figure
 	// replaced an older one of 5,622 "verses naming the LORD", which counted
 	// the literal string LORD in the text. That count stopped meaning what it
