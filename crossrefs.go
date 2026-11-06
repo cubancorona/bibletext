@@ -47,8 +47,11 @@ import (
 	"time"
 )
 
+// crossRefURL is where the dataset's zip is fetched from. A variable so a test
+// can stand a server of its own behind the loader.
+var crossRefURL = "https://a.openbible.info/data/cross-references.zip"
+
 const (
-	crossRefURL          = "https://a.openbible.info/data/cross-references.zip"
 	maxCrossRefsPerVerse = 16
 
 	// maxCrossRefsKept is how many of a verse's rows the index keeps, best
@@ -205,10 +208,9 @@ func (c crossRef) bounds() (start, end verseRef) {
 }
 
 var (
-	crossRefMu      sync.Mutex
-	crossRefIndex   map[string][]tskRow
-	crossRefLoaded  bool
-	crossRefLoadErr error
+	crossRefMu     sync.Mutex
+	crossRefIndex  map[string][]tskRow
+	crossRefLoaded bool // the index is built; a failed attempt leaves it false
 )
 
 func crossRefKey(book string, ch, v int) string {
@@ -220,30 +222,37 @@ func crossRefCachePath() string {
 	return filepath.Join(filepath.Dir(base), "bibletext-crossrefs.zip")
 }
 
-// ensureCrossRefs builds the index once (loading the cached zip, or fetching it).
-// Safe to call from a background goroutine; returns any load error.
+// ensureCrossRefs builds the index once it can: the cached zip, or a fetch.
+// Safe to call from a background goroutine; returns the load error.
+//
+// A failure is not remembered. The first attempt used to set the loaded flag
+// before fetching, so a reader who opened the panel offline was answered
+// "check your connection and try again" for the rest of the run, with nothing
+// a retry could change; now the flag is set only once the index is built, and
+// the next open — or Try again — fetches afresh. A cached zip that will not
+// parse is removed, so a retry fetches rather than failing on the same bytes.
 func ensureCrossRefs() error {
 	crossRefMu.Lock()
 	defer crossRefMu.Unlock()
 	if crossRefLoaded {
-		return crossRefLoadErr
+		return nil
 	}
-	crossRefLoaded = true // attempt once; a failure is remembered until restart
-
-	zipBytes, err := readOrFetchCrossRefZip()
+	zipBytes, cached, err := readOrFetchCrossRefZip()
 	if err != nil {
-		crossRefLoadErr = err
 		return err
 	}
 	idx, drift, err := parseCrossRefZip(zipBytes)
 	if err != nil {
-		crossRefLoadErr = err
+		if cached {
+			_ = os.Remove(crossRefCachePath())
+		}
 		return err
 	}
 	for _, d := range drift {
 		crossRefLogf("bibletext: cross-references: %s", d)
 	}
 	crossRefIndex = idx
+	crossRefLoaded = true
 	return nil
 }
 
@@ -251,23 +260,25 @@ func ensureCrossRefs() error {
 // dataset that no longer apply, once each, as it builds the index.
 var crossRefLogf = log.Printf
 
-func readOrFetchCrossRefZip() ([]byte, error) {
+// readOrFetchCrossRefZip is the dataset's zip: the machine's cached copy when
+// there is one (cached true), else a fetch, kept for next time.
+func readOrFetchCrossRefZip() (b []byte, cached bool, err error) {
 	path := crossRefCachePath()
 	if b, err := os.ReadFile(path); err == nil && len(b) > 0 {
-		return b, nil
+		return b, true, nil
 	}
 	client := &http.Client{Timeout: 60 * time.Second}
 	resp, err := client.Get(crossRefURL)
 	if err != nil {
-		return nil, fmt.Errorf("fetch cross-references: %w", err)
+		return nil, false, fmt.Errorf("fetch cross-references: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("fetch cross-references: HTTP %d", resp.StatusCode)
+		return nil, false, fmt.Errorf("fetch cross-references: HTTP %d", resp.StatusCode)
 	}
-	b, err := io.ReadAll(io.LimitReader(resp.Body, 16<<20))
+	b, err = io.ReadAll(io.LimitReader(resp.Body, 16<<20))
 	if err != nil {
-		return nil, fmt.Errorf("read cross-references: %w", err)
+		return nil, false, fmt.Errorf("read cross-references: %w", err)
 	}
 	if dir := filepath.Dir(path); dir != "." {
 		_ = os.MkdirAll(dir, 0o755)
@@ -276,7 +287,7 @@ func readOrFetchCrossRefZip() ([]byte, error) {
 	if err := os.WriteFile(tmp, b, 0o644); err == nil {
 		_ = os.Rename(tmp, path) // best-effort cache; ignore failure
 	}
-	return b, nil
+	return b, false, nil
 }
 
 func parseCrossRefZip(zipBytes []byte) (map[string][]tskRow, []string, error) {

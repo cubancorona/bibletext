@@ -789,19 +789,14 @@ func TestACorrectionThatNoLongerAppliesIsLoggedOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	var logged []string
+	resetCrossRefLoader(t)
 	crossRefMu.Lock()
-	was := struct {
-		loaded bool
-		err    error
-		index  map[string][]tskRow
-		logf   func(string, ...any)
-	}{crossRefLoaded, crossRefLoadErr, crossRefIndex, crossRefLogf}
-	crossRefLoaded, crossRefLoadErr, crossRefIndex = false, nil, nil
+	wasLogf := crossRefLogf
 	crossRefLogf = func(format string, args ...any) { logged = append(logged, fmt.Sprintf(format, args...)) }
 	crossRefMu.Unlock()
 	t.Cleanup(func() {
 		crossRefMu.Lock()
-		crossRefLoaded, crossRefLoadErr, crossRefIndex, crossRefLogf = was.loaded, was.err, was.index, was.logf
+		crossRefLogf = wasLogf
 		crossRefMu.Unlock()
 	})
 
