@@ -446,9 +446,11 @@ func crossRefFooterCredit(state *AppState, sections crossRefSections) (sources, 
 }
 
 // crossRefSectionLabel is the list's one heading idiom: the sidebar's section
-// label, padded so its ink stands level with the card references beneath it.
+// label, inset by the theme's padding — the card's own inset — so its ink
+// stands level with the card references beneath it by construction.
 func crossRefSectionLabel(text string, pal palette) fyne.CanvasObject {
-	return container.New(layout.NewCustomPaddedLayout(0, 0, 7, 7), sectionLabel(text, pal))
+	p := theme.Padding()
+	return container.New(layout.NewCustomPaddedLayout(0, 0, p, p), sectionLabel(text, pal))
 }
 
 // crossRefCaptionStyle is the style of every caption in the panel: muted and
