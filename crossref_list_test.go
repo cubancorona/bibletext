@@ -419,6 +419,39 @@ func TestAVerseWhoseNotesAllVanishHasNoLabel(t *testing.T) {
 	}
 }
 
+// A PSALM'S TITLE AND THE WHOLE PSALM ARE TWO CARDS. Both are labelled by the
+// chapter ("Psalms 59"), and the rule that two notes citing one passage give
+// one card used to key on the label, so the second of them was dropped.
+func TestATitleAndTheWholePsalmAreTwoCards(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	licenseNKJVForTest(t)
+	withPublisherCrossRefs(t, "nkjv", true)
+	st, _ := listFixtureState()
+	st.CurrentBook, st.CurrentChapter = "1 Samuel", 19
+	nop := func(crossRef) {}
+	x := footnoteKindCrossref
+	v := &st.Bible.Verses["1 Samuel"][19][0]
+	v.Footnotes = []Footnote{{Text: "Ps. 59; Ps. 59:title", Kind: x, Caller: "-", Refs: []NoteRef{{"PSA.59", 0, 6}, {"PSA.59", 8, 14}}}}
+	lst := buildCrossRefList(st, st.Bible.GetChapter("1 Samuel", 19), nil, nil, lightPalette, nop)
+	if got := cardLabelsIn(lst.Objects); joined(got) != "Psalms 59|Psalms 59" || lst.PublisherCards != 2 {
+		t.Fatalf("cards = %q (%d publisher cards); want the psalm and its title", got, lst.PublisherCards)
+	}
+	cards := cardsIn(lst.Objects)
+	if ts := textsIn(cards[1].content); len(ts) < 2 || ts[1] != "Title" {
+		t.Errorf("the second card is not the title's: %q", ts)
+	}
+	if ts := textsIn(cards[0].content); len(ts) > 1 && ts[1] == "Title" {
+		t.Errorf("the first card wears the Title tag: %q", ts)
+	}
+	// CONTROL: the psalm cited twice is one card.
+	v.Footnotes[0] = Footnote{Text: "Ps. 59; Ps. 59", Kind: x, Caller: "-", Refs: []NoteRef{{"PSA.59", 0, 6}, {"PSA.59", 8, 14}}}
+	lst = buildCrossRefList(st, st.Bible.GetChapter("1 Samuel", 19), nil, nil, lightPalette, nop)
+	if got := cardLabelsIn(lst.Objects); joined(got) != "Psalms 59" || lst.PublisherCards != 1 {
+		t.Errorf("control: cards = %q (%d publisher cards); want the psalm once", got, lst.PublisherCards)
+	}
+}
+
 // A title note's card, and the Treasury rows the publisher's cards already
 // carry: dropped by containment, in both directions, and the section goes
 // when nothing of it is left.

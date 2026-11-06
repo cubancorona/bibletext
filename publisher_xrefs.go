@@ -95,6 +95,18 @@ func (tg publisherTarget) label() string {
 	return fmt.Sprintf("%s %d", tg.Ref.Book, tg.Ref.Chapter)
 }
 
+// key identifies the card's passage and kind, for the list's rule that two
+// notes citing one passage give one card: the passage as crossRef.label
+// spells it, and whether the card is the chapter's title. A Psalm's title
+// and the whole psalm share the label "Psalms 59" and are different
+// passages, so the label alone cannot tell them apart.
+func (tg publisherTarget) key() string {
+	if tg.Title {
+		return tg.Ref.label() + titleSuffix
+	}
+	return tg.Ref.label()
+}
+
 // tag is the word set beside the card's reference, in the slot the parallel
 // pill uses: "Title" for a title citation — the footnote section's and the
 // search tag's own word for a superscription — and the basis for a citation
