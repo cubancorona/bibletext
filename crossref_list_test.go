@@ -234,11 +234,11 @@ func TestCrossRefListWithoutThePublisherIsWhatItAlwaysWas(t *testing.T) {
 		}
 	}
 	// The footer names the Treasury in the words it has always had, and the
-	// synopsis beside it while a parallel row is on screen; the edition is
-	// licensed, so the footer carries its notice under the previews of its
-	// verse text.
+	// synopsis on the line under it while a parallel row is on screen; the
+	// edition is licensed, so the footer carries its notice under the
+	// previews of its verse text.
 	sources, notice := crossRefFooterCredit(st, lst.Sections)
-	if sources != "Cross-references: OpenBible.info (CC-BY) · Gospel parallels: synopsis" {
+	if sources != "Cross-references: OpenBible.info (CC-BY)\nGospel parallels: synopsis" {
 		t.Errorf("footer sources = %q", sources)
 	}
 	if !strings.Contains(notice, "Thomas Nelson") {
@@ -326,10 +326,10 @@ func TestCrossRefListWithThePublisherIsOneListOfCards(t *testing.T) {
 	if _, ok := block.Objects[2].(*widget.Separator); !ok || !strings.Contains(strings.Join(textsIn(block.Objects[1]), ""), "19:39") {
 		t.Errorf("the card's block is not card, caption, rule: %v / %q", block.Objects[2], textsIn(block.Objects[1]))
 	}
-	// The footer names both sets, the Treasury in its label's words, and the
-	// notice once.
+	// The footer names both sets, the Treasury in its label's words, one to a
+	// line, and the notice once.
 	sources, notice := crossRefFooterCredit(st, lst.Sections)
-	if sources != treasuryCredit+" · "+parallelsCredit {
+	if sources != treasuryCredit+"\n"+parallelsCredit {
 		t.Errorf("footer sources = %q", sources)
 	}
 	if !strings.Contains(notice, "Thomas Nelson") {
@@ -482,7 +482,8 @@ func TestCrossRefListEmptyPublisherRunShowsTheLineOverTheTreasury(t *testing.T) 
 	}
 }
 
-// The footer's sources line names the sets with rows on screen, and no other.
+// The footer's sources line names the sets with rows on screen, and no other,
+// one credit to a line: two on one line broke inside a credit on a phone.
 func TestTheFooterNamesOnlyTheSetsOnScreen(t *testing.T) {
 	licenseNKJVForTest(t)
 	st, _ := listFixtureState()
@@ -491,11 +492,11 @@ func TestTheFooterNamesOnlyTheSetsOnScreen(t *testing.T) {
 		sections crossRefSections
 		want     string
 	}{
-		{false, crossRefSections{Treasury: true, Parallels: true}, "Cross-references: OpenBible.info (CC-BY) · Gospel parallels: synopsis"},
+		{false, crossRefSections{Treasury: true, Parallels: true}, "Cross-references: OpenBible.info (CC-BY)\nGospel parallels: synopsis"},
 		{false, crossRefSections{Treasury: true}, "Cross-references: OpenBible.info (CC-BY)"},
 		{false, crossRefSections{Parallels: true}, "Gospel parallels: synopsis"},
 		{false, crossRefSections{}, ""},
-		{true, crossRefSections{Treasury: true, Parallels: true, Publisher: true}, "Treasury of Scripture Knowledge: OpenBible.info (CC-BY) · Gospel parallels: synopsis"},
+		{true, crossRefSections{Treasury: true, Parallels: true, Publisher: true}, "Treasury of Scripture Knowledge: OpenBible.info (CC-BY)\nGospel parallels: synopsis"},
 		{true, crossRefSections{Treasury: true, Publisher: true}, "Treasury of Scripture Knowledge: OpenBible.info (CC-BY)"},
 		{true, crossRefSections{Publisher: true}, ""},
 	} {

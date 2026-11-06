@@ -45,8 +45,9 @@ import (
 )
 
 // The footer's credits. The sources line names only the sets with rows on
-// screen; the publisher's run is credited by the edition's own LicenseNotice,
-// which the footer shows once whenever the loaded edition is licensed.
+// screen, one credit to a line; the publisher's run is credited by the
+// edition's own LicenseNotice, which the footer shows once whenever the
+// loaded edition is licensed.
 const (
 	// tskCredit names the Treasury in the builds without the publisher's run,
 	// in the words they have always shown.
@@ -402,6 +403,13 @@ func treasuryMinusPublisher(rows, cards []crossRef) []crossRef {
 // verse text, and in the builds that show its apparatus the apparatus is its
 // too. The Treasury is named in the words of its label where the list has
 // labels, and in the words every store build has always shown where not.
+//
+// Two credits stand one to a line. Joined on one line by " · ", the pair was
+// wider than a phone's footer, and the toolkit's word wrap, which breaks at
+// any space, broke it inside a credit: "… (CC-BY) · Gospel" over "parallels:
+// synopsis" at 375 points, "synopsis" alone on the second row at 402. Each
+// credit alone fits the narrowest footer, so the break now falls only
+// between them, and the words are unchanged.
 func crossRefFooterCredit(state *AppState, sections crossRefSections) (sources, notice string) {
 	v := state.currentVersion()
 	var parts []string
@@ -415,7 +423,7 @@ func crossRefFooterCredit(state *AppState, sections crossRefSections) (sources, 
 	if sections.Parallels {
 		parts = append(parts, parallelsCredit)
 	}
-	sources = strings.Join(parts, " · ")
+	sources = strings.Join(parts, "\n")
 	if !v.PublicDomain && !v.isTesting() {
 		notice = v.LicenseNotice
 	}

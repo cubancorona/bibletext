@@ -41,9 +41,11 @@ import (
 //	  go test -run TestRenderCrossRefPanel -v .
 //
 // Selections are rendered with the publisher's run ON (the nkjvxrefs build's
-// view) and, for the first, OFF as the control everyone has today. The same
-// canon is put through the apparatus census (publisher_xrefs_census_test.go),
-// the assertion the live canon test makes of a fresh download.
+// view) and, for John 3:16 and Matthew 3:1, OFF as the control everyone has
+// today — the second with a parallel row on screen, so the store build's
+// footer carries both of its credits. The same canon is put through the
+// apparatus census (publisher_xrefs_census_test.go), the assertion the live
+// canon test makes of a fresh download.
 func TestRenderCrossRefPanel(t *testing.T) {
 	src, out := os.Getenv("BIBLETEXT_RENDER_XREFS"), os.Getenv("BIBLETEXT_RENDER_OUT")
 	if src == "" || out == "" {
@@ -93,6 +95,7 @@ func TestRenderCrossRefPanel(t *testing.T) {
 	}
 	frames := []frame{
 		{"john3-16-off", "John", 3, 16, 16, false},     // the control: today's panel
+		{"matt3-1-off", "Matthew", 3, 1, 1, false},     // the control with parallels: two credits in the footer
 		{"john3-16-on", "John", 3, 16, 16, true},       // three cards, a group, a lone group
 		{"john3-1to3-on", "John", 3, 1, 3, true},       // keyed labels
 		{"matt3-1-on", "Matthew", 3, 1, 1, true},       // parallels, a self-range, the Treasury
