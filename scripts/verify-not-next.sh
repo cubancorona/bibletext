@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Refuse release artifacts built with next or bibletextdev tags (docs/NEXT.md).
+# Refuse release artifacts built with the next, bibletextdev or nkjvxrefs tags
+# (docs/NEXT.md; docs/SCRIPTURE_WORKLIST.md S20).
 #
 #   scripts/verify-not-next.sh ARTIFACT...
 #
@@ -10,8 +11,9 @@
 # GOFLAGS in the environment, or from GOFLAGS saved with `go env -w`. The last
 # two leave no trace in any script, which is why the release paths check what
 # they built as well as next_release_guard_test.go checking their text.
-# Development builds contain test hooks and persistent local diagnostics;
-# neither belongs in a release artifact.
+# Development builds contain test hooks and persistent local diagnostics; an
+# nkjvxrefs build displays a licensed publisher's cross references ahead of
+# the licence that would allow it; none of them belongs in a release artifact.
 #
 # A universal binary is one executable per architecture, built separately and
 # joined by lipo, so one slice can carry the tag while another does not; and
@@ -78,6 +80,9 @@ check_binary() {
       ;;
     *,bibletextdev,*)
       fail "$label was built with the bibletextdev tag (-tags=$tags). Development diagnostics and test hooks must never ship."
+      ;;
+    *,nkjvxrefs,*)
+      fail "$label was built with the nkjvxrefs tag (-tags=$tags). The NKJV's own cross references display only once the licence allows it; see docs/SCRIPTURE_WORKLIST.md S20."
       ;;
   esac
 }

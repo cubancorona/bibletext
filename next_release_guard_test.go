@@ -685,7 +685,7 @@ func TestVerifyNotNextRefusesTaggedBuilds(t *testing.T) {
 	}
 
 	plain := build("plain", nil, "-trimpath")
-	otherTags := build("other-tags", nil, "-tags", "gles,nextish,bibletextdevish")
+	otherTags := build("other-tags", nil, "-tags", "gles,nextish,bibletextdevish,nkjvxrefsish")
 	// Not ios: on a Linux host that tag selects a second GOOS file in the
 	// standard library and the probe does not build.
 	onTheLine := build("on-the-command-line", nil, "-tags", "gles,next")
@@ -695,6 +695,11 @@ func TestVerifyNotNextRefusesTaggedBuilds(t *testing.T) {
 	devFromEnv := build("dev-from-goflags", []string{"GOFLAGS=-tags=bibletextdev"})
 	devFromGoEnv := build("dev-from-go-env-w", []string{"GOENV=" + devGoEnvFile})
 	bothTags := build("both-excluded-tags", nil, "-tags", "next,bibletextdev")
+	// The NKJV's own cross references (docs/SCRIPTURE_WORKLIST.md S20) display
+	// only behind their tag until the licence allows them, so a release
+	// artifact carrying it is refused as a development build is.
+	xrefsOnTheLine := build("xrefs-on-the-command-line", nil, "-tags", "gles,nkjvxrefs")
+	xrefsFromEnv := build("xrefs-from-goflags", []string{"GOFLAGS=-tags=nkjvxrefs"})
 	notGo := filepath.Join(dir, "not-go")
 	if err := os.WriteFile(notGo, []byte("#!/bin/sh\nexit 0\n"), 0o700); err != nil {
 		t.Fatal(err)
@@ -740,6 +745,9 @@ func TestVerifyNotNextRefusesTaggedBuilds(t *testing.T) {
 		{"a bundle carrying the dev tag", pack("dev.aab", "base/lib/arm64-v8a/libBibleText.so", devOnTheLine), "built with the bibletextdev tag"},
 		{"an APK carrying the dev tag", pack("dev.apk", "lib/arm64-v8a/libBibleText.so", devFromEnv), "built with the bibletextdev tag"},
 		{"both excluded tags preserve next refusal", bothTags, "built with the next tag"},
+		{"the cross-references tag on the command line", xrefsOnTheLine, "built with the nkjvxrefs tag"},
+		{"the cross-references tag from GOFLAGS", xrefsFromEnv, "built with the nkjvxrefs tag"},
+		{"an APK carrying the cross-references tag", pack("xrefs.apk", "lib/arm64-v8a/libBibleText.so", xrefsOnTheLine), "built with the nkjvxrefs tag"},
 		{"a package with no native library", pack("empty.aab", "", ""), "no native library"},
 		{"a file Go did not build", notGo, "no Go build information"},
 		{"a universal binary of plain builds", plainUniversal, ""},
