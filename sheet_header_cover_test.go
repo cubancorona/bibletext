@@ -120,12 +120,14 @@ func settingsWithListedModels(t *testing.T, s *AppState, n int) fyne.CanvasObjec
 // shortWindowSheets that cannot clear the header there with the content
 // those tests give it, and so covers it. Each sheet covers on every window up
 // to a height and clears it above: the link notice to 440pt, the note-link
-// offer to 418pt, the cross-references while they load to 416pt, the share
-// confirmation with a long text to 407pt (430pt at 507pt wide), Go to to
-// 395pt, the note composer and Ask to 398pt, and the AI answer while it waits
-// to 413pt, where the scroll under its waiting line keeps the line whole
-// (ai_panel_waiting_line_test.go). The windows either side of each sheet's
-// last covering height hold the line in both directions.
+// offer to 418pt, the cross-references while they load to 395pt (their
+// footer's sources line names only the sets on screen, so it stands empty
+// and hidden until the list lands), the share confirmation with a long text
+// to 407pt (430pt at 507pt wide), Go to to 395pt, the note composer and Ask
+// to 398pt, and the AI answer while it waits to 413pt, where the scroll under
+// its waiting line keeps the line whole (ai_panel_waiting_line_test.go). The
+// windows either side of each sheet's last covering height hold the line in
+// both directions.
 var coversAt = map[fyne.Size][]string{
 	{Width: 1280, Height: 386}: {"Go to", "note composer", "share confirmation", "cross-references", "AI answer",
 		"link notice", "note-link offer", "Ask"},
@@ -135,14 +137,16 @@ var coversAt = map[fyne.Size][]string{
 		"link notice", "note-link offer", "Ask"},
 	{Width: 1280, Height: 393}: {"Go to", "note composer", "share confirmation", "cross-references", "AI answer",
 		"link notice", "note-link offer", "Ask"},
-	{Width: 1280, Height: 398}: {"note composer", "share confirmation", "cross-references", "AI answer", "link notice",
-		"note-link offer", "Ask"},
-	{Width: 1280, Height: 399}: {"share confirmation", "cross-references", "AI answer", "link notice", "note-link offer"},
-	{Width: 1280, Height: 401}: {"share confirmation", "cross-references", "AI answer", "link notice", "note-link offer"},
-	{Width: 1280, Height: 407}: {"share confirmation", "cross-references", "AI answer", "link notice", "note-link offer"},
-	{Width: 1280, Height: 408}: {"cross-references", "AI answer", "link notice", "note-link offer"},
-	{Width: 1280, Height: 413}: {"cross-references", "AI answer", "link notice", "note-link offer"},
-	{Width: 1280, Height: 414}: {"cross-references", "link notice", "note-link offer"},
+	{Width: 1280, Height: 395}: {"Go to", "note composer", "share confirmation", "cross-references", "AI answer",
+		"link notice", "note-link offer", "Ask"},
+	{Width: 1280, Height: 396}: {"note composer", "share confirmation", "AI answer", "link notice", "note-link offer", "Ask"},
+	{Width: 1280, Height: 398}: {"note composer", "share confirmation", "AI answer", "link notice", "note-link offer", "Ask"},
+	{Width: 1280, Height: 399}: {"share confirmation", "AI answer", "link notice", "note-link offer"},
+	{Width: 1280, Height: 401}: {"share confirmation", "AI answer", "link notice", "note-link offer"},
+	{Width: 1280, Height: 407}: {"share confirmation", "AI answer", "link notice", "note-link offer"},
+	{Width: 1280, Height: 408}: {"AI answer", "link notice", "note-link offer"},
+	{Width: 1280, Height: 413}: {"AI answer", "link notice", "note-link offer"},
+	{Width: 1280, Height: 414}: {"link notice", "note-link offer"},
 	{Width: 1280, Height: 418}: {"link notice", "note-link offer"},
 	{Width: 1280, Height: 419}: {"link notice"},
 	{Width: 507, Height: 430}:  {"share confirmation", "link notice"},
@@ -352,6 +356,8 @@ func TestDesktopSheetsClearOrCoverTheHeaderOnShortWindows(t *testing.T) {
 		{Width: 507, Height: 386},  // and as narrow as its content allows
 		{Width: 1280, Height: 392},
 		{Width: 1280, Height: 393},
+		{Width: 1280, Height: 395},
+		{Width: 1280, Height: 396},
 		{Width: 1280, Height: 398},
 		{Width: 1280, Height: 399},
 		{Width: 1280, Height: 401},

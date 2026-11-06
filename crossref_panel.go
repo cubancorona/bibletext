@@ -2,8 +2,9 @@ package bibletext
 
 // The cross-references panel: a modal that lists the passages related to the
 // selected verse(s). It mirrors the AI panel (spinner while the dataset loads on
-// first use, then content), and reuses the chapter-picker overlay hide/restore
-// dance. Each row is a full tap target that jumps to the passage in context.
+// first use, then content, or one message), and reuses the chapter-picker
+// overlay hide/restore dance. Each card is a full tap target that jumps to the
+// passage in context; the list is composed in crossref_list.go.
 
 import (
 	"image/color"
@@ -51,7 +52,11 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 	ps := sheetPanelSize(state, cnv)
 	bodyW := ps.Width - 44
 	listBox := container.NewVBox()
-	scroll := container.NewVScroll(listBox)
+	// squeezeWidthLayout, as the AI panel's columns have: a vertical scroll
+	// widens its content to the content's own minimum width and clips the
+	// excess sideways with no bar to reach it, so a child that wants more
+	// width than the panel has can only clip itself (sheet_fit.go).
+	scroll := container.NewVScroll(container.New(squeezeWidthLayout{}, listBox))
 	body := container.NewStack(scroll)
 
 	var popup *widget.PopUp
@@ -73,19 +78,7 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 		restore()
 	}
 	closeBtn := widget.NewButton("Close", closePanel)
-	// The credit names the sources whose rows stand in the open, and the
-	// on-screen edition's own notice when it is licensed: the preview under
-	// every row is that edition's verse text, and it used to sit under a line
-	// that credited only the reference dataset.
-	sources, notice := crossRefFooterCredit(state)
-	credit := canvas.NewText(sources, pal.TextMuted)
-	credit.TextSize = 11
-	footerLines := []fyne.CanvasObject{widget.NewSeparator(), credit}
-	if notice != "" {
-		footerLines = append(footerLines, crossRefCaption(notice))
-	}
-	footerLines = append(footerLines, container.NewHBox(layout.NewSpacer(), closeBtn))
-	footer := container.NewVBox(footerLines...)
+	footer, sources := crossRefFooter(state, closeBtn)
 
 	// fit sizes the panel to its cap (below); every change of body is
 	// followed by it, since the body decides whether the panel's least
@@ -108,14 +101,27 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 		// transitions do. A ProgressBarInfinite left assigned-over keeps its
 		// RepeatForever animation, repainting the whole canvas at ~20fps until
 		// GC reclaims it; ui.go documents that as a real defect it once had.
-		// Only one call site reaches here today, which is not a reason for the
-		// transition to be the one that cannot be called twice.
+		// Try again re-enters this state from the error, so it is called
+		// more than once in a panel's life.
 		stopThinking()
 		bar := widget.NewProgressBarInfinite()
 		thinkingBar = bar
 		msg := widget.NewLabel("Finding related passages…")
 		msg.Alignment = fyne.TextAlignCenter
 		setCentered(container.NewVBox(msg, bar))
+	}
+	// load asks for the Treasury and lands the list; set below, since the
+	// error state's Try again runs it again (ensureCrossRefs forgets a
+	// failure, so the retry is a real fetch).
+	var load func()
+	setOffline := func() {
+		stopThinking()
+		lbl := widget.NewLabel(crossRefOfflineMessage)
+		lbl.Wrapping = fyne.TextWrapWord
+		lbl.Alignment = fyne.TextAlignCenter
+		// The AI panel's verb for the same state, under the sentence.
+		retry := widget.NewButton("Try again", func() { load() })
+		setCentered(container.NewVBox(lbl, spacer(12), container.NewCenter(retry)))
 	}
 	follow := func(cc crossRef) {
 		closePanel()
@@ -137,10 +143,21 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 		}
 		scroll.SetMinSize(fyne.NewSize(bodyW, h))
 	}
+	// showRefs lands the load: the list when it holds anything, else one
+	// message — the connection error when the Treasury did not load and
+	// nothing else answered for the selection, the empty sentence otherwise.
+	// The footer's sources line is set from the list that was built, so it
+	// names only the sets on screen, and is laid out at the footer's width
+	// before the list is fitted, so the chrome measured counts its wrapped
+	// height.
 	showRefs := func(refs []crossRef, tskErr error) {
 		stopThinking()
 		lst := buildCrossRefList(state, selectionVerses(state, text, span), refs, tskErr, pal, follow)
 		if len(lst.Objects) == 0 {
+			if tskErr != nil {
+				setOffline()
+				return
+			}
 			msg := crossRefNoneLine
 			if lst.CoverageNote != "" {
 				msg += "\n" + lst.CoverageNote
@@ -150,6 +167,12 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 		}
 		listBox.Objects = lst.Objects
 		listBox.Refresh()
+		line, _ := crossRefFooterCredit(state, lst.Sections)
+		w := footer.Size().Width
+		if w <= 0 {
+			w = ps.Width - sheetChromeWidth
+		}
+		setCrossRefSources(sources, line, w)
 		body.Objects = []fyne.CanvasObject{scroll}
 		body.Refresh()
 		fit()
@@ -196,24 +219,53 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 		return
 	}
 
-	setThinking()
-	crossRefsRun(func() {
-		err := crossRefsLoad()
-		// crossRefsForSelection always returns the embedded Gospel parallels (offline),
-		// plus the TSK cross-references when they loaded — so a TSK fetch failure still
-		// shows parallels, and we only surface the error when there's nothing at all.
-		refs := crossRefsForSelection(state, text, span)
-		fyne.Do(func() {
-			// With the edition's own block in the list, a Treasury that failed
-			// to load is reported in its own place (buildCrossRefList) and the
-			// block still shows — it needs no network.
-			if len(refs) == 0 && err != nil && !state.currentVersion().PublisherCrossRefs {
-				setMessage("Couldn't load cross-references.\nCheck your connection and try again.")
-				return
-			}
-			showRefs(refs, err)
+	load = func() {
+		setThinking()
+		crossRefsRun(func() {
+			err := crossRefsLoad()
+			// crossRefsForSelection always returns the embedded Gospel
+			// parallels (offline), plus the Treasury rows when they loaded,
+			// and the publisher's run needs no network: a Treasury that
+			// failed to load is reported in its own place when anything else
+			// answers for the selection, and as the panel's one message when
+			// nothing does (buildCrossRefList, showRefs).
+			refs := crossRefsForSelection(state, text, span)
+			fyne.Do(func() { showRefs(refs, err) })
 		})
-	})
+	}
+	load()
+}
+
+// crossRefFooter is the panel's footer: a rule, the sources line, the
+// edition's notice once whenever the loaded edition is licensed — the preview
+// under every card is its verse text — and Close. The sources line is empty
+// and hidden until the list is built, since it names only the sets on screen
+// (setCrossRefSources). It is a caption, which wraps: as a canvas.Text it
+// wanted 333 points against the 299 a 375-point phone gives the footer, and
+// clipped.
+func crossRefFooter(state *AppState, closeBtn fyne.CanvasObject) (footer *fyne.Container, sources *widget.RichText) {
+	sources = crossRefCaption("")
+	sources.Hide()
+	lines := []fyne.CanvasObject{widget.NewSeparator(), sources}
+	if _, notice := crossRefFooterCredit(state, crossRefSections{}); notice != "" {
+		lines = append(lines, crossRefCaption(notice))
+	}
+	lines = append(lines, container.NewHBox(layout.NewSpacer(), closeBtn))
+	return container.NewVBox(lines...), sources
+}
+
+// setCrossRefSources puts text on the footer's sources line, or hides the line
+// when there is nothing to name. The line is laid out at width first so its
+// MinSize is its wrapped height before the panel measures its chrome.
+func setCrossRefSources(sources *widget.RichText, text string, width float32) {
+	if text == "" {
+		sources.Hide()
+		return
+	}
+	sources.Segments = []widget.RichTextSegment{&widget.TextSegment{Text: text, Style: crossRefCaptionStyle}}
+	sources.Show()
+	sources.Resize(fyne.NewSize(width, sources.MinSize().Height))
+	sources.Refresh()
 }
 
 // crossRefsRun runs the panel's load and its landing, on a goroutine of their
@@ -270,19 +322,59 @@ func crossRefPreview(text string) string {
 	return strings.TrimRight(cut, " ,;:") + "…"
 }
 
-func crossRefRow(state *AppState, c crossRef, pal palette, onTap func(crossRef)) fyne.CanvasObject {
-	ref := canvas.NewText(c.label(), pal.Accent)
+// crossRefCard is one card of the list: the passage it follows and previews,
+// and how it is labelled and tagged. One constructor (crossRefRow) draws every
+// passage in the panel — a Treasury row, a Gospel parallel, a publisher's
+// citation — so the list has one card idiom.
+type crossRefCard struct {
+	Ref   crossRef // the passage the card follows and previews
+	Label string   // the reference line: Ref.label() for a Treasury or parallel row, the chapter for a citation of one
+	// Tag is the muted word beside the reference, in the slot the parallel
+	// pill uses, saying which passage this is: "Title" for a citation of a
+	// Psalm's title, a basis ("LXX", "LXX, DSS") for a citation the edition
+	// qualifies — search draws exactly this for a title hit. "" for none.
+	Tag string
+	// Title marks a card whose passage is a Psalm's title: the preview is the
+	// superscription, not the first verse, which is where the tap lands.
+	Title bool
+	// Badge draws the PARALLEL pill on a same-occasion parallel: only where no
+	// section label carries the row's provenance, the builds without the
+	// publisher's run. Under a GOSPEL PARALLELS label the pill would say the
+	// label's word again, in the most saturated object on the screen.
+	Badge bool
+	// Caption is the note's remainder, set inside the card's block under the
+	// preview and before the rule (publisher cards only; "" for none).
+	Caption string
+}
+
+// passageCard is the card for a row crossRefsForSelection hands over — a
+// Treasury row or a Gospel parallel — labelled as the row labels itself.
+func passageCard(c crossRef, badge bool) crossRefCard {
+	return crossRefCard{Ref: c, Label: c.label(), Badge: badge}
+}
+
+func crossRefRow(state *AppState, card crossRefCard, pal palette, onTap func(crossRef)) fyne.CanvasObject {
+	c := card.Ref
+	ref := canvas.NewText(card.Label, pal.Accent)
 	ref.TextStyle = fyne.TextStyle{Bold: true}
 	ref.TextSize = 16
 
-	// The reference line, with a "Parallel" tag for Gospel-synopsis entries.
-	// A row of the same saying on another occasion is not the same event and
-	// does not wear that tag: it carries its own label, on a line of its own
+	// The reference line, with a "Parallel" tag for Gospel-synopsis entries
+	// where the list has no label to say so, or the card's own muted tag. A
+	// row of the same saying on another occasion is not the same event and
+	// does not wear the pill: it carries its own label, on a line of its own
 	// because the label is longer than the tag and a phone has no room for it
 	// beside a long reference.
 	var refLine fyne.CanvasObject = ref
-	if c.Parallel && !c.otherOccasion() {
+	switch {
+	case card.Badge && c.Parallel && !c.otherOccasion():
 		refLine = container.NewHBox(container.NewCenter(ref), container.NewCenter(parallelBadge(pal)))
+	case card.Tag != "":
+		// The idiom search.go draws for a title hit: the tag beside the
+		// reference rather than under it, so the two read as one heading.
+		tag := canvas.NewText(card.Tag, pal.TextMuted)
+		tag.TextSize = 12
+		refLine = container.NewHBox(ref, tag)
 	}
 	lines := []fyne.CanvasObject{refLine}
 	if c.otherOccasion() {
@@ -304,18 +396,35 @@ func crossRefRow(state *AppState, c crossRef, pal palette, onTap func(crossRef))
 	// the preview used to show has the same letters for both. They are
 	// characters, so the 90-character cut is unchanged; the chrome face has no
 	// small capitals and the toolkit draws them from its own fallback face, as
-	// a shared verse's are drawn wherever it is pasted.
+	// a shared verse's are drawn wherever it is pasted. A title card previews
+	// the superscription, drawn the same way; a chapter whose title the loaded
+	// text lacks previews its first verse, where the tap lands.
 	snippet := ""
-	if v := state.Bible.GetVerse(c.Book, c.Chapter, c.Verse); v != nil {
-		snippet = crossRefPreview(smallCapsText(*v))
+	if card.Title {
+		if s := state.Bible.SuperscriptionFor(c.Book, c.Chapter); strings.TrimSpace(s.Text) != "" {
+			snippet = crossRefPreview(drawSmallCaps(s.Text, s.SmallCaps))
+		}
+	}
+	if snippet == "" {
+		if v := state.Bible.GetVerse(c.Book, c.Chapter, c.Verse); v != nil {
+			snippet = crossRefPreview(smallCapsText(*v))
+		}
 	}
 	snip := widget.NewLabel(snippet)
 	snip.Wrapping = fyne.TextWrapWord
 	lines = append(lines, snip)
 
 	inner := container.NewPadded(container.NewVBox(lines...))
-	card := newTapCard(inner, pal.SurfaceAlt, func() { onTap(c) })
-	return container.NewVBox(card, widget.NewSeparator())
+	tap := newTapCard(inner, pal.SurfaceAlt, func() { onTap(c) })
+	block := []fyne.CanvasObject{tap}
+	if card.Caption != "" {
+		// Under the card and before its rule, so the caption annotates the
+		// card's note rather than standing under a rule that closed it; not
+		// inside the tap, since its words are not the card's passage.
+		block = append(block, crossRefNoteCaption(card.Caption))
+	}
+	block = append(block, widget.NewSeparator())
+	return container.NewVBox(block...)
 }
 
 // parallelBadge is the small accent pill that marks a Gospel-synopsis parallel row.

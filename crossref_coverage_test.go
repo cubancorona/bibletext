@@ -301,47 +301,47 @@ func TestAnEmptyPartlyCoveredPanelSaysWhy(t *testing.T) {
 	}
 }
 
+// publisherNotedActs is the NKJV's Acts 8 with a publisher's note on its
+// 8:37, the verse the reference does not have, pointing into Matthew 28.
+func publisherNotedActs() *BibleData {
+	bd := addedVersesBible()
+	v := &bd.Verses["Acts"][8][36]
+	v.Footnotes = []Footnote{{Anchor: 0, Text: "Matt. 28:19", Kind: footnoteKindCrossref, Caller: "-",
+		Refs: []NoteRef{{"MAT.28.19", 0, 11}}}}
+	return bd
+}
+
+// publisherUncoveredLine is the coverage note for the NKJV's Acts 8:37.
+const publisherUncoveredLine = "Nothing is listed for verse 8:37, which the cross-references don't cover."
+
 // An edition whose own apparatus the panel shows is not answered for the
-// Treasury. Its block (publisher_xrefs.go) needs no network and answers for
-// the selection whatever the Treasury covers, so a verse it adds that the
-// reference does not have, the NKJV's Acts 8:37, gets neither the note nor
-// the answer before loading: the panel loads and shows the edition's block.
+// Treasury. Its run (publisher_xrefs.go) needs no network and answers for the
+// selection whatever the Treasury covers, so a verse it adds that the
+// reference does not have, the NKJV's Acts 8:37, gets no coverage note over
+// the run. The panel's side of this — that it loads rather than answering
+// before loading — is TestAPublisherRunIsNotAnsweredForTheTreasuryOnThePanel,
+// which needs the app's theme to lay the run's labels out.
 func TestAPublisherBlockIsNotAnsweredForTheTreasury(t *testing.T) {
 	licenseNKJVForTest(t)
-	note := func(bd *BibleData) *BibleData {
-		v := &bd.Verses["Acts"][8][36]
-		v.Footnotes = []Footnote{{Anchor: 0, Text: "Matt. 28:19", Kind: footnoteKindCrossref, Caller: "-",
-			Refs: []NoteRef{{"MAT.28.19", 0, 11}}}}
-		return bd
-	}
-	const uncovered = "Nothing is listed for verse 8:37, which the cross-references don't cover."
+	st := &AppState{Bible: publisherNotedActs(), CurrentBook: "Acts", CurrentChapter: 8, CurrentVersion: "nkjv"}
+	span := selSpan{lo: 36, hi: 37}
 
 	withPublisherCrossRefs(t, "nkjv", true)
-	texts, loaded := coveragePanelIn(t, "nkjv", note(addedVersesBible()), "Acts", 8, 37, 37)
-	if !loaded {
-		t.Error("the panel answered before loading, over the edition's own block")
+	lst := buildCrossRefList(st, selectionVerses(st, "", span), nil, nil, st.pal(), func(crossRef) {})
+	if lst.CoverageNote != "" {
+		t.Errorf("the list over the edition's run carries the note %q", lst.CoverageNote)
 	}
-	all := strings.Join(texts, "\n")
-	if strings.Contains(all, uncovered) {
-		t.Errorf("the panel says the selection is not covered over the edition's own block: %q", texts)
-	}
-	if !strings.Contains(all, "NKJV cross references") {
-		t.Errorf("the edition's block is not shown: %q", texts)
-	}
-	st := &AppState{Bible: note(addedVersesBible()), CurrentBook: "Acts", CurrentChapter: 8, CurrentVersion: "nkjv"}
-	span := selSpan{lo: 36, hi: 37}
-	if lst := buildCrossRefList(st, selectionVerses(st, "", span), nil, nil, st.pal(), func(crossRef) {}); lst.CoverageNote != "" {
-		t.Errorf("the list over the edition's block carries the note %q", lst.CoverageNote)
+	if lst.PublisherCards != 1 {
+		t.Errorf("the edition's run has %d cards, want the note's Matthew 28:19", lst.PublisherCards)
 	}
 
-	// CONTROL: without the edition's block the same selection is answered
-	// before loading, and the list carries the note.
+	// CONTROL: without the edition's run the same selection carries the note.
 	withPublisherCrossRefs(t, "nkjv", false)
-	texts, loaded = coveragePanelIn(t, "nkjv", note(addedVersesBible()), "Acts", 8, 37, 37)
-	if loaded || !strings.Contains(strings.Join(texts, "\n"), uncovered) {
-		t.Errorf("without the edition's block: loaded %v, texts %q; want the note before loading", loaded, texts)
+	if lst := buildCrossRefList(st, selectionVerses(st, "", span), nil, nil, st.pal(), func(crossRef) {}); lst.CoverageNote != publisherUncoveredLine {
+		t.Errorf("without the edition's run the list carries %q, want %q", lst.CoverageNote, publisherUncoveredLine)
 	}
-	if lst := buildCrossRefList(st, selectionVerses(st, "", span), nil, nil, st.pal(), func(crossRef) {}); lst.CoverageNote != uncovered {
-		t.Errorf("without the edition's block the list carries %q, want %q", lst.CoverageNote, uncovered)
+	texts, loaded := coveragePanelIn(t, "nkjv", publisherNotedActs(), "Acts", 8, 37, 37)
+	if loaded || !strings.Contains(strings.Join(texts, "\n"), publisherUncoveredLine) {
+		t.Errorf("without the edition's run: loaded %v, texts %q; want the note before loading", loaded, texts)
 	}
 }

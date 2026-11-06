@@ -150,12 +150,12 @@ func menuBuiltOverThenNarrationTurns(t *testing.T, pane string, named bool) turn
 	return turnedMenu{st: st, w: w, menu: menu, paneSpan: paneSpan}
 }
 
-// The edition's own cross-reference block (publisherCrossRefsFor), opened
+// The edition's own cross-reference run (publisherCrossRefsFor), opened
 // after narration has turned the chapter under a selection, is read in the
 // selection's chapter, as the verses it is handed are: the Psalm's title
 // notes are the selected chapter's, and a citation of a passage that holds
-// the note's own verse is set as the passage on screen, bold and inert,
-// while one of the next chapter is a link. Invented Psalm 135 and 136 titles
+// the note's own verse stays in the note's caption as the passage on screen,
+// while one of the next chapter is a card. Invented Psalm 135 and 136 titles
 // and notes. Control: the same selection with the reader still on Psalm 135.
 func TestTheEditionsCrossReferenceBlockIsTheSelectionsChapterAfterATurn(t *testing.T) {
 	app := test.NewApp()
@@ -183,15 +183,18 @@ func TestTheEditionsCrossReferenceBlockIsTheSelectionsChapterAfterATurn(t *testi
 		}
 		lst := buildCrossRefList(st, selectionVerses(st, words, span), nil, nil, st.pal(), func(crossRef) {})
 		all := joinedTexts(lst.Objects)
-		links := hyperlinksIn(lst.Objects)
+		cards := cardLabelsIn(lst.Objects)
 		if !strings.Contains(all, "Neh. 12:45") || strings.Contains(all, "Ezra 3:11") {
-			t.Errorf("reader on Psalm %d: the block does not carry Psalm 135's title note alone:\n%s", st.CurrentChapter, all)
+			t.Errorf("reader on Psalm %d: the run does not carry Psalm 135's title note alone:\n%s", st.CurrentChapter, all)
 		}
-		if len(links) != 1 || links[0] != "136:1" {
-			t.Errorf("reader on Psalm %d: the block links %q, want 136:1 alone, with 135:1-3 the verse's own passage", st.CurrentChapter, links)
+		if len(cards) != 1 || cards[0] != "Psalms 136:1" {
+			t.Errorf("reader on Psalm %d: the cards are %q, want Psalms 136:1 alone, with 135:1-3 the verse's own passage", st.CurrentChapter, cards)
 		}
-		if lst.PublisherRows != 2 {
-			t.Errorf("reader on Psalm %d: %d publisher rows, want the title's and verse 1's", st.CurrentChapter, lst.PublisherRows)
+		if !strings.Contains(all, "Ps. 135:1-3") {
+			t.Errorf("reader on Psalm %d: the verse's own passage is not in the note's caption:\n%s", st.CurrentChapter, all)
+		}
+		if lst.PublisherCards != 1 || lst.PublisherLines != 2 {
+			t.Errorf("reader on Psalm %d: %d cards and %d lines, want the one card, and the title's note and the self-range as lines", st.CurrentChapter, lst.PublisherCards, lst.PublisherLines)
 		}
 	}
 }

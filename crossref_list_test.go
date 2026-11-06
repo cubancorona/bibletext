@@ -12,10 +12,12 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// The panel's composition: with the edition's block off, the list is
-// parallels then Treasury rows and nothing of the publisher's; with it on,
-// the publisher's notes lead under their own heading and credit, the Treasury
-// waits in a disclosure under its own, and the two never share a line.
+// The panel's composition. With the publisher's run off, the list is the
+// badged parallels then the Treasury rows and nothing of the publisher's;
+// with it on, one list of one card under section labels: the parallels
+// without their pill, the publisher's citations as cards with the words that
+// did not become one as captions, and the Treasury open beneath, less the
+// passages the publisher's cards already carry. Every check carries a control.
 
 // withPublisherCrossRefs flips the registry flag for one edition for the
 // test's duration — what the nkjvxrefs build tag does for the NKJV at init.
@@ -33,7 +35,7 @@ func withPublisherCrossRefs(t *testing.T, id string, on bool) {
 }
 
 // textsIn collects every visible string in a tree: canvas texts, labels,
-// rich-text segments (a hyperlink's words included) and accordion titles.
+// rich-text segments and what a card holds.
 func textsIn(o fyne.CanvasObject) []string {
 	var out []string
 	var walk func(o fyne.CanvasObject)
@@ -44,18 +46,11 @@ func textsIn(o fyne.CanvasObject) []string {
 		case *widget.Label:
 			out = append(out, x.Text)
 		case *widget.RichText:
-			// One paragraph: the segments of a note re-join as the reader
-			// sees them, links included.
 			var b strings.Builder
 			for _, s := range x.Segments {
 				b.WriteString(s.Textual())
 			}
 			out = append(out, b.String())
-		case *widget.Accordion:
-			for _, it := range x.Items {
-				out = append(out, it.Title)
-				walk(it.Detail)
-			}
 		case *tapCard:
 			walk(x.content)
 		case *fyne.Container:
@@ -79,19 +74,82 @@ func joinedTexts(objs []fyne.CanvasObject) string {
 	return b.String()
 }
 
-func hyperlinksIn(objs []fyne.CanvasObject) (links []string) {
+// cardsIn is every card in objs, in list order.
+func cardsIn(objs []fyne.CanvasObject) []*tapCard {
+	var out []*tapCard
 	var walk func(o fyne.CanvasObject)
 	walk = func(o fyne.CanvasObject) {
 		switch x := o.(type) {
+		case *tapCard:
+			out = append(out, x)
+		case *fyne.Container:
+			for _, c := range x.Objects {
+				walk(c)
+			}
+		}
+	}
+	for _, o := range objs {
+		walk(o)
+	}
+	return out
+}
+
+// cardLabelsIn is the reference line of every card in objs, in list order:
+// the first text a card holds.
+func cardLabelsIn(objs []fyne.CanvasObject) []string {
+	var out []string
+	for _, c := range cardsIn(objs) {
+		if ts := textsIn(c.content); len(ts) > 0 {
+			out = append(out, ts[0])
+		}
+	}
+	return out
+}
+
+// sectionLabelsIn is every section label in objs, in list order: the bold
+// monospace texts, which nothing else in the list is.
+func sectionLabelsIn(objs []fyne.CanvasObject) []string {
+	var out []string
+	var walk func(o fyne.CanvasObject)
+	walk = func(o fyne.CanvasObject) {
+		switch x := o.(type) {
+		case *canvas.Text:
+			if x.TextStyle.Monospace && x.TextStyle.Bold {
+				out = append(out, x.Text)
+			}
+		case *fyne.Container:
+			for _, c := range x.Objects {
+				walk(c)
+			}
+		}
+	}
+	for _, o := range objs {
+		walk(o)
+	}
+	return out
+}
+
+// bannedIn names every object in objs of a kind the list may not hold: the
+// widgets whose width cannot wrap, which widened the scroll's content past
+// the panel (crossref_list.go), and the override that clears the font cache.
+func bannedIn(objs []fyne.CanvasObject) []string {
+	var out []string
+	var walk func(o fyne.CanvasObject)
+	walk = func(o fyne.CanvasObject) {
+		switch x := o.(type) {
+		case *widget.Accordion:
+			out = append(out, "Accordion")
+		case *widget.Button:
+			out = append(out, "Button")
+		case *widget.Hyperlink:
+			out = append(out, "Hyperlink")
+		case *container.ThemeOverride:
+			out = append(out, "ThemeOverride")
 		case *widget.RichText:
 			for _, s := range x.Segments {
-				if h, ok := s.(*widget.HyperlinkSegment); ok {
-					links = append(links, h.Text)
+				if _, ok := s.(*widget.HyperlinkSegment); ok {
+					out = append(out, "HyperlinkSegment")
 				}
-			}
-		case *widget.Accordion:
-			for _, it := range x.Items {
-				walk(it.Detail)
 			}
 		case *tapCard:
 			walk(x.content)
@@ -104,7 +162,7 @@ func hyperlinksIn(objs []fyne.CanvasObject) (links []string) {
 	for _, o := range objs {
 		walk(o)
 	}
-	return links
+	return out
 }
 
 // licenseNKJVForTest makes the NKJV's licensed source available, as the
@@ -132,6 +190,20 @@ func listFixtureRefs() []crossRef {
 	}
 }
 
+func joined(ss []string) string { return strings.Join(ss, "|") }
+
+// hasLine reports whether some text in objs is exactly s.
+func hasLine(objs []fyne.CanvasObject, s string) bool {
+	for _, o := range objs {
+		for _, line := range textsIn(o) {
+			if line == s {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func TestCrossRefListWithoutThePublisherIsWhatItAlwaysWas(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -140,34 +212,52 @@ func TestCrossRefListWithoutThePublisherIsWhatItAlwaysWas(t *testing.T) {
 	st, sel := listFixtureState()
 
 	lst := buildCrossRefList(st, sel, listFixtureRefs(), nil, lightPalette, func(crossRef) {})
-	if lst.PublisherBlock || lst.PublisherRows != 0 || lst.Disclosure != nil {
-		t.Errorf("the publisher's block appeared with the flag off: %+v", lst)
+	if lst.PublisherCards != 0 || lst.PublisherLines != 0 || lst.Sections.Publisher {
+		t.Errorf("the publisher's run appeared with the flag off: %+v", lst)
 	}
 	if lst.Parallels != 1 || lst.TSKRows != 2 || len(lst.Objects) != 3 {
 		t.Errorf("list = %d parallels, %d Treasury rows, %d objects; want 1, 2, 3", lst.Parallels, lst.TSKRows, len(lst.Objects))
 	}
-	all := joinedTexts(lst.Objects)
-	if strings.Contains(all, "cross references") || strings.Contains(all, "Thomas Nelson") || strings.Contains(all, "John 7:50; 19:39") {
-		t.Errorf("a publisher's note or credit reached the plain list:\n%s", all)
+	if got := cardLabelsIn(lst.Objects); joined(got) != "Matthew 3:1|John 7:50|Galatians 6:15" {
+		t.Errorf("cards = %q", got)
 	}
-	// The Treasury rows stand in the open, so the footer names the Treasury;
-	// and the edition is licensed, so the footer carries its notice under the
-	// previews of its verse text.
-	sources, notice := crossRefFooterCredit(st)
-	if !strings.Contains(sources, "OpenBible.info") || !strings.Contains(sources, "Gospel parallels") {
+	if labels := sectionLabelsIn(lst.Objects); len(labels) != 0 {
+		t.Errorf("section labels in the plain list: %q", labels)
+	}
+	all := joinedTexts(lst.Objects)
+	if !strings.Contains(all, "PARALLEL") {
+		t.Error("the parallel row lost its pill, the one thing that says where it is from in a list with no labels")
+	}
+	for _, banned := range []string{"REFERENCES", "Thomas Nelson", "John 7:50; 19:39", "(John 1:13", "No NKJV"} {
+		if strings.Contains(all, banned) {
+			t.Errorf("a publisher's note, label or credit reached the plain list (%q):\n%s", banned, all)
+		}
+	}
+	// The footer names the Treasury in the words it has always had, and the
+	// synopsis beside it while a parallel row is on screen; the edition is
+	// licensed, so the footer carries its notice under the previews of its
+	// verse text.
+	sources, notice := crossRefFooterCredit(st, lst.Sections)
+	if sources != "Cross-references: OpenBible.info (CC-BY) · Gospel parallels: synopsis" {
 		t.Errorf("footer sources = %q", sources)
 	}
 	if !strings.Contains(notice, "Thomas Nelson") {
 		t.Errorf("a licensed edition's previews are shown without its notice: %q", notice)
 	}
+	// Without a parallel row the synopsis is not named: the one repair the
+	// plain list takes, since a synopsis was credited on every Psalm.
+	lst = buildCrossRefList(st, sel, listFixtureRefs()[1:], nil, lightPalette, func(crossRef) {})
+	if sources, _ := crossRefFooterCredit(st, lst.Sections); sources != tskCredit {
+		t.Errorf("footer sources without a parallel row = %q, want the Treasury alone", sources)
+	}
 	// CONTROL: a public-domain edition carries no notice.
 	st.CurrentVersion = "web"
-	if _, notice := crossRefFooterCredit(st); notice != "" {
+	if _, notice := crossRefFooterCredit(st, lst.Sections); notice != "" {
 		t.Errorf("a public-domain edition grew a notice: %q", notice)
 	}
 }
 
-func TestCrossRefListWithThePublisherLeadsAndSeparates(t *testing.T) {
+func TestCrossRefListWithThePublisherIsOneListOfCards(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	licenseNKJVForTest(t)
@@ -176,146 +266,279 @@ func TestCrossRefListWithThePublisherLeadsAndSeparates(t *testing.T) {
 	var followed []crossRef
 	lst := buildCrossRefList(st, sel, listFixtureRefs(), nil, lightPalette, func(c crossRef) { followed = append(followed, c) })
 
-	if !lst.PublisherBlock || lst.PublisherRows != 4 || lst.Parallels != 1 || lst.TSKRows != 2 {
-		t.Fatalf("list = %+v; want the publisher's four notes, one parallel and two Treasury rows", lst)
+	if lst.Parallels != 1 || lst.PublisherCards != 1 || lst.PublisherLines != 4 || lst.TSKRows != 1 {
+		t.Fatalf("list = %+v; want one parallel, one publisher card, four caption lines and one Treasury card", lst)
 	}
-	if lst.Disclosure == nil || len(lst.Disclosure.Items) != 1 || !strings.Contains(lst.Disclosure.Items[0].Title, "Treasury") {
-		t.Fatalf("the Treasury is not in a disclosure of its own: %+v", lst.Disclosure)
+	if !lst.Sections.Parallels || !lst.Sections.Publisher || !lst.Sections.Treasury {
+		t.Errorf("sections = %+v; want all three on screen", lst.Sections)
 	}
-	if lst.Disclosure.Items[0].Open {
-		t.Error("the disclosure opened although the publisher's block has rows")
+	// One heading idiom: the three runs' labels, the publisher's keyed per
+	// verse with notes since the selection spans three verses.
+	want := "GOSPEL PARALLELS|NKJV REFERENCES · VERSE 1|NKJV REFERENCES · VERSE 2|NKJV REFERENCES · VERSE 3|TREASURY OF SCRIPTURE KNOWLEDGE"
+	if got := sectionLabelsIn(lst.Objects); joined(got) != want {
+		t.Errorf("section labels = %q\nwant %q", got, want)
 	}
-	// Order: the parallel, then the publisher's block, then the disclosure last.
-	if _, ok := lst.Objects[len(lst.Objects)-1].(*widget.Accordion); !ok {
-		t.Error("the disclosure is not the last object")
+	// One card idiom: the parallel, the publisher's card, then the Treasury's.
+	// The Treasury's John 7:50 is the publisher's card's passage and goes;
+	// its Galatians 6:15 stays, since the tagged span inside the group did
+	// not become a card.
+	if got := cardLabelsIn(lst.Objects); joined(got) != "Matthew 3:1|John 7:50|Galatians 6:15" {
+		t.Errorf("cards = %q", got)
 	}
 	all := joinedTexts(lst.Objects)
-	if !strings.Contains(all, "NKJV cross references") || !strings.Contains(all, "John 7:50; 19:39") ||
-		!strings.Contains(all, "(John 1:13; Gal. 6:15; 1 John 3:9)") {
-		t.Errorf("the publisher's notes are not in the list verbatim:\n%s", all)
-	}
-	if !strings.Contains(all, "compare") {
-		t.Error("a parenthesised citation is shown without the legend")
-	}
-	// The two credits never share a block: the publisher's block (everything
-	// before the disclosure) never says OpenBible; the disclosure never says
-	// Thomas Nelson.
-	open := joinedTexts(lst.Objects[:len(lst.Objects)-1])
-	if strings.Contains(open, "OpenBible") {
-		t.Errorf("the Treasury's credit reached the publisher's block:\n%s", open)
-	}
-	if !strings.Contains(open, "Thomas Nelson") {
-		t.Errorf("the publisher's block carries no notice:\n%s", open)
-	}
-	inside := strings.Join(textsIn(lst.Disclosure), "\n")
-	if !strings.Contains(inside, "OpenBible") || strings.Contains(inside, "Thomas Nelson") {
-		t.Errorf("the disclosure's credit is wrong:\n%s", inside)
-	}
-	// The footer no longer names the Treasury while its rows are folded away.
-	if sources, _ := crossRefFooterCredit(st); strings.Contains(sources, "OpenBible") {
-		t.Errorf("the footer credits the Treasury while it sits in the disclosure: %q", sources)
-	}
-	// Only the resolved citations are links; the untagged one and the one
-	// the loaded text lacks are words; tapping a link follows the passage.
-	links := hyperlinksIn(lst.Objects[:len(lst.Objects)-1])
-	if len(links) != 2 || links[0] != "John 7:50" || links[1] != "Gal. 6:15" {
-		t.Fatalf("links = %q, want John 7:50 and Gal. 6:15 only", links)
-	}
-	for _, o := range lst.Objects {
-		for _, s := range richSegmentsIn(o) {
-			if h, ok := s.(*widget.HyperlinkSegment); ok && h.Text == "John 7:50" {
-				h.OnTapped()
-			}
+	// The words that did not become cards stand verbatim: the untagged note,
+	// the continuation the text lacks, the group whole, the self-range.
+	for _, want := range []string{"(Acts 10:38)", "19:39", "(John 1:13; Gal. 6:15; 1 John 3:9)", "John 3:1–21", "A synopsis probe"} {
+		if !strings.Contains(all, want) {
+			t.Errorf("the list lacks %q:\n%s", want, all)
 		}
 	}
-	if len(followed) != 1 || followed[0] != (crossRef{Book: "John", Chapter: 7, Verse: 50}) {
-		t.Errorf("tapping the citation followed %+v", followed)
+	// No pill under the parallels' label (the pill is a text of its own; the
+	// label's word is not it), no legend, no notice or credit in the list, no
+	// note re-joined as one paragraph.
+	if hasLine(lst.Objects, "PARALLEL") {
+		t.Errorf("the parallel card wears its pill under the GOSPEL PARALLELS label:\n%s", all)
 	}
-	// The self-range on 3:3 is bold words, not a link.
-	if strings.Contains(strings.Join(links, " "), "John 3:1") {
-		t.Error("a citation of the passage on screen became a link")
+	for _, banned := range []string{"compare", "Thomas Nelson", "OpenBible", "cross references", "John 7:50; 19:39"} {
+		if strings.Contains(all, banned) {
+			t.Errorf("%q is in the list:\n%s", banned, all)
+		}
+	}
+	if b := bannedIn(lst.Objects); len(b) != 0 {
+		t.Errorf("the list holds %v", b)
+	}
+	// A card's tap follows its passage.
+	cards := cardsIn(lst.Objects)
+	cards[1].Tapped(nil)
+	if len(followed) != 1 || followed[0] != (crossRef{Book: "John", Chapter: 7, Verse: 50}) {
+		t.Errorf("tapping the publisher's card followed %+v", followed)
+	}
+	// The note's remainder sits inside the card's block, before its rule.
+	var block *fyne.Container
+	for _, o := range lst.Objects {
+		if c, ok := o.(*fyne.Container); ok && len(c.Objects) > 0 && c.Objects[0] == cards[1] {
+			block = c
+		}
+	}
+	if block == nil || len(block.Objects) != 3 {
+		t.Fatalf("the publisher's card does not stand in a block of card, caption and rule: %+v", block)
+	}
+	if _, ok := block.Objects[2].(*widget.Separator); !ok || !strings.Contains(strings.Join(textsIn(block.Objects[1]), ""), "19:39") {
+		t.Errorf("the card's block is not card, caption, rule: %v / %q", block.Objects[2], textsIn(block.Objects[1]))
+	}
+	// The footer names both sets, the Treasury in its label's words, and the
+	// notice once.
+	sources, notice := crossRefFooterCredit(st, lst.Sections)
+	if sources != treasuryCredit+" · "+parallelsCredit {
+		t.Errorf("footer sources = %q", sources)
+	}
+	if !strings.Contains(notice, "Thomas Nelson") {
+		t.Errorf("the footer carries no notice: %q", notice)
 	}
 }
 
-func TestCrossRefListEmptyPublisherBlockOpensTheTreasury(t *testing.T) {
+// The run's label carries a verse key only where the key informs.
+func TestCrossRefListKeysTheRunOnlyWhereItInforms(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	licenseNKJVForTest(t)
+	withPublisherCrossRefs(t, "nkjv", true)
+	st, sel := listFixtureState()
+	nop := func(crossRef) {}
+
+	// One verse: no key anywhere.
+	lst := buildCrossRefList(st, sel[1:2], nil, nil, lightPalette, nop)
+	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES" {
+		t.Errorf("one verse: labels = %q", got)
+	}
+	// Two verses with notes: one label per verse, keyed.
+	lst = buildCrossRefList(st, sel[:2], nil, nil, lightPalette, nop)
+	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES · VERSE 1|NKJV REFERENCES · VERSE 2" {
+		t.Errorf("two verses: labels = %q", got)
+	}
+	// The title's notes are keyed TITLE, and a verse with no note is silently
+	// absent: Psalm 3's title has a note, its verses 1 and 2 have none.
+	st.CurrentBook, st.CurrentChapter = "Psalms", 3
+	ps := st.Bible.GetChapter("Psalms", 3)
+	for _, verses := range [][]Verse{ps, ps[:1]} {
+		lst = buildCrossRefList(st, verses, nil, nil, lightPalette, nop)
+		if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES · TITLE" {
+			t.Errorf("%d verses of Psalm 3: labels = %q", len(verses), got)
+		}
+	}
+	// CONTROL: a verse without a note and no title note: the bare label over
+	// the empty line (a Treasury row keeps the list from being the message).
+	lst = buildCrossRefList(st, ps[1:], []crossRef{{Book: "John", Chapter: 7, Verse: 50, Votes: 3}}, nil, lightPalette, nop)
+	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES|TREASURY OF SCRIPTURE KNOWLEDGE" {
+		t.Errorf("Psalm 3:2: labels = %q", got)
+	}
+}
+
+// A title note's card, and the Treasury rows the publisher's cards already
+// carry: dropped by containment, in both directions, and the section goes
+// when nothing of it is left.
+func TestCrossRefListDropsTheTreasuryRowsThePublisherCarries(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	licenseNKJVForTest(t)
 	withPublisherCrossRefs(t, "nkjv", true)
 	st, _ := listFixtureState()
-	// Psalm 3:2 has no notes.
 	st.CurrentBook, st.CurrentChapter = "Psalms", 3
-	sel := st.Bible.GetChapter("Psalms", 3)[1:]
+	st.Bible.Verses["2 Samuel"] = map[int][]Verse{
+		15: {{BookName: "2 Samuel", Book: "2 Samuel", Chapter: 15, Verse: 13, Text: "A fixture messenger came."}},
+		16: {{BookName: "2 Samuel", Book: "2 Samuel", Chapter: 16, Verse: 1, Text: "Over the fixture hill."}},
+	}
+	ps := st.Bible.GetChapter("Psalms", 3)
+	nop := func(crossRef) {}
+	refs := []crossRef{
+		{Book: "2 Samuel", Chapter: 15, Verse: 1, EndV: 18, Votes: 20}, // contains the card's start: goes
+		{Book: "2 Samuel", Chapter: 15, Verse: 14, Votes: 9},           // inside the card's passage: goes
+		{Book: "2 Samuel", Chapter: 16, Verse: 1, Votes: 5},            // another passage: stays
+		{Book: "John", Chapter: 7, Verse: 50, Votes: 3},
+	}
+	lst := buildCrossRefList(st, ps[:1], refs, nil, lightPalette, nop)
+	if got := cardLabelsIn(lst.Objects); joined(got) != "2 Samuel 15:13–17|2 Samuel 16:1|John 7:50" {
+		t.Errorf("cards = %q", got)
+	}
+	if lst.PublisherCards != 1 || lst.TSKRows != 2 || !lst.Sections.Treasury {
+		t.Errorf("list = %+v", lst)
+	}
+	// CONTROL: with the flag off every Treasury row shows.
+	withPublisherCrossRefs(t, "nkjv", false)
+	if lst := buildCrossRefList(st, ps[:1], refs, nil, lightPalette, nop); lst.TSKRows != 4 {
+		t.Errorf("flag off: %d Treasury rows, want all 4", lst.TSKRows)
+	}
+	withPublisherCrossRefs(t, "nkjv", true)
+	// Every Treasury row carried: no Treasury section, no credit.
+	lst = buildCrossRefList(st, ps[:1], refs[:2], nil, lightPalette, nop)
+	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES · TITLE" {
+		t.Errorf("labels with the Treasury wholly carried = %q", got)
+	}
+	if lst.TSKRows != 0 || lst.Sections.Treasury {
+		t.Errorf("a Treasury with nothing left is still on screen: %+v", lst)
+	}
+	if sources, _ := crossRefFooterCredit(st, lst.Sections); sources != "" {
+		t.Errorf("the footer credits a set with nothing on screen: %q", sources)
+	}
+}
 
-	lst := buildCrossRefList(st, sel, []crossRef{{Book: "John", Chapter: 7, Verse: 50, Votes: 3}}, nil, lightPalette, func(crossRef) {})
-	if lst.PublisherRows != 0 || !lst.PublisherBlock {
-		t.Fatalf("list = %+v", lst)
+func TestCrossRefListEmptyPublisherRunShowsTheLineOverTheTreasury(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	licenseNKJVForTest(t)
+	withPublisherCrossRefs(t, "nkjv", true)
+	st, john3 := listFixtureState()
+	st.CurrentBook, st.CurrentChapter = "Psalms", 3
+	ps := st.Bible.GetChapter("Psalms", 3)
+	nop := func(crossRef) {}
+
+	// Psalm 3:2 has no note: the label, one line, the Treasury open beneath.
+	lst := buildCrossRefList(st, ps[1:], []crossRef{{Book: "John", Chapter: 7, Verse: 50, Votes: 3}}, nil, lightPalette, nop)
+	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES|TREASURY OF SCRIPTURE KNOWLEDGE" {
+		t.Errorf("labels = %q", got)
+	}
+	if lst.PublisherCards != 0 || lst.PublisherLines != 1 || lst.TSKRows != 1 {
+		t.Errorf("list = %+v", lst)
 	}
 	all := joinedTexts(lst.Objects)
-	if !strings.Contains(all, "The NKJV gives no cross references for this selection.") {
-		t.Errorf("the empty state does not name the edition:\n%s", all)
+	if !strings.Contains(all, "No NKJV cross-references for this selection.") || strings.Contains(all, "Thomas Nelson") {
+		t.Errorf("the empty run is not one scoped line:\n%s", all)
 	}
-	if !lst.Disclosure.Items[0].Open {
-		t.Error("with nothing from the publisher, the Treasury must open by default")
+	// Nothing at all for the selection is the panel's message state, not a
+	// run of one line over an empty Treasury.
+	if lst := buildCrossRefList(st, ps[1:], nil, nil, lightPalette, nop); len(lst.Objects) != 0 {
+		t.Errorf("nothing to list, yet %d objects: %q", len(lst.Objects), joinedTexts(lst.Objects))
 	}
-	// A Treasury that failed to load says so in its own place; the block
-	// above still stands.
-	lst = buildCrossRefList(st, sel, nil, errors.New("offline"), lightPalette, func(crossRef) {})
-	inside := strings.Join(textsIn(lst.Disclosure), "\n")
-	if !strings.Contains(inside, "Couldn't load the Treasury") || !lst.PublisherBlock {
-		t.Errorf("an offline Treasury is not reported in the disclosure:\n%s", inside)
+	// Offline with nothing of the publisher's: the message state, which the
+	// panel turns into its connection error.
+	if lst := buildCrossRefList(st, ps[1:], nil, errors.New("offline"), lightPalette, nop); len(lst.Objects) != 0 {
+		t.Errorf("offline and no notes, yet %d objects: %q", len(lst.Objects), joinedTexts(lst.Objects))
+	}
+	// Offline with the publisher's notes: the run, then the Treasury's label
+	// and one line, no verb, no credit.
+	st.CurrentBook, st.CurrentChapter = "John", 3
+	lst = buildCrossRefList(st, john3[1:2], nil, errors.New("offline"), lightPalette, nop)
+	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES|TREASURY OF SCRIPTURE KNOWLEDGE" {
+		t.Errorf("offline labels = %q", got)
+	}
+	all = joinedTexts(lst.Objects)
+	if !strings.Contains(all, "Couldn't load cross-references.") || strings.Contains(all, "try again") {
+		t.Errorf("an offline Treasury is not one line in its place:\n%s", all)
+	}
+	if lst.Sections.Treasury || lst.PublisherCards != 1 {
+		t.Errorf("offline list = %+v", lst)
+	}
+	if sources, _ := crossRefFooterCredit(st, lst.Sections); sources != "" {
+		t.Errorf("the footer credits a Treasury that did not load: %q", sources)
+	}
+	if b := bannedIn(lst.Objects); len(b) != 0 {
+		t.Errorf("the offline list holds %v", b)
 	}
 	// CONTROL: with the flag off the same failure and no rows is an empty
 	// list, which the panel turns into its message.
 	withPublisherCrossRefs(t, "nkjv", false)
-	if lst := buildCrossRefList(st, sel, nil, errors.New("offline"), lightPalette, func(crossRef) {}); len(lst.Objects) != 0 {
+	if lst := buildCrossRefList(st, john3[1:2], nil, errors.New("offline"), lightPalette, nop); len(lst.Objects) != 0 {
 		t.Errorf("flag off, nothing loaded, yet %d objects", len(lst.Objects))
 	}
 }
 
-func richSegmentsIn(o fyne.CanvasObject) (segs []widget.RichTextSegment) {
-	switch x := o.(type) {
-	case *widget.RichText:
-		segs = append(segs, x.Segments...)
-	case *fyne.Container:
-		for _, c := range x.Objects {
-			segs = append(segs, richSegmentsIn(c)...)
+// The footer's sources line names the sets with rows on screen, and no other.
+func TestTheFooterNamesOnlyTheSetsOnScreen(t *testing.T) {
+	licenseNKJVForTest(t)
+	st, _ := listFixtureState()
+	for _, tc := range []struct {
+		flag     bool
+		sections crossRefSections
+		want     string
+	}{
+		{false, crossRefSections{Treasury: true, Parallels: true}, "Cross-references: OpenBible.info (CC-BY) · Gospel parallels: synopsis"},
+		{false, crossRefSections{Treasury: true}, "Cross-references: OpenBible.info (CC-BY)"},
+		{false, crossRefSections{Parallels: true}, "Gospel parallels: synopsis"},
+		{false, crossRefSections{}, ""},
+		{true, crossRefSections{Treasury: true, Parallels: true, Publisher: true}, "Treasury of Scripture Knowledge: OpenBible.info (CC-BY) · Gospel parallels: synopsis"},
+		{true, crossRefSections{Treasury: true, Publisher: true}, "Treasury of Scripture Knowledge: OpenBible.info (CC-BY)"},
+		{true, crossRefSections{Publisher: true}, ""},
+	} {
+		withPublisherCrossRefs(t, "nkjv", tc.flag)
+		if sources, _ := crossRefFooterCredit(st, tc.sections); sources != tc.want {
+			t.Errorf("flag %v, %+v: sources = %q, want %q", tc.flag, tc.sections, sources, tc.want)
 		}
 	}
-	return segs
 }
 
-// The row renders the note as ONE paragraph: the words between and around the
-// citations are kept, in order, so the reader sees the print entry.
-func TestPublisherCrossRefRowIsOneParagraph(t *testing.T) {
+// A title card previews the chapter's superscription and wears the Title tag;
+// the same passage as an ordinary card previews the verse.
+func TestATitleCardPreviewsTheSuperscription(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
-	row := publisherCrossRef{Verse: 2, Text: "(John 1:13; Gal. 6:15; 1 John 3:9)",
-		Targets: []publisherTarget{{Start: 12, End: 21, Ref: crossRef{Book: "Galatians", Chapter: 6, Verse: 15}}}}
-	obj := publisherCrossRefRow(row, lightPalette, func(crossRef) {})
-	var texts []string
-	for _, s := range richSegmentsIn(obj) {
-		texts = append(texts, s.Textual())
+	st := &AppState{Bible: publisherFixture(), CurrentBook: "1 Samuel", CurrentChapter: 19, CurrentVersion: "nkjv"}
+	ref := crossRef{Book: "Psalms", Chapter: 59, Verse: 1}
+	nop := func(crossRef) {}
+	title := textsIn(crossRefRow(st, crossRefCard{Ref: ref, Label: "Psalms 59", Tag: "Title", Title: true}, lightPalette, nop))
+	got := strings.Join(title, "\n")
+	if len(title) < 3 || title[0] != "Psalms 59" || title[1] != "Title" || !strings.Contains(got, "A fixture song of David") || strings.Contains(got, "Rescue me") {
+		t.Errorf("the title card reads %q; want the chapter, the Title tag and the superscription", title)
 	}
-	if strings.Join(texts, "") != row.Text {
-		t.Errorf("segments %q do not re-join to the note %q", texts, row.Text)
+	// CONTROL: the ordinary card of the same verse.
+	plain := textsIn(crossRefRow(st, passageCard(ref, false), lightPalette, nop))
+	if got := strings.Join(plain, "\n"); plain[0] != "Psalms 59:1" || strings.Contains(got, "Title") || !strings.Contains(got, "Rescue me") {
+		t.Errorf("the plain card reads %q", plain)
 	}
-	if len(texts) != 3 || texts[1] != "Gal. 6:15" {
-		t.Errorf("segments = %q, want words, link, words", texts)
+	// A chapter whose title the loaded text lacks previews its first verse,
+	// where the tap lands.
+	bare := textsIn(crossRefRow(st, crossRefCard{Ref: crossRef{Book: "Psalms", Chapter: 45, Verse: 4}, Label: "Psalms 45", Tag: "Title", Title: true}, lightPalette, nop))
+	if got := strings.Join(bare, "\n"); !strings.Contains(got, "Ride on") {
+		t.Errorf("a title card over an untitled chapter reads %q", bare)
 	}
-	// The origin key.
-	if all := strings.Join(textsIn(obj), "\n"); !strings.HasPrefix(all, "2\n") {
-		t.Errorf("the row does not lead with its verse key:\n%s", all)
+	// A basis tag stands in the same slot.
+	basis := textsIn(crossRefRow(st, crossRefCard{Ref: crossRef{Book: "Job", Chapter: 13, Verse: 16}, Label: "Job 13:16", Tag: "LXX"}, lightPalette, nop))
+	if len(basis) < 2 || basis[0] != "Job 13:16" || basis[1] != "LXX" {
+		t.Errorf("the qualified card reads %q", basis)
 	}
-	title := publisherCrossRefRow(publisherCrossRef{Verse: 0, Text: "2 Sam. 15:13–17"}, lightPalette, nil)
-	if all := strings.Join(textsIn(title), "\n"); !strings.HasPrefix(all, "Title\n") {
-		t.Errorf("a title note's row does not lead with Title:\n%s", all)
-	}
-	_ = container.NewVBox
 }
 
 // A ROW'S TAP WASHES WHAT THE ROW CITES. It used to wash the first verse
-// only — "John 1:1-3" lit John 1:1 — though Go to and the verse of the day
+// only — "John 1:1–3" lit John 1:1 — though Go to and the verse of the day
 // already wash a whole range. A wash is one chapter, so a range that runs on
 // is washed to the end of the chapter it starts in.
 func TestFollowingARowWashesTheRangeItCites(t *testing.T) {
@@ -380,7 +603,7 @@ func TestACrossReferencePreviewKeepsTheSmallCapitals(t *testing.T) {
 		SmallCaps: []TextSpan{{Start: 19, End: 22}, {Start: 28, End: 32}},
 	}}}}}
 	st := &AppState{Bible: bd, CurrentBook: "Psalms", CurrentChapter: 23, CurrentVersion: "nkjv"}
-	row := crossRefRow(st, crossRef{Book: "Psalms", Chapter: 23, Verse: 1}, st.pal(), func(crossRef) {})
+	row := crossRefRow(st, passageCard(crossRef{Book: "Psalms", Chapter: 23, Verse: 1}, false), st.pal(), func(crossRef) {})
 	got := strings.Join(textsIn(row), "\n")
 	if !strings.Contains(got, "the Lord Gᴏᴅ: the Lᴏʀᴅ is my shepherd.") {
 		t.Errorf("the preview reads %q; it must keep the small capitals the page draws", got)
