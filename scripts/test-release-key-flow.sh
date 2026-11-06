@@ -418,9 +418,10 @@ BIBLETEXT_RELEASE_LDFLAGS="$release_flags" \
   "$PACKAGE_VERIFIER" "$LINKED_TEST" "$LINKED_TEST" \
   >"$TEST_TMP/package-verifier.log"
 assert_contains "$TEST_TMP/package-verifier.log" "Verified keyed release value"
-# The package verifier also excludes both next and development build tags
-# from shipping artifacts (scripts/verify-not-next.sh, docs/NEXT.md).
-assert_contains "$TEST_TMP/package-verifier.log" "No next or bibletextdev tags"
+# The package verifier also excludes the next, development and nkjvxrefs
+# build tags from shipping artifacts (scripts/verify-not-next.sh,
+# docs/NEXT.md, docs/SCRIPTURE_WORKLIST.md S20).
+assert_contains "$TEST_TMP/package-verifier.log" "No next, bibletextdev or nkjvxrefs tags"
 assert_absent "$TEST_TMP/package-verifier.log" "$marker"
 
 # Shadow the macOS utility so the missing-key case cannot inspect a real login

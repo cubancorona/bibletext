@@ -158,4 +158,4 @@ for artifact in "$@"; do
       ;;
   esac
 done
-echo "No next or bibletextdev tags: ${*}"
+echo "No next, bibletextdev or nkjvxrefs tags: ${*}"
