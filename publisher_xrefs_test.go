@@ -372,6 +372,30 @@ func TestABasisRidesItsCitation(t *testing.T) {
 	}
 }
 
+// THE SPANS INDEX THE TEXT THE ROW STORES. The decoder trims a note before it
+// takes the spans, and the row stores the trimmed text, which split cuts by
+// them; the resolver used to read the spans against the text as delivered,
+// so a note with leading whitespace had its ":title" and basis read from the
+// wrong offset.
+func TestNoteSpansIndexTheStoredText(t *testing.T) {
+	bd := publisherFixture()
+	note := resolvedNote(t, bd, "1 Samuel", 19, 12, "  Ps. 59:title", NoteRef{"PSA.59", 0, 6})
+	if note.Text != "Ps. 59:title" {
+		t.Fatalf("the row stores %q, want the trimmed text", note.Text)
+	}
+	if len(note.Targets) != 1 || !note.Targets[0].Title || note.Targets[0].Cut != 12 {
+		t.Errorf("against the stored text the citation is the title, cut at 12; got %+v", note.Targets)
+	}
+	if cards, remainder := note.split(); len(cards) != 1 || remainder != "" {
+		t.Errorf("split = %d cards, remainder %q; want one card and nothing left", len(cards), remainder)
+	}
+	// CONTROL: the same note without the whitespace resolves to the same target.
+	plain := resolvedNote(t, bd, "1 Samuel", 19, 12, "Ps. 59:title", NoteRef{"PSA.59", 0, 6})
+	if len(plain.Targets) != 1 || plain.Targets[0] != note.Targets[0] {
+		t.Errorf("the note resolved differently with and without leading whitespace: %+v / %+v", plain.Targets, note.Targets)
+	}
+}
+
 // resolvedNote resolves one note's text and spans against the fixture, as a
 // note on book ch:verse, and returns it as the panel receives it.
 func resolvedNote(t *testing.T, bd *BibleData, book string, ch, verse int, text string, refs ...NoteRef) publisherCrossRef {

@@ -296,7 +296,11 @@ func publisherCrossRefsFor(bd *BibleData, book string, chapter int, selected []V
 			return
 		}
 		row := publisherCrossRef{Verse: verse, Text: text}
-		runes := []rune(fn.Text)
+		// The spans index the text the row stores, which the decoder trims
+		// before it takes them (normalizeNoteText), and split cuts that text
+		// by them; read against the text as delivered, a leading space would
+		// put the ":title" and basis reads and every cut one rune off.
+		runes := []rune(text)
 		for _, r := range fn.Refs {
 			if r.Start < 0 || r.End > len(runes) || r.Start >= r.End {
 				continue // a span that does not fit the text it claims to index
