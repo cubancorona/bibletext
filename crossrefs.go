@@ -164,18 +164,22 @@ func (r tskRow) crossRef() crossRef {
 // starts in.
 func (c crossRef) crossBook() bool { return c.EndV != 0 && c.EndBook != "" && c.EndBook != c.Book }
 
+// label is the row's reference line. A range is spelled with an en dash, as
+// the panel's header spells the selection's (citationForSelection, "John
+// 3:1–3") and as the coverage note spells its verse runs: the hyphen it used to
+// carry made the rows the one place in the panel a range read otherwise.
 func (c crossRef) label() string {
 	switch {
 	case c.crossBook():
-		return fmt.Sprintf("%s %d:%d-%s %d:%d", c.Book, c.Chapter, c.Verse, c.EndBook, c.EndCh, c.EndV)
+		return fmt.Sprintf("%s %d:%d–%s %d:%d", c.Book, c.Chapter, c.Verse, c.EndBook, c.EndCh, c.EndV)
 	case c.EndV == 0 || ((c.EndCh == 0 || c.EndCh == c.Chapter) && c.EndV == c.Verse):
 		// A range whose end is its start is one verse, however it was spelled:
-		// "Romans 16:25-25" is not a citation anyone writes.
+		// "Romans 16:25–25" is not a citation anyone writes.
 		return fmt.Sprintf("%s %d:%d", c.Book, c.Chapter, c.Verse)
 	case c.EndCh == 0 || c.EndCh == c.Chapter:
-		return fmt.Sprintf("%s %d:%d-%d", c.Book, c.Chapter, c.Verse, c.EndV)
+		return fmt.Sprintf("%s %d:%d–%d", c.Book, c.Chapter, c.Verse, c.EndV)
 	default:
-		return fmt.Sprintf("%s %d:%d-%d:%d", c.Book, c.Chapter, c.Verse, c.EndCh, c.EndV)
+		return fmt.Sprintf("%s %d:%d–%d:%d", c.Book, c.Chapter, c.Verse, c.EndCh, c.EndV)
 	}
 }
 

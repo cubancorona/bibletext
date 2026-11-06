@@ -26,7 +26,7 @@ func TestParseOSISTarget(t *testing.T) {
 	if !ok || rng.Book != "Romans" || rng.Verse != 19 || rng.EndV != 20 {
 		t.Errorf("range: %+v ok=%v", rng, ok)
 	}
-	if rng.label() != "Romans 1:19-20" {
+	if rng.label() != "Romans 1:19–20" {
 		t.Errorf("range label = %q", rng.label())
 	}
 
@@ -206,7 +206,7 @@ func TestACrossBookRangeKeepsItsEndBook(t *testing.T) {
 	if !ok || r.Book != "Leviticus" || r.EndBook != "Numbers" || r.EndCh != 1 || r.EndV != 1 {
 		t.Fatalf("parsed %+v (ok=%v)", r, ok)
 	}
-	if got := r.label(); got != "Leviticus 27:34-Numbers 1:1" {
+	if got := r.label(); got != "Leviticus 27:34–Numbers 1:1" {
 		t.Errorf("label %q, want \"Leviticus 27:34-Numbers 1:1\"", got)
 	}
 
@@ -222,10 +222,10 @@ func TestACrossBookRangeKeepsItsEndBook(t *testing.T) {
 		want    string
 		version string
 	}{
-		{"Numbers", 3, 1, "Leviticus 27:34-Numbers 1:1", "web"},
-		{"Numbers", 3, 1, "Leviticus 27:34-Numbers 1:1", "bsb"},
-		{"Acts", 11, 30, "2 John 1:1-3 John 1:14", "web"},
-		{"Acts", 11, 30, "2 John 1:1-3 John 1:14", "nkjv"},
+		{"Numbers", 3, 1, "Leviticus 27:34–Numbers 1:1", "web"},
+		{"Numbers", 3, 1, "Leviticus 27:34–Numbers 1:1", "bsb"},
+		{"Acts", 11, 30, "2 John 1:1–3 John 1:14", "web"},
+		{"Acts", 11, 30, "2 John 1:1–3 John 1:14", "nkjv"},
 	} {
 		st := &AppState{Bible: bd, CurrentBook: tc.book, CurrentChapter: tc.ch, CurrentVersion: tc.version}
 		refs := crossRefsForSelection(st, "", selSpan{lo: tc.v, hi: tc.v})
@@ -299,11 +299,11 @@ func TestTheCapCountsOnlyRowsTheReaderCanSee(t *testing.T) {
 	}
 	// CONTROL: the two rows really are hidden behind the parallels, or the
 	// count below is not about hiding at all.
-	if strings.Join(parallels, "; ") != "Mark 6:7-13; Luke 9:1-6" {
-		t.Fatalf("control: Matthew 10:1's parallels are %q, want Mark 6:7-13 and Luke 9:1-6", parallels)
+	if strings.Join(parallels, "; ") != "Mark 6:7–13; Luke 9:1–6" {
+		t.Fatalf("control: Matthew 10:1's parallels are %q, want Mark 6:7–13 and Luke 9:1–6", parallels)
 	}
 	for _, lbl := range treasury {
-		if lbl == "Mark 6:7-13" || lbl == "Luke 9:1-6" {
+		if lbl == "Mark 6:7–13" || lbl == "Luke 9:1–6" {
 			t.Fatalf("control: the Treasury rows repeat the parallel %q", lbl)
 		}
 	}
@@ -547,7 +547,9 @@ func TestTheTargetMovesAreExactlyTheRowsDecided(t *testing.T) {
 		return parts
 	}
 
-	// The table, spelled as the list is.
+	// The table, spelled as the list is: a label spells a range with an en
+	// dash, the list with the dataset's hyphen.
+	asListed := func(label string) string { return strings.ReplaceAll(label, "–", "-") }
 	var table []string
 	for _, m := range crossRefTargetMoves {
 		from, ok1 := parseOSISTarget(m.from)
@@ -560,7 +562,7 @@ func TestTheTargetMovesAreExactlyTheRowsDecided(t *testing.T) {
 			if !ok {
 				t.Fatalf("the row from %s does not parse", s)
 			}
-			table = append(table, src.label()+" | "+from.label()+" | "+to.label())
+			table = append(table, asListed(src.label()+" | "+from.label()+" | "+to.label()))
 		}
 	}
 	want := slices.Clone(crossRefDecidedMoves)
@@ -611,7 +613,7 @@ func TestTheTargetMovesAreExactlyTheRowsDecided(t *testing.T) {
 		ch, v, _ := strings.Cut(source[sp+1:], ":")
 		var out []string
 		for _, r := range idx[source[:sp]+"|"+ch+"|"+v] {
-			out = append(out, r.crossRef().label())
+			out = append(out, asListed(r.crossRef().label()))
 		}
 		return out
 	}
@@ -748,7 +750,7 @@ func TestACorrectionLeavesRowsThatHaveChangedAlone(t *testing.T) {
 			"a verse the dataset lacks, the end of a range now",
 			asMade + "Isa.53.7\tActs.8.32-Acts.8.37\t3\n", []string{"names Acts 8:37 itself"},
 			func(l map[string][]string) bool {
-				return has(l, "Romans|10|9", "Acts 8:36") && has(l, "Isaiah|53|7", "Acts 8:32-37")
+				return has(l, "Romans|10|9", "Acts 8:36") && has(l, "Isaiah|53|7", "Acts 8:32–37")
 			},
 		},
 		{

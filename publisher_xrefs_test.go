@@ -43,11 +43,12 @@ func TestParseUSFMRefID(t *testing.T) {
 			t.Errorf("parseUSFMRefID(%q) = %+v, %v; want %+v, %v", tc.id, got, ok, tc.want, tc.ok)
 		}
 	}
-	// The labels the panel would show for a range.
-	if r, _ := parseUSFMRefID("MAT.3.1-MAT.3.12"); r.label() != "Matthew 3:1-12" {
+	// The labels the panel would show for a range: an en dash, as the header
+	// spells the selection.
+	if r, _ := parseUSFMRefID("MAT.3.1-MAT.3.12"); r.label() != "Matthew 3:1–12" {
 		t.Errorf("range label = %q", r.label())
 	}
-	if r, _ := parseUSFMRefID("MRK.8.34-MRK.9.1"); r.label() != "Mark 8:34-9:1" {
+	if r, _ := parseUSFMRefID("MRK.8.34-MRK.9.1"); r.label() != "Mark 8:34–9:1" {
 		t.Errorf("cross-chapter range label = %q", r.label())
 	}
 }
@@ -211,7 +212,7 @@ func TestPublisherCrossRefsSelectionAndTitle(t *testing.T) {
 	}
 	bd.Verses["2 Samuel"] = map[int][]Verse{15: {{BookName: "2 Samuel", Book: "2 Samuel", Chapter: 15, Verse: 13, Text: "Now a messenger came."}}}
 	rows = publisherCrossRefsFor(bd, "Psalms", 3, ps[:1])
-	if len(rows[0].Targets) != 1 || rows[0].Targets[0].Ref.label() != "2 Samuel 15:13-17" || rows[0].Targets[0].Current {
+	if len(rows[0].Targets) != 1 || rows[0].Targets[0].Ref.label() != "2 Samuel 15:13–17" || rows[0].Targets[0].Current {
 		t.Errorf("the title's citation did not resolve once the passage was loaded: %+v", rows[0].Targets)
 	}
 	// CONTROL: a selection that does not reach verse 1 carries no title note.
@@ -454,7 +455,7 @@ func TestSplitDividesANoteIntoCardsAndRemainder(t *testing.T) {
 		{"a pericope note on its opening verse: the self-range is words, the rest cards",
 			"Matthew", 3, 1, "Matt. 3:1–12; Mark 1:3–8",
 			[]NoteRef{{"MAT.3.1-MAT.3.12", 0, 12}, {"MRK.1.3-MRK.1.8", 14, 24}},
-			[]string{"Mark 1:3-8"}, "Matt. 3:1–12", []string{""}, false},
+			[]string{"Mark 1:3–8"}, "Matt. 3:1–12", []string{""}, false},
 		{"a wholly untagged note is its own remainder",
 			"John", 3, 1, "(Acts 10:38)", nil, nil, "(Acts 10:38)", nil, false},
 		{"a note with no colon", "John", 3, 1, "(Jude 6)", nil, nil, "(Jude 6)", nil, false},

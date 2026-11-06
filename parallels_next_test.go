@@ -231,10 +231,10 @@ func TestOtherOccasionRowsStandBetweenTheParallelsAndTheTreasury(t *testing.T) {
 		got = append(got, kind+" "+c.label())
 	}
 	want := []string{
-		"parallel Mark 3:20-30",
-		"other Luke 11:17-18",
+		"parallel Mark 3:20–30",
+		"other Luke 11:17–18",
 		"treasury Mark 3:24",
-		"treasury Luke 11:14-23",
+		"treasury Luke 11:14–23",
 		"treasury Daniel 5:1",
 	}
 	if strings.Join(got, "; ") != strings.Join(want, "; ") {
@@ -271,7 +271,7 @@ func TestOtherOccasionRowsAreLabelled(t *testing.T) {
 	if !has(0, "Matthew 6:1") || !has(0, "PARALLEL") || has(0, otherOccasionLabel) {
 		t.Errorf("row 1 is not the same-occasion row with its tag alone: %q", rows[0])
 	}
-	if !has(1, "Matthew 6:9-13") || !has(1, otherOccasionLabel) || !has(1, "A synthetic saying") || has(1, "PARALLEL") {
+	if !has(1, "Matthew 6:9–13") || !has(1, otherOccasionLabel) || !has(1, "A synthetic saying") || has(1, "PARALLEL") {
 		t.Errorf("row 2 is not the other-occasion row with its label alone: %q", rows[1])
 	}
 	if !has(2, "John 7:50") || has(2, "PARALLEL") || has(2, otherOccasionLabel) {
@@ -303,8 +303,8 @@ func TestOtherOccasionRowsFollowTheTranslationsNumbering(t *testing.T) {
 		{"nkjv", "Matthew", 23, 13, []string{"Luke 11:52"}},
 		{"web", "Matthew", 23, 13, nil},
 		{"nkjv", "Matthew", 23, 14, nil},
-		{"web", "Matthew", 5, 29, []string{"Matthew 18:8-9", "Mark 9:43-47"}},
-		{"bsb", "Matthew", 5, 29, []string{"Matthew 18:8-9", "Mark 9:43-47"}},
+		{"web", "Matthew", 5, 29, []string{"Matthew 18:8–9", "Mark 9:43–47"}},
+		{"bsb", "Matthew", 5, 29, []string{"Matthew 18:8–9", "Mark 9:43–47"}},
 	} {
 		st := &AppState{Bible: bd, CurrentBook: tc.book, CurrentChapter: tc.ch, CurrentVersion: tc.vid}
 		got := labelsOf(crossRefsForSelection(st, "", selSpan{lo: tc.v, hi: tc.v}), "other")
@@ -349,12 +349,12 @@ func TestOtherOccasionRowsAreDeduplicatedByTheVersesTheyCover(t *testing.T) {
 	st := &AppState{Bible: bd, CurrentBook: "Luke", CurrentChapter: 22, CurrentVersion: "web"}
 	got := labelsOf(crossRefsForSelection(st, "", selSpan{lo: 26, hi: 26}), "other")
 	joined := strings.Join(got, "; ")
-	for _, want := range []string{"Matthew 20:25-27", "Mark 10:42-44", "Matthew 23:11", "Mark 9:35"} {
+	for _, want := range []string{"Matthew 20:25–27", "Mark 10:42–44", "Matthew 23:11", "Mark 9:35"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("Luke 22:26 does not list %s: %q", want, got)
 		}
 	}
-	for _, gone := range []string{"Matthew 20:26-27", "Mark 10:43-44"} {
+	for _, gone := range []string{"Matthew 20:26–27", "Mark 10:43–44"} {
 		for _, lbl := range got {
 			if lbl == gone {
 				t.Errorf("Luke 22:26 lists %s inside a wider row: %q", gone, got)
@@ -451,14 +451,14 @@ func TestTheNamedOtherOccasionPairs(t *testing.T) {
 		ch, v int
 		want  string
 	}{
-		{"Luke", 11, 2, "Matthew 6:9-13"}, // the Lord's Prayer
-		{"Matthew", 6, 9, "Luke 11:2-4"},
-		{"Luke", 11, 9, "Matthew 7:7-11"},   // ask, seek, knock
-		{"Luke", 15, 4, "Matthew 18:12-14"}, // the lost sheep
-		{"Matthew", 18, 12, "Luke 15:4-7"},
-		{"Luke", 12, 42, "Matthew 24:45-51"}, // the faithful servant
-		{"Luke", 13, 34, "Matthew 23:37-39"}, // the lament over Jerusalem
-		{"Matthew", 23, 37, "Luke 13:34-35"},
+		{"Luke", 11, 2, "Matthew 6:9–13"}, // the Lord's Prayer
+		{"Matthew", 6, 9, "Luke 11:2–4"},
+		{"Luke", 11, 9, "Matthew 7:7–11"},   // ask, seek, knock
+		{"Luke", 15, 4, "Matthew 18:12–14"}, // the lost sheep
+		{"Matthew", 18, 12, "Luke 15:4–7"},
+		{"Luke", 12, 42, "Matthew 24:45–51"}, // the faithful servant
+		{"Luke", 13, 34, "Matthew 23:37–39"}, // the lament over Jerusalem
+		{"Matthew", 23, 37, "Luke 13:34–35"},
 		{"Luke", 8, 16, "Luke 11:33"}, // the lamp, twice in Luke
 		{"Luke", 11, 33, "Luke 8:16"},
 	} {

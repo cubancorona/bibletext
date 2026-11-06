@@ -61,7 +61,7 @@ func TestAddOtherOccasionRowListsEachPassageOnceAtItsWidest(t *testing.T) {
 	for _, r := range rows {
 		labels = append(labels, r.label())
 	}
-	want := "Luke 11:14-15; Matthew 9:32-34; Mark 3:31; Matthew 12:22-24"
+	want := "Luke 11:14–15; Matthew 9:32–34; Mark 3:31; Matthew 12:22–24"
 	if strings.Join(labels, "; ") != want {
 		t.Errorf("rows = %q, want %q", strings.Join(labels, "; "), want)
 	}
@@ -94,7 +94,7 @@ func TestAnOtherOccasionRowHidesTheTreasuryRowsInsideIt(t *testing.T) {
 	}
 	resolve := func(c crossRef) []crossRef { return []crossRef{c} }
 	hidden := crossRefHidden{
-		labels: map[string]bool{"Mark 3:20-30": true},
+		labels: map[string]bool{"Mark 3:20–30": true},
 		covers: []crossRef{{Book: "Luke", Chapter: 11, Verse: 2, EndV: 4, Parallel: true, OtherOccasion: true}},
 	}
 	mine, read := treasuryRowsFor(rows, resolve, hidden)
@@ -102,7 +102,7 @@ func TestAnOtherOccasionRowHidesTheTreasuryRowsInsideIt(t *testing.T) {
 	for _, c := range mine[:4] {
 		got = append(got, c.label())
 	}
-	want := "Luke 11:1-4; Luke 11:4-12:1; Mark 3:24; Luke 24:53-John 1:1"
+	want := "Luke 11:1–4; Luke 11:4–12:1; Mark 3:24; Luke 24:53–John 1:1"
 	if strings.Join(got, "; ") != want {
 		t.Errorf("the first rows shown are %q, want %q", strings.Join(got, "; "), want)
 	}

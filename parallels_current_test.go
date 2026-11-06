@@ -66,7 +66,7 @@ func TestTheShippingBuildListsNoOtherOccasion(t *testing.T) {
 		}
 		got = append(got, c.label())
 	}
-	if strings.Join(got, "; ") != "Matthew 6:9; Matthew 6:9-13" {
+	if strings.Join(got, "; ") != "Matthew 6:9; Matthew 6:9–13" {
 		t.Errorf("Luke 11:2 lists %q, want both Treasury rows", got)
 	}
 

@@ -169,12 +169,12 @@ func TestADoxologyRangeKeepsItsEndInEveryTranslation(t *testing.T) {
 		end        int
 		want, from string
 	}{
-		{"bsb", 25, "Romans 16:25-26", "14:24-25"},
-		{"bsb", 26, "Romans 16:25-27", "14:24-26"},
-		{"nkjv", 25, "Romans 16:25-26", "14:24-25"},
-		{"nkjv", 26, "Romans 16:25-27", "14:24-26"},
-		{"web", 25, "Romans 14:24-25", "14:24-25"},
-		{"webc", 26, "Romans 14:24-26", "14:24-26"},
+		{"bsb", 25, "Romans 16:25–26", "14:24-25"},
+		{"bsb", 26, "Romans 16:25–27", "14:24-26"},
+		{"nkjv", 25, "Romans 16:25–26", "14:24-25"},
+		{"nkjv", 26, "Romans 16:25–27", "14:24-26"},
+		{"web", 25, "Romans 14:24–25", "14:24-25"},
+		{"webc", 26, "Romans 14:24–26", "14:24-26"},
 	} {
 		got, ok := targetIn(t, tc.vid, crossRef{Book: "Romans", Chapter: 14, Verse: 24, EndV: tc.end})
 		if !ok {
@@ -214,23 +214,23 @@ func TestRangesThroughReorderedVersesHoldTheirVerses(t *testing.T) {
 	}{
 		{"bsb", crossRef{Book: "Philippians", Chapter: 1, Verse: 16}, "Philippians 1:17"},
 		{"bsb", crossRef{Book: "Philippians", Chapter: 1, Verse: 17}, "Philippians 1:16"},
-		{"bsb", crossRef{Book: "Philippians", Chapter: 1, Verse: 16, EndV: 17}, "Philippians 1:16-17"},
-		{"bsb", crossRef{Book: "Philippians", Chapter: 1, Verse: 12, EndV: 17}, "Philippians 1:12-17"},
-		{"bsb", crossRef{Book: "Philippians", Chapter: 1, Verse: 13, EndV: 16}, "Philippians 1:13-17"},
-		{"web", crossRef{Book: "Philippians", Chapter: 1, Verse: 13, EndV: 16}, "Philippians 1:13-16"},
+		{"bsb", crossRef{Book: "Philippians", Chapter: 1, Verse: 16, EndV: 17}, "Philippians 1:16–17"},
+		{"bsb", crossRef{Book: "Philippians", Chapter: 1, Verse: 12, EndV: 17}, "Philippians 1:12–17"},
+		{"bsb", crossRef{Book: "Philippians", Chapter: 1, Verse: 13, EndV: 16}, "Philippians 1:13–17"},
+		{"web", crossRef{Book: "Philippians", Chapter: 1, Verse: 13, EndV: 16}, "Philippians 1:13–16"},
 		{"nkjv", crossRef{Book: "Matthew", Chapter: 23, Verse: 13}, "Matthew 23:14"},
-		{"nkjv", crossRef{Book: "Matthew", Chapter: 23, Verse: 13, EndV: 14}, "Matthew 23:13-14"},
-		{"nkjv", crossRef{Book: "Matthew", Chapter: 23, Verse: 14, EndV: 39}, "Matthew 23:13-39"},
-		{"nkjv", crossRef{Book: "Matthew", Chapter: 23, Verse: 1, EndV: 13}, "Matthew 23:1-14"},
+		{"nkjv", crossRef{Book: "Matthew", Chapter: 23, Verse: 13, EndV: 14}, "Matthew 23:13–14"},
+		{"nkjv", crossRef{Book: "Matthew", Chapter: 23, Verse: 14, EndV: 39}, "Matthew 23:13–39"},
+		{"nkjv", crossRef{Book: "Matthew", Chapter: 23, Verse: 1, EndV: 13}, "Matthew 23:1–14"},
 		// The BSB does not have the widows' woe at all: a row to it is
 		// dropped, as a row to Mark 9:44 is. A range that STARTS on it still
 		// holds every verse after it, and begins at the BSB's 23:13 — the
 		// kingdom woe, which is the reference's 23:14.
 		{"bsb", crossRef{Book: "Matthew", Chapter: 23, Verse: 13}, ""},
 		{"bsb", crossRef{Book: "Matthew", Chapter: 23, Verse: 14}, "Matthew 23:13"},
-		{"bsb", crossRef{Book: "Matthew", Chapter: 23, Verse: 13, EndV: 36}, "Matthew 23:13-36"},
+		{"bsb", crossRef{Book: "Matthew", Chapter: 23, Verse: 13, EndV: 36}, "Matthew 23:13–36"},
 		{"bsb", crossRef{Book: "Matthew", Chapter: 23, Verse: 13, EndV: 14}, "Matthew 23:13"},
-		{"web", crossRef{Book: "Matthew", Chapter: 23, Verse: 13, EndV: 36}, "Matthew 23:13-36"},
+		{"web", crossRef{Book: "Matthew", Chapter: 23, Verse: 13, EndV: 36}, "Matthew 23:13–36"},
 	} {
 		got, ok := targetIn(t, tc.vid, tc.in)
 		switch {
@@ -308,9 +308,9 @@ func TestTheDatasetsRowsLandOnTheSamePassageInEveryTranslation(t *testing.T) {
 		{"nkjv", "Luke", 11, 52, []string{"Matthew 23:13"}},
 		{"bsb", "Luke", 11, 52, []string{"Matthew 23:13"}},
 		// The woes as a passage.
-		{"web", "Ezekiel", 34, 7, []string{"Matthew 23:13-36"}},
-		{"nkjv", "Ezekiel", 34, 7, []string{"Matthew 23:13-36"}},
-		{"bsb", "Ezekiel", 34, 7, []string{"Matthew 23:13-36"}},
+		{"web", "Ezekiel", 34, 7, []string{"Matthew 23:13–36"}},
+		{"nkjv", "Ezekiel", 34, 7, []string{"Matthew 23:13–36"}},
+		{"bsb", "Ezekiel", 34, 7, []string{"Matthew 23:13–36"}},
 	} {
 		st := &AppState{Bible: bd, CurrentBook: tc.book, CurrentChapter: tc.ch, CurrentVersion: tc.vid}
 		var got []string
@@ -337,15 +337,15 @@ func TestARangeWhoseEndTheTranslationLacksEndsAtTheVerseBefore(t *testing.T) {
 		in   crossRef
 		want string
 	}{
-		{"bsb", crossRef{Book: "Matthew", Chapter: 17, Verse: 14, EndV: 21}, "Matthew 17:14-20"},
-		{"bsb", crossRef{Book: "Mark", Chapter: 11, Verse: 20, EndV: 26}, "Mark 11:20-25"},
+		{"bsb", crossRef{Book: "Matthew", Chapter: 17, Verse: 14, EndV: 21}, "Matthew 17:14–20"},
+		{"bsb", crossRef{Book: "Mark", Chapter: 11, Verse: 20, EndV: 26}, "Mark 11:20–25"},
 		// Past two missing verses, to the one before both.
-		{"bsb", crossRef{Book: "Mark", Chapter: 9, Verse: 42, EndV: 46}, "Mark 9:42-45"},
+		{"bsb", crossRef{Book: "Mark", Chapter: 9, Verse: 42, EndV: 46}, "Mark 9:42–45"},
 		{"bsb", crossRef{Book: "Mark", Chapter: 9, Verse: 43, EndV: 44}, "Mark 9:43"},
 		{"bsb", crossRef{Book: "Luke", Chapter: 23, Verse: 16, EndV: 17}, "Luke 23:16"},
 		// CONTROL: the translations that have the last verse keep it.
-		{"web", crossRef{Book: "Matthew", Chapter: 17, Verse: 14, EndV: 21}, "Matthew 17:14-21"},
-		{"nkjv", crossRef{Book: "Mark", Chapter: 11, Verse: 20, EndV: 26}, "Mark 11:20-26"},
+		{"web", crossRef{Book: "Matthew", Chapter: 17, Verse: 14, EndV: 21}, "Matthew 17:14–21"},
+		{"nkjv", crossRef{Book: "Mark", Chapter: 11, Verse: 20, EndV: 26}, "Mark 11:20–26"},
 	} {
 		got, ok := targetIn(t, tc.vid, tc.in)
 		if !ok {
@@ -367,8 +367,8 @@ func TestARangeWhoseEndTheTranslationLacksEndsAtTheVerseBefore(t *testing.T) {
 			parallels = append(parallels, c.label())
 		}
 	}
-	if fmt.Sprint(parallels) != "[Matthew 17:14-20 Luke 9:37-43]" {
-		t.Errorf("BSB Mark 9:14's parallels are %q, want Matthew 17:14-20 and Luke 9:37-43", parallels)
+	if fmt.Sprint(parallels) != "[Matthew 17:14–20 Luke 9:37–43]" {
+		t.Errorf("BSB Mark 9:14's parallels are %q, want Matthew 17:14–20 and Luke 9:37–43", parallels)
 	}
 }
 
@@ -384,18 +384,18 @@ func TestASpanAcrossTheSongOfTheThreeIsShownOnEitherSideOfIt(t *testing.T) {
 		in   crossRef
 		want string
 	}{
-		{"webc", crossRef{Book: "Daniel", Chapter: 3, Verse: 19, EndV: 30}, "[Daniel 3:19-23 Daniel 3:91-97]"},
-		{"webc", crossRef{Book: "Daniel", Chapter: 3, Verse: 1, EndV: 25}, "[Daniel 3:1-23 Daniel 3:91-92]"},
+		{"webc", crossRef{Book: "Daniel", Chapter: 3, Verse: 19, EndV: 30}, "[Daniel 3:19–23 Daniel 3:91–97]"},
+		{"webc", crossRef{Book: "Daniel", Chapter: 3, Verse: 1, EndV: 25}, "[Daniel 3:1–23 Daniel 3:91–92]"},
 		{"webc", crossRef{Book: "Daniel", Chapter: 3, Verse: 23, EndV: 24}, "[Daniel 3:23 Daniel 3:91]"},
-		{"webc", crossRef{Book: "Daniel", Chapter: 2, Verse: 46, EndCh: 3, EndV: 30}, "[Daniel 2:46-3:23 Daniel 3:91-97]"},
+		{"webc", crossRef{Book: "Daniel", Chapter: 2, Verse: 46, EndCh: 3, EndV: 30}, "[Daniel 2:46–3:23 Daniel 3:91–97]"},
 		// CONTROLS: a span wholly on one side of the Song is one row; so is
 		// the passage in a translation without the Song; and so is a span
 		// holding a verse the reference lacks that moves nothing, the NKJV's
 		// Acts 8:37.
-		{"webc", crossRef{Book: "Daniel", Chapter: 3, Verse: 24, EndV: 30}, "[Daniel 3:91-97]"},
-		{"webc", crossRef{Book: "Daniel", Chapter: 3, Verse: 13, EndV: 23}, "[Daniel 3:13-23]"},
-		{"web", crossRef{Book: "Daniel", Chapter: 3, Verse: 19, EndV: 30}, "[Daniel 3:19-30]"},
-		{"nkjv", crossRef{Book: "Acts", Chapter: 8, Verse: 36, EndV: 38}, "[Acts 8:36-38]"},
+		{"webc", crossRef{Book: "Daniel", Chapter: 3, Verse: 24, EndV: 30}, "[Daniel 3:91–97]"},
+		{"webc", crossRef{Book: "Daniel", Chapter: 3, Verse: 13, EndV: 23}, "[Daniel 3:13–23]"},
+		{"web", crossRef{Book: "Daniel", Chapter: 3, Verse: 19, EndV: 30}, "[Daniel 3:19–30]"},
+		{"nkjv", crossRef{Book: "Acts", Chapter: 8, Verse: 36, EndV: 38}, "[Acts 8:36–38]"},
 	} {
 		var got []string
 		for _, c := range crossRefTargetIn(tc.vid, tc.in) {
@@ -426,12 +426,12 @@ func TestASpanAcrossTheSongOfTheThreeIsShownOnEitherSideOfIt(t *testing.T) {
 	}
 	web, webc := panel("web"), panel("webc")
 	// CONTROL: the WEB shows the row as one, then fifteen psalms.
-	if len(web) != maxCrossRefsPerVerse || web[0] != "Daniel 3:19-30" || web[15] != "Psalms 1:15" {
-		t.Fatalf("control: the WEB lists %q, want Daniel 3:19-30 and Psalms 1:1-15", web)
+	if len(web) != maxCrossRefsPerVerse || web[0] != "Daniel 3:19–30" || web[15] != "Psalms 1:15" {
+		t.Fatalf("control: the WEB lists %q, want Daniel 3:19–30 and Psalms 1:1–15", web)
 	}
-	if len(webc) != maxCrossRefsPerVerse+1 || webc[0] != "Daniel 3:19-23" || webc[1] != "Daniel 3:91-97" ||
+	if len(webc) != maxCrossRefsPerVerse+1 || webc[0] != "Daniel 3:19–23" || webc[1] != "Daniel 3:91–97" ||
 		webc[16] != "Psalms 1:15" {
-		t.Errorf("WEB Catholic lists %q, want Daniel 3:19-23 and 3:91-97 together, then the same "+
+		t.Errorf("WEB Catholic lists %q, want Daniel 3:19–23 and 3:91–97 together, then the same "+
 			"fifteen psalms as the WEB", webc)
 	}
 }
@@ -492,8 +492,8 @@ func TestARowForAVerseSomeTextsLack(t *testing.T) {
 		{"webc", "Romans", 10, 9, "Acts 8:36"},
 		{"nkjv", "Romans", 10, 9, "Acts 8:37"},
 		{"bsb", "Romans", 10, 9, "Acts 8:36"},
-		{"web", "Matthew", 27, 15, "Luke 23:16-17"},
-		{"nkjv", "Matthew", 27, 15, "Luke 23:16-17"},
+		{"web", "Matthew", 27, 15, "Luke 23:16–17"},
+		{"nkjv", "Matthew", 27, 15, "Luke 23:16–17"},
 		{"bsb", "Matthew", 27, 15, "Luke 23:16"},
 		{"web", "Luke", 16, 25, "Mark 9:46"},
 		{"bsb", "Luke", 16, 25, "Mark 9:45"},
