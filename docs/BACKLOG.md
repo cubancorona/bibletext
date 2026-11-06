@@ -9915,14 +9915,24 @@ LicenseNotice; no gloss of the parentheses anywhere.
 
 BUILT 6 November 2026 on `fu/s20-second-pass`, cut from main after the 1.2.25
 release, in five commits (d869191a4e, 527e5c53fa, 471b8cbe95, 5287d915b9,
-278eda52d1):
+278eda52d1), with eight corrections on the same branch the same day
+(622bfc84ab, 586942415f, 72f51d2dc2, 9fd87a1c06, 02898c4cb2, f9fe12dc0e,
+b66fe6229c, 2dc0f2b606: the footer's credits one to a line; the Treasury zip
+cached only once it has parsed; a note's spans read against the stored
+text; a verse's label held until the verse shows a card or a line; the card
+dedupe keyed by passage and kind; the section label inset by the theme's
+padding; the release guard's success line naming every refused tag; the
+API.Bible comments without a plan name), each described in place below:
 
 - The release guard refuses an artifact built with the `nkjvxrefs` tag
   (`scripts/verify-not-next.sh`; `TestVerifyNotNextRefusesTaggedBuilds`, with
   a look-alike tag as its control), and CI vets the tag.
-- `ensureCrossRefs` forgets a failed Treasury load, so a retry can fetch, and
-  removes a cached zip that fails to parse (`crossrefs_retry_test.go`); until
-  then a failure was remembered until restart.
+- `ensureCrossRefs` forgets a failed Treasury load, so a retry can fetch,
+  removes a cached zip that fails to parse, and caches a fetched zip only
+  once it has parsed, so a body that is not the zip (a captive portal's page
+  answered with HTTP 200) is never kept and the first retry fetches
+  (`crossrefs_retry_test.go`); until then a failure was remembered until
+  restart.
 - The resolver reads the three shapes a census of the whole feed found beyond
   plain ids (32,517 notes; the only words besides citations in the whole
   apparatus are `title` 47, `LXX` 3 and `DSS` 1): a whole-chapter id followed
@@ -9940,8 +9950,14 @@ release, in five commits (d869191a4e, 527e5c53fa, 471b8cbe95, 5287d915b9,
   spans verses or a note's key is not the selected verse), TREASURY OF
   SCRIPTURE KNOWLEDGE open, minus any row whose passage a publisher card
   contains or that contains a card's start verse (`treasuryMinusPublisher`:
-  containment, not label equality). A title citation's card carries the
-  search result's muted "Title" tag and previews the superscription. The
+  containment, not label equality). Two notes citing one passage give one
+  card, the first, keyed by passage and kind (`publisherTarget.key`: a
+  Psalm's title and the whole psalm share the label "Psalms 59" and are two
+  cards); a verse's label is put on the list only before the first card or
+  caption its notes add, so a verse whose notes leave nothing on screen is
+  silently absent rather than a label over the next label. A title
+  citation's card carries the search result's muted "Title" tag and
+  previews the superscription. The
   note's remainder is one caption inside its last card's block, at the
   preview's left edge. No Accordion, Button, Hyperlink or theme override
   stands in the list; the list sits in `squeezeWidthLayout` as a belt, and
@@ -9951,9 +9967,11 @@ release, in five commits (d869191a4e, 527e5c53fa, 471b8cbe95, 5287d915b9,
   "Song of Solomon 2:8–3:5", 189 pt at 16 bold; the widest section label
   205 pt at 11-pt bold monospace; the widest pericope title 252 pt at 12
   italic. The footer's sources line is a wrapping caption naming the sets on
-  screen — flag off, today's exact words, with " · Gospel parallels:
-  synopsis" only while a parallel row shows; flag on, the Treasury by the
-  words of its label — and the edition's notice once, in the footer only.
+  screen, one credit to a line — flag off, today's exact words, with "Gospel
+  parallels: synopsis" under the Treasury's credit only while a parallel row
+  shows (the two on one line, joined by " · ", broke inside a credit at both
+  phone widths); flag on, the Treasury by the words of its label — and the
+  edition's notice once, in the footer only.
   The whole-panel error state keeps the shipped sentence and gains the AI
   panel's "Try again"; a Treasury that failed under content shows its label
   and the shipped first line "Couldn't load cross-references."; a Treasury
@@ -9963,12 +9981,12 @@ release, in five commits (d869191a4e, 527e5c53fa, 471b8cbe95, 5287d915b9,
 Deleted: `crossRefBlockHeading`, `publisherCrossRefRow`, the legend, the
 in-block LicenseNotice, the Accordion and every HyperlinkSegment. The render
 harness mounts the real popup on 402×874 and 375×667 canvases, light and
-dark, for nine selections — John 3:16 with the flag on and off, John 3:1–3,
-Matthew 3:1 (parallels), Psalm 3:1 (a title note), Psalm 3:2 (no note),
-1 Samuel 19:12 (a ":title" citation), Hebrews 1:6 (LXX, DSS), Genesis 7:2 (a
-whole-chapter citation) — plus frames scrolled to the Treasury's and the
-publisher's labels, 44 PNGs, and asserts the popup's content fits its inset
-width. The new reader-facing strings — the three labels and the verse-key
+dark, for ten selections — John 3:16 and Matthew 3:1 (parallels) each with
+the flag on and off, John 3:1–3, Psalm 3:1 (a title note), Psalm 3:2 (no
+note), 1 Samuel 19:12 (a ":title" citation), Hebrews 1:6 (LXX, DSS), Genesis
+7:2 (a whole-chapter citation) — plus frames scrolled to the Treasury's and
+the publisher's labels, 48 PNGs, and asserts the popup's content fits its
+inset width. The new reader-facing strings — the three labels and the verse-key
 forms, "No NKJV cross-references for this selection.", "Treasury of Scripture
 Knowledge: OpenBible.info (CC-BY)" — are marked in code "wording pending
 approval, 6 November 2026".
@@ -9986,7 +10004,20 @@ Nelson") and whether a one-sentence gloss of the parentheses may go anywhere
 clause as requiring the apparatus as printed, design B replaces the cards.
 On a no: nothing to unwind. Deferred, not denied: per-section loading, so
 the NKJV's rows no longer wait behind the spinner for the Treasury zip or
-the 60-s timeout on a first open (it would replace the three-state body).
+the 60-s timeout on a first open (it would replace the three-state body);
+a wrap rule for the captions — a note's caption can break inside a numbered
+book name ("… 1 Pet. 1:23; 1" over "John 3:9)"), because the toolkit's word
+wrap breaks at every rune `unicode.IsSpace` admits, the non-breaking spaces
+among them, so no space variant can hold a name together; the fix is a
+`findSpaceIndex` in the Fyne fork that skips U+00A0, not a change to the
+verbatim caption; the comma continuation whose head citation became a card,
+which the verbatim rule leaves as a bare fragment ("19:39", or a bare
+number: eleven of the canon's 4,657 remainders begin with a digit, one is a
+bare number) — whether to repeat the head citation's book or keep the
+fragment as printed is an open presentation decision; and the canon's one
+heading note (on a heading in Numbers 4), which the resolver does not read —
+it reads verse notes and Psalm-title notes only — so its citations do not
+reach the panel.
 
 TO SEE IT. Build for the phone: `scripts/run-ios-device.sh --nkjvxrefs`.
 Without a device: run `TestLiveAPIBibleFullCanon` with
