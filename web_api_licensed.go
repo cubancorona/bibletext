@@ -21,7 +21,7 @@ import (
 type LicensedEdition struct {
 	Bible *BibleData
 	// Requests is how many API.Bible requests the fetch made: the quota it
-	// spent, which the Starter plan bills per call.
+	// spent, since every request counts against the plan's monthly quota.
 	Requests int64
 	// CopyrightLines is how many DISTINCT copyright lines the responses
 	// carried. The site prints the registry's one notice on every page of the

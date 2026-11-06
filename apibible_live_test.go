@@ -36,7 +36,7 @@ func liveAPIBible(t *testing.T, gate string) (key, bibleID string) {
 // TestLiveAPIBibleProbe validates the decoder against the real API.Bible
 // service — the fixture tests pin the de-facto JSON shape, but only a live
 // response proves we read it right. Deliberately tiny: one metadata call plus
-// five content calls (~6 of the Starter plan's 5,000 monthly requests), never
+// five content calls (~6 requests of the plan's monthly quota), never
 // the full ~1,255-call fetch. Skips unless BIBLE_API_KEY and BIBLETEXT_LIVE=1
 // are both exported, so CI and a plain `go test` spend nothing, even from a
 // shell that holds the key.

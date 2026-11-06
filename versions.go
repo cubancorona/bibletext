@@ -152,7 +152,7 @@ var registeredVersions = []BibleVersion{
 		ID: "nkjv", Name: "New King James Version", Abbrev: "NKJV",
 		Publisher: "© Thomas Nelson (HarperCollins Christian) — license required",
 		// The notice Thomas Nelson requires with NKJV text, plus the visible
-		// API.Bible citation the Starter plan requires. Rendered by the picker
+		// API.Bible attribution its terms require. Rendered by the picker
 		// only while the version is licensed and serving real text.
 		LicenseNotice: "Scripture taken from the New King James Version®. Copyright © 1982 " +
 			"by Thomas Nelson. Used by permission. All rights reserved. Text provided via API.Bible (api.bible).",
@@ -580,9 +580,9 @@ func loadVersionData(v BibleVersion, base *BibleData) (*BibleData, dataMode, err
 		// Licensed content past the recency window is revalidated, not served:
 		// dropping the stale cache first makes loadBibleData refetch, and a
 		// failed refetch is an ERROR rather than a quiet fall-back to the old
-		// copy. This is the §11 compliance line the API.Bible enquiry offers —
-		// enforce it from day one so a granted licence never inherits a laxer
-		// behaviour we then have to walk back.
+		// copy. This is the §11 compliance line in API.Bible's terms —
+		// enforced from day one, so a granted licence never inherits a
+		// laxer behaviour that would then have to be walked back.
 		if isLicensedSource(v) {
 			path := cachePathForVersion(v.ID)
 			if licensedCacheStale(path) {
