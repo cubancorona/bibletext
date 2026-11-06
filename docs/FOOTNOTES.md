@@ -201,13 +201,17 @@ pinning that a marker never enters `gVerseIndex`/BtBridge verse spans.
   standing request) captures a cross-reference apparatus instead. The probe
   and its consequences are recorded in §8; the reasoning above is kept
   because it is why the probe was run before any licensing was pursued.
-- **Licence**: nothing public says whether the Starter grant covers
-  *displaying* Thomas Nelson's apparatus, whether selective display
-  (markers in text, bodies in a labelled panel, off by default) satisfies
-  the no-alteration/format clauses, or whether §12 copy limits and the §9.1
-  TTS restriction treat note text like verse text. **Six concrete questions
-  were drafted for API.Bible support**, and that inquiry has been sent; the
-  reply is the gating event.
+- **Licence**: nothing public says whether the grant covers *displaying*
+  Thomas Nelson's apparatus, whether selective display (markers in text,
+  bodies in a labelled panel, off by default) satisfies the
+  no-alteration/format clauses, or whether §12 copy limits and the §9.1 TTS
+  restriction treat note text like verse text. **Six concrete questions were
+  drafted for API.Bible support** and never sent: the probe below made them
+  moot. The licensing enquiry that was sent is the 28 August 2026 follow-up
+  to HarperCollins' permissions team, about displaying the cross-reference
+  apparatus; it has had no reply as of 6 November 2026, and that reply is the
+  gating event. An email to API.Bible support was approved on 6 November
+  2026, awaiting a reply.
 
 ## 6. Recommended phasing
 
@@ -233,8 +237,12 @@ pinning that a marker never enters `gVerseIndex`/BtBridge verse spans.
    or is even a labelled sheet of translators' notes unwanted?
 2. Superscription-anchored notes: drop (recommended) or re-anchor to v1?
 3. Should note bodies ever travel with an AI Explain request? (Default: no.)
-4. The API.Bible inquiry, with the six footnote questions added, has been
-   sent; awaiting a reply.
+4. The six footnote questions drafted for API.Bible support were never sent
+   (§8 made them moot: the feed carries no footnotes). The licensing enquiry
+   sent is the 28 August 2026 follow-up to HarperCollins' permissions team,
+   about displaying the cross-reference apparatus; no reply as of 6 November
+   2026. An email to API.Bible support was approved on 6 November 2026,
+   awaiting a reply.
 
 ---
 
@@ -307,8 +315,11 @@ corpus, and squarely a presentation decision. **Added to the open questions.**
 3. NKJV crossrefs: display eventually, or leave captured-but-dark.
 4. AI prompts: whether note bodies may travel with an Explain request
    (default no).
-5. The API.Bible support inquiry has been sent and is awaiting a reply (its
-   footnote questions now narrower — §8 above).
+5. The licensing enquiry sent is the 28 August 2026 follow-up to
+   HarperCollins' permissions team (no reply as of 6 November 2026). The
+   API.Bible support drafts, their footnote questions narrowed by §8 above,
+   were not sent; an email to API.Bible support was approved on 6 November
+   2026, awaiting a reply.
 
 ### Decision (2026-08-26): no dev tab — presentation trials happen on the main reading pane
 

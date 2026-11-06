@@ -483,7 +483,6 @@ Suggested tester coverage:
 - check that the divine name renders in small capitals but copies as ordinary
   letters, and read a Hebrew-script passage in the new face;
 - open Psalm 3 in the NKJV and confirm the superscription sits above verse 1;
-- follow a footnote marker to the chapter-bottom footnote section;
 - select a verse that carries a highlight and confirm the selection is visible
   over it, in light and dark appearance at more than one text size;
 - **enter an AI provider key in Settings and confirm it survives a force-stop and

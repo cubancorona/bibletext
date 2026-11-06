@@ -2,8 +2,8 @@ package bibletext
 
 // API.Bible (American Bible Society) client — the provider behind licensed
 // translations. HarperCollins' own permissions desk directs NKJV licensing
-// here, and the app's Starter-plan agreement with API.Bible is strictly
-// non-commercial, which BibleText satisfies (free, no ads, no revenue).
+// here; the app's API.Bible plan has been a paid one since 13 August 2026,
+// and BibleText's use is non-commercial (free, no ads, no revenue).
 //
 // The fetch shape mirrors the other whole-Bible sources: assemble a complete
 // *BibleData once, let loadVersionData cache it, and the rest of the app
@@ -23,13 +23,15 @@ package bibletext
 //	GET /v1/bibles/{bibleId}/chapters/{chapterId}?…         — fallback path
 //	header: api-key: <key>
 //
-// The Starter plan bills per call (5,000/MONTH shared across every install),
-// so the fetch walks the PASSAGES endpoint in ≤200-verse ranges: ~200 calls
-// for the whole canon versus ~1,190 chapter-by-chapter (the per-chapter path
-// survives as an automatic fallback for providers without passages support).
-// A public rollout still needs the streamed per-chapter mode and waits on
-// API.Bible's answers about offline storage (see the support@api.bible
-// enquiry).
+// The plan has a monthly request quota shared across every install, so the
+// fetch walks the PASSAGES endpoint in ≤200-verse ranges: ~200 calls for the
+// whole canon versus ~1,190 chapter-by-chapter (the per-chapter path survives
+// as an automatic fallback for providers without passages support). Whether
+// the edition's own cross-reference apparatus may be displayed is a separate
+// licensing question (versions_nkjvxrefs.go): the one enquiry sent is the
+// 28 August 2026 follow-up to HarperCollins' permissions team, unanswered as
+// of 6 November 2026; an email to API.Bible support was approved on
+// 6 November 2026, awaiting a reply.
 //
 // FUMS: API.Bible's usage tracker is required for web apps only — "if you only
 // use API.Bible for your mobile app … you can skip this section". The app has
@@ -180,7 +182,7 @@ func (e *apiBibleStatusError) Error() string {
 }
 
 // apiBibleCallCount counts real requests issued, for quota accounting in
-// logs and tests (the Starter plan bills per call).
+// logs and tests (every request counts against the monthly quota).
 var apiBibleCallCount atomic.Int64
 
 // apiBibleNode is one node of the content-type=json tree: paragraph blocks at
@@ -278,7 +280,7 @@ func fetchAPIBible(displayName, providerBibleID, apiKey string) (*BibleData, err
 
 	// Fan the downloads out over a small worker pool, one BOOK per job. Each
 	// book walks the passages endpoint in ≤200-verse ranges (~200 calls for
-	// the whole canon — the Starter plan bills per call, and the old
+	// the whole canon — every call counts against the monthly quota, and the old
 	// chapter-by-chapter walk cost ~1,190). A provider without passages
 	// support (a 400/404 on a book's FIRST range) falls back to the
 	// per-chapter path for that book. First error wins and cancels the rest.
