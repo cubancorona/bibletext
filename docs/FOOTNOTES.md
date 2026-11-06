@@ -271,11 +271,13 @@ Thomas Nelson's textual apparatus is not in the feed. Consequences: the
 hardest §5 licensing question (displaying their *footnotes*) is moot for
 now; what is capturable — and now captured, tagged `kind:"crossref"` — is a
 cross-reference apparatus, a kind the app already offers from public-domain
-TSK. Whether NKJV crossrefs ever display is the licensing question the
-support enquiry now asks (sent; awaiting a reply); the presentation is built
-behind the `nkjvxrefs` build tag — the publisher's notes lead the
-cross-references panel, one row per note verbatim, the feed's tagged
-citations as links (docs/SCRIPTURE_WORKLIST.md, S20).
+TSK. Whether NKJV crossrefs ever display is the licensing question put to
+HarperCollins' permissions team in the 28 August 2026 follow-up (no reply as
+of 6 November 2026; an email to API.Bible support was approved on 6 November
+2026, awaiting a reply); the presentation is built behind the `nkjvxrefs`
+build tag — the publisher's tagged citations as cards in the cross-references
+panel under the edition's own label, the parenthesised groups as one verbatim
+caption, the Treasury open beneath (docs/SCRIPTURE_WORKLIST.md, S20).
 
 ### The omitted verses — the investigation's most striking find
 
@@ -463,4 +465,6 @@ With this, every note body in all three helloao feeds is rendered: in-verse
 NKJV (2026-09-05, cache epoch 2): the API.Bible `d` paragraph is captured the
 same way once the feed is asked for titles (include-titles=true; with titles
 off the paragraph is absent). 116 titles; their notes are cross references
-and so stay dark like every NKJV note. See docs/SOURCE_FIELDS.md.
+and so stay dark in every store build like every NKJV note; behind the
+`nkjvxrefs` tag the cross-references panel shows them under their own key,
+"NKJV REFERENCES · TITLE" (S20). See docs/SOURCE_FIELDS.md.

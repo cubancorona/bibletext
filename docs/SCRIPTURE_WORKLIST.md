@@ -452,7 +452,7 @@ breaks survive a copy is too easy to get wrong to leave where no test can reach.
 | S17 | NKJV supplied words: captured | NKJV | M | nkjv | done; captured, and drawn in italic on every surface |
 | S18 | speech reads the Psalm title | all | M | none | done |
 | S19 | mark an omitted verse's gap in the text | all | M | none | done |
-| S20 | show the NKJV's cross references | NKJV | M | none | built behind a tag; presentation second pass paused; gated on the licensing reply |
+| S20 | show the NKJV's cross references | NKJV | M | none | built behind a tag; presentation second pass built 6 November 2026; gated on the licensing reply |
 | S21 | website renders the footnote section | website | M | none | done |
 | S22 | in-text footnote markers | all | L | none | blocked |
 | S23 | draw small caps as small caps | NKJV | M | nkjv | done |
@@ -689,8 +689,10 @@ documented order after it is the web reader, then the Apple panes, then the
 styled pane, then Android.
 
 **S20. BUILT, behind the `nkjvxrefs` build tag**, and gated on the licensing
-enquiry about displaying the publisher's apparatus, which has been sent and is
-awaiting a reply. All 32,473 NKJV notes are cross references — the print
+enquiry about displaying the publisher's apparatus: the 28 August 2026
+follow-up to HarperCollins' permissions team, with no reply as of 6 November
+2026 (an email to API.Bible support was approved on 6 November 2026, awaiting
+a reply). All 32,473 NKJV notes are cross references — the print
 edition's centre column, note for note — and 43 more sit on Psalm titles (and
 one on a heading). Across the canon, fetched 10 September, the feed tags
 66,306 citations with a machine-readable id (`JHN.7.50`, `MAT.3.1-MAT.3.12`;
@@ -705,36 +707,51 @@ window, and a note without it is rendered as words only.
 
 The design settled here rather than "lift the filter": the chapter-bottom
 section stays the wording-and-manuscript apparatus and still excludes cross
-references. When the edition's flag is on, the cross-references panel leads
-with the publisher's notes — ONE ROW PER NOTE, verbatim, in verse order, each
-tagged citation a link when its passage is in the loaded text and the
-parenthesised ones left as words under a legend, under the edition's own
-heading and its LicenseNotice (`publisher_xrefs.go`, `crossref_list.go`).
-Nothing is sorted, capped, deduplicated or mapped: the targets are in the
-edition's own numbering, which is the numbering on screen. The Treasury of
-Scripture Knowledge is not removed — 31.7% of NKJV verses carry no note
-(9,853 of 31,102 on the 7 September canon) — but moves into a separately
-headed, separately credited disclosure beneath, closed when the publisher's
-block has rows and open when it has none; the two never share a list or a
-credit, which is what the misattribution worry in
-`docs/SOURCE_FIELDS_DECISIONS.md` actually forbids. The Gospel parallels stay
-first, badged, unchanged: event-level and titled, they answer on every verse
-of a pericope where the edition's own parallel-style notes appear only at
-pericope starts and untitled. A flag off (every store build) leaves the panel
-exactly as it was, except that a licensed edition's notice now stands under
-the verse-text previews the panel shows, which it never did.
+references. When the edition's flag is on, the cross-references panel is one
+list of the one card it has always drawn, in labelled runs (the sidebar's
+`sectionLabel`): the Gospel parallels first; then NKJV REFERENCES — each
+tagged citation whose passage is in the loaded text a card in the publisher's
+order, labelled from its id ("John 19:39", never the continuation "19:39"),
+previewed from the loaded edition, the whole card the tap; a citation of the
+passage on screen, one inside a parenthesised "compare" group, or one the
+loaded text lacks stays in the note's verbatim remainder, one muted caption
+under the note's cards, with no legend and no added word; then TREASURY OF
+SCRIPTURE KNOWLEDGE, open, minus the rows whose passages the publisher's
+cards already carry (`publisher_xrefs.go`, `crossref_list.go`). Nothing of
+the publisher's is sorted, capped or mapped (two notes citing one passage
+yield one card, the first): the targets are in the edition's own numbering,
+which is the numbering on screen. The Treasury is not removed — 31.7% of
+NKJV verses carry no note (9,853 of 31,102 on the 7 September canon) — and
+the two never share a run or a credit, which is what the misattribution
+worry in `docs/SOURCE_FIELDS_DECISIONS.md` actually forbids: the footer's
+sources line names the Treasury, and the edition's LicenseNotice, once in
+the footer, is the publisher's credit. The Gospel parallels stay first:
+event-level and titled, they answer on every verse of a pericope where the
+edition's own parallel-style notes appear only at pericope starts and
+untitled; under their label they drop the PARALLEL pill, since the label
+carries the provenance. A flag off (every store build) leaves the panel as
+it was, except that a licensed edition's notice stands under the verse-text
+previews the panel shows, which it never did before S20, and for two repairs
+that ship regardless of the licence (decided 6 November 2026): range labels
+take an en dash, and the footer's sources line wraps and names Gospel
+parallels only while a parallel row is on screen.
 
 On a yes the one line in `versions_nkjvxrefs.go` moves into the registry and
 the tag goes; on a no nothing needs unwinding. The 43 title notes ride the
-same rule as the rest, keyed "Title" when the selection reaches verse 1.
+same rule as the rest, keyed "NKJV REFERENCES · TITLE" when the selection
+reaches verse 1; and a citation OF a Psalm's title ("Ps. 59:title", 47 in the
+feed) is a card labelled by its chapter, tagged "Title", previewing the
+superscription.
 
-**Paused 10 September** after the first look on a phone: the presentation is
-not right — the Treasury's accordion title forces the list wider than the
-panel and clips every row, and the publisher's rows use a different idiom
-from the cards around them. The findings, the agreed direction (one row
-idiom, one heading style, the notice once, the Treasury behind a plain
-"Show more" link) and the recipe for seeing the panel without a device are
-in `docs/BACKLOG.md`, "NKJV cross references: the panel's second pass".
+**Paused 10 September 2026** after the first look on a phone: the Treasury's
+accordion title forced the list wider than the panel and clipped every row,
+and the publisher's rows used a different idiom from the cards around them.
+**Built again 6 November 2026** as one list of one card, after the design
+review of 14 September 2026. The seven defects, the two designs weighed and
+what was rejected and why, the decisions of 6 November, what the second pass
+ships, what still waits on the licence, and the recipe for seeing the panel
+without a device are in `docs/BACKLOG.md`, "NKJV cross references: the
+panel's second pass".
 
 **S23.** DONE. A small-caps span was folded to uppercase in the stored text,
 so LORD, GOD and the four names of Jesus were literally capitals. Drawing them

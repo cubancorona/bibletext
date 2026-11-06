@@ -139,7 +139,7 @@ edition to download the text again.
 | 8 | Selah placement | WEB, BSB | set differently in each | keep the source's placement | — | — | medium |
 | 9 | descriptive runs | BSB | one oracle title | capture with item 1 | S | with item 1 | medium |
 | 10 | words-of-Jesus flag | WEB, WEBC | nothing; tables agree exactly | keep tables, add a decode-time cross-check | S | none | high |
-| 11 | NKJV cross references hidden | NKJV | 32,473 notes | built behind the `nkjvxrefs` tag: the publisher's notes lead the panel, the Treasury one tap away under its own credit; display waits for the licensing answer (S20) | M | none | high |
+| 11 | NKJV cross references hidden | NKJV | 32,473 notes | built behind the `nkjvxrefs` tag: the publisher's citations are cards under the edition's own label, the Treasury open beneath under its own; display waits for the licensing answer (S20) | M | none | high |
 | 12 | note callers and anchors | all | in-text markers | keep dormant, fix the Android scan first | — | — | high |
 | 13 | website: Psalm titles | WEB, WEBC, BSB | every title | ship | S | none | high |
 | 14 | website: footnote section | WEB, WEBC, BSB | the whole apparatus | defer, needs a presentation model | M | none | medium |
@@ -476,18 +476,22 @@ appears IF they are mixed in: that panel is built from a public-domain dataset
 with its own ordering and its own credit line, and a licensed publisher's
 citations interleaved with it would misattribute both.
 
-So they are not mixed. The panel's list is composed in blocks
-(`crossref_list.go`), and with the edition's flag on the publisher's notes are
-its primary block — one row per note, verbatim, the feed's tagged citations as
-links, the parenthesised ones as words, under the edition's own heading and
-LicenseNotice — while the Treasury waits in a separately credited disclosure
-beneath, because a third of the edition's verses carry no note and a reader
-should not be left with an empty block and no way on. The decoder keeps the
-feed's citation ids as spans (`Footnote.Refs`) without an epoch bump. The flag
-is set for the NKJV only behind the `nkjvxrefs` build tag: **the licensing
-answer still decides whether any of it displays**, and no store build can do
-so before it comes (docs/SCRIPTURE_WORKLIST.md, S20). The 43 title notes ride
-the same rule as the rest, keyed "Title".
+So they are not mixed. The panel's list is composed in labelled runs of its
+one card (`crossref_list.go`), and with the edition's flag on the publisher's
+run stands under the edition's own label — each tagged citation a card in the
+publisher's order, the parenthesised ones kept verbatim as one caption under
+the note's cards — while the Treasury stands open beneath under its own
+label, minus the rows whose passages the publisher's cards already carry,
+because a third of the edition's verses carry no note and a reader should not
+be left with an empty run and no way on. Decided 6 November 2026, replacing
+the first pass's separately credited disclosure, whose title clipped every
+row. The footer's sources line credits the Treasury; the edition's
+LicenseNotice, once in the footer, credits the publisher's run. The decoder
+keeps the feed's citation ids as spans (`Footnote.Refs`) without an epoch
+bump. The flag is set for the NKJV only behind the `nkjvxrefs` build tag:
+**the licensing answer still decides whether any of it displays**, and no
+store build can do so before it comes (docs/SCRIPTURE_WORKLIST.md, S20). The
+43 title notes ride the same rule as the rest, keyed "Title".
 
 ### Unknown styles
 
