@@ -9917,9 +9917,11 @@ Decided 6 November 2026: retain the section labels, verse-key forms, empty-run
 sentence and Treasury source credit below. Source credits appear only while
 their rows are displayed, one credit per line; loading, empty and whole-panel
 connection-error states retain the edition's notice without the sources
-line. Existing test fixtures remain unchanged. Citation fragments retain
-the publisher's wording and punctuation. The non-breaking-space wrapping
-patch is deferred.
+line. Existing test fixtures remain unchanged.
+
+The presentation decision of 7 November 2026 preserves citation fragments
+with the publisher's wording and punctuation and defers the
+non-breaking-space wrapping patch.
 
 BUILT 6 November 2026 on `fu/s20-second-pass`, cut from main after the 1.2.25
 release, in five commits (d869191a4e, 527e5c53fa, 471b8cbe95, 5287d915b9,
