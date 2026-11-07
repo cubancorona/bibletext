@@ -395,8 +395,8 @@ Two things differ from the BSB case. The headings are the publisher's
 copyrighted editorial content, and the licensing enquiry about displaying the
 publisher's apparatus — the 28 August 2026 follow-up to HarperCollins'
 permissions team — has had no reply as of 6 November 2026 (an email to
-API.Bible support was approved on 6 November 2026, awaiting a reply). And an
-NKJV cache epoch bump costs
+API.Bible support was approved on 6 November 2026 but had not been sent as of
+that date). And an NKJV cache epoch bump costs
 every reader a fresh download against a metered quota, so it should be
 batched with another decoder change rather than spent alone.
 

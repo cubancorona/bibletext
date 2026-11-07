@@ -8,8 +8,8 @@ package bibletext
 // captured all of it (publisher_xrefs.go explains the cards). Whether a
 // licensed publisher's apparatus may be DISPLAYED is a licensing question put
 // to HarperCollins' permissions team on 28 August 2026 and not yet answered
-// (an email to API.Bible support was approved on 6 November 2026, awaiting a
-// reply), so the display is compiled only on request:
+// (an email to API.Bible support was approved on 6 November 2026 but had not
+// been sent as of that date), so the display is compiled only on request:
 //
 //	go build -tags nkjvxrefs ./...   (and --tags nkjvxrefs for fyne package)
 //

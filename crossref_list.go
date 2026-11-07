@@ -44,25 +44,21 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// The footer's credits. The sources line names only the sets with rows on
-// screen, one credit to a line; the publisher's run is credited by the
-// edition's own LicenseNotice, which the footer shows once whenever the
-// loaded edition is licensed.
+// Source credits appear with their displayed rows, one credit per line.
+// The footer shows the edition's LicenseNotice once for a licensed edition.
 const (
 	// tskCredit names the Treasury in the builds without the publisher's run,
 	// in the words they have always shown.
 	tskCredit       = "Cross-references: OpenBible.info (CC-BY)"
 	parallelsCredit = "Gospel parallels: synopsis"
-	// treasuryCredit names the Treasury by the words of its section label, in
-	// the builds that show one. Wording pending approval, 6 November 2026.
+	// treasuryCredit uses the section's full name in its source credit.
 	treasuryCredit = "Treasury of Scripture Knowledge: OpenBible.info (CC-BY)"
 )
 
 // The section labels, set as sectionLabel sets them (uppercase, 11-pt bold
 // monospace, muted). The publisher's names the SET, as its two neighbours
 // do: a bare edition abbreviation beside verse text is the app's idiom for
-// the previews' translation, which every card's preview already is. Wording
-// pending approval, 6 November 2026.
+// the previews' translation, which every card's preview already is.
 const (
 	parallelsLabel       = "GOSPEL PARALLELS"
 	treasuryLabel        = "TREASURY OF SCRIPTURE KNOWLEDGE"
@@ -76,7 +72,7 @@ const (
 // selection has no note of its own; the Treasury stands open beneath it. The
 // label scopes the sentence: under a bare line the Treasury's cards would
 // stand a few points below a sentence saying there are none. Hyphenated as
-// the panel's title is. Wording pending approval, 6 November 2026.
+// the panel's title is.
 const publisherEmptyLine = "No %s cross-references for this selection."
 
 // What the panel says of a selection the cross-references cannot cover, in

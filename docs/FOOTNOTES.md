@@ -211,7 +211,7 @@ pinning that a marker never enters `gVerseIndex`/BtBridge verse spans.
   to HarperCollins' permissions team, about displaying the cross-reference
   apparatus; it has had no reply as of 6 November 2026, and that reply is the
   gating event. An email to API.Bible support was approved on 6 November
-  2026, awaiting a reply.
+  2026 but had not been sent as of that date.
 
 ## 6. Recommended phasing
 
@@ -241,8 +241,8 @@ pinning that a marker never enters `gVerseIndex`/BtBridge verse spans.
    (§8 made them moot: the feed carries no footnotes). The licensing enquiry
    sent is the 28 August 2026 follow-up to HarperCollins' permissions team,
    about displaying the cross-reference apparatus; no reply as of 6 November
-   2026. An email to API.Bible support was approved on 6 November 2026,
-   awaiting a reply.
+   2026. An email to API.Bible support was approved on 6 November 2026 but
+   had not been sent as of that date.
 
 ---
 
@@ -282,10 +282,11 @@ cross-reference apparatus, a kind the app already offers from public-domain
 TSK. Whether NKJV crossrefs ever display is the licensing question put to
 HarperCollins' permissions team in the 28 August 2026 follow-up (no reply as
 of 6 November 2026; an email to API.Bible support was approved on 6 November
-2026, awaiting a reply); the presentation is built behind the `nkjvxrefs`
-build tag — the publisher's tagged citations as cards in the cross-references
-panel under the edition's own label, the parenthesised groups as one verbatim
-caption, the Treasury open beneath (docs/SCRIPTURE_WORKLIST.md, S20).
+2026 but had not been sent as of that date); the presentation is built behind
+the `nkjvxrefs` build tag — the publisher's tagged citations as cards in the
+cross-references panel under the edition's own label, the parenthesised
+groups as one verbatim caption, the Treasury open beneath
+(docs/SCRIPTURE_WORKLIST.md, S20).
 
 ### The omitted verses — the investigation's most striking find
 
@@ -319,7 +320,7 @@ corpus, and squarely a presentation decision. **Added to the open questions.**
    HarperCollins' permissions team (no reply as of 6 November 2026). The
    API.Bible support drafts, their footnote questions narrowed by §8 above,
    were not sent; an email to API.Bible support was approved on 6 November
-   2026, awaiting a reply.
+   2026 but had not been sent as of that date.
 
 ### Decision (2026-08-26): no dev tab — presentation trials happen on the main reading pane
 

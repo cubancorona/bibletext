@@ -7295,8 +7295,8 @@ words of Christ and in the prophetic poetry, which is why they are noticed.
 Two actions, independent:
 
 1. **Report it to API.Bible.** A report with the complete list was drafted on
-   7 September; whether it was sent is not recorded. Only the provider can fix
-   the source for everyone.
+   7 September and remains unsent as of 6 November 2026. Only the provider
+   can fix the source for everyone.
 2. **Decide whether the app carries a correction list** meanwhile — one entry
    per affected verse, each restoring the printed reading at one position, and
    each keyed to a hash of the verse's current text so it switches itself off
@@ -9913,6 +9913,14 @@ store build compiles. Defaults taken: the panel keeps its three-state body
 (spinner, then list or message); no NKJV credit line beyond the edition's
 LicenseNotice; no gloss of the parentheses anywhere.
 
+Decided 6 November 2026: retain the section labels, verse-key forms, empty-run
+sentence and Treasury source credit below. Source credits appear only while
+their rows are displayed, one credit per line; loading, empty and whole-panel
+connection-error states retain the edition's notice without the sources
+line. Existing test fixtures remain unchanged. Citation fragments retain
+the publisher's wording and punctuation. The non-breaking-space wrapping
+patch is deferred.
+
 BUILT 6 November 2026 on `fu/s20-second-pass`, cut from main after the 1.2.25
 release, in five commits (d869191a4e, 527e5c53fa, 471b8cbe95, 5287d915b9,
 278eda52d1), with eight corrections on the same branch the same day
@@ -9986,38 +9994,43 @@ the flag on and off, John 3:1–3, Psalm 3:1 (a title note), Psalm 3:2 (no
 note), 1 Samuel 19:12 (a ":title" citation), Hebrews 1:6 (LXX, DSS), Genesis
 7:2 (a whole-chapter citation) — plus frames scrolled to the Treasury's and
 the publisher's labels, 48 PNGs, and asserts the popup's content fits its
-inset width. The new reader-facing strings — the three labels and the verse-key
+inset width. The reader-facing strings — the three labels and the verse-key
 forms, "No NKJV cross-references for this selection.", "Treasury of Scripture
-Knowledge: OpenBible.info (CC-BY)" — are marked in code "wording pending
-approval, 6 November 2026".
+Knowledge: OpenBible.info (CC-BY)" — are the wordings settled on 6 November
+2026, recorded beside their constants.
 
-GATES. Nothing displays in a store build until the licensing reply says it
-may. The only licensing enquiry sent is the 28 August 2026 follow-up to
-HarperCollins' permissions team, which has had no reply as of 6 November
-2026; an email to API.Bible support was approved on 6 November 2026,
-awaiting a reply. On a yes: move the one line in `versions_nkjvxrefs.go`
-into the registry entry and drop the tag; add the dedicated copyright page
-the terms' §7 asks for (a standing pre-ship item, `versions_ui.go`); settle
-whether the sources line names the rights holder ("NKJV references: Thomas
+GATES. The publisher's apparatus does not display in a store build until the
+licensing reply says it may. The only licensing enquiry sent is the
+28 August 2026 follow-up to HarperCollins' permissions team, which has had
+no reply as of 6 November 2026; an email to API.Bible support was approved on
+6 November 2026 but had not been sent as of that date. On a yes: move the one line in
+`versions_nkjvxrefs.go` into the registry entry and drop the tag; add the
+dedicated copyright page the terms' §7 asks for (a standing pre-ship item,
+`versions_ui.go`); settle whether the sources line names the rights holder ("NKJV references: Thomas
 Nelson") and whether a one-sentence gloss of the parentheses may go anywhere
 — the panel is built to need neither. If the reply reads the no-alteration
 clause as requiring the apparatus as printed, design B replaces the cards.
-On a no: nothing to unwind. Deferred, not denied: per-section loading, so
-the NKJV's rows no longer wait behind the spinner for the Treasury zip or
-the 60-s timeout on a first open (it would replace the three-state body);
-a wrap rule for the captions — a note's caption can break inside a numbered
-book name ("… 1 Pet. 1:23; 1" over "John 3:9)"), because the toolkit's word
-wrap breaks at every rune `unicode.IsSpace` admits, the non-breaking spaces
-among them, so no space variant can hold a name together; the fix is a
-`findSpaceIndex` in the Fyne fork that skips U+00A0, not a change to the
-verbatim caption; the comma continuation whose head citation became a card,
-which the verbatim rule leaves as a bare fragment ("19:39", or a bare
-number: eleven of the canon's 4,657 remainders begin with a digit, one is a
-bare number) — whether to repeat the head citation's book or keep the
-fragment as printed is an open presentation decision; and the canon's one
-heading note (on a heading in Numbers 4), which the resolver does not read —
-it reads verse notes and Psalm-title notes only — so its citations do not
-reach the panel.
+On a no: nothing to unwind. Deferred, not denied:
+
+- Per-section loading, so the NKJV's rows no longer wait behind the spinner
+  for the Treasury zip or the 60-s timeout on a first open. It would replace
+  the three-state body.
+- A wrap rule for the captions. A note's caption can break inside a numbered
+  book name ("… 1 Pet. 1:23; 1" over "John 3:9)"), because the toolkit's word
+  wrap breaks at every rune `unicode.IsSpace` admits, including U+00A0. A fix
+  would distinguish breakable spaces in `findSpaceIndex` and at the start of
+  a wrapped line. It is not implemented; it would use the existing
+  `patches/` and `scripts/setup-fyne-patch.sh` mechanism against stock Fyne
+  2.7.4, without changing the verbatim caption or switching the module to a
+  fork. This wrapping improvement is deferred.
+- The comma continuation whose head citation became a card, which the
+  verbatim rule leaves as a bare fragment ("19:39", or a bare number: eleven
+  of the canon's 4,657 remainders begin with a digit, one is a bare number).
+  Keep the fragment as printed to preserve the publisher's wording and
+  punctuation.
+- The canon's one heading note (on a heading in Numbers 4), which the
+  resolver does not read — it reads verse notes and Psalm-title notes only —
+  so its citations do not reach the panel.
 
 TO SEE IT. Build for the phone: `scripts/run-ios-device.sh --nkjvxrefs`.
 Without a device: run `TestLiveAPIBibleFullCanon` with

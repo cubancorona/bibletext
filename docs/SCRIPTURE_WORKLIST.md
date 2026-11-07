@@ -691,11 +691,11 @@ styled pane, then Android.
 **S20. BUILT, behind the `nkjvxrefs` build tag**, and gated on the licensing
 enquiry about displaying the publisher's apparatus: the 28 August 2026
 follow-up to HarperCollins' permissions team, with no reply as of 6 November
-2026 (an email to API.Bible support was approved on 6 November 2026, awaiting
-a reply). All 32,473 NKJV notes are cross references — the print
-edition's centre column, note for note — and 43 more sit on Psalm titles (and
-one on a heading). Across the canon, fetched 10 September, the feed tags
-66,306 citations with a machine-readable id (`JHN.7.50`, `MAT.3.1-MAT.3.12`;
+2026 (an email to API.Bible support was approved on 6 November 2026 but had
+not been sent as of that date). All 32,473 NKJV notes are cross references —
+the print edition's centre column, note for note — and 43 more sit on Psalm
+titles (and one on a heading). Across the canon, fetched 10 September, the
+feed tags 66,306 citations with a machine-readable id (`JHN.7.50`, `MAT.3.1-MAT.3.12`;
 3,504 ranges, none crossing a book); the parenthesised "compare" citations —
 4,850 groups — arrive as bare text, and 1,685 notes (5%) carry nothing else.
 Every response carries the same copyright line, which the live canon test now
