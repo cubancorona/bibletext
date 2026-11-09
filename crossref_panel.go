@@ -51,12 +51,16 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 
 	ps := sheetPanelSize(state, cnv)
 	bodyW := ps.Width - 44
-	listBox := container.NewVBox()
+	listBox := container.New(layout.NewCustomPaddedVBoxLayout(0))
+	// One scope for the whole list keeps previews compact and removes the
+	// label's inner inset, so references and wrapped text share a left edge.
+	listTheme := compactTheme{Theme: passageCitationTheme{fyne.CurrentApp().Settings().Theme()}, text: 17}
+	listScope := container.NewThemeOverride(listBox, listTheme)
 	// squeezeWidthLayout, as the AI panel's columns have: a vertical scroll
 	// widens its content to the content's own minimum width and clips the
 	// excess sideways with no bar to reach it, so a child that wants more
 	// width than the panel has can only clip itself (sheet_fit.go).
-	scroll := container.NewVScroll(container.New(squeezeWidthLayout{}, listBox))
+	scroll := container.NewVScroll(container.New(squeezeWidthLayout{}, listScope))
 	body := container.NewStack(scroll)
 
 	var popup *widget.PopUp
@@ -166,7 +170,7 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 			return
 		}
 		listBox.Objects = lst.Objects
-		listBox.Refresh()
+		listScope.Refresh()
 		line, _ := crossRefFooterCredit(state, lst.Sections)
 		w := footer.Size().Width
 		if w <= 0 {
@@ -246,12 +250,43 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 func crossRefFooter(state *AppState, closeBtn fyne.CanvasObject) (footer *fyne.Container, sources *widget.RichText) {
 	sources = crossRefCaption("")
 	sources.Hide()
-	lines := []fyne.CanvasObject{widget.NewSeparator(), sources}
+	lines := []fyne.CanvasObject{sources}
 	if _, notice := crossRefFooterCredit(state, crossRefSections{}); notice != "" {
 		lines = append(lines, crossRefCaption(notice))
 	}
-	lines = append(lines, container.NewHBox(layout.NewSpacer(), closeBtn))
-	return container.NewVBox(lines...), sources
+	captions := container.New(layout.NewCustomPaddedVBoxLayout(6), lines...)
+	captionScope := container.NewThemeOverride(captions, passageCitationTheme{fyne.CurrentApp().Settings().Theme()})
+	footer = container.New(layout.NewCustomPaddedVBoxLayout(0),
+		widget.NewSeparator(),
+		container.New(captionPadLayout{}, captionScope),
+		container.New(layout.NewCustomPaddedLayout(7, 0, 0, 0), container.NewHBox(layout.NewSpacer(), closeBtn)),
+	)
+	return footer, sources
+}
+
+// captionPadLayout gives the footer's captions an 8pt gap below the rule and a
+// 2pt gap above the Close row's 7pt top inset when at least one caption is
+// visible, and collapses to zero height when every caption is hidden.
+type captionPadLayout struct{}
+
+func (captionPadLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	for _, o := range objects {
+		o.Move(fyne.NewPos(0, 8))
+		o.Resize(fyne.NewSize(size.Width, max(float32(0), size.Height-3)))
+	}
+}
+
+func (captionPadLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	var min fyne.Size
+	for _, o := range objects {
+		if o.Visible() {
+			min = min.Max(o.MinSize())
+		}
+	}
+	if min.Height <= 0 {
+		return fyne.Size{}
+	}
+	return fyne.NewSize(min.Width, min.Height+3)
 }
 
 // setCrossRefSources puts text on the footer's sources line, or hides the line
@@ -414,7 +449,12 @@ func crossRefRow(state *AppState, card crossRefCard, pal palette, onTap func(cro
 	snip.Wrapping = fyne.TextWrapWord
 	lines = append(lines, snip)
 
-	inner := container.NewPadded(container.NewVBox(lines...))
+	bottomPadding := float32(6)
+	if card.Caption != "" {
+		bottomPadding = 0
+	}
+	inner := container.New(layout.NewCustomPaddedLayout(6, bottomPadding, 0, 0),
+		container.New(layout.NewCustomPaddedVBoxLayout(3), lines...))
 	tap := newTapCard(inner, pal.SurfaceAlt, func() { onTap(c) })
 	block := []fyne.CanvasObject{tap}
 	if card.Caption != "" {
@@ -424,7 +464,7 @@ func crossRefRow(state *AppState, card crossRefCard, pal palette, onTap func(cro
 		block = append(block, crossRefNoteCaption(card.Caption))
 	}
 	block = append(block, widget.NewSeparator())
-	return container.NewVBox(block...)
+	return container.New(layout.NewCustomPaddedVBoxLayout(0), block...)
 }
 
 // parallelBadge is the small accent pill that marks a Gospel-synopsis parallel row.
@@ -475,6 +515,7 @@ func newTapCard(content fyne.CanvasObject, hoverBg color.NRGBA, onTap func()) *t
 func (c *tapCard) CreateRenderer() fyne.WidgetRenderer {
 	c.bg = canvas.NewRectangle(color.Transparent)
 	c.bg.CornerRadius = 8
+	c.bg.SetMinSize(fyne.NewSize(0, 44))
 	return widget.NewSimpleRenderer(container.NewStack(c.bg, c.content))
 }
 

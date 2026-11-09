@@ -224,6 +224,8 @@ func labelOffset(top *widget.PopUp, label string) (scroll *container.Scroll, y f
 					return true
 				}
 			}
+		case *container.ThemeOverride:
+			return walk(x.Content, at)
 		case *tapCard:
 			return walk(x.content, at)
 		}

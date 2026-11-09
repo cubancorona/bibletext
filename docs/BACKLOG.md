@@ -9969,8 +9969,13 @@ API.Bible comments without a plan name), each described in place below:
   citation's card carries the search result's muted "Title" tag and
   previews the superscription. The
   note's remainder is one caption inside its last card's block, at the
-  preview's left edge. No Accordion, Button, Hyperlink or theme override
-  stands in the list; the list sits in `squeezeWidthLayout` as a belt, and
+  preview's left edge. No Accordion, Button, Hyperlink or per-row theme
+  override stands in the list; one theme scope wraps the whole list at
+  17-point preview text with no inner inset, aligning section labels,
+  citations, previews and note captions at the same left edge, with a
+  44-point minimum tap height on each passage card
+  (`crossref_compact_test.go`). The list sits in `squeezeWidthLayout` as a
+  belt, and
   `TestCrossRefListFitsTheNarrowestPhone` measures every object against
   283 pt (`aiPanelSize(375×667).Width − 44`), with an injected Accordion as
   its control. Measured under the app theme: the widest card reference,

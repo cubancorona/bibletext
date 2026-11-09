@@ -26,7 +26,8 @@ package bibletext
 // narrowest phone's body gives it (crossRefListWidth). Every child is one of
 // five bounded kinds — a section label, a card (its reference measured, its
 // preview wrapping), a wrapping caption, a spacer, a separator — and no
-// Accordion, Button, Hyperlink or theme override stands among them: a widget
+// Accordion, Button, Hyperlink or per-row theme override stands among them. A
+// single theme scope wraps the complete list in the panel. A widget
 // whose title could not wrap widened the vertical scroll's content past the
 // panel and clipped every row sideways, with no bar to reach the rest (the
 // fold this list replaced). The panel wraps the list in squeezeWidthLayout as
@@ -202,7 +203,7 @@ func buildCrossRefList(state *AppState, selected []Verse, refs []crossRef, tskEr
 	book, _ := selectedChapter(state, selected)
 	out.CoverageNote, _ = panelCoverage(state, book, selected)
 	if out.CoverageNote != "" && len(out.Objects) > 0 {
-		out.Objects = append([]fyne.CanvasObject{crossRefCaption(out.CoverageNote)}, out.Objects...)
+		out.Objects = append([]fyne.CanvasObject{crossRefNoteCaption(out.CoverageNote)}, out.Objects...)
 	}
 	return out
 }
@@ -328,7 +329,7 @@ func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tsk
 			// note ends in a rule whatever it holds.
 			if remainder != "" {
 				flush()
-				out.Objects = append(out.Objects, container.NewVBox(crossRefNoteCaption(remainder), widget.NewSeparator()))
+				out.Objects = append(out.Objects, container.New(layout.NewCustomPaddedVBoxLayout(0), crossRefNoteCaption(remainder), widget.NewSeparator()))
 				out.PublisherLines++
 			}
 			continue
@@ -441,12 +442,10 @@ func crossRefFooterCredit(state *AppState, sections crossRefSections) (sources, 
 	return sources, notice
 }
 
-// crossRefSectionLabel is the list's one heading idiom: the sidebar's section
-// label, inset by the theme's padding — the card's own inset — so its ink
-// stands level with the card references beneath it by construction.
+// crossRefSectionLabel aligns the section heading with the card references.
+// The list supplies the larger gap above each new section.
 func crossRefSectionLabel(text string, pal palette) fyne.CanvasObject {
-	p := theme.Padding()
-	return container.New(layout.NewCustomPaddedLayout(0, 0, p, p), sectionLabel(text, pal))
+	return container.New(layout.NewCustomPaddedLayout(0, 4, 0, 0), sectionLabel(text, pal))
 }
 
 // crossRefCaptionStyle is the style of every caption in the panel: muted and
@@ -463,10 +462,8 @@ func crossRefCaption(s string) *widget.RichText {
 	return rt
 }
 
-// crossRefNoteCaption is a note's remainder, or the publisher's empty line,
-// set where a card's preview stands: inset by the card's padding, so its
-// words share the preview's left edge, with the card's air beneath it.
+// crossRefNoteCaption aligns a note's remainder or an explanatory caption
+// with the preview and separates it from the following rule.
 func crossRefNoteCaption(s string) fyne.CanvasObject {
-	p := theme.Padding()
-	return container.New(layout.NewCustomPaddedLayout(0, p, p, p), crossRefCaption(s))
+	return container.New(layout.NewCustomPaddedLayout(4, 6, 0, 0), crossRefCaption(s))
 }

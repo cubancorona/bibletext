@@ -288,6 +288,13 @@ cross-references panel under the edition's own label, the parenthesised
 groups as one verbatim caption, the Treasury open beneath
 (docs/SCRIPTURE_WORKLIST.md, S20).
 
+The shared cross-reference list uses 17-point wrapping previews, with
+citations, previews and note captions aligned at the same left edge. Explicit
+row and section spacing keeps the list compact. A passage row has a minimum
+44-point tap height. A publisher's note remainder sits outside that tap target.
+Source credits and the edition's notice occupy a separate caption-sized footer.
+
+
 ### The omitted verses — the investigation's most striking find
 
 34 notes (5 WEB protocanon + 29 WEBC) anchor in verses that have **no words
