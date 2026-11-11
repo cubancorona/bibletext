@@ -63,6 +63,7 @@ panel's own, in the order the notes stand.
 | A parenthesised group | 4,850 (census); 1,985 are the whole of their note | A row in the place the edition printed it, carrying the group as printed with its parentheses, that opens in place into the group's pieces; closed until it is tapped | `TestANotesGroupsStandWhereTheEditionPrintsThem`, `TestAGroupRowOpensIntoItsCitations`, `TestAGroupOpensInsideThePanelWithoutMovingIt` |
 | What stands inside a group | 8,320 cards, 3 of the reader's own passage, 1 that is words (census) | Each in its printed order under the opened row, by the rules above | `TestAGroupRowOpensIntoItsCitations` |
 | The book carried into a group and out of it | — | The cards are labelled in full | `TestTheShorthandReadsEveryShapeTheEditionPrints`, `TestTheShorthandFindsGroupsByTheirParentheses` |
+| Which rows are one note's | 17,956 notes of several pieces and 1,985 that are one group (census) | The note's own row stands at the list's edge with its letter; the rows under it are set in beside a rule that runs their whole height; one rule the width of the list closes the note, and the next letter stands back at the edge (`crossref_section.go`) | `TestWhatIsUnderALetterIsSetInBesideItsRule` |
 | **Repeats** | | | |
 | Two notes of a verse citing one passage | the repealed rule "one card, the first" had withheld 245 cards on 224 single-verse selections (counted) | Each note keeps its card | `TestANoteIsKeptWholeThoughAnotherNoteHasItsPassage` |
 | **The text the notes hang from** | | | |
@@ -81,6 +82,10 @@ panel (docs/ADDITIONS_AND_DROPS.md):
   verse or a title before the verse, so that a letter is read against the
   right verse;
 - the disclosure icon on a row that opens.
+
+And one device of layout that is no mark in the text: the rule beside the
+rows under a letter, with their inset, which shows what the edition shows
+by listing a letter's references together.
 
 A citation of the reader's own passage is shown as its reference in full,
 so where the edition prints it without its book the book is supplied on that

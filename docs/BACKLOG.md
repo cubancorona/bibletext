@@ -9923,7 +9923,7 @@ The presentation decision of 7 November 2026 preserves citation fragments
 with the publisher's wording and punctuation and defers the
 non-breaking-space wrapping patch.
 
-Decided 11 November 2026, in three steps, each of which changes part of the
+Decided 11 November 2026, in four steps, each of which changes part of the
 record above.
 
 First: a parenthesised group is a row of its own, in the place the edition
@@ -9943,7 +9943,15 @@ for the other cross-references (the Treasury, the Gospel parallels, any other
 edition's) afterwards. An audit of those is in hand; nothing of it is decided
 or built.
 
-What the three change in the record above. The fold "rejected in every
+Fourth: a reader sees at a glance which rows are a note's. The note's own
+row, with its letter, stands at the list's edge; everything under it is set
+in from the edge beside a rule that runs the whole height of what the note
+holds; one rule the width of the list closes the note; and the next letter
+stands back at the edge. As first built on the same day a note's pieces
+stood at the edge as the next note's row did, so a group under the letter a
+and the note b after it read as two equal rows.
+
+What these change in the record above. The fold "rejected in every
 form" now stands in the list twice, as a group's row and as a note's, and
 each reason given against it is met rather than set aside: neither is an
 Accordion, a Button or a theme override (a row is a 44-point tap over a
@@ -10016,7 +10024,8 @@ API.Bible comments without a plan name), each described in place below:
   scope wraps the whole list at 17-point preview text with no inner inset,
   so that section labels, references, previews and the printed line of a
   note's or a group's row start at the same left edge (a note's letter
-  stands at that edge, before its row's text), with a 44-point minimum tap
+  stands at that edge, before its row's text; the rows under a note's
+  letter are set in from it, below), with a 44-point minimum tap
   height on each passage card (`crossref_compact_test.go`). The list sits in
   `squeezeWidthLayout` as a belt, and
   `TestCrossRefListFitsTheNarrowestPhone` measures every object against
@@ -10054,12 +10063,15 @@ Knowledge: OpenBible.info (CC-BY)" — are the wordings settled on 6 November
 2026, recorded beside their constants.
 
 BUILT 11 November 2026 on `fu/s20-paren-groups`, cut from main at
-665f87671b, in six commits: 77d9203dd8 (the shorthand reader), 82a790190d
+665f87671b, in seven commits: 77d9203dd8 (the shorthand reader), 82a790190d
 (a note's groups resolved from the print and kept in their place; the
 shorthand census), 1cd40b92f4 (the group's row), 3da33a5030 (the notes whole
 under their letters), 98d37259aa (the two stretches the feed hangs one
 caller late), 362f9350c2 (the letters raised as the page raises a
-superscript). `docs/CROSS_REFERENCE_NOTES.md` is the ledger: what a note
+superscript), a7d18eded3 (what is under a letter set in beside a rule);
+cc7fada038 adds the test that the verse-of-the-day card, which shares the
+passage's paragraph, carries none of its marks.
+`docs/CROSS_REFERENCE_NOTES.md` is the ledger: what a note
 carries, kind by kind, how many the canon holds, where the panel shows each
 and the test that holds it. What the list is now, flag on:
 
@@ -10101,6 +10113,15 @@ and the test that holds it. What the list is now, flag on:
   caption that gathered what was not a card is gone, with
   `crossRefCard.Caption`, `publisherCrossRef.parts()` and
   `publisherTarget.key()`.
+- What is under a letter (`crossref_section.go`). A note's own row stands
+  at the list's edge with its letter. Its pieces are set in by 16 points
+  beside a 2-point rule in the letter's colour, which runs from the top of
+  the first to the foot of the last, with a group among them open or
+  closed. The last of them has no rule of its own: one rule the width of
+  the list closes the note, open or closed, and the next note's row stands
+  under it at the edge. A group that is the whole of its note stands at the
+  edge with the letter, and what it opens into is set in the same way. A
+  note that is one card has nothing under it.
 - Resolution. Outside a group a citation the feed tagged resolves by its
   tag, and one it did not tag by the print's reading (`readShorthand`,
   `publisher_xref_shorthand.go`); inside a group the print is followed,
@@ -10132,7 +10153,9 @@ before the first or after the last, with no exception; the passage with its
 letters taken out is the text on every verse that has a note; and every
 letter stands directly before a word (counted on 11 November 2026: before a
 letter or digit 30,433 times, an opening quotation mark 2,043, an opening
-bracket 39). The three pieces that are words are a verse the loaded text does not have
+bracket 39). Of the 21,266 single-verse selections that have a note, each
+built with every group open, none wants more than the narrowest phone's
+283 pt and the widest wants 221 (counted the same day). The three pieces that are words are a verse the loaded text does not have
 (Ezekiel 33:12, "Ezek. 8:21"; Mark 4:29, the "39" of "(Mark 13:30, 39)") and
 a form no rule of the shorthand reads (Amos 2:1, "Is. 15:1—16"). An
 independent reading of all 32,517 notes, written from the raw feed alone
@@ -10144,7 +10167,8 @@ basis). It is a record, not a repository test: both of its inputs are
 licensed data kept outside the repository. Tests added:
 `crossref_note_test.go`, `publisher_xref_displaced_test.go`, the piece
 census and its controls, `TestTheShorthandPrintsWhatItReads`,
-`TestANoteClosesInsideThePanelWithoutMovingIt`.
+`TestANoteClosesInsideThePanelWithoutMovingIt`,
+`TestWhatIsUnderALetterIsSetInBesideItsRule`.
 
 OPEN, each built one way and not decided:
 

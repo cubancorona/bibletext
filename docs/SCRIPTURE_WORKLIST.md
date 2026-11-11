@@ -769,7 +769,8 @@ without a device are in `docs/BACKLOG.md`, "NKJV cross references: the
 panel's second pass".
 **Rebuilt 11 November 2026** so that nothing a note carries is lost: the
 selected text with a raised letter before each word a note hangs from, and
-every note whole under its letter. The decisions, the build, the count that
+every note whole under its letter, its rows set in from the list's edge
+beside a rule so that they are seen to be that letter's. The decisions, the build, the count that
 holds it over the canon and what is still open are in the same BACKLOG
 entry; `docs/CROSS_REFERENCE_NOTES.md` is the ledger of what a note carries
 and where each thing is shown.

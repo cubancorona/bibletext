@@ -302,7 +302,9 @@ of several pieces as printed on a row of its own), the Treasury open beneath
 
 The shared cross-reference list uses 17-point wrapping previews, with
 references, previews and the printed lines of the publisher's note and group
-rows starting at the same left edge, a note's letter standing at that edge.
+rows starting at the same left edge, a note's letter standing at that edge;
+the rows under a publisher's note are set in from it beside a rule, so that
+they are seen to be under the note's letter.
 Explicit row and section spacing keeps the list compact. A passage row has a
 minimum 44-point tap height, and so has the row of a note that folds. Source
 credits and the edition's notice occupy a separate caption-sized footer.
