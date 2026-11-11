@@ -534,11 +534,13 @@ type cardRun struct {
 	Red    bool
 	Italic bool
 	Break  bool
-	// Mark sets the run small and raised, flush before the word that follows
-	// it: a note's letter in the cross-references panel's passage, in the
-	// paragraph's mark colour (crossref_passage.go). Dim draws a run in the
-	// paragraph's muted colour: with Mark a verse's number, without it a
-	// line that is not Scripture, a section heading. The verse-of-the-day
+	// Mark sets the run as the page sets a superscript, flush before the
+	// word that follows it (readingMarkScale, readingMarkLift): a note's
+	// letter in the cross-references panel's passage, in the paragraph's
+	// mark colour (crossref_passage.go). Dim draws a run in the paragraph's
+	// muted colour, a line that is not Scripture, a section heading. Mark
+	// and Dim together are a verse's number, set as the page sets one: in
+	// the bold cut and the paragraph's number colour. The verse-of-the-day
 	// card sets neither.
 	Mark bool
 	Dim  bool
@@ -684,19 +686,38 @@ type readingParagraph struct {
 	red     color.Color
 	regular fyne.Resource
 	italic  fyne.Resource
-	// mark and dim are the colours of a Mark run and a Dim run; nil draws
-	// them in the paragraph's own colour.
-	mark color.Color
-	dim  color.Color
+	// bold is the cut a verse's number is set in; nil sets it in the
+	// regular cut.
+	bold fyne.Resource
+	// mark, dim and number are the colours of a note's letter, a Dim run
+	// and a verse's number; nil draws a letter or a Dim run in the
+	// paragraph's own colour and a number in the Dim run's.
+	mark   color.Color
+	dim    color.Color
+	number color.Color
 	// guess is the width wrapped for before any layout has handed one over,
 	// for a paragraph that knows the width it will be given; 0 for the
 	// card's own guess (readingParagraphGuessWidth).
 	guess float32
 }
 
-// readingMarkScale is a Mark run's size against the paragraph's: a raised
-// letter the height of a superscript, drawn at the top of its row.
-const readingMarkScale = 0.68
+// A MARK IS THE PAGE'S SUPERSCRIPT. readingMarkScale is a Mark run's size
+// against the paragraph's and readingMarkLift how far its baseline stands
+// above the words', as a fraction of the paragraph's size: the figures the
+// reading page sets a verse's number by on every surface
+// (docs/READING_TYPOGRAPHY.md, "Verse numbers"; styledNumRatio and
+// styledNumLift on the canvas pane). A note's letter and a verse's number
+// in the cross-references passage are both set by them, so the passage reads
+// as the page does.
+//
+// The lift is stated baseline to baseline, as the page states it, and a mark
+// is given the height of its own glyphs: given its row's whole height, the
+// toolkit centres the smaller text in it, and the mark sits among the words
+// as a small letter, not above them.
+const (
+	readingMarkScale = float32(readingNumeralEm)
+	readingMarkLift  = float32(readingNumeralLiftEm)
+)
 
 func newReadingParagraph(runs []cardRun, size float32, col, red color.Color, regular, italic fyne.Resource) *readingParagraph {
 	p := &readingParagraph{runs: runs, size: size, color: col, red: red, regular: regular, italic: italic}
@@ -773,8 +794,13 @@ type readingParagraphRenderer struct {
 	width  float32
 	rowH   float32
 	spaceW float32
-	rows   [][]*canvas.Text
-	objs   []fyne.CanvasObject
+	// bodyBase is the words' baseline below the top of their row, and lift
+	// how far below the top of its row each mark's own top stands (it can
+	// be a fraction of a point above it).
+	bodyBase float32
+	lift     map[*canvas.Text]float32
+	rows     [][]*canvas.Text
+	objs     []fyne.CanvasObject
 }
 
 // readingParagraphGuessWidth is the width wrapped for before any layout has
@@ -803,14 +829,25 @@ func (r *readingParagraphRenderer) fragmentSize(f paragraphFragment) float32 {
 	return r.p.size
 }
 
+// fragmentFace is the cut a fragment is drawn in: a verse's number in the
+// bold cut, as the page sets one.
+func (r *readingParagraphRenderer) fragmentFace(f paragraphFragment) fyne.Resource {
+	if f.mark && f.dim && r.p.bold != nil {
+		return r.p.bold
+	}
+	return r.face(f.italic)
+}
+
 func (r *readingParagraphRenderer) fragmentWidth(f paragraphFragment) float32 {
-	sz, _ := fyne.CurrentApp().Driver().RenderedTextSize(f.text, r.fragmentSize(f), fyne.TextStyle{}, r.face(f.italic))
+	sz, _ := fyne.CurrentApp().Driver().RenderedTextSize(f.text, r.fragmentSize(f), fyne.TextStyle{}, r.fragmentFace(f))
 	return sz.Width
 }
 
 // fragmentColour is the colour a fragment is drawn in.
 func (r *readingParagraphRenderer) fragmentColour(f paragraphFragment) color.Color {
 	switch {
+	case f.mark && f.dim && r.p.number != nil:
+		return r.p.number
 	case f.dim && r.p.dim != nil:
 		return r.p.dim
 	case f.mark && r.p.mark != nil:
@@ -838,8 +875,12 @@ func (r *readingParagraphRenderer) wrap(width float32) {
 	r.width = width
 	r.rows = r.rows[:0]
 	r.objs = r.objs[:0]
+	r.lift = map[*canvas.Text]float32{}
+	drv := fyne.CurrentApp().Driver()
 	if r.rowH == 0 {
-		r.rowH = r.measure("Ag", false).Height
+		var body fyne.Size
+		body, r.bodyBase = drv.RenderedTextSize("Ag", r.p.size, fyne.TextStyle{}, r.face(false))
+		r.rowH = body.Height
 		r.spaceW = r.measure("a a", false).Width - r.measure("aa", false).Width
 	}
 	var row []*canvas.Text
@@ -889,9 +930,17 @@ func (r *readingParagraphRenderer) wrap(width float32) {
 		}
 		t := canvas.NewText(f.text, r.fragmentColour(f))
 		t.TextSize = r.fragmentSize(f)
-		t.FontSource = r.face(f.italic)
+		t.FontSource = r.fragmentFace(f)
 		t.Move(fyne.NewPos(x+gap, 0))
-		t.Resize(fyne.NewSize(w, r.rowH))
+		h := r.rowH
+		if f.mark {
+			// Its baseline readingMarkLift of the paragraph's size above
+			// the words'.
+			sz, base := drv.RenderedTextSize(f.text, t.TextSize, fyne.TextStyle{}, t.FontSource)
+			h = sz.Height
+			r.lift[t] = r.bodyBase - r.p.size*readingMarkLift - base
+		}
+		t.Resize(fyne.NewSize(w, h))
 		row = append(row, t)
 		r.objs = append(r.objs, t)
 		x += gap + w
@@ -907,7 +956,7 @@ func (r *readingParagraphRenderer) Layout(size fyne.Size) {
 	y := float32(0)
 	for _, row := range r.rows {
 		for _, t := range row {
-			t.Move(fyne.NewPos(t.Position().X, y))
+			t.Move(fyne.NewPos(t.Position().X, y+r.lift[t]))
 		}
 		y += r.rowH
 	}

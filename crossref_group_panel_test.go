@@ -180,15 +180,39 @@ func TestANoteClosesInsideThePanelWithoutMovingIt(t *testing.T) {
 			t.Errorf("row %d of the passage is %v wide in %v", i, rw, passage.Size().Width)
 		}
 	}
+	// Raised as the page raises a superscript: a letter is readingMarkScale
+	// of the words' size, its baseline readingMarkLift of that size above
+	// theirs, and it is given the height of its own glyphs. Given its row's
+	// whole height the toolkit centres it there, a small letter among the
+	// words. (The fixture's third note is keyed past the text's end, so its
+	// letter closes the row: the words of its row are the ones before it.)
+	_, bodyBase := drv.RenderedTextSize("Ag", passage.size, fyne.TextStyle{}, passage.regular)
 	letters := 0
-	for _, o := range r.Objects() {
-		tx := o.(*canvas.Text)
-		if tx.Color != th.palette().Accent {
-			continue
+	for ri, row := range r.rows {
+		var word *canvas.Text
+		for _, tx := range row {
+			if tx.Color != th.palette().Accent && tx.TextSize == passage.size {
+				word = tx
+				break
+			}
 		}
-		letters++
-		if tx.TextSize >= passage.size || tx.TextSize < passage.size*0.5 {
-			t.Errorf("the letter %q is %v points beside words of %v", tx.Text, tx.TextSize, passage.size)
+		for _, tx := range row {
+			if tx.Color != th.palette().Accent {
+				continue
+			}
+			letters++
+			if want := passage.size * readingMarkScale; tx.TextSize != want {
+				t.Errorf("the letter %q is %v points beside words of %v, want %v", tx.Text, tx.TextSize, passage.size, want)
+			}
+			if word == nil {
+				t.Errorf("the letter %q stands on row %d with no word", tx.Text, ri)
+				continue
+			}
+			own, base := drv.RenderedTextSize(tx.Text, tx.TextSize, fyne.TextStyle{}, tx.FontSource)
+			lift := (word.Position().Y + bodyBase) - (tx.Position().Y + base)
+			if want := passage.size * readingMarkLift; lift < want-0.01 || lift > want+0.01 || tx.Size().Height > own.Height {
+				t.Errorf("the letter %q stands %v above the line of its row's words in a box %v tall (its glyphs are %v): want %v above, in a box no taller than its glyphs", tx.Text, lift, tx.Size().Height, own.Height, want)
+			}
 		}
 	}
 	if letters != 3 {

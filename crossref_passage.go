@@ -24,6 +24,13 @@ package bibletext
 // (passagePlainText, and the test that holds the two equal over a canon).
 // A letter stands directly before its word, so one whose offset the decoder
 // wrote ahead of a line break or a space is drawn after it (noteMarkAt).
+//
+// Decided 11 November 2026: the letter stands before its word, where the
+// edition keys the note, and is raised above the line as the printed
+// edition's letters are. It is set as the page sets a superscript, at the
+// size and the lift of the page's verse numbers (readingMarkScale and
+// readingMarkLift, verse_of_day.go), and a verse's number in the passage is
+// the page's own: the bold cut, in the page's colour for one.
 
 import (
 	"sort"
@@ -38,6 +45,15 @@ import (
 // crossRefPassageTextSize is the passage's size before the reading face's
 // optical correction: the size the list's previews are set at.
 const crossRefPassageTextSize = 17
+
+// passageNumeralFace is the cut a verse's number is set in: the reading
+// face's bold, as on the page (styledReadingPane.numeralFace).
+func passageNumeralFace() fyne.Resource {
+	if f := loadReadingFonts(); f != nil && f.bold != nil {
+		return f.bold
+	}
+	return styledPaneFont()
+}
 
 // passageMark is one note's letter in a unit of the passage: the rune offset
 // in the unit's text where it is drawn, and the letter.
@@ -204,6 +220,7 @@ func newCrossRefPassage(state *AppState, book string, chapter int, selected []Ve
 	p := newReadingParagraph(passageRuns(publisherPassageUnits(state, book, chapter, selected, notes)),
 		readingGlyphSize(crossRefPassageTextSize), pal.Text, pal.RedLetter, styledPaneFont(), cardItalicFont())
 	p.mark, p.dim = pal.Accent, pal.TextMuted
+	p.number, p.bold = pal.VerseNumber, passageNumeralFace()
 	// The list's width is known before the list is laid out, so the passage
 	// reports the height of its rows at that width from the first frame: at
 	// the card's guess a passage of several rows could report a row too few

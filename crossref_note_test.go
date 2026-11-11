@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/test"
 )
 
@@ -284,6 +285,57 @@ func TestThePassageIsTheSelectedTextWithALetterBeforeEachNotesWord(t *testing.T)
 	}
 	if !hasLine(lst.Objects, "b  (Is. 9:6)") || !hasLine(lst.Objects, "c  Is. 43:25; 9:6") {
 		t.Errorf("the group and the note of two citations do not carry b and c:\n%s", joinedTexts(lst.Objects))
+	}
+
+	// DRAWN: a verse's number is the page's own, in the bold cut and the
+	// page's colour for one, and a note's letter is in the text's cut and
+	// the accent; both at the size and the lift of the page's superscript,
+	// measured baseline to baseline.
+	if readingMarkScale != styledNumRatio || readingMarkLift != styledNumLift {
+		t.Errorf("a mark is %v of the text and raised %v of it; the page's verse number is %v and %v", readingMarkScale, readingMarkLift, styledNumRatio, styledNumLift)
+	}
+	if passageNumeralFace() == p.regular || p.number != lightPalette.VerseNumber || p.mark != lightPalette.Accent {
+		t.Fatalf("the passage's number is not set apart from its text: the same cut %v, colours %v and %v", passageNumeralFace() == p.regular, p.number, p.mark)
+	}
+	p.Resize(fyne.NewSize(300, 600))
+	r := test.WidgetRenderer(p).(*readingParagraphRenderer)
+	r.Layout(p.Size())
+	drv := fyne.CurrentApp().Driver()
+	_, bodyBase := drv.RenderedTextSize("Ag", p.size, fyne.TextStyle{}, p.regular)
+	var drawn []string
+	for ri, row := range r.rows {
+		var word *canvas.Text
+		for _, tx := range row {
+			if tx.TextSize == p.size {
+				word = tx
+				break
+			}
+		}
+		for _, tx := range row {
+			if tx.TextSize == p.size {
+				continue
+			}
+			kind := "neither"
+			switch {
+			case tx.FontSource == passageNumeralFace() && tx.Color == p.number:
+				kind = "number"
+			case tx.FontSource == p.regular && tx.Color == p.mark:
+				kind = "letter"
+			}
+			drawn = append(drawn, kind+" "+tx.Text)
+			if word == nil {
+				t.Errorf("the mark %q stands on row %d with no word", tx.Text, ri)
+				continue
+			}
+			_, base := drv.RenderedTextSize(tx.Text, tx.TextSize, fyne.TextStyle{}, tx.FontSource)
+			lift := (word.Position().Y + bodyBase) - (tx.Position().Y + base)
+			if want := p.size * readingMarkLift; tx.TextSize != p.size*readingMarkScale || lift < want-0.01 || lift > want+0.01 {
+				t.Errorf("the mark %q is %v points with its baseline %v above the words': want %v points and %v", tx.Text, tx.TextSize, lift, p.size*readingMarkScale, want)
+			}
+		}
+	}
+	if got := joined(drawn); got != "letter a|number 1|letter a|letter b|letter c|number 2" {
+		t.Errorf("the passage's marks are drawn as %s", got)
 	}
 
 	// CONTROL: one verse and no title: no number, and the letters start at a.
