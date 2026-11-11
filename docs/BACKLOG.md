@@ -10073,14 +10073,16 @@ Knowledge: OpenBible.info (CC-BY)" — are the wordings settled on 6 November
 2026, recorded beside their constants.
 
 BUILT 11 November 2026 on `fu/s20-paren-groups`, cut from main at
-665f87671b, in eight commits: 77d9203dd8 (the shorthand reader), 82a790190d
+665f87671b, in ten commits: 77d9203dd8 (the shorthand reader), 82a790190d
 (a note's groups resolved from the print and kept in their place; the
 shorthand census), 1cd40b92f4 (the group's row), 3da33a5030 (the notes whole
 under their letters), 98d37259aa (the two stretches the feed hangs one
 caller late), 362f9350c2 (the letters raised as the page raises a
 superscript), a7d18eded3 (the second form of the fourth step, superseded the
 same day), 73e70c6d92 (each note on a ground of its own with its letter in a
-margin; every note opening alike); cc7fada038 adds the test that the
+margin; every note opening alike), 86d7c40fde (a Psalm's title in italic in
+the passage), 7162f4cdde (a printed line turned between citations and not
+inside one); cc7fada038 adds the test that the
 verse-of-the-day card, which shares the passage's paragraph, carries none
 of its marks.
 `docs/CROSS_REFERENCE_NOTES.md` is the ledger: what a note
@@ -10094,7 +10096,7 @@ and the test that holds it. What the list is now, flag on:
   divine name's small capitals, the translators' supplied words in italic,
   the words of Christ in red where the reader has that on, poem lines on
   rows of their own. A Psalm's title stands before verse 1 when it has a
-  note, and a section heading that carries a note stands, muted, before its
+  note, in italic as the page sets a title, and a section heading that carries a note stands, muted, before its
   verse. A small raised letter in the accent colour stands directly before
   each word a note hangs from. The letters run a, b, c in the order the
   notes stand and restart at each verse and at a Psalm's title; a heading's
@@ -10109,7 +10111,7 @@ and the test that holds it. What the list is now, flag on:
 - Each note is a block under its letter, in the order the notes stand
   (`crossref_note.go`). A note that is one citation is its card. Any other
   note is a row that carries the note exactly as printed (14 points, muted,
-  wrapping) and folds: under it, while it is open, the note's pieces in
+  its lines turning between citations and not inside one) and folds: under it, while it is open, the note's pieces in
   print order. It is open when the panel opens and a tap closes it; the
   printed text stays on the row in both states. A note that is one
   parenthesised group is such a row too, the group as printed and its
