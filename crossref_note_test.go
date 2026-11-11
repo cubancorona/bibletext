@@ -423,8 +423,9 @@ func TestANoteOfSeveralPiecesFoldsToItsPrintedLine(t *testing.T) {
 		t.Fatalf("%d note rows; list = %+v; want one note of five cards and the reader's own verse", len(rows), lst)
 	}
 	row := rows[0]
-	// Open when the list is built, the printed line on the row.
-	if !row.open || !row.body.Visible() || row.foot.Visible() {
+	// Open when the list is built, the printed line on the row, and the
+	// rule that closes the note under its pieces.
+	if !row.open || !row.body.Visible() || !row.foot.Visible() {
 		t.Fatalf("the note is not open when the list is built: open %v, pieces visible %v, closing rule visible %v", row.open, row.body.Visible(), row.foot.Visible())
 	}
 	if got := joined(textsIn(row.label)); got != "a  "+printed {
@@ -433,7 +434,7 @@ func TestANoteOfSeveralPiecesFoldsToItsPrintedLine(t *testing.T) {
 	// The pieces in print order: the reader's own verse third, in full, with
 	// nothing to tap; the rest cards.
 	var pieces []string
-	for _, o := range row.body.Objects {
+	for _, o := range row.pieces {
 		taps := cardsIn([]fyne.CanvasObject{o})
 		switch {
 		case len(taps) == 1:
@@ -462,7 +463,7 @@ func TestANoteOfSeveralPiecesFoldsToItsPrintedLine(t *testing.T) {
 	}
 	// And a second opens it again, with the pieces it had.
 	test.Tap(row.header)
-	if !row.open || !row.body.Visible() || row.foot.Visible() || relaid != 2 || row.MinSize().Height != openHeight {
+	if !row.open || !row.body.Visible() || !row.foot.Visible() || relaid != 2 || row.MinSize().Height != openHeight {
 		t.Errorf("a second tap did not open the note again: open %v, %d layouts, height %v (was %v)", row.open, relaid, row.MinSize().Height, openHeight)
 	}
 	// A card under the note is followed as any card is.

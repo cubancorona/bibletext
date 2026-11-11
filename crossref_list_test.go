@@ -408,13 +408,13 @@ func TestCrossRefListWithThePublisherIsItsNotesUnderTheirLetters(t *testing.T) {
 	if got := textsIn(notes[0].label); joined(got) != "a  John 7:50; 19:39" {
 		t.Errorf("the note's row reads %q; want its letter and the note as printed", got)
 	}
-	if n := len(notes[0].body.Objects); n != 2 {
+	if n := len(notes[0].pieces); n != 2 {
 		t.Fatalf("the note has %d pieces under it, want its card and its words", n)
 	}
-	if got := cardLabelsIn(notes[0].body.Objects[:1]); joined(got) != "John 7:50" {
+	if got := cardLabelsIn(notes[0].pieces[:1]); joined(got) != "John 7:50" {
 		t.Errorf("the note's first piece is %q, want the card John 7:50", got)
 	}
-	if got := textsIn(notes[0].body.Objects[1]); joined(got) != "19:39" {
+	if got := textsIn(notes[0].pieces[1]); joined(got) != "19:39" {
 		t.Errorf("the note's second piece is %q, want the words 19:39", got)
 	}
 	all := joinedTexts(lst.Objects)

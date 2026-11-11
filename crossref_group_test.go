@@ -121,7 +121,9 @@ func TestAGroupRowOpensIntoItsCitations(t *testing.T) {
 	// row of its own whose pieces are its three cards and then its group,
 	// where the edition printed it; the other two are each a group that is
 	// the whole of its note. A rule closes the card above the first group,
-	// which is the rule above it.
+	// which is the rule above it. The rule below it is its note's, at the
+	// list's edge, since it is the last of the rows under its letter; a group
+	// that is its whole note closes with a rule of its own.
 	notes := noteRowsIn(lst.Objects)
 	if len(notes) != 1 {
 		t.Fatalf("%d note rows, want the first note's", len(notes))
@@ -130,7 +132,7 @@ func TestAGroupRowOpensIntoItsCitations(t *testing.T) {
 	if n := len(lst.Objects); n < 3 || lst.Objects[n-3] != fyne.CanvasObject(note) || lst.Objects[n-2] != fyne.CanvasObject(lone) || lst.Objects[n-1] != fyne.CanvasObject(unread) {
 		t.Fatalf("the list does not end with the first note's row and the two groups, in that order (%d objects)", len(lst.Objects))
 	}
-	body := note.body.Objects
+	body := note.pieces
 	at := len(body) - 1
 	if len(body) != 4 || body[at] != fyne.CanvasObject(first) {
 		t.Fatalf("the first note's pieces are %d objects; want its three cards and then its group", len(body))
@@ -143,7 +145,11 @@ func TestAGroupRowOpensIntoItsCitations(t *testing.T) {
 		t.Errorf("no rule above the first group: the block above ends in a %T", above.Objects[len(above.Objects)-1])
 	}
 	for _, g := range groups {
-		if _, rule := g.box.Objects[len(g.box.Objects)-1].(*widget.Separator); !rule {
+		_, rule := g.box.Objects[len(g.box.Objects)-1].(*widget.Separator)
+		switch {
+		case g == first && (rule || !note.foot.Visible() || note.box.Objects[len(note.box.Objects)-1] != fyne.CanvasObject(note.foot)):
+			t.Errorf("%s: the last row under its letter closes with a rule of its own (%v), or its note's rule is not the last thing in the note", g.group.Text, rule)
+		case g != first && !rule:
 			t.Errorf("%s: no rule below the group", g.group.Text)
 		}
 	}

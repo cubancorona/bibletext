@@ -31,7 +31,9 @@ package bibletext
 // the one caption that gathered, under a note's last card, whatever of the
 // note was not a card, and the rule that two notes citing one passage gave
 // one card: both were the list's reading of a note, and the note is the
-// edition's.
+// edition's. What stands under a note's letter is set in from the list's
+// edge beside a rule, and the next letter stands back at the edge
+// (crossref_section.go).
 //
 // Width, by construction: nothing in the list may want more width than the
 // narrowest phone's body gives it (crossRefListWidth). Every child is one of
@@ -40,7 +42,8 @@ package bibletext
 // note's or a group's row (a printed line that wraps beside an icon of fixed
 // size); a reference that is shown and not followed; a wrapping caption; a
 // spacer; a separator — and no Accordion, Button, Hyperlink or per-row theme
-// override stands among them. A
+// override stands among them. The rows under a note's letter are these same
+// kinds, set in by a fixed inset. A
 // single theme scope wraps the complete list in the panel. A widget
 // whose title could not wrap widened the vertical scroll's content past the
 // panel and clipped every row sideways, with no bar to reach the rest (the

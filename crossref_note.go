@@ -18,7 +18,10 @@ package bibletext
 //     row closes it. The printed text stays on the row in both states, so
 //     the edition's own punctuation — which citations a comma joins, where a
 //     group stands, what was carried from the citation before — is never off
-//     screen.
+//     screen. The pieces are set in from the list's edge beside a rule, and
+//     one rule at the edge closes the note, so that a reader sees which rows
+//     are under the note's letter and where the next letter begins
+//     (crossref_section.go).
 //
 // A piece is drawn where it is printed (publisherPieceRows): a citation the
 // reader can follow as a card; a citation of the verse or passage the reader
@@ -112,16 +115,17 @@ func targetCard(tg publisherTarget, letter string) crossRefCard {
 }
 
 // publisherPieceRows draws pieces in the order the edition prints them.
-// ruleLast says whether the last piece closes with a rule: it does in a
-// note's list, and not at the foot of a group's shaded ground, where the
-// group's own rule stands a few points under it.
+// ruleLast says whether the last piece closes with a rule. It does not where
+// the pieces stand under a note's row or on a group's shaded ground: there
+// the rule that closes the note or the group, the width of the list, stands
+// under them (crossref_section.go).
 func publisherPieceRows(state *AppState, pieces []publisherPiece, pal palette, onTap func(crossRef), relayout *crossRefRelayout, ruleLast bool) []fyne.CanvasObject {
 	rows := make([]fyne.CanvasObject, 0, len(pieces))
 	for i, p := range pieces {
 		rule := ruleLast || i < len(pieces)-1
 		switch {
 		case p.Group != nil:
-			rows = append(rows, newCrossRefGroupRow(state, *p.Group, "", pal, onTap, relayout))
+			rows = append(rows, newCrossRefGroupRow(state, *p.Group, "", pal, onTap, relayout, rule))
 		case p.Target != nil && p.Target.Current:
 			rows = append(rows, crossRefSelfRow("", p.Target.label(), p.Target.tag(), pal, rule))
 		case p.Target != nil:
@@ -144,8 +148,8 @@ type crossRefNoteRow struct {
 	header *tapCard          // the printed note and its icon: the tap that closes and opens
 	icon   *widget.Icon      // points down while open, right while closed
 	label  *widget.RichText  // the note's letter and the note as printed
-	body   *fyne.Container   // the note's pieces, in print order; hidden while closed
-	foot   *widget.Separator // the rule that closes the row while it is closed; open, the last piece's does
+	body   *fyne.Container   // the note's pieces, in print order, set in under the letter; hidden while closed
+	foot   *widget.Separator // the rule that closes the note, the width of the list, open or closed
 	box    *fyne.Container
 	pieces []fyne.CanvasObject
 }
@@ -157,10 +161,12 @@ func newCrossRefNoteRow(state *AppState, n publisherCrossRef, pal palette, onTap
 	middle := container.NewVBox(layout.NewSpacer(), r.label, layout.NewSpacer())
 	row := container.NewBorder(nil, nil, nil, container.NewCenter(r.icon), middle)
 	r.header = newTapCard(container.New(layout.NewCustomPaddedLayout(6, 6, 0, 0), row), pal.SurfaceAlt, r.toggle)
-	r.pieces = publisherPieceRows(state, n.Pieces, pal, onTap, relayout, true)
-	r.body = container.New(layout.NewCustomPaddedVBoxLayout(0), r.pieces...)
+	// The pieces stand under the letter: set in from the edge beside the
+	// rule, with the note's own rule under them at the edge
+	// (crossref_section.go).
+	r.pieces = publisherPieceRows(state, n.Pieces, pal, onTap, relayout, false)
+	r.body = crossRefUnder(container.New(layout.NewCustomPaddedVBoxLayout(0), r.pieces...), pal)
 	r.foot = widget.NewSeparator()
-	r.foot.Hide()
 	r.box = container.New(layout.NewCustomPaddedVBoxLayout(0), r.header, r.body, r.foot)
 	r.ExtendBaseWidget(r)
 	return r
@@ -175,10 +181,8 @@ func (r *crossRefNoteRow) toggle() {
 	r.open = !r.open
 	if r.open {
 		r.body.Show()
-		r.foot.Hide()
 	} else {
 		r.body.Hide()
-		r.foot.Show()
 	}
 	r.icon.SetResource(crossRefGroupIcon(r.open))
 	r.box.Refresh()
@@ -208,7 +212,7 @@ func publisherNoteBlock(state *AppState, n publisherCrossRef, pal palette, onTap
 		return crossRefRowRuled(state, targetCard(tg, letter), pal, onTap, true), cards, groups, lines
 	}
 	if g, ok := n.groupAlone(); ok {
-		return newCrossRefGroupRow(state, *g, letter, pal, onTap, relayout), cards, groups, lines
+		return newCrossRefGroupRow(state, *g, letter, pal, onTap, relayout, true), cards, groups, lines
 	}
 	if words, ok := n.wordsAlone(); ok {
 		return crossRefWordsRow(letter, words, true), cards, groups, lines

@@ -18,6 +18,12 @@ package bibletext
 // apart from the note's direct citations by the parentheses, so none of them
 // counts for the Treasury's filter as a direct citation's card does.
 //
+// A group among the rows under a note's letter stands where those rows do
+// (crossref_section.go); as the last of them it has no rule of its own
+// below it, the note's rule standing there. A group that is the whole of
+// its note is the note's row: it stands at the list's edge with the letter,
+// and what it opens into is set in under the letter as a note's rows are.
+//
 // Width: the label wraps beside an icon of fixed size, so the row wants no
 // more than the narrowest phone gives the list. Opening and closing changes
 // the list's height inside its scroll and nothing else: the panel keeps its
@@ -72,8 +78,10 @@ type crossRefGroupRow struct {
 
 // letter is the note's letter, set before the group's text when the group is
 // the whole of its note (crossref_note.go); "" for a group among a note's
-// other pieces.
-func newCrossRefGroupRow(state *AppState, g publisherGroup, letter string, pal palette, onTap func(crossRef), relayout *crossRefRelayout) *crossRefGroupRow {
+// other pieces. rule says whether the row closes with a rule of its own: it
+// does not as the last of the rows under a letter, where the note's rule
+// stands under it.
+func newCrossRefGroupRow(state *AppState, g publisherGroup, letter string, pal palette, onTap func(crossRef), relayout *crossRefRelayout, rule bool) *crossRefGroupRow {
 	r := &crossRefGroupRow{group: g, state: state, pal: pal, onTap: onTap, relayout: relayout}
 	r.label = crossRefPrintedLine(letter, g.Text)
 	r.members = container.New(layout.NewCustomPaddedVBoxLayout(0))
@@ -83,6 +91,11 @@ func newCrossRefGroupRow(state *AppState, g publisherGroup, letter string, pal p
 	// that closes the row.
 	ground := container.NewStack(r.shade, container.New(layout.NewCustomPaddedLayout(2, 2, 8, 8), r.members))
 	r.inset = container.New(layout.NewCustomPaddedLayout(0, 8, 0, 0), ground)
+	if letter != "" {
+		// The group is the whole of its note: what it opens into stands
+		// under the note's letter (crossref_section.go).
+		r.inset = crossRefUnder(r.inset, pal)
+	}
 	r.inset.Hide()
 
 	var head fyne.CanvasObject
@@ -100,7 +113,10 @@ func newCrossRefGroupRow(state *AppState, g publisherGroup, letter string, pal p
 		r.header = newTapCard(container.New(layout.NewCustomPaddedLayout(6, 6, 0, 0), row), pal.SurfaceAlt, r.toggle)
 		head = r.header
 	}
-	r.box = container.New(layout.NewCustomPaddedVBoxLayout(0), head, r.inset, widget.NewSeparator())
+	r.box = container.New(layout.NewCustomPaddedVBoxLayout(0), head, r.inset)
+	if rule {
+		r.box.Add(widget.NewSeparator())
+	}
 	r.ExtendBaseWidget(r)
 	return r
 }
