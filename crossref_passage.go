@@ -104,8 +104,10 @@ func publisherPassageUnits(state *AppState, book string, chapter int, selected [
 	}
 	var units []passageUnit
 	if title := byVerse[0]; len(title) > 0 {
+		// A Psalm's title is set in italic, as the page sets it
+		// (reading.go, p.pst; reading_styled_super.go).
 		s := bd.SuperscriptionFor(book, chapter)
-		units = append(units, passageUnit{Runs: []verseRun{{Text: s.DrawnText()}}, Marks: marks(title)})
+		units = append(units, passageUnit{Runs: []verseRun{{Text: s.DrawnText(), Italic: true}}, Marks: marks(title)})
 	}
 	versionID := state.currentVersion().ID
 	for _, v := range selected {

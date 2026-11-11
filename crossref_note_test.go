@@ -252,15 +252,16 @@ func TestThePassageIsTheSelectedTextWithALetterBeforeEachNotesWord(t *testing.T)
 	if got := joined(markedWords(runs)); got != "a>when|1>Have|a>mercy|b>According|c>fixture's|2>Synthetic" {
 		t.Errorf("letters and their words: %s", got)
 	}
-	// The supplied word is set in italic, as the page sets it.
+	// The Psalm's title and the supplied word are set in italic, as the
+	// page sets them, and nothing else is.
 	italic := ""
 	for _, r := range runs {
 		if r.Italic {
 			italic += r.Text
 		}
 	}
-	if italic != "the" {
-		t.Errorf("the italic runs read %q, want the supplied word alone", italic)
+	if italic != title.Text+"the" {
+		t.Errorf("the italic runs read %q, want the title and the supplied word", italic)
 	}
 	// The list is headed by it, and each note carries the letter its word has.
 	lst := buildCrossRefList(st, sel, nil, nil, lightPalette, func(crossRef) {})
