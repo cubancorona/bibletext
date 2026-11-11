@@ -58,7 +58,7 @@ func TestCrossRefListFitsTheNarrowestPhone(t *testing.T) {
 		{"John", 3, 1, 3}, {"John", 3, 2, 2}, {"Psalms", 3, 1, 1}, {"Psalms", 3, 2, 2},
 		{"1 Samuel", 19, 12, 12}, {"Genesis", 7, 2, 2}, {"Hebrews", 1, 6, 6},
 	}
-	checked := 0
+	checked, openedLone := 0, 0
 	for _, flag := range []bool{false, true} {
 		withPublisherCrossRefs(t, "nkjv", flag)
 		for _, s := range selections {
@@ -73,12 +73,33 @@ func TestCrossRefListFitsTheNarrowestPhone(t *testing.T) {
 			}
 			// No selection here holds a parenthesised group inside a note:
 			// each of the fixture's groups is the whole of its note and
-			// stands open as that note's row, so it is measured above. The
-			// width with a group opened inside a note is held by
-			// TestTheListFitsTheNarrowestPhoneWithAGroupOpenInsideANote,
-			// which shows that it opened one.
-			if rows := groupRowsIn(lst.Objects); len(rows) != 0 {
-				t.Fatalf("control: flag %v, %s %d:%d-%d holds %d group rows inside notes; this test measures none open", flag, s.book, s.ch, s.lo, s.hi, len(rows))
+			// starts closed as that group's row, so open the whole-note ones
+			// and measure them too. The width with a group opened inside a
+			// note is held by
+			// TestTheListFitsTheNarrowestPhoneWithAGroupOpenInsideANote.
+			inner := 0
+			var lone []*crossRefGroupRow
+			for _, g := range groupRowsIn(lst.Objects) {
+				if g.letter == nil {
+					inner++
+				} else if g.header != nil {
+					lone = append(lone, g)
+				}
+			}
+			if inner != 0 {
+				t.Fatalf("control: flag %v, %s %d:%d-%d holds %d group rows inside notes; this test expects none", flag, s.book, s.ch, s.lo, s.hi, inner)
+			}
+			if len(lone) > 0 {
+				for _, g := range lone {
+					g.toggle()
+					openedLone++
+				}
+				if problems := crossRefListMisfits(lst.Objects, limit); len(problems) != 0 {
+					t.Errorf("flag %v, %s %d:%d-%d (lone groups open): %s", flag, s.book, s.ch, s.lo, s.hi, strings.Join(problems, "; "))
+				}
+				for _, g := range lone {
+					g.toggle()
+				}
 			}
 			all := joinedTexts(lst.Objects)
 			if strings.Contains(all, "Thomas Nelson") {
@@ -96,8 +117,8 @@ func TestCrossRefListFitsTheNarrowestPhone(t *testing.T) {
 			}
 		}
 	}
-	if checked != 2*len(selections) {
-		t.Fatalf("control: %d lists checked", checked)
+	if checked != 2*len(selections) || openedLone == 0 {
+		t.Fatalf("control: %d lists checked, %d lone groups opened", checked, openedLone)
 	}
 
 	// CONTROL: the fold this list replaced is reported twice over — for its

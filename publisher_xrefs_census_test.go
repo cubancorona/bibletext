@@ -403,8 +403,8 @@ type pieceCensus struct {
 	Alone, GroupAlone, WordsAlone, Folded int // what a note is: one citation, one group, words alone, several pieces
 	// Of the notes that are one citation, AloneOwn cite the reader's own
 	// passage and are a line, not a card. Of the notes that are one group,
-	// which stand open as the panel opens, GroupAloneCards is the citations
-	// they put on screen (and the Treasury does not repeat) and
+	// which start closed as a group's row, GroupAloneCards is the citations
+	// inside them (held back until opened, so the Treasury keeps them) and
 	// GroupAloneBare those with nothing to follow, drawn as their words.
 	AloneOwn, GroupAloneCards, GroupAloneBare int
 	MostOnAVerse                              int // the most notes under one verse number

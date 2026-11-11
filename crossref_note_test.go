@@ -287,8 +287,11 @@ func TestThePassageIsTheSelectedTextWithALetterBeforeEachNotesWord(t *testing.T)
 	if got := joined(letters); got != "a 2 Samuel 12:1|a Romans 5:8" {
 		t.Errorf("the cards that are a whole note carry %q", got)
 	}
-	if got := noteHeadsIn(lst.Objects); joined(got) != "b  (Is. 9:6)|c  Is. 43:25; 9:6" {
-		t.Errorf("the note that is one group and the note of two citations read %q; want them under b and c:\n%s", got, joinedTexts(lst.Objects))
+	if got := noteHeadsIn(lst.Objects); joined(got) != "c  Is. 43:25; 9:6" {
+		t.Errorf("the note of two citations reads %q; want it under c:\n%s", got, joinedTexts(lst.Objects))
+	}
+	if groups := groupRowsIn(lst.Objects); len(groups) != 1 || groups[0].open || groups[0].letter == nil || groups[0].letter.Text+"  "+joined(textsIn(groups[0].label)) != "b  (Is. 9:6)" {
+		t.Errorf("the note that is one group: %d group rows; want b  (Is. 9:6), closed", len(groups))
 	}
 
 	// DRAWN: a verse's number is the page's own, in the bold cut and the

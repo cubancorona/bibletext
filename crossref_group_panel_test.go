@@ -54,66 +54,69 @@ func TestAGroupOpensInsideThePanelWithoutMovingIt(t *testing.T) {
 			}
 		}
 	})
-	if len(groups) != 1 || scroll == nil || reference == nil {
-		t.Fatalf("%d group rows, scroll %v, the first card's reference %v; want the one group inside the first note", len(groups), scroll != nil, reference != nil)
+	if len(groups) != 2 || groups[0].letter != nil || groups[1].letter == nil || groups[1].letter.Text != "b" || scroll == nil || reference == nil {
+		t.Fatalf("%d group rows, scroll %v, the first card's reference %v; want the group inside the first note and the second note's lettered group row", len(groups), scroll != nil, reference != nil)
 	}
-	g := groups[0]
+	wantCards := []int{3, 1}
+	for gi, g := range groups {
+		// The label: 14 points, between the caption's 11 and the reference's 16,
+		// muted, in rows no wider than the label, with no inset of its own; and
+		// starting where the cards' references start, inside a note and as the
+		// whole of a note alike.
+		rows := test.WidgetRenderer(g.label).(*crossRefPrintedRenderer).rows
+		if len(rows) == 0 {
+			t.Fatalf("group %d: the label draws no row", gi)
+		}
+		for _, row := range rows {
+			if got := row.TextSize; got != 14 || got <= g.label.Theme().Size(theme.SizeNameCaptionText) || got >= reference.TextSize || row.Color != th.palette().TextMuted {
+				t.Errorf("group %d: the label is %v points in %v; want 14, muted, above the caption's %v and below the reference's %v", gi, got, row.Color, g.label.Theme().Size(theme.SizeNameCaptionText), reference.TextSize)
+			}
+			if row.Position().X != 0 || row.MinSize().Width > g.label.Size().Width {
+				t.Errorf("group %d: a row of the label starts %v in and wants %v in a label %v wide", gi, row.Position().X, row.MinSize().Width, g.label.Size().Width)
+			}
+		}
+		drv := fyne.CurrentApp().Driver()
+		if lx, rx := drv.AbsolutePositionForObject(g.label).X, drv.AbsolutePositionForObject(reference).X; lx != rx {
+			t.Errorf("group %d: the label starts at %v and the cards' references at %v", gi, lx, rx)
+		}
+		if h := g.header.Size().Height; h < 44 {
+			t.Errorf("group %d: the tap is %v points tall, want at least 44", gi, h)
+		}
+		if g.Size().Width > scroll.Size().Width {
+			t.Errorf("group %d: the row is %v wide in a list %v wide", gi, g.Size().Width, scroll.Size().Width)
+		}
 
-	// The label: 14 points, between the caption's 11 and the reference's 16,
-	// muted, in rows no wider than the label, with no inset of its own.
-	rows := test.WidgetRenderer(g.label).(*crossRefPrintedRenderer).rows
-	if len(rows) == 0 {
-		t.Fatalf("the group's label draws no row")
-	}
-	for _, row := range rows {
-		if got := row.TextSize; got != 14 || got <= g.label.Theme().Size(theme.SizeNameCaptionText) || got >= reference.TextSize || row.Color != th.palette().TextMuted {
-			t.Errorf("the group's label is %v points in %v; want 14, muted, above the caption's %v and below the reference's %v", got, row.Color, g.label.Theme().Size(theme.SizeNameCaptionText), reference.TextSize)
+		// Opening and closing: the panel does not move or change size; the list
+		// grows inside the scroll and shrinks back.
+		size, pos, content := top.Content.Size(), top.Content.Position(), scroll.Content.Size().Height
+		test.Tap(g.header)
+		if !g.open || len(g.members.Objects) != wantCards[gi] {
+			t.Fatalf("group %d: the tap did not open the group: open %v, %d cards", gi, g.open, len(g.members.Objects))
 		}
-		if row.Position().X != 0 || row.MinSize().Width > g.label.Size().Width {
-			t.Errorf("a row of the group's label starts %v in and wants %v in a label %v wide", row.Position().X, row.MinSize().Width, g.label.Size().Width)
+		if top.Content.Size() != size || top.Content.Position() != pos {
+			t.Errorf("group %d: opening moved the panel: %v at %v, was %v at %v", gi, top.Content.Size(), top.Content.Position(), size, pos)
 		}
-	}
-	drv := fyne.CurrentApp().Driver()
-	if lx, rx := drv.AbsolutePositionForObject(g.label).X, drv.AbsolutePositionForObject(reference).X; lx != rx {
-		t.Errorf("the group's label starts at %v and the cards' references at %v", lx, rx)
-	}
-	if h := g.header.Size().Height; h < 44 {
-		t.Errorf("the group's tap is %v points tall, want at least 44", h)
-	}
-	if g.Size().Width > scroll.Size().Width {
-		t.Errorf("the group row is %v wide in a list %v wide", g.Size().Width, scroll.Size().Width)
-	}
-
-	// Opening and closing: the panel does not move or change size; the list
-	// grows inside the scroll and shrinks back.
-	size, pos, content := top.Content.Size(), top.Content.Position(), scroll.Content.Size().Height
-	test.Tap(g.header)
-	if !g.open || len(g.members.Objects) != 3 {
-		t.Fatalf("the tap did not open the group: open %v, %d cards", g.open, len(g.members.Objects))
-	}
-	if top.Content.Size() != size || top.Content.Position() != pos {
-		t.Errorf("opening a group moved the panel: %v at %v, was %v at %v", top.Content.Size(), top.Content.Position(), size, pos)
-	}
-	opened := scroll.Content.Size().Height
-	if opened <= content {
-		t.Errorf("open, the list is %v tall inside the scroll, no taller than closed (%v): it was not laid out again", opened, content)
-	}
-	if g.inset.Size().Width > g.Size().Width || g.inset.Size().Height <= 0 {
-		t.Errorf("the open group's ground is %v in a row %v", g.inset.Size(), g.Size())
-	}
-	// The cards on the ground are full taps too, and their previews wrap
-	// inside it.
-	walkTree(g.inset, func(o fyne.CanvasObject) {
-		if card, ok := o.(*tapCard); ok && card.Size().Height < 44 {
-			t.Errorf("a card of the open group is %v points tall", card.Size().Height)
+		opened := scroll.Content.Size().Height
+		if opened <= content {
+			t.Errorf("group %d: open, the list is %v tall inside the scroll, no taller than closed (%v): it was not laid out again", gi, opened, content)
 		}
-		if label, ok := o.(*widget.Label); ok && label.Size().Width > g.inset.Size().Width {
-			t.Errorf("a preview of the open group is %v wide on a ground %v wide", label.Size().Width, g.inset.Size().Width)
+		if g.inset.Size().Width > g.Size().Width || g.inset.Size().Height <= 0 {
+			t.Errorf("group %d: the open group's ground is %v in a row %v", gi, g.inset.Size(), g.Size())
 		}
-	})
-	test.Tap(g.header)
-	if g.open || scroll.Content.Size().Height != content || top.Content.Size() != size || top.Content.Position() != pos {
-		t.Errorf("closing did not restore the list: open %v, list %v (was %v), panel %v at %v", g.open, scroll.Content.Size().Height, content, top.Content.Size(), top.Content.Position())
+		// The cards on the ground are full taps too, and their previews wrap
+		// inside it.
+		walkTree(g.inset, func(o fyne.CanvasObject) {
+			if card, ok := o.(*tapCard); ok && card.Size().Height < 44 {
+				t.Errorf("group %d: a card of the open group is %v points tall", gi, card.Size().Height)
+			}
+			if label, ok := o.(*widget.Label); ok && label.Size().Width > g.inset.Size().Width {
+				t.Errorf("group %d: a preview of the open group is %v wide on a ground %v wide", gi, label.Size().Width, g.inset.Size().Width)
+			}
+		})
+		test.Tap(g.header)
+		if g.open || scroll.Content.Size().Height != content || top.Content.Size() != size || top.Content.Position() != pos {
+			t.Errorf("group %d: closing did not restore the list: open %v, list %v (was %v), panel %v at %v", gi, g.open, scroll.Content.Size().Height, content, top.Content.Size(), top.Content.Position())
+		}
 	}
 }
 
@@ -163,8 +166,8 @@ func TestANoteClosesInsideThePanelWithoutMovingIt(t *testing.T) {
 			}
 		}
 	})
-	if len(notes) != 2 || scroll == nil || reference == nil {
-		t.Fatalf("%d note rows, scroll %v, the first card's reference %v; want the first note's row and the row of the note that is one group", len(notes), scroll != nil, reference != nil)
+	if len(notes) != 1 || scroll == nil || reference == nil {
+		t.Fatalf("%d note rows, scroll %v, the first card's reference %v; want the first note's row", len(notes), scroll != nil, reference != nil)
 	}
 	n := notes[0]
 
@@ -266,11 +269,10 @@ func TestANoteClosesInsideThePanelWithoutMovingIt(t *testing.T) {
 }
 
 // EACH NOTE STANDS ON A GROUND OF ITS OWN, ITS LETTER ALONE IN A MARGIN, so
-// that a reader sees which rows are a letter's and where the next begins.
-// Every note opens the same way, a note that is one parenthesised group
-// included; a group inside a note starts closed and opens onto the
-// palette's other ground, neither the note's nor the panel's: a well in the
-// note's ground.
+// that a reader sees which rows are a letter's and where the next begins. A
+// parenthesised group starts closed wherever it stands — inside a note or as
+// the whole of its note — and opens onto the palette's other ground, neither
+// the note's nor the panel's: a well in the note's ground.
 func TestEachNoteStandsOnAGroundOfItsOwn(t *testing.T) {
 	th := appThemeForTest(t)
 	licenseNKJVForTest(t)
@@ -314,10 +316,10 @@ func TestEachNoteStandsOnAGroundOfItsOwn(t *testing.T) {
 			groups = append(groups, x)
 		}
 	})
-	if len(sections) != 3 || len(notes) != 2 || len(groups) != 1 {
-		t.Fatalf("%d grounds, %d note rows, %d group rows; want a ground for each of the three notes, a row for the first two, and the first note's group", len(sections), len(notes), len(groups))
+	if len(sections) != 3 || len(notes) != 1 || len(groups) != 2 {
+		t.Fatalf("%d grounds, %d note rows, %d group rows; want a ground for each of the three notes, the first note's row, and the two groups", len(sections), len(notes), len(groups))
 	}
-	a, b, inner := notes[0], notes[1], groups[0]
+	a, inner, b := notes[0], groups[0], groups[1]
 	pal := th.palette()
 	drv := fyne.CurrentApp().Driver()
 	x := func(o fyne.CanvasObject) float32 { return drv.AbsolutePositionForObject(o).X }
@@ -394,78 +396,78 @@ func TestEachNoteStandsOnAGroundOfItsOwn(t *testing.T) {
 	rows := func(n *crossRefNoteRow) []fyne.CanvasObject {
 		return append([]fyne.CanvasObject{n.header}, n.pieces...)
 	}
-	if len(a.pieces) != 4 || len(b.pieces) != 1 {
-		t.Fatalf("%d rows under the first letter and %d under the second; want three cards and the group, and one card", len(a.pieces), len(b.pieces))
+	if len(a.pieces) != 4 {
+		t.Fatalf("%d rows under the first letter; want three cards and the group", len(a.pieces))
 	}
 	for i, row := range rows(a) {
 		if !on(row, ground(0)) || on(row, ground(1)) {
 			t.Errorf("row %d of the first note does not stand on its note's ground and no other", i)
 		}
 	}
-	for i, row := range rows(b) {
-		if !on(row, ground(1)) || on(row, ground(0)) {
-			t.Errorf("row %d of the second note does not stand on its note's ground and no other", i)
-		}
+	if !on(b.header, ground(1)) || on(b.header, ground(0)) {
+		t.Errorf("the second note's group row does not stand on its note's ground and no other")
 	}
 
 	// The letter alone in the margin, on the first line of the printed
 	// note; the printed note and every row under it beside the margin.
-	for _, n := range []*crossRefNoteRow{a, b} {
-		margin := x(n.letter)
-		g := ground(0)
-		if n == b {
-			g = ground(1)
-		}
-		if margin-x(g) != crossRefSectionPadX {
-			t.Errorf("the letter %q stands %v in from its ground's edge, want %v", n.letter.Text, margin-x(g), crossRefSectionPadX)
-		}
-		if x(n.label)-margin != crossRefLetterMargin {
-			t.Errorf("the printed note stands %v beside the letter %q, want %v", x(n.label)-margin, n.letter.Text, crossRefLetterMargin)
-		}
-		for i, piece := range n.pieces {
-			if x(piece)-margin != crossRefLetterMargin {
-				t.Errorf("row %d under the letter %q stands %v beside it, want %v", i, n.letter.Text, x(piece)-margin, crossRefLetterMargin)
-			}
-		}
-		_, own := drv.RenderedTextSize(n.letter.Text, n.letter.TextSize, n.letter.TextStyle, nil)
-		_, line := drv.RenderedTextSize("Ag", crossRefGroupTextSize, fyne.TextStyle{}, nil)
-		if d := (y(n.letter) + own) - (y(n.label) + line); d < -0.5 || d > 0.5 {
-			t.Errorf("the letter %q stands %v points off the line of the printed note", n.letter.Text, d)
-		}
-		// From under the letter a rule runs down the margin beside the
-		// note's rows: the letter's colour, under the letter and clear of
-		// the rows, from a little under the line the letter stands on to a
-		// little above the foot of the last row.
-		stem := n.stem
-		first, last := n.pieces[0], n.pieces[len(n.pieces)-1]
-		if !stem.Visible() || stem.FillColor != crossRefStemColour(pal) || stem.Size().Width != crossRefStemWidth || x(stem)-margin != crossRefStemAt {
-			t.Errorf("the rule under %q: visible %v, %v, %v wide, %v into the margin", n.letter.Text, stem.Visible(), stem.FillColor, stem.Size().Width, x(stem)-margin)
-		}
-		if x(stem) < x(n.letter) || right(stem) > right(n.letter) || right(stem) > x(first) {
-			t.Errorf("the rule under %q spans %v to %v; the letter %v to %v, the rows from %v", n.letter.Text, x(stem), right(stem), x(n.letter), right(n.letter), x(first))
-		}
-		if d := y(stem) - (y(n.letter) + own + crossRefStemGap); d < -0.01 || d > 0.01 || y(stem) >= y(first) {
-			t.Errorf("the rule under %q starts at %v; the letter stands on the line at %v and the rows start at %v", n.letter.Text, y(stem), y(n.letter)+own, y(first))
-		}
-		if d := foot(stem) - (foot(last) - crossRefStemFoot); d < -0.01 || d > 0.01 {
-			t.Errorf("the rule under %q ends at %v; the rows at %v", n.letter.Text, foot(stem), foot(last))
+	margin := x(a.letter)
+	if margin-x(ground(0)) != crossRefSectionPadX {
+		t.Errorf("the letter %q stands %v in from its ground's edge, want %v", a.letter.Text, margin-x(ground(0)), crossRefSectionPadX)
+	}
+	if x(a.label)-margin != crossRefLetterMargin {
+		t.Errorf("the printed note stands %v beside the letter %q, want %v", x(a.label)-margin, a.letter.Text, crossRefLetterMargin)
+	}
+	for i, piece := range a.pieces {
+		if x(piece)-margin != crossRefLetterMargin {
+			t.Errorf("row %d under the letter %q stands %v beside it, want %v", i, a.letter.Text, x(piece)-margin, crossRefLetterMargin)
 		}
 	}
-	if a.letter.Text != "a" || b.letter.Text != "b" || a.letter.Color != pal.Accent {
-		t.Errorf("the letters are %q and %q in %v", a.letter.Text, b.letter.Text, a.letter.Color)
+	_, own := drv.RenderedTextSize(a.letter.Text, a.letter.TextSize, a.letter.TextStyle, nil)
+	_, line := drv.RenderedTextSize("Ag", crossRefGroupTextSize, fyne.TextStyle{}, nil)
+	if d := (y(a.letter) + own) - (y(a.label) + line); d < -0.5 || d > 0.5 {
+		t.Errorf("the letter %q stands %v points off the line of the printed note", a.letter.Text, d)
+	}
+	// From under the letter a rule runs down the margin beside the
+	// note's rows: the letter's colour, under the letter and clear of
+	// the rows, from a little under the line the letter stands on to a
+	// little above the foot of the last row.
+	stem := a.stem
+	first, last := a.pieces[0], a.pieces[len(a.pieces)-1]
+	if !stem.Visible() || stem.FillColor != crossRefStemColour(pal) || stem.Size().Width != crossRefStemWidth || x(stem)-margin != crossRefStemAt {
+		t.Errorf("the rule under %q: visible %v, %v, %v wide, %v into the margin", a.letter.Text, stem.Visible(), stem.FillColor, stem.Size().Width, x(stem)-margin)
+	}
+	if x(stem) < x(a.letter) || right(stem) > right(a.letter) || right(stem) > x(first) {
+		t.Errorf("the rule under %q spans %v to %v; the letter %v to %v, the rows from %v", a.letter.Text, x(stem), right(stem), x(a.letter), right(a.letter), x(first))
+	}
+	if d := y(stem) - (y(a.letter) + own + crossRefStemGap); d < -0.01 || d > 0.01 || y(stem) >= y(first) {
+		t.Errorf("the rule under %q starts at %v; the letter stands on the line at %v and the rows start at %v", a.letter.Text, y(stem), y(a.letter)+own, y(first))
+	}
+	if d := foot(stem) - (foot(last) - crossRefStemFoot); d < -0.01 || d > 0.01 {
+		t.Errorf("the rule under %q ends at %v; the rows at %v", a.letter.Text, foot(stem), foot(last))
 	}
 
-	// Every note opens the same way: its own citations shown. The second
-	// note is one parenthesised group; its row carries the group as
-	// printed and its citation stands under it.
-	if !a.open || !a.body.Visible() || !b.open || !b.body.Visible() {
-		t.Errorf("as the panel opens the first note is open %v and the second %v", a.open, b.open)
+	// The second note is one parenthesised group: drawn as that group's row
+	// beside its letter in the margin, closed when the panel opens, at the
+	// same level as the group inside the first note.
+	if b.letter == nil || a.letter.Text != "a" || b.letter.Text != "b" || a.letter.Color != pal.Accent || b.letter.Color != pal.Accent {
+		t.Fatalf("the letters are %q and %v in %v", a.letter.Text, b.letter, a.letter.Color)
+	}
+	bMargin := x(b.letter)
+	if bMargin-x(ground(1)) != crossRefSectionPadX || x(b.label)-bMargin != crossRefLetterMargin || x(b.label) != x(inner.label) {
+		t.Errorf("the lone group's letter stands at %v on a ground at %v, and its label at %v (the inner group's is at %v)", bMargin, x(ground(1)), x(b.label), x(inner.label))
+	}
+	_, bOwn := drv.RenderedTextSize(b.letter.Text, b.letter.TextSize, b.letter.TextStyle, nil)
+	if d := (y(b.letter) + bOwn) - (y(b.label) + line); d < -0.5 || d > 0.5 {
+		t.Errorf("the letter %q stands %v points off the line of the lone group", b.letter.Text, d)
+	}
+	if !a.open || !a.body.Visible() || b.open || b.inset.Visible() || b.stem == nil || b.stem.Visible() {
+		t.Errorf("as the panel opens the first note is open %v and the lone group %v (inset %v, stem %v)", a.open, b.open, b.inset.Visible(), b.stem != nil && b.stem.Visible())
 	}
 	if got := joined(textsIn(b.label)); got != "(Is. 9:6)" {
 		t.Errorf("the second note's row reads %q, want the group as printed", got)
 	}
-	if got := joined(cardLabelsIn(b.pieces)); got != "Isaiah 9:6" {
-		t.Errorf("under the second letter stand %q, want the group's citation", got)
+	if foot(ground(1))-foot(b.header) != crossRefSectionPadY {
+		t.Errorf("closed, the lone group's ground ends %v under its row, want %v", foot(ground(1))-foot(b.header), crossRefSectionPadY)
 	}
 	// The third is a group nothing of which can be followed: as printed,
 	// under its letter, with nothing to tap.
@@ -473,9 +475,10 @@ func TestEachNoteStandsOnAGroundOfItsOwn(t *testing.T) {
 		t.Errorf("the third note reads %q with %d taps; want its letter and the group as printed, and none", got, len(cardsIn([]fyne.CanvasObject{sections[2]})))
 	}
 
-	// A group inside a note starts closed. Open, its cards stand on a
-	// ground that is neither the note's nor the panel's, inside the note's,
-	// and the next note's ground keeps its distance.
+	// Both groups start closed. Open, each stands on a ground that is
+	// neither the note's nor the panel's, inside its note's ground, at the
+	// same left edge and width, and the next note's ground keeps its
+	// distance.
 	if inner.open || inner.inset.Visible() {
 		t.Fatalf("the group inside the first note is open before a tap")
 	}
@@ -488,6 +491,32 @@ func TestEachNoteStandsOnAGroundOfItsOwn(t *testing.T) {
 	}
 	if d := foot(a.stem) - (foot(inner) - crossRefStemFoot); d < -0.01 || d > 0.01 {
 		t.Errorf("with its group open, the rule under the first letter ends at %v and its rows at %v", foot(a.stem), foot(inner))
+	}
+	test.Tap(b.header)
+	if !b.open || !b.inset.Visible() || b.shade.FillColor != crossRefGroupGround(pal) || !on(b.shade, ground(1)) || x(b.shade) != x(inner.shade) || b.shade.Size().Width != inner.shade.Size().Width {
+		t.Errorf("the opened lone group: open %v, visible %v, ground %v inside note %v, at %v (%v wide; the inner well is at %v, %v wide)", b.open, b.inset.Visible(), b.shade.FillColor, on(b.shade, ground(1)), x(b.shade), b.shade.Size().Width, x(inner.shade), inner.shade.Size().Width)
+	}
+	if !b.stem.Visible() || b.stem.FillColor != crossRefStemColour(pal) || b.stem.Size().Width != crossRefStemWidth || x(b.stem)-bMargin != crossRefStemAt {
+		t.Errorf("the rule under %q: visible %v, %v, %v wide, %v into the margin", b.letter.Text, b.stem.Visible(), b.stem.FillColor, b.stem.Size().Width, x(b.stem)-bMargin)
+	}
+	if x(b.stem) < x(b.letter) || right(b.stem) > right(b.letter) || right(b.stem) > x(b.shade) {
+		t.Errorf("the rule under %q spans %v to %v; the letter %v to %v, the well from %v", b.letter.Text, x(b.stem), right(b.stem), x(b.letter), right(b.letter), x(b.shade))
+	}
+	if d := y(b.stem) - (y(b.letter) + bOwn + crossRefStemGap); d < -0.01 || d > 0.01 || y(b.stem) >= y(b.shade) {
+		t.Errorf("the rule under %q starts at %v; the letter stands on the line at %v and the well starts at %v", b.letter.Text, y(b.stem), y(b.letter)+bOwn, y(b.shade))
+	}
+	if d := foot(b.stem) - (foot(b.shade) - crossRefStemFoot); d < -0.01 || d > 0.01 || !on(b.stem, ground(1)) {
+		t.Errorf("the rule under %q ends at %v; the well at %v, on ground %v", b.letter.Text, foot(b.stem), foot(b.shade), on(b.stem, ground(1)))
+	}
+	if got := joined(cardLabelsIn(b.members.Objects)); got != "Isaiah 9:6" {
+		t.Errorf("under the opened lone group stand %q, want Isaiah 9:6", got)
+	}
+	if gap := y(ground(2)) - foot(ground(1)); gap != crossRefSectionGap {
+		t.Errorf("with the lone group open, its ground ends %v above the third's, want %v", gap, crossRefSectionGap)
+	}
+	test.Tap(b.header)
+	if b.open || b.inset.Visible() || b.stem.Visible() {
+		t.Errorf("closed again, the lone group has open %v, inset %v, rule %v", b.open, b.inset.Visible(), b.stem.Visible())
 	}
 
 	// Closed, a note is its own row on its ground, and the next ground

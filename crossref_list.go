@@ -26,9 +26,9 @@ package bibletext
 // (crossref_passage.go), and the publisher's run is its notes one by one
 // under those letters, each whole and in the order it is printed
 // (crossref_note.go): a note of several pieces is a row that carries the
-// note as printed and folds, its pieces under it, and so is a note that is
-// one parenthesised group; a parenthesised group inside a note is a row
-// that opens into its citations (crossref_group.go). This replaces the one
+// note as printed and folds, its pieces under it; a parenthesised group —
+// inside a note or as the whole of its note — is a row that starts closed and
+// opens into its citations (crossref_group.go). This replaces the one
 // caption that gathered, under a note's last card, whatever of the note was
 // not a card, and the rule that two notes citing one passage gave one card:
 // both were the list's reading of a note, and the note is the edition's.
@@ -190,15 +190,14 @@ type crossRefList struct {
 	OtherOccasions int // the same saying on another occasion (next major release)
 	// PublisherNotes is the publisher's notes on screen, each under its
 	// letter (crossref_note.go). PublisherCards is the cards that stand open
-	// when the panel opens: the notes' direct citations, and the citations
-	// of a note that is one parenthesised group. PublisherGroups is the
-	// parenthesised groups among the notes' pieces; one inside a note is a
-	// row that opens into its citations (crossref_group.go). PublisherLines
-	// is the pieces on screen as the panel opens that are shown and not
-	// followed — a citation of the reader's own passage, words that are no
-	// citation the loaded text has, at a note's own level or in a note that
-	// is one group — and the line that says the edition has no note for the
-	// selection.
+	// when the panel opens: the notes' direct citations. PublisherGroups is
+	// the parenthesised groups among the notes, inside a note or as the whole
+	// of its note, each closed until tapped (crossref_group.go).
+	// PublisherLines is the pieces at a note's own level that are shown and
+	// not followed — a citation of the reader's own passage, words that are
+	// no citation the loaded text has — and the line that says the edition
+	// has no note for the selection. A lone group counts as a group and never
+	// as a line, even one with nothing to follow, which is drawn as its words.
 	PublisherNotes  int
 	PublisherCards  int
 	PublisherLines  int

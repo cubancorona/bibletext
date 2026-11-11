@@ -33,9 +33,9 @@ import (
 // with every note closed.
 //
 // Each selection is written as it opens, then a view at a time down the list
-// (-p2, -p3 …), with every group inside a note open and scrolled to the
-// first (-open), and with every note closed and scrolled to the first
-// (-closed).
+// (-p2, -p3 …), with every parenthesised group open and scrolled to the first
+// (-open; plus -b-open on John 3:16 for its lone group alone), and with every
+// note of several pieces closed and scrolled to the first (-closed).
 //
 // Gated on two environment variables, so the default run never needs the
 // files: BIBLETEXT_RENDER_XREFS names a decoded canon (the JSON
@@ -244,6 +244,36 @@ func TestRenderCrossRefPanel(t *testing.T) {
 					listScroll.Offset = fyne.NewPos(0, 0)
 					listScroll.Refresh()
 				}
+				if f.name == "john3-16-on" && listScroll != nil {
+					var lone []*crossRefGroupRow
+					for _, g := range groups {
+						if g.letter != nil {
+							lone = append(lone, g)
+						}
+					}
+					if len(lone) > 0 {
+						for _, g := range lone {
+							test.Tap(g.header)
+						}
+						fits("lone group open")
+						drv := fyne.CurrentApp().Driver()
+						y := drv.AbsolutePositionForObject(lone[0]).Y - drv.AbsolutePositionForObject(listScroll).Y + listScroll.Offset.Y - 6
+						if most := listScroll.Content.Size().Height - listScroll.Size().Height; y > most {
+							y = most
+						}
+						if y < 0 {
+							y = 0
+						}
+						listScroll.Offset = fyne.NewPos(0, y)
+						listScroll.Refresh()
+						writeRenderPNG(t, filepath.Join(out, name+"-b-open.png"), w.Canvas().Capture())
+						for _, g := range lone {
+							test.Tap(g.header)
+						}
+						listScroll.Offset = fyne.NewPos(0, 0)
+						listScroll.Refresh()
+					}
+				}
 				if len(groups) > 0 && listScroll != nil {
 					size, pos := top.Content.Size(), top.Content.Position()
 					for _, g := range groups {
@@ -362,7 +392,7 @@ func TestRenderCrossRefPanel(t *testing.T) {
 	// And the notes as the panel draws them: every one whole, every letter
 	// before its word, the passage the verse's own text.
 	pieces := assertCanonPieceCensus(t, &bd)
-	t.Logf("pieces: %d notes (%d on verses, %d on titles, %d on headings); %d cards, %d of the reader's own passage, %d words, %d groups holding %d cards, %d own and %d words; %d notes are one citation (%d of them the reader's own passage), %d one group (showing %d citations, %d with nothing to follow), %d words alone and %d several pieces; at most %d to a verse; %d letters drawn past white space, %d at the head of a split word, %d between two words run together; %d notes shown one caller back, %d keyed to no word, %d callers with no content; %d problems",
+	t.Logf("pieces: %d notes (%d on verses, %d on titles, %d on headings); %d cards, %d of the reader's own passage, %d words, %d groups holding %d cards, %d own and %d words; %d notes are one citation (%d of them the reader's own passage), %d one group (holding %d citations, %d with nothing to follow), %d words alone and %d several pieces; at most %d to a verse; %d letters drawn past white space, %d at the head of a split word, %d between two words run together; %d notes shown one caller back, %d keyed to no word, %d callers with no content; %d problems",
 		pieces.Notes, pieces.OnVerses, pieces.OnTitles, pieces.OnHeadings, pieces.Cards, pieces.Own, pieces.Words, pieces.Groups, pieces.GroupCards, pieces.GroupOwn, pieces.GroupWords,
 		pieces.Alone, pieces.AloneOwn, pieces.GroupAlone, pieces.GroupAloneCards, pieces.GroupAloneBare, pieces.WordsAlone, pieces.Folded, pieces.MostOnAVerse, pieces.Moved, pieces.WordStarts, pieces.BetweenWords,
 		pieces.Shifted, pieces.Unkeyed, pieces.Silent, len(pieces.Problems))

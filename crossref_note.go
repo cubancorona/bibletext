@@ -12,16 +12,16 @@ package bibletext
 //     (or, where the loaded text has no such passage, its words; or, where
 //     it cites the verse the reader is on, its reference shown and not
 //     followed);
-//   - a note that is one parenthesised group nothing of which can be
-//     followed is the group as printed;
+//   - a note that is one parenthesised group is that group's row
+//     (crossref_group.go), closed until tapped, beside the letter's margin
+//     (or, where nothing in it can be followed, the group as printed);
 //   - every other note is a row that carries the note exactly as printed and
 //     folds: under it, while it is open, the note's pieces in the order the
 //     edition prints them. It is open when the panel opens, and a tap on the
 //     row closes it. The printed text stays on the row in both states, so
 //     the edition's own punctuation — which citations a comma joins, where a
 //     group stands, what was carried from the citation before — is never off
-//     screen. A note that is one parenthesised group is such a row too: the
-//     group as printed, and under it the group's citations.
+//     screen.
 //
 // Each note stands on a ground of its own with its letter alone in a margin
 // at the left, so that a reader sees which rows are a letter's and where the
@@ -110,7 +110,7 @@ func publisherPieceRows(state *AppState, pieces []publisherPiece, pal palette, o
 		rule := i < len(pieces)-1
 		switch {
 		case p.Group != nil:
-			rows = append(rows, newCrossRefGroupRow(state, *p.Group, pal, onTap, relayout, rule))
+			rows = append(rows, newCrossRefGroupRow(state, *p.Group, "", false, pal, onTap, relayout, rule))
 		case p.Target != nil && p.Target.Current:
 			rows = append(rows, crossRefSelfRow(p.Target.label(), p.Target.tag(), pal, rule))
 		case p.Target != nil:
@@ -122,8 +122,8 @@ func publisherPieceRows(state *AppState, pieces []publisherPiece, pal palette, o
 	return rows
 }
 
-// crossRefNoteRow is the row of a note that is more than one piece, or one
-// parenthesised group: the note as printed, and under it its pieces.
+// crossRefNoteRow is the row of a note of more than one piece: the note as
+// printed, and under it its pieces.
 type crossRefNoteRow struct {
 	widget.BaseWidget
 	note     publisherCrossRef
@@ -141,9 +141,8 @@ type crossRefNoteRow struct {
 	pieces []fyne.CanvasObject
 }
 
-// newCrossRefNoteRow draws n as its printed line over pieces: the note's
-// own, or its one group's.
-func newCrossRefNoteRow(state *AppState, n publisherCrossRef, pieces []publisherPiece, pal palette, onTap func(crossRef), relayout *crossRefRelayout) *crossRefNoteRow {
+// newCrossRefNoteRow draws n as its printed line over its pieces.
+func newCrossRefNoteRow(state *AppState, n publisherCrossRef, pal palette, onTap func(crossRef), relayout *crossRefRelayout) *crossRefNoteRow {
 	r := &crossRefNoteRow{note: n, relayout: relayout, open: true}
 	r.label = newCrossRefPrinted(n.Text, pal)
 	r.icon = widget.NewIcon(crossRefGroupIcon(true))
@@ -155,7 +154,7 @@ func newCrossRefNoteRow(state *AppState, n publisherCrossRef, pieces []publisher
 	middle := container.NewVBox(layout.NewSpacer(), r.head, layout.NewSpacer())
 	row := container.NewBorder(nil, nil, nil, crossRefFoldIcon(r.icon), middle)
 	r.header = newTapCard(container.New(layout.NewCustomPaddedLayout(crossRefRowPad, crossRefRowPad, 0, 0), row), crossRefHover(pal), r.toggle)
-	r.pieces = publisherPieceRows(state, pieces, pal, onTap, relayout)
+	r.pieces = publisherPieceRows(state, n.Pieces, pal, onTap, relayout)
 	r.body = container.New(layout.NewCustomPaddedVBoxLayout(0), r.pieces...)
 	r.stem = canvas.NewRectangle(crossRefStemColour(pal))
 	r.stem.CornerRadius = crossRefStemWidth / 2
@@ -230,31 +229,10 @@ func (r *crossRefNoteRow) toggle() {
 // when the panel opens (for the Treasury's filter), and its counts.
 func publisherNoteBlock(state *AppState, n publisherCrossRef, pal palette, onTap func(crossRef), relayout *crossRefRelayout) (row fyne.CanvasObject, cards []crossRef, groups, lines int) {
 	letter := noteLetter(n.Index)
-	_, lone := n.groupAlone()
 	for _, p := range n.Pieces {
 		switch {
 		case p.Group != nil:
 			groups++
-			if lone {
-				// The group is the whole of its note, and the note opens
-				// as every note does: its citations are on screen when the
-				// panel opens, as a note's direct citations are, and the
-				// Treasury does not repeat them; what it holds that is not
-				// followed is on screen too. A group inside a note starts
-				// closed, and nothing in it is counted.
-				for _, tg := range p.Group.cards() {
-					cards = append(cards, tg.Ref)
-				}
-				if len(p.Group.cards()) == 0 {
-					lines++ // the group as printed, nothing of it followed
-				} else {
-					for _, piece := range p.Group.Pieces {
-						if piece.Target == nil || piece.Target.Current {
-							lines++
-						}
-					}
-				}
-			}
 		case p.Target != nil && !p.Target.Current:
 			cards = append(cards, p.Target.Ref)
 		default:
@@ -280,11 +258,11 @@ func publisherNoteBlock(state *AppState, n publisherCrossRef, pal palette, onTap
 			// with no row promising citations under it.
 			block = crossRefLettered(letter, pal, crossRefWordsRow(n.Text, pal, false), crossRefRowPad, crossRefGroupTextSize, fyne.TextStyle{})
 		case group:
-			block = newCrossRefNoteRow(state, n, g.Pieces, pal, onTap, relayout)
+			block = newCrossRefGroupRow(state, *g, letter, true, pal, onTap, relayout, false)
 		case bare:
 			block = crossRefLettered(letter, pal, crossRefWordsRow(words, pal, false), crossRefRowPad, crossRefGroupTextSize, fyne.TextStyle{})
 		default:
-			block = newCrossRefNoteRow(state, n, n.Pieces, pal, onTap, relayout)
+			block = newCrossRefNoteRow(state, n, pal, onTap, relayout)
 		}
 	}
 	return crossRefSection(block, pal), cards, groups, lines

@@ -22,13 +22,11 @@ package bibletext
 // On a phone that did not show where a letter's rows ended: a 2-point rule
 // and a 16-point inset were too slight beside cards at the full type size.
 //
-// Every note opens the same way when the panel opens: its own citations
-// shown, and a parenthesised group inside it closed until it is tapped. A
-// note that is one parenthesised group and nothing else is therefore drawn
-// as any note of several pieces is, its row carrying the group as printed
-// and its citations under it. Drawn as a group's row it started closed,
-// beside notes that started open, though to a reader it is a letter like
-// the others.
+// A parenthesised group is closed until it is tapped wherever it stands: a
+// note's own direct citations stand open when the panel opens, and a group —
+// whether inside a note of several pieces or the whole of its note — is drawn
+// as the group's row beside the letter's margin and opens onto the group's
+// well (crossref_group.go).
 //
 // Width: the ground's padding and the letter's margin are taken from the
 // note's rows, so the widest of them still has to fit the list on the

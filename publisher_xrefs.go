@@ -570,8 +570,8 @@ func (n publisherCrossRef) wordsAlone() (string, bool) {
 }
 
 // groupAlone reports whether the note is one parenthesised group and nothing
-// else: the note is then drawn as a note's row carrying the group as
-// printed, its citations under it (crossref_note.go).
+// else: the note is then drawn as that group's row beside the letter's
+// margin, closed until tapped (crossref_note.go).
 func (n publisherCrossRef) groupAlone() (*publisherGroup, bool) {
 	if len(n.Pieces) != 1 || n.Pieces[0].Group == nil {
 		return nil, false
