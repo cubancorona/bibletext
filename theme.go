@@ -346,9 +346,6 @@ func (t *bibleTheme) Size(name fyne.ThemeSizeName) float32 {
 		return headingTextSize
 	case theme.SizeNameSubHeadingText:
 		return 16
-	case sizeNameCrossRefGroup:
-		// The label of a parenthesised group in the cross-references list.
-		return crossRefGroupTextSize
 	case theme.SizeNamePadding:
 		return 7
 	case theme.SizeNameInnerPadding:

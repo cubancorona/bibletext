@@ -10245,16 +10245,16 @@ On a no: nothing to unwind. Deferred, not denied:
 - Per-section loading, so the NKJV's rows no longer wait behind the spinner
   for the Treasury zip or the 60-s timeout on a first open. It would replace
   the three-state body.
-- A wrap rule for the printed lines. A wrapping line of the edition's print
-  (a note's row, a group's label; until 11 November 2026 the caption) can
-  break inside a numbered book name ("… 1 Pet. 1:23; 1" over "John 3:9)"),
-  because the toolkit's word wrap breaks at every rune `unicode.IsSpace`
-  admits, including U+00A0. A fix would distinguish breakable spaces in
-  `findSpaceIndex` and at the start of a wrapped line. It is not
-  implemented; it would use the existing `patches/` and
-  `scripts/setup-fyne-patch.sh` mechanism against stock Fyne 2.7.4, without
-  changing the verbatim line or switching the module to a fork. This
-  wrapping improvement is deferred.
+- CLOSED 11 November 2026: a wrap rule for the printed lines. A wrapping
+  line of the edition's print (a note's row, a group's label; until
+  11 November 2026 the caption) could break inside a numbered book name
+  ("… 1 Pet. 1:23; 1" over "John 3:9)"), because the toolkit's word wrap
+  breaks at every rune `unicode.IsSpace` admits, including U+00A0. The list
+  now wraps these lines itself (`crossref_printed.go`): after the "; "
+  between two citations; after a ", " only inside a citation longer than a
+  row; at a space only in a piece that has neither. The text is unchanged,
+  and no toolkit patch was needed. The piece census holds the rule over
+  every note of the canon.
 - CLOSED 11 November 2026: the comma continuation whose head citation
   became a card, which the verbatim rule left as a bare fragment ("19:39",
   or a bare number). A continuation the loaded text has is a card under its

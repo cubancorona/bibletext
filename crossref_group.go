@@ -38,11 +38,9 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// sizeNameCrossRefGroup is the size of a group's label: above a caption's 11
-// points and below a card reference's 16 (bibleTheme.Size).
-const sizeNameCrossRefGroup fyne.ThemeSizeName = "bibletext.crossRefGroup"
-
-// crossRefGroupTextSize is that size in points.
+// crossRefGroupTextSize is the size of a line of the edition's print — a
+// group's label, a note's printed line — in points: above a caption's 11 and
+// below a card reference's 16.
 const crossRefGroupTextSize = 14
 
 // crossRefRelayout is how a row that changes its own height asks for the
@@ -72,7 +70,7 @@ type crossRefGroupRow struct {
 	members *fyne.Container   // the group's cards, built the first time it opens
 	inset   *fyne.Container   // the shaded ground the cards stand on; hidden while closed
 	box     *fyne.Container   // header, inset, rule
-	label   *widget.RichText  // the group as printed
+	label   *crossRefPrinted  // the group as printed
 	shade   *canvas.Rectangle // the inset's ground
 }
 
@@ -80,7 +78,7 @@ type crossRefGroupRow struct {
 // the last of a note's rows, where the note's ground ends under it.
 func newCrossRefGroupRow(state *AppState, g publisherGroup, pal palette, onTap func(crossRef), relayout *crossRefRelayout, rule bool) *crossRefGroupRow {
 	r := &crossRefGroupRow{group: g, state: state, pal: pal, onTap: onTap, relayout: relayout}
-	r.label = crossRefPrintedLine(g.Text)
+	r.label = newCrossRefPrinted(g.Text, pal)
 	r.members = container.New(layout.NewCustomPaddedVBoxLayout(0))
 	r.shade = canvas.NewRectangle(crossRefGroupGround(pal))
 	r.shade.CornerRadius = 8

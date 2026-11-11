@@ -59,12 +59,18 @@ func TestAGroupOpensInsideThePanelWithoutMovingIt(t *testing.T) {
 	g := groups[0]
 
 	// The label: 14 points, between the caption's 11 and the reference's 16,
-	// wrapping, with no inset of its own inside the list's scope.
-	if got := g.label.Theme().Size(sizeNameCrossRefGroup); got != 14 || got <= g.label.Theme().Size(theme.SizeNameCaptionText) || got >= reference.TextSize {
-		t.Errorf("the group's label is %v points; want 14, above the caption's %v and below the reference's %v", got, g.label.Theme().Size(theme.SizeNameCaptionText), reference.TextSize)
+	// muted, in rows no wider than the label, with no inset of its own.
+	rows := test.WidgetRenderer(g.label).(*crossRefPrintedRenderer).rows
+	if len(rows) == 0 {
+		t.Fatalf("the group's label draws no row")
 	}
-	if g.label.Wrapping != fyne.TextWrapWord || g.label.Theme().Size(theme.SizeNameInnerPadding) != 0 {
-		t.Errorf("the group's label does not wrap, or keeps an inset of its own")
+	for _, row := range rows {
+		if got := row.TextSize; got != 14 || got <= g.label.Theme().Size(theme.SizeNameCaptionText) || got >= reference.TextSize || row.Color != th.palette().TextMuted {
+			t.Errorf("the group's label is %v points in %v; want 14, muted, above the caption's %v and below the reference's %v", got, row.Color, g.label.Theme().Size(theme.SizeNameCaptionText), reference.TextSize)
+		}
+		if row.Position().X != 0 || row.MinSize().Width > g.label.Size().Width {
+			t.Errorf("a row of the group's label starts %v in and wants %v in a label %v wide", row.Position().X, row.MinSize().Width, g.label.Size().Width)
+		}
 	}
 	drv := fyne.CurrentApp().Driver()
 	if lx, rx := drv.AbsolutePositionForObject(g.label).X, drv.AbsolutePositionForObject(reference).X; lx != rx {
@@ -224,8 +230,10 @@ func TestANoteClosesInsideThePanelWithoutMovingIt(t *testing.T) {
 	if h := n.header.Size().Height; h < 44 {
 		t.Errorf("the note's tap is %v points tall, want at least 44", h)
 	}
-	if got := n.label.Theme().Size(sizeNameCrossRefGroup); got != 14 || n.label.Wrapping != fyne.TextWrapWord {
-		t.Errorf("the note's printed line is %v points, wrapping %v; want 14 and wrapping", got, n.label.Wrapping)
+	for _, row := range test.WidgetRenderer(n.label).(*crossRefPrintedRenderer).rows {
+		if row.TextSize != 14 || row.Color != th.palette().TextMuted || row.MinSize().Width > n.label.Size().Width {
+			t.Errorf("a row of the note's printed line is %v points in %v and wants %v in a line %v wide; want 14, muted, inside it", row.TextSize, row.Color, row.MinSize().Width, n.label.Size().Width)
+		}
 	}
 	if lx, rx := drv.AbsolutePositionForObject(n.label).X, drv.AbsolutePositionForObject(reference).X; lx != rx {
 		t.Errorf("the note's printed line starts at %v and the references under it at %v", lx, rx)

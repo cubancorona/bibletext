@@ -51,6 +51,8 @@ func textsIn(o fyne.CanvasObject) []string {
 				b.WriteString(s.Textual())
 			}
 			out = append(out, b.String())
+		case *crossRefPrinted:
+			out = append(out, x.Text)
 		case *tapCard:
 			walk(x.content)
 		case *crossRefGroupRow:

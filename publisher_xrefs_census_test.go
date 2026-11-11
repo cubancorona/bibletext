@@ -390,7 +390,9 @@ func TestNoteShorthandCensusHoldsTheShorthandToTheTags(t *testing.T) {
 //     panel draws for a verse and its notes read back as the verse's own
 //     drawn text (and a title's, and a heading's), rune for rune;
 //   - each letter stands directly before a word, and the letters of a verse
-//     run a, b, c in the order its notes stand.
+//     run a, b, c in the order its notes stand;
+//   - a note's printed line, turned to any width, is the note's text, and
+//     turns inside a citation only where the citation is longer than a row.
 //
 // The counts say what the canon holds of each shape; the live canon test
 // pins them, so a feed that changes shape is noticed (apibible_live_test.go).
@@ -513,6 +515,16 @@ func notePieceCensus(bd *BibleData) pieceCensus {
 						problem("%s: a note's index is %d (keyed to a word: %v), want %d", where, n.Index, !n.Unkeyed, want)
 					}
 					runes := []rune(n.Text)
+					// The printed line turns between citations at any width,
+					// and is the note's text whatever it is turned to
+					// (crossref_printed.go). Measured in runes: the rule
+					// is the same in any face.
+					for _, width := range []float32{18, 26, 34} {
+						measure := func(s string) float32 { return float32(len([]rune(s))) }
+						for _, p := range printedTurnProblems(n.Text, printedRows(n.Text, width, measure), width, measure) {
+							problem("%s: %q at %v runes: %s", where, n.Text, width, p)
+						}
+					}
 					tally(where, n.Pieces, 0, len(runes), false)
 					for _, p := range n.Pieces {
 						if p.Group != nil {

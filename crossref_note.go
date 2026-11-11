@@ -40,7 +40,6 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -56,17 +55,6 @@ func crossRefLetter(letter string, pal palette) *canvas.Text {
 	t.TextStyle = fyne.TextStyle{Bold: true, Italic: true}
 	t.TextSize = crossRefLetterSize
 	return t
-}
-
-// crossRefPrintedLine is a line of the edition's own print — a note, a
-// group, words that are no citation — at the group label's size, muted and
-// wrapping.
-func crossRefPrintedLine(printed string) *widget.RichText {
-	rt := widget.NewRichText(&widget.TextSegment{Text: printed, Style: widget.RichTextStyle{
-		Inline: true, ColorName: theme.ColorNamePlaceHolder, SizeName: sizeNameCrossRefGroup,
-	}})
-	rt.Wrapping = fyne.TextWrapWord
-	return rt
 }
 
 // crossRefRowPad is the air above and below the text of a row that is no
@@ -96,8 +84,8 @@ func crossRefSelfRow(label, tag string, pal palette, rule bool) fyne.CanvasObjec
 
 // crossRefWordsRow is a piece of a note that is no citation the reader can
 // follow, exactly as printed, in its place.
-func crossRefWordsRow(words string, rule bool) fyne.CanvasObject {
-	block := []fyne.CanvasObject{container.New(layout.NewCustomPaddedLayout(crossRefRowPad, crossRefRowPad, 0, 0), crossRefPrintedLine(words))}
+func crossRefWordsRow(words string, pal palette, rule bool) fyne.CanvasObject {
+	block := []fyne.CanvasObject{container.New(layout.NewCustomPaddedLayout(crossRefRowPad, crossRefRowPad, 0, 0), newCrossRefPrinted(words, pal))}
 	if rule {
 		block = append(block, widget.NewSeparator())
 	}
@@ -124,7 +112,7 @@ func publisherPieceRows(state *AppState, pieces []publisherPiece, pal palette, o
 		case p.Target != nil:
 			rows = append(rows, crossRefRowRuled(state, targetCard(*p.Target, ""), pal, onTap, rule))
 		default:
-			rows = append(rows, crossRefWordsRow(p.Words, rule))
+			rows = append(rows, crossRefWordsRow(p.Words, pal, rule))
 		}
 	}
 	return rows
@@ -142,7 +130,7 @@ type crossRefNoteRow struct {
 	icon   *widget.Icon      // points down while open, right while closed
 	head   *fyne.Container   // the letter in the margin and the printed note beside it, as they lie on the row
 	letter *canvas.Text      // the note's letter, in the margin
-	label  *widget.RichText  // the note as printed
+	label  *crossRefPrinted  // the note as printed
 	body   *fyne.Container   // the note's pieces, in print order, beside the margin; hidden while closed
 	stem   *canvas.Rectangle // the rule from under the letter down the margin beside the pieces; hidden while closed
 	box    *fyne.Container
@@ -153,7 +141,7 @@ type crossRefNoteRow struct {
 // own, or its one group's.
 func newCrossRefNoteRow(state *AppState, n publisherCrossRef, pieces []publisherPiece, pal palette, onTap func(crossRef), relayout *crossRefRelayout) *crossRefNoteRow {
 	r := &crossRefNoteRow{note: n, relayout: relayout, open: true}
-	r.label = crossRefPrintedLine(n.Text)
+	r.label = newCrossRefPrinted(n.Text, pal)
 	r.icon = widget.NewIcon(crossRefGroupIcon(true))
 	// The letter in the margin, on the first line of the printed note, and
 	// the two at the middle of the row's height as the icon is, however
@@ -276,11 +264,11 @@ func publisherNoteBlock(state *AppState, n publisherCrossRef, pal palette, onTap
 		case group && len(g.cards()) == 0:
 			// Nothing of the group can be followed: the group as printed,
 			// with no row promising citations under it.
-			block = crossRefLettered(letter, pal, crossRefWordsRow(n.Text, false), crossRefRowPad, crossRefGroupTextSize, fyne.TextStyle{})
+			block = crossRefLettered(letter, pal, crossRefWordsRow(n.Text, pal, false), crossRefRowPad, crossRefGroupTextSize, fyne.TextStyle{})
 		case group:
 			block = newCrossRefNoteRow(state, n, g.Pieces, pal, onTap, relayout)
 		case bare:
-			block = crossRefLettered(letter, pal, crossRefWordsRow(words, false), crossRefRowPad, crossRefGroupTextSize, fyne.TextStyle{})
+			block = crossRefLettered(letter, pal, crossRefWordsRow(words, pal, false), crossRefRowPad, crossRefGroupTextSize, fyne.TextStyle{})
 		default:
 			block = newCrossRefNoteRow(state, n, n.Pieces, pal, onTap, relayout)
 		}
