@@ -22,6 +22,10 @@ import (
 // whatever its body holds.
 const crossRefPanelHeight = 460
 
+// crossRefListChrome is the width of the panel's chrome beside its list: the
+// list is the panel's width less this.
+const crossRefListChrome = 44
+
 func showCrossRefs(state *AppState, text string, span selSpan) {
 	if state == nil || state.window == nil {
 		return
@@ -50,7 +54,7 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 	header := container.NewVBox(title, src, widget.NewSeparator())
 
 	ps := sheetPanelSize(state, cnv)
-	bodyW := ps.Width - 44
+	bodyW := ps.Width - crossRefListChrome
 	listBox := container.New(layout.NewCustomPaddedVBoxLayout(0))
 	// One scope for the whole list keeps previews compact and removes the
 	// label's inner inset, so references and wrapped text share a left edge.
@@ -378,14 +382,14 @@ type crossRefCard struct {
 	// Title marks a card whose passage is a Psalm's title: the preview is the
 	// superscription, not the first verse, which is where the tap lands.
 	Title bool
+	// Letter is the note's letter, set before the reference of a card that
+	// is the whole of its note (crossref_note.go); "" for every other card.
+	Letter string
 	// Badge draws the PARALLEL pill on a same-occasion parallel: only where no
 	// section label carries the row's provenance, the builds without the
 	// publisher's run. Under a GOSPEL PARALLELS label the pill would say the
 	// label's word again, in the most saturated object on the screen.
 	Badge bool
-	// Caption is the note's remainder, set inside the card's block under the
-	// preview and before the rule (publisher cards only; "" for none).
-	Caption string
 }
 
 // passageCard is the card for a row crossRefsForSelection hands over — a
@@ -423,6 +427,9 @@ func crossRefRowRuled(state *AppState, card crossRefCard, pal palette, onTap fun
 		tag := canvas.NewText(card.Tag, pal.TextMuted)
 		tag.TextSize = 12
 		refLine = container.NewHBox(ref, tag)
+	}
+	if card.Letter != "" {
+		refLine = container.NewHBox(crossRefLetter(card.Letter, pal), refLine)
 	}
 	lines := []fyne.CanvasObject{refLine}
 	if c.otherOccasion() {
@@ -462,20 +469,10 @@ func crossRefRowRuled(state *AppState, card crossRefCard, pal palette, onTap fun
 	snip.Wrapping = fyne.TextWrapWord
 	lines = append(lines, snip)
 
-	bottomPadding := float32(6)
-	if card.Caption != "" {
-		bottomPadding = 0
-	}
-	inner := container.New(layout.NewCustomPaddedLayout(6, bottomPadding, 0, 0),
+	inner := container.New(layout.NewCustomPaddedLayout(6, 6, 0, 0),
 		container.New(layout.NewCustomPaddedVBoxLayout(3), lines...))
 	tap := newTapCard(inner, pal.SurfaceAlt, func() { onTap(c) })
 	block := []fyne.CanvasObject{tap}
-	if card.Caption != "" {
-		// Under the card and before its rule, so the caption annotates the
-		// card's note rather than standing under a rule that closed it; not
-		// inside the tap, since its words are not the card's passage.
-		block = append(block, crossRefNoteCaption(card.Caption))
-	}
 	if rule {
 		block = append(block, widget.NewSeparator())
 	}

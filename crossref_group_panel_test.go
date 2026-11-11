@@ -109,3 +109,121 @@ func TestAGroupOpensInsideThePanelWithoutMovingIt(t *testing.T) {
 		t.Errorf("closing did not restore the list: open %v, list %v (was %v), panel %v at %v", g.open, scroll.Content.Size().Height, content, top.Content.Size(), top.Content.Position())
 	}
 }
+
+// IN THE PANEL: the selected text heads the list, no wider than the list,
+// every row of it inside its width, a letter raised and smaller than the
+// words; a note's own row is a full tap whose printed line starts where the
+// cards' references start; and closing or opening a note moves nothing but
+// the list inside its scroll.
+func TestANoteClosesInsideThePanelWithoutMovingIt(t *testing.T) {
+	th := appThemeForTest(t)
+	licenseNKJVForTest(t)
+	withPublisherCrossRefs(t, "nkjv", true)
+	withCrossRefIndex(t, "John.3.16\tRom.5.8\t10\n")
+	previousRun, previousLoad := crossRefsRun, crossRefsLoad
+	t.Cleanup(func() { crossRefsRun, crossRefsLoad = previousRun, previousLoad })
+	crossRefsRun = func(work func()) { work() }
+	crossRefsLoad = func() error { return nil }
+	st, _ := groupListState(t)
+	w := test.NewWindow(widget.NewLabel("Reading"))
+	t.Cleanup(w.Close)
+	w.Resize(fyne.NewSize(375, 667))
+	st.theme, st.window = th, w
+	showCrossRefs(st, "", selSpan{lo: 16, hi: 16})
+	top, ok := w.Canvas().Overlays().Top().(*widget.PopUp)
+	if !ok {
+		t.Fatal("the cross-references panel did not open")
+	}
+	var notes []*crossRefNoteRow
+	var scroll *container.Scroll
+	var reference *canvas.Text
+	var passage *readingParagraph
+	walkTree(top, func(o fyne.CanvasObject) {
+		switch x := o.(type) {
+		case *readingParagraph:
+			if passage == nil {
+				passage = x
+			}
+		case *crossRefNoteRow:
+			notes = append(notes, x)
+		case *container.Scroll:
+			if scroll == nil {
+				scroll = x
+			}
+		case *canvas.Text:
+			if x.Text == "Romans 5:8" {
+				reference = x
+			}
+		}
+	})
+	if len(notes) != 1 || scroll == nil || reference == nil {
+		t.Fatalf("%d note rows, scroll %v, the first card's reference %v", len(notes), scroll != nil, reference != nil)
+	}
+	n := notes[0]
+
+	// The passage: the list's first row, inside the list's width, its rows
+	// inside its own; three letters, each smaller than the words and at the
+	// top of its row.
+	if passage == nil {
+		t.Fatal("no passage in the list")
+	}
+	drv := fyne.CurrentApp().Driver()
+	if py, sy := drv.AbsolutePositionForObject(passage).Y, drv.AbsolutePositionForObject(scroll).Y; py < sy || py > sy+8 {
+		t.Errorf("the passage starts %v points below the list's top: it does not head the list", py-sy)
+	}
+	if passage.Size().Width > scroll.Size().Width || passage.Size().Width <= 0 {
+		t.Errorf("the passage is %v wide in a list %v wide", passage.Size().Width, scroll.Size().Width)
+	}
+	r := test.WidgetRenderer(passage).(*readingParagraphRenderer)
+	for i, rw := range r.rowWidths() {
+		if rw > passage.Size().Width+0.5 {
+			t.Errorf("row %d of the passage is %v wide in %v", i, rw, passage.Size().Width)
+		}
+	}
+	letters := 0
+	for _, o := range r.Objects() {
+		tx := o.(*canvas.Text)
+		if tx.Color != th.palette().Accent {
+			continue
+		}
+		letters++
+		if tx.TextSize >= passage.size || tx.TextSize < passage.size*0.5 {
+			t.Errorf("the letter %q is %v points beside words of %v", tx.Text, tx.TextSize, passage.size)
+		}
+	}
+	if letters != 3 {
+		t.Errorf("%d letters in the passage, want one for each of the verse's three notes", letters)
+	}
+
+	// The note's row: a full tap, its printed line where the references are.
+	if h := n.header.Size().Height; h < 44 {
+		t.Errorf("the note's tap is %v points tall, want at least 44", h)
+	}
+	if got := n.label.Theme().Size(sizeNameCrossRefGroup); got != 14 || n.label.Wrapping != fyne.TextWrapWord {
+		t.Errorf("the note's printed line is %v points, wrapping %v; want 14 and wrapping", got, n.label.Wrapping)
+	}
+	if lx, rx := drv.AbsolutePositionForObject(n.label).X, drv.AbsolutePositionForObject(reference).X; lx != rx {
+		t.Errorf("the note's printed line starts at %v and the cards' references at %v", lx, rx)
+	}
+	if n.Size().Width > scroll.Size().Width {
+		t.Errorf("the note row is %v wide in a list %v wide", n.Size().Width, scroll.Size().Width)
+	}
+
+	// Closing and opening: the panel does not move or change size; the list
+	// shrinks inside the scroll and grows back.
+	size, pos, content := top.Content.Size(), top.Content.Position(), scroll.Content.Size().Height
+	test.Tap(n.header)
+	if n.open || n.body.Visible() {
+		t.Fatalf("the tap did not close the note")
+	}
+	if top.Content.Size() != size || top.Content.Position() != pos {
+		t.Errorf("closing a note moved the panel: %v at %v, was %v at %v", top.Content.Size(), top.Content.Position(), size, pos)
+	}
+	if closed := scroll.Content.Size().Height; closed >= content {
+		t.Errorf("closed, the list is %v tall inside the scroll, no shorter than open (%v): it was not laid out again", closed, content)
+	}
+	test.Tap(n.header)
+	if !n.open || scroll.Content.Size().Height != content || top.Content.Size() != size || top.Content.Position() != pos {
+		t.Errorf("opening did not restore the list: open %v, list %v (was %v), panel %v at %v", n.open, scroll.Content.Size().Height, content, top.Content.Size(), top.Content.Position())
+	}
+}

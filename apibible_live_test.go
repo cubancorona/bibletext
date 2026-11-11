@@ -323,6 +323,9 @@ func TestLiveAPIBibleFullCanon(t *testing.T) {
 	if shorthand.Groups != 4850 || shorthand.GroupCitations != 8324 || len(shorthand.GroupMistags) != 12 {
 		t.Errorf("shorthand census = %d groups, %d group citations, %d mistags inside groups; want 4,850, 8,324 and 12", shorthand.Groups, shorthand.GroupCitations, len(shorthand.GroupMistags))
 	}
+	// The notes as the panel draws them: every one whole and in its place
+	// (publisher_xrefs_census_test.go).
+	assertCanonPieceCensus(t, data)
 	t.Logf("apparatus: words %v, %d whole-chapter ids, %d title citations, %d bases, %d tagged citations inside parentheses, %d cards and %d caption lines over whole chapters",
 		census.Words, census.WholeChapters, census.TitleCitations, census.Bases, census.InParentheses, census.Cards, census.Lines)
 	// The counts, re-measured 9 September 2026. The small-capital figure

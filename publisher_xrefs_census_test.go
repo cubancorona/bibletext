@@ -2,10 +2,12 @@ package bibletext
 
 import (
 	"fmt"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
 	"testing"
+	"unicode"
 )
 
 // The census of a whole canon's cross-reference apparatus, measured as the
@@ -367,5 +369,286 @@ func TestNoteShorthandCensusHoldsTheShorthandToTheTags(t *testing.T) {
 	c = noteShorthandCensus(bd)
 	if len(c.GroupMistags) != 1 || !strings.Contains(c.GroupMistags[0], `read as "GAL.5.6", tagged "JHN.5.6"`) || len(c.Disagree) != 0 || len(c.problems()) != 0 {
 		t.Errorf("a mistag inside a group: mistags %q, disagreements %q, problems %q", c.GroupMistags, c.Disagree, c.problems())
+	}
+}
+
+// THE PIECE CENSUS: NOTHING A NOTE PRINTS IS LOST ON THE WAY TO THE PANEL.
+//
+// Decided 11 November 2026: the panel preserves everything the edition's
+// notes carry — where a note stands, the order of the notes, and every
+// citation, group and word of a note in the order it is printed. This census
+// is the measure of that over a canon, by the same functions the panel draws
+// from (publisherCrossRefsFor, publisherPassageUnits, passageRuns):
+//
+//   - every note is there: the notes on verses, on Psalm titles and on
+//     section headings are each counted, and their sum is the feed's;
+//   - a note's pieces cover its text: between two pieces stands "; " or ", "
+//     and nothing else, nothing stands before the first or after the last,
+//     and the same holds between a group's parentheses (pieceGaps);
+//   - each piece is one kind, and the pieces are in the order of the text;
+//   - the passage is the text: with the letters taken out, the runs the
+//     panel draws for a verse and its notes read back as the verse's own
+//     drawn text (and a title's, and a heading's), rune for rune;
+//   - each letter stands directly before a word, and the letters of a verse
+//     run a, b, c in the order its notes stand.
+//
+// The counts say what the canon holds of each shape; the live canon test
+// pins them, so a feed that changes shape is noticed (apibible_live_test.go).
+type pieceCensus struct {
+	Notes, OnVerses, OnTitles, OnHeadings int
+	Cards, Own, Words, Groups             int // a note's own pieces: followed, the reader's own passage, words, groups
+	GroupCards, GroupOwn, GroupWords      int // the pieces inside the groups
+	Alone, GroupAlone, WordsAlone, Folded int // the row a note is drawn as
+	MostOnAVerse                          int // the most notes under one verse number
+	Moved                                 int // letters drawn past the white space their offset stands before
+	WordStarts                            int // letters drawn at the head of a word the feed's caller splits
+	BetweenWords                          int // letters that stand between two letters: the feed ran two words together there
+	Problems                              []string
+}
+
+// notePieceCensus measures bd's cross-reference notes as the panel draws them.
+func notePieceCensus(bd *BibleData) pieceCensus {
+	var c pieceCensus
+	problem := func(format string, args ...any) {
+		c.Problems = append(c.Problems, fmt.Sprintf(format, args...))
+	}
+	tally := func(where string, pieces []publisherPiece, from, to int, inGroup bool) {
+		at := from
+		for _, p := range pieces {
+			if p.Start < at || p.End <= p.Start || p.End > to {
+				problem("%s: a piece at [%d,%d) is out of order or outside its text", where, p.Start, p.End)
+			}
+			at = p.End
+			kinds := 0
+			if p.Target != nil {
+				kinds++
+			}
+			if p.Group != nil {
+				kinds++
+			}
+			if p.Words != "" {
+				kinds++
+			}
+			if kinds != 1 || (inGroup && p.Group != nil) {
+				problem("%s: a piece at [%d,%d) is %d kinds at once, or a group inside a group", where, p.Start, p.End, kinds)
+			}
+			switch {
+			case p.Group != nil:
+				c.Groups++
+			case p.Target != nil && p.Target.Current && inGroup:
+				c.GroupOwn++
+			case p.Target != nil && inGroup:
+				c.GroupCards++
+			case inGroup:
+				c.GroupWords++
+			case p.Target != nil && p.Target.Current:
+				c.Own++
+			case p.Target != nil:
+				c.Cards++
+			default:
+				c.Words++
+			}
+		}
+	}
+	books := append([]string(nil), bd.Books...)
+	if len(books) == 0 {
+		for book := range bd.Verses {
+			books = append(books, book)
+		}
+		sort.Strings(books)
+	}
+	for _, book := range books {
+		for _, ch := range bd.GetChapterNumbersForBook(book) {
+			vs := bd.GetChapter(book, ch)
+			st := &AppState{Bible: bd, CurrentBook: book, CurrentChapter: ch, CurrentVersion: "nkjv"}
+			for _, v := range vs {
+				one := []Verse{v}
+				notes := publisherCrossRefsFor(bd, book, ch, one)
+				if len(notes) == 0 {
+					continue
+				}
+				where := fmt.Sprintf("%s %d:%d", book, ch, v.Verse)
+				perNumber := map[int]int{}
+				for _, n := range notes {
+					c.Notes++
+					perNumber[n.Verse]++
+					switch {
+					case n.Heading:
+						c.OnHeadings++
+					case n.Verse == 0:
+						c.OnTitles++
+					default:
+						c.OnVerses++
+					}
+					if n.Index != perNumber[n.Verse]-1 {
+						problem("%s: a note's index is %d, want %d", where, n.Index, perNumber[n.Verse]-1)
+					}
+					runes := []rune(n.Text)
+					tally(where, n.Pieces, 0, len(runes), false)
+					for _, p := range n.Pieces {
+						if p.Group != nil {
+							tally(where, p.Group.Pieces, p.Group.Start+1, p.Group.End-1, true)
+						}
+					}
+					for _, p := range noteGapProblems(n) {
+						problem("%s: %q: %s", where, n.Text, p)
+					}
+					switch noteShape(n) {
+					case "card":
+						c.Alone++
+					case "group":
+						c.GroupAlone++
+					case "words":
+						c.WordsAlone++
+					default:
+						c.Folded++
+					}
+				}
+				for _, n := range perNumber {
+					if n > c.MostOnAVerse {
+						c.MostOnAVerse = n
+					}
+				}
+				// The passage for this verse: its text, with the letters in.
+				units := publisherPassageUnits(st, book, ch, one, notes)
+				runs := passageRuns(units)
+				var want []string
+				marks := 0
+				for _, u := range units {
+					want = append(want, u.text())
+					marks += len(u.Marks)
+					for i, m := range u.Marks {
+						if i > 0 && m.At < u.Marks[i-1].At {
+							problem("%s: the letters do not stand in the order of the notes", where)
+						}
+					}
+				}
+				if got := passagePlainText(runs); got != strings.Join(want, "\n") {
+					problem("%s: the passage without its letters is not the text (%d runes for %d)", where, len([]rune(got)), len([]rune(strings.Join(want, "\n"))))
+				}
+				if marks != len(notes) {
+					problem("%s: %d letters in the passage for %d notes", where, marks, len(notes))
+				}
+				// The verse's own drawn text is the last unit; the title and
+				// a noted heading stand before it.
+				if last := units[len(units)-1]; last.text() != smallCapsText(v) {
+					problem("%s: the passage's verse is not the verse as the page draws it", where)
+				}
+				for i, r := range runs {
+					if !r.Mark || r.Dim {
+						continue
+					}
+					next := ""
+					for _, after := range runs[i+1:] {
+						if after.Mark {
+							continue
+						}
+						next = after.Text
+						if after.Break || next != "" {
+							break
+						}
+					}
+					if next == "" || unicode.IsSpace([]rune(next)[0]) {
+						problem("%s: the letter %s does not stand directly before a word", where, r.Text)
+					}
+				}
+				text := []rune(v.Text)
+				for _, n := range notes {
+					if n.Heading || n.Verse == 0 {
+						continue
+					}
+					switch {
+					case n.Mark > n.Anchor:
+						c.Moved++
+					case n.Mark < n.Anchor:
+						c.WordStarts++
+					}
+					if at := n.Mark; at > 0 && at < len(text) && unicode.IsLetter(text[at-1]) && unicode.IsLetter(text[at]) {
+						c.BetweenWords++
+					}
+				}
+			}
+		}
+	}
+	return c
+}
+
+// problems is what the census found that the panel must not do, and a census
+// that measured nothing.
+func (c pieceCensus) problems() []string {
+	out := append([]string(nil), c.Problems...)
+	if c.Notes == 0 {
+		out = append(out, "the piece census saw no note: it measured nothing")
+	}
+	if c.Notes != c.OnVerses+c.OnTitles+c.OnHeadings || c.Notes != c.Alone+c.GroupAlone+c.WordsAlone+c.Folded {
+		out = append(out, fmt.Sprintf("the piece census's sums do not close: %+v", c))
+	}
+	return out
+}
+
+func assertPieceCensus(t *testing.T, c pieceCensus) {
+	t.Helper()
+	for i, p := range c.problems() {
+		if i == 20 {
+			t.Errorf("… and %d more", len(c.problems())-20)
+			break
+		}
+		t.Error(p)
+	}
+}
+
+// canonPieceCensus is the piece census of the NKJV canon fetched on
+// 6 November 2026: 32,517 notes, every one whole. An independent reading of
+// the raw feed was compared with it, note by note, on 11 November 2026.
+var canonPieceCensus = pieceCensus{
+	Notes: 32517, OnVerses: 32473, OnTitles: 43, OnHeadings: 1,
+	Cards: 65254, Own: 51, Words: 2, Groups: 4850,
+	GroupCards: 8320, GroupOwn: 3, GroupWords: 1,
+	Alone: 12576, GroupAlone: 1985, WordsAlone: 0, Folded: 17956,
+	MostOnAVerse: 7, Moved: 1998, WordStarts: 3, BetweenWords: 257,
+}
+
+// assertCanonPieceCensus holds a canon's piece census to the pinned one.
+func assertCanonPieceCensus(t *testing.T, bd *BibleData) pieceCensus {
+	t.Helper()
+	c := notePieceCensus(bd)
+	assertPieceCensus(t, c)
+	got, want := c, canonPieceCensus
+	got.Problems, want.Problems = nil, nil
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("piece census\n got %+v\nwant %+v", got, want)
+	}
+	return c
+}
+
+// The piece census on the fixture, and its controls: text the shorthand
+// cannot place between two pieces is reported, and so is a letter that does
+// not reach its word.
+func TestNotePieceCensusFindsEveryNoteWhole(t *testing.T) {
+	bd := publisherFixture()
+	c := notePieceCensus(bd)
+	if p := c.problems(); len(p) != 0 {
+		t.Errorf("the fixture's piece census has problems: %q", p)
+	}
+	if c.Notes == 0 || c.Cards == 0 || c.Groups == 0 || c.Own == 0 || c.Words == 0 || c.Folded == 0 || c.Alone == 0 || c.GroupAlone == 0 {
+		t.Errorf("the fixture does not hold every shape the census counts: %+v", c)
+	}
+
+	// CONTROL: a parenthesis that never closes, a doubled separator and a
+	// space before a separator each leave text outside every piece.
+	for _, text := range []string{"(John 7:50; Gal. 6:15", "John 7:50;; Gal. 6:15", "John 7:50 ; Gal. 6:15"} {
+		bd := publisherFixture()
+		bd.Verses["John"][3][1].Footnotes = []Footnote{{Text: text, Kind: footnoteKindCrossref, Caller: "-"}}
+		if p := notePieceCensus(bd).problems(); len(p) == 0 {
+			t.Errorf("control: the census finds no problem in %q", text)
+		}
+	}
+	// CONTROL: an offset past the end of its verse has no word to stand
+	// before.
+	bd = publisherFixture()
+	v := &bd.Verses["John"][3][1]
+	v.Footnotes = []Footnote{{Anchor: len([]rune(v.Text)), Text: "John 7:50", Kind: footnoteKindCrossref, Caller: "-"}}
+	if p := notePieceCensus(bd).problems(); len(p) == 0 {
+		t.Errorf("control: the census finds no problem in a note that stands after its verse's last word")
 	}
 }

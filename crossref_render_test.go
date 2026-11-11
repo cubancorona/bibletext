@@ -108,6 +108,15 @@ func TestRenderCrossRefPanel(t *testing.T) {
 		{"john18-37-on", "John", 18, 37, 37, true},     // a note that is one group of nine and nothing else
 		{"luke6-20-on", "Luke", 6, 20, 20, true},       // the book carried into a group from the citation before it
 		{"acts26-6-on", "Acts", 26, 6, 6, true},        // the largest group, sixteen citations
+		{"1sam2-1-on", "1 Samuel", 2, 1, 1, true},      // four notes on four words, one naming the passage itself
+		{"1sam16-16-on", "1 Samuel", 16, 16, 16, true}, // the verse itself among a note's citations, in its place
+		{"matt6-9-on", "Matthew", 6, 9, 9, true},       // the passage's own extent first, then its parallel and a group
+		{"num4-21-on", "Numbers", 4, 21, 21, true},     // the note on the heading before the verse
+		{"psalm51-1-on", "Psalms", 51, 1, 1, true},     // a title with a note, above the verse with one
+		{"mark4-29-on", "Mark", 4, 29, 29, true},       // a verse the chapter does not have, inside a group
+		{"amos2-1-on", "Amos", 2, 1, 1, true},          // a citation the feed did not link, first in its note
+		{"rev15-3-on", "Revelation", 15, 3, 3, true},   // a note that is the verse itself and nothing else
+		{"luke7-22-on", "Luke", 7, 22, 22, true},       // seven notes on one verse
 	}
 	phones := []struct {
 		name string
@@ -216,6 +225,33 @@ func TestRenderCrossRefPanel(t *testing.T) {
 					listScroll.Offset = fyne.NewPos(0, 0)
 					listScroll.Refresh()
 				}
+				// A frame with every note of several pieces closed to its
+				// printed line: the list as the edition's own column, each
+				// note under its letter. Closing changes the list inside the
+				// scroll and nothing else, as opening a group does.
+				var noteRows []*crossRefNoteRow
+				walkTree(top, func(o fyne.CanvasObject) {
+					if x, ok := o.(*crossRefNoteRow); ok {
+						noteRows = append(noteRows, x)
+					}
+				})
+				if len(noteRows) > 0 {
+					size, pos := top.Content.Size(), top.Content.Position()
+					for _, n := range noteRows {
+						test.Tap(n.header)
+					}
+					if top.Content.Size() != size || top.Content.Position() != pos {
+						t.Errorf("%s: closing the notes moved the panel: %v at %v, was %v at %v", name, top.Content.Size(), top.Content.Position(), size, pos)
+					}
+					if m := top.Content.MinSize().Width; m > inner {
+						t.Errorf("%s: with the notes closed the popup's content wants %.0f points and the panel gives it %.0f", name, m, inner)
+					}
+					writeRenderPNG(t, filepath.Join(out, name+"-closed.png"), w.Canvas().Capture())
+					t.Logf("%s: %d notes closed to their printed lines", name, len(noteRows))
+					for _, n := range noteRows {
+						test.Tap(n.header)
+					}
+				}
 				if extra, ok := scrolledFrames[f.name]; ok {
 					// A second frame scrolled to a label further down: where the
 					// Treasury's run begins under John 3:16's cards, and where
@@ -248,6 +284,12 @@ func TestRenderCrossRefPanel(t *testing.T) {
 	for _, m := range shorthand.GroupMistags {
 		t.Logf("feed mistag: %s", m)
 	}
+	// And the notes as the panel draws them: every one whole, every letter
+	// before its word, the passage the verse's own text.
+	pieces := assertCanonPieceCensus(t, &bd)
+	t.Logf("pieces: %d notes (%d on verses, %d on titles, %d on headings); %d cards, %d of the reader's own passage, %d words, %d groups holding %d cards, %d own and %d words; drawn as %d cards, %d groups, %d words and %d folded notes; at most %d to a verse; %d letters drawn past white space, %d at the head of a split word, %d between two words run together; %d problems",
+		pieces.Notes, pieces.OnVerses, pieces.OnTitles, pieces.OnHeadings, pieces.Cards, pieces.Own, pieces.Words, pieces.Groups, pieces.GroupCards, pieces.GroupOwn, pieces.GroupWords,
+		pieces.Alone, pieces.GroupAlone, pieces.WordsAlone, pieces.Folded, pieces.MostOnAVerse, pieces.Moved, pieces.WordStarts, pieces.BetweenWords, len(pieces.Problems))
 }
 
 func writeRenderPNG(t *testing.T, path string, img image.Image) {

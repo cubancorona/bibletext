@@ -20,20 +20,6 @@ func noteRefAt(t *testing.T, text, piece, id string) NoteRef {
 	return NoteRef{id, start, start + len([]rune(piece))}
 }
 
-// partsOf names a note's parts in order: a card by its label, a group by its
-// printed text and its members' labels.
-func partsOf(n publisherCrossRef) (out []string, words string) {
-	parts, words := n.parts()
-	for _, p := range parts {
-		if p.Card != nil {
-			out = append(out, p.Card.label())
-			continue
-		}
-		out = append(out, p.Group.Text+" = "+strings.Join(cardLabels(p.Group.cards()), ", "))
-	}
-	return out, words
-}
-
 // A GROUP STAYS WHERE THE EDITION PRINTS IT, and its citations are read from
 // the print: the feed tags few of them.
 func TestANotesGroupsStandWhereTheEditionPrintsThem(t *testing.T) {
@@ -46,16 +32,16 @@ func TestANotesGroupsStandWhereTheEditionPrintsThem(t *testing.T) {
 	text := "(Matt. 15:11; Mark 7:19); Acts 10:28; (Rom. 14:14); 1 Cor. 10:25; (1 Tim. 4:4; Titus 1:15)"
 	note := resolvedNote(t, bd, "Acts", 10, 15, text,
 		noteRefAt(t, text, "Acts 10:28", "ACT.10.28"), noteRefAt(t, text, "1 Cor. 10:25", "1CO.10.25"))
-	got, words := partsOf(note)
+	got := pieceNames(note.Pieces)
 	want := []string{
-		"(Matt. 15:11; Mark 7:19) = Matthew 15:11, Mark 7:19",
-		"Acts 10:28",
-		"(Rom. 14:14) = Romans 14:14",
-		"1 Corinthians 10:25",
-		"(1 Tim. 4:4; Titus 1:15) = 1 Timothy 4:4, Titus 1:15",
+		"group:(Matt. 15:11; Mark 7:19)[card:Matthew 15:11 card:Mark 7:19]",
+		"card:Acts 10:28",
+		"group:(Rom. 14:14)[card:Romans 14:14]",
+		"card:1 Corinthians 10:25",
+		"group:(1 Tim. 4:4; Titus 1:15)[card:1 Timothy 4:4 card:Titus 1:15]",
 	}
-	if joined(got) != joined(want) || words != "" {
-		t.Errorf("parts = %q, words %q\nwant  %q and no words", got, words, want)
+	if joined(got) != joined(want) {
+		t.Errorf("pieces = %q\nwant  %q", got, want)
 	}
 	// CONTROL: the census's split still folds the same three groups into one
 	// remainder after the cards, which is the order the list used to show.
@@ -65,24 +51,23 @@ func TestANotesGroupsStandWhereTheEditionPrintsThem(t *testing.T) {
 	}
 
 	// The book carried into a group from the citation before it, and the
-	// note's own passage left as words, outside every group.
+	// note's own passage in its place, outside every group.
 	text = "Matt. 5:3–12; (11:5); Luke 6:20–23; (James 2:5)"
 	note = resolvedNote(t, bd, "Luke", 6, 20, text,
 		noteRefAt(t, text, "Matt. 5:3–12", "MAT.5.3-MAT.5.12"), noteRefAt(t, text, "Luke 6:20–23", "LUK.6.20-LUK.6.23"))
-	got, words = partsOf(note)
-	want = []string{"Matthew 5:3–12", "(11:5) = Matthew 11:5", "(James 2:5) = James 2:5"}
-	if joined(got) != joined(want) || words != "Luke 6:20–23" {
-		t.Errorf("parts = %q, words %q\nwant  %q and the note's own passage as words", got, words, want)
+	got = pieceNames(note.Pieces)
+	want = []string{"card:Matthew 5:3–12", "group:(11:5)[card:Matthew 11:5]", "self:Luke 6:20–23", "group:(James 2:5)[card:James 2:5]"}
+	if joined(got) != joined(want) {
+		t.Errorf("pieces = %q\nwant  %q", got, want)
 	}
 
 	// A comma's verses are one card each, as the direct citations are, and a
-	// citation whose passage the loaded text lacks is no member: its words
-	// are still the group's.
+	// citation whose passage the loaded text lacks is its words, in its
+	// place among the group's pieces.
 	text = "(Rom. 14:14, 15; Jude 6)"
 	note = resolvedNote(t, bd, "Acts", 10, 15, text)
-	got, words = partsOf(note)
-	if joined(got) != "(Rom. 14:14, 15; Jude 6) = Romans 14:14, Romans 14:15" || words != "" {
-		t.Errorf("parts = %q, words %q", got, words)
+	if got := pieceNames(note.Pieces); joined(got) != "group:(Rom. 14:14, 15; Jude 6)[card:Romans 14:14 card:Romans 14:15 words:Jude 6]" {
+		t.Errorf("pieces = %q", got)
 	}
 }
 
@@ -120,8 +105,8 @@ func TestAGroupRowOpensIntoItsCitations(t *testing.T) {
 	relaid := 0
 	lst.Relayout.fn = func() { relaid++ }
 
-	if lst.PublisherCards != 3 || lst.PublisherGroups != 3 || lst.PublisherLines != 0 {
-		t.Fatalf("list = %+v; want three cards, three groups and no caption", lst)
+	if lst.PublisherNotes != 3 || lst.PublisherCards != 3 || lst.PublisherGroups != 3 || lst.PublisherLines != 0 {
+		t.Fatalf("list = %+v; want three notes holding three cards and three groups, and nothing shown that is not followed", lst)
 	}
 	if got := cardLabelsIn(lst.Objects); joined(got) != "Romans 5:8|Ephesians 2:4|2 Thessalonians 2:16" {
 		t.Fatalf("cards = %q", got)
@@ -132,21 +117,27 @@ func TestAGroupRowOpensIntoItsCitations(t *testing.T) {
 	}
 	first, lone, unread := groups[0], groups[1], groups[2]
 
-	// Order: the label, the three cards, then the groups, each a row of the
-	// list itself; and a rule closes the block above the first group, which
-	// is the rule above it.
-	at := -1
-	for i, o := range lst.Objects {
-		if o == fyne.CanvasObject(first) {
-			at = i
-		}
+	// Order: the passage and the label, then the three notes. The first is a
+	// row of its own whose pieces are its three cards and then its group,
+	// where the edition printed it; the other two are each a group that is
+	// the whole of its note. A rule closes the card above the first group,
+	// which is the rule above it.
+	notes := noteRowsIn(lst.Objects)
+	if len(notes) != 1 {
+		t.Fatalf("%d note rows, want the first note's", len(notes))
 	}
-	if at != 4 || lst.Objects[5] != fyne.CanvasObject(lone) || lst.Objects[6] != fyne.CanvasObject(unread) {
-		t.Fatalf("the first group is object %d of %d; want the label, three cards, then the three groups", at, len(lst.Objects))
+	note := notes[0]
+	if n := len(lst.Objects); n < 3 || lst.Objects[n-3] != fyne.CanvasObject(note) || lst.Objects[n-2] != fyne.CanvasObject(lone) || lst.Objects[n-1] != fyne.CanvasObject(unread) {
+		t.Fatalf("the list does not end with the first note's row and the two groups, in that order (%d objects)", len(lst.Objects))
 	}
-	above, ok := lst.Objects[at-1].(*fyne.Container)
+	body := note.body.Objects
+	at := len(body) - 1
+	if len(body) != 4 || body[at] != fyne.CanvasObject(first) {
+		t.Fatalf("the first note's pieces are %d objects; want its three cards and then its group", len(body))
+	}
+	above, ok := body[at-1].(*fyne.Container)
 	if !ok {
-		t.Fatalf("the row above the group is a %T", lst.Objects[at-1])
+		t.Fatalf("the row above the group is a %T", body[at-1])
 	}
 	if _, rule := above.Objects[len(above.Objects)-1].(*widget.Separator); !rule {
 		t.Errorf("no rule above the first group: the block above ends in a %T", above.Objects[len(above.Objects)-1])
@@ -212,14 +203,18 @@ func TestAGroupRowOpensIntoItsCitations(t *testing.T) {
 		t.Errorf("a second tap did not close the group: open %v, inset %v, height %v (closed %v), %d layouts", first.open, first.inset.Visible(), first.MinSize().Height, closedHeight, relaid)
 	}
 
-	// A note that is a group alone opens the same way.
+	// A note that is a group alone opens the same way, and carries its
+	// note's letter before the group's text.
+	if got := textsIn(lone.label); joined(got) != "b  (Is. 9:6)" {
+		t.Errorf("the lone group's row reads %q", got)
+	}
 	test.Tap(lone.header)
 	if got := cardLabelsIn(lone.members.Objects); joined(got) != "Isaiah 9:6" {
 		t.Errorf("the lone group's cards are %q", got)
 	}
 	// CONTROL: a group none of whose citations the loaded text has is its
 	// words and no more: nothing to tap, no icon promising cards.
-	if unread.header != nil || unread.icon != nil || joined(textsIn(unread)) != "(Hab. 2:4)" {
+	if unread.header != nil || unread.icon != nil || joined(textsIn(unread)) != "c  (Hab. 2:4)" {
 		t.Errorf("a group with nothing to open has a header %v, an icon %v and the text %q", unread.header != nil, unread.icon != nil, textsIn(unread))
 	}
 	if len(cardsIn([]fyne.CanvasObject{unread.box})) != 0 {

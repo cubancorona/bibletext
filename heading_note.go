@@ -35,9 +35,11 @@ import (
 // style is one settleHeadingNote set apart, and only those notes are listed
 // in the chapter's footnote section (chapterFootnoteEntries). The notes the
 // API.Bible decoder keeps on an NKJV heading (Heading.Footnotes, apibible.go)
-// stay unlisted, as they were before any heading's note was listed: how many
-// of them are not cross-references has not been measured, and the display of
-// the NKJV's apparatus is an open licensing question.
+// stay out of that section, as they were before any heading's note was
+// listed. Measured over the canon fetched on 6 November 2026 there is one, on
+// the heading before Numbers 4:21, and it is a cross-reference: the
+// cross-references panel shows it with that verse's, in the builds that show
+// the edition's apparatus at all (notedHeadingsBefore, publisher_xrefs.go).
 const feedHeadingStyle = "heading"
 
 // settleHeadingNote returns h with a note the feed ran into its words set

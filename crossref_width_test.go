@@ -39,6 +39,8 @@ func crossRefListMisfits(objs []fyne.CanvasObject, limit float32) []string {
 			walk(x.content, path+"/card")
 		case *crossRefGroupRow:
 			walk(x.box, path+"/group")
+		case *crossRefNoteRow:
+			walk(x.box, path+"/note")
 		case *fyne.Container:
 			for i, c := range x.Objects {
 				walk(c, path+"/"+strconv.Itoa(i))

@@ -251,3 +251,55 @@ func TestTheShorthandTableNamesEveryBookOnce(t *testing.T) {
 		t.Errorf("the one-chapter books are %q", got)
 	}
 }
+
+// THE SHORTHAND PRINTS WHAT IT READS. shorthandPrint is the reverse of the
+// reading of a citation that carries its own book; a note that is one
+// citation is drawn as its card alone only where the print can be had back
+// from the card this way (publisherCrossRef.alone).
+func TestTheShorthandPrintsWhatItReads(t *testing.T) {
+	for _, c := range []struct {
+		id    string
+		title bool
+		basis string
+		want  string
+	}{
+		{"ROM.5.8", false, "", "Rom. 5:8"},
+		{"MAT.3.1-MAT.3.12", false, "", "Matt. 3:1–12"},
+		{"GEN.8.20-GEN.9.17", false, "", "Gen. 8:20—9:17"},
+		{"LEV.11", false, "", "Lev. 11"},
+		{"ISA.36-ISA.39", false, "", "Is. 36—39"},
+		{"PSA.59", true, "", "Ps. 59:title"},
+		{"JOB.13.16", false, "LXX", "Job 13:16, LXX"},
+		{"DEU.32.43", false, "LXX, DSS", "Deut. 32:43, LXX, DSS"},
+		{"JUD.1.20", false, "", "Jude 20"},
+		{"OBA.1.1-OBA.1.4", false, "", "Obad. 1–4"},
+		{"1SA.2.1-1SA.2.10", false, "", "1 Sam. 2:1–10"},
+	} {
+		got, ok := shorthandPrint(c.id, c.title, c.basis)
+		if !ok || got != c.want {
+			t.Errorf("%s (title %v, basis %q) prints as %q, %v; want %q", c.id, c.title, c.basis, got, ok, c.want)
+			continue
+		}
+		// And the print reads back to the id: the two are one mapping.
+		citations, _ := readShorthand(got)
+		if len(citations) != 1 || citations[0].ID != c.id {
+			t.Errorf("%q reads back as %+v, want the one citation %s", got, citations, c.id)
+		}
+	}
+	// What the edition does not print is not printed: an id that is no id,
+	// a book the table lacks, a run that ends before it starts or in
+	// another book, a whole chapter of a book of one chapter, and a title
+	// of anything but a whole chapter.
+	for _, c := range []struct {
+		id    string
+		title bool
+	}{
+		{"", false}, {"ROM", false}, {"ROM.5.8.1", false}, {"XYZ.1.1", false}, {"ROM.0.1", false},
+		{"ROM.5.8-ROM.5.3", false}, {"ROM.5.8-ROM.5.8", false}, {"ROM.5.8-GAL.1.1", false}, {"ROM.5-ROM.6.1", false},
+		{"JUD.1", false}, {"JUD.2.3", false}, {"PSA.59.1", true}, {"PSA.59-PSA.60", true},
+	} {
+		if got, ok := shorthandPrint(c.id, c.title, ""); ok {
+			t.Errorf("%q (title %v) prints as %q; want no print", c.id, c.title, got)
+		}
+	}
+}

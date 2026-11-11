@@ -55,6 +55,8 @@ func textsIn(o fyne.CanvasObject) []string {
 			walk(x.content)
 		case *crossRefGroupRow:
 			walk(x.box)
+		case *crossRefNoteRow:
+			walk(x.box)
 		case *fyne.Container:
 			for _, c := range x.Objects {
 				walk(c)
@@ -76,13 +78,74 @@ func joinedTexts(objs []fyne.CanvasObject) string {
 	return b.String()
 }
 
-// cardsIn is every card in objs, in list order.
+// cardsIn is every card in objs, in list order: the cards of the list's own
+// run, with those under an open note among them. A note's own row and a
+// group's are not cards, and a group's citations are the group's, not the
+// list's, so neither is entered.
 func cardsIn(objs []fyne.CanvasObject) []*tapCard {
 	var out []*tapCard
 	var walk func(o fyne.CanvasObject)
 	walk = func(o fyne.CanvasObject) {
 		switch x := o.(type) {
 		case *tapCard:
+			out = append(out, x)
+		case *crossRefNoteRow:
+			walk(x.body)
+		case *fyne.Container:
+			for _, c := range x.Objects {
+				walk(c)
+			}
+		}
+	}
+	for _, o := range objs {
+		walk(o)
+	}
+	return out
+}
+
+// cardReference is a card's reference line: its bold upright text. A note's
+// letter, which stands before the reference of a card that is its whole
+// note, is bold and italic.
+func cardReference(c *tapCard) string {
+	ref := ""
+	walkTree(c.content, func(o fyne.CanvasObject) {
+		if t, ok := o.(*canvas.Text); ok && ref == "" && t.TextStyle.Bold && !t.TextStyle.Italic {
+			ref = t.Text
+		}
+	})
+	return ref
+}
+
+// cardLetter is the note's letter a card carries, "" for none.
+func cardLetter(c *tapCard) string {
+	letter := ""
+	walkTree(c.content, func(o fyne.CanvasObject) {
+		if t, ok := o.(*canvas.Text); ok && letter == "" && t.TextStyle.Bold && t.TextStyle.Italic {
+			letter = t.Text
+		}
+	})
+	return letter
+}
+
+// cardLabelsIn is the reference line of every card in objs, in list order.
+func cardLabelsIn(objs []fyne.CanvasObject) []string {
+	var out []string
+	for _, c := range cardsIn(objs) {
+		if ref := cardReference(c); ref != "" {
+			out = append(out, ref)
+		}
+	}
+	return out
+}
+
+// noteRowsIn is every note's own row in objs, in list order: the notes that
+// are more than one piece.
+func noteRowsIn(objs []fyne.CanvasObject) []*crossRefNoteRow {
+	var out []*crossRefNoteRow
+	var walk func(o fyne.CanvasObject)
+	walk = func(o fyne.CanvasObject) {
+		switch x := o.(type) {
+		case *crossRefNoteRow:
 			out = append(out, x)
 		case *fyne.Container:
 			for _, c := range x.Objects {
@@ -96,14 +159,24 @@ func cardsIn(objs []fyne.CanvasObject) []*tapCard {
 	return out
 }
 
-// cardLabelsIn is the reference line of every card in objs, in list order:
-// the first text a card holds.
-func cardLabelsIn(objs []fyne.CanvasObject) []string {
-	var out []string
-	for _, c := range cardsIn(objs) {
-		if ts := textsIn(c.content); len(ts) > 0 {
-			out = append(out, ts[0])
+// passageIn is the passage that heads objs, nil when the list has none.
+func passageIn(objs []fyne.CanvasObject) *readingParagraph {
+	var out *readingParagraph
+	var walk func(o fyne.CanvasObject)
+	walk = func(o fyne.CanvasObject) {
+		switch x := o.(type) {
+		case *readingParagraph:
+			if out == nil {
+				out = x
+			}
+		case *fyne.Container:
+			for _, c := range x.Objects {
+				walk(c)
+			}
 		}
+	}
+	for _, o := range objs {
+		walk(o)
 	}
 	return out
 }
@@ -157,6 +230,8 @@ func bannedIn(objs []fyne.CanvasObject) []string {
 			walk(x.content)
 		case *crossRefGroupRow:
 			walk(x.box)
+		case *crossRefNoteRow:
+			walk(x.box)
 		case *fyne.Container:
 			for _, c := range x.Objects {
 				walk(c)
@@ -179,6 +254,8 @@ func groupRowsIn(objs []fyne.CanvasObject) []*crossRefGroupRow {
 		switch x := o.(type) {
 		case *crossRefGroupRow:
 			out = append(out, x)
+		case *crossRefNoteRow:
+			walk(x.body) // a group among a note's pieces
 		case *fyne.Container:
 			for _, c := range x.Objects {
 				walk(c)
@@ -283,7 +360,8 @@ func TestCrossRefListWithoutThePublisherIsWhatItAlwaysWas(t *testing.T) {
 	}
 }
 
-func TestCrossRefListWithThePublisherIsOneListOfCards(t *testing.T) {
+// The publisher's run is the edition's notes, each under its letter and whole.
+func TestCrossRefListWithThePublisherIsItsNotesUnderTheirLetters(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	licenseNKJVForTest(t)
@@ -292,11 +370,15 @@ func TestCrossRefListWithThePublisherIsOneListOfCards(t *testing.T) {
 	var followed []crossRef
 	lst := buildCrossRefList(st, sel, listFixtureRefs(), nil, lightPalette, func(c crossRef) { followed = append(followed, c) })
 
-	if lst.Parallels != 1 || lst.PublisherCards != 1 || lst.PublisherGroups != 2 || lst.PublisherLines != 2 || lst.TSKRows != 1 {
-		t.Fatalf("list = %+v; want one parallel, one publisher card, two groups, two caption lines and one Treasury card", lst)
+	if lst.Parallels != 1 || lst.PublisherNotes != 4 || lst.PublisherCards != 1 || lst.PublisherGroups != 2 || lst.PublisherLines != 2 || lst.TSKRows != 1 {
+		t.Fatalf("list = %+v; want one parallel, four notes holding one card, two groups and two lines that are not followed, and one Treasury card", lst)
+	}
+	// The selected text heads the list.
+	if !lst.Passage || passageIn(lst.Objects[:1]) == nil {
+		t.Fatalf("the selected text does not head the list (Passage %v, first object %T)", lst.Passage, lst.Objects[0])
 	}
 	// The two parenthesised groups are rows of their own, as printed: verse
-	// 1's untagged note and verse 2's group. Neither is a caption any more.
+	// 1's untagged note and verse 2's second note, each the whole of its note.
 	if got := groupRowsIn(lst.Objects); len(got) != 2 || got[0].group.Text != "(Acts 10:38)" || got[1].group.Text != "(John 1:13; Gal. 6:15; 1 John 3:9)" {
 		t.Fatalf("group rows = %d; want (Acts 10:38) and the John 1:13 group", len(got))
 	}
@@ -311,26 +393,51 @@ func TestCrossRefListWithThePublisherIsOneListOfCards(t *testing.T) {
 	}
 	// One card idiom: the parallel, the publisher's card, then the Treasury's.
 	// The Treasury's John 7:50 is the publisher's card's passage and goes;
-	// its Galatians 6:15 stays, since the tagged span inside the group did
-	// not become a card.
+	// its Galatians 6:15 stays, since a citation inside a group is the
+	// group's and not a card of the run.
 	if got := cardLabelsIn(lst.Objects); joined(got) != "Matthew 3:1|John 7:50|Galatians 6:15" {
 		t.Errorf("cards = %q", got)
 	}
+	// Verse 2's first note is more than one piece: a row that carries the
+	// note as printed, open, with its pieces under it in print order — the
+	// card, then the continuation the loaded text lacks, as its words.
+	notes := noteRowsIn(lst.Objects)
+	if len(notes) != 1 || notes[0].note.Text != "John 7:50; 19:39" || !notes[0].open || !notes[0].body.Visible() {
+		t.Fatalf("note rows = %d; want one, the note \"John 7:50; 19:39\", open", len(notes))
+	}
+	if got := textsIn(notes[0].label); joined(got) != "a  John 7:50; 19:39" {
+		t.Errorf("the note's row reads %q; want its letter and the note as printed", got)
+	}
+	if n := len(notes[0].body.Objects); n != 2 {
+		t.Fatalf("the note has %d pieces under it, want its card and its words", n)
+	}
+	if got := cardLabelsIn(notes[0].body.Objects[:1]); joined(got) != "John 7:50" {
+		t.Errorf("the note's first piece is %q, want the card John 7:50", got)
+	}
+	if got := textsIn(notes[0].body.Objects[1]); joined(got) != "19:39" {
+		t.Errorf("the note's second piece is %q, want the words 19:39", got)
+	}
 	all := joinedTexts(lst.Objects)
-	// The words that did not become cards stand verbatim: the untagged note,
-	// the continuation the text lacks, the group whole, the self-range.
-	for _, want := range []string{"(Acts 10:38)", "19:39", "(John 1:13; Gal. 6:15; 1 John 3:9)", "John 3:1–21", "A synopsis probe"} {
+	// Everything the notes print stands in the list verbatim: the untagged
+	// note, the note of two pieces, the group whole, and the citation of the
+	// reader's own passage, which is shown in full and not followed.
+	for _, want := range []string{"(Acts 10:38)", "John 7:50; 19:39", "(John 1:13; Gal. 6:15; 1 John 3:9)", "John 3:1–21", "A synopsis probe"} {
 		if !strings.Contains(all, want) {
 			t.Errorf("the list lacks %q:\n%s", want, all)
 		}
 	}
+	// Each note under its letter, restarting at each verse.
+	for _, want := range []string{"a  (Acts 10:38)", "a  John 7:50; 19:39", "b  (John 1:13; Gal. 6:15; 1 John 3:9)"} {
+		if !hasLine(lst.Objects, want) {
+			t.Errorf("no line %q:\n%s", want, all)
+		}
+	}
 	// No pill under the parallels' label (the pill is a text of its own; the
-	// label's word is not it), no legend, no notice or credit in the list, no
-	// note re-joined as one paragraph.
+	// label's word is not it), no legend, no notice or credit in the list.
 	if hasLine(lst.Objects, "PARALLEL") {
 		t.Errorf("the parallel card wears its pill under the GOSPEL PARALLELS label:\n%s", all)
 	}
-	for _, banned := range []string{"compare", "Thomas Nelson", "OpenBible", "cross references", "John 7:50; 19:39"} {
+	for _, banned := range []string{"compare", "Thomas Nelson", "OpenBible", "cross references"} {
 		if strings.Contains(all, banned) {
 			t.Errorf("%q is in the list:\n%s", banned, all)
 		}
@@ -343,19 +450,6 @@ func TestCrossRefListWithThePublisherIsOneListOfCards(t *testing.T) {
 	cards[1].Tapped(nil)
 	if len(followed) != 1 || followed[0] != (crossRef{Book: "John", Chapter: 7, Verse: 50}) {
 		t.Errorf("tapping the publisher's card followed %+v", followed)
-	}
-	// The note's remainder sits inside the card's block, before its rule.
-	var block *fyne.Container
-	for _, o := range lst.Objects {
-		if c, ok := o.(*fyne.Container); ok && len(c.Objects) > 0 && c.Objects[0] == cards[1] {
-			block = c
-		}
-	}
-	if block == nil || len(block.Objects) != 3 {
-		t.Fatalf("the publisher's card does not stand in a block of card, caption and rule: %+v", block)
-	}
-	if _, ok := block.Objects[2].(*widget.Separator); !ok || !strings.Contains(strings.Join(textsIn(block.Objects[1]), ""), "19:39") {
-		t.Errorf("the card's block is not card, caption, rule: %v / %q", block.Objects[2], textsIn(block.Objects[1]))
 	}
 	// The footer names both sets, the Treasury in its label's words, one to a
 	// line, and the notice once.
@@ -405,11 +499,12 @@ func TestCrossRefListKeysTheRunOnlyWhereItInforms(t *testing.T) {
 	}
 }
 
-// A VERSE WHOSE NOTES LEAVE NOTHING ON SCREEN HAS NO LABEL. Two notes citing
-// one passage give one card, the first; a later verse whose notes cite only
-// passages already carded leaves no card and no words, and its keyed label
-// used to stand over the next label, or over the end of the list.
-func TestAVerseWhoseNotesAllVanishHasNoLabel(t *testing.T) {
+// A NOTE IS KEPT WHOLE THOUGH ANOTHER NOTE HAS ITS PASSAGE. Two notes citing
+// one passage used to give one card, the first, and a verse whose notes cited
+// only passages already carded left nothing on screen and no label. The note
+// is the edition's unit: each stands under its own verse and letter with all
+// it prints.
+func TestANoteIsKeptWholeThoughAnotherNoteHasItsPassage(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	licenseNKJVForTest(t)
@@ -421,32 +516,27 @@ func TestAVerseWhoseNotesAllVanishHasNoLabel(t *testing.T) {
 	v3 := &st.Bible.Verses["John"][3][2]
 	v3.Footnotes = []Footnote{{Text: "John 7:50", Kind: x, Caller: "-", Refs: []NoteRef{{"JHN.7.50", 0, 9}}}}
 	sel := st.Bible.GetChapter("John", 3)[1:]
-	// Alone, and with a Treasury row whose label would have followed the
-	// orphan.
+	// Alone, and with a Treasury row.
 	for _, refs := range [][]crossRef{nil, {{Book: "Galatians", Chapter: 6, Verse: 15, Votes: 3}}} {
 		lst := buildCrossRefList(st, sel, refs, nil, lightPalette, nop)
-		want := "NKJV REFERENCES · VERSE 2"
+		want := "NKJV REFERENCES · VERSE 2|NKJV REFERENCES · VERSE 3"
+		wantCards := "John 7:50|John 7:50"
 		if len(refs) > 0 {
 			want += "|" + treasuryLabel
+			wantCards += "|Galatians 6:15"
 		}
 		if got := sectionLabelsIn(lst.Objects); joined(got) != want {
-			t.Errorf("with %d Treasury rows: labels = %q, want %q (verse 3 has nothing left to show)", len(refs), got, want)
+			t.Errorf("with %d Treasury rows: labels = %q, want %q", len(refs), got, want)
 		}
-		if got := cardLabelsIn(lst.Objects); lst.PublisherCards != 1 || len(got) == 0 || got[0] != "John 7:50" {
-			t.Errorf("with %d Treasury rows: cards = %q, %d publisher cards; want John 7:50 once", len(refs), got, lst.PublisherCards)
+		if got := cardLabelsIn(lst.Objects); lst.PublisherCards != 2 || joined(got) != wantCards {
+			t.Errorf("with %d Treasury rows: cards = %q, %d publisher cards; want John 7:50 under each verse that cites it", len(refs), got, lst.PublisherCards)
 		}
 	}
-	// CONTROL: the same note citing a second passage: verse 3's label and
-	// that passage's card, the shared passage still carded once, under
-	// verse 2.
-	v3.Footnotes[0] = Footnote{Text: "John 7:50; Gal. 6:15", Kind: x, Caller: "-", Refs: []NoteRef{{"JHN.7.50", 0, 9}, {"GAL.6.15", 11, 20}}}
-	sel = st.Bible.GetChapter("John", 3)[1:]
-	lst := buildCrossRefList(st, sel, nil, nil, lightPalette, nop)
-	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES · VERSE 2|NKJV REFERENCES · VERSE 3" {
-		t.Errorf("control: labels = %q", got)
-	}
-	if got := cardLabelsIn(lst.Objects); joined(got) != "John 7:50|Galatians 6:15" {
-		t.Errorf("control: cards = %q", got)
+	// CONTROL: a Treasury row for the shared passage goes once, however many
+	// notes card it.
+	lst := buildCrossRefList(st, sel, []crossRef{{Book: "John", Chapter: 7, Verse: 50, Votes: 9}}, nil, lightPalette, nop)
+	if lst.TSKRows != 0 || lst.Sections.Treasury {
+		t.Errorf("the Treasury keeps a row both notes card: %+v", lst)
 	}
 }
 
@@ -475,11 +565,18 @@ func TestATitleAndTheWholePsalmAreTwoCards(t *testing.T) {
 	if ts := textsIn(cards[0].content); len(ts) > 1 && ts[1] == "Title" {
 		t.Errorf("the first card wears the Title tag: %q", ts)
 	}
-	// CONTROL: the psalm cited twice is one card.
+	// CONTROL: neither card wears the tag when the note cites the psalm
+	// twice and its title not at all; and it is still two cards, since a
+	// note is drawn as it is printed.
 	v.Footnotes[0] = Footnote{Text: "Ps. 59; Ps. 59", Kind: x, Caller: "-", Refs: []NoteRef{{"PSA.59", 0, 6}, {"PSA.59", 8, 14}}}
 	lst = buildCrossRefList(st, st.Bible.GetChapter("1 Samuel", 19), nil, nil, lightPalette, nop)
-	if got := cardLabelsIn(lst.Objects); joined(got) != "Psalms 59" || lst.PublisherCards != 1 {
-		t.Errorf("control: cards = %q (%d publisher cards); want the psalm once", got, lst.PublisherCards)
+	if got := cardLabelsIn(lst.Objects); joined(got) != "Psalms 59|Psalms 59" || lst.PublisherCards != 2 {
+		t.Errorf("control: cards = %q (%d publisher cards); want the psalm twice, as printed", got, lst.PublisherCards)
+	}
+	for i, c := range cardsIn(lst.Objects) {
+		if ts := textsIn(c.content); len(ts) > 1 && ts[1] == "Title" {
+			t.Errorf("control: card %d wears the Title tag: %q", i, ts)
+		}
 	}
 }
 

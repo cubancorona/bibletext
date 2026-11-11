@@ -534,6 +534,14 @@ type cardRun struct {
 	Red    bool
 	Italic bool
 	Break  bool
+	// Mark sets the run small and raised, flush before the word that follows
+	// it: a note's letter in the cross-references panel's passage, in the
+	// paragraph's mark colour (crossref_passage.go). Dim draws a run in the
+	// paragraph's muted colour: with Mark a verse's number, without it a
+	// line that is not Scripture, a section heading. The verse-of-the-day
+	// card sets neither.
+	Mark bool
+	Dim  bool
 }
 
 // runs is the passage as the panes would draw it: each verse through the same
@@ -676,7 +684,19 @@ type readingParagraph struct {
 	red     color.Color
 	regular fyne.Resource
 	italic  fyne.Resource
+	// mark and dim are the colours of a Mark run and a Dim run; nil draws
+	// them in the paragraph's own colour.
+	mark color.Color
+	dim  color.Color
+	// guess is the width wrapped for before any layout has handed one over,
+	// for a paragraph that knows the width it will be given; 0 for the
+	// card's own guess (readingParagraphGuessWidth).
+	guess float32
 }
+
+// readingMarkScale is a Mark run's size against the paragraph's: a raised
+// letter the height of a superscript, drawn at the top of its row.
+const readingMarkScale = 0.68
 
 func newReadingParagraph(runs []cardRun, size float32, col, red color.Color, regular, italic fyne.Resource) *readingParagraph {
 	p := &readingParagraph{runs: runs, size: size, color: col, red: red, regular: regular, italic: italic}
@@ -698,6 +718,7 @@ func (p *readingParagraph) text() string { return runsText(p.runs) }
 type paragraphFragment struct {
 	text        string
 	red, italic bool
+	mark, dim   bool
 	spaceBefore bool
 	breakBefore bool
 }
@@ -732,7 +753,7 @@ func (p *readingParagraph) fragments() []paragraphFragment {
 		leading := unicode.IsSpace([]rune(r.Text)[0])
 		for i, w := range words {
 			out = append(out, paragraphFragment{
-				text: w, red: r.Red, italic: r.Italic,
+				text: w, red: r.Red, italic: r.Italic, mark: r.Mark, dim: r.Dim,
 				spaceBefore: i > 0 || leading || (i == 0 && pending),
 				breakBefore: i == 0 && r.Break,
 			})
@@ -773,9 +794,43 @@ func (r *readingParagraphRenderer) measure(s string, italic bool) fyne.Size {
 	return sz
 }
 
+// fragmentSize is the size a fragment is drawn at, and fragmentWidth its
+// width at that size: a mark is smaller than the words it stands among.
+func (r *readingParagraphRenderer) fragmentSize(f paragraphFragment) float32 {
+	if f.mark {
+		return r.p.size * readingMarkScale
+	}
+	return r.p.size
+}
+
+func (r *readingParagraphRenderer) fragmentWidth(f paragraphFragment) float32 {
+	sz, _ := fyne.CurrentApp().Driver().RenderedTextSize(f.text, r.fragmentSize(f), fyne.TextStyle{}, r.face(f.italic))
+	return sz.Width
+}
+
+// fragmentColour is the colour a fragment is drawn in.
+func (r *readingParagraphRenderer) fragmentColour(f paragraphFragment) color.Color {
+	switch {
+	case f.dim && r.p.dim != nil:
+		return r.p.dim
+	case f.mark && r.p.mark != nil:
+		return r.p.mark
+	case f.red:
+		return r.p.red
+	}
+	return r.p.color
+}
+
+// readingMarkGap is the air after a mark, before the word or the mark that
+// follows it flush: enough that a raised letter does not touch its word.
+const readingMarkGap float32 = 1.5
+
 func (r *readingParagraphRenderer) wrap(width float32) {
 	if width <= 0 {
 		width = readingParagraphGuessWidth
+		if r.p.guess > 0 {
+			width = r.p.guess
+		}
 	}
 	if width == r.width && r.rows != nil {
 		return
@@ -794,34 +849,53 @@ func (r *readingParagraphRenderer) wrap(width float32) {
 		row = nil
 		x = 0
 	}
-	for _, f := range r.p.fragments() {
+	fragments := r.p.fragments()
+	afterMark := false // the fragment before this one, on this row, was a mark
+	for i, f := range fragments {
 		if f.breakBefore && (len(row) > 0 || len(r.rows) > 0) {
 			newRow()
+			afterMark = false
 		}
 		if f.text == "" {
 			continue
 		}
-		w := r.measure(f.text, f.italic).Width
+		w := r.fragmentWidth(f)
 		gap := float32(0)
-		if f.spaceBefore && len(row) > 0 {
+		switch {
+		case f.spaceBefore && len(row) > 0:
 			gap = r.spaceW
+		case afterMark && len(row) > 0:
+			gap = readingMarkGap
 		}
-		if len(row) > 0 && f.spaceBefore && x+gap+w > width {
+		// A mark is flush against the word after it, and a row may break
+		// only at a space: so a mark that would end a row takes the row
+		// break before it, with its word, rather than leave the word to run
+		// past the edge. The same holds for any fragments drawn flush.
+		need := w
+		if f.mark {
+			for _, g := range fragments[i+1:] {
+				if g.spaceBefore || g.breakBefore || g.text == "" {
+					break
+				}
+				need += readingMarkGap + r.fragmentWidth(g)
+				if !g.mark {
+					break
+				}
+			}
+		}
+		if len(row) > 0 && f.spaceBefore && x+gap+need > width {
 			newRow()
 			gap = 0
 		}
-		col := r.p.color
-		if f.red {
-			col = r.p.red
-		}
-		t := canvas.NewText(f.text, col)
-		t.TextSize = r.p.size
+		t := canvas.NewText(f.text, r.fragmentColour(f))
+		t.TextSize = r.fragmentSize(f)
 		t.FontSource = r.face(f.italic)
 		t.Move(fyne.NewPos(x+gap, 0))
 		t.Resize(fyne.NewSize(w, r.rowH))
 		row = append(row, t)
 		r.objs = append(r.objs, t)
 		x += gap + w
+		afterMark = f.mark
 	}
 	if len(row) > 0 || len(r.rows) == 0 {
 		r.rows = append(r.rows, row)

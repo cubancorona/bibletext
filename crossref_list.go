@@ -12,21 +12,35 @@ package bibletext
 //
 // Decided 6 November 2026: one list, one card. With the publisher's apparatus
 // showing, each run stands under the app's one in-list heading, the sidebar's
-// section label; the publisher's tagged citations are the same cards the
-// Treasury's rows are, in the publisher's order, never re-sorted or capped;
-// what the edition prints that cannot be a card stands under the note's cards
-// as one caption, verbatim and unexplained; the Treasury stands OPEN under its
-// own label, with the passages the publisher's cards already carry removed
-// from it; and since the labels carry provenance, the parallel cards drop
-// their pill. Without the apparatus — every other edition, and every store
-// build until the licensing reply — the list is what it always was: the
-// badged parallels, then the Treasury rows, no labels and no captions.
+// section label; the publisher's citations are the same cards the Treasury's
+// rows are, in the publisher's order, never re-sorted or capped; the Treasury
+// stands OPEN under its own label, with the passages the publisher's cards
+// already carry removed from it; and since the labels carry provenance, the
+// parallel cards drop their pill. Without the apparatus — every other
+// edition, and every store build until the licensing reply — the list is
+// what it always was: the badged parallels, then the Treasury rows, no
+// labels and no captions.
+//
+// Decided 11 November 2026: nothing the edition's notes carry is lost. The
+// selected text heads the list, with a letter on each word a note hangs from
+// (crossref_passage.go), and the publisher's run is its notes one by one
+// under those letters, each whole and in the order it is printed
+// (crossref_note.go): a note of several pieces is a row that carries the
+// note as printed and folds, its pieces under it; a parenthesised group is
+// a row that opens into its citations (crossref_group.go). This replaces
+// the one caption that gathered, under a note's last card, whatever of the
+// note was not a card, and the rule that two notes citing one passage gave
+// one card: both were the list's reading of a note, and the note is the
+// edition's.
 //
 // Width, by construction: nothing in the list may want more width than the
 // narrowest phone's body gives it (crossRefListWidth). Every child is one of
-// five bounded kinds — a section label, a card (its reference measured, its
-// preview wrapping), a wrapping caption, a spacer, a separator — and no
-// Accordion, Button, Hyperlink or per-row theme override stands among them. A
+// a few bounded kinds — the passage, which wraps to the width it is given; a
+// section label; a card (its reference measured, its preview wrapping); a
+// note's or a group's row (a printed line that wraps beside an icon of fixed
+// size); a reference that is shown and not followed; a wrapping caption; a
+// spacer; a separator — and no Accordion, Button, Hyperlink or per-row theme
+// override stands among them. A
 // single theme scope wraps the complete list in the panel. A widget
 // whose title could not wrap widened the vertical scroll's content past the
 // panel and clipped every row sideways, with no bar to reach the rest (the
@@ -170,13 +184,23 @@ type crossRefList struct {
 	Objects        []fyne.CanvasObject
 	Parallels      int // same-occasion rows
 	OtherOccasions int // the same saying on another occasion (next major release)
-	PublisherCards int // the publisher's cards
-	PublisherLines int // the publisher's caption lines: the notes' leftover words, and the line that says it has no note
-	// PublisherGroups is the publisher's parenthesised groups on screen, each
-	// a row that opens into its citations (crossref_group.go).
+	// PublisherNotes is the publisher's notes on screen, each under its
+	// letter (crossref_note.go). PublisherCards is the cards of their direct
+	// citations, which stand open when the panel opens; PublisherGroups the
+	// parenthesised groups among their pieces, each a row that opens into
+	// its citations (crossref_group.go); PublisherLines the pieces shown and
+	// not followed — a citation of the reader's own passage, words that are
+	// no citation the loaded text has — and the line that says the edition
+	// has no note for the selection.
+	PublisherNotes  int
+	PublisherCards  int
+	PublisherLines  int
 	PublisherGroups int
 	TSKRows         int // the Treasury cards on screen, after those the publisher's cards already carry are dropped
 	Sections        crossRefSections
+	// Passage reports that the selected text heads the list, with the
+	// publisher's notes' letters on their words (crossref_passage.go).
+	Passage bool
 	// Relayout is how a row that changes its height asks for the list to be
 	// laid out again; the panel sets its fn once the list is mounted.
 	Relayout *crossRefRelayout
@@ -273,6 +297,15 @@ func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tsk
 		out.Objects = append(out.Objects, crossRefSectionLabel(text, pal))
 	}
 
+	// The selected text first, with the notes' letters on their words: the
+	// notes below are read by those letters (crossref_passage.go). Only where
+	// the edition has a note for the selection; a selection without one has
+	// no letter to show.
+	if len(notes) > 0 {
+		out.Objects = append(out.Objects, newCrossRefPassage(state, book, chapter, selected, notes, pal), spacer(4))
+		out.Passage = true
+	}
+
 	if len(parallels)+len(others) > 0 {
 		label(parallelsLabel)
 		for _, c := range parallels {
@@ -300,85 +333,24 @@ func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tsk
 		out.Objects = append(out.Objects, crossRefNoteCaption(fmt.Sprintf(publisherEmptyLine, v.Abbrev)))
 		out.PublisherLines++
 	}
-	var carded []crossRef     // the publisher's passages on screen, for the Treasury filter
-	seen := map[string]bool{} // two notes citing one passage give one card, the first (publisherTarget.key)
-	// A verse's label is held until the verse puts something on screen. A
-	// note whose every citation an earlier note already carded leaves no
-	// card and no words (split cuts the carded spans out whether or not a
-	// card was made of them), and a verse of such notes is silently absent,
-	// as a verse with no note is, rather than a label standing over the next
-	// label or over the end of the list.
-	pending := ""
-	flush := func() {
-		if pending != "" {
-			label(pending)
-			pending = ""
-		}
-	}
+	// Each note is a block of its own under its letter, in the order the
+	// notes stand in the verse, and holds everything the note prints in the
+	// order it prints it (crossref_note.go). A verse's label stands over its
+	// first note: every note puts something on screen, so no label is held
+	// back, and a card is not withheld because an earlier note of the verse
+	// has its passage — the note is the edition's unit and is kept whole.
+	var carded []crossRef // the passages the publisher's direct cards follow, for the Treasury filter
 	for i, n := range notes {
 		if i == 0 || (keyed && n.Verse != notes[i-1].Verse) {
-			pending = publisherRunLabel(v.Abbrev, n.Verse, keyed)
+			label(publisherRunLabel(v.Abbrev, n.Verse, keyed))
 		}
-		// The note's rows, in the order the edition prints them: a card for
-		// each direct citation, and a row of its own for each parenthesised
-		// group, where the edition set it (crossref_group.go). A group is
-		// not de-duplicated and its citations do not count as carded: it is
-		// the edition's unit, and it may be closed.
-		parts, words := n.parts()
-		type noteRow struct {
-			card  *crossRefCard
-			group *publisherGroup
-		}
-		var rows []noteRow
-		lastCard := -1
-		for _, p := range parts {
-			if p.Group != nil {
-				rows = append(rows, noteRow{group: p.Group})
-				continue
-			}
-			tg := *p.Card
-			key := tg.key()
-			if seen[key] {
-				continue
-			}
-			seen[key] = true
-			carded = append(carded, tg.Ref)
-			lastCard = len(rows)
-			rows = append(rows, noteRow{card: &crossRefCard{Ref: tg.Ref, Label: tg.label(), Tag: tg.tag(), Title: tg.Title}})
-		}
-		// The words left over — a citation of the note's own verse, one the
-		// feed could not tag — ride the note's last card as its caption, or
-		// stand alone before a rule when the note has no card.
-		wordsAlone := func() {
-			out.Objects = append(out.Objects, container.New(layout.NewCustomPaddedVBoxLayout(0), crossRefNoteCaption(words), widget.NewSeparator()))
-		}
-		if len(rows) == 0 {
-			if words != "" {
-				flush()
-				wordsAlone()
-				out.PublisherLines++
-			}
-			continue
-		}
-		flush()
-		if words != "" {
-			if lastCard >= 0 {
-				rows[lastCard].card.Caption = words
-			}
-			out.PublisherLines++
-		}
-		for _, r := range rows {
-			if r.group != nil {
-				out.Objects = append(out.Objects, newCrossRefGroupRow(state, *r.group, pal, onTap, out.Relayout))
-				out.PublisherGroups++
-				continue
-			}
-			out.Objects = append(out.Objects, crossRefRow(state, *r.card, pal, onTap))
-			out.PublisherCards++
-		}
-		if words != "" && lastCard < 0 {
-			wordsAlone()
-		}
+		row, cards, groups, lines := publisherNoteBlock(state, n, pal, onTap, out.Relayout)
+		out.Objects = append(out.Objects, row)
+		carded = append(carded, cards...)
+		out.PublisherNotes++
+		out.PublisherCards += len(cards)
+		out.PublisherGroups += groups
+		out.PublisherLines += lines
 	}
 
 	// The Treasury, open under its label, less the passages the publisher's
@@ -490,16 +462,16 @@ var crossRefCaptionStyle = widget.RichTextStyle{
 	ColorName: theme.ColorNamePlaceHolder, SizeName: theme.SizeNameCaptionText,
 }
 
-// crossRefCaption is a wrapped, muted, caption-sized line: a note's remainder,
-// the coverage note, the footer's credits and the empty states.
+// crossRefCaption is a wrapped, muted, caption-sized line: the coverage note,
+// the footer's credits and the empty states.
 func crossRefCaption(s string) *widget.RichText {
 	rt := widget.NewRichText(&widget.TextSegment{Text: s, Style: crossRefCaptionStyle})
 	rt.Wrapping = fyne.TextWrapWord
 	return rt
 }
 
-// crossRefNoteCaption aligns a note's remainder or an explanatory caption
-// with the preview and separates it from the following rule.
+// crossRefNoteCaption aligns an explanatory caption with the previews and
+// separates it from what follows.
 func crossRefNoteCaption(s string) fyne.CanvasObject {
 	return container.New(layout.NewCustomPaddedLayout(4, 6, 0, 0), crossRefCaption(s))
 }

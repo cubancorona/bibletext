@@ -270,6 +270,101 @@ func (c shorthandCarry) interpret(piece string, comma, title bool) (id, book str
 	return "", "", 0
 }
 
+// shorthandPrint is a citation as the edition prints one that carries its own
+// book: the reverse of the shorthand's reading. id is the passage in the
+// feed's id form, title whether it is a Psalm's title, and basis the ancient
+// text named after it ("LXX", "LXX, DSS", or ""). ok is false for an id that
+// is none of the feed's forms, a book the table lacks, or a shape the edition
+// does not print. A note that is one citation is shown as its card alone only
+// where this gives back the note's own text (publisherCrossRef.alone).
+func shorthandPrint(id string, title bool, basis string) (string, bool) {
+	type point struct {
+		book           string
+		chapter, verse int // verse 0 for a whole chapter
+	}
+	parse := func(s string) (point, bool) {
+		f := strings.Split(s, ".")
+		if len(f) != 2 && len(f) != 3 {
+			return point{}, false
+		}
+		p := point{book: f[0]}
+		var err error
+		if p.chapter, err = strconv.Atoi(f[1]); err != nil || p.chapter < 1 {
+			return point{}, false
+		}
+		if len(f) == 3 {
+			if p.verse, err = strconv.Atoi(f[2]); err != nil || p.verse < 1 {
+				return point{}, false
+			}
+		}
+		return p, true
+	}
+	ends := strings.Split(id, "-")
+	if len(ends) != 1 && len(ends) != 2 {
+		return "", false
+	}
+	from, ok := parse(ends[0])
+	if !ok {
+		return "", false
+	}
+	to := from
+	if len(ends) == 2 {
+		// A run's ends are of one book and one kind, and differ: the feed
+		// writes a single verse or chapter as one id, never as a run of one.
+		if to, ok = parse(ends[1]); !ok || to.book != from.book || (to.verse == 0) != (from.verse == 0) || to == from {
+			return "", false
+		}
+	}
+	abbreviation := ""
+	for a, b := range shorthandBooks {
+		if b == from.book {
+			abbreviation = a
+			break
+		}
+	}
+	if abbreviation == "" {
+		return "", false
+	}
+	one := oneChapterBooks[from.book]
+	n := strconv.Itoa
+	var figures string
+	switch {
+	case from.verse == 0 && one:
+		return "", false // a book of one chapter is cited by verse
+	case from.verse == 0 && from == to:
+		figures = n(from.chapter)
+	case from.verse == 0 && to.chapter > from.chapter:
+		figures = n(from.chapter) + string(shorthandChapterDash) + n(to.chapter)
+	case from.verse == 0:
+		return "", false
+	case one && from.chapter == 1 && from == to:
+		figures = n(from.verse)
+	case one && from.chapter == 1 && to.chapter == 1 && to.verse > from.verse:
+		figures = n(from.verse) + string(shorthandVerseDash) + n(to.verse)
+	case one:
+		return "", false
+	case from == to:
+		figures = n(from.chapter) + ":" + n(from.verse)
+	case to.chapter == from.chapter && to.verse > from.verse:
+		figures = n(from.chapter) + ":" + n(from.verse) + string(shorthandVerseDash) + n(to.verse)
+	case to.chapter > from.chapter:
+		figures = n(from.chapter) + ":" + n(from.verse) + string(shorthandChapterDash) + n(to.chapter) + ":" + n(to.verse)
+	default:
+		return "", false
+	}
+	printed := abbreviation + " " + figures
+	if title {
+		if from.verse != 0 || from != to {
+			return "", false
+		}
+		printed += titleSuffix
+	}
+	if basis != "" {
+		printed += ", " + basis
+	}
+	return printed, true
+}
+
 func shorthandVerseID(book string, chapter, verse int) string {
 	return book + "." + strconv.Itoa(chapter) + "." + strconv.Itoa(verse)
 }

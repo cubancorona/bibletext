@@ -10,10 +10,13 @@ package bibletext
 // shows which cards are the group's. It starts closed, and closes again on a
 // second tap.
 //
-// The group is the edition's unit, so it is kept whole: every citation of it
-// the loaded text has is a card when it is open, in print order, with no
-// de-duplication against the cards outside it, and none of them counts as
-// carded for the Treasury's filter while the group may be closed.
+// The group is the edition's unit, so it is kept whole: everything between
+// its parentheses is a row when it is open, in print order — a card for each
+// citation the reader can follow, the reader's own verse in its place and
+// not followed, and words that are no citation the loaded text has
+// (publisherPieceRows). Its citations are the edition's related ones, set
+// apart from the note's direct citations by the parentheses, so none of them
+// counts for the Treasury's filter as a direct citation's card does.
 //
 // Width: the label wraps beside an icon of fixed size, so the row wants no
 // more than the narrowest phone gives the list. Opening and closing changes
@@ -67,12 +70,12 @@ type crossRefGroupRow struct {
 	shade   *canvas.Rectangle // the inset's ground
 }
 
-func newCrossRefGroupRow(state *AppState, g publisherGroup, pal palette, onTap func(crossRef), relayout *crossRefRelayout) *crossRefGroupRow {
+// letter is the note's letter, set before the group's text when the group is
+// the whole of its note (crossref_note.go); "" for a group among a note's
+// other pieces.
+func newCrossRefGroupRow(state *AppState, g publisherGroup, letter string, pal palette, onTap func(crossRef), relayout *crossRefRelayout) *crossRefGroupRow {
 	r := &crossRefGroupRow{group: g, state: state, pal: pal, onTap: onTap, relayout: relayout}
-	r.label = widget.NewRichText(&widget.TextSegment{Text: g.Text, Style: widget.RichTextStyle{
-		ColorName: theme.ColorNamePlaceHolder, SizeName: sizeNameCrossRefGroup,
-	}})
-	r.label.Wrapping = fyne.TextWrapWord
+	r.label = crossRefPrintedLine(letter, g.Text)
 	r.members = container.New(layout.NewCustomPaddedVBoxLayout(0))
 	r.shade = canvas.NewRectangle(pal.Surface)
 	r.shade.CornerRadius = 8
@@ -121,12 +124,13 @@ func (r *crossRefGroupRow) toggle() {
 	r.open = !r.open
 	if r.open {
 		if len(r.members.Objects) == 0 {
-			cards := r.group.cards()
-			for i, tg := range cards {
-				card := crossRefCard{Ref: tg.Ref, Label: tg.label(), Tag: tg.tag(), Title: tg.Title}
-				// The last card's rule would stand at the foot of the shaded
-				// ground with the row's own rule a few points under it.
-				r.members.Add(crossRefRowRuled(r.state, card, r.pal, r.onTap, i < len(cards)-1))
+			// Everything between the parentheses, in print order: the cards,
+			// a citation of the reader's own verse in its place, and words
+			// that cannot be followed. The last row's rule would stand at
+			// the foot of the shaded ground with the row's own rule a few
+			// points under it.
+			for _, row := range publisherPieceRows(r.state, r.group.Pieces, r.pal, r.onTap, r.relayout, false) {
+				r.members.Add(row)
 			}
 		}
 		r.inset.Show()

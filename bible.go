@@ -205,8 +205,10 @@ type Superscription struct {
 	// Text is the title line, assembled by the same marked-text path verse
 	// text uses, so its spacing rules are identical.
 	Text string `json:"text"`
-	// Footnotes are the title's notes; Anchor is a rune offset into Text
-	// (stored for a future in-title marker, unrendered today).
+	// Footnotes are the title's notes; Anchor is a rune offset into Text,
+	// where the cross-references panel sets a note's letter in the builds
+	// that show the edition's apparatus (crossref_passage.go). The page
+	// draws no marker in a title.
 	Footnotes []Footnote `json:"footnotes,omitempty"`
 	// SmallCaps are the runes of Text the edition sets in small capitals,
 	// as on Heading: the divine name in a title such as Psalm 18's. The
