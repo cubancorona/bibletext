@@ -313,6 +313,16 @@ func TestLiveAPIBibleFullCanon(t *testing.T) {
 		t.Errorf("cross-reference notes = %d, want 32,517", census.Notes)
 	}
 	assertNoteCensus(t, census)
+	// The shorthand the parenthesised groups' citations are read by, held to
+	// the feed's own tags (publisher_xrefs_census_test.go). The census of 11
+	// November 2026: every tagged citation outside a group read to its id;
+	// 4,850 groups holding 8,324 citations; twelve tags inside groups that
+	// name a book the print does not.
+	shorthand := noteShorthandCensus(data)
+	assertShorthandCensus(t, shorthand)
+	if shorthand.Groups != 4850 || shorthand.GroupCitations != 8324 || len(shorthand.GroupMistags) != 12 {
+		t.Errorf("shorthand census = %d groups, %d group citations, %d mistags inside groups; want 4,850, 8,324 and 12", shorthand.Groups, shorthand.GroupCitations, len(shorthand.GroupMistags))
+	}
 	t.Logf("apparatus: words %v, %d whole-chapter ids, %d title citations, %d bases, %d tagged citations inside parentheses, %d cards and %d caption lines over whole chapters",
 		census.Words, census.WholeChapters, census.TitleCitations, census.Bases, census.InParentheses, census.Cards, census.Lines)
 	// The counts, re-measured 9 September 2026. The small-capital figure

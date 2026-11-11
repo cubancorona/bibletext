@@ -56,6 +56,35 @@ type publisherCrossRef struct {
 	Verse   int               // the verse the note belongs to; 0 for the Psalm's title
 	Text    string            // the citation text exactly as delivered
 	Targets []publisherTarget // the resolved citations, in text order; none = words only
+	Groups  []publisherGroup  // the note's parenthesised groups, in text order
+}
+
+// publisherGroup is one parenthesised group of a note, the edition's
+// "compare" citations, as printed, with the citations of it that the loaded
+// text has.
+type publisherGroup struct {
+	Start, End int    // the group's rune span within the note's Text, the parentheses included
+	Text       string // the group exactly as printed, the parentheses included
+	// Members are the group's citations resolved against the loaded text, in
+	// print order and one to a printed item, so "4:9, 10" is two. The feed
+	// tags about one in eight of a group's citations, so each is read from
+	// the print (readShorthand), tagged or not, and resolved as a tagged
+	// citation is: a whole chapter, a title and a basis are what they are
+	// outside a group. A piece the shorthand does not read, or whose passage
+	// the loaded text lacks, is not a member; its words are still in Text.
+	Members []publisherTarget
+}
+
+// cards are the members a reader can follow: all but a citation of the
+// note's own verse, which is the passage on screen.
+func (g publisherGroup) cards() []publisherTarget {
+	var out []publisherTarget
+	for _, tg := range g.Members {
+		if !tg.Current {
+			out = append(out, tg)
+		}
+	}
+	return out
 }
 
 // publisherTarget is one tagged citation resolved against the loaded text.
@@ -288,12 +317,10 @@ func (c crossRef) contains(ch, v int) bool {
 // (keyed 0) when the selection reaches the chapter's first verse — the title
 // precedes verse 1 on the page, so its references precede verse 1's.
 //
-// A tagged citation resolves by its id: a verse or verse range
-// (parseUSFMRefID), else whole chapters (chapterTarget), and a whole-chapter
-// id the text follows with ":title" is the chapter's title, placed at its
-// first verse. The basis tokens after a citation (basisAfter) ride it. A
-// citation whose passage the loaded text lacks is not a target: its words
-// stay in the note, and the remainder shows them.
+// A tagged citation resolves by its id (resolveCitation). A citation whose
+// passage the loaded text lacks is not a target: its words stay in the note,
+// and the remainder shows them. The note's parenthesised groups are resolved
+// beside its targets, each citation of a group by what the group prints.
 func publisherCrossRefsFor(bd *BibleData, book string, chapter int, selected []Verse) []publisherCrossRef {
 	if bd == nil || len(selected) == 0 {
 		return nil
@@ -313,31 +340,31 @@ func publisherCrossRefsFor(bd *BibleData, book string, chapter int, selected []V
 		// by them; read against the text as delivered, a leading space would
 		// put the ":title" and basis reads and every cut one rune off.
 		runes := []rune(text)
+		resolve := func(start, end int, id string) (publisherTarget, bool) {
+			return resolveCitation(bd, runes, start, end, id, book, chapter, verse)
+		}
 		for _, r := range fn.Refs {
 			if r.Start < 0 || r.End > len(runes) || r.Start >= r.End {
 				continue // a span that does not fit the text it claims to index
 			}
-			tg := publisherTarget{Start: r.Start, End: r.End, Cut: r.End}
-			ref, ok := parseUSFMRefID(r.ID)
-			if !ok {
-				if ref, ok = chapterTarget(bd, r.ID); ok {
-					tg.Chapters = true
-					if hasRunesAt(runes, r.End, []rune(titleSuffix)) {
-						// The title stands at the chapter's first verse: the
-						// card goes there, not over the whole psalm.
-						tg.Title, tg.Chapters = true, false
-						tg.Cut = r.End + len([]rune(titleSuffix))
-						ref = crossRef{Book: ref.Book, Chapter: ref.Chapter, Verse: ref.Verse}
-					}
+			if tg, ok := resolve(r.Start, r.End, r.ID); ok {
+				row.Targets = append(row.Targets, tg)
+			}
+		}
+		// The groups, each with the citations of it the shorthand reads and
+		// the loaded text has, by the print and not by the feed's tags.
+		citations, groups := readShorthand(text)
+		for i, g := range groups {
+			group := publisherGroup{Start: g.Start, End: g.End, Text: string(runes[g.Start:g.End])}
+			for _, c := range citations {
+				if c.Group != i || c.ID == "" {
+					continue
+				}
+				if tg, ok := resolve(c.Start, c.End, c.ID); ok {
+					group.Members = append(group.Members, tg)
 				}
 			}
-			if !ok || bd.GetVerse(ref.Book, ref.Chapter, ref.Verse) == nil {
-				continue // words only: the passage is not in the loaded text
-			}
-			tg.Basis, tg.Cut = basisAfter(runes, tg.Cut)
-			tg.Ref = ref
-			tg.Current = verse > 0 && ref.Book == book && ref.contains(chapter, verse)
-			row.Targets = append(row.Targets, tg)
+			row.Groups = append(row.Groups, group)
 		}
 		rows = append(rows, row)
 	}
@@ -361,8 +388,42 @@ func publisherCrossRefsFor(bd *BibleData, book string, chapter int, selected []V
 	return rows
 }
 
+// resolveCitation resolves one citation of a note against the loaded text:
+// the rune span of its printed words within the note (runes) and its id, on a
+// note of book chapter:verse (verse 0 for a Psalm's title). The id is a verse
+// or a run of verses (parseUSFMRefID), else whole chapters (chapterTarget),
+// and whole chapters the text follows with ":title" are the chapter's title,
+// placed at its first verse. The basis tokens after the citation ride it. A
+// citation whose passage the loaded text lacks does not resolve.
+func resolveCitation(bd *BibleData, runes []rune, start, end int, id, book string, chapter, verse int) (publisherTarget, bool) {
+	tg := publisherTarget{Start: start, End: end, Cut: end}
+	ref, ok := parseUSFMRefID(id)
+	if !ok {
+		if ref, ok = chapterTarget(bd, id); ok {
+			tg.Chapters = true
+			if hasRunesAt(runes, end, []rune(titleSuffix)) {
+				// The title stands at the chapter's first verse: the card
+				// goes there, not over the whole psalm.
+				tg.Title, tg.Chapters = true, false
+				tg.Cut = end + len([]rune(titleSuffix))
+				ref = crossRef{Book: ref.Book, Chapter: ref.Chapter, Verse: ref.Verse}
+			}
+		}
+	}
+	if !ok || bd.GetVerse(ref.Book, ref.Chapter, ref.Verse) == nil {
+		return publisherTarget{}, false // words only: the passage is not in the loaded text
+	}
+	tg.Basis, tg.Cut = basisAfter(runes, tg.Cut)
+	tg.Ref = ref
+	tg.Current = verse > 0 && ref.Book == book && ref.contains(chapter, verse)
+	return tg, true
+}
+
 // split divides a resolved note into the citations that become cards and the
-// remainder that stays words. A card is every target that is not Current and
+// remainder that stays words: the measure the apparatus census takes of a
+// canon (publisher_xrefs_census_test.go). The list is composed from parts,
+// which keeps the groups split folds into the remainder as rows of their own.
+// A card is every target that is not Current and
 // does not stand inside a parenthesised group (the depth at its Start is
 // zero), in text order: a tagged citation inside a group is never a card,
 // since carding it would present a compare citation in the shape of a direct
@@ -401,6 +462,73 @@ func (n publisherCrossRef) split() (cards []publisherTarget, remainder string) {
 		}
 	}
 	return cards, strings.Join(pieces, "; ")
+}
+
+// publisherPart is one piece of a note in the order the edition prints it: a
+// direct citation a reader can follow, or a parenthesised group. Exactly one
+// of the two is set.
+type publisherPart struct {
+	Card  *publisherTarget
+	Group *publisherGroup
+}
+
+// parts divides a resolved note into its cards and its parenthesised groups,
+// in the order the edition prints them, and the words left over. A card is
+// what split makes one: a target that is not Current and stands outside every
+// group. A group stays where it was printed — before, between or after the
+// direct citations — so a reader meets the edition's "compare" citations where
+// the edition set them, and not gathered under the note's last card. The words
+// are the note with every card's span and every group's span cut out, joined
+// as split joins its remainder: a citation of the note's own verse, and the
+// rare citation the feed could not tag.
+func (n publisherCrossRef) parts() (parts []publisherPart, words string) {
+	runes := []rune(n.Text)
+	keep := make([]bool, len(runes))
+	for i := range keep {
+		keep[i] = true
+	}
+	cut := func(from, to int) {
+		for i := from; i < to && i < len(runes); i++ {
+			if i >= 0 {
+				keep[i] = false
+			}
+		}
+	}
+	var cards []int
+	for i, tg := range n.Targets {
+		if tg.Current || parenDepthAt(runes, tg.Start) > 0 {
+			continue
+		}
+		cards = append(cards, i)
+		cut(tg.Start, tg.Cut)
+	}
+	for _, g := range n.Groups {
+		cut(g.Start, g.End)
+	}
+	// Both runs are in print order already; merge them by where they start.
+	c, g := 0, 0
+	for c < len(cards) || g < len(n.Groups) {
+		if g >= len(n.Groups) || (c < len(cards) && n.Targets[cards[c]].Start < n.Groups[g].Start) {
+			parts = append(parts, publisherPart{Card: &n.Targets[cards[c]]})
+			c++
+		} else {
+			parts = append(parts, publisherPart{Group: &n.Groups[g]})
+			g++
+		}
+	}
+	rest := make([]rune, 0, len(runes))
+	for i, r := range runes {
+		if keep[i] {
+			rest = append(rest, r)
+		}
+	}
+	var pieces []string
+	for _, p := range strings.Split(string(rest), ";") {
+		if p = strings.Trim(p, " ,;"); p != "" {
+			pieces = append(pieces, p)
+		}
+	}
+	return parts, strings.Join(pieces, "; ")
 }
 
 // parenDepthAt is how many parentheses stand open at rune i of a note: the

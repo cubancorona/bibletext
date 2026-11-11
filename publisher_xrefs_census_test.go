@@ -206,3 +206,166 @@ func TestNoteApparatusCensusReadsTheFixture(t *testing.T) {
 		t.Errorf("a canon with a fourth word passed the census: %q", p)
 	}
 }
+
+// THE SHORTHAND AGAINST THE FEED'S OWN TAGS. The feed tags most citations
+// outside parentheses and few inside them, and a group's citations are read
+// from the print (publisher_xref_shorthand.go). Every tagged citation pairs
+// its printed words with an id, so the feed is the answer key: the shorthand
+// must read each tagged citation outside a group to the id the feed gave it.
+// Inside a group the feed's few tags are not all sound: a citation that
+// omits its book takes the book of the citation printed before it, and where
+// that citation opens the group — untagged, since the feed tags none that
+// touches a parenthesis — the feed gave the next one the book of whatever it
+// last recognised, or of the note's own verse ("(1 Cor. 1:23; 2:13, 14;
+// 4:10)" after "John 10:20" is tagged John 2:13). The census of 11 November
+// 2026 found twelve such tags; the group rows read the print, so they are
+// counted and named here, not followed. Then, of the groups' citations, how
+// many the shorthand reads, and how many of those the loaded text has — what
+// a reader can open.
+type shorthandCensus struct {
+	Tagged, Agree  int      // tagged citations, and those the shorthand reads to the feed's own id
+	Disagree       []string // outside every group, the ones it reads otherwise, by place: the shorthand's failures
+	GroupMistags   []string // inside a group, the ones the feed tags with a book the print does not give them, by place
+	Groups         int      // parenthesised groups
+	GroupCitations int      // the citations printed inside them
+	GroupTagged    int      // of those, the ones the feed tags
+	Read, Resolved int      // group citations the shorthand reads, and of those, the ones in the loaded text
+	Unread         []string // group citations it does not read, by place
+	Unresolved     []string // read, but not in the loaded text, by place
+}
+
+// noteShorthandCensus measures bd's cross-reference notes as the shorthand
+// reads them.
+func noteShorthandCensus(bd *BibleData) shorthandCensus {
+	var c shorthandCensus
+	measure := func(where string, fn Footnote) {
+		if fn.Kind != footnoteKindCrossref {
+			return
+		}
+		text := strings.TrimSpace(fn.Text)
+		runes := []rune(text)
+		citations, groups := readShorthand(text)
+		at := map[[2]int]shorthandCitation{}
+		for _, ct := range citations {
+			at[[2]int{ct.Start, ct.End}] = ct
+		}
+		tagged := map[[2]int]bool{}
+		for _, r := range fn.Refs {
+			if r.Start < 0 || r.End > len(runes) || r.Start >= r.End {
+				continue
+			}
+			c.Tagged++
+			tagged[[2]int{r.Start, r.End}] = true
+			ct, ok := at[[2]int{r.Start, r.End}]
+			switch {
+			case ok && ct.ID == r.ID:
+				c.Agree++
+			case ok && ct.Group >= 0:
+				c.GroupMistags = append(c.GroupMistags, fmt.Sprintf("%s: %q in %q read as %q, tagged %q", where, string(runes[r.Start:r.End]), text, ct.ID, r.ID))
+			case ok:
+				c.Disagree = append(c.Disagree, fmt.Sprintf("%s: %q read as %q, tagged %q", where, string(runes[r.Start:r.End]), ct.ID, r.ID))
+			default:
+				c.Disagree = append(c.Disagree, fmt.Sprintf("%s: %q is not a piece the shorthand finds, tagged %q", where, string(runes[r.Start:r.End]), r.ID))
+			}
+		}
+		c.Groups += len(groups)
+		for _, ct := range citations {
+			if ct.Group < 0 {
+				continue
+			}
+			c.GroupCitations++
+			if tagged[[2]int{ct.Start, ct.End}] {
+				c.GroupTagged++
+			}
+			printed := string(runes[ct.Start:ct.End])
+			if ct.ID == "" {
+				c.Unread = append(c.Unread, where+": "+printed)
+				continue
+			}
+			c.Read++
+			if _, ok := resolveCitation(bd, runes, ct.Start, ct.End, ct.ID, "", 0, 0); ok {
+				c.Resolved++
+			} else {
+				c.Unresolved = append(c.Unresolved, where+": "+printed)
+			}
+		}
+	}
+	for book, chapters := range bd.Verses {
+		for ch, vs := range chapters {
+			for _, v := range vs {
+				for _, fn := range v.Footnotes {
+					measure(fmt.Sprintf("%s %d:%d", book, ch, v.Verse), fn)
+				}
+			}
+			for _, fn := range bd.SuperscriptionFor(book, ch).Footnotes {
+				measure(fmt.Sprintf("%s %d:title", book, ch), fn)
+			}
+			for _, h := range bd.Headings[book][ch] {
+				for _, fn := range h.Footnotes {
+					measure(fmt.Sprintf("%s %d:heading", book, ch), fn)
+				}
+			}
+		}
+	}
+	sort.Strings(c.Disagree)
+	sort.Strings(c.GroupMistags)
+	sort.Strings(c.Unread)
+	sort.Strings(c.Unresolved)
+	return c
+}
+
+// problems is what in the census the group rows cannot rely on: a tagged
+// citation outside every group that the shorthand reads to another passage
+// than the feed names, or a canon in which it read nothing.
+func (c shorthandCensus) problems() []string {
+	var out []string
+	if c.Tagged == 0 || c.Groups == 0 || c.Read == 0 {
+		out = append(out, fmt.Sprintf("the shorthand census saw %d tagged citations, %d groups and read %d group citations: it measured nothing", c.Tagged, c.Groups, c.Read))
+	}
+	if len(c.Disagree) != 0 {
+		out = append(out, fmt.Sprintf("outside the groups the shorthand reads %d of %d tagged citations otherwise than the feed tags them, the first %q", len(c.Disagree), c.Tagged, c.Disagree[0]))
+	}
+	return out
+}
+
+func assertShorthandCensus(t *testing.T, c shorthandCensus) {
+	t.Helper()
+	for _, p := range c.problems() {
+		t.Error(p)
+	}
+}
+
+// The shorthand census on the fixture, and its control: a tag that names
+// another passage than the print is reported.
+func TestNoteShorthandCensusHoldsTheShorthandToTheTags(t *testing.T) {
+	bd := publisherFixture()
+	c := noteShorthandCensus(bd)
+	if p := c.problems(); len(p) != 0 {
+		t.Errorf("the fixture's shorthand census has problems: %q", p)
+	}
+	if c.Tagged == 0 || c.Agree != c.Tagged || c.Groups == 0 || c.GroupCitations == 0 || len(c.GroupMistags) != 0 {
+		t.Errorf("census = %+v", c)
+	}
+	// CONTROL: the same canon with one tag pointing at a different verse
+	// than its printed words.
+	v := &bd.Verses["John"][3][0]
+	v.Footnotes = append(v.Footnotes, Footnote{Text: "Rom. 5:8", Kind: footnoteKindCrossref, Caller: "-",
+		Refs: []NoteRef{{"ROM.5.9", 0, 8}}})
+	c = noteShorthandCensus(bd)
+	if len(c.Disagree) != 1 || !strings.Contains(c.Disagree[0], "ROM.5.9") || len(c.problems()) == 0 {
+		t.Errorf("a tag at odds with its print is not reported: %q", c.Disagree)
+	}
+	// And the feed's own kind of slip, inside a group: the second citation
+	// omits its book, which the print carries from the first, and the tag
+	// names the book of the citation before the group. Counted, named, and
+	// no failure of the shorthand.
+	bd = publisherFixture()
+	v = &bd.Verses["John"][3][0]
+	slip := "John 7:50; (Gal. 6:15; 5:6)"
+	v.Footnotes = append(v.Footnotes, Footnote{Text: slip, Kind: footnoteKindCrossref, Caller: "-",
+		Refs: []NoteRef{{"JHN.7.50", 0, 9}, {"JHN.5.6", 23, 26}}})
+	c = noteShorthandCensus(bd)
+	if len(c.GroupMistags) != 1 || !strings.Contains(c.GroupMistags[0], `read as "GAL.5.6", tagged "JHN.5.6"`) || len(c.Disagree) != 0 || len(c.problems()) != 0 {
+		t.Errorf("a mistag inside a group: mistags %q, disagreements %q, problems %q", c.GroupMistags, c.Disagree, c.problems())
+	}
+}
