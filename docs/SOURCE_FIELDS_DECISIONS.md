@@ -486,7 +486,7 @@ in the publisher's order, its citations cards and a parenthesised group a
 row that opens into its own (decided 11 November 2026; the build of
 6 November kept the parenthesised ones as one caption under the note's
 cards) — while the Treasury stands open beneath under its own label, minus
-the rows whose passages the publisher's direct cards already carry,
+the rows whose passages the publisher's cards on screen already carry,
 because a third of the edition's verses carry no note and a reader should not
 be left with an empty run and no way on. Decided 6 November 2026, replacing
 the first pass's separately credited disclosure, whose title clipped every

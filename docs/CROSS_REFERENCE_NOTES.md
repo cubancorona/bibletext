@@ -48,29 +48,30 @@ panel's own, in the order the notes stand.
 | The word it hangs from | every note but 2 (census: `Unkeyed`) | The letter is drawn directly before the word (`noteMarkAt`). 1,998 offsets stand before white space and are drawn after it: a line break 1,952 times, a space 46 (census: `Moved`; the split counted) | `TestANotesLetterAndWhereItStands`; the census reports a letter that no word follows |
 | The order of a verse's notes | at most 7 on a verse (census); letters a 21,287, b 8,241, c 2,316, d 536, e 113, f 19, g 3 (counted) | Letters a, b, c in that order, restarting at each verse and at a title; the notes listed in that order | `TestANotesLetterAndWhereItStands`; the census checks every index |
 | **The printed text** | | | |
-| The note as printed | 32,517 notes | A note of several pieces: verbatim on its own row, in both states of the fold. A note that is one group: verbatim on the group's row. A note that is one citation: its card, whose reference is the citation spelled out | `TestANoteOfSeveralPiecesFoldsToItsPrintedLine`; `TestTheShorthandPrintsWhatItReads` (the shorthand printed back from the card is the note's text for all 12,576 notes of one citation) |
+| The note as printed | 32,517 notes | A note of several pieces, or one that is one parenthesised group: verbatim on its own row, in both states of the fold. A note that is one citation: its card, whose reference is the citation spelled out | `TestANoteOfSeveralPiecesFoldsToItsPrintedLine`; `TestTheShorthandPrintsWhatItReads` (the shorthand printed back from the card is the note's text for all 12,576 notes of one citation) |
 | The separators: "; " between citations, ", " before a further verse | every gap of every note is one of the two, and nothing stands before the first piece or after the last (census: no exception) | On the printed line; the pieces under it are in the same order | `noteGapProblems`, run over the canon by the census |
 | A book or chapter carried from the citation before ("John 7:50; 19:39") | — | The printed line shows the continuation as printed; its card is labelled in full ("John 19:39") | `TestTheShorthandReadsEveryShapeTheEditionPrints` |
 | **The citations** | | | |
 | A citation the reader can follow | 65,257 at a note's level and 8,320 inside groups (census) | A card: the reference, a preview from the loaded edition, the whole card the tap | `TestANoteIsItsPiecesInTheOrderItPrintsThem`, `TestAGroupRowOpensIntoItsCitations` |
 | The target the feed tagged | 66,306 tags; 66,294 agree with the print's reading and 12 do not, all inside groups | Outside a group the tag is followed; inside a group the print is | `TestNoteShorthandCensusHoldsTheShorthandToTheTags`; the live canon test pins 4,850 groups, 8,324 group citations and the 12 |
-| A citation of the verse or passage the reader is on | 48 at a note's level and 3 inside groups (census) | Its reference in full, muted, with no preview and nothing to tap, in its printed place | `TestANoteIsItsPiecesInTheOrderItPrintsThem` |
+| A citation of the verse or passage the reader is on | 48 at a note's level and 3 inside groups (census) | Its reference in full, with no preview and nothing to tap, in its printed place, set as a line of the edition's print (muted, 14 points) | `TestANoteIsItsPiecesInTheOrderItPrintsThem` |
 | A citation that cannot be followed | 3 (census: 2 at a note's level, 1 inside a group): Ezekiel 33:12 "Ezek. 8:21" and Mark 4:29 the "39" of "(Mark 13:30, 39)", verses the text does not have; Amos 2:1 "Is. 15:1—16", a form the shorthand has no rule for | Its words as printed, muted, in their place | the census (`Words`, `GroupWords`); `TestTheShorthandLeavesWhatItCannotReadUnread` |
 | A citation of a Psalm's title ("Ps. 59:title") | 47 (the apparatus census, `noteApparatusCensus`; the live canon test asserts that title, LXX and DSS are the apparatus's only words) | A card labelled by its chapter, tagged "Title", previewing the superscription; the whole psalm is a different card | `TestATitleCitationResolvesToTheTitle`, `TestATitleCardPreviewsTheSuperscription`, `TestATitleAndTheWholePsalmAreTwoCards` |
 | A citation of a whole chapter | 117 (the apparatus census) | A card labelled as a chapter ("Leviticus 11", "2 Kings 18–20") | `TestPublisherCrossRefsLinkWholeChapters` |
 | A basis (", LXX"; ", LXX, DSS") | 3 notes (the apparatus census) | A tag on the citation's card; after a list of verses it is the whole citation's ("Ps. 45:4, 5, LXX", Revelation 6:2) | `TestABasisRidesItsCitation`, `TestABasisAfterAListOfVersesTagsEachOfThem` |
 | **Grouping** | | | |
-| A parenthesised group | 4,850 (census); 1,985 are the whole of their note | A row in the place the edition printed it, carrying the group as printed with its parentheses, that opens in place into the group's pieces; closed until it is tapped | `TestANotesGroupsStandWhereTheEditionPrintsThem`, `TestAGroupRowOpensIntoItsCitations`, `TestAGroupOpensInsideThePanelWithoutMovingIt` |
+| A parenthesised group | 4,850 (census); 1,985 are the whole of their note | Inside a note: a row in the place the edition printed it, carrying the group as printed with its parentheses, that opens in place into the group's pieces on a ground of its own; closed until it is tapped. As the whole of a note: the note's own row, the group as printed, with its citations under it, open as every note is when the panel opens | `TestANotesGroupsStandWhereTheEditionPrintsThem`, `TestAGroupRowOpensIntoItsCitations`, `TestAGroupOpensInsideThePanelWithoutMovingIt` |
 | What stands inside a group | 8,320 cards, 3 of the reader's own passage, 1 that is words (census) | Each in its printed order under the opened row, by the rules above | `TestAGroupRowOpensIntoItsCitations` |
 | The book carried into a group and out of it | — | The cards are labelled in full | `TestTheShorthandReadsEveryShapeTheEditionPrints`, `TestTheShorthandFindsGroupsByTheirParentheses` |
-| Which rows are one note's | 17,956 notes of several pieces and 1,985 that are one group (census) | The note's own row stands at the list's edge with its letter; the rows under it are set in beside a rule that runs their whole height; one rule the width of the list closes the note, and the next letter stands back at the edge (`crossref_section.go`) | `TestWhatIsUnderALetterIsSetInBesideItsRule` |
+| Which rows are one note's | 32,517 notes; 17,956 of several pieces and 1,985 that are one group (census) have rows under their own | Each note stands on a ground of its own with a gap before the next; its letter stands alone in a margin at the ground's left, and everything else of the note beside the margin; a rule hangs from the letter down the margin beside the note's rows (`crossref_section.go`) | `TestEachNoteStandsOnAGroundOfItsOwn` |
 | **Repeats** | | | |
 | Two notes of a verse citing one passage | the repealed rule "one card, the first" had withheld 245 cards on 224 single-verse selections (counted) | Each note keeps its card | `TestANoteIsKeptWholeThoughAnotherNoteHasItsPassage` |
 | **The text the notes hang from** | | | |
 | The verse as the page draws it | every verse with a note | The passage: small capitals, the translators' supplied words in italic, the words of Christ in red where the reader has that on, poem lines on rows of their own. With the letters taken out it is the text, rune for rune | the passage test; the census compares every verse |
 
-The row a note is drawn as (census): 12,576 a card alone, 1,985 a group
-alone, 17,956 a row that folds.
+What a note is (census): 12,576 one citation, drawn as a card; 1,985 one
+parenthesised group and 17,956 several pieces, each drawn as a row that
+folds.
 
 ## What the panel adds
 
@@ -83,9 +84,15 @@ panel (docs/ADDITIONS_AND_DROPS.md):
   right verse;
 - the disclosure icon on a row that opens.
 
-And one device of layout that is no mark in the text: the rule beside the
-rows under a letter, with their inset, which shows what the edition shows
-by listing a letter's references together.
+And devices of layout that are no mark in the text: a note's ground, the
+margin its letter stands in, and the rule that hangs from the letter beside
+the note's rows. Together they show what the edition shows by listing a
+letter's references together.
+
+The Treasury's rows under the publisher's run leave out a passage the
+publisher's cards already show as the panel opens: a note's direct
+citations, and the citations of a note that is one parenthesised group. A
+group inside a note starts closed, and its citations are not counted.
 
 A citation of the reader's own passage is shown as its reference in full,
 so where the edition prints it without its book the book is supplied on that
@@ -111,7 +118,10 @@ A report to the provider is owed, whatever is decided.
 
 - The two stretches: corrected, as delivered, or withheld.
 - The heading's note: on the heading, or in Numbers 4:22.
-- Whether a note's row starts open (as built) or closed, as a group's does.
+- Whether every note starts open (as built) or closed, each letter one
+  row. A group inside a note starts closed either way.
+- Whether a note's letter is kept in view while a note taller than the list
+  scrolls. Not built.
 - The Treasury's filter removes a Treasury row that a title card or a
   whole-chapter card "carries" though the card shows something else. It
   belongs to the audit of the other cross-references (the Treasury, the

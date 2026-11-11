@@ -729,8 +729,10 @@ muted, with nothing to tap; a parenthesised "compare" group is a row that
 carries the group as printed and opens into its citations; a citation the
 loaded text lacks is its printed words; and a note of several pieces is a
 row that carries the note as printed, with its pieces under it — no legend
-and no added word; then TREASURY OF SCRIPTURE KNOWLEDGE, open, minus the
-rows whose passages the publisher's direct cards already carry
+and no added word (a note that is nothing but such a group is drawn as
+any note is, and opens with the panel); then TREASURY OF SCRIPTURE
+KNOWLEDGE, open, minus the rows whose passages the publisher's cards on
+screen already carry
 (`publisher_xrefs.go`, `crossref_list.go`, `crossref_note.go`,
 `crossref_passage.go`). Nothing of the publisher's is sorted, capped, merged
 or mapped: the targets are in the edition's own numbering, which is the
@@ -769,8 +771,9 @@ without a device are in `docs/BACKLOG.md`, "NKJV cross references: the
 panel's second pass".
 **Rebuilt 11 November 2026** so that nothing a note carries is lost: the
 selected text with a raised letter before each word a note hangs from, and
-every note whole under its letter, its rows set in from the list's edge
-beside a rule so that they are seen to be that letter's. The decisions, the build, the count that
+every note whole under its letter, on a ground of its own with the letter
+alone in a margin, so that its rows are seen to be that letter's. The
+decisions, the build, the count that
 holds it over the canon and what is still open are in the same BACKLOG
 entry; `docs/CROSS_REFERENCE_NOTES.md` is the ledger of what a note carries
 and where each thing is shown.

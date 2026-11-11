@@ -301,10 +301,10 @@ of several pieces as printed on a row of its own), the Treasury open beneath
 (docs/SCRIPTURE_WORKLIST.md, S20; docs/CROSS_REFERENCE_NOTES.md).
 
 The shared cross-reference list uses 17-point wrapping previews, with
-references, previews and the printed lines of the publisher's note and group
-rows starting at the same left edge, a note's letter standing at that edge;
-the rows under a publisher's note are set in from it beside a rule, so that
-they are seen to be under the note's letter.
+the Treasury's and the parallels' references and previews starting at the
+list's left edge. Each of the publisher's notes stands on a ground of its
+own, its letter alone in a margin at the ground's left and the rest of the
+note beside the margin, so that its rows are seen to be under its letter.
 Explicit row and section spacing keeps the list compact. A passage row has a
 minimum 44-point tap height, and so has the row of a note that folds. Source
 credits and the edition's notice occupy a separate caption-sized footer.
