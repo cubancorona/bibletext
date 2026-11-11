@@ -138,6 +138,16 @@ off switch. For this app, ranked:
 3. Margin dots — ranked last; poor discoverability for no purity gain over
    step two.
 
+The letters the cross-references panel sets in the selected text (S20,
+decided 11 November 2026, behind the `nkjvxrefs` tag) are not this marker
+and do not anticipate it. They key the edition's cross-reference notes,
+which this section excludes; they stand in the panel's own copy of the
+selection, drawn as text objects of their own in a modal that offers no
+selection, copy, share or speech; and nothing is added to the page, to
+`Verse.Text` or to any pipeline. With the letters taken out, the panel's
+passage is the text rune for rune, held over the canon by the piece census
+(`publisher_xrefs_census_test.go`).
+
 **Off by default**, one checkbox in the Settings READING card ("Show the
 translators' footnotes"), with a below-card footnote in the house style:
 *"Notes from the translators about wording and manuscripts. They are not
@@ -157,7 +167,7 @@ the exact plumbing red letter already uses (`refreshReadingOnly`,
 | Windows/Linux styled pane | **M/L** | New runKind through layout/draw/hit-test + popover; fully host-testable |
 | Fyne fallback panes | **S** | Distinct marker where possible; documented-gap escape hatch exists |
 | Web reader | **S/M** | Friendliest surface: `.fn` rule, `:target`/popover, palette-parity test |
-| Verse-of-day, search cards, cross-ref snippets, share-image, previews | **S** | Nothing beyond leak-pinning tests (clean by construction) |
+| Verse-of-day, search cards, cross-ref snippets, share-image, previews | **S** | Nothing beyond leak-pinning tests (clean by construction). The verse-of-the-day card shares its paragraph with the cross-references passage, which can carry a note's letter; `TestTheCardSetsChristsWordsInRed` holds that the card's runs carry none |
 | Share/AI apparatus strip | **M** | One shared normalize step + sweep tests |
 | Settings toggle + fingerprint | **S** | Rides red-letter plumbing |
 
@@ -283,16 +293,19 @@ TSK. Whether NKJV crossrefs ever display is the licensing question put to
 HarperCollins' permissions team in the 28 August 2026 follow-up (no reply as
 of 6 November 2026; an email to API.Bible support was approved on 6 November
 2026 but had not been sent as of that date); the presentation is built behind
-the `nkjvxrefs` build tag — the publisher's tagged citations as cards in the
-cross-references panel under the edition's own label, the parenthesised
-groups as one verbatim caption, the Treasury open beneath
-(docs/SCRIPTURE_WORKLIST.md, S20).
+the `nkjvxrefs` build tag — in the cross-references panel, under the
+edition's own label, the selected text with a raised letter before each word
+a note hangs from and every note whole under its letter (its citations as
+cards, a parenthesised group as a row that opens into its citations, a note
+of several pieces as printed on a row of its own), the Treasury open beneath
+(docs/SCRIPTURE_WORKLIST.md, S20; docs/CROSS_REFERENCE_NOTES.md).
 
 The shared cross-reference list uses 17-point wrapping previews, with
-citations, previews and note captions aligned at the same left edge. Explicit
-row and section spacing keeps the list compact. A passage row has a minimum
-44-point tap height. A publisher's note remainder sits outside that tap target.
-Source credits and the edition's notice occupy a separate caption-sized footer.
+references, previews and the printed lines of the publisher's note and group
+rows starting at the same left edge, a note's letter standing at that edge.
+Explicit row and section spacing keeps the list compact. A passage row has a
+minimum 44-point tap height, and so has the row of a note that folds. Source
+credits and the edition's notice occupy a separate caption-sized footer.
 
 
 ### The omitted verses — the investigation's most striking find
@@ -486,4 +499,5 @@ same way once the feed is asked for titles (include-titles=true; with titles
 off the paragraph is absent). 116 titles; their notes are cross references
 and so stay dark in every store build like every NKJV note; behind the
 `nkjvxrefs` tag the cross-references panel shows them under their own key,
-"NKJV REFERENCES · TITLE" (S20). See docs/SOURCE_FIELDS.md.
+"NKJV REFERENCES · TITLE" (S20), the title itself standing with their
+letters at the head of the selected text. See docs/SOURCE_FIELDS.md.

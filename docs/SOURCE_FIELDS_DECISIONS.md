@@ -139,8 +139,8 @@ edition to download the text again.
 | 8 | Selah placement | WEB, BSB | set differently in each | keep the source's placement | — | — | medium |
 | 9 | descriptive runs | BSB | one oracle title | capture with item 1 | S | with item 1 | medium |
 | 10 | words-of-Jesus flag | WEB, WEBC | nothing; tables agree exactly | keep tables, add a decode-time cross-check | S | none | high |
-| 11 | NKJV cross references hidden | NKJV | 32,473 notes | built behind the `nkjvxrefs` tag: the publisher's citations are cards under the edition's own label, the Treasury open beneath under its own; display waits for the licensing answer (S20) | M | none | high |
-| 12 | note callers and anchors | all | in-text markers | keep dormant, fix the Android scan first | — | — | high |
+| 11 | NKJV cross references hidden | NKJV | 32,473 notes | built behind the `nkjvxrefs` tag: under the edition's own label the notes stand whole under their letters, their citations as cards, the Treasury open beneath under its own; display waits for the licensing answer (S20) | M | none | high |
+| 12 | note callers and anchors | all | in-text markers | keep dormant on the page, fix the Android scan first (the cross-references panel reads the NKJV's anchors behind its tag, S20) | — | — | high |
 | 13 | website: Psalm titles | WEB, WEBC, BSB | every title | ship | S | none | high |
 | 14 | website: footnote section | WEB, WEBC, BSB | the whole apparatus | defer, needs a presentation model | M | none | medium |
 | 15 | search does not index titles | all | "Absalom" finds nothing | index titles | S | none | medium-high |
@@ -481,10 +481,12 @@ citations interleaved with it would misattribute both.
 
 So they are not mixed. The panel's list is composed in labelled runs of its
 one card (`crossref_list.go`), and with the edition's flag on the publisher's
-run stands under the edition's own label — each tagged citation a card in the
-publisher's order, the parenthesised ones kept verbatim as one caption under
-the note's cards — while the Treasury stands open beneath under its own
-label, minus the rows whose passages the publisher's cards already carry,
+run stands under the edition's own label — each note whole under its letter,
+in the publisher's order, its citations cards and a parenthesised group a
+row that opens into its own (decided 11 November 2026; the build of
+6 November kept the parenthesised ones as one caption under the note's
+cards) — while the Treasury stands open beneath under its own label, minus
+the rows whose passages the publisher's direct cards already carry,
 because a third of the edition's verses carry no note and a reader should not
 be left with an empty run and no way on. Decided 6 November 2026, replacing
 the first pass's separately credited disclosure, whose title clipped every

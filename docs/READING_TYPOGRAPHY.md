@@ -159,6 +159,7 @@ the conclusion that the face needs far more room than it does.
 | Fyne canvas pane | `styledPaneTextSize()` — `readingGlyphSize` of `readingBodyBase` × the reader's setting, in Fyne units (a pixel at 100% on Windows and Linux), as the Apple panes use points; it took the toolkit's interface size, 18, until 24 September 2026, which set the page 14% small | `page.PitchEm × p.textSize` from the reading page (1.55 on its phone page and 1.3 on its book page until 24 September 2026) | `readingPageAt(width, p.referenceSize())` — the measure, the side and the page |
 | Android overlay | Java: `textSizeDp × density × opticalScale` | Java: `page.PitchEm × textSizePx` | the page's `Measure` in dp, centred by `BtBridge.applyReadingPadding` |
 | Verse-of-the-day card | `readingGlyphPx()`, the Apple/Android body size, as a `canvas.Text` `FontSource` | the face's own line box (`readingParagraph`) | the card's inner width — no reporter measure; it is one passage |
+| Cross-references passage (behind the `nkjvxrefs` tag) | `readingGlyphSize(crossRefPassageTextSize)` — the list's 17-point preview size opened by the optical scale, as a `canvas.Text` `FontSource` | the face's own line box (`readingParagraph`) | the list's width — no reporter measure; it is the selection |
 | generated site | `remSize(webScriptureBaseRem)` | `ReadingPhonePitchEm()` / `ReadingBookPitchEm()` | `.wrap.page{max-width:37.96875rem}` — the measure plus the side minimum each side, in root rem, deliberately not em |
 | share card | its own face rotation, auto-fitted | n/a | n/a |
 
@@ -173,6 +174,14 @@ drew the Unicode superscript figures the run's text carries, which the face
 already sets small and raised, at `0.66` on top: a numeral half the size it is
 everywhere else. An omitted verse's mark (`[36]`) is the same size, in the
 regular cut, on the baseline — it is never a superscript.
+
+The cross-references passage sets a verse's number by the same figures, in
+the same cut and colour, and sets a note's letter as a superscript of the
+same size and lift in the text's cut and the accent colour
+(`readingMarkScale` and `readingMarkLift`, `verse_of_day.go`).
+`TestThePassageIsTheSelectedTextWithALetterBeforeEachNotesWord` holds the
+two figures equal to the page's and measures both marks baseline to
+baseline.
 
 Two decisions that look like oversights and are not:
 

@@ -349,8 +349,11 @@ reported at decode time instead of degrading quietly at render time.
 notes; nothing on disk can say how many. They were discarded with the block when
 this was written, and the count was wanted before any NKJV heading work because
 it changed what S16's NKJV half had to carry. That is settled — a note inside a
-heading is now kept on the heading itself — so what remains is the count, which
-is still unknown and still five calls away.
+heading is now kept on the heading itself — and the count is known without the
+calls: one, a cross-reference note on the heading before Numbers 4:21, in the
+canon fetched on 6 November 2026 (the piece census in
+`publisher_xrefs_census_test.go` counts it). The cross-references panel shows
+it with that verse's notes (S20).
 
 ## Stage 3 — small, self-contained wins
 
@@ -452,7 +455,7 @@ breaks survive a copy is too easy to get wrong to leave where no test can reach.
 | S17 | NKJV supplied words: captured | NKJV | M | nkjv | done; captured, and drawn in italic on every surface |
 | S18 | speech reads the Psalm title | all | M | none | done |
 | S19 | mark an omitted verse's gap in the text | all | M | none | done |
-| S20 | show the NKJV's cross references | NKJV | M | none | built behind a tag; presentation second pass built 6 November 2026; gated on the licensing reply |
+| S20 | show the NKJV's cross references | NKJV | M | none | built behind a tag; presentation second pass built 6 November 2026, the notes whole under their letters 11 November 2026; gated on the licensing reply |
 | S21 | website renders the footnote section | website | M | none | done |
 | S22 | in-text footnote markers | all | L | none | blocked |
 | S23 | draw small caps as small caps | NKJV | M | nkjv | done |
@@ -681,7 +684,10 @@ NKJV's pages fetches its whole text from API.Bible.
 
 **S22.** In-text footnote markers, the superscript caller at each note's
 anchor. The data has been carried since the apparatus landed: every note
-stores its caller and its rune anchor, and nothing reads them. The blocker is
+stores its caller and its rune anchor, and nothing on the reading page reads
+them. Since 11 November 2026 the cross-references panel reads an NKJV note's
+anchor to set the note's letter in its own copy of the selected text (S20);
+that is a letter in a panel, not a marker on the page. The blocker is
 Android, whose bridge treats the first non-numeric superscript in a chapter
 as the end of the chapter's content, so an in-text marker would clamp
 selection and copying for everything after it. Fix that scan first; the
@@ -697,7 +703,8 @@ the print edition's centre column, note for note — and 43 more sit on Psalm
 titles (and one on a heading). Across the canon, fetched 10 September, the
 feed tags 66,306 citations with a machine-readable id (`JHN.7.50`, `MAT.3.1-MAT.3.12`;
 3,504 ranges, none crossing a book); the parenthesised "compare" citations —
-4,850 groups — arrive as bare text, and 1,685 notes (5%) carry nothing else.
+4,850 groups holding 8,324 citations — arrive mostly as bare text (the feed
+tags 1,001 of them), and 1,685 notes (5%) carry no tagged citation at all.
 Every response carries the same copyright line, which the live canon test now
 asserts. The decoder now keeps the ids as rune spans
 beside each note's unchanged text (`Footnote.Refs`; apibible.go's
@@ -709,18 +716,25 @@ The design settled here rather than "lift the filter": the chapter-bottom
 section stays the wording-and-manuscript apparatus and still excludes cross
 references. When the edition's flag is on, the cross-references panel is one
 list of the one card it has always drawn, in labelled runs (the sidebar's
-`sectionLabel`): the Gospel parallels first; then NKJV REFERENCES — each
-tagged citation whose passage is in the loaded text a card in the publisher's
-order, labelled from its id ("John 19:39", never the continuation "19:39"),
-previewed from the loaded edition, the whole card the tap; a citation of the
-passage on screen, one inside a parenthesised "compare" group, or one the
-loaded text lacks stays in the note's verbatim remainder, one muted caption
-under the note's cards, with no legend and no added word; then TREASURY OF
-SCRIPTURE KNOWLEDGE, open, minus the rows whose passages the publisher's
-cards already carry (`publisher_xrefs.go`, `crossref_list.go`). Nothing of
-the publisher's is sorted, capped or mapped (two notes citing one passage
-yield one card, the first): the targets are in the edition's own numbering,
-which is the numbering on screen. The Treasury is not removed — 31.7% of
+`sectionLabel`): the Gospel parallels first; then NKJV REFERENCES — the
+edition's notes one by one, each whole and in the order it is printed, under
+the letter its word carries in the selected text, which heads the list
+(decided 11 November 2026; until then whatever of a note was not a card was
+gathered into one muted caption under its cards, and two notes citing one
+passage gave one card). A citation whose passage is in the loaded text is a
+card in the publisher's order, labelled by its full reference ("John 19:39",
+never the continuation "19:39"), previewed from the loaded edition, the
+whole card the tap; a citation of the passage on screen is its reference,
+muted, with nothing to tap; a parenthesised "compare" group is a row that
+carries the group as printed and opens into its citations; a citation the
+loaded text lacks is its printed words; and a note of several pieces is a
+row that carries the note as printed, with its pieces under it — no legend
+and no added word; then TREASURY OF SCRIPTURE KNOWLEDGE, open, minus the
+rows whose passages the publisher's direct cards already carry
+(`publisher_xrefs.go`, `crossref_list.go`, `crossref_note.go`,
+`crossref_passage.go`). Nothing of the publisher's is sorted, capped, merged
+or mapped: the targets are in the edition's own numbering, which is the
+numbering on screen. The Treasury is not removed — 31.7% of
 NKJV verses carry no note (9,853 of 31,102 on the 7 September canon) — and
 the two never share a run or a credit, which is what the misattribution
 worry in `docs/SOURCE_FIELDS_DECISIONS.md` actually forbids: the footer's
@@ -739,7 +753,8 @@ parallels only while a parallel row is on screen.
 On a yes the one line in `versions_nkjvxrefs.go` moves into the registry and
 the tag goes; on a no nothing needs unwinding. The 43 title notes ride the
 same rule as the rest, keyed "NKJV REFERENCES · TITLE" when the selection
-reaches verse 1; and a citation OF a Psalm's title ("Ps. 59:title", 47 in the
+reaches verse 1, the title standing before the verse in the selected text
+with their letters; and a citation OF a Psalm's title ("Ps. 59:title", 47 in the
 feed) is a card labelled by its chapter, tagged "Title", previewing the
 superscription.
 
@@ -752,6 +767,12 @@ what was rejected and why, the decisions of 6 November, what the second pass
 ships, what still waits on the licence, and the recipe for seeing the panel
 without a device are in `docs/BACKLOG.md`, "NKJV cross references: the
 panel's second pass".
+**Rebuilt 11 November 2026** so that nothing a note carries is lost: the
+selected text with a raised letter before each word a note hangs from, and
+every note whole under its letter. The decisions, the build, the count that
+holds it over the canon and what is still open are in the same BACKLOG
+entry; `docs/CROSS_REFERENCE_NOTES.md` is the ledger of what a note carries
+and where each thing is shown.
 
 **S23.** DONE. A small-caps span was folded to uppercase in the stored text,
 so LORD, GOD and the four names of Jesus were literally capitals. Drawing them
@@ -1315,4 +1336,4 @@ is in `docs/SOURCE_FIELDS_DECISIONS.md`.
 | titles in share text | no whole-chapter share exists to attach one to |
 | titles in copy | already correct on the native panes: the clamp bounds the app's own actions, the system's copy takes what the reader selected |
 | the Fyne fallback panes' missing title and section | unreachable in shipping builds |
-| flattening poem lines in cross-reference snippets | a deliberate one-line preview |
+| flattening poem lines in cross-reference snippets | a deliberate one-line preview (the panel's passage is the selection itself, not a snippet, and keeps its lines) |

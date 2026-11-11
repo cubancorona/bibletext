@@ -9833,7 +9833,7 @@ four, and finds no visible object laid out smaller than it asks: it fails on
 the key row as an HBox and on any switch as a widget.Check. What only a
 screen can confirm is in `docs/VISUAL_TESTS.md` V15.
 
-## NKJV cross references: the panel's second pass — BUILT 6 November 2026, display gated on the licence
+## NKJV cross references: the panel's second pass — BUILT 6 November 2026, the notes whole under their letters BUILT 11 November 2026, display gated on the licence
 
 Planned for: stays, gated on the licensing reply — see docs/ROADMAP.md.
 
@@ -9923,6 +9923,47 @@ The presentation decision of 7 November 2026 preserves citation fragments
 with the publisher's wording and punctuation and defers the
 non-breaking-space wrapping patch.
 
+Decided 11 November 2026, in three steps, each of which changes part of the
+record above.
+
+First: a parenthesised group is a row of its own, in the place the edition
+printed it, its printed text at 14 points the row's label, with a rule above
+and below; it opens in place into its citations as the list's ordinary cards
+on a shaded inset, and is closed until it is tapped.
+
+Second: nothing the edition's notes carry is to be lost. The panel shows the
+selected text first, with a letter on each word a note hangs from, and the
+notes under those letters; a note of several citations is a list that folds,
+as a group does; and the build is held to this formally, over grouping,
+syntax, unusual cases and formatting. The letter stands before its word,
+where the edition keys the note, and is raised.
+
+Third: the NKJV first; the same checks, and the same changes where they fit,
+for the other cross-references (the Treasury, the Gospel parallels, any other
+edition's) afterwards. An audit of those is in hand; nothing of it is decided
+or built.
+
+What the three change in the record above. The fold "rejected in every
+form" now stands in the list twice, as a group's row and as a note's, and
+each reason given against it is met rather than set aside: neither is an
+Accordion, a Button or a theme override (a row is a 44-point tap over a
+wrapping line at 14 points beside an icon of fixed size); each stands in its
+printed place, where a counted pill stood off the first screen; and the panel
+is held not to move when one opens or closes
+(`TestAGroupOpensInsideThePanelWithoutMovingIt`,
+`TestANoteClosesInsideThePanelWithoutMovingIt`). Design B's cost, citations
+standing twice, is accepted for a note of several pieces: its row carries the
+note exactly as the edition prints it, which is the only place the note's
+order, punctuation and grouping are whole, and its cards stand under it,
+which is the only place a citation is previewed. A citation inside a group
+is a card once the group is opened, which the review had rejected because it
+would then be repeated in the caption; there is no caption now. A citation
+of the passage the reader is on is still not a card. The letters are a mark
+the feed does not carry; they are neither a badge for the groups nor a
+legend, they add no word, and `docs/ADDITIONS_AND_DROPS.md` records them as
+an addition. The strings settled on 6 November are unchanged; the tests of
+the list's composition were rewritten with the composition.
+
 BUILT 6 November 2026 on `fu/s20-second-pass`, cut from main after the 1.2.25
 release, in five commits (d869191a4e, 527e5c53fa, 471b8cbe95, 5287d915b9,
 278eda52d1), with eight corrections on the same branch the same day
@@ -9949,9 +9990,11 @@ API.Bible comments without a plan name), each described in place below:
   by ":title" cites the Psalm's title, not the psalm (`publisherTarget.Title`;
   the first pass turned the 47 into whole psalms); a whole-chapter id labels
   as a chapter ("Leviticus 11", "2 Kings 18–20"; 117); ", LXX" and ", LXX,
-  DSS" ride their citation as a tag (`Basis`; 3). `split()` divides a
-  resolved note into its cards and the verbatim remainder. The live canon
-  census asserts the word set is exactly {title, LXX, DSS}.
+  DSS" ride their citation as a tag (`Basis`; 3). `split()` divided a
+  resolved note into its cards and the verbatim remainder; since 11 November
+  2026 the list reads a note's pieces (below) and `split()` is the apparatus
+  census's measure by the feed's tags. The live canon census asserts the word
+  set is exactly {title, LXX, DSS}.
 - Every range label is spelled with an en dash ("John 3:1–3"), as the panel's
   header already spelled the selection.
 - The panel is one list of one card (`crossref_list.go`, `crossref_panel.go`):
@@ -9960,25 +10003,26 @@ API.Bible comments without a plan name), each described in place below:
   spans verses or a note's key is not the selected verse), TREASURY OF
   SCRIPTURE KNOWLEDGE open, minus any row whose passage a publisher card
   contains or that contains a card's start verse (`treasuryMinusPublisher`:
-  containment, not label equality). Two notes citing one passage give one
-  card, the first, keyed by passage and kind (`publisherTarget.key`: a
+  containment, not label equality). Until 11 November 2026 two notes citing
+  one passage gave one card, the first, keyed by passage and kind; that rule
+  is repealed, and every note keeps every citation it prints (below). A
   Psalm's title and the whole psalm share the label "Psalms 59" and are two
-  cards); a verse's label is put on the list only before the first card or
-  caption its notes add, so a verse whose notes leave nothing on screen is
-  silently absent rather than a label over the next label. A title
-  citation's card carries the search result's muted "Title" tag and
-  previews the superscription. The
-  note's remainder is one caption inside its last card's block, at the
-  preview's left edge. No Accordion, Button, Hyperlink or per-row theme
-  override stands in the list; one theme scope wraps the whole list at
-  17-point preview text with no inner inset, aligning section labels,
-  citations, previews and note captions at the same left edge, with a
-  44-point minimum tap height on each passage card
-  (`crossref_compact_test.go`). The list sits in `squeezeWidthLayout` as a
-  belt, and
+  cards. A verse's label stands over its first note, and a verse without a
+  note is silently absent, as in print. A title citation's card carries the
+  search result's muted "Title" tag and previews the superscription. Until
+  11 November 2026 a note's remainder was one caption inside its last card's
+  block; a note is now drawn whole, piece by piece (below). No Accordion,
+  Button, Hyperlink or per-row theme override stands in the list; one theme
+  scope wraps the whole list at 17-point preview text with no inner inset,
+  so that section labels, references, previews and the printed line of a
+  note's or a group's row start at the same left edge (a note's letter
+  stands at that edge, before its row's text), with a 44-point minimum tap
+  height on each passage card (`crossref_compact_test.go`). The list sits in
+  `squeezeWidthLayout` as a belt, and
   `TestCrossRefListFitsTheNarrowestPhone` measures every object against
   283 pt (`aiPanelSize(375×667).Width − 44`), with an injected Accordion as
-  its control. Measured under the app theme: the widest card reference,
+  its control. Measured under the app theme on 6 November 2026, before a
+  card carried a letter: the widest card reference,
   "Song of Solomon 2:8–3:5", 189 pt at 16 bold; the widest section label
   205 pt at 11-pt bold monospace; the widest pericope title 252 pt at 12
   italic. The footer's sources line is a wrapping caption naming the sets on
@@ -9996,15 +10040,140 @@ API.Bible comments without a plan name), each described in place below:
 Deleted: `crossRefBlockHeading`, `publisherCrossRefRow`, the legend, the
 in-block LicenseNotice, the Accordion and every HyperlinkSegment. The render
 harness mounts the real popup on 402×874 and 375×667 canvases, light and
-dark, for ten selections — John 3:16 and Matthew 3:1 (parallels) each with
-the flag on and off, John 3:1–3, Psalm 3:1 (a title note), Psalm 3:2 (no
+dark, and asserts the popup's content fits its inset width. On 6 November
+2026 it drew ten selections — John 3:16 and Matthew 3:1 (parallels) each
+with the flag on and off, John 3:1–3, Psalm 3:1 (a title note), Psalm 3:2 (no
 note), 1 Samuel 19:12 (a ":title" citation), Hebrews 1:6 (LXX, DSS), Genesis
 7:2 (a whole-chapter citation) — plus frames scrolled to the Treasury's and
-the publisher's labels, 48 PNGs, and asserts the popup's content fits its
-inset width. The reader-facing strings — the three labels and the verse-key
+the publisher's labels, 48 PNGs. Since 11 November 2026 it draws 23, each
+named in `crossref_render_test.go` with the shape it exercises, with a
+frame of every group opened and a frame of every note closed where a
+selection has them: 208 PNGs. The reader-facing strings — the three labels and the verse-key
 forms, "No NKJV cross-references for this selection.", "Treasury of Scripture
 Knowledge: OpenBible.info (CC-BY)" — are the wordings settled on 6 November
 2026, recorded beside their constants.
+
+BUILT 11 November 2026 on `fu/s20-paren-groups`, cut from main at
+665f87671b, in six commits: 77d9203dd8 (the shorthand reader), 82a790190d
+(a note's groups resolved from the print and kept in their place; the
+shorthand census), 1cd40b92f4 (the group's row), 3da33a5030 (the notes whole
+under their letters), 98d37259aa (the two stretches the feed hangs one
+caller late), 362f9350c2 (the letters raised as the page raises a
+superscript). `docs/CROSS_REFERENCE_NOTES.md` is the ledger: what a note
+carries, kind by kind, how many the canon holds, where the panel shows each
+and the test that holds it. What the list is now, flag on:
+
+- The selected text heads the list (`crossref_passage.go`), above every
+  section label, GOSPEL PARALLELS included, and only where the selection has
+  a note. It is the verses' own text as the page draws it, in the reading
+  face at the list's 17-point size opened by the face's optical scale: the
+  divine name's small capitals, the translators' supplied words in italic,
+  the words of Christ in red where the reader has that on, poem lines on
+  rows of their own. A Psalm's title stands before verse 1 when it has a
+  note, and a section heading that carries a note stands, muted, before its
+  verse. A small raised letter in the accent colour stands directly before
+  each word a note hangs from. The letters run a, b, c in the order the
+  notes stand and restart at each verse and at a Psalm's title; a heading's
+  note is lettered with the verse the heading is set before. They are the
+  panel's own: the feed's caller is "-" on all 32,517 notes. A verse's
+  number is drawn where the passage holds more than one verse, or a title
+  before the verse. Letters and numbers are set as the page sets a
+  superscript, 0.66 of the text with the baseline a third of the text's size
+  above the words', the number in the bold cut and the page's colour for one
+  (`readingMarkScale`, `readingMarkLift`; `docs/READING_TYPOGRAPHY.md`).
+  With its letters taken out the passage is the text, rune for rune.
+- Each note is a block under its letter, in the order the notes stand
+  (`crossref_note.go`). A note that is one citation is its card, the letter
+  before the reference. A note that is one parenthesised group is the
+  group's row, the letter before its text. Any other note is a row that
+  carries the note exactly as printed (14 points, muted, wrapping, the letter
+  before it) and folds: under it, while it is open, the note's pieces in
+  print order. It is open when the panel opens and a tap closes it; the
+  printed text stays on the row in both states.
+- A note's pieces (`publisherCrossRef.Pieces`). A citation the reader can
+  follow is a card. A citation of the verse or passage the reader is on is
+  its reference in full, muted, with no preview and nothing to tap, in its
+  printed place. A parenthesised group is its row, in its place, and opens
+  into its own pieces by the same rule. Anything else is its words,
+  verbatim, in its place. No card is withheld because another note of the
+  verse has its passage (the repealed rule had withheld 245 cards on 224
+  single-verse selections), and no two verses are joined into one card. The
+  caption that gathered what was not a card is gone, with
+  `crossRefCard.Caption`, `publisherCrossRef.parts()` and
+  `publisherTarget.key()`.
+- Resolution. Outside a group a citation the feed tagged resolves by its
+  tag, and one it did not tag by the print's reading (`readShorthand`,
+  `publisher_xref_shorthand.go`); inside a group the print is followed,
+  since the twelve tags that disagree with the print all stand there. A
+  basis after a list of verses is the whole citation's (`spreadBasis`):
+  "Ps. 45:4, 5, LXX" tags both cards, once in the canon (Revelation 6:2). A
+  note is drawn as its card alone only where the shorthand printed back from
+  the card (`shorthandPrint`) is the note's own text, which holds for all
+  12,576 notes of one citation.
+- Where a letter stands. 1,998 letters are drawn past the white space their
+  offset stands before (a line break 1,952 times, a space 46), so each is
+  directly before its word (`noteMarkAt`). Three callers the feed sets
+  inside a word (Genesis 42:20, Exodus 12:25, Exodus 19:17) are drawn at the
+  head of the word (`wordSplitCallers`). 257 stand between two words the
+  source runs together (`docs/SOURCE_FIELDS.md`), and are drawn there.
+- The canon's one note on a heading (before Numbers 4:21, citing Num. 3:22)
+  is read, and shown with that verse's notes.
+
+THE FORMAL CHECK. `notePieceCensus` (`publisher_xrefs_census_test.go`)
+measures a canon by the functions the panel draws from, and
+`TestLiveAPIBibleFullCanon` pins its figures for the canon fetched on
+6 November 2026. 32,517 notes: 32,473 on verses, 43 on Psalm titles, 1 on a
+heading; at most 7 under one verse. As shown: 65,257 cards, 48 citations of
+the reader's own passage and 2 pieces that are words; 4,850 groups holding
+8,320 cards, 3 of the reader's own passage and 1 piece that is words. Drawn
+as 12,576 cards alone, 1,985 groups alone and 17,956 folding rows. Between
+two pieces of a note stands "; " or ", " and nothing else, and nothing stands
+before the first or after the last, with no exception; the passage with its
+letters taken out is the text on every verse that has a note; and every
+letter stands directly before a word (counted on 11 November 2026: before a
+letter or digit 30,433 times, an opening quotation mark 2,043, an opening
+bracket 39). The three pieces that are words are a verse the loaded text does not have
+(Ezekiel 33:12, "Ezek. 8:21"; Mark 4:29, the "39" of "(Mark 13:30, 39)") and
+a form no rule of the shorthand reads (Amos 2:1, "Is. 15:1—16"). An
+independent reading of all 32,517 notes, written from the raw feed alone
+without the app's code, was compared with the panel's model note by note on
+11 November 2026: unit, letter, offset, where the letter is drawn, text, the
+row it is drawn as, and every piece. Read as delivered the two differ on 4
+notes, all intended (the three callers inside a word; Revelation 6:2's
+basis). It is a record, not a repository test: both of its inputs are
+licensed data kept outside the repository. Tests added:
+`crossref_note_test.go`, `publisher_xref_displaced_test.go`, the piece
+census and its controls, `TestTheShorthandPrintsWhatItReads`,
+`TestANoteClosesInsideThePanelWithoutMovingIt`.
+
+OPEN, each built one way and not decided:
+
+- Two stretches of the feed hang every note one caller late
+  (`publisher_xref_displaced.go` has the account and the evidence): from the
+  first caller of Ruth 3:12 to the last of 2 Samuel 24:25 (1,640 callers),
+  and from the first caller of Psalm 119:133 to the caller of Psalm 150:2
+  (323). The feed lacks a caller the edition has on Ruth 3:11 and a second
+  on Psalm 119:132, and the last caller of each stretch has no content in
+  the feed. As built, a caller inside a stretch shows the content delivered
+  on the next caller (1,961 notes), the first content of each stretch
+  stands with its verse and no letter (2), and the last caller of each shows
+  nothing (2); the stored notes are unchanged; and it is done only while the
+  loaded text carries the marks of the feed as found, so a corrected feed is
+  read as delivered. Read as delivered the census is the same but for 65,254
+  cards and 51 citations of the reader's own passage, three of the 51 being
+  artefacts of the displacement (1 Samuel 8:11, 1 Samuel 16:16, 2 Samuel
+  13:37). Against the independent reading above, every content is shown
+  once and each of the 1,961 is the content of the next caller. Not decided: whether the stretches are shown corrected, as
+  delivered, or not at all until the feed is right. A report to the provider
+  is owed either way.
+- The heading's note. A second publication of the same apparatus has it in
+  Numbers 4:22, before the word the heading ends with, and none on the
+  heading. Not decided: where the feed has it (as built) or in verse 22.
+- A note's row opens with the panel (as built) while a group's row starts
+  closed (decided). Not decided: whether a note's row should start closed.
+- The Treasury's filter removes a Treasury row that a title card or a
+  whole-chapter card "carries" though the card shows something else. It
+  belongs to the audit of the other cross-references.
 
 GATES. The publisher's apparatus does not display in a store build until the
 licensing reply says it may. The only licensing enquiry sent is the
@@ -10022,22 +10191,25 @@ On a no: nothing to unwind. Deferred, not denied:
 - Per-section loading, so the NKJV's rows no longer wait behind the spinner
   for the Treasury zip or the 60-s timeout on a first open. It would replace
   the three-state body.
-- A wrap rule for the captions. A note's caption can break inside a numbered
-  book name ("… 1 Pet. 1:23; 1" over "John 3:9)"), because the toolkit's word
-  wrap breaks at every rune `unicode.IsSpace` admits, including U+00A0. A fix
-  would distinguish breakable spaces in `findSpaceIndex` and at the start of
-  a wrapped line. It is not implemented; it would use the existing
-  `patches/` and `scripts/setup-fyne-patch.sh` mechanism against stock Fyne
-  2.7.4, without changing the verbatim caption or switching the module to a
-  fork. This wrapping improvement is deferred.
-- The comma continuation whose head citation became a card, which the
-  verbatim rule leaves as a bare fragment ("19:39", or a bare number: eleven
-  of the canon's 4,657 remainders begin with a digit, one is a bare number).
-  Keep the fragment as printed to preserve the publisher's wording and
-  punctuation.
-- The canon's one heading note (on a heading in Numbers 4), which the
-  resolver does not read — it reads verse notes and Psalm-title notes only —
-  so its citations do not reach the panel.
+- A wrap rule for the printed lines. A wrapping line of the edition's print
+  (a note's row, a group's label; until 11 November 2026 the caption) can
+  break inside a numbered book name ("… 1 Pet. 1:23; 1" over "John 3:9)"),
+  because the toolkit's word wrap breaks at every rune `unicode.IsSpace`
+  admits, including U+00A0. A fix would distinguish breakable spaces in
+  `findSpaceIndex` and at the start of a wrapped line. It is not
+  implemented; it would use the existing `patches/` and
+  `scripts/setup-fyne-patch.sh` mechanism against stock Fyne 2.7.4, without
+  changing the verbatim line or switching the module to a fork. This
+  wrapping improvement is deferred.
+- CLOSED 11 November 2026: the comma continuation whose head citation
+  became a card, which the verbatim rule left as a bare fragment ("19:39",
+  or a bare number). A continuation the loaded text has is a card under its
+  full reference, one it lacks is its printed words in their place, and the
+  whole note stands on its row as printed.
+- CLOSED 11 November 2026: the canon's one heading note (on a heading in
+  Numbers 4), which the resolver did not read. It is read and shown with the
+  notes of the verse the heading is set before; where it belongs is open
+  (above).
 
 TO SEE IT. Build for the phone: `scripts/run-ios-device.sh --nkjvxrefs`.
 Without a device: run `TestLiveAPIBibleFullCanon` with
