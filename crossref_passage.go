@@ -223,6 +223,7 @@ func newCrossRefPassage(state *AppState, book string, chapter int, selected []Ve
 		readingGlyphSize(crossRefPassageTextSize), pal.Text, pal.RedLetter, styledPaneFont(), cardItalicFont())
 	p.mark, p.dim = pal.Accent, pal.TextMuted
 	p.number, p.bold = pal.VerseNumber, passageNumeralFace()
+	p.holdFlush = true
 	// The list's width is known before the list is laid out, so the passage
 	// reports the height of its rows at that width from the first frame: at
 	// the card's guess a passage of several rows could report a row too few

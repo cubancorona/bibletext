@@ -76,7 +76,8 @@ package bibletext
 //     which is held on state rather than by the drained sheet
 //     (key_test_progress.go);
 //   - the audio source menu (audio_menu.go);
-//   - cross-references for the same selection (crossref_panel.go);
+//   - cross-references for the same selection, with the folds and scroll place
+//     the reader had reached (crossref_panel.go);
 //   - the Ask sheet with the question typed so far (ai_ask.go);
 //   - the note composer with the note typed so far, on every platform — on
 //     iOS the field is a native text view, and a drained composer's teardown

@@ -797,6 +797,22 @@ func TestTheCanonFitsTheNarrowestPhoneWithEveryGroupOpen(t *testing.T) {
 						t.Errorf("%s %d:%d, groups open: %s", book, ch, v.Verse, problems[0])
 					}
 				}
+				if lst.Passage && len(lst.Objects) > 0 {
+					if c, ok := lst.Objects[0].(*fyne.Container); ok && len(c.Objects) > 0 {
+						if p, ok := c.Objects[0].(*readingParagraph); ok {
+							p.Resize(fyne.NewSize(limit, 10))
+							for _, tx := range test.WidgetRenderer(p).(*readingParagraphRenderer).objs {
+								if edge := tx.Position().X + tx.Size().Width; edge > limit+0.5 {
+									misfits++
+									if misfits <= 5 {
+										t.Errorf("%s %d:%d: passage row reaches %.1f points, over %.0f", book, ch, v.Verse, edge, limit)
+									}
+									break
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 	}
@@ -804,4 +820,201 @@ func TestTheCanonFitsTheNarrowestPhoneWithEveryGroupOpen(t *testing.T) {
 		t.Fatalf("control: %d selections with a note, %d groups opened", selections, opened)
 	}
 	t.Logf("%d selections with a note, %d groups opened, %d over %.0f points", selections, opened, misfits, limit)
+}
+
+// FLUSH FRAGMENTS IN THE PASSAGE STAY INSIDE THE LIST'S WIDTH. A quotation
+// mark before an italic supplied word, a word split by a raised letter, a
+// letter before a quoted supplied word, and a colour change before closing
+// punctuation are drawn flush with no space between them, so a wrap must break
+// before the whole flush chain rather than leave its tail past the right edge.
+// The verse-of-the-day card keeps its existing wrap (holdFlush == false).
+func TestThePassageWrapsFlushFragmentsWithinTheListsWidth(t *testing.T) {
+	th := appThemeForTest(t)
+	licenseNKJVForTest(t)
+	withPublisherCrossRefs(t, "nkjv", true)
+	pal := th.palette()
+
+	// Store-build verse-of-the-day paragraphs leave holdFlush off.
+	votd := newReadingParagraph([]cardRun{{Text: "Synthetic card words."}}, 17, pal.Text, pal.RedLetter, styledPaneFont(), cardItalicFont())
+	if votd.holdFlush {
+		t.Fatal("newReadingParagraph turned holdFlush on for the verse-of-the-day card")
+	}
+
+	bd := xrefBible(map[string]map[int]int{"Genesis": {1: 2}, "Romans": {5: 21}})
+	v := &bd.Verses["Genesis"][1][0]
+	// Synthetic words only:
+	//   - ‘suppliedword,’ has an upright opening quote flush before an italic word
+	//   - firstword+mark+secondword has a raised letter flush inside a run-together pair
+	//   - mark+‘anotheritalic’ has a raised letter flush before an upright quote and italic word
+	v.Text = "Alpha beta gamma delta ‘suppliedword,’ epsilon zeta firstwordsecondword eta ‘anotheritalic’ theta."
+	q1 := len([]rune("Alpha beta gamma delta ‘"))
+	q1End := q1 + len([]rune("suppliedword,"))
+	midMark := len([]rune("Alpha beta gamma delta ‘suppliedword,’ epsilon zeta firstword"))
+	q2Mark := len([]rune("Alpha beta gamma delta ‘suppliedword,’ epsilon zeta firstwordsecondword eta "))
+	q2 := q2Mark + len([]rune("‘"))
+	q2End := q2 + len([]rune("anotheritalic"))
+	v.Supplied = []TextSpan{{Start: q1, End: q1End}, {Start: q2, End: q2End}}
+	v.Footnotes = []Footnote{
+		{Anchor: midMark, Text: "Rom. 5:8", Kind: footnoteKindCrossref, Caller: "-"},
+		{Anchor: q2Mark, Text: "Rom. 5:9", Kind: footnoteKindCrossref, Caller: "-"},
+	}
+	st := &AppState{Bible: bd, CurrentBook: "Genesis", CurrentChapter: 1, CurrentVersion: "nkjv", theme: th}
+	sel := []Verse{*v}
+	notes := publisherCrossRefsFor(bd, "Genesis", 1, sel)
+	row := newCrossRefPassage(st, "Genesis", 1, sel, notes, pal)
+	p := row.(*fyne.Container).Objects[0].(*readingParagraph)
+	if !p.holdFlush {
+		t.Fatal("newCrossRefPassage did not set holdFlush on the passage")
+	}
+	if got := passagePlainText(p.runs); got != v.Text {
+		t.Fatalf("passagePlainText = %q, want %q", got, v.Text)
+	}
+
+	// Also exercise a red-to-black flush boundary before closing punctuation,
+	// using synthetic runs with holdFlush enabled as newCrossRefPassage sets it.
+	redRuns := passageRuns([]passageUnit{{
+		Runs: []verseRun{
+			{Text: "Alpha beta gamma delta spokenword", Red: true},
+			{Text: "; epsilon zeta.", Red: false},
+		},
+	}})
+	redPara := newReadingParagraph(redRuns, readingGlyphSize(crossRefPassageTextSize), pal.Text, pal.RedLetter, styledPaneFont(), cardItalicFont())
+	redPara.holdFlush = true
+
+	for _, tc := range []struct {
+		name string
+		para *readingParagraph
+	}{
+		{"passage", p},
+		{"red-to-black", redPara},
+	} {
+		for w := float32(200); w <= 283; w += 2 {
+			tc.para.Resize(fyne.NewSize(w, 10))
+			for _, tx := range test.WidgetRenderer(tc.para).(*readingParagraphRenderer).objs {
+				if edge := tx.Position().X + tx.Size().Width; edge > w+0.5 {
+					t.Fatalf("%s at width %.0f: %q reaches %.1f, over %.0f", tc.name, w, tx.(*canvas.Text).Text, edge, w)
+				}
+			}
+		}
+	}
+}
+
+// REOPENING ACROSS APPEARANCE AND LAYOUT REBUILDS KEEPS FOLDS AND PLACE. Both
+// a light/dark switch (observeAppearance) and a rotation or window-layout
+// rebuild (rebuildForLayoutChange) replace the panel with one in the new
+// palette or size while keeping the notes and groups the reader had opened or
+// closed and clamping the scroll offset to the new list's range.
+func TestThePanelKeepsItsOpenRowsAndPlaceAcrossARebuild(t *testing.T) {
+	th := appThemeForTest(t)
+	licenseNKJVForTest(t)
+	withPublisherCrossRefs(t, "nkjv", true)
+	withCrossRefIndex(t, "John.3.16\tRom.5.1\t12\nJohn.3.16\tRom.5.2\t11\nJohn.3.16\tRom.5.3\t10\nJohn.3.16\tRom.5.4\t9\nJohn.3.16\tRom.5.5\t8\nJohn.3.16\tRom.5.6\t7\n")
+	previousRun, previousLoad := crossRefsRun, crossRefsLoad
+	t.Cleanup(func() { crossRefsRun, crossRefsLoad = previousRun, previousLoad })
+	crossRefsRun = func(work func()) { work() }
+	crossRefsLoad = func() error { return nil }
+
+	liveVariant := theme.VariantLight
+	previousVariant := appearanceVariant
+	appearanceVariant = func(*AppState) fyne.ThemeVariant { return liveVariant }
+	t.Cleanup(func() { appearanceVariant = previousVariant })
+
+	st, _ := groupListState(t)
+	st.app = fyne.CurrentApp()
+	st.theme = th
+	w := test.NewWindow(nil)
+	t.Cleanup(w.Close)
+	w.Resize(fyne.NewSize(375, 667))
+	st.window = w
+	w.SetContent(CreateMainUI(st.app, st, w))
+	st.appearance.built = theme.VariantLight
+
+	inspect := func() (top *widget.PopUp, scroll *container.Scroll, notes []*crossRefNoteRow, groups []*crossRefGroupRow, section *fyne.Container) {
+		t.Helper()
+		var ok bool
+		top, ok = w.Canvas().Overlays().Top().(*widget.PopUp)
+		if !ok || top == nil {
+			t.Fatal("the cross-references panel is not on top of the canvas")
+		}
+		walkTree(top, func(o fyne.CanvasObject) {
+			switch x := o.(type) {
+			case *container.Scroll:
+				if scroll == nil {
+					scroll = x
+				}
+			case *fyne.Container:
+				if section == nil {
+					if _, s := x.Layout.(crossRefSectionLayout); s {
+						section = x
+					}
+				}
+			case *crossRefNoteRow:
+				notes = append(notes, x)
+			case *crossRefGroupRow:
+				groups = append(groups, x)
+			}
+		})
+		if scroll == nil || len(notes) != 1 || len(groups) != 2 || section == nil {
+			t.Fatalf("panel holds scroll=%v, %d notes, %d groups, section=%v; want 1 note and 2 groups", scroll != nil, len(notes), len(groups), section != nil)
+		}
+		return top, scroll, notes, groups, section
+	}
+
+	showCrossRefs(st, "", selSpan{lo: 16, hi: 16})
+	first, scroll, _, groups, _ := inspect()
+	// Open both the inner group inside note a and the lone group row of note b,
+	// then scroll down into the list.
+	test.Tap(groups[0].header)
+	test.Tap(groups[1].header)
+	scroll.Offset = fyne.NewPos(0, 140)
+	scroll.Refresh()
+
+	// 1. Light -> dark switch rebuilds in the dark palette and keeps both
+	// groups open and the scroll at 140.
+	liveVariant = theme.VariantDark
+	observeAppearance(st, appearanceChanged)
+	second, scroll, notes, groups, section := inspect()
+	if second == first || first.Visible() || len(w.Canvas().Overlays().List()) != 1 {
+		t.Fatal("the appearance rebuild did not replace the panel cleanly")
+	}
+	if got, want := section.Objects[0].(*canvas.Rectangle).FillColor, crossRefSectionGround(darkPalette); got != want {
+		t.Errorf("reopened note ground is %v, want dark palette's %v", got, want)
+	}
+	if !notes[0].open || !groups[0].open || !groups[1].open || len(groups[0].members.Objects) != 3 || len(groups[1].members.Objects) != 1 {
+		t.Errorf("after appearance rebuild: note open=%v, groups open=(%v with %d, %v with %d); want true, (true with 3, true with 1)",
+			notes[0].open, groups[0].open, len(groups[0].members.Objects), groups[1].open, len(groups[1].members.Objects))
+	}
+	if scroll.Offset.Y != 140 {
+		t.Errorf("after appearance rebuild: scroll offset Y = %v, want 140", scroll.Offset.Y)
+	}
+
+	// 2. Close note a, set scroll to 95, and rotate/resize via rebuildForLayoutChange.
+	test.Tap(notes[0].header)
+	scroll.Offset = fyne.NewPos(0, 95)
+	scroll.Refresh()
+	w.Resize(fyne.NewSize(667, 375))
+	rebuildForLayoutChange(st)
+	third, scroll, notes, groups, _ := inspect()
+	if third == second || second.Visible() || len(w.Canvas().Overlays().List()) != 1 {
+		t.Fatal("the layout rebuild did not replace the panel cleanly")
+	}
+	if notes[0].open || !groups[0].open || !groups[1].open {
+		t.Errorf("after layout rebuild: note open=%v, groups open=(%v, %v); want false, (true, true)",
+			notes[0].open, groups[0].open, groups[1].open)
+	}
+	if scroll.Offset.Y != 95 {
+		t.Errorf("after layout rebuild: scroll offset Y = %v, want 95", scroll.Offset.Y)
+	}
+
+	// 3. Capture an offset beyond what a taller viewport needs: scroll.Refresh
+	// after restoring Offset clamps it to the new content's range rather than
+	// stranding past the foot.
+	w.Resize(fyne.NewSize(402, 874))
+	scroll.Offset = fyne.NewPos(0, 900)
+	rebuildForLayoutChange(st)
+	_, scroll, _, _, _ = inspect()
+	maxY := max(float32(0), scroll.Content.MinSize().Height-scroll.Size().Height)
+	if scroll.Offset.Y != maxY || scroll.Offset.Y >= 900 {
+		t.Errorf("clamped scroll offset Y = %v, want %v (< 900)", scroll.Offset.Y, maxY)
+	}
 }

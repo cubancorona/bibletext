@@ -45,7 +45,47 @@ func (crossRefScrollLaneLayout) Layout(objs []fyne.CanvasObject, size fyne.Size)
 	objs[0].Resize(fyne.NewSize(size.Width+crossRefScrollLane, size.Height))
 }
 
+// crossRefPanelPlace is the reader's place in an open cross-references list,
+// captured before a light/dark or layout rebuild drains the panel and applied
+// when the replacement list lands.
+type crossRefPanelPlace struct {
+	notesOpen  []bool
+	groupsOpen []bool
+	scrollY    float32
+}
+
+// crossRefFoldRows returns the list's note rows and group rows in order.
+func crossRefFoldRows(objs []fyne.CanvasObject) (notes []*crossRefNoteRow, groups []*crossRefGroupRow) {
+	var walk func(fyne.CanvasObject)
+	walk = func(o fyne.CanvasObject) {
+		switch x := o.(type) {
+		case *crossRefNoteRow:
+			notes = append(notes, x)
+			for _, p := range x.pieces {
+				walk(p)
+			}
+		case *crossRefGroupRow:
+			groups = append(groups, x)
+			for _, m := range x.members.Objects {
+				walk(m)
+			}
+		case *fyne.Container:
+			for _, c := range x.Objects {
+				walk(c)
+			}
+		}
+	}
+	for _, o := range objs {
+		walk(o)
+	}
+	return notes, groups
+}
+
 func showCrossRefs(state *AppState, text string, span selSpan) {
+	showCrossRefsAt(state, text, span, nil)
+}
+
+func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRefPanelPlace) {
 	if state == nil || state.window == nil {
 		return
 	}
@@ -199,6 +239,19 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 			return
 		}
 		listBox.Objects = lst.Objects
+		if place != nil {
+			notes, groups := crossRefFoldRows(lst.Objects)
+			for i, n := range notes {
+				if i < len(place.notesOpen) && n.open != place.notesOpen[i] {
+					n.toggle()
+				}
+			}
+			for i, g := range groups {
+				if i < len(place.groupsOpen) && g.header != nil && g.open != place.groupsOpen[i] {
+					g.toggle()
+				}
+			}
+		}
 		listScope.Refresh()
 		// A group that opens or closes changes the list's height inside the
 		// scroll; the panel keeps its size and its place (crossref_group.go).
@@ -221,7 +274,14 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 		body.Objects = []fyne.CanvasObject{list}
 		body.Refresh()
 		fit()
-		scroll.ScrollToTop()
+		if place != nil {
+			scroll.Refresh()
+			scroll.Offset = fyne.NewPos(0, place.scrollY)
+			scroll.Refresh()
+			place = nil
+		} else {
+			scroll.ScrollToTop()
+		}
 	}
 
 	content := container.NewBorder(header, footer, nil, nil, body)
@@ -249,10 +309,28 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 		ps.Height = sheetPanelSize(state, cnv).Height
 		fit()
 	})
-	// The same selection again after a light/dark rebuild. The dataset loads
-	// once and is guarded, so a reopen mid-load waits on the same load rather
-	// than starting another (sheet_reopen.go).
-	registerSheetReopen(state, popup, func() { showCrossRefs(state, text, span) })
+	// The same selection again after a light/dark or layout rebuild, keeping
+	// what the reader had opened or closed and where the list stood. The
+	// dataset loads once and is guarded, so a reopen mid-load waits on the
+	// same load rather than starting another (sheet_reopen.go).
+	registerSheetReopenCapture(state, popup, func() func() {
+		var saved *crossRefPanelPlace
+		if listShowing() {
+			notes, groups := crossRefFoldRows(listBox.Objects)
+			saved = &crossRefPanelPlace{
+				notesOpen:  make([]bool, len(notes)),
+				groupsOpen: make([]bool, len(groups)),
+				scrollY:    scroll.Offset.Y,
+			}
+			for i, n := range notes {
+				saved.notesOpen[i] = n.open
+			}
+			for i, g := range groups {
+				saved.groupsOpen[i] = g.open
+			}
+		}
+		return func() { showCrossRefsAt(state, text, span, saved) }
+	})
 
 	// A selection the cross-references cannot cover at all is answered
 	// before anything loads: the answer cannot change, and a reader who is

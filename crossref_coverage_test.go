@@ -106,11 +106,12 @@ func TestTheTreasuryHoldsTheSixtySixBooksAndNoOthers(t *testing.T) {
 	}
 }
 
-// addedVersesBible is the NKJV's Acts 8 and Luke 17 as it numbers them, with
-// the verses the reference does not have (Acts 8:37, Luke 17:36), and
-// Matthew 28, which a publisher's note on Acts 8:37 points into.
+// addedVersesBible is the NKJV's Acts 8, Acts 15 and Luke 17 as it numbers
+// them, with the verses the reference does not have (Acts 8:37, Acts 15:34,
+// Luke 17:36), and Matthew 28, which a publisher's note on Acts 8:37 points
+// into.
 func addedVersesBible() *BibleData {
-	return xrefBible(map[string]map[int]int{"Acts": {8: 40}, "Luke": {17: 37}, "Matthew": {28: 20}})
+	return xrefBible(map[string]map[int]int{"Acts": {8: 40, 15: 41}, "Luke": {17: 37}, "Matthew": {28: 20}})
 }
 
 // WHAT THE CROSS-REFERENCES CANNOT COVER IS SAID, NOT LEFT BLANK. The Treasury
@@ -343,5 +344,48 @@ func TestAPublisherBlockIsNotAnsweredForTheTreasury(t *testing.T) {
 	texts, loaded := coveragePanelIn(t, "nkjv", publisherNotedActs(), "Acts", 8, 37, 37)
 	if loaded || !strings.Contains(strings.Join(texts, "\n"), publisherUncoveredLine) {
 		t.Errorf("without the edition's run: loaded %v, texts %q; want the note before loading", loaded, texts)
+	}
+}
+
+// Where the edition's own apparatus is on, has no note for the selection, and
+// the Treasury cannot cover the selection at all (Acts 15:34, Luke 17:36),
+// nothing can ever be listed: the panel answers before asking for the
+// Treasury rather than telling an offline reader to check the connection.
+func TestAnUncoveredSelectionWithNoPublisherNoteAnswersBeforeLoading(t *testing.T) {
+	licenseNKJVForTest(t)
+	withPublisherCrossRefs(t, "nkjv", true)
+	bd := publisherNotedActs()
+	for _, tc := range []struct {
+		book    string
+		chapter int
+		verse   int
+		want    string
+	}{
+		{"Acts", 15, 34, "Nothing is listed for verse 15:34, which the cross-references don't cover."},
+		{"Luke", 17, 36, "Nothing is listed for verse 17:36, which the cross-references don't cover."},
+	} {
+		texts, loaded := coveragePanelIn(t, "nkjv", bd, tc.book, tc.chapter, tc.verse, tc.verse)
+		all := strings.Join(texts, "\n")
+		wantMsg := crossRefNoneLine + "\n" + tc.want
+		if loaded {
+			t.Errorf("%s %d:%d: the Treasury's load was asked for when neither source can list anything", tc.book, tc.chapter, tc.verse)
+		}
+		if strings.Contains(all, crossRefOfflineLine) {
+			t.Errorf("%s %d:%d: the panel tells an offline reader to check the connection: %q", tc.book, tc.chapter, tc.verse, texts)
+		}
+		if !strings.Contains(all, wantMsg) {
+			t.Errorf("%s %d:%d: got %q, want %q", tc.book, tc.chapter, tc.verse, texts, wantMsg)
+		}
+		st := &AppState{Bible: bd, CurrentBook: tc.book, CurrentChapter: tc.chapter, CurrentVersion: "nkjv"}
+		lst := buildCrossRefList(st, selectionVerses(st, "", selSpan{lo: tc.verse, hi: tc.verse}), nil, nil, st.pal(), func(crossRef) {})
+		if len(lst.Objects) != 0 || lst.CoverageNote != tc.want {
+			t.Errorf("%s %d:%d list: %d objects, note %q; want empty with %q", tc.book, tc.chapter, tc.verse, len(lst.Objects), lst.CoverageNote, tc.want)
+		}
+	}
+	// CONTROL: a partly covered selection (Acts 15:33-34) still needs the
+	// Treasury for its covered verse, so it loads rather than answering early.
+	_, loaded := coveragePanelIn(t, "nkjv", bd, "Acts", 15, 33, 34)
+	if !loaded {
+		t.Error("Acts 15:33-34 answered before loading though verse 15:33 is covered by the Treasury")
 	}
 }

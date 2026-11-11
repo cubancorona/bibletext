@@ -699,6 +699,10 @@ type readingParagraph struct {
 	// for a paragraph that knows the width it will be given; 0 for the
 	// card's own guess (readingParagraphGuessWidth).
 	guess float32
+	// holdFlush keeps every chain of flush fragments together across a wrap,
+	// so a quotation mark or word part at a style or mark boundary never
+	// leaves its follower to run past the right edge (newCrossRefPassage).
+	holdFlush bool
 }
 
 // A MARK IS THE PAGE'S SUPERSCRIPT. readingMarkScale is a Mark run's size
@@ -911,9 +915,22 @@ func (r *readingParagraphRenderer) wrap(width float32) {
 		// A mark is flush against the word after it, and a row may break
 		// only at a space: so a mark that would end a row takes the row
 		// break before it, with its word, rather than leave the word to run
-		// past the edge. The same holds for any fragments drawn flush.
+		// past the edge. When holdFlush is set, the same holds for every
+		// chain of fragments drawn flush across a style or mark boundary.
 		need := w
-		if f.mark {
+		if r.p.holdFlush {
+			prevMark := f.mark
+			for _, g := range fragments[i+1:] {
+				if g.spaceBefore || g.breakBefore || g.text == "" {
+					break
+				}
+				if prevMark {
+					need += readingMarkGap
+				}
+				need += r.fragmentWidth(g)
+				prevMark = g.mark
+			}
+		} else if f.mark {
 			for _, g := range fragments[i+1:] {
 				if g.spaceBefore || g.breakBefore || g.text == "" {
 					break

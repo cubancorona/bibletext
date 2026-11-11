@@ -143,13 +143,20 @@ func crossRefCoverage(versionID, book string, verses []Verse) (note string, none
 
 // panelCoverage is crossRefCoverage for the selection the panel is showing,
 // in the translation being read. An edition whose own apparatus the panel
-// shows (publisher_xrefs.go) is not asked: its run answers for the
-// selection whatever the Treasury covers, and needs no network, so neither
-// the note nor the answer given before the Treasury loads would be true of
-// it.
+// shows (publisher_xrefs.go) answers from its run wherever it has a note for
+// the selection, and needs no network; where it has none and the Treasury
+// cannot cover the selection at all, the answer cannot change with the load,
+// as in every other edition.
 func panelCoverage(state *AppState, book string, verses []Verse) (note string, none bool) {
 	v := state.currentVersion()
 	if v.PublisherCrossRefs {
+		_, chapter := selectedChapter(state, verses)
+		if len(publisherCrossRefsFor(state.Bible, book, chapter, verses)) > 0 {
+			return "", false
+		}
+		if note, none := crossRefCoverage(v.ID, book, verses); none {
+			return note, true
+		}
 		return "", false
 	}
 	return crossRefCoverage(v.ID, book, verses)
