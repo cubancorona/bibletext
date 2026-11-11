@@ -217,6 +217,17 @@ func persistReadingPosition(s *AppState) {
 	writeReadingStateSeq(appPrefs(), snapshotReadingState(s, 0, 0, 0, 0, 0), readingStateSeq.Add(1))
 }
 
+// persistReadingAnchor saves the current location and history with the chapter
+// at the given scroll anchor rather than at its top: for an arrival that
+// restores a place (a history tap), whose position no scroll has reported yet.
+// Like persistReadingPosition it reads nothing from the native view.
+func persistReadingAnchor(s *AppState, verse int, delta, frac float64) {
+	if s == nil {
+		return
+	}
+	writeReadingStateSeq(appPrefs(), snapshotReadingState(s, verse, delta, frac, 0, 0), readingStateSeq.Add(1))
+}
+
 // flushReadingState captures the exact native scroll position and persists the
 // full state. Called from the app-lifecycle stop/background hooks — the one
 // moment a scroll with no navigation is otherwise lost.

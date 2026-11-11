@@ -399,6 +399,39 @@ func TestRestoreRecentKeepsHeadAnchor(t *testing.T) {
 	}
 }
 
+// A history tap restores a place no scroll has reported yet, and the save every
+// navigation makes pins the chapter to its top. Killed before the first
+// scroll, the app reopened that chapter at its top, with the head of the saved
+// history holding no place either. The tap's own place is what is saved.
+func TestAHistoryTapSavesThePlaceItRestored(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	state := sampleState()
+	state.CurrentVersion = "web"
+	state.RecentChapters = []ChapterVisit{
+		{Book: "John", Chapter: 1},
+		{Book: "John", Chapter: 3, Verse: 12, Delta: 4, Frac: 0.5},
+	}
+	navigateToVisit(state, state.RecentChapters[1])
+	got, ok := readReadingState(appPrefs())
+	if !ok {
+		t.Fatal("the tap saved nothing")
+	}
+	if got.Book != "John" || got.Chapter != 3 || got.AnchorVerse != 12 || got.AnchorDelta != 4 || got.ScrollFrac != 0.5 {
+		t.Fatalf("the tap saved the position %+v, want John 3 at verse 12", got)
+	}
+	if len(got.Recent) == 0 || got.Recent[0] != (ChapterVisit{Book: "John", Chapter: 3, Verse: 12, Delta: 4, Frac: 0.5}) {
+		t.Fatalf("the tap saved the history %+v: its head has lost the place", got.Recent)
+	}
+
+	// The control: a visit that carries no place saves its chapter at the top.
+	navigateToVisit(state, ChapterVisit{Book: "Genesis", Chapter: 1})
+	if got, ok := readReadingState(appPrefs()); !ok || got.Book != "Genesis" || got.Chapter != 1 || got.AnchorVerse != 0 || got.ScrollFrac != 0 {
+		t.Fatalf("a visit with no place saved %+v (ok=%v), want Genesis 1 at its top", got, ok)
+	}
+}
+
 // TestFlushReadingStateGuardsUnloadedState pins the jetsam guard: backgrounding
 // during loadPending (or before a book is current) must NOT overwrite the saved
 // position with an empty snapshot — that is exactly how a reader would lose

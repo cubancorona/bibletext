@@ -807,6 +807,17 @@ func navigateToVisit(state *AppState, visit ChapterVisit) {
 			Delta:   visit.Delta,
 			Frac:    visit.Frac,
 		}
+		// addRecentChapter has just filed this chapter at the head of the
+		// history pinned to its top, and the head is stamped again only when
+		// the reader scrolls (captureSnapshot). Left there, a reader who taps
+		// a second history entry before scrolling leaves this one with no
+		// place, and the tap back opens the chapter at its top; and a kill
+		// before the first scroll reopens the app there. So the head keeps the
+		// place this tap restores until a scroll replaces it, and that place
+		// is what is saved. restoreRecent carries the anchor onto the head at
+		// launch for the same reason.
+		updateCurrentVisitAnchor(state, visit.Verse, visit.Delta, visit.Frac)
+		persistReadingAnchor(state, visit.Verse, visit.Delta, visit.Frac)
 	}
 	state.refresh()
 }

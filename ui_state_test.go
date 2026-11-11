@@ -312,6 +312,58 @@ func TestNavigateToVisitWithoutAnchorGoesToTop(t *testing.T) {
 	}
 }
 
+// A history tap files the chapter at the head of the history afresh, and the
+// head addRecentChapter makes is pinned to the chapter's top: only a scroll
+// stamps it again. A reader who tapped one history entry and then another
+// without scrolling therefore left the first with no place at all, and a tap
+// back to it opened the chapter at its top. The head keeps the place the tap
+// restored until a scroll replaces it. The taps go through recentJumpTargets,
+// which is what the history bar offers.
+func TestAHistoryTapKeepsThePlaceItRestored(t *testing.T) {
+	state := sampleState() // reading John 1
+	state.RecentChapters = []ChapterVisit{
+		{Book: "John", Chapter: 1},
+		{Book: "John", Chapter: 3, Verse: 12, Delta: 4, Frac: 0.5},
+		{Book: "Genesis", Chapter: 2, Verse: 2, Delta: 1.5, Frac: 0.75},
+	}
+	tap := func(book string, chapter int) ChapterVisit {
+		t.Helper()
+		for _, v := range recentJumpTargets(state, maxRecent-1) {
+			if v.Book == book && v.Chapter == chapter {
+				navigateToVisit(state, v)
+				return v
+			}
+		}
+		t.Fatalf("%s %d is not offered in the history", book, chapter)
+		return ChapterVisit{}
+	}
+
+	tap("John", 3)
+	if h := state.RecentChapters[0]; h != (ChapterVisit{Book: "John", Chapter: 3, Verse: 12, Delta: 4, Frac: 0.5}) {
+		t.Fatalf("after the tap the head of the history is %+v: it has lost the place the tap restored", h)
+	}
+	tap("Genesis", 2) // John 3 was never scrolled
+	back := tap("John", 3)
+	if back.Verse != 12 || back.Delta != 4 || back.Frac != 0.5 {
+		t.Fatalf("John 3 came back as %+v: the place its first tap restored is gone", back)
+	}
+	if r := state.restore; r == nil || r.Book != "John" || r.Chapter != 3 || r.Verse != 12 || r.Delta != 4 || r.Frac != 0.5 {
+		t.Fatalf("the tap back to John 3 armed %+v, want its verse 12", r)
+	}
+	again := tap("Genesis", 2)
+	if again.Verse != 2 || again.Delta != 1.5 || again.Frac != 0.75 {
+		t.Fatalf("Genesis 2 came back as %+v: the place its first tap restored is gone", again)
+	}
+
+	// The control: a scroll after the tap is the reader's newer place, and it
+	// replaces the one the tap restored.
+	updateCurrentVisitAnchor(state, 1, 0, 0.1)
+	tap("John", 3)
+	if moved := tap("Genesis", 2); moved.Verse != 1 || moved.Frac != 0.1 {
+		t.Fatalf("Genesis 2 came back as %+v after a scroll to verse 1", moved)
+	}
+}
+
 func TestAddRecentChapterClearsPendingRestore(t *testing.T) {
 	state := &AppState{restore: &restoreAnchor{Book: "John", Chapter: 3, Verse: 5}}
 	addRecentChapter(state, "Genesis", 1)
