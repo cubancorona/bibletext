@@ -730,7 +730,8 @@ carries the group as printed and opens into its citations; a citation the
 loaded text lacks is its printed words; and a note of several pieces is a
 row that carries the note as printed, with its pieces under it — no legend
 and no added word (a note that is nothing but such a group is drawn as
-any note is, and opens with the panel); then TREASURY OF SCRIPTURE
+that group's row beside the letter's margin, closed until tapped, so its
+citations do not count for the Treasury's filter); then TREASURY OF SCRIPTURE
 KNOWLEDGE, open, minus the rows whose passages the publisher's cards on
 screen already carry
 (`publisher_xrefs.go`, `crossref_list.go`, `crossref_note.go`,

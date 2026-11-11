@@ -9967,7 +9967,7 @@ stood open; it is drawn as any note of several pieces is. Whether notes
 start open or closed is open (below). The fifth step replaces the part of
 this that concerns a note that is one parenthesised group.
 
-Fifth, the same afternoon, and not yet built: a parenthesised group is
+Fifth, the same afternoon: a parenthesised group is
 closed until it is tapped wherever it stands. A note that is one
 parenthesised group and nothing else is drawn as that group's row, beside
 the letter's margin, with the same label, mark and opened ground as a group
@@ -10080,16 +10080,17 @@ dark, and asserts the popup's content fits its inset width. On 6 November
 with the flag on and off, John 3:1–3, Psalm 3:1 (a title note), Psalm 3:2 (no
 note), 1 Samuel 19:12 (a ":title" citation), Hebrews 1:6 (LXX, DSS), Genesis
 7:2 (a whole-chapter citation) — plus frames scrolled to the Treasury's and
-the publisher's labels, 48 PNGs. Since 11 November 2026 it draws 23, each
-named in `crossref_render_test.go` with the shape it exercises, with a
-frame of every group opened and a frame of every note closed where a
-selection has them: 204 PNGs. The reader-facing strings — the three labels and the verse-key
+the publisher's labels, 48 PNGs. Since 11 November 2026 it draws 26, each
+named in `crossref_render_test.go` with the shape it exercises, with frames
+scrolled a view at a time down the list, a frame of every group opened (plus
+John 3:16's lone group opened alone) and a frame of every note closed where
+a selection has them: 586 PNGs. The reader-facing strings — the three labels and the verse-key
 forms, "No NKJV cross-references for this selection.", "Treasury of Scripture
 Knowledge: OpenBible.info (CC-BY)" — are the wordings settled on 6 November
 2026, recorded beside their constants.
 
 BUILT 11 November 2026 on `fu/s20-paren-groups`, cut from main at
-665f87671b, in ten commits: 77d9203dd8 (the shorthand reader), 82a790190d
+665f87671b, in thirteen commits: 77d9203dd8 (the shorthand reader), 82a790190d
 (a note's groups resolved from the print and kept in their place; the
 shorthand census), 1cd40b92f4 (the group's row), 3da33a5030 (the notes whole
 under their letters), 98d37259aa (the two stretches the feed hangs one
@@ -10098,7 +10099,10 @@ superscript), a7d18eded3 (the fourth step as first built, superseded the
 same day), 73e70c6d92 (each note on a ground of its own with its letter in a
 margin; every note opening alike), 86d7c40fde (a Psalm's title in italic in
 the passage), 7162f4cdde (a printed line turned between citations and not
-inside one); cc7fada038 adds the test that the
+inside one), 4f6d6a798c (the scroll lane and the 26-point fold mark),
+06033fb70d (the note-ground tests and a group's first opening), f035f39426
+(every parenthesised group starting closed, a lone group drawn as that
+group's row beside the letter's margin); cc7fada038 adds the test that the
 verse-of-the-day card, which shares the passage's paragraph, carries none
 of its marks.
 `docs/CROSS_REFERENCE_NOTES.md` is the ledger: what a note
@@ -10132,9 +10136,10 @@ and the test that holds it. What the list is now, flag on:
   its lines turning between citations and not inside one) and folds: under it, while it is open, the note's pieces in
   print order. It is open when the panel opens and a tap closes it; the
   printed text stays on the row in both states. A note that is one
-  parenthesised group is such a row too, the group as printed and its
-  citations under it (1,985 notes, showing 3,708 citations; every one has a
-  citation to follow).
+  parenthesised group is drawn instead as that group's row (`crossref_group.go`),
+  closed until tapped, beside the letter's margin, its tap and pointer wash
+  spanning the margin as a note's own row does (1,985 notes, holding 3,708
+  citations; every one has a citation to follow).
 - A note's pieces (`publisherCrossRef.Pieces`). A citation the reader can
   follow is a card. A citation of the verse or passage the reader is on is
   its reference in full, with no preview and nothing to tap, in its printed
@@ -10157,13 +10162,17 @@ and the test that holds it. What the list is now, flag on:
   passage and a group's row stand beside the margin. A 3-point rule in the
   letter's colour, better than 4:1 against the ground in both themes, hangs
   from under the letter down the margin to a little above the foot of the
-  note's rows; a note that is one card has none. A group inside a note
-  starts closed, and opens onto the other of the palette's two grounds, a
-  well in the note's and not the panel showing through it.
+  note's rows; a note that is one card has none. Every parenthesised group —
+  inside a note or as the whole of its note — starts closed, and opens onto
+  the other of the palette's two grounds, a well in the note's and not the
+  panel showing through it; while a lone group is open, `crossRefGroupLayout`
+  hangs the margin's rule from under its letter to 6 points above the well's
+  foot.
 - What counts for the Treasury's filter: the cards on screen as the panel
-  opens, which are a note's direct citations and the citations of a note
-  that is one parenthesised group. A group inside a note starts closed and
-  its citations are not counted.
+  opens, which are a note's direct citations. Every parenthesised group
+  starts closed and its citations are not counted (leaving 2,644 more
+  Treasury rows on screen across 1,585 single-verse selections than when
+  lone groups stood open).
 - Resolution. Outside a group a citation the feed tagged resolves by its
   tag, and one it did not tag by the print's reading (`readShorthand`,
   `publisher_xref_shorthand.go`); inside a group the print is followed,
@@ -10190,8 +10199,9 @@ heading; at most 7 under one verse. As shown: 65,257 cards, 48 citations of
 the reader's own passage and 2 pieces that are words; 4,850 groups holding
 8,320 cards, 3 of the reader's own passage and 1 piece that is words. 12,576
 notes are one citation, 12,575 drawn as a card and one, of the reader's own
-verse, as its reference; 1,985 are one parenthesised group and 17,956
-several pieces, each drawn as a row that folds. Between
+verse, as its reference; 1,985 are one parenthesised group, drawn as a
+group's row closed until tapped, and 17,956 several pieces, drawn as a
+note's row open as the panel opens. Between
 two pieces of a note stands "; " or ", " and nothing else, and nothing stands
 before the first or after the last, with no exception; the passage with its
 letters taken out is the text on every verse that has a note; and every
@@ -10237,9 +10247,11 @@ OPEN, each built one way and not decided:
 - The heading's note. A second publication of the same apparatus has it in
   Numbers 4:22, before the word the heading ends with, and none on the
   heading. Not decided: where the feed has it (as built) or in verse 22.
-- Every note's row opens with the panel (as built), and a group inside a
-  note starts closed (decided). Not decided: whether every note should
-  instead start closed, each letter one row. With the notes open a second
+- A note of several pieces opens with the panel (as built), while every
+  parenthesised group starts closed wherever it stands (decided). Not
+  decided: whether notes of several pieces should instead start closed, each
+  letter one row, and whether an opened lone group keeps the margin's rule
+  beside its well (as built). With notes of several pieces open a second
   letter can lie below the first screen (John 3:16's b does).
 - Not built: the letter kept in view at the top of its margin while a note
   taller than the list scrolls, so that a reader in the middle of a long
