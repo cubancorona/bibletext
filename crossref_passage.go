@@ -79,6 +79,9 @@ func publisherPassageUnits(state *AppState, book string, chapter int, selected [
 	marks := func(ns []publisherCrossRef) []passageMark {
 		out := make([]passageMark, 0, len(ns))
 		for _, n := range ns {
+			if n.Unkeyed {
+				continue // its caller is not in the feed: no word is known to be its own
+			}
 			out = append(out, passageMark{At: n.Mark, Letter: noteLetter(n.Index)})
 		}
 		return out

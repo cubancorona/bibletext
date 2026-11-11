@@ -73,7 +73,11 @@ type publisherCrossRef struct {
 	// directly before the note's word (noteMarkAt), and to the head of the
 	// word in the three places where the feed sets a caller inside one
 	// (wordSplitCallers).
-	Mark    int
+	Mark int
+	// Unkeyed marks a note whose caller the feed lacks: it is shown with its
+	// verse, after the verse's other notes, and carries no letter, since no
+	// word of the verse is known to be its own (publisher_xref_displaced.go).
+	Unkeyed bool
 	Text    string            // the citation text exactly as delivered
 	Targets []publisherTarget // the resolved citations the feed tagged, in text order; none = words only
 	Groups  []publisherGroup  // the note's parenthesised groups, in text order
@@ -359,7 +363,9 @@ func (c crossRef) contains(ch, v int) bool {
 // passage the loaded text lacks is not a target: it is a piece of the note
 // that is its words. The note's parenthesised groups are resolved beside its
 // targets, each citation of a group by what the group prints. A heading's
-// notes stand before the notes of the verse the heading is set before.
+// notes stand before the notes of the verse the heading is set before; and
+// in the two stretches where the feed hangs every note one caller late, a
+// caller is given the content that is its own (publisher_xref_displaced.go).
 func publisherCrossRefsFor(bd *BibleData, book string, chapter int, selected []Verse) []publisherCrossRef {
 	if bd == nil || len(selected) == 0 {
 		return nil
@@ -367,7 +373,7 @@ func publisherCrossRefsFor(bd *BibleData, book string, chapter int, selected []V
 	var rows []publisherCrossRef
 	// unit is the text the note stands in: the verse's, the title's or the
 	// heading's.
-	add := func(verse int, heading bool, unit string, fn Footnote) {
+	add := func(verse int, heading, unkeyed bool, unit string, fn Footnote) {
 		if fn.Kind != footnoteKindCrossref {
 			return
 		}
@@ -375,14 +381,20 @@ func publisherCrossRefsFor(bd *BibleData, book string, chapter int, selected []V
 		if text == "" {
 			return
 		}
-		row := publisherCrossRef{Verse: verse, Heading: heading, Anchor: fn.Anchor, Text: text}
+		row := publisherCrossRef{Verse: verse, Heading: heading, Unkeyed: unkeyed, Anchor: fn.Anchor, Text: text}
 		row.Mark = noteMarkAt([]rune(unit), wordSplitCallers.wordStart(book, chapter, verse, heading, []rune(unit), fn.Anchor))
 		// The note's place among the notes of its verse number, which are
 		// added together: the title's are numbered 0, and a heading's stand
 		// before its verse's and are counted with them, so one run of letters
-		// serves the heading and the verse it opens.
+		// serves the heading and the verse it opens. A note keyed to no word
+		// takes no letter.
 		for i := len(rows) - 1; i >= 0 && rows[i].Verse == verse; i-- {
-			row.Index++
+			if !rows[i].Unkeyed {
+				row.Index++
+			}
+		}
+		if unkeyed {
+			row.Index, row.Anchor, row.Mark = -1, 0, 0
 		}
 		// A heading's note cites as a title's does: it has no verse of its
 		// own to be the passage the reader is on.
@@ -471,10 +483,15 @@ func publisherCrossRefsFor(bd *BibleData, book string, chapter int, selected []V
 		rows = append(rows, row)
 	}
 
-	// addCallers adds the cross-reference notes of one verse or title.
+	// addCallers adds the cross-reference notes of one verse or title, each
+	// caller with the content that is its own: the one delivered on it, or,
+	// in the two stretches where the feed hangs every content one caller
+	// late, the next one (displacedContent).
 	addCallers := func(verse int, unit string, fns []Footnote) {
-		for _, fn := range fns {
-			add(verse, false, unit, fn)
+		for i, fn := range crossRefNotesOf(fns) {
+			if own, shown := displacedContent(bd, noteCaller{book, chapter, verse, i}, fn); shown {
+				add(verse, false, false, unit, own)
+			}
 		}
 	}
 	if ch := bd.GetChapter(book, chapter); len(ch) > 0 {
@@ -492,10 +509,14 @@ func publisherCrossRefsFor(bd *BibleData, book string, chapter int, selected []V
 		// precede the verse's.
 		for _, h := range notedHeadingsBefore(bd, book, chapter, v.Verse) {
 			for _, fn := range h.Footnotes {
-				add(v.Verse, true, h.Text, fn)
+				add(v.Verse, true, false, h.Text, fn)
 			}
 		}
 		addCallers(v.Verse, v.Text, v.Footnotes)
+		// A content whose caller the feed lacks, after the verse's others.
+		for _, fn := range displacedHomeNotes(bd, book, chapter, v.Verse) {
+			add(v.Verse, false, true, v.Text, fn)
+		}
 	}
 	return rows
 }

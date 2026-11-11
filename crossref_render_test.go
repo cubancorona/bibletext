@@ -287,9 +287,10 @@ func TestRenderCrossRefPanel(t *testing.T) {
 	// And the notes as the panel draws them: every one whole, every letter
 	// before its word, the passage the verse's own text.
 	pieces := assertCanonPieceCensus(t, &bd)
-	t.Logf("pieces: %d notes (%d on verses, %d on titles, %d on headings); %d cards, %d of the reader's own passage, %d words, %d groups holding %d cards, %d own and %d words; drawn as %d cards, %d groups, %d words and %d folded notes; at most %d to a verse; %d letters drawn past white space, %d at the head of a split word, %d between two words run together; %d problems",
+	t.Logf("pieces: %d notes (%d on verses, %d on titles, %d on headings); %d cards, %d of the reader's own passage, %d words, %d groups holding %d cards, %d own and %d words; drawn as %d cards, %d groups, %d words and %d folded notes; at most %d to a verse; %d letters drawn past white space, %d at the head of a split word, %d between two words run together; %d notes shown one caller back, %d keyed to no word, %d callers with no content; %d problems",
 		pieces.Notes, pieces.OnVerses, pieces.OnTitles, pieces.OnHeadings, pieces.Cards, pieces.Own, pieces.Words, pieces.Groups, pieces.GroupCards, pieces.GroupOwn, pieces.GroupWords,
-		pieces.Alone, pieces.GroupAlone, pieces.WordsAlone, pieces.Folded, pieces.MostOnAVerse, pieces.Moved, pieces.WordStarts, pieces.BetweenWords, len(pieces.Problems))
+		pieces.Alone, pieces.GroupAlone, pieces.WordsAlone, pieces.Folded, pieces.MostOnAVerse, pieces.Moved, pieces.WordStarts, pieces.BetweenWords,
+		pieces.Shifted, pieces.Unkeyed, pieces.Silent, len(pieces.Problems))
 }
 
 func writeRenderPNG(t *testing.T, path string, img image.Image) {

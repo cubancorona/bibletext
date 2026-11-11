@@ -403,7 +403,11 @@ type pieceCensus struct {
 	Moved                                 int // letters drawn past the white space their offset stands before
 	WordStarts                            int // letters drawn at the head of a word the feed's caller splits
 	BetweenWords                          int // letters that stand between two letters: the feed ran two words together there
-	Problems                              []string
+	// Shifted is the notes shown on the caller before the one the feed
+	// delivers them on, Unkeyed those whose caller the feed lacks, and Silent
+	// the callers whose content the feed lacks (publisher_xref_displaced.go).
+	Shifted, Unkeyed, Silent int
+	Problems                 []string
 }
 
 // notePieceCensus measures bd's cross-reference notes as the panel draws them.
@@ -463,15 +467,38 @@ func notePieceCensus(bd *BibleData) pieceCensus {
 			st := &AppState{Bible: bd, CurrentBook: book, CurrentChapter: ch, CurrentVersion: "nkjv"}
 			for _, v := range vs {
 				one := []Verse{v}
+				// The callers as delivered, against what each shows: one that
+				// stands in a stretch the feed hangs a caller late shows the
+				// next caller's content, and the stretch's last shows none.
+				delivered := map[int][]Footnote{v.Verse: crossRefNotesOf(v.Footnotes)}
+				if v.Verse == vs[0].Verse {
+					delivered[0] = crossRefNotesOf(bd.SuperscriptionFor(book, ch).Footnotes)
+				}
+				for verse, fns := range delivered {
+					for i := range fns {
+						caller := noteCaller{book, ch, verse, i}
+						if s, ok := displacedStretchOf(bd, caller); ok {
+							if caller == s.Last {
+								c.Silent++
+							} else {
+								c.Shifted++
+							}
+						}
+					}
+				}
 				notes := publisherCrossRefsFor(bd, book, ch, one)
 				if len(notes) == 0 {
 					continue
 				}
 				where := fmt.Sprintf("%s %d:%d", book, ch, v.Verse)
 				perNumber := map[int]int{}
+				keyed := 0
 				for _, n := range notes {
 					c.Notes++
-					perNumber[n.Verse]++
+					if !n.Unkeyed {
+						perNumber[n.Verse]++
+						keyed++
+					}
 					switch {
 					case n.Heading:
 						c.OnHeadings++
@@ -480,8 +507,10 @@ func notePieceCensus(bd *BibleData) pieceCensus {
 					default:
 						c.OnVerses++
 					}
-					if n.Index != perNumber[n.Verse]-1 {
-						problem("%s: a note's index is %d, want %d", where, n.Index, perNumber[n.Verse]-1)
+					// A note keyed to a word takes the next letter of its
+					// verse; one keyed to none takes no letter.
+					if want := perNumber[n.Verse] - 1; n.Unkeyed && n.Index != -1 || !n.Unkeyed && n.Index != want {
+						problem("%s: a note's index is %d (keyed to a word: %v), want %d", where, n.Index, !n.Unkeyed, want)
 					}
 					runes := []rune(n.Text)
 					tally(where, n.Pieces, 0, len(runes), false)
@@ -526,8 +555,8 @@ func notePieceCensus(bd *BibleData) pieceCensus {
 				if got := passagePlainText(runs); got != strings.Join(want, "\n") {
 					problem("%s: the passage without its letters is not the text (%d runes for %d)", where, len([]rune(got)), len([]rune(strings.Join(want, "\n"))))
 				}
-				if marks != len(notes) {
-					problem("%s: %d letters in the passage for %d notes", where, marks, len(notes))
+				if marks != keyed {
+					problem("%s: %d letters in the passage for %d notes keyed to a word", where, marks, keyed)
 				}
 				// The verse's own drawn text is the last unit; the title and
 				// a noted heading stand before it.
@@ -554,6 +583,10 @@ func notePieceCensus(bd *BibleData) pieceCensus {
 				}
 				text := []rune(v.Text)
 				for _, n := range notes {
+					if n.Unkeyed {
+						c.Unkeyed++
+						continue
+					}
 					if n.Heading || n.Verse == 0 {
 						continue
 					}
@@ -583,6 +616,11 @@ func (c pieceCensus) problems() []string {
 	if c.Notes != c.OnVerses+c.OnTitles+c.OnHeadings || c.Notes != c.Alone+c.GroupAlone+c.WordsAlone+c.Folded {
 		out = append(out, fmt.Sprintf("the piece census's sums do not close: %+v", c))
 	}
+	// A stretch that is undone leaves one content without a caller and one
+	// caller without a content, so the two are equal in number.
+	if c.Unkeyed != c.Silent || (c.Shifted == 0) != (c.Unkeyed == 0) {
+		out = append(out, fmt.Sprintf("the displaced stretches do not close: %d shown one caller back, %d keyed to no word, %d callers with no content", c.Shifted, c.Unkeyed, c.Silent))
+	}
 	return out
 }
 
@@ -598,9 +636,21 @@ func assertPieceCensus(t *testing.T, c pieceCensus) {
 }
 
 // canonPieceCensus is the piece census of the NKJV canon fetched on
-// 6 November 2026: 32,517 notes, every one whole. An independent reading of
-// the raw feed was compared with it, note by note, on 11 November 2026.
+// 6 November 2026: 32,517 notes, every one whole, the two stretches the feed
+// hangs one caller late shown where the edition has them.
 var canonPieceCensus = pieceCensus{
+	Notes: 32517, OnVerses: 32473, OnTitles: 43, OnHeadings: 1,
+	Cards: 65257, Own: 48, Words: 2, Groups: 4850,
+	GroupCards: 8320, GroupOwn: 3, GroupWords: 1,
+	Alone: 12576, GroupAlone: 1985, WordsAlone: 0, Folded: 17956,
+	MostOnAVerse: 7, Moved: 1998, WordStarts: 3, BetweenWords: 257,
+	Shifted: 1961, Unkeyed: 2, Silent: 2,
+}
+
+// canonPieceCensusAsDelivered is the same canon read as the feed delivers it,
+// with the two stretches left one caller late: what the independent reading
+// of the raw feed was compared with, note by note, on 11 November 2026.
+var canonPieceCensusAsDelivered = pieceCensus{
 	Notes: 32517, OnVerses: 32473, OnTitles: 43, OnHeadings: 1,
 	Cards: 65254, Own: 51, Words: 2, Groups: 4850,
 	GroupCards: 8320, GroupOwn: 3, GroupWords: 1,
@@ -608,17 +658,24 @@ var canonPieceCensus = pieceCensus{
 	MostOnAVerse: 7, Moved: 1998, WordStarts: 3, BetweenWords: 257,
 }
 
-// assertCanonPieceCensus holds a canon's piece census to the pinned one.
+// assertCanonPieceCensus holds a canon's piece census to the pinned one, and
+// the same canon read as delivered to its own.
 func assertCanonPieceCensus(t *testing.T, bd *BibleData) pieceCensus {
 	t.Helper()
-	c := notePieceCensus(bd)
-	assertPieceCensus(t, c)
-	got, want := c, canonPieceCensus
-	got.Problems, want.Problems = nil, nil
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("piece census\n got %+v\nwant %+v", got, want)
+	hold := func(name string, c, want pieceCensus) {
+		t.Helper()
+		assertPieceCensus(t, c)
+		c.Problems, want.Problems = nil, nil
+		if !reflect.DeepEqual(c, want) {
+			t.Errorf("piece census %s\n got %+v\nwant %+v", name, c, want)
+		}
 	}
-	return c
+	shown := notePieceCensus(bd)
+	hold("as shown", shown, canonPieceCensus)
+	correctDisplacedNotes = false
+	defer func() { correctDisplacedNotes = true }()
+	hold("as delivered", notePieceCensus(bd), canonPieceCensusAsDelivered)
+	return shown
 }
 
 // The piece census on the fixture, and its controls: text the shorthand
