@@ -173,8 +173,13 @@ func (l crossRefLetteredLayout) Layout(objs []fyne.CanvasObject, size fyne.Size)
 
 // crossRefLettered is content with the note's letter in the margin beside
 // its first row of text, which is set at size in style and stands top below
-// the content's own top. A note keyed to no word has no letter, and its
-// content stands beside an empty margin, in line with the other notes'.
+// the content's own top. Every shape sets that first row on a canvas.Text or
+// crossRefPrinted, neither of which takes theme.SizeNameInnerPadding, so the
+// letter sits on the line outside the panel's theme scope as well as inside
+// it (a card's widget.Label preview shares the reference's left edge only
+// inside passageCitationTheme, where inner padding is 0). A note keyed to no
+// word has no letter, and its content stands beside an empty margin, in line
+// with the other notes'.
 func crossRefLettered(letter string, pal palette, content fyne.CanvasObject, top, size float32, style fyne.TextStyle) *fyne.Container {
 	mark := crossRefLetter(letter, pal)
 	drop := top

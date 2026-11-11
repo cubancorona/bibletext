@@ -379,6 +379,72 @@ func TestEveryShapeOfNoteStandsBesideItsLetterOnItsGround(t *testing.T) {
 	}
 }
 
+// EVERY LETTER SITS ON ITS FIRST LINE OUTSIDE THE PANEL'S THEME SCOPE. Every
+// lettered shape sets its first row on a canvas.Text or crossRefPrinted, so
+// crossRefLettered does not depend on passageCitationTheme's zero inner
+// padding; only a card's widget.Label preview depends on that scope to align
+// its inner text with the reference's left edge.
+func TestEveryShapeOfNoteKeepsItsLetterOnTheLineOutsideTheListScope(t *testing.T) {
+	th := appThemeForTest(t)
+	licenseNKJVForTest(t)
+	withPublisherCrossRefs(t, "nkjv", true)
+	st := noteShapesState(t)
+	st.theme = th
+	st.Bible.Verses["John"][3][15].Footnotes = append(st.Bible.Verses["John"][3][15].Footnotes,
+		Footnote{Anchor: 40, Text: "Rom. 5:8; (Rom. 5:9)", Kind: footnoteKindCrossref, Caller: "-"},
+	)
+	notes := publisherCrossRefsFor(st.Bible, "John", 3, versesBetween(st.Bible, "John", 3, 16, 16))
+	if len(notes) != 6 {
+		t.Fatalf("control: %d notes, want all six shapes", len(notes))
+	}
+	var blocks []fyne.CanvasObject
+	for _, n := range notes {
+		b, _, _, _ := publisherNoteBlock(st, n, st.pal(), func(crossRef) {}, &crossRefRelayout{})
+		blocks = append(blocks, b)
+	}
+	w := test.NewWindow(container.New(squeezeWidthLayout{}, container.NewVBox(blocks...)))
+	t.Cleanup(w.Close)
+	w.Resize(fyne.NewSize(300, 600))
+	drv := fyne.CurrentApp().Driver()
+	for i, want := range []struct {
+		shape, letter, first string
+		size                 float32
+		style                fyne.TextStyle
+	}{
+		{"one citation", "a", "Romans 5:8", 16, fyne.TextStyle{Bold: true}},
+		{"the reader's own verse", "b", "John 3:16", crossRefGroupTextSize, fyne.TextStyle{}},
+		{"words", "c", "Ezek. 8:21", crossRefGroupTextSize, fyne.TextStyle{}},
+		{"a group nothing of which is followed", "d", "(Hab. 2:4)", crossRefGroupTextSize, fyne.TextStyle{}},
+		{"a group that is its whole note", "e", "(Rom. 5:8)", crossRefGroupTextSize, fyne.TextStyle{}},
+		{"several pieces", "f", "Rom. 5:8; (Rom. 5:9)", crossRefGroupTextSize, fyne.TextStyle{}},
+	} {
+		var letter *canvas.Text
+		var first fyne.CanvasObject
+		walkTree(blocks[i], func(o fyne.CanvasObject) {
+			switch x := o.(type) {
+			case *canvas.Text:
+				if x.TextStyle.Bold && x.TextStyle.Italic && letter == nil {
+					letter = x
+				} else if x.Text == want.first {
+					first = x
+				}
+			case *crossRefPrinted:
+				if x.Text == want.first {
+					first = x
+				}
+			}
+		})
+		if letter == nil || letter.Text != want.letter || first == nil {
+			t.Fatalf("%s: letter %v, first %v; want %q and %q", want.shape, letter, first != nil, want.letter, want.first)
+		}
+		_, own := drv.RenderedTextSize(letter.Text, letter.TextSize, letter.TextStyle, nil)
+		_, line := drv.RenderedTextSize("Ag", want.size, want.style, nil)
+		if d := (atY(letter) + own) - (atY(first) + line); d < -0.5 || d > 0.5 {
+			t.Errorf("%s outside listScope: the letter stands %v points off the line of %q", want.shape, d, want.first)
+		}
+	}
+}
+
 // A NOTE KEYED TO NO WORD has no letter. Its rows stand beside an empty
 // margin, in line with the other notes', and its rule starts with its
 // pieces.

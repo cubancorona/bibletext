@@ -138,12 +138,13 @@ func TestCrossRefListFitsTheNarrowestPhone(t *testing.T) {
 // monospace) are the list's widest unwrapped texts, so each is measured at
 // its widest: every title and passage label the synopsis can give a card,
 // the widest run label the Psalter can produce, and the widest book names in
-// a range label. A note's letter and the reader's own passage as a printed
-// line do not wrap either, and are narrower than a reference; a publisher's
-// card stands beside the letter's margin on its note's padded ground, which
-// TestCrossRefListFitsTheNarrowestPhone measures object by object.
+// a range label. A publisher's card stands on its note's padded ground beside
+// the letter's margin (283 − 2×8 − 18 = 249 points), and 233 points inside an
+// opened group's well, with its tag ("Title", "LXX", "LXX, DSS") beside the
+// reference, so its reference line is held to those widths rather than the
+// whole list's 283.
 func TestEveryUnwrappedLineOfTheListFitsTheNarrowestPhone(t *testing.T) {
-	appThemeForTest(t)
+	th := appThemeForTest(t)
 	limit := narrowestPhoneBody(t)
 	gospelOnce.Do(loadGospelParallels)
 	if len(gospelPericopes) == 0 {
@@ -179,14 +180,75 @@ func TestEveryUnwrappedLineOfTheListFitsTheNarrowestPhone(t *testing.T) {
 	} else {
 		t.Logf("widest card reference %q: %.0f points", text, w)
 	}
+
+	// Publisher card headings, with their tags, on a note's ground (249) and
+	// inside an opened group's well (233).
+	empty := &AppState{Bible: &BibleData{}, theme: th}
+	probeGroup := newCrossRefGroupRow(empty, publisherGroup{
+		Text:   "(Rom. 5:8)",
+		Pieces: []publisherPiece{{Target: &publisherTarget{Ref: crossRef{Book: "Romans", Chapter: 5, Verse: 8}}}},
+	}, "", false, lightPalette, func(crossRef) {}, &crossRefRelayout{}, false)
+	probeGroup.toggle()
+	noteLimit := limit - 2*crossRefSectionPadX - crossRefLetterMargin
+	groupPad := probeGroup.inset.Objects[0].MinSize().Width - probeGroup.members.MinSize().Width
+	groupLimit := noteLimit - groupPad
+	if noteLimit != 249 || groupLimit != 233 {
+		t.Fatalf("control: publisher card width is %.0f on a note and %.0f in a group; want 249 and 233", noteLimit, groupLimit)
+	}
+	cardHeadingWidth := func(label, tag string) float32 {
+		return crossRefRowRuled(empty, crossRefCard{Label: label, Tag: tag}, lightPalette, func(crossRef) {}, false).MinSize().Width
+	}
+	var widestNote, widestGroup string
+	var widestNoteW, widestGroupW float32
+	for _, c := range []struct {
+		label, tag string
+		inGroup    bool
+	}{
+		{"Song of Solomon 2:8–3:5", "", true},
+		{"2 Thessalonians 2:16–17", "", true},
+		{"1 Thessalonians 5:12–13", "", true},
+		{"1 Thessalonians 4:14–17", "", true},
+		{"Leviticus 11", "", true},
+		{"2 Kings 18–20", "", true},
+		{"Psalm 150", "Title", true},
+		{"Psalm 119", "Title", true},
+		{"Deuteronomy 32:43", "LXX, DSS", true},
+		{"2 Thessalonians 2:16–17", "LXX", true},
+	} {
+		w := cardHeadingWidth(c.label, c.tag)
+		desc := c.label
+		if c.tag != "" {
+			desc += " [" + c.tag + "]"
+		}
+		if w > widestNoteW {
+			widestNoteW, widestNote = w, desc
+		}
+		if w > noteLimit {
+			t.Errorf("publisher card heading %q wants %.1f points, over the note's %.0f", desc, w, noteLimit)
+		}
+		if c.inGroup {
+			if w > widestGroupW {
+				widestGroupW, widestGroup = w, desc
+			}
+			if w > groupLimit {
+				t.Errorf("publisher group card heading %q wants %.1f points, over the group's %.0f", desc, w, groupLimit)
+			}
+		}
+	}
+	t.Logf("widest publisher card heading %q: %.1f / %.0f (group %q: %.1f / %.0f)", widestNote, widestNoteW, noteLimit, widestGroup, widestGroupW, groupLimit)
+
 	runs := []string{parallelsLabel, treasuryLabel, publisherRunLabel("NKJV", 176, true), publisherRunLabel("NKJV", 0, true)}
 	if text, w := widest(runs, 11, fyne.TextStyle{Bold: true, Monospace: true}); w > limit {
 		t.Errorf("the section label %q wants %.0f points, over %.0f", text, w, limit)
 	} else {
 		t.Logf("widest section label %q: %.0f points", text, w)
 	}
-	// CONTROL: the measure can exceed the limit.
+	// CONTROL: the measure can exceed the limit, and a tagged reference that
+	// still fits the whole list's 283 exceeds the 233 inside an opened group.
 	if _, w := widest([]string{strings.Repeat("Thessalonians ", 4)}, 16, fyne.TextStyle{Bold: true}); w <= limit {
 		t.Fatalf("control: a 56-character reference measures %.0f, within %.0f", w, limit)
+	}
+	if w := cardHeadingWidth("Song of Solomon 2:8–3:5", "LXX, DSS, Title"); w <= groupLimit || w > limit {
+		t.Fatalf("control: tagged Song of Solomon heading measures %.1f; want between %.0f and %.0f", w, groupLimit, limit)
 	}
 }
