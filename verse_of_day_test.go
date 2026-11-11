@@ -584,6 +584,18 @@ func TestTheCardSetsChristsWordsInRed(t *testing.T) {
 		if body == nil {
 			t.Fatal("the card sets no reading paragraph")
 		}
+		// The card shares its paragraph with the cross-references passage,
+		// which sets a note's letter and a verse's number in the text as
+		// raised marks. The card sets neither: its passage is the verses'
+		// words and nothing beside them.
+		for _, run := range body.runs {
+			if run.Mark || run.Dim {
+				t.Errorf("the card's passage carries a mark or a muted run (%q)", run.Text)
+			}
+		}
+		if n := len(test.WidgetRenderer(body).(*readingParagraphRenderer).lift); n != 0 {
+			t.Errorf("the card raises %d fragments above their rows", n)
+		}
 		for _, c := range test.WidgetRenderer(body).(*readingParagraphRenderer).fragmentColours() {
 			switch c {
 			case pal.RedLetter:
