@@ -53,6 +53,8 @@ func textsIn(o fyne.CanvasObject) []string {
 			out = append(out, b.String())
 		case *tapCard:
 			walk(x.content)
+		case *crossRefGroupRow:
+			walk(x.box)
 		case *fyne.Container:
 			for _, c := range x.Objects {
 				walk(c)
@@ -153,6 +155,30 @@ func bannedIn(objs []fyne.CanvasObject) []string {
 			}
 		case *tapCard:
 			walk(x.content)
+		case *crossRefGroupRow:
+			walk(x.box)
+		case *fyne.Container:
+			for _, c := range x.Objects {
+				walk(c)
+			}
+		}
+	}
+	for _, o := range objs {
+		walk(o)
+	}
+	return out
+}
+
+// groupRowsIn is every parenthesised group's row in objs, in list order.
+// cardsIn does not look inside one: a group's label and the cards it opens
+// into are the group's, not cards of the list's run.
+func groupRowsIn(objs []fyne.CanvasObject) []*crossRefGroupRow {
+	var out []*crossRefGroupRow
+	var walk func(o fyne.CanvasObject)
+	walk = func(o fyne.CanvasObject) {
+		switch x := o.(type) {
+		case *crossRefGroupRow:
+			out = append(out, x)
 		case *fyne.Container:
 			for _, c := range x.Objects {
 				walk(c)
@@ -266,8 +292,13 @@ func TestCrossRefListWithThePublisherIsOneListOfCards(t *testing.T) {
 	var followed []crossRef
 	lst := buildCrossRefList(st, sel, listFixtureRefs(), nil, lightPalette, func(c crossRef) { followed = append(followed, c) })
 
-	if lst.Parallels != 1 || lst.PublisherCards != 1 || lst.PublisherLines != 4 || lst.TSKRows != 1 {
-		t.Fatalf("list = %+v; want one parallel, one publisher card, four caption lines and one Treasury card", lst)
+	if lst.Parallels != 1 || lst.PublisherCards != 1 || lst.PublisherGroups != 2 || lst.PublisherLines != 2 || lst.TSKRows != 1 {
+		t.Fatalf("list = %+v; want one parallel, one publisher card, two groups, two caption lines and one Treasury card", lst)
+	}
+	// The two parenthesised groups are rows of their own, as printed: verse
+	// 1's untagged note and verse 2's group. Neither is a caption any more.
+	if got := groupRowsIn(lst.Objects); len(got) != 2 || got[0].group.Text != "(Acts 10:38)" || got[1].group.Text != "(John 1:13; Gal. 6:15; 1 John 3:9)" {
+		t.Fatalf("group rows = %d; want (Acts 10:38) and the John 1:13 group", len(got))
 	}
 	if !lst.Sections.Parallels || !lst.Sections.Publisher || !lst.Sections.Treasury {
 		t.Errorf("sections = %+v; want all three on screen", lst.Sections)

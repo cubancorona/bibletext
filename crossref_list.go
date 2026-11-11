@@ -171,9 +171,15 @@ type crossRefList struct {
 	Parallels      int // same-occasion rows
 	OtherOccasions int // the same saying on another occasion (next major release)
 	PublisherCards int // the publisher's cards
-	PublisherLines int // the publisher's caption lines: the notes' remainders, and the line that says it has no note
-	TSKRows        int // the Treasury cards on screen, after those the publisher's cards already carry are dropped
-	Sections       crossRefSections
+	PublisherLines int // the publisher's caption lines: the notes' leftover words, and the line that says it has no note
+	// PublisherGroups is the publisher's parenthesised groups on screen, each
+	// a row that opens into its citations (crossref_group.go).
+	PublisherGroups int
+	TSKRows         int // the Treasury cards on screen, after those the publisher's cards already carry are dropped
+	Sections        crossRefSections
+	// Relayout is how a row that changes its height asks for the list to be
+	// laid out again; the panel sets its fn once the list is mounted.
+	Relayout *crossRefRelayout
 	// CoverageNote is crossRefCoverage's sentence for the selection, "" when
 	// the cross-references cover all of it. It heads the list when the list
 	// has anything else in it, and is the empty panel's second line when not.
@@ -210,7 +216,7 @@ func buildCrossRefList(state *AppState, selected []Verse, refs []crossRef, tskEr
 
 // composeCrossRefList is the list without the coverage note.
 func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tskErr error, pal palette, onTap func(crossRef)) crossRefList {
-	var out crossRefList
+	out := crossRefList{Relayout: &crossRefRelayout{}}
 	var parallels, others, tsk []crossRef
 	for _, c := range refs {
 		switch {
@@ -313,35 +319,65 @@ func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tsk
 		if i == 0 || (keyed && n.Verse != notes[i-1].Verse) {
 			pending = publisherRunLabel(v.Abbrev, n.Verse, keyed)
 		}
-		targets, remainder := n.split()
-		var cards []crossRefCard
-		for _, tg := range targets {
+		// The note's rows, in the order the edition prints them: a card for
+		// each direct citation, and a row of its own for each parenthesised
+		// group, where the edition set it (crossref_group.go). A group is
+		// not de-duplicated and its citations do not count as carded: it is
+		// the edition's unit, and it may be closed.
+		parts, words := n.parts()
+		type noteRow struct {
+			card  *crossRefCard
+			group *publisherGroup
+		}
+		var rows []noteRow
+		lastCard := -1
+		for _, p := range parts {
+			if p.Group != nil {
+				rows = append(rows, noteRow{group: p.Group})
+				continue
+			}
+			tg := *p.Card
 			key := tg.key()
 			if seen[key] {
 				continue
 			}
 			seen[key] = true
 			carded = append(carded, tg.Ref)
-			cards = append(cards, crossRefCard{Ref: tg.Ref, Label: tg.label(), Tag: tg.tag(), Title: tg.Title})
+			lastCard = len(rows)
+			rows = append(rows, noteRow{card: &crossRefCard{Ref: tg.Ref, Label: tg.label(), Tag: tg.tag(), Title: tg.Title}})
 		}
-		if len(cards) == 0 {
-			// A note with no card: its words stand alone, then a rule, so a
-			// note ends in a rule whatever it holds.
-			if remainder != "" {
+		// The words left over — a citation of the note's own verse, one the
+		// feed could not tag — ride the note's last card as its caption, or
+		// stand alone before a rule when the note has no card.
+		wordsAlone := func() {
+			out.Objects = append(out.Objects, container.New(layout.NewCustomPaddedVBoxLayout(0), crossRefNoteCaption(words), widget.NewSeparator()))
+		}
+		if len(rows) == 0 {
+			if words != "" {
 				flush()
-				out.Objects = append(out.Objects, container.New(layout.NewCustomPaddedVBoxLayout(0), crossRefNoteCaption(remainder), widget.NewSeparator()))
+				wordsAlone()
 				out.PublisherLines++
 			}
 			continue
 		}
 		flush()
-		if remainder != "" {
-			cards[len(cards)-1].Caption = remainder
+		if words != "" {
+			if lastCard >= 0 {
+				rows[lastCard].card.Caption = words
+			}
 			out.PublisherLines++
 		}
-		for _, card := range cards {
-			out.Objects = append(out.Objects, crossRefRow(state, card, pal, onTap))
+		for _, r := range rows {
+			if r.group != nil {
+				out.Objects = append(out.Objects, newCrossRefGroupRow(state, *r.group, pal, onTap, out.Relayout))
+				out.PublisherGroups++
+				continue
+			}
+			out.Objects = append(out.Objects, crossRefRow(state, *r.card, pal, onTap))
 			out.PublisherCards++
+		}
+		if words != "" && lastCard < 0 {
+			wordsAlone()
 		}
 	}
 

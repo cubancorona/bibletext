@@ -104,6 +104,10 @@ func TestRenderCrossRefPanel(t *testing.T) {
 		{"1sam19-12-on", "1 Samuel", 19, 12, 12, true}, // a citation of a Psalm's title
 		{"heb1-6-on", "Hebrews", 1, 6, 6, true},        // a citation with its basis, LXX and DSS
 		{"gen7-2-on", "Genesis", 7, 2, 2, true},        // a citation of a whole chapter
+		{"acts10-15-on", "Acts", 10, 15, 15, true},     // three groups among two direct citations
+		{"john18-37-on", "John", 18, 37, 37, true},     // a note that is one group of nine and nothing else
+		{"luke6-20-on", "Luke", 6, 20, 20, true},       // the book carried into a group from the citation before it
+		{"acts26-6-on", "Acts", 26, 6, 6, true},        // the largest group, sixteen citations
 	}
 	phones := []struct {
 		name string
@@ -162,6 +166,56 @@ func TestRenderCrossRefPanel(t *testing.T) {
 					t.Errorf("%s: a compare word or legend is in the panel", name)
 				}
 				t.Logf("%s: panel %.0f×%.0f, content wants %.0f wide; %d texts", name, ps.Width, ps.Height, top.Content.MinSize().Width, len(treeTexts(top)))
+				// A frame with every parenthesised group open, scrolled to the
+				// first: the group's citations as cards on their shaded ground.
+				// Opening changes the list inside the scroll and nothing else.
+				var groups []*crossRefGroupRow
+				var listScroll *container.Scroll
+				walkTree(top, func(o fyne.CanvasObject) {
+					switch x := o.(type) {
+					case *crossRefGroupRow:
+						if x.header != nil {
+							groups = append(groups, x)
+						}
+					case *container.Scroll:
+						if listScroll == nil {
+							listScroll = x
+						}
+					}
+				})
+				if len(groups) > 0 && listScroll != nil {
+					size, pos := top.Content.Size(), top.Content.Position()
+					for _, g := range groups {
+						test.Tap(g.header)
+					}
+					if top.Content.Size() != size || top.Content.Position() != pos {
+						t.Errorf("%s: opening the groups moved the panel: %v at %v, was %v at %v", name, top.Content.Size(), top.Content.Position(), size, pos)
+					}
+					if m := top.Content.MinSize().Width; m > inner {
+						t.Errorf("%s: with the groups open the popup's content wants %.0f points and the panel gives it %.0f", name, m, inner)
+					}
+					drv := fyne.CurrentApp().Driver()
+					y := drv.AbsolutePositionForObject(groups[0]).Y - drv.AbsolutePositionForObject(listScroll).Y + listScroll.Offset.Y - 6
+					if most := listScroll.Content.Size().Height - listScroll.Size().Height; y > most {
+						y = most
+					}
+					if y < 0 {
+						y = 0
+					}
+					listScroll.Offset = fyne.NewPos(0, y)
+					listScroll.Refresh()
+					writeRenderPNG(t, filepath.Join(out, name+"-open.png"), w.Canvas().Capture())
+					members := 0
+					for _, g := range groups {
+						members += len(g.members.Objects)
+					}
+					t.Logf("%s: %d groups open, %d cards on their ground", name, len(groups), members)
+					for _, g := range groups {
+						test.Tap(g.header)
+					}
+					listScroll.Offset = fyne.NewPos(0, 0)
+					listScroll.Refresh()
+				}
 				if extra, ok := scrolledFrames[f.name]; ok {
 					// A second frame scrolled to a label further down: where the
 					// Treasury's run begins under John 3:16's cards, and where
@@ -185,6 +239,15 @@ func TestRenderCrossRefPanel(t *testing.T) {
 	assertNoteCensus(t, census)
 	t.Logf("census: %d notes, words %v, %d whole-chapter ids, %d title citations, %d bases, %d tagged citations inside parentheses, %d cards and %d caption lines over single-verse selections",
 		census.Notes, census.Words, census.WholeChapters, census.TitleCitations, census.Bases, census.InParentheses, census.Cards, census.Lines)
+	// The shorthand the group rows read their citations by, held to the
+	// feed's own tags over the same canon.
+	shorthand := noteShorthandCensus(&bd)
+	assertShorthandCensus(t, shorthand)
+	t.Logf("shorthand: %d of %d tagged citations read to the feed's id, %d mistagged by the feed inside a group; %d groups holding %d citations, %d of them tagged; %d read, %d in the loaded text; unread %q; unresolved %q",
+		shorthand.Agree, shorthand.Tagged, len(shorthand.GroupMistags), shorthand.Groups, shorthand.GroupCitations, shorthand.GroupTagged, shorthand.Read, shorthand.Resolved, shorthand.Unread, shorthand.Unresolved)
+	for _, m := range shorthand.GroupMistags {
+		t.Logf("feed mistag: %s", m)
+	}
 }
 
 func writeRenderPNG(t *testing.T, path string, img image.Image) {
@@ -228,6 +291,8 @@ func labelOffset(top *widget.PopUp, label string) (scroll *container.Scroll, y f
 			return walk(x.Content, at)
 		case *tapCard:
 			return walk(x.content, at)
+		case *crossRefGroupRow:
+			return walk(x.box, at)
 		}
 		return false
 	}

@@ -37,6 +37,8 @@ func crossRefListMisfits(objs []fyne.CanvasObject, limit float32) []string {
 		switch x := o.(type) {
 		case *tapCard:
 			walk(x.content, path+"/card")
+		case *crossRefGroupRow:
+			walk(x.box, path+"/group")
 		case *fyne.Container:
 			for i, c := range x.Objects {
 				walk(c, path+"/"+strconv.Itoa(i))
@@ -111,6 +113,16 @@ func TestCrossRefListFitsTheNarrowestPhone(t *testing.T) {
 			checked++
 			if problems := crossRefListMisfits(lst.Objects, limit); len(problems) != 0 {
 				t.Errorf("flag %v, %s %d:%d-%d: %s", flag, s.book, s.ch, s.lo, s.hi, strings.Join(problems, "; "))
+			}
+			// And with every parenthesised group open: its cards stand on an
+			// inset, which must not want more than the list has either.
+			for _, g := range groupRowsIn(lst.Objects) {
+				if g.header != nil {
+					g.toggle()
+				}
+			}
+			if problems := crossRefListMisfits(lst.Objects, limit); len(problems) != 0 {
+				t.Errorf("flag %v, %s %d:%d-%d, groups open: %s", flag, s.book, s.ch, s.lo, s.hi, strings.Join(problems, "; "))
 			}
 			all := joinedTexts(lst.Objects)
 			if strings.Contains(all, "Thomas Nelson") {

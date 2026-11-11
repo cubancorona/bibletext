@@ -171,6 +171,12 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 		}
 		listBox.Objects = lst.Objects
 		listScope.Refresh()
+		// A group that opens or closes changes the list's height inside the
+		// scroll; the panel keeps its size and its place (crossref_group.go).
+		lst.Relayout.fn = func() {
+			listBox.Refresh()
+			scroll.Refresh()
+		}
 		line, _ := crossRefFooterCredit(state, lst.Sections)
 		w := footer.Size().Width
 		if w <= 0 {
@@ -389,6 +395,13 @@ func passageCard(c crossRef, badge bool) crossRefCard {
 }
 
 func crossRefRow(state *AppState, card crossRefCard, pal palette, onTap func(crossRef)) fyne.CanvasObject {
+	return crossRefRowRuled(state, card, pal, onTap, true)
+}
+
+// crossRefRowRuled is crossRefRow with or without the rule that closes it:
+// the last card of an open group stands on the group's shaded ground, and
+// the group's own rule closes the row a few points under it (crossref_group.go).
+func crossRefRowRuled(state *AppState, card crossRefCard, pal palette, onTap func(crossRef), rule bool) fyne.CanvasObject {
 	c := card.Ref
 	ref := canvas.NewText(card.Label, pal.Accent)
 	ref.TextStyle = fyne.TextStyle{Bold: true}
@@ -463,7 +476,9 @@ func crossRefRow(state *AppState, card crossRefCard, pal palette, onTap func(cro
 		// inside the tap, since its words are not the card's passage.
 		block = append(block, crossRefNoteCaption(card.Caption))
 	}
-	block = append(block, widget.NewSeparator())
+	if rule {
+		block = append(block, widget.NewSeparator())
+	}
 	return container.New(layout.NewCustomPaddedVBoxLayout(0), block...)
 }
 
