@@ -99,7 +99,7 @@ func newCrossRefGroupRow(state *AppState, g publisherGroup, pal palette, onTap f
 		// does, however many lines it wraps to: the tap is 44 points tall
 		// and one line of the label is not.
 		middle := container.NewVBox(layout.NewSpacer(), r.label, layout.NewSpacer())
-		row := container.NewBorder(nil, nil, nil, container.NewCenter(r.icon), middle)
+		row := container.NewBorder(nil, nil, nil, crossRefFoldIcon(r.icon), middle)
 		r.header = newTapCard(container.New(layout.NewCustomPaddedLayout(6, 6, 0, 0), row), pal.SurfaceAlt, r.toggle)
 		head = r.header
 	}
@@ -109,6 +109,16 @@ func newCrossRefGroupRow(state *AppState, g publisherGroup, pal palette, onTap f
 	}
 	r.ExtendBaseWidget(r)
 	return r
+}
+
+// crossRefFoldIconSize is the box a row's disclosure mark is drawn in: a
+// little over the toolkit's inline size, at which the mark was a triangle
+// eight points by four.
+const crossRefFoldIconSize float32 = 26
+
+// crossRefFoldIcon is icon at that size, at the middle of its row's height.
+func crossRefFoldIcon(icon *widget.Icon) fyne.CanvasObject {
+	return container.NewCenter(container.NewGridWrap(fyne.NewSize(crossRefFoldIconSize, crossRefFoldIconSize), icon))
 }
 
 // crossRefGroupIcon is the row's disclosure mark, in the label's muted colour.

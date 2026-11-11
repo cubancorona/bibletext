@@ -149,7 +149,7 @@ func newCrossRefNoteRow(state *AppState, n publisherCrossRef, pieces []publisher
 	r.head = crossRefLettered(noteLetter(n.Index), pal, r.label, 0, crossRefGroupTextSize, fyne.TextStyle{})
 	r.letter = r.head.Objects[0].(*canvas.Text)
 	middle := container.NewVBox(layout.NewSpacer(), r.head, layout.NewSpacer())
-	row := container.NewBorder(nil, nil, nil, container.NewCenter(r.icon), middle)
+	row := container.NewBorder(nil, nil, nil, crossRefFoldIcon(r.icon), middle)
 	r.header = newTapCard(container.New(layout.NewCustomPaddedLayout(crossRefRowPad, crossRefRowPad, 0, 0), row), pal.SurfaceAlt, r.toggle)
 	r.pieces = publisherPieceRows(state, pieces, pal, onTap, relayout)
 	r.body = container.New(layout.NewCustomPaddedVBoxLayout(0), r.pieces...)

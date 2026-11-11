@@ -26,6 +26,25 @@ const crossRefPanelHeight = 460
 // list is the panel's width less this.
 const crossRefListChrome = 44
 
+// crossRefScrollLane is how far the list's scroll reaches past the list's
+// right edge, into the panel's padding: the lane its indicator runs in. The
+// panel's padding beside the list is half of crossRefListChrome, so the lane
+// stays inside the panel.
+const crossRefScrollLane float32 = 7
+
+// crossRefScrollLaneLayout gives the scroll the list's place and the lane
+// beside it. Its one object is the scroll.
+type crossRefScrollLaneLayout struct{}
+
+func (crossRefScrollLaneLayout) MinSize(objs []fyne.CanvasObject) fyne.Size {
+	return objs[0].MinSize()
+}
+
+func (crossRefScrollLaneLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
+	objs[0].Move(fyne.NewPos(0, 0))
+	objs[0].Resize(fyne.NewSize(size.Width+crossRefScrollLane, size.Height))
+}
+
 func showCrossRefs(state *AppState, text string, span selSpan) {
 	if state == nil || state.window == nil {
 		return
@@ -64,8 +83,14 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 	// widens its content to the content's own minimum width and clips the
 	// excess sideways with no bar to reach it, so a child that wants more
 	// width than the panel has can only clip itself (sheet_fit.go).
-	scroll := container.NewVScroll(container.New(squeezeWidthLayout{}, listScope))
-	body := container.NewStack(scroll)
+	// The list keeps the width it has always had, and the scroll that holds
+	// it reaches a few points further to the right, into the panel's own
+	// padding, so that its indicator runs in a lane beside the list and not
+	// over the right edge of a note's ground (crossRefScrollLane).
+	scroll := container.NewVScroll(container.New(squeezeWidthLayout{},
+		container.New(layout.NewCustomPaddedLayout(0, 0, 0, crossRefScrollLane), listScope)))
+	list := container.New(crossRefScrollLaneLayout{}, scroll)
+	body := container.NewStack(list)
 
 	var popup *widget.PopUp
 	// Stop the spinner on every exit from the thinking state — a running
@@ -142,7 +167,7 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 	// the list stood the panel that much over its cap, which on a desktop
 	// window put its top edge inside the header. Only while the list is the
 	// body: the chrome is what the panel needs besides it.
-	listShowing := func() bool { return len(body.Objects) == 1 && body.Objects[0] == scroll }
+	listShowing := func() bool { return len(body.Objects) == 1 && body.Objects[0] == fyne.CanvasObject(list) }
 	fitList := func() {
 		chrome := popup.MinSize().Height - scroll.MinSize().Height
 		h := ps.Height - chrome
@@ -187,7 +212,7 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 			w = ps.Width - sheetChromeWidth
 		}
 		setCrossRefSources(sources, line, w)
-		body.Objects = []fyne.CanvasObject{scroll}
+		body.Objects = []fyne.CanvasObject{list}
 		body.Refresh()
 		fit()
 		scroll.ScrollToTop()

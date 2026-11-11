@@ -291,11 +291,20 @@ func TestEachNoteStandsOnAGroundOfItsOwn(t *testing.T) {
 	var sections []*fyne.Container
 	var notes []*crossRefNoteRow
 	var groups []*crossRefGroupRow
+	var scroll *container.Scroll
+	var place *fyne.Container // the list's place in the panel: the scroll reaches past it by the lane
 	walkTree(top, func(o fyne.CanvasObject) {
 		switch x := o.(type) {
+		case *container.Scroll:
+			if scroll == nil {
+				scroll = x
+			}
 		case *fyne.Container:
 			if _, section := x.Layout.(crossRefSectionLayout); section {
 				sections = append(sections, x)
+			}
+			if _, lane := x.Layout.(crossRefScrollLaneLayout); lane {
+				place = x
 			}
 		case *crossRefNoteRow:
 			notes = append(notes, x)
@@ -335,6 +344,31 @@ func TestEachNoteStandsOnAGroundOfItsOwn(t *testing.T) {
 			if gap := y(g) - foot(ground(i-1)); gap != crossRefSectionGap {
 				t.Errorf("ground %d starts %v under the ground before it, want %v", i, gap, crossRefSectionGap)
 			}
+		}
+	}
+
+	// The scroll's indicator runs in a lane beside the list: the scroll
+	// reaches that far past the grounds' right edge, and no further than
+	// the panel's own padding beside the list.
+	if scroll == nil || place == nil {
+		t.Fatalf("the list's scroll %v, its place in the panel %v", scroll != nil, place != nil)
+	}
+	if lane := right(scroll) - right(ground(0)); lane != crossRefScrollLane || crossRefScrollLane <= 0 {
+		t.Errorf("the scroll ends %v past the grounds' right edge; want a lane of %v", lane, crossRefScrollLane)
+	}
+	// The lane is not taken from the list: a note's ground is as wide as
+	// the list's place in the panel, and the scroll reaches past that place
+	// into the panel's padding, staying inside the panel.
+	if ground(0).Size().Width != place.Size().Width || right(scroll)-right(place) != crossRefScrollLane {
+		t.Errorf("a note's ground is %v wide in a place %v wide, and the scroll ends %v past it; want the place's width and %v", ground(0).Size().Width, place.Size().Width, right(scroll)-right(place), crossRefScrollLane)
+	}
+	if right(scroll) > x(top.Content)+top.Content.Size().Width {
+		t.Errorf("the scroll ends at %v, past the panel's edge at %v", right(scroll), x(top.Content)+top.Content.Size().Width)
+	}
+	// A row's disclosure mark is drawn in a box of its own size.
+	for _, icon := range []*widget.Icon{a.icon, b.icon, inner.icon} {
+		if icon.Size() != fyne.NewSize(crossRefFoldIconSize, crossRefFoldIconSize) {
+			t.Errorf("a disclosure mark is %v, want %v square", icon.Size(), crossRefFoldIconSize)
 		}
 	}
 
