@@ -188,13 +188,14 @@ type crossRefList struct {
 	Parallels      int // same-occasion rows
 	OtherOccasions int // the same saying on another occasion (next major release)
 	// PublisherNotes is the publisher's notes on screen, each under its
-	// letter (crossref_note.go). PublisherCards is the cards of their direct
-	// citations, which stand open when the panel opens; PublisherGroups the
-	// parenthesised groups among their pieces, each a row that opens into
-	// its citations (crossref_group.go); PublisherLines the pieces shown and
-	// not followed — a citation of the reader's own passage, words that are
-	// no citation the loaded text has — and the line that says the edition
-	// has no note for the selection.
+	// letter (crossref_note.go). PublisherCards is the cards that stand open
+	// when the panel opens: the notes' direct citations, and the citations
+	// of a note that is one parenthesised group. PublisherGroups is the
+	// parenthesised groups among the notes' pieces; one inside a note is a
+	// row that opens into its citations (crossref_group.go). PublisherLines
+	// is the pieces shown and not followed — a citation of the reader's own
+	// passage, words that are no citation the loaded text has — and the line
+	// that says the edition has no note for the selection.
 	PublisherNotes  int
 	PublisherCards  int
 	PublisherLines  int
@@ -342,10 +343,12 @@ func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tsk
 	// first note: every note puts something on screen, so no label is held
 	// back, and a card is not withheld because an earlier note of the verse
 	// has its passage — the note is the edition's unit and is kept whole.
-	var carded []crossRef // the passages the publisher's direct cards follow, for the Treasury filter
+	var carded []crossRef // the passages the publisher's cards on screen follow, for the Treasury filter
 	for i, n := range notes {
 		if i == 0 || (keyed && n.Verse != notes[i-1].Verse) {
 			label(publisherRunLabel(v.Abbrev, n.Verse, keyed))
+			// A little air between the label and the first note's ground.
+			out.Objects = append(out.Objects, spacer(4))
 		}
 		row, cards, groups, lines := publisherNoteBlock(state, n, pal, onTap, out.Relayout)
 		out.Objects = append(out.Objects, row)

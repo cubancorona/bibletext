@@ -428,9 +428,6 @@ func crossRefRowRuled(state *AppState, card crossRefCard, pal palette, onTap fun
 		tag.TextSize = 12
 		refLine = container.NewHBox(ref, tag)
 	}
-	if card.Letter != "" {
-		refLine = container.NewHBox(crossRefLetter(card.Letter, pal), refLine)
-	}
 	lines := []fyne.CanvasObject{refLine}
 	if c.otherOccasion() {
 		lines = append(lines, container.NewHBox(otherOccasionBadge(pal)))
@@ -469,8 +466,14 @@ func crossRefRowRuled(state *AppState, card crossRefCard, pal palette, onTap fun
 	snip.Wrapping = fyne.TextWrapWord
 	lines = append(lines, snip)
 
-	inner := container.New(layout.NewCustomPaddedLayout(6, 6, 0, 0),
-		container.New(layout.NewCustomPaddedVBoxLayout(3), lines...))
+	var body fyne.CanvasObject = container.New(layout.NewCustomPaddedVBoxLayout(3), lines...)
+	if card.Letter != "" {
+		// A card that is the whole of a publisher's note: its letter in the
+		// margin, on the reference's line, inside the tap
+		// (crossref_section.go).
+		body = crossRefLettered(card.Letter, pal, body, 0, ref.TextSize, ref.TextStyle)
+	}
+	inner := container.New(layout.NewCustomPaddedLayout(6, 6, 0, 0), body)
 	tap := newTapCard(inner, pal.SurfaceAlt, func() { onTap(c) })
 	block := []fyne.CanvasObject{tap}
 	if rule {

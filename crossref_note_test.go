@@ -283,8 +283,8 @@ func TestThePassageIsTheSelectedTextWithALetterBeforeEachNotesWord(t *testing.T)
 	if got := joined(letters); got != "a 2 Samuel 12:1|a Romans 5:8" {
 		t.Errorf("the cards that are a whole note carry %q", got)
 	}
-	if !hasLine(lst.Objects, "b  (Is. 9:6)") || !hasLine(lst.Objects, "c  Is. 43:25; 9:6") {
-		t.Errorf("the group and the note of two citations do not carry b and c:\n%s", joinedTexts(lst.Objects))
+	if got := noteHeadsIn(lst.Objects); joined(got) != "b  (Is. 9:6)|c  Is. 43:25; 9:6" {
+		t.Errorf("the note that is one group and the note of two citations read %q; want them under b and c:\n%s", got, joinedTexts(lst.Objects))
 	}
 
 	// DRAWN: a verse's number is the page's own, in the bold cut and the
@@ -423,12 +423,11 @@ func TestANoteOfSeveralPiecesFoldsToItsPrintedLine(t *testing.T) {
 		t.Fatalf("%d note rows; list = %+v; want one note of five cards and the reader's own verse", len(rows), lst)
 	}
 	row := rows[0]
-	// Open when the list is built, the printed line on the row, and the
-	// rule that closes the note under its pieces.
-	if !row.open || !row.body.Visible() || !row.foot.Visible() {
-		t.Fatalf("the note is not open when the list is built: open %v, pieces visible %v, closing rule visible %v", row.open, row.body.Visible(), row.foot.Visible())
+	// Open when the list is built, the printed line on the row.
+	if !row.open || !row.body.Visible() {
+		t.Fatalf("the note is not open when the list is built: open %v, pieces visible %v", row.open, row.body.Visible())
 	}
-	if got := joined(textsIn(row.label)); got != "a  "+printed {
+	if got := row.letter.Text + "  " + joined(textsIn(row.label)); got != "a  "+printed {
 		t.Errorf("the row reads %q; want the letter and the note as printed", got)
 	}
 	// The pieces in print order: the reader's own verse third, in full, with
@@ -448,14 +447,29 @@ func TestANoteOfSeveralPiecesFoldsToItsPrintedLine(t *testing.T) {
 	if got := joined(pieces); got != "card:Judges 9:23|card:1 Samuel 16:15|shown:1 Samuel 16:16|card:1 Samuel 18:10|card:1 Samuel 19:9|card:1 Kings 22:19–22" {
 		t.Errorf("pieces = %s", got)
 	}
+	// The reader's own verse is set as a line of the edition's print, muted
+	// and at that size: in a card's bold it read as a heading over the
+	// cards after it.
+	own := 0
+	walkTree(row.pieces[2], func(o fyne.CanvasObject) {
+		if tx, ok := o.(*canvas.Text); ok && tx.Text == "1 Samuel 16:16" {
+			own++
+			if tx.TextStyle.Bold || tx.TextSize != crossRefGroupTextSize || tx.Color != lightPalette.TextMuted {
+				t.Errorf("the reader's own verse is set bold %v at %v points in %v", tx.TextStyle.Bold, tx.TextSize, tx.Color)
+			}
+		}
+	})
+	if own != 1 {
+		t.Errorf("the reader's own verse stands %d times in its row", own)
+	}
 	openHeight := row.MinSize().Height
 
 	// A tap on the row closes it to its printed line.
 	test.Tap(row.header)
-	if row.open || row.body.Visible() || !row.foot.Visible() || relaid != 1 {
-		t.Fatalf("a tap did not close the note: open %v, pieces visible %v, closing rule visible %v, %d layouts", row.open, row.body.Visible(), row.foot.Visible(), relaid)
+	if row.open || row.body.Visible() || relaid != 1 {
+		t.Fatalf("a tap did not close the note: open %v, pieces visible %v, %d layouts", row.open, row.body.Visible(), relaid)
 	}
-	if got := joined(textsIn(row.label)); got != "a  "+printed {
+	if got := row.letter.Text + "  " + joined(textsIn(row.label)); got != "a  "+printed {
 		t.Errorf("closed, the row reads %q", got)
 	}
 	if row.MinSize().Height >= openHeight {
@@ -463,7 +477,7 @@ func TestANoteOfSeveralPiecesFoldsToItsPrintedLine(t *testing.T) {
 	}
 	// And a second opens it again, with the pieces it had.
 	test.Tap(row.header)
-	if !row.open || !row.body.Visible() || !row.foot.Visible() || relaid != 2 || row.MinSize().Height != openHeight {
+	if !row.open || !row.body.Visible() || relaid != 2 || row.MinSize().Height != openHeight {
 		t.Errorf("a second tap did not open the note again: open %v, %d layouts, height %v (was %v)", row.open, relaid, row.MinSize().Height, openHeight)
 	}
 	// A card under the note is followed as any card is.

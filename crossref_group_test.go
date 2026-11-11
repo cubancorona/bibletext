@@ -105,32 +105,52 @@ func TestAGroupRowOpensIntoItsCitations(t *testing.T) {
 	relaid := 0
 	lst.Relayout.fn = func() { relaid++ }
 
-	if lst.PublisherNotes != 3 || lst.PublisherCards != 3 || lst.PublisherGroups != 3 || lst.PublisherLines != 0 {
-		t.Fatalf("list = %+v; want three notes holding three cards and three groups, and nothing shown that is not followed", lst)
+	if lst.PublisherNotes != 3 || lst.PublisherCards != 4 || lst.PublisherGroups != 3 || lst.PublisherLines != 0 {
+		t.Fatalf("list = %+v; want three notes showing four cards (the first's three and the second's one) and holding three groups, and nothing shown that is not followed", lst)
 	}
-	if got := cardLabelsIn(lst.Objects); joined(got) != "Romans 5:8|Ephesians 2:4|2 Thessalonians 2:16" {
+	// The cards on screen as the list is built: the first note's three, and
+	// the citation of the second note, which is one group and opens as any
+	// note does. The group inside the first note is closed.
+	if got := cardLabelsIn(lst.Objects); joined(got) != "Romans 5:8|Ephesians 2:4|2 Thessalonians 2:16|Isaiah 9:6" {
 		t.Fatalf("cards = %q", got)
 	}
 	groups := groupRowsIn(lst.Objects)
-	if len(groups) != 3 {
-		t.Fatalf("%d group rows", len(groups))
+	if len(groups) != 1 {
+		t.Fatalf("%d group rows, want the one inside the first note", len(groups))
 	}
-	first, lone, unread := groups[0], groups[1], groups[2]
+	first := groups[0]
 
-	// Order: the passage and the label, then the three notes. The first is a
-	// row of its own whose pieces are its three cards and then its group,
-	// where the edition printed it; the other two are each a group that is
-	// the whole of its note. A rule closes the card above the first group,
-	// which is the rule above it. The rule below it is its note's, at the
-	// list's edge, since it is the last of the rows under its letter; a group
-	// that is its whole note closes with a rule of its own.
+	// Order: the passage and the label, then the three notes, each on a
+	// ground of its own. The first is a row whose pieces are its three cards
+	// and then its group, where the edition printed it; the second is a
+	// group that is the whole of its note, drawn as a note is; the third is
+	// a group nothing of which can be followed. A rule closes the card above
+	// the first group, which is the rule above it; it is the last of its
+	// note's rows, so no rule stands under it.
 	notes := noteRowsIn(lst.Objects)
-	if len(notes) != 1 {
-		t.Fatalf("%d note rows, want the first note's", len(notes))
+	if len(notes) != 2 {
+		t.Fatalf("%d note rows, want the first note's and the second's", len(notes))
 	}
-	note := notes[0]
-	if n := len(lst.Objects); n < 3 || lst.Objects[n-3] != fyne.CanvasObject(note) || lst.Objects[n-2] != fyne.CanvasObject(lone) || lst.Objects[n-1] != fyne.CanvasObject(unread) {
-		t.Fatalf("the list does not end with the first note's row and the two groups, in that order (%d objects)", len(lst.Objects))
+	note, lone := notes[0], notes[1]
+	n := len(lst.Objects)
+	if n < 3 {
+		t.Fatalf("the list has %d objects", n)
+	}
+	for i, o := range lst.Objects[n-3:] {
+		c, ok := o.(*fyne.Container)
+		if !ok {
+			t.Fatalf("note %d is a %T, want a ground with the note on it", i, o)
+		}
+		if _, section := c.Layout.(crossRefSectionLayout); !section {
+			t.Fatalf("note %d does not stand on a ground of its own", i)
+		}
+	}
+	unread := lst.Objects[n-1]
+	if got := noteRowsIn(lst.Objects[n-3 : n-2]); len(got) != 1 || got[0] != note {
+		t.Fatalf("the first of the last three grounds does not hold the first note's row")
+	}
+	if got := noteRowsIn(lst.Objects[n-2 : n-1]); len(got) != 1 || got[0] != lone {
+		t.Fatalf("the second of the last three grounds does not hold the second note's row")
 	}
 	body := note.pieces
 	at := len(body) - 1
@@ -144,14 +164,8 @@ func TestAGroupRowOpensIntoItsCitations(t *testing.T) {
 	if _, rule := above.Objects[len(above.Objects)-1].(*widget.Separator); !rule {
 		t.Errorf("no rule above the first group: the block above ends in a %T", above.Objects[len(above.Objects)-1])
 	}
-	for _, g := range groups {
-		_, rule := g.box.Objects[len(g.box.Objects)-1].(*widget.Separator)
-		switch {
-		case g == first && (rule || !note.foot.Visible() || note.box.Objects[len(note.box.Objects)-1] != fyne.CanvasObject(note.foot)):
-			t.Errorf("%s: the last row under its letter closes with a rule of its own (%v), or its note's rule is not the last thing in the note", g.group.Text, rule)
-		case g != first && !rule:
-			t.Errorf("%s: no rule below the group", g.group.Text)
-		}
+	if _, rule := first.box.Objects[len(first.box.Objects)-1].(*widget.Separator); rule {
+		t.Errorf("%s: the last of its note's rows closes with a rule of its own", first.group.Text)
 	}
 	// The card above carries no caption now: the group is not its footnote.
 	if n := len(above.Objects); n != 2 {
@@ -176,8 +190,8 @@ func TestAGroupRowOpensIntoItsCitations(t *testing.T) {
 	if got := cardLabelsIn(first.members.Objects); joined(got) != "1 John 4:9|1 John 4:10|Revelation 1:5" {
 		t.Fatalf("open, the group's cards are %q", got)
 	}
-	if first.shade.FillColor != lightPalette.Surface || lightPalette.Surface == lightPalette.SurfaceAlt {
-		t.Errorf("the group's ground is %v; want the inset surface %v, which must differ from the panel's %v", first.shade.FillColor, lightPalette.Surface, lightPalette.SurfaceAlt)
+	if first.shade.FillColor != crossRefGroupGround(lightPalette) || crossRefGroupGround(lightPalette) == crossRefSectionGround(lightPalette) {
+		t.Errorf("the group's ground is %v; want %v, which must differ from the ground of the note it stands in, %v", first.shade.FillColor, crossRefGroupGround(lightPalette), crossRefSectionGround(lightPalette))
 	}
 	if first.MinSize().Height <= closedHeight {
 		t.Errorf("open, the row is %v tall, no taller than closed (%v)", first.MinSize().Height, closedHeight)
@@ -199,7 +213,7 @@ func TestAGroupRowOpensIntoItsCitations(t *testing.T) {
 		t.Errorf("tapping the group's second card followed %+v", followed)
 	}
 	// The list's own run is what it was: the group's cards are not its cards.
-	if got := cardLabelsIn(lst.Objects); joined(got) != "Romans 5:8|Ephesians 2:4|2 Thessalonians 2:16" {
+	if got := cardLabelsIn(lst.Objects); joined(got) != "Romans 5:8|Ephesians 2:4|2 Thessalonians 2:16|Isaiah 9:6" {
 		t.Errorf("with the group open the list's cards are %q", got)
 	}
 
@@ -209,21 +223,26 @@ func TestAGroupRowOpensIntoItsCitations(t *testing.T) {
 		t.Errorf("a second tap did not close the group: open %v, inset %v, height %v (closed %v), %d layouts", first.open, first.inset.Visible(), first.MinSize().Height, closedHeight, relaid)
 	}
 
-	// A note that is a group alone opens the same way, and carries its
-	// note's letter before the group's text.
-	if got := textsIn(lone.label); joined(got) != "b  (Is. 9:6)" {
+	// A note that is a group alone is drawn as any note is: its letter, the
+	// group as printed on its row, and its citation under it, shown when the
+	// list is built and folded by a tap on the row.
+	if got := lone.letter.Text + "  " + joined(textsIn(lone.label)); got != "b  (Is. 9:6)" {
 		t.Errorf("the lone group's row reads %q", got)
 	}
+	if got := cardLabelsIn(lone.pieces); !lone.open || !lone.body.Visible() || joined(got) != "Isaiah 9:6" {
+		t.Errorf("the lone group's note: open %v, its cards %q", lone.open, got)
+	}
 	test.Tap(lone.header)
-	if got := cardLabelsIn(lone.members.Objects); joined(got) != "Isaiah 9:6" {
-		t.Errorf("the lone group's cards are %q", got)
+	if lone.open || lone.body.Visible() {
+		t.Errorf("a tap did not fold the lone group's note")
 	}
 	// CONTROL: a group none of whose citations the loaded text has is its
-	// words and no more: nothing to tap, no icon promising cards.
-	if unread.header != nil || unread.icon != nil || joined(textsIn(unread)) != "c  (Hab. 2:4)" {
-		t.Errorf("a group with nothing to open has a header %v, an icon %v and the text %q", unread.header != nil, unread.icon != nil, textsIn(unread))
+	// letter and its words and no more: nothing to tap, no row promising
+	// citations.
+	if got := joined(textsIn(unread)); got != "c|(Hab. 2:4)" {
+		t.Errorf("a group with nothing to open reads %q", got)
 	}
-	if len(cardsIn([]fyne.CanvasObject{unread.box})) != 0 {
-		t.Errorf("a group with nothing to open holds a tap target")
+	if len(cardsIn([]fyne.CanvasObject{unread})) != 0 || len(noteRowsIn([]fyne.CanvasObject{unread})) != 0 {
+		t.Errorf("a group with nothing to open holds a tap target or a row that folds")
 	}
 }

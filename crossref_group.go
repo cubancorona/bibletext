@@ -76,26 +76,18 @@ type crossRefGroupRow struct {
 	shade   *canvas.Rectangle // the inset's ground
 }
 
-// letter is the note's letter, set before the group's text when the group is
-// the whole of its note (crossref_note.go); "" for a group among a note's
-// other pieces. rule says whether the row closes with a rule of its own: it
-// does not as the last of the rows under a letter, where the note's rule
-// stands under it.
-func newCrossRefGroupRow(state *AppState, g publisherGroup, letter string, pal palette, onTap func(crossRef), relayout *crossRefRelayout, rule bool) *crossRefGroupRow {
+// rule says whether the row closes with a rule of its own: it does not as
+// the last of a note's rows, where the note's ground ends under it.
+func newCrossRefGroupRow(state *AppState, g publisherGroup, pal palette, onTap func(crossRef), relayout *crossRefRelayout, rule bool) *crossRefGroupRow {
 	r := &crossRefGroupRow{group: g, state: state, pal: pal, onTap: onTap, relayout: relayout}
-	r.label = crossRefPrintedLine(letter, g.Text)
+	r.label = crossRefPrintedLine(g.Text)
 	r.members = container.New(layout.NewCustomPaddedVBoxLayout(0))
-	r.shade = canvas.NewRectangle(pal.Surface)
+	r.shade = canvas.NewRectangle(crossRefGroupGround(pal))
 	r.shade.CornerRadius = 8
 	// The ground, with a little air under it so it does not sit on the rule
 	// that closes the row.
 	ground := container.NewStack(r.shade, container.New(layout.NewCustomPaddedLayout(2, 2, 8, 8), r.members))
 	r.inset = container.New(layout.NewCustomPaddedLayout(0, 8, 0, 0), ground)
-	if letter != "" {
-		// The group is the whole of its note: what it opens into stands
-		// under the note's letter (crossref_section.go).
-		r.inset = crossRefUnder(r.inset, pal)
-	}
 	r.inset.Hide()
 
 	var head fyne.CanvasObject
@@ -145,7 +137,7 @@ func (r *crossRefGroupRow) toggle() {
 			// that cannot be followed. The last row's rule would stand at
 			// the foot of the shaded ground with the row's own rule a few
 			// points under it.
-			for _, row := range publisherPieceRows(r.state, r.group.Pieces, r.pal, r.onTap, r.relayout, false) {
+			for _, row := range publisherPieceRows(r.state, r.group.Pieces, r.pal, r.onTap, r.relayout) {
 				r.members.Add(row)
 			}
 		}

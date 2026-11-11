@@ -1,27 +1,38 @@
 package bibletext
 
-// What stands under a letter, seen to stand under it — the cross-references
-// list's publisher run (crossref_note.go; docs/SCRIPTURE_WORKLIST.md, S20).
+// One note of the publisher's apparatus set apart from the next — the
+// cross-references list's publisher run (crossref_note.go;
+// docs/SCRIPTURE_WORKLIST.md, S20).
 //
 // Decided 11 November 2026: a reader sees at a glance which rows are a
-// note's. The note's own row, with its letter, stands at the list's edge.
-// Everything under it — its cards, the reader's own passage, a parenthesised
-// group's row and the cards that row opens into — is set in from the edge
-// beside a rule that runs the whole height of what the note holds. One rule
-// the width of the list closes the note, and the next letter stands back at
-// the edge.
+// note's. Each note stands on a ground of its own, rounded, with a gap
+// between one note's ground and the next. The note's letter stands alone in
+// a margin at the ground's left, and everything else of the note stands
+// beside that margin: the note as printed, its cards, the reader's own
+// passage, a parenthesised group's row and the cards that row opens into.
+// From under the letter a rule runs down the margin beside the note's rows,
+// so that a note taller than the list still shows, with its ends scrolled
+// out of sight, that its rows are one note's; it is the one device here that
+// holds on a dim screen, where a ground's edge is faint. A group opened
+// inside a note stands on a third ground, neither the note's nor the
+// panel's, a well in the note's (crossRefGrounds).
 //
-// Until then a note's pieces stood at the edge as the next note's row did: a
-// group under the letter a and the note b after it read as two equal rows,
-// and nothing showed where a's citations ended.
+// It was first built the same day as rows set in from the list's edge
+// beside a quiet rule, with a rule the width of the list closing the note.
+// On a phone that did not show where a letter's rows ended: a 2-point rule
+// and a 16-point inset were too slight beside cards at the full type size.
 //
-// A note that is one card has nothing under it and is drawn as before. A
-// note that is one parenthesised group is the group's row at the edge, and
-// what the group opens into is set in the same way.
+// Every note opens the same way when the panel opens: its own citations
+// shown, and a parenthesised group inside it closed until it is tapped. A
+// note that is one parenthesised group and nothing else is therefore drawn
+// as any note of several pieces is, its row carrying the group as printed
+// and its citations under it. Drawn as a group's row it started closed,
+// beside notes that started open, though to a reader it is a letter like
+// the others.
 //
-// Width: the inset is taken from the rows under a letter, so the widest of
-// them still has to fit the list on the narrowest phone
-// (TestCrossRefListFitsTheNarrowestPhone, with every note and group open).
+// Width: the ground's padding and the letter's margin are taken from the
+// note's rows, so the widest of them still has to fit the list on the
+// narrowest phone (TestCrossRefListFitsTheNarrowestPhone, every group open).
 
 import (
 	"image/color"
@@ -29,43 +40,141 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 )
 
 const (
-	// crossRefUnderInset is how far the rows under a letter stand in from
-	// the list's edge.
-	crossRefUnderInset float32 = 16
-	// crossRefUnderRuleAt is the left edge of the rule they stand beside,
-	// and crossRefUnderRuleWidth its width.
-	crossRefUnderRuleAt    float32 = 4
-	crossRefUnderRuleWidth float32 = 2
+	// crossRefSectionPadX and crossRefSectionPadY are a note's ground's
+	// inner padding, at its sides and above and below.
+	crossRefSectionPadX float32 = 8
+	crossRefSectionPadY float32 = 2
+	// crossRefSectionGap is the space between one note's ground and the
+	// next thing in the list: the widest interval in the publisher's run,
+	// where the rows of one note are a hairline apart.
+	crossRefSectionGap float32 = 10
+	// crossRefSectionRadius rounds the ground's corners.
+	crossRefSectionRadius float32 = 10
+	// crossRefLetterMargin is the width of the margin the letter stands in.
+	crossRefLetterMargin float32 = 18
+	// crossRefStemAt is the left edge of the rule under the letter, which
+	// puts it under the middle of the letter, and crossRefStemWidth its
+	// width. crossRefStemGap is how far under the line the letter stands on
+	// the rule starts, and crossRefStemFoot how far above the foot of the
+	// note's rows it stops, so that it hangs from the letter and does not
+	// run into the ground's edge.
+	crossRefStemAt    float32 = 3
+	crossRefStemWidth float32 = 3
+	crossRefStemGap   float32 = 5
+	crossRefStemFoot  float32 = 6
 )
 
-// crossRefUnderRuleColour is the rule's colour: the letter's, quieter, so
-// the rule reads as the letter's own.
-func crossRefUnderRuleColour(pal palette) color.Color {
-	return withAlpha(pal.Accent, 110)
+// crossRefStemColour is the rule's colour: the letter's, a little quieter
+// than the letter, and better than 4:1 against the note's ground in both
+// themes, so that it still reads where the ground's own edge does not.
+func crossRefStemColour(pal palette) color.NRGBA { return withAlpha(pal.Accent, 200) }
+
+// crossRefGrounds are the two grounds of the publisher's run: the one a
+// note stands on, and the one a group opened inside a note stands on. The
+// panel stands on the palette's alternate surface. Of the palette's two
+// other grounds a note takes the one further in lightness from the panel's
+// — the page's near-white in the light theme, the window's near-black in
+// the dark — and an opened group the other. So a note stands out from the
+// panel as far as the palette allows in both themes, and a group opened
+// inside it is a well in the note's ground and not the panel showing
+// through it: the gap between two notes is the panel's colour, and a well
+// of that colour would cut a long note in two.
+func crossRefGrounds(pal palette) (note, group color.NRGBA) {
+	away := func(c color.NRGBA) float64 {
+		d := crossRefLightness(c) - crossRefLightness(pal.SurfaceAlt)
+		if d < 0 {
+			return -d
+		}
+		return d
+	}
+	if away(pal.Surface) >= away(pal.Background) {
+		return pal.Surface, pal.Background
+	}
+	return pal.Background, pal.Surface
 }
 
-// crossRefUnderLayout sets a body in from the left edge beside a rule of the
-// body's whole height. Its objects are the rule, then the body.
-type crossRefUnderLayout struct{}
-
-func (crossRefUnderLayout) MinSize(objs []fyne.CanvasObject) fyne.Size {
-	body := objs[1].MinSize()
-	return fyne.NewSize(body.Width+crossRefUnderInset, body.Height)
+// crossRefLightness is a colour's lightness, enough to order two grounds.
+func crossRefLightness(c color.NRGBA) float64 {
+	return 0.299*float64(c.R) + 0.587*float64(c.G) + 0.114*float64(c.B)
 }
 
-func (crossRefUnderLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
-	objs[0].Move(fyne.NewPos(crossRefUnderRuleAt, 0))
-	objs[0].Resize(fyne.NewSize(crossRefUnderRuleWidth, size.Height))
-	objs[1].Move(fyne.NewPos(crossRefUnderInset, 0))
-	objs[1].Resize(fyne.NewSize(size.Width-crossRefUnderInset, size.Height))
+func crossRefSectionGround(pal palette) color.NRGBA {
+	note, _ := crossRefGrounds(pal)
+	return note
 }
 
-// crossRefUnder is body as it stands under a letter: set in beside the rule.
-func crossRefUnder(body fyne.CanvasObject, pal palette) *fyne.Container {
-	rule := canvas.NewRectangle(crossRefUnderRuleColour(pal))
-	rule.CornerRadius = crossRefUnderRuleWidth / 2
-	return container.New(crossRefUnderLayout{}, rule, body)
+func crossRefGroupGround(pal palette) color.NRGBA {
+	_, group := crossRefGrounds(pal)
+	return group
+}
+
+// crossRefSectionLayout lays a note's block on its ground, with the gap
+// under it. Its objects are the ground, then the block.
+type crossRefSectionLayout struct{}
+
+func (crossRefSectionLayout) MinSize(objs []fyne.CanvasObject) fyne.Size {
+	b := objs[1].MinSize()
+	return fyne.NewSize(b.Width+2*crossRefSectionPadX, b.Height+2*crossRefSectionPadY+crossRefSectionGap)
+}
+
+func (crossRefSectionLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
+	objs[0].Move(fyne.NewPos(0, 0))
+	objs[0].Resize(fyne.NewSize(size.Width, size.Height-crossRefSectionGap))
+	objs[1].Move(fyne.NewPos(crossRefSectionPadX, crossRefSectionPadY))
+	objs[1].Resize(fyne.NewSize(size.Width-2*crossRefSectionPadX, size.Height-crossRefSectionGap-2*crossRefSectionPadY))
+}
+
+// crossRefSection is one note's block on its ground.
+func crossRefSection(block fyne.CanvasObject, pal palette) *fyne.Container {
+	ground := canvas.NewRectangle(crossRefSectionGround(pal))
+	ground.CornerRadius = crossRefSectionRadius
+	return container.New(crossRefSectionLayout{}, ground, block)
+}
+
+// crossRefLetteredLayout stands a note's letter in the margin and what it
+// heads beside it. Its objects are the letter, then the content. drop is how
+// far below the content's top the letter stands, so that it sits on the
+// line of the content's first row of text.
+type crossRefLetteredLayout struct{ drop float32 }
+
+func (l crossRefLetteredLayout) MinSize(objs []fyne.CanvasObject) fyne.Size {
+	c, letter := objs[1].MinSize(), objs[0].MinSize()
+	h := c.Height
+	if lh := letter.Height + l.drop; lh > h {
+		h = lh
+	}
+	return fyne.NewSize(c.Width+crossRefLetterMargin, h)
+}
+
+func (l crossRefLetteredLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
+	objs[0].Move(fyne.NewPos(0, l.drop))
+	objs[0].Resize(objs[0].MinSize())
+	objs[1].Move(fyne.NewPos(crossRefLetterMargin, 0))
+	objs[1].Resize(fyne.NewSize(size.Width-crossRefLetterMargin, size.Height))
+}
+
+// crossRefLettered is content with the note's letter in the margin beside
+// its first row of text, which is set at size in style and stands top below
+// the content's own top. A note keyed to no word has no letter, and its
+// content stands beside an empty margin, in line with the other notes'.
+func crossRefLettered(letter string, pal palette, content fyne.CanvasObject, top, size float32, style fyne.TextStyle) *fyne.Container {
+	mark := crossRefLetter(letter, pal)
+	drop := top
+	if letter != "" {
+		drv := fyne.CurrentApp().Driver()
+		_, first := drv.RenderedTextSize("Ag", size, style, nil)
+		_, own := drv.RenderedTextSize(letter, mark.TextSize, mark.TextStyle, nil)
+		drop += first - own
+	}
+	return container.New(crossRefLetteredLayout{drop: drop}, mark, content)
+}
+
+// crossRefBeside is a row that stands beside the margin with no letter in
+// it and no rule: the one card of a note keyed to no word.
+func crossRefBeside(row fyne.CanvasObject) *fyne.Container {
+	return container.New(layout.NewCustomPaddedLayout(0, 0, crossRefLetterMargin, 0), row)
 }

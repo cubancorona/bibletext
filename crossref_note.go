@@ -10,18 +10,18 @@ package bibletext
 //
 //   - a note that is one citation and nothing else is that citation's card
 //     (or, where the loaded text has no such passage, its words);
-//   - a note that is one parenthesised group is the group's row
-//     (crossref_group.go);
 //   - every other note is a row that carries the note exactly as printed and
 //     folds: under it, while it is open, the note's pieces in the order the
 //     edition prints them. It is open when the panel opens, and a tap on the
 //     row closes it. The printed text stays on the row in both states, so
 //     the edition's own punctuation — which citations a comma joins, where a
 //     group stands, what was carried from the citation before — is never off
-//     screen. The pieces are set in from the list's edge beside a rule, and
-//     one rule at the edge closes the note, so that a reader sees which rows
-//     are under the note's letter and where the next letter begins
-//     (crossref_section.go).
+//     screen. A note that is one parenthesised group is such a row too: the
+//     group as printed, and under it the group's citations.
+//
+// Each note stands on a ground of its own with its letter alone in a margin
+// at the left, so that a reader sees which rows are a letter's and where the
+// next letter begins (crossref_section.go).
 //
 // A piece is drawn where it is printed (publisherPieceRows): a citation the
 // reader can follow as a card; a citation of the verse or passage the reader
@@ -44,11 +44,13 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// crossRefLetterSize is a note's letter before a card's reference, and the
-// letter is the group label's size before a printed line.
-const crossRefLetterSize = 14
+// crossRefLetterSize is the size of a note's letter in its margin: the size
+// of a card's reference, so that the letters read down the margin as the
+// heads of their notes.
+const crossRefLetterSize = 16
 
-// crossRefLetter is a note's letter set before a card's reference line.
+// crossRefLetter is a note's letter as it stands in the margin of its note
+// (crossRefLettered).
 func crossRefLetter(letter string, pal palette) *canvas.Text {
 	t := canvas.NewText(letter, pal.Accent)
 	t.TextStyle = fyne.TextStyle{Bold: true, Italic: true}
@@ -58,41 +60,34 @@ func crossRefLetter(letter string, pal palette) *canvas.Text {
 
 // crossRefPrintedLine is a line of the edition's own print — a note, a
 // group, words that are no citation — at the group label's size, muted and
-// wrapping, with the note's letter before it when it opens the note.
-func crossRefPrintedLine(letter, printed string) *widget.RichText {
-	var segments []widget.RichTextSegment
-	if letter != "" {
-		segments = append(segments, &widget.TextSegment{Text: letter + "  ", Style: widget.RichTextStyle{
-			Inline: true, ColorName: theme.ColorNamePrimary, SizeName: sizeNameCrossRefGroup,
-			TextStyle: fyne.TextStyle{Bold: true, Italic: true},
-		}})
-	}
-	segments = append(segments, &widget.TextSegment{Text: printed, Style: widget.RichTextStyle{
+// wrapping.
+func crossRefPrintedLine(printed string) *widget.RichText {
+	rt := widget.NewRichText(&widget.TextSegment{Text: printed, Style: widget.RichTextStyle{
 		Inline: true, ColorName: theme.ColorNamePlaceHolder, SizeName: sizeNameCrossRefGroup,
 	}})
-	rt := widget.NewRichText(segments...)
 	rt.Wrapping = fyne.TextWrapWord
 	return rt
 }
 
+// crossRefRowPad is the air above and below the text of a row that is no
+// card: the reader's own passage, words that are no citation.
+const crossRefRowPad float32 = 6
+
 // crossRefSelfRow is a citation of the verse or passage the reader is on:
-// its reference in full, muted, in the place the edition printed it, with no
-// preview and nothing to tap, since it leads nowhere the reader is not.
-func crossRefSelfRow(letter, label, tag string, pal palette, rule bool) fyne.CanvasObject {
+// its reference in full, in the place the edition printed it, with no
+// preview and nothing to tap, since it leads nowhere the reader is not. It
+// is set as a line of the edition's print is, muted and at that size: in a
+// card's bold it read as a heading over the cards after it.
+func crossRefSelfRow(label, tag string, pal palette, rule bool) fyne.CanvasObject {
 	ref := canvas.NewText(label, pal.TextMuted)
-	ref.TextStyle = fyne.TextStyle{Bold: true}
-	ref.TextSize = 16
-	var line []fyne.CanvasObject
-	if letter != "" {
-		line = append(line, crossRefLetter(letter, pal))
-	}
-	line = append(line, ref)
+	ref.TextSize = crossRefGroupTextSize
+	line := []fyne.CanvasObject{ref}
 	if tag != "" {
 		t := canvas.NewText(tag, pal.TextMuted)
 		t.TextSize = 12
 		line = append(line, t)
 	}
-	block := []fyne.CanvasObject{container.New(layout.NewCustomPaddedLayout(6, 6, 0, 0), container.NewHBox(line...))}
+	block := []fyne.CanvasObject{container.New(layout.NewCustomPaddedLayout(crossRefRowPad, crossRefRowPad, 0, 0), container.NewHBox(line...))}
 	if rule {
 		block = append(block, widget.NewSeparator())
 	}
@@ -101,8 +96,8 @@ func crossRefSelfRow(letter, label, tag string, pal palette, rule bool) fyne.Can
 
 // crossRefWordsRow is a piece of a note that is no citation the reader can
 // follow, exactly as printed, in its place.
-func crossRefWordsRow(letter, words string, rule bool) fyne.CanvasObject {
-	block := []fyne.CanvasObject{container.New(layout.NewCustomPaddedLayout(6, 6, 0, 0), crossRefPrintedLine(letter, words))}
+func crossRefWordsRow(words string, rule bool) fyne.CanvasObject {
+	block := []fyne.CanvasObject{container.New(layout.NewCustomPaddedLayout(crossRefRowPad, crossRefRowPad, 0, 0), crossRefPrintedLine(words))}
 	if rule {
 		block = append(block, widget.NewSeparator())
 	}
@@ -114,62 +109,108 @@ func targetCard(tg publisherTarget, letter string) crossRefCard {
 	return crossRefCard{Ref: tg.Ref, Label: tg.label(), Tag: tg.tag(), Title: tg.Title, Letter: letter}
 }
 
-// publisherPieceRows draws pieces in the order the edition prints them.
-// ruleLast says whether the last piece closes with a rule. It does not where
-// the pieces stand under a note's row or on a group's shaded ground: there
-// the rule that closes the note or the group, the width of the list, stands
-// under them (crossref_section.go).
-func publisherPieceRows(state *AppState, pieces []publisherPiece, pal palette, onTap func(crossRef), relayout *crossRefRelayout, ruleLast bool) []fyne.CanvasObject {
+// publisherPieceRows draws pieces in the order the edition prints them, a
+// rule between one and the next. The last has none under it: the note's
+// ground, or the group's, ends there (crossref_section.go).
+func publisherPieceRows(state *AppState, pieces []publisherPiece, pal palette, onTap func(crossRef), relayout *crossRefRelayout) []fyne.CanvasObject {
 	rows := make([]fyne.CanvasObject, 0, len(pieces))
 	for i, p := range pieces {
-		rule := ruleLast || i < len(pieces)-1
+		rule := i < len(pieces)-1
 		switch {
 		case p.Group != nil:
-			rows = append(rows, newCrossRefGroupRow(state, *p.Group, "", pal, onTap, relayout, rule))
+			rows = append(rows, newCrossRefGroupRow(state, *p.Group, pal, onTap, relayout, rule))
 		case p.Target != nil && p.Target.Current:
-			rows = append(rows, crossRefSelfRow("", p.Target.label(), p.Target.tag(), pal, rule))
+			rows = append(rows, crossRefSelfRow(p.Target.label(), p.Target.tag(), pal, rule))
 		case p.Target != nil:
 			rows = append(rows, crossRefRowRuled(state, targetCard(*p.Target, ""), pal, onTap, rule))
 		default:
-			rows = append(rows, crossRefWordsRow("", p.Words, rule))
+			rows = append(rows, crossRefWordsRow(p.Words, rule))
 		}
 	}
 	return rows
 }
 
-// crossRefNoteRow is the row of a note that is more than one piece: the note
-// as printed, and under it its pieces.
+// crossRefNoteRow is the row of a note that is more than one piece, or one
+// parenthesised group: the note as printed, and under it its pieces.
 type crossRefNoteRow struct {
 	widget.BaseWidget
 	note     publisherCrossRef
 	relayout *crossRefRelayout
 
 	open   bool
-	header *tapCard          // the printed note and its icon: the tap that closes and opens
+	header *tapCard          // the letter, the printed note and its icon: the tap that closes and opens
 	icon   *widget.Icon      // points down while open, right while closed
-	label  *widget.RichText  // the note's letter and the note as printed
-	body   *fyne.Container   // the note's pieces, in print order, set in under the letter; hidden while closed
-	foot   *widget.Separator // the rule that closes the note, the width of the list, open or closed
+	head   *fyne.Container   // the letter in the margin and the printed note beside it, as they lie on the row
+	letter *canvas.Text      // the note's letter, in the margin
+	label  *widget.RichText  // the note as printed
+	body   *fyne.Container   // the note's pieces, in print order, beside the margin; hidden while closed
+	stem   *canvas.Rectangle // the rule from under the letter down the margin beside the pieces; hidden while closed
 	box    *fyne.Container
 	pieces []fyne.CanvasObject
 }
 
-func newCrossRefNoteRow(state *AppState, n publisherCrossRef, pal palette, onTap func(crossRef), relayout *crossRefRelayout) *crossRefNoteRow {
+// newCrossRefNoteRow draws n as its printed line over pieces: the note's
+// own, or its one group's.
+func newCrossRefNoteRow(state *AppState, n publisherCrossRef, pieces []publisherPiece, pal palette, onTap func(crossRef), relayout *crossRefRelayout) *crossRefNoteRow {
 	r := &crossRefNoteRow{note: n, relayout: relayout, open: true}
-	r.label = crossRefPrintedLine(noteLetter(n.Index), n.Text)
+	r.label = crossRefPrintedLine(n.Text)
 	r.icon = widget.NewIcon(crossRefGroupIcon(true))
-	middle := container.NewVBox(layout.NewSpacer(), r.label, layout.NewSpacer())
+	// The letter in the margin, on the first line of the printed note, and
+	// the two at the middle of the row's height as the icon is, however
+	// many lines the note wraps to.
+	r.head = crossRefLettered(noteLetter(n.Index), pal, r.label, 0, crossRefGroupTextSize, fyne.TextStyle{})
+	r.letter = r.head.Objects[0].(*canvas.Text)
+	middle := container.NewVBox(layout.NewSpacer(), r.head, layout.NewSpacer())
 	row := container.NewBorder(nil, nil, nil, container.NewCenter(r.icon), middle)
-	r.header = newTapCard(container.New(layout.NewCustomPaddedLayout(6, 6, 0, 0), row), pal.SurfaceAlt, r.toggle)
-	// The pieces stand under the letter: set in from the edge beside the
-	// rule, with the note's own rule under them at the edge
-	// (crossref_section.go).
-	r.pieces = publisherPieceRows(state, n.Pieces, pal, onTap, relayout, false)
-	r.body = crossRefUnder(container.New(layout.NewCustomPaddedVBoxLayout(0), r.pieces...), pal)
-	r.foot = widget.NewSeparator()
-	r.box = container.New(layout.NewCustomPaddedVBoxLayout(0), r.header, r.body, r.foot)
+	r.header = newTapCard(container.New(layout.NewCustomPaddedLayout(crossRefRowPad, crossRefRowPad, 0, 0), row), pal.SurfaceAlt, r.toggle)
+	r.pieces = publisherPieceRows(state, pieces, pal, onTap, relayout)
+	r.body = container.New(layout.NewCustomPaddedVBoxLayout(0), r.pieces...)
+	r.stem = canvas.NewRectangle(crossRefStemColour(pal))
+	r.stem.CornerRadius = crossRefStemWidth / 2
+	r.box = container.New(crossRefNoteLayout{r}, r.header, r.body, r.stem)
 	r.ExtendBaseWidget(r)
 	return r
+}
+
+// crossRefNoteLayout lays a note's row out: its own row across the top, its
+// pieces under it beside the margin, and the rule in the margin from under
+// the letter to a little above the foot of the pieces (crossref_section.go).
+type crossRefNoteLayout struct{ row *crossRefNoteRow }
+
+func (l crossRefNoteLayout) MinSize([]fyne.CanvasObject) fyne.Size {
+	r := l.row
+	size := r.header.MinSize()
+	if r.body.Visible() {
+		b := r.body.MinSize()
+		if w := b.Width + crossRefLetterMargin; w > size.Width {
+			size.Width = w
+		}
+		size.Height += b.Height
+	}
+	return size
+}
+
+func (l crossRefNoteLayout) Layout(_ []fyne.CanvasObject, size fyne.Size) {
+	r := l.row
+	top := r.header.MinSize().Height
+	r.header.Move(fyne.NewPos(0, 0))
+	r.header.Resize(fyne.NewSize(size.Width, top))
+	if !r.body.Visible() {
+		return
+	}
+	r.body.Move(fyne.NewPos(crossRefLetterMargin, top))
+	r.body.Resize(fyne.NewSize(size.Width-crossRefLetterMargin, size.Height-top))
+	// The rule hangs from the letter: it starts a little under the line the
+	// letter stands on, which is on the note's own row, and runs down the
+	// margin past the foot of that row beside the pieces. A note keyed to
+	// no word has no letter, and its rule starts with its pieces.
+	from := top
+	if r.letter.Text != "" {
+		_, line := fyne.CurrentApp().Driver().RenderedTextSize(r.letter.Text, r.letter.TextSize, r.letter.TextStyle, nil)
+		from = crossRefRowPad + r.head.Position().Y + r.letter.Position().Y + line + crossRefStemGap
+	}
+	r.stem.Move(fyne.NewPos(crossRefStemAt, from))
+	r.stem.Resize(fyne.NewSize(crossRefStemWidth, size.Height-crossRefStemFoot-from))
 }
 
 func (r *crossRefNoteRow) CreateRenderer() fyne.WidgetRenderer {
@@ -181,8 +222,10 @@ func (r *crossRefNoteRow) toggle() {
 	r.open = !r.open
 	if r.open {
 		r.body.Show()
+		r.stem.Show()
 	} else {
 		r.body.Hide()
+		r.stem.Hide()
 	}
 	r.icon.SetResource(crossRefGroupIcon(r.open))
 	r.box.Refresh()
@@ -191,31 +234,56 @@ func (r *crossRefNoteRow) toggle() {
 }
 
 // publisherNoteBlock is one note as the list draws it, under its letter, and
-// what it put on screen: the passages its cards follow (for the Treasury's
-// filter), and its counts.
+// what it put on screen: the passages followed by the cards that stand open
+// when the panel opens (for the Treasury's filter), and its counts.
 func publisherNoteBlock(state *AppState, n publisherCrossRef, pal palette, onTap func(crossRef), relayout *crossRefRelayout) (row fyne.CanvasObject, cards []crossRef, groups, lines int) {
 	letter := noteLetter(n.Index)
+	_, lone := n.groupAlone()
 	for _, p := range n.Pieces {
 		switch {
 		case p.Group != nil:
 			groups++
+			if lone {
+				// The group is the whole of its note, and the note opens
+				// as every note does: its citations are on screen when the
+				// panel opens, as a note's direct citations are, and the
+				// Treasury does not repeat them. A group inside a note
+				// starts closed, and its citations are not counted.
+				for _, tg := range p.Group.cards() {
+					cards = append(cards, tg.Ref)
+				}
+			}
 		case p.Target != nil && !p.Target.Current:
 			cards = append(cards, p.Target.Ref)
 		default:
 			lines++ // the reader's own passage, or words: shown, not followed
 		}
 	}
-	if tg, ok := n.alone(); ok {
-		if tg.Current {
-			return crossRefSelfRow(letter, tg.label(), tg.tag(), pal, true), cards, groups, lines
+	// Each shape on the note's own ground, the letter in its margin
+	// (crossref_section.go).
+	var block fyne.CanvasObject
+	switch tg, alone := n.alone(); {
+	case alone && tg.Current:
+		block = crossRefLettered(letter, pal, crossRefSelfRow(tg.label(), tg.tag(), pal, false), crossRefRowPad, crossRefGroupTextSize, fyne.TextStyle{})
+	case alone && letter == "":
+		block = crossRefBeside(crossRefRowRuled(state, targetCard(tg, ""), pal, onTap, false))
+	case alone:
+		block = crossRefRowRuled(state, targetCard(tg, letter), pal, onTap, false)
+	default:
+		g, group := n.groupAlone()
+		words, bare := n.wordsAlone()
+		switch {
+		case group && len(g.cards()) == 0:
+			// Nothing of the group can be followed: the group as printed,
+			// with no row promising citations under it.
+			block = crossRefLettered(letter, pal, crossRefWordsRow(n.Text, false), crossRefRowPad, crossRefGroupTextSize, fyne.TextStyle{})
+		case group:
+			block = newCrossRefNoteRow(state, n, g.Pieces, pal, onTap, relayout)
+		case bare:
+			block = crossRefLettered(letter, pal, crossRefWordsRow(words, false), crossRefRowPad, crossRefGroupTextSize, fyne.TextStyle{})
+		default:
+			block = newCrossRefNoteRow(state, n, n.Pieces, pal, onTap, relayout)
 		}
-		return crossRefRowRuled(state, targetCard(tg, letter), pal, onTap, true), cards, groups, lines
 	}
-	if g, ok := n.groupAlone(); ok {
-		return newCrossRefGroupRow(state, *g, letter, pal, onTap, relayout, true), cards, groups, lines
-	}
-	if words, ok := n.wordsAlone(); ok {
-		return crossRefWordsRow(letter, words, true), cards, groups, lines
-	}
-	return newCrossRefNoteRow(state, n, pal, onTap, relayout), cards, groups, lines
+	return crossRefSection(block, pal), cards, groups, lines
 }

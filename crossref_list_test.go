@@ -295,6 +295,16 @@ func listFixtureRefs() []crossRef {
 
 func joined(ss []string) string { return strings.Join(ss, "|") }
 
+// noteHeadsIn is each note row's own row as a reader reads it: the letter in
+// its margin, then the note as printed.
+func noteHeadsIn(objs []fyne.CanvasObject) []string {
+	var out []string
+	for _, n := range noteRowsIn(objs) {
+		out = append(out, n.letter.Text+"  "+joined(textsIn(n.label)))
+	}
+	return out
+}
+
 // hasLine reports whether some text in objs is exactly s.
 func hasLine(objs []fyne.CanvasObject, s string) bool {
 	for _, o := range objs {
@@ -368,19 +378,26 @@ func TestCrossRefListWithThePublisherIsItsNotesUnderTheirLetters(t *testing.T) {
 	withPublisherCrossRefs(t, "nkjv", true)
 	st, sel := listFixtureState()
 	var followed []crossRef
-	lst := buildCrossRefList(st, sel, listFixtureRefs(), nil, lightPalette, func(c crossRef) { followed = append(followed, c) })
+	// The Treasury's rows: two the publisher's cards carry, and one they do not.
+	refs := append(listFixtureRefs(), crossRef{Book: "Romans", Chapter: 5, Verse: 8, Votes: 5})
+	lst := buildCrossRefList(st, sel, refs, nil, lightPalette, func(c crossRef) { followed = append(followed, c) })
 
-	if lst.Parallels != 1 || lst.PublisherNotes != 4 || lst.PublisherCards != 1 || lst.PublisherGroups != 2 || lst.PublisherLines != 2 || lst.TSKRows != 1 {
-		t.Fatalf("list = %+v; want one parallel, four notes holding one card, two groups and two lines that are not followed, and one Treasury card", lst)
+	if lst.Parallels != 1 || lst.PublisherNotes != 4 || lst.PublisherCards != 2 || lst.PublisherGroups != 2 || lst.PublisherLines != 2 || lst.TSKRows != 1 {
+		t.Fatalf("list = %+v; want one parallel, four notes showing two cards, two groups and two lines that are not followed, and one Treasury card", lst)
 	}
 	// The selected text heads the list.
 	if !lst.Passage || passageIn(lst.Objects[:1]) == nil {
 		t.Fatalf("the selected text does not head the list (Passage %v, first object %T)", lst.Passage, lst.Objects[0])
 	}
-	// The two parenthesised groups are rows of their own, as printed: verse
-	// 1's untagged note and verse 2's second note, each the whole of its note.
-	if got := groupRowsIn(lst.Objects); len(got) != 2 || got[0].group.Text != "(Acts 10:38)" || got[1].group.Text != "(John 1:13; Gal. 6:15; 1 John 3:9)" {
-		t.Fatalf("group rows = %d; want (Acts 10:38) and the John 1:13 group", len(got))
+	// The two notes that are each one parenthesised group are drawn as
+	// notes are, not as a group's row: verse 1's, nothing of which the
+	// loaded text has, is its letter and the group as printed; verse 2's is
+	// a row over its pieces, open as every note is.
+	if got := groupRowsIn(lst.Objects); len(got) != 0 {
+		t.Fatalf("%d group rows; a group that is its whole note is drawn as a note", len(got))
+	}
+	if got := noteHeadsIn(lst.Objects); joined(got) != "a  John 7:50; 19:39|b  (John 1:13; Gal. 6:15; 1 John 3:9)" {
+		t.Fatalf("note rows = %q", got)
 	}
 	if !lst.Sections.Parallels || !lst.Sections.Publisher || !lst.Sections.Treasury {
 		t.Errorf("sections = %+v; want all three on screen", lst.Sections)
@@ -391,22 +408,28 @@ func TestCrossRefListWithThePublisherIsItsNotesUnderTheirLetters(t *testing.T) {
 	if got := sectionLabelsIn(lst.Objects); joined(got) != want {
 		t.Errorf("section labels = %q\nwant %q", got, want)
 	}
-	// One card idiom: the parallel, the publisher's card, then the Treasury's.
-	// The Treasury's John 7:50 is the publisher's card's passage and goes;
-	// its Galatians 6:15 stays, since a citation inside a group is the
-	// group's and not a card of the run.
-	if got := cardLabelsIn(lst.Objects); joined(got) != "Matthew 3:1|John 7:50|Galatians 6:15" {
+	// One card idiom: the parallel, the publisher's cards, then the
+	// Treasury's. The Treasury's John 7:50 and Galatians 6:15 are passages
+	// the publisher's cards show as the panel opens — the first note's, and
+	// the citation of the note that is one group — and go; its Romans 5:8
+	// stays.
+	if got := cardLabelsIn(lst.Objects); joined(got) != "Matthew 3:1|John 7:50|Galatians 6:15|Romans 5:8" {
 		t.Errorf("cards = %q", got)
 	}
 	// Verse 2's first note is more than one piece: a row that carries the
 	// note as printed, open, with its pieces under it in print order — the
 	// card, then the continuation the loaded text lacks, as its words.
 	notes := noteRowsIn(lst.Objects)
-	if len(notes) != 1 || notes[0].note.Text != "John 7:50; 19:39" || !notes[0].open || !notes[0].body.Visible() {
-		t.Fatalf("note rows = %d; want one, the note \"John 7:50; 19:39\", open", len(notes))
+	if len(notes) != 2 || notes[0].note.Text != "John 7:50; 19:39" || !notes[0].open || !notes[0].body.Visible() {
+		t.Fatalf("note rows = %d; want the note \"John 7:50; 19:39\", open, and the note that is one group", len(notes))
 	}
-	if got := textsIn(notes[0].label); joined(got) != "a  John 7:50; 19:39" {
+	if got := notes[0].letter.Text + "  " + joined(textsIn(notes[0].label)); got != "a  John 7:50; 19:39" {
 		t.Errorf("the note's row reads %q; want its letter and the note as printed", got)
+	}
+	// Verse 2's second note is one group: the group as printed on its row,
+	// and under it everything between its parentheses in print order.
+	if got := textsIn(notes[1].pieces[0]); len(notes[1].pieces) != 3 || joined(got) != "John 1:13" || joined(cardLabelsIn(notes[1].pieces)) != "Galatians 6:15" || joined(textsIn(notes[1].pieces[2])) != "1 John 3:9" {
+		t.Errorf("the note that is one group has %d pieces, the first %q, its cards %q", len(notes[1].pieces), got, cardLabelsIn(notes[1].pieces))
 	}
 	if n := len(notes[0].pieces); n != 2 {
 		t.Fatalf("the note has %d pieces under it, want its card and its words", n)
@@ -426,10 +449,21 @@ func TestCrossRefListWithThePublisherIsItsNotesUnderTheirLetters(t *testing.T) {
 			t.Errorf("the list lacks %q:\n%s", want, all)
 		}
 	}
-	// Each note under its letter, restarting at each verse.
-	for _, want := range []string{"a  (Acts 10:38)", "a  John 7:50; 19:39", "b  (John 1:13; Gal. 6:15; 1 John 3:9)"} {
-		if !hasLine(lst.Objects, want) {
-			t.Errorf("no line %q:\n%s", want, all)
+	// Each note under its letter, restarting at each verse: the letter is a
+	// text of its own, in the margin, directly before the note it heads.
+	var flat []string
+	for _, o := range lst.Objects {
+		flat = append(flat, textsIn(o)...)
+	}
+	for _, want := range [][2]string{{"a", "(Acts 10:38)"}, {"a", "John 7:50; 19:39"}, {"b", "(John 1:13; Gal. 6:15; 1 John 3:9)"}} {
+		found := false
+		for i := 1; i < len(flat); i++ {
+			if flat[i-1] == want[0] && flat[i] == want[1] {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("no letter %q directly before %q:\n%s", want[0], want[1], all)
 		}
 	}
 	// No pill under the parallels' label (the pill is a text of its own; the
@@ -516,19 +550,20 @@ func TestANoteIsKeptWholeThoughAnotherNoteHasItsPassage(t *testing.T) {
 	v3 := &st.Bible.Verses["John"][3][2]
 	v3.Footnotes = []Footnote{{Text: "John 7:50", Kind: x, Caller: "-", Refs: []NoteRef{{"JHN.7.50", 0, 9}}}}
 	sel := st.Bible.GetChapter("John", 3)[1:]
-	// Alone, and with a Treasury row.
-	for _, refs := range [][]crossRef{nil, {{Book: "Galatians", Chapter: 6, Verse: 15, Votes: 3}}} {
+	// Alone, and with a Treasury row. (Verse 2's second note is one group,
+	// whose one citation the loaded text has stands open under it.)
+	for _, refs := range [][]crossRef{nil, {{Book: "Romans", Chapter: 5, Verse: 8, Votes: 3}}} {
 		lst := buildCrossRefList(st, sel, refs, nil, lightPalette, nop)
 		want := "NKJV REFERENCES · VERSE 2|NKJV REFERENCES · VERSE 3"
-		wantCards := "John 7:50|John 7:50"
+		wantCards := "John 7:50|Galatians 6:15|John 7:50"
 		if len(refs) > 0 {
 			want += "|" + treasuryLabel
-			wantCards += "|Galatians 6:15"
+			wantCards += "|Romans 5:8"
 		}
 		if got := sectionLabelsIn(lst.Objects); joined(got) != want {
 			t.Errorf("with %d Treasury rows: labels = %q, want %q", len(refs), got, want)
 		}
-		if got := cardLabelsIn(lst.Objects); lst.PublisherCards != 2 || joined(got) != wantCards {
+		if got := cardLabelsIn(lst.Objects); lst.PublisherCards != 3 || joined(got) != wantCards {
 			t.Errorf("with %d Treasury rows: cards = %q, %d publisher cards; want John 7:50 under each verse that cites it", len(refs), got, lst.PublisherCards)
 		}
 	}
@@ -671,7 +706,7 @@ func TestCrossRefListEmptyPublisherRunShowsTheLineOverTheTreasury(t *testing.T) 
 	if !strings.Contains(all, "Couldn't load cross-references.") || strings.Contains(all, "try again") {
 		t.Errorf("an offline Treasury is not one line in its place:\n%s", all)
 	}
-	if lst.Sections.Treasury || lst.PublisherCards != 1 {
+	if lst.Sections.Treasury || lst.PublisherCards != 2 {
 		t.Errorf("offline list = %+v", lst)
 	}
 	if sources, _ := crossRefFooterCredit(st, lst.Sections); sources != "" {
