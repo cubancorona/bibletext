@@ -3,6 +3,7 @@
 package bibletext
 
 import (
+	"image/color"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -267,8 +268,9 @@ func TestANoteClosesInsideThePanelWithoutMovingIt(t *testing.T) {
 // EACH NOTE STANDS ON A GROUND OF ITS OWN, ITS LETTER ALONE IN A MARGIN, so
 // that a reader sees which rows are a letter's and where the next begins.
 // Every note opens the same way, a note that is one parenthesised group
-// included; a group inside a note starts closed and opens onto the panel's
-// own ground, a well in the note's.
+// included; a group inside a note starts closed and opens onto the
+// palette's other ground, neither the note's nor the panel's: a well in the
+// note's ground.
 func TestEachNoteStandsOnAGroundOfItsOwn(t *testing.T) {
 	th := appThemeForTest(t)
 	licenseNKJVForTest(t)
@@ -329,8 +331,24 @@ func TestEachNoteStandsOnAGroundOfItsOwn(t *testing.T) {
 
 	// The grounds: the note's colour, which is not the panel's; rounded; one
 	// under another, the same width, with the gap between them.
-	if crossRefSectionGround(pal) == pal.SurfaceAlt || crossRefSectionGround(pal) == crossRefGroupGround(pal) {
-		t.Fatalf("a note's ground is %v, the panel's own colour: it sets nothing apart", crossRefSectionGround(pal))
+	// In both themes: a note's ground, an opened group's ground and the
+	// panel's are three different colours, and the note's is the one
+	// further in lightness from the panel's.
+	for name, p := range map[string]palette{"light": lightPalette, "dark": darkPalette, "this panel's": pal} {
+		note, group := crossRefSectionGround(p), crossRefGroupGround(p)
+		if note == p.SurfaceAlt || group == p.SurfaceAlt || note == group {
+			t.Fatalf("%s palette: a note's ground %v, an opened group's %v and the panel's %v are not three colours", name, note, group, p.SurfaceAlt)
+		}
+		away := func(c color.NRGBA) float64 {
+			d := crossRefLightness(c) - crossRefLightness(p.SurfaceAlt)
+			if d < 0 {
+				return -d
+			}
+			return d
+		}
+		if away(note) < away(group) {
+			t.Errorf("%s palette: a note's ground stands %v from the panel's in lightness and an opened group's %v; the note's should be the further", name, away(note), away(group))
+		}
 	}
 	for i := range sections {
 		g := ground(i)
@@ -455,14 +473,14 @@ func TestEachNoteStandsOnAGroundOfItsOwn(t *testing.T) {
 		t.Errorf("the third note reads %q with %d taps; want its letter and the group as printed, and none", got, len(cardsIn([]fyne.CanvasObject{sections[2]})))
 	}
 
-	// A group inside a note starts closed. Open, its cards stand on the
-	// panel's own ground, inside the note's, and the next note's ground
-	// keeps its distance.
+	// A group inside a note starts closed. Open, its cards stand on a
+	// ground that is neither the note's nor the panel's, inside the note's,
+	// and the next note's ground keeps its distance.
 	if inner.open || inner.inset.Visible() {
 		t.Fatalf("the group inside the first note is open before a tap")
 	}
 	test.Tap(inner.header)
-	if !inner.inset.Visible() || inner.shade.FillColor != crossRefGroupGround(pal) || inner.shade.FillColor == ground(0).FillColor || !on(inner.shade, ground(0)) {
+	if !inner.inset.Visible() || inner.shade.FillColor != crossRefGroupGround(pal) || inner.shade.FillColor == ground(0).FillColor || inner.shade.FillColor == color.Color(pal.SurfaceAlt) || !on(inner.shade, ground(0)) {
 		t.Errorf("the opened group: visible %v, its ground %v on the note's %v, inside it %v", inner.inset.Visible(), inner.shade.FillColor, ground(0).FillColor, on(inner.shade, ground(0)))
 	}
 	if gap := y(ground(1)) - foot(ground(0)); gap != crossRefSectionGap {

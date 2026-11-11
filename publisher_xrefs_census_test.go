@@ -400,11 +400,17 @@ type pieceCensus struct {
 	Notes, OnVerses, OnTitles, OnHeadings int
 	Cards, Own, Words, Groups             int // a note's own pieces: followed, the reader's own passage, words, groups
 	GroupCards, GroupOwn, GroupWords      int // the pieces inside the groups
-	Alone, GroupAlone, WordsAlone, Folded int // the row a note is drawn as
-	MostOnAVerse                          int // the most notes under one verse number
-	Moved                                 int // letters drawn past the white space their offset stands before
-	WordStarts                            int // letters drawn at the head of a word the feed's caller splits
-	BetweenWords                          int // letters that stand between two letters: the feed ran two words together there
+	Alone, GroupAlone, WordsAlone, Folded int // what a note is: one citation, one group, words alone, several pieces
+	// Of the notes that are one citation, AloneOwn cite the reader's own
+	// passage and are a line, not a card. Of the notes that are one group,
+	// which stand open as the panel opens, GroupAloneCards is the citations
+	// they put on screen (and the Treasury does not repeat) and
+	// GroupAloneBare those with nothing to follow, drawn as their words.
+	AloneOwn, GroupAloneCards, GroupAloneBare int
+	MostOnAVerse                              int // the most notes under one verse number
+	Moved                                     int // letters drawn past the white space their offset stands before
+	WordStarts                                int // letters drawn at the head of a word the feed's caller splits
+	BetweenWords                              int // letters that stand between two letters: the feed ran two words together there
 	// Shifted is the notes shown on the caller before the one the feed
 	// delivers them on, Unkeyed those whose caller the feed lacks, and Silent
 	// the callers whose content the feed lacks (publisher_xref_displaced.go).
@@ -537,8 +543,16 @@ func notePieceCensus(bd *BibleData) pieceCensus {
 					switch noteShape(n) {
 					case "card":
 						c.Alone++
+						if tg, _ := n.alone(); tg.Current {
+							c.AloneOwn++
+						}
 					case "group":
 						c.GroupAlone++
+						g, _ := n.groupAlone()
+						c.GroupAloneCards += len(g.cards())
+						if len(g.cards()) == 0 {
+							c.GroupAloneBare++
+						}
 					case "words":
 						c.WordsAlone++
 					default:
@@ -655,6 +669,7 @@ var canonPieceCensus = pieceCensus{
 	Cards: 65257, Own: 48, Words: 2, Groups: 4850,
 	GroupCards: 8320, GroupOwn: 3, GroupWords: 1,
 	Alone: 12576, GroupAlone: 1985, WordsAlone: 0, Folded: 17956,
+	AloneOwn: 1, GroupAloneCards: 3708, GroupAloneBare: 0,
 	MostOnAVerse: 7, Moved: 1998, WordStarts: 3, BetweenWords: 257,
 	Shifted: 1961, Unkeyed: 2, Silent: 2,
 }
@@ -667,6 +682,7 @@ var canonPieceCensusAsDelivered = pieceCensus{
 	Cards: 65254, Own: 51, Words: 2, Groups: 4850,
 	GroupCards: 8320, GroupOwn: 3, GroupWords: 1,
 	Alone: 12576, GroupAlone: 1985, WordsAlone: 0, Folded: 17956,
+	AloneOwn: 2, GroupAloneCards: 3708, GroupAloneBare: 0,
 	MostOnAVerse: 7, Moved: 1998, WordStarts: 3, BetweenWords: 257,
 }
 

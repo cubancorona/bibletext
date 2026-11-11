@@ -570,7 +570,8 @@ func (n publisherCrossRef) wordsAlone() (string, bool) {
 }
 
 // groupAlone reports whether the note is one parenthesised group and nothing
-// else: the group's row is then the note.
+// else: the note is then drawn as a note's row carrying the group as
+// printed, its citations under it (crossref_note.go).
 func (n publisherCrossRef) groupAlone() (*publisherGroup, bool) {
 	if len(n.Pieces) != 1 || n.Pieces[0].Group == nil {
 		return nil, false
@@ -685,8 +686,9 @@ func spreadBasis(runes []rune, pieces []publisherPiece) {
 // noteLetter is the letter the panel sets on a note and on its word: a for a
 // verse's first note, b for its second. The feed carries no letters (its
 // caller is "-" on every note), so these are the panel's own, restarting at
-// each verse, title and heading; no verse of the NKJV has more than seven
-// notes, and a twenty-seventh would be "aa".
+// each verse and at a Psalm's title; a heading's notes are lettered with
+// the verse the heading is set before. No verse of the NKJV has more than
+// seven notes, and a twenty-seventh would be "aa".
 func noteLetter(index int) string {
 	if index < 0 {
 		return ""

@@ -9,7 +9,11 @@ package bibletext
 // the order the notes stand in the verse:
 //
 //   - a note that is one citation and nothing else is that citation's card
-//     (or, where the loaded text has no such passage, its words);
+//     (or, where the loaded text has no such passage, its words; or, where
+//     it cites the verse the reader is on, its reference shown and not
+//     followed);
+//   - a note that is one parenthesised group nothing of which can be
+//     followed is the group as printed;
 //   - every other note is a row that carries the note exactly as printed and
 //     folds: under it, while it is open, the note's pieces in the order the
 //     edition prints them. It is open when the panel opens, and a tap on the
@@ -150,7 +154,7 @@ func newCrossRefNoteRow(state *AppState, n publisherCrossRef, pieces []publisher
 	r.letter = r.head.Objects[0].(*canvas.Text)
 	middle := container.NewVBox(layout.NewSpacer(), r.head, layout.NewSpacer())
 	row := container.NewBorder(nil, nil, nil, crossRefFoldIcon(r.icon), middle)
-	r.header = newTapCard(container.New(layout.NewCustomPaddedLayout(crossRefRowPad, crossRefRowPad, 0, 0), row), pal.SurfaceAlt, r.toggle)
+	r.header = newTapCard(container.New(layout.NewCustomPaddedLayout(crossRefRowPad, crossRefRowPad, 0, 0), row), crossRefHover(pal), r.toggle)
 	r.pieces = publisherPieceRows(state, pieces, pal, onTap, relayout)
 	r.body = container.New(layout.NewCustomPaddedVBoxLayout(0), r.pieces...)
 	r.stem = canvas.NewRectangle(crossRefStemColour(pal))
@@ -235,10 +239,20 @@ func publisherNoteBlock(state *AppState, n publisherCrossRef, pal palette, onTap
 				// The group is the whole of its note, and the note opens
 				// as every note does: its citations are on screen when the
 				// panel opens, as a note's direct citations are, and the
-				// Treasury does not repeat them. A group inside a note
-				// starts closed, and its citations are not counted.
+				// Treasury does not repeat them; what it holds that is not
+				// followed is on screen too. A group inside a note starts
+				// closed, and nothing in it is counted.
 				for _, tg := range p.Group.cards() {
 					cards = append(cards, tg.Ref)
+				}
+				if len(p.Group.cards()) == 0 {
+					lines++ // the group as printed, nothing of it followed
+				} else {
+					for _, piece := range p.Group.Pieces {
+						if piece.Target == nil || piece.Target.Current {
+							lines++
+						}
+					}
 				}
 			}
 		case p.Target != nil && !p.Target.Current:

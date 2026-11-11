@@ -1,28 +1,31 @@
 package bibletext
 
-// A parenthesised group of the publisher's apparatus, as a row of the
-// cross-references list (crossref_list.go).
+// A parenthesised group inside a note of the publisher's apparatus, as a row
+// of the cross-references list (crossref_list.go).
 //
 // Decided 11 November 2026: a group is a row of its own, in the place the
-// edition printed it, with a rule above and below; its printed text, a little
-// larger than a caption, is the row's label; and the row opens in place into
-// the group's citations as the list's ordinary cards, on a shaded inset that
-// shows which cards are the group's. It starts closed, and closes again on a
-// second tap.
+// edition printed it, a rule between it and the rows beside it; its printed
+// text, a little larger than a caption, is the row's label; and the row
+// opens in place into the group's citations as the list's ordinary cards,
+// on a ground of their own that shows which cards are the group's. It
+// starts closed, and closes again on a second tap.
 //
 // The group is the edition's unit, so it is kept whole: everything between
 // its parentheses is a row when it is open, in print order — a card for each
 // citation the reader can follow, the reader's own verse in its place and
 // not followed, and words that are no citation the loaded text has
 // (publisherPieceRows). Its citations are the edition's related ones, set
-// apart from the note's direct citations by the parentheses, so none of them
-// counts for the Treasury's filter as a direct citation's card does.
+// apart from the note's direct citations by the parentheses, and they are
+// not on screen until the row is opened, so none of them counts for the
+// Treasury's filter.
 //
-// A group among the rows under a note's letter stands where those rows do
-// (crossref_section.go); as the last of them it has no rule of its own
-// below it, the note's rule standing there. A group that is the whole of
-// its note is the note's row: it stands at the list's edge with the letter,
-// and what it opens into is set in under the letter as a note's rows are.
+// The row stands among its note's rows, beside the letter's margin on the
+// note's ground (crossref_section.go). As the first of them it has no rule
+// above it, the note's own row standing there, and as the last none below,
+// where the note's ground ends. A group that is the whole of its note is
+// not drawn by this row: it is drawn as a note's row is, open, the group as
+// printed on the row and its citations under it, and those citations are on
+// screen and counted (crossref_note.go).
 //
 // Width: the label wraps beside an icon of fixed size, so the row wants no
 // more than the narrowest phone gives the list. Opening and closing changes
@@ -82,6 +85,11 @@ func newCrossRefGroupRow(state *AppState, g publisherGroup, pal palette, onTap f
 	r.members = container.New(layout.NewCustomPaddedVBoxLayout(0))
 	r.shade = canvas.NewRectangle(crossRefGroupGround(pal))
 	r.shade.CornerRadius = 8
+	// An edge that does not rest on the fill: in the dark theme the well's
+	// ground stands 1.09:1 from the note's, and once the group's own row has
+	// scrolled away the well is all that tells its cards from the note's.
+	r.shade.StrokeColor = crossRefGroupEdge(pal)
+	r.shade.StrokeWidth = 1
 	// The ground, with a little air under it so it does not sit on the rule
 	// that closes the row.
 	ground := container.NewStack(r.shade, container.New(layout.NewCustomPaddedLayout(2, 2, 8, 8), r.members))
@@ -100,7 +108,7 @@ func newCrossRefGroupRow(state *AppState, g publisherGroup, pal palette, onTap f
 		// and one line of the label is not.
 		middle := container.NewVBox(layout.NewSpacer(), r.label, layout.NewSpacer())
 		row := container.NewBorder(nil, nil, nil, crossRefFoldIcon(r.icon), middle)
-		r.header = newTapCard(container.New(layout.NewCustomPaddedLayout(6, 6, 0, 0), row), pal.SurfaceAlt, r.toggle)
+		r.header = newTapCard(container.New(layout.NewCustomPaddedLayout(6, 6, 0, 0), row), crossRefHover(pal), r.toggle)
 		head = r.header
 	}
 	r.box = container.New(layout.NewCustomPaddedVBoxLayout(0), head, r.inset)

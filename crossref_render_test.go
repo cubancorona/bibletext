@@ -28,7 +28,14 @@ import (
 // shown twice, two row idioms) were found this way, with a harness that
 // mounted the list alone at a guessed size, which is why this one mounts the
 // real popup on a canvas the size of the phone and asserts the popup's
-// content fits the panel's width.
+// content fits the panel's width, and that nothing in the list wants more
+// than the width the list was given: as it opens, with every group open and
+// with every note closed.
+//
+// Each selection is written as it opens, then a view at a time down the list
+// (-p2, -p3 …), with every group inside a note open and scrolled to the
+// first (-open), and with every note closed and scrolled to the first
+// (-closed).
 //
 // Gated on two environment variables, so the default run never needs the
 // files: BIBLETEXT_RENDER_XREFS names a decoded canon (the JSON
@@ -93,30 +100,34 @@ func TestRenderCrossRefPanel(t *testing.T) {
 		ch, lo, hi int
 		flag       bool
 	}
+	measured := 0 // lists the width check measured
 	frames := []frame{
-		{"john3-16-off", "John", 3, 16, 16, false},     // the control: today's panel
-		{"matt3-1-off", "Matthew", 3, 1, 1, false},     // the control with parallels: two credits in the footer
-		{"john3-16-on", "John", 3, 16, 16, true},       // three cards, a group, a lone group
-		{"john3-1to3-on", "John", 3, 1, 3, true},       // keyed labels
-		{"matt3-1-on", "Matthew", 3, 1, 1, true},       // parallels, a self-range, the Treasury
-		{"psalm3-1-on", "Psalms", 3, 1, 1, true},       // the title's note
-		{"psalm3-2-on", "Psalms", 3, 2, 2, true},       // the empty run
-		{"1sam19-12-on", "1 Samuel", 19, 12, 12, true}, // a citation of a Psalm's title
-		{"heb1-6-on", "Hebrews", 1, 6, 6, true},        // a citation with its basis, LXX and DSS
-		{"gen7-2-on", "Genesis", 7, 2, 2, true},        // a citation of a whole chapter
-		{"acts10-15-on", "Acts", 10, 15, 15, true},     // three groups among two direct citations
-		{"john18-37-on", "John", 18, 37, 37, true},     // a note that is one group of nine and nothing else
-		{"luke6-20-on", "Luke", 6, 20, 20, true},       // the book carried into a group from the citation before it
-		{"acts26-6-on", "Acts", 26, 6, 6, true},        // the largest group, sixteen citations
-		{"1sam2-1-on", "1 Samuel", 2, 1, 1, true},      // four notes on four words, one naming the passage itself
-		{"1sam16-16-on", "1 Samuel", 16, 16, 16, true}, // the verse itself among a note's citations, in its place
-		{"matt6-9-on", "Matthew", 6, 9, 9, true},       // the passage's own extent first, then its parallel and a group
-		{"num4-21-on", "Numbers", 4, 21, 21, true},     // the note on the heading before the verse
-		{"psalm51-1-on", "Psalms", 51, 1, 1, true},     // a title with a note, above the verse with one
-		{"mark4-29-on", "Mark", 4, 29, 29, true},       // a verse the chapter does not have, inside a group
-		{"amos2-1-on", "Amos", 2, 1, 1, true},          // a citation the feed did not link, first in its note
-		{"rev15-3-on", "Revelation", 15, 3, 3, true},   // a note that is the verse itself and nothing else
-		{"luke7-22-on", "Luke", 7, 22, 22, true},       // seven notes on one verse
+		{"john3-16-off", "John", 3, 16, 16, false},         // the control: today's panel
+		{"matt3-1-off", "Matthew", 3, 1, 1, false},         // the control with parallels: two credits in the footer
+		{"john3-16-on", "John", 3, 16, 16, true},           // three cards, a group, a lone group
+		{"john3-1to3-on", "John", 3, 1, 3, true},           // keyed labels
+		{"matt3-1-on", "Matthew", 3, 1, 1, true},           // parallels, a self-range, the Treasury
+		{"psalm3-1-on", "Psalms", 3, 1, 1, true},           // the title's note
+		{"psalm3-2-on", "Psalms", 3, 2, 2, true},           // the empty run
+		{"1sam19-11-on", "1 Samuel", 19, 11, 11, true},     // a citation of a Psalm's title
+		{"1sam19-12-on", "1 Samuel", 19, 12, 12, true},     // inside the stretch the feed hangs one caller late (Ruth 3:12 to 2 Samuel 24:25): the edition's note
+		{"heb1-6-on", "Hebrews", 1, 6, 6, true},            // a citation with its basis, LXX and DSS
+		{"gen7-2-on", "Genesis", 7, 2, 2, true},            // a citation of a whole chapter
+		{"acts10-15-on", "Acts", 10, 15, 15, true},         // three groups among two direct citations
+		{"john18-37-on", "John", 18, 37, 37, true},         // a note that is one group of nine and nothing else
+		{"luke6-20-on", "Luke", 6, 20, 20, true},           // the book carried into a group from the citation before it
+		{"acts26-6-on", "Acts", 26, 6, 6, true},            // the largest group, sixteen citations
+		{"1sam2-1-on", "1 Samuel", 2, 1, 1, true},          // four notes on four words, one naming the passage itself
+		{"1sam16-16-on", "1 Samuel", 16, 16, 16, true},     // in the same stretch, as the edition has it
+		{"matt6-9-on", "Matthew", 6, 9, 9, true},           // the passage's own extent first, then its parallel and a group
+		{"num4-21-on", "Numbers", 4, 21, 21, true},         // the note on the heading before the verse
+		{"psalm51-1-on", "Psalms", 51, 1, 1, true},         // a title with a note, above the verse with one
+		{"mark4-29-on", "Mark", 4, 29, 29, true},           // a verse the chapter does not have, inside a group
+		{"amos2-1-on", "Amos", 2, 1, 1, true},              // a citation the feed did not link, first in its note
+		{"rev15-3-on", "Revelation", 15, 3, 3, true},       // a note that is the verse itself and nothing else
+		{"luke7-22-on", "Luke", 7, 22, 22, true},           // seven notes on one verse
+		{"ruth3-11-on", "Ruth", 3, 11, 11, true},           // a note keyed to no word: no letter, an empty margin
+		{"psalm119-132-on", "Psalms", 119, 132, 132, true}, // the second: a note keyed to no word after one keyed to a word
 	}
 	phones := []struct {
 		name string
@@ -180,6 +191,7 @@ func TestRenderCrossRefPanel(t *testing.T) {
 				// Opening changes the list inside the scroll and nothing else.
 				var groups []*crossRefGroupRow
 				var listScroll *container.Scroll
+				var listBox *fyne.Container
 				walkTree(top, func(o fyne.CanvasObject) {
 					switch x := o.(type) {
 					case *crossRefGroupRow:
@@ -190,8 +202,48 @@ func TestRenderCrossRefPanel(t *testing.T) {
 						if listScroll == nil {
 							listScroll = x
 						}
+					case *container.ThemeOverride:
+						if box, ok := x.Content.(*fyne.Container); ok && listBox == nil && listScroll != nil {
+							listBox = box
+						}
 					}
 				})
+				// The popup's content cannot say what a row wants: the list
+				// stands in a layout that reports no width, so that one wide
+				// row cannot widen the panel. What can fail is the list
+				// itself: nothing in it wants more than the width it was given.
+				fits := func(state string) {
+					if listScroll == nil {
+						return // the panel shows a message, not a list
+					}
+					if listBox == nil {
+						t.Errorf("%s, %s: no list under the panel's scroll to measure", name, state)
+						return
+					}
+					measured++
+					for i, problem := range crossRefListMisfits(listBox.Objects, listBox.Size().Width) {
+						if i == 3 {
+							break
+						}
+						t.Errorf("%s, %s: %s", name, state, problem)
+					}
+				}
+				fits("as it opens")
+				// The rest of the list as it opens, a view at a time: a note
+				// that is one group, the notes below the first, the Treasury.
+				if listScroll != nil {
+					view := listScroll.Size().Height
+					for page, y := 2, view-24; page <= 9 && y < listScroll.Content.Size().Height-24; page, y = page+1, y+view-24 {
+						if most := listScroll.Content.Size().Height - view; y > most {
+							y = most
+						}
+						listScroll.Offset = fyne.NewPos(0, y)
+						listScroll.Refresh()
+						writeRenderPNG(t, filepath.Join(out, fmt.Sprintf("%s-p%d.png", name, page)), w.Canvas().Capture())
+					}
+					listScroll.Offset = fyne.NewPos(0, 0)
+					listScroll.Refresh()
+				}
 				if len(groups) > 0 && listScroll != nil {
 					size, pos := top.Content.Size(), top.Content.Position()
 					for _, g := range groups {
@@ -203,6 +255,7 @@ func TestRenderCrossRefPanel(t *testing.T) {
 					if m := top.Content.MinSize().Width; m > inner {
 						t.Errorf("%s: with the groups open the popup's content wants %.0f points and the panel gives it %.0f", name, m, inner)
 					}
+					fits("every group open")
 					drv := fyne.CurrentApp().Driver()
 					y := drv.AbsolutePositionForObject(groups[0]).Y - drv.AbsolutePositionForObject(listScroll).Y + listScroll.Offset.Y - 6
 					if most := listScroll.Content.Size().Height - listScroll.Size().Height; y > most {
@@ -246,10 +299,29 @@ func TestRenderCrossRefPanel(t *testing.T) {
 					if m := top.Content.MinSize().Width; m > inner {
 						t.Errorf("%s: with the notes closed the popup's content wants %.0f points and the panel gives it %.0f", name, m, inner)
 					}
+					fits("every note closed")
+					// Scrolled to the first of them, which the passage and the
+					// parallels can stand a screen above.
+					if listScroll != nil {
+						drv := fyne.CurrentApp().Driver()
+						y := drv.AbsolutePositionForObject(noteRows[0]).Y - drv.AbsolutePositionForObject(listScroll).Y + listScroll.Offset.Y - 6
+						if most := listScroll.Content.Size().Height - listScroll.Size().Height; y > most {
+							y = most
+						}
+						if y < 0 {
+							y = 0
+						}
+						listScroll.Offset = fyne.NewPos(0, y)
+						listScroll.Refresh()
+					}
 					writeRenderPNG(t, filepath.Join(out, name+"-closed.png"), w.Canvas().Capture())
 					t.Logf("%s: %d notes closed to their printed lines", name, len(noteRows))
 					for _, n := range noteRows {
 						test.Tap(n.header)
+					}
+					if listScroll != nil {
+						listScroll.Offset = fyne.NewPos(0, 0)
+						listScroll.Refresh()
 					}
 				}
 				if extra, ok := scrolledFrames[f.name]; ok {
@@ -271,9 +343,12 @@ func TestRenderCrossRefPanel(t *testing.T) {
 		}
 	}
 
+	if measured == 0 {
+		t.Error("control: the width check measured no list")
+	}
 	census := noteApparatusCensus(&bd)
 	assertNoteCensus(t, census)
-	t.Logf("census: %d notes, words %v, %d whole-chapter ids, %d title citations, %d bases, %d tagged citations inside parentheses, %d cards and %d caption lines over single-verse selections",
+	t.Logf("census: %d notes, words %v, %d whole-chapter ids, %d title citations, %d bases, %d tagged citations inside parentheses, %d cards and %d remainders by the feed's tags over each chapter",
 		census.Notes, census.Words, census.WholeChapters, census.TitleCitations, census.Bases, census.InParentheses, census.Cards, census.Lines)
 	// The shorthand the group rows read their citations by, held to the
 	// feed's own tags over the same canon.
@@ -287,9 +362,9 @@ func TestRenderCrossRefPanel(t *testing.T) {
 	// And the notes as the panel draws them: every one whole, every letter
 	// before its word, the passage the verse's own text.
 	pieces := assertCanonPieceCensus(t, &bd)
-	t.Logf("pieces: %d notes (%d on verses, %d on titles, %d on headings); %d cards, %d of the reader's own passage, %d words, %d groups holding %d cards, %d own and %d words; drawn as %d cards, %d groups, %d words and %d folded notes; at most %d to a verse; %d letters drawn past white space, %d at the head of a split word, %d between two words run together; %d notes shown one caller back, %d keyed to no word, %d callers with no content; %d problems",
+	t.Logf("pieces: %d notes (%d on verses, %d on titles, %d on headings); %d cards, %d of the reader's own passage, %d words, %d groups holding %d cards, %d own and %d words; %d notes are one citation (%d of them the reader's own passage), %d one group (showing %d citations, %d with nothing to follow), %d words alone and %d several pieces; at most %d to a verse; %d letters drawn past white space, %d at the head of a split word, %d between two words run together; %d notes shown one caller back, %d keyed to no word, %d callers with no content; %d problems",
 		pieces.Notes, pieces.OnVerses, pieces.OnTitles, pieces.OnHeadings, pieces.Cards, pieces.Own, pieces.Words, pieces.Groups, pieces.GroupCards, pieces.GroupOwn, pieces.GroupWords,
-		pieces.Alone, pieces.GroupAlone, pieces.WordsAlone, pieces.Folded, pieces.MostOnAVerse, pieces.Moved, pieces.WordStarts, pieces.BetweenWords,
+		pieces.Alone, pieces.AloneOwn, pieces.GroupAlone, pieces.GroupAloneCards, pieces.GroupAloneBare, pieces.WordsAlone, pieces.Folded, pieces.MostOnAVerse, pieces.Moved, pieces.WordStarts, pieces.BetweenWords,
 		pieces.Shifted, pieces.Unkeyed, pieces.Silent, len(pieces.Problems))
 }
 

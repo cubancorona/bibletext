@@ -62,7 +62,10 @@ func noteGapProblems(n publisherCrossRef) []string {
 	return out
 }
 
-// noteShape names the row a note is drawn as.
+// noteShape names what a note is: one citation, one parenthesised group,
+// words alone, or several pieces. The first is drawn as a card (or, where it
+// cites the reader's own verse, as its reference); the others as a row that
+// folds, or as their words where nothing in them can be followed.
 func noteShape(n publisherCrossRef) string {
 	if _, ok := n.alone(); ok {
 		return "card"
@@ -137,7 +140,7 @@ func TestANoteIsItsPiecesInTheOrderItPrintsThem(t *testing.T) {
 			t.Errorf("%s: pieces\n got %s\nwant %s", c.name, got, c.want)
 		}
 		if got := noteShape(n); got != c.shape {
-			t.Errorf("%s: drawn as a %s, want a %s", c.name, got, c.shape)
+			t.Errorf("%s: the note is a %s, want a %s", c.name, got, c.shape)
 		}
 		if n.Anchor != 3 || n.Index != 0 || n.Heading {
 			t.Errorf("%s: the note stands at %d, index %d, heading %v; want offset 3, the verse's first", c.name, n.Anchor, n.Index, n.Heading)

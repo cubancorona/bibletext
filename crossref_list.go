@@ -26,24 +26,25 @@ package bibletext
 // (crossref_passage.go), and the publisher's run is its notes one by one
 // under those letters, each whole and in the order it is printed
 // (crossref_note.go): a note of several pieces is a row that carries the
-// note as printed and folds, its pieces under it; a parenthesised group is
-// a row that opens into its citations (crossref_group.go). This replaces
-// the one caption that gathered, under a note's last card, whatever of the
-// note was not a card, and the rule that two notes citing one passage gave
-// one card: both were the list's reading of a note, and the note is the
-// edition's. What stands under a note's letter is set in from the list's
-// edge beside a rule, and the next letter stands back at the edge
-// (crossref_section.go).
+// note as printed and folds, its pieces under it, and so is a note that is
+// one parenthesised group; a parenthesised group inside a note is a row
+// that opens into its citations (crossref_group.go). This replaces the one
+// caption that gathered, under a note's last card, whatever of the note was
+// not a card, and the rule that two notes citing one passage gave one card:
+// both were the list's reading of a note, and the note is the edition's.
+// Each note stands on a ground of its own, its letter alone in a margin and
+// the rest of it beside the margin (crossref_section.go).
 //
 // Width, by construction: nothing in the list may want more width than the
-// narrowest phone's body gives it (crossRefListWidth). Every child is one of
+// narrowest phone's body gives it (crossRefListChrome; narrowestPhoneBody in
+// crossref_width_test.go). Every child is one of
 // a few bounded kinds — the passage, which wraps to the width it is given; a
 // section label; a card (its reference measured, its preview wrapping); a
 // note's or a group's row (a printed line that wraps beside an icon of fixed
 // size); a reference that is shown and not followed; a wrapping caption; a
 // spacer; a separator — and no Accordion, Button, Hyperlink or per-row theme
-// override stands among them. The rows under a note's letter are these same
-// kinds, set in by a fixed inset. A
+// override stands among them. A note's rows are these same kinds, on the
+// note's padded ground beside the letter's margin. A
 // single theme scope wraps the complete list in the panel. A widget
 // whose title could not wrap widened the vertical scroll's content past the
 // panel and clipped every row sideways, with no bar to reach the rest (the
@@ -193,9 +194,11 @@ type crossRefList struct {
 	// of a note that is one parenthesised group. PublisherGroups is the
 	// parenthesised groups among the notes' pieces; one inside a note is a
 	// row that opens into its citations (crossref_group.go). PublisherLines
-	// is the pieces shown and not followed — a citation of the reader's own
-	// passage, words that are no citation the loaded text has — and the line
-	// that says the edition has no note for the selection.
+	// is the pieces on screen as the panel opens that are shown and not
+	// followed — a citation of the reader's own passage, words that are no
+	// citation the loaded text has, at a note's own level or in a note that
+	// is one group — and the line that says the edition has no note for the
+	// selection.
 	PublisherNotes  int
 	PublisherCards  int
 	PublisherLines  int
@@ -456,8 +459,9 @@ func crossRefFooterCredit(state *AppState, sections crossRefSections) (sources, 
 	return sources, notice
 }
 
-// crossRefSectionLabel aligns the section heading with the card references.
-// The list supplies the larger gap above each new section.
+// crossRefSectionLabel aligns the section heading with the references of
+// the cards that stand at the list's edge, the Treasury's and the
+// parallels'. The list supplies the larger gap above each new section.
 func crossRefSectionLabel(text string, pal palette) fyne.CanvasObject {
 	return container.New(layout.NewCustomPaddedLayout(0, 4, 0, 0), sectionLabel(text, pal))
 }

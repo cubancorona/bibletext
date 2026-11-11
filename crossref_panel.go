@@ -202,8 +202,14 @@ func showCrossRefs(state *AppState, text string, span selSpan) {
 		listScope.Refresh()
 		// A group that opens or closes changes the list's height inside the
 		// scroll; the panel keeps its size and its place (crossref_group.go).
+		// The scope is refreshed, not the list inside it: a group's cards
+		// are made at the tap, and the scope has to take them in before
+		// anything measures them, or they are measured at the app's text
+		// size and padding and the heights of that measure are left
+		// standing — a note's ground taller than its rows, or the scroll's
+		// content longer than the list — until the next frame.
 		lst.Relayout.fn = func() {
-			listBox.Refresh()
+			listScope.Refresh()
 			scroll.Refresh()
 		}
 		line, _ := crossRefFooterCredit(state, lst.Sections)
@@ -407,8 +413,9 @@ type crossRefCard struct {
 	// Title marks a card whose passage is a Psalm's title: the preview is the
 	// superscription, not the first verse, which is where the tap lands.
 	Title bool
-	// Letter is the note's letter, set before the reference of a card that
-	// is the whole of its note (crossref_note.go); "" for every other card.
+	// Letter is the note's letter, set in the margin beside the reference
+	// of a card that is the whole of its note (crossref_section.go); "" for
+	// every other card.
 	Letter string
 	// Badge draws the PARALLEL pill on a same-occasion parallel: only where no
 	// section label carries the row's provenance, the builds without the
@@ -427,9 +434,10 @@ func crossRefRow(state *AppState, card crossRefCard, pal palette, onTap func(cro
 	return crossRefRowRuled(state, card, pal, onTap, true)
 }
 
-// crossRefRowRuled is crossRefRow with or without the rule that closes it:
-// the last card of an open group stands on the group's shaded ground, and
-// the group's own rule closes the row a few points under it (crossref_group.go).
+// crossRefRowRuled is crossRefRow with or without the rule that closes it.
+// It has none as the last card on an open group's ground, as the last row
+// of a note, or as a card that is the whole of its note: the ground it
+// stands on ends under it (crossref_group.go, crossref_section.go).
 func crossRefRowRuled(state *AppState, card crossRefCard, pal palette, onTap func(crossRef), rule bool) fyne.CanvasObject {
 	c := card.Ref
 	ref := canvas.NewText(card.Label, pal.Accent)
@@ -499,7 +507,7 @@ func crossRefRowRuled(state *AppState, card crossRefCard, pal palette, onTap fun
 		body = crossRefLettered(card.Letter, pal, body, 0, ref.TextSize, ref.TextStyle)
 	}
 	inner := container.New(layout.NewCustomPaddedLayout(6, 6, 0, 0), body)
-	tap := newTapCard(inner, pal.SurfaceAlt, func() { onTap(c) })
+	tap := newTapCard(inner, crossRefHover(pal), func() { onTap(c) })
 	block := []fyne.CanvasObject{tap}
 	if rule {
 		block = append(block, widget.NewSeparator())

@@ -72,7 +72,8 @@ func TestANotesGroupsStandWhereTheEditionPrintsThem(t *testing.T) {
 }
 
 // groupListState is a list fixture shaped like John 3:16: one note of three
-// direct citations and a group, and a second note that is a group alone.
+// direct citations and a group, a second note that is a group alone, and a
+// third that is a group nothing of which the fixture's text has.
 func groupListState(t *testing.T) (*AppState, []Verse) {
 	t.Helper()
 	bd := xrefBible(map[string]map[int]int{
@@ -93,7 +94,8 @@ func groupListState(t *testing.T) (*AppState, []Verse) {
 }
 
 // THE ROW: closed until tapped, its citations the list's ordinary cards when
-// open, a rule above and below it, and the list told to lay itself out again.
+// open, a rule between it and the row above it, none under it as the last
+// of its note's rows, and the list told to lay itself out again.
 func TestAGroupRowOpensIntoItsCitations(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -105,8 +107,8 @@ func TestAGroupRowOpensIntoItsCitations(t *testing.T) {
 	relaid := 0
 	lst.Relayout.fn = func() { relaid++ }
 
-	if lst.PublisherNotes != 3 || lst.PublisherCards != 4 || lst.PublisherGroups != 3 || lst.PublisherLines != 0 {
-		t.Fatalf("list = %+v; want three notes showing four cards (the first's three and the second's one) and holding three groups, and nothing shown that is not followed", lst)
+	if lst.PublisherNotes != 3 || lst.PublisherCards != 4 || lst.PublisherGroups != 3 || lst.PublisherLines != 1 {
+		t.Fatalf("list = %+v; want three notes showing four cards (the first's three and the second's one) and holding three groups, and one line shown and not followed, the third note's group", lst)
 	}
 	// The cards on screen as the list is built: the first note's three, and
 	// the citation of the second note, which is one group and opens as any

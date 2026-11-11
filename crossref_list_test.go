@@ -2,6 +2,8 @@ package bibletext
 
 import (
 	"errors"
+	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -15,9 +17,10 @@ import (
 // The panel's composition. With the publisher's run off, the list is the
 // badged parallels then the Treasury rows and nothing of the publisher's;
 // with it on, one list of one card under section labels: the parallels
-// without their pill, the publisher's citations as cards with the words that
-// did not become one as captions, and the Treasury open beneath, less the
-// passages the publisher's cards already carry. Every check carries a control.
+// without their pill, the publisher's notes each whole under its letter with
+// its citations as cards, and the Treasury open beneath, less the passages
+// the publisher's cards on screen already carry. Every check carries a
+// control.
 
 // withPublisherCrossRefs flips the registry flag for one edition for the
 // test's duration — what the nkjvxrefs build tag does for the NKJV at init.
@@ -106,8 +109,8 @@ func cardsIn(objs []fyne.CanvasObject) []*tapCard {
 }
 
 // cardReference is a card's reference line: its bold upright text. A note's
-// letter, which stands before the reference of a card that is its whole
-// note, is bold and italic.
+// letter, which stands in the margin beside the reference of a card that is
+// its whole note, is bold and italic.
 func cardReference(c *tapCard) string {
 	ref := ""
 	walkTree(c.content, func(o fyne.CanvasObject) {
@@ -141,7 +144,7 @@ func cardLabelsIn(objs []fyne.CanvasObject) []string {
 }
 
 // noteRowsIn is every note's own row in objs, in list order: the notes that
-// are more than one piece.
+// are more than one piece, or one parenthesised group.
 func noteRowsIn(objs []fyne.CanvasObject) []*crossRefNoteRow {
 	var out []*crossRefNoteRow
 	var walk func(o fyne.CanvasObject)
@@ -202,6 +205,40 @@ func sectionLabelsIn(objs []fyne.CanvasObject) []string {
 	}
 	for _, o := range objs {
 		walk(o)
+	}
+	return out
+}
+
+// crossRefListMisfits is everything in objs the list may not hold: an object
+// whose MinSize is wider than limit, and a widget of a kind whose width
+// cannot wrap (bannedIn). Every object is measured, not only the top level,
+// so a wide child inside a block is named by its path. It stands in a file
+// every build compiles: the render harness uses it as the width tests do.
+func crossRefListMisfits(objs []fyne.CanvasObject, limit float32) []string {
+	var out []string
+	var walk func(o fyne.CanvasObject, path string)
+	walk = func(o fyne.CanvasObject, path string) {
+		if w := o.MinSize().Width; w > limit {
+			out = append(out, fmt.Sprintf("%s %T wants %.0f points, over %.0f", path, o, w, limit))
+		}
+		switch x := o.(type) {
+		case *tapCard:
+			walk(x.content, path+"/card")
+		case *crossRefGroupRow:
+			walk(x.box, path+"/group")
+		case *crossRefNoteRow:
+			walk(x.box, path+"/note")
+		case *fyne.Container:
+			for i, c := range x.Objects {
+				walk(c, path+"/"+strconv.Itoa(i))
+			}
+		}
+	}
+	for i, o := range objs {
+		walk(o, strconv.Itoa(i))
+	}
+	for _, b := range bannedIn(objs) {
+		out = append(out, "a "+b+" in the list")
 	}
 	return out
 }
@@ -384,8 +421,11 @@ func TestCrossRefListWithThePublisherIsItsNotesUnderTheirLetters(t *testing.T) {
 	refs := append(listFixtureRefs(), crossRef{Book: "Romans", Chapter: 5, Verse: 8, Votes: 5})
 	lst := buildCrossRefList(st, sel, refs, nil, lightPalette, func(c crossRef) { followed = append(followed, c) })
 
-	if lst.Parallels != 1 || lst.PublisherNotes != 4 || lst.PublisherCards != 2 || lst.PublisherGroups != 2 || lst.PublisherLines != 2 || lst.TSKRows != 1 {
-		t.Fatalf("list = %+v; want one parallel, four notes showing two cards, two groups and two lines that are not followed, and one Treasury card", lst)
+	// Shown and not followed: verse 1's group, nothing of which the loaded
+	// text has; the continuation in verse 2's first note; the two citations
+	// of verse 2's group the loaded text lacks; and verse 3's own passage.
+	if lst.Parallels != 1 || lst.PublisherNotes != 4 || lst.PublisherCards != 2 || lst.PublisherGroups != 2 || lst.PublisherLines != 5 || lst.TSKRows != 1 {
+		t.Fatalf("list = %+v; want one parallel, four notes showing two cards, two groups and five lines that are not followed, and one Treasury card", lst)
 	}
 	// The selected text heads the list.
 	if !lst.Passage || passageIn(lst.Objects[:1]) == nil {

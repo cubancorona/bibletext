@@ -195,6 +195,19 @@ func xrefBible(chapters map[string]map[int]int) *BibleData {
 	return bd
 }
 
+// versesBetween is the verses lo to hi of a chapter: a selection, as the
+// reader makes one. It stands in a file every build compiles, since tests in
+// and out of the race run use it.
+func versesBetween(bd *BibleData, book string, ch, lo, hi int) []Verse {
+	var out []Verse
+	for _, v := range bd.GetChapter(book, ch) {
+		if v.Verse >= lo && v.Verse <= hi {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
 // A RANGE THAT RUNS INTO THE NEXT BOOK. Eighteen Treasury rows end in a
 // different book from the one they start in, and the end's book was thrown
 // away, so the end was read as a verse of the START book: "Leviticus

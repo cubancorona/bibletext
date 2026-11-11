@@ -32,7 +32,11 @@ package bibletext
 //
 // Width: the ground's padding and the letter's margin are taken from the
 // note's rows, so the widest of them still has to fit the list on the
-// narrowest phone (TestCrossRefListFitsTheNarrowestPhone, every group open).
+// narrowest phone: TestCrossRefListFitsTheNarrowestPhone measures every
+// object of the list, TestTheListFitsTheNarrowestPhoneWithAGroupOpenInsideANote
+// measures it with a group open, and
+// TestTheCanonFitsTheNarrowestPhoneWithEveryGroupOpen measures every verse
+// of a fetched canon that has a note.
 
 import (
 	"image/color"
@@ -111,6 +115,18 @@ func crossRefGroupGround(pal palette) color.NRGBA {
 	_, group := crossRefGrounds(pal)
 	return group
 }
+
+// crossRefGroupEdge is the edge of an opened group's ground: the palette's
+// card edge, which reads against a note's ground in both themes where the
+// group's fill alone is the faintest step of the three grounds.
+func crossRefGroupEdge(pal palette) color.NRGBA { return pal.Border }
+
+// crossRefHover is the wash under the pointer on a row or a card of the
+// list, on a desktop: the theme's own, a tint and not a ground, so that it
+// shows on the panel's ground, a note's and an opened group's alike. The
+// panel's own colour stood here while every card stood on the panel, where
+// it showed nothing, and would have shown on the publisher's rows alone.
+func crossRefHover(pal palette) color.NRGBA { return paletteHover(pal) }
 
 // crossRefSectionLayout lays a note's block on its ground, with the gap
 // under it. Its objects are the ground, then the block.

@@ -65,7 +65,7 @@ type passageMark struct {
 // passageUnit is one stretch of the passage: a Psalm's title, a section
 // heading that carries a note, or a verse.
 type passageUnit struct {
-	Number int        // the verse's number, set before it when the selection has several verses; 0 for none
+	Number int        // the verse's number, set before it when the selection has several verses or a title stands before the verse; 0 for none
 	Runs   []verseRun // the unit's text as the page draws it
 	Dim    bool       // a heading: not Scripture, set muted
 	Marks  []passageMark

@@ -13,8 +13,6 @@ package bibletext
 // theme switch clears the font cache; widgettree_test.go).
 
 import (
-	"fmt"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -22,39 +20,6 @@ import (
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 )
-
-// crossRefListMisfits is everything in objs the list may not hold: an object
-// whose MinSize is wider than limit, and a widget of a kind whose width
-// cannot wrap (bannedIn). Every object is measured, not only the top level,
-// so a wide child inside a block is named by its path.
-func crossRefListMisfits(objs []fyne.CanvasObject, limit float32) []string {
-	var out []string
-	var walk func(o fyne.CanvasObject, path string)
-	walk = func(o fyne.CanvasObject, path string) {
-		if w := o.MinSize().Width; w > limit {
-			out = append(out, fmt.Sprintf("%s %T wants %.0f points, over %.0f", path, o, w, limit))
-		}
-		switch x := o.(type) {
-		case *tapCard:
-			walk(x.content, path+"/card")
-		case *crossRefGroupRow:
-			walk(x.box, path+"/group")
-		case *crossRefNoteRow:
-			walk(x.box, path+"/note")
-		case *fyne.Container:
-			for i, c := range x.Objects {
-				walk(c, path+"/"+strconv.Itoa(i))
-			}
-		}
-	}
-	for i, o := range objs {
-		walk(o, strconv.Itoa(i))
-	}
-	for _, b := range bannedIn(objs) {
-		out = append(out, "a "+b+" in the list")
-	}
-	return out
-}
 
 // narrowestPhoneBody is the width the list has on the narrowest phone: the
 // panel's width on a 375×667 canvas less the 44 points of chrome around the
@@ -76,16 +41,6 @@ func appThemeForTest(t *testing.T) *bibleTheme {
 	th := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
 	app.Settings().SetTheme(th)
 	return th
-}
-
-func versesBetween(bd *BibleData, book string, ch, lo, hi int) []Verse {
-	var out []Verse
-	for _, v := range bd.GetChapter(book, ch) {
-		if v.Verse >= lo && v.Verse <= hi {
-			out = append(out, v)
-		}
-	}
-	return out
 }
 
 func TestCrossRefListFitsTheNarrowestPhone(t *testing.T) {
@@ -116,15 +71,14 @@ func TestCrossRefListFitsTheNarrowestPhone(t *testing.T) {
 			if problems := crossRefListMisfits(lst.Objects, limit); len(problems) != 0 {
 				t.Errorf("flag %v, %s %d:%d-%d: %s", flag, s.book, s.ch, s.lo, s.hi, strings.Join(problems, "; "))
 			}
-			// And with every parenthesised group open: its cards stand on an
-			// inset, which must not want more than the list has either.
-			for _, g := range groupRowsIn(lst.Objects) {
-				if g.header != nil {
-					g.toggle()
-				}
-			}
-			if problems := crossRefListMisfits(lst.Objects, limit); len(problems) != 0 {
-				t.Errorf("flag %v, %s %d:%d-%d, groups open: %s", flag, s.book, s.ch, s.lo, s.hi, strings.Join(problems, "; "))
+			// No selection here holds a parenthesised group inside a note:
+			// each of the fixture's groups is the whole of its note and
+			// stands open as that note's row, so it is measured above. The
+			// width with a group opened inside a note is held by
+			// TestTheListFitsTheNarrowestPhoneWithAGroupOpenInsideANote,
+			// which shows that it opened one.
+			if rows := groupRowsIn(lst.Objects); len(rows) != 0 {
+				t.Fatalf("control: flag %v, %s %d:%d-%d holds %d group rows inside notes; this test measures none open", flag, s.book, s.ch, s.lo, s.hi, len(rows))
 			}
 			all := joinedTexts(lst.Objects)
 			if strings.Contains(all, "Thomas Nelson") {
@@ -160,10 +114,13 @@ func TestCrossRefListFitsTheNarrowestPhone(t *testing.T) {
 
 // THE TEXTS THAT DO NOT WRAP FIT TOO. A card's reference (16 bold), a
 // parallel card's pericope title (12 italic) and the section labels (11 bold
-// monospace) are the list's only unwrapped texts, so each is measured at its
-// widest: every title and passage label the synopsis can give a card, the
-// widest run label the Psalter can produce, and the widest book names in a
-// range label.
+// monospace) are the list's widest unwrapped texts, so each is measured at
+// its widest: every title and passage label the synopsis can give a card,
+// the widest run label the Psalter can produce, and the widest book names in
+// a range label. A note's letter and the reader's own passage as a printed
+// line do not wrap either, and are narrower than a reference; a publisher's
+// card stands beside the letter's margin on its note's padded ground, which
+// TestCrossRefListFitsTheNarrowestPhone measures object by object.
 func TestEveryUnwrappedLineOfTheListFitsTheNarrowestPhone(t *testing.T) {
 	appThemeForTest(t)
 	limit := narrowestPhoneBody(t)
