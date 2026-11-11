@@ -293,11 +293,12 @@ TSK. Whether NKJV crossrefs ever display is the licensing question put to
 HarperCollins' permissions team in the 28 August 2026 follow-up (no reply as
 of 6 November 2026; an email to API.Bible support was approved on 6 November
 2026 but had not been sent as of that date); the presentation is built behind
-the `nkjvxrefs` build tag — in the cross-references panel, under the
-edition's own label, the selected text with a raised letter before each word
-a note hangs from and every note whole under its letter (its citations as
-cards, a parenthesised group as a row that opens into its citations, a note
-of several pieces as printed on a row of its own), the Treasury open beneath
+the `nkjvxrefs` build tag — in the cross-references panel the selected text
+heads the list, with a raised letter before each word a note hangs from,
+and under the edition's own label every note stands whole under its letter
+(its citations as cards, a parenthesised group as a row that opens into its
+citations, a note of several pieces as printed on a row of its own), the
+Treasury open beneath
 (docs/SCRIPTURE_WORKLIST.md, S20; docs/CROSS_REFERENCE_NOTES.md).
 
 The shared cross-reference list uses 17-point wrapping previews, with

@@ -673,7 +673,7 @@ the generator, so the page cannot drift from the app.
 
 **The NKJV contributes nothing**, which is why "all editions" needed no
 licensing decision. Its entire apparatus is cross references, and the section
-excludes those (S20, still blocked). There was a second reason until 3 October
+excludes those (S20, built behind its tag and gated on the licence). There was a second reason until 3 October
 2026: a licensed chapter had no page here at all, since `/nkjv/` was a notice
 page that never called `chapterBody`. The site has served the NKJV's own text
 since that day (`nkjvSiteText`, `cmd/websitegen/nkjv_text.go`), its chapters

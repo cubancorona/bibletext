@@ -466,8 +466,8 @@ styled pane included.
 ### The apparatus
 
 Every NKJV note is a cross reference, and the section hides cross references,
-so all 32,473 are captured and dark, including the 43 attached to Psalm
-titles. Those 43 are the most interesting of the set, since they point at the
+so all 32,517 are captured and dark in every store build: 32,473 on verses,
+43 on Psalm titles and one on a heading. Those 43 are the most interesting of the set, since they point at the
 narrative a superscription alludes to, but they are the same policy question
 as the rest.
 

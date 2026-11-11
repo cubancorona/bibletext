@@ -9927,9 +9927,10 @@ Decided 11 November 2026, in five steps, each of which changes part of the
 record above.
 
 First: a parenthesised group is a row of its own, in the place the edition
-printed it, its printed text at 14 points the row's label, with a rule above
-and below; it opens in place into its citations as the list's ordinary cards
-on a shaded inset, and is closed until it is tapped.
+printed it, its printed text at 14 points the row's label, with a rule
+between it and the rows beside it; it opens in place into its citations as
+the list's ordinary cards on a shaded inset, and is closed until it is
+tapped.
 
 Second: nothing the edition's notes carry is to be lost. The panel shows the
 selected text first, with a letter on each word a note hangs from, and the
@@ -9947,19 +9948,32 @@ Fourth: a reader sees at a glance which rows are a note's. Each note stands
 on a ground of its own with a gap before the next; its letter stands alone
 in a margin at the ground's left, and everything else of the note beside
 that margin; and a rule hangs from the letter down the margin beside the
-note's rows. As first built on the same day a note's pieces stood at the
-list's edge as the next note's row did, so a group under the letter a and
-the note b after it read as two equal rows; a second form the same day set
-the pieces in 16 points beside a 2-point rule, which on a phone was still
-too slight. The form built was chosen from six rendered candidates by five
-independent readings (a first glance, older eyes and the dark theme, a
-typographer's, a small phone's costs, and one set against the favourite).
+note's rows. Before this step a note's pieces stood at the list's edge as
+the next note's row did, so a group under the letter a and the note b after
+it read as two equal rows. As first built for the step (a7d18eded3) the
+pieces were set in 16 points beside a 2-point rule, with a hairline the
+width of the list closing the note, which on a phone was still too slight.
+Each device was found wanting alone: a ground's edge is faint on a dim
+screen and in the dark theme and tells nothing once a long note's ends have
+scrolled away; a rule alone leaves a note of one citation unmarked and the
+note's own row outside the mark; an inset alone is the slight form. The
+three are used together.
 
-Fifth: every note opens the same way when the panel opens, its own
-citations shown and a parenthesised group inside it closed. A note that is
-one parenthesised group and nothing else had been drawn as a group's row,
-closed until tapped, beside notes that stood open; it is drawn as any note
-of several pieces is.
+Built the same day for consistency, and not decided: every note opens the
+same way when the panel opens, its own citations shown and a parenthesised
+group inside it closed. A note that is one parenthesised group and nothing
+else had been drawn as a group's row, closed until tapped, beside notes that
+stood open; it is drawn as any note of several pieces is. Whether notes
+start open or closed is open (below). The fifth step replaces the part of
+this that concerns a note that is one parenthesised group.
+
+Fifth, the same afternoon, and not yet built: a parenthesised group is
+closed until it is tapped wherever it stands. A note that is one
+parenthesised group and nothing else is drawn as that group's row, beside
+the letter's margin, with the same label, mark and opened ground as a group
+inside a note, so that a group reads the same at every level. Its citations
+are then not on screen as the panel opens, and like a closed group's inside
+a note they do not count for the Treasury's filter.
 
 What these change in the record above. The fold "rejected in every
 form" now stands in the list twice, as a group's row and as a note's, and
@@ -9970,7 +9984,8 @@ printed place, where a counted pill stood off the first screen; and the panel
 is held not to move when one opens or closes
 (`TestAGroupOpensInsideThePanelWithoutMovingIt`,
 `TestANoteClosesInsideThePanelWithoutMovingIt`). Design B's cost, citations
-standing twice, is accepted for a note of several pieces: its row carries the
+standing twice, is accepted for a note of several pieces, and for a note
+that is one parenthesised group: its row carries the
 note exactly as the edition prints it, which is the only place the note's
 order, punctuation and grouping are whole, and its cards stand under it,
 which is the only place a citation is previewed. A citation inside a group
@@ -10032,10 +10047,11 @@ API.Bible comments without a plan name), each described in place below:
   block; a note is now drawn whole, piece by piece (below). No Accordion,
   Button, Hyperlink or per-row theme override stands in the list; one theme
   scope wraps the whole list at 17-point preview text with no inner inset,
-  so that section labels, references, previews and the printed line of a
-  note's or a group's row start at the same left edge (a note's letter
-  stood at that edge, before its row's text, until the publisher's notes
-  were each given a ground of their own, below), with a 44-point minimum tap
+  so that the section labels and the Treasury's and the parallels'
+  references and previews start at the list's left edge (so did the
+  publisher's rows until each note was given a ground of its own, below:
+  within a note the printed line, the cards and a group's row share one
+  edge beside the letter's margin), with a 44-point minimum tap
   height on each passage card (`crossref_compact_test.go`). The list sits in
   `squeezeWidthLayout` as a belt, and
   `TestCrossRefListFitsTheNarrowestPhone` measures every object against
@@ -10078,7 +10094,7 @@ BUILT 11 November 2026 on `fu/s20-paren-groups`, cut from main at
 shorthand census), 1cd40b92f4 (the group's row), 3da33a5030 (the notes whole
 under their letters), 98d37259aa (the two stretches the feed hangs one
 caller late), 362f9350c2 (the letters raised as the page raises a
-superscript), a7d18eded3 (the second form of the fourth step, superseded the
+superscript), a7d18eded3 (the fourth step as first built, superseded the
 same day), 73e70c6d92 (each note on a ground of its own with its letter in a
 margin; every note opening alike), 86d7c40fde (a Psalm's title in italic in
 the passage), 7162f4cdde (a printed line turned between citations and not
@@ -10109,7 +10125,9 @@ and the test that holds it. What the list is now, flag on:
   (`readingMarkScale`, `readingMarkLift`; `docs/READING_TYPOGRAPHY.md`).
   With its letters taken out the passage is the text, rune for rune.
 - Each note is a block under its letter, in the order the notes stand
-  (`crossref_note.go`). A note that is one citation is its card. Any other
+  (`crossref_note.go`). A note that is one citation is its card (one such
+  note, at Revelation 15:3, cites the verse the reader is on and is its
+  reference, shown and not followed). Any other
   note is a row that carries the note exactly as printed (14 points, muted,
   its lines turning between citations and not inside one) and folds: under it, while it is open, the note's pieces in
   print order. It is open when the panel opens and a tap closes it; the
@@ -10171,8 +10189,9 @@ measures a canon by the functions the panel draws from, and
 heading; at most 7 under one verse. As shown: 65,257 cards, 48 citations of
 the reader's own passage and 2 pieces that are words; 4,850 groups holding
 8,320 cards, 3 of the reader's own passage and 1 piece that is words. 12,576
-notes are one citation, drawn as a card; 1,985 are one parenthesised group
-and 17,956 several pieces, each drawn as a row that folds. Between
+notes are one citation, 12,575 drawn as a card and one, of the reader's own
+verse, as its reference; 1,985 are one parenthesised group and 17,956
+several pieces, each drawn as a row that folds. Between
 two pieces of a note stands "; " or ", " and nothing else, and nothing stands
 before the first or after the last, with no exception; the passage with its
 letters taken out is the text on every verse that has a note; and every
@@ -10218,15 +10237,14 @@ OPEN, each built one way and not decided:
 - The heading's note. A second publication of the same apparatus has it in
   Numbers 4:22, before the word the heading ends with, and none on the
   heading. Not decided: where the feed has it (as built) or in verse 22.
-- Every note's row opens with the panel (decided for consistency; as
-  built), and a group inside a note starts closed (decided). Not decided:
-  whether every note should instead start closed, each letter one row. With
-  the notes open a second letter can lie below the first screen (John 3:16's
-  b does).
-- Asked for by three of the five readings and not built: the letter kept in
-  view at the top of its margin while a note taller than the list scrolls,
-  so that a reader in the middle of a long note still sees which letter its
-  rows are under. The rule says that they are one note's; nothing says whose.
+- Every note's row opens with the panel (as built), and a group inside a
+  note starts closed (decided). Not decided: whether every note should
+  instead start closed, each letter one row. With the notes open a second
+  letter can lie below the first screen (John 3:16's b does).
+- Not built: the letter kept in view at the top of its margin while a note
+  taller than the list scrolls, so that a reader in the middle of a long
+  note still sees which letter its rows are under. The rule says that they
+  are one note's; nothing says whose.
 - The Treasury's filter removes a Treasury row that a title card or a
   whole-chapter card "carries" though the card shows something else. It
   belongs to the audit of the other cross-references.

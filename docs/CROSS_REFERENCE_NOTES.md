@@ -48,13 +48,13 @@ panel's own, in the order the notes stand.
 | The word it hangs from | every note but 2 (census: `Unkeyed`) | The letter is drawn directly before the word (`noteMarkAt`). 1,998 offsets stand before white space and are drawn after it: a line break 1,952 times, a space 46 (census: `Moved`; the split counted) | `TestANotesLetterAndWhereItStands`; the census reports a letter that no word follows |
 | The order of a verse's notes | at most 7 on a verse (census); letters a 21,287, b 8,241, c 2,316, d 536, e 113, f 19, g 3 (counted) | Letters a, b, c in that order, restarting at each verse and at a title; the notes listed in that order | `TestANotesLetterAndWhereItStands`; the census checks every index |
 | **The printed text** | | | |
-| The note as printed | 32,517 notes | A note of several pieces, or one that is one parenthesised group: verbatim on its own row, in both states of the fold. A note that is one citation: its card, whose reference is the citation spelled out | `TestANoteOfSeveralPiecesFoldsToItsPrintedLine`; `TestTheShorthandPrintsWhatItReads` (the shorthand printed back from the card is the note's text for all 12,576 notes of one citation) |
+| The note as printed | 32,517 notes | A note of several pieces, or one that is one parenthesised group: verbatim on its own row, in both states of the fold. A note that is one citation: its card, whose reference is the citation spelled out (one such note cites the reader's own verse and is its reference, shown and not followed) | `TestANoteOfSeveralPiecesFoldsToItsPrintedLine`; `TestTheShorthandPrintsWhatItReads` (the shorthand printed back from the card is the note's text for all 12,576 notes of one citation) |
 | The separators: "; " between citations, ", " before a further verse | every gap of every note is one of the two, and nothing stands before the first piece or after the last (census: no exception) | On the printed line, which turns after "; " and not inside a citation unless the citation is longer than a row (`crossref_printed.go`); the pieces under it are in the same order | `noteGapProblems` and `printedTurnProblems`, run over the canon by the census; `TestAPrintedLineTurnsBetweenCitations` |
 | A book or chapter carried from the citation before ("John 7:50; 19:39") | — | The printed line shows the continuation as printed; its card is labelled in full ("John 19:39") | `TestTheShorthandReadsEveryShapeTheEditionPrints` |
 | **The citations** | | | |
 | A citation the reader can follow | 65,257 at a note's level and 8,320 inside groups (census) | A card: the reference, a preview from the loaded edition, the whole card the tap | `TestANoteIsItsPiecesInTheOrderItPrintsThem`, `TestAGroupRowOpensIntoItsCitations` |
 | The target the feed tagged | 66,306 tags; 66,294 agree with the print's reading and 12 do not, all inside groups | Outside a group the tag is followed; inside a group the print is | `TestNoteShorthandCensusHoldsTheShorthandToTheTags`; the live canon test pins 4,850 groups, 8,324 group citations and the 12 |
-| A citation of the verse or passage the reader is on | 48 at a note's level and 3 inside groups (census) | Its reference in full, with no preview and nothing to tap, in its printed place, set as a line of the edition's print (muted, 14 points) | `TestANoteIsItsPiecesInTheOrderItPrintsThem` |
+| A citation of the verse or passage the reader is on | 48 at a note's level and 3 inside groups (census) | Its reference in full, with no preview and nothing to tap, in its printed place, set as a line of the edition's print (muted, 14 points) | `TestANoteIsItsPiecesInTheOrderItPrintsThem`, `TestANoteOfSeveralPiecesFoldsToItsPrintedLine` (its setting) |
 | A citation that cannot be followed | 3 (census: 2 at a note's level, 1 inside a group): Ezekiel 33:12 "Ezek. 8:21" and Mark 4:29 the "39" of "(Mark 13:30, 39)", verses the text does not have; Amos 2:1 "Is. 15:1—16", a form the shorthand has no rule for | Its words as printed, muted, in their place | the census (`Words`, `GroupWords`); `TestTheShorthandLeavesWhatItCannotReadUnread` |
 | A citation of a Psalm's title ("Ps. 59:title") | 47 (the apparatus census, `noteApparatusCensus`; the live canon test asserts that title, LXX and DSS are the apparatus's only words) | A card labelled by its chapter, tagged "Title", previewing the superscription; the whole psalm is a different card | `TestATitleCitationResolvesToTheTitle`, `TestATitleCardPreviewsTheSuperscription`, `TestATitleAndTheWholePsalmAreTwoCards` |
 | A citation of a whole chapter | 117 (the apparatus census) | A card labelled as a chapter ("Leviticus 11", "2 Kings 18–20") | `TestPublisherCrossRefsLinkWholeChapters` |
@@ -69,9 +69,12 @@ panel's own, in the order the notes stand.
 | **The text the notes hang from** | | | |
 | The verse as the page draws it | every verse with a note | The passage: small capitals, the translators' supplied words in italic, the words of Christ in red where the reader has that on, poem lines on rows of their own. With the letters taken out it is the text, rune for rune | the passage test; the census compares every verse |
 
-What a note is (census): 12,576 one citation, drawn as a card; 1,985 one
-parenthesised group and 17,956 several pieces, each drawn as a row that
-folds.
+What a note is (census): 12,576 one citation; 1,985 one parenthesised group
+and 17,956 several pieces. A note of one citation is drawn as its card,
+except the one that cites the verse the reader is on (Revelation 15:3),
+drawn as its reference, muted. The others are each drawn as a row that
+folds. These four figures are of what a note is; the census's other figures
+are of what is shown.
 
 ## What the panel adds
 
