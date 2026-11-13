@@ -10096,27 +10096,27 @@ shorthand census), 1cd40b92f4 (the group's row), 3da33a5030 (the notes whole
 under their letters), 98d37259aa (the two stretches the feed hangs one
 caller late), 362f9350c2 (the letters raised as the page raises a
 superscript), a7d18eded3 (the fourth step as first built, superseded the
-same day), 73e70c6d92 (each note on a ground of its own with its letter in a
-margin; every note opening alike), 86d7c40fde (a Psalm's title in italic in
-the passage), 7162f4cdde (a printed line turned between citations and not
-inside one), 4f6d6a798c (the scroll lane and the 26-point fold mark),
-06033fb70d (the note-ground tests and a group's first opening), f035f39426
+same day), 78ed92eeb2 (each note on a ground of its own with its letter in a
+margin; every note opening alike), d87921eb8f (a Psalm's title in italic in
+the passage), dd86bbab05 (a printed line turned between citations and not
+inside one), b0d2edb8b9 (the scroll lane and the 26-point fold mark),
+37bc5bcc5c (the note-ground tests and a group's first opening), 25f24acb4b
 (every parenthesised group starting closed, a lone group drawn as that
-group's row beside the letter's margin), 9c8395212a (publisher card headings
-held to note and group widths) and f7ea13bb04 (open folds and scroll place
+group's row beside the letter's margin), be4e4bb01e (publisher card headings
+held to note and group widths) and a500abf703 (open folds and scroll place
 kept across rebuilds, flush passage clusters wrapped within the list, and
 omitted-verse selections answered before loading); cc7fada038 adds the test
 that the verse-of-the-day card, which shares the passage's paragraph, carries
 none of its marks. REFINED 12–13 November 2026 on the same branch in four
-commits: 2249a81e74 (Matthew 15:8's first-line red-letter span restored in
-`red_letter_nkjv_data.go`), 11d367d9dd (NKJV test fixture strings replaced
-with WEBC/BSB wording), 0daadf7739 (NKJV REFERENCES directly under the passage
+commits: 467e13546a (Matthew 15:8's first-line red-letter span restored in
+`red_letter_nkjv_data.go`), 4e9e789c7d (NKJV test fixture strings replaced
+with WEBC/BSB wording), e9814bcf27 (NKJV REFERENCES directly under the passage
 ahead of GOSPEL PARALLELS, continuous spreadsheet lettering `a..z, aa..`
 across a selection, one shared NKJV REFERENCES label for a Psalm title and
 verse 1, `NKJV REFERENCES · HEADING` with bold text-coloured heading in the
 passage, `:title` card navigation without washing verse 1, exact-selection
 own-passage rule across publisher and Treasury rows, and the missing-note
-sentence at Psalm 150:2) and b8e6d249e8 (pinned margin letters on scrolled
+sentence at Psalm 150:2) and 13e44dcef8 (pinned margin letters on scrolled
 open notes and opened lone groups, italic-to-mark clearance and opening-quote
 holding in the passage, plain-zero Atkinson faces on references and printed
 shorthand lines, and scrolled credits on landscape or short windows).
