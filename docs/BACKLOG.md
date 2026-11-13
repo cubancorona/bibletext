@@ -10316,7 +10316,21 @@ DECIDED AND BUILT 12–13 November 2026 (resolving the 11 November open list):
   spans instead of truncating or dropping segments silently, and
   `TestEveryGospelParallelSpanNamesRealVerses` verifies all 473 shipping spans
   (481 with `-tags next`) and all 102 other-occasion groups against the Gospel
-  chapter and omitted-verse tables. `GOSPEL PARALLELS` deliberately stays
+  chapter and omitted-verse tables, while
+  `TestGospelParallelsPanelCensusAcrossEditions` holds all 15,103 Gospel
+  single-verse panels across all four editions to the embedded synopsis model.
+  Follow-up pass the same day (`85f46dc8f2`) also added canonical cross-book
+  range containment (`canonBounds`, `covers`, `containsVerse`,
+  `treasuryMinusPublisher`, dropping
+  overlapping fused `2 Chronicles 36:22–Ezra 1:*` rows at Ezra 4:3, Ezra 6:3
+  and Daniel 6:28), en-dash wrapping for oversized cross-book card headings on
+  the narrowest 375pt phone (`newCrossRefRef`, fixing Extra large's 288pt
+  overflow on `"Jeremiah 52:1–Lamentations 1:5"` at Ezekiel 36:3 and the
+  315–374pt overflow on `"1 Thessalonians 5:28–2 Thessalonians 1:2"` in Romans
+  1:7's kept index rows), and full dataset accounting + width checks
+  (`TestEveryTreasuryDatasetRowIsAccountedFor`,
+  `TestEveryRealCrossReferenceCardFitsTheNarrowestPhone`,
+  `docs/SOURCE_FIELDS.md`). `GOSPEL PARALLELS` deliberately stays
   unfiltered against `NKJV REFERENCES` so synopsis pericopes keep every
   participating Gospel, and `treasuryRowsFor` keeps its pre-filter
   `maxCrossRefsPerVerse = 16` cap (`maxCrossRefsKept = 32`). Upstream USFM `\x`

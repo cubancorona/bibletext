@@ -150,17 +150,31 @@ A report to the provider is drafted for the owner to review and send.
   carry pericope titles and tell the reader which Gospels record the same
   event, so dropping one Gospel because a publisher note cited a verse in it
   would misstate the synopsis. `parseGospelRef` strictly rejects empty,
-  malformed, non-positive or inverted spans, and
+  malformed, non-positive or inverted spans;
   `TestEveryGospelParallelSpanNamesRealVerses` pins all 473 shipping spans
-  (481 with `-tags next`) and all 102 other-occasion groups to valid verses.
+  (481 with `-tags next`) and all 102 other-occasion groups to valid verses;
+  and `TestGospelParallelsPanelCensusAcrossEditions` holds all 15,103
+  single-verse Gospel panels across WEB, WEB Catholic, BSB and NKJV to the
+  embedded synopsis row for row.
 - `treasuryRowsFor` keeps its `maxCrossRefsPerVerse = 16` vote-ranked cap
   before `composeCrossRefList` (`maxCrossRefsKept = 32` across all builds)
-  rather than promoting deeper rows when publisher cards carry upper ones.
+  rather than promoting deeper rows when publisher cards carry upper ones, and
+  `TestEveryTreasuryDatasetRowIsAccountedFor` (`BIBLETEXT_XREF_REALDATA=1`)
+  accounts for all 344,799 dataset rows with zero silent drops.
+  `canonBounds`, `covers` and `treasuryMinusPublisher` compare cross-book
+  ranges in canonical book order so fused spans such as
+  `"2 Chronicles 36:22–Ezra 1:3"` yield to publisher cards in either book
+  (Ezra 4:3, Ezra 6:3, Daniel 6:28), and `newCrossRefRef` turns oversized
+  cross-book card headings cleanly after their en dash
+  (`"Jeremiah 52:1–"` / `"Lamentations 1:5"` at Extra large on Ezekiel 36:3, and
+  `"1 Thessalonians 5:28–"` / `"2 Thessalonians 1:2"` among Romans 1:7's kept
+  index rows) so every card fits the 283pt narrowest phone
+  (`TestEveryRealCrossReferenceCardFitsTheNarrowestPhone`).
 - Upstream USFM `\x` cross-reference notes in WEB (340) and WEB Catholic (343)
   and `\r` parallel headings in BSB (1,325) are stripped by helloao's JSON
   export before reaching the app; whether to source them upstream or replace
   OpenBible's vote-ranked TSK with CrossWire's head-word TSK remains separate
-  backlog work (`docs/BACKLOG.md`).
+  backlog work (`docs/BACKLOG.md`, `docs/SOURCE_FIELDS.md`).
 
 ## Checking it again
 
