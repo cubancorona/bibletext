@@ -42,28 +42,28 @@ panel's own, in the order the notes stand.
 | What a note carries | In the canon | Where the panel shows it | Held by |
 |---|---|---|---|
 | **Where it stands** | | | |
-| It hangs from a verse | 32,473 notes on 21,249 of 31,102 verses (census; the verses counted) | A letter before its word in the passage at the head of the list; the note under NKJV REFERENCES, keyed "· VERSE n" where the selection spans verses or a note's key is not the selected verse | `TestThePassageIsTheSelectedTextWithALetterBeforeEachNotesWord`, `TestCrossRefListKeysTheRunOnlyWhereItInforms` |
-| It hangs from a Psalm's title | 43 notes on 38 of 116 titles (census; the titles counted) | The title stands before verse 1 in the passage, in italic as the page sets a title, with its own letters; the notes under NKJV REFERENCES · TITLE, when the selection reaches verse 1 | the same passage test |
-| It hangs from a section heading | 1, before Numbers 4:21 (census) | The heading stands, muted, before its verse in the passage, the letter at its head; the note is lettered and listed with that verse's | `TestAHeadingsNoteStandsWithTheVerseItIsSetBefore` |
-| The word it hangs from | every note but 2 (census: `Unkeyed`) | The letter is drawn directly before the word (`noteMarkAt`). 1,998 offsets stand before white space and are drawn after it: a line break 1,952 times, a space 46 (census: `Moved`; the split counted) | `TestANotesLetterAndWhereItStands`; the census reports a letter that no word follows |
-| The order of a verse's notes | at most 7 on a verse (census); letters a 21,287, b 8,241, c 2,316, d 536, e 113, f 19, g 3 (counted) | Letters a, b, c in that order, restarting at each verse and at a title; the notes listed in that order | `TestANotesLetterAndWhereItStands`; the census checks every index |
+| It hangs from a verse | 32,473 notes on 21,249 of 31,102 verses (census; the verses counted) | A letter before its word in the passage at the head of the list; the note directly under the passage under NKJV REFERENCES (before GOSPEL PARALLELS and the Treasury), keyed "· VERSE n" where the selection spans verses | `TestThePassageIsTheSelectedTextWithALetterBeforeEachNotesWord`, `TestCrossRefListKeysTheRunOnlyWhereItInforms` |
+| It hangs from a Psalm's title | 43 notes on 38 of 116 titles (census; the titles counted) | The title stands before verse 1 in the passage, in italic as the page sets a title, opening the selection's letter run; on verse 1 alone the title's notes and verse 1's share one NKJV REFERENCES heading, and on a multi-verse selection the title's stand under NKJV REFERENCES · TITLE | `TestThePassageIsTheSelectedTextWithALetterBeforeEachNotesWord`, `TestCrossRefListKeysTheRunOnlyWhereItInforms` |
+| It hangs from a section heading | 1, before Numbers 4:21 (census) | The heading stands in the bold cut and text colour before its verse in the passage, as the reading page sets a heading, the letter at its head; the note stands under NKJV REFERENCES · HEADING | `TestAHeadingsNoteStandsWithTheVerseItIsSetBefore` |
+| The word it hangs from | every note but 2 (census: `Unkeyed`) | The letter is drawn directly before the word (`noteMarkAt`), with `readingMarkGap` (`1.5pt`) of air after an italic supplied word and standalone opening quotation marks held with the word that follows across line breaks. 1,998 offsets stand before white space and are drawn after it: a line break 1,952 times, a space 46 (census: `Moved`; the split counted) | `TestANotesLetterAndWhereItStands`, `TestPassageLetteringTouchesItalicGapAndOpeningQuote`; the census reports a letter that no word follows |
+| The order of a selection's notes | at most 7 on a verse (census); on single verses, letters a 21,287, b 8,241, c 2,316, d 536, e 113, f 19, g 3 (counted) | One continuous spreadsheet run across the whole selection — title, noted headings and verses alike — a, b, c … z, aa, ab …; double-letter marks step down to 10 points inside the 18-point margin | `TestANotesLetterAndWhereItStands`, `TestMultiVerseSelectionRunsOneSeriesOfLettersAcrossTitleAndVerses`; the census checks every index |
 | **The printed text** | | | |
 | The note as printed | 32,517 notes | A note of several pieces: verbatim on its own row, in both states of the fold. A note that is one parenthesised group: verbatim on that group's row, closed until tapped. A note that is one citation: its card, whose reference is the citation spelled out (one such note cites the reader's own verse and is its reference, shown and not followed) | `TestANoteOfSeveralPiecesFoldsToItsPrintedLine`, `TestANoteThatIsOneGroupIsDrawnAsAGroupRow`; `TestTheShorthandPrintsWhatItReads` (the shorthand printed back from the card is the note's text for all 12,576 notes of one citation) |
 | The separators: "; " between citations, ", " before a further verse | every gap of every note is one of the two, and nothing stands before the first piece or after the last (census: no exception) | On the printed line, which turns after "; " and not inside a citation unless the citation is longer than a row (`crossref_printed.go`); the pieces under it are in the same order | `noteGapProblems` and `printedTurnProblems`, run over the canon by the census; `TestAPrintedLineTurnsBetweenCitations` |
 | A book or chapter carried from the citation before ("John 7:50; 19:39") | — | The printed line shows the continuation as printed; its card is labelled in full ("John 19:39") | `TestTheShorthandReadsEveryShapeTheEditionPrints` |
 | **The citations** | | | |
-| A citation the reader can follow | 65,257 at a note's level and 8,320 inside groups (census) | A card: the reference, a preview from the loaded edition, the whole card the tap | `TestANoteIsItsPiecesInTheOrderItPrintsThem`, `TestAGroupRowOpensIntoItsCitations` |
+| A citation the reader can follow | 65,296 at a note's level and 8,323 inside groups (census) | A card: the reference, a preview from the loaded edition, the whole card the tap | `TestANoteIsItsPiecesInTheOrderItPrintsThem`, `TestAGroupRowOpensIntoItsCitations` |
 | The target the feed tagged | 66,306 tags; 66,294 agree with the print's reading and 12 do not, all inside groups | Outside a group the tag is followed; inside a group the print is | `TestNoteShorthandCensusHoldsTheShorthandToTheTags`; the live canon test pins 4,850 groups, 8,324 group citations and the 12 |
-| A citation of the verse or passage the reader is on | 48 at a note's level and 3 inside groups (census) | Its reference in full, with no preview and nothing to tap, in its printed place, set as a line of the edition's print (muted, 14 points) | `TestANoteIsItsPiecesInTheOrderItPrintsThem`, `TestANoteOfSeveralPiecesFoldsToItsPrintedLine` (its setting) |
-| A citation that cannot be followed | 3 (census: 2 at a note's level, 1 inside a group): Ezekiel 33:12 "Ezek. 8:21" and Mark 4:29 the "39" of "(Mark 13:30, 39)", verses the text does not have; Amos 2:1 "Is. 15:1—16", a form the shorthand has no rule for | Its words as printed, muted, in their place | the census (`Words`, `GroupWords`); `TestTheShorthandLeavesWhatItCannotReadUnread` |
-| A citation of a Psalm's title ("Ps. 59:title") | 47 (the apparatus census, `noteApparatusCensus`; the live canon test asserts that title, LXX and DSS are the apparatus's only words) | A card labelled by its chapter, tagged "Title", previewing the superscription; the whole psalm is a different card | `TestATitleCitationResolvesToTheTitle`, `TestATitleCardPreviewsTheSuperscription`, `TestATitleAndTheWholePsalmAreTwoCards` |
+| A citation of a verse in the selection | 9 at a note's level and 0 inside groups on single-verse selections (census) | Its reference in full, with no preview and nothing to tap, in its printed place, set as a line of the edition's print (muted, 14 points); a range citation that runs beyond the selection is a tappable card, and the same rule governs Treasury rows | `TestANoteIsItsPiecesInTheOrderItPrintsThem`, `TestASelfRangeBeyondTheSelectionIsACardAndExactSelfStaysMuted` |
+| A citation that cannot be followed | 3 (census: 2 at a note's level, 1 inside a group): Ezekiel 33:12 "Ezek. 8:21" and Mark 4:29 the "39" of "(Mark 13:30, 39)", verses the text does not have; Amos 2:1 "Is. 15:1—16", truncated from "Is. 15:1—16:14" (printed 1983–2018 as "Is. 15:1–16", emended in 2023 to "Is. 16:1–6") | Its words as printed, muted, in their place | the census (`Words`, `GroupWords`); `TestTheShorthandLeavesWhatItCannotReadUnread` |
+| A citation of a Psalm's title ("Ps. 59:title") | 47 (the apparatus census, `noteApparatusCensus`; the live canon test asserts that title, LXX and DSS are the apparatus's only words) | A card labelled by its chapter, tagged "Title", previewing the superscription, navigating to the chapter's head without washing verse 1; the whole psalm is a different card | `TestATitleCitationResolvesToTheTitle`, `TestATitleCardPreviewsTheSuperscription`, `TestATitleAndTheWholePsalmAreTwoCards`, `TestATitleCardNavigatesWithoutWashingVerseOne` |
 | A citation of a whole chapter | 70 tagged (117 whole-chapter ids in the apparatus census, which includes the 47 followed by ":title") | A card labelled as a chapter ("Leviticus 11", "2 Kings 18–20") | `TestPublisherCrossRefsLinkWholeChapters` |
 | A basis (", LXX"; ", LXX, DSS") | 3 notes (the apparatus census) | A tag on the citation's card; after a list of verses it is the whole citation's ("Ps. 45:4, 5, LXX", Revelation 6:2) | `TestABasisRidesItsCitation`, `TestABasisAfterAListOfVersesTagsEachOfThem` |
 | **Grouping** | | | |
 | A parenthesised group | 4,850 (census); 1,985 are the whole of their note | Wherever it stands — inside a note of several pieces, or as the whole of its note beside the letter's margin — a row carrying the group as printed with its parentheses, closed until it is tapped, that opens in place into the group's pieces on a well of its own | `TestANotesGroupsStandWhereTheEditionPrintsThem`, `TestAGroupRowOpensIntoItsCitations`, `TestAGroupOpensInsideThePanelWithoutMovingIt`, `TestANoteThatIsOneGroupIsDrawnAsAGroupRow` |
-| What stands inside a group | 8,320 cards, 3 of the reader's own passage, 1 that is words (census) | Each in its printed order under the opened row, by the rules above | `TestAGroupRowOpensIntoItsCitations` |
+| What stands inside a group | 8,323 cards, 0 of the reader's own passage, 1 that is words (census) | Each in its printed order under the opened row, by the rules above | `TestAGroupRowOpensIntoItsCitations` |
 | The book carried into a group and out of it | — | The cards are labelled in full | `TestTheShorthandReadsEveryShapeTheEditionPrints`, `TestTheShorthandFindsGroupsByTheirParentheses` |
-| Which rows are one note's | 32,517 notes; 17,956 of several pieces open over their rows, and 1,985 that are one group open onto their well when tapped (census) | Each note stands on a ground of its own with a gap before the next; its letter stands alone in a margin at the ground's left, and everything else of the note beside the margin; a rule hangs from the letter down the margin beside a note's rows, and beside an opened lone group's well (`crossref_section.go`, `crossref_group.go`) | `TestEachNoteStandsOnAGroundOfItsOwn` |
+| Which rows are one note's | 32,517 notes; 17,956 of several pieces open over their rows, and 1,985 that are one group open onto their well when tapped (census) | Each note stands on a ground of its own with a gap before the next; its letter stands alone in a margin at the ground's left, and everything else of the note beside the margin; a rule hangs from the letter down the margin beside a note's rows and beside an opened lone group's well, and while an open note or opened lone group scrolls past the top of the list its letter stays pinned near the top of the margin above its rule (`crossref_section.go`, `crossref_note.go`, `crossref_group.go`) | `TestEachNoteStandsOnAGroundOfItsOwn`, `TestALetterStaysInViewWhileItsNoteRunsPastTheTopOfTheList` |
 | **Repeats** | | | |
 | Two notes of a verse citing one passage | the repealed rule "one card, the first" had withheld 245 cards on 224 single-verse selections (counted) | Each note keeps its card | `TestANoteIsKeptWholeThoughAnotherNoteHasItsPassage` |
 | **The text the notes hang from** | | | |
@@ -103,35 +103,38 @@ so where the edition prints it without its book the book is supplied on that
 row; the note's printed line above it is unchanged.
 
 Letters and numbers are set as the page sets a superscript
-(docs/READING_TYPOGRAPHY.md, "Verse numbers").
+(docs/READING_TYPOGRAPHY.md, "Verse numbers"). References in the panel's
+header, cards and own-passage lines and printed shorthand lines on note and
+group rows draw from plain-zero cuts derived in memory from the embedded
+Atkinson Hyperlegible faces (`crossref_zero_font.go`,
+`TestCrossRefPlainZeroFacesAndPanelReferences`). On landscape phones and
+short windows where the available height is below `crossRefPanelHeight`, the
+source credits and edition notice move into the foot of the scroll body above
+Close (`TestShortAndLandscapePanelsScrollCreditsWithTheList`).
 
 ## What is known to be wrong in the feed, and what the panel does
 
 | The defect | What the panel does | Status |
 |---|---|---|
-| Two stretches hang every note one caller late: Ruth 3:12 to 2 Samuel 24:25 (1,640 callers) and Psalm 119:133 to Psalm 150:2 (323). The feed lacks a caller on Ruth 3:11 and a second on Psalm 119:132, and the last caller of each stretch has no content | Shows each caller in a stretch with the content delivered on the next (1,961 notes), the first content of each stretch with its verse and no letter (2), nothing for the last caller of each (2). Only while the loaded text carries the marks of the feed as found; the stored notes are unchanged (`publisher_xref_displaced.go`, `TestANoteTheFeedHangsOneCallerLateIsShownOnItsOwn`) | OPEN: corrected (as built), as delivered, or withheld until the feed is right |
-| The heading's note. A second publication of the apparatus has it in Numbers 4:22, before the word the heading ends with | Shown where the feed has it, on the heading | OPEN |
+| Two stretches hang every note one caller late: Ruth 3:12 to 2 Samuel 24:25 (1,640 callers) and Psalm 119:133 to Psalm 150:2 (323). The feed lacks a caller on Ruth 3:11 and a second on Psalm 119:132, and the last caller of each stretch has no content | Shows each caller in a stretch with the content delivered on the next (1,961 notes), the first content of each stretch with its verse and no letter (2), nothing for the second caller of 2 Samuel 24:25 (whose first note is shown), and `"The NKJV has a cross-reference here that isn't in our source."` at Psalm 150:2 where the verse has no other note (`publisher_xref_displaced.go`, `crossref_list.go`, `TestANoteTheFeedHangsOneCallerLateIsShownOnItsOwn`, `TestPsalm150Verse2SaysTheCrossReferenceIsMissingFromOurSource`). Only while the loaded text carries the marks of the feed as found; the stored notes are unchanged | Built (decided 12 November 2026) |
+| The heading's note. A second publication of the apparatus has it in Numbers 4:22, before the word the heading ends with | Shown where the feed has it, on the heading: the heading stands in the bold cut and text colour in the passage, and the note stands under `NKJV REFERENCES · HEADING` (`TestAHeadingsNoteStandsWithTheVerseItIsSetBefore`) | Built (decided 12 November 2026) |
 | Twelve tags inside groups name the wrong book: where a group opens with a numbered book, a later citation of the group that omits its book is tagged with the book of the citation before the group ("(1 Cor. 1:23; 2:13, 14; 4:10)" after "John 10:20" is tagged John 2:13) | Inside a group the print is followed | Built |
 | Three callers stand inside a word (Genesis 42:20, Exodus 12:25, Exodus 19:17) | The letter is drawn at the head of the word (`wordSplitCallers`, `TestACallerInsideAWordIsDrawnBeforeTheWord`) | Built |
 | 257 callers stand where the source runs two words together (docs/SOURCE_FIELDS.md) | The letter is drawn where it stands, between the two words | Built; the text is the source's |
-| Three citations name a verse the text does not have, or are cut short | Their words are shown as printed and are not followed | Built; scans of the printed edition read the same (checked 11 November 2026) |
+| Three citations name a verse the text does not have, or are cut short | Their words are shown as printed and are not followed | Built; 1983–2018 Thomas Nelson print editions read `"Is. 15:1–16"` at Amos 2:1 (Isaiah 15 has 9 verses; truncated from `"Is. 15:1—16:14"` on Is. 15:1 and Jer. 48:1) while the 2023 Evangelical Study Bible reads `"Is. 16:1–6"` (checked 11–13 November 2026) |
 
-A report to the provider is owed, whatever is decided.
+A report to the provider is drafted for the owner to review and send.
 
-## What is open
+## What is deferred
 
-- The two stretches: corrected, as delivered, or withheld.
-- The heading's note: on the heading, or in Numbers 4:22.
-- Whether a note of several pieces starts open (as built) or closed, each
-  letter one row, and whether an opened lone group keeps the margin's rule
-  beside its well (as built). Every parenthesised group starts closed either
-  way.
-- Whether a note's letter is kept in view while a note taller than the list
-  scrolls. Not built.
 - The Treasury's filter removes a Treasury row that a title card or a
   whole-chapter card "carries" though the card shows something else. It
   belongs to the audit of the other cross-references (the Treasury, the
   Gospel parallels, any other edition's), which follows the NKJV.
+- Scaling the cross-references panel with the reader's text size (on the
+  backlog).
+- Showing the NKJV's cross-reference notes immediately when the panel opens
+  before the first Treasury zip download has completed (on the backlog).
 
 ## Checking it again
 

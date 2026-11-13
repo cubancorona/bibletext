@@ -455,7 +455,7 @@ breaks survive a copy is too easy to get wrong to leave where no test can reach.
 | S17 | NKJV supplied words: captured | NKJV | M | nkjv | done; captured, and drawn in italic on every surface |
 | S18 | speech reads the Psalm title | all | M | none | done |
 | S19 | mark an omitted verse's gap in the text | all | M | none | done |
-| S20 | show the NKJV's cross references | NKJV | M | none | built behind a tag; presentation second pass built 6 November 2026, the notes whole under their letters 11 November 2026; gated on the licensing reply |
+| S20 | show the NKJV's cross references | NKJV | M | none | built behind a tag; presentation second pass built 6 November 2026, the notes whole under their letters 11 November 2026, panel refinements settled and built 12–13 November 2026; gated on the licensing reply |
 | S21 | website renders the footnote section | website | M | none | done |
 | S22 | in-text footnote markers | all | L | none | blocked |
 | S23 | draw small caps as small caps | NKJV | M | nkjv | done |
@@ -716,25 +716,30 @@ The design settled here rather than "lift the filter": the chapter-bottom
 section stays the wording-and-manuscript apparatus and still excludes cross
 references. When the edition's flag is on, the cross-references panel is one
 list of the one card it has always drawn, in labelled runs (the sidebar's
-`sectionLabel`): the Gospel parallels first; then NKJV REFERENCES — the
-edition's notes one by one, each whole and in the order it is printed, under
-the letter its word carries in the selected text, which heads the list
-(decided 11 November 2026; until then whatever of a note was not a card was
-gathered into one muted caption under its cards, and two notes citing one
-passage gave one card). A citation whose passage is in the loaded text is a
-card in the publisher's order, labelled by its full reference ("John 19:39",
-never the continuation "19:39"), previewed from the loaded edition, the
-whole card the tap; a citation of the passage on screen is its reference,
-muted, with nothing to tap; a parenthesised "compare" group is a row that
-carries the group as printed and opens into its citations; a citation the
-loaded text lacks is its printed words; and a note of several pieces is a
+`sectionLabel`): NKJV REFERENCES directly under the lettered passage at the
+head of the list — the edition's notes one by one, each whole and in the
+order it is printed, under the letter its word carries in the selected text
+(decided 11–12 November 2026; until 11 November whatever of a note was not a
+card was gathered into one muted caption under its cards, and two notes
+citing one passage gave one card; on 12 November NKJV REFERENCES moved ahead
+of GOSPEL PARALLELS so the notes stand directly below their letters in the
+passage, and a multi-verse selection runs one spreadsheet series `a..z, aa..`
+across title, noted headings and verses). A citation whose passage is in the
+loaded text is a card in the publisher's order, labelled by its full reference
+("John 19:39", never the continuation "19:39"), previewed from the loaded
+edition, the whole card the tap; a citation of a verse in the selection is
+its reference, muted, with nothing to tap, while a range citation that runs
+beyond the selection is a tappable card; a parenthesised "compare" group is a
+row that carries the group as printed and opens into its citations; a citation
+the loaded text lacks is its printed words; and a note of several pieces is a
 row that carries the note as printed, with its pieces under it — no legend
 and no added word (a note that is nothing but such a group is drawn as
 that group's row beside the letter's margin, closed until tapped, so its
-citations do not count for the Treasury's filter); then TREASURY OF SCRIPTURE
-KNOWLEDGE, open, minus the rows whose passages the publisher's cards on
-screen already carry
-(`publisher_xrefs.go`, `crossref_list.go`, `crossref_note.go`,
+citations do not count for the Treasury's filter); then GOSPEL PARALLELS
+where the selection has them, dropping the PARALLEL pill under their label;
+then TREASURY OF SCRIPTURE KNOWLEDGE, open, minus the rows whose passages the
+publisher's cards on screen already carry and minus exact citations of a
+selected verse (`publisher_xrefs.go`, `crossref_list.go`, `crossref_note.go`,
 `crossref_passage.go`). Nothing of the publisher's is sorted, capped, merged
 or mapped: the targets are in the edition's own numbering, which is the
 numbering on screen. The Treasury is not removed — 31.7% of
@@ -742,11 +747,7 @@ NKJV verses carry no note (9,853 of 31,102 on the 7 September canon) — and
 the two never share a run or a credit, which is what the misattribution
 worry in `docs/SOURCE_FIELDS_DECISIONS.md` actually forbids: the footer's
 sources line names the Treasury, and the edition's LicenseNotice, once in
-the footer, is the publisher's credit. The Gospel parallels stay first:
-event-level and titled, they answer on every verse of a pericope where the
-edition's own parallel-style notes appear only at pericope starts and
-untitled; under their label they drop the PARALLEL pill, since the label
-carries the provenance. A flag off (every store build) leaves the panel as
+the footer, is the publisher's credit. A flag off (every store build) leaves the panel as
 it was, except that a licensed edition's notice stands under the verse-text
 previews the panel shows, which it never did before S20, and for two repairs
 that ship regardless of the licence (decided 6 November 2026): range labels
@@ -755,11 +756,14 @@ parallels only while a parallel row is on screen.
 
 On a yes the one line in `versions_nkjvxrefs.go` moves into the registry and
 the tag goes; on a no nothing needs unwinding. The 43 title notes ride the
-same rule as the rest, keyed "NKJV REFERENCES · TITLE" when the selection
-reaches verse 1, the title standing before the verse in the selected text
-with their letters; and a citation OF a Psalm's title ("Ps. 59:title", 47 in the
-feed) is a card labelled by its chapter, tagged "Title", previewing the
-superscription.
+same rule as the rest, sharing "NKJV REFERENCES" with verse 1 on a
+single-verse selection and keyed "NKJV REFERENCES · TITLE" on a multi-verse
+selection, the title standing before verse 1 in the selected text and opening
+the selection's letter run; a noted section heading stands bold in the
+passage with its note under "NKJV REFERENCES · HEADING"; and a citation OF a
+Psalm's title ("Ps. 59:title", 47 in the feed) is a card labelled by its
+chapter, tagged "Title", previewing the superscription and navigating to the
+chapter's head without washing verse 1.
 
 **Paused 10 September 2026** after the first look on a phone: the Treasury's
 accordion title forced the list wider than the panel and clipped every row,
@@ -773,11 +777,14 @@ panel's second pass".
 **Rebuilt 11 November 2026** so that nothing a note carries is lost: the
 selected text with a raised letter before each word a note hangs from, and
 every note whole under its letter, on a ground of its own with the letter
-alone in a margin, so that its rows are seen to be that letter's. The
-decisions, the build, the count that
-holds it over the canon and what is still open are in the same BACKLOG
-entry; `docs/CROSS_REFERENCE_NOTES.md` is the ledger of what a note carries
-and where each thing is shown.
+alone in a margin, so that its rows are seen to be that letter's, and
+**refined 12–13 November 2026** with pinned margin letters on scrolled long
+notes and opened lone groups, plain-zero citation and shorthand numerals,
+scrolled credits on landscape or short windows, and the silent-caller notice
+at Psalm 150:2. The decisions, the build, the count that holds it over the
+canon and what is deferred are in the same BACKLOG entry;
+`docs/CROSS_REFERENCE_NOTES.md` is the ledger of what a note carries and
+where each thing is shown.
 
 **S23.** DONE. A small-caps span was folded to uppercase in the stored text,
 so LORD, GOD and the four names of Jesus were literally capitals. Drawing them

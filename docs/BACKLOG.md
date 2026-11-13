@@ -9833,7 +9833,7 @@ four, and finds no visible object laid out smaller than it asks: it fails on
 the key row as an HBox and on any switch as a widget.Check. What only a
 screen can confirm is in `docs/VISUAL_TESTS.md` V15.
 
-## NKJV cross references: the panel's second pass — BUILT 6 November 2026, the notes whole under their letters BUILT 11 November 2026, display gated on the licence
+## NKJV cross references: the panel's second pass — BUILT 6 November 2026, the notes whole under their letters BUILT 11 November 2026, refinements BUILT 13 November 2026, display gated on the licence
 
 Planned for: stays, gated on the licensing reply — see docs/ROADMAP.md.
 
@@ -10090,7 +10090,7 @@ Knowledge: OpenBible.info (CC-BY)" — are the wordings settled on 6 November
 2026, recorded beside their constants.
 
 BUILT 11 November 2026 on `fu/s20-paren-groups`, cut from main at
-665f87671b, in thirteen commits: 77d9203dd8 (the shorthand reader), 82a790190d
+665f87671b, in fifteen commits: 77d9203dd8 (the shorthand reader), 82a790190d
 (a note's groups resolved from the print and kept in their place; the
 shorthand census), 1cd40b92f4 (the group's row), 3da33a5030 (the notes whole
 under their letters), 98d37259aa (the two stretches the feed hangs one
@@ -10102,25 +10102,48 @@ the passage), 7162f4cdde (a printed line turned between citations and not
 inside one), 4f6d6a798c (the scroll lane and the 26-point fold mark),
 06033fb70d (the note-ground tests and a group's first opening), f035f39426
 (every parenthesised group starting closed, a lone group drawn as that
-group's row beside the letter's margin); cc7fada038 adds the test that the
-verse-of-the-day card, which shares the passage's paragraph, carries none
-of its marks.
+group's row beside the letter's margin), 9c8395212a (publisher card headings
+held to note and group widths) and f7ea13bb04 (open folds and scroll place
+kept across rebuilds, flush passage clusters wrapped within the list, and
+omitted-verse selections answered before loading); cc7fada038 adds the test
+that the verse-of-the-day card, which shares the passage's paragraph, carries
+none of its marks. REFINED 12–13 November 2026 on the same branch in four
+commits: 2249a81e74 (Matthew 15:8's first-line red-letter span restored in
+`red_letter_nkjv_data.go`), 11d367d9dd (NKJV test fixture strings replaced
+with WEBC/BSB wording), 0daadf7739 (NKJV REFERENCES directly under the passage
+ahead of GOSPEL PARALLELS, continuous spreadsheet lettering `a..z, aa..`
+across a selection, one shared NKJV REFERENCES label for a Psalm title and
+verse 1, `NKJV REFERENCES · HEADING` with bold text-coloured heading in the
+passage, `:title` card navigation without washing verse 1, exact-selection
+own-passage rule across publisher and Treasury rows, and the missing-note
+sentence at Psalm 150:2) and b8e6d249e8 (pinned margin letters on scrolled
+open notes and opened lone groups, italic-to-mark clearance and opening-quote
+holding in the passage, plain-zero Atkinson faces on references and printed
+shorthand lines, and scrolled credits on landscape or short windows).
 `docs/CROSS_REFERENCE_NOTES.md` is the ledger: what a note
 carries, kind by kind, how many the canon holds, where the panel shows each
 and the test that holds it. What the list is now, flag on:
 
 - The selected text heads the list (`crossref_passage.go`), above every
-  section label, GOSPEL PARALLELS included, and only where the selection has
-  a note. It is the verses' own text as the page draws it, in the reading
+  section label, and only where the selection has
+  a note. Directly under the passage stands NKJV REFERENCES, then GOSPEL
+  PARALLELS where the selection has them, then TREASURY OF SCRIPTURE
+  KNOWLEDGE. The passage is the verses' own text as the page draws it, in the reading
   face at the list's 17-point size opened by the face's optical scale: the
   divine name's small capitals, the translators' supplied words in italic,
   the words of Christ in red where the reader has that on, poem lines on
   rows of their own. A Psalm's title stands before verse 1 when it has a
-  note, in italic as the page sets a title, and a section heading that carries a note stands, muted, before its
-  verse. A small raised letter in the accent colour stands directly before
-  each word a note hangs from. The letters run a, b, c in the order the
-  notes stand and restart at each verse and at a Psalm's title; a heading's
-  note is lettered with the verse the heading is set before. They are the
+  note, in italic as the page sets a title, and a section heading that carries a note stands in the bold cut and text colour before its
+  verse, as the reading page sets a heading. A small raised letter in the accent colour stands directly before
+  each word a note hangs from, with `readingMarkGap` (`1.5pt`) of air after
+  an italic supplied word and standalone opening quotation marks held with
+  the word that follows across line breaks. The letters run in one continuous
+  spreadsheet series across the whole selection — title, noted headings and
+  verses alike — `a, b, c … z, aa, ab …`, never restarting inside a
+  multi-verse selection. On a single-verse Psalm 1 selection the title's
+  notes and verse 1's share one `NKJV REFERENCES` heading; on a multi-verse
+  selection the title's stand under `NKJV REFERENCES · TITLE`; a noted
+  heading's note stands under `NKJV REFERENCES · HEADING`. They are the
   panel's own: the feed's caller is "-" on all 32,517 notes. A verse's
   number is drawn where the passage holds more than one verse, or a title
   before the verse. Letters and numbers are set as the page sets a
@@ -10138,13 +10161,16 @@ and the test that holds it. What the list is now, flag on:
   printed text stays on the row in both states. A note that is one
   parenthesised group is drawn instead as that group's row (`crossref_group.go`),
   closed until tapped, beside the letter's margin, its tap and pointer wash
-  spanning the margin as a note's own row does (1,985 notes, holding 3,708
+  spanning the margin as a note's own row does (1,985 notes, holding 3,710
   citations; every one has a citation to follow).
 - A note's pieces (`publisherCrossRef.Pieces`). A citation the reader can
-  follow is a card. A citation of the verse or passage the reader is on is
-  its reference in full, with no preview and nothing to tap, in its printed
+  follow is a card; tapping a `:title` card navigates to the chapter's head
+  (`verse 0`) without washing verse 1. A citation of a verse in the selection
+  is its reference in full, with no preview and nothing to tap, in its printed
   place, set as a line of the edition's print (muted, 14 points): in a
-  card's bold it read as a heading over the cards after it. A parenthesised group is its row, in its place, and opens
+  card's bold it read as a heading over the cards after it. A range citation
+  that runs beyond the selection is a tappable card, and the same rule governs
+  Treasury rows (`selectionContainsTarget`). A parenthesised group is its row, in its place, and opens
   into its own pieces by the same rule. Anything else is its words,
   verbatim, in its place. No card is withheld because another note of the
   verse has its passage (the repealed rule had withheld 245 cards on 224
@@ -10152,12 +10178,14 @@ and the test that holds it. What the list is now, flag on:
   caption that gathered what was not a card is gone, with
   `crossRefCard.Caption`, `publisherCrossRef.parts()` and
   `publisherTarget.key()`.
-- What is under a letter (`crossref_section.go`). Each note stands on a
+- What is under a letter (`crossref_section.go`, `crossref_note.go`,
+  `crossref_group.go`). Each note stands on a
   ground of its own, rounded, 10 points from the next. The ground is the
   palette's ground furthest in lightness from the panel's: the page's
   near-white in the light theme, the window's near-black in the dark. The
   letter stands alone in an 18-point margin at the ground's left, 16 points
-  bold italic in the accent colour, on the first line of the note; the note
+  bold italic in the accent colour (stepping down to 10 points on two-letter
+  marks `aa..`), on the first line of the note; the note
   as printed (its turnover lines included), the cards, the reader's own
   passage and a group's row stand beside the margin. A 3-point rule in the
   letter's colour, better than 4:1 against the ground in both themes, hangs
@@ -10167,7 +10195,17 @@ and the test that holds it. What the list is now, flag on:
   the other of the palette's two grounds, a well in the note's and not the
   panel showing through it; while a lone group is open, `crossRefGroupLayout`
   hangs the margin's rule from under its letter to 6 points above the well's
-  foot.
+  foot. While an open note or an opened lone group runs past the top of the
+  scroll view, its letter stays pinned near the top of the 18-point margin
+  above its rule, clamping at the foot of the rule before the block leaves
+  the view and restoring its pinned position across theme and layout rebuilds
+  (`TestALetterStaysInViewWhileItsNoteRunsPastTheTopOfTheList`). References
+  in the panel's header, cards and own-passage lines and printed shorthand
+  lines draw from plain-zero Regular and Bold faces derived in memory from
+  the embedded Atkinson Hyperlegible cuts (`crossref_zero_font.go`), and on
+  landscape phones or short windows below `crossRefPanelHeight` the source
+  credits and edition notice scroll at the foot of the list body above Close
+  (`TestShortAndLandscapePanelsScrollCreditsWithTheList`).
 - What counts for the Treasury's filter: the cards on screen as the panel
   opens, which are a note's direct citations. Every parenthesised group
   starts closed and its citations are not counted (leaving 2,644 more
@@ -10189,19 +10227,19 @@ and the test that holds it. What the list is now, flag on:
   head of the word (`wordSplitCallers`). 257 stand between two words the
   source runs together (`docs/SOURCE_FIELDS.md`), and are drawn there.
 - The canon's one note on a heading (before Numbers 4:21, citing Num. 3:22)
-  is read, and shown with that verse's notes.
+  is read, and shown on the heading under `NKJV REFERENCES · HEADING`.
 
 THE FORMAL CHECK. `notePieceCensus` (`publisher_xrefs_census_test.go`)
 measures a canon by the functions the panel draws from, and
 `TestLiveAPIBibleFullCanon` pins its figures for the canon fetched on
 6 November 2026. 32,517 notes: 32,473 on verses, 43 on Psalm titles, 1 on a
-heading; at most 7 under one verse. As shown: 65,257 cards, 48 citations of
+heading; at most 7 under one verse. As shown: 65,296 cards, 9 citations of
 the reader's own passage and 2 pieces that are words; 4,850 groups holding
-8,320 cards, 3 of the reader's own passage and 1 piece that is words. 12,576
+8,323 cards, 0 of the reader's own passage and 1 piece that is words. 12,576
 notes are one citation, 12,575 drawn as a card and one, of the reader's own
 verse, as its reference; 1,985 are one parenthesised group, drawn as a
-group's row closed until tapped, and 17,956 several pieces, drawn as a
-note's row open as the panel opens. Between
+group's row closed until tapped (holding 3,710 citations), and 17,956 several
+pieces, drawn as a note's row open as the panel opens. Between
 two pieces of a note stands "; " or ", " and nothing else, and nothing stands
 before the first or after the last, with no exception; the passage with its
 letters taken out is the text on every verse that has a note; and every
@@ -10209,9 +10247,12 @@ letter stands directly before a word (counted on 11 November 2026: before a
 letter or digit 30,433 times, an opening quotation mark 2,043, an opening
 bracket 39). Of the 21,266 single-verse selections that have a note, each
 built with every group open, none wants more than the narrowest phone's
-283 pt and the widest wants 239 (counted the same day). The three pieces that are words are a verse the loaded text does not have
+283 pt and the widest wants 239 (counted on 11 November 2026; the passage
+wrap check holds all 21,266 single-verse passages within 283 pt as well). The three pieces that are words are a verse the loaded text does not have
 (Ezekiel 33:12, "Ezek. 8:21"; Mark 4:29, the "39" of "(Mark 13:30, 39)") and
-a form no rule of the shorthand reads (Amos 2:1, "Is. 15:1—16"). An
+a truncated cross-chapter span (Amos 2:1, "Is. 15:1—16", printed 1983–2018 as
+"Is. 15:1–16" though Isaiah 15 has 9 verses, truncated from "Is. 15:1—16:14"
+on Is. 15:1 and Jer. 48:1, and emended in 2023 to "Is. 16:1–6"). An
 independent reading of all 32,517 notes, written from the raw feed alone
 without the app's code, was compared with the panel's model note by note on
 11 November 2026: unit, letter, offset, where the letter is drawn, text, the
@@ -10219,47 +10260,46 @@ row it is drawn as, and every piece. Read as delivered the two differ on 4
 notes, all intended (the three callers inside a word; Revelation 6:2's
 basis). It is a record, not a repository test: both of its inputs are
 licensed data kept outside the repository. Tests added:
-`crossref_note_test.go`, `publisher_xref_displaced_test.go`, the piece
+`crossref_note_test.go`, `crossref_zero_font_test.go`,
+`crossref_coverage_test.go`, `publisher_xref_displaced_test.go`, the piece
 census and its controls, `TestTheShorthandPrintsWhatItReads`,
 `TestANoteClosesInsideThePanelWithoutMovingIt`,
-`TestEachNoteStandsOnAGroundOfItsOwn`.
+`TestEachNoteStandsOnAGroundOfItsOwn`,
+`TestALetterStaysInViewWhileItsNoteRunsPastTheTopOfTheList`,
+`TestShortAndLandscapePanelsScrollCreditsWithTheList`.
 
-OPEN, each built one way and not decided:
+DECIDED AND BUILT 12–13 November 2026 (resolving the 11 November open list):
 
-- Two stretches of the feed hang every note one caller late
-  (`publisher_xref_displaced.go` has the account and the evidence): from the
-  first caller of Ruth 3:12 to the last of 2 Samuel 24:25 (1,640 callers),
-  and from the first caller of Psalm 119:133 to the caller of Psalm 150:2
-  (323). The feed lacks a caller the edition has on Ruth 3:11 and a second
-  on Psalm 119:132, and the last caller of each stretch has no content in
-  the feed. As built, a caller inside a stretch shows the content delivered
-  on the next caller (1,961 notes), the first content of each stretch
-  stands with its verse and no letter (2), and the last caller of each shows
-  nothing (2); the stored notes are unchanged; and it is done only while the
-  loaded text carries the marks of the feed as found, so a corrected feed is
-  read as delivered. Read as delivered the census is the same but for 65,254
-  cards and 51 citations of the reader's own passage, three of the 51 being
-  artefacts of the displacement (1 Samuel 8:11, 1 Samuel 16:16, 2 Samuel
-  13:37). Against the independent reading above, every content is shown
-  once and each of the 1,961 is the content of the next caller. Not decided: whether the stretches are shown corrected, as
-  delivered, or not at all until the feed is right. A report to the provider
-  is owed either way.
-- The heading's note. A second publication of the same apparatus has it in
-  Numbers 4:22, before the word the heading ends with, and none on the
-  heading. Not decided: where the feed has it (as built) or in verse 22.
-- A note of several pieces opens with the panel (as built), while every
-  parenthesised group starts closed wherever it stands (decided). Not
-  decided: whether notes of several pieces should instead start closed, each
-  letter one row, and whether an opened lone group keeps the margin's rule
-  beside its well (as built). With notes of several pieces open a second
-  letter can lie below the first screen (John 3:16's b does).
-- Not built: the letter kept in view at the top of its margin while a note
-  taller than the list scrolls, so that a reader in the middle of a long
-  note still sees which letter its rows are under. The rule says that they
-  are one note's; nothing says whose.
-- The Treasury's filter removes a Treasury row that a title card or a
-  whole-chapter card "carries" though the card shows something else. It
-  belongs to the audit of the other cross-references.
+- The two displaced stretches (`publisher_xref_displaced.go`): kept
+  corrected as built. From the first caller of Ruth 3:12 to the last of
+  2 Samuel 24:25 (1,640 callers), and from the first caller of Psalm 119:133
+  to the caller of Psalm 150:2 (323), each caller shows the content delivered
+  on the next (1,961 notes), the first content of each stretch stands with
+  its verse and no letter (2), 2 Samuel 24:25 shows its first note while its
+  silent second caller is omitted, and Psalm 150:2 — where the silent caller
+  leaves the verse with no publisher note — shows
+  `"The NKJV has a cross-reference here that isn't in our source."`
+  (`crossRefMissingPublisherNoteLine`,
+  `TestPsalm150Verse2SaysTheCrossReferenceIsMissingFromOurSource`). Read as
+  delivered the census has 65,294 cards and 11 own-passage lines (two of the
+  eleven being displacement artefacts: 1 Samuel 8:11 and 1 Samuel 16:16).
+  A full provider report (covering Bible ID `63097d2a0a2f7db3-01`, the two
+  displaced stretches, the 12 mistagged group citations, the 286 run-together
+  caller boundaries including Zephaniah 2:8, the Amos 2:1 `"Is. 15:1—16"`
+  genealogy, Matthew 15:8's split `wj` span, and whether the NKJV's
+  translator footnotes are available under the licence) is drafted for the
+  owner to review and send.
+- The heading's note before Numbers 4:21: kept on the heading, drawn in the
+  bold cut and text colour in the passage, under `NKJV REFERENCES · HEADING`.
+- Notes of several pieces start open when the panel opens; every
+  parenthesised group starts closed wherever it stands; an opened lone group
+  keeps the 3-point rule in its margin beside its well; and `letter-in-view`
+  pins the letter of a scrolled open note or opened lone group near the top
+  of its margin above the rule.
+- The Treasury's filter removing a Treasury row that a title card or a
+  whole-chapter card "carries" belongs to the audit of the other
+  cross-references (the Treasury, the Gospel parallels, any other edition's),
+  which follows the NKJV.
 
 GATES. The publisher's apparatus does not display in a store build until the
 licensing reply says it may. The only licensing enquiry sent is the
@@ -10274,9 +10314,16 @@ Nelson") and whether a one-sentence gloss of the parentheses may go anywhere
 clause as requiring the apparatus as printed, design B replaces the cards.
 On a no: nothing to unwind. Deferred, not denied:
 
-- Per-section loading, so the NKJV's rows no longer wait behind the spinner
-  for the Treasury zip or the 60-s timeout on a first open. It would replace
-  the three-state body.
+- Per-section loading, so the NKJV's cross-reference notes show immediately
+  from the already-loaded `BibleData` on a reader's very first open instead
+  of waiting behind the spinner for the Treasury zip download or its 60-s
+  timeout. It would replace the panel's three-state body with immediate
+  publisher content and an inline loading/retry state under the Treasury
+  heading.
+- Scaling the cross-references panel with the reader's text size (`Normal`,
+  `Large`, `Extra large`), keeping the passage, card previews, printed
+  shorthand rows, margins and phone-width fit in proportion across all three
+  settings.
 - CLOSED 11 November 2026: a wrap rule for the printed lines. A wrapping
   line of the edition's print (a note's row, a group's label; until
   11 November 2026 the caption) could break inside a numbered book name
@@ -10292,17 +10339,17 @@ On a no: nothing to unwind. Deferred, not denied:
   or a bare number). A continuation the loaded text has is a card under its
   full reference, one it lacks is its printed words in their place, and the
   whole note stands on its row as printed.
-- CLOSED 11 November 2026: the canon's one heading note (on a heading in
-  Numbers 4), which the resolver did not read. It is read and shown with the
-  notes of the verse the heading is set before; where it belongs is open
-  (above).
+- CLOSED 11–12 November 2026: the canon's one heading note (on a heading in
+  Numbers 4), which the resolver did not read. It is read and shown on the
+  heading under `NKJV REFERENCES · HEADING`, with the heading drawn bold in
+  the passage (above).
 
 TO SEE IT. Build for the phone: `scripts/run-ios-device.sh --nkjvxrefs`.
 Without a device: run `TestLiveAPIBibleFullCanon` with
 `BIBLETEXT_FULL_CANON_OUT` set (the decoded canon is licensed text and must
 stay outside the repository), then `BIBLETEXT_RENDER_XREFS=<that file>
-BIBLETEXT_RENDER_OUT=<dir> go test -run TestRenderCrossRefPanel .` writes
-the PNGs at both phone sizes in both appearances.
+BIBLETEXT_RENDER_OUT=<dir> go test -tags nkjvxrefs -run TestRenderCrossRefPanel .`
+writes the PNGs at both phone sizes in both appearances.
 
 ## FIXED: Share as image failed silently on Android 6.0-9.0 (API 23-28) — 20 September 2026
 

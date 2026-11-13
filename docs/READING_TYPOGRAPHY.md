@@ -178,10 +178,14 @@ regular cut, on the baseline — it is never a superscript.
 The cross-references passage sets a verse's number by the same figures, in
 the same cut and colour, and sets a note's letter as a superscript of the
 same size and lift in the text's cut and the accent colour
-(`readingMarkScale` and `readingMarkLift`, `verse_of_day.go`).
+(`readingMarkScale` and `readingMarkLift`, `verse_of_day.go`), adding
+`readingMarkGap` (`1.5pt`) of air after an italic word before a flush letter
+and holding standalone opening quotation marks after a letter with the word
+that follows across line breaks.
 `TestThePassageIsTheSelectedTextWithALetterBeforeEachNotesWord` holds the
 two figures equal to the page's and measures both marks baseline to
-baseline.
+baseline, and `TestPassageLetteringTouchesItalicGapAndOpeningQuote` holds the
+italic clearance and opening-quote grouping.
 
 Two decisions that look like oversights and are not:
 
