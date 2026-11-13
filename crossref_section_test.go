@@ -987,6 +987,10 @@ func TestThePanelKeepsItsOpenRowsAndPlaceAcrossARebuild(t *testing.T) {
 	if scroll.Offset.Y != 140 {
 		t.Errorf("after appearance rebuild: scroll offset Y = %v, want 140", scroll.Offset.Y)
 	}
+	if notes[0].pin == nil || !notes[0].pin.Visible() || notes[0].letter.Visible() {
+		t.Errorf("after appearance rebuild at scroll 140: note a pin visible=%v, own letter visible=%v; want pinned immediately",
+			notes[0].pin != nil && notes[0].pin.Visible(), notes[0].letter.Visible())
+	}
 
 	// 2. Close note a, set scroll to 95, and rotate/resize via rebuildForLayoutChange.
 	test.Tap(notes[0].header)
@@ -1016,5 +1020,150 @@ func TestThePanelKeepsItsOpenRowsAndPlaceAcrossARebuild(t *testing.T) {
 	maxY := max(float32(0), scroll.Content.MinSize().Height-scroll.Size().Height)
 	if scroll.Offset.Y != maxY || scroll.Offset.Y >= 900 {
 		t.Errorf("clamped scroll offset Y = %v, want %v (< 900)", scroll.Offset.Y, maxY)
+	}
+}
+
+// A LETTER STAYS IN VIEW WHILE ITS NOTE OR OPENED LONE GROUP RUNS PAST THE TOP
+// OF THE LIST. A multi-piece note or an opened lone parenthesised group can be
+// taller than the list; with its own row scrolled out above, its letter stands
+// at crossRefPinTop under the top of the view, in the margin, with the rule
+// hanging from it there, leaves with the foot of the rows, returns to its own
+// row at the top, and is restored immediately when a scrolled panel reopens.
+func TestALetterStaysInViewWhileItsNoteRunsPastTheTopOfTheList(t *testing.T) {
+	st, _ := groupListState(t)
+	// Give the lone group (note b) several citations so that when tapped open
+	// it is taller than the view and exercises lone-group letter pinning too.
+	v := &st.Bible.Verses["John"][3][15]
+	v.Footnotes[1].Text = "(Is. 9:6; Rom. 5:8; Eph. 2:4; 2 Thess. 2:16; 1 John 4:9, 10; Rev. 1:5)"
+	// Add trailing Treasury rows so the scroll has ample travel past note b's foot.
+	tsk := "John.3.16\tJohn.3.1\t9\nJohn.3.16\tJohn.3.2\t8\nJohn.3.16\tJohn.3.3\t7\nJohn.3.16\tJohn.3.4\t6\nJohn.3.16\tJohn.3.5\t5\nJohn.3.16\tJohn.3.6\t4\n"
+	p := mountSectionPanel(t, st, 16, tsk)
+	if len(p.notes) != 1 || len(p.groups) != 2 || p.scroll == nil {
+		t.Fatalf("%d note rows, %d group rows, scroll=%v; want 1 note, 2 groups, and scroll", len(p.notes), len(p.groups), p.scroll != nil)
+	}
+	a := p.notes[0]
+	inner, b := p.groups[0], p.groups[1]
+	if crossRefPinTop != 4 {
+		t.Errorf("a letter kept in view stands %v under the top of the view; built at 4", crossRefPinTop)
+	}
+	line := a.letterLine()
+	to := func(y float32) {
+		t.Helper()
+		p.scroll.Scrolled(&fyne.ScrollEvent{Scrolled: fyne.Delta{DY: p.scroll.Offset.Y - y}})
+		if !within(p.scroll.Offset.Y, y) {
+			t.Fatalf("control: the list is scrolled to %v, not %v (it runs to %v)", p.scroll.Offset.Y, y, p.scroll.Content.Size().Height-p.scroll.Size().Height)
+		}
+	}
+	view := atY(p.scroll)
+	own := atY(a.letter) - view + p.scroll.Offset.Y
+	ownX := atX(a.letter)
+	rule, foot := atY(a.stem), atFoot(a.stem)
+
+	// 1. As the panel opens, the letter stands on its own row.
+	if a.pinned != 0 || a.pin != nil || !a.letter.Visible() {
+		t.Fatalf("as the panel opens: kept at %v, pin=%v, own visible=%v", a.pinned, a.pin != nil, a.letter.Visible())
+	}
+	// 2. Scrolled while the letter's own line is still below the view's top.
+	to(own - crossRefPinTop - 2)
+	if a.pinned != 0 || !a.letter.Visible() {
+		t.Errorf("with own row still in view: kept at %v, own visible=%v", a.pinned, a.letter.Visible())
+	}
+	// 3. Scrolled into note a: pinned at crossRefPinTop with the rule beneath it.
+	to(own + 60)
+	if a.pin == nil || !a.pin.Visible() || a.letter.Visible() {
+		t.Fatalf("scrolled into note a: pin visible=%v, own visible=%v", a.pin != nil && a.pin.Visible(), a.letter.Visible())
+	}
+	if a.pin.Text != "a" || a.pin.TextSize != a.letter.TextSize || a.pin.TextStyle != a.letter.TextStyle || a.pin.Color != a.letter.Color {
+		t.Errorf("pin is %q at %v in %v; own is %q at %v in %v", a.pin.Text, a.pin.TextSize, a.pin.Color, a.letter.Text, a.letter.TextSize, a.letter.Color)
+	}
+	if got := atY(a.pin) - view; !within(got, crossRefPinTop) {
+		t.Errorf("pin stands %v under view top, want %v", got, crossRefPinTop)
+	}
+	if atX(a.pin) != ownX {
+		t.Errorf("pin X = %v, own X = %v", atX(a.pin), ownX)
+	}
+	if got, want := atY(a.stem), atY(a.pin)+line+crossRefStemGap; !within(got, want) {
+		t.Errorf("rule starts at %v, want %v", got, want)
+	}
+	if got, want := atFoot(a.stem), foot-(own+60); !within(got, want) {
+		t.Errorf("rule ends at %v, want %v", got, want)
+	}
+	// Opening an inner group updates the note's height and keeps the letter pinned.
+	inner.toggle()
+	if got := atY(a.pin) - view; !a.pin.Visible() || !within(got, crossRefPinTop) {
+		t.Errorf("with inner group open: pin at %v under view top, visible=%v", got, a.pin.Visible())
+	}
+	inner.toggle()
+	// 4. Scrolled to note a's foot: clamped above the rule's foot.
+	last := a.pieces[len(a.pieces)-1]
+	to(p.scroll.Offset.Y + atFoot(last) - view - 8)
+	if got, want := atY(a.pin)+line+crossRefStemGap, atFoot(last)-crossRefStemFoot; !within(got, want) {
+		t.Errorf("at note a's foot: pin+line+gap = %v, rule foot = %v", got, want)
+	}
+	if atY(a.pin) >= view+crossRefPinTop {
+		t.Errorf("at note a's foot: pin stands at %v, did not leave with rows (%v)", atY(a.pin), view+crossRefPinTop)
+	}
+	// 5. Back at top: unpinned, rule restored, and closing note a keeps it unpinned.
+	to(0)
+	if a.pinned != 0 || a.pin.Visible() || !a.letter.Visible() {
+		t.Errorf("back at top: pinned=%v, pin visible=%v, own visible=%v", a.pinned, a.pin.Visible(), a.letter.Visible())
+	}
+	if !within(atY(a.stem), rule) || !within(atFoot(a.stem), foot) {
+		t.Errorf("back at top rule = %v..%v, want %v..%v", atY(a.stem), atFoot(a.stem), rule, foot)
+	}
+	test.Tap(a.header)
+	to(own + 20)
+	if a.pinned != 0 || a.pin.Visible() || !a.letter.Visible() {
+		t.Errorf("closed note a: pinned=%v, pin visible=%v, own visible=%v", a.pinned, a.pin.Visible(), a.letter.Visible())
+	}
+	test.Tap(a.header)
+	to(0)
+
+	// 6. Lone parenthesised group (note b): closed has nothing pinned; opened
+	// and scrolled into pins b's letter at crossRefPinTop above b's stem and
+	// clamps at b's well foot.
+	bOwn := atY(b.letter) - view + p.scroll.Offset.Y
+	to(bOwn + 20)
+	if b.pinned != 0 || b.pin != nil || !b.letter.Visible() {
+		t.Fatalf("closed lone group b: pinned=%v, pin=%v, own visible=%v", b.pinned, b.pin != nil, b.letter.Visible())
+	}
+	to(0)
+	test.Tap(b.header)
+	bOwn = atY(b.letter) - view + p.scroll.Offset.Y
+	bOwnX := atX(b.letter)
+	bLine := b.letterLine()
+	to(bOwn + 80)
+	if b.pin == nil || !b.pin.Visible() || b.letter.Visible() {
+		t.Fatalf("scrolled into opened lone group b: pin visible=%v, own visible=%v", b.pin != nil && b.pin.Visible(), b.letter.Visible())
+	}
+	if got := atY(b.pin) - view; !within(got, crossRefPinTop) {
+		t.Errorf("lone group b pin stands %v under view top, want %v", got, crossRefPinTop)
+	}
+	if atX(b.pin) != bOwnX {
+		t.Errorf("lone group b pin X = %v, own X = %v", atX(b.pin), bOwnX)
+	}
+	if got, want := atY(b.stem), atY(b.pin)+bLine+crossRefStemGap; !within(got, want) {
+		t.Errorf("lone group b rule starts at %v, want %v", got, want)
+	}
+	to(p.scroll.Offset.Y + atFoot(b.shade) - view - 8)
+	if got, want := atY(b.pin)+bLine+crossRefStemGap, atFoot(b.shade)-crossRefStemFoot; !within(got, want) {
+		t.Errorf("at lone group b's well foot: pin+line+gap = %v, rule foot = %v", got, want)
+	}
+	// Closing opened lone group b resets its pinned state.
+	test.Tap(b.header)
+	if b.pinned != 0 || (b.pin != nil && b.pin.Visible()) || !b.letter.Visible() {
+		t.Errorf("after closing lone group b: pinned=%v, pin visible=%v, own visible=%v", b.pinned, b.pin != nil && b.pin.Visible(), b.letter.Visible())
+	}
+
+	// Standalone note row (no panel relayout wired) also resets pin on toggle().
+	solo := newCrossRefNoteRow(st, a.note, st.pal(), func(crossRef) {}, &crossRefRelayout{})
+	solo.Resize(fyne.NewSize(260, 400))
+	solo.keepLetterInView(80)
+	if solo.pinned == 0 || solo.pin == nil || !solo.pin.Visible() {
+		t.Fatalf("control: solo note did not pin at into=80")
+	}
+	solo.toggle()
+	if solo.pinned != 0 || solo.pin.Visible() || !solo.letter.Visible() {
+		t.Errorf("after closing standalone note: pinned=%v, pin visible=%v, own visible=%v", solo.pinned, solo.pin.Visible(), solo.letter.Visible())
 	}
 }

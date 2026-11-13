@@ -639,3 +639,123 @@ func TestContinuousLettersPastTwentySixFitTheMargin(t *testing.T) {
 		t.Errorf("widest double letter %q renders %.2fpt wide, leaving no gap inside %vpt margin", double.Text, wSize.Width, crossRefLetterMargin)
 	}
 }
+
+// PASSAGE LETTERING TOUCHES (S20 Item 20): when holdFlush is set (the
+// cross-references passage), a raised letter flush after an italic supplied
+// word takes readingMarkGap before it so the slanted glyph does not touch the
+// upright letter, and a standalone opening quotation mark after a raised
+// letter stays attached across the space to the word that follows rather than
+// stranding at the right end of a row. When holdFlush is false (the Verse of
+// the Day card), neither rule alters layout.
+func TestPassageLetteringTouchesItalicGapAndOpeningQuote(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+
+	// 1. Air after an italic supplied word before a flush raised letter.
+	italicRuns := []cardRun{
+		{Text: "“He", Italic: true},
+		{Text: "a", Mark: true},
+		{Text: "is a tower of salvation", Italic: false},
+	}
+	pFlush := newReadingParagraph(italicRuns, 17, lightPalette.Text, lightPalette.RedLetter, styledPaneFont(), cardItalicFont())
+	pFlush.holdFlush = true
+	rFlush := test.WidgetRenderer(pFlush).(*readingParagraphRenderer)
+	rFlush.Layout(fyne.NewSize(300, 100))
+	if len(rFlush.rows) == 0 || len(rFlush.rows[0]) < 3 {
+		t.Fatalf("rows = %v, want at least 3 fragments on row 0", len(rFlush.rows))
+	}
+	heFrag, markFrag := rFlush.rows[0][0], rFlush.rows[0][1]
+	gotGap := markFrag.Position().X - (heFrag.Position().X + heFrag.Size().Width)
+	if d := gotGap - readingMarkGap; d < -0.05 || d > 0.05 {
+		t.Errorf("gap between italic word and flush mark = %.2f, want %.2f", gotGap, readingMarkGap)
+	}
+	// Lookahead accounts for readingMarkGap so a tight width wraps cleanly
+	// instead of overrunning by readingMarkGap.
+	prefixRuns := []cardRun{
+		{Text: "Mercy "},
+		{Text: "He", Italic: true},
+		{Text: "a", Mark: true},
+		{Text: "shows"},
+	}
+	pTight := newReadingParagraph(prefixRuns, 17, lightPalette.Text, lightPalette.RedLetter, styledPaneFont(), cardItalicFont())
+	pTight.holdFlush = true
+	rTight := test.WidgetRenderer(pTight).(*readingParagraphRenderer)
+	rTight.Layout(fyne.NewSize(500, 100))
+	oneLineW := rTight.rowWidths()[0]
+	// Force width 0.5pt narrower than the single-line width: the cluster must
+	// wrap onto row 2 rather than overrun by readingMarkGap.
+	rTight.Layout(fyne.NewSize(oneLineW-0.5, 100))
+	for ri, rw := range rTight.rowWidths() {
+		if rw > oneLineW-0.5+0.01 {
+			t.Errorf("row %d width %.2f exceeds tight limit %.2f", ri, rw, oneLineW-0.5)
+		}
+	}
+
+	// Control: holdFlush == false leaves gap == 0 after italic before flush mark.
+	pPlain := newReadingParagraph(italicRuns, 17, lightPalette.Text, lightPalette.RedLetter, styledPaneFont(), cardItalicFont())
+	rPlain := test.WidgetRenderer(pPlain).(*readingParagraphRenderer)
+	rPlain.Layout(fyne.NewSize(300, 100))
+	plainGap := rPlain.rows[0][1].Position().X - (rPlain.rows[0][0].Position().X + rPlain.rows[0][0].Size().Width)
+	if plainGap != 0 {
+		t.Errorf("control (holdFlush=false): gap = %.2f, want 0", plainGap)
+	}
+
+	// 2. Standalone opening quote mark after a raised letter ("“ ‘So...") stays
+	// with the word after its space rather than stranding at the end of row 0.
+	quoteRuns := []cardRun{
+		{Text: "Then Haggai answered and spoke, "},
+		{Text: "a", Mark: true},
+		{Text: "“ ‘So is this nation before Me,’"},
+	}
+	pQuote := newReadingParagraph(quoteRuns, 17, lightPalette.Text, lightPalette.RedLetter, styledPaneFont(), cardItalicFont())
+	pQuote.holdFlush = true
+	rQuote := test.WidgetRenderer(pQuote).(*readingParagraphRenderer)
+	// Measure exact width up through `a“` on one row so `a“` alone would fit
+	// while `a“ ‘So` does not.
+	rQuote.Layout(fyne.NewSize(800, 100))
+	var quoteEnd, nextEnd float32
+	for _, tx := range rQuote.rows[0] {
+		if tx.Text == "“" {
+			quoteEnd = tx.Position().X + tx.Size().Width
+		}
+		if tx.Text == "‘So" {
+			nextEnd = tx.Position().X + tx.Size().Width
+		}
+	}
+	if quoteEnd == 0 || nextEnd <= quoteEnd {
+		t.Fatalf("control: quoteEnd=%v nextEnd=%v", quoteEnd, nextEnd)
+	}
+	limit := (quoteEnd + nextEnd) / 2
+	rQuote.Layout(fyne.NewSize(limit, 200))
+	if len(rQuote.rows) < 2 {
+		t.Fatalf("expected wrap at width %.1f, got %d row", limit, len(rQuote.rows))
+	}
+	lastOnFirst := rQuote.rows[0][len(rQuote.rows[0])-1].Text
+	if lastOnFirst == "“" || lastOnFirst == "a" {
+		t.Errorf("row 0 ended on %q, stranding the mark or opening quote from its word", lastOnFirst)
+	}
+	if len(rQuote.rows[1]) < 3 || rQuote.rows[1][0].Text != "a" || rQuote.rows[1][1].Text != "“" || rQuote.rows[1][2].Text != "‘So" {
+		var got []string
+		for _, tx := range rQuote.rows[1] {
+			got = append(got, tx.Text)
+		}
+		t.Errorf("row 1 fragments = %q, want [\"a\" \"“\" \"‘So\" ...]", got)
+	}
+	// And the space between "“" and "‘So" is preserved on row 1.
+	spaceBetween := rQuote.rows[1][2].Position().X - (rQuote.rows[1][1].Position().X + rQuote.rows[1][1].Size().Width)
+	if spaceBetween <= 0.5 {
+		t.Errorf("space between opening quotes on row 1 = %.2f, want > 0.5", spaceBetween)
+	}
+	// Even at a width narrower than `a“ ‘So` itself, `‘So` stays on the same
+	// row as `a“` at the head of a row rather than breaking after `“`.
+	rQuote.Layout(fyne.NewSize(35, 300))
+	sawQuoteCluster := false
+	for _, rw := range rQuote.rows {
+		if len(rw) >= 3 && rw[0].Text == "a" && rw[1].Text == "“" && rw[2].Text == "‘So" {
+			sawQuoteCluster = true
+		}
+	}
+	if !sawQuoteCluster {
+		t.Error("at narrow width 35, `‘So` broke away from `a“` at the start of its row")
+	}
+}

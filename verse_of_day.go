@@ -883,8 +883,24 @@ func (r *readingParagraphRenderer) fragmentColour(f paragraphFragment) color.Col
 }
 
 // readingMarkGap is the air after a mark, before the word or the mark that
-// follows it flush: enough that a raised letter does not touch its word.
+// follows it flush — and, when holdFlush is set, after an italic word before a
+// flush mark so the slanted glyph does not touch the upright letter.
 const readingMarkGap float32 = 1.5
+
+// isOpeningQuote reports whether s consists solely of opening quotation marks
+// (such as "“" before a spaced nested "‘" or an italic supplied word), which
+// must stay with the word that follows when holdFlush is set.
+func isOpeningQuote(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if !unicode.In(r, unicode.Pi) {
+			return false
+		}
+	}
+	return true
+}
 
 func (r *readingParagraphRenderer) wrap(width float32) {
 	if width <= 0 {
@@ -909,17 +925,21 @@ func (r *readingParagraphRenderer) wrap(width float32) {
 	}
 	var row []*canvas.Text
 	x := float32(0)
+	afterMark := false
+	afterItalic := false
+	afterOpenQuote := false
 	newRow := func() {
 		r.rows = append(r.rows, row)
 		row = nil
 		x = 0
+		afterMark = false
+		afterItalic = false
+		afterOpenQuote = false
 	}
 	fragments := r.p.fragments()
-	afterMark := false // the fragment before this one, on this row, was a mark
 	for i, f := range fragments {
 		if f.breakBefore && (len(row) > 0 || len(r.rows) > 0) {
 			newRow()
-			afterMark = false
 		}
 		if f.text == "" {
 			continue
@@ -929,26 +949,36 @@ func (r *readingParagraphRenderer) wrap(width float32) {
 		switch {
 		case f.spaceBefore && len(row) > 0:
 			gap = r.spaceW
-		case afterMark && len(row) > 0:
+		case (afterMark || (r.p.holdFlush && afterItalic && f.mark)) && len(row) > 0:
 			gap = readingMarkGap
 		}
 		// A mark is flush against the word after it, and a row may break
 		// only at a space: so a mark that would end a row takes the row
 		// break before it, with its word, rather than leave the word to run
 		// past the edge. When holdFlush is set, the same holds for every
-		// chain of fragments drawn flush across a style or mark boundary.
+		// chain of fragments drawn flush across a style or mark boundary,
+		// and across the space after a standalone opening quotation mark.
 		need := w
 		if r.p.holdFlush {
 			prevMark := f.mark
+			prevItalic := f.italic
+			prevOpenQuote := !f.mark && isOpeningQuote(f.text)
 			for _, g := range fragments[i+1:] {
-				if g.spaceBefore || g.breakBefore || g.text == "" {
+				if g.breakBefore || g.text == "" {
 					break
 				}
-				if prevMark {
+				if g.spaceBefore {
+					if !prevOpenQuote {
+						break
+					}
+					need += r.spaceW
+				} else if prevMark || (prevItalic && g.mark) {
 					need += readingMarkGap
 				}
 				need += r.fragmentWidth(g)
 				prevMark = g.mark
+				prevItalic = g.italic
+				prevOpenQuote = !g.mark && isOpeningQuote(g.text)
 			}
 		} else if f.mark {
 			for _, g := range fragments[i+1:] {
@@ -961,7 +991,7 @@ func (r *readingParagraphRenderer) wrap(width float32) {
 				}
 			}
 		}
-		if len(row) > 0 && f.spaceBefore && x+gap+need > width {
+		if len(row) > 0 && f.spaceBefore && !(r.p.holdFlush && afterOpenQuote) && x+gap+need > width {
 			newRow()
 			gap = 0
 		}
@@ -982,6 +1012,8 @@ func (r *readingParagraphRenderer) wrap(width float32) {
 		r.objs = append(r.objs, t)
 		x += gap + w
 		afterMark = f.mark
+		afterItalic = f.italic
+		afterOpenQuote = !f.mark && isOpeningQuote(f.text)
 	}
 	if len(row) > 0 || len(r.rows) == 0 {
 		r.rows = append(r.rows, row)

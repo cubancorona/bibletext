@@ -83,6 +83,10 @@ type crossRefGroupRow struct {
 	box     *fyne.Container   // header, inset, rule or stem
 	label   *crossRefPrinted  // the group as printed
 	shade   *canvas.Rectangle // the inset's ground
+
+	pin    *canvas.Text
+	pinned float32
+	line   float32
 }
 
 // margin says whether the row stands at the top of its note's ground, where
@@ -176,14 +180,73 @@ func (l crossRefGroupLayout) Layout(_ []fyne.CanvasObject, size fyne.Size) {
 	}
 	r.inset.Move(fyne.NewPos(0, top))
 	r.inset.Resize(fyne.NewSize(size.Width, size.Height-top))
+	r.placeRule(top, size.Height)
+}
+
+func (r *crossRefGroupRow) letterTop() float32 {
+	return crossRefRowPad + r.head.Position().Y + r.letter.Position().Y
+}
+
+func (r *crossRefGroupRow) letterLine() float32 {
+	if r.line == 0 {
+		_, r.line = fyne.CurrentApp().Driver().RenderedTextSize(r.letter.Text, r.letter.TextSize, r.letter.TextStyle, nil)
+	}
+	return r.line
+}
+
+func (r *crossRefGroupRow) placeRule(top, height float32) {
 	from := top
 	if r.letter != nil && r.letter.Text != "" {
-		_, line := fyne.CurrentApp().Driver().RenderedTextSize(r.letter.Text, r.letter.TextSize, r.letter.TextStyle, nil)
-		from = crossRefRowPad + r.head.Position().Y + r.letter.Position().Y + line + crossRefStemGap
+		at := r.letterTop()
+		if r.pinned > 0 && r.pin != nil {
+			at = r.pinned
+			r.pin.Move(fyne.NewPos(0, at))
+			r.pin.Resize(r.pin.MinSize())
+		}
+		from = at + r.letterLine() + crossRefStemGap
 	}
-	wellFoot := size.Height - crossRefGroupWellFoot
+	wellFoot := height - crossRefGroupWellFoot
 	r.stem.Move(fyne.NewPos(crossRefStemAt, from))
 	r.stem.Resize(fyne.NewSize(crossRefStemWidth, wellFoot-crossRefStemFoot-from))
+}
+
+func (r *crossRefGroupRow) keepLetterInView(into float32) {
+	if r.stem == nil || r.letter == nil {
+		return
+	}
+	pinned := float32(0)
+	if r.open && r.letter.Text != "" {
+		at := into + crossRefPinTop
+		if lowest := r.Size().Height - crossRefGroupWellFoot - crossRefStemFoot - crossRefStemGap - r.letterLine(); at > lowest {
+			at = lowest
+		}
+		if at > r.letterTop() {
+			pinned = at
+		}
+	}
+	if pinned == r.pinned {
+		return
+	}
+	r.pinned = pinned
+	if pinned > 0 {
+		if r.pin == nil {
+			r.pin = crossRefLetter(r.letter.Text, r.pal)
+			r.box.Add(r.pin)
+		}
+		r.pin.Show()
+		r.letter.Hide()
+	} else {
+		if r.pin != nil {
+			r.pin.Hide()
+		}
+		r.letter.Show()
+	}
+	r.placeRule(0, r.Size().Height)
+	r.letter.Refresh()
+	r.stem.Refresh()
+	if r.pin != nil {
+		r.pin.Refresh()
+	}
 }
 
 // crossRefFoldIconSize is the box a row's disclosure mark is drawn in: a
@@ -232,6 +295,7 @@ func (r *crossRefGroupRow) toggle() {
 		r.inset.Hide()
 		if r.stem != nil {
 			r.stem.Hide()
+			r.keepLetterInView(0)
 		}
 	}
 	if r.icon != nil {

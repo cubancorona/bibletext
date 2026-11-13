@@ -53,7 +53,8 @@ func (p *crossRefPrinted) CreateRenderer() fyne.WidgetRenderer {
 
 // crossRefPrintedMeasure is the width of s as a printed line draws it.
 func crossRefPrintedMeasure(s string) float32 {
-	return fyne.MeasureText(s, crossRefGroupTextSize, fyne.TextStyle{}).Width
+	sz, _ := fyne.CurrentApp().Driver().RenderedTextSize(s, crossRefGroupTextSize, fyne.TextStyle{}, crossRefZeroFace(fyne.TextStyle{}))
+	return sz.Width
 }
 
 // printedRows is text in rows no wider than width, turned at the print's
@@ -125,13 +126,16 @@ func (r *crossRefPrintedRenderer) wrap(width float32) {
 		return
 	}
 	r.width = width
+	face := crossRefZeroFace(fyne.TextStyle{})
 	if r.rowH == 0 {
-		r.rowH = fyne.MeasureText("Ag", crossRefGroupTextSize, fyne.TextStyle{}).Height
+		sz, _ := fyne.CurrentApp().Driver().RenderedTextSize("Ag", crossRefGroupTextSize, fyne.TextStyle{}, face)
+		r.rowH = sz.Height
 	}
 	r.rows, r.objs = r.rows[:0], r.objs[:0]
 	for _, s := range printedRows(r.p.Text, width, crossRefPrintedMeasure) {
 		t := canvas.NewText(s, r.p.color)
 		t.TextSize = crossRefGroupTextSize
+		t.FontSource = face
 		r.rows = append(r.rows, t)
 		r.objs = append(r.objs, t)
 	}

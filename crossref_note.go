@@ -81,6 +81,7 @@ const crossRefRowPad float32 = 6
 func crossRefSelfRow(label, tag string, pal palette, rule bool) fyne.CanvasObject {
 	ref := canvas.NewText(label, pal.TextMuted)
 	ref.TextSize = crossRefGroupTextSize
+	ref.FontSource = crossRefZeroFace(fyne.TextStyle{})
 	line := []fyne.CanvasObject{ref}
 	if tag != "" {
 		t := canvas.NewText(tag, pal.TextMuted)
@@ -147,11 +148,19 @@ type crossRefNoteRow struct {
 	stem   *canvas.Rectangle // the rule from under the letter down the margin beside the pieces; hidden while closed
 	box    *fyne.Container
 	pieces []fyne.CanvasObject
+
+	// The letter kept in view (keepLetterInView): pin is the letter again,
+	// made the first time it is needed, and pinned how far down the row it
+	// stands, 0 while the letter stands on its own row.
+	pin    *canvas.Text
+	pinned float32
+	pal    palette
+	line   float32 // the letter's line below its own top, measured once
 }
 
 // newCrossRefNoteRow draws n as its printed line over its pieces.
 func newCrossRefNoteRow(state *AppState, n publisherCrossRef, pal palette, onTap func(crossRef), relayout *crossRefRelayout) *crossRefNoteRow {
-	r := &crossRefNoteRow{note: n, relayout: relayout, open: true}
+	r := &crossRefNoteRow{note: n, relayout: relayout, open: true, pal: pal}
 	r.label = newCrossRefPrinted(n.Text, pal)
 	r.icon = widget.NewIcon(crossRefGroupIcon(true))
 	// The letter in the margin, on the first line of the printed note, and
@@ -199,17 +208,112 @@ func (l crossRefNoteLayout) Layout(_ []fyne.CanvasObject, size fyne.Size) {
 	}
 	r.body.Move(fyne.NewPos(crossRefLetterMargin, top))
 	r.body.Resize(fyne.NewSize(size.Width-crossRefLetterMargin, size.Height-top))
-	// The rule hangs from the letter: it starts a little under the line the
-	// letter stands on, which is on the note's own row, and runs down the
-	// margin past the foot of that row beside the pieces. A note keyed to
-	// no word has no letter, and its rule starts with its pieces.
+	r.placeRule(top, size.Height)
+}
+
+// letterTop is where the letter stands on the note's own row, from the
+// row's top, and letterLine the line it stands on, from its own top.
+func (r *crossRefNoteRow) letterTop() float32 {
+	return crossRefRowPad + r.head.Position().Y + r.letter.Position().Y
+}
+
+func (r *crossRefNoteRow) letterLine() float32 {
+	if r.line == 0 {
+		_, r.line = fyne.CurrentApp().Driver().RenderedTextSize(r.letter.Text, r.letter.TextSize, r.letter.TextStyle, nil)
+	}
+	return r.line
+}
+
+// placeRule hangs the rule from the letter: it starts a little under the
+// line the letter stands on — on the note's own row, or where the letter is
+// kept in view — and runs down the margin beside the pieces to a little
+// above their foot. A note keyed to no word has no letter, and its rule
+// starts with its pieces, at top.
+func (r *crossRefNoteRow) placeRule(top, height float32) {
 	from := top
 	if r.letter.Text != "" {
-		_, line := fyne.CurrentApp().Driver().RenderedTextSize(r.letter.Text, r.letter.TextSize, r.letter.TextStyle, nil)
-		from = crossRefRowPad + r.head.Position().Y + r.letter.Position().Y + line + crossRefStemGap
+		at := r.letterTop()
+		if r.pinned > 0 && r.pin != nil {
+			at = r.pinned
+			r.pin.Move(fyne.NewPos(0, at))
+			r.pin.Resize(r.pin.MinSize())
+		}
+		from = at + r.letterLine() + crossRefStemGap
 	}
 	r.stem.Move(fyne.NewPos(crossRefStemAt, from))
-	r.stem.Resize(fyne.NewSize(crossRefStemWidth, size.Height-crossRefStemFoot-from))
+	r.stem.Resize(fyne.NewSize(crossRefStemWidth, height-crossRefStemFoot-from))
+}
+
+// crossRefPinTop is how far under the top of the list's view a letter kept
+// in view stands.
+const crossRefPinTop float32 = 4
+
+// keepLetterInView keeps the note's letter on screen while the list is
+// scrolled into the note: a note can be taller than the list, and with its
+// own row scrolled out above nothing on screen said which letter its rows
+// were under. into is how far the top of the list's view stands below the
+// row's top. Past the letter's own line, the letter stands at the top of
+// the view, in the margin, the rule hanging from it there; it goes no lower
+// than its line's place above the rule's foot, so it leaves the view with
+// the foot of the note's rows. The letter on the note's own row is hidden
+// meanwhile: the two would pass through each other as the row leaves.
+func (r *crossRefNoteRow) keepLetterInView(into float32) {
+	pinned := float32(0)
+	if r.open && r.letter.Text != "" {
+		at := into + crossRefPinTop
+		if lowest := r.Size().Height - crossRefStemFoot - crossRefStemGap - r.letterLine(); at > lowest {
+			at = lowest
+		}
+		if at > r.letterTop() {
+			pinned = at
+		}
+	}
+	if pinned == r.pinned {
+		return
+	}
+	r.pinned = pinned
+	if pinned > 0 {
+		if r.pin == nil {
+			r.pin = crossRefLetter(r.letter.Text, r.pal)
+			r.box.Add(r.pin)
+		}
+		r.pin.Show()
+		r.letter.Hide()
+	} else {
+		if r.pin != nil {
+			r.pin.Hide()
+		}
+		r.letter.Show()
+	}
+	r.placeRule(0, r.Size().Height)
+	r.letter.Refresh()
+	r.stem.Refresh()
+	if r.pin != nil {
+		r.pin.Refresh()
+	}
+}
+
+type crossRefLetterKeeper interface {
+	keepLetterInView(into float32)
+}
+
+// keepCrossRefLettersInView keeps in view the letter of whichever open note
+// or opened lone group the top of the list's view stands inside. list is the
+// list's own box and top the scroll's offset; a note's ground is one of the
+// box's objects.
+func keepCrossRefLettersInView(list *fyne.Container, top float32) {
+	for _, o := range list.Objects {
+		section, ok := o.(*fyne.Container)
+		if !ok {
+			continue
+		}
+		if _, ok := section.Layout.(crossRefSectionLayout); !ok {
+			continue
+		}
+		if row, ok := section.Objects[1].(crossRefLetterKeeper); ok {
+			row.keepLetterInView(top - section.Position().Y - crossRefSectionPadY)
+		}
+	}
 }
 
 func (r *crossRefNoteRow) CreateRenderer() fyne.WidgetRenderer {
@@ -225,6 +329,7 @@ func (r *crossRefNoteRow) toggle() {
 	} else {
 		r.body.Hide()
 		r.stem.Hide()
+		r.keepLetterInView(0) // closed, the letter stands on its own row
 	}
 	r.icon.SetResource(crossRefGroupIcon(r.open))
 	r.box.Refresh()

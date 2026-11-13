@@ -110,6 +110,7 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 	src := canvas.NewText(citationForSelection(state, text, span), pal.Accent)
 	src.TextStyle = fyne.TextStyle{Bold: true}
 	src.TextSize = subheadingTextSize
+	src.FontSource = crossRefZeroFace(src.TextStyle)
 	header := container.NewVBox(title, src, widget.NewSeparator())
 
 	ps := sheetPanelSize(state, cnv)
@@ -119,6 +120,7 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 	// label's inner inset, so references and wrapped text share a left edge.
 	listTheme := compactTheme{Theme: passageCitationTheme{fyne.CurrentApp().Settings().Theme()}, text: 17}
 	listScope := container.NewThemeOverride(listBox, listTheme)
+	scrollBody := container.New(layout.NewCustomPaddedVBoxLayout(0), listScope)
 	// squeezeWidthLayout, as the AI panel's columns have: a vertical scroll
 	// widens its content to the content's own minimum width and clips the
 	// excess sideways with no bar to reach it, so a child that wants more
@@ -128,7 +130,7 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 	// padding, so that its indicator runs in a lane beside the list and not
 	// over the right edge of a note's ground (crossRefScrollLane).
 	scroll := container.NewVScroll(container.New(squeezeWidthLayout{},
-		container.New(layout.NewCustomPaddedLayout(0, 0, 0, crossRefScrollLane), listScope)))
+		container.New(layout.NewCustomPaddedLayout(0, 0, 0, crossRefScrollLane), scrollBody)))
 	list := container.New(crossRefScrollLaneLayout{}, scroll)
 	body := container.NewStack(list)
 
@@ -151,7 +153,27 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 		restore()
 	}
 	closeBtn := widget.NewButton("Close", closePanel)
-	footer, sources := crossRefFooter(state, closeBtn)
+	footer, footerRule, captionBox, closeRow, sources := crossRefFooterParts(state, closeBtn)
+	listRule := widget.NewSeparator()
+	listFoot := container.New(layout.NewCustomPaddedLayout(8, 8, 0, 0),
+		container.New(layout.NewCustomPaddedVBoxLayout(0), listRule, captionBox))
+	// On portrait phones and roomy desktop windows the credits and edition
+	// notice stay pinned in the footer; on landscape phones and short desktop
+	// windows (ps.Height < crossRefPanelHeight) they follow the rows inside
+	// the scroll so the pinned chrome reduces to Close alone.
+	placeCaptions := func(pinned bool) {
+		if pinned || captionBox.MinSize().Height <= 0 {
+			scrollBody.Objects = []fyne.CanvasObject{listScope}
+			footer.Objects = []fyne.CanvasObject{footerRule, captionBox, closeRow}
+			return
+		}
+		scrollBody.Objects = []fyne.CanvasObject{listScope, listFoot}
+		footer.Objects = []fyne.CanvasObject{footerRule, closeRow}
+	}
+
+	var sourcesText string
+	keep := func() { keepCrossRefLettersInView(listBox, scroll.Offset.Y) }
+	scroll.OnScrolled = func(fyne.Position) { keep() }
 
 	// fit sizes the panel to its cap (below); every change of body is
 	// followed by it, since the body decides whether the panel's least
@@ -209,6 +231,12 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 	// body: the chrome is what the panel needs besides it.
 	listShowing := func() bool { return len(body.Objects) == 1 && body.Objects[0] == fyne.CanvasObject(list) }
 	fitList := func() {
+		pinned := ps.Height >= crossRefPanelHeight
+		setCrossRefSources(sources, sourcesText, bodyW)
+		placeCaptions(pinned)
+		footer.Refresh()
+		scrollBody.Refresh()
+		scroll.SetMinSize(fyne.NewSize(bodyW, 1))
 		chrome := popup.MinSize().Height - scroll.MinSize().Height
 		h := ps.Height - chrome
 		if h < 1 {
@@ -261,16 +289,15 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 		// size and padding and the heights of that measure are left
 		// standing — a note's ground taller than its rows, or the scroll's
 		// content longer than the list — until the next frame.
+		// The letter of a note or opened lone group the view stands inside is
+		// kept in view (crossref_note.go), as the list is scrolled and when a
+		// row's height changes under it.
 		lst.Relayout.fn = func() {
 			listScope.Refresh()
 			scroll.Refresh()
+			keep()
 		}
-		line, _ := crossRefFooterCredit(state, lst.Sections)
-		w := footer.Size().Width
-		if w <= 0 {
-			w = ps.Width - sheetChromeWidth
-		}
-		setCrossRefSources(sources, line, w)
+		sourcesText, _ = crossRefFooterCredit(state, lst.Sections)
 		body.Objects = []fyne.CanvasObject{list}
 		body.Refresh()
 		fit()
@@ -278,6 +305,7 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 			scroll.Refresh()
 			scroll.Offset = fyne.NewPos(0, place.scrollY)
 			scroll.Refresh()
+			keep()
 			place = nil
 		} else {
 			scroll.ScrollToTop()
@@ -298,15 +326,23 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 	fit = func() {
 		if listShowing() {
 			fitList()
+		} else {
+			placeCaptions(true)
+			footer.Refresh()
+			scrollBody.Refresh()
 		}
 		popup.Resize(fyne.NewSize(ps.Width, minF(ps.Height, crossRefPanelHeight)))
 		coverHeaderUnlessClear(state, popup, crossRefPanelHeight)
+		if listShowing() {
+			keep()
+		}
 	}
 	fit()
 	// Sized again from the height a desktop window now gives it whenever the
 	// window changes size, in whichever state it is (sheet_refit.go).
 	registerSheetRefit(state, popup, func() {
-		ps.Height = sheetPanelSize(state, cnv).Height
+		ps = sheetPanelSize(state, cnv)
+		bodyW = ps.Width - crossRefListChrome
 		fit()
 	})
 	// The same selection again after a light/dark or layout rebuild, keeping
@@ -367,6 +403,11 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 // wanted 333 points against the 299 a 375-point phone gives the footer, and
 // clipped.
 func crossRefFooter(state *AppState, closeBtn fyne.CanvasObject) (footer *fyne.Container, sources *widget.RichText) {
+	footer, _, _, _, sources = crossRefFooterParts(state, closeBtn)
+	return footer, sources
+}
+
+func crossRefFooterParts(state *AppState, closeBtn fyne.CanvasObject) (footer *fyne.Container, rule *widget.Separator, captionBox, closeRow *fyne.Container, sources *widget.RichText) {
 	sources = crossRefCaption("")
 	sources.Hide()
 	lines := []fyne.CanvasObject{sources}
@@ -375,12 +416,11 @@ func crossRefFooter(state *AppState, closeBtn fyne.CanvasObject) (footer *fyne.C
 	}
 	captions := container.New(layout.NewCustomPaddedVBoxLayout(6), lines...)
 	captionScope := container.NewThemeOverride(captions, passageCitationTheme{fyne.CurrentApp().Settings().Theme()})
-	footer = container.New(layout.NewCustomPaddedVBoxLayout(0),
-		widget.NewSeparator(),
-		container.New(captionPadLayout{}, captionScope),
-		container.New(layout.NewCustomPaddedLayout(7, 0, 0, 0), container.NewHBox(layout.NewSpacer(), closeBtn)),
-	)
-	return footer, sources
+	rule = widget.NewSeparator()
+	captionBox = container.New(captionPadLayout{}, captionScope)
+	closeRow = container.New(layout.NewCustomPaddedLayout(7, 0, 0, 0), container.NewHBox(layout.NewSpacer(), closeBtn))
+	footer = container.New(layout.NewCustomPaddedVBoxLayout(0), rule, captionBox, closeRow)
+	return footer, rule, captionBox, closeRow, sources
 }
 
 // captionPadLayout gives the footer's captions an 8pt gap below the rule and a
@@ -525,6 +565,7 @@ func crossRefRowRuled(state *AppState, card crossRefCard, pal palette, onTap fun
 	ref := canvas.NewText(card.Label, pal.Accent)
 	ref.TextStyle = fyne.TextStyle{Bold: true}
 	ref.TextSize = 16
+	ref.FontSource = crossRefZeroFace(ref.TextStyle)
 
 	// The reference line, with a "Parallel" tag for Gospel-synopsis entries
 	// where the list has no label to say so, or the card's own muted tag. A
