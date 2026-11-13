@@ -156,8 +156,31 @@ func TestNKJVUsesItsOwnSpans(t *testing.T) {
 	for _, spans := range nkjvRedLetterSpans {
 		runCount += len(spans)
 	}
-	if got, want := runCount, 3484; got != want {
+	if got, want := runCount, 3483; got != want {
 		t.Errorf("NKJV run count = %d, want publisher count %d", got, want)
+	}
+}
+
+// API.Bible's Matthew 15:8 markup closes its first <span class="wj"> at the
+// cross-reference caller after the opening word (rune 6) and reopens it after
+// the second word (rune 13), leaving one word inside Christ's quotation from
+// Isaiah 29:13 black while printed NKJV red-letter editions redden the whole
+// line. The first poem line (runes 0..46) is one unbroken red span, followed
+// only by the two poem-line breaks at 46 and 76.
+func TestNKJVMatthew15v8CoversTheWholeFirstLine(t *testing.T) {
+	key := verseKeyFor("Matthew", 15, 8)
+	got, ok := nkjvRedLetterSpans[key]
+	if !ok {
+		t.Fatal("no NKJV span data for Matthew 15:8")
+	}
+	want := []redLetterSpan{{0, 46}, {47, 76}, {77, 108}}
+	if len(got) != len(want) {
+		t.Fatalf("Matthew 15:8 spans = %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("Matthew 15:8 span %d = %+v, want %+v", i, got[i], want[i])
+		}
 	}
 }
 

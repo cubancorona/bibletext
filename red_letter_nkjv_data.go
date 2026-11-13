@@ -1530,7 +1530,7 @@ var nkjvRedLetterSpans = map[string][]redLetterSpan{
 	"Matthew 15:5":        {{0, 51}, {52, 120}},
 	"Matthew 15:6":        {{0, 119}},
 	"Matthew 15:7":        {{0, 55}},
-	"Matthew 15:8":        {{0, 6}, {13, 46}, {47, 76}, {77, 108}},
+	"Matthew 15:8":        {{0, 46}, {47, 76}, {77, 108}},
 	"Matthew 15:9":        {{0, 28}, {29, 78}},
 	"Matthew 16:10":       {{0, 81}},
 	"Matthew 16:11":       {{0, 139}},

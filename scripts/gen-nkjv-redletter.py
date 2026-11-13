@@ -269,6 +269,21 @@ def fnv1a64(text):
         value = (value * 0x100000001B3) & 0xFFFFFFFFFFFFFFFF
     return value
 
+# One-verse upstream markup omission verified against printed NKJV red-letter
+# editions: in Matthew 15:8 API.Bible's <span class="wj"> closes at the note
+# anchor after the first word (rune 6) and reopens after the second (rune 13),
+# leaving one word of Christ's quotation unreddened. Keyed by verse, runtime
+# FNV-1a hash and the unfixed span tuple so an upstream fix passes straight
+# through.
+UPSTREAM_SPAN_FIXES = {
+    ("Matthew 15:8", 0xb9912e025332d3c6, ((0, 6), (13, 46), (47, 76), (77, 108))):
+        [(0, 46), (47, 76), (77, 108)],
+}
+
+def apply_upstream_span_fixes(key, text_hash, out, fixes=UPSTREAM_SPAN_FIXES):
+    fixed = fixes.get((key, text_hash, tuple(out)))
+    return list(fixed) if fixed is not None else out
+
 def derive(cache, app_cache=None, out_path=None, allow_relocated=False):
     import glob
     # The cache name carries the decoder's EPOCH — bibletext-nkjv-v7.json — so
@@ -336,9 +351,10 @@ def derive(cache, app_cache=None, out_path=None, allow_relocated=False):
                     else:
                         out.append((a, b))
                 if out:
-                    spans[key] = out
+                    h = fnv1a64(text)
+                    spans[key] = apply_upstream_span_fixes(key, h, out)
                     lengths[key] = len(text)
-                    hashes[key] = fnv1a64(text)
+                    hashes[key] = h
 
     if failed:
         print(f"FAILED to place {len(failed)} runs:", file=sys.stderr)

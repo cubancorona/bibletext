@@ -659,3 +659,27 @@ sys.exit(1 if held or "BIBLE_API_KEY" in os.environ else 0)
 		t.Fatalf("%v\n%s", err, out)
 	}
 }
+
+// Upstream markup omissions guarded by UPSTREAM_SPAN_FIXES repair only the
+// exact verse, runtime hash and broken span tuple recorded there; a different
+// verse, a changed text hash, or an already-repaired upstream span passes
+// through untouched.
+func TestTheNKJVRedLetterGeneratorGuardsUpstreamSpanFixes(t *testing.T) {
+	py := pythonForScripts(t)
+	probe := `import importlib.util, sys
+spec = importlib.util.spec_from_file_location("gen_nkjv_redletter", sys.argv[1])
+gen = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(gen)
+broken = [(0, 6), (13, 46), (47, 76), (77, 108)]
+repaired = [(0, 46), (47, 76), (77, 108)]
+h = 0xb9912e025332d3c6
+assert gen.apply_upstream_span_fixes("Matthew 15:8", h, broken) == repaired, "exact match did not repair"
+assert gen.apply_upstream_span_fixes("Matthew 15:8", h ^ 1, broken) == broken, "wrong hash repaired"
+assert gen.apply_upstream_span_fixes("Matthew 15:9", h, broken) == broken, "wrong verse repaired"
+assert gen.apply_upstream_span_fixes("Matthew 15:8", h, repaired) == repaired, "already-repaired span changed"
+`
+	cmd := exec.Command(py, "-I", "-B", "-c", probe, filepath.Join("scripts", "gen-nkjv-redletter.py"))
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+}
