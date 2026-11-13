@@ -155,3 +155,62 @@ func TestEnsureCrossRefsDoesNotCacheABodyThatWillNotParse(t *testing.T) {
 		t.Errorf("the index was not built from the zip that parsed: %+v", rows)
 	}
 }
+
+// A SELECTION CAN READ LOCAL ROWS WHILE THE TREASURY FETCHES, AND THEN READ
+// THE BUILT INDEX WITHOUT RACING. Per-section loading reads embedded parallels
+// on the UI goroutine while ensureCrossRefs downloads on a worker goroutine,
+// and concurrent crossRefsForSelection calls read crossRefIndex under its own
+// lock rather than waiting behind HTTP I/O.
+func TestCrossRefsForSelectionConcurrentWithEnsureCrossRefs(t *testing.T) {
+	t.Setenv("BIBLETEXT_CACHE_PATH", filepath.Join(t.TempDir(), cacheFileName))
+	resetCrossRefLoader(t)
+	good := makeCrossRefZip(t, "Matt.5.3\tIsa.61.1\t10\n")
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		close(entered)
+		<-release
+		_, _ = w.Write(good)
+	}))
+	t.Cleanup(srv.Close)
+	crossRefMu.Lock()
+	crossRefURL = srv.URL
+	crossRefMu.Unlock()
+
+	bd := xrefBible(map[string]map[int]int{
+		"Matthew": {5: 48},
+		"Luke":    {6: 49},
+		"Isaiah":  {61: 11},
+	})
+	st := &AppState{Bible: bd, CurrentBook: "Matthew", CurrentChapter: 5, CurrentVersion: "web"}
+
+	done := make(chan error, 1)
+	go func() { done <- ensureCrossRefs() }()
+	<-entered
+
+	// While ensureCrossRefs is parked inside HTTP I/O, local and selection
+	// lookups return the embedded Gospel parallel immediately without blocking.
+	local := localCrossRefsForSelection(st, "", selSpan{lo: 3, hi: 3})
+	if len(local) == 0 || local[0].label() != "Luke 6:20–23" {
+		t.Fatalf("while fetching, localCrossRefsForSelection = %+v; want Luke 6:20–23", local)
+	}
+	during := crossRefsForSelection(st, "", selSpan{lo: 3, hi: 3})
+	if len(during) != len(local) {
+		t.Fatalf("while fetching, crossRefsForSelection = %+v; want %d local rows only", during, len(local))
+	}
+
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatalf("ensureCrossRefs failed: %v", err)
+	}
+	after := crossRefsForSelection(st, "", selSpan{lo: 3, hi: 3})
+	sawTSK := false
+	for _, r := range after {
+		if r.label() == "Isaiah 61:1" {
+			sawTSK = true
+		}
+	}
+	if !sawTSK {
+		t.Errorf("after ensureCrossRefs finished, Isaiah 61:1 missing from %+v", after)
+	}
+}

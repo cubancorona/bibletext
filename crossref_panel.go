@@ -172,8 +172,14 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 	}
 
 	var sourcesText string
+	var settingScroll, userTouched bool
 	keep := func() { keepCrossRefLettersInView(listBox, scroll.Offset.Y) }
-	scroll.OnScrolled = func(fyne.Position) { keep() }
+	scroll.OnScrolled = func(fyne.Position) {
+		if !settingScroll {
+			userTouched = true
+		}
+		keep()
+	}
 
 	// fit sizes the panel to its cap (below); every change of body is
 	// followed by it, since the body decides whether the panel's least
@@ -229,7 +235,27 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 	// the list stood the panel that much over its cap, which on a desktop
 	// window put its top edge inside the header. Only while the list is the
 	// body: the chrome is what the panel needs besides it.
-	listShowing := func() bool { return len(body.Objects) == 1 && body.Objects[0] == fyne.CanvasObject(list) }
+	listShowing := func() bool {
+		return len(body.Objects) == 1 && body.Objects[0] == fyne.CanvasObject(list) && len(listBox.Objects) > 0
+	}
+	capturePlace := func() *crossRefPanelPlace {
+		if !listShowing() {
+			return nil
+		}
+		notes, groups := crossRefFoldRows(listBox.Objects)
+		saved := &crossRefPanelPlace{
+			notesOpen:  make([]bool, len(notes)),
+			groupsOpen: make([]bool, len(groups)),
+			scrollY:    scroll.Offset.Y,
+		}
+		for i, n := range notes {
+			saved.notesOpen[i] = n.open
+		}
+		for i, g := range groups {
+			saved.groupsOpen[i] = g.open
+		}
+		return saved
+	}
 	fitList := func() {
 		pinned := ps.Height >= crossRefPanelHeight
 		setCrossRefSources(sources, sourcesText, bodyW)
@@ -244,28 +270,7 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 		}
 		scroll.SetMinSize(fyne.NewSize(bodyW, h))
 	}
-	// showRefs lands the load: the list when it holds anything, else one
-	// message — the connection error when the Treasury did not load and
-	// nothing else answered for the selection, the empty sentence otherwise.
-	// The footer's sources line is set from the list that was built, so it
-	// names only the sets on screen, and is laid out at the footer's width
-	// before the list is fitted, so the chrome measured counts its wrapped
-	// height.
-	showRefs := func(refs []crossRef, tskErr error) {
-		stopThinking()
-		lst := buildCrossRefList(state, selectionVerses(state, text, span), refs, tskErr, pal, follow)
-		if len(lst.Objects) == 0 {
-			if tskErr != nil {
-				setOffline()
-				return
-			}
-			msg := crossRefNoneLine
-			if lst.CoverageNote != "" {
-				msg += "\n" + lst.CoverageNote
-			}
-			setMessage(msg)
-			return
-		}
+	mountList := func(lst crossRefList, keepPlace bool) {
 		listBox.Objects = lst.Objects
 		if place != nil {
 			notes, groups := crossRefFoldRows(lst.Objects)
@@ -293,6 +298,7 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 		// kept in view (crossref_note.go), as the list is scrolled and when a
 		// row's height changes under it.
 		lst.Relayout.fn = func() {
+			userTouched = true
 			listScope.Refresh()
 			scroll.Refresh()
 			keep()
@@ -300,16 +306,77 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 		sourcesText, _ = crossRefFooterCredit(state, lst.Sections)
 		body.Objects = []fyne.CanvasObject{list}
 		body.Refresh()
+		settingScroll = true
 		fit()
 		if place != nil {
 			scroll.Refresh()
 			scroll.Offset = fyne.NewPos(0, place.scrollY)
 			scroll.Refresh()
 			keep()
-			place = nil
+			if !keepPlace {
+				place = nil
+			}
 		} else {
 			scroll.ScrollToTop()
 		}
+		settingScroll = false
+		userTouched = false
+	}
+	// setLoading shows the embedded publisher notes and Gospel parallels
+	// immediately when the loaded edition displays its own apparatus and has
+	// local content for the selection, putting the spinner only under the
+	// Treasury heading while the dataset downloads; otherwise it shows the
+	// whole-panel spinner.
+	setLoading := func() {
+		if !state.currentVersion().PublisherCrossRefs {
+			setThinking()
+			return
+		}
+		if (place == nil || userTouched) && listShowing() {
+			place = capturePlace()
+		}
+		stopThinking()
+		bar := widget.NewProgressBarInfinite()
+		thinkingBar = bar
+		localRefs := localCrossRefsForSelection(state, text, span)
+		lst := buildCrossRefPanelList(state, selectionVerses(state, text, span), localRefs,
+			crossRefTreasuryState{loading: true, bar: bar}, pal, follow)
+		if len(lst.Objects) == 0 {
+			setThinking()
+			return
+		}
+		mountList(lst, true)
+	}
+	// showRefs lands the load: the list when it holds anything, else one
+	// message — the connection error when the Treasury did not load and
+	// nothing else answered for the selection, the empty sentence otherwise.
+	// The footer's sources line is set from the list that was built, so it
+	// names only the sets on screen, and is laid out at the footer's width
+	// before the list is fitted, so the chrome measured counts its wrapped
+	// height.
+	showRefs := func(refs []crossRef, tskErr error) {
+		stopThinking()
+		if popup != nil && !popup.Visible() {
+			return
+		}
+		if (place == nil || userTouched) && listShowing() {
+			place = capturePlace()
+		}
+		lst := buildCrossRefPanelList(state, selectionVerses(state, text, span), refs,
+			crossRefTreasuryState{err: tskErr, onRetry: func() { load() }}, pal, follow)
+		if len(lst.Objects) == 0 {
+			if tskErr != nil {
+				setOffline()
+				return
+			}
+			msg := crossRefNoneLine
+			if lst.CoverageNote != "" {
+				msg += "\n" + lst.CoverageNote
+			}
+			setMessage(msg)
+			return
+		}
+		mountList(lst, false)
 	}
 
 	content := container.NewBorder(header, footer, nil, nil, body)
@@ -350,20 +417,10 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 	// dataset loads once and is guarded, so a reopen mid-load waits on the
 	// same load rather than starting another (sheet_reopen.go).
 	registerSheetReopenCapture(state, popup, func() func() {
-		var saved *crossRefPanelPlace
-		if listShowing() {
-			notes, groups := crossRefFoldRows(listBox.Objects)
-			saved = &crossRefPanelPlace{
-				notesOpen:  make([]bool, len(notes)),
-				groupsOpen: make([]bool, len(groups)),
-				scrollY:    scroll.Offset.Y,
-			}
-			for i, n := range notes {
-				saved.notesOpen[i] = n.open
-			}
-			for i, g := range groups {
-				saved.groupsOpen[i] = g.open
-			}
+		stopThinking()
+		saved := place
+		if saved == nil || userTouched {
+			saved = capturePlace()
 		}
 		return func() { showCrossRefsAt(state, text, span, saved) }
 	})
@@ -379,7 +436,7 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 	}
 
 	load = func() {
-		setThinking()
+		setLoading()
 		crossRefsRun(func() {
 			err := crossRefsLoad()
 			// crossRefsForSelection always returns the embedded Gospel

@@ -53,10 +53,12 @@ package bibletext
 
 import (
 	"fmt"
+	"image/color"
 	"strconv"
 	"strings"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
@@ -238,6 +240,18 @@ type crossRefSections struct {
 	Treasury  bool
 }
 
+// crossRefTreasuryState describes the Treasury section's state when composing
+// the cross-references list: settled (both loading false and err nil), loading
+// (an inline caption and progress bar under the Treasury heading while the
+// dataset downloads), or failed (err != nil, with an inline retry tap target
+// when mounted in the live panel).
+type crossRefTreasuryState struct {
+	loading bool
+	bar     *widget.ProgressBarInfinite
+	err     error
+	onRetry func()
+}
+
 // buildCrossRefList composes the list for one selection. refs is
 // crossRefsForSelection's answer (parallels first, then the Treasury rows);
 // tskErr is the Treasury's load error when it has none, which a list with a
@@ -245,7 +259,13 @@ type crossRefSections struct {
 // everything else. The same-occasion parallels lead and the other-occasion
 // rows follow them, whatever order refs hands them over in.
 func buildCrossRefList(state *AppState, selected []Verse, refs []crossRef, tskErr error, pal palette, onTap func(crossRef)) crossRefList {
-	out := composeCrossRefList(state, selected, refs, tskErr, pal, onTap)
+	return buildCrossRefPanelList(state, selected, refs, crossRefTreasuryState{err: tskErr}, pal, onTap)
+}
+
+// buildCrossRefPanelList is buildCrossRefList with the live panel's Treasury
+// loading and inline retry state.
+func buildCrossRefPanelList(state *AppState, selected []Verse, refs []crossRef, tskState crossRefTreasuryState, pal palette, onTap func(crossRef)) crossRefList {
+	out := composeCrossRefList(state, selected, refs, tskState, pal, onTap)
 	// The selected verses' own book: the selection's chapter, which the
 	// reader may have left (selectedChapter).
 	book, _ := selectedChapter(state, selected)
@@ -257,7 +277,7 @@ func buildCrossRefList(state *AppState, selected []Verse, refs []crossRef, tskEr
 }
 
 // composeCrossRefList is the list without the coverage note.
-func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tskErr error, pal palette, onTap func(crossRef)) crossRefList {
+func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tskState crossRefTreasuryState, pal palette, onTap func(crossRef)) crossRefList {
 	out := crossRefList{Relayout: &crossRefRelayout{}}
 	var parallels, others, tsk []crossRef
 	for _, c := range refs {
@@ -389,16 +409,24 @@ func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tsk
 	}
 
 	// The Treasury, open under its label, less the passages the publisher's
-	// cards already carry. Nothing for the selection: no section, no credit.
-	// Failed to load while the list has content: the label and one line, no
-	// verb — a retry here would put the whole-body spinner over rows that
-	// need no network. A row that lies wholly inside the selection is muted
-	// with no tap, as in the publisher's run.
+	// cards already carry. While the dataset downloads, its label holds an
+	// inline loading caption and progress bar while the local sections stand
+	// open above it; when a load fails with local content on screen, its label
+	// holds the offline line (and an inline retry tap target in the live
+	// panel, which reloads the Treasury section in place). Nothing for the
+	// selection once loaded: no section, no credit. A row that lies wholly
+	// inside the selection is muted with no tap, as in the publisher's run.
 	kept := treasuryMinusPublisher(tsk, carded)
 	switch {
-	case tskErr != nil:
+	case tskState.loading:
+		label(treasuryLabel)
+		out.Objects = append(out.Objects, crossRefTreasuryLoading(tskState.bar))
+	case tskState.err != nil:
 		label(treasuryLabel)
 		out.Objects = append(out.Objects, crossRefNoteCaption(crossRefOfflineLine))
+		if tskState.onRetry != nil {
+			out.Objects = append(out.Objects, crossRefTreasuryRetry(pal, tskState.onRetry))
+		}
 	case len(kept) > 0:
 		label(treasuryLabel)
 		for _, c := range kept {
@@ -515,4 +543,35 @@ func crossRefCaption(s string) *widget.RichText {
 // separates it from what follows.
 func crossRefNoteCaption(s string) fyne.CanvasObject {
 	return container.New(layout.NewCustomPaddedLayout(4, 6, 0, 0), crossRefCaption(s))
+}
+
+// crossRefTreasuryLoading draws the inline waiting state under the Treasury
+// heading while the dataset loads behind already-rendered local sections.
+func crossRefTreasuryLoading(bar *widget.ProgressBarInfinite) fyne.CanvasObject {
+	if bar == nil {
+		bar = widget.NewProgressBarInfinite()
+	}
+	return container.New(layout.NewCustomPaddedVBoxLayout(2),
+		crossRefNoteCaption("Finding related passages…"),
+		container.New(layout.NewCustomPaddedLayout(0, 6, 0, 0), bar),
+	)
+}
+
+// crossRefTreasuryRetry draws the inline retry action under the Treasury
+// heading as a bounded tapCard rather than a widget.Button (bannedIn).
+func crossRefTreasuryRetry(pal palette, onRetry func()) fyne.CanvasObject {
+	lbl := canvas.NewText("Try again", pal.Accent)
+	lbl.TextStyle = fyne.TextStyle{Bold: true}
+	lbl.TextSize = 14
+	border := canvas.NewRectangle(color.Transparent)
+	border.StrokeColor = pal.Border
+	border.StrokeWidth = 1
+	border.CornerRadius = 8
+	pill := container.NewStack(
+		border,
+		container.New(layout.NewCustomPaddedLayout(0, 0, 14, 14),
+			container.NewVBox(layout.NewSpacer(), lbl, layout.NewSpacer())),
+	)
+	return container.New(layout.NewCustomPaddedLayout(2, 6, 0, 0),
+		container.NewHBox(newTapCard(pill, crossRefHover(pal), onRetry)))
 }

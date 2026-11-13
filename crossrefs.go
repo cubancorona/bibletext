@@ -213,9 +213,10 @@ func (c crossRef) bounds() (start, end verseRef) {
 }
 
 var (
-	crossRefMu     sync.Mutex
-	crossRefIndex  map[string][]tskRow
-	crossRefLoaded bool // the index is built; a failed attempt leaves it false
+	crossRefFetchMu sync.Mutex // serializes ensureCrossRefs loads so concurrent opens share one fetch
+	crossRefMu      sync.Mutex // guards crossRefIndex, crossRefLoaded, and crossRefURL
+	crossRefIndex   map[string][]tskRow
+	crossRefLoaded  bool // the index is built; a failed attempt leaves it false
 )
 
 func crossRefKey(book string, ch, v int) string {
@@ -241,12 +242,16 @@ func crossRefCachePath() string {
 // and HTTP 200 — used to be cached before it was read, and the first retry
 // failed on the cached copy.
 func ensureCrossRefs() error {
+	crossRefFetchMu.Lock()
+	defer crossRefFetchMu.Unlock()
 	crossRefMu.Lock()
-	defer crossRefMu.Unlock()
-	if crossRefLoaded {
+	loaded := crossRefLoaded
+	url := crossRefURL
+	crossRefMu.Unlock()
+	if loaded {
 		return nil
 	}
-	zipBytes, cached, err := readOrFetchCrossRefZip()
+	zipBytes, cached, err := readOrFetchCrossRefZip(url)
 	if err != nil {
 		return err
 	}
@@ -263,8 +268,10 @@ func ensureCrossRefs() error {
 	for _, d := range drift {
 		crossRefLogf("bibletext: cross-references: %s", d)
 	}
+	crossRefMu.Lock()
 	crossRefIndex = idx
 	crossRefLoaded = true
+	crossRefMu.Unlock()
 	return nil
 }
 
@@ -275,12 +282,12 @@ var crossRefLogf = log.Printf
 // readOrFetchCrossRefZip is the dataset's zip: the machine's cached copy when
 // there is one (cached true), else a fetch, which the caller keeps for next
 // time once it has parsed (writeCrossRefCache).
-func readOrFetchCrossRefZip() (b []byte, cached bool, err error) {
+func readOrFetchCrossRefZip(url string) (b []byte, cached bool, err error) {
 	if b, err := os.ReadFile(crossRefCachePath()); err == nil && len(b) > 0 {
 		return b, true, nil
 	}
 	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Get(crossRefURL)
+	resp, err := client.Get(url)
 	if err != nil {
 		return nil, false, fmt.Errorf("fetch cross-references: %w", err)
 	}
@@ -1198,22 +1205,27 @@ func verseBefore(a, b verseRef) bool {
 	return a.Chapter < b.Chapter || (a.Chapter == b.Chapter && a.Verse < b.Verse)
 }
 
-// crossRefsForSelection aggregates the cross-references for the verse(s) the
-// selection spans, resolving target book names against the loaded translation
-// and merging duplicates (keeping the highest vote). Highest-voted first.
-func crossRefsForSelection(state *AppState, text string, span selSpan) []crossRef {
+// localCrossRefsForSelection returns the cross-references for the selection
+// that are embedded in the binary and need no Treasury download: the Gospel
+// synopsis parallels and, in the next major release, the same-saying-on-another-
+// occasion rows.
+func localCrossRefsForSelection(state *AppState, text string, span selSpan) []crossRef {
+	parallels, occasions, _, _, _, _ := localCrossRefParts(state, text, span)
+	return append(parallels, occasions...)
+}
+
+func localCrossRefParts(state *AppState, text string, span selSpan) (parallels, occasions []crossRef, verses []Verse, vid string, resolve func(crossRef) []crossRef, shown map[string]bool) {
 	if state == nil || state.Bible == nil {
-		return nil
+		return nil, nil, nil, "", nil, nil
 	}
-	verses := selectionVerses(state, text, span)
-	shown := map[string]bool{} // label -> already emitted
-	vid := state.currentVersion().ID
-	resolve := crossRefResolver(state.Bible.Books, vid)
+	verses = selectionVerses(state, text, span)
+	shown = map[string]bool{} // label -> already emitted
+	vid = state.currentVersion().ID
+	resolve = crossRefResolver(state.Bible.Books, vid)
 
 	// Gospel synopsis parallels first (parallels.go): the same event in the other
 	// Gospels, tagged. Embedded, so these appear even when the TSK cross-references
 	// failed to load (offline). Kept in synopsis order, not sorted by votes.
-	var parallels []crossRef
 	for _, v := range verses {
 		srcCh, srcV, ok := crossRefSourceRef(vid, v)
 		if !ok {
@@ -1238,7 +1250,6 @@ func crossRefsForSelection(state *AppState, text string, span selSpan) []crossRe
 	// by the verses it covers rather than by its label: from Luke 22:26, one
 	// saying gives Matthew 20:26-27 and the next Matthew 20:25-27, and the
 	// reader needs the passage once.
-	var occasions []crossRef
 	if nextRelease {
 		for _, v := range verses {
 			srcCh, srcV, ok := crossRefSourceRef(vid, v)
@@ -1252,6 +1263,17 @@ func crossRefsForSelection(state *AppState, text string, span selSpan) []crossRe
 			}
 		}
 	}
+	return parallels, occasions, verses, vid, resolve, shown
+}
+
+// crossRefsForSelection aggregates the cross-references for the verse(s) the
+// selection spans, resolving target book names against the loaded translation
+// and merging duplicates (keeping the highest vote). Highest-voted first.
+func crossRefsForSelection(state *AppState, text string, span selSpan) []crossRef {
+	parallels, occasions, verses, vid, resolve, shown := localCrossRefParts(state, text, span)
+	if resolve == nil {
+		return nil
+	}
 	hidden := crossRefHidden{labels: shown, covers: occasions}
 
 	// Treasury-of-Scripture-Knowledge cross-references, highest-voted first, minus
@@ -1259,15 +1281,18 @@ func crossRefsForSelection(state *AppState, text string, span selSpan) []crossRe
 	// maxCrossRefsPerVerse best rows among the ones this translation can SHOW:
 	// the cap is counted after the drops and the hiding, so a row the reader
 	// cannot be shown hands its place to the next one down.
+	crossRefMu.Lock()
+	idx := crossRefIndex
+	crossRefMu.Unlock()
 	var tsk []crossRef
-	if crossRefIndex != nil {
+	if idx != nil {
 		seen := map[string]int{} // label -> index into tsk
 		for _, v := range verses {
 			srcCh, srcV, ok := crossRefSourceRef(vid, v)
 			if !ok {
 				continue
 			}
-			mine, _ := treasuryRowsFor(crossRefIndex[crossRefKey(v.BookName, srcCh, srcV)], resolve, hidden)
+			mine, _ := treasuryRowsFor(idx[crossRefKey(v.BookName, srcCh, srcV)], resolve, hidden)
 			for _, c := range mine {
 				lbl := c.label()
 				if i, dup := seen[lbl]; dup {
