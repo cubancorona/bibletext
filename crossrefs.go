@@ -85,6 +85,7 @@ type crossRef struct {
 	Parallel       bool   // true = from the Gospel parallels (parallels.go), not a TSK cross-ref
 	OtherOccasion  bool   // with Parallel: the same saying on another occasion, not the same event
 	Title          string // for parallels, the pericope's title ("The Beatitudes") or the saying's
+	TitleRef       bool   // a publisher citation of a chapter's superscription (":title"), arriving without washing verse 1
 }
 
 // otherOccasion reports whether c is a row of the same saying on another

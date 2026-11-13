@@ -49,8 +49,13 @@ import (
 
 // crossRefLetterSize is the size of a note's letter in its margin: the size
 // of a card's reference, so that the letters read down the margin as the
-// heads of their notes.
-const crossRefLetterSize = 16
+// heads of their notes. crossRefDoubleLetterSize steps down for two-letter
+// marks ("aa".."zz") in a long multi-verse selection so the pair stays inside
+// crossRefLetterMargin with air before the row beside it.
+const (
+	crossRefLetterSize       = 16
+	crossRefDoubleLetterSize = 10
+)
 
 // crossRefLetter is a note's letter as it stands in the margin of its note
 // (crossRefLettered).
@@ -58,6 +63,9 @@ func crossRefLetter(letter string, pal palette) *canvas.Text {
 	t := canvas.NewText(letter, pal.Accent)
 	t.TextStyle = fyne.TextStyle{Bold: true, Italic: true}
 	t.TextSize = crossRefLetterSize
+	if len(letter) > 1 {
+		t.TextSize = crossRefDoubleLetterSize
+	}
 	return t
 }
 

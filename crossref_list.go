@@ -82,8 +82,8 @@ const (
 	parallelsLabel       = "GOSPEL PARALLELS"
 	treasuryLabel        = "TREASURY OF SCRIPTURE KNOWLEDGE"
 	publisherLabelSuffix = " REFERENCES" // after the edition's abbreviation: "NKJV REFERENCES"
-	publisherKeySep      = " · "         // before a verse key: "NKJV REFERENCES · VERSE 2"
-	publisherTitleKey    = "TITLE"       // the key of the Psalm title's notes
+	publisherKeySep      = " · "         // before a verse or heading key: "NKJV REFERENCES · VERSE 2"
+	publisherHeadingKey  = "HEADING"     // the key of a section heading's note
 	publisherVerseKey    = "VERSE "      // before the number
 )
 
@@ -91,8 +91,12 @@ const (
 // selection has no note of its own; the Treasury stands open beneath it. The
 // label scopes the sentence: under a bare line the Treasury's cards would
 // stand a few points below a sentence saying there are none. Hyphenated as
-// the panel's title is.
-const publisherEmptyLine = "No %s cross-references for this selection."
+// the panel's title is. publisherMissingLine replaces it where the edition has
+// a caller whose note is missing at the end of a displaced stretch in the feed.
+const (
+	publisherEmptyLine   = "No %s cross-references for this selection."
+	publisherMissingLine = "The %s has a cross-reference here that isn't in our source."
+)
 
 // What the panel says of a selection the cross-references cannot cover, in
 // two lines: the first is the one every empty panel shows, the second says
@@ -151,7 +155,8 @@ func panelCoverage(state *AppState, book string, verses []Verse) (note string, n
 	v := state.currentVersion()
 	if v.PublisherCrossRefs {
 		_, chapter := selectedChapter(state, verses)
-		if len(publisherCrossRefsFor(state.Bible, book, chapter, verses)) > 0 {
+		if len(publisherCrossRefsFor(state.Bible, book, chapter, verses)) > 0 ||
+			hasSilentDisplacedCaller(state.Bible, book, chapter, verses) {
 			return "", false
 		}
 		if note, none := crossRefCoverage(v.ID, book, verses); none {
@@ -291,11 +296,13 @@ func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tsk
 	// when the selection reaches the chapter's first verse.
 	book, chapter := selectedChapter(state, selected)
 	notes := publisherCrossRefsFor(state.Bible, book, chapter, selected)
+	missing := len(notes) == 0 && hasSilentDisplacedCaller(state.Bible, book, chapter, selected)
 	// Nothing at all to list is the panel's message state, not a run with
 	// one line over an empty Treasury: with the Treasury unloaded, the
 	// connection error; with it loaded and empty, the sentence every empty
-	// panel shows. The publisher's empty line is not content.
-	if len(notes) == 0 && len(parallels)+len(others) == 0 && len(tsk) == 0 {
+	// panel shows. The publisher's empty line is not content; a missing
+	// displaced note is.
+	if len(notes) == 0 && !missing && len(parallels)+len(others) == 0 && len(tsk) == 0 {
 		return out
 	}
 
@@ -319,43 +326,46 @@ func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tsk
 		out.Passage = true
 	}
 
-	if len(parallels)+len(others) > 0 {
-		label(parallelsLabel)
-		for _, c := range parallels {
-			out.Objects = append(out.Objects, crossRefRow(state, passageCard(c, false), pal, onTap))
-		}
-		for _, c := range others {
-			out.Objects = append(out.Objects, crossRefRow(state, passageCard(c, false), pal, onTap))
-		}
-	}
-
-	// The publisher's run. Its label carries a verse key only where the key
-	// informs: a selection of several verses, or a note whose key is not the
-	// selected verse (the title's, keyed 0, when verse 1 is selected). Then
-	// the label repeats per verse that has notes, and a verse without one is
-	// silently absent, as in print.
+	// The publisher's run stands directly under the lettered passage, before
+	// the Gospel parallels. A Psalm's title and verse 1 share one label; a
+	// section heading's note wears HEADING; and verse keys appear where the
+	// selection spans several verses or a heading note precedes the verse's.
 	out.Sections.Publisher = true
+	firstVerse := 0
+	if len(selected) > 0 {
+		firstVerse = selected[0].Verse
+	}
+	sectionVerse := func(n publisherCrossRef) int {
+		if n.Verse == 0 && !n.Heading {
+			return firstVerse
+		}
+		return n.Verse
+	}
 	keyed := len(selected) > 1
 	for _, n := range notes {
-		if n.Verse != selected[0].Verse {
+		if n.Heading || sectionVerse(n) != firstVerse {
 			keyed = true
 		}
 	}
 	if len(notes) == 0 {
-		label(publisherRunLabel(v.Abbrev, 0, false))
-		out.Objects = append(out.Objects, crossRefNoteCaption(fmt.Sprintf(publisherEmptyLine, v.Abbrev)))
+		label(publisherRunLabel(v.Abbrev, 0, false, false))
+		line := publisherEmptyLine
+		if missing {
+			line = publisherMissingLine
+		}
+		out.Objects = append(out.Objects, crossRefNoteCaption(fmt.Sprintf(line, v.Abbrev)))
 		out.PublisherLines++
 	}
 	// Each note is a block of its own under its letter, in the order the
-	// notes stand in the verse, and holds everything the note prints in the
-	// order it prints it (crossref_note.go). A verse's label stands over its
-	// first note: every note puts something on screen, so no label is held
+	// notes stand in the selection, and holds everything the note prints in
+	// the order it prints it (crossref_note.go). A verse's label stands over
+	// its first note: every note puts something on screen, so no label is held
 	// back, and a card is not withheld because an earlier note of the verse
 	// has its passage — the note is the edition's unit and is kept whole.
 	var carded []crossRef // the passages the publisher's cards on screen follow, for the Treasury filter
 	for i, n := range notes {
-		if i == 0 || (keyed && n.Verse != notes[i-1].Verse) {
-			label(publisherRunLabel(v.Abbrev, n.Verse, keyed))
+		if i == 0 || n.Heading != notes[i-1].Heading || (keyed && sectionVerse(n) != sectionVerse(notes[i-1])) {
+			label(publisherRunLabel(v.Abbrev, sectionVerse(n), n.Heading, keyed))
 			// A little air between the label and the first note's ground.
 			out.Objects = append(out.Objects, spacer(4))
 		}
@@ -368,11 +378,22 @@ func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tsk
 		out.PublisherLines += lines
 	}
 
+	if len(parallels)+len(others) > 0 {
+		label(parallelsLabel)
+		for _, c := range parallels {
+			out.Objects = append(out.Objects, crossRefRow(state, passageCard(c, false), pal, onTap))
+		}
+		for _, c := range others {
+			out.Objects = append(out.Objects, crossRefRow(state, passageCard(c, false), pal, onTap))
+		}
+	}
+
 	// The Treasury, open under its label, less the passages the publisher's
 	// cards already carry. Nothing for the selection: no section, no credit.
 	// Failed to load while the list has content: the label and one line, no
 	// verb — a retry here would put the whole-body spinner over rows that
-	// need no network.
+	// need no network. A row that lies wholly inside the selection is muted
+	// with no tap, as in the publisher's run.
 	kept := treasuryMinusPublisher(tsk, carded)
 	switch {
 	case tskErr != nil:
@@ -381,6 +402,10 @@ func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tsk
 	case len(kept) > 0:
 		label(treasuryLabel)
 		for _, c := range kept {
+			if isWithinSelection(c, book, chapter, selected) {
+				out.Objects = append(out.Objects, crossRefSelfRow(c.label(), "", pal, true))
+				continue
+			}
 			out.Objects = append(out.Objects, crossRefRow(state, passageCard(c, false), pal, onTap))
 		}
 		out.TSKRows = len(kept)
@@ -390,15 +415,15 @@ func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tsk
 }
 
 // publisherRunLabel is the publisher's section label: "NKJV REFERENCES", and
-// with a key "NKJV REFERENCES · VERSE 2" or, for the title's notes,
-// "NKJV REFERENCES · TITLE".
-func publisherRunLabel(abbrev string, verse int, keyed bool) string {
+// with a key "NKJV REFERENCES · VERSE 2" or, for a section heading's note,
+// "NKJV REFERENCES · HEADING".
+func publisherRunLabel(abbrev string, verse int, heading, keyed bool) string {
 	label := strings.ToUpper(abbrev) + publisherLabelSuffix
 	switch {
+	case heading:
+		return label + publisherKeySep + publisherHeadingKey
 	case !keyed:
 		return label
-	case verse == 0:
-		return label + publisherKeySep + publisherTitleKey
 	default:
 		return label + publisherKeySep + publisherVerseKey + strconv.Itoa(verse)
 	}

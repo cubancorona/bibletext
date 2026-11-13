@@ -237,7 +237,7 @@ func TestEveryUnwrappedLineOfTheListFitsTheNarrowestPhone(t *testing.T) {
 	}
 	t.Logf("widest publisher card heading %q: %.1f / %.0f (group %q: %.1f / %.0f)", widestNote, widestNoteW, noteLimit, widestGroup, widestGroupW, groupLimit)
 
-	runs := []string{parallelsLabel, treasuryLabel, publisherRunLabel("NKJV", 176, true), publisherRunLabel("NKJV", 0, true)}
+	runs := []string{parallelsLabel, treasuryLabel, publisherRunLabel("NKJV", 176, false, true), publisherRunLabel("NKJV", 0, true, true)}
 	if text, w := widest(runs, 11, fyne.TextStyle{Bold: true, Monospace: true}); w > limit {
 		t.Errorf("the section label %q wants %.0f points, over %.0f", text, w, limit)
 	} else {

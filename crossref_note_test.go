@@ -102,8 +102,8 @@ func TestANoteIsItsPiecesInTheOrderItPrintsThem(t *testing.T) {
 	}{
 		{"the reader's own verse among others", "1 Samuel", 16, 16, "Judg. 9:23; 1 Sam. 16:15, 16; 18:10; 19:9; 1 Kin. 22:19–22", nil,
 			"card:Judges 9:23|card:1 Samuel 16:15|self:1 Samuel 16:16|card:1 Samuel 18:10|card:1 Samuel 19:9|card:1 Kings 22:19–22", "fold"},
-		{"the reader's own passage first", "Matthew", 6, 9, "Matt. 6:9–13; Luke 11:2–4", nil,
-			"self:Matthew 6:9–13|card:Luke 11:2–4", "fold"},
+		{"a pericope range on its opening verse", "Matthew", 6, 9, "Matt. 6:9–13; Luke 11:2–4", nil,
+			"card:Matthew 6:9–13|card:Luke 11:2–4", "fold"},
 		{"a verse the loaded text lacks, inside a group", "Mark", 4, 29, "(Mark 13:30, 39); Rev. 14:15", nil,
 			"group:(Mark 13:30, 39)[card:Mark 13:30 words:39]|card:Revelation 14:15", "fold"},
 		{"a citation the shorthand does not read, first", "Matthew", 6, 1, "Is. 15:1—16; Jer. 25:21", nil,
@@ -120,7 +120,7 @@ func TestANoteIsItsPiecesInTheOrderItPrintsThem(t *testing.T) {
 			"self:Revelation 14:15", "card"},
 		{"a print the shorthand cannot read, tagged", "Psalms", 135, 1, oddPrint,
 			[]NoteRef{noteRefAt(t, oddPrint, "Ps. 135:1-3", "PSA.135.1-PSA.135.3"), noteRefAt(t, oddPrint, "136:1", "PSA.136.1")},
-			"self:Psalms 135:1–3|card:Psalms 136:1", "fold"},
+			"card:Psalms 135:1–3|card:Psalms 136:1", "fold"},
 		{"a tag the feed set wrong inside a group", "Mark", 4, 1, wrongTag,
 			[]NoteRef{noteRefAt(t, wrongTag, "John 10:20", "JHN.10.20"), noteRefAt(t, wrongTag, "2:13", "JHN.2.13")},
 			"card:John 10:20|group:(1 Cor. 1:23; 2:13)[card:1 Corinthians 1:23 card:1 Corinthians 2:13]", "fold"},
@@ -250,9 +250,9 @@ func TestThePassageIsTheSelectedTextWithALetterBeforeEachNotesWord(t *testing.T)
 	if got := passagePlainText(runs); got != want {
 		t.Errorf("the passage without its letters is\n%q\nwant\n%q", got, want)
 	}
-	// Each letter directly before its word, in order; the verses numbered,
-	// since the passage holds more than the one verse.
-	if got := joined(markedWords(runs)); got != "a>when|1>Have|a>mercy|b>According|c>fixture's|2>Synthetic" {
+	// Each letter directly before its word, continuously across the title and
+	// verses; the verses numbered, since the passage holds more than one verse.
+	if got := joined(markedWords(runs)); got != "a>when|1>Have|b>mercy|c>According|d>fixture's|2>Synthetic" {
 		t.Errorf("letters and their words: %s", got)
 	}
 	// The Psalm's title and the supplied word are set in italic, as the
@@ -266,7 +266,8 @@ func TestThePassageIsTheSelectedTextWithALetterBeforeEachNotesWord(t *testing.T)
 	if italic != title.Text+"the" {
 		t.Errorf("the italic runs read %q, want the title and the supplied word", italic)
 	}
-	// The list is headed by it, and each note carries the letter its word has.
+	// The list is headed by it, and each note carries the letter its word has;
+	// a Psalm's title and verse 1 share one section label.
 	lst := buildCrossRefList(st, sel, nil, nil, lightPalette, func(crossRef) {})
 	p := passageIn(lst.Objects[:1])
 	if !lst.Passage || p == nil {
@@ -275,7 +276,7 @@ func TestThePassageIsTheSelectedTextWithALetterBeforeEachNotesWord(t *testing.T)
 	if got := passagePlainText(p.runs); got != want {
 		t.Errorf("the list's passage without its letters is %q", got)
 	}
-	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES · TITLE|NKJV REFERENCES · VERSE 1" {
+	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES · VERSE 1" {
 		t.Errorf("labels = %q", got)
 	}
 	var letters []string
@@ -284,14 +285,23 @@ func TestThePassageIsTheSelectedTextWithALetterBeforeEachNotesWord(t *testing.T)
 			letters = append(letters, l+" "+cardReference(c))
 		}
 	}
-	if got := joined(letters); got != "a 2 Samuel 12:1|a Romans 5:8" {
+	if got := joined(letters); got != "a 2 Samuel 12:1|b Romans 5:8" {
 		t.Errorf("the cards that are a whole note carry %q", got)
 	}
-	if got := noteHeadsIn(lst.Objects); joined(got) != "c  Is. 43:25; 9:6" {
-		t.Errorf("the note of two citations reads %q; want it under c:\n%s", got, joinedTexts(lst.Objects))
+	if got := noteHeadsIn(lst.Objects); joined(got) != "d  Is. 43:25; 9:6" {
+		t.Errorf("the note of two citations reads %q; want it under d:\n%s", got, joinedTexts(lst.Objects))
 	}
-	if groups := groupRowsIn(lst.Objects); len(groups) != 1 || groups[0].open || groups[0].letter == nil || groups[0].letter.Text+"  "+joined(textsIn(groups[0].label)) != "b  (Is. 9:6)" {
-		t.Errorf("the note that is one group: %d group rows; want b  (Is. 9:6), closed", len(groups))
+	if groups := groupRowsIn(lst.Objects); len(groups) != 1 || groups[0].open || groups[0].letter == nil || groups[0].letter.Text+"  "+joined(textsIn(groups[0].label)) != "c  (Is. 9:6)" {
+		t.Errorf("the note that is one group: %d group rows; want c  (Is. 9:6), closed", len(groups))
+	}
+	// Verse 1 selected alone with its title: one bare NKJV REFERENCES label,
+	// verse 1 numbered after the title, and continuous letters a..d across both.
+	alone := buildCrossRefList(st, sel[:1], nil, nil, lightPalette, func(crossRef) {})
+	if got := sectionLabelsIn(alone.Objects); joined(got) != "NKJV REFERENCES" {
+		t.Errorf("Psalm 51:1 alone labels = %q, want NKJV REFERENCES", got)
+	}
+	if ap := passageIn(alone.Objects[:1]); ap == nil || joined(markedWords(ap.runs)) != "a>when|1>Have|b>mercy|c>According|d>fixture's" {
+		t.Errorf("Psalm 51:1 alone passage marks = %v", ap)
 	}
 
 	// DRAWN: a verse's number is the page's own, in the bold cut and the
@@ -341,7 +351,7 @@ func TestThePassageIsTheSelectedTextWithALetterBeforeEachNotesWord(t *testing.T)
 			}
 		}
 	}
-	if got := joined(drawn); got != "letter a|number 1|letter a|letter b|letter c|number 2" {
+	if got := joined(drawn); got != "letter a|number 1|letter b|letter c|letter d|number 2" {
 		t.Errorf("the passage's marks are drawn as %s", got)
 	}
 
@@ -390,16 +400,45 @@ func TestAHeadingsNoteStandsWithTheVerseItIsSetBefore(t *testing.T) {
 		t.Errorf("letters and their words: %s", got)
 	}
 	for _, r := range runs {
-		if strings.Contains(r.Text, "Duties") && !r.Dim {
-			t.Errorf("the heading is not set muted")
+		if strings.Contains(r.Text, "Duties") && (!r.Bold || r.Dim) {
+			t.Errorf("the heading is not set bold in full colour: Bold=%v Dim=%v", r.Bold, r.Dim)
 		}
 	}
 	lst := buildCrossRefList(st, sel, nil, nil, lightPalette, func(crossRef) {})
 	if got := cardLabelsIn(lst.Objects); joined(got) != "Numbers 3:22|Numbers 3:25" || lst.PublisherNotes != 2 {
 		t.Errorf("cards = %q, %d notes; want the heading's note and the verse's", got, lst.PublisherNotes)
 	}
-	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES" {
+	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES · HEADING|NKJV REFERENCES · VERSE 21" {
 		t.Errorf("labels = %q", got)
+	}
+	// Drawn: the heading line uses the bold cut and the body text colour, and
+	// a single-verse selection keeps its verse unnumbered despite the heading.
+	hp := passageIn(lst.Objects[:1])
+	hp.Resize(fyne.NewSize(300, 300))
+	hr := test.WidgetRenderer(hp).(*readingParagraphRenderer)
+	hr.Layout(hp.Size())
+	sawBoldHeading := false
+	for _, row := range hr.rows {
+		for _, tx := range row {
+			if strings.Contains(tx.Text, "Duties") {
+				sawBoldHeading = true
+				if tx.FontSource != passageNumeralFace() || tx.Color != lightPalette.Text {
+					t.Errorf("heading fragment drawn with face=%v color=%v, want bold face and %v", tx.FontSource, tx.Color, lightPalette.Text)
+				}
+			}
+		}
+	}
+	if !sawBoldHeading {
+		t.Errorf("heading text was not drawn in the passage")
+	}
+	// When only the heading has a note (as on Numbers 4:21 in the NKJV), its
+	// section label is NKJV REFERENCES · HEADING both alone and in a range.
+	v21.Footnotes = nil
+	for _, span := range [][]Verse{versesBetween(bd, "Numbers", 4, 21, 21), versesBetween(bd, "Numbers", 4, 20, 22)} {
+		onlyHeading := buildCrossRefList(st, span, nil, nil, lightPalette, func(crossRef) {})
+		if got := sectionLabelsIn(onlyHeading.Objects); joined(got) != "NKJV REFERENCES · HEADING" {
+			t.Errorf("%d verses around Numbers 4:21: labels = %q, want NKJV REFERENCES · HEADING", len(span), got)
+		}
 	}
 
 	// CONTROL: the verse after a heading that carries no note has only its own.
@@ -550,5 +589,53 @@ func TestABasisAfterAListOfVersesTagsEachOfThem(t *testing.T) {
 		for _, problem := range noteGapProblems(n) {
 			t.Errorf("%q: %s", c.text, problem)
 		}
+	}
+}
+
+// CONTINUOUS LETTERS PAST Z USE SPREADSHEET ORDER AND FIT THE 18PT MARGIN.
+func TestContinuousLettersPastTwentySixFitTheMargin(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	licenseNKJVForTest(t)
+	withPublisherCrossRefs(t, "nkjv", true)
+	bd := xrefBible(map[string]map[int]int{"Amos": {2: 4}, "Romans": {5: 21}})
+	for v := 1; v <= 4; v++ {
+		verse := &bd.Verses["Amos"][2][v-1]
+		verse.Text = "Alpha beta gamma delta epsilon zeta eta."
+		var notes []Footnote
+		for j := range 7 {
+			notes = append(notes, Footnote{Anchor: j * 6, Text: "Rom. 5:8", Kind: footnoteKindCrossref, Caller: "-"})
+		}
+		verse.Footnotes = notes
+	}
+	sel := versesBetween(bd, "Amos", 2, 1, 4)
+	notes := publisherCrossRefsFor(bd, "Amos", 2, sel)
+	if len(notes) != 28 {
+		t.Fatalf("got %d notes, want 28", len(notes))
+	}
+	if got, want := noteLetter(notes[0].Index), "a"; got != want {
+		t.Errorf("first letter = %q, want %q", got, want)
+	}
+	if got, want := noteLetter(notes[7].Index), "h"; got != want {
+		t.Errorf("eighth letter (head of verse 2) = %q, want %q", got, want)
+	}
+	if got, want := noteLetter(notes[25].Index), "z"; got != want {
+		t.Errorf("26th letter = %q, want %q", got, want)
+	}
+	if got, want := noteLetter(notes[26].Index), "aa"; got != want {
+		t.Errorf("27th letter = %q, want %q", got, want)
+	}
+	if got, want := noteLetter(notes[27].Index), "ab"; got != want {
+		t.Errorf("28th letter = %q, want %q", got, want)
+	}
+
+	single := crossRefLetter("a", lightPalette)
+	double := crossRefLetter("ww", lightPalette)
+	if single.TextSize != crossRefLetterSize || double.TextSize != crossRefDoubleLetterSize || double.TextSize >= single.TextSize {
+		t.Errorf("single size = %v, double size = %v; want %v and %v", single.TextSize, double.TextSize, crossRefLetterSize, crossRefDoubleLetterSize)
+	}
+	wSize, _ := fyne.CurrentApp().Driver().RenderedTextSize(double.Text, double.TextSize, double.TextStyle, double.FontSource)
+	if wSize.Width >= crossRefLetterMargin-1 {
+		t.Errorf("widest double letter %q renders %.2fpt wide, leaving no gap inside %vpt margin", double.Text, wSize.Width, crossRefLetterMargin)
 	}
 }

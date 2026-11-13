@@ -371,6 +371,7 @@ func publisherCrossRefsFor(bd *BibleData, book string, chapter int, selected []V
 		return nil
 	}
 	var rows []publisherCrossRef
+	nextIndex := 0
 	// unit is the text the note stands in: the verse's, the title's or the
 	// heading's.
 	add := func(verse int, heading, unkeyed bool, unit string, fn Footnote) {
@@ -383,24 +384,14 @@ func publisherCrossRefsFor(bd *BibleData, book string, chapter int, selected []V
 		}
 		row := publisherCrossRef{Verse: verse, Heading: heading, Unkeyed: unkeyed, Anchor: fn.Anchor, Text: text}
 		row.Mark = noteMarkAt([]rune(unit), wordSplitCallers.wordStart(book, chapter, verse, heading, []rune(unit), fn.Anchor))
-		// The note's place among the notes of its verse number, which are
-		// added together: the title's are numbered 0, and a heading's stand
-		// before its verse's and are counted with them, so one run of letters
-		// serves the heading and the verse it opens. A note keyed to no word
-		// takes no letter.
-		for i := len(rows) - 1; i >= 0 && rows[i].Verse == verse; i-- {
-			if !rows[i].Unkeyed {
-				row.Index++
-			}
-		}
+		// One continuous run of letters across the whole selection — title,
+		// noted headings and verses alike — in spreadsheet order (a..z, aa..).
+		// A note keyed to no word takes no letter.
 		if unkeyed {
 			row.Index, row.Anchor, row.Mark = -1, 0, 0
-		}
-		// A heading's note cites as a title's does: it has no verse of its
-		// own to be the passage the reader is on.
-		own := verse
-		if heading {
-			own = 0
+		} else {
+			row.Index = nextIndex
+			nextIndex++
 		}
 		// The spans index the text the row stores, which the decoder trims
 		// before it takes them (normalizeNoteText), and split cuts that text
@@ -408,7 +399,7 @@ func publisherCrossRefsFor(bd *BibleData, book string, chapter int, selected []V
 		// put the ":title" and basis reads and every cut one rune off.
 		runes := []rune(text)
 		resolve := func(start, end int, id string) (publisherTarget, bool) {
-			return resolveCitation(bd, runes, start, end, id, book, chapter, own)
+			return resolveCitation(bd, runes, start, end, id, book, chapter, selected)
 		}
 		tagged := map[int]NoteRef{} // the feed's tags by where their span starts
 		for _, r := range fn.Refs {
@@ -684,11 +675,10 @@ func spreadBasis(runes []rune, pieces []publisherPiece) {
 }
 
 // noteLetter is the letter the panel sets on a note and on its word: a for a
-// verse's first note, b for its second. The feed carries no letters (its
-// caller is "-" on every note), so these are the panel's own, restarting at
-// each verse and at a Psalm's title; a heading's notes are lettered with
-// the verse the heading is set before. No verse of the NKJV has more than
-// seven notes, and a twenty-seventh would be "aa".
+// selection's first note, b for its second, running continuously across the
+// selection's title, noted headings and verses in spreadsheet order (a..z,
+// aa, ab..). The feed carries no letters (its caller is "-" on every note),
+// so these are the panel's own.
 func noteLetter(index int) string {
 	if index < 0 {
 		return ""
@@ -703,14 +693,42 @@ func noteLetter(index int) string {
 	}
 }
 
+// isWithinSelection reports whether c names only verses already in selected:
+// an exact match to the selection or a subset of a multi-verse selection. A
+// citation that runs beyond the selection is false, so it becomes a tappable
+// card; a title citation cites the superscription rather than a verse.
+func isWithinSelection(c crossRef, book string, chapter int, selected []Verse) bool {
+	if len(selected) == 0 || c.TitleRef || c.crossBook() || c.Book != book {
+		return false
+	}
+	start, end := c.bounds()
+	if start.Chapter != chapter || end.Chapter != chapter || end.Verse < start.Verse {
+		return false
+	}
+	for v := start.Verse; v <= end.Verse; v++ {
+		in := false
+		for _, sv := range selected {
+			if sv.Verse == v {
+				in = true
+				break
+			}
+		}
+		if !in {
+			return false
+		}
+	}
+	return true
+}
+
 // resolveCitation resolves one citation of a note against the loaded text:
-// the rune span of its printed words within the note (runes) and its id, on a
-// note of book chapter:verse (verse 0 for a Psalm's title). The id is a verse
-// or a run of verses (parseUSFMRefID), else whole chapters (chapterTarget),
-// and whole chapters the text follows with ":title" are the chapter's title,
-// placed at its first verse. The basis tokens after the citation ride it. A
-// citation whose passage the loaded text lacks does not resolve.
-func resolveCitation(bd *BibleData, runes []rune, start, end int, id, book string, chapter, verse int) (publisherTarget, bool) {
+// the rune span of its printed words within the note (runes) and its id, for a
+// selection in book chapter. The id is a verse or a run of verses
+// (parseUSFMRefID), else whole chapters (chapterTarget), and whole chapters
+// the text follows with ":title" are the chapter's title, placed at its first
+// verse without washing verse 1 on arrival. The basis tokens after the
+// citation ride it. A citation whose passage the loaded text lacks does not
+// resolve.
+func resolveCitation(bd *BibleData, runes []rune, start, end int, id, book string, chapter int, selected []Verse) (publisherTarget, bool) {
 	tg := publisherTarget{Start: start, End: end, ID: id, Cut: end}
 	ref, ok := parseUSFMRefID(id)
 	if !ok {
@@ -718,10 +736,11 @@ func resolveCitation(bd *BibleData, runes []rune, start, end int, id, book strin
 			tg.Chapters = true
 			if hasRunesAt(runes, end, []rune(titleSuffix)) {
 				// The title stands at the chapter's first verse: the card
-				// goes there, not over the whole psalm.
+				// goes there, not over the whole psalm, without highlighting
+				// verse 1 on arrival.
 				tg.Title, tg.Chapters = true, false
 				tg.Cut = end + len([]rune(titleSuffix))
-				ref = crossRef{Book: ref.Book, Chapter: ref.Chapter, Verse: ref.Verse}
+				ref = crossRef{Book: ref.Book, Chapter: ref.Chapter, Verse: ref.Verse, TitleRef: true}
 			}
 		}
 	}
@@ -730,7 +749,7 @@ func resolveCitation(bd *BibleData, runes []rune, start, end int, id, book strin
 	}
 	tg.Basis, tg.Cut = basisAfter(runes, tg.Cut)
 	tg.Ref = ref
-	tg.Current = verse > 0 && ref.Book == book && ref.contains(chapter, verse)
+	tg.Current = !tg.Title && isWithinSelection(ref, book, chapter, selected)
 	return tg, true
 }
 

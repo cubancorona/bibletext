@@ -10,11 +10,11 @@ package bibletext
 // raised letter stands before the word and the note's citations are listed
 // under that letter. The feed keeps the place as the note's offset in its
 // verse (Footnote.Anchor) and carries no letter (its caller is "-" on every
-// note), so the letters here are the panel's own: a, b, c in the order the
-// notes stand, restarting at each verse and at a Psalm's title
+// note), so the letters here are the panel's own: a, b, c in one continuous
+// run across the whole selection — title, noted headings and verses alike
 // (noteLetter). A section heading that carries a note (one in the NKJV,
-// before Numbers 4:21) is shown before its verse, muted, and its notes are
-// lettered with that verse's.
+// before Numbers 4:21) is set before its verse in the bold cut and the text
+// colour, as the reading page sets it.
 //
 // The text is the verse's own, drawn as the page draws it (redLetterRuns):
 // the divine name's small capitals, the translators' supplied words in
@@ -65,10 +65,10 @@ type passageMark struct {
 // passageUnit is one stretch of the passage: a Psalm's title, a section
 // heading that carries a note, or a verse.
 type passageUnit struct {
-	Number int        // the verse's number, set before it when the selection has several verses or a title stands before the verse; 0 for none
-	Runs   []verseRun // the unit's text as the page draws it
-	Dim    bool       // a heading: not Scripture, set muted
-	Marks  []passageMark
+	Number  int        // the verse's number, set before it when the selection has several verses or a title stands before the verse; 0 for none
+	Runs    []verseRun // the unit's text as the page draws it
+	Heading bool       // a section heading: set in the bold cut and the text colour, as the page sets it
+	Marks   []passageMark
 }
 
 // text is the unit's text as drawn, without its marks.
@@ -131,14 +131,14 @@ func publisherPassageUnits(state *AppState, book string, chapter int, selected [
 			if n > len(onHeadings) {
 				n = len(onHeadings)
 			}
-			units = append(units, passageUnit{Runs: []verseRun{{Text: h.DrawnText()}}, Dim: true, Marks: marks(onHeadings[:n])})
+			units = append(units, passageUnit{Runs: []verseRun{{Text: h.DrawnText()}}, Heading: true, Marks: marks(onHeadings[:n])})
 			onHeadings = onHeadings[n:]
 		}
 		u := passageUnit{Runs: redLetterRuns(versionID, v, redLetterEnabled()), Marks: marks(onVerse)}
 		// A verse's number where the passage holds more than the one verse:
 		// several verses, or a title before the first, whose letters would
 		// otherwise read as that verse's.
-		if len(selected) > 1 || len(units) > 0 && !units[len(units)-1].Dim {
+		if len(selected) > 1 || len(units) > 0 && !units[len(units)-1].Heading {
 			u.Number = v.Verse
 		}
 		units = append(units, u)
@@ -168,7 +168,7 @@ func passageRuns(units []passageUnit) []cardRun {
 				// A piece that ends on a break yields an empty last line
 				// that carries it: what follows, a letter or the next run,
 				// opens the next row.
-				emit(cardRun{Text: line, Red: run.Red, Italic: run.Italic, Dim: u.Dim, Break: li > 0})
+				emit(cardRun{Text: line, Red: run.Red, Italic: run.Italic, Bold: u.Heading, Break: li > 0})
 			}
 		}
 		if u.Number > 0 {

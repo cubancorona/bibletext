@@ -50,15 +50,22 @@ func TestANotesGroupsStandWhereTheEditionPrintsThem(t *testing.T) {
 		t.Errorf("control: split = %q / %q", cardLabels(cards), remainder)
 	}
 
-	// The book carried into a group from the citation before it, and the
-	// note's own passage in its place, outside every group.
+	// The book carried into a group from the citation before it, and a
+	// pericope range wider than the selected verse kept as a card while an
+	// exact or contained selection becomes self.
 	text = "Matt. 5:3–12; (11:5); Luke 6:20–23; (James 2:5)"
 	note = resolvedNote(t, bd, "Luke", 6, 20, text,
 		noteRefAt(t, text, "Matt. 5:3–12", "MAT.5.3-MAT.5.12"), noteRefAt(t, text, "Luke 6:20–23", "LUK.6.20-LUK.6.23"))
 	got = pieceNames(note.Pieces)
-	want = []string{"card:Matthew 5:3–12", "group:(11:5)[card:Matthew 11:5]", "self:Luke 6:20–23", "group:(James 2:5)[card:James 2:5]"}
+	want = []string{"card:Matthew 5:3–12", "group:(11:5)[card:Matthew 11:5]", "card:Luke 6:20–23", "group:(James 2:5)[card:James 2:5]"}
 	if joined(got) != joined(want) {
 		t.Errorf("pieces = %q\nwant  %q", got, want)
+	}
+	sel := versesBetween(bd, "Luke", 6, 20, 23)
+	sel[0].Footnotes = []Footnote{{Text: text, Kind: footnoteKindCrossref, Caller: "-",
+		Refs: []NoteRef{noteRefAt(t, text, "Matt. 5:3–12", "MAT.5.3-MAT.5.12"), noteRefAt(t, text, "Luke 6:20–23", "LUK.6.20-LUK.6.23")}}}
+	if got := pieceNames(publisherCrossRefsFor(bd, "Luke", 6, sel)[0].Pieces); joined(got) != "card:Matthew 5:3–12|group:(11:5)[card:Matthew 11:5]|self:Luke 6:20–23|group:(James 2:5)[card:James 2:5]" {
+		t.Errorf("when the full pericope is selected, pieces = %q", got)
 	}
 
 	// A comma's verses are one card each, as the direct citations are, and a

@@ -442,6 +442,10 @@ func followCrossRef(state *AppState, c crossRef) {
 	if v == nil {
 		return
 	}
+	if c.TitleRef {
+		goToChapterTitle(state, v.BookName, v.Chapter)
+		return
+	}
 	end := v.Verse
 	switch {
 	case c.EndV == 0:

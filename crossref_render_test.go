@@ -135,7 +135,7 @@ func TestRenderCrossRefPanel(t *testing.T) {
 	}{{"402x874", fyne.NewSize(402, 874)}, {"375x667", fyne.NewSize(375, 667)}}
 	scrolledFrames := map[string]struct{ suffix, label string }{
 		"john3-16-on": {"-treasury", treasuryLabel},
-		"matt3-1-on":  {"-nkjv", publisherRunLabel("NKJV", 0, false)},
+		"matt3-1-on":  {"-parallels", parallelsLabel},
 	}
 
 	for _, phone := range phones {

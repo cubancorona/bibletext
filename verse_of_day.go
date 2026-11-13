@@ -538,12 +538,14 @@ type cardRun struct {
 	// word that follows it (readingMarkScale, readingMarkLift): a note's
 	// letter in the cross-references panel's passage, in the paragraph's
 	// mark colour (crossref_passage.go). Dim draws a run in the paragraph's
-	// muted colour, a line that is not Scripture, a section heading. Mark
-	// and Dim together are a verse's number, set as the page sets one: in
-	// the bold cut and the paragraph's number colour. The verse-of-the-day
-	// card sets neither.
+	// muted colour. Mark and Dim together are a verse's number, set as the
+	// page sets one: in the bold cut and the paragraph's number colour.
+	// Bold sets a run in the paragraph's bold cut and text colour, as the
+	// page sets a section heading. The verse-of-the-day card sets none of
+	// these.
 	Mark bool
 	Dim  bool
+	Bold bool
 }
 
 // runs is the passage as the panes would draw it: each verse through the same
@@ -666,6 +668,23 @@ func goToVerseRange(state *AppState, book string, chapter, start, end int) {
 	}
 }
 
+// goToChapterTitle navigates to book+chapter for a citation of the chapter's
+// superscription, clearing any verse highlight so verse 1 is not washed as if
+// it had been cited.
+func goToChapterTitle(state *AppState, book string, chapter int) {
+	if state == nil || state.Bible == nil {
+		return
+	}
+	selectBook(state, book, false)
+	state.CurrentChapter = chapter
+	addRecentChapter(state, book, chapter)
+	state.forceReposition = true
+	state.refresh()
+	if state.surfaceReading != nil {
+		state.surfaceReading()
+	}
+}
+
 // THE CARD'S TYPE. The passage is set in the reading face at the size the reader
 // chose for the reading pane — readingGlyphPx, the same figure the Apple and
 // Android panes set their body at (docs/READING_TYPOGRAPHY.md). It used to be
@@ -744,6 +763,7 @@ type paragraphFragment struct {
 	text        string
 	red, italic bool
 	mark, dim   bool
+	bold        bool
 	spaceBefore bool
 	breakBefore bool
 }
@@ -778,7 +798,7 @@ func (p *readingParagraph) fragments() []paragraphFragment {
 		leading := unicode.IsSpace([]rune(r.Text)[0])
 		for i, w := range words {
 			out = append(out, paragraphFragment{
-				text: w, red: r.Red, italic: r.Italic, mark: r.Mark, dim: r.Dim,
+				text: w, red: r.Red, italic: r.Italic, mark: r.Mark, dim: r.Dim, bold: r.Bold,
 				spaceBefore: i > 0 || leading || (i == 0 && pending),
 				breakBefore: i == 0 && r.Break,
 			})
@@ -833,10 +853,10 @@ func (r *readingParagraphRenderer) fragmentSize(f paragraphFragment) float32 {
 	return r.p.size
 }
 
-// fragmentFace is the cut a fragment is drawn in: a verse's number in the
-// bold cut, as the page sets one.
+// fragmentFace is the cut a fragment is drawn in: a verse's number or a
+// section heading in the bold cut, as the page sets them.
 func (r *readingParagraphRenderer) fragmentFace(f paragraphFragment) fyne.Resource {
-	if f.mark && f.dim && r.p.bold != nil {
+	if (f.bold || (f.mark && f.dim)) && r.p.bold != nil {
 		return r.p.bold
 	}
 	return r.face(f.italic)

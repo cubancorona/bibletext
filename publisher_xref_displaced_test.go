@@ -1,9 +1,12 @@
 package bibletext
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"testing"
+
+	"fyne.io/fyne/v2/test"
 )
 
 // displacedFixture is a text with the marks of the two stretches the NKJV
@@ -84,7 +87,7 @@ func TestANoteTheFeedHangsOneCallerLateIsShownOnItsOwn(t *testing.T) {
 		{"1 Kings", 1, 1, "a@2 1 Chr. 23:1"},                                 // after the stretch: its own
 		{"Psalms", 119, 132, "a@0 Ps. 106:4 | -@0 Ps. 51:1; (2 Thess. 1:6)"}, // the verse's own, then the content of its missing second caller
 		{"Psalms", 119, 133, "a@0 Ps. 17:5 | b@11 Ps. 119:170"},              // on to the next psalm's title
-		{"Psalms", 120, 1, "title a@2 Jon. 2:2 | a@3 Ps. 148:14"},            // a title's caller, then its verse's
+		{"Psalms", 120, 1, "title a@2 Jon. 2:2 | b@3 Ps. 148:14"},            // a title's caller, then its verse's
 		{"Psalms", 150, 1, "a@6 Ps. 145:5, 6"},                               //
 		{"Psalms", 150, 2, ""},                                               // the last caller
 		{"Proverbs", 1, 1, "a@4 1 Kin. 4:32"},                                // after it
@@ -140,5 +143,78 @@ func TestANoteTheFeedHangsOneCallerLateIsShownOnItsOwn(t *testing.T) {
 	}
 	if got := shownNotes(bd, "Ruth", 3, 11); got != "" {
 		t.Errorf("control, the correction off: Ruth 3:11 shows %q", got)
+	}
+}
+
+// A SILENT DISPLACED CALLER WITH NO OTHER NOTE IN SELECTION SAYS SO PLAINLY.
+// On Psalm 150:2 the edition prints a cross-reference whose content our feed
+// omits; saying "No NKJV cross-references" there would misstate the edition,
+// whereas on 2 Samuel 24:25 the verse's first note still shows on its own.
+func TestASilentDisplacedCallerNamesTheMissingNote(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	licenseNKJVForTest(t)
+	withPublisherCrossRefs(t, "nkjv", true)
+	bd := displacedFixture()
+	st := &AppState{Bible: bd, CurrentBook: "Psalms", CurrentChapter: 150, CurrentVersion: "nkjv"}
+	nop := func(crossRef) {}
+	ps150v2 := versesBetween(bd, "Psalms", 150, 2, 2)
+	const wantMissing = "The NKJV has a cross-reference here that isn't in our source."
+
+	// With Treasury rows loaded: NKJV REFERENCES shows the missing-source
+	// sentence above the Treasury section.
+	tsk := []crossRef{{Book: "Proverbs", Chapter: 1, Verse: 1, Votes: 8}}
+	lst := buildCrossRefList(st, ps150v2, tsk, nil, lightPalette, nop)
+	if got := joined(sectionLabelsIn(lst.Objects)); got != "NKJV REFERENCES|TREASURY OF SCRIPTURE KNOWLEDGE" {
+		t.Errorf("Psalm 150:2 labels = %q", got)
+	}
+	all := joinedTexts(lst.Objects)
+	if !strings.Contains(all, wantMissing) || strings.Contains(all, "No NKJV cross-references") || lst.CoverageNote != "" {
+		t.Errorf("Psalm 150:2 with Treasury:\n%s\ncoverage=%q", all, lst.CoverageNote)
+	}
+
+	// With no Treasury rows (and even offline): the missing-source sentence
+	// still renders under NKJV REFERENCES rather than collapsing into the
+	// generic empty or connection-error message.
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{{"no treasury", nil}, {"offline", errors.New("offline")}} {
+		lst := buildCrossRefList(st, ps150v2, nil, tc.err, lightPalette, nop)
+		if len(lst.Objects) == 0 {
+			t.Fatalf("%s: Psalm 150:2 returned an empty list", tc.name)
+		}
+		if got := joinedTexts(lst.Objects); !strings.Contains(got, wantMissing) || lst.CoverageNote != "" {
+			t.Errorf("%s: Psalm 150:2 rendered:\n%s\ncoverage=%q", tc.name, got, lst.CoverageNote)
+		}
+	}
+
+	// Selecting Psalm 150:1–2 shows 150:1's note without the empty/missing line.
+	span := buildCrossRefList(st, versesBetween(bd, "Psalms", 150, 1, 2), tsk, nil, lightPalette, nop)
+	if got := joinedTexts(span.Objects); strings.Contains(got, wantMissing) || !strings.Contains(got, "Ps. 145:5, 6") {
+		t.Errorf("Psalm 150:1–2 rendered:\n%s", got)
+	}
+
+	// 2 Samuel 24:25 has its first note present; no missing-source line is added.
+	st2Sam := &AppState{Bible: bd, CurrentBook: "2 Samuel", CurrentChapter: 24, CurrentVersion: "nkjv"}
+	sam := buildCrossRefList(st2Sam, versesBetween(bd, "2 Samuel", 24, 25, 25), tsk, nil, lightPalette, nop)
+	if got := joinedTexts(sam.Objects); strings.Contains(got, wantMissing) || !strings.Contains(got, "2 Sam. 21:14") {
+		t.Errorf("2 Samuel 24:25 rendered:\n%s", got)
+	}
+
+	// CONTROL: an ordinary verse with no notes shows "No NKJV cross-references".
+	stProv := &AppState{Bible: bd, CurrentBook: "Proverbs", CurrentChapter: 1, CurrentVersion: "nkjv"}
+	prov := buildCrossRefList(stProv, versesBetween(bd, "Proverbs", 1, 2, 2), tsk, nil, lightPalette, nop)
+	if got := joinedTexts(prov.Objects); strings.Contains(got, wantMissing) || !strings.Contains(got, "No NKJV cross-references for this selection.") {
+		t.Errorf("Proverbs 1:2 rendered:\n%s", got)
+	}
+
+	// CONTROL: if the feed stretch is fixed, Psalm 150:2 shows its delivered note.
+	other := displacedFixture()
+	other.Verses["Psalms"][119][132].Footnotes[0].Text = "Ps. 17:5"
+	stFixed := &AppState{Bible: other, CurrentBook: "Psalms", CurrentChapter: 150, CurrentVersion: "nkjv"}
+	fixed := buildCrossRefList(stFixed, versesBetween(other, "Psalms", 150, 2, 2), tsk, nil, lightPalette, nop)
+	if got := joinedTexts(fixed.Objects); strings.Contains(got, wantMissing) || !strings.Contains(got, "Ps. 145:5, 6") {
+		t.Errorf("fixed feed Psalm 150:2 rendered:\n%s", got)
 	}
 }

@@ -97,8 +97,8 @@ func publisherFixture() *BibleData {
 				{Anchor: 34, Text: "Alpha-Text omits the fixture clause.", Caller: "+"}, // a translator note: never a row
 			}},
 		{BookName: "John", Book: "John", Chapter: 3, Verse: 3, Text: "Jesus answered him.",
-			Footnotes: []Footnote{{Anchor: 5, Text: "John 3:1–21", Kind: x, Caller: "-",
-				Refs: []NoteRef{{"JHN.3.1-JHN.3.21", 0, 11}}}}}, // contains its own verse: current, not followed
+			Footnotes: []Footnote{{Anchor: 5, Text: "John 3:3", Kind: x, Caller: "-",
+				Refs: []NoteRef{{"JHN.3.3", 0, 8}}}}}, // cites its own verse: current, not followed
 	}
 	return &BibleData{
 		Books: []string{"Genesis", "Leviticus", "Deuteronomy", "1 Samuel", "2 Kings", "Job", "Psalms", "Matthew", "Mark", "John", "Romans", "Galatians", "Ephesians", "2 Thessalonians", "Hebrews"},
@@ -175,12 +175,25 @@ func TestPublisherCrossRefsAreTheNotesVerbatimInOrder(t *testing.T) {
 	if len(rows[2].Targets) != 1 || rows[2].Targets[0].Ref.Book != "Galatians" || rows[2].Targets[0].Start != 12 {
 		t.Errorf("mixed note's targets = %+v", rows[2].Targets)
 	}
-	// A passage containing the note's own verse is current: shown, not followed.
+	// A citation within the selected passage is current: shown, not followed.
 	if len(rows[3].Targets) != 1 || !rows[3].Targets[0].Current {
-		t.Errorf("a self-range is not marked current: %+v", rows[3].Targets)
+		t.Errorf("a self-citation is not marked current: %+v", rows[3].Targets)
 	}
 	if rows[1].Targets[0].Current {
 		t.Error("an ordinary target is marked current")
+	}
+	// A range wider than the selected passage is a card the reader can follow;
+	// a citation of another verse inside a multi-verse selection is current.
+	wider := resolvedNote(t, bd, "John", 3, 3, "John 3:1–21", NoteRef{"JHN.3.1-JHN.3.21", 0, 11})
+	if len(wider.Targets) != 1 || wider.Targets[0].Current {
+		t.Errorf("a pericope range wider than the selected verse was marked current: %+v", wider.Targets)
+	}
+	sel := bd.GetChapter("John", 3)
+	neighbour := Verse{BookName: "John", Book: "John", Chapter: 3, Verse: 3, Text: "Jesus answered him.",
+		Footnotes: []Footnote{{Text: "John 3:1–2", Kind: footnoteKindCrossref, Caller: "-", Refs: []NoteRef{{"JHN.3.1-JHN.3.2", 0, 10}}}}}
+	inSel := publisherCrossRefsFor(bd, "John", 3, []Verse{sel[0], sel[1], neighbour})
+	if last := inSel[len(inSel)-1]; len(last.Targets) != 1 || !last.Targets[0].Current {
+		t.Errorf("a citation inside a multi-verse selection was not marked current: %+v", last.Targets)
 	}
 	// A plain citation carries no tag and no basis.
 	if tg := rows[1].Targets[0]; tg.Title || tg.Chapters || tg.Basis != "" || tg.tag() != "" || tg.label() != "John 7:50" {
@@ -314,7 +327,7 @@ func TestATitleCitationResolvesToTheTitle(t *testing.T) {
 		t.Fatalf("1 Samuel 19:12 resolved to %+v; want one target (Judges is not in the fixture)", rows)
 	}
 	tg := rows[0].Targets[0]
-	if !tg.Title || tg.Chapters || tg.Ref != (crossRef{Book: "Psalms", Chapter: 59, Verse: 1}) {
+	if !tg.Title || tg.Chapters || tg.Current || tg.Ref != (crossRef{Book: "Psalms", Chapter: 59, Verse: 1, TitleRef: true}) {
 		t.Errorf("the title citation resolved to %+v", tg)
 	}
 	if tg.Start != 12 || tg.End != 18 || tg.Cut != 24 {
@@ -323,11 +336,17 @@ func TestATitleCitationResolvesToTheTitle(t *testing.T) {
 	if tg.label() != "Psalms 59" || tg.tag() != "Title" {
 		t.Errorf("label %q tag %q, want Psalms 59 / Title", tg.label(), tg.tag())
 	}
+	// Even if a note on Psalm 59:1 cited Ps. 59:title, a title citation is the
+	// superscription above verse 1, never the selected verse itself.
+	onOwn := resolvedNote(t, bd, "Psalms", 59, 1, "Ps. 59:title", NoteRef{"PSA.59", 0, 6})
+	if len(onOwn.Targets) != 1 || onOwn.Targets[0].Current || !onOwn.Targets[0].Ref.TitleRef {
+		t.Errorf("Ps. 59:title on Psalm 59:1 resolved to %+v", onOwn.Targets)
+	}
 	// CONTROL: the same id without the suffix is the whole chapter.
 	v := &bd.Verses["1 Samuel"][19][0]
 	v.Footnotes[0].Text = "Judg. 16:2; Ps. 59"
 	rows = publisherCrossRefsFor(bd, "1 Samuel", 19, bd.GetChapter("1 Samuel", 19))
-	if tg := rows[0].Targets[0]; tg.Title || !tg.Chapters || tg.Ref.EndV != 2 || tg.Cut != 18 || tg.tag() != "" {
+	if tg := rows[0].Targets[0]; tg.Title || tg.Ref.TitleRef || !tg.Chapters || tg.Ref.EndV != 2 || tg.Cut != 18 || tg.tag() != "" {
 		t.Errorf("without \":title\" the citation resolved to %+v", tg)
 	}
 }
@@ -476,10 +495,14 @@ func TestSplitDividesANoteIntoCardsAndRemainder(t *testing.T) {
 			"Genesis", 7, 2, "Lev. 11",
 			[]NoteRef{{"LEV.11", 0, 7}},
 			[]string{"Leviticus 11"}, "", []string{""}, false},
-		{"a pericope note on its opening verse: the self-range is words, the rest cards",
+		{"a pericope note on its opening verse: the wider range is a card too",
 			"Matthew", 3, 1, "Matt. 3:1–12; Mark 1:3–8",
 			[]NoteRef{{"MAT.3.1-MAT.3.12", 0, 12}, {"MRK.1.3-MRK.1.8", 14, 24}},
-			[]string{"Mark 1:3–8"}, "Matt. 3:1–12", []string{""}, false},
+			[]string{"Matthew 3:1–12", "Mark 1:3–8"}, "", []string{"", ""}, false},
+		{"an exact citation of the selected verse is words, the rest cards",
+			"Matthew", 3, 1, "Matt. 3:1; Mark 1:3–8",
+			[]NoteRef{{"MAT.3.1", 0, 9}, {"MRK.1.3-MRK.1.8", 11, 21}},
+			[]string{"Mark 1:3–8"}, "Matt. 3:1", []string{""}, false},
 		{"a wholly untagged note is its own remainder",
 			"John", 3, 1, "(Acts 10:38)", nil, nil, "(Acts 10:38)", nil, false},
 		{"a note with no colon", "John", 3, 1, "(Jude 6)", nil, nil, "(Jude 6)", nil, false},

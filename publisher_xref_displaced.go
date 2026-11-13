@@ -226,3 +226,34 @@ func displacedHomeNotes(bd *BibleData, book string, chapter, verse int) []Footno
 	}
 	return out
 }
+
+// hasSilentDisplacedCaller reports whether selected holds a caller whose own
+// content is absent at the end of a live displaced stretch (displacedContent).
+func hasSilentDisplacedCaller(bd *BibleData, book string, chapter int, selected []Verse) bool {
+	if !correctDisplacedNotes || bd == nil || len(selected) == 0 {
+		return false
+	}
+	check := func(verse int, fns []Footnote) bool {
+		for i := range crossRefNotesOf(fns) {
+			c := noteCaller{book, chapter, verse, i}
+			if s, ok := displacedStretchOf(bd, c); ok && c == s.Last {
+				return true
+			}
+		}
+		return false
+	}
+	if ch := bd.GetChapter(book, chapter); len(ch) > 0 {
+		first := ch[0].Verse
+		for _, v := range selected {
+			if v.Verse == first && check(0, bd.SuperscriptionFor(book, chapter).Footnotes) {
+				return true
+			}
+		}
+	}
+	for _, v := range selected {
+		if check(v.Verse, v.Footnotes) {
+			return true
+		}
+	}
+	return false
+}

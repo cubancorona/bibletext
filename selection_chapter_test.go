@@ -153,10 +153,10 @@ func menuBuiltOverThenNarrationTurns(t *testing.T, pane string, named bool) turn
 // The edition's own cross-reference run (publisherCrossRefsFor), opened
 // after narration has turned the chapter under a selection, is read in the
 // selection's chapter, as the verses it is handed are: the Psalm's title
-// notes are the selected chapter's, and a citation of a passage that holds
-// the note's own verse stays in the note's caption as the passage on screen,
-// while one of the next chapter is a card. Invented Psalm 135 and 136 titles
-// and notes. Control: the same selection with the reader still on Psalm 135.
+// notes are the selected chapter's, and a citation of the note's own verse
+// stays muted as the passage on screen, while one of the next chapter is a
+// card. Invented Psalm 135 and 136 titles and notes. Control: the same
+// selection with the reader still on Psalm 135.
 func TestTheEditionsCrossReferenceBlockIsTheSelectionsChapterAfterATurn(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -168,8 +168,8 @@ func TestTheEditionsCrossReferenceBlockIsTheSelectionsChapterAfterATurn(t *testi
 	st := turningChapterState()
 	st.CurrentVersion = "nkjv"
 	ps135 := st.Bible.Verses["Psalms"][135]
-	ps135[0].Footnotes = []Footnote{xr("Ps. 135:1-3; 136:1",
-		NoteRef{ID: "PSA.135.1-PSA.135.3", Start: 0, End: 11}, NoteRef{ID: "PSA.136.1", Start: 13, End: 18})}
+	ps135[0].Footnotes = []Footnote{xr("Ps. 135:1; 136:1",
+		NoteRef{ID: "PSA.135.1", Start: 0, End: 9}, NoteRef{ID: "PSA.136.1", Start: 11, End: 16})}
 	st.Bible.Superscriptions = map[string]map[int]Superscription{"Psalms": {
 		135: {Text: "A song of the gate.", Footnotes: []Footnote{xr("Neh. 12:45")}},
 		136: {Text: "A song of the harvest.", Footnotes: []Footnote{xr("Ezra 3:11")}},
@@ -188,13 +188,13 @@ func TestTheEditionsCrossReferenceBlockIsTheSelectionsChapterAfterATurn(t *testi
 			t.Errorf("reader on Psalm %d: the run does not carry Psalm 135's title note alone:\n%s", st.CurrentChapter, all)
 		}
 		if len(cards) != 1 || cards[0] != "Psalms 136:1" {
-			t.Errorf("reader on Psalm %d: the cards are %q, want Psalms 136:1 alone, with 135:1-3 the verse's own passage", st.CurrentChapter, cards)
+			t.Errorf("reader on Psalm %d: the cards are %q, want Psalms 136:1 alone, with 135:1 the verse's own passage", st.CurrentChapter, cards)
 		}
-		if !strings.Contains(all, "Ps. 135:1-3") {
-			t.Errorf("reader on Psalm %d: the verse's own passage is not in the note's caption:\n%s", st.CurrentChapter, all)
+		if !strings.Contains(all, "Psalms 135:1") {
+			t.Errorf("reader on Psalm %d: the verse's own passage is not muted in place:\n%s", st.CurrentChapter, all)
 		}
 		if lst.PublisherCards != 1 || lst.PublisherLines != 2 {
-			t.Errorf("reader on Psalm %d: %d cards and %d lines, want the one card, and the title's note and the self-range as lines", st.CurrentChapter, lst.PublisherCards, lst.PublisherLines)
+			t.Errorf("reader on Psalm %d: %d cards and %d lines, want the one card, and the title's note and the self-reference as lines", st.CurrentChapter, lst.PublisherCards, lst.PublisherLines)
 		}
 	}
 }

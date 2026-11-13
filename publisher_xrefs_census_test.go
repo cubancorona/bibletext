@@ -285,7 +285,7 @@ func noteShorthandCensus(bd *BibleData) shorthandCensus {
 				continue
 			}
 			c.Read++
-			if _, ok := resolveCitation(bd, runes, ct.Start, ct.End, ct.ID, "", 0, 0); ok {
+			if _, ok := resolveCitation(bd, runes, ct.Start, ct.End, ct.ID, "", 0, nil); ok {
 				c.Resolved++
 			} else {
 				c.Unresolved = append(c.Unresolved, where+": "+printed)
@@ -515,9 +515,9 @@ func notePieceCensus(bd *BibleData) pieceCensus {
 					default:
 						c.OnVerses++
 					}
-					// A note keyed to a word takes the next letter of its
-					// verse; one keyed to none takes no letter.
-					if want := perNumber[n.Verse] - 1; n.Unkeyed && n.Index != -1 || !n.Unkeyed && n.Index != want {
+					// A note keyed to a word takes the next letter of the
+					// selection; one keyed to none takes no letter.
+					if want := keyed - 1; n.Unkeyed && n.Index != -1 || !n.Unkeyed && n.Index != want {
 						problem("%s: a note's index is %d (keyed to a word: %v), want %d", where, n.Index, !n.Unkeyed, want)
 					}
 					runes := []rune(n.Text)
@@ -666,10 +666,10 @@ func assertPieceCensus(t *testing.T, c pieceCensus) {
 // hangs one caller late shown where the edition has them.
 var canonPieceCensus = pieceCensus{
 	Notes: 32517, OnVerses: 32473, OnTitles: 43, OnHeadings: 1,
-	Cards: 65257, Own: 48, Words: 2, Groups: 4850,
-	GroupCards: 8320, GroupOwn: 3, GroupWords: 1,
+	Cards: 65296, Own: 9, Words: 2, Groups: 4850,
+	GroupCards: 8323, GroupOwn: 0, GroupWords: 1,
 	Alone: 12576, GroupAlone: 1985, WordsAlone: 0, Folded: 17956,
-	AloneOwn: 1, GroupAloneCards: 3708, GroupAloneBare: 0,
+	AloneOwn: 1, GroupAloneCards: 3710, GroupAloneBare: 0,
 	MostOnAVerse: 7, Moved: 1998, WordStarts: 3, BetweenWords: 257,
 	Shifted: 1961, Unkeyed: 2, Silent: 2,
 }
@@ -679,10 +679,10 @@ var canonPieceCensus = pieceCensus{
 // of the raw feed was compared with, note by note, on 11 November 2026.
 var canonPieceCensusAsDelivered = pieceCensus{
 	Notes: 32517, OnVerses: 32473, OnTitles: 43, OnHeadings: 1,
-	Cards: 65254, Own: 51, Words: 2, Groups: 4850,
-	GroupCards: 8320, GroupOwn: 3, GroupWords: 1,
+	Cards: 65294, Own: 11, Words: 2, Groups: 4850,
+	GroupCards: 8323, GroupOwn: 0, GroupWords: 1,
 	Alone: 12576, GroupAlone: 1985, WordsAlone: 0, Folded: 17956,
-	AloneOwn: 2, GroupAloneCards: 3708, GroupAloneBare: 0,
+	AloneOwn: 1, GroupAloneCards: 3710, GroupAloneBare: 0,
 	MostOnAVerse: 7, Moved: 1998, WordStarts: 3, BetweenWords: 257,
 }
 
