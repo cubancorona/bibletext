@@ -30,9 +30,9 @@ func TestSmallCapsAreDrawnButNotStored(t *testing.T) {
 			wantCopied: "O Lord GOD of hosts",
 		},
 		{
-			name: "the name of Christ", text: "call His name Jesus",
-			spans: []TextSpan{{Start: 14, End: 19}}, wantDrawn: "call His name Jᴇꜱᴜꜱ",
-			wantCopied: "call His name JESUS",
+			name: "the name of Christ", text: "shall name him Jesus",
+			spans: []TextSpan{{Start: 15, End: 20}}, wantDrawn: "shall name him Jᴇꜱᴜꜱ",
+			wantCopied: "shall name him JESUS",
 		},
 		{
 			name: "no spans changes nothing", text: "In the beginning",

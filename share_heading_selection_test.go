@@ -27,8 +27,9 @@ import (
 )
 
 // A chapter shaped like the report: a heading between two verses, with verses
-// either side of it. The wording is invented -- the edition in the report is
-// under licence and none of its text belongs in a fixture.
+// either side of it. The verse wording is WEBC and the heading is invented --
+// the edition in the report is under licence and none of its text belongs in a
+// fixture.
 func headingChapterState() *AppState {
 	bd := &BibleData{
 		Books: []string{"Acts"},
@@ -36,18 +37,18 @@ func headingChapterState() *AppState {
 			{BookName: "Acts", Book: "Acts", Chapter: 10, Verse: 42,
 				Text: "He commanded us to preach to the people and to testify."},
 			{BookName: "Acts", Book: "Acts", Chapter: 10, Verse: 43,
-				Text: "To him all the prophets witness that whoever believes in him will receive remission of sins."},
+				Text: "All the prophets testify about him, that through his name everyone who believes in him will receive remission of sins."},
 			{BookName: "Acts", Book: "Acts", Chapter: 10, Verse: 44,
-				Text: "While Peter was still speaking these words, the Spirit fell on all those who heard the word."},
+				Text: "While Peter was still speaking these words, the Holy Spirit fell on all those who heard the word."},
 			{BookName: "Acts", Book: "Acts", Chapter: 10, Verse: 45,
-				Text: "Those of the circumcision who believed were astonished, as many as came with Peter."},
+				Text: "They of the circumcision who believed were amazed, as many as came with Peter."},
 			{BookName: "Acts", Book: "Acts", Chapter: 10, Verse: 46,
-				Text: "For they heard them speaking with tongues and magnifying God."},
+				Text: "For they heard them speaking in other languages and magnifying God."},
 			{BookName: "Acts", Book: "Acts", Chapter: 10, Verse: 47,
-				Text: "Can anyone forbid the water for these to be baptized?"},
+				Text: "“Can anyone forbid these people from being baptized with water?”"},
 		}}},
 		Headings: map[string]map[int][]Heading{"Acts": {10: {
-			{Text: "The Holy Spirit Falls on the Gentiles", Style: "s", BeforeVerse: 44},
+			{Text: "The Spirit Poured Out on the Gentiles", Style: "s", BeforeVerse: 44},
 		}}},
 	}
 	return &AppState{Bible: bd, CurrentBook: "Acts", CurrentChapter: 10}
@@ -57,11 +58,11 @@ func headingChapterState() *AppState {
 // numbers survive as bare tokens in the selected string (stripVerseMarkers
 // exists for exactly that), and the heading's own words lead the selection.
 const (
-	headingUnderVerses = "44 While Peter was still speaking these words, the Spirit fell on all those who heard the word. " +
-		"45 Those of the circumcision who believed were astonished, as many as came with Peter. " +
-		"46 For they heard them speaking with tongues and magnifying God. " +
-		"47 Can anyone forbid the water for these to be baptized?"
-	headingText = "The Holy Spirit Falls on the Gentiles"
+	headingUnderVerses = "44 While Peter was still speaking these words, the Holy Spirit fell on all those who heard the word. " +
+		"45 They of the circumcision who believed were amazed, as many as came with Peter. " +
+		"46 For they heard them speaking in other languages and magnifying God. " +
+		"47 “Can anyone forbid these people from being baptized with water?”"
+	headingText = "The Spirit Poured Out on the Gentiles"
 )
 
 func TestASelectionLedByAHeadingIsNotAttributedToTheVerseAbove(t *testing.T) {
@@ -124,8 +125,8 @@ func TestSelectionVersesSkipsTheVerseAboveAHeading(t *testing.T) {
 func TestADragBegunInsideAHeadingIsAlsoAttributedForward(t *testing.T) {
 	st := headingChapterState()
 	for _, c := range []struct{ name, lead string }{
-		{"begun at a word boundary inside the heading", "Falls on the Gentiles"},
-		{"begun in the middle of one of its words", "pirit Falls on the Gentiles"},
+		{"begun at a word boundary inside the heading", "Poured Out on the Gentiles"},
+		{"begun in the middle of one of its words", "pirit Poured Out on the Gentiles"},
 		{"begun at its last word", "Gentiles"},
 	} {
 		got := selectionVersesIn(st, "Acts", 10, c.lead+" "+headingUnderVerses, selSpanFromNative(43, 47))
@@ -150,10 +151,10 @@ func TestTheHeadingRepairNeverTouchesASelectionThatAlreadyResolves(t *testing.T)
 		{"a two-letter fragment that is also heading matter", "th", 45, 45, 45},
 		{"a whole word that is also heading matter", "the", 46, 46, 46},
 		{"the word the heading ends with", "Gentiles", 45, 45, 45},
-		{"an ordinary verse drag", "Those of the circumcision who believed", 45, 45, 45},
+		{"an ordinary verse drag", "They of the circumcision who believed", 45, 45, 45},
 		{"a drag from the verse above, through the heading, into the one below",
-			"To him all the prophets witness that whoever believes in him will receive remission of sins. " +
-				headingText + " 44 While Peter was still speaking these words, the Spirit fell on all those who heard the word.",
+			"All the prophets testify about him, that through his name everyone who believes in him will receive remission of sins. " +
+				headingText + " 44 While Peter was still speaking these words, the Holy Spirit fell on all those who heard the word.",
 			43, 44, 43},
 	} {
 		got := selectionVersesIn(st, "Acts", 10, c.sel, selSpanFromNative(c.lo, c.hi))
@@ -176,17 +177,17 @@ func TestAHeadingIsNeverQuotedAsScripture(t *testing.T) {
 		lo, hi    int
 	}{
 		{"a drag from the verse above that reaches into the heading",
-			"To him all the prophets witness that whoever believes in him will receive remission of sins. " + headingText,
+			"All the prophets testify about him, that through his name everyone who believes in him will receive remission of sins. " + headingText,
 			43, 43},
 		{"a drag from the verse above, through the heading, into the one below",
-			"To him all the prophets witness that whoever believes in him will receive remission of sins. " +
-				headingText + " 44 While Peter was still speaking these words, the Spirit fell on all those who heard the word.",
+			"All the prophets testify about him, that through his name everyone who believes in him will receive remission of sins. " +
+				headingText + " 44 While Peter was still speaking these words, the Holy Spirit fell on all those who heard the word.",
 			43, 44},
 		{"a drag that opens at the heading",
 			headingText + " " + headingUnderVerses, 43, 47},
 	} {
 		quote, _, _, _ := prepareShareQuote(st, c.sel, selSpanFromNative(c.lo, c.hi))
-		if strings.Contains(quote, "Falls on the Gentiles") {
+		if strings.Contains(quote, "Poured Out on the Gentiles") {
 			t.Errorf("%s: the shared quotation carries the publisher's heading:\n  %q", c.name, quote)
 		}
 	}
@@ -258,7 +259,7 @@ func TestAHeadingIsOnlyStrippedWhereItsOwnVerseNumberFollows(t *testing.T) {
 	st := headingChapterState()
 
 	// BeforeVerse is 44; a different number must leave the heading in place.
-	wrong := headingText + " 46 For they heard them speaking with tongues and magnifying God."
+	wrong := headingText + " 46 For they heard them speaking in other languages and magnifying God."
 	if got := stripHeadings(st, "Acts", 10, wrong); got != wrong {
 		t.Errorf("stripped a heading that was not followed by its own verse number:\n  in:  %q\n  out: %q", wrong, got)
 	}
@@ -317,9 +318,9 @@ func TestAHeadingSelectedOnItsOwnBelongsToTheVerseBelowIt(t *testing.T) {
 	st := headingChapterState()
 
 	for _, sel := range []string{
-		headingText,                   // the whole heading
-		"Falls on the Gentiles",       // a drag that began part-way along it
-		"pirit Falls on the Gentiles", // and one that began mid-word
+		headingText,                        // the whole heading
+		"Poured Out on the Gentiles",       // a drag that began part-way along it
+		"pirit Poured Out on the Gentiles", // and one that began mid-word
 	} {
 		got := selectionVersesIn(st, "Acts", 10, sel, selSpanFromNative(43, 43))
 		if len(got) != 1 || got[0].Verse != 44 {
@@ -336,7 +337,7 @@ func TestAHeadingSelectedOnItsOwnBelongsToTheVerseBelowIt(t *testing.T) {
 func TestAHeadingSelectedOnItsOwnQuotesNothing(t *testing.T) {
 	st := headingChapterState()
 	quote, cite, _, _ := prepareShareQuote(st, headingText, selSpanFromNative(43, 43))
-	if strings.Contains(quote, "Falls on the Gentiles") {
+	if strings.Contains(quote, "Poured Out on the Gentiles") {
 		t.Errorf("a heading selected alone was quoted as scripture: %q", quote)
 	}
 	if !strings.Contains(cite, "44") {
@@ -355,7 +356,7 @@ func TestAHeadingSelectedOnItsOwnQuotesNothing(t *testing.T) {
 // with no span, quoted as ever.
 func TestAHeadingSelectedWholeWithNoSpanQuotesNothing(t *testing.T) {
 	st := headingChapterState()
-	if quote, cite, _, _ := prepareShareQuote(st, "the Spirit fell on all those", selSpan{}); quote != "the Spirit fell on all those" || cite != "Acts 10:44" {
+	if quote, cite, _, _ := prepareShareQuote(st, "the Holy Spirit fell on all those", selSpan{}); quote != "the Holy Spirit fell on all those" || cite != "Acts 10:44" {
 		t.Fatalf("control: a verse's words with no span shared (%q, %q)", quote, cite)
 	}
 	for _, sel := range []string{headingText, headingText + "\n", headingText + "\n44"} {
@@ -881,7 +882,7 @@ func TestAHeadingRunOnIntoPartOfAWordQuotesNothing(t *testing.T) {
 // answers.
 func TestAHeadingRepairDropsTheNumberTheDragStoppedOn(t *testing.T) {
 	st := headingChapterState()
-	const above = "whoever believes in him will receive remission of sins."
+	const above = "everyone who believes in him will receive remission of sins."
 
 	if quote, cite, _, _ := prepareShareQuote(st, above+" 44", selSpanFromNative(43, 44)); quote != above || cite != "Acts 10:43" {
 		t.Fatalf("control: verse 43's words and verse 44's number shared (%q, %q)", quote, cite)

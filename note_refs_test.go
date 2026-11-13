@@ -171,8 +171,8 @@ func TestNKJVFixtureNotesCarryTheirCitations(t *testing.T) {
 	if got := vs[2].Footnotes[0]; got.Text != "Numbers 21:9" || got.Refs != nil {
 		t.Errorf("the untagged citation changed: %+v", got)
 	}
-	if vs[0].Text != "This man came to Jesus by night and said to Him." ||
-		vs[2].Text != "As Moses lifted up the serpent,\neven so must the Son of Man be lifted up." {
+	if vs[0].Text != "He came to Jesus by night and said to him." ||
+		vs[2].Text != "As Moses lifted up the serpent in the wilderness,\neven so must the Son of Man be lifted up," {
 		t.Errorf("verse text changed with the citation capture: %q / %q", vs[0].Text, vs[2].Text)
 	}
 }

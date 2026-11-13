@@ -360,8 +360,9 @@ func TestSpacingAuditSurfaces(t *testing.T) {
 	if got := ctrl.lostSpaces("Behold,I stand at the door and knock."); len(got) != 1 {
 		t.Fatalf("control: the detector did not see a lost space in %q: %v", "Behold,I …", got)
 	}
-	up := buildSpacingIndex([]Verse{{Verse: 5, Text: "“Theyhave corrupted themselves;"}, {Verse: 21, Text: "They have provoked Me"}})
-	if got := up.lostSpaces("Theyhave corrupted themselves;"); len(got) != 0 {
+	// WEBC wording in the upstream join shape: a missing space after an opening quote.
+	up := buildSpacingIndex([]Verse{{Verse: 5, Text: "“Theyhave dealt corruptly with him."}, {Verse: 21, Text: "They have moved me to jealousy"}})
+	if got := up.lostSpaces("Theyhave dealt corruptly with him."); len(got) != 0 {
 		t.Fatalf("control: an upstream join shown without its quotation mark was blamed on the surface: %v", got)
 	}
 	sp := buildSpacingIndex([]Verse{{Verse: 33, Text: "Being therefore exalted"}})

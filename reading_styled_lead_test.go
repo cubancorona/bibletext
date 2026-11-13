@@ -139,8 +139,8 @@ func TestTheStyledPanesSelectionsArePlacedByTheirLead(t *testing.T) {
 // selection cannot begin on it.
 func TestTheStyledPaneSendsTheLeadFromTheVerseNumber(t *testing.T) {
 	st := leadChapter("Acts", 8, map[int]string{
-		36: "As they went on the way, they came to some water.",
-		38: "He commanded the chariot to stand still.",
+		36: "As they went on the way, they came to some water;",
+		38: "He commanded the chariot to stand still, and they both went down into the water.",
 	})
 	lay := layoutChapter(st, st.Bible.GetChapter("Acts", 8), testLayoutParams, fixedMeasure)
 	text := []rune(lay.Text)

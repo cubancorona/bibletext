@@ -72,11 +72,11 @@ func TestCrossRefContains(t *testing.T) {
 	}
 }
 
-// A small NKJV-shaped canon, invented words throughout: John 3 with notes of
-// every plain shape, the passages some of them cite, a titled psalm, and one
-// verse for each of the three shapes the census found beyond plain citations
-// — a citation of a Psalm's title, a citation of whole chapters, and a
-// citation the edition qualifies by its basis.
+// A small NKJV-shaped canon, WEBC and invented words throughout: John 3 with
+// notes of every plain shape, the passages some of them cite, a titled psalm,
+// and one verse for each of the three shapes the census found beyond plain
+// citations — a citation of a Psalm's title, a citation of whole chapters, and
+// a citation the edition qualifies by its basis.
 func publisherFixture() *BibleData {
 	x := footnoteKindCrossref
 	xr := func(text string, refs ...NoteRef) Footnote {
@@ -86,35 +86,35 @@ func publisherFixture() *BibleData {
 		return Verse{BookName: book, Book: book, Chapter: ch, Verse: v, Text: text, Footnotes: notes}
 	}
 	john3 := []Verse{
-		{BookName: "John", Book: "John", Chapter: 3, Verse: 1, Text: "There was a man of the Pharisees named Nicodemus.",
-			Footnotes: []Footnote{{Anchor: 10, Text: "(Acts 10:38)", Kind: x, Caller: "-"}}}, // untagged: words only
-		{BookName: "John", Book: "John", Chapter: 3, Verse: 2, Text: "This man came to Jesus by night and said to Him.",
+		{BookName: "John", Book: "John", Chapter: 3, Verse: 1, Text: "Now there was a man of the Pharisees named Nicodemus, a ruler of the Jews.",
+			Footnotes: []Footnote{{Anchor: 14, Text: "(Acts 10:38)", Kind: x, Caller: "-"}}}, // untagged: words only
+		{BookName: "John", Book: "John", Chapter: 3, Verse: 2, Text: "He came to Jesus by night and said to him.",
 			Footnotes: []Footnote{
-				{Anchor: 31, Text: "John 7:50; 19:39", Kind: x, Caller: "-",
+				{Anchor: 25, Text: "John 7:50; 19:39", Kind: x, Caller: "-",
 					Refs: []NoteRef{{"JHN.7.50", 0, 9}, {"JHN.19.39", 11, 16}}}, // 19:39 is not in the fixture
-				{Anchor: 31, Text: "(John 1:13; Gal. 6:15; 1 John 3:9)", Kind: x, Caller: "-",
+				{Anchor: 25, Text: "(John 1:13; Gal. 6:15; 1 John 3:9)", Kind: x, Caller: "-",
 					Refs: []NoteRef{{"GAL.6.15", 12, 21}}},
-				{Anchor: 40, Text: "Alpha-Text omits the fixture clause.", Caller: "+"}, // a translator note: never a row
+				{Anchor: 34, Text: "Alpha-Text omits the fixture clause.", Caller: "+"}, // a translator note: never a row
 			}},
-		{BookName: "John", Book: "John", Chapter: 3, Verse: 3, Text: "Jesus answered and said to him.",
+		{BookName: "John", Book: "John", Chapter: 3, Verse: 3, Text: "Jesus answered him.",
 			Footnotes: []Footnote{{Anchor: 5, Text: "John 3:1–21", Kind: x, Caller: "-",
 				Refs: []NoteRef{{"JHN.3.1-JHN.3.21", 0, 11}}}}}, // contains its own verse: current, not followed
 	}
 	return &BibleData{
 		Books: []string{"Genesis", "Leviticus", "Deuteronomy", "1 Samuel", "2 Kings", "Job", "Psalms", "Matthew", "Mark", "John", "Romans", "Galatians", "Ephesians", "2 Thessalonians", "Hebrews"},
 		Verses: map[string]map[int][]Verse{
-			"John":      {3: john3, 7: {verse("John", 7, 50, "Nicodemus said to them.")}},
+			"John":      {3: john3, 7: {verse("John", 7, 50, "Nicodemus (he who came to him by night, being one of them) said to them,")}},
 			"Galatians": {6: {verse("Galatians", 6, 15, "A new creation.")}},
 			"Psalms": {
 				3: {
-					verse("Psalms", 3, 1, "LORD, how they have increased who trouble me!"),
-					verse("Psalms", 3, 2, "Many are they who say of me."),
+					verse("Psalms", 3, 1, "LORD, how my adversaries have increased!"),
+					verse("Psalms", 3, 2, "Many there are who say of my soul,"),
 				},
 				45: {verse("Psalms", 45, 4, "Ride on for the cause of the fixture."), verse("Psalms", 45, 5, "The arrows of the fixture are sharp.")},
 				59: {verse("Psalms", 59, 1, "Rescue me from the invented foes, my God."), verse("Psalms", 59, 2, "Lift me above the fixture's workers.")},
 				97: {verse("Psalms", 97, 7, "Let every carved thing be put to shame.")},
 			},
-			"Matthew":         {3: {verse("Matthew", 3, 1, "In those days John the Baptist came.")}},
+			"Matthew":         {3: {verse("Matthew", 3, 1, "In those days, John the Baptizer came, preaching in the wilderness of Judea,")}},
 			"Mark":            {1: {verse("Mark", 1, 3, "A voice in the invented wilderness.")}},
 			"Romans":          {5: {verse("Romans", 5, 8, "The fixture's love is shown here.")}},
 			"Ephesians":       {2: {verse("Ephesians", 2, 4, "Rich in the fixture's mercy.")}},
@@ -136,7 +136,7 @@ func publisherFixture() *BibleData {
 		},
 		Superscriptions: map[string]map[int]Superscription{"Psalms": {
 			3: {
-				Text:      "A Psalm of David when he fled from Absalom his son.",
+				Text:      "A Psalm by David, when he fled from Absalom his son.",
 				Footnotes: []Footnote{{Anchor: 0, Text: "2 Sam. 15:13–17", Kind: x, Caller: "-", Refs: []NoteRef{{"2SA.15.13-2SA.15.17", 0, 15}}}},
 			},
 			59: {Text: "A fixture song of David, when the watchers were set at his house."},

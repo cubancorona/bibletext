@@ -26,7 +26,7 @@ func TestDecodeAPIBibleEdgeRangedMarker(t *testing.T) {
 	content := `[
 	  {"name":"para","type":"tag","attrs":{"style":"p"},"items":[
 	    {"name":"verse","type":"tag","attrs":{"style":"v","number":"17-18"},"items":[{"type":"text","text":"17-18"}]},
-	    {"type":"text","text":"Do not think that I came to destroy the Law."}
+	    {"type":"text","text":"“Don’t think that I came to destroy the law or the prophets."}
 	  ]}
 	]`
 	vs, _, _, _, err := decodeAPIBibleChapter(json.RawMessage(content), "Matthew", 5)
@@ -39,7 +39,7 @@ func TestDecodeAPIBibleEdgeRangedMarker(t *testing.T) {
 	if vs[0].Verse != 17 {
 		t.Errorf("ranged marker keyed verse %d, want 17", vs[0].Verse)
 	}
-	if vs[0].Text != "Do not think that I came to destroy the Law." {
+	if vs[0].Text != "“Don’t think that I came to destroy the law or the prophets." {
 		t.Errorf("ranged verse text wrong: %q", vs[0].Text)
 	}
 }
@@ -112,7 +112,7 @@ func TestDecodeAPIBibleEdgeSuperscriptionNoLeak(t *testing.T) {
 	// appendText drops verse-0 text — so the title must NOT leak into verse 1.
 	content := `[
 	  {"name":"para","type":"tag","attrs":{"style":"d"},"items":[
-	    {"type":"text","text":"A Psalm of David."}
+	    {"type":"text","text":"A Psalm by David."}
 	  ]},
 	  {"name":"para","type":"tag","attrs":{"style":"q1"},"items":[
 	    {"name":"verse","type":"tag","attrs":{"style":"v","number":"1","sid":"PSA 23:1"},"items":[{"type":"text","text":"1"}]},
@@ -132,7 +132,7 @@ func TestDecodeAPIBibleEdgeSuperscriptionNoLeak(t *testing.T) {
 	if vs[0].Text != "The LORD is my shepherd;" {
 		t.Errorf("verse 1 text wrong: %q", vs[0].Text)
 	}
-	if strings.Contains(vs[0].Text, "Psalm of David") {
+	if strings.Contains(vs[0].Text, "Psalm by David") {
 		t.Errorf("superscription leaked into verse 1: %q", vs[0].Text)
 	}
 }
@@ -142,7 +142,7 @@ func TestDecodeAPIBibleEdgeTitleOnlyChapter(t *testing.T) {
 	// text) must fail loudly, never succeed as an empty chapter.
 	content := `[
 	  {"name":"para","type":"tag","attrs":{"style":"d"},"items":[
-	    {"type":"text","text":"A Psalm of David."}
+	    {"type":"text","text":"A Psalm by David."}
 	  ]}
 	]`
 	_, _, _, _, err := decodeAPIBibleChapter(json.RawMessage(content), "Psalms", 23)
@@ -451,7 +451,7 @@ func TestDecodeAPIBibleEdgeSkipsPopulatedNoteNodes(t *testing.T) {
 	content := `[
 	  {"name":"para","type":"tag","attrs":{"style":"p"},"items":[
 	    {"name":"verse","type":"tag","attrs":{"style":"v","number":"13","sid":"JHN 3:13"},"items":[{"type":"text","text":"13"}]},
-	    {"type":"text","text":"No one has ascended to heaven","attrs":{"verseId":"JHN.3.13"}},
+	    {"type":"text","text":"No one has ascended into heaven","attrs":{"verseId":"JHN.3.13"}},
 	    {"name":"note","type":"tag","attrs":{"style":"f"},"items":[
 	      {"name":"char","type":"tag","attrs":{"style":"fr"},"items":[{"type":"text","text":"3:13 "}]},
 	      {"name":"char","type":"tag","attrs":{"style":"ft"},"items":[{"type":"text","text":"Alpha-Text omits the fixture clause."}]}
@@ -466,7 +466,7 @@ func TestDecodeAPIBibleEdgeSkipsPopulatedNoteNodes(t *testing.T) {
 	if len(vs) != 1 {
 		t.Fatalf("got %d verses, want 1", len(vs))
 	}
-	want := "No one has ascended to heaven but the fixture clause continues here."
+	want := "No one has ascended into heaven but the fixture clause continues here."
 	if vs[0].Text != want {
 		t.Errorf("footnote leaked into Scripture:\n got  %q\n want %q", vs[0].Text, want)
 	}

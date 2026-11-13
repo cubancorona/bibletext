@@ -55,8 +55,8 @@ func TestApplePanesLeadAHeadingFromTheParagraphBefore(t *testing.T) {
 		{BookName: "Psalms", Chapter: 23, Verse: 1, Text: "The LORD is my shepherd.", ParaStart: true},
 		{BookName: "Psalms", Chapter: 23, Verse: 2, Text: "He makes me lie down."},
 	}}}
-	ps.Bible.Headings = map[string]map[int][]Heading{"Psalms": {23: {{Text: "The LORD the Shepherd", Style: "s", BeforeVerse: 1}}}}
-	ps.Bible.Superscriptions = map[string]map[int]Superscription{"Psalms": {23: {Text: "A Psalm of David."}}}
+	ps.Bible.Headings = map[string]map[int][]Heading{"Psalms": {23: {{Text: "The Shepherd of Israel", Style: "s", BeforeVerse: 1}}}}
+	ps.Bible.Superscriptions = map[string]map[int]Superscription{"Psalms": {23: {Text: "A Psalm by David."}}}
 	ps.CurrentBook, ps.CurrentChapter = "Psalms", 23
 	if h := buildChapterHTML(ps, ps.Bible.GetChapter("Psalms", 23)); !strings.Contains(h, `<p class="pst pre-sec">`) {
 		t.Error("a psalm title standing before the first heading does not carry the heading's lead")

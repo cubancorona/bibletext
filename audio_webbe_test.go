@@ -84,9 +84,9 @@ func TestWEBCUsesSyntheticVoiceForGreekBooks(t *testing.T) {
 		Books: []string{"Tobit", "Daniel", "Esther", "John"},
 		Verses: map[string]map[int][]Verse{
 			"Tobit":  {1: {{Text: "The book of the words of Tobit"}}},
-			"Daniel": {3: {{Text: "Nebuchadnezzar the king made an image"}}, 12: {{Text: "At that time Michael shall stand up"}}},
+			"Daniel": {3: {{Text: "Nebuchadnezzar the king made an image"}}, 12: {{Text: "At that time Michael will stand up"}}},
 			"Esther": {1: {{Text: "In the second year of the reign of Ahasuerus"}}},
-			"John":   {3: {{Text: "There was a man of the Pharisees"}}},
+			"John":   {3: {{Text: "Now there was a man of the Pharisees"}}},
 		},
 	}
 	for _, c := range []struct {

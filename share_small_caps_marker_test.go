@@ -97,10 +97,10 @@ func TestADeclinedSelectionFollowsTheSameRuleAsALocatedOne(t *testing.T) {
 func TestAHeadingOverADivineNameVerseIsStrippedAndTheVerseLocated(t *testing.T) {
 	st := psalm23SmallCapsState()
 	st.Bible.Headings = map[string]map[int][]Heading{"Psalms": {23: {
-		{Text: "The Lord the Shepherd of His People", Style: "s", BeforeVerse: 1},
+		{Text: "The Shepherd of Israel", Style: "s", BeforeVerse: 1},
 	}}}
 	v := st.Bible.Verses["Psalms"][23][0]
-	raw := "The Lord the Shepherd of His People 1 " + drawnVerse(t, v)
+	raw := "The Shepherd of Israel 1 " + drawnVerse(t, v)
 
 	text, lo, hi, _, ok := normalizeShareSelection(st, raw, selSpan{})
 	if !ok {
@@ -109,7 +109,7 @@ func TestAHeadingOverADivineNameVerseIsStrippedAndTheVerseLocated(t *testing.T) 
 	if lo != 1 || hi != 1 {
 		t.Errorf("attributed to verses %d-%d, want 1-1", lo, hi)
 	}
-	if strings.Contains(text, "Shepherd of His People") {
+	if strings.Contains(text, "Shepherd of Israel") {
 		t.Errorf("the heading rode into the quote: %q", text)
 	}
 	if !strings.Contains(text, "Lᴏʀᴅ") {
@@ -124,21 +124,21 @@ func TestAHeadingAndAGapMarkInOneDragLocateAndCiteOnlyTheVersesQuoted(t *testing
 		Books: []string{"Acts"},
 		Verses: map[string]map[int][]Verse{"Acts": {10: {
 			{BookName: "Acts", Book: "Acts", Chapter: 10, Verse: 43,
-				Text: "All the prophets witness about him, that through his name everyone who believes in him will receive remission of sins."},
+				Text: "All the prophets testify about him, that through his name everyone who believes in him will receive remission of sins."},
 			{BookName: "Acts", Book: "Acts", Chapter: 10, Verse: 44,
-				Text: "While Peter was still speaking these words, the Spirit fell on all those who heard the word."},
+				Text: "While Peter was still speaking these words, the Holy Spirit fell on all those who heard the word."},
 			// 45 is omitted by this edition; the page draws "[45]" here.
 			{BookName: "Acts", Book: "Acts", Chapter: 10, Verse: 46,
-				Text: "For they heard them speaking with tongues and magnifying God."},
+				Text: "For they heard them speaking in other languages and magnifying God."},
 		}}},
 		Headings: map[string]map[int][]Heading{"Acts": {10: {
-			{Text: "The Holy Spirit Falls on the Gentiles", Style: "s", BeforeVerse: 44},
+			{Text: "The Spirit Poured Out on the Gentiles", Style: "s", BeforeVerse: 44},
 		}}},
 	}
 	st := &AppState{Bible: bd, CurrentBook: "Acts", CurrentChapter: 10}
-	raw := "The Holy Spirit Falls on the Gentiles 44 While Peter was still speaking these words, " +
-		"the Spirit fell on all those who heard the word. " + verseGapMark(45) +
-		" 46 For they heard them speaking with tongues and magnifying God."
+	raw := "The Spirit Poured Out on the Gentiles 44 While Peter was still speaking these words, " +
+		"the Holy Spirit fell on all those who heard the word. " + verseGapMark(45) +
+		" 46 For they heard them speaking in other languages and magnifying God."
 
 	text, lo, hi, _, ok := normalizeShareSelection(st, raw, selSpan{})
 	if !ok {
@@ -148,7 +148,7 @@ func TestAHeadingAndAGapMarkInOneDragLocateAndCiteOnlyTheVersesQuoted(t *testing
 	if lo != 44 || hi != 46 {
 		t.Errorf("attributed to verses %d-%d, want 44-46 (43 contributed no words)", lo, hi)
 	}
-	if strings.Contains(text, "Falls on the Gentiles") {
+	if strings.Contains(text, "Poured Out on the Gentiles") {
 		t.Errorf("the heading rode into the quote: %q", text)
 	}
 	if strings.Contains(text, "[45]") {

@@ -661,7 +661,7 @@ func TestTheVerseOfTheDayCardKeepsASpaceThatIsARunOfItsOwn(t *testing.T) {
 func TestTheVerseOfTheDayCardPreservesEveryWordBoundaryWhereverTheRunsSplit(t *testing.T) {
 	lines := []string{
 		"Behold, I stand at the door and knock.",
-		"And Asahel was as fleet of foot as a wild gazelle.",
+		"Asahel was as light of foot as a wild gazelle.",
 		"a b",
 	}
 	for _, line := range lines {

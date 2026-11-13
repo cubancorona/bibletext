@@ -167,14 +167,15 @@ func TestChapterBodyRedensOnlyChristsWordsInTheBSB(t *testing.T) {
 // The SAME verse rendered for two translations must use each one's own marks.
 // Version-blind rendering is what put the WEB's marks on every page.
 func TestChapterBodyRedLettersFollowTheTranslation(t *testing.T) {
-	// Mark 5:31 — the NKJV's publisher reddens Christ here and the WEB does not.
+	// Mark 5:31 — the BSB's publisher reddens Christ's quoted question here and
+	// the WEB does not (BSB wording).
 	verse := []bibletext.Verse{
-		v("Mark", 5, 31, `But His disciples said to Him, “You see the multitude thronging You, and You say, ‘Who touched Me?’ ”`),
+		v("Mark", 5, 31, `His disciples answered, “You can see the crowd pressing in on You, and yet You ask, ‘Who touched Me?’”`),
 	}
 	web := chapterBody(nil, "web", "Mark", 1, verse)
-	nkjv := chapterBody(nil, "nkjv", "Mark", 1, verse)
-	if web == nkjv {
-		t.Error("the WEB and the NKJV rendered Mark 5:31 identically; the page is still version-blind")
+	bsb := chapterBody(nil, "bsb", "Mark", 1, verse)
+	if web == bsb {
+		t.Error("the WEB and the BSB rendered Mark 5:31 identically; the page is still version-blind")
 	}
 }
 

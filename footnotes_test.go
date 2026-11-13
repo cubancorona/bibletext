@@ -371,15 +371,15 @@ func TestFootnotesOldCacheStillLoads(t *testing.T) {
 
 // --- the NKJV walk (API.Bible) ------------------------------------------------
 
-// A realistic NKJV-shaped chapter: a cross-reference note (style x — the only
-// kind the live feed carries, probed 2026-08-26) with an xo origin span to
-// strip and ref tags to flatten, plus a translator-footnote-shaped note
-// (style f) so the machinery is proven for both kinds, a note at a poem-line
-// boundary, and a note inside a red-letter span.
+// A realistic NKJV-shaped chapter with WEBC wording: a cross-reference note
+// (style x — the only kind the live feed carries, probed 2026-08-26) with an xo
+// origin span to strip and ref tags to flatten, plus a translator-footnote-shaped
+// note (style f) so the machinery is proven for both kinds, a note at a
+// poem-line boundary, and a note inside a red-letter span.
 const nkjvNotedChapter = `[
   {"name":"para","type":"tag","attrs":{"style":"p"},"items":[
     {"name":"verse","type":"tag","attrs":{"style":"v","number":"2","sid":"JHN 3:2"},"items":[{"type":"text","text":"2"}]},
-    {"type":"text","text":"This man came to Jesus by night","attrs":{"verseId":"JHN.3.2"}},
+    {"type":"text","text":"He came to Jesus by night","attrs":{"verseId":"JHN.3.2"}},
     {"name":"note","type":"tag","attrs":{"style":"x","caller":"-","id":"JHN.3.2!x.1","verseId":"JHN.3.2"},"items":[
       {"name":"char","type":"tag","attrs":{"style":"xo"},"items":[{"type":"text","text":"3:2 "}]},
       {"name":"char","type":"tag","attrs":{"style":"xt"},"items":[
@@ -388,9 +388,9 @@ const nkjvNotedChapter = `[
         {"name":"ref","type":"tag","attrs":{"id":"JHN.19.39"},"items":[{"type":"text","text":"19:39"}]}
       ]}
     ]},
-    {"type":"text","text":" and said to Him.","attrs":{"verseId":"JHN.3.2"}},
+    {"type":"text","text":" and said to him.","attrs":{"verseId":"JHN.3.2"}},
     {"name":"verse","type":"tag","attrs":{"style":"v","number":"13","sid":"JHN 3:13"},"items":[{"type":"text","text":"13"}]},
-    {"type":"text","text":"No one has ascended to heaven","attrs":{"verseId":"JHN.3.13"}},
+    {"type":"text","text":"No one has ascended into heaven","attrs":{"verseId":"JHN.3.13"}},
     {"name":"note","type":"tag","attrs":{"style":"f","caller":"+","id":"JHN.3.13!f.1","verseId":"JHN.3.13"},"items":[
       {"name":"char","type":"tag","attrs":{"style":"fr"},"items":[{"type":"text","text":"3:13 "}]},
       {"name":"char","type":"tag","attrs":{"style":"ft"},"items":[{"type":"text","text":"Alpha-Text omits the fixture clause."}]}
@@ -399,14 +399,14 @@ const nkjvNotedChapter = `[
   ]},
   {"name":"para","type":"tag","attrs":{"style":"q1"},"items":[
     {"name":"verse","type":"tag","attrs":{"style":"v","number":"14","sid":"JHN 3:14"},"items":[{"type":"text","text":"14"}]},
-    {"type":"text","text":"As Moses lifted up the serpent,","attrs":{"verseId":"JHN.3.14"}},
+    {"type":"text","text":"As Moses lifted up the serpent in the wilderness,","attrs":{"verseId":"JHN.3.14"}},
     {"name":"note","type":"tag","attrs":{"style":"x","caller":"-","id":"JHN.3.14!x.1","verseId":"JHN.3.14"},"items":[
       {"name":"char","type":"tag","attrs":{"style":"xo"},"items":[{"type":"text","text":"3:14 "}]},
       {"name":"char","type":"tag","attrs":{"style":"xt"},"items":[{"type":"text","text":"Numbers 21:9"}]}
     ]}
   ]},
   {"name":"para","type":"tag","attrs":{"style":"q2"},"items":[
-    {"type":"text","text":"even so must the Son of Man be lifted up.","attrs":{"verseId":"JHN.3.14"}}
+    {"type":"text","text":"even so must the Son of Man be lifted up,","attrs":{"verseId":"JHN.3.14"}}
   ]}
 ]`
 
@@ -421,7 +421,7 @@ func TestFootnotesNKJVCaptureAndPurity(t *testing.T) {
 	}
 
 	v2 := vs[0]
-	if v2.Text != "This man came to Jesus by night and said to Him." {
+	if v2.Text != "He came to Jesus by night and said to him." {
 		t.Errorf("v2 text corrupted by note capture: %q", v2.Text)
 	}
 	if len(v2.Footnotes) != 1 {
@@ -434,30 +434,30 @@ func TestFootnotesNKJVCaptureAndPurity(t *testing.T) {
 	if fn.Text != "John 7:50; 19:39" {
 		t.Errorf("crossref body = %q, want the flattened refs without the xo origin", fn.Text)
 	}
-	if want := utf8.RuneCountInString("This man came to Jesus by night"); fn.Anchor != want {
+	if want := utf8.RuneCountInString("He came to Jesus by night"); fn.Anchor != want {
 		t.Errorf("crossref anchor = %d, want %d", fn.Anchor, want)
 	}
 
 	v13 := vs[1]
-	if v13.Text != "No one has ascended to heaven but the fixture clause continues here." {
+	if v13.Text != "No one has ascended into heaven but the fixture clause continues here." {
 		t.Errorf("v13 text corrupted: %q", v13.Text)
 	}
 	if len(v13.Footnotes) != 1 || v13.Footnotes[0].Kind != "" ||
 		v13.Footnotes[0].Text != "Alpha-Text omits the fixture clause." {
 		t.Fatalf("translator footnote wrong: %+v", v13.Footnotes)
 	}
-	if want := utf8.RuneCountInString("No one has ascended to heaven"); v13.Footnotes[0].Anchor != want {
+	if want := utf8.RuneCountInString("No one has ascended into heaven"); v13.Footnotes[0].Anchor != want {
 		t.Errorf("footnote anchor = %d, want %d", v13.Footnotes[0].Anchor, want)
 	}
 
 	v14 := vs[2] // note at the poem-line boundary: anchor ends line 1
-	if v14.Text != "As Moses lifted up the serpent,\neven so must the Son of Man be lifted up." {
+	if v14.Text != "As Moses lifted up the serpent in the wilderness,\neven so must the Son of Man be lifted up," {
 		t.Errorf("v14 poem structure changed by the note: %q", v14.Text)
 	}
 	if len(v14.Footnotes) != 1 {
 		t.Fatalf("v14 footnotes = %d, want 1", len(v14.Footnotes))
 	}
-	if want := utf8.RuneCountInString("As Moses lifted up the serpent,"); v14.Footnotes[0].Anchor != want {
+	if want := utf8.RuneCountInString("As Moses lifted up the serpent in the wilderness,"); v14.Footnotes[0].Anchor != want {
 		t.Errorf("poem-boundary anchor = %d, want %d (end of line 1)", v14.Footnotes[0].Anchor, want)
 	}
 

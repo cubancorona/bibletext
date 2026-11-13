@@ -75,7 +75,7 @@ func TestAudioForChapter(t *testing.T) {
 		Verses: map[string]map[int][]Verse{
 			"John": {20: {{Text: "Now on the first day of the week"}, {Text: "Mary Magdalene went"}}},
 			"Daniel": {
-				12: {{Text: "At that time Michael shall stand up"}},
+				12: {{Text: "At that time Michael will stand up"}},
 				13: {{Text: "There was a man living in Babylon whose name was Joakim"}},
 			},
 			"Tobit": {1: {{Text: "The book of the words of Tobit"}}},
@@ -322,13 +322,13 @@ func TestSpeechTextReadsTheTitle(t *testing.T) {
 	bd := &BibleData{
 		Books: []string{"Psalms"},
 		Verses: map[string]map[int][]Verse{"Psalms": {
-			3:  {{Verse: 1, Text: "LORD, how my foes have increased!"}, {Verse: 2, Text: "Many say of me."}},
+			3:  {{Verse: 1, Text: "LORD, how my adversaries have increased!"}, {Verse: 2, Text: "Many there are who say of my soul."}},
 			23: {{Verse: 1, Text: "The LORD is my shepherd."}},
 		}},
 		Superscriptions: map[string]map[int]Superscription{"Psalms": {
-			3: {Text: "A Psalm of David when he fled from Absalom his son.",
+			3: {Text: "A Psalm by David, when he fled from Absalom his son.",
 				Footnotes: []Footnote{{Text: "A titlenoteprobe gloss.", Caller: "+"}}},
-			23: {Text: "A Psalm of David"}, // the NKJV shape: no full stop of its own
+			23: {Text: "A Psalm by David"}, // WEBC words in the NKJV shape: no full stop of its own
 		}},
 	}
 	for _, tc := range []struct {
@@ -336,8 +336,8 @@ func TestSpeechTextReadsTheTitle(t *testing.T) {
 		sentence string
 		verses   string
 	}{
-		{3, "A Psalm of David when he fled from Absalom his son.", "LORD, how my foes have increased! Many say of me."},
-		{23, "A Psalm of David.", "The LORD is my shepherd."},
+		{3, "A Psalm by David, when he fled from Absalom his son.", "LORD, how my adversaries have increased! Many there are who say of my soul."},
+		{23, "A Psalm by David.", "The LORD is my shepherd."},
 	} {
 		state := &AppState{Bible: bd, CurrentBook: "Psalms", CurrentChapter: tc.chapter}
 		got := chapterSpeechText(state)
@@ -358,14 +358,14 @@ func TestSpeechTextReadsTheTitle(t *testing.T) {
 // speechSentence's exact rule, with the shapes that must NOT gain a stop.
 func TestSpeechSentence(t *testing.T) {
 	for in, want := range map[string]string{
-		"A Psalm of David.":    "A Psalm of David.",
-		"  A Psalm of David  ": "A Psalm of David.",
-		"A Psalm of David":     "A Psalm of David.",
+		"A Psalm by David.":    "A Psalm by David.",
+		"  A Psalm by David  ": "A Psalm by David.",
+		"A Psalm by David":     "A Psalm by David.",
 		"To the choirmaster!":  "To the choirmaster!",
 		"Why, O LORD?":         "Why, O LORD?",
 		"He said, “Sing.”":     "He said, “Sing.”",
 		"(A Psalm.)":           "(A Psalm.)",
-		"A Psalm of David’s":   "A Psalm of David’s.",
+		"A Psalm by David’s":   "A Psalm by David’s.",
 		"":                     "",
 		"   ":                  "",
 		"”":                    "”.",
@@ -417,7 +417,7 @@ func TestSpeechOffsetsLockstep(t *testing.T) {
 			{Verse: 4, Text: "Last."},
 		}}},
 		Superscriptions: map[string]map[int]Superscription{"Psalms": {7: {
-			Text: "A Shiggaion of David, which he sang to the LORD concerning “𝔻” the Benjamite."}}},
+			Text: "A meditation by David, which he sang to the LORD, concerning “𝔻” the Benjamite."}}},
 	}
 	state := &AppState{Bible: bd, CurrentBook: "Psalms", CurrentChapter: 7}
 	text, offs, segs := chapterSpeechText(state), speechVerseOffsets(state), speechSegments(state)
@@ -476,7 +476,7 @@ func TestSpeechTextUntitledChaptersUnchanged(t *testing.T) {
 		Headings: map[string]map[int][]Heading{"Psalms": {119: {
 			{Text: "ALEPH", Style: "acrostic", BeforeVerse: 1}}}},
 		Superscriptions: map[string]map[int]Superscription{"Psalms": {
-			23:  {Text: "A Psalm of David."},
+			23:  {Text: "A Psalm by David."},
 			150: {Text: "   "},
 		}},
 	}

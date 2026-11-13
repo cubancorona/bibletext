@@ -11,26 +11,27 @@ import (
 	"testing"
 )
 
-// A titled Psalm as the chapter endpoint serves it: the title carries a
-// cross-reference note mid-sentence, and verse 1 opens with a divine-name
-// span, so both the note and the char-span handling are exercised on the
-// title's side of the line.
+// A titled Psalm in the chapter endpoint's shape, with WEBC wording (and
+// API.Bible's mixed-case <char style="nd">Lord</char> span on verse 1): the
+// title carries a cross-reference note mid-sentence, and verse 1 opens with a
+// divine-name span, so both the note and the char-span handling are exercised
+// on the title's side of the line.
 const psalmTitledChapterContent = `[
   {"name":"para","type":"tag","attrs":{"style":"d"},"items":[
-    {"type":"text","text":"A Psalm of David","attrs":{"verseId":"PSA.3.1"}},
+    {"type":"text","text":"A Psalm by David","attrs":{"verseId":"PSA.3.1"}},
     {"name":"note","type":"tag","attrs":{"style":"x","caller":"-","id":"PSA.3.1!x.1","verseId":"PSA.3.1"},"items":[
       {"name":"char","type":"tag","attrs":{"style":"xo"},"items":[{"type":"text","text":"3:title "}]},
       {"name":"char","type":"tag","attrs":{"style":"xt"},"items":[{"type":"text","text":"2 Samuel 15:13-17"}]}
     ]},
-    {"type":"text","text":" when he fled from Absalom his son.","attrs":{"verseId":"PSA.3.1"}}
+    {"type":"text","text":", when he fled from Absalom his son.","attrs":{"verseId":"PSA.3.1"}}
   ]},
   {"name":"para","type":"tag","attrs":{"style":"q1"},"items":[
     {"name":"verse","type":"tag","attrs":{"style":"v","number":"1","sid":"PSA 3:1"},"items":[{"type":"text","text":"1"}]},
     {"name":"char","type":"tag","attrs":{"style":"nd"},"items":[{"type":"text","text":"Lord","attrs":{"verseId":"PSA.3.1"}}]},
-    {"type":"text","text":", how they have increased who trouble me!","attrs":{"verseId":"PSA.3.1"}}
+    {"type":"text","text":", how my adversaries have increased!","attrs":{"verseId":"PSA.3.1"}}
   ]},
   {"name":"para","type":"tag","attrs":{"style":"q2"},"items":[
-    {"type":"text","text":"Many are they who rise up against me.","attrs":{"verseId":"PSA.3.1"}}
+    {"type":"text","text":"Many are those who rise up against me.","attrs":{"verseId":"PSA.3.1"}}
   ]}
 ]`
 
@@ -40,9 +41,9 @@ const psalm3LastVersePara = `{"name":"para","type":"tag","attrs":{"style":"q1"},
 
 const psalm4FirstVersePara = `{"name":"para","type":"tag","attrs":{"style":"q1"},"items":[
     {"name":"verse","type":"tag","attrs":{"style":"v","number":"1","sid":"PSA 4:1"},"items":[{"type":"text","text":"1"}]},
-    {"type":"text","text":"Hear me when I call, O God of my righteousness!","attrs":{"verseId":"PSA.4.1"}}]}`
+    {"type":"text","text":"Answer me when I call, God of my righteousness.","attrs":{"verseId":"PSA.4.1"}}]}`
 
-const psalm4Title = "To the Chief Musician. With stringed instruments. A Psalm of David."
+const psalm4Title = "For the Chief Musician; on stringed instruments. A Psalm by David."
 
 // psalm4TitlePara is Psalm 4's "d" paragraph, with or without the provider's
 // verseId stamp on its text.
@@ -63,7 +64,7 @@ func TestDecodeAPIBibleChapterKeepsThePsalmTitleBesideTheChapter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sup.Text != "A Psalm of David when he fled from Absalom his son." {
+	if sup.Text != "A Psalm by David, when he fled from Absalom his son." {
 		t.Errorf("superscription = %q", sup.Text)
 	}
 	if strings.ContainsRune(sup.Text, footnoteSentinel) {
@@ -79,7 +80,7 @@ func TestDecodeAPIBibleChapterKeepsThePsalmTitleBesideTheChapter(t *testing.T) {
 	if note.Kind != apiBibleNoteKind("x") {
 		t.Errorf("title note kind = %v, want a cross-reference", note.Kind)
 	}
-	if want := len([]rune("A Psalm of David")); note.Anchor != want {
+	if want := len([]rune("A Psalm by David")); note.Anchor != want {
 		t.Errorf("title note anchor = %d, want %d (after \"David\")", note.Anchor, want)
 	}
 
@@ -87,7 +88,7 @@ func TestDecodeAPIBibleChapterKeepsThePsalmTitleBesideTheChapter(t *testing.T) {
 	if len(vs) != 1 {
 		t.Fatalf("got %d verses, want 1: %+v", len(vs), vs)
 	}
-	want := "Lord, how they have increased who trouble me!\nMany are they who rise up against me."
+	want := "Lord, how my adversaries have increased!\nMany are those who rise up against me."
 	if vs[0].Text != want {
 		t.Errorf("verse 1:\n got  %q\n want %q", vs[0].Text, want)
 	}
@@ -117,7 +118,7 @@ func TestDecodeAPIBiblePassageAttachesATitleToTheChapterItOpens(t *testing.T) {
 	if got := byCh[3][0].Text; got != "Salvation belongs to the LORD." {
 		t.Errorf("3:8 = %q", got)
 	}
-	if got := byCh[4][0].Text; !strings.HasPrefix(got, "Hear me when I call") {
+	if got := byCh[4][0].Text; !strings.HasPrefix(got, "Answer me when I call") {
 		t.Errorf("4:1 = %q", got)
 	}
 }

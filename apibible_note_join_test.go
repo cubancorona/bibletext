@@ -22,15 +22,15 @@ func chapterWithNoteAtVerseStart(paraStyle string) json.RawMessage {
 	return json.RawMessage(`[
   {"name":"para","type":"tag","attrs":{"style":"` + paraStyle + `"},"items":[
     {"name":"verse","type":"tag","attrs":{"style":"v","number":"22","sid":"1CH 16:22"},"items":[{"type":"text","text":"22"}]},
-    {"type":"text","text":"Saying, Do not touch My anointed ones.","attrs":{"verseId":"1CH.16.22"}}
+    {"type":"text","text":"“Don’t touch my anointed ones!”","attrs":{"verseId":"1CH.16.22"}}
   ]},
   {"name":"para","type":"tag","attrs":{"style":"` + paraStyle + `"},"items":[
     {"name":"verse","type":"tag","attrs":{"style":"v","number":"23","sid":"1CH 16:23"},"items":[{"type":"text","text":"23"}]},
     ` + noteAtVerseStartX + `,
-    {"type":"text","text":"Sing to the LORD, all the earth;","attrs":{"verseId":"1CH.16.23"}}
+    {"type":"text","text":"Sing to the LORD, all the earth!","attrs":{"verseId":"1CH.16.23"}}
   ]},
   {"name":"para","type":"tag","attrs":{"style":"q2"},"items":[
-    {"type":"text","text":"Proclaim the good news of His salvation.","attrs":{"verseId":"1CH.16.23"}}
+    {"type":"text","text":"Display his salvation from day to day.","attrs":{"verseId":"1CH.16.23"}}
   ]}
 ]`)
 }
@@ -39,8 +39,8 @@ func TestNoteAtVerseStartTakesNoJoin(t *testing.T) {
 	for _, tc := range []struct {
 		style, want string
 	}{
-		{"q1", "Sing to the LORD, all the earth;\nProclaim the good news of His salvation."},
-		{"p", "Sing to the LORD, all the earth;\nProclaim the good news of His salvation."},
+		{"q1", "Sing to the LORD, all the earth!\nDisplay his salvation from day to day."},
+		{"p", "Sing to the LORD, all the earth!\nDisplay his salvation from day to day."},
 	} {
 		vs, _, _, _, err := decodeAPIBibleChapter(chapterWithNoteAtVerseStart(tc.style), "1 Chronicles", 16)
 		if err != nil {
@@ -61,7 +61,7 @@ func TestNoteAtVerseStartTakesNoJoin(t *testing.T) {
 		}
 		// The verse before is untouched, and the boundary's break for a
 		// note-free verse is still written (the q2 line inside verse 23).
-		if vs[0].Text != "Saying, Do not touch My anointed ones." {
+		if vs[0].Text != "“Don’t touch my anointed ones!”" {
 			t.Errorf("%s: verse 22 = %q", tc.style, vs[0].Text)
 		}
 	}

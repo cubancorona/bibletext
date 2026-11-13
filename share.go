@@ -1966,7 +1966,7 @@ func verseAbove(state *AppState, book string, chapter, n int) (int, bool) {
 // A drag that began inside the heading's own words leaves a fragment of it at
 // the front, and because a drag can start in the middle of a word the fragment
 // is a byte suffix of the heading rather than a word-aligned one —
-// "pirit Falls on the Gentiles" is a shape a reader really produces.
+// "pirit Poured Out on the Gentiles" is a shape a reader really produces.
 //
 // What separates such a fragment from a selection that began in the verse
 // ABOVE the heading is that the latter carries that verse's words first and

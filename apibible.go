@@ -724,7 +724,7 @@ func decodeAPIBiblePassageChecked(raw json.RawMessage, bookName string, defaultC
 	currentCh := defaultChapter
 	current := 0 // current verse number; 0 = before the first verse
 
-	// A Psalm's superscription ("A Psalm of David when he fled from Absalom
+	// A Psalm's superscription ("A Psalm by David, when he fled from Absalom
 	// his son") is the "d" paragraph, and it arrives BEFORE the chapter's
 	// first verse marker — so while it is being read, currentCh can still
 	// name the previous chapter of a multi-chapter passage. The title is

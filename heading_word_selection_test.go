@@ -176,18 +176,18 @@ func TestAWordSelectedInAHeadingMeansTheSectionBelowIt(t *testing.T) {
 // naming no verse, it is as it was.
 func TestASelectionThePaneFoundInAHeadingIsItsVerseAlone(t *testing.T) {
 	st := headingChapterState()
-	for _, sel := range []string{headingText, "Spirit", "the", "the Spirit fell", "zzz"} {
+	for _, sel := range []string{headingText, "Spirit", "the", "the Holy Spirit fell", "zzz"} {
 		quote, lo, hi, at, ok := normalizeShareSelectionIn(st, "Acts", 10, sel, selSpanInHeading(44))
 		if quote != "" || lo != 44 || hi != 44 || at != -1 || !ok {
 			t.Errorf("%q, flagged in the heading above 44: (%q, %d, %d, %d, %v), want (\"\", 44, 44, -1, true)", sel, quote, lo, hi, at, ok)
 		}
 	}
 	// The control: unflagged, verse 44's own words are quoted there.
-	if quote, lo, _, _, ok := normalizeShareSelectionIn(st, "Acts", 10, "the Spirit fell", selSpanFromNative(44, 44)); quote != "the Spirit fell" || lo != 44 || !ok {
+	if quote, lo, _, _, ok := normalizeShareSelectionIn(st, "Acts", 10, "the Holy Spirit fell", selSpanFromNative(44, 44)); quote != "the Holy Spirit fell" || lo != 44 || !ok {
 		t.Fatalf("control: verse 44's words, unflagged: (%q, %d, %v)", quote, lo, ok)
 	}
 	// A verse the chapter does not hold is not taken.
-	if _, lo, _, _, ok := normalizeShareSelectionIn(st, "Acts", 10, "the Spirit fell", selSpanInHeading(99)); ok && lo == 99 {
+	if _, lo, _, _, ok := normalizeShareSelectionIn(st, "Acts", 10, "the Holy Spirit fell", selSpanInHeading(99)); ok && lo == 99 {
 		t.Errorf("a heading's flag on verse 99, which the chapter lacks, cited it")
 	}
 

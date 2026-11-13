@@ -114,8 +114,8 @@ func TestHelloAODecoderCarriesTheFeedsParagraphBreaks(t *testing.T) {
 	book.Chapters[0].Chapter.Number = 3
 	for _, raw := range []string{
 		`{"type":"heading","content":["A heading, which is not a break"]}`,
-		`{"type":"verse","number":1,"content":["There was a man of the Pharisees."]}`,
-		`{"type":"verse","number":2,"content":["This man came to Jesus by night."]}`,
+		`{"type":"verse","number":1,"content":["Now there was a man of the Pharisees."]}`,
+		`{"type":"verse","number":2,"content":["He came to Jesus by night."]}`,
 		`{"type":"line_break"}`,
 		`{"type":"verse","number":3,"content":["Jesus answered him."]}`,
 		`{"type":"line_break"}`,

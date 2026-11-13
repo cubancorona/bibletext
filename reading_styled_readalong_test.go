@@ -355,7 +355,7 @@ func TestStyledReadAlongTitleWashIsTheTitleGeometry(t *testing.T) {
 	defer app.Quit()
 	defer resetStyledWiring()
 
-	st := titledPsalmState("A Psalm of David, when he fled from Absalom his son, and a line more so that it wraps.")
+	st := titledPsalmState("A Psalm by David, when he fled from Absalom his son, and a line more so that it wraps.")
 	w := buildStyledAreaWindow(t, st)
 	defer w.Close()
 	pane := styledPane
@@ -441,7 +441,7 @@ func TestStyledReadAlongTitleWashFollowsAResize(t *testing.T) {
 	defer app.Quit()
 	defer resetStyledWiring()
 
-	st := titledPsalmState("A Psalm of David, when he fled from Absalom his son, and a line more so that it wraps.")
+	st := titledPsalmState("A Psalm by David, when he fled from Absalom his son, and a line more so that it wraps.")
 	w := buildStyledAreaWindow(t, st)
 	defer w.Close()
 	pane := styledPane

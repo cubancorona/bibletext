@@ -481,7 +481,7 @@ func TestLiveAPIBibleFullCanon(t *testing.T) {
 	// is about the HEADING never reaching the verse, so what matters is the
 	// opening words, not their case — but the case is pinned deliberately,
 	// because it silently stopped matching once the fold was removed.
-	if got := first("Psalms", 3); !strings.HasPrefix(got, "Lord, how they have increased") {
+	if got := first("Psalms", 3); !strings.HasPrefix(got, "Lord, how ") {
 		t.Errorf("Psalm 3:1 = %q", got)
 	}
 	if got := first("Psalms", 119); strings.Contains(got, "Aleph") {
