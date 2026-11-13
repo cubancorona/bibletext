@@ -103,7 +103,8 @@ func loadGospelParallels() {
 }
 
 // parseGospelRef parses a synopsis ref string into contiguous spans. It handles
-// every shape in the dataset:
+// every shape in the dataset, rejecting malformed segments, malformed range
+// ends, and inverted spans rather than silently truncating them:
 //
 //	"1:1-4"            one-chapter range
 //	"1:14a"           single verse (the a/b verse-part letter is ignored)
@@ -111,28 +112,38 @@ func loadGospelParallels() {
 //	"6:27-28,32-36"   comma-separated sub-ranges; a sub-range with no colon
 //	                  inherits the chapter from the one before it
 func parseGospelRef(s string) []gSpan {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
 	var spans []gSpan
 	curCh := 0
 	for _, seg := range strings.Split(s, ",") {
 		seg = strings.TrimSpace(seg)
 		if seg == "" {
-			continue
+			return nil
 		}
 		startPart, endPart := seg, ""
+		hasDash := false
 		if i := strings.IndexByte(seg, '-'); i >= 0 {
-			startPart, endPart = seg[:i], seg[i+1:]
+			startPart, endPart, hasDash = seg[:i], seg[i+1:], true
 		}
 		s1ch, s1v, ok := parseChV(startPart, curCh)
 		if !ok {
-			continue
+			return nil
 		}
 		curCh = s1ch
 		e1ch, e1v := s1ch, s1v
-		if endPart != "" {
-			if ec, ev, ok := parseChV(endPart, s1ch); ok {
-				e1ch, e1v = ec, ev
-				curCh = ec
+		if hasDash {
+			ec, ev, ok := parseChV(endPart, s1ch)
+			if !ok {
+				return nil
 			}
+			e1ch, e1v = ec, ev
+			curCh = ec
+		}
+		if e1ch < s1ch || (e1ch == s1ch && e1v < s1v) {
+			return nil
 		}
 		spans = append(spans, gSpan{s1ch, s1v, e1ch, e1v})
 	}
@@ -145,7 +156,7 @@ func parseChV(s string, fallbackCh int) (ch, v int, ok bool) {
 	s = strings.TrimSpace(s)
 	if i := strings.IndexByte(s, ':'); i >= 0 {
 		c, err := strconv.Atoi(strings.TrimSpace(s[:i]))
-		if err != nil {
+		if err != nil || c < 1 {
 			return 0, 0, false
 		}
 		vv, ok2 := parseVerseNum(s[i+1:])
@@ -167,7 +178,7 @@ func parseChV(s string, fallbackCh int) (ch, v int, ok bool) {
 func parseVerseNum(s string) (int, bool) {
 	s = strings.TrimRight(strings.TrimSpace(s), "ab") // ignore verse-part letters (54a, 6b)
 	n, err := strconv.Atoi(s)
-	if err != nil {
+	if err != nil || n < 1 {
 		return 0, false
 	}
 	return n, true

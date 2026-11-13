@@ -24,6 +24,19 @@ func TestParseGospelRef(t *testing.T) {
 		{"11:12-14,20-26", []gSpan{{11, 12, 11, 14}, {11, 20, 11, 26}}},
 		{"18:15-18,25-27", []gSpan{{18, 15, 18, 18}, {18, 25, 18, 27}}},
 		{"2:21", []gSpan{{2, 21, 2, 21}}}, // single verse
+		// Malformed segments, malformed range ends, non-positive numbers, and
+		// inverted ranges reject the whole reference rather than silently
+		// truncating or dropping a span.
+		{"", nil},
+		{"5:1-bad", nil},
+		{"5:1-", nil},
+		{"5:1–12", nil},
+		{"6:27-28,bad", nil},
+		{"6:27-28,", nil},
+		{"6:28-27", nil},
+		{"9:1-8:34", nil},
+		{"0:1", nil},
+		{"1:0", nil},
 	}
 	for _, tc := range cases {
 		got := parseGospelRef(tc.in)
@@ -149,5 +162,64 @@ func TestTheGospelVersesInNoSynopsisSet(t *testing.T) {
 	}
 	if got, want := strings.Join(uncovered, ", "), strings.Join(gospelVersesInNoSet, ", "); got != want {
 		t.Errorf("the Gospel verses in no synopsis set are\n  %s\nwant\n  %s", got, want)
+	}
+}
+
+// EVERY SPAN IN THE EMBEDDED PARALLEL FILES NAMES REAL, IN-ORDER VERSES.
+func TestEveryGospelParallelSpanNamesRealVerses(t *testing.T) {
+	gospelOnce.Do(loadGospelParallels)
+	checkSpan := func(where, book string, s gSpan) {
+		ends := webGospelChapterEnds[book]
+		if len(ends) == 0 {
+			t.Errorf("%s: unknown Gospel %q", where, book)
+			return
+		}
+		if s.ch1 < 1 || s.ch1 > len(ends) || s.ch2 < 1 || s.ch2 > len(ends) {
+			t.Errorf("%s: %s span %+v out of chapter bounds (1..%d)", where, book, s, len(ends))
+			return
+		}
+		if s.ch2 < s.ch1 || (s.ch2 == s.ch1 && s.v2 < s.v1) {
+			t.Errorf("%s: %s span %+v is inverted", where, book, s)
+			return
+		}
+		if s.v1 < 1 || s.v1 > ends[s.ch1-1] || s.v2 < 1 || s.v2 > ends[s.ch2-1] {
+			t.Errorf("%s: %s span %+v out of verse bounds (%d:%d..%d:%d)", where, book, s, s.ch1, ends[s.ch1-1], s.ch2, ends[s.ch2-1])
+			return
+		}
+		for _, endpoint := range [2]verseRef{{book, s.ch1, s.v1}, {book, s.ch2, s.v2}} {
+			if webGospelGaps[endpoint] {
+				t.Errorf("%s: %s span %+v starts or ends on an omitted WEB verse %+v", where, book, s, endpoint)
+			}
+		}
+	}
+	spanCount := 0
+	for i, p := range gospelPericopes {
+		if p.title == "" {
+			t.Errorf("pericope %d has an empty title", i)
+		}
+		for book, spans := range p.spans {
+			for _, s := range spans {
+				spanCount++
+				checkSpan(fmt.Sprintf("pericope %q", p.title), book, s)
+			}
+		}
+	}
+	if spanCount != gospelSynopsisSpans {
+		t.Errorf("checked %d synopsis spans, want %d", spanCount, gospelSynopsisSpans)
+	}
+	if len(gospelOccasionsJSON) > 0 {
+		occasionOnce.Do(loadGospelOccasions)
+		occSpans := 0
+		for _, g := range occasionGroups {
+			for _, p := range g.passages {
+				for _, s := range p.spans {
+					occSpans++
+					checkSpan(fmt.Sprintf("occasion %q", g.title), p.book, s)
+				}
+			}
+		}
+		if occSpans < len(occasionGroups) {
+			t.Errorf("checked %d occasion spans across %d groups", occSpans, len(occasionGroups))
+		}
 	}
 }

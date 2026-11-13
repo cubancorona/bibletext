@@ -86,6 +86,7 @@ type crossRef struct {
 	OtherOccasion  bool   // with Parallel: the same saying on another occasion, not the same event
 	Title          string // for parallels, the pericope's title ("The Beatitudes") or the saying's
 	TitleRef       bool   // a publisher citation of a chapter's superscription (":title"), arriving without washing verse 1
+	WholeChapters  bool   // a publisher citation of whole chapters ("Lev. 11", "2 Kin. 18–20"), labelled by chapter
 }
 
 // otherOccasion reports whether c is a row of the same saying on another

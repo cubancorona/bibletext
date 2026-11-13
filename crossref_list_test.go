@@ -723,6 +723,48 @@ func TestCrossRefListDropsTheTreasuryRowsThePublisherCarries(t *testing.T) {
 	}
 }
 
+// A citation of a Psalm's title previews the superscription and never washes
+// verse 1, so it drops no Treasury verse row; a citation of whole chapters
+// previews only verse 1 under a chapter heading and drops a Treasury row only
+// when the row spans those exact whole chapters, keeping specific verse and
+// sub-range rows inside the chapter.
+func TestTitleAndWholeChapterCardsKeepSpecificTreasuryRows(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	licenseNKJVForTest(t)
+	withPublisherCrossRefs(t, "nkjv", true)
+	st, _ := listFixtureState()
+	nop := func(crossRef) {}
+
+	// 1. 1 Samuel 19:12 cites "Ps. 59:title": both Psalms 59:1 and Psalms 59:1–2 stay.
+	st.CurrentBook, st.CurrentChapter = "1 Samuel", 19
+	titleTSK := []crossRef{
+		{Book: "Psalms", Chapter: 59, Verse: 1, Votes: 25},
+		{Book: "Psalms", Chapter: 59, Verse: 1, EndV: 2, Votes: 15},
+	}
+	lst := buildCrossRefList(st, st.Bible.GetChapter("1 Samuel", 19), titleTSK, nil, lightPalette, nop)
+	if got := cardLabelsIn(lst.Objects); joined(got) != "Psalms 59|Psalms 59:1|Psalms 59:1–2" || lst.TSKRows != 2 {
+		t.Errorf("under a :title card, cards = %q (TSKRows=%d); want Psalms 59 + both Treasury verse rows", got, lst.TSKRows)
+	}
+
+	// 2. Genesis 7:2 cites whole-chapter "Lev. 11" (verses 1..2 in the fixture):
+	// specific verses inside Leviticus 11 and a cross-chapter range starting
+	// earlier stay; only a Treasury row spanning the exact whole chapter
+	// (Leviticus 11:1–2) is dropped.
+	st.Bible.Verses["Leviticus"][10] = []Verse{{BookName: "Leviticus", Book: "Leviticus", Chapter: 10, Verse: 1, Text: "An earlier fixture chapter."}}
+	st.CurrentBook, st.CurrentChapter = "Genesis", 7
+	chapterTSK := []crossRef{
+		{Book: "Leviticus", Chapter: 11, Verse: 1, Votes: 30},                    // single verse: stays
+		{Book: "Leviticus", Chapter: 11, Verse: 2, Votes: 20},                    // single verse: stays
+		{Book: "Leviticus", Chapter: 10, Verse: 1, EndCh: 11, EndV: 2, Votes: 9}, // wider multi-chapter: stays
+		{Book: "Leviticus", Chapter: 11, Verse: 1, EndV: 2, Votes: 40},           // exact whole chapter: goes
+	}
+	lst = buildCrossRefList(st, st.Bible.GetChapter("Genesis", 7), chapterTSK, nil, lightPalette, nop)
+	if got := cardLabelsIn(lst.Objects); joined(got) != "Leviticus 11|Leviticus 11:1|Leviticus 11:2|Leviticus 10:1–11:2" || lst.TSKRows != 3 {
+		t.Errorf("under a whole-chapter card, cards = %q (TSKRows=%d); want specific and wider rows kept, exact whole-chapter dropped", got, lst.TSKRows)
+	}
+}
+
 func TestCrossRefListEmptyPublisherRunShowsTheLineOverTheTreasury(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()

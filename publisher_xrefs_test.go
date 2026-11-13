@@ -290,7 +290,7 @@ func TestPublisherCrossRefsLinkWholeChapters(t *testing.T) {
 	if len(rows) != 2 || len(rows[0].Targets) != 1 {
 		t.Fatalf("a whole-chapter citation did not become a target: %+v", rows)
 	}
-	if got := rows[0].Targets[0]; got.Ref != (crossRef{Book: "John", Chapter: 7, Verse: 50}) || !got.Chapters || got.Title || got.label() != "John 7" {
+	if got := rows[0].Targets[0]; got.Ref != (crossRef{Book: "John", Chapter: 7, Verse: 50, WholeChapters: true}) || !got.Chapters || got.Title || got.label() != "John 7" {
 		t.Errorf("John 7 resolved to %+v, want the chapter's verses as loaded (7:50 alone), labelled by chapter", got)
 	}
 	// Genesis 7:2's "Lev. 11": the chapter's first to last verse, one card.
@@ -298,7 +298,7 @@ func TestPublisherCrossRefsLinkWholeChapters(t *testing.T) {
 	if len(rows) != 1 || len(rows[0].Targets) != 1 {
 		t.Fatalf("Genesis 7:2 resolved to %+v", rows)
 	}
-	if tg := rows[0].Targets[0]; tg.Ref != (crossRef{Book: "Leviticus", Chapter: 11, Verse: 1, EndV: 2}) || tg.label() != "Leviticus 11" || tg.tag() != "" {
+	if tg := rows[0].Targets[0]; tg.Ref != (crossRef{Book: "Leviticus", Chapter: 11, Verse: 1, EndV: 2, WholeChapters: true}) || tg.label() != "Leviticus 11" || tg.tag() != "" {
 		t.Errorf("Lev. 11 resolved to %+v (label %q, tag %q)", tg.Ref, tg.label(), tg.tag())
 	}
 	// A run of chapters is labelled as one: "2 Kings 18–20".

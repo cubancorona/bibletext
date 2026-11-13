@@ -22,8 +22,11 @@ import (
 // gospelSynopsisColumns is how many Gospel passages the synopsis's sets name:
 // 469, then three placed in sets that lacked that Gospel (Matthew 4:23, Luke
 // 6:17-19 and 6:43-45) and four sets of one Gospel each for verses that were
-// in none.
-const gospelSynopsisColumns = 476
+// in none. Five columns carry two comma-separated spans (481 spans in all).
+const (
+	gospelSynopsisColumns = 476
+	gospelSynopsisSpans   = 481
+)
 
 // gospelVersesInNoSet is empty: every verse of the WEB's Gospels belongs to a
 // synopsis set.

@@ -15,8 +15,13 @@ import (
 // shipped it, and no same saying on another occasion. The next major
 // release's are in parallels_next_test.go (docs/NEXT.md).
 
-// gospelSynopsisColumns is how many Gospel passages the synopsis's sets name.
-const gospelSynopsisColumns = 469
+// gospelSynopsisColumns is how many Gospel passages the synopsis's sets name,
+// and gospelSynopsisSpans is how many contiguous spans those columns expand to
+// (four columns carry two comma-separated spans).
+const (
+	gospelSynopsisColumns = 469
+	gospelSynopsisSpans   = 473
+)
 
 // gospelVersesInNoSet are the WEB's Gospel verses that belong to no synopsis
 // set, in Gospel order.

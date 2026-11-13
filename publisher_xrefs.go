@@ -734,6 +734,7 @@ func resolveCitation(bd *BibleData, runes []rune, start, end int, id, book strin
 	if !ok {
 		if ref, ok = chapterTarget(bd, id); ok {
 			tg.Chapters = true
+			ref.WholeChapters = true
 			if hasRunesAt(runes, end, []rune(titleSuffix)) {
 				// The title stands at the chapter's first verse: the card
 				// goes there, not over the whole psalm, without highlighting
