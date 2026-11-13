@@ -426,29 +426,29 @@ func publisherRunLabel(abbrev string) string {
 }
 
 // treasuryMinusPublisher drops the Treasury rows whose passage a publisher's
-// card already carries: for an ordinary verse or range card, a row the card's
-// passage contains or that contains the card's start verse — containment, not
-// label equality, so "2 Samuel 15:1–18" yields to the title note's "2 Samuel
-// 15:13–17" and "2 Corinthians 5:19–21" to its "2 Cor. 5:19". A citation of a
-// chapter's superscription (TitleRef) previews the title rather than verse 1
-// and never drops a Treasury verse row; a citation of whole chapters
-// (WholeChapters) previews only verse 1 under a chapter heading and drops a
-// Treasury row only when the row spans those exact whole chapters, keeping
-// specific verse and sub-range Treasury rows inside the chapter. Removal is in
-// the licence-safe direction: nothing is added to the publisher's run, and a
-// passage appears once, under the source that stands above it. A row that runs
-// on into another book is compared by its start verse alone, as contains reads
-// one book.
+// card already carries: for an ordinary verse or range card, any row whose
+// passage overlaps the card's — containment, not label equality, so "2 Samuel
+// 15:1–18" yields to the title note's "2 Samuel 15:13–17", "2 Corinthians
+// 5:19–21" to its "2 Cor. 5:19", and a cross-book range such as "2 Chronicles
+// 36:22–Ezra 1:3" to a card in either book it spans ("Ezra 1:1–4" or "Ezra
+// 1:1"). A citation of a chapter's superscription (TitleRef) previews the
+// title rather than verse 1 and never drops a Treasury verse row; a citation
+// of whole chapters (WholeChapters) previews only verse 1 under a chapter
+// heading and drops a Treasury row only when the row spans those exact whole
+// chapters, keeping specific verse and sub-range Treasury rows inside the
+// chapter. Removal is in the licence-safe direction: nothing is added to the
+// publisher's run, and a passage appears once, under the source that stands
+// above it.
 func treasuryMinusPublisher(rows, cards []crossRef) []crossRef {
 	var kept []crossRef
 	for _, r := range rows {
 		carried := false
 		for _, c := range cards {
-			if c.TitleRef || c.Book != r.Book {
+			if c.TitleRef {
 				continue
 			}
 			if c.WholeChapters {
-				if !r.crossBook() {
+				if !r.crossBook() && c.Book == r.Book {
 					rs, re := r.bounds()
 					cs, ce := c.bounds()
 					if rs == cs && re == ce {
@@ -458,7 +458,7 @@ func treasuryMinusPublisher(rows, cards []crossRef) []crossRef {
 				}
 				continue
 			}
-			if c.contains(r.Chapter, r.Verse) || (!r.crossBook() && r.contains(c.Chapter, c.Verse)) {
+			if c.containsVerse(r.Book, r.Chapter, r.Verse) || r.containsVerse(c.Book, c.Chapter, c.Verse) {
 				carried = true
 				break
 			}

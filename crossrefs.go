@@ -185,19 +185,85 @@ func (c crossRef) label() string {
 	}
 }
 
-// covers reports whether c's passage holds every verse of o's: the same book,
-// starting no later and ending no earlier. A range that runs into another book
-// covers only itself.
+// canonBookRank numbers the 66 books in reading order, from 1, so a range
+// that runs into the next book compares start-to-end across book boundaries.
+var canonBookRank = func() map[string]int {
+	books := NewBibleData().Books
+	m := make(map[string]int, len(books))
+	for i, b := range books {
+		m[b] = i + 1
+	}
+	return m
+}()
+
+type canonPos struct {
+	book, ch, v int
+}
+
+func (a canonPos) before(b canonPos) bool {
+	if a.book != b.book {
+		return a.book < b.book
+	}
+	return a.ch < b.ch || (a.ch == b.ch && a.v < b.v)
+}
+
+func (c crossRef) canonBounds() (start, end canonPos, ok bool) {
+	sb := canonBookRank[c.Book]
+	if sb == 0 {
+		return canonPos{}, canonPos{}, false
+	}
+	start = canonPos{sb, c.Chapter, c.Verse}
+	end = start
+	if c.EndV != 0 {
+		eb := sb
+		if c.EndBook != "" {
+			eb = canonBookRank[c.EndBook]
+			if eb == 0 {
+				return canonPos{}, canonPos{}, false
+			}
+		}
+		ech := c.EndCh
+		if ech == 0 {
+			ech = c.Chapter
+		}
+		end = canonPos{eb, ech, c.EndV}
+	}
+	if end.before(start) {
+		return canonPos{}, canonPos{}, false
+	}
+	return start, end, true
+}
+
+// containsVerse reports whether c covers (book, ch, v), including when c runs
+// on into another book in canonical order.
+func (c crossRef) containsVerse(book string, ch, v int) bool {
+	cs, ce, ok := c.canonBounds()
+	b := canonBookRank[book]
+	if ok && b != 0 {
+		p := canonPos{b, ch, v}
+		return !p.before(cs) && !ce.before(p)
+	}
+	return !c.crossBook() && c.Book == book && c.contains(ch, v)
+}
+
+// covers reports whether c's passage holds every verse of o's: starting no
+// later and ending no earlier, within one book or across adjacent books in
+// canonical order.
 func (c crossRef) covers(o crossRef) bool {
+	cs, ce, cok := c.canonBounds()
+	os, oe, ook := o.canonBounds()
+	if cok && ook {
+		return !os.before(cs) && !ce.before(oe)
+	}
 	if c.crossBook() || o.crossBook() {
 		return c.label() == o.label()
 	}
 	if c.Book != o.Book {
 		return false
 	}
-	cs, ce := c.bounds()
-	ostart, oend := o.bounds()
-	return !verseBefore(ostart, cs) && !verseBefore(ce, oend)
+	s1, e1 := c.bounds()
+	s2, e2 := o.bounds()
+	return !verseBefore(s2, s1) && !verseBefore(e1, e2)
 }
 
 // bounds is a row's first and last verse within its book.
@@ -987,6 +1053,11 @@ func normaliseSpanEnd(c crossRef) crossRef {
 		return c
 	}
 	if c.crossBook() {
+		if canonBookRank[c.Book] != 0 && canonBookRank[c.EndBook] != 0 {
+			if _, _, ok := c.canonBounds(); !ok {
+				c.EndBook, c.EndCh, c.EndV = "", 0, 0
+			}
+		}
 		return c
 	}
 	c.EndBook = ""

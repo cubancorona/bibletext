@@ -1,7 +1,9 @@
 package bibletext
 
 import (
+	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -221,5 +223,196 @@ func TestEveryGospelParallelSpanNamesRealVerses(t *testing.T) {
 		if occSpans < len(occasionGroups) {
 			t.Errorf("checked %d occasion spans across %d groups", occSpans, len(occasionGroups))
 		}
+	}
+}
+
+// gospelEditionBible builds a four-Gospel BibleData whose verse set matches
+// versionID's exact versification and omissions (versification_data.go,
+// omitted_verses_data.go), needing no external cache file.
+func gospelEditionBible(versionID string) *BibleData {
+	bd := &BibleData{
+		Books:  []string{"Matthew", "Mark", "Luke", "John"},
+		Verses: map[string]map[int][]Verse{},
+	}
+	present := map[string]map[int]map[int]bool{}
+	add := func(book string, ch, v int) {
+		if present[book] == nil {
+			present[book] = map[int]map[int]bool{}
+		}
+		if present[book][ch] == nil {
+			present[book][ch] = map[int]bool{}
+		}
+		present[book][ch][v] = true
+	}
+	eachWEBGospelVerse(func(book string, ch, v int) {
+		if outCh, outV, res := crossRefPrintedIn(versionID, book, ch, v); res != verseMapAbsent && res != verseMapIncommensurable {
+			add(book, outCh, outV)
+		}
+	})
+	for _, e := range versificationDeltas[versionID].extra {
+		if isGospelBook(e.Book) && !omitsVerse(versionID, e.Book, e.Chapter, e.Verse) {
+			add(e.Book, e.Chapter, e.Verse)
+		}
+	}
+	for _, book := range bd.Books {
+		bd.Verses[book] = map[int][]Verse{}
+		for ch := 1; ch <= len(webGospelChapterEnds[book]); ch++ {
+			vmap := present[book][ch]
+			nums := make([]int, 0, len(vmap))
+			for v := range vmap {
+				nums = append(nums, v)
+			}
+			slices.Sort(nums)
+			verses := make([]Verse, 0, len(nums))
+			for _, v := range nums {
+				verses = append(verses, Verse{BookName: book, Book: book, Chapter: ch, Verse: v, Text: "Synthetic verse."})
+			}
+			bd.Verses[book][ch] = verses
+		}
+	}
+	return bd
+}
+
+// EVERY GOSPEL PANEL MATCHES THE EMBEDDED SYNOPSIS ACROSS ALL FOUR EDITIONS.
+// Checks the raw synopsis structure (pericope count, 17 contiguous section runs,
+// single-Gospel pericopes, zero dropped columns) and holds all 15,103 single-verse
+// Gospel panels across WEB, WEB Catholic, BSB and NKJV to the synopsis model:
+// zero lost rows, zero lost pericope titles, zero self-Gospel leaks, every
+// emitted endpoint present in the edition, and BSB range-end clamping on
+// Matthew 17:14–20 and Mark 11:20–25.
+func TestGospelParallelsPanelCensusAcrossEditions(t *testing.T) {
+	gospelOnce.Do(loadGospelParallels)
+
+	var raw []struct {
+		Section string `json:"section"`
+		Title   string `json:"title"`
+		Refs    struct {
+			Matthew *string `json:"matthew"`
+			Mark    *string `json:"mark"`
+			Luke    *string `json:"luke"`
+			John    *string `json:"john"`
+		} `json:"refs"`
+	}
+	if err := json.Unmarshal(gospelParallelsJSON, &raw); err != nil {
+		t.Fatalf("unmarshal gospelParallelsJSON: %v", err)
+	}
+	if len(raw) != gospelSynopsisPericopes || len(gospelPericopes) != gospelSynopsisPericopes {
+		t.Fatalf("raw=%d loaded=%d pericopes, want %d", len(raw), len(gospelPericopes), gospelSynopsisPericopes)
+	}
+	sectionRuns, prevSection, singleGospel := 0, "", 0
+	for i, r := range raw {
+		sec := strings.TrimSpace(r.Section)
+		if sec == "" {
+			t.Errorf("pericope %d (%q) has an empty section", i, r.Title)
+		} else if sec != prevSection {
+			sectionRuns++
+			prevSection = sec
+		}
+		cols := 0
+		for _, cell := range []*string{r.Refs.Matthew, r.Refs.Mark, r.Refs.Luke, r.Refs.John} {
+			if cell != nil {
+				cols++
+				if len(parseGospelRef(*cell)) == 0 {
+					t.Errorf("pericope %d (%q) dropped ref %q", i, r.Title, *cell)
+				}
+			}
+		}
+		if cols == 1 {
+			singleGospel++
+		}
+	}
+	if sectionRuns != gospelSynopsisSections {
+		t.Errorf("counted %d contiguous section runs, want %d", sectionRuns, gospelSynopsisSections)
+	}
+	if singleGospel != gospelSynopsisSingleGospel {
+		t.Errorf("counted %d single-Gospel pericopes, want %d", singleGospel, gospelSynopsisSingleGospel)
+	}
+
+	totalPanels := 0
+	wantPanelsByEdition := map[string]int{
+		"web":  3778,
+		"webc": 3778,
+		"bsb":  3768,
+		"nkjv": 3779,
+	}
+	sawBSBClampMatt, sawBSBClampMark := false, false
+	for _, id := range []string{"web", "webc", "bsb", "nkjv"} {
+		bd := gospelEditionBible(id)
+		resolve := crossRefResolver(bd.Books, id)
+		panels := 0
+		for _, book := range bd.Books {
+			for _, ch := range bd.GetChapterNumbersForBook(book) {
+				st := &AppState{Bible: bd, CurrentBook: book, CurrentChapter: ch, CurrentVersion: id}
+				for _, v := range bd.GetChapter(book, ch) {
+					panels++
+					totalPanels++
+					var got []crossRef
+					for _, c := range localCrossRefsForSelection(st, "", selSpan{lo: v.Verse, hi: v.Verse}) {
+						if !c.otherOccasion() {
+							got = append(got, c)
+						}
+					}
+					var want []crossRef
+					if srcCh, srcV, ok := crossRefSourceRef(id, v); ok {
+						seen := map[string]bool{}
+						for i := range gospelPericopes {
+							p := &gospelPericopes[i]
+							if !spansContain(p.spans[book], srcCh, srcV) {
+								continue
+							}
+							for _, g := range gospelColumns {
+								if g.book == book {
+									continue
+								}
+								for _, s := range p.spans[g.book] {
+									for _, m := range resolve(spanToCrossRef(g.book, s, p.title)) {
+										lbl := m.label()
+										if !seen[lbl] {
+											seen[lbl] = true
+											want = append(want, m)
+										}
+									}
+								}
+							}
+						}
+					}
+					if !slices.Equal(got, want) {
+						t.Fatalf("%s %s %d:%d parallels = %+v, want %+v", id, book, ch, v.Verse, got, want)
+					}
+					for _, c := range got {
+						if !c.Parallel || strings.TrimSpace(c.Title) == "" || c.Book == book {
+							t.Fatalf("%s %s %d:%d malformed parallel %+v", id, book, ch, v.Verse, c)
+						}
+						if bd.GetVerse(c.Book, c.Chapter, c.Verse) == nil {
+							t.Fatalf("%s %s %d:%d parallel start missing: %s", id, book, ch, v.Verse, c.label())
+						}
+						if c.EndV != 0 {
+							endCh := c.EndCh
+							if endCh == 0 {
+								endCh = c.Chapter
+							}
+							if bd.GetVerse(c.Book, endCh, c.EndV) == nil {
+								t.Fatalf("%s %s %d:%d parallel end missing: %s", id, book, ch, v.Verse, c.label())
+							}
+						}
+						if id == "bsb" && c.label() == "Matthew 17:14–20" {
+							sawBSBClampMatt = true
+						}
+						if id == "bsb" && c.label() == "Mark 11:20–25" {
+							sawBSBClampMark = true
+						}
+					}
+				}
+			}
+		}
+		if panels != wantPanelsByEdition[id] {
+			t.Errorf("%s built %d Gospel panels, want %d", id, panels, wantPanelsByEdition[id])
+		}
+	}
+	if totalPanels != 15103 {
+		t.Errorf("walked %d Gospel panels across four editions, want 15,103", totalPanels)
+	}
+	if !sawBSBClampMatt || !sawBSBClampMark {
+		t.Errorf("BSB clamping seen: Matthew 17:14–20=%v, Mark 11:20–25=%v; want both", sawBSBClampMatt, sawBSBClampMark)
 	}
 }

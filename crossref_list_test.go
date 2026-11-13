@@ -114,8 +114,18 @@ func cardsIn(objs []fyne.CanvasObject) []*tapCard {
 func cardReference(c *tapCard) string {
 	ref := ""
 	walkTree(c.content, func(o fyne.CanvasObject) {
-		if t, ok := o.(*canvas.Text); ok && ref == "" && t.TextStyle.Bold && !t.TextStyle.Italic {
-			ref = t.Text
+		if ref != "" {
+			return
+		}
+		switch t := o.(type) {
+		case *canvas.Text:
+			if t.TextStyle.Bold && !t.TextStyle.Italic {
+				ref = t.Text
+			}
+		case *crossRefPrinted:
+			if t.style.Bold && !t.style.Italic {
+				ref = t.Text
+			}
 		}
 	})
 	return ref
@@ -1063,5 +1073,35 @@ func TestACrossReferencePreviewKeepsTheSmallCapitals(t *testing.T) {
 	got := strings.Join(textsIn(row), "\n")
 	if !strings.Contains(got, "the Lord Gᴏᴅ: the Lᴏʀᴅ is my shepherd.") {
 		t.Errorf("the preview reads %q; it must keep the small capitals the page draws", got)
+	}
+}
+
+func TestTreasuryMinusPublisherDropsOverlappingCrossBookRanges(t *testing.T) {
+	fused := crossRef{Book: "2 Chronicles", Chapter: 36, Verse: 22, EndBook: "Ezra", EndCh: 1, EndV: 3}
+	later := crossRef{Book: "Jeremiah", Chapter: 25, Verse: 12}
+
+	for _, card := range []crossRef{
+		{Book: "Ezra", Chapter: 1, Verse: 1},           // Ezra 6:3 / Daniel 6:28 shape
+		{Book: "Ezra", Chapter: 1, Verse: 1, EndV: 4},  // Ezra 4:3 shape
+		{Book: "2 Chronicles", Chapter: 36, Verse: 23}, // start-book non-initial verse
+		{Book: "2 Chronicles", Chapter: 36, Verse: 22, EndV: 23},
+	} {
+		kept := treasuryMinusPublisher([]crossRef{fused, later}, []crossRef{card})
+		if len(kept) != 1 || kept[0].label() != "Jeremiah 25:12" {
+			t.Errorf("card %q left %v, want only Jeremiah 25:12", card.label(), kept)
+		}
+	}
+
+	// Non-overlapping verses, superscription (:title) cards and whole-chapter cards leave the cross-book row standing.
+	for _, card := range []crossRef{
+		{Book: "Ezra", Chapter: 1, Verse: 4},
+		{Book: "2 Chronicles", Chapter: 36, Verse: 21},
+		{Book: "Ezra", Chapter: 1, Verse: 1, TitleRef: true},
+		{Book: "Ezra", Chapter: 1, Verse: 1, EndV: 11, WholeChapters: true},
+	} {
+		kept := treasuryMinusPublisher([]crossRef{fused}, []crossRef{card})
+		if len(kept) != 1 || kept[0].label() != fused.label() {
+			t.Errorf("card %+v dropped %q, want kept", card, fused.label())
+		}
 	}
 }

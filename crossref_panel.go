@@ -621,10 +621,8 @@ func crossRefRow(state *AppState, card crossRefCard, pal palette, onTap func(cro
 func crossRefRowRuled(state *AppState, card crossRefCard, pal palette, onTap func(crossRef), rule bool) fyne.CanvasObject {
 	sz := crossRefPanelSizes()
 	c := card.Ref
-	ref := canvas.NewText(card.Label, pal.Accent)
-	ref.TextStyle = fyne.TextStyle{Bold: true}
-	ref.TextSize = sz.reference
-	ref.FontSource = crossRefZeroFace(ref.TextStyle)
+	refStyle := fyne.TextStyle{Bold: true}
+	ref := newCrossRefHeadingText(card.Label, sz.reference, refStyle, pal.Accent)
 
 	// The reference line, with a "Parallel" tag for Gospel-synopsis entries
 	// where the list has no label to say so, or the card's own muted tag. A
@@ -632,7 +630,7 @@ func crossRefRowRuled(state *AppState, card crossRefCard, pal palette, onTap fun
 	// does not wear the pill: it carries its own label, on a line of its own
 	// because the label is longer than the tag and a phone has no room for it
 	// beside a long reference.
-	var refLine fyne.CanvasObject = ref
+	refLine := ref
 	switch {
 	case card.Badge && c.Parallel && !c.otherOccasion():
 		refLine = container.New(&crossRefHeadingFlow{gap: 7}, ref, parallelBadge(pal))
@@ -685,7 +683,7 @@ func crossRefRowRuled(state *AppState, card crossRefCard, pal palette, onTap fun
 		// A card that is the whole of a publisher's note: its letter in the
 		// margin, on the reference's line, inside the tap
 		// (crossref_section.go).
-		body = crossRefLettered(card.Letter, pal, body, 0, ref.TextSize, ref.TextStyle)
+		body = crossRefLettered(card.Letter, pal, body, 0, sz.reference, refStyle)
 	}
 	inner := container.New(layout.NewCustomPaddedLayout(6, 6, 0, 0), body)
 	tap := newTapCard(inner, crossRefHover(pal), func() { onTap(c) })

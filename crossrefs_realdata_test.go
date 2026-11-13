@@ -1,6 +1,7 @@
 package bibletext
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"slices"
@@ -264,8 +265,8 @@ func TestEveryCrossReferenceRowOpensScriptureTheTextHas(t *testing.T) {
 						if bd.GetVerse(endBook, endCh, c.EndV) == nil {
 							report("%s, whose last verse the text does not have", where)
 						}
-						if endBook == c.Book && !verseBefore(verseRef{c.Book, c.Chapter, c.Verse}, verseRef{c.Book, endCh, c.EndV}) {
-							report("%s, a range that does not run forwards", where)
+						if _, _, ok := c.canonBounds(); !ok {
+							report("%s, a range that does not run forwards in canonical order", where)
 						}
 					}
 
@@ -355,5 +356,163 @@ func TestTheWalksDepthHoldsForEverySelection(t *testing.T) {
 	_, wide := treasuryRowsFor(rows, resolve, chapter)
 	if got := crossRefDeepestReadable(rows, resolve, own, chapter); got != wide || wide != 18 {
 		t.Errorf("the walk measures row %d; the chapter-wide panel reads row %d, want 18", got, wide)
+	}
+}
+
+// EVERY ROW OF THE TREASURY DATASET IS ACCOUNTED FOR. Mirrors
+// publisher_xrefs_census_test.go for the OpenBible Treasury zip: counts raw TSV
+// lines against parsed rows (zero silent parse/pack drops), pins the kept/capped
+// index split, and verifies for every verse across all downloaded editions that
+// every dataset row is accounted for as unmappable, hidden/duplicate, shown in
+// places 1..16, or past the 16-row cap, matching crossRefsForSelection's
+// Treasury slice row for row.
+func TestEveryTreasuryDatasetRowIsAccountedFor(t *testing.T) {
+	if os.Getenv("BIBLETEXT_XREF_REALDATA") == "" {
+		t.Skip("set BIBLETEXT_XREF_REALDATA=1 to account for the downloaded Treasury")
+	}
+	zipBytes, err := os.ReadFile(realCachePath(crossRefCachePath()))
+	if err != nil {
+		t.Skipf("no Treasury zip in the machine's cache: %v", err)
+	}
+
+	rc, err := crossRefTSV(zipBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawLines := 0
+	sc := bufio.NewScanner(rc)
+	for sc.Scan() {
+		line := sc.Text()
+		if line == "" || strings.HasPrefix(line, "From") || strings.HasPrefix(line, "#") {
+			continue
+		}
+		rawLines++
+	}
+	if err := sc.Err(); err != nil {
+		rc.Close()
+		t.Fatal(err)
+	}
+	rc.Close()
+
+	rc2, err := crossRefTSV(zipBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	every, drift, err := readCrossRefRows(rc2, 0)
+	rc2.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range drift {
+		t.Errorf("correction drift: %s", d)
+	}
+	parsedTotal := 0
+	for _, rows := range every {
+		parsedTotal += len(rows)
+	}
+	if rawLines != parsedTotal || rawLines != 344799 || len(every) != 29363 {
+		t.Fatalf("rawLines=%d parsedTotal=%d keys=%d; want 344,799 rows across 29,363 source keys (0 dropped)",
+			rawLines, parsedTotal, len(every))
+	}
+
+	idx, _, err := parseCrossRefZip(zipBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	keptTotal := 0
+	for _, rows := range idx {
+		keptTotal += len(rows)
+	}
+	if keptTotal != 337179 || parsedTotal-keptTotal != 7620 {
+		t.Errorf("kept=%d past32=%d; want 337,179 kept and 7,620 past maxCrossRefsKept=%d",
+			keptTotal, parsedTotal-keptTotal, maxCrossRefsKept)
+	}
+
+	crossRefMu.Lock()
+	was := crossRefIndex
+	crossRefIndex = idx
+	crossRefMu.Unlock()
+	t.Cleanup(func() {
+		crossRefMu.Lock()
+		crossRefIndex = was
+		crossRefMu.Unlock()
+	})
+
+	walked := 0
+	for _, id := range []string{"web", "bsb", "webc", "nkjv"} {
+		bd, err := loadBibleFromCache(realCachePath(cachePathForVersion(id)))
+		if err != nil {
+			continue
+		}
+		walked++
+		resolve := crossRefResolver(bd.Books, id)
+		var unmappable, hiddenOrDup, shownPlaces, pastCap, emittedRows, checkedVerses int
+		for _, book := range bd.Books {
+			for _, chapter := range bd.GetChapterNumbersForBook(book) {
+				st := &AppState{Bible: bd, CurrentBook: book, CurrentChapter: chapter, CurrentVersion: id}
+				for _, v := range bd.GetChapter(book, chapter) {
+					checkedVerses++
+					parallels, occasions, _, _, _, shown := localCrossRefParts(st, "", selSpan{lo: v.Verse, hi: v.Verse})
+					_ = parallels
+					hidden := crossRefHidden{labels: shown, covers: occasions}
+
+					var wantTSK []crossRef
+					if srcCh, srcV, ok := crossRefSourceRef(id, v); ok {
+						srcRows := every[crossRefKey(v.BookName, srcCh, srcV)]
+						vUnmap, vHidDup, vShown, vPast := 0, 0, 0, 0
+						given := map[string]bool{}
+						for _, r := range srcRows {
+							if vShown == maxCrossRefsPerVerse {
+								vPast++
+								continue
+							}
+							resolved := resolve(r.crossRef())
+							if len(resolved) == 0 {
+								vUnmap++
+								continue
+							}
+							took := false
+							for _, c := range resolved {
+								lbl := c.label()
+								if hidden.hides(c) || given[lbl] {
+									continue
+								}
+								given[lbl] = true
+								wantTSK = append(wantTSK, c)
+								took = true
+							}
+							if took {
+								vShown++
+							} else {
+								vHidDup++
+							}
+						}
+						if vUnmap+vHidDup+vShown+vPast != len(srcRows) {
+							t.Fatalf("%s %s %d:%d accounting mismatch: %d+%d+%d+%d != %d",
+								id, book, chapter, v.Verse, vUnmap, vHidDup, vShown, vPast, len(srcRows))
+						}
+						unmappable += vUnmap
+						hiddenOrDup += vHidDup
+						shownPlaces += vShown
+						pastCap += vPast
+					}
+					var gotTSK []crossRef
+					for _, c := range crossRefsForSelection(st, "", selSpan{lo: v.Verse, hi: v.Verse}) {
+						if !c.Parallel {
+							gotTSK = append(gotTSK, c)
+						}
+					}
+					if !slices.Equal(gotTSK, wantTSK) {
+						t.Fatalf("%s %s %d:%d Treasury slice = %+v, want %+v", id, book, chapter, v.Verse, gotTSK, wantTSK)
+					}
+					emittedRows += len(gotTSK)
+				}
+			}
+		}
+		t.Logf("%s (%d verses): shownPlaces=%d (emitted=%d), unmappable=%d, hiddenOrDup=%d, pastCap16=%d",
+			id, checkedVerses, shownPlaces, emittedRows, unmappable, hiddenOrDup, pastCap)
+	}
+	if walked == 0 {
+		t.Skip("no downloaded translation in the machine's cache")
 	}
 }

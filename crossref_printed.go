@@ -34,7 +34,15 @@ const crossRefPrintedLeading float32 = 3
 // ground, margin and icon, so that the first height reported is not short.
 const crossRefPrintedGuess float32 = 220
 
-// crossRefPrinted is one printed line (or wrapped italic title when wordWrap is true).
+// crossRefSingleLineMax is the narrowest group well at Extra large (229pt):
+// any reference without a cross-book en dash that fits inside it needs only a
+// single canvas.Text; cross-book ranges and wider headings use crossRefPrinted
+// so they stay on one line while there is room and turn cleanly after the en
+// dash (or between words) on a narrow phone.
+const crossRefSingleLineMax float32 = 229
+
+// crossRefPrinted is one printed line, wrapped italic title (wordWrap), or
+// wrapped reference heading (refWrap).
 type crossRefPrinted struct {
 	widget.BaseWidget
 	Text     string
@@ -43,6 +51,7 @@ type crossRefPrinted struct {
 	style    fyne.TextStyle
 	guess    float32
 	wordWrap bool
+	refWrap  bool
 }
 
 func newCrossRefPrinted(text string, pal palette) *crossRefPrinted {
@@ -67,6 +76,37 @@ func newCrossRefTitle(text string, size float32, pal palette) *crossRefPrinted {
 	}
 	p.ExtendBaseWidget(p)
 	return p
+}
+
+func newCrossRefRef(text string, size float32, style fyne.TextStyle, col color.Color) *crossRefPrinted {
+	p := &crossRefPrinted{
+		Text:    text,
+		color:   col,
+		size:    size,
+		style:   style,
+		guess:   283,
+		refWrap: true,
+	}
+	p.ExtendBaseWidget(p)
+	return p
+}
+
+func hasCrossBookEnDash(text string) bool {
+	_, after, ok := strings.Cut(text, "–")
+	return ok && strings.Contains(after, " ")
+}
+
+func newCrossRefHeadingText(text string, size float32, style fyne.TextStyle, col color.Color) fyne.CanvasObject {
+	face := crossRefZeroFace(style)
+	sz, _ := fyne.CurrentApp().Driver().RenderedTextSize(text, size, style, face)
+	if !hasCrossBookEnDash(text) && sz.Width <= crossRefSingleLineMax {
+		t := canvas.NewText(text, col)
+		t.TextStyle = style
+		t.TextSize = size
+		t.FontSource = face
+		return t
+	}
+	return newCrossRefRef(text, size, style, col)
 }
 
 func (p *crossRefPrinted) textSize() float32 {
@@ -180,6 +220,27 @@ func wordWrappedRows(text string, width float32, measure func(string) float32) [
 	return rows
 }
 
+// referenceRows keeps a reference heading on one row whenever it fits width,
+// turns a range after its en dash ("1 Thessalonians 5:28–" / "2 Thessalonians
+// 1:2") before splitting words, and falls back to word wrapping only inside a
+// piece that is still wider than width.
+func referenceRows(text string, width float32, measure func(string) float32) []string {
+	if text == "" {
+		return nil
+	}
+	if measure(text) <= width {
+		return []string{text}
+	}
+	if before, after, ok := strings.Cut(text, "–"); ok && after != "" {
+		first := before + "–"
+		if measure(first) <= width && measure(after) <= width {
+			return []string{first, after}
+		}
+		return append(wordWrappedRows(first, width, measure), wordWrappedRows(after, width, measure)...)
+	}
+	return wordWrappedRows(text, width, measure)
+}
+
 func (r *crossRefPrintedRenderer) wrap(width float32) {
 	if width <= 0 {
 		width = r.p.guessWidth()
@@ -195,9 +256,12 @@ func (r *crossRefPrintedRenderer) wrap(width float32) {
 	r.rowH = sz.Height
 	r.rows, r.objs = r.rows[:0], r.objs[:0]
 	var lines []string
-	if r.p.wordWrap {
+	switch {
+	case r.p.refWrap:
+		lines = referenceRows(r.p.Text, width, r.measure)
+	case r.p.wordWrap:
 		lines = wordWrappedRows(r.p.Text, width, r.measure)
-	} else {
+	default:
 		lines = printedRows(r.p.Text, width, r.measure)
 	}
 	for _, s := range lines {
@@ -222,11 +286,15 @@ func (r *crossRefPrintedRenderer) Layout(size fyne.Size) {
 
 // MinSize is the height of the rows at the last width wrapped for, as the
 // passage's paragraph reports its own (verse_of_day.go), and a width no
-// greater than the longest word, which a row cannot be narrower than.
+// greater than the longest indivisible word, which a row cannot be narrower than.
 func (r *crossRefPrintedRenderer) MinSize() fyne.Size {
 	r.wrap(r.width)
 	var w float32
-	for _, word := range strings.Fields(r.p.Text) {
+	tokens := r.p.Text
+	if r.p.refWrap {
+		tokens = strings.ReplaceAll(tokens, "–", "– ")
+	}
+	for _, word := range strings.Fields(tokens) {
 		if m := r.measure(word); m > w {
 			w = m
 		}

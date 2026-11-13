@@ -109,6 +109,15 @@ type crossRefHeadingFlow struct {
 	width float32
 }
 
+func (f *crossRefHeadingFlow) leadSingleLineSize(o fyne.CanvasObject) (fyne.Size, bool) {
+	pr, ok := o.(*crossRefPrinted)
+	if !ok {
+		return o.MinSize(), false
+	}
+	sz, _ := fyne.CurrentApp().Driver().RenderedTextSize(pr.Text, pr.textSize(), pr.style, crossRefZeroFace(pr.style))
+	return sz, true
+}
+
 func (f *crossRefHeadingFlow) MinSize(objs []fyne.CanvasObject) fyne.Size {
 	if len(objs) == 0 {
 		return fyne.Size{}
@@ -116,16 +125,28 @@ func (f *crossRefHeadingFlow) MinSize(objs []fyne.CanvasObject) fyne.Size {
 	if len(objs) == 1 {
 		return objs[0].MinSize()
 	}
-	lead, trail := objs[0].MinSize(), objs[1].MinSize()
-	minW := max(lead.Width, trail.Width)
+	leadMin, trail := objs[0].MinSize(), objs[1].MinSize()
+	minW := max(leadMin.Width, trail.Width)
 	avail := f.width
 	if avail <= 0 {
 		avail = 283
 	}
-	if lead.Width+f.gap+trail.Width <= avail {
-		return fyne.NewSize(minW, max(lead.Height, trail.Height))
+	fullLead, isPrinted := f.leadSingleLineSize(objs[0])
+	if fullLead.Width+f.gap+trail.Width <= avail {
+		return fyne.NewSize(minW, max(fullLead.Height, trail.Height))
 	}
-	return fyne.NewSize(minW, lead.Height+2+trail.Height)
+	leadH := leadMin.Height
+	if isPrinted {
+		pr := objs[0].(*crossRefPrinted)
+		rows := referenceRows(pr.Text, avail, func(s string) float32 {
+			sz, _ := fyne.CurrentApp().Driver().RenderedTextSize(s, pr.textSize(), pr.style, crossRefZeroFace(pr.style))
+			return sz.Width
+		})
+		if n := float32(len(rows)); n > 0 {
+			leadH = n*fullLead.Height + (n-1)*crossRefPrintedLeading
+		}
+	}
+	return fyne.NewSize(minW, leadH+2+trail.Height)
 }
 
 func (f *crossRefHeadingFlow) Layout(objs []fyne.CanvasObject, size fyne.Size) {
@@ -138,17 +159,25 @@ func (f *crossRefHeadingFlow) Layout(objs []fyne.CanvasObject, size fyne.Size) {
 		objs[0].Resize(size)
 		return
 	}
-	lead, trail := objs[0].MinSize(), objs[1].MinSize()
-	if lead.Width+f.gap+trail.Width <= size.Width {
-		rowH := max(lead.Height, trail.Height)
-		objs[0].Move(fyne.NewPos(0, (rowH-lead.Height)/2))
-		objs[0].Resize(lead)
-		objs[1].Move(fyne.NewPos(lead.Width+f.gap, (rowH-trail.Height)/2))
+	fullLead, isPrinted := f.leadSingleLineSize(objs[0])
+	trail := objs[1].MinSize()
+	if fullLead.Width+f.gap+trail.Width <= size.Width {
+		rowH := max(fullLead.Height, trail.Height)
+		objs[0].Move(fyne.NewPos(0, (rowH-fullLead.Height)/2))
+		objs[0].Resize(fullLead)
+		objs[1].Move(fyne.NewPos(fullLead.Width+f.gap, (rowH-trail.Height)/2))
 		objs[1].Resize(trail)
 		return
 	}
 	objs[0].Move(fyne.NewPos(0, 0))
-	objs[0].Resize(lead)
-	objs[1].Move(fyne.NewPos(0, lead.Height+2))
+	leadH := fullLead.Height
+	if isPrinted {
+		objs[0].Resize(fyne.NewSize(size.Width, fullLead.Height))
+		leadH = objs[0].MinSize().Height
+		objs[0].Resize(fyne.NewSize(size.Width, leadH))
+	} else {
+		objs[0].Resize(fullLead)
+	}
+	objs[1].Move(fyne.NewPos(0, leadH+2))
 	objs[1].Resize(trail)
 }

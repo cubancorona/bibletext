@@ -24,8 +24,11 @@ import (
 // 6:17-19 and 6:43-45) and four sets of one Gospel each for verses that were
 // in none. Five columns carry two comma-separated spans (481 spans in all).
 const (
-	gospelSynopsisColumns = 476
-	gospelSynopsisSpans   = 481
+	gospelSynopsisPericopes    = 271
+	gospelSynopsisSections     = 17
+	gospelSynopsisSingleGospel = 159
+	gospelSynopsisColumns      = 476
+	gospelSynopsisSpans        = 481
 )
 
 // gospelVersesInNoSet is empty: every verse of the WEB's Gospels belongs to a

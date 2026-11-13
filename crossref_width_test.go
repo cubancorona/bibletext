@@ -168,15 +168,34 @@ func TestEveryUnwrappedLineOfTheListFitsTheNarrowestPhone(t *testing.T) {
 		return text, w
 	}
 	var titles, labels []string
+	var parRefs []crossRef
 	for _, p := range gospelPericopes {
 		titles = append(titles, p.title)
 		for _, g := range gospelColumns {
 			for _, s := range p.spans[g.book] {
-				labels = append(labels, spanToCrossRef(g.book, s, p.title).label())
+				ref := spanToCrossRef(g.book, s, p.title)
+				labels = append(labels, ref.label())
+				parRefs = append(parRefs, ref)
 			}
 		}
 	}
-	labels = append(labels, "Song of Solomon 2:8–3:5", "2 Thessalonians 2:16–17", "1 Thessalonians 5:12–13", "Leviticus 11", "2 Kings 18–20")
+	labels = append(labels, "Deuteronomy 31:30–32:45", "Song of Solomon 2:8–3:5", "2 Thessalonians 2:16–17", "1 Thessalonians 5:12–13", "Leviticus 11", "2 Kings 18–20")
+
+	crossBookLabels := []string{
+		"Leviticus 27:34–Numbers 1:1",
+		"2 Chronicles 36:22–Ezra 1:3",
+		"2 Chronicles 36:22–Ezra 1:4",
+		"2 Chronicles 36:21–Ezra 1:5",
+		"2 Chronicles 36:21–Ezra 1:2",
+		"2 Chronicles 36:22–Ezra 1:2",
+		"Jeremiah 52:1–Lamentations 1:5",
+		"Haggai 2:20–Zechariah 1:1",
+		"2 John 1:1–3 John 1:14",
+		"Acts 28:17–Romans 1:1",
+		"Ephesians 6:23–Philippians 1:2",
+		"1 Thessalonians 5:28–2 Thessalonians 1:2",
+		"2 John 1:13–3 John 1:14",
+	}
 
 	empty := &AppState{Bible: &BibleData{}, theme: th}
 	for _, sizeOpt := range textSizeOptions {
@@ -203,9 +222,72 @@ func TestEveryUnwrappedLineOfTheListFitsTheNarrowestPhone(t *testing.T) {
 			}
 		}
 		widestTitle, _ := widest(titles, sz.title, fyne.TextStyle{Italic: true})
-		pCard := crossRefRowRuled(empty, passageCard(crossRef{Book: "Mark", Chapter: 5, Verse: 21, Parallel: true, Title: widestTitle}, false), lightPalette, func(crossRef) {}, false)
-		if problems := crossRefListMisfits([]fyne.CanvasObject{pCard}, limit); len(problems) != 0 {
-			t.Errorf("%s: parallel card with widest title %q: %s", sizeOpt.ID, widestTitle, strings.Join(problems, "; "))
+		for _, badge := range []bool{false, true} {
+			pCard := crossRefRowRuled(empty, passageCard(crossRef{Book: "Mark", Chapter: 5, Verse: 21, Parallel: true, Title: widestTitle}, badge), lightPalette, func(crossRef) {}, false)
+			if problems := crossRefListMisfits([]fyne.CanvasObject{pCard}, limit); len(problems) != 0 {
+				t.Errorf("%s: parallel card badge=%v with widest title %q: %s", sizeOpt.ID, badge, widestTitle, strings.Join(problems, "; "))
+			}
+		}
+		for _, ref := range parRefs {
+			bCard := crossRefRowRuled(empty, passageCard(ref, true), lightPalette, func(crossRef) {}, false)
+			if problems := crossRefListMisfits([]fyne.CanvasObject{bCard}, limit); len(problems) != 0 {
+				t.Errorf("%s: badged parallel card %q: %s", sizeOpt.ID, ref.label(), strings.Join(problems, "; "))
+			}
+		}
+		occBadge := otherOccasionBadge(lightPalette)
+		if occBadge.MinSize().Width > limit {
+			t.Errorf("%s: otherOccasionBadge wants %.1f points, over %.0f", sizeOpt.ID, occBadge.MinSize().Width, limit)
+		}
+
+		// Every cross-book Treasury card and self-row fits the narrowest phone,
+		// staying on one row while it fits and turning cleanly after the en dash
+		// ("1 Thessalonians 5:28–" / "2 Thessalonians 1:2") when wider than 283pt.
+		for _, cb := range crossBookLabels {
+			cObj := crossRefRowRuled(empty, crossRefCard{Label: cb}, lightPalette, func(crossRef) {}, false)
+			if problems := crossRefListMisfits([]fyne.CanvasObject{cObj}, limit); len(problems) != 0 {
+				t.Errorf("%s: cross-book card %q: %s", sizeOpt.ID, cb, strings.Join(problems, "; "))
+			}
+			cObj.Resize(fyne.NewSize(limit, 200))
+			walkTree(cObj, func(o fyne.CanvasObject) {
+				if pr, ok := o.(*crossRefPrinted); ok {
+					rr := test.WidgetRenderer(pr).(*crossRefPrintedRenderer)
+					rr.Layout(pr.Size())
+					for _, row := range rr.rows {
+						if rw := rr.measure(row.Text); rw > limit+0.5 {
+							t.Errorf("%s: cross-book row %q wants %.1f points, over %.0f", sizeOpt.ID, row.Text, rw, limit)
+						}
+					}
+					switch cb {
+					case "1 Thessalonians 5:28–2 Thessalonians 1:2":
+						if got := strings.Join(rr.rowTexts(), " | "); got != "1 Thessalonians 5:28– | 2 Thessalonians 1:2" {
+							t.Errorf("%s: %q wrapped as %q; want break after en dash", sizeOpt.ID, cb, got)
+						}
+					case "Leviticus 27:34–Numbers 1:1":
+						if len(rr.rows) != 1 {
+							t.Errorf("%s: %q wrapped into %d rows on 283pt; want 1", sizeOpt.ID, cb, len(rr.rows))
+						}
+					case "Jeremiah 52:1–Lamentations 1:5":
+						wantRows := 1
+						if sizeOpt.ID == "xl" {
+							wantRows = 2
+						}
+						if len(rr.rows) != wantRows {
+							t.Errorf("%s: %q wrapped into %d rows; want %d", sizeOpt.ID, cb, len(rr.rows), wantRows)
+						}
+					}
+				}
+			})
+			sObj := crossRefSelfRow(cb, "", lightPalette, false)
+			if problems := crossRefListMisfits([]fyne.CanvasObject{sObj}, limit); len(problems) != 0 {
+				t.Errorf("%s: cross-book self-row %q: %s", sizeOpt.ID, cb, strings.Join(problems, "; "))
+			}
+		}
+		wideDesktop := newCrossRefRef("1 Thessalonians 5:28–2 Thessalonians 1:2", sz.reference, fyne.TextStyle{Bold: true}, lightPalette.Accent)
+		wideDesktop.Resize(fyne.NewSize(420, 100))
+		rr := test.WidgetRenderer(wideDesktop).(*crossRefPrintedRenderer)
+		rr.Layout(wideDesktop.Size())
+		if len(rr.rows) != 1 {
+			t.Errorf("%s: cross-book reference wrapped into %d rows on 420pt wide panel; want 1", sizeOpt.ID, len(rr.rows))
 		}
 
 		// Hyphenated and em-dashed compounds in the passage stay whole when they

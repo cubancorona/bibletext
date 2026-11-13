@@ -19,8 +19,11 @@ import (
 // and gospelSynopsisSpans is how many contiguous spans those columns expand to
 // (four columns carry two comma-separated spans).
 const (
-	gospelSynopsisColumns = 469
-	gospelSynopsisSpans   = 473
+	gospelSynopsisPericopes    = 267
+	gospelSynopsisSections     = 17
+	gospelSynopsisSingleGospel = 156
+	gospelSynopsisColumns      = 469
+	gospelSynopsisSpans        = 473
 )
 
 // gospelVersesInNoSet are the WEB's Gospel verses that belong to no synopsis

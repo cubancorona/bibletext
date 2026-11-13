@@ -13,6 +13,8 @@ import (
 	"encoding/json"
 	"image/color"
 	"os"
+	"slices"
+	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -823,6 +825,62 @@ func TestTheCanonFitsTheNarrowestPhoneWithEveryGroupOpen(t *testing.T) {
 			t.Fatalf("control (%s): %d selections with a note, %d groups opened", sizeOpt.ID, selections, opened)
 		}
 		t.Logf("%s: %d selections with a note, %d groups opened, %d over %.0f points", sizeOpt.ID, selections, opened, misfits, limit)
+	}
+
+	// When the Treasury zip is also cached locally, build full three-source lists
+	// (publisher + Gospel parallels + Treasury, including cross-book Treasury
+	// spans and cross-book overlap cases) and verify both width and cross-book
+	// publisher filtering against the real canon.
+	if zipBytes, err := os.ReadFile(realCachePath(crossRefCachePath())); err == nil {
+		if idx, _, err := parseCrossRefZip(zipBytes); err == nil {
+			crossRefMu.Lock()
+			was := crossRefIndex
+			crossRefIndex = idx
+			crossRefMu.Unlock()
+			t.Cleanup(func() {
+				crossRefMu.Lock()
+				crossRefIndex = was
+				crossRefMu.Unlock()
+			})
+			for _, sizeOpt := range textSizeOptions {
+				setReadingTextSizeID(sizeOpt.ID)
+				for _, tc := range []struct {
+					book        string
+					ch, v       int
+					presentCard string
+					absentCard  string
+				}{
+					{"Ezekiel", 36, 3, "Jeremiah 52:1–Lamentations 1:5", ""}, // 30-char cross-book Treasury row (wraps at Extra large)
+					{"Numbers", 3, 1, "Leviticus 27:34–Numbers 1:1", ""},     // 27-char cross-book Treasury row
+					{"Matthew", 3, 1, "", ""},                                // publisher + Gospel parallels + Treasury
+					{"Ezra", 4, 3, "", "2 Chronicles 36:22–Ezra 1:3"},        // overlapped by publisher Ezra 1:1–4
+					{"Ezra", 6, 3, "", "2 Chronicles 36:22–Ezra 1:4"},        // overlapped by publisher Ezra 1:1
+					{"Daniel", 6, 28, "", "2 Chronicles 36:22–Ezra 1:2"},     // overlapped by publisher Ezra 1:1, 2
+				} {
+					st.CurrentBook, st.CurrentChapter = tc.book, tc.ch
+					sel := versesBetween(&bd, tc.book, tc.ch, tc.v, tc.v)
+					refs := crossRefsForSelection(st, "", selSpan{lo: tc.v, hi: tc.v})
+					lst := buildCrossRefList(st, sel, refs, nil, st.pal(), func(crossRef) {})
+					for _, g := range groupRowsIn(lst.Objects) {
+						if g.header != nil {
+							g.toggle()
+						}
+					}
+					if problems := crossRefListMisfits(lst.Objects, limit); len(problems) != 0 {
+						t.Errorf("%s full list %s %d:%d: %s", sizeOpt.ID, tc.book, tc.ch, tc.v, strings.Join(problems, "; "))
+					}
+					cards := cardLabelsIn(lst.Objects)
+					if tc.presentCard != "" && !slices.Contains(cards, tc.presentCard) {
+						t.Errorf("%s %s %d:%d missing expected cross-book Treasury card %q",
+							sizeOpt.ID, tc.book, tc.ch, tc.v, tc.presentCard)
+					}
+					if tc.absentCard != "" && slices.Contains(cards, tc.absentCard) {
+						t.Errorf("%s %s %d:%d retained overlapping cross-book Treasury card %q",
+							sizeOpt.ID, tc.book, tc.ch, tc.v, tc.absentCard)
+					}
+				}
+			}
+		}
 	}
 }
 

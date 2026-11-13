@@ -828,3 +828,44 @@ func TestACorrectionThatNoLongerAppliesIsLoggedOnce(t *testing.T) {
 		t.Errorf("control: the index holds %d rows at Matthew 23:14, want the one filed at 23:13", len(got))
 	}
 }
+
+func TestCrossBookRangeContainmentAndNormalisation(t *testing.T) {
+	span := crossRef{Book: "2 Chronicles", Chapter: 36, Verse: 22, EndBook: "Ezra", EndCh: 1, EndV: 3}
+	for _, inside := range []crossRef{
+		span,
+		{Book: "2 Chronicles", Chapter: 36, Verse: 22},
+		{Book: "2 Chronicles", Chapter: 36, Verse: 23},
+		{Book: "2 Chronicles", Chapter: 36, Verse: 22, EndV: 23},
+		{Book: "Ezra", Chapter: 1, Verse: 1},
+		{Book: "Ezra", Chapter: 1, Verse: 3},
+		{Book: "Ezra", Chapter: 1, Verse: 1, EndV: 3},
+		{Book: "2 Chronicles", Chapter: 36, Verse: 23, EndBook: "Ezra", EndCh: 1, EndV: 2},
+	} {
+		if !span.covers(inside) {
+			t.Errorf("%q.covers(%q) = false, want true", span.label(), inside.label())
+		}
+	}
+	for _, outside := range []crossRef{
+		{Book: "2 Chronicles", Chapter: 36, Verse: 21},
+		{Book: "Ezra", Chapter: 1, Verse: 4},
+		{Book: "Ezra", Chapter: 1, Verse: 1, EndV: 4},
+		{Book: "2 Chronicles", Chapter: 36, Verse: 21, EndBook: "Ezra", EndCh: 1, EndV: 3},
+		{Book: "2 Chronicles", Chapter: 36, Verse: 22, EndBook: "Ezra", EndCh: 1, EndV: 4},
+	} {
+		if span.covers(outside) {
+			t.Errorf("%q.covers(%q) = true, want false", span.label(), outside.label())
+		}
+	}
+	if !span.containsVerse("2 Chronicles", 36, 23) || !span.containsVerse("Ezra", 1, 2) {
+		t.Error("containsVerse missed a verse inside a cross-book range")
+	}
+	if span.containsVerse("2 Chronicles", 36, 21) || span.containsVerse("Ezra", 1, 4) || span.containsVerse("Nehemiah", 1, 1) {
+		t.Error("containsVerse matched a verse outside a cross-book range")
+	}
+
+	// An inverted cross-book span keeps only its start verse, matching single-book normalisation.
+	inverted := normaliseSpanEnd(crossRef{Book: "Ezra", Chapter: 1, Verse: 3, EndBook: "2 Chronicles", EndCh: 36, EndV: 22})
+	if inverted.crossBook() || inverted.EndV != 0 || inverted.label() != "Ezra 1:3" {
+		t.Errorf("inverted cross-book span normalised to %+v (%q), want Ezra 1:3", inverted, inverted.label())
+	}
+}

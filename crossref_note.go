@@ -89,10 +89,8 @@ const crossRefRowPad float32 = 6
 // card's bold it read as a heading over the cards after it.
 func crossRefSelfRow(label, tag string, pal palette, rule bool) fyne.CanvasObject {
 	sz := crossRefPanelSizes()
-	ref := canvas.NewText(label, pal.TextMuted)
-	ref.TextSize = sz.printed
-	ref.FontSource = crossRefZeroFace(fyne.TextStyle{})
-	var line fyne.CanvasObject = ref
+	ref := newCrossRefHeadingText(label, sz.printed, fyne.TextStyle{}, pal.TextMuted)
+	line := ref
 	if tag != "" {
 		t := canvas.NewText(tag, pal.TextMuted)
 		t.TextSize = sz.title
