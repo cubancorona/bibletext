@@ -10031,10 +10031,12 @@ API.Bible comments without a plan name), each described in place below:
 - Every range label is spelled with an en dash ("John 3:1–3"), as the panel's
   header already spelled the selection.
 - The panel is one list of one card (`crossref_list.go`, `crossref_panel.go`):
-  GOSPEL PARALLELS (the pericope title stays, the pill goes under the label),
-  NKJV REFERENCES (the key "· VERSE 2" or "· TITLE" only when the selection
-  spans verses or a note's key is not the selected verse), TREASURY OF
-  SCRIPTURE KNOWLEDGE open, minus any row whose passage a verse-level publisher
+  until 13 November 2026 GOSPEL PARALLELS led and NKJV REFERENCES carried
+  "· VERSE 2", "· TITLE" or "· HEADING" keys when a selection spanned units;
+  since 13 November 2026 one single `NKJV REFERENCES` label stands directly
+  under the lettered passage over every note of the selection in order (below),
+  followed by GOSPEL PARALLELS (the pericope title stays, the pill goes under
+  the label) and TREASURY OF SCRIPTURE KNOWLEDGE open, minus any row whose passage a verse-level publisher
   card contains or that contains a verse-level card's start verse
   (`treasuryMinusPublisher`: containment, not label equality; `:title` cards
   never suppress verse rows, and whole-chapter cards suppress only exact
@@ -10114,11 +10116,11 @@ commits: 467e13546a (Matthew 15:8's first-line red-letter span restored in
 `red_letter_nkjv_data.go`), 4e9e789c7d (NKJV test fixture strings replaced
 with WEBC/BSB wording), e9814bcf27 (NKJV REFERENCES directly under the passage
 ahead of GOSPEL PARALLELS, continuous spreadsheet lettering `a..z, aa..`
-across a selection, one shared NKJV REFERENCES label for a Psalm title and
-verse 1, `NKJV REFERENCES · HEADING` with bold text-coloured heading in the
-passage, `:title` card navigation without washing verse 1, exact-selection
-own-passage rule across publisher and Treasury rows, and the missing-note
-sentence at Psalm 150:2) and 13e44dcef8 (pinned margin letters on scrolled
+across a selection, bold text-coloured noted heading in the passage — all
+publisher notes since consolidated under one unkeyed `NKJV REFERENCES` label
+per source on 13 November, below — `:title` card navigation without washing
+verse 1, exact-selection own-passage rule across publisher and Treasury rows,
+and the missing-note sentence at Psalm 150:2) and 13e44dcef8 (pinned margin letters on scrolled
 open notes and opened lone groups, italic-to-mark clearance and opening-quote
 holding in the passage, plain-zero Atkinson faces on references and printed
 shorthand lines, and scrolled credits on landscape or short windows).
@@ -10142,11 +10144,12 @@ and the test that holds it. What the list is now, flag on:
   the word that follows across line breaks. The letters run in one continuous
   spreadsheet series across the whole selection — title, noted headings and
   verses alike — `a, b, c … z, aa, ab …`, never restarting inside a
-  multi-verse selection. On a single-verse Psalm 1 selection the title's
-  notes and verse 1's share one `NKJV REFERENCES` heading; on a multi-verse
-  selection the title's stand under `NKJV REFERENCES · TITLE`; a noted
-  heading's note stands under `NKJV REFERENCES · HEADING`. They are the
-  panel's own: the feed's caller is "-" on all 32,517 notes. A verse's
+  multi-verse selection. Sections in the panel are for the sources only (`NKJV
+  REFERENCES`, `GOSPEL PARALLELS`, `TREASURY OF SCRIPTURE KNOWLEDGE`), never
+  for verses, a Psalm's title or a heading: all notes of the selection — the
+  title's, a heading's, then the verses' — follow in order under the one
+  `NKJV REFERENCES` label (`TestCrossRefListHasOnePublisherSectionForTheSelection`).
+  They are the panel's own: the feed's caller is "-" on all 32,517 notes. A verse's
   number is drawn where the passage holds more than one verse, or a title
   before the verse. Letters and numbers are set as the page sets a
   superscript, 0.66 of the text with the baseline a third of the text's size
@@ -10229,7 +10232,8 @@ and the test that holds it. What the list is now, flag on:
   head of the word (`wordSplitCallers`). 257 stand between two words the
   source runs together (`docs/SOURCE_FIELDS.md`), and are drawn there.
 - The canon's one note on a heading (before Numbers 4:21, citing Num. 3:22)
-  is read, and shown on the heading under `NKJV REFERENCES · HEADING`.
+  is read, with the heading drawn bold in text colour in the passage and the
+  note standing in order under `NKJV REFERENCES`.
 
 THE FORMAL CHECK. `notePieceCensus` (`publisher_xrefs_census_test.go`)
 measures a canon by the functions the panel draws from, and
@@ -10292,7 +10296,9 @@ DECIDED AND BUILT 12–13 November 2026 (resolving the 11 November open list):
   translator footnotes are available under the licence) is drafted for the
   owner to review and send.
 - The heading's note before Numbers 4:21: kept on the heading, drawn in the
-  bold cut and text colour in the passage, under `NKJV REFERENCES · HEADING`.
+  bold cut and text colour in the passage, with its note in order under the
+  single `NKJV REFERENCES` label (decided 13 November 2026: one section per
+  source, never per verse, title or heading).
 - Notes of several pieces start open when the panel opens; every
   parenthesised group starts closed wherever it stands; an opened lone group
   keeps the 3-point rule in its margin beside its well; and `letter-in-view`
@@ -10366,10 +10372,9 @@ On a no: nothing to unwind. Deferred, not denied:
   or a bare number). A continuation the loaded text has is a card under its
   full reference, one it lacks is its printed words in their place, and the
   whole note stands on its row as printed.
-- CLOSED 11–12 November 2026: the canon's one heading note (on a heading in
-  Numbers 4), which the resolver did not read. It is read and shown on the
-  heading under `NKJV REFERENCES · HEADING`, with the heading drawn bold in
-  the passage (above).
+- CLOSED 11–13 November 2026: the canon's one heading note (on a heading in
+  Numbers 4), which the resolver did not read. It is read and shown in order
+  under `NKJV REFERENCES`, with the heading drawn bold in the passage (above).
 
 TO SEE IT. Build for the phone: `scripts/run-ios-device.sh --nkjvxrefs`.
 Without a device: run `TestLiveAPIBibleFullCanon` with

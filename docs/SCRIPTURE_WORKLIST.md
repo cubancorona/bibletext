@@ -758,15 +758,14 @@ take an en dash, and the footer's sources line wraps and names Gospel
 parallels only while a parallel row is on screen.
 
 On a yes the one line in `versions_nkjvxrefs.go` moves into the registry and
-the tag goes; on a no nothing needs unwinding. The 43 title notes ride the
-same rule as the rest, sharing "NKJV REFERENCES" with verse 1 on a
-single-verse selection and keyed "NKJV REFERENCES · TITLE" on a multi-verse
-selection, the title standing before verse 1 in the selected text and opening
-the selection's letter run; a noted section heading stands bold in the
-passage with its note under "NKJV REFERENCES · HEADING"; and a citation OF a
-Psalm's title ("Ps. 59:title", 47 in the feed) is a card labelled by its
-chapter, tagged "Title", previewing the superscription and navigating to the
-chapter's head without washing verse 1.
+the tag goes; on a no nothing needs unwinding. All publisher notes of the
+selection — the 43 Psalm title notes (with the title set in italic before
+verse 1 in the passage), a noted section heading (set bold in text colour in
+the passage), and the verses' notes — follow in order under one single
+"NKJV REFERENCES" label (sections name sources only, never verses, titles or
+headings); and a citation OF a Psalm's title ("Ps. 59:title", 47 in the feed)
+is a card labelled by its chapter, tagged "Title", previewing the
+superscription and navigating to the chapter's head without washing verse 1.
 
 **Paused 10 September 2026** after the first look on a phone: the Treasury's
 accordion title forced the list wider than the panel and clipped every row,

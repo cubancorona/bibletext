@@ -266,8 +266,8 @@ func TestThePassageIsTheSelectedTextWithALetterBeforeEachNotesWord(t *testing.T)
 	if italic != title.Text+"the" {
 		t.Errorf("the italic runs read %q, want the title and the supplied word", italic)
 	}
-	// The list is headed by it, and each note carries the letter its word has;
-	// a Psalm's title and verse 1 share one section label.
+	// The list is headed by it, and each note carries the letter its word has,
+	// all under one NKJV REFERENCES label.
 	lst := buildCrossRefList(st, sel, nil, nil, lightPalette, func(crossRef) {})
 	p := passageIn(lst.Objects[:1])
 	if !lst.Passage || p == nil {
@@ -276,7 +276,7 @@ func TestThePassageIsTheSelectedTextWithALetterBeforeEachNotesWord(t *testing.T)
 	if got := passagePlainText(p.runs); got != want {
 		t.Errorf("the list's passage without its letters is %q", got)
 	}
-	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES · VERSE 1" {
+	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES" {
 		t.Errorf("labels = %q", got)
 	}
 	var letters []string
@@ -408,8 +408,8 @@ func TestAHeadingsNoteStandsWithTheVerseItIsSetBefore(t *testing.T) {
 	if got := cardLabelsIn(lst.Objects); joined(got) != "Numbers 3:22|Numbers 3:25" || lst.PublisherNotes != 2 {
 		t.Errorf("cards = %q, %d notes; want the heading's note and the verse's", got, lst.PublisherNotes)
 	}
-	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES · HEADING|NKJV REFERENCES · VERSE 21" {
-		t.Errorf("labels = %q", got)
+	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES" {
+		t.Errorf("labels = %q, want NKJV REFERENCES", got)
 	}
 	// Drawn: the heading line uses the bold cut and the body text colour, and
 	// a single-verse selection keeps its verse unnumbered despite the heading.
@@ -432,12 +432,12 @@ func TestAHeadingsNoteStandsWithTheVerseItIsSetBefore(t *testing.T) {
 		t.Errorf("heading text was not drawn in the passage")
 	}
 	// When only the heading has a note (as on Numbers 4:21 in the NKJV), its
-	// section label is NKJV REFERENCES · HEADING both alone and in a range.
+	// section label is the single unkeyed NKJV REFERENCES both alone and in a range.
 	v21.Footnotes = nil
 	for _, span := range [][]Verse{versesBetween(bd, "Numbers", 4, 21, 21), versesBetween(bd, "Numbers", 4, 20, 22)} {
 		onlyHeading := buildCrossRefList(st, span, nil, nil, lightPalette, func(crossRef) {})
-		if got := sectionLabelsIn(onlyHeading.Objects); joined(got) != "NKJV REFERENCES · HEADING" {
-			t.Errorf("%d verses around Numbers 4:21: labels = %q, want NKJV REFERENCES · HEADING", len(span), got)
+		if got := sectionLabelsIn(onlyHeading.Objects); joined(got) != "NKJV REFERENCES" {
+			t.Errorf("%d verses around Numbers 4:21: labels = %q, want NKJV REFERENCES", len(span), got)
 		}
 	}
 

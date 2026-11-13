@@ -54,7 +54,6 @@ package bibletext
 import (
 	"fmt"
 	"image/color"
-	"strconv"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -77,16 +76,14 @@ const (
 )
 
 // The section labels, set as sectionLabel sets them (uppercase, 11-pt bold
-// monospace, muted). The publisher's names the SET, as its two neighbours
-// do: a bare edition abbreviation beside verse text is the app's idiom for
-// the previews' translation, which every card's preview already is.
+// monospace, muted). One label per source, never per verse, title or heading:
+// the publisher's names the SET, as its two neighbours do (a bare edition
+// abbreviation beside verse text is the app's idiom for the previews'
+// translation, which every card's preview already is).
 const (
 	parallelsLabel       = "GOSPEL PARALLELS"
 	treasuryLabel        = "TREASURY OF SCRIPTURE KNOWLEDGE"
 	publisherLabelSuffix = " REFERENCES" // after the edition's abbreviation: "NKJV REFERENCES"
-	publisherKeySep      = " · "         // before a verse or heading key: "NKJV REFERENCES · VERSE 2"
-	publisherHeadingKey  = "HEADING"     // the key of a section heading's note
-	publisherVerseKey    = "VERSE "      // before the number
 )
 
 // publisherEmptyLine is the one line under the publisher's label when the
@@ -347,48 +344,28 @@ func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tsk
 	}
 
 	// The publisher's run stands directly under the lettered passage, before
-	// the Gospel parallels. A Psalm's title and verse 1 share one label; a
-	// section heading's note wears HEADING; and verse keys appear where the
-	// selection spans several verses or a heading note precedes the verse's.
+	// the Gospel parallels, under one section label for the source: sections
+	// are for the sources only, never for verses, a Psalm's title or a
+	// heading. Each note is a block of its own under its letter, in the order
+	// the notes stand in the selection (the title's, a heading's, then the
+	// verses'), and holds everything the note prints in the order it prints
+	// it (crossref_note.go); no card is withheld because an earlier note has
+	// its passage — the note is the edition's unit and is kept whole.
 	out.Sections.Publisher = true
-	firstVerse := 0
-	if len(selected) > 0 {
-		firstVerse = selected[0].Verse
-	}
-	sectionVerse := func(n publisherCrossRef) int {
-		if n.Verse == 0 && !n.Heading {
-			return firstVerse
-		}
-		return n.Verse
-	}
-	keyed := len(selected) > 1
-	for _, n := range notes {
-		if n.Heading || sectionVerse(n) != firstVerse {
-			keyed = true
-		}
-	}
+	label(publisherRunLabel(v.Abbrev))
 	if len(notes) == 0 {
-		label(publisherRunLabel(v.Abbrev, 0, false, false))
 		line := publisherEmptyLine
 		if missing {
 			line = publisherMissingLine
 		}
 		out.Objects = append(out.Objects, crossRefNoteCaption(fmt.Sprintf(line, v.Abbrev)))
 		out.PublisherLines++
+	} else {
+		// A little air between the label and the first note's ground.
+		out.Objects = append(out.Objects, spacer(4))
 	}
-	// Each note is a block of its own under its letter, in the order the
-	// notes stand in the selection, and holds everything the note prints in
-	// the order it prints it (crossref_note.go). A verse's label stands over
-	// its first note: every note puts something on screen, so no label is held
-	// back, and a card is not withheld because an earlier note of the verse
-	// has its passage — the note is the edition's unit and is kept whole.
 	var carded []crossRef // the passages the publisher's cards on screen follow, for the Treasury filter
-	for i, n := range notes {
-		if i == 0 || n.Heading != notes[i-1].Heading || (keyed && sectionVerse(n) != sectionVerse(notes[i-1])) {
-			label(publisherRunLabel(v.Abbrev, sectionVerse(n), n.Heading, keyed))
-			// A little air between the label and the first note's ground.
-			out.Objects = append(out.Objects, spacer(4))
-		}
+	for _, n := range notes {
 		row, cards, groups, lines := publisherNoteBlock(state, n, pal, onTap, out.Relayout)
 		out.Objects = append(out.Objects, row)
 		carded = append(carded, cards...)
@@ -442,19 +419,10 @@ func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tsk
 	return out
 }
 
-// publisherRunLabel is the publisher's section label: "NKJV REFERENCES", and
-// with a key "NKJV REFERENCES · VERSE 2" or, for a section heading's note,
-// "NKJV REFERENCES · HEADING".
-func publisherRunLabel(abbrev string, verse int, heading, keyed bool) string {
-	label := strings.ToUpper(abbrev) + publisherLabelSuffix
-	switch {
-	case heading:
-		return label + publisherKeySep + publisherHeadingKey
-	case !keyed:
-		return label
-	default:
-		return label + publisherKeySep + publisherVerseKey + strconv.Itoa(verse)
-	}
+// publisherRunLabel is the publisher's section label ("NKJV REFERENCES"): one
+// over every note of the selection, naming the source as its neighbours do.
+func publisherRunLabel(abbrev string) string {
+	return strings.ToUpper(abbrev) + publisherLabelSuffix
 }
 
 // treasuryMinusPublisher drops the Treasury rows whose passage a publisher's

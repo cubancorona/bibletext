@@ -281,7 +281,7 @@ func TestEveryUnwrappedLineOfTheListFitsTheNarrowestPhone(t *testing.T) {
 	}
 
 	setReadingTextSizeID("normal")
-	runs := []string{parallelsLabel, treasuryLabel, publisherRunLabel("NKJV", 176, false, true), publisherRunLabel("NKJV", 0, true, true)}
+	runs := []string{parallelsLabel, treasuryLabel, publisherRunLabel("NKJV")}
 	if text, w := widest(runs, 11, fyne.TextStyle{Bold: true, Monospace: true}); w > limit {
 		t.Errorf("the section label %q wants %.0f points, over %.0f", text, w, limit)
 	}

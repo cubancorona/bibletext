@@ -446,10 +446,10 @@ func TestCrossRefListWithThePublisherIsItsNotesUnderTheirLetters(t *testing.T) {
 	if !lst.Sections.Parallels || !lst.Sections.Publisher || !lst.Sections.Treasury {
 		t.Errorf("sections = %+v; want all three on screen", lst.Sections)
 	}
-	// One heading idiom: the publisher's run directly under the lettered
-	// passage (keyed per verse with notes since the selection spans three
-	// verses), then Gospel parallels, then the Treasury.
-	want := "NKJV REFERENCES · VERSE 1|NKJV REFERENCES · VERSE 2|NKJV REFERENCES · VERSE 3|GOSPEL PARALLELS|TREASURY OF SCRIPTURE KNOWLEDGE"
+	// One heading per source, never per verse: the publisher's run directly
+	// under the lettered passage (a single NKJV REFERENCES label over all four
+	// notes across verses 1–3), then Gospel parallels, then the Treasury.
+	want := "NKJV REFERENCES|GOSPEL PARALLELS|TREASURY OF SCRIPTURE KNOWLEDGE"
 	if got := sectionLabelsIn(lst.Objects); joined(got) != want {
 		t.Errorf("section labels = %q\nwant %q", got, want)
 	}
@@ -556,8 +556,10 @@ func TestCrossRefListWithThePublisherIsItsNotesUnderTheirLetters(t *testing.T) {
 	}
 }
 
-// The run's label carries a verse key only where the key informs.
-func TestCrossRefListKeysTheRunOnlyWhereItInforms(t *testing.T) {
+// Sections are for the sources only (NKJV, Gospel parallels, Treasury), never
+// for verses, a Psalm's title or a heading: every note of the selection stands
+// in order under a single NKJV REFERENCES label.
+func TestCrossRefListHasOnePublisherSectionForTheSelection(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	licenseNKJVForTest(t)
@@ -565,24 +567,24 @@ func TestCrossRefListKeysTheRunOnlyWhereItInforms(t *testing.T) {
 	st, sel := listFixtureState()
 	nop := func(crossRef) {}
 
-	// One verse: no key anywhere.
+	// One verse: one NKJV REFERENCES label.
 	lst := buildCrossRefList(st, sel[1:2], nil, nil, lightPalette, nop)
 	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES" {
 		t.Errorf("one verse: labels = %q", got)
 	}
-	// Two verses with notes: one label per verse, keyed.
-	lst = buildCrossRefList(st, sel[:2], nil, nil, lightPalette, nop)
-	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES · VERSE 1|NKJV REFERENCES · VERSE 2" {
-		t.Errorf("two verses: labels = %q", got)
+	// Multiple verses with notes: still one NKJV REFERENCES label over all of them.
+	lst = buildCrossRefList(st, sel, nil, nil, lightPalette, nop)
+	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES" {
+		t.Errorf("three verses: labels = %q, want one NKJV REFERENCES", got)
 	}
-	// A Psalm's title note shares verse 1's label: bare on verse 1 alone, and
-	// VERSE 1 when the selection spans more than verse 1.
+	// A Psalm's title note and verse notes share the single NKJV REFERENCES
+	// label on verse 1 alone and across multiple verses.
 	st.CurrentBook, st.CurrentChapter = "Psalms", 3
 	ps := st.Bible.GetChapter("Psalms", 3)
 	if lst = buildCrossRefList(st, ps[:1], nil, nil, lightPalette, nop); joined(sectionLabelsIn(lst.Objects)) != "NKJV REFERENCES" {
 		t.Errorf("1 verse of Psalm 3: labels = %q", sectionLabelsIn(lst.Objects))
 	}
-	if lst = buildCrossRefList(st, ps, nil, nil, lightPalette, nop); joined(sectionLabelsIn(lst.Objects)) != "NKJV REFERENCES · VERSE 1" {
+	if lst = buildCrossRefList(st, ps, nil, nil, lightPalette, nop); joined(sectionLabelsIn(lst.Objects)) != "NKJV REFERENCES" {
 		t.Errorf("2 verses of Psalm 3: labels = %q", sectionLabelsIn(lst.Objects))
 	}
 	// CONTROL: a verse without a note and no title note: the bare label over
@@ -590,6 +592,28 @@ func TestCrossRefListKeysTheRunOnlyWhereItInforms(t *testing.T) {
 	lst = buildCrossRefList(st, ps[1:], []crossRef{{Book: "John", Chapter: 7, Verse: 50, Votes: 3}}, nil, lightPalette, nop)
 	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES|TREASURY OF SCRIPTURE KNOWLEDGE" {
 		t.Errorf("Psalm 3:2: labels = %q", got)
+	}
+	// A noted section heading and surrounding verses share the one NKJV
+	// REFERENCES label, with their notes in order (verse 20's a, heading's b,
+	// verse 21's c).
+	x := footnoteKindCrossref
+	hbd := xrefBible(map[string]map[int]int{"Numbers": {3: 51, 4: 49}})
+	hbd.Verses["Numbers"][4][19].Footnotes = []Footnote{{Anchor: 0, Text: "Num. 3:17", Kind: x, Caller: "-"}}
+	hbd.Headings = map[string]map[int][]Heading{"Numbers": {4: {
+		{Text: "Duties of the fixture's sons", Style: "s", BeforeVerse: 21, Footnotes: []Footnote{{Text: "Num. 3:22", Kind: x, Caller: "-"}}},
+	}}}
+	hbd.Verses["Numbers"][4][20].Footnotes = []Footnote{{Anchor: 0, Text: "Num. 3:25", Kind: x, Caller: "-"}}
+	hst := &AppState{Bible: hbd, CurrentBook: "Numbers", CurrentChapter: 4, CurrentVersion: "nkjv"}
+	hlst := buildCrossRefList(hst, versesBetween(hbd, "Numbers", 4, 20, 22), nil, nil, lightPalette, nop)
+	if got := sectionLabelsIn(hlst.Objects); joined(got) != "NKJV REFERENCES" {
+		t.Errorf("Numbers 4:20-22 with noted heading: labels = %q, want NKJV REFERENCES", got)
+	}
+	var letters []string
+	for _, c := range cardsIn(hlst.Objects) {
+		letters = append(letters, cardLetter(c)+" "+cardReference(c))
+	}
+	if got := joined(letters); got != "a Numbers 3:17|b Numbers 3:22|c Numbers 3:25" {
+		t.Errorf("Numbers 4:20-22 note order = %q", got)
 	}
 }
 
@@ -614,7 +638,7 @@ func TestANoteIsKeptWholeThoughAnotherNoteHasItsPassage(t *testing.T) {
 	// and starts closed, so it puts no card into the run.)
 	for _, refs := range [][]crossRef{nil, {{Book: "Romans", Chapter: 5, Verse: 8, Votes: 3}}} {
 		lst := buildCrossRefList(st, sel, refs, nil, lightPalette, nop)
-		want := "NKJV REFERENCES · VERSE 2|NKJV REFERENCES · VERSE 3"
+		want := "NKJV REFERENCES"
 		wantCards := "John 7:50|John 7:50"
 		if len(refs) > 0 {
 			want += "|" + treasuryLabel

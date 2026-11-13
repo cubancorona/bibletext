@@ -502,7 +502,6 @@ same way once the feed is asked for titles (include-titles=true; with titles
 off the paragraph is absent). 116 titles; their notes are cross references
 and so stay dark in every store build like every NKJV note; behind the
 `nkjvxrefs` tag the cross-references panel shows them when the selection
-reaches verse 1 — sharing "NKJV REFERENCES" with verse 1 on a single-verse
-selection and keyed "NKJV REFERENCES · TITLE" on a multi-verse selection
-(S20) — the title itself standing at the head of the selected text and opening
-the selection's letter run. See docs/SOURCE_FIELDS.md.
+reaches verse 1 — leading the single "NKJV REFERENCES" section ahead of the
+verses' notes (S20) — the title itself standing in italic at the head of the
+selected text and opening the selection's letter run. See docs/SOURCE_FIELDS.md.

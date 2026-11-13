@@ -105,7 +105,7 @@ func TestRenderCrossRefPanel(t *testing.T) {
 		{"john3-16-off", "John", 3, 16, 16, false},         // the control: today's panel
 		{"matt3-1-off", "Matthew", 3, 1, 1, false},         // the control with parallels: two credits in the footer
 		{"john3-16-on", "John", 3, 16, 16, true},           // three cards, a group, a lone group
-		{"john3-1to3-on", "John", 3, 1, 3, true},           // keyed labels
+		{"john3-1to3-on", "John", 3, 1, 3, true},           // three verses under the one NKJV REFERENCES label
 		{"matt3-1-on", "Matthew", 3, 1, 1, true},           // parallels, a self-range, the Treasury
 		{"psalm3-1-on", "Psalms", 3, 1, 1, true},           // the title's note
 		{"psalm3-2-on", "Psalms", 3, 2, 2, true},           // the empty run
@@ -184,6 +184,9 @@ func TestRenderCrossRefPanel(t *testing.T) {
 				}
 				if strings.Contains(strings.ToLower(all), "compare") {
 					t.Errorf("%s: a compare word or legend is in the panel", name)
+				}
+				if want := map[bool]int{true: 1, false: 0}[f.flag]; strings.Count(all, "NKJV REFERENCES") != want || strings.Contains(all, "REFERENCES ·") {
+					t.Errorf("%s: NKJV REFERENCES count = %d (want %d) or keyed publisher label present", name, strings.Count(all, "NKJV REFERENCES"), want)
 				}
 				t.Logf("%s: panel %.0f×%.0f, content wants %.0f wide; %d texts", name, ps.Width, ps.Height, top.Content.MinSize().Width, len(treeTexts(top)))
 				// A frame with every parenthesised group open, scrolled to the
