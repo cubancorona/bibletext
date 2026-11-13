@@ -455,7 +455,7 @@ breaks survive a copy is too easy to get wrong to leave where no test can reach.
 | S17 | NKJV supplied words: captured | NKJV | M | nkjv | done; captured, and drawn in italic on every surface |
 | S18 | speech reads the Psalm title | all | M | none | done |
 | S19 | mark an omitted verse's gap in the text | all | M | none | done |
-| S20 | show the NKJV's cross references | NKJV | M | none | built behind a tag; presentation second pass built 6 November 2026, the notes whole under their letters 11 November 2026, panel refinements settled and built 12–13 November 2026; gated on the licensing reply |
+| S20 | show the NKJV's cross references | NKJV | M | none | built behind a tag; presentation second pass built 6 November 2026, the notes whole under their letters 11 November 2026, panel refinements, per-section loading, other-cross-reference checks and reader text-size scaling built 12–13 November 2026; gated on the licensing reply |
 | S21 | website renders the footnote section | website | M | none | done |
 | S22 | in-text footnote markers | all | L | none | blocked |
 | S23 | draw small caps as small caps | NKJV | M | nkjv | done |
@@ -737,10 +737,13 @@ and no added word (a note that is nothing but such a group is drawn as
 that group's row beside the letter's margin, closed until tapped, so its
 citations do not count for the Treasury's filter); then GOSPEL PARALLELS
 where the selection has them, dropping the PARALLEL pill under their label;
-then TREASURY OF SCRIPTURE KNOWLEDGE, open, minus the rows whose passages the
-publisher's cards on screen already carry and minus exact citations of a
+then TREASURY OF SCRIPTURE KNOWLEDGE, open (or carrying an inline loading or
+retry state while the Treasury zip downloads on first use, while local
+publisher notes and parallels already stand on screen), minus the rows whose
+passages verse-level publisher cards on screen already carry (keeping specific
+rows under `:title` and whole-chapter cards) and minus exact citations of a
 selected verse (`publisher_xrefs.go`, `crossref_list.go`, `crossref_note.go`,
-`crossref_passage.go`). Nothing of the publisher's is sorted, capped, merged
+`crossref_passage.go`, `crossref_sizes.go`). Nothing of the publisher's is sorted, capped, merged
 or mapped: the targets are in the edition's own numbering, which is the
 numbering on screen. The Treasury is not removed — 31.7% of
 NKJV verses carry no note (9,853 of 31,102 on the 7 September canon) — and
@@ -780,11 +783,14 @@ every note whole under its letter, on a ground of its own with the letter
 alone in a margin, so that its rows are seen to be that letter's, and
 **refined 12–13 November 2026** with pinned margin letters on scrolled long
 notes and opened lone groups, plain-zero citation and shorthand numerals,
-scrolled credits on landscape or short windows, and the silent-caller notice
-at Psalm 150:2. The decisions, the build, the count that holds it over the
-canon and what is deferred are in the same BACKLOG entry;
-`docs/CROSS_REFERENCE_NOTES.md` is the ledger of what a note carries and
-where each thing is shown.
+scrolled credits on landscape or short windows, the silent-caller notice at
+Psalm 150:2, immediate local display while the Treasury downloads, `:title`
+and whole-chapter Treasury filter precision, strict Gospel-parallel span
+validation, and proportional scaling across `Normal`, `Large` and `Extra large`
+text sizes. The decisions, the build, the count that holds it over the canon
+and the audit of the other cross-reference sets are in the same BACKLOG entry;
+`docs/CROSS_REFERENCE_NOTES.md` is the ledger of what a note carries and where
+each thing is shown.
 
 **S23.** DONE. A small-caps span was folded to uppercase in the stored text,
 so LORD, GOD and the four names of Jesus were literally capitals. Drawing them

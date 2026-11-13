@@ -10034,9 +10034,11 @@ API.Bible comments without a plan name), each described in place below:
   GOSPEL PARALLELS (the pericope title stays, the pill goes under the label),
   NKJV REFERENCES (the key "· VERSE 2" or "· TITLE" only when the selection
   spans verses or a note's key is not the selected verse), TREASURY OF
-  SCRIPTURE KNOWLEDGE open, minus any row whose passage a publisher card
-  contains or that contains a card's start verse (`treasuryMinusPublisher`:
-  containment, not label equality). Until 11 November 2026 two notes citing
+  SCRIPTURE KNOWLEDGE open, minus any row whose passage a verse-level publisher
+  card contains or that contains a verse-level card's start verse
+  (`treasuryMinusPublisher`: containment, not label equality; `:title` cards
+  never suppress verse rows, and whole-chapter cards suppress only exact
+  matching whole-chapter Treasury spans, `695702382f`). Until 11 November 2026 two notes citing
   one passage gave one card, the first, keyed by passage and kind; that rule
   is repealed, and every note keeps every citation it prints (below). A
   Psalm's title and the whole psalm share the label "Psalms 59" and are two
@@ -10296,10 +10298,26 @@ DECIDED AND BUILT 12–13 November 2026 (resolving the 11 November open list):
   keeps the 3-point rule in its margin beside its well; and `letter-in-view`
   pins the letter of a scrolled open note or opened lone group near the top
   of its margin above the rule.
-- The Treasury's filter removing a Treasury row that a title card or a
-  whole-chapter card "carries" belongs to the audit of the other
-  cross-references (the Treasury, the Gospel parallels, any other edition's),
-  which follows the NKJV.
+- CLOSED 13 November 2026 (`695702382f`): audit of the other cross-reference
+  sets alongside the NKJV. `treasuryMinusPublisher` no longer lets `:title`
+  cards (`TitleRef`) suppress verse-1 or range Treasury rows (restoring 32
+  single-verse Treasury rows across the NKJV canon, such as Psalms 34:1 at
+  1 Samuel 22:1 and Psalms 56:1–13 at 1 Samuel 21:11) or lets whole-chapter
+  cards (`WholeChapters`) suppress specific intra-chapter verse and sub-range
+  Treasury rows unless their bounds match the whole chapter (restoring 66
+  single-verse rows across 50 panels, such as Genesis 7:2 and Exodus 28:41).
+  `parseGospelRef` now rejects empty, malformed, non-positive and inverted
+  spans instead of truncating or dropping segments silently, and
+  `TestEveryGospelParallelSpanNamesRealVerses` verifies all 473 shipping spans
+  (481 with `-tags next`) and all 102 other-occasion groups against the Gospel
+  chapter and omitted-verse tables. `GOSPEL PARALLELS` deliberately stays
+  unfiltered against `NKJV REFERENCES` so synopsis pericopes keep every
+  participating Gospel, and `treasuryRowsFor` keeps its pre-filter
+  `maxCrossRefsPerVerse = 16` cap (`maxCrossRefsKept = 32`). Upstream USFM `\x`
+  notes in WEB (340) and WEB Catholic (343) and `\r` parallel headings in BSB
+  (1,325) are stripped by helloao's JSON before reaching the decoder; sourcing
+  them upstream or moving to CrossWire's head-word TSK stays separate product
+  work if ever wanted.
 
 GATES. The publisher's apparatus does not display in a store build until the
 licensing reply says it may. The only licensing enquiry sent is the
@@ -10314,16 +10332,25 @@ Nelson") and whether a one-sentence gloss of the parentheses may go anywhere
 clause as requiring the apparatus as printed, design B replaces the cards.
 On a no: nothing to unwind. Deferred, not denied:
 
-- Per-section loading, so the NKJV's cross-reference notes show immediately
-  from the already-loaded `BibleData` on a reader's very first open instead
-  of waiting behind the spinner for the Treasury zip download or its 60-s
-  timeout. It would replace the panel's three-state body with immediate
-  publisher content and an inline loading/retry state under the Treasury
-  heading.
-- Scaling the cross-references panel with the reader's text size (`Normal`,
-  `Large`, `Extra large`), keeping the passage, card previews, printed
-  shorthand rows, margins and phone-width fit in proportion across all three
-  settings.
+- CLOSED 13 November 2026 (`2f8ef33dd8`): per-section loading, so the NKJV's
+  cross-reference notes and embedded Gospel parallels show immediately from
+  the already-loaded `BibleData` on a reader's very first open instead of
+  waiting behind the whole-panel spinner for the Treasury zip download or its
+  timeout. While the Treasury loads (or fails offline), only the
+  `TREASURY OF SCRIPTURE KNOWLEDGE` section carries the progress bar (or the
+  offline caption and bounded `Try again` card), and open note/group folds and
+  scroll offset survive both inline retries and the Treasury landing
+  (`crossref_panel.go`, `crossref_list.go`, `crossrefs.go`).
+- CLOSED 13 November 2026 (`d338edf52d`): scaling the cross-references panel
+  with the reader's text size (`Normal`, `Large`, `Extra large`), scaling the
+  selected passage and card previews by `readingTextScale` in full and
+  stepping card references, single and double margin letters, note-letter
+  margins, printed shorthand rows, inline retry labels, tags, wrapped pericope
+  titles and inline captions up in strict hierarchy while keeping pinned
+  footer credits steady and fitting all 21,266 noted single-verse panels of
+  the NKJV canon (with all 4,850 parenthesised groups opened) inside 283pt on
+  a 375pt phone across all three sizes (`crossref_sizes.go`,
+  `crossref_width_test.go`, `crossref_section_test.go`).
 - CLOSED 11 November 2026: a wrap rule for the printed lines. A wrapping
   line of the edition's print (a note's row, a group's label; until
   11 November 2026 the caption) could break inside a numbered book name

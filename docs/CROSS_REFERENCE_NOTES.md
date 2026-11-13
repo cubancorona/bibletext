@@ -95,8 +95,20 @@ letter's references together.
 
 The Treasury's rows under the publisher's run leave out a passage the
 publisher's cards already show as the panel opens: a note's direct
-citations. Every parenthesised group starts closed — inside a note or as the
-whole of its note — and its citations are not counted.
+citations (`treasuryMinusPublisher`, `TestTitleAndWholeChapterCardsKeepSpecificTreasuryRows`).
+A citation of a Psalm's title (`:title`, `TitleRef`) never removes a Treasury
+verse row, and a whole-chapter card (`WholeChapters`) removes only an exact
+matching whole-chapter Treasury span while keeping specific verse and
+sub-range Treasury rows inside that chapter. Every parenthesised group starts
+closed — inside a note or as the whole of its note — and its citations are not
+counted.
+
+While the Treasury zip downloads on first use (or retries after an offline
+failure), any local `NKJV REFERENCES` and embedded `GOSPEL PARALLELS` rows
+show immediately from the loaded `BibleData`, with the loading indicator or
+inline `Try again` scoped under `TREASURY OF SCRIPTURE KNOWLEDGE` and open
+folds and scroll position preserved when the Treasury rows land
+(`TestPublisherNotesShowImmediatelyWhileTreasuryLoads`).
 
 A citation of the reader's own passage is shown as its reference in full,
 so where the edition prints it without its book the book is supplied on that
@@ -107,10 +119,17 @@ Letters and numbers are set as the page sets a superscript
 header, cards and own-passage lines and printed shorthand lines on note and
 group rows draw from plain-zero cuts derived in memory from the embedded
 Atkinson Hyperlegible faces (`crossref_zero_font.go`,
-`TestCrossRefPlainZeroFacesAndPanelReferences`). On landscape phones and
-short windows where the available height is below `crossRefPanelHeight`, the
-source credits and edition notice move into the foot of the scroll body above
-Close (`TestShortAndLandscapePanelsScrollCreditsWithTheList`).
+`TestCrossRefPlainZeroFacesAndPanelReferences`). The list scales with the
+reader's `Normal`, `Large` and `Extra large` text size (`crossref_sizes.go`,
+`TestCrossRefPanelScalesWithReaderTextSize`,
+`TestTheCanonFitsTheNarrowestPhoneWithEveryGroupOpen`), scaling the passage
+and card previews in full and stepping headings, margin letters, margins,
+printed shorthand rows, tags, wrapped pericope titles and inline captions up
+in strict hierarchy while keeping pinned footer credits steady. On landscape
+phones and short windows where the available height is below
+`crossRefPanelHeight`, the source credits and edition notice move into the
+foot of the scroll body above Close
+(`TestShortAndLandscapePanelsScrollCreditsWithTheList`).
 
 ## What is known to be wrong in the feed, and what the panel does
 
@@ -125,16 +144,23 @@ Close (`TestShortAndLandscapePanelsScrollCreditsWithTheList`).
 
 A report to the provider is drafted for the owner to review and send.
 
-## What is deferred
+## The other cross-reference sets alongside it
 
-- The Treasury's filter removes a Treasury row that a title card or a
-  whole-chapter card "carries" though the card shows something else. It
-  belongs to the audit of the other cross-references (the Treasury, the
-  Gospel parallels, any other edition's), which follows the NKJV.
-- Scaling the cross-references panel with the reader's text size (on the
-  backlog).
-- Showing the NKJV's cross-reference notes immediately when the panel opens
-  before the first Treasury zip download has completed (on the backlog).
+- `GOSPEL PARALLELS` stays unfiltered against `NKJV REFERENCES`: synopsis rows
+  carry pericope titles and tell the reader which Gospels record the same
+  event, so dropping one Gospel because a publisher note cited a verse in it
+  would misstate the synopsis. `parseGospelRef` strictly rejects empty,
+  malformed, non-positive or inverted spans, and
+  `TestEveryGospelParallelSpanNamesRealVerses` pins all 473 shipping spans
+  (481 with `-tags next`) and all 102 other-occasion groups to valid verses.
+- `treasuryRowsFor` keeps its `maxCrossRefsPerVerse = 16` vote-ranked cap
+  before `composeCrossRefList` (`maxCrossRefsKept = 32` across all builds)
+  rather than promoting deeper rows when publisher cards carry upper ones.
+- Upstream USFM `\x` cross-reference notes in WEB (340) and WEB Catholic (343)
+  and `\r` parallel headings in BSB (1,325) are stripped by helloao's JSON
+  export before reaching the app; whether to source them upstream or replace
+  OpenBible's vote-ranked TSK with CrossWire's head-word TSK remains separate
+  backlog work (`docs/BACKLOG.md`).
 
 ## Checking it again
 
