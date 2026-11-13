@@ -17,7 +17,9 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -58,66 +60,70 @@ func TestCrossRefListFitsTheNarrowestPhone(t *testing.T) {
 		{"John", 3, 1, 3}, {"John", 3, 2, 2}, {"Psalms", 3, 1, 1}, {"Psalms", 3, 2, 2},
 		{"1 Samuel", 19, 12, 12}, {"Genesis", 7, 2, 2}, {"Hebrews", 1, 6, 6},
 	}
+	t.Cleanup(func() { setReadingTextSizeID("normal") })
 	checked, openedLone := 0, 0
-	for _, flag := range []bool{false, true} {
-		withPublisherCrossRefs(t, "nkjv", flag)
-		for _, s := range selections {
-			st.CurrentBook, st.CurrentChapter = s.book, s.ch
-			lst := buildCrossRefList(st, versesBetween(bd, s.book, s.ch, s.lo, s.hi), listFixtureRefs(), nil, st.pal(), func(crossRef) {})
-			if len(lst.Objects) == 0 {
-				t.Fatalf("control: flag %v, %s %d:%d-%d built an empty list", flag, s.book, s.ch, s.lo, s.hi)
-			}
-			checked++
-			if problems := crossRefListMisfits(lst.Objects, limit); len(problems) != 0 {
-				t.Errorf("flag %v, %s %d:%d-%d: %s", flag, s.book, s.ch, s.lo, s.hi, strings.Join(problems, "; "))
-			}
-			// No selection here holds a parenthesised group inside a note:
-			// each of the fixture's groups is the whole of its note and
-			// starts closed as that group's row, so open the whole-note ones
-			// and measure them too. The width with a group opened inside a
-			// note is held by
-			// TestTheListFitsTheNarrowestPhoneWithAGroupOpenInsideANote.
-			inner := 0
-			var lone []*crossRefGroupRow
-			for _, g := range groupRowsIn(lst.Objects) {
-				if g.letter == nil {
-					inner++
-				} else if g.header != nil {
-					lone = append(lone, g)
+	for _, sizeOpt := range textSizeOptions {
+		setReadingTextSizeID(sizeOpt.ID)
+		for _, flag := range []bool{false, true} {
+			withPublisherCrossRefs(t, "nkjv", flag)
+			for _, s := range selections {
+				st.CurrentBook, st.CurrentChapter = s.book, s.ch
+				lst := buildCrossRefList(st, versesBetween(bd, s.book, s.ch, s.lo, s.hi), listFixtureRefs(), nil, st.pal(), func(crossRef) {})
+				if len(lst.Objects) == 0 {
+					t.Fatalf("control: size %s flag %v, %s %d:%d-%d built an empty list", sizeOpt.ID, flag, s.book, s.ch, s.lo, s.hi)
 				}
-			}
-			if inner != 0 {
-				t.Fatalf("control: flag %v, %s %d:%d-%d holds %d group rows inside notes; this test expects none", flag, s.book, s.ch, s.lo, s.hi, inner)
-			}
-			if len(lone) > 0 {
-				for _, g := range lone {
-					g.toggle()
-					openedLone++
-				}
+				checked++
 				if problems := crossRefListMisfits(lst.Objects, limit); len(problems) != 0 {
-					t.Errorf("flag %v, %s %d:%d-%d (lone groups open): %s", flag, s.book, s.ch, s.lo, s.hi, strings.Join(problems, "; "))
+					t.Errorf("size %s flag %v, %s %d:%d-%d: %s", sizeOpt.ID, flag, s.book, s.ch, s.lo, s.hi, strings.Join(problems, "; "))
 				}
-				for _, g := range lone {
-					g.toggle()
+				// No selection here holds a parenthesised group inside a note:
+				// each of the fixture's groups is the whole of its note and
+				// starts closed as that group's row, so open the whole-note ones
+				// and measure them too. The width with a group opened inside a
+				// note is held by
+				// TestTheListFitsTheNarrowestPhoneWithAGroupOpenInsideANote.
+				inner := 0
+				var lone []*crossRefGroupRow
+				for _, g := range groupRowsIn(lst.Objects) {
+					if g.letter == nil {
+						inner++
+					} else if g.header != nil {
+						lone = append(lone, g)
+					}
 				}
-			}
-			all := joinedTexts(lst.Objects)
-			if strings.Contains(all, "Thomas Nelson") {
-				t.Errorf("flag %v, %s %d: the notice is in the list", flag, s.book, s.ch)
-			}
-			if strings.Contains(strings.ToLower(all), "compare") {
-				t.Errorf("flag %v, %s %d: a legend or compare word is in the list:\n%s", flag, s.book, s.ch, all)
-			}
-			// The notice stands once, in the footer, whatever the list shows.
-			footer, sources := crossRefFooter(st, widget.NewButton("Close", func() {}))
-			line, _ := crossRefFooterCredit(st, lst.Sections)
-			setCrossRefSources(sources, line, limit)
-			if n := strings.Count(strings.Join(treeTexts(footer), "\n"), "Thomas Nelson"); n != 1 {
-				t.Errorf("flag %v, %s %d: the notice stands %d times in the footer, want once", flag, s.book, s.ch, n)
+				if inner != 0 {
+					t.Fatalf("control: size %s flag %v, %s %d:%d-%d holds %d group rows inside notes; this test expects none", sizeOpt.ID, flag, s.book, s.ch, s.lo, s.hi, inner)
+				}
+				if len(lone) > 0 {
+					for _, g := range lone {
+						g.toggle()
+						openedLone++
+					}
+					if problems := crossRefListMisfits(lst.Objects, limit); len(problems) != 0 {
+						t.Errorf("size %s flag %v, %s %d:%d-%d (lone groups open): %s", sizeOpt.ID, flag, s.book, s.ch, s.lo, s.hi, strings.Join(problems, "; "))
+					}
+					for _, g := range lone {
+						g.toggle()
+					}
+				}
+				all := joinedTexts(lst.Objects)
+				if strings.Contains(all, "Thomas Nelson") {
+					t.Errorf("size %s flag %v, %s %d: the notice is in the list", sizeOpt.ID, flag, s.book, s.ch)
+				}
+				if strings.Contains(strings.ToLower(all), "compare") {
+					t.Errorf("size %s flag %v, %s %d: a legend or compare word is in the list:\n%s", sizeOpt.ID, flag, s.book, s.ch, all)
+				}
+				// The notice stands once, in the footer, whatever the list shows.
+				footer, sources := crossRefFooter(st, widget.NewButton("Close", func() {}))
+				line, _ := crossRefFooterCredit(st, lst.Sections)
+				setCrossRefSources(sources, line, limit)
+				if n := strings.Count(strings.Join(treeTexts(footer), "\n"), "Thomas Nelson"); n != 1 {
+					t.Errorf("size %s flag %v, %s %d: the notice stands %d times in the footer, want once", sizeOpt.ID, flag, s.book, s.ch, n)
+				}
 			}
 		}
 	}
-	if checked != 2*len(selections) || openedLone == 0 {
+	if checked != len(textSizeOptions)*2*len(selections) || openedLone == 0 {
 		t.Fatalf("control: %d lists checked, %d lone groups opened", checked, openedLone)
 	}
 
@@ -145,6 +151,7 @@ func TestCrossRefListFitsTheNarrowestPhone(t *testing.T) {
 // whole list's 283.
 func TestEveryUnwrappedLineOfTheListFitsTheNarrowestPhone(t *testing.T) {
 	th := appThemeForTest(t)
+	t.Cleanup(func() { setReadingTextSizeID("normal") })
 	limit := narrowestPhoneBody(t)
 	gospelOnce.Do(loadGospelParallels)
 	if len(gospelPericopes) == 0 {
@@ -170,85 +177,250 @@ func TestEveryUnwrappedLineOfTheListFitsTheNarrowestPhone(t *testing.T) {
 		}
 	}
 	labels = append(labels, "Song of Solomon 2:8–3:5", "2 Thessalonians 2:16–17", "1 Thessalonians 5:12–13", "Leviticus 11", "2 Kings 18–20")
-	if text, w := widest(titles, 12, fyne.TextStyle{Italic: true}); w > limit {
-		t.Errorf("the pericope title %q wants %.0f points at 12 italic, over %.0f", text, w, limit)
-	} else {
-		t.Logf("widest pericope title %q: %.0f points", text, w)
-	}
-	if text, w := widest(labels, 16, fyne.TextStyle{Bold: true}); w > limit {
-		t.Errorf("the card reference %q wants %.0f points at 16 bold, over %.0f", text, w, limit)
-	} else {
-		t.Logf("widest card reference %q: %.0f points", text, w)
-	}
 
-	// Publisher card headings, with their tags, on a note's ground (249) and
-	// inside an opened group's well (233).
 	empty := &AppState{Bible: &BibleData{}, theme: th}
-	probeGroup := newCrossRefGroupRow(empty, publisherGroup{
-		Text:   "(Rom. 5:8)",
-		Pieces: []publisherPiece{{Target: &publisherTarget{Ref: crossRef{Book: "Romans", Chapter: 5, Verse: 8}}}},
-	}, "", false, lightPalette, func(crossRef) {}, &crossRefRelayout{}, false)
-	probeGroup.toggle()
-	noteLimit := limit - 2*crossRefSectionPadX - crossRefLetterMargin
-	groupPad := probeGroup.inset.Objects[0].MinSize().Width - probeGroup.members.MinSize().Width
-	groupLimit := noteLimit - groupPad
-	if noteLimit != 249 || groupLimit != 233 {
-		t.Fatalf("control: publisher card width is %.0f on a note and %.0f in a group; want 249 and 233", noteLimit, groupLimit)
-	}
-	cardHeadingWidth := func(label, tag string) float32 {
-		return crossRefRowRuled(empty, crossRefCard{Label: label, Tag: tag}, lightPalette, func(crossRef) {}, false).MinSize().Width
-	}
-	var widestNote, widestGroup string
-	var widestNoteW, widestGroupW float32
-	for _, c := range []struct {
-		label, tag string
-		inGroup    bool
-	}{
-		{"Song of Solomon 2:8–3:5", "", true},
-		{"2 Thessalonians 2:16–17", "", true},
-		{"1 Thessalonians 5:12–13", "", true},
-		{"1 Thessalonians 4:14–17", "", true},
-		{"Leviticus 11", "", true},
-		{"2 Kings 18–20", "", true},
-		{"Psalm 150", "Title", true},
-		{"Psalm 119", "Title", true},
-		{"Deuteronomy 32:43", "LXX, DSS", true},
-		{"2 Thessalonians 2:16–17", "LXX", true},
-	} {
-		w := cardHeadingWidth(c.label, c.tag)
-		desc := c.label
-		if c.tag != "" {
-			desc += " [" + c.tag + "]"
-		}
-		if w > widestNoteW {
-			widestNoteW, widestNote = w, desc
-		}
-		if w > noteLimit {
-			t.Errorf("publisher card heading %q wants %.1f points, over the note's %.0f", desc, w, noteLimit)
-		}
-		if c.inGroup {
-			if w > widestGroupW {
-				widestGroupW, widestGroup = w, desc
-			}
-			if w > groupLimit {
-				t.Errorf("publisher group card heading %q wants %.1f points, over the group's %.0f", desc, w, groupLimit)
-			}
-		}
-	}
-	t.Logf("widest publisher card heading %q: %.1f / %.0f (group %q: %.1f / %.0f)", widestNote, widestNoteW, noteLimit, widestGroup, widestGroupW, groupLimit)
+	for _, sizeOpt := range textSizeOptions {
+		setReadingTextSizeID(sizeOpt.ID)
+		sz := crossRefPanelSizes()
 
+		// Parallel pericope titles stay single-line at Normal and wrap cleanly at
+		// Large and Extra large without exceeding the narrowest phone's width.
+		for _, title := range titles {
+			tw := newCrossRefTitle(title, sz.title, lightPalette)
+			tw.Resize(fyne.NewSize(limit, 100))
+			r := test.WidgetRenderer(tw).(*crossRefPrintedRenderer)
+			r.Layout(tw.Size())
+			if sizeOpt.ID == "normal" && len(r.rows) != 1 {
+				t.Errorf("Normal pericope title %q wrapped into %d rows; want 1", title, len(r.rows))
+			}
+			if tw.MinSize().Width > limit {
+				t.Errorf("%s: pericope title %q MinSize.Width = %.1f, over %.0f", sizeOpt.ID, title, tw.MinSize().Width, limit)
+			}
+			for _, row := range r.rows {
+				if rw := fyne.MeasureText(row.Text, row.TextSize, row.TextStyle).Width; rw > limit {
+					t.Errorf("%s: pericope title row %q wants %.1f points, over %.0f", sizeOpt.ID, row.Text, rw, limit)
+				}
+			}
+		}
+		widestTitle, _ := widest(titles, sz.title, fyne.TextStyle{Italic: true})
+		pCard := crossRefRowRuled(empty, passageCard(crossRef{Book: "Mark", Chapter: 5, Verse: 21, Parallel: true, Title: widestTitle}, false), lightPalette, func(crossRef) {}, false)
+		if problems := crossRefListMisfits([]fyne.CanvasObject{pCard}, limit); len(problems) != 0 {
+			t.Errorf("%s: parallel card with widest title %q: %s", sizeOpt.ID, widestTitle, strings.Join(problems, "; "))
+		}
+
+		// Hyphenated and em-dashed compounds in the passage stay whole when they
+		// fit a row of their own, and turn cleanly after the dash when wider than
+		// the narrowest phone at Extra large.
+		para := newReadingParagraph([]cardRun{{Text: "Opening words unrighteousness—indignation and a short-term phrase."}},
+			readingGlyphSize(sz.passage), lightPalette.Text, lightPalette.RedLetter, styledPaneFont(), cardItalicFont())
+		para.holdFlush = true
+		para.Resize(fyne.NewSize(limit, 10))
+		for _, o := range test.WidgetRenderer(para).(*readingParagraphRenderer).objs {
+			if edge := o.Position().X + o.Size().Width; edge > limit+0.5 {
+				t.Errorf("%s: compound passage row reaches %.1f, over %.0f", sizeOpt.ID, edge, limit)
+			}
+		}
+
+		if text, w := widest(labels, sz.reference, fyne.TextStyle{Bold: true}); w > limit {
+			t.Errorf("%s: the card reference %q wants %.1f points at %v bold, over %.0f", sizeOpt.ID, text, w, sz.reference, limit)
+		}
+
+		probeGroup := newCrossRefGroupRow(empty, publisherGroup{
+			Text:   "(Rom. 5:8)",
+			Pieces: []publisherPiece{{Target: &publisherTarget{Ref: crossRef{Book: "Romans", Chapter: 5, Verse: 8}}}},
+		}, "", false, lightPalette, func(crossRef) {}, &crossRefRelayout{}, false)
+		probeGroup.toggle()
+		noteLimit := limit - 2*crossRefSectionPadX - sz.letterMargin
+		groupPad := probeGroup.inset.Objects[0].MinSize().Width - probeGroup.members.MinSize().Width
+		groupLimit := noteLimit - groupPad
+		if sizeOpt.ID == "normal" && (noteLimit != 249 || groupLimit != 233) {
+			t.Fatalf("control: Normal publisher card width is %.0f on a note and %.0f in a group; want 249 and 233", noteLimit, groupLimit)
+		}
+
+		for _, c := range []struct {
+			label, tag string
+			inGroup    bool
+		}{
+			{"Song of Solomon 2:8–3:5", "", true},
+			{"2 Thessalonians 2:16–17", "", true},
+			{"1 Thessalonians 5:12–13", "", true},
+			{"1 Thessalonians 4:14–17", "", true},
+			{"Leviticus 11", "", true},
+			{"2 Kings 18–20", "", true},
+			{"Psalm 150", "Title", true},
+			{"Psalm 119", "Title", true},
+			{"Deuteronomy 32:43", "LXX, DSS", true},
+			{"2 Thessalonians 2:16–17", "LXX", true},
+		} {
+			card := crossRefRowRuled(empty, crossRefCard{Label: c.label, Tag: c.tag}, lightPalette, func(crossRef) {}, false)
+			w := card.MinSize().Width
+			desc := c.label
+			if c.tag != "" {
+				desc += " [" + c.tag + "]"
+			}
+			if w > noteLimit {
+				t.Errorf("%s: publisher card heading %q wants %.1f points, over the note's %.0f", sizeOpt.ID, desc, w, noteLimit)
+			}
+			if c.inGroup {
+				if w > groupLimit {
+					t.Errorf("%s: publisher group card heading %q wants %.1f points, over the group's %.0f", sizeOpt.ID, desc, w, groupLimit)
+				}
+				card.Resize(fyne.NewSize(groupLimit, 200))
+				walkTree(card, func(o fyne.CanvasObject) {
+					if tx, ok := o.(*canvas.Text); ok && tx.Text != "" {
+						if edge := tx.Position().X + tx.Size().Width; edge > groupLimit+0.5 {
+							t.Errorf("%s: %q text %q reaches %.1f inside %.0f group well", sizeOpt.ID, desc, tx.Text, edge, groupLimit)
+						}
+						if sizeOpt.ID == "normal" && c.tag != "" && tx.Text == c.tag && tx.Position().X == 0 {
+							t.Errorf("Normal: %q wrapped tag onto a second line inside %.0f group well", desc, groupLimit)
+						}
+					}
+				})
+			}
+		}
+	}
+
+	setReadingTextSizeID("normal")
 	runs := []string{parallelsLabel, treasuryLabel, publisherRunLabel("NKJV", 176, false, true), publisherRunLabel("NKJV", 0, true, true)}
 	if text, w := widest(runs, 11, fyne.TextStyle{Bold: true, Monospace: true}); w > limit {
 		t.Errorf("the section label %q wants %.0f points, over %.0f", text, w, limit)
-	} else {
-		t.Logf("widest section label %q: %.0f points", text, w)
 	}
-	// CONTROL: the measure can exceed the limit, and a tagged reference that
-	// still fits the whole list's 283 exceeds the 233 inside an opened group.
+	// CONTROL: the measure can exceed the limit, and an oversized tagged
+	// reference wraps its tag onto line 2 inside a group well instead of
+	// overflowing groupLimit.
 	if _, w := widest([]string{strings.Repeat("Thessalonians ", 4)}, 16, fyne.TextStyle{Bold: true}); w <= limit {
 		t.Fatalf("control: a 56-character reference measures %.0f, within %.0f", w, limit)
 	}
-	if w := cardHeadingWidth("Song of Solomon 2:8–3:5", "LXX, DSS, Title"); w <= groupLimit || w > limit {
-		t.Fatalf("control: tagged Song of Solomon heading measures %.1f; want between %.0f and %.0f", w, groupLimit, limit)
+	wideCard := crossRefRowRuled(empty, crossRefCard{Label: "Song of Solomon 2:8–3:5", Tag: "LXX, DSS, Title"}, lightPalette, func(crossRef) {}, false)
+	wideCard.Resize(fyne.NewSize(233, 200))
+	wrappedTag := false
+	walkTree(wideCard, func(o fyne.CanvasObject) {
+		if tx, ok := o.(*canvas.Text); ok && tx.Text == "LXX, DSS, Title" && tx.Position().Y > 0 {
+			wrappedTag = true
+		}
+	})
+	if !wrappedTag || wideCard.MinSize().Width > 233 {
+		t.Fatalf("control: oversized tag wrapped=%v MinSize.Width=%.1f; want wrapped inside 233", wrappedTag, wideCard.MinSize().Width)
+	}
+}
+
+// THE PANEL SCALES PROPORTIONALLY WITH THE READER'S TEXT SIZE. Normal leaves
+// every baseline metric untouched; Large and Extra large grow the passage,
+// previews, references, margin letters, printed shorthand, inline retry, tags,
+// pericope titles and inline list captions in strict hierarchy while keeping
+// pinned footer chrome steady and double-letter marks clear of their margin.
+func TestCrossRefPanelScalesWithReaderTextSize(t *testing.T) {
+	th := appThemeForTest(t)
+	t.Cleanup(func() { setReadingTextSizeID("normal") })
+	licenseNKJVForTest(t)
+	withPublisherCrossRefs(t, "nkjv", true)
+	withCrossRefIndex(t, "From Verse\tTo Verse\tVotes\nMatt.3.1\tJohn.3.2\t10\n")
+
+	prevRun, prevLoad := crossRefsRun, crossRefsLoad
+	t.Cleanup(func() { crossRefsRun, crossRefsLoad = prevRun, prevLoad })
+	crossRefsRun = func(work func()) { work() }
+	crossRefsLoad = func() error { return nil }
+
+	bd := publisherFixture()
+	bd.Verses["Matthew"][3][0].Footnotes = []Footnote{
+		{Anchor: 14, Text: "John 7:50; (Gal. 6:15)", Kind: footnoteKindCrossref, Caller: "-", Refs: []NoteRef{{"JHN.7.50", 0, 9}, {"GAL.6.15", 12, 21}}},
+	}
+	bd.Verses["Mark"][1] = []Verse{
+		{BookName: "Mark", Book: "Mark", Chapter: 1, Verse: 1, Text: "Synthetic parallel opening."},
+		{BookName: "Mark", Book: "Mark", Chapter: 1, Verse: 6, Text: "Synthetic parallel closing."},
+	}
+	bd.PrepareSearchIndex()
+
+	var prev crossRefSizes
+	for i, sizeOpt := range textSizeOptions {
+		setReadingTextSizeID(sizeOpt.ID)
+		sz := crossRefPanelSizes()
+		if !(sz.caption < sz.title && sz.title < sz.printed && sz.printed < sz.reference && sz.reference == sz.letter && sz.reference < sz.preview && sz.preview == sz.passage) {
+			t.Fatalf("%s: broken hierarchy: %+v", sizeOpt.ID, sz)
+		}
+		if i == 0 {
+			want := crossRefSizes{
+				passage: 17, preview: 17, reference: 16, letter: 16,
+				doubleLetter: 10, letterMargin: 18, printed: 14, title: 12, caption: 11,
+			}
+			if sz != want {
+				t.Fatalf("Normal sizes = %+v, want %+v", sz, want)
+			}
+		} else {
+			if !(sz.passage > prev.passage && sz.preview > prev.preview && sz.reference > prev.reference &&
+				sz.printed > prev.printed && sz.title > prev.title && sz.caption > prev.caption &&
+				sz.doubleLetter > prev.doubleLetter && sz.letterMargin > prev.letterMargin) {
+				t.Fatalf("%s did not strictly grow every role over previous: got %+v after %+v", sizeOpt.ID, sz, prev)
+			}
+		}
+		dbl := crossRefLetter("ww", lightPalette)
+		wSize, _ := fyne.CurrentApp().Driver().RenderedTextSize(dbl.Text, dbl.TextSize, dbl.TextStyle, dbl.FontSource)
+		if wSize.Width >= sz.letterMargin-1 {
+			t.Errorf("%s: double letter %q renders %.2fpt wide inside %.1fpt margin", sizeOpt.ID, dbl.Text, wSize.Width, sz.letterMargin)
+		}
+
+		w := test.NewTempWindow(t, canvas.NewRectangle(lightPalette.Background))
+		w.Resize(fyne.NewSize(375, 667))
+		st := &AppState{Bible: bd, CurrentBook: "Matthew", CurrentChapter: 3, CurrentVersion: "nkjv", window: w, theme: th}
+		showCrossRefs(st, "", selSpan{lo: 1, hi: 1})
+		top := w.Canvas().Overlays().Top().(*widget.PopUp)
+
+		var (
+			passage   *readingParagraph
+			preview   *widget.Label
+			reference *canvas.Text
+			noteRow   *crossRefNoteRow
+			sources   *widget.RichText
+		)
+		walkTree(top, func(o fyne.CanvasObject) {
+			switch x := o.(type) {
+			case *readingParagraph:
+				if passage == nil {
+					passage = x
+				}
+			case *widget.Label:
+				if preview == nil && strings.Contains(x.Text, "Synthetic") {
+					preview = x
+				}
+			case *canvas.Text:
+				if reference == nil && x.Text == "John 7:50" {
+					reference = x
+				}
+			case *crossRefNoteRow:
+				if noteRow == nil {
+					noteRow = x
+				}
+			case *widget.RichText:
+				if sources == nil && strings.Contains(segmentText(x.Segments), "OpenBible.info") {
+					sources = x
+				}
+			}
+		})
+		if passage == nil || preview == nil || reference == nil || noteRow == nil || sources == nil {
+			t.Fatalf("%s: missing mounted widget (passage=%v preview=%v ref=%v note=%v sources=%v)",
+				sizeOpt.ID, passage != nil, preview != nil, reference != nil, noteRow != nil, sources != nil)
+		}
+		if got, want := passage.size, readingGlyphSize(sz.passage); got != want {
+			t.Errorf("%s: passage glyph size = %v, want %v", sizeOpt.ID, got, want)
+		}
+		if got := preview.Theme().Size(theme.SizeNameText); got != sz.preview {
+			t.Errorf("%s: preview theme text size = %v, want %v", sizeOpt.ID, got, sz.preview)
+		}
+		if got := preview.Theme().Size(theme.SizeNameCaptionText); got != sz.caption {
+			t.Errorf("%s: list scope caption size = %v, want %v", sizeOpt.ID, got, sz.caption)
+		}
+		if reference.TextSize != sz.reference || noteRow.letter.TextSize != sz.letter {
+			t.Errorf("%s: reference=%v letter=%v, want %v and %v", sizeOpt.ID, reference.TextSize, noteRow.letter.TextSize, sz.reference, sz.letter)
+		}
+		rows := test.WidgetRenderer(noteRow.label).(*crossRefPrintedRenderer).rows
+		if len(rows) == 0 || rows[0].TextSize != sz.printed {
+			t.Errorf("%s: printed row size = %v, want %v", sizeOpt.ID, rows, sz.printed)
+		}
+		// Pinned footer legal/source credits remain steady 11pt panel chrome.
+		if got := sources.Theme().Size(theme.SizeNameCaptionText); got != 11 {
+			t.Errorf("%s: footer credit size = %v, want steady 11pt chrome", sizeOpt.ID, got)
+		}
+		top.Hide()
+		prev = sz
 	}
 }

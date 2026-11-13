@@ -97,6 +97,7 @@ type crossRefGroupRow struct {
 // note's rows, or as the whole of its note, where the note's ground ends
 // under it.
 func newCrossRefGroupRow(state *AppState, g publisherGroup, letter string, margin bool, pal palette, onTap func(crossRef), relayout *crossRefRelayout, rule bool) *crossRefGroupRow {
+	sz := crossRefPanelSizes()
 	r := &crossRefGroupRow{group: g, state: state, pal: pal, onTap: onTap, relayout: relayout}
 	r.label = newCrossRefPrinted(g.Text, pal)
 	r.members = container.New(layout.NewCustomPaddedVBoxLayout(0))
@@ -111,8 +112,8 @@ func newCrossRefGroupRow(state *AppState, g publisherGroup, letter string, margi
 	var left float32
 	line := fyne.CanvasObject(r.label)
 	if margin {
-		left = crossRefLetterMargin
-		r.head = crossRefLettered(letter, pal, r.label, 0, crossRefGroupTextSize, fyne.TextStyle{})
+		left = sz.letterMargin
+		r.head = crossRefLettered(letter, pal, r.label, 0, sz.printed, fyne.TextStyle{})
 		r.letter = r.head.Objects[0].(*canvas.Text)
 		line = r.head
 	}
@@ -230,7 +231,7 @@ func (r *crossRefGroupRow) keepLetterInView(into float32) {
 	r.pinned = pinned
 	if pinned > 0 {
 		if r.pin == nil {
-			r.pin = crossRefLetter(r.letter.Text, r.pal)
+			r.pin = crossRefLetterWithSize(r.letter.Text, r.letter.TextSize, r.pal)
 			r.box.Add(r.pin)
 		}
 		r.pin.Show()

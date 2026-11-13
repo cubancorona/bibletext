@@ -80,6 +80,8 @@ func treeTexts(o fyne.CanvasObject) []string {
 			add(v.Text)
 		case *statusLine:
 			add(v.text)
+		case *crossRefPrinted:
+			add(v.Text)
 		case *widget.RichText:
 			add(segmentText(v.Segments))
 		}

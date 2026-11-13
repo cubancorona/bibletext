@@ -153,7 +153,17 @@ func crossRefSection(block fyne.CanvasObject, pal palette) *fyne.Container {
 // heads beside it. Its objects are the letter, then the content. drop is how
 // far below the content's top the letter stands, so that it sits on the
 // line of the content's first row of text.
-type crossRefLetteredLayout struct{ drop float32 }
+type crossRefLetteredLayout struct {
+	drop   float32
+	margin float32
+}
+
+func (l crossRefLetteredLayout) letterMargin() float32 {
+	if l.margin > 0 {
+		return l.margin
+	}
+	return crossRefLetterMargin
+}
 
 func (l crossRefLetteredLayout) MinSize(objs []fyne.CanvasObject) fyne.Size {
 	c, letter := objs[1].MinSize(), objs[0].MinSize()
@@ -161,14 +171,15 @@ func (l crossRefLetteredLayout) MinSize(objs []fyne.CanvasObject) fyne.Size {
 	if lh := letter.Height + l.drop; lh > h {
 		h = lh
 	}
-	return fyne.NewSize(c.Width+crossRefLetterMargin, h)
+	return fyne.NewSize(c.Width+l.letterMargin(), h)
 }
 
 func (l crossRefLetteredLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
+	m := l.letterMargin()
 	objs[0].Move(fyne.NewPos(0, l.drop))
 	objs[0].Resize(objs[0].MinSize())
-	objs[1].Move(fyne.NewPos(crossRefLetterMargin, 0))
-	objs[1].Resize(fyne.NewSize(size.Width-crossRefLetterMargin, size.Height))
+	objs[1].Move(fyne.NewPos(m, 0))
+	objs[1].Resize(fyne.NewSize(size.Width-m, size.Height))
 }
 
 // crossRefLettered is content with the note's letter in the margin beside
@@ -181,7 +192,8 @@ func (l crossRefLetteredLayout) Layout(objs []fyne.CanvasObject, size fyne.Size)
 // word has no letter, and its content stands beside an empty margin, in line
 // with the other notes'.
 func crossRefLettered(letter string, pal palette, content fyne.CanvasObject, top, size float32, style fyne.TextStyle) *fyne.Container {
-	mark := crossRefLetter(letter, pal)
+	sz := crossRefPanelSizes()
+	mark := crossRefLetterSized(letter, sz, pal)
 	drop := top
 	if letter != "" {
 		drv := fyne.CurrentApp().Driver()
@@ -189,11 +201,11 @@ func crossRefLettered(letter string, pal palette, content fyne.CanvasObject, top
 		_, own := drv.RenderedTextSize(letter, mark.TextSize, mark.TextStyle, nil)
 		drop += first - own
 	}
-	return container.New(crossRefLetteredLayout{drop: drop}, mark, content)
+	return container.New(crossRefLetteredLayout{drop: drop, margin: sz.letterMargin}, mark, content)
 }
 
 // crossRefBeside is a row that stands beside the margin with no letter in
 // it and no rule: the one card of a note keyed to no word.
 func crossRefBeside(row fyne.CanvasObject) *fyne.Container {
-	return container.New(layout.NewCustomPaddedLayout(0, 0, crossRefLetterMargin, 0), row)
+	return container.New(layout.NewCustomPaddedLayout(0, 0, crossRefPanelSizes().letterMargin, 0), row)
 }

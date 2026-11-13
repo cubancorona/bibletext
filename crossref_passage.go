@@ -220,7 +220,7 @@ func passagePlainText(runs []cardRun) string {
 // list's first row.
 func newCrossRefPassage(state *AppState, book string, chapter int, selected []Verse, notes []publisherCrossRef, pal palette) fyne.CanvasObject {
 	p := newReadingParagraph(passageRuns(publisherPassageUnits(state, book, chapter, selected, notes)),
-		readingGlyphSize(crossRefPassageTextSize), pal.Text, pal.RedLetter, styledPaneFont(), cardItalicFont())
+		readingGlyphSize(crossRefPanelSizes().passage), pal.Text, pal.RedLetter, styledPaneFont(), cardItalicFont())
 	p.mark, p.dim = pal.Accent, pal.TextMuted
 	p.number, p.bold = pal.VerseNumber, passageNumeralFace()
 	p.holdFlush = true

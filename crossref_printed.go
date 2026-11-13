@@ -34,17 +34,53 @@ const crossRefPrintedLeading float32 = 3
 // ground, margin and icon, so that the first height reported is not short.
 const crossRefPrintedGuess float32 = 220
 
-// crossRefPrinted is one printed line.
+// crossRefPrinted is one printed line (or wrapped italic title when wordWrap is true).
 type crossRefPrinted struct {
 	widget.BaseWidget
-	Text  string
-	color color.Color
+	Text     string
+	color    color.Color
+	size     float32
+	style    fyne.TextStyle
+	guess    float32
+	wordWrap bool
 }
 
 func newCrossRefPrinted(text string, pal palette) *crossRefPrinted {
-	p := &crossRefPrinted{Text: text, color: pal.TextMuted}
+	p := &crossRefPrinted{
+		Text:  text,
+		color: pal.TextMuted,
+		size:  crossRefPanelSizes().printed,
+		guess: crossRefPrintedGuess,
+	}
 	p.ExtendBaseWidget(p)
 	return p
+}
+
+func newCrossRefTitle(text string, size float32, pal palette) *crossRefPrinted {
+	p := &crossRefPrinted{
+		Text:     text,
+		color:    pal.TextMuted,
+		size:     size,
+		style:    fyne.TextStyle{Italic: true},
+		guess:    283,
+		wordWrap: true,
+	}
+	p.ExtendBaseWidget(p)
+	return p
+}
+
+func (p *crossRefPrinted) textSize() float32 {
+	if p.size > 0 {
+		return p.size
+	}
+	return crossRefGroupTextSize
+}
+
+func (p *crossRefPrinted) guessWidth() float32 {
+	if p.guess > 0 {
+		return p.guess
+	}
+	return crossRefPrintedGuess
 }
 
 func (p *crossRefPrinted) CreateRenderer() fyne.WidgetRenderer {
@@ -53,7 +89,7 @@ func (p *crossRefPrinted) CreateRenderer() fyne.WidgetRenderer {
 
 // crossRefPrintedMeasure is the width of s as a printed line draws it.
 func crossRefPrintedMeasure(s string) float32 {
-	sz, _ := fyne.CurrentApp().Driver().RenderedTextSize(s, crossRefGroupTextSize, fyne.TextStyle{}, crossRefZeroFace(fyne.TextStyle{}))
+	sz, _ := fyne.CurrentApp().Driver().RenderedTextSize(s, crossRefPanelSizes().printed, fyne.TextStyle{}, crossRefZeroFace(fyne.TextStyle{}))
 	return sz.Width
 }
 
@@ -113,28 +149,61 @@ func splitAfter(s, sep string) []string {
 type crossRefPrintedRenderer struct {
 	p     *crossRefPrinted
 	width float32
+	size  float32
 	rowH  float32
 	rows  []*canvas.Text
 	objs  []fyne.CanvasObject
 }
 
+func (r *crossRefPrintedRenderer) measure(s string) float32 {
+	sz, _ := fyne.CurrentApp().Driver().RenderedTextSize(s, r.p.textSize(), r.p.style, crossRefZeroFace(r.p.style))
+	return sz.Width
+}
+
+func wordWrappedRows(text string, width float32, measure func(string) float32) []string {
+	var rows []string
+	row := ""
+	for _, word := range strings.Fields(text) {
+		if row != "" && measure(row+" "+word) > width {
+			rows = append(rows, row)
+			row = word
+			continue
+		}
+		if row != "" {
+			row += " "
+		}
+		row += word
+	}
+	if row != "" {
+		rows = append(rows, row)
+	}
+	return rows
+}
+
 func (r *crossRefPrintedRenderer) wrap(width float32) {
 	if width <= 0 {
-		width = crossRefPrintedGuess
+		width = r.p.guessWidth()
 	}
-	if width == r.width && r.rows != nil {
+	size := r.p.textSize()
+	if width == r.width && size == r.size && r.rows != nil {
 		return
 	}
 	r.width = width
-	face := crossRefZeroFace(fyne.TextStyle{})
-	if r.rowH == 0 {
-		sz, _ := fyne.CurrentApp().Driver().RenderedTextSize("Ag", crossRefGroupTextSize, fyne.TextStyle{}, face)
-		r.rowH = sz.Height
-	}
+	r.size = size
+	face := crossRefZeroFace(r.p.style)
+	sz, _ := fyne.CurrentApp().Driver().RenderedTextSize("Ag", size, r.p.style, face)
+	r.rowH = sz.Height
 	r.rows, r.objs = r.rows[:0], r.objs[:0]
-	for _, s := range printedRows(r.p.Text, width, crossRefPrintedMeasure) {
+	var lines []string
+	if r.p.wordWrap {
+		lines = wordWrappedRows(r.p.Text, width, r.measure)
+	} else {
+		lines = printedRows(r.p.Text, width, r.measure)
+	}
+	for _, s := range lines {
 		t := canvas.NewText(s, r.p.color)
-		t.TextSize = crossRefGroupTextSize
+		t.TextSize = size
+		t.TextStyle = r.p.style
 		t.FontSource = face
 		r.rows = append(r.rows, t)
 		r.objs = append(r.objs, t)
@@ -158,7 +227,7 @@ func (r *crossRefPrintedRenderer) MinSize() fyne.Size {
 	r.wrap(r.width)
 	var w float32
 	for _, word := range strings.Fields(r.p.Text) {
-		if m := crossRefPrintedMeasure(word); m > w {
+		if m := r.measure(word); m > w {
 			w = m
 		}
 	}

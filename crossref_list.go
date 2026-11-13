@@ -579,7 +579,7 @@ func crossRefTreasuryLoading(bar *widget.ProgressBarInfinite) fyne.CanvasObject 
 func crossRefTreasuryRetry(pal palette, onRetry func()) fyne.CanvasObject {
 	lbl := canvas.NewText("Try again", pal.Accent)
 	lbl.TextStyle = fyne.TextStyle{Bold: true}
-	lbl.TextSize = 14
+	lbl.TextSize = crossRefPanelSizes().printed
 	border := canvas.NewRectangle(color.Transparent)
 	border.StrokeColor = pal.Border
 	border.StrokeWidth = 1

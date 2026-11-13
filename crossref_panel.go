@@ -118,7 +118,8 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 	listBox := container.New(layout.NewCustomPaddedVBoxLayout(0))
 	// One scope for the whole list keeps previews compact and removes the
 	// label's inner inset, so references and wrapped text share a left edge.
-	listTheme := compactTheme{Theme: passageCitationTheme{fyne.CurrentApp().Settings().Theme()}, text: 17}
+	sz := crossRefPanelSizes()
+	listTheme := crossRefScopeTheme{Theme: passageCitationTheme{fyne.CurrentApp().Settings().Theme()}, text: sz.preview, caption: sz.caption}
 	listScope := container.NewThemeOverride(listBox, listTheme)
 	scrollBody := container.New(layout.NewCustomPaddedVBoxLayout(0), listScope)
 	// squeezeWidthLayout, as the AI panel's columns have: a vertical scroll
@@ -618,10 +619,11 @@ func crossRefRow(state *AppState, card crossRefCard, pal palette, onTap func(cro
 // of a note, or as a card that is the whole of its note: the ground it
 // stands on ends under it (crossref_group.go, crossref_section.go).
 func crossRefRowRuled(state *AppState, card crossRefCard, pal palette, onTap func(crossRef), rule bool) fyne.CanvasObject {
+	sz := crossRefPanelSizes()
 	c := card.Ref
 	ref := canvas.NewText(card.Label, pal.Accent)
 	ref.TextStyle = fyne.TextStyle{Bold: true}
-	ref.TextSize = 16
+	ref.TextSize = sz.reference
 	ref.FontSource = crossRefZeroFace(ref.TextStyle)
 
 	// The reference line, with a "Parallel" tag for Gospel-synopsis entries
@@ -633,13 +635,15 @@ func crossRefRowRuled(state *AppState, card crossRefCard, pal palette, onTap fun
 	var refLine fyne.CanvasObject = ref
 	switch {
 	case card.Badge && c.Parallel && !c.otherOccasion():
-		refLine = container.NewHBox(container.NewCenter(ref), container.NewCenter(parallelBadge(pal)))
+		refLine = container.New(&crossRefHeadingFlow{gap: 7}, ref, parallelBadge(pal))
 	case card.Tag != "":
 		// The idiom search.go draws for a title hit: the tag beside the
-		// reference rather than under it, so the two read as one heading.
+		// reference rather than under it, so the two read as one heading, and
+		// dropping under it only when a narrow well at Extra large leaves no
+		// room beside a long book name.
 		tag := canvas.NewText(card.Tag, pal.TextMuted)
-		tag.TextSize = 12
-		refLine = container.NewHBox(ref, tag)
+		tag.TextSize = sz.title
+		refLine = container.New(&crossRefHeadingFlow{gap: 7}, ref, tag)
 	}
 	lines := []fyne.CanvasObject{refLine}
 	if c.otherOccasion() {
@@ -649,10 +653,7 @@ func crossRefRowRuled(state *AppState, card crossRefCard, pal palette, onTap fun
 	// For a parallel, the pericope title ("The Beatitudes") is the useful context,
 	// so show it above the verse preview; for another occasion, the saying's.
 	if c.Parallel && c.Title != "" {
-		t := canvas.NewText(c.Title, pal.TextMuted)
-		t.TextSize = 12
-		t.TextStyle = fyne.TextStyle{Italic: true}
-		lines = append(lines, t)
+		lines = append(lines, newCrossRefTitle(c.Title, sz.title, pal))
 	}
 
 	// The preview carries the divine name's small capitals as the page draws

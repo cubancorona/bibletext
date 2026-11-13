@@ -60,12 +60,21 @@ const (
 // crossRefLetter is a note's letter as it stands in the margin of its note
 // (crossRefLettered).
 func crossRefLetter(letter string, pal palette) *canvas.Text {
+	return crossRefLetterSized(letter, crossRefPanelSizes(), pal)
+}
+
+func crossRefLetterSized(letter string, sz crossRefSizes, pal palette) *canvas.Text {
+	size := sz.letter
+	if len(letter) > 1 {
+		size = sz.doubleLetter
+	}
+	return crossRefLetterWithSize(letter, size, pal)
+}
+
+func crossRefLetterWithSize(letter string, size float32, pal palette) *canvas.Text {
 	t := canvas.NewText(letter, pal.Accent)
 	t.TextStyle = fyne.TextStyle{Bold: true, Italic: true}
-	t.TextSize = crossRefLetterSize
-	if len(letter) > 1 {
-		t.TextSize = crossRefDoubleLetterSize
-	}
+	t.TextSize = size
 	return t
 }
 
@@ -79,16 +88,17 @@ const crossRefRowPad float32 = 6
 // is set as a line of the edition's print is, muted and at that size: in a
 // card's bold it read as a heading over the cards after it.
 func crossRefSelfRow(label, tag string, pal palette, rule bool) fyne.CanvasObject {
+	sz := crossRefPanelSizes()
 	ref := canvas.NewText(label, pal.TextMuted)
-	ref.TextSize = crossRefGroupTextSize
+	ref.TextSize = sz.printed
 	ref.FontSource = crossRefZeroFace(fyne.TextStyle{})
-	line := []fyne.CanvasObject{ref}
+	var line fyne.CanvasObject = ref
 	if tag != "" {
 		t := canvas.NewText(tag, pal.TextMuted)
-		t.TextSize = 12
-		line = append(line, t)
+		t.TextSize = sz.title
+		line = container.New(&crossRefHeadingFlow{gap: 7}, ref, t)
 	}
-	block := []fyne.CanvasObject{container.New(layout.NewCustomPaddedLayout(crossRefRowPad, crossRefRowPad, 0, 0), container.NewHBox(line...))}
+	block := []fyne.CanvasObject{container.New(layout.NewCustomPaddedLayout(crossRefRowPad, crossRefRowPad, 0, 0), line)}
 	if rule {
 		block = append(block, widget.NewSeparator())
 	}
@@ -156,17 +166,19 @@ type crossRefNoteRow struct {
 	pinned float32
 	pal    palette
 	line   float32 // the letter's line below its own top, measured once
+	margin float32 // width of the note letter's margin
 }
 
 // newCrossRefNoteRow draws n as its printed line over its pieces.
 func newCrossRefNoteRow(state *AppState, n publisherCrossRef, pal palette, onTap func(crossRef), relayout *crossRefRelayout) *crossRefNoteRow {
-	r := &crossRefNoteRow{note: n, relayout: relayout, open: true, pal: pal}
+	sz := crossRefPanelSizes()
+	r := &crossRefNoteRow{note: n, relayout: relayout, open: true, pal: pal, margin: sz.letterMargin}
 	r.label = newCrossRefPrinted(n.Text, pal)
 	r.icon = widget.NewIcon(crossRefGroupIcon(true))
 	// The letter in the margin, on the first line of the printed note, and
 	// the two at the middle of the row's height as the icon is, however
 	// many lines the note wraps to.
-	r.head = crossRefLettered(noteLetter(n.Index), pal, r.label, 0, crossRefGroupTextSize, fyne.TextStyle{})
+	r.head = crossRefLettered(noteLetter(n.Index), pal, r.label, 0, sz.printed, fyne.TextStyle{})
 	r.letter = r.head.Objects[0].(*canvas.Text)
 	middle := container.NewVBox(layout.NewSpacer(), r.head, layout.NewSpacer())
 	row := container.NewBorder(nil, nil, nil, crossRefFoldIcon(r.icon), middle)
@@ -180,6 +192,13 @@ func newCrossRefNoteRow(state *AppState, n publisherCrossRef, pal palette, onTap
 	return r
 }
 
+func (r *crossRefNoteRow) letterMargin() float32 {
+	if r.margin > 0 {
+		return r.margin
+	}
+	return crossRefLetterMargin
+}
+
 // crossRefNoteLayout lays a note's row out: its own row across the top, its
 // pieces under it beside the margin, and the rule in the margin from under
 // the letter to a little above the foot of the pieces (crossref_section.go).
@@ -190,7 +209,7 @@ func (l crossRefNoteLayout) MinSize([]fyne.CanvasObject) fyne.Size {
 	size := r.header.MinSize()
 	if r.body.Visible() {
 		b := r.body.MinSize()
-		if w := b.Width + crossRefLetterMargin; w > size.Width {
+		if w := b.Width + r.letterMargin(); w > size.Width {
 			size.Width = w
 		}
 		size.Height += b.Height
@@ -206,8 +225,9 @@ func (l crossRefNoteLayout) Layout(_ []fyne.CanvasObject, size fyne.Size) {
 	if !r.body.Visible() {
 		return
 	}
-	r.body.Move(fyne.NewPos(crossRefLetterMargin, top))
-	r.body.Resize(fyne.NewSize(size.Width-crossRefLetterMargin, size.Height-top))
+	m := r.letterMargin()
+	r.body.Move(fyne.NewPos(m, top))
+	r.body.Resize(fyne.NewSize(size.Width-m, size.Height-top))
 	r.placeRule(top, size.Height)
 }
 
@@ -274,7 +294,7 @@ func (r *crossRefNoteRow) keepLetterInView(into float32) {
 	r.pinned = pinned
 	if pinned > 0 {
 		if r.pin == nil {
-			r.pin = crossRefLetter(r.letter.Text, r.pal)
+			r.pin = crossRefLetterWithSize(r.letter.Text, r.letter.TextSize, r.pal)
 			r.box.Add(r.pin)
 		}
 		r.pin.Show()
@@ -354,10 +374,11 @@ func publisherNoteBlock(state *AppState, n publisherCrossRef, pal palette, onTap
 	}
 	// Each shape on the note's own ground, the letter in its margin
 	// (crossref_section.go).
+	sz := crossRefPanelSizes()
 	var block fyne.CanvasObject
 	switch tg, alone := n.alone(); {
 	case alone && tg.Current:
-		block = crossRefLettered(letter, pal, crossRefSelfRow(tg.label(), tg.tag(), pal, false), crossRefRowPad, crossRefGroupTextSize, fyne.TextStyle{})
+		block = crossRefLettered(letter, pal, crossRefSelfRow(tg.label(), tg.tag(), pal, false), crossRefRowPad, sz.printed, fyne.TextStyle{})
 	case alone && letter == "":
 		block = crossRefBeside(crossRefRowRuled(state, targetCard(tg, ""), pal, onTap, false))
 	case alone:
@@ -369,11 +390,11 @@ func publisherNoteBlock(state *AppState, n publisherCrossRef, pal palette, onTap
 		case group && len(g.cards()) == 0:
 			// Nothing of the group can be followed: the group as printed,
 			// with no row promising citations under it.
-			block = crossRefLettered(letter, pal, crossRefWordsRow(n.Text, pal, false), crossRefRowPad, crossRefGroupTextSize, fyne.TextStyle{})
+			block = crossRefLettered(letter, pal, crossRefWordsRow(n.Text, pal, false), crossRefRowPad, sz.printed, fyne.TextStyle{})
 		case group:
 			block = newCrossRefGroupRow(state, *g, letter, true, pal, onTap, relayout, false)
 		case bare:
-			block = crossRefLettered(letter, pal, crossRefWordsRow(words, pal, false), crossRefRowPad, crossRefGroupTextSize, fyne.TextStyle{})
+			block = crossRefLettered(letter, pal, crossRefWordsRow(words, pal, false), crossRefRowPad, sz.printed, fyne.TextStyle{})
 		default:
 			block = newCrossRefNoteRow(state, n, pal, onTap, relayout)
 		}

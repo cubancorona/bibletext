@@ -770,44 +770,48 @@ func TestTheCanonFitsTheNarrowestPhoneWithEveryGroupOpen(t *testing.T) {
 		t.Fatal(err)
 	}
 	th := appThemeForTest(t)
+	t.Cleanup(func() { setReadingTextSizeID("normal") })
 	licenseNKJVForTest(t)
 	withPublisherCrossRefs(t, "nkjv", true)
 	limit := narrowestPhoneBody(t)
 	st := &AppState{Bible: &bd, CurrentVersion: "nkjv", theme: th}
-	selections, opened, misfits := 0, 0, 0
-	for _, book := range bd.Books {
-		for _, ch := range bd.GetChapterNumbersForBook(book) {
-			for _, v := range bd.GetChapter(book, ch) {
-				sel := []Verse{v}
-				if len(publisherCrossRefsFor(&bd, book, ch, sel)) == 0 {
-					continue
-				}
-				selections++
-				st.CurrentBook, st.CurrentChapter = book, ch
-				lst := buildCrossRefList(st, sel, nil, nil, st.pal(), func(crossRef) {})
-				for _, g := range groupRowsIn(lst.Objects) {
-					if g.header != nil {
-						g.toggle()
-						opened++
+	for _, sizeOpt := range textSizeOptions {
+		setReadingTextSizeID(sizeOpt.ID)
+		selections, opened, misfits := 0, 0, 0
+		for _, book := range bd.Books {
+			for _, ch := range bd.GetChapterNumbersForBook(book) {
+				for _, v := range bd.GetChapter(book, ch) {
+					sel := []Verse{v}
+					if len(publisherCrossRefsFor(&bd, book, ch, sel)) == 0 {
+						continue
 					}
-				}
-				if problems := crossRefListMisfits(lst.Objects, limit); len(problems) != 0 {
-					misfits++
-					if misfits <= 5 {
-						t.Errorf("%s %d:%d, groups open: %s", book, ch, v.Verse, problems[0])
+					selections++
+					st.CurrentBook, st.CurrentChapter = book, ch
+					lst := buildCrossRefList(st, sel, nil, nil, st.pal(), func(crossRef) {})
+					for _, g := range groupRowsIn(lst.Objects) {
+						if g.header != nil {
+							g.toggle()
+							opened++
+						}
 					}
-				}
-				if lst.Passage && len(lst.Objects) > 0 {
-					if c, ok := lst.Objects[0].(*fyne.Container); ok && len(c.Objects) > 0 {
-						if p, ok := c.Objects[0].(*readingParagraph); ok {
-							p.Resize(fyne.NewSize(limit, 10))
-							for _, tx := range test.WidgetRenderer(p).(*readingParagraphRenderer).objs {
-								if edge := tx.Position().X + tx.Size().Width; edge > limit+0.5 {
-									misfits++
-									if misfits <= 5 {
-										t.Errorf("%s %d:%d: passage row reaches %.1f points, over %.0f", book, ch, v.Verse, edge, limit)
+					if problems := crossRefListMisfits(lst.Objects, limit); len(problems) != 0 {
+						misfits++
+						if misfits <= 5 {
+							t.Errorf("%s %s %d:%d, groups open: %s", sizeOpt.ID, book, ch, v.Verse, problems[0])
+						}
+					}
+					if lst.Passage && len(lst.Objects) > 0 {
+						if c, ok := lst.Objects[0].(*fyne.Container); ok && len(c.Objects) > 0 {
+							if p, ok := c.Objects[0].(*readingParagraph); ok {
+								p.Resize(fyne.NewSize(limit, 10))
+								for _, tx := range test.WidgetRenderer(p).(*readingParagraphRenderer).objs {
+									if edge := tx.Position().X + tx.Size().Width; edge > limit+0.5 {
+										misfits++
+										if misfits <= 5 {
+											t.Errorf("%s %s %d:%d: passage row reaches %.1f points, over %.0f", sizeOpt.ID, book, ch, v.Verse, edge, limit)
+										}
+										break
 									}
-									break
 								}
 							}
 						}
@@ -815,11 +819,11 @@ func TestTheCanonFitsTheNarrowestPhoneWithEveryGroupOpen(t *testing.T) {
 				}
 			}
 		}
+		if selections == 0 || opened == 0 {
+			t.Fatalf("control (%s): %d selections with a note, %d groups opened", sizeOpt.ID, selections, opened)
+		}
+		t.Logf("%s: %d selections with a note, %d groups opened, %d over %.0f points", sizeOpt.ID, selections, opened, misfits, limit)
 	}
-	if selections == 0 || opened == 0 {
-		t.Fatalf("control: %d selections with a note, %d groups opened", selections, opened)
-	}
-	t.Logf("%d selections with a note, %d groups opened, %d over %.0f points", selections, opened, misfits, limit)
 }
 
 // FLUSH FRAGMENTS IN THE PASSAGE STAY INSIDE THE LIST'S WIDTH. A quotation

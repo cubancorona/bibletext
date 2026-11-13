@@ -779,6 +779,29 @@ type paragraphFragment struct {
 // knock.If", while every reading pane, which keeps the lone-space run, read
 // correctly. A space seen and not yet placed is now simply pending until the
 // next word takes it.
+func endsWithDash(s string) bool {
+	return strings.HasSuffix(s, "-") || strings.HasSuffix(s, "–") || strings.HasSuffix(s, "—")
+}
+
+// splitDashParts splits w immediately after any interior hyphen, en dash or em
+// dash so a compound wider than an entire narrow-phone line at Extra large can
+// turn after the dash without altering the characters drawn.
+func splitDashParts(w string) []string {
+	var parts []string
+	start := 0
+	for i, ch := range w {
+		if ch == '-' || ch == '–' || ch == '—' {
+			end := i + len(string(ch))
+			if end < len(w) {
+				parts = append(parts, w[start:end])
+				start = end
+			}
+		}
+	}
+	parts = append(parts, w[start:])
+	return parts
+}
+
 func (p *readingParagraph) fragments() []paragraphFragment {
 	var out []paragraphFragment
 	pending := false
@@ -797,10 +820,22 @@ func (p *readingParagraph) fragments() []paragraphFragment {
 		}
 		leading := unicode.IsSpace([]rune(r.Text)[0])
 		for i, w := range words {
+			space := i > 0 || leading || (i == 0 && pending)
+			brk := i == 0 && r.Break
+			if p.holdFlush && !r.Mark {
+				for j, part := range splitDashParts(w) {
+					out = append(out, paragraphFragment{
+						text: part, red: r.Red, italic: r.Italic, mark: r.Mark, dim: r.Dim, bold: r.Bold,
+						spaceBefore: j == 0 && space,
+						breakBefore: j == 0 && brk,
+					})
+				}
+				continue
+			}
 			out = append(out, paragraphFragment{
 				text: w, red: r.Red, italic: r.Italic, mark: r.Mark, dim: r.Dim, bold: r.Bold,
-				spaceBefore: i > 0 || leading || (i == 0 && pending),
-				breakBefore: i == 0 && r.Break,
+				spaceBefore: space,
+				breakBefore: brk,
 			})
 		}
 		rs := []rune(r.Text)
@@ -928,6 +963,7 @@ func (r *readingParagraphRenderer) wrap(width float32) {
 	afterMark := false
 	afterItalic := false
 	afterOpenQuote := false
+	afterDash := false
 	newRow := func() {
 		r.rows = append(r.rows, row)
 		row = nil
@@ -935,8 +971,41 @@ func (r *readingParagraphRenderer) wrap(width float32) {
 		afterMark = false
 		afterItalic = false
 		afterOpenQuote = false
+		afterDash = false
 	}
 	fragments := r.p.fragments()
+	flushNeed := func(at int, stopAtDash bool) float32 {
+		cur := fragments[at]
+		total := r.fragmentWidth(cur)
+		prevMark := cur.mark
+		prevItalic := cur.italic
+		prevOpenQuote := !cur.mark && isOpeningQuote(cur.text)
+		prevDash := !cur.mark && endsWithDash(cur.text)
+		for _, g := range fragments[at+1:] {
+			if g.breakBefore || g.text == "" {
+				break
+			}
+			if g.spaceBefore {
+				if !prevOpenQuote {
+					break
+				}
+				total += r.spaceW
+			} else {
+				if stopAtDash && prevDash {
+					break
+				}
+				if prevMark || (prevItalic && g.mark) {
+					total += readingMarkGap
+				}
+			}
+			total += r.fragmentWidth(g)
+			prevMark = g.mark
+			prevItalic = g.italic
+			prevOpenQuote = !g.mark && isOpeningQuote(g.text)
+			prevDash = !g.mark && endsWithDash(g.text)
+		}
+		return total
+	}
 	for i, f := range fragments {
 		if f.breakBefore && (len(row) > 0 || len(r.rows) > 0) {
 			newRow()
@@ -957,28 +1026,20 @@ func (r *readingParagraphRenderer) wrap(width float32) {
 		// break before it, with its word, rather than leave the word to run
 		// past the edge. When holdFlush is set, the same holds for every
 		// chain of fragments drawn flush across a style or mark boundary,
-		// and across the space after a standalone opening quotation mark.
+		// and across the space after a standalone opening quotation mark; a
+		// hyphenated or em-dashed compound stays whole when it fits a row on
+		// its own and turns after its dash only when wider than width.
 		need := w
+		canBreak := f.spaceBefore && !(r.p.holdFlush && afterOpenQuote)
 		if r.p.holdFlush {
-			prevMark := f.mark
-			prevItalic := f.italic
-			prevOpenQuote := !f.mark && isOpeningQuote(f.text)
-			for _, g := range fragments[i+1:] {
-				if g.breakBefore || g.text == "" {
-					break
+			if canBreak {
+				need = flushNeed(i, false)
+				if need > width {
+					need = flushNeed(i, true)
 				}
-				if g.spaceBefore {
-					if !prevOpenQuote {
-						break
-					}
-					need += r.spaceW
-				} else if prevMark || (prevItalic && g.mark) {
-					need += readingMarkGap
-				}
-				need += r.fragmentWidth(g)
-				prevMark = g.mark
-				prevItalic = g.italic
-				prevOpenQuote = !g.mark && isOpeningQuote(g.text)
+			} else if afterDash {
+				canBreak = true
+				need = flushNeed(i, true)
 			}
 		} else if f.mark {
 			for _, g := range fragments[i+1:] {
@@ -991,7 +1052,7 @@ func (r *readingParagraphRenderer) wrap(width float32) {
 				}
 			}
 		}
-		if len(row) > 0 && f.spaceBefore && !(r.p.holdFlush && afterOpenQuote) && x+gap+need > width {
+		if len(row) > 0 && canBreak && x+gap+need > width {
 			newRow()
 			gap = 0
 		}
@@ -1014,6 +1075,7 @@ func (r *readingParagraphRenderer) wrap(width float32) {
 		afterMark = f.mark
 		afterItalic = f.italic
 		afterOpenQuote = !f.mark && isOpeningQuote(f.text)
+		afterDash = !f.mark && endsWithDash(f.text)
 	}
 	if len(row) > 0 || len(r.rows) == 0 {
 		r.rows = append(r.rows, row)
