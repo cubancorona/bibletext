@@ -18,6 +18,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -147,6 +148,187 @@ func TestBundledKeyStillClearable(t *testing.T) {
 	if got := fake.prefs.String(prefKeyPrefix + bibleKeyID); got != "" {
 		t.Errorf("bundled fallback was persisted as %q", got)
 	}
+}
+
+// In a build that carries an included key, clearing the active key (whether the
+// included one or a reader-supplied one) turns the Clear slot into an enabled
+// Restore button that brings the included key back without requiring a binary
+// reinstall or manual preferences edit. In a keyless build, the slot stays a
+// disabled Clear button.
+func TestBundledKeyRestorableAfterClear(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	th := &bibleTheme{fonts: loadReadingFonts(), uiFonts: loadUIFonts()}
+	app.Settings().SetTheme(th)
+	t.Setenv("BIBLE_API_KEY", "")
+	t.Setenv("BIBLETEXT_LICENSE_NKJV", "1")
+	t.Setenv("BIBLETEXT_PROVIDER_ID_NKJV", "test-provider-id")
+
+	const bundled = "the-bundled-one"
+
+	t.Run("clear included key then restore", func(t *testing.T) {
+		fake := withFakeSharedKeys(t)
+		prev := bundledBibleKeyEnc
+		defer func() { bundledBibleKeyEnc = prev }()
+		bundledBibleKeyEnc = obfuscateForTest(bundled)
+
+		st := sampleState()
+		st.theme = th
+		st.aiKeys = fake
+		st.CurrentVersion = defaultVersionID
+		st.preferredVersion = "nkjv"
+
+		var presenceCalls int
+		rows, _ := bibleKeySection(st, st.pal(), func() { presenceCalls++ })
+		win := app.NewWindow("keys")
+		defer win.Close()
+		win.Resize(fyne.NewSize(402, 700))
+		win.SetContent(rows)
+		rows.Resize(fyne.NewSize(334, rows.MinSize().Height))
+		entry := findKeyEntry(rows)
+
+		clearBtn := findTreeButton(rows, "Clear")
+		if clearBtn == nil || clearBtn.Disabled() {
+			t.Fatal("setup: Clear button should be present and enabled")
+		}
+		clearWidth := clearBtn.Size().Width
+		beforeClear := presenceCalls
+		clearBtn.OnTapped()
+
+		if got := fake.bibleAPIKey(); got != "" {
+			t.Fatalf("after Clear: bibleAPIKey() = %q, want empty", got)
+		}
+		if st.keyRemovedVersion != "nkjv" {
+			t.Fatalf("after Clear: keyRemovedVersion = %q, want nkjv", st.keyRemovedVersion)
+		}
+		if presenceCalls <= beforeClear {
+			t.Fatalf("after Clear: onKeyPresence did not fire (calls=%d, before=%d)", presenceCalls, beforeClear)
+		}
+		if findTreeButton(rows, "Clear") != nil {
+			t.Fatal("after Clear in a bundled build, button should no longer be labeled Clear")
+		}
+		restoreBtn := findTreeButton(rows, "Restore")
+		if restoreBtn == nil {
+			t.Fatal("after Clear in a bundled build, expected Restore button in the Clear slot")
+		}
+		if restoreBtn.Disabled() {
+			t.Fatal("Restore button must be enabled when the included key can be restored")
+		}
+		if restoreBtn.Icon != theme.ViewRefreshIcon() {
+			t.Errorf("Restore button icon = %v, want ViewRefreshIcon", restoreBtn.Icon)
+		}
+		if restoreBtn.Size() != restoreBtn.MinSize() || restoreBtn.Size().Width <= clearWidth {
+			t.Errorf("Restore button size = %v (MinSize %v, prior Clear width %.1f), want resized to MinSize",
+				restoreBtn.Size(), restoreBtn.MinSize(), clearWidth)
+		}
+		if entry.PlaceHolder != bibleKeyPlaceholder(false) {
+			t.Errorf("after Clear: placeholder = %q, want %q", entry.PlaceHolder, bibleKeyPlaceholder(false))
+		}
+
+		// Tap Restore: the included key comes back, the remembered translation
+		// is taken back, and the button returns to enabled Clear.
+		beforeRestore := presenceCalls
+		restoreBtn.OnTapped()
+
+		if !fake.usingBundledBibleKey() {
+			t.Fatal("after Restore: store should be using the bundled key again")
+		}
+		if got := fake.bibleAPIKey(); got != bundled {
+			t.Fatalf("after Restore: bibleAPIKey() = %q, want %q", got, bundled)
+		}
+		if st.preferredVersion != "nkjv" || st.keyRemovedVersion != "" {
+			t.Errorf("after Restore: preferredVersion=%q keyRemovedVersion=%q, want nkjv and empty",
+				st.preferredVersion, st.keyRemovedVersion)
+		}
+		if presenceCalls <= beforeRestore {
+			t.Errorf("after Restore: onKeyPresence did not fire (calls=%d, before=%d)", presenceCalls, beforeRestore)
+		}
+		if entry.PlaceHolder != bibleKeyPlaceholder(true) {
+			t.Errorf("after Restore: placeholder = %q, want %q", entry.PlaceHolder, bibleKeyPlaceholder(true))
+		}
+		if !treeHasText(rows, "✓ Included with BibleText — or paste your own.") {
+			t.Errorf("after Restore: status line did not return to included-key message; texts = %q", collectText(rows))
+		}
+		again := findTreeButton(rows, "Clear")
+		if again == nil || again.Disabled() {
+			t.Fatal("after Restore: button should return to enabled Clear")
+		}
+		if again.Icon != theme.ContentClearIcon() {
+			t.Errorf("after Restore: Clear button icon = %v, want ContentClearIcon", again.Icon)
+		}
+		if again.Size() != again.MinSize() {
+			t.Errorf("after Restore: Clear button size = %v, want MinSize %v", again.Size(), again.MinSize())
+		}
+	})
+
+	t.Run("clear reader key then restore included key", func(t *testing.T) {
+		fake := withFakeSharedKeys(t)
+		prev := bundledBibleKeyEnc
+		defer func() { bundledBibleKeyEnc = prev }()
+		bundledBibleKeyEnc = obfuscateForTest(bundled)
+
+		fake.setBibleAPIKey("readers-own-key")
+		fake.noteBibleKeyCleared(false)
+
+		st := sampleState()
+		st.theme = th
+		st.aiKeys = fake
+		st.CurrentVersion = defaultVersionID
+		st.preferredVersion = "nkjv"
+
+		rows, _ := bibleKeySection(st, st.pal(), nil)
+		entry := findKeyEntry(rows)
+		if entry.Text != "readers-own-key" {
+			t.Fatalf("setup: entry.Text = %q, want readers-own-key", entry.Text)
+		}
+
+		// Emptying the field by hand also clears for good and offers Restore.
+		entry.SetText("")
+		if got := fake.bibleAPIKey(); got != "" {
+			t.Fatalf("after emptying field: bibleAPIKey() = %q, want empty", got)
+		}
+		restoreBtn := findTreeButton(rows, "Restore")
+		if restoreBtn == nil || restoreBtn.Disabled() {
+			t.Fatal("after emptying reader key in a bundled build, Restore should be present and enabled")
+		}
+
+		restoreBtn.OnTapped()
+		if !fake.usingBundledBibleKey() || fake.bibleAPIKey() != bundled {
+			t.Fatalf("after Restore: usingBundled=%v key=%q, want true and %q",
+				fake.usingBundledBibleKey(), fake.bibleAPIKey(), bundled)
+		}
+		if st.preferredVersion != "nkjv" || st.keyRemovedVersion != "" {
+			t.Errorf("after Restore: preferredVersion=%q keyRemovedVersion=%q, want nkjv and empty",
+				st.preferredVersion, st.keyRemovedVersion)
+		}
+	})
+
+	t.Run("keyless build keeps disabled Clear", func(t *testing.T) {
+		fake := withFakeSharedKeys(t)
+		prev := bundledBibleKeyEnc
+		defer func() { bundledBibleKeyEnc = prev }()
+		bundledBibleKeyEnc = ""
+
+		fake.setBibleAPIKey("readers-own-key")
+		st := sampleState()
+		st.theme = th
+		st.aiKeys = fake
+
+		rows, _ := bibleKeySection(st, st.pal(), nil)
+		clearBtn := findTreeButton(rows, "Clear")
+		if clearBtn == nil || clearBtn.Disabled() {
+			t.Fatal("setup: Clear button should be enabled while reader key is stored")
+		}
+		clearBtn.OnTapped()
+
+		if findTreeButton(rows, "Restore") != nil {
+			t.Fatal("keyless build must not offer Restore when no bundled key is compiled in")
+		}
+		clearAfter := findTreeButton(rows, "Clear")
+		if clearAfter == nil || !clearAfter.Disabled() {
+			t.Fatal("keyless build should leave Clear present and disabled after clearing")
+		}
+	})
 }
 
 // obfuscateForTest mirrors the release link-value preparation.

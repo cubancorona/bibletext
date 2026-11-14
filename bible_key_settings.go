@@ -160,11 +160,11 @@ func (r *keyStatusRow) showClose(show bool) bool {
 // icon. Copy that also describes the replacement action exceeds that budget;
 // the adjacent Paste button and status line carry the action and state details.
 //
-// The helper takes the state rather than reading it, so the three call sites —
-// construction, Clear, and emptying the field by hand — cannot drift. That last
-// one is why this is a function at all: OnChanged clears the bundled key for
-// good, so a placeholder set only at construction would go on claiming the key
-// was included after the reader deleted it.
+// The helper takes the state rather than reading it, so the four call sites —
+// construction, Clear, Restore, and emptying the field by hand — cannot drift.
+// That last one is why this is a function at all: OnChanged clears the bundled
+// key for good, so a placeholder set only at construction would go on claiming
+// the key was included after the reader deleted it.
 func bibleKeyPlaceholder(usingBundled bool) string {
 	if usingBundled {
 		// Brackets distinguish this state description from masked field content
@@ -309,13 +309,22 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 	})
 	// Assigned below, once refreshStatus and the presence hook exist.
 	var clearBibleKey func()
-	clearBtn := widget.NewButtonWithIcon("Clear", theme.ContentClearIcon(), func() {
+	var restoreBundledBibleKey func()
+	var clearBtn *widget.Button
+	clearBtn = widget.NewButtonWithIcon("Clear", theme.ContentClearIcon(), func() {
+		if clearBtn.Text == "Restore" {
+			if restoreBundledBibleKey != nil {
+				restoreBundledBibleKey()
+			}
+			return
+		}
 		if clearBibleKey != nil {
 			clearBibleKey()
 		}
 	})
 
 	saveOK := true
+	actionsRow := keyActionsRow(pasteBtn, testBtn, clearBtn)
 	var refreshStatus func()
 	statusRow := newKeyStatusRow(status, func() {
 		store.dismissKeyNotRestored(bibleKeyID)
@@ -335,18 +344,30 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 		}
 		var text string
 		var col color.Color
+		prevBtnText := clearBtn.Text
 		if keyInUse() != "" {
 			if saveOK {
 				text, col = savedLabel, pal.Accent
 			} else {
 				text, col = "Couldn't save this key securely. Please try again.", theme.Color(theme.ColorNameError)
 			}
+			clearBtn.SetText("Clear")
+			clearBtn.SetIcon(theme.ContentClearIcon())
 			clearBtn.Enable()
 		} else if !saveOK {
 			text, col = "Couldn't remove the stored key. Please try again.", theme.Color(theme.ColorNameError)
+			clearBtn.SetText("Clear")
+			clearBtn.SetIcon(theme.ContentClearIcon())
+			clearBtn.Enable()
+		} else if bundledBibleKey() != "" {
+			text, col = "Free for personal use — no card, no charge.", pal.TextMuted
+			clearBtn.SetText("Restore")
+			clearBtn.SetIcon(theme.ViewRefreshIcon())
 			clearBtn.Enable()
 		} else {
 			text, col = "Free for personal use — no card, no charge.", pal.TextMuted
+			clearBtn.SetText("Clear")
+			clearBtn.SetIcon(theme.ContentClearIcon())
 			clearBtn.Disable()
 		}
 		// An empty field whose key a restore did not bring back says so,
@@ -357,9 +378,19 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 		if notRestored {
 			text, col = keyNotRestoredLine, pal.Text
 		}
+		// Switching between Clear and Restore changes the button's MinSize
+		// width; re-laying out actionsRow ensures the button is resized to its
+		// new label even when the row's line count (and height) does not change.
+		btnChanged := clearBtn.Text != prevBtnText
+		if btnChanged {
+			if s := actionsRow.Size(); s.Width > 0 {
+				actionsRow.Layout.Layout(actionsRow.Objects, s)
+			}
+			actionsRow.Refresh()
+		}
 		// A status that now takes a line more or less changes the section's
 		// height, and the sheet's with it; so can the ✕ coming or going.
-		changed := status.set(text, col)
+		changed := status.set(text, col) || btnChanged
 		if statusRow.showClose(notRestored) {
 			changed = true
 		}
@@ -383,6 +414,20 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 		refreshStatus()
 		if hadKey {
 			hadKey = false
+			if onKeyPresence != nil {
+				onKeyPresence()
+			}
+		}
+	}
+	restoreBundledBibleKey = func() {
+		store.noteBibleKeyCleared(false)
+		takeBackKeyedTranslation(state)
+		saveOK = true
+		entry.SetPlaceHolder(bibleKeyPlaceholder(store.usingBundledBibleKey()))
+		entry.Refresh()
+		refreshStatus()
+		if has := store.bibleAPIKey() != ""; has != hadKey {
+			hadKey = has
 			if onKeyPresence != nil {
 				onKeyPresence()
 			}
@@ -428,7 +473,7 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 		// Field on its own full-width line: an API key is long.
 		entry,
 		// The same row as the assistant's (key_actions_row.go).
-		keyActionsRow(pasteBtn, testBtn, clearBtn),
+		actionsRow,
 		// Status has the row to itself, but for the ✕ of a key a restore did
 		// not bring back; the link is up on the label row.
 		statusRow.row,

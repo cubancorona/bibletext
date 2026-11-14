@@ -102,7 +102,7 @@ func bibleKeyControls(t *testing.T, popup *widget.PopUp) (*widget.Entry, *widget
 				entries = append(entries, v)
 			}
 		case *widget.Button:
-			if v.Text == "Clear" {
+			if v.Text == "Clear" || v.Text == "Restore" {
 				clears = append(clears, v)
 			}
 		}
