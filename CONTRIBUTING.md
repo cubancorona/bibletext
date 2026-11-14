@@ -75,10 +75,12 @@ overlay) and run on Linux/Windows.
 ## Scope & data
 
 - The full scripture text and the Treasury-of-Scripture-Knowledge cross-references
-  are fetched at runtime and cached, not bundled. Two datasets *are* embedded in
-  the binary: a World English Bible Gospels seed (`assets/seed/`, so a first run
-  opens instantly to readable scripture while the full canon downloads) and the
-  Gospel-parallels synopsis (`assets/parallels/`). See [NOTICE](NOTICE) for licenses.
+  are fetched at runtime and cached. The binary embeds a World English Bible
+  Gospels seed (`assets/seed/`, so a first run opens instantly to readable
+  scripture while the full canon downloads), the Gospel-parallels synopsis
+  (`assets/parallels/`), and recovered publisher cross-references for WEB, WEB
+  Catholic and BSB (`publisher_xrefs_public_data.go`). See [NOTICE](NOTICE) for
+  licenses and [docs/TEXTUAL-DATA.md](docs/TEXTUAL-DATA.md) for table sources.
 - AI study is bring-your-own-key. **Never commit API keys.** Store-release
   API.Bible credentials are supplied only through the external release-key flow
   documented in `docs/API_KEY_HANDLING.md`; they do not belong in source files.

@@ -15,7 +15,9 @@ package bibletext
 // glyph untouched.
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"sync"
 
 	"fyne.io/fyne/v2"
@@ -121,6 +123,15 @@ func patchAtkinsonPlainZero(src []byte) []byte {
 		return nil
 	}
 	raw := src[glyfOff+g0 : glyfOff+g1]
+	// The contour indices below describe these two embedded glyphs only.
+	// A font update must be reviewed before applying the same reconstruction.
+	const regularZeroSHA256 = "c0565bcb55ef5c8466715dfcaf53c90c2c10d82a61ada8edea897f9cc21d20ce"
+	const boldZeroSHA256 = "cd7f6744af323484671a91f0a9a80713a79d2c4aa4959766f700e9a6f006d5d2"
+	digest := sha256.Sum256(raw)
+	digestText := hex.EncodeToString(digest[:])
+	if digestText != regularZeroSHA256 && digestText != boldZeroSHA256 {
+		return nil
+	}
 	contours, bbox, ok := decodeSimpleGlyph(raw)
 	if !ok || len(contours) != 3 {
 		return nil

@@ -643,3 +643,38 @@ func TestThePublisherCrossRefGeneratorReproducesTheShippedTables_LocalOnly(t *te
 		t.Fatal("publisher_xrefs_public_data.go differs from generator output; re-run scripts/gen-publisher-xrefs.py")
 	}
 }
+
+func TestPublicPublisherHeadingReferencesRejectAmbiguousRevisions(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		headings []Heading
+	}{
+		{"renamed and reordered", []Heading{
+			{Text: "Numbered saying revised", Style: "heading", BeforeVerse: 1},
+			{Text: "Riches revised", Style: "heading", BeforeVerse: 1},
+		}},
+		{"duplicate matching titles", []Heading{
+			{Text: "Original section", Style: "heading", BeforeVerse: 1},
+			{Text: "Original section", Style: "heading", BeforeVerse: 1},
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bd := &BibleData{Headings: map[string]map[int][]Heading{
+				"Proverbs": {23: tc.headings},
+			}}
+			table := map[string][]publisherHeadingNote{
+				"Proverbs 23": {{
+					BeforeVerse: 1, HeadingOrd: 0,
+					HeadingHash: redLetterTextHash("Original section"),
+					Text:        "Luke 12:13–21",
+				}},
+			}
+			applyPublisherHeadingCrossRefs(bd, table)
+			for i, h := range bd.Headings["Proverbs"][23] {
+				if len(h.Footnotes) != 0 {
+					t.Errorf("ambiguous heading %d received a reference", i)
+				}
+			}
+		})
+	}
+}

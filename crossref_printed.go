@@ -34,12 +34,12 @@ const crossRefPrintedLeading float32 = 3
 // ground, margin and icon, so that the first height reported is not short.
 const crossRefPrintedGuess float32 = 220
 
-// crossRefSingleLineMax is the narrowest group well at Extra large (229pt):
-// any reference without a cross-book en dash that fits inside it needs only a
-// single canvas.Text; cross-book ranges and wider headings use crossRefPrinted
-// so they stay on one line while there is room and turn cleanly after the en
-// dash (or between words) on a narrow phone.
-const crossRefSingleLineMax float32 = 229
+// crossRefSingleLineMax conservatively estimates the group well at the
+// minimum panel width and Extra large text: 280pt panel less the 44pt chrome
+// estimate, 16pt section padding, 22pt letter margin and 16pt group padding.
+// Only references that fit this lower bound use a single canvas.Text. Wider
+// headings use crossRefPrinted and wrap to the actual available width.
+const crossRefSingleLineMax float32 = 182
 
 // crossRefPrinted is one printed line, wrapped italic title (wordWrap), or
 // wrapped reference heading (refWrap).
@@ -231,7 +231,7 @@ func referenceRows(text string, width float32, measure func(string) float32) []s
 	if measure(text) <= width {
 		return []string{text}
 	}
-	if before, after, ok := strings.Cut(text, "–"); ok && after != "" {
+	if before, after, ok := strings.Cut(text, "–"); ok && hasCrossBookEnDash(text) {
 		first := before + "–"
 		if measure(first) <= width && measure(after) <= width {
 			return []string{first, after}

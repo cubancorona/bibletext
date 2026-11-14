@@ -154,10 +154,12 @@ func applyPublisherHeadingCrossRefs(bd *BibleData, table map[string][]publisherH
 				}
 			}
 			if matches != 1 {
-				if hn.HeadingOrd >= 0 && hn.HeadingOrd < len(atVerse) {
-					target = atVerse[hn.HeadingOrd]
-				} else {
-					target = -1
+				target = -1
+				// A sole heading can retain its note after a wording change.
+				// With multiple candidates, an ordinal cannot identify which
+				// heading survived a rename or reorder.
+				if len(atVerse) == 1 && hn.HeadingOrd == 0 {
+					target = atVerse[0]
 				}
 			}
 			if target < 0 || hasCrossRefFootnoteText(chHeads[target].Footnotes, hn.Text) {
