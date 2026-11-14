@@ -32,6 +32,7 @@ func loadSeedGospels() (*BibleData, error) {
 	if len(bd.Books) == 0 {
 		return nil, fmt.Errorf("embedded gospels seed is empty")
 	}
+	applyPublisherCrossRefs("web", bd)
 	bd.PrepareSearchIndex()
 	return bd, nil
 }

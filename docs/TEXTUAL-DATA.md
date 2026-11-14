@@ -700,6 +700,7 @@ under the same discipline:
 | `red_letter_web_data.go` | WEB/WEBC USFM `\wj` markers | `scripts/gen-web-redletter.py` | committed spans, lengths, and content fingerprints |
 | `red_letter_bsb_data.go` | official BSB third-printing USFM `\wj` markers | `scripts/gen-bsb-redletter.py` | committed; all 2,042 marked verses and 2,294 runs located |
 | `red_letter_nkjv_data.go` | API.Bible NKJV `<span class="wj">` | `scripts/gen-nkjv-redletter.py` | committed offsets/fingerprints only; no licensed text |
+| `publisher_xrefs_public_data.go` | WEB/WEBC USFM `\x` notes (340 WEB across 322 verses; 343 WEBC across 325 verses) and BSB USFM `\r` section-heading parallel lines (1,325 across 634 chapters) | `scripts/gen-publisher-xrefs.py` | committed offsets, content/heading hashes and resolved `NoteRef` spans; guarded by rune count and `redLetterTextHash`, verified by `TestShippedPublicPublisherCrossRefTablesAreCompleteAndSound` and `TestThePublisherCrossRefGeneratorReproducesTheShippedTables_LocalOnly` |
 | `scripts/data/bsb-redletter-adjudications.json` | retired derived table | — | historical record; no longer used by generation or runtime |
 | `scripts/data/nkjv-wj-verses.json` | retired BSB derivation input | — | historical verse numbers; no longer used by BSB generation |
 | `assets/timings/bsb.json`, `web.json` | per-verse read-along alignment; verse 0 is the Psalm's superscription (116 per narration) | `scripts/audio-align` | timing only; no claim about the text |

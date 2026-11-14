@@ -28,9 +28,16 @@ func withPublisherCrossRefs(t *testing.T, id string, on bool) {
 	t.Helper()
 	for i := range registeredVersions {
 		if registeredVersions[i].ID == id {
-			was := registeredVersions[i].PublisherCrossRefs
+			wasRefs := registeredVersions[i].PublisherCrossRefs
+			wasApp := registeredVersions[i].PublisherApparatus
 			registeredVersions[i].PublisherCrossRefs = on
-			t.Cleanup(func() { registeredVersions[i].PublisherCrossRefs = was })
+			if id == "nkjv" {
+				registeredVersions[i].PublisherApparatus = on
+			}
+			t.Cleanup(func() {
+				registeredVersions[i].PublisherCrossRefs = wasRefs
+				registeredVersions[i].PublisherApparatus = wasApp
+			})
 			return
 		}
 	}

@@ -342,7 +342,7 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 		localRefs := localCrossRefsForSelection(state, text, span)
 		lst := buildCrossRefPanelList(state, selectionVerses(state, text, span), localRefs,
 			crossRefTreasuryState{loading: true, bar: bar}, pal, follow)
-		if len(lst.Objects) == 0 {
+		if len(lst.Objects) == 0 || !lst.Sections.Publisher {
 			setThinking()
 			return
 		}

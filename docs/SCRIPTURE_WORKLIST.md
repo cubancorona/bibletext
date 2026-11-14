@@ -455,7 +455,7 @@ breaks survive a copy is too easy to get wrong to leave where no test can reach.
 | S17 | NKJV supplied words: captured | NKJV | M | nkjv | done; captured, and drawn in italic on every surface |
 | S18 | speech reads the Psalm title | all | M | none | done |
 | S19 | mark an omitted verse's gap in the text | all | M | none | done |
-| S20 | show the NKJV's cross references | NKJV | M | none | built behind a tag; presentation second pass built 6 November 2026, the notes whole under their letters 11 November 2026, panel refinements, per-section loading, other-cross-reference checks and reader text-size scaling built 12–13 November 2026; gated on the licensing reply |
+| S20 | show publisher cross references | all four | M | none | WEB (340), WEBC (343) and BSB (1,325 `\r` heading notes) recovered from USFM and live in every build (14 November 2026); NKJV built behind `nkjvxrefs` (6–13 November 2026), gated on the licensing reply |
 | S21 | website renders the footnote section | website | M | none | done |
 | S22 | in-text footnote markers | all | L | none | blocked |
 | S23 | draw small caps as small caps | NKJV | M | nkjv | done |
@@ -786,7 +786,17 @@ scrolled credits on landscape or short windows, the silent-caller notice at
 Psalm 150:2, immediate local display while the Treasury downloads, `:title`
 and whole-chapter Treasury filter precision, strict Gospel-parallel span
 validation, and proportional scaling across `Normal`, `Large` and `Extra large`
-text sizes. The decisions, the build, the count that holds it over the canon
+text sizes. **Extended 14 November 2026** to recover in every build the
+publisher cross-references that `bible.helloao.org` strips from the
+public-domain and CC0 editions (`scripts/gen-publisher-xrefs.py`,
+`publisher_xrefs_public_data.go`, `publisher_xrefs_public.go`): 340 in-verse
+`\x` notes across 322 WEB verses, 343 across 325 WEBC verses (including
+Tobit 2:6, Wisdom 14:27 and Sirach 6:30), and 1,325 `\r` section-heading
+parallel lines across 634 BSB chapters (cleaning up helloao's leaked duplicate
+`"(Joshua–Malachi)"` heading at Hebrews 11:30), shown on noted selections under
+`WEB REFERENCES`, `WEBC REFERENCES` and `BSB REFERENCES` while unnoted
+selections keep the plain unlabelled list (`PublisherApparatus == false`). The
+decisions, the build, the count that holds it over the canon
 and the audit of the other cross-reference sets are in the same BACKLOG entry;
 `docs/CROSS_REFERENCE_NOTES.md` is the ledger of what a note carries and where
 each thing is shown.

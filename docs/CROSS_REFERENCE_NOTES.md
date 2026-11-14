@@ -9,9 +9,11 @@ canon holds, where the panel shows it, and the test that holds it, so that a
 change to the panel can be checked against the list rather than against a
 memory of it.
 
-Everything here is behind the `nkjvxrefs` build tag, which no store build
-compiles; whether any of it displays waits on the licensing reply
-(docs/BACKLOG.md, "NKJV cross references: the panel's second pass").
+The NKJV's apparatus below is behind the `nkjvxrefs` build tag, which no store
+build compiles while the licensing enquiry waits on a reply (docs/BACKLOG.md,
+"NKJV cross references: the panel's second pass"); the same publisher-run
+model ships in every build for the public-domain and CC0 editions' own
+recovered cross-references (`publisher_xrefs_public.go`, below).
 
 The figures are of the canon fetched on 6 November 2026. Those marked
 "census" are pinned by `canonPieceCensus` in `publisher_xrefs_census_test.go`
@@ -170,11 +172,24 @@ A report to the provider is drafted for the owner to review and send.
   `"1 Thessalonians 5:28–"` / `"2 Thessalonians 1:2"` among Romans 1:7's kept
   index rows) so every card fits the 283pt narrowest phone
   (`TestEveryRealCrossReferenceCardFitsTheNarrowestPhone`).
-- Upstream USFM `\x` cross-reference notes in WEB (340) and WEB Catholic (343)
-  and `\r` parallel headings in BSB (1,325) are stripped by helloao's JSON
-  export before reaching the app; whether to source them upstream or replace
-  OpenBible's vote-ranked TSK with CrossWire's head-word TSK remains separate
-  backlog work (`docs/BACKLOG.md`, `docs/SOURCE_FIELDS.md`).
+- The public-domain and CC0 editions' own cross-references — stripped by
+  `bible.helloao.org`'s JSON export — are recovered offline from their
+  published USFM (`scripts/gen-publisher-xrefs.py`,
+  `publisher_xrefs_public_data.go`, `publisher_xrefs_public.go`) and shown in
+  every build on the same publisher-run model (`WEB REFERENCES`,
+  `WEBC REFERENCES`, `BSB REFERENCES`): 340 in-verse `\x` notes across 322 WEB
+  verses (424 citations), 343 across 325 WEB Catholic verses (430 citations,
+  adding Tobit 2:6, Wisdom 14:27 and Sirach 6:30), and 1,325 section-heading
+  `\r` parallel-passage lines across 634 BSB chapters (2,032 citations plus
+  Hebrews 11:30's words-only `"Joshua–Malachi"`, whose leaked duplicate
+  `"(Joshua–Malachi)"` feed heading is stripped on attachment). Because these
+  three sets are sparse (`BibleVersion.PublisherApparatus == false`), unnoted
+  selections stay in the plain unlabelled list rather than showing an empty
+  publisher banner on 96–99% of verses
+  (`TestShippedPublicPublisherCrossRefTablesAreCompleteAndSound`,
+  `TestEveryPublicPublisherCrossRefNoteFitsTheNarrowestPhone`). Whether to
+  replace OpenBible's vote-ranked TSK with CrossWire's public-domain head-word
+  TSK remains an open product question (`docs/SOURCE_FIELDS.md`).
 
 ## Checking it again
 

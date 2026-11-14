@@ -158,10 +158,12 @@ func panelCoverage(state *AppState, book string, verses []Verse) (note string, n
 			hasSilentDisplacedCaller(state.Bible, book, chapter, verses) {
 			return "", false
 		}
-		if note, none := crossRefCoverage(v.ID, book, verses); none {
-			return note, true
+		if v.PublisherApparatus {
+			if note, none := crossRefCoverage(v.ID, book, verses); none {
+				return note, true
+			}
+			return "", false
 		}
-		return "", false
 	}
 	return crossRefCoverage(v.ID, book, verses)
 }
@@ -291,9 +293,24 @@ func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tsk
 	out.Sections.Parallels = len(parallels)+len(others) > 0
 
 	v := state.currentVersion()
-	if !v.PublisherCrossRefs {
-		// The shipped list: the parallels wear their pill, since no label
-		// says where they are from, then the Treasury's rows.
+	var book string
+	var chapter int
+	var notes []publisherCrossRef
+	var missing bool
+	if v.PublisherCrossRefs {
+		// The publisher's notes are the selected verses' chapter's, which the
+		// reader may have left (selectedChapter); the title's notes come first
+		// when the selection reaches the chapter's first verse.
+		book, chapter = selectedChapter(state, selected)
+		notes = publisherCrossRefsFor(state.Bible, book, chapter, selected)
+		missing = len(notes) == 0 && hasSilentDisplacedCaller(state.Bible, book, chapter, selected)
+	}
+	if !v.PublisherCrossRefs || (len(notes) == 0 && !missing && !v.PublisherApparatus) {
+		// The unlabelled list: the parallels wear their pill, since no label
+		// says where they are from, then the Treasury's rows. Used whenever
+		// no publisher apparatus stands on screen — every edition without
+		// PublisherCrossRefs, and a sparse publisher set (WEB, WEBC, BSB) on
+		// a selection where the edition prints no note.
 		for _, c := range parallels {
 			out.Objects = append(out.Objects, crossRefRow(state, passageCard(c, true), pal, onTap))
 		}
@@ -308,12 +325,6 @@ func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tsk
 		return out
 	}
 
-	// The publisher's notes are the selected verses' chapter's, which the
-	// reader may have left (selectedChapter); the title's notes come first
-	// when the selection reaches the chapter's first verse.
-	book, chapter := selectedChapter(state, selected)
-	notes := publisherCrossRefsFor(state.Bible, book, chapter, selected)
-	missing := len(notes) == 0 && hasSilentDisplacedCaller(state.Bible, book, chapter, selected)
 	// Nothing at all to list is the panel's message state, not a run with
 	// one line over an empty Treasury: with the Treasury unloaded, the
 	// connection error; with it loaded and empty, the sentence every empty
@@ -487,7 +498,7 @@ func crossRefFooterCredit(state *AppState, sections crossRefSections) (sources, 
 	v := state.currentVersion()
 	var parts []string
 	if sections.Treasury {
-		if v.PublisherCrossRefs {
+		if sections.Publisher {
 			parts = append(parts, treasuryCredit)
 		} else {
 			parts = append(parts, tskCredit)

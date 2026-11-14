@@ -10333,11 +10333,27 @@ DECIDED AND BUILT 12–13 November 2026 (resolving the 11 November open list):
   `docs/SOURCE_FIELDS.md`). `GOSPEL PARALLELS` deliberately stays
   unfiltered against `NKJV REFERENCES` so synopsis pericopes keep every
   participating Gospel, and `treasuryRowsFor` keeps its pre-filter
-  `maxCrossRefsPerVerse = 16` cap (`maxCrossRefsKept = 32`). Upstream USFM `\x`
-  notes in WEB (340) and WEB Catholic (343) and `\r` parallel headings in BSB
-  (1,325) are stripped by helloao's JSON before reaching the decoder; sourcing
-  them upstream or moving to CrossWire's head-word TSK stays separate product
-  work if ever wanted.
+  `maxCrossRefsPerVerse = 16` cap (`maxCrossRefsKept = 32`).
+- **Recovered 14 November 2026**: the publisher cross-references that
+  `bible.helloao.org` strips from the public-domain and CC0 editions — 340
+  in-verse `\x` notes across 322 WEB verses (424 citations), 343 across 325
+  WEB Catholic verses (430 citations, adding Tobit 2:6, Wisdom 14:27 and
+  Sirach 6:30), and 1,325 `\r` section-heading parallel-passage lines across
+  634 BSB chapters (2,032 citations plus Hebrews 11:30's words-only
+  `"Joshua–Malachi"`, stripping helloao's leaked duplicate `"(Joshua–Malachi)"`
+  heading) — are generated offline from the cached USFM archives into
+  `publisher_xrefs_public_data.go` (`scripts/gen-publisher-xrefs.py`,
+  `publisher_xrefs_public.go`), guarded by rune count and `redLetterTextHash`,
+  and attached idempotently on decode, on cache load and on the embedded WEB
+  Gospels seed without bumping `cacheEpoch`. `PublisherCrossRefs` is true in
+  every build for `web`, `webc` and `bsb`, while `PublisherApparatus` stays
+  true only for `nkjv` behind `nkjvxrefs` so unnoted verses in the sparse sets
+  keep the plain unlabelled list rather than showing an empty publisher banner
+  on 96–99% of selections (`TestShippedPublicPublisherCrossRefTablesAreCompleteAndSound`,
+  `TestEveryPublicPublisherCrossRefNoteFitsTheNarrowestPhone`,
+  `TestThePublisherCrossRefGeneratorReproducesTheShippedTables_LocalOnly`).
+  Moving from OpenBible's vote-ranked TSK to CrossWire's public-domain
+  head-word TSK remains a separate product question.
 
 GATES. The publisher's apparatus does not display in a store build until the
 licensing reply says it may. The only licensing enquiry sent is the

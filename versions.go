@@ -48,14 +48,22 @@ type BibleVersion struct {
 	// PublicDomain marks freely-distributable text (no license required).
 	PublicDomain bool
 
-	// PublisherCrossRefs shows the edition's OWN cross-reference apparatus in
-	// the cross-references panel (publisher_xrefs.go), ahead of the Treasury
-	// of Scripture Knowledge. False everywhere in a store build: displaying a
-	// licensed publisher's apparatus is the subject of a licensing enquiry that
-	// has been sent and not answered, so the one line that sets it — for the
-	// NKJV — lives behind the nkjvxrefs build tag (versions_nkjvxrefs.go),
-	// where no shipped binary compiles it.
+	// PublisherCrossRefs shows the edition's OWN cross-references in the
+	// cross-references panel (publisher_xrefs.go, publisher_xrefs_public.go),
+	// ahead of the Treasury of Scripture Knowledge. True in every build for the
+	// public-domain / CC0 editions (WEB, WEBC, BSB); true for the NKJV only
+	// behind the nkjvxrefs build tag (versions_nkjvxrefs.go), where no shipped
+	// binary compiles it while the licensing enquiry is open.
 	PublisherCrossRefs bool
+
+	// PublisherApparatus marks an edition whose cross-references are a full
+	// canon-wide apparatus (the NKJV's 32,517 notes, behind nkjvxrefs) rather
+	// than sparse notes or section-heading parallel lines (WEB, WEBC, BSB). On
+	// a selection where the edition prints no note, a full apparatus shows its
+	// section label and empty line ("No NKJV cross-references for this
+	// selection.") above the other sources; a sparse set leaves the panel in
+	// its plain unlabelled shape so 96–99% of verses carry no dead empty section.
+	PublisherApparatus bool
 
 	// cacheEpoch invalidates this version's on-disk cache when its DECODING
 	// changes (not the cache file format — that is cacheSchemaVersion). The cache
@@ -108,7 +116,7 @@ func (v BibleVersion) canSelect() bool {
 var registeredVersions = []BibleVersion{
 	{
 		ID: "web", Name: "World English Bible", Abbrev: "WEB",
-		Publisher: "Public Domain", PublicDomain: true,
+		Publisher: "Public Domain", PublicDomain: true, PublisherCrossRefs: true,
 		// epoch 5: Psalm superscriptions + their notes. Epoch 4 omitted-verse
 		// orphan notes (Luke 17:36 and kin — the WEB carries 5); epoch 3
 		// footnote capture; epoch 2 poem-clause line breaks (epoch 1,
@@ -122,7 +130,7 @@ var registeredVersions = []BibleVersion{
 	},
 	{
 		ID: "bsb", Name: "Berean Standard Bible", Abbrev: "BSB",
-		Publisher: "Public Domain (CC0)", PublicDomain: true,
+		Publisher: "Public Domain (CC0)", PublicDomain: true, PublisherCrossRefs: true,
 		// epoch 6: Psalm superscriptions + their notes (the BSB carries 116
 		// titles and 36 title notes). Epoch 5 omitted-verse orphan capture
 		// (decoder-version hygiene; zero BSB orphans); epoch 4 footnote
@@ -137,7 +145,7 @@ var registeredVersions = []BibleVersion{
 	},
 	{
 		ID: "webc", Name: "World English Bible (Catholic)", Abbrev: "WEBC",
-		Publisher: "Public Domain", PublicDomain: true,
+		Publisher: "Public Domain", PublicDomain: true, PublisherCrossRefs: true,
 		// 73-book Catholic canon (deuterocanon) from bible.helloao.org, decoded by
 		// USFM id into traditional Catholic order — see catholic.go.
 		// epoch 8: the indent depth of each poetry line; epoch 7 the
@@ -455,6 +463,7 @@ func loadVersionFromCacheOnly(v BibleVersion) (*BibleData, dataMode, error) {
 	noFetch := func() (*BibleData, error) { return nil, errCacheNotFound }
 	data, _, err := loadBibleData(noFetch, cachePathForVersion(v.ID), currentUTCTime)
 	if err == nil {
+		applyPublisherCrossRefs(v.ID, data)
 		return data, modeReal, nil
 	}
 	// The superseded-epoch walk below serves a previous decode with no
@@ -478,6 +487,7 @@ func loadVersionFromCacheOnly(v BibleVersion) (*BibleData, dataMode, error) {
 	// saved non-Gospel position look invalid.
 	for _, path := range supersededCachePaths(v) {
 		if data, _, err := loadBibleData(noFetch, path, currentUTCTime); err == nil {
+			applyPublisherCrossRefs(v.ID, data)
 			return data, modeReal, nil
 		}
 	}
@@ -593,6 +603,7 @@ func loadVersionData(v BibleVersion, base *BibleData) (*BibleData, dataMode, err
 		if err != nil {
 			return nil, modeReal, err
 		}
+		applyPublisherCrossRefs(v.ID, data)
 		// Purge pre-epoch cache files only AFTER the current-epoch cache exists
 		// (incident-hardening): purging first destroyed the reader's only local
 		// copy of the translation and only then discovered the network was down.

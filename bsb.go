@@ -35,7 +35,19 @@ func (bsbSource) fetch() (*BibleData, error) {
 	// The whole translation is one large body, so the client's deadline is a
 	// STALL watchdog, not a wall clock — a slow connection may take as long
 	// as it keeps moving (fetch_stall.go).
-	return fetchHelloAOComplete("BSB", bsbCompleteURL, newCorpusClient(), decodeCanonical66)
+	return fetchHelloAOComplete("BSB", bsbCompleteURL, newCorpusClient(), decodeBSB)
+}
+
+// decodeBSB is decodeCanonical66 plus the edition's own \r section-heading
+// parallel-passage lines, which helloao strips (publisher_xrefs_public.go).
+// decodeCanonical66 itself stays pure for raw-feed decoder checks.
+func decodeBSB(body []byte) (*BibleData, error) {
+	bd, err := decodeCanonical66(body)
+	if err != nil {
+		return nil, err
+	}
+	applyPublisherCrossRefs("bsb", bd)
+	return bd, nil
 }
 
 // webCompleteURL is helloao's whole-translation endpoint for the 66-book World English
@@ -51,15 +63,16 @@ func fetchWEBFromHelloAO() (*BibleData, error) {
 	return fetchHelloAOComplete("WEB", webCompleteURL, newCorpusClient(), decodeWEB)
 }
 
-// decodeWEB is decodeCanonical66 plus the edition's own paragraphing, which
-// its runtime feed drops (paragraph_web.go). The BSB keeps decodeCanonical66
-// unchanged: its feed carries the breaks itself.
+// decodeWEB is decodeCanonical66 plus the edition's own paragraphing and
+// cross-reference notes, which its runtime feed drops (paragraph_web.go,
+// publisher_xrefs_public.go).
 func decodeWEB(body []byte) (*BibleData, error) {
 	bd, err := decodeCanonical66(body)
 	if err != nil {
 		return nil, err
 	}
 	applyPublisherParagraphs(bd, webParagraphStarts)
+	applyPublisherCrossRefs("web", bd)
 	return bd, nil
 }
 

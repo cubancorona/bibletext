@@ -23,6 +23,7 @@ func init() {
 	for i := range registeredVersions {
 		if registeredVersions[i].ID == "nkjv" {
 			registeredVersions[i].PublisherCrossRefs = true
+			registeredVersions[i].PublisherApparatus = true
 		}
 	}
 }

@@ -40,8 +40,10 @@ package bibletext
 // the live canon census pins that (TestLiveAPIBibleFullCanon), so a feed that
 // starts saying more is caught rather than captioned.
 //
-// Whether any of it DISPLAYS is BibleVersion.PublisherCrossRefs, true for the
-// NKJV only in the file behind the nkjvxrefs build tag: displaying a licensed
+// Whether any of it DISPLAYS is BibleVersion.PublisherCrossRefs: true in every
+// build for the public-domain / CC0 editions (WEB, WEBC, BSB;
+// publisher_xrefs_public.go), and true for the NKJV only in the file behind the
+// nkjvxrefs build tag (versions_nkjvxrefs.go), because displaying a licensed
 // publisher's apparatus is the subject of a licensing enquiry that has not
 // been answered, and a store build must not be able to do it before the answer
 // comes. The resolver itself is plain code over data every build already holds.
@@ -215,7 +217,16 @@ func basisAfter(runes []rune, end int) (string, int) {
 		for _, tok := range basisTokens {
 			piece := []rune(", " + tok)
 			if !hasRunesAt(runes, at, piece) {
-				continue
+				if len(found) > 0 {
+					continue
+				}
+				// WEB and WEB Catholic set a basis token after a space without a
+				// comma ("Deuteronomy 32:43 LXX"). After ";" ("Job 13:16; LXX") at
+				// stands at ';', so neither ", " nor " " matches there.
+				piece = []rune(" " + tok)
+				if !hasRunesAt(runes, at, piece) {
+					continue
+				}
 			}
 			next := at + len(piece)
 			if next < len(runes) && (isLetterRune(runes[next]) || isDigitRune(runes[next])) {
@@ -382,8 +393,26 @@ func publisherCrossRefsFor(bd *BibleData, book string, chapter int, selected []V
 		if text == "" {
 			return
 		}
+		if fn.Anchor < 0 {
+			unkeyed = true
+		}
 		row := publisherCrossRef{Verse: verse, Heading: heading, Unkeyed: unkeyed, Anchor: fn.Anchor, Text: text}
-		row.Mark = noteMarkAt([]rune(unit), wordSplitCallers.wordStart(book, chapter, verse, heading, []rune(unit), fn.Anchor))
+		unitRunes := []rune(unit)
+		if fn.Caller == "+" {
+			// A "+" caller (WEB, WEB Catholic) records the exact rune boundary
+			// where the publisher's \x marker stands — flush after its word or
+			// clause, or directly before the word where no space follows \x* —
+			// rather than ahead of white space as the NKJV's "-" caller does.
+			mark := fn.Anchor
+			if mark < 0 {
+				mark = 0
+			} else if mark > len(unitRunes) {
+				mark = len(unitRunes)
+			}
+			row.Mark = mark
+		} else {
+			row.Mark = noteMarkAt(unitRunes, wordSplitCallers.wordStart(book, chapter, verse, heading, unitRunes, fn.Anchor))
+		}
 		// One continuous run of letters across the whole selection — title,
 		// noted headings and verses alike — in spreadsheet order (a..z, aa..).
 		// A note keyed to no word takes no letter.
@@ -424,9 +453,15 @@ func publisherCrossRefsFor(bd *BibleData, book string, chapter int, selected []V
 			row.Groups = append(row.Groups, publisherGroup{Start: g.Start, End: g.End, Text: string(runes[g.Start:g.End])})
 		}
 		piece := func(c shorthandCitation) publisherPiece {
-			if r, ok := tagged[c.Start]; ok && c.Group < 0 {
-				if tg, ok := resolve(r.Start, r.End, r.ID); ok {
-					return publisherPiece{Start: tg.Start, End: tg.Cut, Target: &tg}
+			if c.Group < 0 {
+				r, ok := tagged[c.Start]
+				if !ok && hasRunesAt(runes, c.Start, []rune("See ")) {
+					r, ok = tagged[c.Start+4]
+				}
+				if ok {
+					if tg, ok := resolve(r.Start, r.End, r.ID); ok {
+						return publisherPiece{Start: tg.Start, End: tg.Cut, Target: &tg}
+					}
 				}
 			}
 			if c.ID != "" {
@@ -546,9 +581,76 @@ func (n publisherCrossRef) alone() (publisherTarget, bool) {
 		return publisherTarget{}, false
 	}
 	if printed, ok := shorthandPrint(p.Target.ID, p.Target.Title, p.Target.Basis); !ok || printed != n.Text {
-		return publisherTarget{}, false
+		if !fullCitationMatches(*p.Target, n.Text) {
+			return publisherTarget{}, false
+		}
 	}
 	return *p.Target, true
+}
+
+// fullCitationMatches reports whether text spells tg as a single full-book-name
+// citation (WEB, WEB Catholic and BSB print "2 Samuel 3:1–5", "Daniel 3:1-30",
+// "Psalm 22:1", "Deuteronomy 32:43 LXX", "Genesis 4–9", etc., rather than NKJV
+// abbreviations). A note with leading words such as "See Job 9:8" fails both
+// p.Start == 0 above and this check, keeping "See" visible on screen.
+func fullCitationMatches(tg publisherTarget, text string) bool {
+	if tg.Title || tg.Ref.Book == "" {
+		return false
+	}
+	core := text
+	if tg.Basis != "" {
+		switch {
+		case strings.HasSuffix(core, ", "+tg.Basis):
+			core = strings.TrimSuffix(core, ", "+tg.Basis)
+		case strings.HasSuffix(core, " "+tg.Basis):
+			core = strings.TrimSuffix(core, " "+tg.Basis)
+		default:
+			return false
+		}
+	}
+	names := []string{tg.Ref.Book}
+	switch tg.Ref.Book {
+	case "Psalms":
+		names = append(names, "Psalm")
+	case "Song of Solomon":
+		names = append(names, "Song of Songs")
+	}
+	fig := ""
+	for _, b := range names {
+		if strings.HasPrefix(core, b+" ") {
+			fig = core[len(b)+1:]
+			break
+		}
+	}
+	if fig == "" {
+		return false
+	}
+	bookCode := strings.SplitN(strings.SplitN(tg.ID, "-", 2)[0], ".", 2)[0]
+	oneCh := oneChapterBooks[bookCode]
+	c1, v1, c2, v2 := tg.Ref.Chapter, tg.Ref.Verse, tg.Ref.EndCh, tg.Ref.EndV
+	if tg.Chapters {
+		if c2 == 0 || c2 == c1 {
+			return fig == strconv.Itoa(c1)
+		}
+		return fig == fmt.Sprintf("%d–%d", c1, c2) ||
+			fig == fmt.Sprintf("%d—%d", c1, c2) ||
+			fig == fmt.Sprintf("%d-%d", c1, c2)
+	}
+	if v2 == 0 || ((c2 == 0 || c2 == c1) && v2 == v1) {
+		if fig == fmt.Sprintf("%d:%d", c1, v1) {
+			return true
+		}
+		return oneCh && c1 == 1 && fig == strconv.Itoa(v1)
+	}
+	if c2 == 0 || c2 == c1 {
+		if fig == fmt.Sprintf("%d:%d–%d", c1, v1, v2) || fig == fmt.Sprintf("%d:%d-%d", c1, v1, v2) {
+			return true
+		}
+		return oneCh && c1 == 1 && (fig == fmt.Sprintf("%d–%d", v1, v2) || fig == fmt.Sprintf("%d-%d", v1, v2))
+	}
+	return fig == fmt.Sprintf("%d:%d–%d:%d", c1, v1, c2, v2) ||
+		fig == fmt.Sprintf("%d:%d—%d:%d", c1, v1, c2, v2) ||
+		fig == fmt.Sprintf("%d:%d-%d:%d", c1, v1, c2, v2)
 }
 
 // wordsAlone reports whether the note is one piece that is no citation the
