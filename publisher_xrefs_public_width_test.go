@@ -103,8 +103,17 @@ func TestEveryPublicPublisherCrossRefNoteFitsTheNarrowestPhone(t *testing.T) {
 				if len(lst.Objects) == 0 || !lst.Sections.Publisher {
 					t.Fatalf("size %s bsb %s:%d did not mount publisher section (%+v)", sizeOpt.ID, key, hn.BeforeVerse, lst.Sections)
 				}
-				if lst.Passage {
-					t.Fatalf("size %s bsb %s:%d repeated the selected passage despite heading-only origins", sizeOpt.ID, key, hn.BeforeVerse)
+				passage := passageIn(lst.Objects)
+				if !lst.Passage || passage == nil {
+					t.Fatalf("size %s bsb %s:%d lost the selected-verse excerpt", sizeOpt.ID, key, hn.BeforeVerse)
+				}
+				if passagePlainText(passage.runs) != v.Text {
+					t.Fatalf("size %s bsb %s:%d changed the excerpt or included its heading twice", sizeOpt.ID, key, hn.BeforeVerse)
+				}
+				for _, run := range passage.runs {
+					if run.Mark && !run.Dim {
+						t.Fatalf("size %s bsb %s:%d added a word-anchor letter to a heading-only selection", sizeOpt.ID, key, hn.BeforeVerse)
+					}
 				}
 				for _, note := range publisherCrossRefsFor(bsbBD, book, ch, []Verse{*v}) {
 					if note.HeadingText == "" || !strings.Contains(joinedTexts(lst.Objects), note.HeadingText) || !strings.Contains(joinedTexts(lst.Objects), "Heading before verse "+strconv.Itoa(note.Verse)) {

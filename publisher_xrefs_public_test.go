@@ -461,7 +461,7 @@ func TestPublicPublisherCrossRefCitationShapesAndPanelComposition(t *testing.T) 
 	}
 
 	withoutNote := buildCrossRefList(webSt, webBD.Verses["Matthew"][5][0:1], refs, nil, lightPalette, func(crossRef) {})
-	if withoutNote.Passage || withoutNote.Sections.Publisher || withoutNote.TSKRows != 2 {
+	if !withoutNote.Passage || withoutNote.Sections.Publisher || withoutNote.TSKRows != 2 {
 		t.Fatalf("WEB unnoted Matthew 5:42 list = %+v", withoutNote)
 	}
 	withoutNoteText := joinedTexts(withoutNote.Objects)
@@ -480,8 +480,8 @@ func TestPublicPublisherCrossRefCitationShapesAndPanelComposition(t *testing.T) 
 	}
 
 	// BSB noted section heading mounts BSB REFERENCES on the verse the heading
-	// precedes, with the actual heading and no lettered passage quote. The
-	// following verse retains only its named Treasury section.
+	// precedes, with the actual heading and a plain selected-verse excerpt. The
+	// following verse retains its excerpt and named Treasury section.
 	bsbBD := publicXRefSkeleton(false)
 	bsbBD.Headings["Psalms"][3] = []Heading{
 		{Text: "Deliver Me, O LORD!", Style: "heading", BeforeVerse: 1},
@@ -493,11 +493,11 @@ func TestPublicPublisherCrossRefCitationShapesAndPanelComposition(t *testing.T) 
 	applyPublisherCrossRefs("bsb", bsbBD)
 	bsbSt := &AppState{Bible: bsbBD, CurrentBook: "Psalms", CurrentChapter: 3, CurrentVersion: "bsb"}
 	bsbWith := buildCrossRefList(bsbSt, bsbBD.Verses["Psalms"][3][0:1], nil, nil, lightPalette, func(crossRef) {})
-	if bsbWith.Passage || !bsbWith.Sections.Publisher || !strings.Contains(joinedTexts(bsbWith.Objects), "BSB REFERENCES") || !strings.Contains(joinedTexts(bsbWith.Objects), "Deliver Me, O LORD!") || !strings.Contains(joinedTexts(bsbWith.Objects), "Heading before verse 1") {
+	if !bsbWith.Passage || !bsbWith.Sections.Publisher || !strings.Contains(joinedTexts(bsbWith.Objects), "BSB REFERENCES") || !strings.Contains(joinedTexts(bsbWith.Objects), "Deliver Me, O LORD!") || !strings.Contains(joinedTexts(bsbWith.Objects), "Heading before verse 1") {
 		t.Errorf("BSB Psalms 3:1 did not mount BSB REFERENCES: %+v", bsbWith)
 	}
 	bsbWithout := buildCrossRefList(bsbSt, bsbBD.Verses["Psalms"][3][1:2], []crossRef{{Book: "Genesis", Chapter: 1, Verse: 1}}, nil, lightPalette, func(crossRef) {})
-	if bsbWithout.Sections.Publisher || strings.Contains(joinedTexts(bsbWithout.Objects), "BSB REFERENCES") {
+	if !bsbWithout.Passage || bsbWithout.Sections.Publisher || strings.Contains(joinedTexts(bsbWithout.Objects), "BSB REFERENCES") {
 		t.Errorf("BSB Psalms 3:2 mounted BSB REFERENCES on unnoted verse: %+v", bsbWithout)
 	}
 }
