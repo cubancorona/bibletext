@@ -195,10 +195,14 @@ jobs:
           go vet ./...
           go vet -tags next ./...
 
-      # Match the bounded race deadline in the Linux job, which also covers
-      # the full UI suite on slower shared runners.
-      - name: go test
-        run: go test -race -timeout 45m ./...
+      # Keep the exhaustive sheet geometry matrices and their exact complement
+      # in separate serial processes, each retaining the 45-minute race limit.
+      # The coverage guard requires both commands with the identical selector.
+      - name: go test (sheet geometry, race detector)
+        run: go test -race -timeout 45m -run '^(TestDesktopSheetsOpenBelowTheHeader|TestDesktopSheetsRefitWhenTheWindowResizes|TestACoveringSheetTakesItsNaturalHeight|TestDesktopSheetsClearOrCoverTheHeaderOnShortWindows|TestASheetCoveringTheHeaderIsSizedAgainWithTheWindow|TestOpenCardHidesExactlyTheControlsItTouches|TestSettingsSheetSqueezesNothing)$' ./...
+
+      - name: go test (remaining tests, race detector)
+        run: go test -race -timeout 45m -skip '^(TestDesktopSheetsOpenBelowTheHeader|TestDesktopSheetsRefitWhenTheWindowResizes|TestACoveringSheetTakesItsNaturalHeight|TestDesktopSheetsClearOrCoverTheHeaderOnShortWindows|TestASheetCoveringTheHeaderIsSizedAgainWithTheWindow|TestOpenCardHidesExactlyTheControlsItTouches|TestSettingsSheetSqueezesNothing)$' ./...
 
       # The same script a developer runs locally after touching reading_ios.go
       # (under a minute), so the check here and the check there cannot drift.

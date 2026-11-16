@@ -859,7 +859,7 @@ func TestNextSwitchFilesDeclareOppositeStates(t *testing.T) {
 
 // nextCICommand names a go vet or go test run over the whole module by what
 // distinguishes one from another: the tool, the race detector, and the tags,
-// sorted. Anything else is named by its own text.
+// sorted. Filtered tests and anything else retain their own text.
 func nextCICommand(cmd string) string {
 	tool := ""
 	for _, t := range []string{"go vet", "go test"} {
@@ -867,7 +867,7 @@ func nextCICommand(cmd string) string {
 			tool = t
 		}
 	}
-	if tool == "" {
+	if tool == "" || tool == "go test" && nextCITestSelectionRE.MatchString(nextShellQuoting.Replace(cmd)) {
 		return strings.TrimSpace(cmd)
 	}
 	if nextRaceFlagRE.MatchString(cmd) {
@@ -886,6 +886,84 @@ func nextCICommand(cmd string) string {
 		tool += " -tags " + strings.Join(tags, ",")
 	}
 	return tool
+}
+
+// A filtered test command does not alone prove that a whole suite ran.
+// Recognize both spellings of the test binary flags as well as go test's.
+// Inspect without shell quoting so quoted or concatenated flag tokens cannot
+// masquerade as an unfiltered command. The complete pair still matches raw text.
+var nextCITestSelectionRE = regexp.MustCompile(`(?:^|\s)--?(?:test\.)?(?:run|skip|list)(?:=|\s|$)`)
+
+// The macOS sheet matrices and their complement use the same exact selector.
+// Matching complete commands also binds the race flag, deadline, package set
+// and absence of extra tags or filters. Unknown partitions fail closed.
+const nextCISheetRacePattern = `^(TestDesktopSheetsOpenBelowTheHeader|TestDesktopSheetsRefitWhenTheWindowResizes|TestACoveringSheetTakesItsNaturalHeight|TestDesktopSheetsClearOrCoverTheHeaderOnShortWindows|TestASheetCoveringTheHeaderIsSizedAgainWithTheWindow|TestOpenCardHidesExactlyTheControlsItTouches|TestSettingsSheetSqueezesNothing)$`
+
+const (
+	nextCISheetRaceRun  = "go test -race -timeout 45m -run '" + nextCISheetRacePattern + "' ./..."
+	nextCISheetRaceSkip = "go test -race -timeout 45m -skip '" + nextCISheetRacePattern + "' ./..."
+)
+
+func nextCICompleteCommands(commands []string) map[string]bool {
+	have := map[string]bool{}
+	for _, cmd := range commands {
+		have[nextCICommand(cmd)] = true
+	}
+	if have[nextCISheetRaceRun] && have[nextCISheetRaceSkip] {
+		have["go test -race"] = true
+	}
+	return have
+}
+
+func TestCIFilteredCommandsNeedTheirExactComplement(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		commands []string
+		want     bool
+	}{
+		{"unfiltered", []string{"go test -race -timeout 45m ./..."}, true},
+		{"complementary pair", []string{nextCISheetRaceRun, nextCISheetRaceSkip}, true},
+		{"reversed pair", []string{nextCISheetRaceSkip, nextCISheetRaceRun}, true},
+		{"missing complement", []string{nextCISheetRaceRun}, false},
+		{"missing selected group", []string{nextCISheetRaceSkip}, false},
+		{"duplicate selected group", []string{nextCISheetRaceRun, nextCISheetRaceRun}, false},
+		{"mismatched selectors", []string{nextCISheetRaceRun, strings.Replace(nextCISheetRaceSkip, "TestACoveringSheetTakesItsNaturalHeight", "TestDifferentMatrix", 1)}, false},
+		{"missing race flag", []string{nextCISheetRaceRun, strings.Replace(nextCISheetRaceSkip, " -race", "", 1)}, false},
+		{"different deadline", []string{nextCISheetRaceRun, strings.Replace(nextCISheetRaceSkip, "45m", "46m", 1)}, false},
+		{"different tags", []string{nextCISheetRaceRun, strings.Replace(nextCISheetRaceSkip, " -skip", " -tags next -skip", 1)}, false},
+		{"partial packages", []string{nextCISheetRaceRun, strings.Replace(nextCISheetRaceSkip, "./...", "./cmd/...", 1)}, false},
+		{"additional filter", []string{nextCISheetRaceRun, strings.Replace(nextCISheetRaceSkip, " ./...", " -run '^TestOnly$' ./...", 1)}, false},
+		{"arbitrary run", []string{"go test -race -run '^TestOnly$' ./..."}, false},
+		{"arbitrary skip", []string{"go test -race -skip '^TestOmitted$' ./..."}, false},
+		{"test binary spelling", []string{"go test -race -test.run=TestOnly ./..."}, false},
+		{"double dash spelling", []string{"go test -race --run=TestOnly ./..."}, false},
+		{"concatenated quoted flag", []string{"go test -race '-ru'n=TestOnly ./..."}, false},
+		{"listing only", []string{"go test -race -list . ./..."}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := nextCICompleteCommands(tc.commands)["go test -race"]; got != tc.want {
+				t.Errorf("full race coverage = %v, want %v for %q", got, tc.want, tc.commands)
+			}
+		})
+	}
+}
+
+func TestCIQuotedSelectorsAreNotFullRuns(t *testing.T) {
+	for _, flag := range []string{"run", "skip", "list", "test.run", "test.skip", "test.list"} {
+		for _, quote := range []struct{ name, mark string }{{"single", "'"}, {"double", `"`}} {
+			for _, value := range []struct{ name, argument string }{
+				{"equals", quote.mark + "-" + flag + "=TestOnly" + quote.mark},
+				{"separate", quote.mark + "-" + flag + quote.mark + " TestOnly"},
+			} {
+				t.Run(flag+"/"+quote.name+"/"+value.name, func(t *testing.T) {
+					command := "go test -race " + value.argument + " ./..."
+					if nextCICompleteCommands([]string{command})["go test -race"] {
+						t.Errorf("filtered command counted as complete race coverage: %s", command)
+					}
+				})
+			}
+		}
+	}
 }
 
 // Both states must keep being built and tested on every push, or the next
@@ -921,10 +999,7 @@ func TestCIBuildsBothStatesOfTheNextSwitch(t *testing.T) {
 			t.Errorf(".github/workflows/ci.yml has no job %s", name)
 			continue
 		}
-		have := map[string]bool{}
-		for _, c := range job.commands() {
-			have[nextCICommand(c)] = true
-		}
+		have := nextCICompleteCommands(job.commands())
 		for _, w := range want {
 			if !have[w] {
 				t.Errorf(".github/workflows/ci.yml: job %s no longer runs %s ./...", name, w)
