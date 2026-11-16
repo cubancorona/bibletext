@@ -93,6 +93,8 @@ jobs:
           WATCH_MODE = sys.argv[1] == 'watch'
           MAX_BYTES = 256 * 1024
           MAX_INSTANCES = 2
+          LXD_CURRENT = pathlib.Path('/snap/lxd/current')
+          LXC = '/snap/bin/lxc'
           SEEN, PULLED, TASK_IDS = {}, {}, {}
 
           def stamp(): return datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -125,8 +127,18 @@ jobs:
                   if dest.exists(): dest.replace(PUBLIC/(name+'.previous'))
                   temp=PUBLIC/(name+'.tmp'); temp.write_bytes(data); temp.replace(dest)
 
+          def lxd_ready():
+              return LXD_CURRENT.is_dir() and os.access(LXC, os.X_OK)
+
           def run(name, command, timeout=4, public=True):
               started=stamp()
+              clients=[arg for arg in command if pathlib.PurePath(arg).name=='lxc']
+              if clients and any(arg!=LXC for arg in clients):
+                  raise ValueError('LXD inspection requires the installed absolute client')
+              if (clients or 'snap.lxd.daemon' in command) and not lxd_ready():
+                  # Ubuntu's PATH client can install LXD. Only the build action owns installation.
+                  if public: publish(name,json.dumps({'startedUTC':started,'finishedUTC':stamp(),'exitCode':125,'executed':False,'reason':'installed LXD snap/client not ready'}))
+                  return 125,''
               try:
                   if WATCH_MODE:
                       remaining=DEADLINE-time.monotonic()
@@ -144,7 +156,7 @@ jobs:
               return code,out.decode('utf-8','replace')
 
           def inventory():
-              code,text=run('instance-discovery.txt',['sudo','-n','lxc','list','--all-projects','--format=json'],public=False)
+              code,text=run('instance-discovery.txt',['sudo','-n',LXC,'list','--all-projects','--format=json'],public=False)
               publish('instance-discovery-status.json',json.dumps({'checkedUTC':stamp(),'exitCode':code}))
               if code: return []
               try: rows=json.loads(text)
@@ -159,7 +171,7 @@ jobs:
               publish('instance-inventory.json',json.dumps({'checkedUTC':stamp(),'instances':result[:32]}))
               return result
 
-          def prefix(row): return ['sudo','-n','lxc','--project',row['project']]
+          def prefix(row): return ['sudo','-n',LXC,'--project',row['project']]
           def ident(row): return hashlib.sha256((row['project']+'/'+row['name']).encode()).hexdigest()[:12]
           def guest(row,label,cmd):
               return run(ident(row)+'-'+label,prefix(row)+['exec',row['name'],'--mode=non-interactive','--']+cmd)
@@ -173,7 +185,7 @@ jobs:
                       publish(label+'.scope.json',json.dumps({'path':path,'sourceBytes':size,'tailLimitBytes':MAX_BYTES,'truncated':True}))
                       continue
                   target=RAW/(key+'-guest-'+hashlib.sha256(path.encode()).hexdigest()[:12]+'.log')
-                  code,_=run(key+'-pull-'+target.stem+'.txt',['sudo','-n','prlimit','--fsize=2097152:2097152','--','lxc','--project',row['project'],'file','pull',row['name']+path,str(target)],timeout=6)
+                  code,_=run(key+'-pull-'+target.stem+'.txt',['sudo','-n','prlimit','--fsize=2097152:2097152','--',LXC,'--project',row['project'],'file','pull',row['name']+path,str(target)],timeout=6)
                   if code==0 and target.is_file() and target.stat().st_size<=2*1024*1024:
                       publish(target.name,target.read_bytes()[-MAX_BYTES:].decode('utf-8','replace'))
 
@@ -250,7 +262,7 @@ jobs:
               return code
 
           def final():
-              for label,command in [('host-snap-version.txt',['snap','version']),('host-snap-list.txt',['snap','list']),('host-snap-changes.txt',['snap','changes','--abs-time']),('host-lxd-version.txt',['sudo','-n','lxc','version']),('host-snapd-journal.txt',['sudo','-n','journalctl','-u','snapd','--since=-45min','-n','1000','--no-pager','-o','short-iso']),('host-lxd-journal.txt',['sudo','-n','journalctl','-u','snap.lxd.daemon','--since=-45min','-n','600','--no-pager','-o','short-iso'])]: run(label,command,timeout=6)
+              for label,command in [('host-snap-version.txt',['snap','version']),('host-snap-list.txt',['snap','list']),('host-snap-changes.txt',['snap','changes','--abs-time']),('host-lxd-version.txt',['sudo','-n',LXC,'version']),('host-snapd-journal.txt',['sudo','-n','journalctl','-u','snapd','--since=-45min','-n','1000','--no-pager','-o','short-iso']),('host-lxd-journal.txt',['sudo','-n','journalctl','-u','snap.lxd.daemon','--since=-45min','-n','600','--no-pager','-o','short-iso'])]: run(label,command,timeout=6)
               inventory();libraries()
               if (BASE/'known-managed-logs.json').exists(): PULLED.update(json.loads((BASE/'known-managed-logs.json').read_text()))
               known=json.loads((BASE/'known-instances.json').read_text()) if (BASE/'known-instances.json').exists() else []
