@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches: ["**", "!codex/snap-arm64-diagnostics"]
   pull_request:
     branches: [main]
 

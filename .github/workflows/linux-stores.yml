@@ -1,234 +1,333 @@
-# Builds the two Linux store packages from ONE keyed executable and proves
-# each installs and launches headless: the AppImage (scripts/build-appimage.sh)
-# and the snap (snapcraft inside LXD from the staged binary). Both packages
-# get the same smoke: the desktop entry with the bibletext: scheme asserted
-# inside the artefact, the executable verified for the bundled key, a launch
-# under Xvfb with software OpenGL, and a second launch with a link that must
-# hand off to the first and exit. Both also ship from release.yml; this
-# workflow is the verification that runs on every change to their inputs.
-name: Linux stores
+# Isolated diagnostic branch only. Never use this result as release acceptance.
+name: Linux stores ARM diagnostic
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "linux/**"
-      - "snap/**"
-      - "cmd/linuxmeta/**"
-      # The version this job stamps is read from cmd/bibletext/FyneApp.toml,
-      # so a release bump that touches nothing else must still retrigger it.
-      - "cmd/bibletext/**"
-      - "scripts/build-appimage.sh"
-      - "scripts/check-glibc-floor.sh"
-      - "scripts/smoke-linux-launch.sh"
-      - ".github/workflows/linux-stores.yml"
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
-  binary:
-    name: build the keyed executable (${{ matrix.arch }})
-    # A matrix rather than a second job, so the two architectures cannot drift
-    # apart: anything added here is added to both by construction. arm64
-    # runners are free on public repositories.
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: amd64
-            runner: ubuntu-24.04
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-    runs-on: ${{ matrix.runner }}
+  snap-arm64-diagnostic:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: e5cf4e45d491a267523d78bb7e1b63498f725ad3
+          persist-credentials: false
+      - name: Assert exact frozen source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/codex/snap-arm64-diagnostics
+          test "$(git rev-parse HEAD)" = e5cf4e45d491a267523d78bb7e1b63498f725ad3
+          test "$(git rev-parse HEAD^{tree})" = bf00db885dcb9691994d3e38303f5152260caf17
+          test -z "$(git status --porcelain)"
       - uses: actions/setup-go@v7
         with:
-          go-version: "1.24"
-          cache: true
-      - name: install GL/X11/ALSA headers
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libasound2-dev binutils
-      - name: the rendered inputs are current (before the toolkit replace touches go.mod)
-        run: go test ./cmd/linuxmeta
-      - name: build against the patched Fyne (Noto emoji + discrete caret blink)
+          go-version: '1.24'
+          cache: false
+      - name: Download exact prior staged artifact as ZIP
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: '14260325440'
+          run-id: '43933368666'
+          repository: ${{ github.repository }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/source-artifact
+          skip-decompress: true
+          digest-mismatch: error
+      - name: Verify ZIP and staged ARM payload before extraction/use
         shell: bash
-        run: |
-          ./scripts/setup-fyne-patch.sh
-          go mod edit -replace fyne.io/fyne/v2=./third_party/fyne
-      - name: build and verify
-        shell: bash
-        env:
-          BIBLETEXT_BUNDLED_KEY_ENC: ${{ secrets.BIBLETEXT_BUNDLED_KEY_ENC }}
         run: |
           set -euo pipefail
-          unset BIBLE_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY
-          source scripts/release-bible-key.sh
-          load_encoded_release_bible_key
-          trap clear_release_bible_key EXIT
-          (cd cmd/bibletext && CGO_ENABLED=1 GOARCH=${{ matrix.arch }} go build -trimpath -ldflags="$BIBLE_KEY_LDFLAGS -s -w" -o ../../build/linux/bibletext .)
-          BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" scripts/verify-release-package.sh build/linux/bibletext build/linux
-          python3 scripts/verify-atomic-prefs.py build/linux/bibletext
-          scripts/check-glibc-floor.sh build/linux/bibletext 2.35
-          install -Dm755 build/linux/bibletext build/snap-stage/bin/bibletext
-          install -Dm644 linux/asound.conf build/snap-stage/etc/asound.conf
-      - uses: actions/upload-artifact@v7
+          python3 - <<'PY_VERIFY'
+          import hashlib,json,os,pathlib,stat,struct,zipfile
+          root=pathlib.Path(os.environ['RUNNER_TEMP']);out=root/'snap-arm-diagnostics'/'sanitized';out.mkdir(parents=True,exist_ok=True)
+          archives=list((root/'source-artifact').rglob('*.zip'))
+          assert len(archives)==1,'expected exactly one artifact ZIP'
+          p=archives[0];blob=p.read_bytes()
+          assert len(blob)==21956923,'artifact ZIP size mismatch'
+          assert hashlib.sha256(blob).hexdigest()=='926a71ef481b902602402657d7c2d618bb15e3549f7ed963c0aab63366164603','artifact ZIP digest mismatch'
+          stage=pathlib.Path(os.environ['GITHUB_WORKSPACE'])/'build/snap-stage'
+          assert not stage.exists(),'fresh stage required'
+          with zipfile.ZipFile(p) as z:
+              infos=z.infolist();names=[i.filename for i in infos]
+              assert len(names)==len(set(names)),'duplicate ZIP member'
+              assert {i.filename for i in infos if not i.is_dir()}=={'bin/bibletext','etc/asound.conf'},'unexpected staged artifact members'
+              assert all(not stat.S_ISLNK(i.external_attr>>16) and i.filename in {'bin/','etc/','bin/bibletext','etc/asound.conf'} for i in infos),'unsafe artifact path/type'
+              assert sum(i.file_size for i in infos)<512*1024*1024,'artifact expansion bound'
+              for info in infos:
+                  if info.is_dir():continue
+                  target=stage/info.filename;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(z.read(info));target.chmod(0o755 if info.filename=='bin/bibletext' else 0o644)
+          binfile=stage/'bin/bibletext';header=binfile.read_bytes()[:64]
+          assert header[:6]==b'\x7fELF\x02\x01' and struct.unpack('<H',header[18:20])[0]==183,'expected little-endian ELF64 AArch64'
+          assert (stage/'etc/asound.conf').read_bytes()==(pathlib.Path(os.environ['GITHUB_WORKSPACE'])/'linux/asound.conf').read_bytes(),'ALSA configuration source mismatch'
+          rows=[{'path':str(p.relative_to(stage)),'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()} for p in [binfile,stage/'etc/asound.conf']]
+          (out/'source-artifact.json').write_text(json.dumps({'runId':43933368666,'artifactId':14260325440,'name':'snap-stage-arm64','sourceCommit':'e5cf4e45d491a267523d78bb7e1b63498f725ad3','zipBytes':len(blob),'zipSHA256':hashlib.sha256(blob).hexdigest(),'elf':'ELF64 little-endian AArch64','files':rows,'scope':'Exact previously verified staged binary; no application rebuild or key inspection.'},indent=2)+'\n')
+          PY_VERIFY
+      - name: Render only ARM package metadata
+        shell: bash
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          go -C "$GITHUB_WORKSPACE" run ./cmd/linuxmeta render -arch arm64
+          grep -q '^  arm64:' snap/snapcraft.yaml
+          mkdir -p "$RUNNER_TEMP/snap-arm-diagnostics/raw" "$RUNNER_TEMP/snap-arm-diagnostics/sanitized"
+          sha256sum snap/snapcraft.yaml > "$RUNNER_TEMP/snap-arm-diagnostics/sanitized/arm-manifest.sha256"
+      - name: Start bounded live managed-instance diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/snap-diag-collector.py" <<'PY_COLLECTOR'
+          import concurrent.futures, datetime, hashlib, json, os, pathlib, re, signal, subprocess, sys, threading, time, urllib.parse
+          BASE = pathlib.Path(os.environ['RUNNER_TEMP']) / 'snap-arm-diagnostics'
+          RAW, PUBLIC = BASE / 'raw', BASE / 'sanitized'
+          for directory in (RAW, PUBLIC): directory.mkdir(parents=True, exist_ok=True)
+          STOP = BASE / 'stop'
+          ENV = {'PATH': os.environ['PATH'], 'HOME': os.environ['HOME'], 'LANG': 'C.UTF-8'}
+          LOCK = threading.Lock()
+          DEADLINE = time.monotonic() + 38 * 60
+          WATCH_MODE = sys.argv[1] == 'watch'
+          MAX_BYTES = 256 * 1024
+          MAX_INSTANCES = 2
+          SEEN, PULLED, TASK_IDS = {}, {}, {}
+
+          def stamp(): return datetime.datetime.now(datetime.timezone.utc).isoformat()
+          def digest(data): return hashlib.sha256(data).hexdigest()
+          def scrub(text):
+              text = re.sub(r'-----BEGIN[^-\n]*PRIVATE KEY-----.*?-----END[^-\n]*PRIVATE KEY-----', '[REDACTED PRIVATE KEY]', text, flags=re.S)
+              def url(match):
+                  try:
+                      p = urllib.parse.urlsplit(match.group(0))
+                      host = p.hostname or ''
+                      if p.port: host += ':' + str(p.port)
+                      return urllib.parse.urlunsplit((p.scheme, host, p.path, '', ''))
+                  except ValueError: return '[REDACTED URL]'
+              text = re.sub(r'https?://[^\s<>"\']+', url, text)
+              rows=[]
+              for line in text.splitlines():
+                  if re.search(r'(?i)authorization|(?:set-)?cookie|macaroon|password|credential|api[_ -]?key|secret|\btoken\b|BIBLE.*KEY|\b(?:env|environment)\s*[:={]', line):
+                      rows.append('[REDACTED credential/environment-related line]'); continue
+                  line = re.sub(r'\b(?:gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|sk-[A-Za-z0-9_-]{12,}|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)\b', '[REDACTED credential-like value]', line)
+                  if '@' in line:
+                      line = re.sub(r'(?<![A-Za-z0-9.!#$%&\'*+/=?^_`{|}~-])[A-Za-z0-9.!#$%&\'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}', '[REDACTED email]', line)
+                  rows.append(line)
+              return '\n'.join(rows) + '\n'
+
+          def publish(name, text):
+              # Keep bounded latest + previous snapshots, never upload raw command output.
+              data=scrub(text).encode()[-MAX_BYTES:]
+              with LOCK:
+                  dest=PUBLIC/name
+                  if dest.exists(): dest.replace(PUBLIC/(name+'.previous'))
+                  temp=PUBLIC/(name+'.tmp'); temp.write_bytes(data); temp.replace(dest)
+
+          def run(name, command, timeout=4, public=True):
+              started=stamp()
+              try:
+                  if WATCH_MODE:
+                      remaining=DEADLINE-time.monotonic()
+                      if remaining<=0: raise subprocess.TimeoutExpired(command,0)
+                      timeout=min(timeout,remaining)
+                  p=subprocess.run(command, capture_output=True, timeout=timeout, env=ENV)
+                  code=p.returncode; out=p.stdout[-MAX_BYTES:]; err=p.stderr[-MAX_BYTES:]
+              except subprocess.TimeoutExpired as e:
+                  code=124; out=(e.stdout or b'')[-MAX_BYTES:]; err=(e.stderr or b'')[-MAX_BYTES:]+b'\nDIAGNOSTIC COMMAND TIMEOUT\n'
+              except OSError as e:
+                  code=127; out=b''; err=str(e).encode()
+              payload=b'STDOUT\n'+out+b'\nSTDERR\n'+err
+              (RAW/(name+'.raw')).write_bytes(payload)
+              if public: publish(name, json.dumps({'startedUTC':started,'finishedUTC':stamp(),'exitCode':code,'outputCappedAtBytes':MAX_BYTES})+'\n'+payload.decode('utf-8','replace'))
+              return code,out.decode('utf-8','replace')
+
+          def inventory():
+              code,text=run('instance-discovery.txt',['sudo','-n','lxc','list','--all-projects','--format=json'],public=False)
+              publish('instance-discovery-status.json',json.dumps({'checkedUTC':stamp(),'exitCode':code}))
+              if code: return []
+              try: rows=json.loads(text)
+              except ValueError: return []
+              if not isinstance(rows,list): return []
+              result=[]
+              for row in rows:
+                  p,n,s=row.get('project'),row.get('name'),row.get('status')
+                  if isinstance(p,str) and isinstance(n,str) and re.fullmatch(r'[A-Za-z0-9_.-]{1,100}',p) and re.fullmatch(r'[A-Za-z0-9_.-]{1,100}',n):
+                      result.append({'project':p,'name':n,'status':s})
+              # No broad LXD configuration/environment dump in the artifact.
+              publish('instance-inventory.json',json.dumps({'checkedUTC':stamp(),'instances':result[:32]}))
+              return result
+
+          def prefix(row): return ['sudo','-n','lxc','--project',row['project']]
+          def ident(row): return hashlib.sha256((row['project']+'/'+row['name']).encode()).hexdigest()[:12]
+          def guest(row,label,cmd):
+              return run(ident(row)+'-'+label,prefix(row)+['exec',row['name'],'--mode=non-interactive','--']+cmd)
+
+          def pull_logs(row):
+              key=ident(row)
+              for path,size in list(PULLED.get(key,{}).items())[-6:]:
+                  if size>2*1024*1024:
+                      label=key+'-large-log-tail-'+hashlib.sha256(path.encode()).hexdigest()[:12]+'.txt'
+                      guest(row,label,['tail','-c',str(MAX_BYTES),path])
+                      publish(label+'.scope.json',json.dumps({'path':path,'sourceBytes':size,'tailLimitBytes':MAX_BYTES,'truncated':True}))
+                      continue
+                  target=RAW/(key+'-guest-'+hashlib.sha256(path.encode()).hexdigest()[:12]+'.log')
+                  code,_=run(key+'-pull-'+target.stem+'.txt',['sudo','-n','prlimit','--fsize=2097152:2097152','--','lxc','--project',row['project'],'file','pull',row['name']+path,str(target)],timeout=6)
+                  if code==0 and target.is_file() and target.stat().st_size<=2*1024*1024:
+                      publish(target.name,target.read_bytes()[-MAX_BYTES:].decode('utf-8','replace'))
+
+          def snapshot(row):
+              key=ident(row)
+              guest(row,'snap-version.txt',['snap','version'])
+              guest(row,'snap-list.txt',['snap','list'])
+              code,changes=guest(row,'snap-changes.txt',['snap','changes','--abs-time'])
+              ids=[]
+              if not code:
+                  for line in changes.splitlines():
+                      match=re.match(r'^\s*(\d+)\s+(Doing|Error)\b',line)
+                      if match: ids.append(match.group(1))
+              history=TASK_IDS.setdefault(key,set())
+              for cid in ids[-4:]:
+                  if cid in history or len(history)<16:
+                      history.add(cid); guest(row,'snap-tasks-'+cid+'.txt',['snap','tasks',cid])
+              guest(row,'snapd-journal.txt',['journalctl','-u','snapd','--since=-10min','-n','1000','--no-pager','-o','short-iso'])
+              # Enumerate only Snapcraft log directories and a narrow /tmp filename, no environment or home archive.
+              code,found=guest(row,'managed-log-paths.txt',['python3','-c',
+                  'import pathlib,json; roots=[pathlib.Path("/root/.local/state/snapcraft/log"),pathlib.Path("/root/.cache/snapcraft/log")]; files=[p for root in roots for p in root.glob("*.log")]+list(pathlib.Path("/tmp").glob("snapcraft*.log")); print(json.dumps([[str(p),p.stat().st_size] for p in sorted(files) if p.is_file() and not p.is_symlink()][-6:]))'])
+              if not code:
+                  try:
+                      candidates=json.loads(found)
+                      for path,size in candidates:
+                          if re.fullmatch(r'/(?:root/\.local/state/snapcraft/log|root/\.cache/snapcraft/log|tmp)/snapcraft[^/]*\.log',path) and type(size)==int and size>=0:
+                              PULLED.setdefault(key,{})[path]=size
+                  except (ValueError,TypeError): pass
+              pull_logs(row)
+              publish(key+'-snapshot-complete.json',json.dumps({'completedUTC':stamp(),'project':row['project'],'instance':row['name'],'scope':'Read-only commands; individual exit codes retained.'}))
+
+          def libraries():
+              root=pathlib.Path('/snap/snapcraft/current')
+              rows=[]
+              if root.exists():
+                  for path in root.glob('**/craft_parts/packages/snaps.py'):
+                      if len(rows)>=8: break
+                      rows.append({'path':str(path),'sha256':digest(path.read_bytes())})
+                  for path in root.glob('**/craft_parts-*.dist-info/METADATA'):
+                      if len(rows)>=16: break
+                      rows.append({'path':str(path),'sha256':digest(path.read_bytes()),'versionFields':[line for line in path.read_text(errors='replace').splitlines() if line.startswith(('Name: ','Version: '))]})
+              publish('installed-craft-parts.json',json.dumps({'checkedUTC':stamp(),'files':rows,'found':bool(rows)}))
+
+          def watch():
+              signal.signal(signal.SIGTERM,lambda *_: STOP.touch())
+              initial={(r['project'],r['name']) for r in inventory()}
+              (BASE/'collector-ready').touch()
+              futures={}; last={}; code=0
+              pool=concurrent.futures.ThreadPoolExecutor(max_workers=2)
+              try:
+                  while not STOP.exists() and time.monotonic()<DEADLINE:
+                      for row in inventory():
+                          key=(row['project'],row['name'])
+                          if key in initial or not ('snapcraft' in row['name'].lower() or 'craft' in row['project'].lower()): continue
+                          if key not in SEEN and len(SEEN)>=MAX_INSTANCES: continue
+                          SEEN[key]=row
+                          old=futures.get(key)
+                          if old is not None and old.done(): old.result()
+                          if row['status']=='Running' and (old is None or old.done()) and time.monotonic()-last.get(key,0)>=30:
+                              futures[key]=pool.submit(snapshot,row);last[key]=time.monotonic()
+                      (BASE/'known-instances.json').write_text(json.dumps(list(SEEN.values())))
+                      for _ in range(10):
+                          if STOP.exists() or time.monotonic()>=DEADLINE: break
+                          time.sleep(1)
+              except BaseException as error:
+                  code=1;publish('collector-error.txt',type(error).__name__+': '+str(error))
+              finally:
+                  pool.shutdown(wait=True)
+                  for future in futures.values():
+                      try: future.result()
+                      except BaseException as error: code=1;publish('collector-worker-error.txt',str(error))
+                  (BASE/'known-managed-logs.json').write_text(json.dumps(PULLED))
+                  (BASE/'collector-exit.json').write_text(json.dumps({'exitCode':code,'finishedUTC':stamp(),'discoveredManagedInstances':len(SEEN),'deadlineReached':time.monotonic()>=DEADLINE}))
+              return code
+
+          def final():
+              for label,command in [('host-snap-version.txt',['snap','version']),('host-snap-list.txt',['snap','list']),('host-snap-changes.txt',['snap','changes','--abs-time']),('host-lxd-version.txt',['sudo','-n','lxc','version']),('host-snapd-journal.txt',['sudo','-n','journalctl','-u','snapd','--since=-45min','-n','1000','--no-pager','-o','short-iso']),('host-lxd-journal.txt',['sudo','-n','journalctl','-u','snap.lxd.daemon','--since=-45min','-n','600','--no-pager','-o','short-iso'])]: run(label,command,timeout=6)
+              inventory();libraries()
+              if (BASE/'known-managed-logs.json').exists(): PULLED.update(json.loads((BASE/'known-managed-logs.json').read_text()))
+              known=json.loads((BASE/'known-instances.json').read_text()) if (BASE/'known-instances.json').exists() else []
+              for row in known[:MAX_INSTANCES]: pull_logs(row)
+              logroot=pathlib.Path(os.environ['HOME'])/'.local/state/snapcraft/log'
+              hostlogs=sorted(p for p in logroot.glob('*.log') if p.is_file() and not p.is_symlink())[-6:]
+              for path in hostlogs:
+                  with path.open('rb') as stream:
+                      stream.seek(max(0,path.stat().st_size-MAX_BYTES));data=stream.read(MAX_BYTES)
+                  (RAW/('host-'+path.name)).write_bytes(data);publish('host-'+path.name,data.decode('utf-8','replace'))
+              produced=[]
+              for path in pathlib.Path(os.environ['GITHUB_WORKSPACE']).glob('*.snap'):
+                  h=hashlib.sha256()
+                  with path.open('rb') as stream:
+                      for block in iter(lambda:stream.read(1<<20),b''):h.update(block)
+                  produced.append({'name':path.name,'bytes':path.stat().st_size,'sha256':h.hexdigest(),'uploaded':False,'releaseArtifact':False})
+              publish('produced-snap-hashes.json',json.dumps(produced))
+              exitpath=BASE/'collector-exit.json';result=json.loads(exitpath.read_text()) if exitpath.exists() else {'exitCode':1,'missingCollectorExit':True}
+              publish('collector-exit.json',json.dumps(result))
+              for path in PUBLIC.iterdir():
+                  if path.suffix=='.tmp':path.unlink()
+              files=[{'name':p.name,'bytes':p.stat().st_size,'sha256':digest(p.read_bytes())} for p in sorted(PUBLIC.iterdir()) if p.is_file()]
+              manifest={'collectedUTC':stamp(),'collectorSHA256':digest(pathlib.Path(__file__).read_bytes()),'files':files,'rawUploaded':False,'providerOrSigningCredentialsProvided':False,'sourceArtifactReused':True,'diagnosticOnly':True,'managedLogLimit':'Only discovered, available, bounded log files. Missing/failed reads are retained, not described as successful.','publicArtifactWarning':'This repository is public. Only sanitized diagnostic text/JSON is uploaded.','snapcraftOutcome':os.environ.get('SNAPCRAFT_OUTCOME','unknown')}
+              (PUBLIC/'manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
+              assert sum(p.stat().st_size for p in PUBLIC.iterdir() if p.is_file())<64*1024*1024,'diagnostic artifact exceeds bound'
+              return 0 if result.get('exitCode')==0 and result.get('discoveredManagedInstances',0)>0 else 1
+
+          if __name__=='__main__':sys.exit(watch() if sys.argv[1]=='watch' else final())
+          PY_COLLECTOR
+          nohup python3 -u "$RUNNER_TEMP/snap-diag-collector.py" watch > "$RUNNER_TEMP/snap-arm-diagnostics/raw/collector-console.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/snap-arm-diagnostics/collector.pid"
+          for attempt in {1..10}; do
+            if test -f "$RUNNER_TEMP/snap-arm-diagnostics/collector-ready"; then break; fi
+            sleep 1
+          done
+          test -f "$RUNNER_TEMP/snap-arm-diagnostics/collector-ready"
+      - name: Build unchanged managed-LXD snap with debug verbosity
+        id: snapcraft
+        timeout-minutes: 35
+        uses: snapcore/action-build@3bdaa03e1ba6bf59a65f84a751d943d549a54e79
         with:
-          name: linux-binary-${{ matrix.arch }}
-          path: build/linux/bibletext
+          snapcraft-channel: stable
+          snapcraft-args: --verbosity=debug
+      - name: Stop collector and retain bounded sanitized diagnostics
+        if: always()
+        timeout-minutes: 4
+        shell: bash
+        env:
+          SNAPCRAFT_OUTCOME: ${{ steps.snapcraft.outcome }}
+        run: |
+          set -euo pipefail
+          base="$RUNNER_TEMP/snap-arm-diagnostics"
+          mkdir -p "$base/sanitized"
+          if test -f "$base/collector.pid"; then
+            touch "$base/stop"
+            pid="$(cat "$base/collector.pid")"
+            for attempt in {1..75}; do
+              if ! kill -0 "$pid" 2>/dev/null; then break; fi
+              sleep 1
+            done
+            if kill -0 "$pid" 2>/dev/null; then
+              kill -TERM "$pid"
+              sleep 10
+            fi
+            if kill -0 "$pid" 2>/dev/null; then kill -KILL "$pid"; fi
+          fi
+          if test -f "$RUNNER_TEMP/snap-diag-collector.py"; then
+            python3 "$RUNNER_TEMP/snap-diag-collector.py" final
+          else
+            printf '%s\n' '{"collectorNotStarted":true,"diagnosticOnly":true}' > "$base/sanitized/collector-not-started.json"
+            exit 1
+          fi
+      - name: Upload only sanitized diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: snap-arm64-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/snap-arm-diagnostics/sanitized/
           if-no-files-found: error
           retention-days: 3
-      - uses: actions/upload-artifact@v7
-        with:
-          name: snap-stage-${{ matrix.arch }}
-          path: build/snap-stage
-          if-no-files-found: error
-          retention-days: 3
-
-  appimage:
-    name: AppImage (${{ matrix.appimage }})
-    needs: binary
-    # appimagetool RUNS on the build host and the runtime it embeds must match
-    # the executable being wrapped, so each architecture is built on its own
-    # machine. `arch` is Go's spelling, `appimage` the one AppImage uses in
-    # file names.
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: amd64
-            appimage: x86_64
-            runner: ubuntu-24.04
-          - arch: arm64
-            appimage: aarch64
-            runner: ubuntu-24.04-arm
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7 # verify-release-package.sh reads the build info with go version -m
-        with:
-          go-version: "1.24"
-      - uses: actions/download-artifact@v8
-        with:
-          name: linux-binary-${{ matrix.arch }}
-          path: build/linux
-      - name: install the packaging and smoke tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y desktop-file-utils appstream zsync binutils xvfb imagemagick mesa-utils
-      - name: build the AppImage
-        shell: bash
-        run: |
-          set -euo pipefail
-          chmod 755 build/linux/bibletext
-          scripts/build-appimage.sh build/linux/bibletext BibleText-${{ matrix.appimage }}.AppImage
-      - name: assert the entry, verify the executable, smoke
-        shell: bash
-        env:
-          BIBLETEXT_BUNDLED_KEY_ENC: ${{ secrets.BIBLETEXT_BUNDLED_KEY_ENC }}
-        run: |
-          set -euo pipefail
-          rm -rf squashfs-root
-          ./BibleText-${{ matrix.appimage }}.AppImage --appimage-extract >/dev/null
-          entry=squashfs-root/uk.co.bibletext.BibleText.desktop
-          grep -q '^Exec=bibletext %u$' "$entry"
-          grep -q '^MimeType=x-scheme-handler/bibletext;' "$entry"
-          grep -q "^X-AppImage-Version=$(sed -n 's/^Version = "\(.*\)"/\1/p' cmd/bibletext/FyneApp.toml)$" "$entry"
-          unset BIBLE_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY
-          source scripts/release-bible-key.sh
-          load_encoded_release_bible_key
-          trap clear_release_bible_key EXIT
-          BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" scripts/verify-release-package.sh squashfs-root/usr/bin/bibletext squashfs-root
-          # The payload, launched twice from one extraction (the runtime's own
-          # extract-and-run would extract twice into one content-addressed
-          # directory); the runtime itself is exercised by the update-information
-          # read in build-appimage.sh and by the extraction above.
-          scripts/smoke-linux-launch.sh appimage-${{ matrix.appimage }} ./squashfs-root/AppRun
-          rm -rf squashfs-root
-      - uses: actions/upload-artifact@v7
-        with:
-          name: BibleText-${{ matrix.appimage }}-AppImage
-          path: |
-            BibleText-${{ matrix.appimage }}.AppImage
-            BibleText-${{ matrix.appimage }}.AppImage.zsync
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: appimage-smoke-${{ matrix.appimage }}
-          path: smoke-appimage-${{ matrix.appimage }}-*.png
-          if-no-files-found: ignore
-
-  snap:
-    name: snap (${{ matrix.arch }})
-    needs: binary
-    strategy:
-      fail-fast: false
-      matrix:
-        # The triplet travels with the architecture because the ALSA assertion
-        # below checks a real path inside the squashfs. Deriving it here rather
-        # than hardcoding one is the difference between checking the arm64 snap
-        # and checking nothing on arm64 for ever.
-        include:
-          - arch: amd64
-            runner: ubuntu-24.04
-            triplet: x86_64-linux-gnu
-          - arch: arm64
-            runner: ubuntu-24.04-arm
-            triplet: aarch64-linux-gnu
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7 # verify-release-package.sh reads the build info with go version -m
-        with:
-          go-version: "1.24"
-      - uses: actions/download-artifact@v8
-        with:
-          name: snap-stage-${{ matrix.arch }}
-          path: build/snap-stage
-      - run: chmod 755 build/snap-stage/bin/bibletext
-      # Snap layouts take no variables, so the committed manifest is the amd64
-      # render and every other architecture re-renders first. The layout binds a
-      # REAL path: a snap carrying another architecture's ALSA triplet builds,
-      # installs and launches perfectly, and is silent.
-      - name: render the snap for ${{ matrix.arch }}
-        run: |
-          go run ./cmd/linuxmeta render -arch ${{ matrix.arch }}
-          grep -q '^  ${{ matrix.arch }}:' snap/snapcraft.yaml
-      - id: snapcraft
-        uses: snapcore/action-build@v1
-      - name: install, assert the entry, verify the executable, smoke
-        shell: bash
-        env:
-          BIBLETEXT_BUNDLED_KEY_ENC: ${{ secrets.BIBLETEXT_BUNDLED_KEY_ENC }}
-          SNAP_FILE: ${{ steps.snapcraft.outputs.snap }}
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y xvfb imagemagick mesa-utils squashfs-tools
-          sudo snap install --dangerous "$SNAP_FILE"
-          entry=/var/lib/snapd/desktop/applications/bibletext_bibletext.desktop
-          grep -q '^MimeType=x-scheme-handler/bibletext;' "$entry"
-          grep -q '^Exec=.*bibletext %u$' "$entry"
-          grep -q '^Categories=Education;Spirituality;$' "$entry"
-          unsquashfs -q -d "$RUNNER_TEMP/snapfs" "$SNAP_FILE"
-          test -f "$RUNNER_TEMP/snapfs/usr/lib/${{ matrix.triplet }}/alsa-lib/libasound_module_pcm_pulse.so"
-          unset BIBLE_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY XAI_API_KEY
-          source scripts/release-bible-key.sh
-          load_encoded_release_bible_key
-          trap clear_release_bible_key EXIT
-          BIBLETEXT_RELEASE_LDFLAGS="$BIBLE_KEY_LDFLAGS" scripts/verify-release-package.sh "$RUNNER_TEMP/snapfs/bin/bibletext" "$RUNNER_TEMP/snapfs"
-          scripts/smoke-linux-launch.sh snap bibletext
-      - uses: actions/upload-artifact@v7
-        with:
-          name: bibletext-snap-${{ matrix.arch }}
-          path: ${{ steps.snapcraft.outputs.snap }}
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: snap-smoke-${{ matrix.arch }}
-          path: smoke-snap-*.png
-          if-no-files-found: ignore
