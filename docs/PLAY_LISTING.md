@@ -200,6 +200,10 @@ Also confirm from the final AAB:
 - target audience and Families eligibility are selected from the real intended
   audience, not to avoid or trigger a policy track.
 
+## Release notes — 1.2.26
+
+> Publisher references for NKJV, WEB, WEB Catholic and BSB now join Gospel parallels and the Treasury. Expandable groups use clearer passage markers and compact previews that follow your reading-size setting. Restore the included Bible key in Settings after clearing it. Chapter history keeps your restored position when you leave again before scrolling. Improved tap areas for compact reading controls and Verse of the Day Share.
+
 ## Release notes — 1.2.25
 
 > Clearer messages when AI study cannot answer: if the account behind your key has run out of credit or reached its spending limit, or a request takes too long, the message says so and offers Try again, the provider's billing page or a faster model. Notes and questions use Android's own text editing, with Return adding a new line.

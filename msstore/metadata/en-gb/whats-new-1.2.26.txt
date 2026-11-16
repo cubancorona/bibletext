@@ -1,0 +1,5 @@
+Publisher cross-references for NKJV, WEB, WEB Catholic and BSB now appear alongside Gospel parallels and the Treasury. Expandable groups use clearer passage markers and compact previews that follow your reading-size setting.
+
+Restore the included Bible key in Settings after clearing it. Returning through chapter history keeps your saved position, even if you leave again before scrolling.
+
+Updated Grok naming in Settings and billing guidance.

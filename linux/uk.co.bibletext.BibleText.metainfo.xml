@@ -75,6 +75,18 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.2.26" date="2026-11-16">
+      <description>
+        <p>Publisher cross-references and clearer study lists.</p>
+        <ul>
+          <li>Publisher cross-references for NKJV, WEB, WEB Catholic and BSB now appear alongside Gospel parallels and the Treasury.</li>
+          <li>Expandable groups use clearer passage markers and compact previews that follow your reading-size setting.</li>
+          <li>Restore the included Bible key in Settings after clearing it.</li>
+          <li>Returning through chapter history keeps your saved position, even if you leave again before scrolling.</li>
+          <li>Updated Grok naming in Settings and billing guidance.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.25" date="2026-11-04">
       <description>
         <p>Clearer messages when AI study cannot answer: if the account behind your key has run out of credit or reached its spending limit, or a request takes too long, the message says so and offers Try again, the provider's billing page or a faster model.</p>

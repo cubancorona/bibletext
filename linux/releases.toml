@@ -15,6 +15,18 @@
 # are each a day before their tags, and stand.
 
 [[release]]
+version = "1.2.26"
+date = "2026-11-16"
+head = "Publisher cross-references and clearer study lists."
+bullets = [
+  "Publisher cross-references for NKJV, WEB, WEB Catholic and BSB now appear alongside Gospel parallels and the Treasury.",
+  "Expandable groups use clearer passage markers and compact previews that follow your reading-size setting.",
+  "Restore the included Bible key in Settings after clearing it.",
+  "Returning through chapter history keeps your saved position, even if you leave again before scrolling.",
+  "Updated Grok naming in Settings and billing guidance.",
+]
+
+[[release]]
 version = "1.2.25"
 date = "2026-11-04"
 head = "Clearer messages when AI study cannot answer: if the account behind your key has run out of credit or reached its spending limit, or a request takes too long, the message says so and offers Try again, the provider's billing page or a faster model."
