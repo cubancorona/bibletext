@@ -15,6 +15,18 @@ saying, another occasion" are there, not here. The Greek Esther mapped verse
 for verse left the switch for 1.2.23, and NEXT.md keeps its record too
 (*Work graduated for 1.2.23*).
 
+## Website narration wording — corrected locally, publication pending
+
+The homepage qualifies human-recorded audio as available and names device
+read-aloud without implying that every Android speech engine runs offline.
+The platform scope of lock-screen playback is unchanged. The correction
+awaits website publication.
+
+The Linux and Windows Settings screenshots still show the previous Grok
+vendor name. Recapture them at the next screenshot refresh and update the
+Linux listing's pinned screenshot reference. Changing an image in the
+repository alone does not update an existing pinned listing image.
+
 ## The release pipeline: what still waits on something it need not
 
 Planned for: stays, a standing entry — see docs/ROADMAP.md. Stage 10 names
@@ -6140,7 +6152,7 @@ billing", Try again and "Switch to a faster model" actions. Decided 2
 November 2026: the line for a billing error that is not an exhausted
 balance or cap, the line for a request the reader cancelled, the fallbacks
 when no provider was captured ("The AI service" and "the provider", with no
-billing link) and the vendor names OpenAI, Anthropic, Google and SpaceXAI;
+billing link) and the vendor names OpenAI, Anthropic, Google and SpaceXSI;
 the "said" line quotes only the recognised opening clause, and Try again
 stands above the billing link. [AI_ERRORS.md](AI_ERRORS.md) gives every
 line, and `TestTheAIErrorWordingWordForWord` holds each byte for byte; a
@@ -6333,9 +6345,186 @@ answer, leave what was seen standing: the two timeouts there, a TLS
 handshake that never completed and the transport's wait for the response
 headers over HTTP/1.1, are read the same way after them.
 
-## Native Android Note and Ask editors — implemented, unreleased
+## Mobile tap areas — integrated locally, remaining acceptance pending
 
-Decided 2 November 2026: ships in 1.2.25 (ROADMAP.md, Next minor release,
+The 20 October 2026 scope adds only invisible, bounded mobile hit areas;
+visible icon, button, toolbar and layout dimensions must stay unchanged.
+Integrated in the main working tree on 14 November 2026, without a release
+assignment: the header sparkle/settings actions, the Notes browser's delete
+control, collapsed iOS note pills and phone-landscape chapter arrows.
+
+The shared centered targets use only space their existing cells already own,
+capped at 44 points per axis where that space permits. Desktop keeps the
+ordinary centered layout. Disabled or hidden controls release the added area;
+neighboring gaps and parent controls retain their own taps. A collapsed iOS
+pill can use 8 points above and below its unchanged 28-point artwork only
+when its own resolved reservation contains the whole 44-point target. Missing,
+unresolved or displaced reservations grant no extra area. The singleton's
+parent admits the same bounded points; expanded cards keep their ordinary
+hit testing.
+
+The preserved prototype left the landscape arrow difficulty unresolved.
+The integrated phone-landscape arrows retain their original drawing and row
+height, using only the existing margin above and below, bounded before the
+reading pane or note banner. Their default target is 36 by 36 points around
+unchanged 36 by 22-point controls. Both native mobile reading bodies use the
+shared layout; portrait, tablet and desktop paths retain their prior layout.
+
+Shared tests compare pixels, geometry and minimum sizes and exercise bounded
+dispatch, disabled/hidden fall-through, parent controls, gaps, overlays and
+resize. Both mobile pane compile checks pass in default and `next` states;
+iOS is checked against stock and patched Fyne. The combined baseline passed
+the host build and vet checks, full default, `next` and `next,nkjvxrefs`
+suites, the full default race suite and repository hygiene. That baseline
+predates the verse-arrival history and VOTD Share changes; their separate
+checks are below.
+
+Bounded iPhone Simulator input covers landscape arrows in both orientations,
+per-paragraph and singleton pill additions and exclusions, a scroll starting
+in added space, and selection extension without restoring a pill. Full-window
+iPad Simulator portrait and landscape checks cover per-paragraph pill routing
+and exclusions. Current Android emulator input covers the header additions,
+inter-control gaps, landscape upper margins in both orientations, and disabled
+chapter and reading-boundary controls. The native reading overlay constrains
+the lower landscape margin; the whole logical target is not established as
+available to native taps.
+
+These checks do not establish physical finger acceptance or a complete device
+matrix. Installation alone does not establish on-screen acceptance. Physical
+use, iPad resizing and singleton gestures, and the remaining
+neighboring-control and reading-size cases remain release checks. Native
+public-reference and history checks are recorded below; desktop controls
+retain their ordinary layout.
+
+## Verse-of-the-day Share target — integrated locally
+
+The mobile Share icon remains 17 points inside its original 33-by-22-point
+control. The mobile driver's 8-point touch adjustment displaced the physical
+hit area below the artwork: upper-glyph taps missed while blank space below
+activated Share. Native iPhone portrait and landscape input reproduced both.
+
+`verse_of_day_touch.go` uses only the clear card padding above Share, keeping
+the same width and lower edge. With the normal theme, the combined target is
+33 by 40 points; no 44-point or complete device-matrix claim follows. The
+card, icon, controls, text and layout minimum stay unchanged. The original
+Share control still supplies the native share anchor. Hidden or disabled
+controls release the additional area, and higher overlays retain their taps.
+Desktop returns the original card without a wrapper.
+
+An actual-card regression fails with the original construction and passes with
+the bounded target. Focused default and `next,nkjvxrefs` tests cover canvas
+dispatch, the original anchor, exact pixels and geometry at three widths in
+light and dark, neighboring areas, passage, overlays and inactive controls.
+The focused vet and formatting checks pass. These are later checks, not a
+rerun of the earlier full suites.
+
+Native iPhone Simulator portrait and landscape checks verify the newly
+reachable upper glyph and padding, original center and lower area, and
+outside/passage exclusions. The card pixels match the earlier candidate;
+Close and Read in context pass. One iPad portrait check verifies the upper
+padding, a native share popover anchored to the original 33-by-22-point
+control, dismissal and Close. Android API33 portrait checks verify the glyph
+top, center, bottom and added padding, five outside/passage exclusions,
+Close and Read in context. Android has no native old/new pixel comparison;
+the shared pixel and geometry tests retain that separate role.
+
+Returning from Android's chooser with Back left the card closed. This is an
+observed behavior with no before-change control, so it is not classified as
+new or inherited. Follow-on taps from that closed-card state are excluded
+from acceptance; the valid checks reopen the card before each Share action.
+No share destination was selected. These checks do not establish physical
+finger acceptance, every device/window configuration or a public release.
+
+## Verse-arrival history fallback — integrated locally
+
+An explicit Go to, followed cross-reference or verse-of-day jump can move the
+reader before a user scroll records the viewport. `goToVerseRange` now keeps
+the validated requested start verse in the current history visit and saved
+reading state, so a subsequent history return has a position even when no
+scroll was recorded. The fallback has zero delta and scroll fraction: it
+returns to the requested passage, not necessarily the exact original viewport.
+A successful later capture replaces it with the measured position.
+
+The fallback is shared by every renderer and reads no native geometry, which
+may still belong to the outgoing chapter while a new arrival is pending. It
+does not arm a restore or change the arrival's placement priority. Ordinary
+chapter and title visits remain at chapter top without an anchor; a missing
+start verse receives no fallback. History restores a position without reviving
+the old verse highlight.
+
+`verse_arrival_history_test.go` covers the saved edition, chapter and history
+head, source and target returns through a cross-reference, a successful later
+capture, repeated same-chapter arrivals and anchorless controls. The existing
+capture-preservation and latest-write tests retain their separate roles. The
+original implementation fails the affected arrival/history controls while
+anchorless controls pass. The change passes focused default, `next,nkjvxrefs`
+and race checks, including capture supersession and explicit-reposition
+precedence, plus source and documentation hygiene. The full baseline above
+was not rerun or relabeled as covering this later change.
+
+Current iPhone Simulator native input returns an unscrolled Go to arrival to
+its requested verse after following a cross-reference; a separate real-scroll
+control returns to the measured viewport with matching reader pixels. The
+current iPad Simulator WEB route also covers native selection, open-panel
+rotation, target highlighting and history return, with the requested verse
+visible and no old highlight. It is one tablet case, not the full edition or
+multitasking matrix. Android emulator native selection and reference actions
+cover WEB, WEBC and BSB, full target ranges and history return, section
+association, and the long reference label at an actual 320-unit width with
+XL reading text in light and dark. Narrow reading chrome still crowds;
+unchanged source and shared-layout checks support inheritance, but there is
+no matching pre-change native image establishing pixel identity.
+
+Current Mac and Linux public fixtures exercise real operating-system clicks
+for panel Close, reference targets and history, with readable edition-specific
+references and BSB section association checked separately. Each covers seven
+cases, including a fresh WEB repeat rather than a persisted-state restart.
+The requested 320-unit XL windows realize 607 units on Mac and 606 on Linux;
+these are practical native minimum-width checks, not native 320 coverage.
+Linux's dark panel and reader are readable; poor Go to contrast is a forced-
+theme fixture limitation, not an established production regression. Targeted
+Mac image review covers publisher grouping, highlights, history, the XL light
+and dark routes and the nonlink. Its original bounded dark scroll attempt
+failed; a separate captured retry passed. Deterministic scroll delivery is
+not established by that retry.
+
+Windows native Close, reference-target and history actions pass for all seven
+public fixtures. The four later checks use the original, unchanged binaries
+in a separate offline test VM: BSB narrow light and dark at 606 by 700 units,
+plus Hebrews and a fresh WEB repeat at 900 by 700. Nineteen captures verify
+reference exposure, complete target ranges, history without stale highlights,
+and the Hebrews nonlink. The narrow checks do not establish native 320-unit
+coverage. These binaries precede the separate mobile Share-target change.
+
+The external controller waits for fresh geometry within its existing bound;
+seven isolated controls verify acceptance and rejection cases. A separate
+scroll diagnostic established the effective wheel direction in this VM, then
+the unchanged light and dark binaries passed with that controller correction.
+No app or toolkit change was needed. Earlier failed and inconclusive attempts
+remain separate from acceptance. All test VMs are stopped; the original
+protected Windows VM and its saved configuration remain unchanged.
+
+Desktop fixtures open the panel programmatically, so these clicks do not
+establish native selection-menu
+invocation, open-panel resizing or a complete platform matrix. Requested-verse
+fallback remains distinct from measured-scroll restoration; neither correct
+passage return nor installation establishes exact viewport or physical-finger
+acceptance. Earlier failed attempts and successful historical checks retain
+their original scope and do not count as additional current passes.
+
+## Native iPhone keyboard dismissal — deferred investigation
+
+Deferred 4 November 2026. Investigate the system keyboard's hide control or
+newer checkmark-style dismissal for the native Ask and Share with note editors,
+particularly in landscape. No native control has been selected. The custom
+title-row icon proposal is withdrawn. The shared UITextView currently has no
+input accessory; Return inserts a newline. Keep this separate from Android's
+already-shipped Show passage keyboard behavior. No implementation follows
+from this record correction.
+
+## Native Android Note and Ask editors — included in 1.2.25
+
+Decided 2 November 2026 and included in 1.2.25 (ROADMAP.md, Next minor release,
 row 3). Decided 3 November 2026: keep the shared 112-unit native field height,
 about five and a half Android lines at 14pt. The toolkit field's one line is
 not kept, and no smaller four-Android-line field is required.
@@ -6762,8 +6951,9 @@ Two older layout faults the same simulator pass showed, both in 1.2.17:
 
 ## The open narration card covers the phone header's controls — kept as a pop-up for now
 
-Planned for: next major, the bar on phones behind `next`; the double tap on
-the ✕ in 1.2.23+ — see docs/ROADMAP.md.
+Planned for: next major, the bar on phones behind `next`. The close control
+retains its current double-tap behavior; no shield or delay is planned
+(decided 15 October 2026). See docs/ROADMAP.md.
 
 On a phone the open narration card lies over the next-chapter arrow and the
 full-screen button, and with a long heading or on the narrowest phones over the
@@ -6915,7 +7105,8 @@ a card, flush right under the header, that pushed the text down.
   take both taps, at the cost of the double-tap interval on every close; a
   shield left over the card's place for that interval would take them too,
   but leaves the controls it covered unreachable for that time after the
-  card has closed. Not yet decided.
+  card has closed. Decided 15 October 2026: retain the current behavior,
+  with no shield or delay.
 - The place is the same in every chapter of a book, so the controls do not jump
   as the reader moves between chapters (the branch chose it by the widest
   rows the book's chapters make for this reason).
@@ -9941,8 +10132,9 @@ where the edition keys the note, and is raised.
 
 Third: the NKJV first; the same checks, and the same changes where they fit,
 for the other cross-references (the Treasury, the Gospel parallels, any other
-edition's) afterwards. An audit of those is in hand; nothing of it is decided
-or built.
+edition's) afterwards. The audit and applicable changes are implemented;
+see the completed audit dated 13 November and public-edition recovery dated
+14 November below. The Treasury dataset choice remains open.
 
 Fourth: a reader sees at a glance which rows are a note's. Each note stands
 on a ground of its own with a gap before the next; its letter stands alone
@@ -10324,7 +10516,7 @@ DECIDED AND BUILT 12–13 November 2026 (resolving the 11 November open list):
   `treasuryMinusPublisher`, dropping
   overlapping fused `2 Chronicles 36:22–Ezra 1:*` rows at Ezra 4:3, Ezra 6:3
   and Daniel 6:28), en-dash wrapping for oversized cross-book card headings on
-  the narrowest 375pt phone (`newCrossRefRef`, fixing Extra large's 288pt
+  the 375pt phone used for that pass (`newCrossRefRef`, fixing Extra large's 288pt
   overflow on `"Jeremiah 52:1–Lamentations 1:5"` at Ezekiel 36:3 and the
   315–374pt overflow on `"1 Thessalonians 5:28–2 Thessalonians 1:2"` in Romans
   1:7's kept index rows), and full dataset accounting + width checks
@@ -10334,6 +10526,10 @@ DECIDED AND BUILT 12–13 November 2026 (resolving the 11 November open list):
   unfiltered against `NKJV REFERENCES` so synopsis pericopes keep every
   participating Gospel, and `treasuryRowsFor` keeps its pre-filter
   `maxCrossRefsPerVerse = 16` cap (`maxCrossRefsKept = 32`).
+  The minimum supported canvas is 320pt, with a 280pt popup. The 14 November
+  width correction (`2696fba020`) lowers the unwrapped-heading cutoff to a
+  conservative 182pt and keeps same-book verse ranges together; the mounted
+  popup regression covers direct and grouped headings at all three text sizes.
 - **Recovered 14 November 2026**: the publisher cross-references that
   `bible.helloao.org` strips from the public-domain and CC0 editions — 340
   in-verse `\x` notes across 322 WEB verses (424 citations), 343 across 325
