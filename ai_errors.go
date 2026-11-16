@@ -67,7 +67,7 @@ func aiBillingDestination(info providerInfo) (vendor, address string) {
 	case providerGemini:
 		return "Google", "https://aistudio.google.com/spend"
 	case providerGrok:
-		return "SpaceXAI", "https://console.x.ai"
+		return "SpaceXSI", "https://console.x.ai"
 	default:
 		return "the provider", ""
 	}

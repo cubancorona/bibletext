@@ -24,8 +24,10 @@ or right in the recipient's browser. No accounts, no server, no ads.
 
 ![Cross-references and Gospel parallels](docs/screenshots/cross-references.png)
 
-Tap a verse to surface its cross-references (Treasury of Scripture Knowledge) and,
-for a Gospel passage, the parallel accounts in the other Gospels.
+Tap a verse to see its edition’s own cross-references where available, related
+passages from the Treasury of Scripture Knowledge, and, for a Gospel passage,
+the parallel accounts in the other Gospels. WEB, WEB Catholic and BSB publisher
+references are bundled and work offline.
 
 </details>
 
@@ -185,11 +187,14 @@ root), signing, emulator use, and distribution are covered in
   off-able (Settings → Assistant → None). See [AI study](#ai-study-bring-your-own-key)
   for exactly what is sent.
 - 🔗 **Cross-references & Gospel parallels** — select a verse and choose
-  **Cross-references** to see related passages (vote-ranked), each a tap away. For a
-  Gospel verse, the same event in the other Gospels appears first, tagged
-  **Parallel** (an embedded synopsis that works offline). Cross-reference data is the
-  public-domain/CC-BY [OpenBible.info](https://www.openbible.info/labs/cross-references/)
-  set, fetched once and cached.
+  **Cross-references** to see related passages, each a tap away. WEB, WEB Catholic
+  and BSB include their publishers' own references, recovered from the published
+  USFM and bundled for offline use. Where the selection has publisher notes,
+  those appear first. For a Gospel verse, the same event in the other Gospels
+  appears under **Gospel parallels**, from an embedded synopsis that also works
+  offline. The additional, vote-ranked Treasury of Scripture Knowledge rows
+  come from the [OpenBible.info](https://www.openbible.info/labs/cross-references/)
+  set (CC BY), fetched once and cached.
 - 🎧 **Listen** (all platforms) — play the current chapter from the reading
   header as a recorded **narration** (human, except for the WEB-Catholic's Greek
   books) or on-device **read-aloud**
@@ -392,7 +397,7 @@ separate API.Bible fallback used to fetch the licensed NKJV is described above.)
 | Gemini (Google) | `gemini-pro-latest` (faster: `gemini-2.5-flash`) | <https://aistudio.google.com/apikey> |
 | ChatGPT (OpenAI) | `gpt-5` (faster: `gpt-5-mini`) | <https://platform.openai.com/api-keys> |
 | Claude (Anthropic) | `claude-opus-5` (faster: `claude-haiku-4-5`) | <https://platform.claude.com/settings/keys> |
-| Grok (SpaceXAI) | `grok-4.5` (faster: `grok-4.3`) | <https://console.x.ai> |
+| Grok (SpaceXSI) | `grok-4.5` (faster: `grok-4.3`) | <https://console.x.ai> |
 
 The **Model** dropdown in the same sheet is populated live from your provider's
 own model list (fetched with your key), so new models appear the day they ship —
@@ -403,7 +408,7 @@ A `<PROVIDER>_API_KEY` environment variable (`GEMINI_API_KEY`, `OPENAI_API_KEY`,
 `ANTHROPIC_API_KEY`, `XAI_API_KEY`) overrides the stored key when set.
 
 If a provider reports exhausted credit or a spending limit, the error names
-that provider and offers its billing page (for Grok, the SpaceXAI console)
+that provider and offers its billing page (for Grok, the SpaceXSI console)
 and **Try again**. A timeout offers retry or the existing faster-model
 option. Ordinary rate limits and missing keys retain their separate
 guidance. The app does not change a provider's billing settings.
@@ -562,8 +567,13 @@ The application's source code is licensed under the **[Apache License 2.0](LICEN
 
 Bundled data and assets keep their own licenses (see [NOTICE](NOTICE)):
 
-- Scripture: **World English Bible** and **Berean Standard Bible** — public domain
-  (via [bible.helloao.org](https://bible.helloao.org/docs/)).
+- Scripture: **World English Bible**, including its **Catholic edition**, is
+  public domain; **Berean Standard Bible** is public domain / CC0. The full text
+  is fetched via [bible.helloao.org](https://bible.helloao.org/docs/); a WEB
+  Gospels seed is bundled for offline startup.
+- Publisher cross-references: bundled **WEB** and **WEB Catholic** notes from
+  their public-domain USFM, and **BSB** heading references from its CC0 USFM.
+  See [source records and reproduction](docs/TEXTUAL-DATA.md).
 - Audio narration: **BSB** by Barry Hays (**CC0**) and **WEB** by David Williams
   (**public domain**), plus a **synthetic** public-domain narration of the
   **WEB-Catholic**'s Greek books from [eBible.org](https://ebible.org/eng-webbe/),

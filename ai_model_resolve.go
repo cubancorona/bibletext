@@ -211,7 +211,7 @@ var modelUnstableSubstrings = []string{"preview", "-exp", "experimental", "night
 // self-heal so a light model in the same tier always wins.
 //
 // This backstops the tier keyword where it cannot discriminate — above all for
-// SpaceXAI, whose keyword is "grok" (every model they sell matches it): before
+// Grok, whose keyword is "grok" (every model they sell matches it): before
 // this rule, newest-wins picked a variant whose reasoning pass took ~48s on a
 // broad Find against ~4s for the non-reasoning one (measured 2026-08-07).
 // "Light" here means the id doesn't ADVERTISE an extra-heavy thinking pass;
@@ -221,7 +221,7 @@ var modelUnstableSubstrings = []string{"preview", "-exp", "experimental", "night
 var reasoningModelSubstrings = []string{"reasoning", "thinking", "multi-agent"}
 
 // modelNegatedReasoning are ids that CONTAIN a reasoning marker but explicitly
-// negate it — SpaceXAI ships "grok-4.20-0309-non-reasoning", the fast variant,
+// negate it — Grok ships "grok-4.20-0309-non-reasoning", the fast variant,
 // whose id trivially matches "reasoning" as a substring. Checked first so the
 // light model is never mistaken for the heavy one it is named against.
 var modelNegatedReasoning = []string{"non-reasoning", "no-reasoning", "non-thinking"}

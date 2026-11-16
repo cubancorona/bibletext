@@ -380,7 +380,7 @@ func TestFriendlyBadKey400SaysKeyRejected(t *testing.T) {
 }
 
 // TestPickInTierPrefersLightOverReasoning locks the backstop for tier keywords
-// that cannot discriminate. SpaceXAI's keyword is "grok" — every model they
+// that cannot discriminate. Grok's keyword is "grok" — every model they
 // sell matches it — so newest-wins can hand a reader a heavy reasoning model
 // (measured 2026-08-07: a reasoning variant took ~48s on a broad Find against
 // ~4s for the non-reasoning one, past the 35s timeout).
@@ -391,7 +391,7 @@ func TestFriendlyBadKey400SaysKeyRejected(t *testing.T) {
 // PINNED default (kept alive by TestLivePinnedDefaultsExist), with this as a
 // backstop for the explicitly-marked variants.
 func TestPickInTierPrefersLightOverReasoning(t *testing.T) {
-	// Real SpaceXAI ids and creation ranks (2026-08-07), newest first.
+	// Real Grok ids and creation ranks (2026-08-07), newest first.
 	models := []discoveredModel{
 		{"grok-4.20-0309-reasoning", 1773014402},     // newest, marked heavy
 		{"grok-4.20-multi-agent-0309", 1773014401},   // marked heavy

@@ -127,7 +127,7 @@ func TestLiveModelDropdown(t *testing.T) {
 // TestLivePinnedDefaultsExist is the guard that would have caught the retired
 // grok-2 pin: every provider's DEFAULT model must still be offered by that
 // provider today. Self-heal covers a dead pin at runtime, but only by picking
-// another in-tier model — for SpaceXAI that silently landed on a reasoning
+// another in-tier model — for Grok that silently landed on a reasoning
 // variant slow enough to blow the Find timeout. So a retired default is a real
 // defect to fix deliberately, not a condition to leave to self-heal.
 //

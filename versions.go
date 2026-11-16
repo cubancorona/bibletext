@@ -137,8 +137,8 @@ var registeredVersions = []BibleVersion{
 		// capture; epoch 3 poem-clause line breaks; epoch 1 punctuation
 		// spacing.
 		// epoch 9: the indent depth of each poetry line; epoch 8 the
-		// publisher's section headings, all 3,091 of them, kept
-		// instead of skipped; epoch 7 the publisher's paragraphing, read from
+		// publisher's section headings, kept instead of skipped. After
+		// removing one leaked reference line, 3,090 are drawn. Epoch 7 the publisher's paragraphing, read from
 		// the feed's own chapter-level break nodes instead of being skipped.
 		cacheEpoch: 9,
 		source:     bsbSource{},

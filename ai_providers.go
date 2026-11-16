@@ -208,11 +208,9 @@ func aiProviders() []providerInfo {
 			ListModels: listAnthropicModels(anthropicBaseURL),
 		},
 		{
-			// xAI merged into SpaceX and rebranded SpaceXAI (July 2026); the
-			// assistant keeps the name Grok, and api.x.ai / console.x.ai still
-			// serve (a SpaceX-branded endpoint is promised with a long
-			// transition — swap grokBaseURL when it lands).
-			ID: providerGrok, Name: "Grok (SpaceXAI)", ShortName: "Grok", Model: grokModel, FastModel: grokFastModel,
+			// The vendor uses SpaceXSI branding; API and console URLs retain
+			// x.ai. See https://x.ai/legal/faq and https://docs.x.ai/overview.
+			ID: providerGrok, Name: "Grok (SpaceXSI)", ShortName: "Grok", Model: grokModel, FastModel: grokFastModel,
 			KeyURL: "https://console.x.ai", KeyHint: "key starts with “xai-”",
 			New: func(store *keyStore, k string) aiClient {
 				return &modelResolver{

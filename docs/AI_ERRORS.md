@@ -134,7 +134,7 @@ Decided 2 November 2026: a request the reader cancelled, should its failure
 reach a screen, reads "The request was cancelled."; with no provider
 captured, {Provider} is "The AI service" and {Vendor} "the provider", and
 no billing link is offered; and the vendors are named OpenAI, Anthropic,
-Google and SpaceXAI.
+Google and SpaceXSI.
 
 The faster-model action is offered only for the captured provider while it
 is still active. Its callback checks again before changing a model or

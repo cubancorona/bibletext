@@ -9,7 +9,7 @@ import (
 // THE ASSISTANT LIST IS ONE FORM: "Product (Vendor)".
 //
 // The picker had "Google Gemini" beside "ChatGPT (OpenAI)", "Claude
-// (Anthropic)" and "Grok (SpaceXAI)" — one row vendor-first with no
+// (Anthropic)" and "Grok (SpaceXSI)" — one row vendor-first with no
 // parenthetical, three product-first with one. Product first is the right way
 // round because the product is what a reader chooses by; the vendor is the
 // attribution, and it belongs in the parens.
@@ -18,11 +18,6 @@ import (
 // places honest: the key row says "Gemini key", and it should be the same word
 // the picker led with rather than an independently chosen abbreviation.
 func TestAssistantNamesAreCanonical(t *testing.T) {
-	// SpaceXAI is CORRECT and current, not a typo for xAI: SpaceX absorbed xAI
-	// in an all-stock deal (Feb 2026) and the company rebranded to SpaceXAI on
-	// 6 July 2026, while the assistant kept the name Grok. Anyone whose
-	// knowledge predates that will read it as a mistake — it is not, and this
-	// note is here so nobody "fixes" it back.
 	form := regexp.MustCompile(`^(.+) \(([^()]+)\)$`)
 	for _, p := range aiProviders() {
 		m := form.FindStringSubmatch(p.Name)
@@ -39,6 +34,10 @@ func TestAssistantNamesAreCanonical(t *testing.T) {
 		}
 		if strings.TrimSpace(m[2]) == "" {
 			t.Errorf("%s: Name %q has an empty vendor", p.ID, p.Name)
+		}
+		vendor, _ := aiBillingDestination(p)
+		if m[2] != vendor {
+			t.Errorf("%s: picker vendor %q differs from billing vendor %q", p.ID, m[2], vendor)
 		}
 	}
 }
