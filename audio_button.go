@@ -383,8 +383,8 @@ var _ fyne.Tappable = (*tappableArea)(nil)
 // view — on most phones the full-screen button, which the card was hiding —
 // as any tap goes to what is on top when it lands. A ✕ that waited for a
 // second tap (fyne.DoubleTappable) would take both, at the cost of the
-// double-tap interval on every close; that choice is left open
-// (docs/BACKLOG.md).
+// double-tap interval on every close. The immediate close is retained,
+// without a second-tap delay or post-close shield (docs/BACKLOG.md).
 type tapShield struct {
 	widget.BaseWidget
 }

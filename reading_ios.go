@@ -1701,6 +1701,33 @@ static const CGFloat kNoteWho = 14, kNoteWhoGap = 4, kNotePill = 28, kNoteRad = 
 // target. The pill used to borrow it, which is how a touch-target decision came
 // to set the height of a piece of content.
 static const CGFloat kNoteBtn = 30;
+
+// The 28pt artwork already owns 10pt of blank band on each side. Use 8pt of
+// that air for a 44pt touch target without moving or resizing any drawing.
+static const CGFloat kNotePillHitPad = 8;
+
+@interface BTNotePillButton : UIButton
+@property (nonatomic) CGFloat pillHitPad;
+@end
+@implementation BTNotePillButton
+- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
+    if (self.hidden || !self.userInteractionEnabled || !self.enabled || self.alpha <= 0.01) return NO;
+    return CGRectContainsPoint(CGRectInset(self.bounds, 0, -self.pillHitPad), point);
+}
+@end
+
+// The singleton's parent must admit the same points before UIKit can ask its
+// button. Its original bounds, border and clipping remain the artwork's.
+@interface BTNotePillHostView : UIView
+@end
+@implementation BTNotePillHostView
+- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
+    if (self.hidden || !self.userInteractionEnabled || self.alpha <= 0.01) return NO;
+    if ([super pointInside:point withEvent:event]) return YES;
+    BTNotePillButton *chip = (BTNotePillButton *)[self viewWithTag:901];
+    return chip != nil && [chip pointInside:[self convertPoint:point toView:chip] withEvent:event];
+}
+@end
 // kNoteTail/kNoteTailW/kNoteTailX are declared above, beside gNoteTail, because
 // SetNote resolves gNoteShapeExtra from them and SetNote comes first in this file.
 
@@ -1839,6 +1866,41 @@ static int            gNoteBandSpecCount = 0;
 // btIOSLayoutNote's loop; a registry, never a single tracked field, for the
 // same reason the reservations are a list.
 static NSMutableArray<UIButton *> *gNotePillViews = nil;
+
+// Only an anchored pill with its own installed band may borrow blank space.
+// An unresolved or unplaced note can fall back to chapter top without owning
+// that air. A resolved first-paragraph pill owns its recorded inset band.
+static CGFloat btIOSPillHitPadForBand(int key, NSInteger verse, CGRect artwork) {
+    if (verse <= 0 || gReadingTV == nil) return 0;
+    NSTextStorage *ts = gReadingTV.textStorage;
+    NSUInteger loc = btIOSLocForVerse(ts, verse);
+    if (loc == NSNotFound || loc >= ts.length) return 0;
+    NSRange para = [ts.string paragraphRangeForRange:NSMakeRange(loc, 0)];
+    for (int b = 0; b < gNoteBandCount; b++) {
+        BTNoteBandRes *band = &gNoteBands[b];
+        if (band->key != key || band->contribution < kNotePill + 2 * kNotePillHitPad) continue;
+        if (band->para.location == NSNotFound) {
+            if (para.location != 0 || gNoteTopInset < band->contribution) continue;
+        } else if (band->para.location != para.location) {
+            continue;
+        }
+        // Optical centering can move a pill out of its unlifted reservation.
+        // Borrow blank space only while the final target stays in this slot.
+        CGFloat top;
+        if (band->para.location == NSNotFound) {
+            top = btIOSInsetBandTop();
+        } else {
+            NSRange glyphs = [gReadingTV.layoutManager glyphRangeForCharacterRange:para actualCharacterRange:NULL];
+            if (glyphs.length == 0) continue;
+            top = btIOSBandTopY(glyphs.location);
+        }
+        top += btIOSBandStackAbove(b) - kNoteGapAbove;
+        CGRect slot = CGRectMake(artwork.origin.x, top, artwork.size.width, band->contribution);
+        CGRect target = CGRectInset(artwork, 0, -kNotePillHitPad);
+        if (CGRectContainsRect(slot, target)) return kNotePillHitPad;
+    }
+    return 0;
+}
 
 // Take EVERY reservation back — a SWEEP over the list, never a single tracked
 // field. The sweep is the whole point of the list: whatever this pane reserved,
@@ -2038,7 +2100,7 @@ static void btIOSEnsurePillViews(void) {
     if (gNoteBandSpecCount == 0 || gReadingTV == nil) return;
     for (int i = 0; i < gNoteBandSpecCount; i++) {
         BTNoteBandSpec *spec = &gNoteBandSpecs[i];
-        UIButton *chip = [UIButton buttonWithType:UIButtonTypeSystem];
+        BTNotePillButton *chip = [BTNotePillButton buttonWithType:UIButtonTypeSystem];
         [chip setTitle:spec->label forState:UIControlStateNormal];
         [chip setTitleColor:btNoteColor(gNoteMuted) forState:UIControlStateNormal];
         chip.titleLabel.font = btNoteWhoFont();
@@ -2071,7 +2133,8 @@ static void btIOSLayoutPillViews(void) {
     // text on iPad, and a fixed pad drew every pill in the left margin there.
     CGFloat x = gReadingTV.textContainerInset.left + pad;
     for (NSUInteger i = 0; i < gNotePillViews.count && (int)i < gNoteBandSpecCount; i++) {
-        UIButton *chip = gNotePillViews[i];
+        BTNotePillButton *chip = (BTNotePillButton *)gNotePillViews[i];
+        chip.pillHitPad = 0;
         BTNoteBandSpec *spec = &gNoteBandSpecs[i];
         // The band, by key — with its INDEX, which the co-tenant stack needs.
         int bi = -1;
@@ -2130,6 +2193,7 @@ static void btIOSLayoutPillViews(void) {
         if (cw > w) cw = w;
         chip.hidden = NO;
         chip.frame = CGRectMake(x, y, cw, kNotePill);
+        chip.pillHitPad = btIOSPillHitPadForBand(spec->key, spec->verse, chip.frame);
     }
 }
 
@@ -2141,7 +2205,9 @@ static void btIOSEnsureNoteView(void) {
     if (gNoteBandSpecCount > 0 && btIOSNotePill()) { return; }
     if (!btIOSNotePresent() || gReadingTV == nil) return;
 
-    UIView *box = [[UIView alloc] initWithFrame:CGRectZero];
+    UIView *box = btIOSNotePill()
+        ? [[BTNotePillHostView alloc] initWithFrame:CGRectZero]
+        : [[UIView alloc] initWithFrame:CGRectZero];
     gNoteCard = nil;
     if (btIOSNotePill()) {
         // The collapsed marker is a plain pill — no tail, exactly as on the web.
@@ -2173,7 +2239,7 @@ static void btIOSEnsureNoteView(void) {
         // the rest of the set invisible. The press is the Restore verb; with
         // no note text behind it (unplaced-only) the Go side is a no-op, so
         // the pill is inert exactly when there is nothing to restore.
-        UIButton *chip = [UIButton buttonWithType:UIButtonTypeSystem];
+        BTNotePillButton *chip = [BTNotePillButton buttonWithType:UIButtonTypeSystem];
         [chip setTitle:(gNoteWho ?: @"Note") forState:UIControlStateNormal];
         [chip setTitleColor:btNoteColor(gNoteMuted) forState:UIControlStateNormal];
         chip.titleLabel.font = btNoteWhoFont();
@@ -2349,8 +2415,9 @@ static void btIOSLayoutNote(void) {
         if (cw < kNotePillMinW) cw = kNotePillMinW;
         if (cw > w) cw = w;
         gNoteView.frame = CGRectMake(x, y, cw, kNotePill);
-        UIView *chip = [gNoteView viewWithTag:901];
+        BTNotePillButton *chip = (BTNotePillButton *)[gNoteView viewWithTag:901];
         chip.frame = gNoteView.bounds;
+        chip.pillHitPad = btIOSPillHitPadForBand(kNoteStickerBandKey, gNoteAnchorVerse, gNoteView.frame);
         return;
     }
 
@@ -4727,8 +4794,7 @@ func buildReadingViewMobile(state *AppState) fyne.CanvasObject {
 	if state.readingFullScreen() {
 		// The row, and what it offers at each end, is shared with the Android
 		// pane (reading_fullscreen_row.go) so the two cannot drift.
-		body := container.NewBorder(fullScreenTop(state), nil, nil, nil, container.NewStack(paper, host))
-		return container.NewPadded(body)
+		return fullScreenReadingBody(state, container.NewStack(paper, host))
 	}
 
 	top := container.NewVBox()

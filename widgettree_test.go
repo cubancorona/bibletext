@@ -49,6 +49,8 @@ func walkTree(o fyne.CanvasObject, visit func(fyne.CanvasObject)) {
 		walkTree(v.box, visit)
 	case *crossRefNoteRow:
 		walkTree(v.box, visit)
+	case *crossRefSourceGroup:
+		walkTree(v.box, visit)
 	case *searchResultCard:
 		walkTree(v.content, visit)
 	case *compareAnswer:

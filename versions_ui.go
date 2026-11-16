@@ -35,7 +35,7 @@ func versionSelector(state *AppState) fyne.CanvasObject {
 	badge := canvas.NewText("TESTING", pal.Accent)
 	badge.TextSize = 9
 	badge.TextStyle = fyne.TextStyle{Bold: true}
-	return container.NewHBox(anchor, hgap(6), container.NewCenter(badge))
+	return container.NewHBox(anchor, hgap(6), container.NewCenter(offsetHeaderText(badge)))
 }
 
 // versionPickerAnchor is a small tappable bit of muted text (the header
@@ -63,7 +63,7 @@ func (a *versionPickerAnchor) CreateRenderer() fyne.WidgetRenderer {
 	// a.size+12 made this the smallest tap target in the app (~22pt). Pad the box
 	// well past the text instead — the header has the room, and the translation
 	// switcher is a primary control on a phone.
-	box := container.NewGridWrap(fyne.NewSize(w+tapTextHPad, a.size+26), container.NewCenter(lbl))
+	box := container.NewGridWrap(fyne.NewSize(w+tapTextHPad, a.size+26), container.NewCenter(offsetHeaderText(lbl)))
 	return widget.NewSimpleRenderer(box)
 }
 

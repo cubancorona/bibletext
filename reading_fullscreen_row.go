@@ -44,10 +44,14 @@ func fullScreenTop(state *AppState) fyne.CanvasObject {
 }
 
 func fullScreenExitRow(state *AppState) fyne.CanvasObject {
+	return fullScreenExitRowWithControls(state, fullScreenExitControls(state))
+}
+
+func fullScreenExitRowWithControls(state *AppState, controls fyne.CanvasObject) fyne.CanvasObject {
 	ref := canvas.NewText(fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter), state.pal().TextMuted)
 	ref.TextSize = 16
 	refBox := container.NewVBox(layout.NewSpacer(), ref, layout.NewSpacer())
-	return container.NewBorder(nil, nil, refBox, fullScreenExitControls(state), nil)
+	return container.NewBorder(nil, nil, refBox, controls, nil)
 }
 
 // fullScreenExitControls is the right-hand end of that row, and the two ways
@@ -82,8 +86,16 @@ func fullScreenExitControls(state *AppState) fyne.CanvasObject {
 // the same event as one turned in portrait. Returns nil before a Bible is
 // loaded, which Border reads as "no right-hand object".
 func chapterArrowPair(state *AppState) fyne.CanvasObject {
-	if state == nil || state.Bible == nil {
+	prev, next := chapterArrowButtons(state)
+	if prev == nil || next == nil {
 		return nil
+	}
+	return container.NewHBox(prev, next)
+}
+
+func chapterArrowButtons(state *AppState) (*iconTapButton, *iconTapButton) {
+	if state == nil || state.Bible == nil {
+		return nil, nil
 	}
 	numbers := state.Bible.GetChapterNumbersForBook(state.CurrentBook)
 	idx := indexOf(numbers, state.CurrentChapter)
@@ -93,7 +105,7 @@ func chapterArrowPair(state *AppState) fyne.CanvasObject {
 	// height — measured on the iPhone 16 Pro simulator, a 28pt box cost 8pt, so
 	// the portrait header's 36 (chapter_header_mobile.go) would cost 16. At the
 	// label's own height the arrows cost the reader nothing; the tap box is the
-	// row, 38pt wide, which is landscape's compromise.
+	// row, 36pt wide, which is landscape's compromise.
 	const boxH = 22
 	prev := newIconTapButton(state, theme.NavigateBackIcon(), 20, boxH, func() {
 		if moveChapter(state, -1) {
@@ -107,5 +119,5 @@ func chapterArrowPair(state *AppState) fyne.CanvasObject {
 		}
 	})
 	next.disabled = idx < 0 || idx >= len(numbers)-1
-	return container.NewHBox(prev, next)
+	return prev, next
 }

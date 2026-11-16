@@ -1086,7 +1086,7 @@ func noteRowTrashFor(state *AppState, pal palette, note func() StoredNote) fyne.
 	// bottom padding takes the tail's depth back out, so the mark lines up with
 	// the middle of the message.
 	return container.New(layout.NewCustomPaddedLayout(0, noteTailDepth, 0, 0),
-		container.NewCenter(btn))
+		centerTouchTarget(btn))
 }
 
 // setNotesMode is the ONE place the Notes flag moves, so leaving the mode

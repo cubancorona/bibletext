@@ -40,6 +40,7 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 	// TESTING badge when a version is showing placeholder text (see versions.go).
 	// The title and the version line read as one two-line block, so they sit
 	// tight against each other rather than a padding apart.
+	titleRow = offsetHeaderText(titleRow)
 	left := container.New(layout.NewCustomPaddedVBoxLayout(0), titleRow, versionSelector(state))
 
 	// Retained hook for the former regular iPad layout. The current classifier
@@ -60,8 +61,8 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 	// quiet next to the reading text.
 	gear := widget.NewButtonWithIcon("", theme.SettingsIcon(), func() { showAISettings(state) })
 	gear.Importance = widget.LowImportance
-	controls := container.NewHBox(verseOfDayButton(state), gear)
-	right := container.NewVBox(layout.NewSpacer(), controls, layout.NewSpacer())
+	controls := container.NewHBox(centerTouchTarget(verseOfDayButton(state)), centerTouchTarget(gear))
+	right := controls
 
 	// A single centered "Go to" button opens the citation popup (showGotoPopup). It
 	// sits in the Border's center slot — shorter than the title+subtitle column, so
@@ -93,6 +94,14 @@ func buildHeader(state *AppState) fyne.CanvasObject {
 	band := container.NewStack(bg, content)
 	state.header = band
 	return band
+}
+
+// offsetHeaderText balances the visible title and translation lines within
+// their existing slots. Opposite padding preserves the header minimum and the
+// translation hit rectangle; only the text moves. Three points keeps title ink
+// above the translation target and leaves the other controls centered.
+func offsetHeaderText(content fyne.CanvasObject) *fyne.Container {
+	return container.New(layout.NewCustomPaddedLayout(3, -3, 0, 0), content)
 }
 
 // incompleteBibleBanner is the status strip shown above the book lists while the app is

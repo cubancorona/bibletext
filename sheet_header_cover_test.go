@@ -447,25 +447,48 @@ func TestASheetCoveringTheHeaderIsSizedAgainWithTheWindow(t *testing.T) {
 // sized again whenever the body changes. Mutation guarded: the landing leaving
 // the panel at the covering height the waiting state took.
 func TestTheCrossReferencesAreSizedAgainWhenTheirListLands(t *testing.T) {
-	desktopSheets(t) // the seams the panel's load runs through
-	var land func()
-	crossRefsRun = func(work func()) { land = work }
-	st, w := desktopWindow(t, fyne.NewSize(1280, 386))
-	withBeatitudes(st)
-	popup := pickerPopup(t, st, func(s *AppState) { showCrossRefs(s, "", selSpan{lo: 3, hi: 3}) })
-	defer popup.Hide()
-	if !wantClearOrCovering(t, st, w, popup) {
-		t.Fatal("control: waiting on its load, the panel should be too tall to clear the header at 1280x386")
-	}
-	if land == nil {
-		t.Fatal("control: the panel did not start its load")
-	}
-	land()
-	if findScroll(popup) == nil || treeHasText(popup, "Finding related passages…") {
-		t.Fatalf("control: the list should have landed; texts %v", treeTexts(popup))
-	}
-	if wantClearOrCovering(t, st, w, popup) {
-		t.Error("with its list, which scrolls, the panel should open below the header, as one opened listed does")
+	for _, localGospel := range []bool{false, true} {
+		name := "Treasury only"
+		if localGospel {
+			name = "local Gospel while Treasury loads"
+		}
+		t.Run(name, func(t *testing.T) {
+			desktopSheets(t) // the seams the panel's load runs through
+			var land func()
+			crossRefsRun = func(work func()) { land = work }
+			st, w := desktopWindow(t, fyne.NewSize(1280, 386))
+			span := selSpan{lo: 1, hi: 1}
+			if localGospel {
+				withBeatitudes(st)
+				span = selSpan{lo: 3, hi: 3}
+				withCrossRefIndex(t, "Matt.5.3\tLuke.6.20\t8\n")
+			} else {
+				st.Bible = xrefBible(map[string]map[int]int{"Genesis": {1: 1}, "Exodus": {1: 1}})
+				st.CurrentBook, st.CurrentChapter, st.CurrentVersion = "Genesis", 1, "web"
+				withCrossRefIndex(t, "Gen.1.1\tExod.1.1\t8\n")
+			}
+			popup := pickerPopup(t, st, func(s *AppState) { showCrossRefs(s, "", span) })
+			defer popup.Hide()
+			// A local Gospel list already scrolls, so it clears the header
+			// while loading. With no local content, the old whole-panel
+			// waiting message still needs the full short-window height.
+			if covering := wantClearOrCovering(t, st, w, popup); covering == localGospel {
+				t.Fatalf("waiting panel covers header=%v, want %v", covering, !localGospel)
+			}
+			if localGospel && (findScroll(popup) == nil || !treeHasText(popup, parallelsLabel)) {
+				t.Fatal("control: local Gospel content did not appear before Treasury completion")
+			}
+			if !treeHasText(popup, "Finding related passages…") || land == nil {
+				t.Fatal("control: the panel did not start its Treasury load")
+			}
+			land()
+			if findScroll(popup) == nil || treeHasText(popup, "Finding related passages…") || !strings.Contains(strings.Join(treeTexts(popup), "\n"), treasuryCredit) {
+				t.Fatalf("control: the Treasury list should have landed; texts %v", treeTexts(popup))
+			}
+			if wantClearOrCovering(t, st, w, popup) {
+				t.Error("with its scrollable list, the panel should clear the header")
+			}
+		})
 	}
 }
 

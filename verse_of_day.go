@@ -644,6 +644,14 @@ func goToVerseRange(state *AppState, book string, chapter, start, end int) {
 	})
 	state.IsSearching = false
 	state.CanReturnToSearchResults = false
+	// A verse arrival may be followed before any user scroll records its
+	// position. Keep the requested verse as the history fallback; a later
+	// scroll replaces it with the measured viewport. Do not arm a restore or
+	// sample a native pane that may still hold the outgoing chapter.
+	if state.Bible != nil && state.Bible.GetVerse(book, chapter, start) != nil {
+		updateCurrentVisitAnchor(state, start, 0, 0)
+		persistReadingAnchor(state, start, 0, 0)
+	}
 	// The reader asked to BE somewhere, so the view must go there — the same
 	// declaration openSearchResultRange and a tapped link already make (see
 	// AppState.forceReposition).
@@ -1310,7 +1318,7 @@ func showVerseOfDayCard(state *AppState, d dayVerse) {
 	)
 	inner := container.New(layout.NewCustomPaddedLayout(votdCardTop, votdCardTop, votdCardPad, votdCardPad), content)
 	card := surface(container.NewPadded(inner), pal.SurfaceAlt, pal.Border, fyne.Size{})
-	popup = widget.NewModalPopUp(card, cnv)
+	popup = widget.NewModalPopUp(votdShareTouchTarget(card, shareBtn), cnv)
 	// Escape on the desktop closes the card, rather than falling through to
 	// the canvas handler and clearing whatever mark is live underneath it
 	// (installShortcuts, ui_desktop.go). Guarded on Visible: rebuildWindow
