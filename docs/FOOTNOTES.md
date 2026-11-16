@@ -138,9 +138,9 @@ off switch. For this app, ranked:
 3. Margin dots — ranked last; poor discoverability for no purity gain over
    step two.
 
-The letters the cross-references panel sets in the selected text (S20,
-decided 11 November 2026, behind the `nkjvxrefs` tag) are not this marker
-and do not anticipate it. They key the edition's cross-reference notes,
+The letters the cross-references panel sets in the selected text (S20) are
+shown for WEB, WEB Catholic and BSB in every build, and for NKJV behind the
+`nkjvxrefs` tag. They are not this marker and do not anticipate it. They key the edition's cross-reference notes,
 which this section excludes; they stand in the panel's own copy of the
 selection, drawn as text objects of their own in a modal that offers no
 selection, copy, share or speech; and nothing is added to the page, to

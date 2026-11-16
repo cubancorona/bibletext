@@ -31,13 +31,20 @@ var (
 
 func initPlainZeroFaces() {
 	plainZeroOnce.Do(func() {
-		if b := patchAtkinsonPlainZero(atkinsonRegular); len(b) > 0 {
-			plainZeroRegular = fyne.NewStaticResource("AtkinsonHyperlegible-PlainZero-Regular.ttf", b)
-		}
-		if b := patchAtkinsonPlainZero(atkinsonBold); len(b) > 0 {
-			plainZeroBold = fyne.NewStaticResource("AtkinsonHyperlegible-PlainZero-Bold.ttf", b)
-		}
+		plainZeroRegular, plainZeroBold = makePlainZeroFaces(atkinsonRegular, atkinsonBold)
 	})
+}
+
+// makePlainZeroFaces keeps the two weights consistent: if either source face
+// cannot be reconstructed, both weights use the theme's normal zero.
+func makePlainZeroFaces(regular, bold []byte) (fyne.Resource, fyne.Resource) {
+	r := patchAtkinsonPlainZero(regular)
+	b := patchAtkinsonPlainZero(bold)
+	if len(r) == 0 || len(b) == 0 {
+		return nil, nil
+	}
+	return fyne.NewStaticResource("AtkinsonHyperlegible-PlainZero-Regular.ttf", r),
+		fyne.NewStaticResource("AtkinsonHyperlegible-PlainZero-Bold.ttf", b)
 }
 
 func crossRefPlainZeroRegular() fyne.Resource {

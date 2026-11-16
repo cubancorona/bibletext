@@ -70,6 +70,9 @@ func TestCrossRefHeadingsFitMinimumPanelWidth(t *testing.T) {
 			if grouped {
 				limit -= 16 // The opened well's two 8pt side insets.
 			}
+			if crossRefSingleLineMax > limit {
+				t.Errorf("%s grouped=%v: unwrapped cutoff %.1f exceeds mounted content width %.1f", sizeOpt.ID, grouped, crossRefSingleLineMax, limit)
+			}
 			var printed *crossRefPrinted
 			var single *canvas.Text
 			walkTree(top, func(o fyne.CanvasObject) {
@@ -106,5 +109,19 @@ func TestCrossRefHeadingsFitMinimumPanelWidth(t *testing.T) {
 			}
 			test.Tap(findTreeButton(top, "Close"))
 		}
+	}
+}
+
+func TestCrossRefMinimumWidthKeepsSameBookRangeWhole(t *testing.T) {
+	th := appThemeForTest(t)
+	p := newCrossRefRef("Psalm 119:105–176", 16, fyne.TextStyle{}, th.palette().Text)
+	renderer := test.WidgetRenderer(p).(*crossRefPrintedRenderer)
+	want := renderer.measure("119:105–176")
+	if want <= renderer.measure("Psalm") {
+		t.Fatal("control: verse range must be the widest indivisible word")
+	}
+	renderer.Layout(fyne.NewSize(want, 200))
+	if got := renderer.MinSize().Width; got != want {
+		t.Errorf("minimum width %.2f splits a same-book verse range that needs %.2f", got, want)
 	}
 }

@@ -736,7 +736,7 @@ def extract_bsb_heading_notes(usfm_dir, cache_path, allow_partial):
 
                             per_chapter.setdefault(ch, []).append({
                                 'BeforeVerse': before_v,
-                                'HeadingOrd': matched_ord,
+                                'HeadingCount': len(rt_at_v),
                                 'HeadingHash': fnv1a64(rt_h['Text']),
                                 'Text': clean_inner,
                                 'Refs': refs,
@@ -801,7 +801,7 @@ def emit_heading_map(lines, var_name, label, data):
         lines.append(f'\t{go_quote(key)}: {{')
         for n in data[key]:
             lines.append(
-                f'\t\t{{BeforeVerse: {n["BeforeVerse"]}, HeadingOrd: {n["HeadingOrd"]}, '
+                f'\t\t{{BeforeVerse: {n["BeforeVerse"]}, HeadingCount: {n["HeadingCount"]}, '
                 f'HeadingHash: 0x{n["HeadingHash"]:016x}, Text: {go_quote(n["Text"])}, '
                 f'Refs: {format_refs(n["Refs"])}}},'
             )

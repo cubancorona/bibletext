@@ -185,7 +185,12 @@ func TestRenderCrossRefPanel(t *testing.T) {
 				if strings.Contains(strings.ToLower(all), "compare") {
 					t.Errorf("%s: a compare word or legend is in the panel", name)
 				}
-				if want := map[bool]int{true: 1, false: 0}[f.flag]; strings.Count(all, "NKJV REFERENCES") != want || strings.Contains(all, "REFERENCES ·") {
+				wantPublisher := 0
+				selected := versesBetween(&bd, f.book, f.ch, f.lo, f.hi)
+				if f.flag && (len(publisherCrossRefsFor(&bd, f.book, f.ch, selected)) > 0 || hasSilentDisplacedCaller(&bd, f.book, f.ch, selected)) {
+					wantPublisher = 1
+				}
+				if want := wantPublisher; strings.Count(all, "NKJV REFERENCES") != want || strings.Contains(all, "REFERENCES ·") {
 					t.Errorf("%s: NKJV REFERENCES count = %d (want %d) or keyed publisher label present", name, strings.Count(all, "NKJV REFERENCES"), want)
 				}
 				t.Logf("%s: panel %.0f×%.0f, content wants %.0f wide; %d texts", name, ps.Width, ps.Height, top.Content.MinSize().Width, len(treeTexts(top)))
@@ -232,6 +237,29 @@ func TestRenderCrossRefPanel(t *testing.T) {
 					}
 				}
 				fits("as it opens")
+				if listBox != nil {
+					sourceGroups := crossRefSourceRows(listBox.Objects)
+					opened := make([]bool, len(sourceGroups))
+					size, pos := top.Content.Size(), top.Content.Position()
+					for i, g := range sourceGroups {
+						opened[i] = g.open
+						g.setOpen(true)
+					}
+					if len(sourceGroups) > 0 {
+						w.Canvas().Capture()
+						fits("all source groups open")
+						if top.Content.Size() != size || top.Content.Position() != pos {
+							t.Errorf("%s: opening source groups moved the panel", name)
+						}
+						if m := top.Content.MinSize().Width; m > inner {
+							t.Errorf("%s: expanded sources want %.0f points; panel gives %.0f", name, m, inner)
+						}
+						writeRenderPNG(t, filepath.Join(out, name+"-sources-open.png"), w.Canvas().Capture())
+					}
+					for i, g := range sourceGroups {
+						g.setOpen(opened[i])
+					}
+				}
 				// The rest of the list as it opens, a view at a time: a note
 				// that is one group, the notes below the first, the Treasury.
 				if listScroll != nil {
@@ -443,6 +471,8 @@ func labelOffset(top *widget.PopUp, label string) (scroll *container.Scroll, y f
 		case *tapCard:
 			return walk(x.content, at)
 		case *crossRefGroupRow:
+			return walk(x.box, at)
+		case *crossRefSourceGroup:
 			return walk(x.box, at)
 		}
 		return false

@@ -304,15 +304,10 @@ func TestThePassageIsTheSelectedTextWithALetterBeforeEachNotesWord(t *testing.T)
 		t.Errorf("Psalm 51:1 alone passage marks = %v", ap)
 	}
 
-	// DRAWN: a verse's number is the page's own, in the bold cut and the
-	// page's colour for one, and a note's letter is in the text's cut and
-	// the accent; both at the size and the lift of the page's superscript,
-	// measured baseline to baseline.
-	if readingMarkScale != styledNumRatio || readingMarkLift != styledNumLift {
-		t.Errorf("a mark is %v of the text and raised %v of it; the page's verse number is %v and %v", readingMarkScale, readingMarkLift, styledNumRatio, styledNumLift)
-	}
-	if passageNumeralFace() == p.regular || p.number != lightPalette.VerseNumber || p.mark != lightPalette.Accent {
-		t.Fatalf("the passage's number is not set apart from its text: the same cut %v, colours %v and %v", passageNumeralFace() == p.regular, p.number, p.mark)
+	// Both keys use the source groups' accent, with distinct upright numeric
+	// and bold-italic letter faces, and a raised baseline measured below.
+	if p.marks == nil || p.marks.number == p.marks.letter || p.number != lightPalette.Accent || p.mark != lightPalette.Accent {
+		t.Fatalf("the passage's markers lack distinct faces or matching accent")
 	}
 	p.Resize(fyne.NewSize(300, 600))
 	r := test.WidgetRenderer(p).(*readingParagraphRenderer)
@@ -334,9 +329,9 @@ func TestThePassageIsTheSelectedTextWithALetterBeforeEachNotesWord(t *testing.T)
 			}
 			kind := "neither"
 			switch {
-			case tx.FontSource == passageNumeralFace() && tx.Color == p.number:
+			case tx.FontSource == p.marks.number && tx.Color == p.number:
 				kind = "number"
-			case tx.FontSource == p.regular && tx.Color == p.mark:
+			case tx.FontSource == p.marks.letter && tx.Color == p.mark:
 				kind = "letter"
 			}
 			drawn = append(drawn, kind+" "+tx.Text)
@@ -346,8 +341,8 @@ func TestThePassageIsTheSelectedTextWithALetterBeforeEachNotesWord(t *testing.T)
 			}
 			_, base := drv.RenderedTextSize(tx.Text, tx.TextSize, fyne.TextStyle{}, tx.FontSource)
 			lift := (word.Position().Y + bodyBase) - (tx.Position().Y + base)
-			if want := p.size * readingMarkLift; tx.TextSize != p.size*readingMarkScale || lift < want-0.01 || lift > want+0.01 {
-				t.Errorf("the mark %q is %v points with its baseline %v above the words': want %v points and %v", tx.Text, tx.TextSize, lift, p.size*readingMarkScale, want)
+			if want := p.marks.lift; tx.TextSize != p.marks.size || lift < want-0.01 || lift > want+0.01 {
+				t.Errorf("the mark %q is %v points with its baseline %v above the words': want %v points and %v", tx.Text, tx.TextSize, lift, p.marks.size, want)
 			}
 		}
 	}

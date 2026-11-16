@@ -110,11 +110,23 @@ func publicXRefSkeleton(catholic bool) *BibleData {
 					atV++
 				}
 			}
-			for atV <= hn.HeadingOrd {
+			for atV < hn.HeadingCount {
 				bd.Headings[b][c] = append(bd.Headings[b][c], Heading{
 					Text: "Section heading", Style: "heading", BeforeVerse: hn.BeforeVerse,
 				})
 				atV++
+			}
+			// A rendering skeleton has invented heading text, so a group of
+			// ambiguous siblings cannot match the publisher's heading hash.
+			// Supply its note directly; attachment fidelity has separate tests.
+			if hn.HeadingCount > 1 {
+				for i := range bd.Headings[b][c] {
+					h := &bd.Headings[b][c][i]
+					if h.BeforeVerse == hn.BeforeVerse && h.Style == "heading" {
+						h.Footnotes = append(h.Footnotes, Footnote{Kind: footnoteKindCrossref, Caller: "-", Text: hn.Text, Refs: hn.Refs})
+						break
+					}
+				}
 			}
 			for _, r := range hn.Refs {
 				ensureRef(r.ID)
@@ -359,7 +371,7 @@ func TestPublicPublisherCrossRefAttachmentMarksGuardsAndIdempotency(t *testing.T
 	}
 
 	// HeadingHash takes precedence when an unnoted heading precedes the noted one,
-	// while HeadingOrd falls back cleanly when feed wording differs (1 Chronicles 16:7).
+	// while a sole-heading match falls back when feed wording differs (1 Chronicles 16:7).
 	bsbGuardBD := publicXRefSkeleton(false)
 	bsbGuardBD.Headings["Proverbs"][23] = []Heading{
 		{Text: "Saying 7", Style: "heading", BeforeVerse: 1},
@@ -373,7 +385,7 @@ func TestPublicPublisherCrossRefAttachmentMarksGuardsAndIdempotency(t *testing.T
 		t.Errorf("HeadingHash did not disambiguate reordered headings: %+v", bsbGuardBD.Headings["Proverbs"][23])
 	}
 	if len(bsbGuardBD.Headings["1 Chronicles"][16][0].Footnotes) != 1 {
-		t.Errorf("HeadingOrd fallback did not attach 1 Chronicles 16:7 note: %+v", bsbGuardBD.Headings["1 Chronicles"][16])
+		t.Errorf("sole-heading fallback did not attach 1 Chronicles 16:7 note: %+v", bsbGuardBD.Headings["1 Chronicles"][16])
 	}
 }
 
@@ -415,9 +427,9 @@ func TestPublicPublisherCrossRefCitationShapesAndPanelComposition(t *testing.T) 
 
 	// Sparse edition behaviour on WEB:
 	// - When selection HAS a publisher note, shows WEB REFERENCES + GOSPEL PARALLELS
-	//   (unbadged) + TREASURY OF SCRIPTURE KNOWLEDGE (deduped, treasuryCredit).
-	// - When selection has NO publisher note, keeps the plain unlabelled list
-	//   (badged Parallel, tskCredit, no "No WEB cross-references" empty banner).
+	//   + TREASURY OF SCRIPTURE KNOWLEDGE, preserving each source relationship.
+	// - When selection has NO publisher note, named Gospel and Treasury sources
+	//   remain, without an empty publisher section or repeated per-card pills.
 	webBD := publicXRefSkeleton(false)
 	webBD.Verses["Matthew"][5] = []Verse{
 		{BookName: "Matthew", Book: "Matthew", Chapter: 5, Verse: 42, Text: "Give to him who asks you."},
@@ -427,15 +439,18 @@ func TestPublicPublisherCrossRefCitationShapesAndPanelComposition(t *testing.T) 
 	webSt := &AppState{Bible: webBD, CurrentBook: "Matthew", CurrentChapter: 5, CurrentVersion: "web"}
 	refs := []crossRef{
 		{Book: "Luke", Chapter: 6, Verse: 27, Parallel: true},
-		{Book: "Leviticus", Chapter: 19, Verse: 18}, // duplicates WEB's own card -> dropped from Treasury!
+		{Book: "Leviticus", Chapter: 19, Verse: 18}, // same destination as WEB's note; both source relationships remain
 		{Book: "Romans", Chapter: 13, Verse: 9},
 	}
 
 	withNote := buildCrossRefList(webSt, webBD.Verses["Matthew"][5][1:2], refs, nil, lightPalette, func(crossRef) {})
-	if !withNote.Passage || !withNote.Sections.Publisher || withNote.PublisherCards != 1 || withNote.TSKRows != 1 {
+	if !withNote.Passage || !withNote.Sections.Publisher || withNote.PublisherCards != 1 || withNote.TSKRows != 2 {
 		t.Fatalf("WEB noted Matthew 5:43 list = %+v", withNote)
 	}
 	withNoteText := joinedTexts(withNote.Objects)
+	if got := cardLabelsIn(withNote.Objects); strings.Join(got, "|") != "Leviticus 19:18|Luke 6:27|Leviticus 19:18|Romans 13:9" {
+		t.Errorf("WEB noted selection lost an independent source destination: %q", got)
+	}
 	for _, want := range []string{"WEB REFERENCES", "Leviticus 19:18", "GOSPEL PARALLELS", "Luke 6:27", "TREASURY OF SCRIPTURE KNOWLEDGE", "Romans 13:9"} {
 		if !strings.Contains(withNoteText, want) {
 			t.Errorf("WEB noted Matthew 5:43 missing %q:\n%s", want, withNoteText)
@@ -453,8 +468,8 @@ func TestPublicPublisherCrossRefCitationShapesAndPanelComposition(t *testing.T) 
 	if strings.Contains(withoutNoteText, "WEB REFERENCES") || strings.Contains(withoutNoteText, "No WEB cross-references") {
 		t.Errorf("WEB unnoted verse grew an empty publisher section:\n%s", withoutNoteText)
 	}
-	if src, _ := crossRefFooterCredit(webSt, withoutNote.Sections); src != tskCredit+"\n"+parallelsCredit {
-		t.Errorf("WEB unnoted footer = %q, want tskCredit + parallelsCredit", src)
+	if src, _ := crossRefFooterCredit(webSt, withoutNote.Sections); src != treasuryCredit+"\n"+parallelsCredit {
+		t.Errorf("WEB unnoted footer = %q, want treasuryCredit + parallelsCredit", src)
 	}
 
 	// Offline error on a noted WEB verse stays scoped under TREASURY OF SCRIPTURE KNOWLEDGE.
@@ -465,7 +480,8 @@ func TestPublicPublisherCrossRefCitationShapesAndPanelComposition(t *testing.T) 
 	}
 
 	// BSB noted section heading mounts BSB REFERENCES on the verse the heading
-	// precedes, while the following verse stays in the plain unlabelled list.
+	// precedes, with the actual heading and no lettered passage quote. The
+	// following verse retains only its named Treasury section.
 	bsbBD := publicXRefSkeleton(false)
 	bsbBD.Headings["Psalms"][3] = []Heading{
 		{Text: "Deliver Me, O LORD!", Style: "heading", BeforeVerse: 1},
@@ -477,7 +493,7 @@ func TestPublicPublisherCrossRefCitationShapesAndPanelComposition(t *testing.T) 
 	applyPublisherCrossRefs("bsb", bsbBD)
 	bsbSt := &AppState{Bible: bsbBD, CurrentBook: "Psalms", CurrentChapter: 3, CurrentVersion: "bsb"}
 	bsbWith := buildCrossRefList(bsbSt, bsbBD.Verses["Psalms"][3][0:1], nil, nil, lightPalette, func(crossRef) {})
-	if !bsbWith.Sections.Publisher || !strings.Contains(joinedTexts(bsbWith.Objects), "BSB REFERENCES") {
+	if bsbWith.Passage || !bsbWith.Sections.Publisher || !strings.Contains(joinedTexts(bsbWith.Objects), "BSB REFERENCES") || !strings.Contains(joinedTexts(bsbWith.Objects), "Deliver Me, O LORD!") || !strings.Contains(joinedTexts(bsbWith.Objects), "Heading before verse 1") {
 		t.Errorf("BSB Psalms 3:1 did not mount BSB REFERENCES: %+v", bsbWith)
 	}
 	bsbWithout := buildCrossRefList(bsbSt, bsbBD.Verses["Psalms"][3][1:2], []crossRef{{Book: "Genesis", Chapter: 1, Verse: 1}}, nil, lightPalette, func(crossRef) {})
@@ -577,7 +593,8 @@ func TestThePublisherCrossRefGeneratorBuildsTablesFromInventedUSFM(t *testing.T)
 		`{"EXO.1.2", 28, 29}`,
 		`Anchor: 12, AtEnd: true, Text: "Genesis 1:1 LXX", Refs: []NoteRef{{"GEN.1.1", 0, 11}}`,
 		`Anchor: 0, AtEnd: false, Text: "Genesis 1:2"`,
-		`BeforeVerse: 1, HeadingOrd: 0`,
+		`BeforeVerse: 1, HeadingCount: 2`,
+		`BeforeVerse: 2, HeadingCount: 1`,
 		`Text: "Genesis 1:1–2; Exodus 1"`,
 		`Text: "Genesis–Exodus", Refs: nil`,
 	} {
@@ -649,7 +666,7 @@ func TestPublicPublisherHeadingReferencesRejectAmbiguousRevisions(t *testing.T) 
 		name     string
 		headings []Heading
 	}{
-		{"renamed and reordered", []Heading{
+		{"both titles reworded", []Heading{
 			{Text: "Numbered saying revised", Style: "heading", BeforeVerse: 1},
 			{Text: "Riches revised", Style: "heading", BeforeVerse: 1},
 		}},
@@ -664,7 +681,7 @@ func TestPublicPublisherHeadingReferencesRejectAmbiguousRevisions(t *testing.T) 
 			}}
 			table := map[string][]publisherHeadingNote{
 				"Proverbs 23": {{
-					BeforeVerse: 1, HeadingOrd: 0,
+					BeforeVerse: 1, HeadingCount: 1,
 					HeadingHash: redLetterTextHash("Original section"),
 					Text:        "Luke 12:13–21",
 				}},

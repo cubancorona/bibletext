@@ -250,7 +250,7 @@ below), and keeps its number here so that references to piece 3 still hold.
 | Piece | What readers will see | Status | Tests | Open decisions |
 |---|---|---|---|---|
 | 1. The NKJV refreshed at cache epoch 8, with an offline bridge | One fresh download of the NKJV (about 13 MB) on the first launch that can reach API.Bible, bringing corrected headings after a 200-verse passage boundary and the divine name in small capitals inside headings and psalm titles; a reader offline at that launch keeps the previous copy for up to 30 days instead of falling back to the WEB | Ported; both states pass; not tried on a device | `licensed_epoch_bridge_test.go` (both states), `licensed_epoch_bridge_next_test.go`, `licensed_epoch_bridge_current_test.go`, `nkjv_epoch_next_test.go`, `nkjv_epoch_current_test.go`; switch-aware checks in `version_launch_flow_test.go` and `red_letter_epoch_test.go` | N1 |
-| 3. "Same saying, another occasion" among the Gospel parallels | The cross-references panel lists, after the synopsis rows, the passages that carry the same saying on another occasion, under a label of their own; and the twenty-two Gospel verses that belonged to no synopsis set each find one | Ported; both states pass; seen only in test renders | `parallels_occasions_test.go` and `parallels_states_test.go` (both states), `parallels_next_test.go`, `parallels_current_test.go`, the kingdom woe in `crossrefs_versification_test.go`, the depth in `crossrefs_realdata_test.go` | P1 to P6 |
+| 3. "Same saying, another occasion" among the Gospel parallels | The cross-references panel lists, after the synopsis groups, the passages that carry the same saying on another occasion, grouped by the actual source relationship and labelled once per group; and the twenty-two Gospel verses that belonged to no synopsis set each find one | Ported; source-origin grouping is shared by both builds; native acceptance of the gated content remains separate | `parallels_occasions_test.go` and `parallels_states_test.go` (both states), `parallels_next_test.go`, `parallels_current_test.go`, the kingdom woe in `crossrefs_versification_test.go`, source-group tests | P1 to P5 |
 
 ### Open decisions
 
@@ -287,10 +287,12 @@ switch on.
   parallels: synopsis". The harmonies, both public domain, are credited in
   `NOTICE` and `TEXTUAL-DATA.md` §9; whether the footer names them too, and
   how the README describes the second kind, waits on P1.
-- **P6. Two hiding rules.** One rule for both kinds of row would hide
-  verse-level Treasury rows inside whole pericopes. The tree keeps two (see
-  piece 3's `crossRefHidden`); if one is wanted, `crossRefDeepestRead` is
-  measured again with the real-data walk.
+
+The former P6 hiding-policy question is resolved by the shared source-origin
+model: synopsis, other-occasion, publisher and Treasury relationships remain
+visible independently, including repeated destinations. Neither Gospel kind
+suppresses Treasury rows. Only repeated lookup hits within the same Gospel
+origin group are removed.
 
 ### 1. Every reader's NKJV refreshed at cache epoch 8, with an offline bridge
 
@@ -385,80 +387,42 @@ The data, both chosen by the switch (seam 4):
 
 Where the switch is read:
 
-- `crossRefsForSelection` (`crossrefs.go`) looks up the other-occasion rows
-  only `if nextRelease`. Without the tag there is no data to look up either.
-- `crossRef.otherOccasion()` is the one test of a row's kind, read by the
-  list (`composeCrossRefList`) and the row (`crossRefRow`). Without the tag
-  it is false, so the label and its badge are compiled out.
+- `localCrossRefParts` (`crossrefs.go`) looks up the other-occasion rows only
+  `if nextRelease`. Without the tag there is no occasions data to look up.
+- `crossRef.otherOccasion()` identifies the gated relation. Group composition
+  uses it to add `otherOccasionLabel` once to the group's origin caption;
+  ordinary synopsis groups do not receive that caption.
 
-The shared code, which does what 1.2.19 does when there are no
-other-occasion rows:
+The source-origin grouping code is shared by both builds
+(`crossref_origin_list.go`, `crossref_source_group.go`). A Gospel group keeps
+its actual event identity, episode title and source span in the displayed
+edition's numbering. A split source passage stays split. Repeated destination
+hits within that group are removed, but the same destination remains in a
+different event or source group. A one-destination group is displayed directly;
+a group with several destinations opens independently into its cards and
+retains its full citation summary when folded. Fold state follows the origin
+identity through a panel rebuild or Treasury load.
 
-- The reader of the occasions file and its lookup (`parallels.go`).
-- `addOtherOccasionRow`, which lists a passage once, at its widest, and
-  never one a row above it covers.
-- `crossRefHidden`, what the rows above the Treasury hide. A synopsis row
-  hides a Treasury row with its own label, as before; an other-occasion row
-  hides every Treasury row inside its passage. Without the tag it holds
-  labels alone.
-- `treasuryRowsFor`, which now takes a `crossRefHidden` rather than a set of
-  labels, adapted to `main`'s resolver, which returns a list of rows.
+Neither synopsis nor other-occasion groups suppress publisher or Treasury
+references. Each selected verse keeps its own vote-ranked Treasury allowance
+of 16 source rows, with no selection-wide 40-row cap; one source row that maps
+to two disjoint destination spans still consumes one place. The index retains
+32 rows per verse to allow for targets absent from an edition. Adding gated
+Gospel relationships therefore does not change which Treasury relationships
+are shown. Historical depth measurements of the earlier cross-source hiding
+path do not describe the current source-group selection path.
 
-The label is one constant, `otherOccasionLabel` (`crossref_panel.go`), drawn
-as an outlined tag where the synopsis's is filled.
-
-The tests:
-
-- `parallels_occasions_test.go` and `parallels_states_test.go` hold in both
-  states: the file reader, the de-duplication and the hiding on synthetic
-  rows, and the two synopses' difference.
-- `parallels_next_test.go` holds the reviewed behaviour:
-  - the file loads whole;
-  - no pair lies inside one synopsis set;
-  - the rows' order, label and de-duplication;
-  - the kingdom woe mapped in every translation;
-  - every passage mapped whole in every translation;
-  - the six Lukan doublets and the named pairs;
-  - the twenty-two verses where the harmony prints them;
-  - the depth walk's bounds over every Gospel selection of up to six verses
-    and every whole chapter.
-- `parallels_current_test.go` pins the shipping build: no other-occasion
-  data or rows, the twenty-two verses in no set, and a row marked as another
-  occasion still drawn as the synopsis's.
-- The kingdom woe test (`crossrefs_versification_test.go`) reads both kinds
-  of row, so it holds in both states. In the next release Luke 11:52 is the
-  kingdom woe's other occasion and hides the Treasury's copy of it, so the
-  test gives the kingdom woe a second Treasury row (Isaiah 22:22) that
-  nothing hides.
-
-Measured over the real texts, in all four editions, every single-verse panel
-is identical to 1.2.19's without the tag. With it, every panel lists exactly
-the reviewed branch's 3,174 other-occasion rows, and only 2,042 panels
-change. Where a panel differs from the branch beyond that, the cause is a
-cross-reference fix made on `main` since the branch was cut, or the Greek
-Esther:
-
-- The kingdom woe's Treasury row from Luke 11:52 now opens the kingdom woe,
-  so the other-occasion row hides it.
-- In the BSB, which prints the kingdom woe at Matthew 23:13, Matthew 10:7's
-  and Luke 11:42's Treasury rows to it now open it there. The row takes one
-  of the verse's sixteen places (`maxCrossRefsPerVerse`), so the last row
-  the branch listed, Acts 4:2 and Ecclesiastes 7:18, drops off. The shipping
-  build lists the same row.
-- Matthew 18:35's row to Mark 11:25 now opens Mark 11:26, which no
-  other-occasion row covers.
-- A range now ends at the last verse a translation has.
-
-The deepest Treasury row a panel reads (`crossRefDeepestRead`, re-measured
-with all three pieces on) is the twenty-first, Matthew 10:17 in every
-edition. Five of its best rows lie inside passages its chapter lists as the
-same saying on another occasion: two are Matthew 10:17's own, three its
-neighbours'. That is inside the 32 the index keeps. The walk measures the
-depth between what every selection holding a verse hides and the most any
-selection hides (`crossRefSelectionsHide`). The narrower bound now leaves out
-an other-occasion row that a synopsis row of the chapter covers. A selection
-holding both verses lists the synopsis row instead, which hides by label
-alone; the only verse this affects is Luke 4:24.
+The gated data contracts remain in `parallels_occasions_test.go`,
+`parallels_states_test.go`, `parallels_next_test.go` and
+`parallels_current_test.go`: valid spans, the two synopses' exact differences,
+the named same-saying pairs, versification and absence of occasions data from
+ordinary builds. Source-group tests additionally cover independent origins,
+retained duplicate destinations, lazy cards and fold restoration. The kingdom
+woe test in `crossrefs_versification_test.go` must retain the correctly mapped
+Treasury relationship in both builds, even when a gated Gospel group also
+contains it. Dataset row-accounting and width checks remain required; old
+whole-panel counts from the flattened list are not acceptance evidence for
+grouped results.
 
 Trying it: a build with the switch on writes nothing new. The verse a
 reader selects and the rows shown are not stored. It has been seen only in
@@ -476,7 +440,7 @@ its sentence about `gospel_parallels_next.json` moves to
 `gospel_parallels.json`, which that file becomes, and `TEXTUAL-DATA.md` §9
 loses its note that it is the next major release's (step 7, below).
 
-Open decisions: P1 to P6.
+Open decisions: P1 to P5.
 
 ## Work graduated for 1.2.20
 
@@ -581,12 +545,14 @@ What was made unconditional, as *Release day* below does for every piece:
   next book. The web reader's two pinned fixture trees
   (`nkjv_off_site.sha256`, `nkjv_off_site_next.sha256`) are the same again,
   and `nextReleaseSitePages` is empty.
-- **The deepest cross-reference row a panel reads** (`crossRefDeepestRead`):
+- **The deepest cross-reference row measured before source-origin grouping** (`crossRefDeepestRead`):
   without the tag the eighteenth, first at the WEB's Matthew 10:1, where it was
   the twentieth, WEB Catholic's Genesis 41:42, whose rows into the Greek Esther
   it could not show; with the tag the twenty-first, as before. Measured on 15
   October 2026 over the WEB, the BSB and the WEB Catholic, and on 16 October
-  2026 with the NKJV, fetched through the app's own path, as well.
+  2026 with the NKJV, fetched through the app's own path, as well. Those
+  measurements describe the earlier cross-source suppression path, not the
+  current independent-origin groups.
 
 The site changes with it. Built offline from the public-domain feeds with the
 NKJV's text off, the generator writes the forty Esther chapter pages, ten in

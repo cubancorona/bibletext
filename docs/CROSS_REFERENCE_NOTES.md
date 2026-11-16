@@ -1,4 +1,4 @@
-# The NKJV's cross-reference notes: what a note carries, and where it is shown
+# Publisher cross-reference notes: what a note carries, and where it is shown
 
 A ledger for the cross-references panel's publisher run
 (docs/SCRIPTURE_WORKLIST.md, S20). Decided 11 November 2026: nothing the
@@ -15,14 +15,14 @@ build compiles while the licensing enquiry waits on a reply (docs/BACKLOG.md,
 model ships in every build for the public-domain and CC0 editions' own
 recovered cross-references (`publisher_xrefs_public.go`, below).
 
-The figures are of the canon fetched on 6 November 2026. Those marked
+The NKJV figures are of the canon fetched on 6 November 2026. Those marked
 "census" are pinned by `canonPieceCensus` in `publisher_xrefs_census_test.go`
 and asserted against a live fetch by `TestLiveAPIBibleFullCanon`; the census
 measures a canon through the same functions the panel draws from, so it
 counts what is shown, not what was meant. A figure marked "counted" was
 counted once on 11 November 2026 and is not held by a test.
 
-## What the feed sends, and what the decoder keeps
+## What the NKJV feed sends, and what the decoder keeps
 
 Every note in the feed is a cross-reference note (style `x`), and its caller
 is `-`, the form that prints no caller. Inside a note the feed marks the
@@ -81,13 +81,17 @@ a note is; the census's other figures are of what is shown.
 
 ## What the panel adds
 
-Nothing in words. Three marks, none of which is in `Verse.Text` or leaves the
-panel (docs/ADDITIONS_AND_DROPS.md):
+Publisher note wording stays unchanged. The panel adds navigational labels
+and marks, none of which is in `Verse.Text` or leaves the panel
+(docs/ADDITIONS_AND_DROPS.md):
 
-- the letters, for the reason above;
+- the publisher-note letters, for the reason above;
 - a verse's number in the passage, where the passage holds more than one
   verse or a title before the verse, so that a letter is read against the
   right verse;
+- an upright origin-verse number beside a Treasury group, or an actual
+  heading or episode title with its source location beside that group's
+  references;
 - the disclosure icon on a row that opens.
 
 And devices of layout that are no mark in the text: a note's ground, the
@@ -95,18 +99,18 @@ margin its letter stands in, and the rule that hangs from the letter beside
 the note's rows. Together they show what the edition shows by listing a
 letter's references together.
 
-The Treasury's rows under the publisher's run leave out a passage the
-publisher's cards already show as the panel opens: a note's direct
-citations (`treasuryMinusPublisher`, `TestTitleAndWholeChapterCardsKeepSpecificTreasuryRows`).
-A citation of a Psalm's title (`:title`, `TitleRef`) never removes a Treasury
-verse row, and a whole-chapter card (`WholeChapters`) removes only an exact
-matching whole-chapter Treasury span while keeping specific verse and
-sub-range Treasury rows inside that chapter. Every parenthesised group starts
-closed — inside a note or as the whole of its note — and its citations are not
-counted.
+Source relationships are preserved independently. A destination present in a
+publisher note, a Gospel episode and a Treasury group remains in all three;
+a destination contributed by two selected verses remains in each verse's
+Treasury group. Neither an exact match nor an overlapping passage in another
+source suppresses it. Duplicate Treasury or Gospel lookup hits inside the
+same origin group are removed by destination identity; publisher notes retain
+their printed pieces.
+Publisher parenthesised groups retain their own rule: closed initially,
+whether inside a note or forming the whole note.
 
 While the Treasury zip downloads on first use (or retries after an offline
-failure), any local `NKJV REFERENCES` and embedded `GOSPEL PARALLELS` rows
+failure), the loaded publisher references and embedded `GOSPEL PARALLELS` rows
 show immediately from the loaded `BibleData`, with the loading indicator or
 inline `Try again` scoped under `TREASURY OF SCRIPTURE KNOWLEDGE` and open
 folds and scroll position preserved when the Treasury rows land
@@ -116,12 +120,23 @@ A citation of the reader's own passage is shown as its reference in full,
 so where the edition prints it without its book the book is supplied on that
 row; the note's printed line above it is unchanged.
 
-Letters and numbers are set as the page sets a superscript
-(docs/READING_TYPOGRAPHY.md, "Verse numbers"). References in the panel's
+Letters and verse numbers inside the selected passage use the matching
+groups' accent and bold UI faces: italic letters and upright plain-zero
+numbers. They are 14 points at Normal, at the printed-citation size, with a
+modest raised baseline; Scripture remains 17 points before optical correction.
+An adjacent verse number and reference letter have a quarter-em gap, measured
+at the marker size, without added punctuation or a break between them.
+This emphasis is confined to the cross-reference excerpt. A Treasury
+group's margin key is instead an upright source-verse numeral at the card
+reference size; its measured margin widens for three digits without shrinking
+them or changing publisher-letter geometry. References in the panel's
 header, cards and own-passage lines and printed shorthand lines on note and
 group rows draw from plain-zero cuts derived in memory from the embedded
 Atkinson Hyperlegible faces (`crossref_zero_font.go`,
-`TestCrossRefPlainZeroFacesAndPanelReferences`). The list scales with the
+`TestCrossRefPlainZeroFacesAndPanelReferences`). Only the reviewed zero-glyph
+fingerprints are transformed. Both derived weights are published together; if
+either font revision is unrecognised, both use the theme's ordinary faces
+(`TestPlainZeroRejectsChangedGlyphGeometry`, `TestPlainZeroFacesArePublishedTogether`). The list scales with the
 reader's `Normal`, `Large` and `Extra large` text size (`crossref_sizes.go`,
 `TestCrossRefPanelScalesWithReaderTextSize`,
 `TestTheCanonFitsTheNarrowestPhoneWithEveryGroupOpen`), scaling the passage
@@ -148,30 +163,50 @@ A report to the provider is drafted for the owner to review and send.
 
 ## The other cross-reference sets alongside it
 
-- `GOSPEL PARALLELS` stays unfiltered against `NKJV REFERENCES`: synopsis rows
-  carry pericope titles and tell the reader which Gospels record the same
-  event, so dropping one Gospel because a publisher note cited a verse in it
-  would misstate the synopsis. `parseGospelRef` strictly rejects empty,
+- `GOSPEL PARALLELS` groups destinations by the actual synopsis event and
+  source passage. Each group names its episode once and shows the source
+  span in the displayed edition's numbering; discontinuous spans stay
+  separate rather than becoming one invented continuous range. Different
+  events retain separate groups even when their titles or destinations match.
+  A single destination stands directly under the group heading; several
+  destinations form an independently expandable group, initially open. The
+  same source-group model handles the other-occasion relationships only in
+  `next` builds, with their relation label once per group. All remain
+  unfiltered against publisher and Treasury references. `parseGospelRef`
+  strictly rejects empty,
   malformed, non-positive or inverted spans;
   `TestEveryGospelParallelSpanNamesRealVerses` pins all 473 shipping spans
   (481 with `-tags next`) and all 102 other-occasion groups to valid verses;
   and `TestGospelParallelsPanelCensusAcrossEditions` holds all 15,103
   single-verse Gospel panels across WEB, WEB Catholic, BSB and NKJV to the
   embedded synopsis row for row.
-- `treasuryRowsFor` keeps its `maxCrossRefsPerVerse = 16` vote-ranked cap
-  before `composeCrossRefList` (`maxCrossRefsKept = 32` across all builds)
-  rather than promoting deeper rows when publisher cards carry upper ones, and
+- `treasuryRowsFor` keeps its `maxCrossRefsPerVerse = 16` vote-ranked cap for
+  each contributing verse (`maxCrossRefsKept = 32` in the index across all
+  builds). A source row resolved into two disjoint spans consumes one place
+  and displays both. There is no selection-wide 40-row cap: later verses'
+  groups cannot disappear because earlier verses filled it. The selected
+  verses appear in Scripture order, with vote order retained inside each
+  group. A single-verse selection stays flat and open. A multi-verse
+  selection uses an upright verse key for every contributing group; several
+  such groups begin closed, while a sole contributing group begins open.
+  The group header retains its complete abbreviated citation summary in
+  either state. Cards are created only on the first opening and retained
+  through later closes. Other sources never consume a verse's allowance, and
   `TestEveryTreasuryDatasetRowIsAccountedFor` (`BIBLETEXT_XREF_REALDATA=1`)
   accounts for all 344,799 dataset rows with zero silent drops.
-  `canonBounds`, `covers` and `treasuryMinusPublisher` compare cross-book
-  ranges in canonical book order so fused spans such as
-  `"2 Chronicles 36:22–Ezra 1:3"` yield to publisher cards in either book
-  (Ezra 4:3, Ezra 6:3, Daniel 6:28), and `newCrossRefRef` turns oversized
+  Cross-book destination spans retain both book names, and `newCrossRefRef` turns oversized
   cross-book card headings cleanly after their en dash
   (`"Jeremiah 52:1–"` / `"Lamentations 1:5"` at Extra large on Ezekiel 36:3, and
   `"1 Thessalonians 5:28–"` / `"2 Thessalonians 1:2"` among Romans 1:7's kept
-  index rows) so every card fits the 283pt narrowest phone
-  (`TestEveryRealCrossReferenceCardFitsTheNarrowestPhone`).
+  index rows). The dataset width test retains its 283pt list-width case
+  (`TestEveryRealCrossReferenceCardFitsTheNarrowestPhone`); the minimum supported
+  canvas is 320pt, with a 280pt popup and a 244pt mounted list. At Extra large,
+  a direct note gives its heading 206pt and an opened group gives it 190pt.
+  The conservative 160pt single-line cutoff keeps longer headings on the
+  width-aware renderer. `TestCrossRefHeadingsFitMinimumPanelWidth` mounts the
+  minimum popup in all three text sizes and checks direct and grouped headings;
+  a same-book verse range stays together when the reference wraps, including
+  its minimum-width calculation (`TestCrossRefMinimumWidthKeepsSameBookRangeWhole`).
 - The public-domain and CC0 editions' own cross-references — stripped by
   `bible.helloao.org`'s JSON export — are recovered offline from their
   published USFM (`scripts/gen-publisher-xrefs.py`,
@@ -184,14 +219,64 @@ A report to the provider is drafted for the owner to review and send.
   Hebrews 11:30's words-only `"Joshua–Malachi"`, whose leaked duplicate
   `"(Joshua–Malachi)"` feed heading is stripped on attachment). Because these
   three sets are sparse (`BibleVersion.PublisherApparatus == false`), unnoted
-  selections stay in the plain unlabelled list rather than showing an empty
-  publisher banner on 96–99% of verses
+  selections have no empty publisher banner. The Gospel and Treasury sections
+  still name their sources when they have references
   (`TestShippedPublicPublisherCrossRefTablesAreCompleteAndSound`,
   `TestEveryPublicPublisherCrossRefNoteFitsTheNarrowestPhone`). Whether to
   replace OpenBible's vote-ranked TSK with CrossWire's public-domain head-word
   TSK remains an open product question (`docs/SOURCE_FIELDS.md`).
 
+WEB and WEB Catholic retain their genuine source insertion points and the
+lettered publisher-note presentation. The letters are panel navigation keys,
+not characters in the main reading page. BSB's recovered apparatus belongs to
+section headings: its groups show the actual heading and `Heading before verse
+N`, using the existing exact `BeforeVerse` inclusion rule. Heading-only BSB
+results do not repeat the selected passage merely to attach artificial letters.
+A one-piece heading note is displayed directly; a multi-piece note opens under
+its complete printed summary, initially open.
+
+`crossref_origin_list.go` composes these source groups and
+`crossref_source_group.go` supplies their shared compact disclosure row.
+Independent fold state is keyed by origin identity, so a Treasury download,
+retry or panel rebuild can restore each group's choice without confusing two
+groups that cite the same passage. A numeric key stays visible beside its
+opened group's stem while that group scrolls past the viewport's top. These
+changes do not alter translation footnotes: the optional chapter-bottom
+wording-and-manuscript notes remain separate from cross-reference apparatus.
+
+Recovered notes carry `Footnote.PublisherTable`, persisted in the cache as
+`publisher_table`. Before applying the current tables, attachment removes only
+cross-reference notes carrying that marker. A changed or deleted table entry
+therefore replaces the old recovered note while genuine feed notes remain in
+order. Unmarked notes are treated as feed-owned: an experimental cache written
+before the marker must be refreshed rather than having its provenance guessed
+from matching citation text.
+
+BSB heading attachment first requires a unique heading-text hash at the same
+verse. If the wording has changed, it falls back only when both the saved
+`HeadingCount` and the current candidate count are one. Multiple candidates
+remain ambiguous; their old order is not treated as proof of identity. The
+count is taken after removing a leaked reference heading. Attachment updates
+the stored heading slice directly, so an unrelated run-in heading does not
+turn the operation into a write to a filtered copy.
+
 ## Checking it again
+
+`crossref_origin_list_test.go` covers per-origin Treasury groups, the flat
+single-verse case, repeated destinations across sources, BSB heading labels,
+WEB-family letters and source credits during Treasury loading and failure.
+`crossref_source_group_test.go` covers independent disclosure, lazy creation,
+retained children, complete wrapping, three-digit numeric keys at every text
+size and sticky-key bounds.
+
+`TestPublisherTableVerseCacheRefresh` and `TestPublisherTableHeadingCacheRefresh`
+exercise table updates and deletions across a cache round trip while preserving
+feed notes; the heading case also retains notes beside a run-in heading.
+`TestPublisherHeadingFallbackRequiresOriginalSingleton` holds the original and
+current sibling counts separately. With `BIBLETEXT_XREF_REALDATA=1`,
+`TestPublicPublisherBSBCanonAllAttachments` reapplies the tables to an in-memory
+copy of the cached BSB canon and requires all 1,325 notes to reach their uniquely
+matched headings; it does not rewrite the cache file.
 
 `TestLiveAPIBibleFullCanon`, with `BIBLETEXT_FULL_CANON_OUT` set, fetches the
 canon, asserts the census and writes the decoded canon, which is licensed

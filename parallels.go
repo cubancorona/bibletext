@@ -55,8 +55,10 @@ func (s gSpan) contains(ch, v int) bool {
 
 // gPericope is one synopsis row: a titled event with each Gospel's passage spans.
 type gPericope struct {
+	id    int
 	title string
 	spans map[string][]gSpan // canonical book name -> spans (absent if that Gospel has none)
+	refs  map[string]string  // source notation, including supplied verse-part suffixes
 }
 
 var (
@@ -64,8 +66,9 @@ var (
 	gospelPericopes []gPericope
 )
 
-// rawPericope mirrors the embedded JSON (id/section are ignored).
+// rawPericope mirrors the embedded JSON; section is not needed by the panel.
 type rawPericope struct {
+	ID    int    `json:"id"`
 	Title string `json:"title"`
 	Refs  struct {
 		Matthew *string `json:"matthew"`
@@ -82,13 +85,14 @@ func loadGospelParallels() {
 	}
 	out := make([]gPericope, 0, len(raw))
 	for _, r := range raw {
-		p := gPericope{title: strings.TrimSpace(r.Title), spans: map[string][]gSpan{}}
+		p := gPericope{id: r.ID, title: strings.TrimSpace(r.Title), spans: map[string][]gSpan{}, refs: map[string]string{}}
 		add := func(book string, ref *string) {
 			if ref == nil {
 				return
 			}
 			if spans := parseGospelRef(*ref); len(spans) > 0 {
 				p.spans[book] = spans
+				p.refs[book] = strings.TrimSpace(*ref)
 			}
 		}
 		add("Matthew", r.Refs.Matthew)
@@ -190,6 +194,14 @@ func parseVerseNum(s string) (int, bool) {
 // Gospel verses with no recorded parallel. Book names are canonical; the caller
 // resolves them against the loaded translation (as with TSK cross-references).
 func gospelParallelsForVerse(book string, ch, v int) []crossRef {
+	return gospelParallelsForVerseIn(book, ch, v, versificationReference)
+}
+
+// gospelParallelsForVerseIn keeps destination coordinates in the reference
+// numbering for the existing resolver, while naming each source passage in
+// the displayed edition. Event identity, rather than title or destination,
+// keeps unrelated events separate when a selection crosses their boundaries.
+func gospelParallelsForVerseIn(book string, ch, v int, versionID string) []crossRef {
 	gospelOnce.Do(loadGospelParallels)
 	if len(gospelPericopes) == 0 || !isGospelBook(book) {
 		return nil
@@ -200,12 +212,20 @@ func gospelParallelsForVerse(book string, ch, v int) []crossRef {
 		if !spansContain(p.spans[book], ch, v) {
 			continue
 		}
+		id := strconv.Itoa(p.id)
+		if p.id == 0 {
+			id = "index-" + strconv.Itoa(i)
+		}
+		group := "synopsis:" + id + ":" + book + ":" + gospelSourceIdentity(p.spans[book], p.refs[book])
+		label := gospelSourceLabel(book, p.spans[book], p.refs[book], versionID)
 		for _, g := range gospelColumns {
 			if g.book == book {
 				continue
 			}
 			for _, s := range p.spans[g.book] {
-				out = append(out, spanToCrossRef(g.book, s, p.title))
+				c := spanToCrossRef(g.book, s, p.title)
+				c.SourceGroup, c.SourceLabel = group, label
+				out = append(out, c)
 			}
 		}
 	}
@@ -238,6 +258,58 @@ func spanToCrossRef(book string, s gSpan, title string) crossRef {
 	return c
 }
 
+// gospelSourceIdentity preserves disjoint spans and verse-part notation in a
+// stable group key. The fallback also supports synthetic, parsed-only data.
+func gospelSourceIdentity(spans []gSpan, raw string) string {
+	if raw = strings.TrimSpace(raw); raw != "" {
+		return raw
+	}
+	parts := make([]string, 0, len(spans))
+	for _, s := range spans {
+		parts = append(parts, strings.TrimSpace(spanToCrossRef("", s, "").label()))
+	}
+	return strings.Join(parts, ",")
+}
+
+// gospelSourceLabel maps every source span independently. Original a/b
+// suffixes survive only when its numbering is unchanged; they describe the
+// synopsis's verse parts, not a word position in the displayed translation.
+func gospelSourceLabel(book string, spans []gSpan, raw, versionID string) string {
+	var labels []string
+	identity := true
+	for _, s := range spans {
+		source := spanToCrossRef(book, s, "")
+		mapped := crossRefTargetIn(versionID, source)
+		if len(mapped) != 1 || mapped[0].label() != source.label() {
+			identity = false
+		}
+		for _, m := range versificationDeltas[versionID].moved {
+			if m.Book == book && s.contains(m.Chapter, m.Verse) {
+				identity = false
+			}
+		}
+		for _, a := range versificationDeltas[versionID].absent {
+			if a.Book == book && s.contains(a.Chapter, a.Verse) {
+				identity = false
+			}
+		}
+		for _, c := range mapped {
+			labels = append(labels, strings.TrimPrefix(c.label(), book+" "))
+		}
+	}
+	if identity && strings.TrimSpace(raw) != "" {
+		parts := strings.Split(strings.ReplaceAll(raw, "-", "–"), ",")
+		for i := range parts {
+			parts[i] = strings.TrimSpace(parts[i])
+		}
+		return book + " " + strings.Join(parts, ", ")
+	}
+	if len(labels) == 0 {
+		return ""
+	}
+	return book + " " + strings.Join(labels, ", ")
+}
+
 // gPassage is one passage of one Gospel.
 type gPassage struct {
 	book  string
@@ -251,8 +323,10 @@ type gPassage struct {
 // the parable of the sower in both, already a synopsis parallel — and a row
 // under the other-occasion label must not join those.
 type gOccasionGroup struct {
+	id       string
 	title    string
 	passages []gPassage
+	refs     []string // raw source notation, parallel to passages
 	pairs    [][2]int // indexes into passages
 }
 
@@ -261,8 +335,8 @@ var (
 	occasionGroups []gOccasionGroup
 )
 
-// rawOccasions mirrors gospel_occasions.json (id, source and about are for
-// the reader of the file; the panel reads the rest).
+// rawOccasions mirrors gospel_occasions.json; source and about are for the
+// reader of the file, while id keeps separate relations distinct in the panel.
 type rawOccasions struct {
 	Groups []struct {
 		ID       string      `json:"id"`
@@ -287,7 +361,7 @@ func parseGospelOccasions(data []byte) []gOccasionGroup {
 	}
 	var out []gOccasionGroup
 	for _, rg := range raw.Groups {
-		g := gOccasionGroup{title: strings.TrimSpace(rg.Title)}
+		g := gOccasionGroup{id: rg.ID, title: strings.TrimSpace(rg.Title)}
 		index := map[string]int{}
 		for _, ref := range rg.Passages {
 			p, ok := parseGospelPassage(ref)
@@ -296,6 +370,8 @@ func parseGospelOccasions(data []byte) []gOccasionGroup {
 			}
 			index[ref] = len(g.passages)
 			g.passages = append(g.passages, p)
+			rawRef := strings.TrimSpace(ref)
+			g.refs = append(g.refs, rawRef[strings.LastIndexByte(rawRef, ' ')+1:])
 		}
 		for _, pr := range rg.Pairs {
 			a, okA := index[pr[0]]
@@ -339,6 +415,13 @@ func parseGospelPassage(s string) (gPassage, bool) {
 // in file order. Numbered in the reference (WEB); the caller maps them. None
 // in the shipping build, which has no such data.
 func gospelOccasionsForVerse(book string, ch, v int) []crossRef {
+	return gospelOccasionsForVerseIn(book, ch, v, versificationReference)
+}
+
+// gospelOccasionsForVerseIn retains each explicit source passage and its
+// paired destinations. Two relations may point at overlapping passages
+// without becoming one relation or inheriting each other's source ranges.
+func gospelOccasionsForVerseIn(book string, ch, v int, versionID string) []crossRef {
 	occasionOnce.Do(loadGospelOccasions)
 	if len(occasionGroups) == 0 || !isGospelBook(book) {
 		return nil
@@ -346,31 +429,48 @@ func gospelOccasionsForVerse(book string, ch, v int) []crossRef {
 	var out []crossRef
 	for i := range occasionGroups {
 		g := &occasionGroups[i]
-		var partners []int
-		taken := map[int]bool{}
-		for _, pr := range g.pairs {
-			for side := 0; side < 2; side++ {
-				here, there := g.passages[pr[side]], g.passages[pr[1-side]]
-				if here.book != book || !spansContain(here.spans, ch, v) {
-					continue
-				}
-				if there.book == book && spansContain(there.spans, ch, v) {
-					continue
-				}
-				if !taken[pr[1-side]] {
-					taken[pr[1-side]] = true
-					partners = append(partners, pr[1-side])
+		for sourceIndex, here := range g.passages {
+			if here.book != book || !spansContain(here.spans, ch, v) {
+				continue
+			}
+			var partners []int
+			taken := map[int]bool{}
+			for _, pr := range g.pairs {
+				for side := 0; side < 2; side++ {
+					if pr[side] != sourceIndex {
+						continue
+					}
+					targetIndex := pr[1-side]
+					there := g.passages[targetIndex]
+					if there.book == book && spansContain(there.spans, ch, v) {
+						continue
+					}
+					if !taken[targetIndex] {
+						taken[targetIndex] = true
+						partners = append(partners, targetIndex)
+					}
 				}
 			}
-		}
-		sort.SliceStable(partners, func(a, b int) bool {
-			return passageBefore(g.passages[partners[a]], g.passages[partners[b]])
-		})
-		for _, p := range partners {
-			for _, s := range g.passages[p].spans {
-				c := spanToCrossRef(g.passages[p].book, s, g.title)
-				c.OtherOccasion = true
-				out = append(out, c)
+			sort.SliceStable(partners, func(a, b int) bool {
+				return passageBefore(g.passages[partners[a]], g.passages[partners[b]])
+			})
+			raw := ""
+			if sourceIndex < len(g.refs) {
+				raw = g.refs[sourceIndex]
+			}
+			id := g.id
+			if id == "" {
+				id = "index-" + strconv.Itoa(i)
+			}
+			group := "occasion:" + id + ":" + book + ":" + gospelSourceIdentity(here.spans, raw)
+			label := gospelSourceLabel(book, here.spans, raw, versionID)
+			for _, p := range partners {
+				for _, s := range g.passages[p].spans {
+					c := spanToCrossRef(g.passages[p].book, s, g.title)
+					c.OtherOccasion = true
+					c.SourceGroup, c.SourceLabel = group, label
+					out = append(out, c)
+				}
 			}
 		}
 	}

@@ -344,13 +344,15 @@ func TestTheSongOfTheThreeIsNeverQuotedAsScripture(t *testing.T) {
 	}
 }
 
-// Every read of a chapter's headings outside the tests goes through
+// Every display read of a chapter's headings outside the tests goes through
 // headingsFor, so what a surface draws and what the share code compares a
 // selection with are the same headings. A read of the stored map anywhere
 // else sees the feed's fused Daniel 3 string, 510 characters, where the page
 // draws a 35-character heading, and a selection of that heading would be
-// matched against words the page does not show. The decoders' writes to the
-// map are not reads.
+// matched against words the page does not show. Decoders write the raw map;
+// publisher-reference enrichment must also update that stored data, because
+// headingsFor can return a normalized copy. Neither path supplies display
+// headings directly.
 func TestEveryReadOfAChaptersHeadingsGoesThroughHeadingsFor(t *testing.T) {
 	files, err := filepath.Glob("*.go")
 	if err != nil {
@@ -375,7 +377,11 @@ func TestEveryReadOfAChaptersHeadingsGoesThroughHeadingsFor(t *testing.T) {
 		scanned++
 		for _, d := range f.Decls {
 			fd, ok := d.(*ast.FuncDecl)
-			if !ok || fd.Body == nil || (name == "chapter_blocks.go" && fd.Recv == nil && fd.Name.Name == "headingsFor") {
+			if !ok || fd.Body == nil {
+				continue
+			}
+			if fd.Recv == nil && ((name == "chapter_blocks.go" && fd.Name.Name == "headingsFor") ||
+				(name == "publisher_xrefs_public.go" && fd.Name.Name == "applyPublisherHeadingCrossRefs")) {
 				continue
 			}
 			written := map[ast.Expr]bool{}

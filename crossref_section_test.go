@@ -733,9 +733,8 @@ func TestAGroupsFirstOpeningLeavesTheListAsItWants(t *testing.T) {
 	}
 }
 
-// WHAT THE TREASURY REPEATS. It loses the passages a note shows as the
-// panel opens — a direct citation's — and keeps what any closed group cites,
-// whether inside a note or the whole of its note.
+// THE TREASURY KEEPS EACH SOURCE RELATIONSHIP. Direct citations and closed
+// publisher groups do not remove the Treasury's own references.
 func TestTheTreasuryKeepsWhatAClosedGroupCites(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -743,13 +742,13 @@ func TestTheTreasuryKeepsWhatAClosedGroupCites(t *testing.T) {
 	withPublisherCrossRefs(t, "nkjv", true)
 	st, sel := groupListState(t)
 	refs := []crossRef{
-		{Book: "Romans", Chapter: 5, Verse: 8, Votes: 9}, // the first note's direct citation: goes
+		{Book: "Romans", Chapter: 5, Verse: 8, Votes: 9}, // the first note's direct citation: stays
 		{Book: "1 John", Chapter: 4, Verse: 9, Votes: 5}, // inside the first note's closed group: stays
 		{Book: "Isaiah", Chapter: 9, Verse: 6, Votes: 3}, // inside the second note's closed lone group: stays
 	}
 	lst := buildCrossRefList(st, sel, refs, nil, lightPalette, func(crossRef) {})
-	if got := cardLabelsIn(lst.Objects); lst.TSKRows != 2 || joined(got) != "Romans 5:8|Ephesians 2:4|2 Thessalonians 2:16|1 John 4:9|Isaiah 9:6" {
-		t.Errorf("%d Treasury rows, cards %q; want the Treasury's 1 John 4:9 and Isaiah 9:6 after the first note's three cards", lst.TSKRows, got)
+	if got := cardLabelsIn(lst.Objects); lst.TSKRows != 3 || joined(got) != "Romans 5:8|Ephesians 2:4|2 Thessalonians 2:16|Romans 5:8|1 John 4:9|Isaiah 9:6" {
+		t.Errorf("%d Treasury rows, cards %q; want all three Treasury destinations after the first note's three cards", lst.TSKRows, got)
 	}
 }
 

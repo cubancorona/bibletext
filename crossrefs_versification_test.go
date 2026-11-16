@@ -315,7 +315,12 @@ func TestTheDatasetsRowsLandOnTheSamePassageInEveryTranslation(t *testing.T) {
 		st := &AppState{Bible: bd, CurrentBook: tc.book, CurrentChapter: tc.ch, CurrentVersion: tc.vid}
 		var got []string
 		for _, c := range crossRefsForSelection(st, "", selSpan{lo: tc.v, hi: tc.v}) {
-			if !c.Parallel || c.otherOccasion() {
+			// This checks the Treasury dataset independently of other sources
+			// that may contribute the same destination in their own group.
+			if !c.Parallel {
+				if c.SourceVerse != tc.v {
+					t.Errorf("Treasury origin = %d, want displayed verse %d", c.SourceVerse, tc.v)
+				}
 				got = append(got, c.label())
 			}
 		}

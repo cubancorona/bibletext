@@ -249,14 +249,19 @@ func TestAPartlyCoveredSelectionIsListedUnderTheNote(t *testing.T) {
 	span := selSpan{lo: 16, hi: 19}
 	refs := crossRefsForSelection(st, "", span)
 	lst := buildCrossRefList(st, selectionVerses(st, "", span), refs, nil, st.pal(), func(crossRef) {})
-	if lst.TSKRows != 1 || len(lst.Objects) != 2 {
-		t.Fatalf("want the note and one row, got %d rows in %d objects", lst.TSKRows, len(lst.Objects))
+	if lst.TSKRows != 1 || len(lst.Objects) != 3 || joined(sectionLabelsIn(lst.Objects)) != treasuryLabel {
+		t.Fatalf("want the coverage note, Treasury label and one origin group; got %d rows in %d objects", lst.TSKRows, len(lst.Objects))
 	}
 	if got := treeTexts(lst.Objects[0]); len(got) != 1 || got[0] != note {
 		t.Errorf("the list does not open with the note: %q", got)
 	}
-	if len(refs) != 1 || refs[0].label() != "Genesis 1:1" {
+	if len(refs) != 1 || refs[0].label() != "Genesis 1:1" || refs[0].SourceVerse != 16 {
 		t.Errorf("the covered verse's row is not the one listed: %v", refs)
+	}
+
+	groups := crossRefSourceRows(lst.Objects)
+	if len(groups) != 1 || groups[0].id != "treasury:16" || !groups[0].open || joined(cardLabelsIn(groups[0].body.Objects)) != "Genesis 1:1" {
+		t.Error("the sole covered source verse did not keep its open, correctly attributed destination")
 	}
 
 	// Nothing to list: the note is not a list of its own.
@@ -268,11 +273,12 @@ func TestAPartlyCoveredSelectionIsListedUnderTheNote(t *testing.T) {
 	}
 
 	// CONTROL: in the WEB the same numbers are the Hebrew Esther's, all
-	// covered, and the list is the row alone.
+	// covered, and the list has its source label and origin group without
+	// the coverage note.
 	st.CurrentVersion = "web"
 	span = selSpan{lo: 16, hi: 17}
 	lst = buildCrossRefList(st, selectionVerses(st, "", span), crossRefsForSelection(st, "", span), nil, st.pal(), func(crossRef) {})
-	if lst.CoverageNote != "" || len(lst.Objects) != 1 {
+	if lst.CoverageNote != "" || len(lst.Objects) != 2 || lst.TSKRows != 1 || joined(sectionLabelsIn(lst.Objects)) != treasuryLabel {
 		t.Errorf("the WEB's Esther 4:16-17 is covered; got note %q and %d objects", lst.CoverageNote, len(lst.Objects))
 	}
 }

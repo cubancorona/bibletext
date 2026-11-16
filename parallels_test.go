@@ -284,6 +284,7 @@ func TestGospelParallelsPanelCensusAcrossEditions(t *testing.T) {
 	gospelOnce.Do(loadGospelParallels)
 
 	var raw []struct {
+		ID      int    `json:"id"`
 		Section string `json:"section"`
 		Title   string `json:"title"`
 		Refs    struct {
@@ -308,9 +309,15 @@ func TestGospelParallelsPanelCensusAcrossEditions(t *testing.T) {
 			sectionRuns++
 			prevSection = sec
 		}
+		if gospelPericopes[i].id != r.ID {
+			t.Errorf("pericope %d lost source identity %d", i, r.ID)
+		}
 		cols := 0
-		for _, cell := range []*string{r.Refs.Matthew, r.Refs.Mark, r.Refs.Luke, r.Refs.John} {
+		for col, cell := range []*string{r.Refs.Matthew, r.Refs.Mark, r.Refs.Luke, r.Refs.John} {
 			if cell != nil {
+				if got := gospelPericopes[i].refs[gospelColumns[col].book]; got != *cell {
+					t.Errorf("pericope %d lost source notation: got %q, want %q", i, got, *cell)
+				}
 				cols++
 				if len(parseGospelRef(*cell)) == 0 {
 					t.Errorf("pericope %d (%q) dropped ref %q", i, r.Title, *cell)
@@ -366,9 +373,11 @@ func TestGospelParallelsPanelCensusAcrossEditions(t *testing.T) {
 								}
 								for _, s := range p.spans[g.book] {
 									for _, m := range resolve(spanToCrossRef(g.book, s, p.title)) {
-										lbl := m.label()
-										if !seen[lbl] {
-											seen[lbl] = true
+										m.SourceGroup = fmt.Sprintf("synopsis:%d:%s:%s", p.id, book, p.refs[book])
+										m.SourceLabel = gospelSourceLabel(book, p.spans[book], p.refs[book], id)
+										key := m.SourceGroup + "\x00" + m.label()
+										if !seen[key] {
+											seen[key] = true
 											want = append(want, m)
 										}
 									}
@@ -380,7 +389,7 @@ func TestGospelParallelsPanelCensusAcrossEditions(t *testing.T) {
 						t.Fatalf("%s %s %d:%d parallels = %+v, want %+v", id, book, ch, v.Verse, got, want)
 					}
 					for _, c := range got {
-						if !c.Parallel || strings.TrimSpace(c.Title) == "" || c.Book == book {
+						if !c.Parallel || strings.TrimSpace(c.Title) == "" || c.Book == book || c.SourceGroup == "" || c.SourceLabel == "" {
 							t.Fatalf("%s %s %d:%d malformed parallel %+v", id, book, ch, v.Verse, c)
 						}
 						if bd.GetVerse(c.Book, c.Chapter, c.Verse) == nil {

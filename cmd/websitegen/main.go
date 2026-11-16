@@ -124,9 +124,9 @@ func checkDecoded(v webVersion, bd *bibletext.BibleData) error {
 func publishedVersions() []webVersion {
 	return []webVersion{
 		{ID: "web", Name: "World English Bible",
-			URL: "https://bible.helloao.org/api/ENGWEBP/complete.json", decode: bibletext.DecodeCanonical66},
+			URL: "https://bible.helloao.org/api/ENGWEBP/complete.json", decode: bibletext.DecodeWEB},
 		{ID: "bsb", Name: "Berean Standard Bible",
-			URL: "https://bible.helloao.org/api/BSB/complete.json", decode: bibletext.DecodeCanonical66, headings: true},
+			URL: "https://bible.helloao.org/api/BSB/complete.json", decode: bibletext.DecodeBSB, headings: true},
 		{ID: "webc", Name: "World English Bible (Catholic)",
 			URL: "https://bible.helloao.org/api/eng_webc/complete.json", decode: bibletext.DecodeHelloAOCatholic},
 	}

@@ -103,6 +103,14 @@ func TestEveryPublicPublisherCrossRefNoteFitsTheNarrowestPhone(t *testing.T) {
 				if len(lst.Objects) == 0 || !lst.Sections.Publisher {
 					t.Fatalf("size %s bsb %s:%d did not mount publisher section (%+v)", sizeOpt.ID, key, hn.BeforeVerse, lst.Sections)
 				}
+				if lst.Passage {
+					t.Fatalf("size %s bsb %s:%d repeated the selected passage despite heading-only origins", sizeOpt.ID, key, hn.BeforeVerse)
+				}
+				for _, note := range publisherCrossRefsFor(bsbBD, book, ch, []Verse{*v}) {
+					if note.HeadingText == "" || !strings.Contains(joinedTexts(lst.Objects), note.HeadingText) || !strings.Contains(joinedTexts(lst.Objects), "Heading before verse "+strconv.Itoa(note.Verse)) {
+						t.Fatalf("size %s bsb %s:%d lost its actual heading or placement", sizeOpt.ID, key, hn.BeforeVerse)
+					}
+				}
 				checked++
 				if problems := crossRefListMisfits(lst.Objects, limit); len(problems) != 0 {
 					t.Errorf("size %s bsb %s:%d: %s", sizeOpt.ID, key, hn.BeforeVerse, strings.Join(problems, "; "))
@@ -120,9 +128,9 @@ func TestEveryPublicPublisherCrossRefNoteFitsTheNarrowestPhone(t *testing.T) {
 //   - On a noted WEB verse (Matthew 5:43), showCrossRefs renders WEB REFERENCES
 //     and GOSPEL PARALLELS immediately with the inline spinner under TREASURY
 //     OF SCRIPTURE KNOWLEDGE while Treasury downloads.
-//   - On an unnoted WEB Gospel verse (Matthew 5:42), showCrossRefs keeps the
-//     whole-panel "Finding related passages…" spinner rather than mounting an
-//     empty "No WEB cross-references" section.
+//   - On an unnoted WEB Gospel verse (Matthew 5:42), the local Gospel
+//     parallels still appear immediately, with Treasury loading beneath and
+//     no empty publisher section.
 func TestPublicPublisherLivePanelImmediateVsSpinner(t *testing.T) {
 	app := themedTestApp()
 	t.Cleanup(app.Quit)
@@ -155,7 +163,7 @@ func TestPublicPublisherLivePanelImmediateVsSpinner(t *testing.T) {
 		}
 	}
 
-	// 2. Unnoted Gospel verse (Matthew 5:42) uses whole-panel spinner, never "WEB REFERENCES".
+	// 2. Unnoted Gospel verse (Matthew 5:42) still shows local Gospel content.
 	w2 := test.NewWindow(nil)
 	t.Cleanup(w2.Close)
 	w2.Resize(fyne.NewSize(390, 844))
@@ -166,7 +174,19 @@ func TestPublicPublisherLivePanelImmediateVsSpinner(t *testing.T) {
 		t.Fatal("panel did not open on Matthew 5:42")
 	}
 	texts2 := strings.Join(treeTexts(top2), "\n")
-	if strings.Contains(texts2, "WEB REFERENCES") || !strings.Contains(texts2, "Finding related passages…") {
-		t.Errorf("unnoted Matthew 5:42 loading state = %q, want whole-panel spinner without WEB REFERENCES", texts2)
+	if strings.Contains(texts2, "WEB REFERENCES") || strings.Contains(texts2, treasuryCredit) {
+		t.Errorf("unnoted Matthew 5:42 loading state leaked an absent publisher or Treasury credit: %q", texts2)
+	}
+	for _, want := range []string{parallelsLabel, treasuryLabel, "Finding related passages…", parallelsCredit} {
+		if !strings.Contains(texts2, want) {
+			t.Errorf("unnoted Matthew 5:42 loading state missing local source or inline progress %q: %q", want, texts2)
+		}
+	}
+	listScroll, listBox, bar := panelListParts(top2)
+	if listScroll == nil || listBox == nil || bar == nil || !bar.Running() {
+		t.Fatal("local Gospel content did not mount a scrollable list with inline Treasury progress")
+	}
+	if len(cardLabelsIn(listBox.Objects)) == 0 {
+		t.Fatal("unnoted Gospel selection has no immediately readable destination")
 	}
 }

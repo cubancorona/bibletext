@@ -478,6 +478,24 @@ three differ from the copies above: `bsb_usfm.zip` 1,598,038 bytes,
 with the epoch-9 caches, `scripts/gen-bsb-redletter.py` and
 `scripts/gen-web-redletter.py` write the shipped tables byte for byte.
 
+The publisher-reference tables were verified on 14 November 2026 against
+later WEB-family archives whose USFM members are dated 21 October 2026. These
+fingerprints identify the recovery inputs; they do not replace the earlier
+red-letter audit records above.
+
+| publisher-reference source | bytes | SHA-256 |
+| --- | ---: | --- |
+| `https://ebible.org/Scriptures/eng-web_usfm.zip` | 3,249,632 | `1298c07ccd62fe8ebab6d0cc94ab75a88dd95272d7fe618faeb7a8f6d632c6e0` |
+| `https://ebible.org/Scriptures/eng-web-c_usfm.zip` | 3,086,529 | `6fedbef919e0850ecbe7a9480012c2549f327db7aa7bccf79d1bf6261e9992c1` |
+| `https://bereanbible.com/bsb_usfm.zip` | 1,598,038 | `f0c56438eb89c98e8f62c5c00461e25cc35b098ad5b179bc350cede759ee5f87` |
+
+The BSB archive is the same revision as the 14 October audit. Reproduction
+matches all 340 WEB notes, 343 WEB Catholic notes and 1,325 BSB heading-reference
+lines to `publisher_xrefs_public_data.go`. All 2,028 explicit BSB target
+attributes, including range ends, agreed with the parsed destinations, and
+all 1,325 BSB note-to-heading associations had unique matching hashes in the
+runtime cache used for generation.
+
 ---
 
 ## 5. Rendering and reproduction
@@ -608,6 +626,19 @@ BIBLETEXT_BSB_USFM=<unpacked bsb_usfm.zip>/bsb_usfm \
 BIBLETEXT_WEB_USFM=<unpacked eng-web_usfm.zip> BIBLETEXT_WEBC_USFM=<unpacked eng-web-c_usfm.zip> \
     go test -run 'TestTheRedLetterGeneratorsReproduceTheShippedTables_LocalOnly' -v .
 
+# publisher cross-references — WEB, WEB Catholic and BSB USFM (no API calls)
+python3 scripts/gen-publisher-xrefs.py \
+    --web-usfm <unpacked eng-web_usfm.zip> --web-cache <WEB cache JSON> \
+    --webc-usfm <unpacked eng-web-c_usfm.zip> --webc-cache <WEB Catholic cache JSON> \
+    --bsb-usfm <unpacked bsb_usfm.zip>/bsb_usfm --bsb-cache <BSB cache JSON> \
+    --out publisher_xrefs_public_data.go
+
+# compare the recovered references without replacing the shipped table;
+# requires all three local USFM directories and current runtime caches
+BIBLETEXT_BSB_USFM=<unpacked bsb_usfm.zip>/bsb_usfm \
+BIBLETEXT_WEB_USFM=<unpacked eng-web_usfm.zip> BIBLETEXT_WEBC_USFM=<unpacked eng-web-c_usfm.zip> \
+    go test -run '^TestThePublisherCrossRefGeneratorReproducesTheShippedTables_LocalOnly$' -v .
+
 # red letters — the NKJV, from API.Bible. CACHED: a warm cache makes ZERO calls.
 python3 scripts/gen-nkjv-redletter.py
 # or from the cached chapters alone, with no key read and no call
@@ -700,7 +731,7 @@ under the same discipline:
 | `red_letter_web_data.go` | WEB/WEBC USFM `\wj` markers | `scripts/gen-web-redletter.py` | committed spans, lengths, and content fingerprints |
 | `red_letter_bsb_data.go` | official BSB third-printing USFM `\wj` markers | `scripts/gen-bsb-redletter.py` | committed; all 2,042 marked verses and 2,294 runs located |
 | `red_letter_nkjv_data.go` | API.Bible NKJV `<span class="wj">` | `scripts/gen-nkjv-redletter.py` | committed offsets/fingerprints only; no licensed text |
-| `publisher_xrefs_public_data.go` | WEB/WEBC USFM `\x` notes (340 WEB across 322 verses; 343 WEBC across 325 verses) and BSB USFM `\r` section-heading parallel lines (1,325 across 634 chapters) | `scripts/gen-publisher-xrefs.py` | committed offsets, content/heading hashes and resolved `NoteRef` spans; guarded by rune count and `redLetterTextHash`, verified by `TestShippedPublicPublisherCrossRefTablesAreCompleteAndSound` and `TestThePublisherCrossRefGeneratorReproducesTheShippedTables_LocalOnly` |
+| `publisher_xrefs_public_data.go` | WEB/WEBC USFM `\x` notes (340 WEB across 322 verses; 343 WEBC across 325 verses) and BSB USFM `\r` section-heading parallel lines (1,325 across 634 chapters) | `scripts/gen-publisher-xrefs.py` | committed offsets, content/heading hashes, source sibling-heading counts (`HeadingCount`) and resolved `NoteRef` spans; guarded by rune count and `redLetterTextHash`, verified by `TestShippedPublicPublisherCrossRefTablesAreCompleteAndSound` and `TestThePublisherCrossRefGeneratorReproducesTheShippedTables_LocalOnly`; `TestPublicPublisherBSBCanonAllAttachments` checks all 1,325 heading associations against a cached canon with `BIBLETEXT_XREF_REALDATA=1` |
 | `scripts/data/bsb-redletter-adjudications.json` | retired derived table | — | historical record; no longer used by generation or runtime |
 | `scripts/data/nkjv-wj-verses.json` | retired BSB derivation input | — | historical verse numbers; no longer used by BSB generation |
 | `assets/timings/bsb.json`, `web.json` | per-verse read-along alignment; verse 0 is the Psalm's superscription (116 per narration) | `scripts/audio-align` | timing only; no claim about the text |

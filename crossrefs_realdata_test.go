@@ -9,128 +9,16 @@ import (
 	"testing"
 )
 
-// crossRefDeepestRead is the furthest down a verse's rows any panel reads,
-// measured by the walk below over the 2026-08-31 dataset in all four
-// translations, for every selection that can hold the verse
-// (crossRefDeepestReadable). maxCrossRefsKept is set well above it, and the
-// walk fails if the dataset ever reads deeper, so the margin is re-judged
-// rather than assumed.
-//
-// In the shipping build it is the eighteenth row, first at the WEB's Matthew
-// 10:1. It was the twentieth, for WEB Catholic's Genesis 41:42, whose twenty
-// rows include eight into the Greek Esther, until the Greek Esther came to
-// map verse for verse.
-//
-// In the next major release (docs/NEXT.md) it is the twenty-first, for
-// Matthew 10:17 in all four: five of its best rows lie inside passages its
-// chapter lists as the same saying on another occasion (parallels.go), two
-// of them its own, and a selection of the whole chapter hides all five.
+// crossRefDeepestRead is the retained read-depth regression ceiling for the
+// downloaded-corpus walk. These 18/21-row budgets leave space below the
+// 32-row index cap; the walk measures the current source-local pipeline
+// directly rather than inferring the effects of other displayed sources.
 var crossRefDeepestRead = func() int {
 	if nextRelease {
 		return 21
 	}
 	return 18
 }()
-
-// crossRefDeepestReadable is the furthest down a verse's rows any selection
-// holding the verse can read. Every such selection hides at least own and at
-// most chapter (crossRefSelectionsHide).
-//
-// The panel built with every parallel of the chapter hidden is not the
-// deepest. Hiding more reads deeper while sixteen rows are still to be found,
-// but where fewer than sixteen are left to show, the deepest row read is the
-// last one shown, and hiding a neighbour's parallel can hide exactly that
-// row. So a row counts here when it can be shown at all, that is when only
-// what every selection hides is hidden, and fewer than sixteen rows above it
-// are shown when the most any selection hides is: no selection shows fewer
-// above it, and none hides less.
-func crossRefDeepestReadable(rows []tskRow, resolve func(crossRef) []crossRef, own, chapter crossRefHidden) int {
-	deepest, above := 0, 0
-	seen := map[string]bool{} // labels of the rows above, which no selection shows twice
-	for i, r := range rows {
-		if above >= maxCrossRefsPerVerse {
-			break
-		}
-		shown, counted := false, false
-		for _, c := range resolve(r.crossRef()) {
-			lbl := c.label()
-			if seen[lbl] {
-				continue
-			}
-			seen[lbl] = true
-			shown = shown || !own.hides(c)
-			counted = counted || !chapter.hides(c)
-		}
-		if shown {
-			deepest = i + 1
-		}
-		if counted {
-			above++
-		}
-	}
-	return deepest
-}
-
-// crossRefSelectionsHide is, for each verse of a chapter, what every
-// selection holding the verse hides from its Treasury rows (own), and what
-// the selection that hides most hides (chapter); a selection lies within one
-// chapter. Every selection hides the labels of the verse's own same-occasion
-// parallels, and at most those of every parallel in the chapter.
-//
-// In the next major release the same saying on another occasion hides too,
-// every Treasury row inside its passage (crossRefHidden). At most, that is
-// every such row of every verse in the chapter. At least, it is the verse's
-// own such rows, but not one that a same-occasion row of the chapter covers:
-// a selection that holds that row's verse lists the same-occasion row
-// instead, which hides by its label alone. A row left out because an earlier
-// one covers it, or put in the place of rows it covers, only hides more.
-func crossRefSelectionsHide(verses []Verse, id string, resolve func(crossRef) []crossRef) (own map[int]crossRefHidden, chapter crossRefHidden) {
-	own = map[int]crossRefHidden{}
-	chapter = crossRefHidden{labels: map[string]bool{}}
-	occasions := map[int][]crossRef{}
-	for _, v := range verses {
-		mine := crossRefHidden{labels: map[string]bool{}}
-		if ch, vs, ok := crossRefSourceRef(id, v); ok {
-			for _, p := range gospelParallelsForVerse(v.BookName, ch, vs) {
-				for _, c := range resolve(p) {
-					chapter.labels[c.label()] = true
-					mine.labels[c.label()] = true
-				}
-			}
-			if nextRelease {
-				for _, o := range gospelOccasionsForVerse(v.BookName, ch, vs) {
-					for _, c := range resolve(o) {
-						chapter.covers = append(chapter.covers, c)
-						occasions[v.Verse] = append(occasions[v.Verse], c)
-					}
-				}
-			}
-		}
-		own[v.Verse] = mine
-	}
-	var parallels []crossRef
-	for _, v := range verses {
-		if ch, vs, ok := crossRefSourceRef(id, v); ok {
-			for _, p := range gospelParallelsForVerse(v.BookName, ch, vs) {
-				parallels = append(parallels, resolve(p)...)
-			}
-		}
-	}
-	for v, rows := range occasions {
-		mine := own[v]
-	row:
-		for _, c := range rows {
-			for _, p := range parallels {
-				if p.covers(c) {
-					continue row
-				}
-			}
-			mine.covers = append(mine.covers, c)
-		}
-		own[v] = mine
-	}
-	return own, chapter
-}
 
 // THE WHOLE TREASURY AGAINST THE DOWNLOADED TEXTS. The tests beside this one
 // pin the mapping rules on synthetic rows; this one walks every verse of every
@@ -145,10 +33,9 @@ func crossRefSelectionsHide(verses []Verse, id string, resolve func(crossRef) []
 // applies to the copy the machine downloaded (crossRefCorrection). And it
 // holds the index's cap to the panels. The index keeps each verse's best
 // maxCrossRefsKept rows; every panel must be the one an index keeping every
-// row builds, and no selection may need a row past the cap: the depth is
-// measured for every selection that can hold the verse, from what every one
-// of them hides to the most any of them hides (crossRefDeepestReadable,
-// crossRefSelectionsHide).
+// row builds, and no selection may need a row past the cap. Each source
+// verse contributes independently, so treasuryRowsFor's last contributing
+// row measures that origin's depth for every selection containing it.
 //
 // Opt-in, and read-only: it reads the machine's own caches through
 // realCachePath (open the panel once in the app for the Treasury zip), and
@@ -241,7 +128,6 @@ func TestEveryCrossReferenceRowOpensScriptureTheTextHas(t *testing.T) {
 		for _, book := range bd.Books {
 			for _, chapter := range bd.GetChapterNumbersForBook(book) {
 				verses := bd.GetChapter(book, chapter)
-				own, hidden := crossRefSelectionsHide(verses, id, resolve)
 				for _, v := range verses {
 					st := &AppState{Bible: bd, CurrentBook: book, CurrentChapter: chapter, CurrentVersion: id}
 					panels++
@@ -278,7 +164,7 @@ func TestEveryCrossReferenceRowOpensScriptureTheTextHas(t *testing.T) {
 							book, chapter, v.Verse, len(panel), len(full))
 					}
 					if ch, vs, ok := crossRefSourceRef(id, v); ok {
-						read := crossRefDeepestReadable(every[crossRefKey(v.BookName, ch, vs)], resolve, own[v.Verse], hidden)
+						_, read := treasuryRowsFor(every[crossRefKey(v.BookName, ch, vs)], resolve)
 						if read > deepestHere {
 							deepestHere = read
 						}
@@ -303,59 +189,68 @@ func TestEveryCrossReferenceRowOpensScriptureTheTextHas(t *testing.T) {
 			deepest, deepestAt, maxCrossRefsKept)
 	}
 	if deepest > crossRefDeepestRead {
-		t.Errorf("a panel reads row %d of %s, deeper than the %d measured when maxCrossRefsKept was "+
-			"chosen: re-judge the margin and update crossRefDeepestRead", deepest, deepestAt, crossRefDeepestRead)
+		t.Errorf("a panel reads row %d of %s, past the %d-row regression ceiling: re-judge the index margin",
+			deepest, deepestAt, crossRefDeepestRead)
 	}
 }
 
-// The depth the walk measures holds for every selection, including the one
-// the panel with every parallel of the chapter hidden misses: a verse with
-// fewer than sixteen rows to show, whose last row is a neighbour's parallel.
-// Hidden, as it is when the whole chapter is selected, the panel reads ten
-// rows; the verse selected alone shows that row and reads twelve.
-func TestTheWalksDepthHoldsForEverySelection(t *testing.T) {
-	var rows []tskRow
+// Read depth is the last source row that contributes a distinct destination,
+// not the number of emitted cards or the number of rows examined. Other
+// source sections have no role in this per-origin limit.
+func TestTreasuryReadDepthTracksContributingSourceRows(t *testing.T) {
+	pack := func(refs ...crossRef) []tskRow {
+		t.Helper()
+		rows := make([]tskRow, 0, len(refs))
+		for _, ref := range refs {
+			row, ok := packTSKRow(ref)
+			if !ok {
+				t.Fatalf("invalid synthetic reference: %+v", ref)
+			}
+			rows = append(rows, row)
+		}
+		return rows
+	}
+	identity := func(c crossRef) []crossRef { return []crossRef{c} }
+	var refs []crossRef
 	for v := 1; v <= 10; v++ {
-		r, _ := packTSKRow(crossRef{Book: "Psalms", Chapter: 1, Verse: v})
-		rows = append(rows, r)
+		refs = append(refs, crossRef{Book: "Psalms", Chapter: 1, Verse: v})
 	}
-	for _, v := range []int{11, 12} { // the neighbours' parallels
-		r, _ := packTSKRow(crossRef{Book: "Luke", Chapter: 9, Verse: v})
-		rows = append(rows, r)
-	}
-	resolve := func(c crossRef) []crossRef { return []crossRef{c} }
-	own := crossRefHidden{labels: map[string]bool{"Mark 6:1": true}}
-	chapter := crossRefHidden{labels: map[string]bool{"Mark 6:1": true, "Luke 9:11": true, "Luke 9:12": true}}
-
-	// Every selection hides own and something of the rest of the chapter.
-	deepestOf := 0
-	for _, extra := range [][]string{nil, {"Luke 9:11"}, {"Luke 9:12"}, {"Luke 9:11", "Luke 9:12"}} {
-		hidden := map[string]bool{"Mark 6:1": true}
-		for _, lbl := range extra {
-			hidden[lbl] = true
-		}
-		if _, read := treasuryRowsFor(rows, resolve, crossRefHidden{labels: hidden}); read > deepestOf {
-			deepestOf = read
-		}
-	}
-	// CONTROL: the chapter-wide panel really does read less than a selection.
-	if _, read := treasuryRowsFor(rows, resolve, chapter); read >= deepestOf {
-		t.Fatalf("control: the chapter-wide panel reads row %d and the deepest selection row %d", read, deepestOf)
-	}
-	if got := crossRefDeepestReadable(rows, resolve, own, chapter); got != deepestOf {
-		t.Errorf("the walk measures row %d, but a selection reads row %d", got, deepestOf)
+	refs = append(refs, crossRef{Book: "Luke", Chapter: 9, Verse: 11}, crossRef{Book: "Luke", Chapter: 9, Verse: 12})
+	rows := pack(refs...)
+	got, read := treasuryRowsFor(rows, identity)
+	if read != 12 || !slices.Equal(got, refs) {
+		t.Fatalf("uncapped source = %d rows at depth %d; want all 12", len(got), read)
 	}
 
-	// And where sixteen rows are still to be found, hiding more reads deeper:
-	// twenty rows, the first two the neighbours' parallels.
-	rows = append(rows[10:12:12], rows[:10]...)
+	// References that also occur as Gospel parallels still occupy their
+	// ranked Treasury places; the sixteenth source row closes the cap.
+	refs = append(append([]crossRef(nil), refs[10:12]...), refs[:10]...)
 	for v := 11; v <= 18; v++ {
-		r, _ := packTSKRow(crossRef{Book: "Psalms", Chapter: 1, Verse: v})
-		rows = append(rows, r)
+		refs = append(refs, crossRef{Book: "Psalms", Chapter: 1, Verse: v})
 	}
-	_, wide := treasuryRowsFor(rows, resolve, chapter)
-	if got := crossRefDeepestReadable(rows, resolve, own, chapter); got != wide || wide != 18 {
-		t.Errorf("the walk measures row %d; the chapter-wide panel reads row %d, want 18", got, wide)
+	got, read = treasuryRowsFor(pack(refs...), identity)
+	if read != 16 || !slices.Equal(got, refs[:16]) {
+		t.Fatalf("capped source = %d rows at depth %d; want the first 16", len(got), read)
+	}
+
+	// A dropped leading row and a duplicate consume no cap places. A
+	// dropped trailing row also cannot inflate the last contributing depth.
+	resolve := func(c crossRef) []crossRef {
+		if c.Book == "Mark" {
+			return nil
+		}
+		return []crossRef{c}
+	}
+	filtered := []crossRef{
+		{Book: "Mark", Chapter: 1, Verse: 1},
+		{Book: "Psalms", Chapter: 1, Verse: 1},
+		{Book: "Psalms", Chapter: 1, Verse: 1},
+		{Book: "Psalms", Chapter: 1, Verse: 2},
+		{Book: "Mark", Chapter: 1, Verse: 2},
+	}
+	got, read = treasuryRowsFor(pack(filtered...), resolve)
+	if read != 4 || !slices.Equal(got, []crossRef{filtered[1], filtered[3]}) {
+		t.Fatalf("filtered source = %v at depth %d; want two distinct rows at depth 4", got, read)
 	}
 }
 
@@ -363,7 +258,7 @@ func TestTheWalksDepthHoldsForEverySelection(t *testing.T) {
 // publisher_xrefs_census_test.go for the OpenBible Treasury zip: counts raw TSV
 // lines against parsed rows (zero silent parse/pack drops), pins the kept/capped
 // index split, and verifies for every verse across all downloaded editions that
-// every dataset row is accounted for as unmappable, hidden/duplicate, shown in
+// every dataset row is accounted for as unmappable, duplicate, shown in
 // places 1..16, or past the 16-row cap, matching crossRefsForSelection's
 // Treasury slice row for row.
 func TestEveryTreasuryDatasetRowIsAccountedFor(t *testing.T) {
@@ -446,16 +341,12 @@ func TestEveryTreasuryDatasetRowIsAccountedFor(t *testing.T) {
 		}
 		walked++
 		resolve := crossRefResolver(bd.Books, id)
-		var unmappable, hiddenOrDup, shownPlaces, pastCap, emittedRows, checkedVerses int
+		var unmappable, duplicate, shownPlaces, pastCap, emittedRows, checkedVerses int
 		for _, book := range bd.Books {
 			for _, chapter := range bd.GetChapterNumbersForBook(book) {
 				st := &AppState{Bible: bd, CurrentBook: book, CurrentChapter: chapter, CurrentVersion: id}
 				for _, v := range bd.GetChapter(book, chapter) {
 					checkedVerses++
-					parallels, occasions, _, _, _, shown := localCrossRefParts(st, "", selSpan{lo: v.Verse, hi: v.Verse})
-					_ = parallels
-					hidden := crossRefHidden{labels: shown, covers: occasions}
-
 					var wantTSK []crossRef
 					if srcCh, srcV, ok := crossRefSourceRef(id, v); ok {
 						srcRows := every[crossRefKey(v.BookName, srcCh, srcV)]
@@ -474,10 +365,12 @@ func TestEveryTreasuryDatasetRowIsAccountedFor(t *testing.T) {
 							took := false
 							for _, c := range resolved {
 								lbl := c.label()
-								if hidden.hides(c) || given[lbl] {
+								if given[lbl] {
 									continue
 								}
 								given[lbl] = true
+								c.SourceVerse = v.Verse
+								c.SourceLabel = (crossRef{Book: v.BookName, Chapter: v.Chapter, Verse: v.Verse}).label()
 								wantTSK = append(wantTSK, c)
 								took = true
 							}
@@ -492,7 +385,7 @@ func TestEveryTreasuryDatasetRowIsAccountedFor(t *testing.T) {
 								id, book, chapter, v.Verse, vUnmap, vHidDup, vShown, vPast, len(srcRows))
 						}
 						unmappable += vUnmap
-						hiddenOrDup += vHidDup
+						duplicate += vHidDup
 						shownPlaces += vShown
 						pastCap += vPast
 					}
@@ -509,8 +402,8 @@ func TestEveryTreasuryDatasetRowIsAccountedFor(t *testing.T) {
 				}
 			}
 		}
-		t.Logf("%s (%d verses): shownPlaces=%d (emitted=%d), unmappable=%d, hiddenOrDup=%d, pastCap16=%d",
-			id, checkedVerses, shownPlaces, emittedRows, unmappable, hiddenOrDup, pastCap)
+		t.Logf("%s (%d verses): shownPlaces=%d (emitted=%d), unmappable=%d, duplicate=%d, pastCap16=%d",
+			id, checkedVerses, shownPlaces, emittedRows, unmappable, duplicate, pastCap)
 	}
 	if walked == 0 {
 		t.Skip("no downloaded translation in the machine's cache")

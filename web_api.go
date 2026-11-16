@@ -11,8 +11,17 @@ import "image/color"
 // small: if one of these signatures has to change, the blast radius is one
 // program, not the whole codebase.
 
-// DecodeCanonical66 decodes a 66-book helloao complete.json (WEB, BSB).
+// DecodeCanonical66 decodes a 66-book helloao complete.json without an
+// edition's recovered paragraphing or publisher references.
 func DecodeCanonical66(body []byte) (*BibleData, error) { return decodeCanonical66(body) }
+
+// DecodeWEB decodes the World English Bible with its recovered paragraphing
+// and publisher cross-references, as every app surface loads it.
+func DecodeWEB(body []byte) (*BibleData, error) { return decodeWEB(body) }
+
+// DecodeBSB decodes the Berean Standard Bible with its publisher references
+// and without reference lines that the feed misclassifies as headings.
+func DecodeBSB(body []byte) (*BibleData, error) { return decodeBSB(body) }
 
 // DecodeHelloAOCatholic decodes the 73-book WEB Catholic complete.json.
 func DecodeHelloAOCatholic(body []byte) (*BibleData, error) { return decodeHelloAOCatholic(body) }

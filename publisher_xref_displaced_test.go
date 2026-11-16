@@ -202,10 +202,11 @@ func TestASilentDisplacedCallerNamesTheMissingNote(t *testing.T) {
 		t.Errorf("2 Samuel 24:25 rendered:\n%s", got)
 	}
 
-	// CONTROL: an ordinary verse with no notes shows "No NKJV cross-references".
+	// CONTROL: an ordinary verse with no notes omits the publisher section;
+	// it must not acquire the genuine missing-source warning.
 	stProv := &AppState{Bible: bd, CurrentBook: "Proverbs", CurrentChapter: 1, CurrentVersion: "nkjv"}
 	prov := buildCrossRefList(stProv, versesBetween(bd, "Proverbs", 1, 2, 2), tsk, nil, lightPalette, nop)
-	if got := joinedTexts(prov.Objects); strings.Contains(got, wantMissing) || !strings.Contains(got, "No NKJV cross-references for this selection.") {
+	if got := joinedTexts(prov.Objects); strings.Contains(got, wantMissing) || strings.Contains(got, "No NKJV cross-references for this selection.") || prov.Sections.Publisher || joined(sectionLabelsIn(prov.Objects)) != treasuryLabel {
 		t.Errorf("Proverbs 1:2 rendered:\n%s", got)
 	}
 

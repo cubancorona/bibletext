@@ -79,8 +79,11 @@ overlay) and run on Linux/Windows.
   Gospels seed (`assets/seed/`, so a first run opens instantly to readable
   scripture while the full canon downloads), the Gospel-parallels synopsis
   (`assets/parallels/`), and recovered publisher cross-references for WEB, WEB
-  Catholic and BSB (`publisher_xrefs_public_data.go`). See [NOTICE](NOTICE) for
-  licenses and [docs/TEXTUAL-DATA.md](docs/TEXTUAL-DATA.md) for table sources.
+  Catholic and BSB (`publisher_xrefs_public_data.go`). Other bundled data includes
+  narration timings (`assets/timings/`) and generated versification, paragraph,
+  red-letter and omitted-verse tables. Fonts and icons are embedded too. See
+  [NOTICE](NOTICE) for licenses and [docs/TEXTUAL-DATA.md](docs/TEXTUAL-DATA.md)
+  for the derived-data inventory and source records.
 - AI study is bring-your-own-key. **Never commit API keys.** Store-release
   API.Bible credentials are supplied only through the external release-key flow
   documented in `docs/API_KEY_HANDLING.md`; they do not belong in source files.

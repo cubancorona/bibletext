@@ -210,13 +210,8 @@ func TestNoOtherOccasionPairIsOneSynopsisSet(t *testing.T) {
 	}
 }
 
-// ORDER AND HIDING. Matthew 12:25 is in a synopsis set (the Beelzebul
-// controversy, with Mark 3:20-30) and its divided-kingdom saying is Luke's
-// too, on another occasion (Luke 11:17-18). The panel lists the same-occasion
-// row, then the other-occasion row, then the Treasury. A Treasury row inside
-// the other-occasion passage (Luke 11:17) is hidden; one wider than it
-// (Luke 11:14-23) is not. A Treasury row inside the same-occasion pericope
-// (Mark 3:24) stays, as it always has: the pericope hides by label.
+// Source kinds stay in order without suppressing one another's relationships.
+// An overlapping Treasury destination keeps its own selected-verse origin.
 func TestOtherOccasionRowsStandBetweenTheParallelsAndTheTreasury(t *testing.T) {
 	withCrossRefIndex(t, "Matt.12.25\tLuke.11.17\t50\n"+
 		"Matt.12.25\tMark.3.24\t40\n"+
@@ -239,6 +234,7 @@ func TestOtherOccasionRowsStandBetweenTheParallelsAndTheTreasury(t *testing.T) {
 	want := []string{
 		"parallel Mark 3:20–30",
 		"other Luke 11:17–18",
+		"treasury Luke 11:17",
 		"treasury Mark 3:24",
 		"treasury Luke 11:14–23",
 		"treasury Daniel 5:1",
@@ -247,8 +243,11 @@ func TestOtherOccasionRowsStandBetweenTheParallelsAndTheTreasury(t *testing.T) {
 		t.Errorf("Matthew 12:25 lists\n  %s\nwant\n  %s", strings.Join(got, "\n  "), strings.Join(want, "\n  "))
 	}
 	for _, c := range refs {
-		if c.OtherOccasion && c.Title != "A kingdom divided against itself" {
-			t.Errorf("the other-occasion row carries the title %q, want the saying's", c.Title)
+		if c.OtherOccasion && (c.Title != "A kingdom divided against itself" || c.SourceGroup == "" || c.SourceLabel != "Matthew 12:25–26") {
+			t.Errorf("the other-occasion row lost its source group: %+v", c)
+		}
+		if !c.Parallel && (c.SourceVerse != 25 || c.SourceLabel != "Matthew 12:25") {
+			t.Errorf("Treasury row lost its selected origin: %+v", c)
 		}
 	}
 }
@@ -265,23 +264,21 @@ func TestOtherOccasionRowsAreLabelled(t *testing.T) {
 	same := crossRef{Book: "Matthew", Chapter: 6, Verse: 1, Parallel: true, Title: "A synthetic pericope"}
 	tsk := crossRef{Book: "John", Chapter: 7, Verse: 50, Votes: 4}
 	lst := buildCrossRefList(st, nil, []crossRef{other, tsk, same}, nil, lightPalette, func(crossRef) {})
-	if lst.Parallels != 1 || lst.OtherOccasions != 1 || lst.TSKRows != 1 || len(lst.Objects) != 3 {
-		t.Fatalf("list = %d parallels, %d other-occasion rows, %d Treasury rows, %d objects; want 1, 1, 1, 3",
-			lst.Parallels, lst.OtherOccasions, lst.TSKRows, len(lst.Objects))
+	if lst.Parallels != 1 || lst.OtherOccasions != 1 || lst.TSKRows != 1 {
+		t.Fatalf("wrong source counts: %+v", lst)
 	}
-	rows := make([]string, 3)
-	for i, o := range lst.Objects {
-		rows[i] = strings.Join(textsIn(o), " | ")
+	var lines []string
+	for _, o := range lst.Objects {
+		lines = append(lines, textsIn(o)...)
 	}
-	has := func(row int, s string) bool { return strings.Contains(rows[row], s) }
-	if !has(0, "Matthew 6:1") || !has(0, "PARALLEL") || has(0, otherOccasionLabel) {
-		t.Errorf("row 1 is not the same-occasion row with its tag alone: %q", rows[0])
+	text := strings.Join(lines, "\n")
+	for _, want := range []string{parallelsLabel, treasuryLabel, "Matthew 6:1", "Matthew 6:9–13", "John 7:50", "A synthetic pericope", "A synthetic saying", otherOccasionLabel} {
+		if !strings.Contains(text, want) {
+			t.Errorf("missing source label or destination %q", want)
+		}
 	}
-	if !has(1, "Matthew 6:9–13") || !has(1, otherOccasionLabel) || !has(1, "A synthetic saying") || has(1, "PARALLEL") {
-		t.Errorf("row 2 is not the other-occasion row with its label alone: %q", rows[1])
-	}
-	if !has(2, "John 7:50") || has(2, "PARALLEL") || has(2, otherOccasionLabel) {
-		t.Errorf("row 3 is not a plain Treasury row: %q", rows[2])
+	if strings.Count(text, otherOccasionLabel) != 1 {
+		t.Fatal("other-occasion label must appear only on its episode")
 	}
 }
 
@@ -345,26 +342,48 @@ func TestEveryOtherOccasionPassageMapsWhole(t *testing.T) {
 	}
 }
 
-// ONE PASSAGE, ONE ROW. From Luke 22:26 one saying gives Matthew 20:26-27 and
-// Mark 10:43-44 and the next Matthew 20:25-27 and Mark 10:42-44: the wider
-// rows stand and the narrower go, wherever the narrower came first
-// (addOtherOccasionRow, TestAddOtherOccasionRowListsEachPassageOnceAtItsWidest).
-func TestOtherOccasionRowsAreDeduplicatedByTheVersesTheyCover(t *testing.T) {
+// Distinct sayings keep their own target ranges, even where one covers
+// another. Selecting two verses of the same saying must not duplicate it.
+func TestOtherOccasionRowsKeepEachGroupsExactRanges(t *testing.T) {
 	withCrossRefIndex(t, "")
-	bd := xrefBible(map[string]map[int]int{"Luke": {22: 71}, "Matthew": {20: 34, 23: 39}, "Mark": {9: 50, 10: 52}})
+	bd := xrefBible(map[string]map[int]int{"Luke": {9: 62, 22: 71}, "Matthew": {20: 34, 23: 39}, "Mark": {9: 50, 10: 52}})
 	st := &AppState{Bible: bd, CurrentBook: "Luke", CurrentChapter: 22, CurrentVersion: "web"}
-	got := labelsOf(crossRefsForSelection(st, "", selSpan{lo: 26, hi: 26}), "other")
-	joined := strings.Join(got, "; ")
-	for _, want := range []string{"Matthew 20:25–27", "Mark 10:42–44", "Matthew 23:11", "Mark 9:35"} {
-		if !strings.Contains(joined, want) {
-			t.Errorf("Luke 22:26 does not list %s: %q", want, got)
-		}
+	want := map[string]bool{
+		"Luke 22:26 -> Matthew 20:26–27":    true,
+		"Luke 22:26 -> Matthew 23:11":       true,
+		"Luke 22:26 -> Mark 9:35":           true,
+		"Luke 22:26 -> Mark 10:43–44":       true,
+		"Luke 22:26 -> Luke 9:48":           true,
+		"Luke 22:25–26 -> Matthew 20:25–27": true,
+		"Luke 22:25–26 -> Mark 10:42–44":    true,
 	}
-	for _, gone := range []string{"Matthew 20:26–27", "Mark 10:43–44"} {
-		for _, lbl := range got {
-			if lbl == gone {
-				t.Errorf("Luke 22:26 lists %s inside a wider row: %q", gone, got)
+	for _, span := range []selSpan{{lo: 26, hi: 26}, {lo: 25, hi: 26}} {
+		seen := map[string]bool{}
+		groups := map[string]string{}
+		for _, c := range crossRefsForSelection(st, "", span) {
+			if !c.OtherOccasion {
+				continue
 			}
+			key := c.SourceLabel + " -> " + c.label()
+			if seen[key] || !want[key] {
+				t.Errorf("selection %d–%d emitted repeated or unexpected relation %q", span.lo, span.hi, key)
+			}
+			seen[key] = true
+			if c.SourceGroup == "" {
+				t.Errorf("relation %q has no source identity", key)
+			}
+			if old, exists := groups[c.SourceGroup]; exists && old != c.SourceLabel {
+				t.Errorf("source identity %q combines %q and %q", c.SourceGroup, old, c.SourceLabel)
+			}
+			groups[c.SourceGroup] = c.SourceLabel
+		}
+		for key := range want {
+			if !seen[key] {
+				t.Errorf("selection %d–%d lost exact relation %q", span.lo, span.hi, key)
+			}
+		}
+		if len(groups) != 2 {
+			t.Errorf("selection %d–%d has %d source groups, want the two distinct sayings", span.lo, span.hi, len(groups))
 		}
 	}
 }
@@ -486,106 +505,75 @@ func TestTheNamedOtherOccasionPairs(t *testing.T) {
 	})
 }
 
-// THE DEPTH WALK'S BOUNDS HOLD FOR THE GOSPELS' SELECTIONS. The real-data
-// walk measures how deep a panel can read from what every selection holding a
-// verse hides and the most any selection hides (crossRefSelectionsHide). With
-// the other-occasion rows that is no longer a matter of labels: a row is left
-// out when a row above covers it, so a selection holding a neighbour can hide
-// less of a verse's Treasury rows than the verse selected alone. Here, in the
-// WEB's numbering and the BSB's, every selection of up to six verses and every
-// whole chapter of the Gospels is built, and what its panel hides — its
-// same-occasion rows by label, its other-occasion rows by the verses they
-// cover — must hide all that the narrower bound says every selection hides
-// for each verse it holds, and nothing the wider bound does not.
-func TestTheDepthWalksBoundsHoldForTheGospelsSelections(t *testing.T) {
+// Every selection of up to six verses, and every whole Gospel chapter,
+// retains the union of its verses' source relationships. Only repeated hits
+// within the same source group and exact destination collapse; overlapping
+// ranges and distinct source identities remain separate.
+func TestGospelSelectionsRetainEachSourceGroupsExactDestinations(t *testing.T) {
 	withCrossRefIndex(t, "")
-	chapters := map[string]map[int]int{}
-	for book, ends := range webGospelChapterEnds {
-		chapters[book] = map[int]int{}
-		for i, last := range ends {
-			chapters[book][i+1] = last
-		}
-	}
-	bd := xrefBible(chapters)
-	coveredBy := func(rows []crossRef, c crossRef) bool {
-		for _, r := range rows {
-			if r.covers(c) {
-				return true
-			}
-		}
-		return false
-	}
-	selections := 0
-	var narrowed []string
+	selections, relations := 0, 0
 	for _, id := range []string{"web", "bsb"} {
-		resolve := crossRefResolver(bd.Books, id)
+		bd := gospelEditionBible(id)
 		for _, g := range gospelColumns {
-			for ch := 1; ch <= len(webGospelChapterEnds[g.book]); ch++ {
+			for _, ch := range bd.GetChapterNumbersForBook(g.book) {
 				verses := bd.GetChapter(g.book, ch)
-				own, most := crossRefSelectionsHide(verses, id, resolve)
+				if len(verses) == 0 {
+					t.Fatalf("control: %s %s %d has no verses", id, g.book, ch)
+				}
+				st := &AppState{Bible: bd, CurrentBook: g.book, CurrentChapter: ch, CurrentVersion: id}
+				own := make([]map[string]crossRef, len(verses))
+				for i, v := range verses {
+					own[i] = map[string]crossRef{}
+					for _, c := range crossRefsForSelection(st, "", selSpan{lo: v.Verse, hi: v.Verse}) {
+						if !c.Parallel || c.SourceGroup == "" || c.SourceLabel == "" {
+							t.Fatalf("%s %s %d:%d lost source metadata: %+v", id, g.book, ch, v.Verse, c)
+						}
+						key := c.SourceGroup + "\x00" + c.label()
+						if _, duplicate := own[i][key]; duplicate {
+							t.Fatalf("%s %s %d:%d repeated relation %q", id, g.book, ch, v.Verse, key)
+						}
+						own[i][key] = c
+						relations++
+					}
+				}
 				check := func(lo, hi int) {
 					selections++
-					st := &AppState{Bible: bd, CurrentBook: g.book, CurrentChapter: ch, CurrentVersion: id}
-					hidden := crossRefHidden{labels: map[string]bool{}}
-					for _, c := range crossRefsForSelection(st, "", selSpan{lo: lo, hi: hi}) {
-						switch {
-						case c.otherOccasion():
-							hidden.covers = append(hidden.covers, c)
-						case c.Parallel:
-							hidden.labels[c.label()] = true
+					where := fmt.Sprintf("%s %s %d:%d–%d", id, g.book, ch, verses[lo].Verse, verses[hi].Verse)
+					want := map[string]crossRef{}
+					for i := lo; i <= hi; i++ {
+						for key, c := range own[i] {
+							want[key] = c
 						}
 					}
-					where := fmt.Sprintf("%s %s %d:%d-%d", id, g.book, ch, lo, hi)
-					for lbl := range hidden.labels {
-						if !most.labels[lbl] {
-							t.Errorf("%s hides %s by label, which the wider bound does not", where, lbl)
+					seen := map[string]bool{}
+					for _, c := range crossRefsForSelection(st, "", selSpan{lo: verses[lo].Verse, hi: verses[hi].Verse}) {
+						key := c.SourceGroup + "\x00" + c.label()
+						if seen[key] {
+							t.Fatalf("%s duplicated relation %q", where, key)
+						}
+						seen[key] = true
+						if w, ok := want[key]; !ok || c != w {
+							t.Fatalf("%s added or changed relation %+v; expected %+v, present=%v", where, c, w, ok)
 						}
 					}
-					for _, c := range hidden.covers {
-						if !coveredBy(most.covers, c) {
-							t.Errorf("%s hides inside %s, which the wider bound does not", where, c.label())
-						}
-					}
-					for v := lo; v <= hi; v++ {
-						for lbl := range own[v].labels {
-							if !hidden.labels[lbl] {
-								t.Errorf("%s does not hide %s, which every selection of verse %d hides", where, lbl, v)
-							}
-						}
-						for _, c := range own[v].covers {
-							if !coveredBy(hidden.covers, c) {
-								t.Errorf("%s does not hide inside %s, which every selection of verse %d hides", where, c.label(), v)
+					if len(seen) != len(want) {
+						for key := range want {
+							if !seen[key] {
+								t.Errorf("%s lost exact source relation %q", where, key)
 							}
 						}
 					}
 				}
-				for lo := 1; lo <= len(verses); lo++ {
-					for hi := lo; hi <= len(verses) && hi < lo+6; hi++ {
+				for lo := range verses {
+					for hi := lo; hi < len(verses) && hi < lo+6; hi++ {
 						check(lo, hi)
 					}
 				}
-				check(1, len(verses))
-				// The verses whose narrower bound leaves out one of their
-				// other-occasion rows, because a same-occasion row of the
-				// chapter covers it.
-				for _, v := range verses {
-					if sch, sv, ok := crossRefSourceRef(id, v); ok {
-						n := 0
-						for _, o := range gospelOccasionsForVerse(v.BookName, sch, sv) {
-							n += len(resolve(o))
-						}
-						if n > len(own[v.Verse].covers) {
-							narrowed = append(narrowed, fmt.Sprintf("%s %s %d:%d", id, g.book, ch, v.Verse))
-						}
-					}
-				}
+				check(0, len(verses)-1)
 			}
 		}
 	}
-	t.Logf("%d selections; the narrower bound leaves a row out at %s", selections, strings.Join(narrowed, ", "))
-	// CONTROL: the selections were built, and the narrower bound is narrower
-	// than the verse's own rows somewhere, so the rule is exercised.
-	if selections < 40000 || len(narrowed) == 0 {
-		t.Errorf("%d selections built, %d verses with a row left out of the narrower bound", selections, len(narrowed))
+	if selections < 40000 || relations < 1000 {
+		t.Errorf("control: checked %d selections and %d single-verse relations", selections, relations)
 	}
 }

@@ -722,6 +722,9 @@ type readingParagraph struct {
 	mark   color.Color
 	dim    color.Color
 	number color.Color
+	// marks overrides the small page-style superscript for a study excerpt.
+	// Nil preserves the ordinary card's marker size, lift and typeface.
+	marks *paragraphMarkStyle
 	// guess is the width wrapped for before any layout has handed one over,
 	// for a paragraph that knows the width it will be given; 0 for the
 	// card's own guess (readingParagraphGuessWidth).
@@ -732,14 +735,19 @@ type readingParagraph struct {
 	holdFlush bool
 }
 
-// A MARK IS THE PAGE'S SUPERSCRIPT. readingMarkScale is a Mark run's size
+type paragraphMarkStyle struct {
+	size, lift      float32
+	numberLetterGap float32
+	letter, number  fyne.Resource
+}
+
+// readingMarkScale is an ordinary Mark run's size
 // against the paragraph's and readingMarkLift how far its baseline stands
 // above the words', as a fraction of the paragraph's size: the figures the
 // reading page sets a verse's number by on every surface
 // (docs/READING_TYPOGRAPHY.md, "Verse numbers"; styledNumRatio and
-// styledNumLift on the canvas pane). A note's letter and a verse's number
-// in the cross-references passage are both set by them, so the passage reads
-// as the page does.
+// styledNumLift on the canvas pane). Study excerpts can opt into a distinct
+// paragraphMarkStyle without changing these page and card defaults.
 //
 // The lift is stated baseline to baseline, as the page states it, and a mark
 // is given the height of its own glyphs: given its row's whole height, the
@@ -891,6 +899,9 @@ func (r *readingParagraphRenderer) measure(s string, italic bool) fyne.Size {
 // width at that size: a mark is smaller than the words it stands among.
 func (r *readingParagraphRenderer) fragmentSize(f paragraphFragment) float32 {
 	if f.mark {
+		if r.p.marks != nil {
+			return r.p.marks.size
+		}
 		return r.p.size * readingMarkScale
 	}
 	return r.p.size
@@ -899,6 +910,12 @@ func (r *readingParagraphRenderer) fragmentSize(f paragraphFragment) float32 {
 // fragmentFace is the cut a fragment is drawn in: a verse's number or a
 // section heading in the bold cut, as the page sets them.
 func (r *readingParagraphRenderer) fragmentFace(f paragraphFragment) fyne.Resource {
+	if f.mark && r.p.marks != nil {
+		if f.dim {
+			return r.p.marks.number
+		}
+		return r.p.marks.letter
+	}
 	if (f.bold || (f.mark && f.dim)) && r.p.bold != nil {
 		return r.p.bold
 	}
@@ -929,6 +946,15 @@ func (r *readingParagraphRenderer) fragmentColour(f paragraphFragment) color.Col
 // follows it flush — and, when holdFlush is set, after an italic word before a
 // flush mark so the slanted glyph does not touch the upright letter.
 const readingMarkGap float32 = 1.5
+
+// markGap separates a verse number from an adjacent reference letter without
+// adding text or a line-break opportunity. Other marker pairs keep their gap.
+func (r *readingParagraphRenderer) markGap(afterNumber bool, next paragraphFragment) float32 {
+	if afterNumber && next.mark && !next.dim && r.p.marks != nil && r.p.marks.numberLetterGap > readingMarkGap {
+		return r.p.marks.numberLetterGap
+	}
+	return readingMarkGap
+}
 
 // isOpeningQuote reports whether s consists solely of opening quotation marks
 // (such as "“" before a spaced nested "‘" or an italic supplied word), which
@@ -969,6 +995,7 @@ func (r *readingParagraphRenderer) wrap(width float32) {
 	var row []*canvas.Text
 	x := float32(0)
 	afterMark := false
+	afterNumber := false
 	afterItalic := false
 	afterOpenQuote := false
 	afterDash := false
@@ -977,6 +1004,7 @@ func (r *readingParagraphRenderer) wrap(width float32) {
 		row = nil
 		x = 0
 		afterMark = false
+		afterNumber = false
 		afterItalic = false
 		afterOpenQuote = false
 		afterDash = false
@@ -986,6 +1014,7 @@ func (r *readingParagraphRenderer) wrap(width float32) {
 		cur := fragments[at]
 		total := r.fragmentWidth(cur)
 		prevMark := cur.mark
+		prevNumber := cur.mark && cur.dim
 		prevItalic := cur.italic
 		prevOpenQuote := !cur.mark && isOpeningQuote(cur.text)
 		prevDash := !cur.mark && endsWithDash(cur.text)
@@ -1003,11 +1032,12 @@ func (r *readingParagraphRenderer) wrap(width float32) {
 					break
 				}
 				if prevMark || (prevItalic && g.mark) {
-					total += readingMarkGap
+					total += r.markGap(prevNumber, g)
 				}
 			}
 			total += r.fragmentWidth(g)
 			prevMark = g.mark
+			prevNumber = g.mark && g.dim
 			prevItalic = g.italic
 			prevOpenQuote = !g.mark && isOpeningQuote(g.text)
 			prevDash = !g.mark && endsWithDash(g.text)
@@ -1027,7 +1057,7 @@ func (r *readingParagraphRenderer) wrap(width float32) {
 		case f.spaceBefore && len(row) > 0:
 			gap = r.spaceW
 		case (afterMark || (r.p.holdFlush && afterItalic && f.mark)) && len(row) > 0:
-			gap = readingMarkGap
+			gap = r.markGap(afterNumber, f)
 		}
 		// A mark is flush against the word after it, and a row may break
 		// only at a space: so a mark that would end a row takes the row
@@ -1050,11 +1080,13 @@ func (r *readingParagraphRenderer) wrap(width float32) {
 				need = flushNeed(i, true)
 			}
 		} else if f.mark {
+			prevNumber := f.dim
 			for _, g := range fragments[i+1:] {
 				if g.spaceBefore || g.breakBefore || g.text == "" {
 					break
 				}
-				need += readingMarkGap + r.fragmentWidth(g)
+				need += r.markGap(prevNumber, g) + r.fragmentWidth(g)
+				prevNumber = g.mark && g.dim
 				if !g.mark {
 					break
 				}
@@ -1070,17 +1102,22 @@ func (r *readingParagraphRenderer) wrap(width float32) {
 		t.Move(fyne.NewPos(x+gap, 0))
 		h := r.rowH
 		if f.mark {
-			// Its baseline readingMarkLift of the paragraph's size above
-			// the words'.
+			// The ordinary marker uses the page's superscript lift; a
+			// study excerpt can keep larger markers nearer the body line.
 			sz, base := drv.RenderedTextSize(f.text, t.TextSize, fyne.TextStyle{}, t.FontSource)
 			h = sz.Height
-			r.lift[t] = r.bodyBase - r.p.size*readingMarkLift - base
+			lift := r.p.size * readingMarkLift
+			if r.p.marks != nil {
+				lift = r.p.marks.lift
+			}
+			r.lift[t] = r.bodyBase - lift - base
 		}
 		t.Resize(fyne.NewSize(w, h))
 		row = append(row, t)
 		r.objs = append(r.objs, t)
 		x += gap + w
 		afterMark = f.mark
+		afterNumber = f.mark && f.dim
 		afterItalic = f.italic
 		afterOpenQuote = !f.mark && isOpeningQuote(f.text)
 		afterDash = !f.mark && endsWithDash(f.text)

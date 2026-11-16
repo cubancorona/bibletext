@@ -613,17 +613,32 @@ the audio service and a killed process takes it along.
 - **Cross-references** ([crossrefs.go](crossrefs.go), `crossref_panel.go`) — the
   public-domain/CC-BY **OpenBible.info** Treasury of Scripture Knowledge set,
   fetched once as a ~2 MB zip from `a.openbible.info`, cached, then fully
-  offline. OSIS refs are parsed into a per-verse index, vote-ranked.
+  offline. OSIS refs are parsed into a per-verse index, vote-ranked. Each
+  selected verse contributes up to 16 source rows that the current edition
+  can display, with no selection-wide 40-row cap. Multi-verse selections keep
+  independently expandable groups in Scripture order, keyed by upright verse
+  numbers; a shared destination remains in every contributing group. Several
+  contributing groups begin closed and create cards on first opening; a sole
+  group begins open, and a single-verse selection stays flat.
+- **Publisher references** (`publisher_xrefs.go`,
+  `publisher_xrefs_public.go`) — WEB and WEB Catholic retain the exact source
+  insertion points and lettered note groups in the panel's quotation. BSB's
+  recovered references identify the actual section heading and its position
+  before a verse, without inventing word anchors or repeating the selection
+  solely to place letters. NKJV apparatus stays behind `nkjvxrefs`. These
+  references are separate from the optional chapter-bottom translation notes.
 - **Gospel parallels** ([parallels.go](parallels.go)) — an **embedded** synopsis
   (`assets/parallels/gospel_parallels.json`, `//go:embed`). For a Gospel verse,
-  the same event in the other Gospels is surfaced first, tagged **Parallel**
-  (`crossRef.Parallel = true`), so it works without any network. In the next
+  destinations are grouped by the actual event and source passage, with its
+  episode title and source span shown once (`crossRef.Parallel = true`).
+  Distinct spans remain distinct, and a single destination is displayed
+  directly without an extra disclosure. The synopsis works without any
+  network. In the next
   major release ([docs/NEXT.md](docs/NEXT.md)), `parallels_next.go` embeds a
   second file, `gospel_occasions.json`, which pairs passages that carry the
   same saying on another occasion (the Lord's Prayer in Matthew 6 and Luke
   11); its rows follow the synopsis rows, ahead of the Treasury, under their
-  own label (`crossRef.OtherOccasion`, `otherOccasionLabel`), and hide any
-  Treasury row inside their passage. Provenance:
+  own label (`crossRef.OtherOccasion`, `otherOccasionLabel`). Provenance:
   [docs/TEXTUAL-DATA.md](docs/TEXTUAL-DATA.md) §9.
 - **Red-letter mode** ([red_letter.go](red_letter.go),
   `red_letter_{web,bsb,nkjv}_data.go`) — publisher-marked spans for each edition;
@@ -634,6 +649,17 @@ the audio service and a killed process takes it along.
   with alternates for the Catholic edition's own books, set in the reading face
   at the reader's size, with a jump-to-context. The list is pinned offline by
   `testdata/verse_of_day_snapshot.json` (`scripts/gen-votd-snapshot.py`).
+
+The cross-reference list labels each populated source section even without
+publisher notes. Publisher, Gospel and Treasury groups retain their own
+relationships when destinations overlap; duplicate Treasury or Gospel lookup
+hits within one origin are removed, while publisher notes keep their printed
+pieces. `crossref_origin_list.go` builds the source groups and
+`crossref_source_group.go` provides lazy independent folds with complete
+wrapping summaries. Their identities preserve open state through Treasury
+loading and panel rebuilds. The original lettered publisher-note renderer and
+its geometry remain separate; shared disclosure and card control sizes do not
+change. See [CROSS_REFERENCE_NOTES.md](docs/CROSS_REFERENCE_NOTES.md).
 
 ## AI study (bring your own key)
 
@@ -837,8 +863,13 @@ the only runs under ~80% of the body size, a threshold derived from the
 rendered text — so the anchor survives the reader changing text size too).
 
 - **Saving:** continuously on navigation (`addRecentChapter` / `clearHistory` /
-  `switchVersion` → `persistReadingPosition`, chapter pinned to top) **and** the
-  precise scroll via `flushReadingState` — on iOS from a native scroll-end
+  `switchVersion` → `persistReadingPosition`, chapter pinned to top). An explicit
+  `goToVerseRange` arrival then saves its validated start verse as a fallback
+  in both the current history visit and reading state, before a render or user
+  scroll is required. It reads no native geometry and arms no restore. A later
+  measured scroll supersedes that fallback; plain chapter/title visits remain
+  anchorless, and history does not restore the old highlight. The precise
+  scroll is saved via `flushReadingState` — on iOS from a native scroll-end
   `//export` (`bibleTextReadingScrolled` in `ai_menu_darwin.go`; the iOS
   background lifecycle hook is unreliable) plus app-lifecycle/close hooks
   (`InstallReadingStateFlush`); on macOS the window-close/stop hooks.

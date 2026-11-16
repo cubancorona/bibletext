@@ -85,11 +85,11 @@ func TestTheShippingBuildListsNoOtherOccasion(t *testing.T) {
 		t.Error("the shipping build reads a row as another occasion")
 	}
 	lst := buildCrossRefList(st, nil, []crossRef{marked}, nil, lightPalette, func(crossRef) {})
-	if lst.Parallels != 1 || lst.OtherOccasions != 0 || len(lst.Objects) != 1 {
-		t.Fatalf("list = %d parallels, %d other-occasion rows, %d objects; want 1, 0, 1", lst.Parallels, lst.OtherOccasions, len(lst.Objects))
+	if lst.Parallels != 1 || lst.OtherOccasions != 0 || len(lst.Objects) != 2 {
+		t.Fatalf("list = %d parallels, %d other-occasion rows, %d objects; want 1, 0, 2", lst.Parallels, lst.OtherOccasions, len(lst.Objects))
 	}
-	row := strings.Join(textsIn(lst.Objects[0]), " | ")
-	if !strings.Contains(row, "PARALLEL") || strings.Contains(row, otherOccasionLabel) {
+	row := strings.Join(textsIn(lst.Objects[1]), " | ")
+	if !strings.Contains(row, "A synthetic saying") || strings.Contains(row, otherOccasionLabel) {
 		t.Errorf("the row is not drawn as the synopsis's: %q", row)
 	}
 }

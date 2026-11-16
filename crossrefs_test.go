@@ -257,11 +257,9 @@ func TestACrossBookRangeKeepsItsEndBook(t *testing.T) {
 }
 
 // THE CAP COUNTS ROWS A READER CAN SEE. A verse shows its sixteen best
-// Treasury rows. The sixteen used to be chosen when the dataset was read,
-// before the rows this translation cannot show were dropped and the rows a
-// parallel already shows were hidden, so each of those left an empty place
-// instead of handing it to the seventeenth: WEB Catholic's Genesis 41:42
-// showed 10, and Matthew 10:1 showed 14 in every translation.
+// Treasury rows. A target this edition cannot show hands its place to the
+// next ranked row. A target also listed by a Gospel source remains in the
+// Treasury because the two sources describe independent relationships.
 func TestTheCapCountsOnlyRowsTheReaderCanSee(t *testing.T) {
 	var rows strings.Builder
 	// The two best rows point at Esther 4:6 and 9:5, which WEB Catholic
@@ -290,10 +288,8 @@ func TestTheCapCountsOnlyRowsTheReaderCanSee(t *testing.T) {
 			"rows to verses the Greek Esther lacks must hand their places to the next two", n, last)
 	}
 
-	// The other half: a row the panel hides because a Gospel parallel listed
-	// above it already shows that passage. Matthew 10:1's two best rows are
-	// Luke 9:1-6 and Mark 6:7-13, which are its parallels (the commissioning
-	// of the Twelve), so its sixteen Treasury rows are the sixteen after them.
+	// The two highest-ranked Treasury destinations are also Gospel parallels.
+	// Each source keeps its own rows; neither uses the other's ranking slots.
 	rows.Reset()
 	rows.WriteString("Matt.10.1\tLuke.9.1-Luke.9.6\t90\nMatt.10.1\tMark.6.7-Mark.6.13\t80\n")
 	for v := 1; v <= 16; v++ {
@@ -308,33 +304,28 @@ func TestTheCapCountsOnlyRowsTheReaderCanSee(t *testing.T) {
 			parallels = append(parallels, c.label())
 		} else {
 			treasury = append(treasury, c.label())
+			if c.SourceVerse != 1 || c.SourceLabel != "Matthew 10:1" {
+				t.Errorf("Treasury row lost its selected origin: %+v", c)
+			}
 		}
 	}
-	// CONTROL: the two rows really are hidden behind the parallels, or the
-	// count below is not about hiding at all.
+	// CONTROL: both sources really name the same destinations.
 	if strings.Join(parallels, "; ") != "Mark 6:7–13; Luke 9:1–6" {
 		t.Fatalf("control: Matthew 10:1's parallels are %q, want Mark 6:7–13 and Luke 9:1–6", parallels)
 	}
-	for _, lbl := range treasury {
-		if lbl == "Mark 6:7–13" || lbl == "Luke 9:1–6" {
-			t.Fatalf("control: the Treasury rows repeat the parallel %q", lbl)
-		}
+	if len(treasury) != maxCrossRefsPerVerse {
+		t.Fatalf("Matthew 10:1 lists %d Treasury rows, want %d", len(treasury), maxCrossRefsPerVerse)
 	}
-	if len(treasury) == 0 {
-		t.Fatal("Matthew 10:1 lists no Treasury rows")
-	}
-	if n, last := len(treasury), treasury[len(treasury)-1]; n != maxCrossRefsPerVerse || last != "Daniel 5:16" {
-		t.Errorf("Matthew 10:1 lists %d Treasury rows ending %q, want 16 ending \"Daniel 5:16\": "+
-			"the two rows its parallels already show must hand their places to the next two", n, last)
+	if treasury[0] != "Luke 9:1–6" || treasury[1] != "Mark 6:7–13" || treasury[len(treasury)-1] != "Daniel 5:14" {
+		t.Errorf("Treasury source ranking changed: %q", treasury)
 	}
 }
 
 // THE INDEX KEEPS EACH VERSE'S BEST maxCrossRefsKept ROWS, EIGHT BYTES EACH.
-// It is held for as long as the app runs, on every platform. As crossRefs,
-// every row kept, it came to some 53 MB; the panel never reads past a
-// verse's eighteenth row in the shipping build, or its twenty-first in the
-// next major release (crossRefDeepestRead), so the rest need not be kept, and a row
-// needs only its books, numbers and votes.
+// The index lasts for the app's lifetime. Packed rows hold only destination
+// coordinates and votes; selected-origin metadata belongs to the panel rows.
+// Spare ranked rows allow targets absent from an edition to be skipped without
+// reducing that source verse's displayed quota.
 func TestTheIndexKeepsEachVersesBestRows(t *testing.T) {
 	var rows strings.Builder
 	n := maxCrossRefsKept + 8 // even, so the rows pair off
@@ -375,9 +366,9 @@ func TestTheIndexKeepsEachVersesBestRows(t *testing.T) {
 	if size := unsafe.Sizeof(tskRow{}); size > 8 {
 		t.Errorf("an index row takes %d bytes, want at most 8", size)
 	}
-	// The cap must clear the measured worst case with room to spare.
+	// The cap must clear the read-depth regression ceiling with room to spare.
 	if maxCrossRefsKept < crossRefDeepestRead+maxCrossRefsPerVerse/2 {
-		t.Errorf("the index keeps %d rows a verse, too close to the %d a panel has been measured to read",
+		t.Errorf("the index keeps %d rows a verse, too close to the %d-row read-depth ceiling",
 			maxCrossRefsKept, crossRefDeepestRead)
 	}
 }

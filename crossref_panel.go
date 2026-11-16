@@ -49,9 +49,10 @@ func (crossRefScrollLaneLayout) Layout(objs []fyne.CanvasObject, size fyne.Size)
 // captured before a light/dark or layout rebuild drains the panel and applied
 // when the replacement list lands.
 type crossRefPanelPlace struct {
-	notesOpen  []bool
-	groupsOpen []bool
-	scrollY    float32
+	notesOpen   []bool
+	groupsOpen  []bool
+	sourcesOpen map[string]bool
+	scrollY     float32
 }
 
 // crossRefFoldRows returns the list's note rows and group rows in order.
@@ -63,6 +64,10 @@ func crossRefFoldRows(objs []fyne.CanvasObject) (notes []*crossRefNoteRow, group
 			notes = append(notes, x)
 			for _, p := range x.pieces {
 				walk(p)
+			}
+		case *crossRefSourceGroup:
+			for _, m := range x.body.Objects {
+				walk(m)
 			}
 		case *crossRefGroupRow:
 			groups = append(groups, x)
@@ -245,15 +250,19 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 		}
 		notes, groups := crossRefFoldRows(listBox.Objects)
 		saved := &crossRefPanelPlace{
-			notesOpen:  make([]bool, len(notes)),
-			groupsOpen: make([]bool, len(groups)),
-			scrollY:    scroll.Offset.Y,
+			notesOpen:   make([]bool, len(notes)),
+			groupsOpen:  make([]bool, len(groups)),
+			sourcesOpen: map[string]bool{},
+			scrollY:     scroll.Offset.Y,
 		}
 		for i, n := range notes {
 			saved.notesOpen[i] = n.open
 		}
 		for i, g := range groups {
 			saved.groupsOpen[i] = g.open
+		}
+		for _, r := range crossRefSourceRows(listBox.Objects) {
+			saved.sourcesOpen[r.id] = r.open
 		}
 		return saved
 	}
@@ -274,6 +283,11 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 	mountList := func(lst crossRefList, keepPlace bool) {
 		listBox.Objects = lst.Objects
 		if place != nil {
+			for _, r := range crossRefSourceRows(lst.Objects) {
+				if open, ok := place.sourcesOpen[r.id]; ok {
+					r.setOpen(open)
+				}
+			}
 			notes, groups := crossRefFoldRows(lst.Objects)
 			for i, n := range notes {
 				if i < len(place.notesOpen) && n.open != place.notesOpen[i] {
@@ -329,10 +343,6 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 	// Treasury heading while the dataset downloads; otherwise it shows the
 	// whole-panel spinner.
 	setLoading := func() {
-		if !state.currentVersion().PublisherCrossRefs {
-			setThinking()
-			return
-		}
 		if (place == nil || userTouched) && listShowing() {
 			place = capturePlace()
 		}
@@ -342,7 +352,7 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 		localRefs := localCrossRefsForSelection(state, text, span)
 		lst := buildCrossRefPanelList(state, selectionVerses(state, text, span), localRefs,
 			crossRefTreasuryState{loading: true, bar: bar}, pal, follow)
-		if len(lst.Objects) == 0 || !lst.Sections.Publisher {
+		if len(lst.Objects) == 0 || (!lst.Sections.Publisher && !lst.Sections.Parallels) {
 			setThinking()
 			return
 		}
@@ -602,6 +612,8 @@ type crossRefCard struct {
 	// publisher's run. Under a GOSPEL PARALLELS label the pill would say the
 	// label's word again, in the most saturated object on the screen.
 	Badge bool
+	// Grouped moves episode context to the enclosing source-group header.
+	Grouped bool
 }
 
 // passageCard is the card for a row crossRefsForSelection hands over — a
@@ -644,13 +656,13 @@ func crossRefRowRuled(state *AppState, card crossRefCard, pal palette, onTap fun
 		refLine = container.New(&crossRefHeadingFlow{gap: 7}, ref, tag)
 	}
 	lines := []fyne.CanvasObject{refLine}
-	if c.otherOccasion() {
+	if c.otherOccasion() && !card.Grouped {
 		lines = append(lines, container.NewHBox(otherOccasionBadge(pal)))
 	}
 
 	// For a parallel, the pericope title ("The Beatitudes") is the useful context,
 	// so show it above the verse preview; for another occasion, the saying's.
-	if c.Parallel && c.Title != "" {
+	if c.Parallel && c.Title != "" && !card.Grouped {
 		lines = append(lines, newCrossRefTitle(c.Title, sz.title, pal))
 	}
 

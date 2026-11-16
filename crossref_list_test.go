@@ -14,13 +14,9 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// The panel's composition. With the publisher's run off, the list is the
-// badged parallels then the Treasury rows and nothing of the publisher's;
-// with it on, one list of one card under section labels: the parallels
-// without their pill, the publisher's notes each whole under its letter with
-// its citations as cards, and the Treasury open beneath, less the passages
-// the publisher's cards on screen already carry. Every check carries a
-// control.
+// The panel keeps publisher notes, Gospel episodes and Treasury origins in
+// separate labelled sections. Shared destinations remain under every source
+// that contributes them; publisher notes retain their own printed structure.
 
 // withPublisherCrossRefs flips the registry flag for one edition for the
 // test's duration — what the nkjvxrefs build tag does for the NKJV at init.
@@ -69,6 +65,8 @@ func textsIn(o fyne.CanvasObject) []string {
 			walk(x.box)
 		case *crossRefNoteRow:
 			walk(x.box)
+		case *crossRefSourceGroup:
+			walk(x.box)
 		case *fyne.Container:
 			for _, c := range x.Objects {
 				walk(c)
@@ -92,8 +90,8 @@ func joinedTexts(objs []fyne.CanvasObject) string {
 
 // cardsIn is every card in objs, in list order: the cards of the list's own
 // run, with those under an open note among them. A note's own row and a
-// group's are not cards, and a group's citations are the group's, not the
-// list's, so neither is entered.
+// group's are not cards. Source groups contribute their mounted bodies;
+// nested publisher groups remain separate from the list's direct cards.
 func cardsIn(objs []fyne.CanvasObject) []*tapCard {
 	var out []*tapCard
 	var walk func(o fyne.CanvasObject)
@@ -102,6 +100,8 @@ func cardsIn(objs []fyne.CanvasObject) []*tapCard {
 		case *tapCard:
 			out = append(out, x)
 		case *crossRefNoteRow:
+			walk(x.body)
+		case *crossRefSourceGroup:
 			walk(x.body)
 		case *fyne.Container:
 			for _, c := range x.Objects {
@@ -245,6 +245,8 @@ func crossRefListMisfits(objs []fyne.CanvasObject, limit float32) []string {
 			walk(x.box, path+"/group")
 		case *crossRefNoteRow:
 			walk(x.box, path+"/note")
+		case *crossRefSourceGroup:
+			walk(x.box, path+"/source")
 		case *fyne.Container:
 			for i, c := range x.Objects {
 				walk(c, path+"/"+strconv.Itoa(i))
@@ -288,6 +290,8 @@ func bannedIn(objs []fyne.CanvasObject) []string {
 			walk(x.box)
 		case *crossRefNoteRow:
 			walk(x.box)
+		case *crossRefSourceGroup:
+			walk(x.box)
 		case *fyne.Container:
 			for _, c := range x.Objects {
 				walk(c)
@@ -312,6 +316,8 @@ func groupRowsIn(objs []fyne.CanvasObject) []*crossRefGroupRow {
 			out = append(out, x)
 		case *crossRefNoteRow:
 			walk(x.body) // a group among a note's pieces
+		case *crossRefSourceGroup:
+			walk(x.body)
 		case *fyne.Container:
 			for _, c := range x.Objects {
 				walk(c)
@@ -373,7 +379,7 @@ func hasLine(objs []fyne.CanvasObject, s string) bool {
 	return false
 }
 
-func TestCrossRefListWithoutThePublisherIsWhatItAlwaysWas(t *testing.T) {
+func TestCrossRefListWithoutThePublisherKeepsLabelledSources(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	licenseNKJVForTest(t)
@@ -384,39 +390,36 @@ func TestCrossRefListWithoutThePublisherIsWhatItAlwaysWas(t *testing.T) {
 	if lst.PublisherCards != 0 || lst.PublisherLines != 0 || lst.Sections.Publisher {
 		t.Errorf("the publisher's run appeared with the flag off: %+v", lst)
 	}
-	if lst.Parallels != 1 || lst.TSKRows != 2 || len(lst.Objects) != 3 {
-		t.Errorf("list = %d parallels, %d Treasury rows, %d objects; want 1, 2, 3", lst.Parallels, lst.TSKRows, len(lst.Objects))
+	if lst.Parallels != 1 || lst.TSKRows != 2 {
+		t.Errorf("list = %d parallels and %d Treasury rows; want 1 and 2", lst.Parallels, lst.TSKRows)
 	}
 	if got := cardLabelsIn(lst.Objects); joined(got) != "Matthew 3:1|John 7:50|Galatians 6:15" {
 		t.Errorf("cards = %q", got)
 	}
-	if labels := sectionLabelsIn(lst.Objects); len(labels) != 0 {
-		t.Errorf("section labels in the plain list: %q", labels)
+	if labels := sectionLabelsIn(lst.Objects); joined(labels) != parallelsLabel+"|"+treasuryLabel {
+		t.Errorf("source section labels = %q", labels)
 	}
 	all := joinedTexts(lst.Objects)
-	if !strings.Contains(all, "PARALLEL") {
-		t.Error("the parallel row lost its pill, the one thing that says where it is from in a list with no labels")
+	if hasLine(lst.Objects, "PARALLEL") || !hasLine(lst.Objects, "A synopsis probe") {
+		t.Error("the Gospel source must identify its episode without repeating a per-card pill")
 	}
 	for _, banned := range []string{"REFERENCES", "Thomas Nelson", "John 7:50; 19:39", "(John 1:13", "No NKJV"} {
 		if strings.Contains(all, banned) {
 			t.Errorf("a publisher's note, label or credit reached the plain list (%q):\n%s", banned, all)
 		}
 	}
-	// The footer names the Treasury in the words it has always had, and the
-	// synopsis on the line under it while a parallel row is on screen; the
-	// edition is licensed, so the footer carries its notice under the
-	// previews of its verse text.
+	// The footer names both displayed sources, and the licensed edition
+	// retains its notice under the previews of its verse text.
 	sources, notice := crossRefFooterCredit(st, lst.Sections)
-	if sources != "Cross-references: OpenBible.info (CC-BY)\nGospel parallels: synopsis" {
+	if sources != treasuryCredit+"\n"+parallelsCredit {
 		t.Errorf("footer sources = %q", sources)
 	}
 	if !strings.Contains(notice, "Thomas Nelson") {
 		t.Errorf("a licensed edition's previews are shown without its notice: %q", notice)
 	}
-	// Without a parallel row the synopsis is not named: the one repair the
-	// plain list takes, since a synopsis was credited on every Psalm.
+	// Without a parallel row the synopsis is not named.
 	lst = buildCrossRefList(st, sel, listFixtureRefs()[1:], nil, lightPalette, func(crossRef) {})
-	if sources, _ := crossRefFooterCredit(st, lst.Sections); sources != tskCredit {
+	if sources, _ := crossRefFooterCredit(st, lst.Sections); sources != treasuryCredit {
 		t.Errorf("footer sources without a parallel row = %q, want the Treasury alone", sources)
 	}
 	// CONTROL: a public-domain edition carries no notice.
@@ -443,8 +446,8 @@ func TestCrossRefListWithThePublisherIsItsNotesUnderTheirLetters(t *testing.T) {
 	// verse 2's first note, and verse 3's own passage. Verse 1's lone group
 	// has nothing to follow and is drawn as its words, and still counts as a
 	// group and never as a line.
-	if lst.Parallels != 1 || lst.PublisherNotes != 4 || lst.PublisherCards != 1 || lst.PublisherGroups != 2 || lst.PublisherLines != 2 || lst.TSKRows != 2 {
-		t.Fatalf("list = %+v; want one parallel, four notes showing one card, two groups and two lines that are not followed, and two Treasury cards", lst)
+	if lst.Parallels != 1 || lst.PublisherNotes != 4 || lst.PublisherCards != 1 || lst.PublisherGroups != 2 || lst.PublisherLines != 2 || lst.TSKRows != 3 {
+		t.Fatalf("list = %+v; want one parallel, four notes showing one card, two groups and two lines that are not followed, and three Treasury cards", lst)
 	}
 	// The selected text heads the list.
 	if !lst.Passage || passageIn(lst.Objects[:1]) == nil {
@@ -470,12 +473,9 @@ func TestCrossRefListWithThePublisherIsItsNotesUnderTheirLetters(t *testing.T) {
 	if got := sectionLabelsIn(lst.Objects); joined(got) != want {
 		t.Errorf("section labels = %q\nwant %q", got, want)
 	}
-	// One card idiom: the publisher's card, the parallel, then the
-	// Treasury's. The Treasury's John 7:50 is the passage the first note's
-	// card shows as the panel opens and goes; its Galatians 6:15 is inside
-	// verse 2's closed lone group and stays, after the Treasury's label,
-	// before Romans 5:8.
-	if got := cardLabelsIn(lst.Objects); joined(got) != "John 7:50|Matthew 3:1|Galatians 6:15|Romans 5:8" {
+	// Every source retains its relationship, including the Treasury's
+	// destination that the publisher also cites.
+	if got := cardLabelsIn(lst.Objects); joined(got) != "John 7:50|Matthew 3:1|John 7:50|Galatians 6:15|Romans 5:8" {
 		t.Errorf("cards = %q", got)
 	}
 	tskAt := -1
@@ -488,8 +488,8 @@ func TestCrossRefListWithThePublisherIsItsNotesUnderTheirLetters(t *testing.T) {
 	if tskAt < 0 {
 		t.Fatalf("no %q label in the list", treasuryLabel)
 	}
-	if before, after := joined(cardLabelsIn(lst.Objects[:tskAt])), joined(cardLabelsIn(lst.Objects[tskAt:])); before != "John 7:50|Matthew 3:1" || after != "Galatians 6:15|Romans 5:8" {
-		t.Errorf("cards before %s = %q, after = %q; want Galatians 6:15 kept in the Treasury", treasuryLabel, before, after)
+	if before, after := joined(cardLabelsIn(lst.Objects[:tskAt])), joined(cardLabelsIn(lst.Objects[tskAt:])); before != "John 7:50|Matthew 3:1" || after != "John 7:50|Galatians 6:15|Romans 5:8" {
+		t.Errorf("cards before %s = %q, after = %q; want every Treasury relationship retained", treasuryLabel, before, after)
 	}
 	// Verse 2's first note is more than one piece: a row that carries the
 	// note as printed, open, with its pieces under it in print order — the
@@ -604,10 +604,9 @@ func TestCrossRefListHasOnePublisherSectionForTheSelection(t *testing.T) {
 	if lst = buildCrossRefList(st, ps, nil, nil, lightPalette, nop); joined(sectionLabelsIn(lst.Objects)) != "NKJV REFERENCES" {
 		t.Errorf("2 verses of Psalm 3: labels = %q", sectionLabelsIn(lst.Objects))
 	}
-	// CONTROL: a verse without a note and no title note: the bare label over
-	// the empty line (a Treasury row keeps the list from being the message).
+	// CONTROL: a verse without a publisher note has no empty publisher section.
 	lst = buildCrossRefList(st, ps[1:], []crossRef{{Book: "John", Chapter: 7, Verse: 50, Votes: 3}}, nil, lightPalette, nop)
-	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES|TREASURY OF SCRIPTURE KNOWLEDGE" {
+	if got := sectionLabelsIn(lst.Objects); joined(got) != treasuryLabel {
 		t.Errorf("Psalm 3:2: labels = %q", got)
 	}
 	// A noted section heading and surrounding verses share the one NKJV
@@ -668,11 +667,11 @@ func TestANoteIsKeptWholeThoughAnotherNoteHasItsPassage(t *testing.T) {
 			t.Errorf("with %d Treasury rows: cards = %q, %d publisher cards; want John 7:50 under each verse that cites it", len(refs), got, lst.PublisherCards)
 		}
 	}
-	// CONTROL: a Treasury row for the shared passage goes once, however many
-	// notes card it.
+	// CONTROL: a Treasury row for the shared passage remains beneath both
+	// publisher notes, preserving all three source relationships.
 	lst := buildCrossRefList(st, sel, []crossRef{{Book: "John", Chapter: 7, Verse: 50, Votes: 9}}, nil, lightPalette, nop)
-	if lst.TSKRows != 0 || lst.Sections.Treasury {
-		t.Errorf("the Treasury keeps a row both notes card: %+v", lst)
+	if lst.TSKRows != 1 || !lst.Sections.Treasury || joined(cardLabelsIn(lst.Objects)) != "John 7:50|John 7:50|John 7:50" {
+		t.Errorf("a shared destination lost one of its source relationships: %+v", lst)
 	}
 }
 
@@ -716,10 +715,9 @@ func TestATitleAndTheWholePsalmAreTwoCards(t *testing.T) {
 	}
 }
 
-// A title note's card, and the Treasury rows the publisher's cards already
-// carry: dropped by containment, in both directions, and the section goes
-// when nothing of it is left.
-func TestCrossRefListDropsTheTreasuryRowsThePublisherCarries(t *testing.T) {
+// Each source keeps its own relationship, including matching and overlapping
+// destinations. A publisher card never removes a Treasury row or its credit.
+func TestCrossRefListKeepsTreasuryRelationshipsAlsoCarriedByPublisher(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	licenseNKJVForTest(t)
@@ -733,16 +731,16 @@ func TestCrossRefListDropsTheTreasuryRowsThePublisherCarries(t *testing.T) {
 	ps := st.Bible.GetChapter("Psalms", 3)
 	nop := func(crossRef) {}
 	refs := []crossRef{
-		{Book: "2 Samuel", Chapter: 15, Verse: 1, EndV: 18, Votes: 20}, // contains the card's start: goes
-		{Book: "2 Samuel", Chapter: 15, Verse: 14, Votes: 9},           // inside the card's passage: goes
-		{Book: "2 Samuel", Chapter: 16, Verse: 1, Votes: 5},            // another passage: stays
+		{Book: "2 Samuel", Chapter: 15, Verse: 1, EndV: 18, Votes: 20}, // contains the publisher card's start
+		{Book: "2 Samuel", Chapter: 15, Verse: 14, Votes: 9},           // inside the publisher passage
+		{Book: "2 Samuel", Chapter: 16, Verse: 1, Votes: 5},            // another passage
 		{Book: "John", Chapter: 7, Verse: 50, Votes: 3},
 	}
 	lst := buildCrossRefList(st, ps[:1], refs, nil, lightPalette, nop)
-	if got := cardLabelsIn(lst.Objects); joined(got) != "2 Samuel 15:13–17|2 Samuel 16:1|John 7:50" {
+	if got := cardLabelsIn(lst.Objects); joined(got) != "2 Samuel 15:13–17|2 Samuel 15:1–18|2 Samuel 15:14|2 Samuel 16:1|John 7:50" {
 		t.Errorf("cards = %q", got)
 	}
-	if lst.PublisherCards != 1 || lst.TSKRows != 2 || !lst.Sections.Treasury {
+	if lst.PublisherCards != 1 || lst.TSKRows != 4 || !lst.Sections.Treasury {
 		t.Errorf("list = %+v", lst)
 	}
 	// CONTROL: with the flag off every Treasury row shows.
@@ -751,24 +749,22 @@ func TestCrossRefListDropsTheTreasuryRowsThePublisherCarries(t *testing.T) {
 		t.Errorf("flag off: %d Treasury rows, want all 4", lst.TSKRows)
 	}
 	withPublisherCrossRefs(t, "nkjv", true)
-	// Every Treasury row carried: no Treasury section, no credit.
+	// Even when every target overlaps, the Treasury remains a separate source.
 	lst = buildCrossRefList(st, ps[:1], refs[:2], nil, lightPalette, nop)
-	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES" {
-		t.Errorf("labels with the Treasury wholly carried = %q", got)
+	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES|TREASURY OF SCRIPTURE KNOWLEDGE" {
+		t.Errorf("labels with overlapping Treasury targets = %q", got)
 	}
-	if lst.TSKRows != 0 || lst.Sections.Treasury {
-		t.Errorf("a Treasury with nothing left is still on screen: %+v", lst)
+	if lst.TSKRows != 2 || !lst.Sections.Treasury {
+		t.Errorf("the Treasury lost its own relationships: %+v", lst)
 	}
-	if sources, _ := crossRefFooterCredit(st, lst.Sections); sources != "" {
-		t.Errorf("the footer credits a set with nothing on screen: %q", sources)
+	if sources, _ := crossRefFooterCredit(st, lst.Sections); sources != treasuryCredit {
+		t.Errorf("the footer lost the displayed Treasury credit: %q", sources)
 	}
 }
 
 // A citation of a Psalm's title previews the superscription and never washes
-// verse 1, so it drops no Treasury verse row; a citation of whole chapters
-// previews only verse 1 under a chapter heading and drops a Treasury row only
-// when the row spans those exact whole chapters, keeping specific verse and
-// sub-range rows inside the chapter.
+// verse 1. Whole-chapter citations preview the opening verse. Treasury rows
+// retain their own destinations in both cases, including an exact overlap.
 func TestTitleAndWholeChapterCardsKeepSpecificTreasuryRows(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
@@ -789,24 +785,23 @@ func TestTitleAndWholeChapterCardsKeepSpecificTreasuryRows(t *testing.T) {
 	}
 
 	// 2. Genesis 7:2 cites whole-chapter "Lev. 11" (verses 1..2 in the fixture):
-	// specific verses inside Leviticus 11 and a cross-chapter range starting
-	// earlier stay; only a Treasury row spanning the exact whole chapter
-	// (Leviticus 11:1–2) is dropped.
+	// specific verses, a cross-chapter range, and the exact whole chapter
+	// all retain their independent Treasury relationship.
 	st.Bible.Verses["Leviticus"][10] = []Verse{{BookName: "Leviticus", Book: "Leviticus", Chapter: 10, Verse: 1, Text: "An earlier fixture chapter."}}
 	st.CurrentBook, st.CurrentChapter = "Genesis", 7
 	chapterTSK := []crossRef{
 		{Book: "Leviticus", Chapter: 11, Verse: 1, Votes: 30},                    // single verse: stays
 		{Book: "Leviticus", Chapter: 11, Verse: 2, Votes: 20},                    // single verse: stays
 		{Book: "Leviticus", Chapter: 10, Verse: 1, EndCh: 11, EndV: 2, Votes: 9}, // wider multi-chapter: stays
-		{Book: "Leviticus", Chapter: 11, Verse: 1, EndV: 2, Votes: 40},           // exact whole chapter: goes
+		{Book: "Leviticus", Chapter: 11, Verse: 1, EndV: 2, Votes: 40},           // exact whole chapter: stays
 	}
 	lst = buildCrossRefList(st, st.Bible.GetChapter("Genesis", 7), chapterTSK, nil, lightPalette, nop)
-	if got := cardLabelsIn(lst.Objects); joined(got) != "Leviticus 11|Leviticus 11:1|Leviticus 11:2|Leviticus 10:1–11:2" || lst.TSKRows != 3 {
-		t.Errorf("under a whole-chapter card, cards = %q (TSKRows=%d); want specific and wider rows kept, exact whole-chapter dropped", got, lst.TSKRows)
+	if got := cardLabelsIn(lst.Objects); joined(got) != "Leviticus 11|Leviticus 11:1|Leviticus 11:2|Leviticus 10:1–11:2|Leviticus 11:1–2" || lst.TSKRows != 4 {
+		t.Errorf("under a whole-chapter card, cards = %q (TSKRows=%d); want all four Treasury relationships kept", got, lst.TSKRows)
 	}
 }
 
-func TestCrossRefListEmptyPublisherRunShowsTheLineOverTheTreasury(t *testing.T) {
+func TestCrossRefListOmitsEmptyPublisherSection(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
 	licenseNKJVForTest(t)
@@ -816,17 +811,17 @@ func TestCrossRefListEmptyPublisherRunShowsTheLineOverTheTreasury(t *testing.T) 
 	ps := st.Bible.GetChapter("Psalms", 3)
 	nop := func(crossRef) {}
 
-	// Psalm 3:2 has no note: the label, one line, the Treasury open beneath.
+	// Psalm 3:2 has no note: only the populated Treasury section appears.
 	lst := buildCrossRefList(st, ps[1:], []crossRef{{Book: "John", Chapter: 7, Verse: 50, Votes: 3}}, nil, lightPalette, nop)
-	if got := sectionLabelsIn(lst.Objects); joined(got) != "NKJV REFERENCES|TREASURY OF SCRIPTURE KNOWLEDGE" {
+	if got := sectionLabelsIn(lst.Objects); joined(got) != treasuryLabel {
 		t.Errorf("labels = %q", got)
 	}
-	if lst.PublisherCards != 0 || lst.PublisherLines != 1 || lst.TSKRows != 1 {
+	if lst.PublisherCards != 0 || lst.PublisherLines != 0 || lst.Sections.Publisher || lst.TSKRows != 1 {
 		t.Errorf("list = %+v", lst)
 	}
 	all := joinedTexts(lst.Objects)
-	if !strings.Contains(all, "No NKJV cross-references for this selection.") || strings.Contains(all, "Thomas Nelson") {
-		t.Errorf("the empty run is not one scoped line:\n%s", all)
+	if strings.Contains(all, "No NKJV cross-references for this selection.") || strings.Contains(all, "NKJV REFERENCES") || strings.Contains(all, "Thomas Nelson") {
+		t.Errorf("the absent publisher leaked a section or credit:\n%s", all)
 	}
 	// Nothing at all for the selection is the panel's message state, not a
 	// run of one line over an empty Treasury.
@@ -876,8 +871,8 @@ func TestTheFooterNamesOnlyTheSetsOnScreen(t *testing.T) {
 		sections crossRefSections
 		want     string
 	}{
-		{false, crossRefSections{Treasury: true, Parallels: true}, "Cross-references: OpenBible.info (CC-BY)\nGospel parallels: synopsis"},
-		{false, crossRefSections{Treasury: true}, "Cross-references: OpenBible.info (CC-BY)"},
+		{false, crossRefSections{Treasury: true, Parallels: true}, treasuryCredit + "\n" + parallelsCredit},
+		{false, crossRefSections{Treasury: true}, treasuryCredit},
 		{false, crossRefSections{Parallels: true}, "Gospel parallels: synopsis"},
 		{false, crossRefSections{}, ""},
 		{true, crossRefSections{Treasury: true, Parallels: true, Publisher: true}, "Treasury of Scripture Knowledge: OpenBible.info (CC-BY)\nGospel parallels: synopsis"},
@@ -1006,17 +1001,16 @@ func TestOwnPassageIsMutedOnlyWithinSelection(t *testing.T) {
 	}
 
 	// Single verse 3:1: publisher Matt. 3:1–12 and Treasury Matt. 3:1–6 are
-	// both wider than 3:1, so Matt. 3:1–12 is a publisher card (carrying the
-	// overlapping Treasury row) and Mark 1:3–8 and Mark 1:9 are cards.
+	// both wider than 3:1, so both remain cards in their own source sections,
+	// alongside Mark 1:3–8 and Mark 1:9.
 	one := versesBetween(bd, "Matthew", 3, 1, 1)
 	lstOne := buildCrossRefList(st, one, tsk, nil, lightPalette, func(crossRef) {})
-	if got := joined(cardLabelsIn(lstOne.Objects)); got != "Matthew 3:1–12|Mark 1:3–8|Mark 1:9" {
-		t.Errorf("single verse 3:1 cards = %q, want Matthew 3:1–12|Mark 1:3–8|Mark 1:9", got)
+	if got := joined(cardLabelsIn(lstOne.Objects)); got != "Matthew 3:1–12|Mark 1:3–8|Matthew 3:1–6|Mark 1:9" {
+		t.Errorf("single verse 3:1 cards = %q, want Matthew 3:1–12|Mark 1:3–8|Matthew 3:1–6|Mark 1:9", got)
 	}
 
 	// Selecting the full pericope 3:1–12: publisher Matt. 3:1–12 is now equal
-	// to the selection (muted self-row, so it no longer drops Treasury
-	// Matt. 3:1–6 as a card), and Treasury Matt. 3:1–6 is contained in 3:1–12
+	// to the selection (a muted self-row), and Treasury Matt. 3:1–6 is contained in 3:1–12
 	// so it also renders as a muted self-row under the Treasury section!
 	span := versesBetween(bd, "Matthew", 3, 1, 12)
 	lstSpan := buildCrossRefList(st, span, tsk, nil, lightPalette, func(crossRef) {})
@@ -1031,11 +1025,15 @@ func TestOwnPassageIsMutedOnlyWithinSelection(t *testing.T) {
 		t.Errorf("muted Treasury self-row label missing from list:\n%s", all)
 	}
 
-	// Store build (PublisherCrossRefs false): Treasury rows remain ordinary cards.
+	// Store build (PublisherCrossRefs false): the own-passage rule still
+	// applies, independently of whether publisher notes are displayed.
 	withPublisherCrossRefs(t, "nkjv", false)
 	storeSpan := buildCrossRefList(st, span, tsk, nil, lightPalette, func(crossRef) {})
-	if got := joined(cardLabelsIn(storeSpan.Objects)); got != "Matthew 3:1–6|Mark 1:9" {
-		t.Errorf("store build cards = %q, want Matthew 3:1–6|Mark 1:9", got)
+	if got := joined(cardLabelsIn(storeSpan.Objects)); got != "Mark 1:9" {
+		t.Errorf("store build cards = %q, want Mark 1:9", got)
+	}
+	if !strings.Contains(joinedTexts(storeSpan.Objects), "Matthew 3:1–6") {
+		t.Error("store build lost the muted Treasury self-reference")
 	}
 }
 
@@ -1080,35 +1078,5 @@ func TestACrossReferencePreviewKeepsTheSmallCapitals(t *testing.T) {
 	got := strings.Join(textsIn(row), "\n")
 	if !strings.Contains(got, "the Lord Gᴏᴅ: the Lᴏʀᴅ is my shepherd.") {
 		t.Errorf("the preview reads %q; it must keep the small capitals the page draws", got)
-	}
-}
-
-func TestTreasuryMinusPublisherDropsOverlappingCrossBookRanges(t *testing.T) {
-	fused := crossRef{Book: "2 Chronicles", Chapter: 36, Verse: 22, EndBook: "Ezra", EndCh: 1, EndV: 3}
-	later := crossRef{Book: "Jeremiah", Chapter: 25, Verse: 12}
-
-	for _, card := range []crossRef{
-		{Book: "Ezra", Chapter: 1, Verse: 1},           // Ezra 6:3 / Daniel 6:28 shape
-		{Book: "Ezra", Chapter: 1, Verse: 1, EndV: 4},  // Ezra 4:3 shape
-		{Book: "2 Chronicles", Chapter: 36, Verse: 23}, // start-book non-initial verse
-		{Book: "2 Chronicles", Chapter: 36, Verse: 22, EndV: 23},
-	} {
-		kept := treasuryMinusPublisher([]crossRef{fused, later}, []crossRef{card})
-		if len(kept) != 1 || kept[0].label() != "Jeremiah 25:12" {
-			t.Errorf("card %q left %v, want only Jeremiah 25:12", card.label(), kept)
-		}
-	}
-
-	// Non-overlapping verses, superscription (:title) cards and whole-chapter cards leave the cross-book row standing.
-	for _, card := range []crossRef{
-		{Book: "Ezra", Chapter: 1, Verse: 4},
-		{Book: "2 Chronicles", Chapter: 36, Verse: 21},
-		{Book: "Ezra", Chapter: 1, Verse: 1, TitleRef: true},
-		{Book: "Ezra", Chapter: 1, Verse: 1, EndV: 11, WholeChapters: true},
-	} {
-		kept := treasuryMinusPublisher([]crossRef{fused}, []crossRef{card})
-		if len(kept) != 1 || kept[0].label() != fused.label() {
-			t.Errorf("card %+v dropped %q, want kept", card, fused.label())
-		}
 	}
 }

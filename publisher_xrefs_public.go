@@ -45,11 +45,11 @@ type publisherVerseEntry struct {
 // publisherHeadingNote is one parallel-passage reference line (\r) recovered
 // from an edition's published USFM for a section heading before a verse.
 type publisherHeadingNote struct {
-	BeforeVerse int       // Heading.BeforeVerse in the chapter
-	HeadingOrd  int       // 0-based index among the chapter's section headings at BeforeVerse
-	HeadingHash uint64    // redLetterTextHash(Heading.Text)
-	Text        string    // the reference line without its outer wrapper parentheses
-	Refs        []NoteRef // resolved citations within Text; nil for words-only (e.g. "Joshua–Malachi")
+	BeforeVerse  int       // Heading.BeforeVerse in the chapter
+	HeadingCount int       // number of section headings at BeforeVerse in the source snapshot
+	HeadingHash  uint64    // redLetterTextHash(Heading.Text)
+	Text         string    // the reference line without its outer wrapper parentheses
+	Refs         []NoteRef // resolved citations within Text; nil for words-only (e.g. "Joshua–Malachi")
 }
 
 // applyPublisherCrossRefs attaches an edition's recovered publisher
@@ -71,6 +71,13 @@ func applyPublisherCrossRefs(versionID string, bd *BibleData) {
 func applyPublisherVerseCrossRefs(bd *BibleData, table map[string]publisherVerseEntry) {
 	if len(bd.Verses) == 0 {
 		return
+	}
+	for _, chapters := range bd.Verses {
+		for _, verses := range chapters {
+			for i := range verses {
+				verses[i].Footnotes = withoutPublisherTableNotes(verses[i].Footnotes)
+			}
+		}
 	}
 	for key, entry := range table {
 		book, ch, verseNum, ok := splitPublisherVerseKey(key)
@@ -106,11 +113,12 @@ func applyPublisherVerseCrossRefs(bd *BibleData, table map[string]publisherVerse
 				refs = append([]NoteRef(nil), n.Refs...)
 			}
 			verses[idx].Footnotes = append(verses[idx].Footnotes, Footnote{
-				Anchor: anchor,
-				Text:   n.Text,
-				Kind:   footnoteKindCrossref,
-				Caller: "+",
-				Refs:   refs,
+				Anchor:         anchor,
+				Text:           n.Text,
+				Kind:           footnoteKindCrossref,
+				Caller:         "+",
+				Refs:           refs,
+				PublisherTable: true,
 			})
 		}
 	}
@@ -120,12 +128,19 @@ func applyPublisherHeadingCrossRefs(bd *BibleData, table map[string][]publisherH
 	if len(bd.Headings) == 0 {
 		return
 	}
+	for _, chapters := range bd.Headings {
+		for _, headings := range chapters {
+			for i := range headings {
+				headings[i].Footnotes = withoutPublisherTableNotes(headings[i].Footnotes)
+			}
+		}
+	}
 	for key, list := range table {
 		book, ch, ok := splitPublisherChapterKey(key)
 		if !ok {
 			continue
 		}
-		origHeads := headingsFor(bd, book, ch)
+		origHeads := bd.Headings[book][ch]
 		if len(origHeads) == 0 {
 			continue
 		}
@@ -155,10 +170,11 @@ func applyPublisherHeadingCrossRefs(bd *BibleData, table map[string][]publisherH
 			}
 			if matches != 1 {
 				target = -1
-				// A sole heading can retain its note after a wording change.
+				// A heading that was and remains alone can retain its note
+				// after a wording change.
 				// With multiple candidates, an ordinal cannot identify which
 				// heading survived a rename or reorder.
-				if len(atVerse) == 1 && hn.HeadingOrd == 0 {
+				if len(atVerse) == 1 && hn.HeadingCount == 1 {
 					target = atVerse[0]
 				}
 			}
@@ -170,25 +186,37 @@ func applyPublisherHeadingCrossRefs(bd *BibleData, table map[string][]publisherH
 				refs = append([]NoteRef(nil), hn.Refs...)
 			}
 			chHeads[target].Footnotes = append(chHeads[target].Footnotes, Footnote{
-				Anchor: 0,
-				Text:   hn.Text,
-				Kind:   footnoteKindCrossref,
-				Caller: "-",
-				Refs:   refs,
+				Anchor:         0,
+				Text:           hn.Text,
+				Kind:           footnoteKindCrossref,
+				Caller:         "-",
+				Refs:           refs,
+				PublisherTable: true,
 			})
 		}
 		if replacedSlice {
-			bookHeads := map[int][]Heading{ch: chHeads}
-			for _, c := range bd.GetChapterNumbersForBook(book) {
-				if c != ch {
-					if hs := headingsFor(bd, book, c); len(hs) > 0 {
-						bookHeads[c] = hs
-					}
-				}
-			}
-			bd.Headings[book] = bookHeads
+			bd.Headings[book][ch] = chHeads
 		}
 	}
+}
+
+// withoutPublisherTableNotes keeps feed notes in order and removes only
+// recovered references. Cache-loaded data can then take additions, revisions
+// and deletions from the current tables without accumulating stale notes.
+func withoutPublisherTableNotes(notes []Footnote) []Footnote {
+	for i, note := range notes {
+		if note.Kind != footnoteKindCrossref || !note.PublisherTable {
+			continue
+		}
+		kept := append([]Footnote(nil), notes[:i]...)
+		for _, rest := range notes[i+1:] {
+			if rest.Kind != footnoteKindCrossref || !rest.PublisherTable {
+				kept = append(kept, rest)
+			}
+		}
+		return kept
+	}
+	return notes
 }
 
 func stripLeakedRefHeadings(heads []Heading, notes []publisherHeadingNote) []Heading {

@@ -14,6 +14,24 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+// noteReferenceText locates a destination inside this publisher note. A
+// Treasury card may carry the same citation at a different left edge.
+func noteReferenceText(n *crossRefNoteRow, label string) *canvas.Text {
+	for _, card := range cardsIn(n.body.Objects) {
+		if cardReference(card) != label {
+			continue
+		}
+		var reference *canvas.Text
+		walkTree(card.content, func(o fyne.CanvasObject) {
+			if x, ok := o.(*canvas.Text); ok && x.Text == label {
+				reference = x
+			}
+		})
+		return reference
+	}
+	return nil
+}
+
 // IN THE PANEL: a group's label is larger than a caption and smaller than a
 // card's reference, its left edge is the cards', its tap is a full row, and
 // opening or closing it moves nothing but the list inside its scroll — the
@@ -44,13 +62,13 @@ func TestAGroupOpensInsideThePanelWithoutMovingIt(t *testing.T) {
 		switch x := o.(type) {
 		case *crossRefGroupRow:
 			groups = append(groups, x)
+		case *crossRefNoteRow:
+			if reference == nil {
+				reference = noteReferenceText(x, "Romans 5:8")
+			}
 		case *container.Scroll:
 			if scroll == nil {
 				scroll = x
-			}
-		case *canvas.Text:
-			if x.Text == "Romans 5:8" {
-				reference = x
 			}
 		}
 	})
@@ -156,13 +174,12 @@ func TestANoteClosesInsideThePanelWithoutMovingIt(t *testing.T) {
 			}
 		case *crossRefNoteRow:
 			notes = append(notes, x)
+			if reference == nil {
+				reference = noteReferenceText(x, "Romans 5:8")
+			}
 		case *container.Scroll:
 			if scroll == nil {
 				scroll = x
-			}
-		case *canvas.Text:
-			if x.Text == "Romans 5:8" {
-				reference = x
 			}
 		}
 	})
@@ -190,9 +207,8 @@ func TestANoteClosesInsideThePanelWithoutMovingIt(t *testing.T) {
 			t.Errorf("row %d of the passage is %v wide in %v", i, rw, passage.Size().Width)
 		}
 	}
-	// Raised as the page raises a superscript: a letter is readingMarkScale
-	// of the words' size, its baseline readingMarkLift of that size above
-	// theirs, and it is given the height of its own glyphs. Given its row's
+	// Raised above the words with the excerpt's marker size and lift, and
+	// given the height of its own glyphs. Given its row's
 	// whole height the toolkit centres it there, a small letter among the
 	// words. (The fixture's third note is keyed past the text's end, so its
 	// letter closes the row: the words of its row are the ones before it.)
@@ -211,7 +227,7 @@ func TestANoteClosesInsideThePanelWithoutMovingIt(t *testing.T) {
 				continue
 			}
 			letters++
-			if want := passage.size * readingMarkScale; tx.TextSize != want {
+			if want := passage.marks.size; tx.TextSize != want {
 				t.Errorf("the letter %q is %v points beside words of %v, want %v", tx.Text, tx.TextSize, passage.size, want)
 			}
 			if word == nil {
@@ -220,7 +236,7 @@ func TestANoteClosesInsideThePanelWithoutMovingIt(t *testing.T) {
 			}
 			own, base := drv.RenderedTextSize(tx.Text, tx.TextSize, fyne.TextStyle{}, tx.FontSource)
 			lift := (word.Position().Y + bodyBase) - (tx.Position().Y + base)
-			if want := passage.size * readingMarkLift; lift < want-0.01 || lift > want+0.01 || tx.Size().Height > own.Height {
+			if want := passage.marks.lift; lift < want-0.01 || lift > want+0.01 || tx.Size().Height > own.Height {
 				t.Errorf("the letter %q stands %v above the line of its row's words in a box %v tall (its glyphs are %v): want %v above, in a box no taller than its glyphs", tx.Text, lift, tx.Size().Height, own.Height, want)
 			}
 		}

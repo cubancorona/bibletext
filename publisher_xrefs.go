@@ -62,6 +62,10 @@ type publisherCrossRef struct {
 	// Verse and not from the verse itself: one in the NKJV, on the heading
 	// before Numbers 4:21.
 	Heading bool
+	// HeadingText is the actual heading that carries the note; empty for
+	// notes on verses or titles. Verse locates it without making the note
+	// a reference from that verse alone.
+	HeadingText string
 	// Index is the note's place among the notes of its verse number, from 0
 	// in the order they stand: a title's among the title's, and a heading's
 	// before the verse's it precedes, counted with them. Anchor is the rune
@@ -397,6 +401,9 @@ func publisherCrossRefsFor(bd *BibleData, book string, chapter int, selected []V
 			unkeyed = true
 		}
 		row := publisherCrossRef{Verse: verse, Heading: heading, Unkeyed: unkeyed, Anchor: fn.Anchor, Text: text}
+		if heading {
+			row.HeadingText = unit
+		}
 		unitRunes := []rune(unit)
 		if fn.Caller == "+" {
 			// A "+" caller (WEB, WEB Catholic) records the exact rune boundary

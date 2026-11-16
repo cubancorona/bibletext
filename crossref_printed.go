@@ -35,11 +35,11 @@ const crossRefPrintedLeading float32 = 3
 const crossRefPrintedGuess float32 = 220
 
 // crossRefSingleLineMax conservatively estimates the group well at the
-// minimum panel width and Extra large text: 280pt panel less the 44pt chrome
-// estimate, 16pt section padding, 22pt letter margin and 16pt group padding.
+// minimum panel width and Extra large text, including a three-digit source
+// verse margin and the padding of an opened publisher group.
 // Only references that fit this lower bound use a single canvas.Text. Wider
 // headings use crossRefPrinted and wrap to the actual available width.
-const crossRefSingleLineMax float32 = 182
+const crossRefSingleLineMax float32 = 160
 
 // crossRefPrinted is one printed line, wrapped italic title (wordWrap), or
 // wrapped reference heading (refWrap).
@@ -221,9 +221,9 @@ func wordWrappedRows(text string, width float32, measure func(string) float32) [
 }
 
 // referenceRows keeps a reference heading on one row whenever it fits width,
-// turns a range after its en dash ("1 Thessalonians 5:28–" / "2 Thessalonians
-// 1:2") before splitting words, and falls back to word wrapping only inside a
-// piece that is still wider than width.
+// turns a cross-book range after its en dash ("1 Thessalonians 5:28–" /
+// "2 Thessalonians 1:2") before splitting words, and falls back to word
+// wrapping only inside a piece that is still wider than width.
 func referenceRows(text string, width float32, measure func(string) float32) []string {
 	if text == "" {
 		return nil
@@ -291,7 +291,7 @@ func (r *crossRefPrintedRenderer) MinSize() fyne.Size {
 	r.wrap(r.width)
 	var w float32
 	tokens := r.p.Text
-	if r.p.refWrap {
+	if r.p.refWrap && hasCrossBookEnDash(tokens) {
 		tokens = strings.ReplaceAll(tokens, "–", "– ")
 	}
 	for _, word := range strings.Fields(tokens) {

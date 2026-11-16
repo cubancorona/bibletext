@@ -25,12 +25,10 @@ package bibletext
 // A letter stands directly before its word, so one whose offset the decoder
 // wrote ahead of a line break or a space is drawn after it (noteMarkAt).
 //
-// Decided 11 November 2026: the letter stands before its word, where the
-// edition keys the note, and is raised above the line as the printed
-// edition's letters are. It is set as the page sets a superscript, at the
-// size and the lift of the page's verse numbers (readingMarkScale and
-// readingMarkLift, verse_of_day.go), and a verse's number in the passage is
-// the page's own: the bold cut, in the page's colour for one.
+// The excerpt's letters and verse numbers identify the matching groups
+// below it. They use those groups' accent and bold UI faces, at the printed
+// citation size, raised just enough to keep their exact text anchors clear.
+// The main reading page and other passage cards keep their own markers.
 
 import (
 	"sort"
@@ -40,11 +38,27 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 )
 
 // crossRefPassageTextSize is the passage's size before the reading face's
 // optical correction: the size the list's previews are set at.
 const crossRefPassageTextSize = 17
+
+const crossRefPassageMarkLift float32 = 0.2
+
+// An explicit face is needed because readingParagraph measures every run
+// through FontSource rather than the canvas text style. Only upright numeric
+// faces have a plain-zero derivative; letters retain the theme's bold italic.
+func crossRefPassageMarkFace(style fyne.TextStyle) fyne.Resource {
+	if f := crossRefZeroFace(style); f != nil {
+		return f
+	}
+	if app := fyne.CurrentApp(); app != nil && app.Settings() != nil && app.Settings().Theme() != nil {
+		return app.Settings().Theme().Font(style)
+	}
+	return theme.DefaultTheme().Font(style)
+}
 
 // passageNumeralFace is the cut a verse's number is set in: the reading
 // face's bold, as on the page (styledReadingPane.numeralFace).
@@ -222,7 +236,14 @@ func newCrossRefPassage(state *AppState, book string, chapter int, selected []Ve
 	p := newReadingParagraph(passageRuns(publisherPassageUnits(state, book, chapter, selected, notes)),
 		readingGlyphSize(crossRefPanelSizes().passage), pal.Text, pal.RedLetter, styledPaneFont(), cardItalicFont())
 	p.mark, p.dim = pal.Accent, pal.TextMuted
-	p.number, p.bold = pal.VerseNumber, passageNumeralFace()
+	p.number, p.bold = pal.Accent, passageNumeralFace()
+	p.marks = &paragraphMarkStyle{
+		size:            crossRefPanelSizes().printed,
+		numberLetterGap: crossRefPanelSizes().printed * 0.25,
+		lift:            p.size * crossRefPassageMarkLift,
+		letter:          crossRefPassageMarkFace(fyne.TextStyle{Bold: true, Italic: true}),
+		number:          crossRefPassageMarkFace(fyne.TextStyle{Bold: true}),
+	}
 	p.holdFlush = true
 	// The list's width is known before the list is laid out, so the passage
 	// reports the height of its rows at that width from the first frame: at

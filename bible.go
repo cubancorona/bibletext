@@ -104,11 +104,15 @@ type Footnote struct {
 	Caller string `json:"caller,omitempty"`
 	// Refs are the citations inside a cross-reference note that the source
 	// tagged with a machine-readable target, in text order. Only the NKJV feed
-	// tags them (its ref elements); the helloao editions' notes carry none and
-	// leave this nil, as does a cache written before the field existed.
+	// tags them (its ref elements); recovered public-edition tables also
+	// populate these targets. Other notes and older caches leave this nil.
 	// Offsets into Text, never characters added to it, so a note's words are
 	// the publisher's own whether or not its citations were kept.
 	Refs []NoteRef `json:"refs,omitempty"`
+	// PublisherTable distinguishes recovered cross-references from notes
+	// supplied directly by the feed. It survives cache serialization so a
+	// later table revision can replace only its own recovered notes.
+	PublisherTable bool `json:"publisher_table,omitempty"`
 }
 
 // NoteRef is one tagged citation inside a note: the source's own target id

@@ -37,7 +37,7 @@ func TestCrossRefCompactPreviewUsesScopedSizing(t *testing.T) {
 		if card, ok := o.(*tapCard); ok {
 			cards = append(cards, card)
 		}
-		if text, ok := o.(*widget.RichText); ok && segmentText(text.Segments) == tskCredit {
+		if text, ok := o.(*widget.RichText); ok && segmentText(text.Segments) == treasuryCredit {
 			sources = text
 		}
 	})

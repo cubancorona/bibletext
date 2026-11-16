@@ -56,15 +56,9 @@ const (
 
 	// maxCrossRefsKept is how many of a verse's rows the index keeps, best
 	// first. The panel shows maxCrossRefsPerVerse of them, counted after the
-	// rows the reader's translation cannot show are dropped and the rows a
-	// Gospel parallel already shows are hidden, so it can read past the
-	// sixteenth. Measured over the 2026-08-31 dataset, for every selection
-	// that can hold the verse, the deepest it reads is the eighteenth row,
-	// first at the WEB's Matthew 10:1. In the next major release
-	// (docs/NEXT.md) it is the twenty-first, Matthew 10:17: five of its best
-	// rows lie inside passages its chapter lists as the same saying on
-	// another occasion, which hide the Treasury rows inside them. Thirty-two
-	// leaves room for a dataset that drops or hides more; the opt-in walk of
+	// rows the reader's translation cannot show are dropped, so it can read
+	// past the sixteenth. Thirty-two leaves room for a dataset that drops
+	// more; the opt-in walk of
 	// the downloaded texts measures the depth again and fails if a panel ever
 	// reads past it (crossRefDeepestRead).
 	maxCrossRefsKept = 32
@@ -87,6 +81,12 @@ type crossRef struct {
 	Title          string // for parallels, the pericope's title ("The Beatitudes") or the saying's
 	TitleRef       bool   // a publisher citation of a chapter's superscription (":title"), arriving without washing verse 1
 	WholeChapters  bool   // a publisher citation of whole chapters ("Lev. 11", "2 Kin. 18–20"), labelled by chapter
+	// Panel provenance is attached after lookup, never stored in the packed
+	// Treasury index. SourceVerse is the selected translation's verse number;
+	// a Gospel group instead carries its source identity and mapped passage.
+	SourceVerse int
+	SourceGroup string
+	SourceLabel string
 }
 
 // otherOccasion reports whether c is a row of the same saying on another
@@ -1282,16 +1282,16 @@ func verseBefore(a, b verseRef) bool {
 // synopsis parallels and, in the next major release, the same-saying-on-another-
 // occasion rows.
 func localCrossRefsForSelection(state *AppState, text string, span selSpan) []crossRef {
-	parallels, occasions, _, _, _, _ := localCrossRefParts(state, text, span)
+	parallels, occasions, _, _, _ := localCrossRefParts(state, text, span)
 	return append(parallels, occasions...)
 }
 
-func localCrossRefParts(state *AppState, text string, span selSpan) (parallels, occasions []crossRef, verses []Verse, vid string, resolve func(crossRef) []crossRef, shown map[string]bool) {
+func localCrossRefParts(state *AppState, text string, span selSpan) (parallels, occasions []crossRef, verses []Verse, vid string, resolve func(crossRef) []crossRef) {
 	if state == nil || state.Bible == nil {
-		return nil, nil, nil, "", nil, nil
+		return nil, nil, nil, "", nil
 	}
 	verses = selectionVerses(state, text, span)
-	shown = map[string]bool{} // label -> already emitted
+	seen := map[string]bool{} // source group and destination -> already emitted
 	vid = state.currentVersion().ID
 	resolve = crossRefResolver(state.Bible.Books, vid)
 
@@ -1303,13 +1303,14 @@ func localCrossRefParts(state *AppState, text string, span selSpan) (parallels, 
 		if !ok {
 			continue
 		}
-		for _, p := range gospelParallelsForVerse(v.BookName, srcCh, srcV) {
+		for _, p := range gospelParallelsForVerseIn(v.BookName, srcCh, srcV, vid) {
 			for _, c := range resolve(p) {
 				lbl := c.label()
-				if shown[lbl] {
+				key := c.SourceGroup + "\x00" + lbl
+				if seen[key] {
 					continue
 				}
-				shown[lbl] = true
+				seen[key] = true
 				parallels = append(parallels, c)
 			}
 		}
@@ -1317,130 +1318,62 @@ func localCrossRefParts(state *AppState, text string, span selSpan) (parallels, 
 
 	// The same saying on another occasion (parallels.go), after the
 	// same-occasion rows and before the Treasury, mapped as they are; the
-	// next major release's (docs/NEXT.md), and none in the shipping build. A
-	// row a same-occasion row already shows, or another of these, is left out
-	// by the verses it covers rather than by its label: from Luke 22:26, one
-	// saying gives Matthew 20:26-27 and the next Matthew 20:25-27, and the
-	// reader needs the passage once.
+	// next major release's (docs/NEXT.md), and none in the shipping build.
+	// Different source relations retain their own targets, including
+	// overlapping ranges; only a repeated hit within one group is omitted.
 	if nextRelease {
 		for _, v := range verses {
 			srcCh, srcV, ok := crossRefSourceRef(vid, v)
 			if !ok {
 				continue
 			}
-			for _, o := range gospelOccasionsForVerse(v.BookName, srcCh, srcV) {
+			for _, o := range gospelOccasionsForVerseIn(v.BookName, srcCh, srcV, vid) {
 				for _, c := range resolve(o) {
-					occasions = addOtherOccasionRow(occasions, parallels, c)
+					key := c.SourceGroup + "\x00" + c.label()
+					if !seen[key] {
+						seen[key] = true
+						occasions = append(occasions, c)
+					}
 				}
 			}
 		}
 	}
-	return parallels, occasions, verses, vid, resolve, shown
+	return parallels, occasions, verses, vid, resolve
 }
 
 // crossRefsForSelection aggregates the cross-references for the verse(s) the
-// selection spans, resolving target book names against the loaded translation
-// and merging duplicates (keeping the highest vote). Highest-voted first.
+// selection spans. Treasury rows remain grouped by their originating verse
+// in Scripture order, vote-ranked within that verse. A shared destination
+// remains in every source group that contributes it.
 func crossRefsForSelection(state *AppState, text string, span selSpan) []crossRef {
-	parallels, occasions, verses, vid, resolve, shown := localCrossRefParts(state, text, span)
+	parallels, occasions, verses, vid, resolve := localCrossRefParts(state, text, span)
 	if resolve == nil {
 		return nil
 	}
-	hidden := crossRefHidden{labels: shown, covers: occasions}
-
-	// Treasury-of-Scripture-Knowledge cross-references, highest-voted first, minus
-	// anything already shown above. Each selected verse gives its
-	// maxCrossRefsPerVerse best rows among the ones this translation can SHOW:
-	// the cap is counted after the drops and the hiding, so a row the reader
-	// cannot be shown hands its place to the next one down.
+	// Each selected verse gives its maxCrossRefsPerVerse best citations that
+	// this translation can show. Relationships from another source never
+	// suppress them. There is no selection-wide cap that could erase a later
+	// verse's group; the panel creates collapsed groups' cards on demand.
 	crossRefMu.Lock()
 	idx := crossRefIndex
 	crossRefMu.Unlock()
 	var tsk []crossRef
 	if idx != nil {
-		seen := map[string]int{} // label -> index into tsk
 		for _, v := range verses {
 			srcCh, srcV, ok := crossRefSourceRef(vid, v)
 			if !ok {
 				continue
 			}
-			mine, _ := treasuryRowsFor(idx[crossRefKey(v.BookName, srcCh, srcV)], resolve, hidden)
+			mine, _ := treasuryRowsFor(idx[crossRefKey(v.BookName, srcCh, srcV)], resolve)
 			for _, c := range mine {
-				lbl := c.label()
-				if i, dup := seen[lbl]; dup {
-					if c.Votes > tsk[i].Votes {
-						tsk[i].Votes = c.Votes
-					}
-					continue
-				}
-				seen[lbl] = len(tsk)
+				c.SourceVerse = v.Verse
+				c.SourceLabel = (crossRef{Book: v.BookName, Chapter: v.Chapter, Verse: v.Verse}).label()
 				tsk = append(tsk, c)
 			}
-		}
-		sort.SliceStable(tsk, func(i, j int) bool { return tsk[i].Votes > tsk[j].Votes })
-		if len(tsk) > 40 {
-			tsk = tsk[:40]
 		}
 	}
 
 	return append(append(parallels, occasions...), tsk...)
-}
-
-// addOtherOccasionRow adds one other-occasion row unless a row already listed
-// shows its passage: a same-occasion row, or an earlier other-occasion row,
-// that covers it. A row that covers earlier other-occasion rows takes the
-// place of the first of them and the rest go, so the list keeps its order and
-// shows each passage once, at its widest.
-func addOtherOccasionRow(rows, parallels []crossRef, c crossRef) []crossRef {
-	for _, p := range parallels {
-		if p.covers(c) {
-			return rows
-		}
-	}
-	for _, r := range rows {
-		if r.covers(c) {
-			return rows
-		}
-	}
-	out, placed := rows[:0:0], false
-	for _, r := range rows {
-		if c.covers(r) {
-			if !placed {
-				out, placed = append(out, c), true
-			}
-			continue
-		}
-		out = append(out, r)
-	}
-	if !placed {
-		out = append(out, c)
-	}
-	return out
-}
-
-// crossRefHidden is what the rows above the Treasury already show, which the
-// Treasury does not list again. A same-occasion parallel hides a Treasury row
-// with its own label, as it always has: a pericope runs to a whole event, and
-// a Treasury row to one verse inside it is a reference of its own. An
-// other-occasion row hides every Treasury row inside its passage, which is
-// one saying: a Treasury row to Luke 11:2 says nothing that the row for
-// Luke 11:2-4 above it has not. The shipping build has no other-occasion
-// rows, so covers is empty there and only labels hide.
-type crossRefHidden struct {
-	labels map[string]bool
-	covers []crossRef
-}
-
-func (h crossRefHidden) hides(c crossRef) bool {
-	if h.labels[c.label()] {
-		return true
-	}
-	for _, o := range h.covers {
-		if o.covers(c) {
-			return true
-		}
-	}
-	return false
 }
 
 // crossRefResolver names a row's book — and a cross-book range's end book —
@@ -1464,16 +1397,16 @@ func crossRefResolver(books []string, versionID string) func(crossRef) []crossRe
 }
 
 // treasuryRowsFor is what one selected verse gives the panel: the first
-// maxCrossRefsPerVerse of its rows, best first, that resolve can show, that
-// are not hidden (shown above as a parallel) and whose labels are not given
-// already. read is how far down rows it went for them — the depth the index
+// maxCrossRefsPerVerse of its rows, best first, that resolve can show and
+// whose labels are not given already within this source verse. read is the
+// last source row that contributes a destination — the depth the index
 // must keep (maxCrossRefsKept).
 //
 // A row the translation prints in two places (crossRefPartsAround) is shown
 // as both, side by side, and takes one place in the cap: it is one citation,
 // and counting it twice would push out the verse's sixteenth row in that
 // translation alone.
-func treasuryRowsFor(rows []tskRow, resolve func(crossRef) []crossRef, hidden crossRefHidden) (mine []crossRef, read int) {
+func treasuryRowsFor(rows []tskRow, resolve func(crossRef) []crossRef) (mine []crossRef, read int) {
 	given := map[string]bool{}
 	places := 0
 	for i, r := range rows {
@@ -1483,7 +1416,7 @@ func treasuryRowsFor(rows []tskRow, resolve func(crossRef) []crossRef, hidden cr
 		took := false
 		for _, c := range resolve(r.crossRef()) {
 			lbl := c.label()
-			if hidden.hides(c) || given[lbl] {
+			if given[lbl] {
 				continue
 			}
 			given[lbl] = true

@@ -1,55 +1,9 @@
 package bibletext
 
-// The cross-references panel's list, assembled from the three sources that
-// can appear in it — the Gospel parallels (the synopsis's same-event rows,
-// and in the next major release the same saying on another occasion after
-// them), the publisher's own apparatus (publisher_xrefs.go: the NKJV's, and
-// only in a build that shows it), and the Treasury of Scripture Knowledge —
-// as consecutive runs of ONE card (crossRefRow), never interleaved: a
-// licensed publisher's citations mixed into a list credited to OpenBible.info
-// would misattribute both (docs/SOURCE_FIELDS_DECISIONS.md). Kept apart from
-// the popup that mounts it so the composition can be tested without a window.
-//
-// Decided 6 November 2026: one list, one card. With the publisher's apparatus
-// showing, each run stands under the app's one in-list heading, the sidebar's
-// section label; the publisher's citations are the same cards the Treasury's
-// rows are, in the publisher's order, never re-sorted or capped; the Treasury
-// stands OPEN under its own label, with the passages the publisher's cards
-// already carry removed from it; and since the labels carry provenance, the
-// parallel cards drop their pill. Without the apparatus — every other
-// edition, and every store build until the licensing reply — the list is
-// what it always was: the badged parallels, then the Treasury rows, no
-// labels and no captions.
-//
-// Decided 11 November 2026: nothing the edition's notes carry is lost. The
-// selected text heads the list, with a letter on each word a note hangs from
-// (crossref_passage.go), and the publisher's run is its notes one by one
-// under those letters, each whole and in the order it is printed
-// (crossref_note.go): a note of several pieces is a row that carries the
-// note as printed and folds, its pieces under it; a parenthesised group —
-// inside a note or as the whole of its note — is a row that starts closed and
-// opens into its citations (crossref_group.go). This replaces the one
-// caption that gathered, under a note's last card, whatever of the note was
-// not a card, and the rule that two notes citing one passage gave one card:
-// both were the list's reading of a note, and the note is the edition's.
-// Each note stands on a ground of its own, its letter alone in a margin and
-// the rest of it beside the margin (crossref_section.go).
-//
-// Width, by construction: nothing in the list may want more width than the
-// narrowest phone's body gives it (crossRefListChrome; narrowestPhoneBody in
-// crossref_width_test.go). Every child is one of
-// a few bounded kinds — the passage, which wraps to the width it is given; a
-// section label; a card (its reference measured, its preview wrapping); a
-// note's or a group's row (a printed line that wraps beside an icon of fixed
-// size); a reference that is shown and not followed; a wrapping caption; a
-// spacer; a separator — and no Accordion, Button, Hyperlink or per-row theme
-// override stands among them. A note's rows are these same kinds, on the
-// note's padded ground beside the letter's margin. A
-// single theme scope wraps the complete list in the panel. A widget
-// whose title could not wrap widened the vertical scroll's content past the
-// panel and clipped every row sideways, with no bar to reach the rest (the
-// fold this list replaced). The panel wraps the list in squeezeWidthLayout as
-// a belt, and TestCrossRefListFitsTheNarrowestPhone measures every object.
+// The cross-references panel keeps publisher notes, Gospel episodes and
+// Treasury origins in separate source sections. Publisher notes preserve
+// their exact pieces and word anchors; other sources use their own verse,
+// heading or event identities. All sections share cards and bounded folds.
 
 import (
 	"fmt"
@@ -215,7 +169,7 @@ type crossRefList struct {
 	PublisherCards  int
 	PublisherLines  int
 	PublisherGroups int
-	TSKRows         int // the Treasury cards on screen, after those the publisher's cards already carry are dropped
+	TSKRows         int // Treasury relationships, including cards in closed verse groups
 	Sections        crossRefSections
 	// Passage reports that the selected text heads the list, with the
 	// publisher's notes' letters on their words (crossref_passage.go).
@@ -293,8 +247,7 @@ func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tsk
 	out.Sections.Parallels = len(parallels)+len(others) > 0
 
 	v := state.currentVersion()
-	var book string
-	var chapter int
+	book, chapter := selectedChapter(state, selected)
 	var notes []publisherCrossRef
 	var missing bool
 	if v.PublisherCrossRefs {
@@ -304,25 +257,6 @@ func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tsk
 		book, chapter = selectedChapter(state, selected)
 		notes = publisherCrossRefsFor(state.Bible, book, chapter, selected)
 		missing = len(notes) == 0 && hasSilentDisplacedCaller(state.Bible, book, chapter, selected)
-	}
-	if !v.PublisherCrossRefs || (len(notes) == 0 && !missing && !v.PublisherApparatus) {
-		// The unlabelled list: the parallels wear their pill, since no label
-		// says where they are from, then the Treasury's rows. Used whenever
-		// no publisher apparatus stands on screen — every edition without
-		// PublisherCrossRefs, and a sparse publisher set (WEB, WEBC, BSB) on
-		// a selection where the edition prints no note.
-		for _, c := range parallels {
-			out.Objects = append(out.Objects, crossRefRow(state, passageCard(c, true), pal, onTap))
-		}
-		for _, c := range others {
-			out.Objects = append(out.Objects, crossRefRow(state, passageCard(c, true), pal, onTap))
-		}
-		for _, c := range tsk {
-			out.Objects = append(out.Objects, crossRefRow(state, passageCard(c, false), pal, onTap))
-		}
-		out.TSKRows = len(tsk)
-		out.Sections.Treasury = len(tsk) > 0
-		return out
 	}
 
 	// Nothing at all to list is the panel's message state, not a run with
@@ -349,63 +283,54 @@ func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tsk
 	// notes below are read by those letters (crossref_passage.go). Only where
 	// the edition has a note for the selection; a selection without one has
 	// no letter to show.
-	if len(notes) > 0 {
+	headingOnly := v.ID == "bsb" && len(notes) > 0
+	for _, n := range notes {
+		headingOnly = headingOnly && n.Heading && n.HeadingText != ""
+	}
+	if len(notes) > 0 && !headingOnly {
 		out.Objects = append(out.Objects, newCrossRefPassage(state, book, chapter, selected, notes, pal), spacer(4))
 		out.Passage = true
 	}
 
-	// The publisher's run stands directly under the lettered passage, before
-	// the Gospel parallels, under one section label for the source: sections
-	// are for the sources only, never for verses, a Psalm's title or a
-	// heading. Each note is a block of its own under its letter, in the order
-	// the notes stand in the selection (the title's, a heading's, then the
-	// verses'), and holds everything the note prints in the order it prints
-	// it (crossref_note.go); no card is withheld because an earlier note has
-	// its passage — the note is the edition's unit and is kept whole.
-	out.Sections.Publisher = true
-	label(publisherRunLabel(v.Abbrev))
-	if len(notes) == 0 {
-		line := publisherEmptyLine
+	if len(notes) > 0 || missing {
+		out.Sections.Publisher = true
+		label(publisherRunLabel(v.Abbrev))
 		if missing {
-			line = publisherMissingLine
+			out.Objects = append(out.Objects, crossRefNoteCaption(fmt.Sprintf(publisherMissingLine, v.Abbrev)))
+			out.PublisherLines++
+		} else {
+			out.Objects = append(out.Objects, spacer(4))
 		}
-		out.Objects = append(out.Objects, crossRefNoteCaption(fmt.Sprintf(line, v.Abbrev)))
-		out.PublisherLines++
-	} else {
-		// A little air between the label and the first note's ground.
-		out.Objects = append(out.Objects, spacer(4))
 	}
-	var carded []crossRef // the passages the publisher's cards on screen follow, for the Treasury filter
 	for _, n := range notes {
-		row, cards, groups, lines := publisherNoteBlock(state, n, pal, onTap, out.Relayout)
-		out.Objects = append(out.Objects, row)
-		carded = append(carded, cards...)
+		if headingOnly {
+			row, cards, groups, lines := crossRefHeadingNoteBlock(state, n, pal, onTap, out.Relayout)
+			out.Objects = append(out.Objects, row)
+			out.PublisherCards += cards
+			out.PublisherGroups += groups
+			out.PublisherLines += lines
+		} else {
+			row, cards, groups, lines := publisherNoteBlock(state, n, pal, onTap, out.Relayout)
+			out.Objects = append(out.Objects, row)
+			out.PublisherCards += len(cards)
+			out.PublisherGroups += groups
+			out.PublisherLines += lines
+		}
 		out.PublisherNotes++
-		out.PublisherCards += len(cards)
-		out.PublisherGroups += groups
-		out.PublisherLines += lines
 	}
 
 	if len(parallels)+len(others) > 0 {
 		label(parallelsLabel)
-		for _, c := range parallels {
-			out.Objects = append(out.Objects, crossRefRow(state, passageCard(c, false), pal, onTap))
-		}
-		for _, c := range others {
-			out.Objects = append(out.Objects, crossRefRow(state, passageCard(c, false), pal, onTap))
+		for _, set := range crossRefGospelSets(append(parallels, others...)) {
+			out.Objects = append(out.Objects, crossRefGospelBlock(state, set, selected, pal, onTap, out.Relayout))
 		}
 	}
 
-	// The Treasury, open under its label, less the passages the publisher's
-	// cards already carry. While the dataset downloads, its label holds an
-	// inline loading caption and progress bar while the local sections stand
-	// open above it; when a load fails with local content on screen, its label
-	// holds the offline line (and an inline retry tap target in the live
-	// panel, which reloads the Treasury section in place). Nothing for the
-	// selection once loaded: no section, no credit. A row that lies wholly
-	// inside the selection is muted with no tap, as in the publisher's run.
-	kept := treasuryMinusPublisher(tsk, carded)
+	// An unavailable Treasury never replaces local notes or episodes. Its
+	// credit appears only when references are present, including closed groups.
+	_, uncovered := crossRefCoverage(v.ID, book, selected)
 	switch {
+	case uncovered && len(tsk) == 0:
 	case tskState.loading:
 		label(treasuryLabel)
 		out.Objects = append(out.Objects, crossRefTreasuryLoading(tskState.bar))
@@ -415,18 +340,34 @@ func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tsk
 		if tskState.onRetry != nil {
 			out.Objects = append(out.Objects, crossRefTreasuryRetry(pal, tskState.onRetry))
 		}
-	case len(kept) > 0:
+	case len(tsk) > 0:
 		label(treasuryLabel)
-		for _, c := range kept {
-			if isWithinSelection(c, book, chapter, selected) {
-				out.Objects = append(out.Objects, crossRefSelfRow(c.label(), "", pal, true))
-				continue
-			}
-			out.Objects = append(out.Objects, crossRefRow(state, passageCard(c, false), pal, onTap))
-		}
-		out.TSKRows = len(kept)
+		out.TSKRows = len(tsk)
 		out.Sections.Treasury = true
+		if len(selected) <= 1 {
+			out.Objects = append(out.Objects, crossRefSourceCards(state, tsk, selected, pal, onTap)...)
+			break
+		}
+		sets, unkeyed := crossRefTreasurySets(tsk)
+		rows := make([]*crossRefSourceGroup, 0, len(sets))
+		var margin float32
+		for _, set := range sets {
+			build := func() []fyne.CanvasObject { return crossRefSourceCards(state, set.refs, selected, pal, onTap) }
+			row := newCrossRefSourceGroup(set.id, fmt.Sprint(set.verse), "", "",
+				crossRefSourceSummary(set.refs), len(sets) == 1, pal, out.Relayout, build)
+			margin = max(margin, row.margin)
+			rows = append(rows, row)
+		}
+		// Align all origins in a section, including a range crossing 99–100.
+		for _, row := range rows {
+			row.margin = margin
+			out.Objects = append(out.Objects, crossRefSection(row, pal))
+		}
+		// Older in-memory callers may not supply origins. Keep those rows
+		// visible without inventing a verse key for them.
+		out.Objects = append(out.Objects, crossRefSourceCards(state, unkeyed, selected, pal, onTap)...)
 	}
+
 	return out
 }
 
@@ -436,57 +377,12 @@ func publisherRunLabel(abbrev string) string {
 	return strings.ToUpper(abbrev) + publisherLabelSuffix
 }
 
-// treasuryMinusPublisher drops the Treasury rows whose passage a publisher's
-// card already carries: for an ordinary verse or range card, any row whose
-// passage overlaps the card's — containment, not label equality, so "2 Samuel
-// 15:1–18" yields to the title note's "2 Samuel 15:13–17", "2 Corinthians
-// 5:19–21" to its "2 Cor. 5:19", and a cross-book range such as "2 Chronicles
-// 36:22–Ezra 1:3" to a card in either book it spans ("Ezra 1:1–4" or "Ezra
-// 1:1"). A citation of a chapter's superscription (TitleRef) previews the
-// title rather than verse 1 and never drops a Treasury verse row; a citation
-// of whole chapters (WholeChapters) previews only verse 1 under a chapter
-// heading and drops a Treasury row only when the row spans those exact whole
-// chapters, keeping specific verse and sub-range Treasury rows inside the
-// chapter. Removal is in the licence-safe direction: nothing is added to the
-// publisher's run, and a passage appears once, under the source that stands
-// above it.
-func treasuryMinusPublisher(rows, cards []crossRef) []crossRef {
-	var kept []crossRef
-	for _, r := range rows {
-		carried := false
-		for _, c := range cards {
-			if c.TitleRef {
-				continue
-			}
-			if c.WholeChapters {
-				if !r.crossBook() && c.Book == r.Book {
-					rs, re := r.bounds()
-					cs, ce := c.bounds()
-					if rs == cs && re == ce {
-						carried = true
-						break
-					}
-				}
-				continue
-			}
-			if c.containsVerse(r.Book, r.Chapter, r.Verse) || r.containsVerse(c.Book, c.Chapter, c.Verse) {
-				carried = true
-				break
-			}
-		}
-		if !carried {
-			kept = append(kept, r)
-		}
-	}
-	return kept
-}
-
 // crossRefFooterCredit is the panel footer's credit: the sources whose rows
 // stand on screen (sections), and — whenever the on-screen edition is licensed
 // — that edition's own notice, because the preview under every card is its
 // verse text, and in the builds that show its apparatus the apparatus is its
-// too. The Treasury is named in the words of its label where the list has
-// labels, and in the words every store build has always shown where not.
+// too. Each displayed source keeps its own credit even when another source
+// points to the same destination.
 //
 // Two credits stand one to a line. Joined on one line by " · ", the pair was
 // wider than a phone's footer, and the toolkit's word wrap, which breaks at
@@ -498,11 +394,7 @@ func crossRefFooterCredit(state *AppState, sections crossRefSections) (sources, 
 	v := state.currentVersion()
 	var parts []string
 	if sections.Treasury {
-		if sections.Publisher {
-			parts = append(parts, treasuryCredit)
-		} else {
-			parts = append(parts, tskCredit)
-		}
+		parts = append(parts, treasuryCredit)
 	}
 	if sections.Parallels {
 		parts = append(parts, parallelsCredit)

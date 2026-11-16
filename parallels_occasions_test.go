@@ -1,13 +1,14 @@
 package bibletext
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
 
 // The second kind of Gospel parallel, the same saying on another occasion
-// (parallels.go), on synthetic data: the reader of its file, the rule that
-// lists each passage once, and the Treasury rows such a row hides. The code
+// (parallels.go), on synthetic data: its source identities and the Treasury
+// relationships retained alongside overlapping Gospel destinations. The code
 // is shared by both states of the next switch; only the next major release
 // has the data (parallels_next.go), so the tests on the data itself are in
 // parallels_next_test.go.
@@ -27,6 +28,9 @@ func TestParseGospelOccasionsDropsWhatItCannotRead(t *testing.T) {
 	if len(g.passages) != 2 || len(g.pairs) != 1 || g.title != "A synthetic saying" {
 		t.Fatalf("got %+v; want two passages (Acts is not a Gospel, \"Luke x\" not a reference) and one pair", g)
 	}
+	if g.id != "A" || strings.Join(g.refs, "; ") != "8:16; 11:33" {
+		t.Errorf("source identity/notation lost: id=%q refs=%q", g.id, g.refs)
+	}
 	if a, b := g.passages[g.pairs[0][0]], g.passages[g.pairs[0][1]]; a.book != "Luke" || b.book != "Luke" {
 		t.Errorf("a pair within one Gospel was not kept: %+v %+v", a, b)
 	}
@@ -35,84 +39,72 @@ func TestParseGospelOccasionsDropsWhatItCannotRead(t *testing.T) {
 	}
 }
 
-// ONE PASSAGE, ONE ROW. A row a same-occasion row covers is left out, as is a
-// row an earlier one covers or repeats; a row that covers earlier ones takes
-// the place of the first of them (TestOtherOccasionRowsAreDeduplicatedByTheVersesTheyCover
-// shows it on the data).
-func TestAddOtherOccasionRowListsEachPassageOnceAtItsWidest(t *testing.T) {
-	row := func(book string, ch, v, endV int) crossRef {
-		return crossRef{Book: book, Chapter: ch, Verse: v, EndV: endV, Parallel: true, OtherOccasion: true}
-	}
-	parallels := []crossRef{{Book: "Mark", Chapter: 3, Verse: 20, EndV: 30, Parallel: true}}
-	var rows []crossRef
-	for _, c := range []crossRef{
-		row("Mark", 3, 22, 0),      // inside the same-occasion row: out
-		row("Luke", 11, 15, 0),     // in
-		row("Luke", 11, 15, 0),     // the same again: out
-		row("Matthew", 9, 32, 34),  // in
-		row("Luke", 11, 14, 15),    // covers Luke 11:15: takes its place
-		row("Matthew", 9, 33, 0),   // inside Matthew 9:32-34: out
-		row("Mark", 3, 31, 0),      // outside the same-occasion row: in
-		row("Matthew", 12, 22, 24), // in
+// Sources retain their own relationships even when destination ranges are
+// equal, contained by one another, or overlap a Gospel row.
+func TestTreasuryRowsRemainAlongsideOverlappingGospelGroups(t *testing.T) {
+	withOriginPericopes(t, []gPericope{{
+		id: 801, title: "Synthetic event",
+		spans: map[string][]gSpan{"Matthew": {{1, 1, 1, 1}}, "Mark": {{3, 20, 3, 30}}},
+		refs:  map[string]string{"Matthew": "1:1", "Mark": "3:20-30"},
+	}})
+	occasionOnce.Do(loadGospelOccasions)
+	old := occasionGroups
+	occasionGroups = parseGospelOccasions([]byte(`{"groups":[
+		{"id":"SYNTHETIC","title":"Synthetic saying","passages":["Matthew 1:1","Luke 11:2-4"],"pairs":[["Matthew 1:1","Luke 11:2-4"]]}
+	]}`))
+	t.Cleanup(func() { occasionGroups = old })
+	var rows strings.Builder
+	for i, target := range []string{
+		"Luke.11.2", "Luke.11.2-Luke.11.4", "Luke.11.1-Luke.11.4",
+		"Luke.11.4-Luke.12.1", "Mark.3.24", "Mark.3.20-Mark.3.30", "Luke.24.53-John.1.1",
 	} {
-		rows = addOtherOccasionRow(rows, parallels, c)
-	}
-	var labels []string
-	for _, r := range rows {
-		labels = append(labels, r.label())
-	}
-	want := "Luke 11:14–15; Matthew 9:32–34; Mark 3:31; Matthew 12:22–24"
-	if strings.Join(labels, "; ") != want {
-		t.Errorf("rows = %q, want %q", strings.Join(labels, "; "), want)
-	}
-}
-
-// HIDING BY THE VERSES COVERED. A same-occasion row hides a Treasury row with
-// its own label and no other; an other-occasion row hides every Treasury row
-// inside its passage, and none that runs past it or into another book. The
-// cap is counted after the hiding, so a hidden row hands its place on.
-func TestAnOtherOccasionRowHidesTheTreasuryRowsInsideIt(t *testing.T) {
-	var rows []tskRow
-	for _, c := range []crossRef{
-		{Book: "Luke", Chapter: 11, Verse: 2},                                      // inside Luke 11:2-4: hidden
-		{Book: "Luke", Chapter: 11, Verse: 2, EndV: 4},                             // the passage itself: hidden
-		{Book: "Luke", Chapter: 11, Verse: 1, EndV: 4},                             // runs past its start: shown
-		{Book: "Luke", Chapter: 11, Verse: 4, EndCh: 12, EndV: 1},                  // runs past its end: shown
-		{Book: "Mark", Chapter: 3, Verse: 24},                                      // inside the pericope, not its label: shown
-		{Book: "Mark", Chapter: 3, Verse: 20, EndV: 30},                            // the pericope's label: hidden
-		{Book: "Luke", Chapter: 24, Verse: 53, EndBook: "John", EndCh: 1, EndV: 1}, // into another book: shown
-	} {
-		r, ok := packTSKRow(c)
-		if !ok {
-			t.Fatalf("cannot pack %s", c.label())
-		}
-		rows = append(rows, r)
+		fmt.Fprintf(&rows, "Matt.1.1\t%s\t%d\n", target, 100-i)
 	}
 	for v := 1; v <= maxCrossRefsPerVerse; v++ {
-		r, _ := packTSKRow(crossRef{Book: "Psalms", Chapter: 1, Verse: v})
-		rows = append(rows, r)
+		fmt.Fprintf(&rows, "Matt.1.1\tPs.119.%d\t%d\n", v, 40-v)
 	}
-	resolve := func(c crossRef) []crossRef { return []crossRef{c} }
-	hidden := crossRefHidden{
-		labels: map[string]bool{"Mark 3:20–30": true},
-		covers: []crossRef{{Book: "Luke", Chapter: 11, Verse: 2, EndV: 4, Parallel: true, OtherOccasion: true}},
+	withCrossRefIndex(t, rows.String())
+	bd := xrefBible(map[string]map[int]int{
+		"Matthew": {1: 1}, "Mark": {3: 35}, "Luke": {11: 54, 12: 59, 24: 53},
+		"John": {1: 1}, "Psalms": {119: 176},
+	})
+	st := &AppState{Bible: bd, CurrentBook: "Matthew", CurrentChapter: 1, CurrentVersion: "web"}
+	var treasury []string
+	synopsis, occasions := 0, 0
+	for _, c := range crossRefsForSelection(st, "", selSpan{lo: 1, hi: 1}) {
+		switch {
+		case c.OtherOccasion:
+			occasions++
+			if c.label() != "Luke 11:2–4" || c.SourceLabel != "Matthew 1:1" {
+				t.Errorf("occasion changed: %+v", c)
+			}
+		case c.Parallel:
+			synopsis++
+			if c.label() != "Mark 3:20–30" || c.SourceLabel != "Matthew 1:1" {
+				t.Errorf("synopsis changed: %+v", c)
+			}
+		default:
+			treasury = append(treasury, c.label())
+			if c.SourceVerse != 1 || c.SourceLabel != "Matthew 1:1" {
+				t.Errorf("Treasury origin changed: %+v", c)
+			}
+		}
 	}
-	mine, read := treasuryRowsFor(rows, resolve, hidden)
-	var got []string
-	for _, c := range mine[:4] {
-		got = append(got, c.label())
+	wantOccasions := 0
+	if nextRelease {
+		wantOccasions = 1
 	}
-	want := "Luke 11:1–4; Luke 11:4–12:1; Mark 3:24; Luke 24:53–John 1:1"
-	if strings.Join(got, "; ") != want {
-		t.Errorf("the first rows shown are %q, want %q", strings.Join(got, "; "), want)
+	if synopsis != 1 || occasions != wantOccasions {
+		t.Fatalf("control: got %d synopsis and %d occasion rows; want 1 and %d", synopsis, occasions, wantOccasions)
 	}
-	// Three hidden rows hand their places on: sixteen shown, read to the 19th.
-	if len(mine) != maxCrossRefsPerVerse || read != maxCrossRefsPerVerse+3 {
-		t.Errorf("%d rows shown, read to row %d; want %d, read to row %d", len(mine), read, maxCrossRefsPerVerse, maxCrossRefsPerVerse+3)
+	if len(treasury) != maxCrossRefsPerVerse {
+		t.Fatalf("got %d Treasury rows, want %d", len(treasury), maxCrossRefsPerVerse)
 	}
-	// CONTROL: hidden by label alone, as the shipping build hides, the
-	// passage's rows show.
-	if mine, _ := treasuryRowsFor(rows, resolve, crossRefHidden{labels: hidden.labels}); mine[0].label() != "Luke 11:2" {
-		t.Errorf("by label alone the first row is %s, want Luke 11:2", mine[0].label())
+	want := "Luke 11:2; Luke 11:2–4; Luke 11:1–4; Luke 11:4–12:1; Mark 3:24; Mark 3:20–30; Luke 24:53–John 1:1"
+	if got := strings.Join(treasury[:7], "; "); got != want {
+		t.Errorf("Treasury relationships = %q; want %q", got, want)
+	}
+	if last := treasury[len(treasury)-1]; last != "Psalms 119:9" {
+		t.Errorf("Treasury last row = %q, want Psalms 119:9 without duplicate-driven backfill", last)
 	}
 }
