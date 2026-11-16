@@ -971,6 +971,21 @@ func isOpeningQuote(s string) bool {
 	return true
 }
 
+// isClosingQuote reports an unambiguous closing quotation mark or a chain of
+// them. A source space before it remains visible, but is not a wrap opportunity
+// in a study excerpt. Straight quotes are ambiguous and retain their old rule.
+func isClosingQuote(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if !unicode.In(r, unicode.Pf) {
+			return false
+		}
+	}
+	return true
+}
+
 func (r *readingParagraphRenderer) wrap(width float32) {
 	if width <= 0 {
 		width = readingParagraphGuessWidth
@@ -1023,7 +1038,7 @@ func (r *readingParagraphRenderer) wrap(width float32) {
 				break
 			}
 			if g.spaceBefore {
-				if !prevOpenQuote {
+				if !prevOpenQuote && (g.mark || !isClosingQuote(g.text)) {
 					break
 				}
 				total += r.spaceW
@@ -1064,18 +1079,19 @@ func (r *readingParagraphRenderer) wrap(width float32) {
 		// break before it, with its word, rather than leave the word to run
 		// past the edge. When holdFlush is set, the same holds for every
 		// chain of fragments drawn flush across a style or mark boundary,
-		// and across the space after a standalone opening quotation mark; a
+		// including spaces after opening or before closing quotation marks; a
 		// hyphenated or em-dashed compound stays whole when it fits a row on
 		// its own and turns after its dash only when wider than width.
 		need := w
-		canBreak := f.spaceBefore && !(r.p.holdFlush && afterOpenQuote)
+		closingQuote := !f.mark && isClosingQuote(f.text)
+		canBreak := f.spaceBefore && !(r.p.holdFlush && (afterOpenQuote || closingQuote))
 		if r.p.holdFlush {
 			if canBreak {
 				need = flushNeed(i, false)
 				if need > width {
 					need = flushNeed(i, true)
 				}
-			} else if afterDash {
+			} else if afterDash && !closingQuote {
 				canBreak = true
 				need = flushNeed(i, true)
 			}

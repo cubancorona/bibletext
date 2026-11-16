@@ -120,6 +120,12 @@ A citation of the reader's own passage is shown as its reference in full,
 so where the edition prints it without its book the book is supplied on that
 row; the note's printed line above it is unchanged.
 
+The selected passage heads every populated reference list, including
+Treasury-only, Gospel-only and heading-only BSB results. Publisher letters
+appear only where a note has an actual word anchor; the other excerpts show
+the selected verses with their verse numbers. Empty results and standalone
+loading/error states retain their existing presentation.
+
 Letters and verse numbers inside the selected passage use the matching
 groups' accent and bold UI faces: italic letters and upright plain-zero
 numbers. They are 14 points at Normal, at the printed-citation size, with a
@@ -231,7 +237,8 @@ lettered publisher-note presentation. The letters are panel navigation keys,
 not characters in the main reading page. BSB's recovered apparatus belongs to
 section headings: its groups show the actual heading and `Heading before verse
 N`, using the existing exact `BeforeVerse` inclusion rule. Heading-only BSB
-results do not repeat the selected passage merely to attach artificial letters.
+results retain the selected excerpt above those groups without artificial
+letters.
 A one-piece heading note is displayed directly; a multi-piece note opens under
 its complete printed summary, initially open.
 

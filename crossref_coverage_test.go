@@ -249,8 +249,8 @@ func TestAPartlyCoveredSelectionIsListedUnderTheNote(t *testing.T) {
 	span := selSpan{lo: 16, hi: 19}
 	refs := crossRefsForSelection(st, "", span)
 	lst := buildCrossRefList(st, selectionVerses(st, "", span), refs, nil, st.pal(), func(crossRef) {})
-	if lst.TSKRows != 1 || len(lst.Objects) != 3 || joined(sectionLabelsIn(lst.Objects)) != treasuryLabel {
-		t.Fatalf("want the coverage note, Treasury label and one origin group; got %d rows in %d objects", lst.TSKRows, len(lst.Objects))
+	if lst.TSKRows != 1 || len(lst.Objects) != 5 || joined(sectionLabelsIn(lst.Objects)) != treasuryLabel {
+		t.Fatalf("want the coverage note, excerpt, spacer, Treasury label and one origin group; got %d rows in %d objects", lst.TSKRows, len(lst.Objects))
 	}
 	if got := treeTexts(lst.Objects[0]); len(got) != 1 || got[0] != note {
 		t.Errorf("the list does not open with the note: %q", got)
@@ -273,12 +273,12 @@ func TestAPartlyCoveredSelectionIsListedUnderTheNote(t *testing.T) {
 	}
 
 	// CONTROL: in the WEB the same numbers are the Hebrew Esther's, all
-	// covered, and the list has its source label and origin group without
-	// the coverage note.
+	// covered, and the list has its excerpt, source label and origin group
+	// without the coverage note.
 	st.CurrentVersion = "web"
 	span = selSpan{lo: 16, hi: 17}
 	lst = buildCrossRefList(st, selectionVerses(st, "", span), crossRefsForSelection(st, "", span), nil, st.pal(), func(crossRef) {})
-	if lst.CoverageNote != "" || len(lst.Objects) != 2 || lst.TSKRows != 1 || joined(sectionLabelsIn(lst.Objects)) != treasuryLabel {
+	if lst.CoverageNote != "" || len(lst.Objects) != 4 || lst.TSKRows != 1 || joined(sectionLabelsIn(lst.Objects)) != treasuryLabel {
 		t.Errorf("the WEB's Esther 4:16-17 is covered; got note %q and %d objects", lst.CoverageNote, len(lst.Objects))
 	}
 }

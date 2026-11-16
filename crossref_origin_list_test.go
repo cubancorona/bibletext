@@ -195,9 +195,10 @@ func TestOriginListBSBUsesActualHeadingsWithoutLetteredPassage(t *testing.T) {
 	state := &AppState{Bible: bd, CurrentBook: "Genesis", CurrentChapter: 1, CurrentVersion: "bsb"}
 	selected := versesBetween(bd, "Genesis", 1, 1, 3)
 	lst := buildCrossRefList(state, selected, nil, nil, lightPalette, func(crossRef) {})
-	if lst.Passage || passageIn(lst.Objects) != nil || !lst.Sections.Publisher || lst.PublisherNotes != 2 || lst.PublisherCards != 3 {
+	if !lst.Passage || !lst.Sections.Publisher || lst.PublisherNotes != 2 || lst.PublisherCards != 3 {
 		t.Fatalf("heading-only BSB list = passage %v, publisher %v, notes %d, cards %d", lst.Passage, lst.Sections.Publisher, lst.PublisherNotes, lst.PublisherCards)
 	}
+	requirePlainCrossRefExcerpt(t, passageIn(lst.Objects), selected)
 	groups := crossRefSourceRows(lst.Objects)
 	if len(groups) != 1 {
 		t.Fatalf("got %d disclosure groups, want only the two-target heading", len(groups))

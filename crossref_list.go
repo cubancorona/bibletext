@@ -172,7 +172,7 @@ type crossRefList struct {
 	TSKRows         int // Treasury relationships, including cards in closed verse groups
 	Sections        crossRefSections
 	// Passage reports that the selected text heads the list, with the
-	// publisher's notes' letters on their words (crossref_passage.go).
+	// publisher's letters only where exact word anchors exist (crossref_passage.go).
 	Passage bool
 	// Relayout is how a row that changes its height asks for the list to be
 	// laid out again; the panel sets its fn once the list is mounted.
@@ -279,16 +279,19 @@ func composeCrossRefList(state *AppState, selected []Verse, refs []crossRef, tsk
 		out.Objects = append(out.Objects, crossRefSectionLabel(text, pal))
 	}
 
-	// The selected text first, with the notes' letters on their words: the
-	// notes below are read by those letters (crossref_passage.go). Only where
-	// the edition has a note for the selection; a selection without one has
-	// no letter to show.
+	// Keep the selected passage above every source. Only exact publisher
+	// word anchors receive letters; heading-only notes are identified below
+	// by their heading text and before-verse position.
 	headingOnly := v.ID == "bsb" && len(notes) > 0
 	for _, n := range notes {
 		headingOnly = headingOnly && n.Heading && n.HeadingText != ""
 	}
-	if len(notes) > 0 && !headingOnly {
-		out.Objects = append(out.Objects, newCrossRefPassage(state, book, chapter, selected, notes, pal), spacer(4))
+	passageNotes := notes
+	if headingOnly {
+		passageNotes = nil
+	}
+	if len(selected) > 0 {
+		out.Objects = append(out.Objects, newCrossRefPassage(state, book, chapter, selected, passageNotes, pal), spacer(4))
 		out.Passage = true
 	}
 

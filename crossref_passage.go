@@ -134,6 +134,9 @@ func publisherPassageUnits(state *AppState, book string, chapter int, selected [
 			}
 		}
 		for _, h := range notedHeadingsBefore(bd, book, chapter, v.Verse) {
+			if len(onHeadings) == 0 {
+				break // plain selected text does not repeat unlettered heading groups
+			}
 			// The heading's own notes are the next of the headings' notes,
 			// one for each cross-reference note it carries.
 			n := 0

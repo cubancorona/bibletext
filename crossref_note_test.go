@@ -357,10 +357,40 @@ func TestThePassageIsTheSelectedTextWithALetterBeforeEachNotesWord(t *testing.T)
 	if got := joined(markedWords(runs)); got != "a>mercy|b>According|c>fixture's" {
 		t.Errorf("control: letters and their words: %s", got)
 	}
-	// CONTROL: a selection with no note has no passage.
+	// CONTROL: a selection with no publisher note retains its plain excerpt.
 	none := versesBetween(bd, "Psalms", 51, 2, 3)
-	if lst := buildCrossRefList(st, none, []crossRef{{Book: "Romans", Chapter: 5, Verse: 8, Votes: 3}}, nil, lightPalette, func(crossRef) {}); lst.Passage || passageIn(lst.Objects) != nil {
-		t.Errorf("control: a selection with no note is headed by a passage")
+	lst = buildCrossRefList(st, none, []crossRef{{Book: "Romans", Chapter: 5, Verse: 8, Votes: 3}}, nil, lightPalette, func(crossRef) {})
+	if !lst.Passage {
+		t.Fatal("control: a selection with no publisher note lost its passage")
+	}
+	requirePlainCrossRefExcerpt(t, passageIn(lst.Objects), none)
+}
+
+func requirePlainCrossRefExcerpt(t *testing.T, passage *readingParagraph, selected []Verse) {
+	t.Helper()
+	if passage == nil {
+		t.Fatal("the populated reference list lost its selected-passage excerpt")
+	}
+	var text, wantNumbers, numbers []string
+	for _, verse := range selected {
+		text = append(text, verse.Text)
+		if len(selected) > 1 {
+			wantNumbers = append(wantNumbers, fmt.Sprint(verse.Verse))
+		}
+	}
+	if passagePlainText(passage.runs) != strings.Join(text, "\n") {
+		t.Fatal("the plain excerpt changed or omitted selected text, or repeated a heading")
+	}
+	for _, run := range passage.runs {
+		if run.Mark {
+			if !run.Dim {
+				t.Fatal("an excerpt without word anchors acquired a publisher letter")
+			}
+			numbers = append(numbers, run.Text)
+		}
+	}
+	if joined(numbers) != joined(wantNumbers) {
+		t.Fatalf("excerpt verse numbers = %v, want %v", numbers, wantNumbers)
 	}
 }
 

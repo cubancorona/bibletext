@@ -210,9 +210,8 @@ func originRenderContent(t *testing.T, kind string, st *AppState, span selSpan, 
 		}
 		return
 	}
-	if passage != nil {
-		t.Fatal("a source without an exact word anchor repeated the selected passage")
-	}
+	selected := versesBetween(st.Bible, st.CurrentBook, st.CurrentChapter, span.lo, span.hi)
+	requirePlainCrossRefExcerpt(t, passage, selected)
 	switch kind {
 	case "bsb-heading":
 		if len(groups) != 1 || !groups[0].open || groups[0].key != nil || len(cards) != 2 ||

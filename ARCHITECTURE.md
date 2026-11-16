@@ -624,8 +624,7 @@ the audio service and a killed process takes it along.
   `publisher_xrefs_public.go`) — WEB and WEB Catholic retain the exact source
   insertion points and lettered note groups in the panel's quotation. BSB's
   recovered references identify the actual section heading and its position
-  before a verse, without inventing word anchors or repeating the selection
-  solely to place letters. NKJV apparatus stays behind `nkjvxrefs`. These
+  before a verse, without inventing word anchors. NKJV apparatus stays behind `nkjvxrefs`. These
   references are separate from the optional chapter-bottom translation notes.
 - **Gospel parallels** ([parallels.go](parallels.go)) — an **embedded** synopsis
   (`assets/parallels/gospel_parallels.json`, `//go:embed`). For a Gospel verse,
@@ -650,8 +649,12 @@ the audio service and a killed process takes it along.
   at the reader's size, with a jump-to-context. The list is pinned offline by
   `testdata/verse_of_day_snapshot.json` (`scripts/gen-votd-snapshot.py`).
 
-The cross-reference list labels each populated source section even without
-publisher notes. Publisher, Gospel and Treasury groups retain their own
+The selected passage heads every populated cross-reference list, including
+Treasury-only, Gospel-only and heading-only BSB results. Only publisher notes
+with actual word anchors add letters; other excerpts keep the selected verses
+and their verse numbers. Empty results and standalone loading/error states
+retain their existing presentation. The list labels each populated source
+section even without publisher notes. Publisher, Gospel and Treasury groups retain their own
 relationships when destinations overlap; duplicate Treasury or Gospel lookup
 hits within one origin are removed, while publisher notes keep their printed
 pieces. `crossref_origin_list.go` builds the source groups and
