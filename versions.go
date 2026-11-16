@@ -50,20 +50,9 @@ type BibleVersion struct {
 
 	// PublisherCrossRefs shows the edition's OWN cross-references in the
 	// cross-references panel (publisher_xrefs.go, publisher_xrefs_public.go),
-	// ahead of the Treasury of Scripture Knowledge. True in every build for the
-	// public-domain / CC0 editions (WEB, WEBC, BSB); true for the NKJV only
-	// behind the nkjvxrefs build tag (versions_nkjvxrefs.go), where no shipped
-	// binary compiles it while the licensing enquiry is open.
+	// ahead of the Treasury of Scripture Knowledge. True in every build for
+	// the NKJV and the public-domain / CC0 editions (WEB, WEBC, BSB).
 	PublisherCrossRefs bool
-
-	// PublisherApparatus marks an edition whose cross-references are a full
-	// canon-wide apparatus (the NKJV's 32,517 notes, behind nkjvxrefs) rather
-	// than sparse notes or section-heading parallel lines (WEB, WEBC, BSB). On
-	// a selection where the edition prints no note, a full apparatus shows its
-	// section label and empty line ("No NKJV cross-references for this
-	// selection.") above the other sources; a sparse set leaves the panel in
-	// its plain unlabelled shape so 96–99% of verses carry no dead empty section.
-	PublisherApparatus bool
 
 	// cacheEpoch invalidates this version's on-disk cache when its DECODING
 	// changes (not the cache file format — that is cacheSchemaVersion). The cache
@@ -158,7 +147,8 @@ var registeredVersions = []BibleVersion{
 	},
 	{
 		ID: "nkjv", Name: "New King James Version", Abbrev: "NKJV",
-		Publisher: "© Thomas Nelson (HarperCollins Christian) — license required",
+		Publisher:          "© Thomas Nelson (HarperCollins Christian) — license required",
+		PublisherCrossRefs: true,
 		// The notice Thomas Nelson requires with NKJV text, plus the visible
 		// API.Bible attribution its terms require. Rendered by the picker
 		// only while the version is licensed and serving real text.
@@ -193,10 +183,10 @@ var registeredVersions = []BibleVersion{
 		// build does: there both reach a reader's copy when it is next
 		// re-fetched, within licensedRecencyWindow. The epoch also brings
 		// forward the tagged citations in each cross-reference note
-		// (Footnote.Refs), which shipped without an epoch and are drawn only in
-		// a build with the nkjvxrefs tag. The verse text is unchanged, so the
-		// red-letter table and the versification tables carry over as they
-		// are.
+		// (Footnote.Refs), which shipped without an epoch. Older copies still
+		// resolve citations from the note text until their next refresh. The
+		// verse text is unchanged, so the red-letter and versification tables
+		// carry over as they are.
 		cacheEpoch: nkjvCacheEpoch(),
 		source:     newBYOKLicensedSource("nkjv", nkjvProviderBibleID),
 	},

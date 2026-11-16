@@ -40,13 +40,10 @@ package bibletext
 // the live canon census pins that (TestLiveAPIBibleFullCanon), so a feed that
 // starts saying more is caught rather than captioned.
 //
-// Whether any of it DISPLAYS is BibleVersion.PublisherCrossRefs: true in every
-// build for the public-domain / CC0 editions (WEB, WEBC, BSB;
-// publisher_xrefs_public.go), and true for the NKJV only in the file behind the
-// nkjvxrefs build tag (versions_nkjvxrefs.go), because displaying a licensed
-// publisher's apparatus is the subject of a licensing enquiry that has not
-// been answered, and a store build must not be able to do it before the answer
-// comes. The resolver itself is plain code over data every build already holds.
+// Display is controlled by BibleVersion.PublisherCrossRefs: true in every
+// build for the NKJV and the public-domain / CC0 editions (WEB, WEBC, BSB;
+// publisher_xrefs_public.go). The resolver reads the loaded edition's own data;
+// it does not change licensed access or fetch another edition's text.
 
 import (
 	"fmt"

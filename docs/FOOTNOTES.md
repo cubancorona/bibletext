@@ -26,7 +26,7 @@ requirement this document designs against:
 > selection, the share card or citation, the spoken audio, the search index,
 > or a shared link. Purity by construction, pinned by tests that can fail.
 
-## Verdict
+## Original verdict — 26 August 2026
 
 **Feasible, tractable, and worth doing in two quiet steps — with the NKJV's
 footnotes licence-gated behind the pending API.Bible questions.** The data is
@@ -36,8 +36,8 @@ presentation that honours that standard is the one the notes feature
 already established.
 
 The NKJV half of that verdict did not survive the probe in §8: that feed has no
-translator footnotes to gate, only cross-references, which are captured and left
-dark.
+translator footnotes to gate, only cross-references, which are captured for
+the separate cross-references panel.
 
 ## 1. What the data holds (measured, not assumed)
 
@@ -139,8 +139,9 @@ off switch. For this app, ranked:
    step two.
 
 The letters the cross-references panel sets in the selected text (S20) are
-shown for WEB, WEB Catholic and BSB in every build, and for NKJV behind the
-`nkjvxrefs` tag. They are not this marker and do not anticipate it. They key the edition's cross-reference notes,
+shown for WEB, WEB Catholic and NKJV in every build. BSB references use
+heading identity and position instead, without word-anchor letters. These
+letters are not this marker and do not anticipate it. They key the edition's cross-reference notes,
 which this section excludes; they stand in the panel's own copy of the
 selection, drawn as text objects of their own in a modal that offers no
 selection, copy, share or speech; and nothing is added to the page, to
@@ -180,7 +181,7 @@ the real Psalm 23:1 marker-at-poem-break), the five-renderer
 tests, websitegen render + palette parity, and new native-scan guards
 pinning that a marker never enters `gVerseIndex`/BtBridge verse spans.
 
-## 5. The NKJV: technically cheap, licence-gated
+## 5. The initial NKJV footnote proposal — superseded by the feed probe
 
 - Technically: notes ride the SAME 197-call canon walk — flipping
   `include-notes` in the one shared query const costs **zero extra quota**.
@@ -207,7 +208,8 @@ pinning that a marker never enters `gVerseIndex`/BtBridge verse spans.
 
   **That call has since been made, and it refutes this section's premise:**
   the feed carries no translator footnotes at all — only cross-references —
-  so there is no NKJV apparatus to gate, and `include-notes=true` (now the
+  so there is no supplied NKJV translator-footnote apparatus to display, and
+  `include-notes=true` (now the
   standing request) captures a cross-reference apparatus instead. The probe
   and its consequences are recorded in §8; the reasoning above is kept
   because it is why the probe was run before any licensing was pursued.
@@ -217,11 +219,9 @@ pinning that a marker never enters `gVerseIndex`/BtBridge verse spans.
   no-alteration/format clauses, or whether §12 copy limits and the §9.1 TTS
   restriction treat note text like verse text. **Six concrete questions were
   drafted for API.Bible support** and never sent: the probe below made them
-  moot. The licensing enquiry that was sent is the 28 August 2026 follow-up
-  to HarperCollins' permissions team, about displaying the cross-reference
-  apparatus; it has had no reply as of 6 November 2026, and that reply is the
-  gating event. An email to API.Bible support was approved on 6 November
-  2026 but had not been sent as of that date.
+  moot. Clarification of the cross-reference panel's presentation under the
+  existing agreement remains a separate follow-up; enquiry delivery is
+  unverified. It does not gate the release display described in §8.
 
 ## 6. Recommended phasing
 
@@ -238,10 +238,10 @@ pinning that a marker never enters `gVerseIndex`/BtBridge verse spans.
    (after the BtBridge scan fix).
 4. **NKJV notes**: only after the API.Bible answers arrive, and after the
    one-call probe confirms the feed carries them. *The probe found none: the
-   feed carries cross-references only, which are captured and stay dark
-   (§8).*
+   feed carries cross-references only, which are captured and shown in the
+   separate cross-references panel (§8).*
 
-## 7. Open decisions
+## 7. Initial open decisions
 
 1. Does Phase 1 (sheet only, no markers, off by default) meet the standard —
    or is even a labelled sheet of translators' notes unwanted?
@@ -256,7 +256,7 @@ pinning that a marker never enters `gVerseIndex`/BtBridge verse spans.
 
 ---
 
-## 8. Machinery status (capture built ahead of any presentation; NO rendering)
+## 8. Machinery status — capture and subsequent presentation
 
 The capture machinery is **built, humming and tested** on this branch, under
 the strict rule that nothing renders anywhere:
@@ -289,11 +289,10 @@ Thomas Nelson's textual apparatus is not in the feed. Consequences: the
 hardest §5 licensing question (displaying their *footnotes*) is moot for
 now; what is capturable — and now captured, tagged `kind:"crossref"` — is a
 cross-reference apparatus, a kind the app already offers from public-domain
-TSK. Whether NKJV crossrefs ever display is the licensing question put to
-HarperCollins' permissions team in the 28 August 2026 follow-up (no reply as
-of 6 November 2026; an email to API.Bible support was approved on 6 November
-2026 but had not been sent as of that date); the presentation is built behind
-the `nkjvxrefs` build tag — in the cross-references panel the selected text
+TSK. NKJV cross-references are enabled in ordinary builds for the coming
+minor release. The presentation enquiry remains a follow-up, with delivery
+unverified; no publisher confirmation is claimed. In the cross-references
+panel the selected text
 heads the list, with a raised letter before each word a note hangs from,
 and under the edition's own label every note stands whole under its letter
 (its citations as cards, a parenthesised group as a row that opens into its
@@ -336,14 +335,14 @@ corpus, and squarely a presentation decision. **Added to the open questions.**
    interrupted fetch both leave gaps that are not omissions. The mark is never
    a superscript, so the three native verse indexes cannot mistake it for a
    verse, and it is stripped on every outbound path (outbound_text.go).
-3. NKJV crossrefs: display eventually, or leave captured-but-dark.
+3. NKJV crossrefs: enabled in ordinary builds for the coming minor release.
+   The presentation enquiry remains a follow-up, not a release gate.
 4. AI prompts: whether note bodies may travel with an Explain request
    (default no).
-5. The licensing enquiry sent is the 28 August 2026 follow-up to
-   HarperCollins' permissions team (no reply as of 6 November 2026). The
-   API.Bible support drafts, their footnote questions narrowed by §8 above,
-   were not sent; an email to API.Bible support was approved on 6 November
-   2026 but had not been sent as of that date.
+5. The API.Bible presentation enquiry's delivery is unverified; the questions
+   were still drafts at the last recorded check on 10 November 2026. The
+   earlier HarperCollins correspondence was referred to API.Bible. No
+   pending reply or publisher confirmation of the presentation is assumed.
 
 ### Decision (2026-08-26): no dev tab — presentation trials happen on the main reading pane
 
@@ -500,8 +499,8 @@ With this, every note body in all three helloao feeds is rendered: in-verse
 NKJV (2026-09-05, cache epoch 2): the API.Bible `d` paragraph is captured the
 same way once the feed is asked for titles (include-titles=true; with titles
 off the paragraph is absent). 116 titles; their notes are cross references
-and so stay dark in every store build like every NKJV note; behind the
-`nkjvxrefs` tag the cross-references panel shows them when the selection
+and are excluded from the chapter-bottom footnote section. The
+cross-references panel shows them when the selection
 reaches verse 1 — leading the single "NKJV REFERENCES" section ahead of the
 verses' notes (S20) — the title itself standing in italic at the head of the
 selected text and opening the selection's letter run. See docs/SOURCE_FIELDS.md.

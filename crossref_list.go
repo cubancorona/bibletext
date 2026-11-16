@@ -40,16 +40,9 @@ const (
 	publisherLabelSuffix = " REFERENCES" // after the edition's abbreviation: "NKJV REFERENCES"
 )
 
-// publisherEmptyLine is the one line under the publisher's label when the
-// selection has no note of its own; the Treasury stands open beneath it. The
-// label scopes the sentence: under a bare line the Treasury's cards would
-// stand a few points below a sentence saying there are none. Hyphenated as
-// the panel's title is. publisherMissingLine replaces it where the edition has
-// a caller whose note is missing at the end of a displaced stretch in the feed.
-const (
-	publisherEmptyLine   = "No %s cross-references for this selection."
-	publisherMissingLine = "The %s has a cross-reference here that isn't in our source."
-)
+// publisherMissingLine identifies a caller whose note is missing at the end
+// of a displaced stretch in the feed.
+const publisherMissingLine = "The %s has a cross-reference here that isn't in our source."
 
 // What the panel says of a selection the cross-references cannot cover, in
 // two lines: the first is the one every empty panel shows, the second says
@@ -101,21 +94,14 @@ func crossRefCoverage(versionID, book string, verses []Verse) (note string, none
 // panelCoverage is crossRefCoverage for the selection the panel is showing,
 // in the translation being read. An edition whose own apparatus the panel
 // shows (publisher_xrefs.go) answers from its run wherever it has a note for
-// the selection, and needs no network; where it has none and the Treasury
-// cannot cover the selection at all, the answer cannot change with the load,
-// as in every other edition.
+// the selection, and needs no network. Without a publisher note, the Treasury's
+// coverage applies in full, including its caption for a partly covered range.
 func panelCoverage(state *AppState, book string, verses []Verse) (note string, none bool) {
 	v := state.currentVersion()
 	if v.PublisherCrossRefs {
 		_, chapter := selectedChapter(state, verses)
 		if len(publisherCrossRefsFor(state.Bible, book, chapter, verses)) > 0 ||
 			hasSilentDisplacedCaller(state.Bible, book, chapter, verses) {
-			return "", false
-		}
-		if v.PublisherApparatus {
-			if note, none := crossRefCoverage(v.ID, book, verses); none {
-				return note, true
-			}
 			return "", false
 		}
 	}

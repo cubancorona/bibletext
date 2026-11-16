@@ -109,9 +109,9 @@ DEV_TAG=""
 for arg in "$@"; do
     case "$arg" in
         --dev) DEV_TAG="$DEV_TAG,bibletextdev" ;;
-        # The NKJV's own cross references in the panel (versions_nkjvxrefs.go):
-        # a device build for looking, never a store build.
-        --nkjvxrefs) DEV_TAG="$DEV_TAG,nkjvxrefs" ;;
+        # Compatibility with older device commands: publisher references are
+        # enabled in ordinary builds, so this retired switch adds no build tag.
+        --nkjvxrefs) : ;;
         # The next major release (next_on.go, docs/NEXT.md): everything gated
         # for it, on a phone. Combines with --dev. Never a store build:
         # release-ios.sh refuses a binary that carries the tag.

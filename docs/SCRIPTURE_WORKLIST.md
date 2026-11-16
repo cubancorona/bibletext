@@ -455,7 +455,7 @@ breaks survive a copy is too easy to get wrong to leave where no test can reach.
 | S17 | NKJV supplied words: captured | NKJV | M | nkjv | done; captured, and drawn in italic on every surface |
 | S18 | speech reads the Psalm title | all | M | none | done |
 | S19 | mark an omitted verse's gap in the text | all | M | none | done |
-| S20 | show publisher cross references | all four | M | none | WEB (340), WEBC (343) and BSB (1,325 `\r` heading notes) recovered from USFM and live in every build (14 November 2026); NKJV built behind `nkjvxrefs` (6–13 November 2026), gated on the licensing reply |
+| S20 | show publisher cross references | all four | M | none | WEB (340), WEBC (343) and BSB (1,325 `\r` heading notes) recovered from USFM and live in every build (14 November 2026); NKJV enabled in ordinary builds for the coming minor release (16 November 2026); the presentation enquiry remains a follow-up |
 | S21 | website renders the footnote section | website | M | none | done |
 | S22 | in-text footnote markers | all | L | none | blocked |
 | S23 | draw small caps as small caps | NKJV | M | nkjv | done |
@@ -673,7 +673,7 @@ the generator, so the page cannot drift from the app.
 
 **The NKJV contributes nothing**, which is why "all editions" needed no
 licensing decision. Its entire apparatus is cross references, and the section
-excludes those (S20, built behind its tag and gated on the licence). There was a second reason until 3 October
+excludes those (S20 shows them in the app's separate cross-references panel). There was a second reason until 3 October
 2026: a licensed chapter had no page here at all, since `/nkjv/` was a notice
 page that never called `chapterBody`. The site has served the NKJV's own text
 since that day (`nkjvSiteText`, `cmd/websitegen/nkjv_text.go`), its chapters
@@ -694,11 +694,11 @@ selection and copying for everything after it. Fix that scan first; the
 documented order after it is the web reader, then the Apple panes, then the
 styled pane, then Android.
 
-**S20. BUILT, behind the `nkjvxrefs` build tag**, and gated on the licensing
-enquiry about displaying the publisher's apparatus: the 28 August 2026
-follow-up to HarperCollins' permissions team, with no reply as of 6 November
-2026 (an email to API.Bible support was approved on 6 November 2026 but had
-not been sent as of that date). All 32,473 NKJV notes are cross references —
+**S20. BUILT, enabled in ordinary builds for the coming minor release**
+(16 November 2026). Clarification of the presentation under the existing NKJV
+agreement remains a follow-up, not a release gate. Enquiry delivery is
+unverified; no publisher confirmation of the presentation is recorded.
+All 32,473 NKJV notes are cross references —
 the print edition's centre column, note for note — and 43 more sit on Psalm
 titles (and one on a heading). Across the canon, fetched 10 September, the
 feed tags 66,306 citations with a machine-readable id (`JHN.7.50`, `MAT.3.1-MAT.3.12`;
@@ -734,15 +734,13 @@ row that carries the group as printed and opens into its citations; a citation
 the loaded text lacks is its printed words; and a note of several pieces is a
 row that carries the note as printed, with its pieces under it — no legend
 and no added word (a note that is nothing but such a group is drawn as
-that group's row beside the letter's margin, closed until tapped, so its
-citations do not count for the Treasury's filter); then GOSPEL PARALLELS
+that group's row beside the letter's margin, closed until tapped); then GOSPEL PARALLELS
 where the selection has them, dropping the PARALLEL pill under their label;
 then TREASURY OF SCRIPTURE KNOWLEDGE, open (or carrying an inline loading or
 retry state while the Treasury zip downloads on first use, while local
-publisher notes and parallels already stand on screen), minus the rows whose
-passages verse-level publisher cards on screen already carry (keeping specific
-rows under `:title` and whole-chapter cards) and minus exact citations of a
-selected verse (`publisher_xrefs.go`, `crossref_list.go`, `crossref_note.go`,
+publisher notes and parallels already stand on screen), retaining each source
+verse's relationships even when another source cites the same passage
+(`publisher_xrefs.go`, `crossref_list.go`, `crossref_note.go`,
 `crossref_passage.go`, `crossref_sizes.go`). Nothing of the publisher's is sorted, capped, merged
 or mapped: the targets are in the edition's own numbering, which is the
 numbering on screen. The Treasury is not removed — 31.7% of
@@ -750,15 +748,12 @@ NKJV verses carry no note (9,853 of 31,102 on the 7 September canon) — and
 the two never share a run or a credit, which is what the misattribution
 worry in `docs/SOURCE_FIELDS_DECISIONS.md` actually forbids: the footer's
 sources line names the Treasury, and the edition's LicenseNotice, once in
-the footer, is the publisher's credit. A flag off (every store build) leaves the panel as
-it was, except that a licensed edition's notice stands under the verse-text
-previews the panel shows, which it never did before S20, and for two repairs
-that ship regardless of the licence (decided 6 November 2026): range labels
-take an en dash, and the footer's sources line wraps and names Gospel
-parallels only while a parallel row is on screen.
+the footer, is the publisher's credit. The edition's notice stands under the
+verse-text previews. Range labels take an en dash, and the footer's sources
+line wraps and names Gospel parallels only while a parallel row is on screen;
+these two repairs were independent of the former display gate.
 
-On a yes the one line in `versions_nkjvxrefs.go` moves into the registry and
-the tag goes; on a no nothing needs unwinding. All publisher notes of the
+All publisher notes of the
 selection — the 43 Psalm title notes (with the title set in italic before
 verse 1 in the passage), a noted section heading (set bold in text colour in
 the passage), and the verses' notes — follow in order under one single
@@ -794,8 +789,9 @@ public-domain and CC0 editions (`scripts/gen-publisher-xrefs.py`,
 Tobit 2:6, Wisdom 14:27 and Sirach 6:30), and 1,325 `\r` section-heading
 parallel lines across 634 BSB chapters (cleaning up helloao's leaked duplicate
 `"(Joshua–Malachi)"` heading at Hebrews 11:30), shown on noted selections under
-`WEB REFERENCES`, `WEBC REFERENCES` and `BSB REFERENCES` while unnoted
-selections keep the plain unlabelled list (`PublisherApparatus == false`). The
+`WEB REFERENCES`, `WEBC REFERENCES` and `BSB REFERENCES`. Empty publisher
+sections are omitted for these editions and the NKJV; Gospel and Treasury
+sections retain their own labels when they have references. The
 decisions, the build, the count that holds it over the canon
 and the audit of the other cross-reference sets are in the same BACKLOG entry;
 `docs/CROSS_REFERENCE_NOTES.md` is the ledger of what a note carries and where

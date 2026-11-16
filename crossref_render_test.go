@@ -47,10 +47,9 @@ import (
 //	BIBLETEXT_RENDER_XREFS=/path/to/nkjv-canon.json BIBLETEXT_RENDER_OUT=/tmp/xrefs \
 //	  go test -run TestRenderCrossRefPanel -v .
 //
-// Selections are rendered with the publisher's run ON (the nkjvxrefs build's
-// view) and, for John 3:16 and Matthew 3:1, OFF as the control everyone has
-// today — the second with a parallel row on screen, so the store build's
-// footer carries both of its credits. The same canon is put through the
+// Selections are rendered with the publisher's run on and, for John 3:16 and
+// Matthew 3:1, off as a control — the second with a parallel row on screen,
+// so the control's footer carries both of its credits. The same canon is put through the
 // apparatus census (publisher_xrefs_census_test.go), the assertion the live
 // canon test makes of a fresh download.
 func TestRenderCrossRefPanel(t *testing.T) {

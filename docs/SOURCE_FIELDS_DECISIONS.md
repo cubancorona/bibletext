@@ -139,8 +139,8 @@ edition to download the text again.
 | 8 | Selah placement | WEB, BSB | set differently in each | keep the source's placement | — | — | medium |
 | 9 | descriptive runs | BSB | one oracle title | capture with item 1 | S | with item 1 | medium |
 | 10 | words-of-Jesus flag | WEB, WEBC | nothing; tables agree exactly | keep tables, add a decode-time cross-check | S | none | high |
-| 11 | NKJV cross references hidden | NKJV | 32,473 notes | built behind the `nkjvxrefs` tag: under the edition's own label the notes stand whole under their letters, their citations as cards, the Treasury open beneath under its own; display waits for the licensing answer (S20) | M | none | high |
-| 12 | note callers and anchors | all | in-text markers | keep dormant on the page, fix the Android scan first (the cross-references panel reads the NKJV's anchors behind its tag, S20) | — | — | high |
+| 11 | NKJV cross-reference display | NKJV | 32,473 verse notes | enabled in ordinary builds for the coming minor release: under the edition's own label the notes stand whole under their letters, their citations as cards, with the Treasury under its own label; the presentation enquiry remains a follow-up (S20) | M | none | high |
+| 12 | note callers and anchors | all | in-text markers | keep dormant on the page, fix the Android scan first (the cross-references panel reads the NKJV's anchors in ordinary builds, S20) | — | — | high |
 | 13 | website: Psalm titles | WEB, WEBC, BSB | every title | ship | S | none | high |
 | 14 | website: footnote section | WEB, WEBC, BSB | the whole apparatus | defer, needs a presentation model | M | none | medium |
 | 15 | search does not index titles | all | "Absalom" finds nothing | index titles | S | none | medium-high |
@@ -465,11 +465,10 @@ styled pane included.
 
 ### The apparatus
 
-Every NKJV note is a cross reference, and the section hides cross references,
-so all 32,517 are captured and dark in every store build: 32,473 on verses,
-43 on Psalm titles and one on a heading. Those 43 are the most interesting of the set, since they point at the
-narrative a superscription alludes to, but they are the same policy question
-as the rest.
+Every NKJV note is a cross reference, so the chapter-bottom footnote section
+excludes them. All 32,517 are captured for the cross-references panel: 32,473
+on verses, 43 on Psalm titles and one on a heading. The title notes point at
+the narrative a superscription alludes to and use the same panel as the rest.
 
 Lifting the filter would add about 27 rows to an average chapter, against a
 current maximum of 25 in the busiest BSB chapter, and the section is the
@@ -485,18 +484,19 @@ run stands under the edition's own label — each note whole under its letter,
 in the publisher's order, its citations cards and a parenthesised group a
 row that opens into its own (decided 11 November 2026; the build of
 6 November kept the parenthesised ones as one caption under the note's
-cards) — while the Treasury stands open beneath under its own label, minus
-the rows whose passages the publisher's cards on screen already carry,
-because a third of the edition's verses carry no note and a reader should not
-be left with an empty run and no way on. Decided 6 November 2026, replacing
-the first pass's separately credited disclosure, whose title clipped every
-row. The footer's sources line credits the Treasury; the edition's
+cards) — while the Treasury stands beneath under its own label. Each source
+relationship is retained even when a publisher note cites the same passage,
+and a destination contributed by two selected verses remains in each verse's
+Treasury group. A third of the edition's verses carry no note, so the
+Treasury also supplies references where no publisher run exists. The
+labelled-run presentation replaced the first pass's separately credited
+disclosure on 6 November 2026; that disclosure's title clipped every row. The footer's sources line credits the Treasury; the edition's
 LicenseNotice, once in the footer, credits the publisher's run. The decoder
 keeps the feed's citation ids as spans (`Footnote.Refs`) without an epoch
-bump. The flag is set for the NKJV only behind the `nkjvxrefs` build tag:
-**the licensing answer still decides whether any of it displays**, and no
-store build can do so before it comes (docs/SCRIPTURE_WORKLIST.md, S20). The
-43 title notes ride the same rule as the rest, keyed "Title".
+bump. The NKJV's publisher flags are set in the ordinary registry for the
+coming minor release. The presentation enquiry remains a follow-up, with
+delivery unverified, rather than a release gate (docs/SCRIPTURE_WORKLIST.md,
+S20). The 43 title notes appear before verse 1 under their own letters.
 
 ### Unknown styles
 

@@ -624,8 +624,9 @@ the audio service and a killed process takes it along.
   `publisher_xrefs_public.go`) — WEB and WEB Catholic retain the exact source
   insertion points and lettered note groups in the panel's quotation. BSB's
   recovered references identify the actual section heading and its position
-  before a verse, without inventing word anchors. NKJV apparatus stays behind `nkjvxrefs`. These
-  references are separate from the optional chapter-bottom translation notes.
+  before a verse, without inventing word anchors. NKJV notes use the same
+  publisher-run model in ordinary builds. These references are separate from
+  the optional chapter-bottom translation notes.
 - **Gospel parallels** ([parallels.go](parallels.go)) — an **embedded** synopsis
   (`assets/parallels/gospel_parallels.json`, `//go:embed`). For a Gospel verse,
   destinations are grouped by the actual event and source passage, with its

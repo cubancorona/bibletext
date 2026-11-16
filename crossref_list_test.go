@@ -19,20 +19,15 @@ import (
 // that contributes them; publisher notes retain their own printed structure.
 
 // withPublisherCrossRefs flips the registry flag for one edition for the
-// test's duration — what the nkjvxrefs build tag does for the NKJV at init.
+// test's duration, so both enabled and disabled paths have explicit controls.
 func withPublisherCrossRefs(t *testing.T, id string, on bool) {
 	t.Helper()
 	for i := range registeredVersions {
 		if registeredVersions[i].ID == id {
 			wasRefs := registeredVersions[i].PublisherCrossRefs
-			wasApp := registeredVersions[i].PublisherApparatus
 			registeredVersions[i].PublisherCrossRefs = on
-			if id == "nkjv" {
-				registeredVersions[i].PublisherApparatus = on
-			}
 			t.Cleanup(func() {
 				registeredVersions[i].PublisherCrossRefs = wasRefs
-				registeredVersions[i].PublisherApparatus = wasApp
 			})
 			return
 		}
@@ -1025,7 +1020,7 @@ func TestOwnPassageIsMutedOnlyWithinSelection(t *testing.T) {
 		t.Errorf("muted Treasury self-row label missing from list:\n%s", all)
 	}
 
-	// Store build (PublisherCrossRefs false): the own-passage rule still
+	// Disabled publisher control: the own-passage rule still
 	// applies, independently of whether publisher notes are displayed.
 	withPublisherCrossRefs(t, "nkjv", false)
 	storeSpan := buildCrossRefList(st, span, tsk, nil, lightPalette, func(crossRef) {})

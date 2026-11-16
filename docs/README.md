@@ -40,7 +40,7 @@ Adding a document? Add its line here. One line, saying **when** to read it.
 - [DIVINE_NAME.md](DIVINE_NAME.md) — before touching small capitals, the `nd`/`sc` markers, or any code that compares selected text against verse text
 - [TEXTUAL-DATA.md](TEXTUAL-DATA.md) — before regenerating or trusting a derived table — versification, red-letter spans, cross-edition verse mapping
 - [FOOTNOTES.md](FOOTNOTES.md) — before changing footnote capture or the chapter-bottom section, or when apparatus could leak into verse text
-- [CROSS_REFERENCE_NOTES.md](CROSS_REFERENCE_NOTES.md) — before changing publisher cross-reference parsing or display — WEB, WEB Catholic and BSB recovery, and the gated NKJV apparatus
+- [CROSS_REFERENCE_NOTES.md](CROSS_REFERENCE_NOTES.md) — before changing publisher cross-reference parsing or display — WEB, WEB Catholic and BSB recovery, and the NKJV apparatus
 
 
 ## Translations, keys and links

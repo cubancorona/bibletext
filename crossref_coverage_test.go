@@ -211,9 +211,9 @@ func TestTheCoverageSentenceComesBeforeTheOfflineMessage(t *testing.T) {
 		{"partly covered", "webc", greekEstherBible(), "Esther", 4, 17, 18, offline, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			// The NKJV without its own apparatus, as every store build has
-			// it, whatever tags this build has; the build that shows it is
-			// TestAPublisherBlockIsNotAnsweredForTheTreasury's.
+			// Disable the NKJV apparatus to isolate Treasury coverage;
+			// TestAPublisherBlockIsNotAnsweredForTheTreasury covers the
+			// enabled publisher path.
 			withPublisherCrossRefs(t, "nkjv", false)
 			texts, loaded := coveragePanelIn(t, tc.version, tc.bd, tc.book, tc.chapter, tc.lo, tc.hi)
 			found := false
@@ -393,5 +393,50 @@ func TestAnUncoveredSelectionWithNoPublisherNoteAnswersBeforeLoading(t *testing.
 	_, loaded := coveragePanelIn(t, "nkjv", bd, "Acts", 15, 33, 34)
 	if !loaded {
 		t.Error("Acts 15:33-34 answered before loading though verse 15:33 is covered by the Treasury")
+	}
+}
+
+// A publisher with no note for the selected range cannot hide gaps in the
+// Treasury's coverage. Every unsupported NKJV verse has the same rule.
+func TestUnnotedNKJVSelectionsKeepPartialTreasuryCoverage(t *testing.T) {
+	app := test.NewApp()
+	defer app.Quit()
+	licenseNKJVForTest(t)
+	for _, tc := range []struct {
+		name, book                string
+		chapter, covered, omitted int
+		want                      string
+	}{
+		{"Acts 8", "Acts", 8, 36, 37, "Nothing is listed for verse 8:37, which the cross-references don't cover."},
+		{"Acts 15", "Acts", 15, 33, 34, "Nothing is listed for verse 15:34, which the cross-references don't cover."},
+		{"Acts 24", "Acts", 24, 6, 7, "Nothing is listed for verse 24:7, which the cross-references don't cover."},
+		{"Luke 17", "Luke", 17, 35, 36, "Nothing is listed for verse 17:36, which the cross-references don't cover."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bd := xrefBible(map[string]map[int]int{tc.book: {tc.chapter: tc.omitted}, "Genesis": {1: 1}})
+			st := &AppState{Bible: bd, CurrentBook: tc.book, CurrentChapter: tc.chapter, CurrentVersion: "nkjv"}
+			selected := versesBetween(bd, tc.book, tc.chapter, tc.covered, tc.omitted)
+			if note, none := panelCoverage(st, tc.book, selected); none || note != tc.want {
+				t.Fatalf("partly covered range = (%q, %v), want (%q, false)", note, none, tc.want)
+			}
+			refs := []crossRef{{Book: "Genesis", Chapter: 1, Verse: 1, SourceVerse: tc.covered}}
+			list := buildCrossRefList(st, selected, refs, nil, lightPalette, func(crossRef) {})
+			if list.CoverageNote != tc.want || list.Sections.Publisher || list.TSKRows != 1 || !list.Passage {
+				t.Fatalf("unnoted selection lost its coverage caption or Treasury row: %+v", list)
+			}
+			if len(list.Objects) == 0 || !treeHasText(list.Objects[0], tc.want) {
+				t.Fatal("partial-coverage caption does not precede the reference content")
+			}
+			empty := buildCrossRefList(st, selected, nil, nil, lightPalette, func(crossRef) {})
+			if len(empty.Objects) != 0 || empty.CoverageNote != tc.want {
+				t.Fatal("empty partly covered selection lost its explanatory message")
+			}
+			if note, none := panelCoverage(st, tc.book, selected[:1]); none || note != "" {
+				t.Fatalf("covered-only control = (%q, %v), want no caption", note, none)
+			}
+			if note, none := panelCoverage(st, tc.book, selected[1:]); !none || note != tc.want {
+				t.Fatalf("uncovered-only control = (%q, %v), want (%q, true)", note, none, tc.want)
+			}
+		})
 	}
 }

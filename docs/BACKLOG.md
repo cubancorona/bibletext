@@ -10024,18 +10024,19 @@ four, and finds no visible object laid out smaller than it asks: it fails on
 the key row as an HBox and on any switch as a widget.Check. What only a
 screen can confirm is in `docs/VISUAL_TESTS.md` V15.
 
-## NKJV cross references: the panel's second pass — BUILT 6 November 2026, the notes whole under their letters BUILT 11 November 2026, refinements BUILT 13 November 2026, display gated on the licence
+## NKJV cross references: the panel's second pass — BUILT 6 November 2026, the notes whole under their letters BUILT 11 November 2026, refinements BUILT 13 November 2026, release display enabled 16 November 2026
 
-Planned for: stays, gated on the licensing reply — see docs/ROADMAP.md.
+Planned for: the coming minor release. The presentation enquiry remains a
+follow-up, not a release gate — see docs/ROADMAP.md.
 
 The edition's own cross-reference apparatus is captured, resolved and drawn
-in the cross-references panel behind the `nkjvxrefs` build tag (the first
+in the cross-references panel in ordinary builds (the first
 pass: commits ecdeb1cad, 94385ac27; the design memo and the decision are in
 `docs/SCRIPTURE_WORKLIST.md` S20 and `docs/SOURCE_FIELDS_DECISIONS.md`).
 What the first pass left and stays: the decoder keeps each tagged citation as
 a span (`Footnote.Refs`, no cache-epoch bump); `publisher_xrefs.go` resolves
-the notes; the flag is set for the NKJV only in `versions_nkjvxrefs.go`;
-`scripts/run-ios-device.sh --nkjvxrefs` builds it for a phone; the canon
+the notes; the NKJV's publisher flags are set in `versions.go`;
+`scripts/run-ios-device.sh` builds it for a phone; the canon
 census and the copyright-line assertion are in `apibible_live_test.go`.
 
 PAUSED 10 September 2026 after the first look on a phone, which
@@ -10073,10 +10074,9 @@ citation a tap target, the Treasury's cards beneath it uncut. B was not
 chosen because it keeps two registers in one list (the cards preview what the
 band only cites — about 60% of the citations stand twice), its tap targets
 fall under 44 pt, and the ~40% of the NKJV's citations the Treasury does not
-carry get no preview. It stays recorded because it is the one design that
-would satisfy a licensing reply reading the no-alteration clause as "the
-apparatus as printed"; on such a reply the cards are withdrawn and B is
-built. The fold was rejected in every form: a `widget.Accordion` or any
+carry get no preview. It was retained as an alternative if the applicable
+agreement required the apparatus as printed. Any later presentation change
+belongs to the enquiry follow-up; this alternative is not a release gate. The fold was rejected in every form: a `widget.Accordion` or any
 `widget.Button` as a fold or header is the width defect itself (an 18-pt
 bold label with button chrome and no size control) and outranks the 16-pt
 references; a button shrunk with a theme override clears the process-wide
@@ -10098,9 +10098,9 @@ label equality (it misses "2 Samuel 15:1–18" beside "2 Samuel 15:13–17").
 Decided 6 November 2026: design A; the Treasury open under its own label, no
 fold; the store-build repairs ship now, independent of the licence — the
 footer's sources line wraps and names only the sets on screen, and range
-labels take an en dash; display stays gated on the licence, with the
-`nkjvxrefs` build tag and `versions_nkjvxrefs.go` the only switch, which no
-store build compiles. Defaults taken: the panel keeps its three-state body
+labels take an en dash. At that stage display stayed behind the
+`nkjvxrefs` build tag, excluded from store builds; that gate was retired on
+16 November 2026. Defaults taken: the panel keeps its three-state body
 (spinner, then list or message); no NKJV credit line beyond the edition's
 LicenseNotice; no gloss of the parentheses anywhere.
 
@@ -10200,9 +10200,11 @@ dedupe keyed by passage and kind; the section label inset by the theme's
 padding; the release guard's success line naming every refused tag; the
 API.Bible comments without a plan name), each described in place below:
 
-- The release guard refuses an artifact built with the `nkjvxrefs` tag
-  (`scripts/verify-not-next.sh`; `TestVerifyNotNextRefusesTaggedBuilds`, with
-  a look-alike tag as its control), and CI vets the tag.
+- At that stage the release guard refused an artifact built with the
+  `nkjvxrefs` tag (`scripts/verify-not-next.sh`;
+  `TestVerifyNotNextRefusesTaggedBuilds`, with a look-alike tag as its control),
+  and CI vetted the tag. That separate display gate was retired on
+  16 November 2026; the `next` and development-build refusals remain.
 - `ensureCrossRefs` forgets a failed Treasury load, so a retry can fetch,
   removes a cached zip that fails to parse, and caches a fetched zip only
   once it has parsed, so a body that is not the zip (a captive portal's page
@@ -10543,7 +10545,7 @@ DECIDED AND BUILT 12–13 November 2026 (resolving the 11 November open list):
   and attached idempotently on decode, on cache load and on the embedded WEB
   Gospels seed without bumping `cacheEpoch`. `PublisherCrossRefs` is true in
   every build for `web`, `webc` and `bsb`, while `PublisherApparatus` stays
-  true only for `nkjv` behind `nkjvxrefs` so unnoted verses in the sparse sets
+  true only for `nkjv` (behind `nkjvxrefs` at that stage) so unnoted verses in the sparse sets
   keep the plain unlabelled list rather than showing an empty publisher banner
   on 96–99% of selections (`TestShippedPublicPublisherCrossRefTablesAreCompleteAndSound`,
   `TestEveryPublicPublisherCrossRefNoteFitsTheNarrowestPhone`,
@@ -10551,18 +10553,18 @@ DECIDED AND BUILT 12–13 November 2026 (resolving the 11 November open list):
   Moving from OpenBible's vote-ranked TSK to CrossWire's public-domain
   head-word TSK remains a separate product question.
 
-GATES. The publisher's apparatus does not display in a store build until the
-licensing reply says it may. The only licensing enquiry sent is the
-28 August 2026 follow-up to HarperCollins' permissions team, which has had
-no reply as of 6 November 2026; an email to API.Bible support was approved on
-6 November 2026 but had not been sent as of that date. On a yes: move the one line in
-`versions_nkjvxrefs.go` into the registry entry and drop the tag; add the
-dedicated copyright page the terms' §7 asks for (a standing pre-ship item,
-`versions_ui.go`); settle whether the sources line names the rights holder ("NKJV references: Thomas
-Nelson") and whether a one-sentence gloss of the parentheses may go anywhere
-— the panel is built to need neither. If the reply reads the no-alteration
-clause as requiring the apparatus as printed, design B replaces the cards.
-On a no: nothing to unwind. Deferred, not denied:
+RELEASE SCOPE. NKJV publisher references are enabled for the coming minor
+release. Existing licensed NKJV access and the current presentation are
+retained; this is not a claim of publisher confirmation of the presentation.
+Clarification under the applicable agreement remains a follow-up, including
+any version-specific presentation or attribution requirements. The dedicated
+copyright-page proposal and possible rights-holder wording remain part of
+that enquiry. Current enquiry delivery is unverified: the API.Bible questions
+were still drafts at the last recorded check on 10 November 2026, and the
+earlier HarperCollins
+correspondence was referred to API.Bible. No pending reply is assumed. This
+follow-up does not gate release display, and the current credits, labels and
+note presentation remain unchanged. Earlier design and validation followups:
 
 - CLOSED 13 November 2026 (`2f8ef33dd8`): per-section loading, so the NKJV's
   cross-reference notes and embedded Gospel parallels show immediately from
@@ -10602,11 +10604,13 @@ On a no: nothing to unwind. Deferred, not denied:
   Numbers 4), which the resolver did not read. It is read and shown in order
   under `NKJV REFERENCES`, with the heading drawn bold in the passage (above).
 
-TO SEE IT. Build for the phone: `scripts/run-ios-device.sh --nkjvxrefs`.
+TO SEE IT. Build for the phone: `scripts/run-ios-device.sh`. The former
+`--nkjvxrefs` option remains a compatibility no-op; ordinary builds include
+the apparatus.
 Without a device: run `TestLiveAPIBibleFullCanon` with
 `BIBLETEXT_FULL_CANON_OUT` set (the decoded canon is licensed text and must
 stay outside the repository), then `BIBLETEXT_RENDER_XREFS=<that file>
-BIBLETEXT_RENDER_OUT=<dir> go test -tags nkjvxrefs -run TestRenderCrossRefPanel .`
+BIBLETEXT_RENDER_OUT=<dir> go test -run TestRenderCrossRefPanel .`
 writes the PNGs at both phone sizes in both appearances.
 
 ## FIXED: Share as image failed silently on Android 6.0-9.0 (API 23-28) — 20 September 2026

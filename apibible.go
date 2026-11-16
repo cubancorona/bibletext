@@ -26,12 +26,9 @@ package bibletext
 // The plan has a monthly request quota shared across every install, so the
 // fetch walks the PASSAGES endpoint in ≤200-verse ranges: ~200 calls for the
 // whole canon versus ~1,190 chapter-by-chapter (the per-chapter path survives
-// as an automatic fallback for providers without passages support). Whether
-// the edition's own cross-reference apparatus may be displayed is a separate
-// licensing question (versions_nkjvxrefs.go): the one enquiry sent is the
-// 28 August 2026 follow-up to HarperCollins' permissions team, unanswered as
-// of 6 November 2026; an email to API.Bible support was approved on
-// 6 November 2026 but had not been sent as of that date.
+// as an automatic fallback for providers without passages support). The
+// edition's cross-reference notes are kept with its text for the dedicated
+// cross-references panel (publisher_xrefs.go).
 //
 // FUMS: API.Bible's usage tracker is required for web apps only — "if you only
 // use API.Bible for your mobile app … you can skip this section". The app has

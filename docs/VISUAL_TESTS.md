@@ -668,8 +668,9 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
 - [ ] At every text size, verse navigation/read-along must never jump to a
       section KEY as if it were a verse; the last verse's narration tint
       ends at the rule.
-- [ ] NKJV stays dark: no rule, no section, no crossref rows on any NKJV
-      chapter — the Settings card still present.
+- [ ] NKJV reading pane: no chapter-bottom rule or note section; the
+      Settings card remains present. Publisher cross-references appear in
+      the separate cross-references panel in ordinary builds.
 - [ ] Cross-references panel: loading bar STOPS on close (a leaked
       infinite bar once pinned the canvas at ~20fps); Gospel selections
       show embedded PARALLEL rows even offline; rows never display a verse

@@ -9,11 +9,12 @@ canon holds, where the panel shows it, and the test that holds it, so that a
 change to the panel can be checked against the list rather than against a
 memory of it.
 
-The NKJV's apparatus below is behind the `nkjvxrefs` build tag, which no store
-build compiles while the licensing enquiry waits on a reply (docs/BACKLOG.md,
-"NKJV cross references: the panel's second pass"); the same publisher-run
-model ships in every build for the public-domain and CC0 editions' own
-recovered cross-references (`publisher_xrefs_public.go`, below).
+The NKJV's apparatus below is enabled in ordinary builds for the coming minor
+release, alongside the public-domain and CC0 editions' recovered references
+(`publisher_xrefs_public.go`, below). Clarification of this presentation under
+the existing NKJV agreement remains a follow-up, not a release gate. Enquiry
+delivery is unverified, and no publisher confirmation of the presentation is
+recorded (docs/BACKLOG.md, "NKJV cross references: the panel's second pass").
 
 The NKJV figures are of the canon fetched on 6 November 2026. Those marked
 "census" are pinned by `canonPieceCensus` in `publisher_xrefs_census_test.go`
@@ -223,9 +224,9 @@ A report to the provider is drafted for the owner to review and send.
   adding Tobit 2:6, Wisdom 14:27 and Sirach 6:30), and 1,325 section-heading
   `\r` parallel-passage lines across 634 BSB chapters (2,032 citations plus
   Hebrews 11:30's words-only `"Joshua–Malachi"`, whose leaked duplicate
-  `"(Joshua–Malachi)"` feed heading is stripped on attachment). Because these
-  three sets are sparse (`BibleVersion.PublisherApparatus == false`), unnoted
-  selections have no empty publisher banner. The Gospel and Treasury sections
+  `"(Joshua–Malachi)"` feed heading is stripped on attachment). Unnoted
+  selections have no empty publisher section, for these sparse sets or the
+  NKJV apparatus. The Gospel and Treasury sections
   still name their sources when they have references
   (`TestShippedPublicPublisherCrossRefTablesAreCompleteAndSound`,
   `TestEveryPublicPublisherCrossRefNoteFitsTheNarrowestPhone`). Whether to
@@ -288,8 +289,8 @@ matched headings; it does not rewrite the cache file.
 `TestLiveAPIBibleFullCanon`, with `BIBLETEXT_FULL_CANON_OUT` set, fetches the
 canon, asserts the census and writes the decoded canon, which is licensed
 text and stays outside the repository. With that file,
-`BIBLETEXT_RENDER_XREFS=<that file> BIBLETEXT_RENDER_OUT=<dir> go test -tags
-nkjvxrefs -run TestRenderCrossRefPanel .` draws the panel for 26 selections
+`BIBLETEXT_RENDER_XREFS=<that file> BIBLETEXT_RENDER_OUT=<dir> go test
+-run TestRenderCrossRefPanel .` draws the panel for 26 selections
 at two phone sizes in both appearances, with every group opened and every
 note closed where a selection has them (586 PNGs).
 

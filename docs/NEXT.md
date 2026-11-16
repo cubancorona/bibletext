@@ -46,8 +46,8 @@ Each file also exports the same value as `NextRelease`, for the commands built
 beside the package (`cmd/websitegen` reads `bibletext.NextRelease`), which
 cannot see an unexported name.
 
-A build tag rather than a setting, for the reason the NRSV, LSB and
-`nkjvxrefs` builds give (`versions_nrsv.go`): a setting, even one that is off,
+A build tag rather than a setting, for the reason the NRSV and LSB
+builds give (`versions_nrsv.go`): a setting, even one that is off,
 ships the code it switches. Without the tag the gated code is not in the binary
 at all.
 
@@ -510,10 +510,10 @@ The decisions, taken 15 October 2026 (`ROADMAP.md`, decision 9):
   before the Treasury loads, so a reader who is offline is not told to check
   the connection for it. A deuterocanonical book's second line, "The
   cross-references don't cover the deuterocanonical books.", came with the
-  piece, and its wording was approved on 21 October 2026. An edition whose
-  own apparatus the panel shows (the NKJV in a build with the `nkjvxrefs`
-  tag) gets neither the line nor the early answer, since its block answers
-  for the selection without the network (`panelCoverage`).
+  piece, and its wording was approved on 21 October 2026. A selection with
+  publisher references is answered by its own run without the network.
+  Without them, every edition retains the normal coverage line for uncovered
+  verses and the early answer when none can be covered (`panelCoverage`).
 - **E-C. The two sentences for a book whose numbering does not correspond**,
   approved as drafted: under a note that cannot be placed, "The translation
   being read numbers the whole of this book differently."

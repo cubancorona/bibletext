@@ -105,9 +105,8 @@ func footnoteEntryKey(e footnoteEntry) string {
 // the translation omits (Luke 17:36 and kin), merged by verse number so an
 // omitted verse's note sorts into its natural place between its neighbours.
 // Cross-references (Kind == footnoteKindCrossref — the NKJV feed's entire
-// apparatus) are excluded: whether they ever display is an open decision
-// (docs/FOOTNOTES.md §8), and a wall of "John 7:50; 19:39" rows is a
-// different feature from wording-and-manuscript notes.
+// apparatus) are excluded: they belong in the dedicated cross-references
+// panel, separate from wording-and-manuscript notes.
 //
 // A heading's notes (heads, as headingsFor gives them) are filed under the
 // verse the heading stands above, which is the reference the publisher gives
