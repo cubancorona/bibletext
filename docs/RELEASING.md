@@ -72,19 +72,20 @@ permission. That covers the `main` push, the tag push and the `gh-pages` push,
 each separately.
 
 **The three irreversible acts**: `--submit` in `appstore/submit-version.py`,
-`commit` in `msstore/submit.py`, and `promote` in `scripts/play-publish.py`.
-All three are mechanically automatable and each is deliberately left as its
-own step, run only on the account holder's OK, because Apple releases
-`AFTER_APPROVAL`, the Store publishes `Immediate`, and Play sends a promotion
-to production straight into its review — once certification passes there is
-no second checkpoint on any of them.
+`commit` in `msstore/submit.py`, and a production commit in
+`scripts/play-publish.py`. All three require release authorization because
+Apple releases `AFTER_APPROVAL`, the Store publishes `Immediate`, and Play
+sends production straight into review. With Managed publishing off, approval
+publishes it without a second release action. Existing authorization covers
+ordinary recovery of the same release; it is not requested again merely
+because a service returned a transient error.
 
-**Google Play's promotion to production** is one of those three: the account
-holder's OK, then the script (stage 7). Until 2 October 2026 it was a Play
-Console step, because the service account was scoped so it could not reach
-production; that day it was granted "release to production", for this app
-only. The What's new text production shows is the alpha release's, carried
-unchanged, and the dry run prints it line by line for that OK.
+**Google Play public releases go directly to production** with the signed
+AAB and approved What's new file (stage 6). Alpha and other testing tracks
+are only for deliberate testing, not a prerequisite for each public release.
+If a build was deliberately released to testers first, `promote` carries
+that already-uploaded build and its approved notes to production without
+another upload (stage 7).
 
 **Console-only, per store**: the IARC age-rating questionnaire; Snap categories,
 screenshots, banner and publisher display name; raising, completing or halting
@@ -338,42 +339,42 @@ uploads of stage 6 go on.
 
 ### 6 — Upload to Play, then Apple
 
-Play's alpha upload goes first. Google reviews every track change, and the
-promotion in stage 7 is refused until that review has cleared, so the
-review runs while Apple is processing its builds to `VALID`, and the
-Publishing overview is usually showing the alpha release published by the
-time the Apple submissions go. `scripts/play-publish.py --dry-run upload
-<aab> alpha` first — it uploads into an edit it then discards — then the
-identical command without `--dry-run`, with `--status completed`. The
-release notes are read from
-`play/metadata/en-GB/whats-new-<v>.txt`, the tracked file of stage 1, unless
-`--notes <file>` names another, and the upload refuses without it; the file
-keeps its line breaks, so the opening line and each bullet reach Play as
-lines. Before the commit the upload holds the bundle Play reports to this
-tree: its versionCode must be the mobile ledger's Build and the sha1 Play
-computed over the bytes it received must be the file's, or the edit is
-discarded with nothing changed. After the commit it reads the track back in
-a fresh edit and prints it, held to the release written — the versionCode,
-the status, and the name Play gives a release it was given no name for,
-the bundle's versionName, which is where that versionName is held to the
-ledger's Version. That is where stage 6 ends on Play: the release is on the
-alpha track, `upload` refuses the production track, and production waits for
-the promotion in stage 7. The script refuses an option it does not know, such
-as `--dryrun`, before it reads the key, so a mistyped dry run never commits.
-The two legs part here on purpose: Play keeps the alpha track — Google
-reviews every track change, closed testing on it was the prerequisite for
-production access, and its release is the build the testers get — while
-TestFlight is deliberately unused for releases, so an Apple build goes
-straight to the version record.
+For a public release, upload the prepared AAB directly to **production**.
+Verify the current [Play publishing mode](PLAY_LISTING.md#publishing-mode)
+in Publishing overview and record it before submitting. The expected setting
+is Managed publishing off, so approval publishes automatically. Do not change
+that setting merely to match an earlier receipt.
+
+```
+scripts/play-publish.py upload <aab> production --confirm-version <v> --dry-run
+scripts/play-publish.py upload <aab> production --confirm-version <v>
+```
+
+The dry run uploads into an edit, assigns production, validates it and deletes
+it without committing. The real command commits the same prepared artifact.
+Both require the ledger's exact Version and status `completed`. Before sending
+the bundle, they read production and refuse if it already carries this Build
+or a newer one, a draft or an unfinished rollout. An older completed or halted
+release can be replaced. The omitted-track default remains `internal` for
+explicit testing workflows; always name `production` for a public release.
+
+Release notes come from `play/metadata/en-GB/whats-new-<v>.txt`, the tracked
+file of stage 1, unless `--notes <file>` names another approved file. Line
+breaks are preserved. Before the commit, the returned versionCode must be the
+mobile ledger's Build and Play's sha1 must match the prepared bytes. After
+commit, a fresh production read must show exactly that versionCode, the
+ledger's Version, full rollout and the approved notes. A mismatch is reported
+as a committed release needing reconciliation, never as a discarded upload.
+Unknown options such as `--dryrun` are refused before credentials are read.
+
+Alpha is used only when a separate test distribution was deliberately chosen.
+Such a build is later promoted without uploading it again; it is not sent
+through both tracks by default. Apple builds go straight to their version
+records; TestFlight is not part of the public-release sequence.
 
 Then Apple: `xcrun altool --upload-app -t ios` and `-t macos`. **Keep both
 delivery UUIDs**: each is that build's App Store Connect id and
 `submit-version.py` checks the attached build against it.
-
-Verify the current [Play publishing mode](PLAY_LISTING.md#publishing-mode)
-in Publishing overview and record it before submitting. The expected setting
-is Managed publishing off, so approval publishes automatically; this does not
-replace the production promotion in stage 7.
 
 **An upload waits for a review already in progress.** Its commit asks Play
 to refuse rather than cancel that review and send everything again, as
@@ -397,10 +398,10 @@ from one release to the next. An approved new phone and tablet set goes up
 with `play/push-screenshots.py` — read-only first, then `--rehearse`, then
 `--write --confirm-version <v>` (docs/SCREENSHOT_PLAYBOOK.md, §6).
 
-### 7 — Submit to Apple, promote on Play
+### 7 — Submit to Apple and verify Play publication
 
-Two of the three irreversible acts, each on the account holder's OK (the
-third is the Microsoft Store's `commit`, stage 9). Apple: wait for each build
+Apple submission is the next irreversible act under the release authorization
+(the Microsoft Store's `commit` follows in stage 9). Wait for each Apple build
 to reach `VALID`, then per platform, three commands in this order:
 
 ```
@@ -436,50 +437,32 @@ rather than an oversight. Apple takes **one version per platform** into
 review at a time, so check nothing else is in review on that platform first —
 `release-status.py` prints it.
 
-Play's promotion waits on nothing of Apple's. It does wait on Play's own
-review of the alpha upload: Google reviews that release before it publishes,
-and until the Publishing overview in the Play Console shows the alpha release
-published, the promotion's commit is refused with
-`CHANGES_ALREADY_IN_REVIEW`; the script's refusal names this release's own
-alpha upload as the likeliest cause. The dry run cannot tell, because it has
-Play validate the edit and then deletes it, and only the commit carries the
-flag that asks Play to refuse rather than cancel the review. So once the
-overview has been read and shows the alpha release published — a wait of
-about fifteen minutes on 3 October 2026 and of more than twenty-four
-minutes on 13 October — the dry run is run, the OK that names Play is given
-on its output, and then the same command without `--dry-run`. A refusal
-does not use up the OK: a person reads the overview again and re-runs the
-promotion once it shows the release published; a timer never does. Stage 6
-uploads Play's alpha first so that the overview is usually showing it
-published by the time the Apple submissions go.
+The direct production upload from stage 6 needs no promotion. Observe the
+matching production submission in the Play Console through publication,
+recording the version and full rollout. An API track marked `completed` proves
+a committed track assignment, not approval or public availability. Keep
+monitoring in the current release task until the requested condition is met;
+report a material blocker promptly and distinguish review from publication.
+
+**Only for a deliberately tested candidate:** wait until the Console confirms
+that the testing-track submission is Published, then promote that same build:
 
 ```
 scripts/play-publish.py promote alpha production --confirm-version <v> --dry-run
 scripts/play-publish.py promote alpha production --confirm-version <v>
 ```
 
-The dry run reads the alpha and production tracks in a fresh edit, prints
-both, prints the release notes line by line, writes production in the edit,
-has Play validate it, and deletes the edit: nothing changes. Those notes are
-the What's new text production will show, carried from the alpha release
-unchanged; the script writes none of its own. The second command does the
-same and commits, asking Play to refuse rather than cancel and restart a
-review already in progress. Both refuse, changing nothing, unless `<v>` is
-the mobile ledger's Version and alpha holds exactly one release — completed,
-with notes, and with one versionCode, the ledger's Build — and they refuse
-once production carries that versionCode in any state, or a higher one. A
-halted staged rollout on production gives way to the promotion, since that
-is where a fix is promoted from, and the dry run names it; a rollout still
-going out is completed or halted in the Play Console first, and a draft
-there is rolled out or discarded, and until then both commands refuse.
-`--rollout 0.2` stages the release to a fifth of readers instead; raising,
-completing or halting a staged rollout is done in the Play Console. After the
-commit, `promote` reads production back in a fresh edit and prints it, held
-to the release it wrote, and `scripts/release-status.py`, run on its own,
-shows production on the new versionCode. Its Play rows mean committed, not
-approved, and say so: Google reviews the promotion as it reviewed the alpha
-release, and that review is visible only in the Play Console's Publishing
-overview.
+This optional path reuses the existing bundle and carries its approved notes
+unchanged. Both commands reread the source and production tracks, refuse an
+already-present or newer build, and preserve `ERROR_IF_IN_REVIEW`. A dry run
+cannot prove that review has cleared; the actual Console state is required,
+not elapsed time. Earlier testing-track reviews took about fifteen minutes
+on 3 October 2026 and more than twenty-four minutes on 13 October; those
+observations do not replace current Console evidence. `--rollout 0.2`
+deliberately stages a tested candidate to a fifth of readers; raising, completing or halting it remains a Console action.
+The production submission is then monitored through actual publication just
+like a direct upload. Routine recovery under the existing release
+authorization does not require another approval of the same release.
 
 ### 8 — Finish the GitHub release
 
@@ -659,7 +642,22 @@ into it.
 
 ## When a stage fails
 
-Re-running from the top is usually wrong. These steps are not idempotent:
+Re-running from the top is usually wrong. Preserve the failed attempt and
+its receipts, inspect the actual failure, and report a material blocker
+promptly while continuing any independent release work.
+
+For a transient Play error known to occur **before commit**, verify that no
+commit was sent and the edit was discarded before one bounded retry of that
+step. Keep both attempts and reread the relevant tracks in the new edit.
+If the commit may have reached Play, read the tracks before any retry; do not
+upload again or restart a review on an assumption. A review-in-progress
+refusal waits for observed clearance. Existing release authorization covers
+these ordinary recoveries, but never substitutes for evidence of the outcome.
+There is no blanket automatic retry loop. Continue monitoring the exact
+submission in the current task and keep committed, in review and Published
+states distinct.
+
+These steps are not idempotent:
 
 | step | re-running does | recovery |
 | --- | --- | --- |
@@ -691,9 +689,8 @@ ledger's version string, so once the bump has moved that on it neither finds
 nor touches the rejected record, and it prepares a record in a rejected
 state only under that string, never under the next one; what becomes of the
 rejected record is settled in App Store Connect, and no script here touches
-it. On Play the fix is the next upload to alpha, under the next versionCode,
-as stage 6 says, and the promotion's dry run prints what alpha and
-production hold.
+it. On Play the fix is the next direct production upload under the next
+versionCode, as stage 6 says; its dry run first reads what production holds.
 
 ## What a conductor refuses
 
@@ -703,8 +700,8 @@ production hold.
   value. Sourcing a credential script into its own process is fine; that is
   what they are for.
 - Deleting a pending store submission it did not create.
-- `--submit`, `commit` or `play-publish.py promote` as part of an unattended
-  sweep.
+- `--submit`, `commit` or either Play production path without release
+  authorization.
 - Two Google Play steps at once.
 - Reporting a store as up to date that it could not actually reach.
 - Building a release with the `next` tag, or getting past a refusal from
@@ -721,10 +718,11 @@ so plainly rather than look incomplete:
 has been open since 30 September 2026 (1.2.17, versionCode 187); until the
 service account was granted "release to production" for this app on
 2 October, an upload stopped on the alpha track and the promotion was made in
-the Play Console. It is now `scripts/play-publish.py promote`, on the account
-holder's OK like Apple's `--submit` and the Microsoft Store's `commit`
-(stage 7); only raising, completing or halting a staged rollout stays in the
-console.
+the Play Console. Public releases now use direct production upload
+(stage 6); promotion remains available for a deliberately tested candidate
+(stage 7). Both require release authorization, like Apple's `--submit` and
+the Microsoft Store's `commit`. Raising, completing or halting a staged
+rollout stays in the console.
 
 Everything else — GitHub, Snap, the App Store, the Mac App Store, the Microsoft
 Store and Google Play — is reachable in one pass.

@@ -445,19 +445,20 @@ each step it lists.
    `v<version>` at the build commit, pushed. The release workflow then builds
    the desktop assets into a DRAFT while the uploads below go on. From here no
    commit lands on `main` under this number.
-5. Upload, Play first: `scripts/play-publish.py --dry-run upload <aab>
-   alpha` (uploads into a discarded edit), then the same without
-   `--dry-run`, so that Google's review of the alpha release runs while
-   Apple processes its builds. The notes are
+5. Upload the public release directly to Play production:
+   `scripts/play-publish.py upload <aab> production --confirm-version <v>
+   --dry-run` (uploads, validates and discards the edit), then the same
+   without `--dry-run`. The notes are
    `play/metadata/en-GB/whats-new-<v>.txt`, tracked and held by test to the
    blockquote of that version's section in `docs/PLAY_LISTING.md`, under
-   500 characters with its line breaks, which the upload keeps; `--notes
-   <file>` names another. The upload stops on the alpha track; on the
-   account holder's OK, `scripts/play-publish.py promote alpha production
-   --confirm-version <v>`, with `--dry-run` first, takes it to production
-   (docs/RELEASING.md, stage 7). Then Apple: `xcrun altool --upload-app -t
-   ios|macos` with the ASC key (set `API_PRIVATE_KEYS_DIR` to the key's
-   directory); keep each Delivery UUID.
+   500 characters with line breaks preserved; `--notes <file>` names another
+   approved file. Confirm the current publishing mode and track state first,
+   and verify the exact production readback after commit. API `completed`
+   is not publication; monitor the matching production submission in the
+   Console. Alpha is only for deliberate testing; an already-tested build
+   uses `promote` without another upload (docs/RELEASING.md, stages 6–7).
+   Then Apple: `xcrun altool --upload-app -t ios|macos` with the ASC key
+   (set `API_PRIVATE_KEYS_DIR` to the key's directory); keep each Delivery UUID.
 6. Wait for each Apple build to reach VALID, then per platform, as above:
    `submit-version.py --write` to prepare the record, `push-screenshots.py
    --write` for the release's sets, `submit-version.py --write --submit`.

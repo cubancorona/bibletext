@@ -13,14 +13,18 @@ the service-account JWT is built with `cryptography`, which is already present
 CREDENTIAL. A service-account key at ~/.private_keys/, mode 0600, never in the
 repository. The account is scoped in Play Console to this app only, with
 testing-track releases, tester lists and store presence, and, since 2 October
-2026, "release to production" for this app only. Production is reached by
-`promote` and by nothing else: `upload` refuses the production track, and
-`promote` is its own command, run on the account holder's OK, the way Apple's
-`--submit` and the Microsoft Store's `commit` are.
+2026, "release to production" for this app only. Public releases upload
+directly to production with --confirm-version. Testing tracks are used only
+for deliberate testing; an already-tested release can instead be promoted
+without uploading the bundle again. Either production path requires release
+authorization, as Apple's --submit and the Microsoft Store's commit do.
 
   play-publish.py tracks                       what tracks exist
   play-publish.py upload <bundle.aab> [track]  upload, assign, commit (default: internal)
   play-publish.py --dry-run upload <b> [track] everything except the commit
+  play-publish.py upload <b> production --confirm-version <v>
+                                               direct public release; use
+                                               --dry-run first
   --status draft|completed                     draft is REQUIRED until the app
                                                has been published once
   --notes <file>                               the en-GB release notes, line
@@ -42,7 +46,8 @@ track is read back in a fresh edit and printed, and the release Play now
 holds must carry that versionCode with the status asked for; Play names a
 release it was given no name for after the bundle's versionName, so the
 read-back is also where the bundle's versionName is held to the ledger's
-Version. A promotion reads production back the same way.
+Version. A direct production upload also requires one exact release with its
+approved notes and full rollout. A promotion reads production back the same way.
 
 ONE PLAY STEP AT A TIME. Every command here opens an edit as the one service
 account, and Play lets each user hold one open edit: a new edit ends the one
@@ -348,6 +353,23 @@ def promotion_refusal(source, held, production, version, build):
     return None
 
 
+def production_upload_refusal(current, version, build):
+    """Refuse replacing a current/newer build or an unfinished production rollout."""
+    if current.get("track") != PRODUCTION:
+        return "the production read returned another track; nothing was uploaded"
+    for release in current.get("releases") or []:
+        codes = [str(code) for code in release.get("versionCodes") or []]
+        if not codes or any(not code.isdigit() for code in codes):
+            return "production has an unreadable versionCode; inspect the track before uploading"
+        if any(int(code) >= int(build) for code in codes):
+            return (f"production already carries this or a newer versionCode ({describe(release)}); "
+                    f"the mobile ledger is {version}, Build {build}; nothing was uploaded")
+        if release.get("status") not in ("completed", "halted"):
+            return (f"production holds an unfinished release ({describe(release)}); "
+                    "complete, halt or discard it in the Play Console before uploading")
+    return None
+
+
 def bundle_problem(answer, blob, version, build):
     """Why the bundle Play reports is not this tree's, or None.
 
@@ -404,7 +426,7 @@ def read_track(token, name):
     return held
 
 
-def read_back(token, name, version, build, status):
+def read_back(token, name, version, build, status, notes=None):
     """Print the track as Play holds it after the commit, held to the release written.
 
     The commit has gone through by now, so a disagreement is reported, not
@@ -422,6 +444,14 @@ def read_back(token, name, version, build, status):
     for line in track_lines(name, held):
         print(line)
     problem = committed_problem(name, held, version, build, status)
+    if notes is not None and not problem:
+        releases = held.get("releases") or []
+        if (held.get("track") != name or len(releases) != 1
+                or releases[0].get("versionCodes") != [build]
+                or named_version(releases[0].get("name") or "") != version
+                or releases[0].get("releaseNotes") != [{"language": "en-GB", "text": notes}]
+                or releases[0].get("userFraction") is not None):
+            problem = f"'{name}' read back without the exact version, full rollout and approved notes"
     if problem:
         raise SystemExit(f"The commit went through, but {problem}. Play holds what was committed "
                          "and nothing here can discard it; settle the track in the Play Console "
@@ -446,13 +476,23 @@ def upload(token, aab, track, status, notes, version, build, dry):
     _, edit = call(BASE + "/edits", token, "POST", {})
     eid = edit["id"]
     try:
+        if track == PRODUCTION:
+            _, current = call(f"{BASE}/edits/{eid}/tracks/{track}", token)
+            for line in track_lines(track, current):
+                print(line)
+            problem = production_upload_refusal(current, version, build)
+            if problem:
+                raise SystemExit(problem)
         _, b = call(f"{UPLOAD}/edits/{eid}/bundles?uploadType=media", token, "POST",
                     raw=blob, content_type="application/octet-stream")
         code = b["versionCode"]
         print(f"  uploaded versionCode {code} (sha1 {b.get('sha1')})")
         problem = bundle_problem(b, blob, version, build)
         if problem:
-            raise discarded(token, eid, f"{problem}; the bundle is not on '{track}'.")
+            message = f"{problem}; the bundle is not on '{track}'."
+            if track == PRODUCTION:
+                raise SystemExit(message)
+            raise discarded(token, eid, message)
         print(f"  the ledger's Build {build} and the file's sha1, as Play holds them")
         # An app that has never been published is a DRAFT app, and Play refuses
         # any release on it whose status is not "draft" ("Only releases with
@@ -466,12 +506,22 @@ def upload(token, aab, track, status, notes, version, build, dry):
              {"track": track, "releases": [release]})
         print(f"  assigned {code} to '{track}' with status '{status}'"
               + (f", notes {len(notes)} chars" if notes else ", no release notes"))
+        if track == PRODUCTION:
+            call(f"{BASE}/edits/{eid}:validate", token, "POST")
+            print("  Play validated the edit")
         if dry:
             call(f"{BASE}/edits/{eid}", token, "DELETE")
             print("  --dry-run: edit discarded, nothing changed on Play")
             return 0
     except SystemExit as stop:
-        raise lost_edit(stop, "the upload was in flight", ", and the versionCode is still unused") from None
+        explained = lost_edit(stop, "the upload was in flight", ", and the versionCode is still unused")
+        if track == PRODUCTION and explained is stop:
+            raise discarded(token, eid, str(stop.code)) from None
+        raise explained from None
+    except (Exception, KeyboardInterrupt) as error:
+        if track == PRODUCTION:
+            raise discarded(token, eid, failure_text(error)) from None
+        raise
     try:
         _, done = call(f"{BASE}/edits/{eid}:commit?{IN_REVIEW_QUERY}", token, "POST")
     except SystemExit as stop:
@@ -488,14 +538,14 @@ def upload(token, aab, track, status, notes, version, build, dry):
                 "review, and this upload waits rather than send that review back to the start: "
                 "once the Play Console's Publishing overview shows nothing in review, run the "
                 "same command again.")) from None
-        raise
+        raise SystemExit(unknown_outcome(message, build, "upload")) from None
     except (Exception, KeyboardInterrupt) as error:
         # As in promote: once the commit has been sent, a lost connection, a
         # truncated or unreadable answer or an interrupt leaves Play's side
         # unknown, so nothing is called unused and the edit is not touched.
         raise SystemExit(unknown_outcome(failure_text(error), build, "upload")) from None
     print(f"  committed edit {done.get('id', eid)}")
-    read_back(token, track, version, build, status)
+    read_back(token, track, version, build, status, notes if track == PRODUCTION else None)
     return 0
 
 
@@ -617,20 +667,28 @@ def main(argv):
     if stray:
         raise SystemExit(f"unknown option {' '.join(stray)}; nothing was changed")
     cmd = argv[1] if len(argv) > 1 else "tracks"
-    if cmd != "promote" and (confirm is not None or rollout_text is not None):
-        raise SystemExit("--confirm-version and --rollout belong to promote")
+    if cmd != "promote" and rollout_text is not None:
+        raise SystemExit("--rollout belongs to promote")
+    if cmd not in ("upload", "promote") and confirm is not None:
+        raise SystemExit("--confirm-version belongs to production upload or promote")
 
     if cmd == "tracks":
         return tracks(access_token())
 
     if cmd == "upload":
         if not 3 <= len(argv) <= 4:
-            raise SystemExit("usage: play-publish.py [--status draft|completed] [--notes file] upload <bundle.aab> [track]")
+            raise SystemExit("usage: play-publish.py [--status draft|completed] [--notes file] "
+                             "upload <bundle.aab> [track] [--confirm-version <v>]")
         aab, track = argv[2], (argv[3] if len(argv) > 3 else "internal")
-        if track == PRODUCTION:
-            raise SystemExit("upload goes to a testing track; production is reached only by "
-                             "promote, on the account holder's OK")
         version, build = ledger()
+        if track == PRODUCTION:
+            if confirm != version:
+                raise SystemExit(f"production upload requires --confirm-version {version}, "
+                                 "the mobile ledger's Version; nothing was changed")
+            if status != "completed":
+                raise SystemExit("production upload requires --status completed; nothing was changed")
+        elif confirm is not None:
+            raise SystemExit("--confirm-version belongs to production upload or promote")
         if notes_path is None:
             notes_path = default_notes(version)
             if not os.path.exists(notes_path):

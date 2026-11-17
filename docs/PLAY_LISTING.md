@@ -29,13 +29,14 @@ notes are drafted below, under "Release notes — <version>", and the
 release's text is tracked in `play/metadata/en-GB/whats-new-<version>.txt`,
 which `scripts/play-publish.py upload` sends and `play_whats_new_test.go`
 holds equal to the blockquote, within 500 characters with its line breaks
-counted. Releases go to alpha with
-`scripts/play-publish.py upload`. On the account holder's OK,
-`scripts/play-publish.py promote` takes that release to production, its
-release notes unchanged (docs/RELEASING.md, stages 6 and 7). The service
-account was granted "release to production" on 2 October 2026, for this app
-only; until then it could not reach production, and the promotion was made in
-the Play Console.
+counted. Public releases upload directly with
+`scripts/play-publish.py upload <aab> production --confirm-version <v>`:
+a dry run first, then the same command without `--dry-run`, under the release
+authorization. Alpha and other testing tracks are used only for deliberate
+testing. If a candidate was tested there, `scripts/play-publish.py promote`
+reuses that build and its approved notes without another upload
+(docs/RELEASING.md, stages 6 and 7). The service account has had
+"release to production" for this app since 2 October 2026.
 
 The version and versionCode come from `cmd/mobile/FyneApp.toml`; do not supply a
 different manual `-app-build`. Produce the AAB only with
@@ -50,8 +51,9 @@ artifact is not a valid prepared upload.
 
 Google Play's **Managed publishing** was **off** when verified on 13 October
 2026. In that mode, approved releases publish automatically to the submitted
-track. Alpha approval does not promote a release to production; the production
-promotion remains a separate step.
+track. Direct production upload needs no later promotion. If alpha was
+deliberately chosen for testing, its approval does not promote the build;
+that optional flow still needs a production promotion.
 
 Check Publishing overview before each release and record the setting with its
 verification time. Treat the recorded mode as the expected configuration, not

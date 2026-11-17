@@ -396,19 +396,19 @@ class UploadNotes(Harness):
         self.fake()
         self.assertIn("is empty", self.refused("--notes", notes, "upload", self.bundle(), "alpha"))
 
-    def test_upload_refuses_the_production_track(self):
+    def test_production_upload_requires_the_exact_version_confirmation(self):
         play = self.fake()
         message = self.refused("upload", self.bundle(), "production")
-        self.assertIn("promote", message)
+        self.assertIn("production upload requires --confirm-version", message)
         self.assertEqual(play.calls, [])
         self.assertEqual(self.tokens, 0)
 
-    def test_confirm_version_and_rollout_belong_to_promote(self):
+    def test_confirm_version_and_rollout_are_not_testing_upload_options(self):
         play = self.fake()
         for extra in (("--confirm-version", VERSION), ("--rollout", "0.5")):
             with self.subTest(extra[0]):
                 message = self.refused(*extra, "upload", self.bundle(), "alpha")
-                self.assertIn("belong to promote", message)
+                self.assertIn("belong", message)
         self.assertEqual(play.calls, [])
 
     def test_a_mistyped_dry_run_never_uploads(self):
@@ -655,7 +655,10 @@ class UploadWhileInReview(Harness):
         # and the edit is not touched.
         answer = f"Play API POST {self.m.BASE}/edits/edit-1:commit -> HTTP 503\nbackend error"
         play = self.fake(fail={"commit": answer})
-        self.assertEqual(self.refused(*self.upload()), answer)
+        message = self.refused(*self.upload())
+        self.assertIn(answer, message)
+        self.assertIn("the commit's outcome is unknown", message)
+        self.assertNotIn("still unused", message)
         self.assertEqual(play.kinds()[-1], "commit")
 
     def test_a_commit_whose_answer_is_lost_is_an_unknown_outcome(self):
@@ -685,6 +688,148 @@ class UploadWhileInReview(Harness):
         self.assertIn("Play ended this edit while the upload was in flight", message)
         self.assertNotIn("Play refused the commit", message)
         self.assertNotIn("delete", play.kinds())
+
+
+
+class DirectProductionUpload(Harness):
+    """Public releases use one production review and do not visit a testing track."""
+
+    def args(self, *extra):
+        bundle = self.write("release.aab", BUNDLE, "wb")
+        return ("upload", bundle, "production", "--confirm-version", VERSION, *extra)
+
+    def test_upload_reads_production_before_bundle_then_validates_commits_and_reads_back(self):
+        play = self.fake(tracks={"production": track("production", LIVE)})
+        self.assertEqual(self.run_script(*self.args()), 0)
+        self.assertEqual(play.kinds(), ["open", "get", "bundle", "put", "validate", "commit",
+                                       "open", "get", "delete"])
+        self.assertEqual(play.calls[1][2], "/edits/edit-1/tracks/production")
+        self.assertEqual(play.calls[5][2], "/edits/edit-1:commit" + REVIEW)
+        self.assertEqual(play.commits, 1)
+        self.assertEqual(play.tracks["production"], track("production", release(notes=TRACKED_NOTES)))
+        self.assertEqual(set(play.tracks), {"production"})
+
+    def test_dry_run_validates_and_discards_without_a_commit(self):
+        play = self.fake(tracks={"production": track("production", LIVE)})
+        self.assertEqual(self.run_script(*self.args("--dry-run")), 0)
+        self.assertEqual(play.kinds(), ["open", "get", "bundle", "put", "validate", "delete"])
+        self.assertEqual(play.commits, 0)
+        self.assertEqual(play.tracks, play.before)
+
+    def test_wrong_confirmation_or_draft_refuses_before_credentials(self):
+        for extra in (("--confirm-version", "9.8.6"), ("--status", "draft")):
+            with self.subTest(extra=extra):
+                play = self.fake()
+                args = self.args()
+                if extra[0] == "--confirm-version":
+                    args = (*args[:-1], extra[1])
+                else:
+                    args = (*args, *extra)
+                self.refused(*args)
+                self.assertEqual(self.tokens, 0)
+                self.assertEqual(play.calls, [])
+
+    def test_current_newer_unfinished_or_unreadable_production_refuses_before_upload(self):
+        held = [release(), release("988", name="9.8.8"),
+                release("986", status="draft"), release("986", status="inProgress"),
+                release("986", status="unknown"), release(codes=[]), release(codes=["unknown"])]
+        for prior in held:
+            with self.subTest(prior=prior):
+                play = self.fake(tracks={"production": track("production", prior)})
+                self.refused(*self.args())
+                self.assertEqual(play.kinds(), ["open", "get", "delete"])
+                self.assertEqual(play.tracks, play.before)
+                self.assertEqual(play.commits, 0)
+
+    def test_a_halted_older_release_can_be_replaced(self):
+        play = self.fake(tracks={"production": track("production", release("986", status="halted"))})
+        self.assertEqual(self.run_script(*self.args()), 0)
+        self.assertEqual(play.commits, 1)
+
+    def test_a_failed_production_read_discards_before_upload(self):
+        play = self.fake(fail={"get": "Play API GET production -> HTTP 503"})
+        self.assertIn("HTTP 503", self.refused(*self.args()))
+        self.assertEqual(play.kinds(), ["open", "get", "delete"])
+        self.assertEqual(play.commits, 0)
+
+    def test_production_precommit_transport_failure_discards_without_retry(self):
+        for step in ("get", "bundle", "put", "validate"):
+            with self.subTest(step=step):
+                play = self.fake(fail={step: TimeoutError("timed out")})
+                message = self.refused(*self.args())
+                self.assertIn("timed out", message)
+                self.assertIn("edit is discarded", message)
+                self.assertNotIn("commit", play.kinds())
+                self.assertEqual(play.kinds().count(step), 1)
+                self.assertEqual(play.kinds()[-1], "delete")
+                self.assertEqual(play.tracks, play.before)
+
+    def test_production_read_cannot_return_a_different_track(self):
+        play = self.fake(tracks={"production": track("alpha", LIVE)})
+        self.assertIn("another track", self.refused(*self.args()))
+        self.assertEqual(play.kinds(), ["open", "get", "delete"])
+
+    def test_wrong_bundle_identity_never_assigns_or_commits(self):
+        for kw in ({"bundle_code": "986"}, {"bundle_sha1": "0" * 40}):
+            with self.subTest(kw=kw):
+                play = self.fake(**kw)
+                self.refused(*self.args())
+                self.assertEqual(play.kinds(), ["open", "get", "bundle", "delete"])
+                self.assertEqual(play.commits, 0)
+
+    def test_validation_failure_discards_without_committing(self):
+        play = self.fake(fail={"validate": "Play API POST validation -> HTTP 400"})
+        self.refused(*self.args())
+        self.assertEqual(play.kinds(), ["open", "get", "bundle", "put", "validate", "delete"])
+        self.assertEqual(play.tracks, play.before)
+
+    def test_an_existing_review_is_not_restarted(self):
+        play = self.fake(in_review=True)
+        message = self.refused(*self.args())
+        self.assertIn("Play refused the commit", message)
+        self.assertEqual(play.restarted, [])
+        self.assertEqual(play.commits, 0)
+        self.assertEqual(play.kinds()[-2:], ["commit", "delete"])
+        self.assertEqual(play.tracks, play.before)
+
+    def test_commit_unknown_outcomes_do_not_delete_or_retry(self):
+        for failure in ("Play API POST commit -> HTTP 503", TimeoutError("timed out")):
+            with self.subTest(failure=str(failure)):
+                play = self.fake(fail={"commit": failure})
+                message = self.refused(*self.args())
+                self.assertIn("the commit's outcome is unknown", message)
+                self.assertIn("scripts/play-publish.py tracks", message)
+                self.assertNotIn("still unused", message)
+                self.assertEqual(play.kinds().count("commit"), 1)
+                self.assertEqual(play.kinds()[-1], "commit")
+
+    def test_readback_requires_exact_notes_version_build_status_and_full_rollout(self):
+        changes = [{"releaseNotes": [{"language": "en-GB", "text": "Different."}]},
+                   {"releaseNotes": []}, {"name": "unreadable"}, {"name": "9.8.6"},
+                   {"versionCodes": [BUILD, "986"]}, {"status": "draft"},
+                   {"userFraction": 0.5}]
+        for change in changes:
+            with self.subTest(change=change):
+                play = self.fake()
+                play.tamper = lambda tracks, change=change: tracks["production"]["releases"][0].update(change)
+                message = self.refused(*self.args())
+                self.assertIn("The commit went through, but", message)
+                self.assertEqual(play.commits, 1)
+                self.assertEqual(play.kinds()[-3:], ["open", "get", "delete"])
+
+    def test_postcommit_readback_must_name_production(self):
+        play = self.fake()
+        play.tamper = lambda tracks: tracks["production"].update(track="alpha")
+        self.assertIn("The commit went through, but", self.refused(*self.args()))
+        self.assertEqual(play.commits, 1)
+
+    def test_repeat_refuses_without_another_upload(self):
+        play = self.fake()
+        self.assertEqual(self.run_script(*self.args()), 0)
+        play.calls.clear()
+        self.assertIn("already carries", self.refused(*self.args()))
+        self.assertEqual(play.kinds(), ["open", "get", "delete"])
+        self.assertEqual(play.commits, 1)
 
 
 class Promote(Harness):
