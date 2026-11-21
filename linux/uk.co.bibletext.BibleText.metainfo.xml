@@ -75,6 +75,16 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.2.27" date="2026-11-21">
+      <description>
+        <p>Choose how much reasoning your AI assistant uses in Settings.</p>
+        <ul>
+          <li>Supported Gemini, ChatGPT, Claude, and Grok models offer effort levels or a thinking budget.</li>
+          <li>Leave it on Recommended to use the provider’s default.</li>
+          <li>BibleText remembers your choice for each model.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.26" date="2026-11-16">
       <description>
         <p>Publisher cross-references and clearer study lists.</p>

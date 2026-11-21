@@ -1,18 +1,12 @@
-VERSION 1.2.26 (macOS)
+VERSION 1.2.27 (macOS)
 
 BibleText is a Bible reader. No account, login, or registration is required, and reading, search, navigation, notes, and cross-references need no AI-provider key. Downloaded scripture stays readable and searchable offline; downloads and optional provider services need connectivity when used.
 
 WHAT CHANGED IN THIS BUILD
-NKJV, WEB, WEB Catholic and BSB publisher references now accompany Gospel parallels and the Treasury. Expandable groups identify their note, verse, heading or passage. Previews follow the reading-size setting; available references appear while the Treasury loads.
+Choose how much reasoning your AI assistant uses in Settings. Supported Gemini, ChatGPT, Claude, and Grok models offer effort levels or a thinking budget. Leave it on Recommended to use the provider’s default. BibleText remembers your choice for each model.
 
-Settings can restore the included Bible key after clearing it. Chapter history keeps the restored position before any new scroll. Grok naming is updated.
-
-HOW TO EXERCISE 1.2.26
-In World English Bible, select 1 Corinthians 10:26 and right-click and choose Cross-references. The WEB REFERENCES section shows a publisher note, linked to its letter in the selected passage. Select Matthew 5:3–5 to see verse-numbered Treasury groups and Gospel parallels. Expand and collapse the groups, open a reference preview, then return through chapter history.
-
-With Cross-references open, resize the window or change between light and dark appearance: the open groups and position in the list are retained.
-
-On a fresh install, open Settings → Translations, clear the included API.Bible key, then choose Restore in the same button position. No AI-provider key is needed for these checks.
+HOW TO EXERCISE 1.2.27
+Open Settings and choose ChatGPT. Leave Model on Recommended, open Reasoning effort, and select High. Close and reopen Settings to confirm High is saved. Return Reasoning effort to Recommended.
 
 STUDY GESTURE ON THE MAC
 Selection actions live on the right-click menu rather than a touch popover. Select any passage and right-click: the menu offers the system’s Copy and Look Up, Cross-references, Share and Study with AI. Choose None in Settings → Assistant to hide AI features. AI answers require a provider key; core reading needs none.

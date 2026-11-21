@@ -1,0 +1,1 @@
+Choose how much reasoning your AI assistant uses in Settings. Supported Gemini, ChatGPT, Claude, and Grok models offer effort levels or a thinking budget. Leave it on Recommended to use the provider’s default. BibleText remembers your choice for each model.

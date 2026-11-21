@@ -15,6 +15,16 @@
 # are each a day before their tags, and stand.
 
 [[release]]
+version = "1.2.27"
+date = "2026-11-21"
+head = "Choose how much reasoning your AI assistant uses in Settings."
+bullets = [
+  "Supported Gemini, ChatGPT, Claude, and Grok models offer effort levels or a thinking budget.",
+  "Leave it on Recommended to use the provider’s default.",
+  "BibleText remembers your choice for each model.",
+]
+
+[[release]]
 version = "1.2.26"
 date = "2026-11-16"
 head = "Publisher cross-references and clearer study lists."

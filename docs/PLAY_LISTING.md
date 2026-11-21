@@ -202,6 +202,10 @@ Also confirm from the final AAB:
 - target audience and Families eligibility are selected from the real intended
   audience, not to avoid or trigger a policy track.
 
+## Release notes — 1.2.27
+
+> Choose how much reasoning your AI assistant uses in Settings. Supported Gemini, ChatGPT, Claude, and Grok models offer effort levels or a thinking budget. Leave it on Recommended to use the provider’s default. BibleText remembers your choice for each model.
+
 ## Release notes — 1.2.26
 
 > Publisher references for NKJV, WEB, WEB Catholic and BSB now join Gospel parallels and the Treasury. Expandable groups use clearer passage markers and compact previews that follow your reading-size setting. Restore the included Bible key in Settings after clearing it. Chapter history keeps your restored position when you leave again before scrolling. Improved tap areas for compact reading controls and Verse of the Day Share.
