@@ -40,7 +40,7 @@ func holdFinds(t *testing.T) *[]*heldFind {
 	t.Helper()
 	var held []*heldFind
 	prev := startFind
-	startFind = func(_ *AppState, q string, onModel func(aiModelInUse), done func([]Verse, error)) func() {
+	startFind = func(_ *AppState, q string, _ aiSpeedChoice, onModel func(aiModelInUse), done func([]Verse, error)) func() {
 		f := &heldFind{q: q, onModel: onModel, done: done}
 		held = append(held, f)
 		return func() { f.abandoned = true }

@@ -47,7 +47,7 @@ func TestOpenAIDocumentEfforts(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := openAIDocumentEfforts([]byte(tc.card), tc.model)
+			got := openAIDocumentEfforts([]byte(tc.card), tc.model).Levels
 			if (got == nil) != (tc.want == nil) || !slices.Equal(got, tc.want) {
 				t.Fatalf("levels = %v, want %v", got, tc.want)
 			}
@@ -61,7 +61,7 @@ func TestEffortDocumentFollowsCurrentGeminiAlias(t *testing.T) {
 	const current = "gemini-10-synthetic"
 	prefs := newFakePrefs()
 	rememberModelEfforts(prefs, providerGemini, []discoveredModel{{id: alias, docsModel: old}})
-	saveEffortDocument(prefs, providerGemini, alias, old, []string{"low", "high"})
+	effortDocument{Levels: []string{"low", "high"}}.save(prefs, providerGemini, alias, old)
 	setAIReasoningEffort(prefs, providerGemini, alias, "high")
 	if got := aiReasoningEffort(prefs, providerGemini, alias); got != "high" {
 		t.Fatalf("current documented effort = %q", got)
@@ -70,9 +70,9 @@ func TestEffortDocumentFollowsCurrentGeminiAlias(t *testing.T) {
 	if got := aiReasoningEffort(prefs, providerGemini, alias); got != "" {
 		t.Fatalf("previous model's effort remains active after alias changed: %q", got)
 	}
-	saveEffortDocument(prefs, providerGemini, alias, current, []string{"low", "medium"})
+	effortDocument{Levels: []string{"low", "medium"}}.save(prefs, providerGemini, alias, current)
 	// A slower lookup started before the catalog changed.
-	saveEffortDocument(prefs, providerGemini, alias, old, []string{"low", "high"})
+	effortDocument{Levels: []string{"low", "high"}}.save(prefs, providerGemini, alias, old)
 	if got := modelEffortChoices(prefs, providerGemini, alias); !slices.Equal(got, []string{"low", "medium"}) {
 		t.Fatalf("late document replaced current choices: %v", got)
 	}

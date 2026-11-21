@@ -366,10 +366,22 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       muted colour and centred on its axis — `Gemini (Google) ·
       gemini-pro-latest`, the Settings pickers' own names; Settings → Test
       key shows the same line under "Testing…". It fills a moment after the
-      wait appears and moves nothing when it does. Pin a model in Settings:
-      the line names the pinned model. Tap "Switch to a faster model": the
-      line changes to the fast model. With `BIBLETEXT_DESKTOP_TABS=sidebar`,
-      the sidebar's Find wait carries it too.
+      wait appears. On a model with reasoning controls, select High and
+      confirm the line ends in “· High”. Repeat with Recommended and with
+      a model that takes a token budget. A model without a known effort
+      control shows just its provider and model. Recommended includes the
+      level in parentheses when the model's default is verified. With
+      `BIBLETEXT_DESKTOP_TABS=sidebar`, the sidebar's Find wait carries it too.
+- [ ] In an Ask or Find wait where both faster options are available, open
+      “Switch to a faster model or reasoning effort”. The request keeps
+      running while the choices are open. The lower-effort or budget action
+      says “this time” and the model switch identifies the model it saves
+      in Settings. Choose the lower setting. Ask a new question and check that its caption shows
+      the original effort. Switch models and check that the destination
+      and effort shown before the switch match the new caption and Settings.
+      On the faster model at High, check that the lower retry is directly
+      accessible. On a short landscape screen, scroll to both expanded
+      actions and Cancel.
 - [ ] The model line on a small screen: pin a long model id (a Gemini
       preview); on a 375pt phone it wraps to a second line and never widens
       the card or the Search tab. On a phone in landscape (iPhone SE, a Pro

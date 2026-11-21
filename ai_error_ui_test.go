@@ -16,6 +16,21 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+func aiErrorActions(state *AppState, p aiErrorPresentation, retry func()) *fyne.Container {
+	_, actions := aiErrorRecovery(p, makeAISpeedControl(state, func(aiSpeedChoice) { retry() }, true))
+	return actions
+}
+
+func timeoutLinkIn(root fyne.CanvasObject) *widget.Hyperlink {
+	var found *widget.Hyperlink
+	walkTree(root, func(obj fyne.CanvasObject) {
+		if link, ok := obj.(*widget.Hyperlink); ok && strings.HasPrefix(link.Text, "Set ") && strings.Contains(link.Text, " in Settings") {
+			found = link
+		}
+	})
+	return found
+}
+
 func syntheticAIAccountError() error {
 	return aiResponseFailure(429, []byte(`{"error":{"code":"insufficient_credits","message":"Your credit balance is too low. synthetic-private-tail"}}`))
 }
@@ -62,7 +77,7 @@ func TestAIErrorStudyRetryKeepsCapturedRequest(t *testing.T) {
 					}
 				}
 				if timeout {
-					faster := findTreeLink(popup, "Switch to a faster model")
+					faster := timeoutLinkIn(popup)
 					if faster == nil {
 						t.Fatal("a timeout lost the faster-model action")
 					}
@@ -84,6 +99,12 @@ func TestAIErrorStudyRetryKeepsCapturedRequest(t *testing.T) {
 					findTreeButton(popup, "Try again").OnTapped()
 				}
 				second := nextCapturedStudyRequest(t, requests, "error retry")
+				if timeout {
+					choice, ok := second.ctx.Value(aiSpeedChoiceKey{}).(aiSpeedChoice)
+					if !ok || choice != (aiSpeedChoice{provider: info.ID, model: info.FastModel}) {
+						t.Fatalf("Study retry lost the selected destination: %#v", choice)
+					}
+				}
 				if second.action != first.action || second.passage != passage || second.question != question {
 					t.Fatal("the error action changed the captured passage, question or action")
 				}
@@ -112,7 +133,7 @@ func TestAIHTTP408StudyKeepsGenericRetryWithoutFasterModel(t *testing.T) {
 			finishCapturedStudyRequest(t, first, "", &apiHTTPError{StatusCode: http.StatusRequestTimeout})
 			popup := topPopup(t, w)
 			const want = "The AI service returned an error. Please try again shortly."
-			if !treeHasText(popup, want) || findTreeLink(popup, "Switch to a faster model") != nil {
+			if !treeHasText(popup, want) || timeoutLinkIn(popup) != nil {
 				t.Fatal("HTTP 408 did not keep generic guidance without timeout recovery")
 			}
 			retry := findTreeButton(popup, "Try again")
@@ -126,6 +147,199 @@ func TestAIHTTP408StudyKeepsGenericRetryWithoutFasterModel(t *testing.T) {
 			}
 			finishCapturedStudyRequest(t, second, "A synthetic answer paragraph.", nil)
 		})
+	}
+}
+
+// A queued timeout action belongs only to the Study panel and attempt that showed it.
+func TestStudyTimeoutActionExpiresWithItsPanelOrAttempt(t *testing.T) {
+	for _, leave := range []string{"close", "evict", "retry"} {
+		t.Run(leave, func(t *testing.T) {
+			test.NewTempApp(t)
+			w := test.NewWindow(widget.NewLabel("Reading"))
+			t.Cleanup(w.Close)
+			w.Resize(fyne.NewSize(390, 700))
+			state := studyPanelState(t, w)
+			requests := stubCapturedStudyRequests(t)
+			showAIPanelForPassage(state, aiActionAsk, syntheticAskPassage(), "Synthetic question", selSpan{})
+			first := nextCapturedStudyRequest(t, requests, "initial request")
+			finishCapturedStudyRequest(t, first, "", syntheticAITimeout())
+			popup := topPopup(t, w)
+			link := timeoutLinkIn(popup)
+			again := findTreeButton(popup, "Try again")
+			if link == nil || again == nil {
+				t.Fatal("timeout has no retry actions")
+			}
+			var next capturedStudyRequest
+			switch leave {
+			case "close":
+				findTreeButton(popup, "Close").OnTapped()
+			case "evict":
+				popup.Hide()
+			case "retry":
+				again.OnTapped()
+				next = nextCapturedStudyRequest(t, requests, "ordinary retry")
+			}
+			link.OnTapped()
+			again.OnTapped()
+			if got := state.keys().overrideModel(defaultProviderID); got != "" {
+				t.Fatalf("retired timeout set model %q", got)
+			}
+			if next.ctx != nil {
+				finishCapturedStudyRequest(t, next, "Synthetic answer", nil)
+			}
+			select {
+			case <-requests:
+				t.Fatal("retired timeout started another request")
+			default:
+			}
+		})
+	}
+}
+
+func TestFindTimeoutSwitchUsesTheShownTargetOnTheCurrentPane(t *testing.T) {
+	for _, layout := range []string{"Search tab", "sidebar"} {
+		t.Run(layout, func(t *testing.T) {
+			isolateAICache(t)
+			type send struct {
+				ctx    context.Context
+				finish chan error
+			}
+			calls := make(chan send, 2)
+			prev := aiSearchGenerate
+			t.Cleanup(func() { aiSearchGenerate = prev })
+			aiSearchGenerate = func(ctx context.Context, _ providerInfo, _ *keyStore, _, _ string) (string, error) {
+				call := send{ctx, make(chan error, 1)}
+				calls <- call
+				return "Acts 2:1", <-call.finish
+			}
+			next := func() send {
+				t.Helper()
+				select {
+				case call := <-calls:
+					return call
+				case <-time.After(2 * time.Second):
+					t.Fatal("Find never reached the provider")
+					return send{}
+				}
+			}
+			var state *AppState
+			var pane func() fyne.CanvasObject
+			var ask func(string)
+			var rebuild func()
+			if layout == "Search tab" {
+				h := liveFindTab(t)
+				state, pane, ask, rebuild = h.state, h.pane, h.ask, h.flip
+			} else {
+				test.NewTempApp(t)
+				state = sidebarFindState(t)
+				var current fyne.CanvasObject
+				rebuild = func() { current = buildSearchResultsView(state) }
+				pane = func() fyne.CanvasObject { return current }
+				state.showReading = rebuild
+				ask = func(q string) { state.aiSearchQuery = q; state.retryAISearch(aiSpeedChoice{}) }
+			}
+
+			store := state.keys()
+			info := activeAIProvider(state)
+			rememberModelEfforts(store.prefs, info.ID, []discoveredModel{{id: info.FastModel, efforts: []string{"low", "high"}}})
+			setAIReasoningEffort(store.prefs, info.ID, info.FastModel, "low")
+			ask("Test question")
+			first := next()
+			first.finish <- syntheticAITimeout()
+			<-first.ctx.Done()
+			retired := timeoutLinkIn(pane())
+			if retired == nil {
+				t.Fatal("missing original timeout action")
+			}
+			rebuild()
+			gen := state.askSession.gen
+			retired.OnTapped()
+			if !state.askSession.Current(gen) || store.overrideModel(info.ID) != "" {
+				t.Fatal("detached Find timeout changed Settings or retried")
+			}
+			link := timeoutLinkIn(pane())
+			if link == nil || link.Text != "Set "+info.FastModel+" in Settings · Low" {
+				t.Fatalf("missing destination and saved effort in %v", treeTexts(pane()))
+			}
+			link.OnTapped()
+			second := next()
+			choice, _ := second.ctx.Value(aiSpeedChoiceKey{}).(aiSpeedChoice)
+			actual := second.ctx.Value(aiRequestIdentityKey{}).(*aiRequestIdentity)
+			second.finish <- nil
+			<-second.ctx.Done()
+			if choice != (aiSpeedChoice{provider: info.ID, model: info.FastModel}) || store.overrideModel(info.ID) != info.FastModel || actual.model != info.FastModel || actual.effort != "low" {
+				t.Fatalf("chosen %#v, actual %#v, pinned %q", choice, actual, store.overrideModel(info.ID))
+			}
+
+		})
+	}
+}
+
+// A long destination label must stay inside both the canvas and the action's
+// own scroll viewport, including the Settings card with its extra padding.
+func TestTimeoutModelAndEffortFitNarrowRecoveryScreens(t *testing.T) {
+	for _, width := range []float32{320, 375} {
+		for _, surface := range []string{"Search tab", "sidebar results", "Test key"} {
+			t.Run(fmt.Sprintf("%.0f/%s", width, surface), func(t *testing.T) {
+				s := insetScreen{name: "portrait", w: width, h: 667, top: 20}
+				st, w := insetWindow(t, s, 2)
+				info, _ := providerByID(providerAnthropic)
+				store := st.keys()
+				store.setActiveProvider(info.ID)
+				store.setAPIKey(info.ID, "synthetic-key")
+				grantAIPermission(store, info.ID)
+				rememberModelEfforts(store.prefs, info.ID, []discoveredModel{{id: info.FastModel, efforts: []string{"low", "high"}}})
+				failure := withAIErrorProvider(syntheticAITimeout(), info)
+				var root fyne.CanvasObject
+				switch surface {
+				case "Test key":
+					_, listed := holdKeyTests(t)
+					showAISettings(st)
+					waitParked(t, listed, "model list")
+					slot := st.keyTest(keyTestAI)
+					slot.finishAIError(slot.begin(info.ID, true, ""), failure)
+					root = settingsPopup(t, st)
+				default:
+					st.aiSearchMode, st.aiSearchActive = true, true
+					st.aiSearchErr, st.aiSearchQuery = failure, "Synthetic query"
+					st.retryAISearch = func(aiSpeedChoice) {}
+					if surface == "Search tab" {
+						root = buildMobileSearchTab(st, func() {})
+					} else {
+						root = buildSearchResultsView(st)
+					}
+					w.SetContent(container.New(safeAreaLayout{s, theme.Padding()}, root))
+					w.Resize(fyne.NewSize(s.w, s.h))
+				}
+				link := timeoutLinkIn(root)
+				if link == nil || !strings.Contains(link.Text, info.FastModel+" in Settings · Recommended") {
+					t.Fatalf("missing model or effort on %s: %v", surface, treeTexts(root))
+				}
+				drv := fyne.CurrentApp().Driver()
+				x := drv.AbsolutePositionForObject(link).X
+				right := x + link.Size().Width
+				if x < 0 || right > width+0.5 || link.Size().Width <= 0 || link.Size().Height < link.MinSize().Height-0.5 {
+					t.Fatalf("link spans %.1f..%.1f on %.0fpt, drawn %.1fpt high, needs %.1fpt", x, right, width, link.Size().Height, link.MinSize().Height)
+				}
+				walkTree(root, func(o fyne.CanvasObject) {
+					sc, ok := o.(*container.Scroll)
+					if !ok || timeoutLinkIn(sc.Content) != link {
+						return
+					}
+					left := drv.AbsolutePositionForObject(sc).X
+					if x < left-0.5 || right > left+sc.Size().Width+0.5 {
+						t.Errorf("link spans %.1f..%.1f but its scroll viewport spans %.1f..%.1f", x, right, left, left+sc.Size().Width)
+					}
+				})
+				if surface == "Test key" {
+					root.(*widget.PopUp).Hide()
+					link.OnTapped()
+					if got := store.overrideModel(info.ID); got != "" {
+						t.Fatalf("dismissed Settings pinned model %q", got)
+					}
+				}
+			})
+		}
 	}
 }
 
@@ -172,7 +386,7 @@ func TestAIErrorBillingKindOffersTheBillingLink(t *testing.T) {
 			strings.Contains(p.message, "run out of credit") || strings.Contains(p.message, "synthetic-") {
 			t.Fatalf("%s billing error presentation: %#v", info.ID, p)
 		}
-		view := aiSearchErrorView(state, err, func() {})
+		view := aiSearchErrorView(state, err, func(aiSpeedChoice) {})
 		if aiErrorOutbound(view, info.ShortName+" billing") == nil || findTreeButton(view, "Try again") == nil || treeHasText(view, account.message) {
 			t.Fatalf("%s billing error view lost its billing link or Try again, or asserted exhausted credit", info.ID)
 		}
@@ -185,10 +399,11 @@ func TestAIErrorFasterActionNeverSwitchesAnotherProvider(t *testing.T) {
 	state := sampleState()
 	state.aiKeys = newKeyStoreWith(newFakePrefs())
 	info, _ := providerByID(defaultProviderID)
+	state.keys().setAPIKey(info.ID, "synthetic-key")
 	p, _ := aiSpecialError(withAIErrorProvider(syntheticAITimeout(), info))
 	retries := 0
 	view := aiErrorActions(state, p, func() { retries++ })
-	faster := findTreeLink(view, "Switch to a faster model")
+	faster := timeoutLinkIn(view)
 	if faster == nil {
 		t.Fatal("control: the active provider has no faster-model offer")
 	}
@@ -197,12 +412,12 @@ func TestAIErrorFasterActionNeverSwitchesAnotherProvider(t *testing.T) {
 	if retries != 0 || state.keys().overrideModel(info.ID) != "" || state.keys().overrideModel(providerAnthropic) != "" {
 		t.Fatal("a stale timeout view switched a different account or sent another request")
 	}
-	if findTreeLink(aiErrorActions(state, p, func() { retries++ }), "Switch to a faster model") != nil {
+	if timeoutLinkIn(aiErrorActions(state, p, func() { retries++ })) != nil {
 		t.Fatal("a non-active provider's error offered the active provider's faster model")
 	}
 	state.keys().setActiveProvider(info.ID)
 	state.keys().setOverrideModel(info.ID, info.FastModel)
-	if findTreeLink(aiErrorActions(state, p, func() { retries++ }), "Switch to a faster model") != nil {
+	if timeoutLinkIn(aiErrorActions(state, p, func() { retries++ })) != nil {
 		t.Fatal("a provider already on its faster model was offered it again")
 	}
 }
@@ -231,8 +446,9 @@ func TestAIErrorFindActionsAndProviderCapture(t *testing.T) {
 		}
 	}
 	retries := 0
-	view := aiSearchErrorView(state, searchErr, func() { retries++ })
-	if findTreeLink(view, "Switch to a faster model") != nil {
+	state.aiSearchActive, state.aiSearchErr = true, searchErr
+	view := aiSearchErrorView(state, searchErr, func(aiSpeedChoice) { retries++ })
+	if timeoutLinkIn(view) != nil {
 		t.Fatal("Find offered the wrong provider's faster model")
 	}
 	findTreeButton(view, "Try again").OnTapped()
@@ -243,7 +459,7 @@ func TestAIErrorFindActionsAndProviderCapture(t *testing.T) {
 	account := withAIErrorProvider(syntheticAIAccountError(), info)
 	state.aiSearchActive, state.aiSearchErr = true, account
 	state.keys().setAPIKey(info.ID, "synthetic-key")
-	state.retryAISearch = func() { retries++ }
+	state.retryAISearch = func(aiSpeedChoice) { retries++ }
 	desktop := buildSearchResultsView(state)
 	if aiErrorOutbound(desktop, info.ShortName+" billing") == nil {
 		t.Fatal("the desktop Find error lost its billing action")
@@ -275,7 +491,7 @@ func TestAIErrorKeyTestKeepsFailureProviderAndClearsOldActions(t *testing.T) {
 	first.release <- syntheticAITimeout()
 	awaitPaint(t, painted, "timeout")
 	<-first.ctx.Done()
-	if !strings.Contains(keyTestResult(popup), "Gemini took too long") || findTreeLink(popup, "Switch to a faster model") != nil {
+	if !strings.Contains(keyTestResult(popup), "Gemini took too long") || timeoutLinkIn(popup) != nil {
 		t.Fatal("the non-active provider's key test offered a switch for another account")
 	}
 	state.keys().setActiveProvider(defaultProviderID)
@@ -365,7 +581,7 @@ func TestTheTimeoutLineNamesTheFasterModelOnlyWhereItIsOffered(t *testing.T) {
 		if !treeHasText(root, prefix+line) || treeHasText(root, prefix+other) {
 			t.Errorf("%s: the timeout reads %v, want %q", o.name, treeTexts(root), prefix+line)
 		}
-		if got := findTreeLink(root, "Switch to a faster model") != nil; got != o.faster {
+		if got := timeoutLinkIn(root) != nil; got != o.faster {
 			t.Errorf("%s: the faster-model action shown %v, want %v", o.name, got, o.faster)
 		}
 	}
@@ -398,6 +614,7 @@ func TestTheTimeoutLineNamesTheFasterModelOnlyWhereItIsOffered(t *testing.T) {
 			o.before(state)
 			o.prepare(state)
 			state.aiSearchActive, state.aiSearchMode = true, true
+			state.retryAISearch = func(aiSpeedChoice) {}
 			state.aiSearchQuery = "Synthetic Find question"
 			state.aiSearchErr = withAIErrorProvider(syntheticAITimeout(), gemini)
 			return state
@@ -473,7 +690,7 @@ func TestAIErrorKeyTestFasterActionUpdatesTheModelRow(t *testing.T) {
 	first.release <- syntheticAITimeout()
 	awaitPaint(t, painted, "timeout")
 	<-first.ctx.Done()
-	faster := findTreeLink(popup, "Switch to a faster model")
+	faster := timeoutLinkIn(popup)
 	if faster == nil {
 		t.Fatal("control: the active provider's timeout offered no faster-model action")
 	}
@@ -485,6 +702,9 @@ func TestAIErrorKeyTestFasterActionUpdatesTheModelRow(t *testing.T) {
 		t.Fatal("the faster-model action did not test the key again")
 	}
 	awaitPaint(t, painted, "retest wait")
+	if got, _ := second.ctx.Value(aiSpeedChoiceKey{}).(aiSpeedChoice); got != (aiSpeedChoice{provider: info.ID, model: info.FastModel}) {
+		t.Fatalf("key retest lost the selected destination: %#v", got)
+	}
 	if state.keys().overrideModel(info.ID) != info.FastModel {
 		t.Fatal("control: the faster-model action did not pin the provider's faster model")
 	}
@@ -567,7 +787,7 @@ func aiPanelHeaderGaps(t *testing.T, popup *widget.PopUp, action string) []float
 func aiErrorSecondAction(t *testing.T, popup *widget.PopUp, info providerInfo, timeout bool) fyne.CanvasObject {
 	t.Helper()
 	if timeout {
-		if link := findTreeLink(popup, "Switch to a faster model"); link != nil {
+		if link := timeoutLinkIn(popup); link != nil {
 			return link
 		}
 	} else if link := aiErrorOutbound(popup, info.ShortName+" billing"); link != nil {
@@ -818,6 +1038,8 @@ func TestTheAIAccountAndTimeoutErrorsKeepTheErrorRuleOnPhones(t *testing.T) {
 					t.Run(fmt.Sprintf("%s/%s/%s, %s", s.name, info.ID, kind, form.name), func(t *testing.T) {
 						st, w := insetWindow(t, s, 0)
 						st.keys().setActiveProvider(info.ID)
+						st.keys().setAPIKey(info.ID, "synthetic-key")
+						grantAIPermission(st.keys(), info.ID)
 						failure := syntheticAIAccountLimit(info)
 						if timeout {
 							failure = syntheticAITimeout()

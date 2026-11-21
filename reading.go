@@ -481,10 +481,10 @@ func rebuildWindow(state *AppState) {
 	// tree nothing will show again, and went on marking the canvas dirty until
 	// that search landed; the rebuilt tab draws a bar of its own from state.
 	// The Find bar is stopped through state, which holds the one on the
-	// canvas wherever it is (stopFindBar); the walk is for anything else, and
+	// canvas wherever it is (stopFindWait); the walk is for anything else, and
 	// goes into the phones' root widget through contentWrapper, where a walk
 	// over containers alone would stop at the root and reach nothing.
-	state.stopFindBar()
+	state.stopFindWait()
 	if old := cnv.Content(); old != nil {
 		stopInfiniteBars(old)
 	}

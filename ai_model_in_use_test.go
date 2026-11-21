@@ -35,18 +35,20 @@ import (
 // goroutine against a later test is not (see stubAIGenerate).
 type resolverSend struct {
 	model  string
+	effort string
 	answer chan error
 }
 
 // sendClient is a provider client that publishes each send and waits for the
 // test's answer.
 type sendClient struct {
-	model string
-	sends chan<- *resolverSend
+	model  string
+	effort string
+	sends  chan<- *resolverSend
 }
 
 func (c sendClient) generate(context.Context, string) (string, error) {
-	s := &resolverSend{model: c.model, answer: make(chan error, 1)}
+	s := &resolverSend{model: c.model, effort: c.effort, answer: make(chan error, 1)}
 	c.sends <- s
 	if err := <-s.answer; err != nil {
 		return "", err
@@ -62,7 +64,7 @@ func (c sendClient) generate(context.Context, string) (string, error) {
 func routedResolver(store *keyStore, id string, sends chan<- *resolverSend, replacement string) *modelResolver {
 	info, _ := providerByID(id)
 	r := info.New(store, "test-key").(*modelResolver)
-	r.build = func(m, _ string) aiClient { return sendClient{model: m, sends: sends} }
+	r.build = func(m, effort string) aiClient { return sendClient{model: m, effort: effort, sends: sends} }
 	r.list = func(context.Context, string) ([]discoveredModel, error) {
 		return []discoveredModel{{id: replacement, rank: 1}}, nil
 	}
@@ -195,7 +197,9 @@ func wantModelLine(t *testing.T, o fyne.CanvasObject, want, when string) {
 	}
 }
 
-func label(provider, model string) string { return aiModelInUse{provider, model}.label() }
+func label(provider, model string) string {
+	return aiModelInUse{provider: provider, model: model}.label()
+}
 
 // THE WORDING IS THE SETTINGS PICKERS' OWN. The assistant picker lists each
 // provider by Name and the model picker lists each model by its id; the line
@@ -281,7 +285,7 @@ func (f clientFunc) generate(ctx context.Context, p string) (string, error) { re
 func TestAModelLineMeasuresWrappedBeforeLayout(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
-	long := aiModelInUse{providerGemini, "gemini-2.5-flash-lite-preview-09-2025-thinking-experimental"}
+	long := aiModelInUse{provider: providerGemini, model: "gemini-2.5-flash-lite-preview-09-2025-thinking-experimental", effortLabel: "Recommended"}
 	line := newAIModelLine(long)
 	got := line.box.MinSize()
 	if got.Width != aiModelLineWidth {
@@ -291,7 +295,7 @@ func TestAModelLineMeasuresWrappedBeforeLayout(t *testing.T) {
 		t.Errorf("the line measures %vpt tall before layout, one line of %vpt: its name needs more",
 			got.Height, captionLine())
 	}
-	for _, m := range []aiModelInUse{{}, {providerGemini, geminiModel}} {
+	for _, m := range []aiModelInUse{{}, {provider: providerGemini, model: geminiModel}} {
 		if h := newAIModelLine(m).box.MinSize().Height; h != captionLine() {
 			t.Errorf("a line reading %q measures %vpt; one line of the hint's box is %vpt", m.label(), h, captionLine())
 		}
@@ -318,29 +322,32 @@ func studyOverlay(t *testing.T, w fyne.Window) *widget.PopUp {
 func TestTheStudyWaitNamesTheModelAndFollowsTheRetry(t *testing.T) {
 	app := test.NewApp()
 	defer app.Quit()
-	sends := routeStudy(t, "gemini-3-pro")
+	const replacement = "gemini-3.1-pro-preview"
+	sends := routeStudy(t, replacement)
 	w := test.NewWindow(widget.NewLabel("reading"))
 	defer w.Close()
 	st := studyPanelState(t, w)
+	rememberModelEfforts(st.keys().prefs, providerGemini, []discoveredModel{{id: geminiModel, efforts: []string{"low", "high"}}})
+	setAIReasoningEffort(st.keys().prefs, providerGemini, geminiModel, "high")
 
 	showAIPanel(st, aiActionExplain, "God is love.", "", selSpan{})
 	first := nextSend(t, sends)
-	if first.model != geminiModel {
-		t.Fatalf("control: the first send went to %q, want the default %q", first.model, geminiModel)
+	if first.model != geminiModel || first.effort != "high" {
+		t.Fatalf("first send used model %q, effort %q; want %q, high", first.model, first.effort, geminiModel)
 	}
 	overlay := studyOverlay(t, w)
 	if !treeHasText(overlay, "Reading the passage…") {
 		t.Fatalf("control: not the waiting state; texts %v", treeTexts(overlay))
 	}
-	wantModelLine(t, overlay, "Gemini (Google) · "+geminiModel, "first send")
+	wantModelLine(t, overlay, "Gemini (Google) · "+geminiModel+" · High", "first send")
 	wantHintStyle(t, overlay, "the study wait")
 
 	first.answer <- &apiHTTPError{StatusCode: http.StatusNotFound}
 	retry := nextSend(t, sends)
-	if retry.model != "gemini-3-pro" {
-		t.Fatalf("control: the retry went to %q, want the replacement", retry.model)
+	if retry.model != replacement || retry.effort != "" {
+		t.Fatalf("retry used model %q, effort %q; want %q, provider default", retry.model, retry.effort, replacement)
 	}
-	wantModelLine(t, overlay, "Gemini (Google) · gemini-3-pro", "retry on the replacement")
+	wantModelLine(t, overlay, "Gemini (Google) · "+replacement+" · Recommended (High)", "retry on the replacement")
 }
 
 // THE LINE FOLLOWS THE FASTER-MODEL SWITCH. Mutation: the resolver naming the
@@ -360,16 +367,16 @@ func TestTheStudyWaitFollowsTheFasterModel(t *testing.T) {
 	overlay := studyOverlay(t, w)
 	wantModelLine(t, overlay, "Gemini (Google) · "+geminiModel, "before the switch")
 
-	sw := findTreeLink(overlay, "Switch to a faster model")
+	sw := waitingAction(overlay, "Switch to a faster model")
 	if sw == nil {
 		t.Fatalf("control: no faster-model offer; texts %v", treeTexts(overlay))
 	}
-	tapLinkText(sw)
+	sw.Tapped(nil)
 	fast := nextSend(t, sends)
 	if fast.model != geminiFastModel {
 		t.Fatalf("control: the switch sent to %q, want %q", fast.model, geminiFastModel)
 	}
-	wantModelLine(t, overlay, "Gemini (Google) · "+geminiFastModel, "after the switch")
+	wantModelLine(t, overlay, "Gemini (Google) · "+geminiFastModel+" · Recommended", "after the switch")
 }
 
 // A REPORT FROM A REQUEST THE PANEL NO LONGER WAITS ON PAINTS NOTHING. The
@@ -392,22 +399,22 @@ func TestTheStudyWaitIgnoresAStaleReport(t *testing.T) {
 	slow := nextCtx(t, ctxs)
 	overlay := studyOverlay(t, w)
 	wantModelLine(t, overlay, "", "before the request reports")
-	reportAIModel(slow, providerGemini, geminiModel)
+	reportAIModel(slow, aiModelInUse{provider: providerGemini, model: geminiModel})
 	wantModelLine(t, overlay, "Gemini (Google) · "+geminiModel, "the request reported")
 
-	sw := findTreeLink(overlay, "Switch to a faster model")
+	sw := waitingAction(overlay, "Switch to a faster model")
 	if sw == nil {
 		t.Fatalf("control: no faster-model offer; texts %v", treeTexts(overlay))
 	}
-	tapLinkText(sw)
+	sw.Tapped(nil)
 	fast := nextCtx(t, ctxs)
 	wantModelLine(t, overlay, "", "the new wait, before its request reports")
-	reportAIModel(fast, providerGemini, geminiFastModel)
+	reportAIModel(fast, aiModelInUse{provider: providerGemini, model: geminiFastModel})
 	wantModelLine(t, overlay, "Gemini (Google) · "+geminiFastModel, "the new request reported")
 
 	// The replaced request was between attempts when it was abandoned, and
 	// its retry's report arrives now.
-	reportAIModel(slow, providerGemini, "gemini-3-pro")
+	reportAIModel(slow, aiModelInUse{provider: providerGemini, model: "gemini-3-pro"})
 	wantModelLine(t, overlay, "Gemini (Google) · "+geminiFastModel, "the replaced request's late retry")
 
 	cancel := findTreeButton(overlay, "Cancel")
@@ -415,7 +422,7 @@ func TestTheStudyWaitIgnoresAStaleReport(t *testing.T) {
 		t.Fatalf("control: no Cancel; texts %v", treeTexts(overlay))
 	}
 	cancel.OnTapped()
-	reportAIModel(fast, providerGemini, "gemini-3-pro")
+	reportAIModel(fast, aiModelInUse{provider: providerGemini, model: "gemini-3-pro"})
 	wantModelLine(t, overlay, "Gemini (Google) · "+geminiFastModel, "a report after Cancel")
 }
 
@@ -489,8 +496,8 @@ func TestTheStudyWaitWrapsALongModelAndKeepsCancelInReach(t *testing.T) {
 			showAIPanel(st, aiActionExplain, "God is love.", "", selSpan{})
 			ctx := nextCtx(t, ctxs)
 			p := studyOverlay(t, w)
-			reportAIModel(ctx, providerGemini, long)
-			wantModelLine(t, p, "Gemini (Google) · "+long, "the long name reported")
+			reportAIModel(ctx, aiModelInUse{provider: providerGemini, model: long, effortLabel: "Recommended"})
+			wantModelLine(t, p, "Gemini (Google) · "+long+" · Recommended", "the long name and effort reported")
 
 			line, text := modelLineBox(p)
 			if lw := line.MinSize().Width; lw > aiModelLineWidth {
@@ -565,12 +572,19 @@ func liveFindTab(t *testing.T) *appearanceHarness {
 func TestTheFindWaitNamesTheModelAndFollowsTheRetry(t *testing.T) {
 	sends := routeFind(t, "gemini-3-pro")
 	h := liveFindTab(t)
+	const budgetModel = "gemini-2.5-flash-lite"
+	store := h.state.keys()
+	store.setResolvedModel(providerGemini, budgetModel)
+	setAIReasoningEffort(store.prefs, providerGemini, budgetModel, "8192")
 	h.ask("where love is described")
 	first := nextSend(t, sends)
+	if first.model != budgetModel || first.effort != "8192" {
+		t.Fatalf("first send used model %q, effort %q; want %q, 8192", first.model, first.effort, budgetModel)
+	}
 	if !treeHasText(h.pane(), findRunning) {
 		t.Fatalf("control: the Find is not waiting; texts %v", treeTexts(h.pane()))
 	}
-	wantModelLine(t, h.pane(), "Gemini (Google) · "+geminiModel, "first send")
+	wantModelLine(t, h.pane(), "Gemini (Google) · "+budgetModel+" · 8,192 tokens", "first send")
 	wantHintStyle(t, h.pane(), "the Find wait")
 
 	first.answer <- &apiHTTPError{StatusCode: http.StatusNotFound}
@@ -591,19 +605,24 @@ func TestTheFindWaitNamesTheModelAndFollowsTheRetry(t *testing.T) {
 func TestTheFindWaitFollowsTheFasterModel(t *testing.T) {
 	sends := routeFind(t, "gemini-3-pro")
 	h := liveFindTab(t)
+	store := h.state.keys()
+	rememberModelEfforts(store.prefs, providerGemini, []discoveredModel{
+		{id: geminiFastModel, efforts: []string{"low", "high"}},
+	})
+	setAIReasoningEffort(store.prefs, providerGemini, geminiFastModel, "high")
 	h.ask("where love is described")
 	nextSend(t, sends)
 	wantModelLine(t, h.pane(), "Gemini (Google) · "+geminiModel, "before the switch")
 
-	sw := findTreeLink(h.pane(), "Switch to a faster model")
-	if sw == nil {
-		t.Fatalf("control: no faster-model offer; texts %v", treeTexts(h.pane()))
+	sw := waitingAction(h.pane(), "Switch to a faster model")
+	if sw == nil || sw.detail != "Restart this request and save "+geminiFastModel+" in Settings. Effort: High." {
+		t.Fatalf("missing switch or destination effort; displayed %v", treeTexts(h.pane()))
 	}
-	tapLinkText(sw)
-	if fast := nextSend(t, sends); fast.model != geminiFastModel {
-		t.Fatalf("control: the switch sent to %q, want %q", fast.model, geminiFastModel)
+	sw.Tapped(nil)
+	if fast := nextSend(t, sends); fast.model != geminiFastModel || fast.effort != "high" {
+		t.Fatalf("switched to %q at %q, want %q at high", fast.model, fast.effort, geminiFastModel)
 	}
-	wantModelLine(t, h.pane(), "Gemini (Google) · "+geminiFastModel, "after the switch")
+	wantModelLine(t, h.pane(), "Gemini (Google) · "+geminiFastModel+" · High", "after the switch")
 }
 
 // A REPORT FROM A FIND THAT WAS CANCELLED PAINTS NOTHING ON THE FIND AFTER
@@ -616,7 +635,7 @@ func TestTheFindWaitIgnoresAStaleReport(t *testing.T) {
 	h.ask("first question")
 	first := nextCtx(t, aiCtxSeen)
 	wantModelLine(t, h.pane(), "", "before the request reports")
-	reportAIModel(first, providerGemini, geminiModel)
+	reportAIModel(first, aiModelInUse{provider: providerGemini, model: geminiModel})
 	wantModelLine(t, h.pane(), "Gemini (Google) · "+geminiModel, "the request reported")
 
 	cancel := findTreeButton(h.pane(), "Cancel")
@@ -627,10 +646,10 @@ func TestTheFindWaitIgnoresAStaleReport(t *testing.T) {
 	h.ask("second question")
 	second := nextCtx(t, aiCtxSeen)
 	wantModelLine(t, h.pane(), "", "the next Find, before its request reports")
-	reportAIModel(second, providerGemini, geminiFastModel)
+	reportAIModel(second, aiModelInUse{provider: providerGemini, model: geminiFastModel})
 	wantModelLine(t, h.pane(), "Gemini (Google) · "+geminiFastModel, "the next Find reported")
 
-	reportAIModel(first, providerGemini, "gemini-3-pro") // the cancelled Find's retry
+	reportAIModel(first, aiModelInUse{provider: providerGemini, model: "gemini-3-pro"}) // the cancelled Find's retry
 	wantModelLine(t, h.pane(), "Gemini (Google) · "+geminiFastModel, "the cancelled Find's late retry")
 	if got := h.state.aiSearchModel; got.model != geminiFastModel {
 		t.Fatalf("state holds %q for the Find in flight, want %q", got.model, geminiFastModel)
@@ -650,9 +669,9 @@ func TestAFindAskedAgainMidFlightNamesItsModelAndLands(t *testing.T) {
 	if len(*held) != 2 || !(*held)[0].abandoned {
 		t.Fatalf("control: the resubmit must reach the seam and abandon the first; held %d", len(*held))
 	}
-	(*held)[1].onModel(aiModelInUse{providerGemini, geminiModel})
+	(*held)[1].onModel(aiModelInUse{provider: providerGemini, model: geminiModel})
 	wantModelLine(t, h.pane(), "Gemini (Google) · "+geminiModel, "the second Find reported")
-	(*held)[0].onModel(aiModelInUse{providerGemini, "gemini-3-pro"}) // the first one's late retry
+	(*held)[0].onModel(aiModelInUse{provider: providerGemini, model: "gemini-3-pro"}) // the first one's late retry
 	wantModelLine(t, h.pane(), "Gemini (Google) · "+geminiModel, "the first Find's late report")
 
 	verse := h.state.Bible.GetChapter("John", 1)[0]
@@ -709,7 +728,7 @@ func TestTheFindWaitWrapsALongModelOnAPhone(t *testing.T) {
 	}
 	h.ask("where love is described")
 	ctx := nextCtx(t, aiCtxSeen)
-	reportAIModel(ctx, providerGemini, long)
+	reportAIModel(ctx, aiModelInUse{provider: providerGemini, model: long})
 	wantModelLine(t, h.pane(), "Gemini (Google) · "+long, "the long name reported")
 	if got := h.pane().MinSize().Width; got > 375 {
 		t.Errorf("the Search tab wants %vpt with the model named, on a 375pt phone", got)
@@ -742,14 +761,14 @@ func TestTheSidebarFindWaitNamesTheModel(t *testing.T) {
 
 	pane, first := findSidebarSearchPane(t, st)
 	wantModelLine(t, pane, "", "before the request reports")
-	reportAIModel(first, providerGemini, geminiModel)
+	reportAIModel(first, aiModelInUse{provider: providerGemini, model: geminiModel})
 	wantModelLine(t, pane, "Gemini (Google) · "+geminiModel, "the request reported")
 	wantHintStyle(t, pane, "the sidebar's Find wait")
 
 	pane, second := findSidebarSearchPane(t, st) // a resubmit supersedes the first
 	wantModelLine(t, pane, "", "the resubmit, before its request reports")
-	reportAIModel(second, providerGemini, geminiFastModel)
-	reportAIModel(first, providerGemini, "gemini-3-pro")
+	reportAIModel(second, aiModelInUse{provider: providerGemini, model: geminiFastModel})
+	reportAIModel(first, aiModelInUse{provider: providerGemini, model: "gemini-3-pro"})
 	wantModelLine(t, pane, "Gemini (Google) · "+geminiFastModel, "the superseded Find's late report")
 }
 
@@ -765,7 +784,7 @@ func TestTheSidebarFindWaitLaysOutALongModel(t *testing.T) {
 	area := container.NewStack(pane) // the reading pane the results replace
 	area.Resize(fyne.NewSize(600, 700))
 	wantLineLaidOut(t, area, "control: the empty line")
-	reportAIModel(ctx, providerGemini, long)
+	reportAIModel(ctx, aiModelInUse{provider: providerGemini, model: long})
 	wantModelLine(t, area, "Gemini (Google) · "+long, "the long name reported")
 	if h := func() float32 { b, _ := modelLineBox(area); return b.MinSize().Height }(); h < captionLine()+captionRow() {
 		t.Fatalf("control: the long name must wrap; the line wants %vpt", h)
@@ -898,7 +917,12 @@ func findWaitParts(t *testing.T, root fyne.CanvasObject) (fyne.CanvasObject, map
 	hint := objectWithText(root, hintText)
 	box, _ := modelLineBox(root)
 	cancel := findTreeButton(root, "Cancel")
-	faster := findTreeLink(root, "Switch to a faster model")
+	var faster fyne.CanvasObject
+	if toggle := waitingDisclosure(root); toggle != nil {
+		faster = toggle
+	} else if row := waitingAction(root, "Switch to a faster model"); row != nil {
+		faster = row
+	}
 	if msg == nil || hint == nil || box == nil || cancel == nil || faster == nil {
 		t.Fatalf("the wait is missing a part: status %v, hint %v, model %v, Cancel %v, faster offer %v; texts %v",
 			msg != nil, hint != nil, box != nil, cancel != nil, faster != nil, treeTexts(root))
@@ -981,6 +1005,12 @@ func TestTheFindWaitKeepsCancelInReachOnALandscapePhone(t *testing.T) {
 		t.Run(fmt.Sprintf("%s %vx%v", sc.nav, sc.w, sc.h), func(t *testing.T) {
 			t.Setenv("BIBLETEXT_DESKTOP_TABS", sc.nav)
 			h, held := findTab(t)
+			store := h.state.keys()
+			store.setOverrideModel(providerGemini, long)
+			rememberModelEfforts(store.prefs, providerGemini, []discoveredModel{
+				{id: long, efforts: []string{"low", "medium", "high"}},
+			})
+			setAIReasoningEffort(store.prefs, providerGemini, long, "high")
 			sz := fyne.NewSize(sc.w, sc.h)
 			h.state.window.Resize(sz)
 			rebuildWindow(h.state)
@@ -988,7 +1018,7 @@ func TestTheFindWaitKeepsCancelInReachOnALandscapePhone(t *testing.T) {
 			if len(*held) != 1 {
 				t.Fatalf("control: want one Find in flight, have %d", len(*held))
 			}
-			(*held)[0].onModel(aiModelInUse{providerGemini, long})
+			(*held)[0].onModel(speedTargetReport(store.prefs, providerGemini, long))
 			root := h.pane()
 			root.Resize(sz) // a phone lays the tree out at its screen, whatever the tree asks for
 			msg, parts := findWaitParts(t, root)
@@ -999,6 +1029,20 @@ func TestTheFindWaitKeepsCancelInReachOnALandscapePhone(t *testing.T) {
 					area.Size().Height, columnOf(t, area, msg).MinSize().Height, sc.short)
 			}
 			wantWaitInReach(t, area, msg, parts, room)
+
+			toggle := waitingDisclosure(root)
+			if toggle == nil {
+				t.Fatal("missing speed choices for a model with a lower effort and a faster model")
+			}
+			toggle.Tapped(nil)
+			retry := waitingAction(root, "Use Medium effort this time")
+			sw := waitingAction(root, "Switch to a faster model")
+			target := speedTargetReport(store.prefs, providerGemini, geminiFastModel)
+			if retry == nil || sw == nil || sw.detail != switchModelDetail(target) {
+				t.Fatalf("speed options missing their actions or target: %v", treeTexts(root))
+			}
+			parts["lower effort"], parts["model switch"] = retry, sw
+			wantWaitInReach(t, area, msg, parts, columnOf(t, area, msg).MinSize().Height <= area.Size().Height)
 		})
 	}
 }
@@ -1014,8 +1058,9 @@ func TestTheDesktopFindWaitKeepsCancelInReachInAShortPane(t *testing.T) {
 	defer app.Quit()
 	stubAIGenerate(t)
 	st := sidebarFindState(t)
+	st.keys().setOverrideModel(providerGemini, long)
 	pane, ctx := findSidebarSearchPane(t, st)
-	reportAIModel(ctx, providerGemini, long)
+	reportAIModel(ctx, aiModelInUse{provider: providerGemini, model: long})
 	area := container.NewStack(pane) // the pane the results take over
 	for _, sc := range []struct {
 		h     float32
@@ -1117,8 +1162,8 @@ func TestTheKeyTestNamesTheModel(t *testing.T) {
 	if got := keyTestResult(popup); got != "Testing…" {
 		t.Fatalf("before the request reports the wait reads %q, want just \"Testing…\"", got)
 	}
-	reportAIModel(first.ctx, providerGemini, geminiModel)
-	if got, want := keyTestResult(popup), "Testing…"+"Gemini (Google) · "+geminiModel; got != want {
+	reportAIModel(first.ctx, aiModelInUse{provider: providerGemini, model: geminiModel, effortLabel: "High"})
+	if got, want := keyTestResult(popup), "Testing…"+"Gemini (Google) · "+geminiModel+" · High"; got != want {
 		t.Fatalf("the wait reads %q, want %q", got, want)
 	}
 	if segs := keyTestLine(popup).Segments; len(segs) == 2 {
@@ -1135,8 +1180,8 @@ func TestTheKeyTestNamesTheModel(t *testing.T) {
 	if got := keyTestResult(popup); got != "Testing…" {
 		t.Fatalf("a second test's wait reads %q before its request reports", got)
 	}
-	reportAIModel(second.ctx, providerGemini, "gemini-3-pro")
-	reportAIModel(first.ctx, providerGemini, geminiFastModel) // the first test's late retry
+	reportAIModel(second.ctx, aiModelInUse{provider: providerGemini, model: "gemini-3-pro"})
+	reportAIModel(first.ctx, aiModelInUse{provider: providerGemini, model: geminiFastModel}) // the first test's late retry
 	want := "Testing…" + "Gemini (Google) · gemini-3-pro"
 	if got := keyTestResult(popup); got != want {
 		t.Fatalf("after the first test's late report the wait reads %q, want %q", got, want)

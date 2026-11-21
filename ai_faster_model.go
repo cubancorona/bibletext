@@ -23,7 +23,7 @@ import (
 
 // fasterModelOffer describes the switch available for the active provider, if
 // any. ok is false when AI is off, the provider has no economy model, or the
-// reader is already on it (or on some other model of their own choosing).
+// reader is already using that model.
 func fasterModelOffer(state *AppState) (providerID, model, label string, ok bool) {
 	if state == nil || !aiFeaturesEnabled(state) {
 		return "", "", "", false
@@ -58,10 +58,14 @@ func fasterModelOffer(state *AppState) (providerID, model, label string, ok bool
 // button was tried first: a bold body-size label, louder than Cancel's own —
 // and inside a chip-theme override it rendered washed-out and mis-measured.)
 func fasterModelControl(label string, onTapped func()) fyne.CanvasObject {
+	return container.NewCenter(fasterModelLink(label, onTapped))
+}
+
+func fasterModelLink(label string, onTapped func()) *widget.Hyperlink {
 	hl := widget.NewHyperlink(label, nil)
 	hl.OnTapped = onTapped
 	hl.SizeName = theme.SizeNameCaptionText
-	return container.NewCenter(hl)
+	return hl
 }
 
 // applyFasterModel pins the provider to its economy model. It is the same

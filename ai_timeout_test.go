@@ -94,7 +94,7 @@ func TestStartAISearchCancelAbandonsRequest(t *testing.T) {
 	}
 	defer func() { aiSearchGenerate = prev }()
 
-	cancel := startAISearch(st, "anything", nil, func([]Verse, error) {})
+	cancel := startAISearch(st, "anything", aiSpeedChoice{}, nil, func([]Verse, error) {})
 	var reqCtx context.Context
 	select {
 	case reqCtx = <-seen:
@@ -149,7 +149,7 @@ func findSidebarSearchPane(t *testing.T, st *AppState) (fyne.CanvasObject, conte
 	st.showReading = func() { paneAtRefresh = buildSearchResultsView(st) }
 	t.Cleanup(func() { st.showReading = nil })
 
-	st.retryAISearch() // re-runs the last query through the real submit path
+	st.retryAISearch(aiSpeedChoice{}) // re-runs the last query through the real submit path
 	st.showReading = nil
 	select {
 	case ctx := <-aiCtxSeen:
@@ -530,11 +530,11 @@ func TestStudyPanelFasterSwitchAbandonsTheSlowRequest(t *testing.T) {
 	}
 
 	overlay := w.Canvas().Overlays().Top()
-	sw := findTreeLink(overlay, "Switch to a faster model")
+	sw := waitingAction(overlay, "Switch to a faster model")
 	if sw == nil {
 		t.Fatalf("no faster-model switch on the thinking state; texts %v", treeTexts(overlay))
 	}
-	tapLinkText(sw)
+	sw.Tapped(nil)
 
 	select {
 	case <-slow.Done():
@@ -588,11 +588,11 @@ func TestStudyPanelStaleSettleCannotDisarmTheNewRequest(t *testing.T) {
 		t.Fatal("the study action never reached the provider seam")
 	}
 
-	sw := findTreeLink(w.Canvas().Overlays().Top(), "Switch to a faster model")
+	sw := waitingAction(w.Canvas().Overlays().Top(), "Switch to a faster model")
 	if sw == nil {
 		t.Fatalf("no faster-model switch on the thinking state; texts %v", treeTexts(w.Canvas().Overlays().Top()))
 	}
-	tapLinkText(sw)
+	sw.Tapped(nil)
 	var fast studyCall
 	select {
 	case fast = <-calls:

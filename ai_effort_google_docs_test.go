@@ -32,7 +32,7 @@ func TestGeminiDocumentEffortsMatchOnlyPublishedModelLevels(t *testing.T) {
 		{"gemini-9-synthetic-live", nil},
 		{"gemini-2.5-flash", nil},
 	} {
-		if got := geminiDocumentEfforts(rows, tc.model); !slices.Equal(got, tc.want) {
+		if got := geminiDocumentEfforts(rows, tc.model).Levels; !slices.Equal(got, tc.want) {
 			t.Errorf("%s: levels %v, want %v", tc.model, got, tc.want)
 		}
 	}

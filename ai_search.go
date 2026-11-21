@@ -21,8 +21,8 @@ import (
 // onModel, when set, hears on the UI thread each model the request is about
 // to send to (ai_model_in_use.go), for the waiting screen to name; like done,
 // it can arrive after the search was abandoned, and the caller drops it then.
-func startAISearch(state *AppState, query string, onModel func(aiModelInUse), done func([]Verse, error)) (cancel func()) {
-	ctx, cancelCtx := context.WithCancel(context.Background())
+func startAISearch(state *AppState, query string, choice aiSpeedChoice, onModel func(aiModelInUse), done func([]Verse, error)) (cancel func()) {
+	ctx, cancelCtx := context.WithCancel(withAISpeedChoice(context.Background(), choice))
 	ctx, cancelTimeout := context.WithTimeout(ctx, aiRequestBudget)
 	if onModel != nil {
 		ctx = showAIModelOnUI(ctx, onModel)
@@ -85,10 +85,13 @@ func (s *aiSearchSession) Abandon(g int) {
 // its own screen, and must not name its model there. (A Find's own landing
 // cannot overtake its reports, which reach the UI thread first, in order.)
 func showFindModel(state *AppState, gen int, m aiModelInUse) {
-	if state == nil || !state.askSession.Current(gen) {
+	if state == nil || !state.aiSearchLoading || !state.askSession.Current(gen) {
 		return
 	}
 	state.aiSearchModel = m
+	if state.findSpeed != nil {
+		state.findSpeed.show(m)
+	}
 	state.findModelLine.show(m)
 }
 
@@ -99,6 +102,22 @@ func newFindModelLine(state *AppState) *aiModelLine {
 	line := newAIModelLine(state.aiSearchModel)
 	state.findModelLine = line
 	return line
+}
+
+// newFindSpeedControl attaches the new view to reports for the active Find.
+// A rebuilt view can immediately restore the choices for its current attempt.
+func newFindSpeedControl(state *AppState, retry func(aiSpeedChoice)) *aiSpeedControl {
+	if state.findSpeed != nil {
+		state.findSpeed.close()
+	}
+	speed := newAISpeedControl(state, retry)
+	state.findSpeed = speed
+	gen := state.askSession.gen
+	speed.active = func() bool {
+		return state.findSpeed == speed && state.aiSearchLoading && state.askSession.Current(gen)
+	}
+	speed.show(state.aiSearchModel)
+	return speed
 }
 
 // AI semantic search: the reader asks for passages in their own words
@@ -146,6 +165,7 @@ func abandonAISearch(state *AppState) {
 	// the flag). Returning early here re-armed a previously-fixed bug — a
 	// permanent "Searching with AI…" pane.
 	state.aiSearchLoading = false
+	state.stopFindWait()
 	if state.cancelAISearch == nil {
 		return
 	}
@@ -276,7 +296,10 @@ func runAISearch(ctx context.Context, state *AppState, query string) ([]Verse, e
 		return nil, &noKeyError{provider: info}
 	}
 
-	ctx, options := trackAIRequestOptions(ctx, store, id)
+	ctx, options, err := trackAIRequestOptions(ctx, store, id)
+	if err != nil {
+		return nil, err
+	}
 	normalizedQuery := strings.ToLower(q)
 	cacheKey := func() string {
 		return aiCacheKey(options.provider+"|"+options.cacheModel()+"|search", "", 0, normalizedQuery)

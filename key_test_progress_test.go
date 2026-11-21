@@ -94,7 +94,7 @@ func TestTheKeyTestOutlivesALightDarkReopen(t *testing.T) {
 			}
 			painted := paintsOf(h.state, keyTestAI)
 
-			reportAIModel(first.ctx, providerGemini, geminiModel)
+			reportAIModel(first.ctx, aiModelInUse{provider: providerGemini, model: geminiModel})
 			awaitPaint(t, painted, "the model report")
 			if got := keyTestResult(again); !strings.HasPrefix(got, "Testing…") || !strings.Contains(got, geminiModel) {
 				t.Errorf("after the report the reopened sheet reads %q, want the wait naming %s", got, geminiModel)

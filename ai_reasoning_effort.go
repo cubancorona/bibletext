@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // aiReasoningEfforts supplies offline choices for documented model versions.
@@ -26,8 +27,10 @@ func aiReasoningEfforts(provider, model string) []string {
 func modelEffortCatalogKey(provider string) string { return "ai.modelEffortCatalog." + provider }
 
 type modelEffortCatalog struct {
-	Levels  map[string][]string
-	Targets map[string]string
+	Checked  int64
+	Levels   map[string][]string
+	Targets  map[string]string
+	Defaults map[string]string `json:",omitempty"`
 }
 
 func readEffortCatalog(prefs prefStore, provider string) (c modelEffortCatalog) {
@@ -48,7 +51,7 @@ func rememberModelEfforts(prefs prefStore, provider string, models []discoveredM
 }
 
 func effortCatalogFromModels(provider string, models []discoveredModel) modelEffortCatalog {
-	c := modelEffortCatalog{map[string][]string{}, map[string]string{}}
+	c := modelEffortCatalog{Checked: time.Now().Unix(), Levels: map[string][]string{}, Targets: map[string]string{}, Defaults: map[string]string{}}
 	// Canonical entries take priority over another entry's aliases.
 	for pass := 0; pass < 2; pass++ {
 		for _, m := range models {
@@ -76,6 +79,15 @@ func effortCatalogFromModels(provider string, models []discoveredModel) modelEff
 				}
 				if provider == providerGemini || provider == providerOpenAI {
 					c.Targets[id] = target
+				}
+				if m.defaultEffort != nil {
+					c.Defaults[id] = ""
+					if valid := checkedEffortValues([]string{*m.defaultEffort}); len(valid) == 1 {
+						c.Defaults[id] = valid[0]
+					}
+				} else if pass == 1 {
+					// A concrete model cannot inherit another entry's alias default.
+					delete(c.Defaults, id)
 				}
 				if levels != nil {
 					if provider == providerGrok {
@@ -148,16 +160,15 @@ func reasoningEffortKey(provider, model string) string {
 }
 
 func aiReasoningEffort(prefs prefStore, provider, model string) string {
-	return readEffortCatalog(prefs, provider).selected(prefs, provider, model)
+	return savedModelEffort(prefs, provider, model, modelEffortChoices(prefs, provider, model))
 }
 
-func (c modelEffortCatalog) selected(prefs prefStore, provider, model string) string {
-	if prefs == nil {
-		return ""
-	}
-	effort := prefs.String(reasoningEffortKey(provider, model))
-	if effort != "" && slices.Contains(c.choices(prefs, provider, model), effort) {
-		return effort
+// An empty wire value leaves the effort at the provider's default.
+func savedModelEffort(prefs prefStore, provider, model string, levels []string) string {
+	if prefs != nil {
+		if effort := prefs.String(reasoningEffortKey(provider, model)); slices.Contains(levels, effort) {
+			return effort
+		}
 	}
 	return ""
 }

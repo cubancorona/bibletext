@@ -64,7 +64,11 @@ func TestEveryStudyMenuReachesThePermissionThroughOneDispatch(t *testing.T) {
 		"showAIPanelForPassage(state, aiActionAsk") {
 		t.Error("the Ask composer no longer sends its question through the study panel")
 	}
-	fetch := sourceFrom(t, funcBody(t, readRepoFile(t, "ai_panel.go"), "showAIPanelForPassage"), "startFetch = func() {")
+	panel := readRepoFile(t, "ai_panel.go")
+	if !strings.Contains(funcBody(t, panel, "showAIPanelForPassage"), "showAIPanelWithSpeed(") {
+		t.Fatal("the study panel no longer delegates to the guarded request")
+	}
+	fetch := sourceFrom(t, funcBody(t, panel, "showAIPanelWithSpeed"), "startFetch = func() {")
 	sourceOrder(t, "the panel's startFetch", fetch, "aiPermissionPending(state)", "aiActionRun(")
 	sourceOrder(t, "the panel's startFetch", fetch, "promptAIPermission(", "aiActionRun(")
 
@@ -75,6 +79,9 @@ func TestEveryStudyMenuReachesThePermissionThroughOneDispatch(t *testing.T) {
 	}
 	for _, f := range productionGoFiles(t) {
 		src := readRepoFile(t, f)
+		if f != "ai_panel.go" && strings.Contains(src, "showAIPanelWithSpeed(") {
+			t.Errorf("%s opens a study retry outside its panel", f)
+		}
 		if (strings.Contains(src, "showAIPanel(") || strings.Contains(src, "showAIPanelForPassage(")) && !allowed[f] {
 			t.Errorf("%s opens the study panel outside the dispatch", f)
 		}
@@ -266,7 +273,7 @@ func TestBothFindPanesAskBeforeASearchStarts(t *testing.T) {
 		{"the desktop sidebar", "sidebar.go", "buildSidebar", "startAISearch("},
 		{"the phone's Search tab", "ui_compact.go", "buildMobileSearchTab", "startFind("},
 	} {
-		submit := sourceFrom(t, funcBody(t, readRepoFile(t, c.file), c.fn), "runAsk = func(q string) {")
+		submit := sourceFrom(t, funcBody(t, readRepoFile(t, c.file), c.fn), "runAsk = func(q string, choice aiSpeedChoice) {")
 		sourceOrder(t, c.surface, submit, "hasAIKey(state)", "findAsksPermission(")
 		sourceOrder(t, c.surface, submit, "findAsksPermission(", c.start)
 	}

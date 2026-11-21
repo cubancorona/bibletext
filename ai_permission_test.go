@@ -307,7 +307,7 @@ func TestTheDesktopFindSendsNothingBeforeAllow(t *testing.T) {
 	t.Cleanup(func() { st.showReading = nil })
 	gemini, _ := providerByID(defaultProviderID)
 
-	st.retryAISearch() // submits "mercy" through the sidebar's own path
+	st.retryAISearch(aiSpeedChoice{}) // submits "mercy" through the sidebar's own path
 	q := permissionQuestion(t, w.Canvas(), gemini.Name)
 	s.nothingSent(t, "with the Find's question open")
 	retry := assertNotSentState(t, pane, "the Find pane under the question")

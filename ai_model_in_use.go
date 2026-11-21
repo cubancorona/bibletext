@@ -2,8 +2,8 @@ package bibletext
 
 // Which model an AI request is working on, as the request itself says.
 //
-// Every AI waiting screen names the provider and model the reader is waiting
-// on: the Study with AI panel (Explain, Context, Translation and Ask), the
+// Every AI waiting screen names the provider, model and supported effort
+// setting for the current request: the Study with AI panel, the
 // Search tab's Find, and the key test in Settings. The configuration read when
 // a screen is built (activeModelFor) names only the model a request is
 // expected to send. The resolver (ai_model_resolve.go) sends the reader's
@@ -35,13 +35,40 @@ import (
 // aiModelInUse is a provider and the model a request sends to there. The zero
 // value means the request has not said yet.
 type aiModelInUse struct {
-	provider string // provider id (ai_providers.go)
-	model    string // the model id, exactly as sent
+	provider    string // provider id (ai_providers.go)
+	model       string // the model id, exactly as sent
+	effortLabel string // selected effort or budget, empty when unavailable
+	lowerEffort string // wire value for the next lower supported choice
+}
+
+func speedTargetReport(prefs prefStore, provider, model string) aiModelInUse {
+	catalog := readEffortCatalog(prefs, provider)
+	levels := catalog.choices(prefs, provider, model)
+	return catalog.attemptReport(prefs, provider, model, savedModelEffort(prefs, provider, model, levels), levels)
+}
+
+func (c modelEffortCatalog) attemptReport(prefs prefStore, provider, model, effort string, levels []string) aiModelInUse {
+	report := aiModelInUse{provider: provider, model: model}
+	if len(levels) == 0 {
+		return report
+	}
+	report.effortLabel = effortDisplayName(effort)
+	if effort == "" {
+		effort = verifiedDefaultEffort(prefs, provider, model, c, levels)
+		if effort != "" {
+			report.effortLabel += " (" + effortDisplayName(effort) + ")"
+		}
+		if provider == providerAnthropic && explicitEffortEnablesThinking(model) {
+			return report
+		}
+	}
+	report.lowerEffort = lowerReasoningEffort(effort, levels)
+	return report
 }
 
 // label is the waiting screens' wording for m: the provider as the Settings
 // assistant picker names it ("Claude (Anthropic)"), then the model as the
-// Settings model picker lists it, which is by its id. "" before a report.
+// Settings model picker lists it, then the effort picker’s selection when available.
 func (m aiModelInUse) label() string {
 	if m.model == "" {
 		return ""
@@ -50,10 +77,14 @@ func (m aiModelInUse) label() string {
 	if info, ok := providerByID(m.provider); ok {
 		name = info.Name
 	}
-	if name == "" {
-		return m.model
+	line := m.model
+	if name != "" {
+		line = name + " · " + line
 	}
-	return name + " · " + m.model
+	if m.effortLabel != "" {
+		line += " · " + m.effortLabel
+	}
+	return line
 }
 
 type aiModelObserverKey struct{}
@@ -76,13 +107,13 @@ func showAIModelOnUI(ctx context.Context, show func(aiModelInUse)) context.Conte
 }
 
 // reportAIModel tells ctx's observer, if it has one, that the request is about
-// to send to model at provider.
-func reportAIModel(ctx context.Context, provider, model string) {
+// to send to the reported model using the reported settings.
+func reportAIModel(ctx context.Context, model aiModelInUse) {
 	if ctx == nil {
 		return
 	}
 	if observe, ok := ctx.Value(aiModelObserverKey{}).(func(aiModelInUse)); ok && observe != nil {
-		observe(aiModelInUse{provider: provider, model: model})
+		observe(model)
 	}
 }
 

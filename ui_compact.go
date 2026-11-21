@@ -630,18 +630,12 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	disc.Wrapping = fyne.TextWrapWord
 	aiDisclaimer := container.NewPadded(disc)
 
-	// The Find bar lives on state (state.findBar), not in this build: a
-	// rebuild mid-Find draws a new one, and the old build's closures — the
-	// landing, the abandon hook — must stop whichever bar is on the canvas,
-	// not the one they happened to draw.
-	stopAIBar := state.stopFindBar
-
 	// The supersession guard lives on AppState (state.askSession) so it survives
 	// window rebuilds (edit the query, resubmit, progress flashes,
 	// then the OLD results reappear — and the rebuild variant of the same race).
 	askSession := &state.askSession
 
-	var runAsk func(string)
+	var runAsk func(string, aiSpeedChoice)
 	var renderFind func()
 
 	// findSearchingView is the in-progress state: the line, the bar, the model
@@ -651,7 +645,6 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	// still running, with a Cancel that reaches it, instead of the empty
 	// prompt.
 	findSearchingView := func() fyne.CanvasObject {
-		state.stopFindBar() // one bar at a time, whichever build drew the last
 		bar := widget.NewProgressBarInfinite()
 		state.findBar = bar
 		msg := canvas.NewText("Searching with AI…", pal.TextMuted)
@@ -662,15 +655,9 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		// while the fixed-width bar stayed left-aligned inside it).
 		hint := container.NewGridWrap(fyne.NewSize(260, captionHeightFor(2)),
 			centeredCaption("Capable models can take a minute or more."))
-		var fasterRow fyne.CanvasObject = spacer(0)
-		if pid, fm, label, ok := fasterModelOffer(state); ok {
-			fasterRow = container.NewVBox(spacer(6), fasterModelControl(label, func() {
-				q := state.aiSearchQuery // read at the tap: the question in flight
-				abandonAISearch(state)
-				applyFasterModel(state, pid, fm)
-				runAsk(q) // re-ask the same question on the quick model
-			}))
-		}
+		speed := newFindSpeedControl(state, func(choice aiSpeedChoice) {
+			runAsk(state.aiSearchQuery, choice)
+		})
 		// Cancel reaches the request through state (abandonAISearch), never
 		// through a handle captured here: the tab that submitted the Find may
 		// be a build the window has since replaced.
@@ -690,9 +677,10 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 			// inputFrame: the theme's SurfaceAlt button fill is near-invisible
 			// on this ground, so give Cancel the app's standard visible outline.
 			spacer(4), container.NewCenter(inputFrame(cancelBtn, state.pal().Border)),
-			fasterRow,
+			speed.box,
 		))
 		model.relayout = view.Refresh
+		speed.relayout = view.Refresh
 		return view
 	}
 
@@ -713,7 +701,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	// the answer, including an answer of nothing. The prompt alone carries
 	// the disclaimer.
 	renderFind = func() {
-		stopAIBar() // a bar replaced below must stop, or it repaints forever
+		state.stopFindWait() // a bar replaced below must stop, or it repaints forever
 		prompt := false
 		var view fyne.CanvasObject
 		switch {
@@ -723,7 +711,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 			view = aiNoKeyView(state)
 		case state.aiSearchErr != nil:
 			view = aiSearchErrorView(state, state.aiSearchErr,
-				func() { runAsk(state.aiSearchQuery) })
+				func(choice aiSpeedChoice) { runAsk(state.aiSearchQuery, choice) })
 		case state.aiSearchCancelled && len(state.aiSearchResults) == 0:
 			prompt, view = true, aiSearchPromptView(state)
 		case len(state.aiSearchResults) == 0 && strings.TrimSpace(state.aiSearchQuery) == "":
@@ -748,7 +736,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		}
 	}
 
-	runAsk = func(q string) {
+	runAsk = func(q string, choice aiSpeedChoice) {
 		// Defense in depth (mirrors dispatchAIAction): with the assistant on
 		// "None" no caller should reach this, but never start an AI search then.
 		if !aiFeaturesEnabled(state) {
@@ -768,7 +756,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 			renderFind() // → the no-key view
 			return
 		}
-		if findAsksPermission(state, gen, q, renderFind, runAsk) {
+		if findAsksPermission(state, gen, q, renderFind, func(q string) { runAsk(q, choice) }) {
 			return // the pane says nothing was sent; Allow runs this search
 		}
 		// The submitted query is the live context NOW: persist it and drop the
@@ -796,11 +784,11 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		installAISearchCancel(state, func() {
 			askSession.Abandon(gen) // a late completion must not repaint this pane
 			cancelSearch()          // abandon the request itself, not just its callback
-			stopAIBar()
+			state.stopFindWait()
 		})
 		renderFind() // → the searching view, with Cancel
 
-		cancelSearch = startFind(state, q, func(m aiModelInUse) {
+		cancelSearch = startFind(state, q, choice, func(m aiModelInUse) {
 			showFindModel(state, gen, m)
 		}, func(verses []Verse, err error) {
 			if !askSession.Current(gen) {
@@ -814,7 +802,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 			// must never stop a NEWER ask's bar.) The bar on state: the one the
 			// tab on the canvas drew, which after a rebuild is not the one this
 			// build drew — that one its successor's renderFind already stopped.
-			stopAIBar()
+			state.stopFindWait()
 			state.cancelAISearch = nil // this request is done; nothing to abandon
 			state.aiSearchLoading = false
 			if !state.aiSearchActive {
@@ -839,8 +827,8 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		})
 	}
 	registerPageField(state, pageFieldFind, aiEntry)
-	aiEntry.OnSubmitted = runAsk
-	askBtn := widget.NewButtonWithIcon("", theme.SearchIcon(), func() { runAsk(aiEntry.Text) })
+	aiEntry.OnSubmitted = func(q string) { runAsk(q, aiSpeedChoice{}) }
+	askBtn := widget.NewButtonWithIcon("", theme.SearchIcon(), func() { aiEntry.OnSubmitted(aiEntry.Text) })
 	askBtn.Importance = widget.LowImportance
 
 	// --- Mode toggle + field swap (no window rebuild, so the keyboard survives). ---
@@ -881,7 +869,6 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	clearAskBtn := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
 		abandonAISearch(state) // cancel the REQUEST (invalidates the session too)
 		aiEntry.SetText("")
-		stopAIBar()
 		state.aiSearchResults = nil
 		state.aiSearchQuery = ""
 		state.aiSearchErr = nil // the pane is drawn from state: a kept error would come back
@@ -893,7 +880,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	applyMode = func() {
 		if searchModeOf(state) == modeNotes {
 			aiDisclaimer.Hide()
-			stopAIBar()
+			state.stopFindWait()
 			fieldHost.Objects = []fyne.CanvasObject{
 				container.NewBorder(nil, nil, nil, clearNotesBtn, inputFrame(withCaret(state, notesEntry), pal.Border)),
 			}
@@ -911,7 +898,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 			return
 		}
 		aiDisclaimer.Hide()
-		stopAIBar()
+		state.stopFindWait()
 		fieldHost.Objects = []fyne.CanvasObject{
 			container.NewBorder(nil, nil, nil, clearKwBtn, inputFrame(withCaret(state, searchEntry), pal.Border)),
 		}
@@ -926,7 +913,6 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		ai := mode == modeFind
 		inFlight := state.cancelAISearch != nil
 		abandonAISearch(state) // cancel the REQUEST (invalidates the session too)
-		stopAIBar()
 		// Abandoning is not a zero-result answer. Set, never cleared, here: a
 		// Find stopped earlier is still a stopped Find when the reader comes
 		// back to this mode, and renderFind draws what state says.

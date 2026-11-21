@@ -73,7 +73,7 @@ func TestCompatibleModelListReadsOptionalEffortMetadata(t *testing.T) {
 			t.Errorf("unexpected model-list request")
 		}
 		io.WriteString(w, `{"data":[
-			{"id":"grok-synthetic","created":11,"aliases":["grok-synthetic-latest"],"capabilities":{"reasoning_effort":["medium","xhigh"]}},
+			{"id":"grok-synthetic","created":11,"aliases":["grok-synthetic-latest"],"capabilities":{"reasoning_effort":["medium","xhigh"],"default_reasoning_effort":"xhigh"}},
 			{"id":"synthetic-empty","capabilities":{"reasoning_effort":[]}},
 			{"id":"synthetic-absent"},
 			{"id":"synthetic-malformed","capabilities":{"reasoning_effort":["low",4]}}
@@ -88,6 +88,12 @@ func TestCompatibleModelListReadsOptionalEffortMetadata(t *testing.T) {
 	if first.id != "grok-synthetic" || first.rank != 11 || !slices.Equal(first.aliases, []string{"grok-synthetic-latest"}) ||
 		!slices.Equal(first.efforts, []string{"medium", "xhigh"}) {
 		t.Errorf("incomplete provider model metadata: %+v", first)
+	}
+	catalog := effortCatalogFromModels(providerGrok, models)
+	for _, id := range []string{first.id, first.aliases[0]} {
+		if got := verifiedDefaultEffort(nil, providerGrok, id, catalog, catalog.Levels[id]); got != "xhigh" {
+			t.Errorf("default reported by /models for %s = %q, want xhigh", id, got)
+		}
 	}
 	if models[1].efforts == nil || len(models[1].efforts) != 0 || models[2].efforts != nil || models[3].efforts != nil {
 		t.Errorf("explicit empty, missing, or malformed capabilities changed meaning: %+v", models)

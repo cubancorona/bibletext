@@ -678,6 +678,15 @@ type anthropicResponse struct {
 	StopReason string `json:"stop_reason"`
 }
 
+// These models start adaptive thinking only when BibleText sends a named effort.
+func explicitEffortEnablesThinking(model string) bool {
+	switch model {
+	case "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6":
+		return true
+	}
+	return false
+}
+
 func (c *anthropicClient) generate(ctx context.Context, prompt string) (string, error) {
 	if strings.TrimSpace(c.apiKey) == "" {
 		return "", errNoAPIKey
@@ -694,8 +703,7 @@ func (c *anthropicClient) generate(ctx context.Context, prompt string) (string, 
 			bodyConfig.OutputConfig = &anthropicOutputConfig{Effort: c.effort}
 			// These models accept adaptive thinking but default to off.
 			// Enable it when the reader explicitly chooses reasoning effort.
-			switch c.model {
-			case "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6":
+			if explicitEffortEnablesThinking(c.model) {
 				bodyConfig.Thinking = &anthropicThinking{Type: "adaptive"}
 			}
 		}

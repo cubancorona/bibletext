@@ -60,6 +60,31 @@ func walkTree(o fyne.CanvasObject, visit func(fyne.CanvasObject)) {
 	}
 }
 
+func walkVisibleControls(object fyne.CanvasObject, visit func(fyne.CanvasObject)) {
+	if object == nil || !object.Visible() {
+		return
+	}
+	visit(object)
+	var children []fyne.CanvasObject
+	switch value := object.(type) {
+	case *fyne.Container:
+		children = value.Objects
+	case *container.Scroll:
+		children = []fyne.CanvasObject{value.Content}
+	case *container.Clip:
+		children = []fyne.CanvasObject{value.Content}
+	case *container.Split:
+		children = []fyne.CanvasObject{value.Leading, value.Trailing}
+	case *container.ThemeOverride:
+		children = []fyne.CanvasObject{value.Content}
+	case *widget.PopUp:
+		children = []fyne.CanvasObject{value.Content}
+	}
+	for _, child := range children {
+		walkVisibleControls(child, visit)
+	}
+}
+
 // treeTexts gathers the user-visible strings under o: canvas texts, labels,
 // button labels, and rich-text content (segments joined per widget). Empty
 // strings are dropped — otherwise treeHasText(o, "") would match vacuously on
@@ -138,7 +163,7 @@ func findTreeButton(o fyne.CanvasObject, label string) *widget.Button {
 }
 
 // findTreeLink returns the first *widget.Hyperlink under o with the given label
-// (the waiting screens' "Switch to a faster model" line). Tap it with
+// in the constructed tree. Tap it with
 // tapLinkText, not test.Tap: a Hyperlink ignores taps outside its text bbox,
 // and test.Tap's (1,1) lands in the padding.
 func findTreeLink(o fyne.CanvasObject, label string) *widget.Hyperlink {

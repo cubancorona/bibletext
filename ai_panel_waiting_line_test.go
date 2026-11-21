@@ -349,8 +349,8 @@ func TestTheAIWaitingLineStaysWholeUnderAWrappedModelName(t *testing.T) {
 					ctx = nextCtx(t, studies)
 				})
 				defer popup.Hide()
-				reportAIModel(ctx, providerGemini, long)
-				wantModelLine(t, popup, label(providerGemini, long), "the long name reported")
+				reportAIModel(ctx, aiModelInUse{provider: providerGemini, model: long, effortLabel: "24,576 tokens"})
+				wantModelLine(t, popup, "Gemini (Google) · "+long+" · 24,576 tokens", "the long name and budget reported")
 				if box, _ := modelLineBox(popup); box.MinSize().Height < 1.5*captionLine() {
 					t.Fatalf("control: the model line is %.1fpt tall: the long name did not wrap", box.MinSize().Height)
 				}

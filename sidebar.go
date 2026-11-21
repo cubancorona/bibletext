@@ -66,8 +66,8 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 	// post-rebuild query (see the state-transition details in ai_search.go).
 	askSession := &state.askSession
 
-	var runAsk func(string)
-	runAsk = func(q string) {
+	var runAsk func(string, aiSpeedChoice)
+	runAsk = func(q string, choice aiSpeedChoice) {
 		// Defense in depth (mirrors dispatchAIAction): with the assistant on
 		// "None" no caller should reach this, but never start an AI search then.
 		if !aiFeaturesEnabled(state) {
@@ -84,12 +84,13 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		state.aiSearchErr = nil
 		state.IsSearching = true // results replace the reading pane
 		if !hasAIKey(state) {
+			abandonAISearch(state)
 			state.aiSearchResults = nil
 			state.aiSearchLoading = false
 			state.refresh() // → aiNoKeyView
 			return
 		}
-		if findAsksPermission(state, gen, q, state.refresh, runAsk) {
+		if findAsksPermission(state, gen, q, state.refresh, func(q string) { runAsk(q, choice) }) {
 			return // the pane says nothing was sent; Allow runs this search
 		}
 		state.aiSearchResults = nil
@@ -109,7 +110,7 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 			cancelSearch()
 		})
 		state.refresh() // → aiSearchingView (with Cancel)
-		cancelSearch = startAISearch(state, q, func(m aiModelInUse) {
+		cancelSearch = startAISearch(state, q, choice, func(m aiModelInUse) {
 			showFindModel(state, gen, m)
 		}, func(verses []Verse, err error) {
 			if !askSession.Current(gen) {
@@ -121,6 +122,7 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 				// back to keyword): drop the result instead of repopulating state.
 				return
 			}
+			state.stopFindWait()
 			state.aiSearchLoading = false
 			switch {
 			case err != nil && isNoKeyError(err):
@@ -135,8 +137,8 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 			state.refresh()            // → results / error
 		})
 	}
-	state.retryAISearch = func() { runAsk(state.aiSearchQuery) }
-	aiEntry.OnSubmitted = runAsk
+	state.retryAISearch = func(choice aiSpeedChoice) { runAsk(state.aiSearchQuery, choice) }
+	aiEntry.OnSubmitted = func(q string) { runAsk(q, aiSpeedChoice{}) }
 
 	clearAsk := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
 		abandonAISearch(state) // cancel the REQUEST (invalidates the session too)
@@ -150,7 +152,7 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		}
 	})
 	clearAsk.Importance = widget.LowImportance
-	askBtn := widget.NewButtonWithIcon("", theme.SearchIcon(), func() { runAsk(aiEntry.Text) })
+	askBtn := widget.NewButtonWithIcon("", theme.SearchIcon(), func() { aiEntry.OnSubmitted(aiEntry.Text) })
 	askBtn.Importance = widget.LowImportance
 	askRow := container.NewBorder(nil, nil, nil, container.NewHBox(clearAsk, askBtn), inputFrame(withCaret(state, aiEntry), pal.Border))
 

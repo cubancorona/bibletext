@@ -132,6 +132,7 @@ func openAISettings(state *AppState) {
 	// (see the sizing block at the end of this function). Declared this early so
 	// the key rows built below can ask for it when their status line changes
 	// height.
+	var popup *widget.PopUp
 	var fitSheet func()
 	closed := false
 
@@ -185,7 +186,7 @@ func openAISettings(state *AppState) {
 		result.Hide()
 		resultExtras := container.NewVBox()
 		resultExtras.Hide()
-		var runKeyTest func()
+		var runKeyTest func(aiSpeedChoice)
 		// Assigned with the Model row below: it re-reads the store's model
 		// choice into the row after a change made outside the picker.
 		var syncModelChoice func()
@@ -223,7 +224,10 @@ func openAISettings(state *AppState) {
 		// dropped, not painted over the newer wait. A test of another
 		// provider's key is not this row's.
 		slot := state.keyTest(keyTestAI)
+		var timeoutControl *aiSpeedControl
 		slot.attach(func() {
+			timeoutControl.close()
+			timeoutControl = nil
 			resultExtras.Objects = nil
 			resultExtras.Hide()
 			t := slot.test
@@ -240,14 +244,16 @@ func openAISettings(state *AppState) {
 			} else {
 				text := t.text
 				if p := t.failure; p != nil {
-					faster := aiErrorFasterModel(state, *p, func() {
+					timeoutControl = makeAISpeedControl(state, func(choice aiSpeedChoice) {
 						// The action pins the economy model in the store;
 						// the Model row on this sheet must show it at once.
 						if syncModelChoice != nil {
 							syncModelChoice()
 						}
-						runKeyTest()
-					})
+						runKeyTest(choice)
+					}, true)
+					timeoutControl.active = func() bool { return slot.test == t && gen == renderGen && sheetShowing(state, popup) }
+					faster := timeoutControl.timeoutSwitch(*p)
 					// Read with the offer as this paint finds it, so a
 					// timeout names the faster model only beside its action.
 					text = "✗ " + p.shown(faster != nil)
@@ -265,9 +271,13 @@ func openAISettings(state *AppState) {
 					}
 				}
 				setResult(text)
+				if fitSheet != nil && resultExtras.Visible() {
+					fitSheet()
+					fitSheet()
+				}
 			}
 		})
-		runKeyTest = func() {
+		runKeyTest = func(choice aiSpeedChoice) {
 			key := strings.TrimSpace(entry.Text)
 			if key == "" {
 				slot.begin(info.ID, false, "Paste a key first.")
@@ -277,6 +287,7 @@ func openAISettings(state *AppState) {
 			go func() {
 				ctx, cancel := context.WithTimeout(context.Background(), aiProbeBudget)
 				defer cancel()
+				ctx = withAISpeedChoice(ctx, choice)
 				ctx = showAIModelOnUI(ctx, func(m aiModelInUse) { slot.report(t, m) })
 				err := aiKeyTestRun(ctx, info, store, key)
 				err = withAIErrorProvider(err, info)
@@ -289,7 +300,7 @@ func openAISettings(state *AppState) {
 				})
 			}()
 		}
-		testBtn := widget.NewButtonWithIcon("Test key", theme.MediaPlayIcon(), runKeyTest)
+		testBtn := widget.NewButtonWithIcon("Test key", theme.MediaPlayIcon(), func() { runKeyTest(aiSpeedChoice{}) })
 		// A normal-weight button with an icon, so it clearly reads as tappable. A
 		// low-importance button is borderless — it looks like a plain bold label and
 		// hides that it's interactive (and on touch there's no hover state to reveal
@@ -425,13 +436,13 @@ func openAISettings(state *AppState) {
 				go func() {
 					ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
 					defer cancel()
-					levels := lookup(ctx, id, target)
+					doc := lookup(ctx, id, target)
 					fyne.Do(func() {
-						if closed || renderGen != gen || levels == nil ||
+						if closed || renderGen != gen || doc.Levels == nil ||
 							effortDocumentTarget(store.prefs, id, model, liveModels) != target {
 							return
 						}
-						saveEffortDocument(store.prefs, id, model, target, levels)
+						doc.save(store.prefs, id, model, target)
 						if activeModelFor(store, id) == model {
 							refreshEffort()
 						}
@@ -751,7 +762,6 @@ func openAISettings(state *AppState) {
 	// Done button — every change auto-saves, so the ✕ or a tap anywhere outside the
 	// card dismisses it. done() runs the cleanup either way (re-show the native
 	// reading overlay + re-render so a red-letter toggle takes effect).
-	var popup *widget.PopUp
 	done := func() {
 		if closed {
 			return

@@ -257,7 +257,7 @@ prose.
 | `wrap_check.go` | The Settings switches (footnotes, shared notes, red letter): widget.Check with a label that breaks between words where its row is too narrow for it |
 | `ai_panel.go` | AI answer panel (prose result, Report button, disclosure line) |
 | `ai_search.go` | AI "Find" passage search on the Search tab (returns verses) |
-| `ai_model_in_use.go` | The model a running request reports it is sending to (`reportAIModel`, through the request's context) and the waiting screens' muted line naming it (`aiModelLine`) |
+| `ai_model_in_use.go`, `ai_speed_control.go` | The model and effort reported for each send, the progress caption, and the faster options for the current attempt |
 | `ai_menu_darwin.go` | Native selection-menu → Go bridge (shared with reading overlays) |
 
 ### Share
@@ -736,16 +736,27 @@ keystroke supersedes it (pinned in `search_race_test.go`).
   guard and bounded text segments. Copy, Report and the request cache retain
   the provider's original answer. The other study actions keep their existing
   rich-text renderer.
-- Every AI wait names the provider and model at work, in one muted line under
-  its bar: the Study panel, Find (the Search tab and the former sidebar) and
-  Test key. The name comes from the request, not the configuration: the
-  resolver ([ai_model_resolve.go](ai_model_resolve.go)) reports each model it
-  is about to send to, the retry onto a self-healed replacement included,
+- The Study panel, Find (both layouts) and Test key show the provider and
+  model for the current attempt. For a model with reasoning controls, the
+  same caption shows the requested effort, token budget or Recommended.
+  Recommended leaves the choice to the provider. The caption includes the
+  default level in parentheses when it can be verified for that model.
+  The resolver ([ai_model_resolve.go](ai_model_resolve.go)) reports the
+  options for each attempt, including a retry on a replacement model,
   through an observer the screen puts on the request's context
   ([ai_model_in_use.go](ai_model_in_use.go)). The observer hops to the UI
   goroutine, and each screen drops a report from a request it is no longer
   waiting on (the panel's fetch generation, Find's session token, the key
   test's sequence number).
+- Study and Find offer a lower effort or smaller token budget for the same
+  question when the next lower supported setting is known. This retry
+  cancels the previous attempt. Its model and effort travel in the request
+  context and in the answer's cache key. A new question uses Settings again.
+  The alternative model switch shows the destination and its saved effort
+  before selecting it in Settings. One available action appears directly
+  under Cancel. When both are available, “Switch to a faster model or reasoning
+  effort” expands in place. Each choice explains whether it applies to this
+  request or saves a new model in Settings.
 - AI request errors are classified at the transport boundary in
   [ai_errors.go](ai_errors.go), retaining the HTTP cause and captured provider.
   Confirmed credit/spend errors offer that provider's billing link; timeouts

@@ -137,10 +137,11 @@ no billing link is offered; and the vendors are named OpenAI, Anthropic,
 Google and SpaceXSI.
 
 The faster-model action is offered only for the captured provider while it
-is still active. Its callback checks again before changing a model or
-retrying. It must not change another provider's model after Settings has
-changed. Decided 2 November 2026: Settings' Test key offers it on a timeout
-too, beside its existing explicit test/retry control.
+is still active. On a timeout, the action identifies the model it will set
+in Settings and includes that model's saved effort when supported. Tapping
+it retries with that model. Closing the screen retires the action, and the
+callback rechecks the credential, model and offer before changing Settings.
+Settings' Test key offers the same switch beside its explicit test control.
 
 ## Provider reason text
 

@@ -6,31 +6,9 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
-	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 )
-
-func walkVisibleComposer(object fyne.CanvasObject, visit func(fyne.CanvasObject)) {
-	if object == nil || !object.Visible() {
-		return
-	}
-	visit(object)
-	var children []fyne.CanvasObject
-	switch value := object.(type) {
-	case *fyne.Container:
-		children = value.Objects
-	case *container.Scroll:
-		children = []fyne.CanvasObject{value.Content}
-	case *container.ThemeOverride:
-		children = []fyne.CanvasObject{value.Content}
-	case *widget.PopUp:
-		children = []fyne.CanvasObject{value.Content}
-	}
-	for _, child := range children {
-		walkVisibleComposer(child, visit)
-	}
-}
 
 // The smallest portrait phone still needs room for its draft and controls
 // beside a wrapping citation. The geometry is read from the actual composer,
@@ -128,7 +106,7 @@ func TestMobileComposerFitsNarrowPhoneKeyboard(t *testing.T) {
 					}
 					// A Border layout can keep both boxes on-screen while the
 					// title paints over a button on a narrow toolbar.
-					walkVisibleComposer(popup, func(object fyne.CanvasObject) {
+					walkVisibleControls(popup, func(object fyne.CanvasObject) {
 						text, ok := object.(*canvas.Text)
 						if !ok || (text.Text != "Ask a question" && text.Text != "Will be shortened") {
 							return
@@ -169,7 +147,7 @@ func TestMobileComposerFitsNarrowPhoneKeyboard(t *testing.T) {
 				editor := check()
 				if ask {
 					var citation *widget.RichText
-					walkVisibleComposer(popup, func(object fyne.CanvasObject) {
+					walkVisibleControls(popup, func(object fyne.CanvasObject) {
 						if rich, ok := object.(*widget.RichText); ok && segmentText(rich.Segments) == passagePreviewCitation(passage.Ref, passage.previewVersion()) {
 							citation = rich
 						}
@@ -252,7 +230,7 @@ func TestDenseAskComposerDismissesKeyboardForPassage(t *testing.T) {
 		t.Helper()
 		driver := fyne.CurrentApp().Driver()
 		var citation *widget.RichText
-		walkVisibleComposer(popup, func(object fyne.CanvasObject) {
+		walkVisibleControls(popup, func(object fyne.CanvasObject) {
 			if rich, ok := object.(*widget.RichText); ok && segmentText(rich.Segments) == passagePreviewCitation(passage.Ref, passage.previewVersion()) {
 				if citation != nil {
 					t.Error("the dense toolbar repeats its citation")

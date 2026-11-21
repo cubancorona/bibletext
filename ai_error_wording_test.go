@@ -7,6 +7,7 @@ package bibletext
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -20,10 +21,10 @@ func aiErrorActionRows(t *testing.T, actions *fyne.Container) []string {
 	var rows []string
 	for _, row := range actions.Objects {
 		texts := treeTexts(row)
-		if len(texts) != 1 {
-			t.Fatalf("an action row reads %v, not one action", texts)
+		if len(texts) == 0 {
+			t.Fatal("an action row contains no text")
 		}
-		rows = append(rows, texts[0])
+		rows = append(rows, strings.Join(texts, "\n"))
 	}
 	return rows
 }
@@ -101,10 +102,15 @@ func TestTheAIErrorWordingWordForWord(t *testing.T) {
 			t.Fatalf("%s: the timeout offers %v", tc.id, rows)
 		}
 		add(tc.id+" timeout, first row", rows[0], "Try again")
-		add(tc.id+" timeout, second row", rows[1], "Switch to a faster model")
+		target := speedTargetReport(state.keys().prefs, info.ID, info.FastModel)
+		want := "Set " + info.FastModel + " in Settings"
+		if target.effortLabel != "" {
+			want += " · " + target.effortLabel
+		}
+		add(tc.id+" timeout, second row", rows[1], want)
 
 		// The quoted reason as the screen draws it.
-		view := aiSearchErrorView(state, account, func() {})
+		view := aiSearchErrorView(state, account, func(aiSpeedChoice) {})
 		drawn := ""
 		if said := aiErrorRichText(view, p.detail); said != nil {
 			drawn = segmentText(said.Segments)

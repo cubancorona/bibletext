@@ -48,10 +48,10 @@ type AppState struct {
 	// Search tab through renderFind — so a window rebuild renders them again.
 	aiSearchLoading   bool
 	aiSearchErr       error
-	retryAISearch     func() // re-runs the last AI query (the error view's "Try again")
-	cancelAISearch    func() // abandons an in-flight AI query (the searching view's "Cancel")
-	aiSearchCancelled bool   // the reader abandoned the last Find — NOT a zero-result answer
-	cancelAIAction    func() // abandons an in-flight study request (Explain / Analyze …)
+	retryAISearch     func(aiSpeedChoice) // re-runs the last query with the selected speed option
+	cancelAISearch    func()              // abandons an in-flight AI query (the searching view's "Cancel")
+	aiSearchCancelled bool                // the reader abandoned the last Find — NOT a zero-result answer
+	cancelAIAction    func()              // abandons an in-flight study request (Explain / Analyze …)
 	// searchScrollY remembers the results list's scroll offset so returning to the
 	// Search tab lands where you left off. Reset to 0 when a new search runs.
 	searchScrollY float32
@@ -65,16 +65,13 @@ type AppState struct {
 	// root is a widget (layoutWatcher) that rebuildWindow's walk over the old
 	// tree cannot enter. One slot for the whole app: a build that draws a bar
 	// stops the one before it, and the landing, Cancel, a mode switch and
-	// leaving the tab stop the one there is (stopFindBar).
+	// leaving the tab stop the one there is (stopFindWait).
 	findBar *widget.ProgressBarInfinite
-	// aiSearchModel is the provider and model the Find in flight is sending
-	// to, as its request reported it (ai_model_in_use.go); zero until it has.
-	// Held with the rest of the Find's progress, so a tab rebuilt mid-Find
-	// names the model again. findModelLine is the line on the canvas that
-	// names it — one slot, like findBar and for its reason: the build that
-	// drew the line may not be the build on the canvas when a report lands.
+	// Keep the reported options when a tab is rebuilt. Only the current
+	// caption and speed control receive subsequent reports or accept taps.
 	aiSearchModel aiModelInUse
 	findModelLine *aiModelLine
+	findSpeed     *aiSpeedControl
 	// repaintFind redraws the Search tab's Find results from state, in the tab
 	// that is on the canvas NOW. A Find's completion paints through it rather
 	// than into the results host of the build that submitted it, which a
@@ -451,11 +448,14 @@ type AppState struct {
 	loadingMsg *canvas.Text
 }
 
-// stopFindBar halts the Search tab's Find progress bar, wherever the build
-// that drew it now is (safe to call repeatedly / when absent). A bar left
-// animating in a tree the window no longer shows still marks the live canvas
-// dirty on every tick, until the renderer cache expires it a minute later.
-func (s *AppState) stopFindBar() {
+// stopFindWait retires the controls of the old Find view. A detached bar keeps
+// repainting, and a menu opened from a detached view must not restart a search.
+func (s *AppState) stopFindWait() {
+	if s.findSpeed != nil {
+		s.findSpeed.close()
+		s.findSpeed = nil
+	}
+	s.findModelLine = nil
 	if s.findBar != nil {
 		s.findBar.Stop()
 		s.findBar = nil

@@ -138,7 +138,7 @@ func TestEffortCatalogControlsPrecedenceForAliasesAndFallbacks(t *testing.T) {
 		if _, found := readEffortCatalog(prefs, providerOpenAI).Levels[known]; found {
 			t.Fatal("missing capability metadata overrode the offline table")
 		}
-		saveEffortDocument(prefs, providerOpenAI, known, known, []string{"high"})
+		effortDocument{Levels: []string{"high"}}.save(prefs, providerOpenAI, known, known)
 		if got := modelEffortChoices(prefs, providerOpenAI, known); !slices.Equal(got, []string{"high"}) {
 			t.Fatalf("documented choices with no catalog evidence = %v", got)
 		}

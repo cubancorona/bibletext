@@ -49,11 +49,7 @@ func buildSearchResultsView(state *AppState) fyne.CanvasObject {
 		case !hasAIKey(state):
 			return aiNoKeyView(state)
 		case state.aiSearchErr != nil:
-			return aiSearchErrorView(state, state.aiSearchErr, func() {
-				if state.retryAISearch != nil {
-					state.retryAISearch()
-				}
-			})
+			return aiSearchErrorView(state, state.aiSearchErr, state.retryAISearch)
 		case state.aiSearchCancelled && len(state.aiSearchResults) == 0:
 			// Before the empty-results case below: the reader stopped this
 			// search, so the pane must not claim the AI found nothing. Gated on
@@ -62,7 +58,7 @@ func buildSearchResultsView(state *AppState) fyne.CanvasObject {
 			// passages if some path leaves it stale.
 			return aiSearchMessageView("Search cancelled.", "Try again", func() {
 				if state.retryAISearch != nil {
-					state.retryAISearch()
+					state.retryAISearch(aiSpeedChoice{})
 				}
 			})
 		case len(state.aiSearchResults) == 0 && strings.TrimSpace(state.aiSearchQuery) == "":
@@ -297,25 +293,11 @@ func aiSearchingView(state *AppState) fyne.CanvasObject {
 	// the same visible box the app's cards and fields carry.
 	items = append(items, spacer(4), container.NewCenter(inputFrame(cancelBtn, state.pal().Border)))
 
-	// Below Cancel, and quieter than it (fasterModelControl): an offer for the
-	// impatient, not a competing action — shown only when there IS something
-	// faster. Switching re-asks the same question straight away, since the
-	// reader is sitting here waiting for exactly that answer.
-	if pid, model, label, ok := fasterModelOffer(state); ok {
-		items = append(items, spacer(6), fasterModelControl(label, func() {
-			q := state.aiSearchQuery
-			abandonAISearch(state)
-			applyFasterModel(state, pid, model)
-			if state.retryAISearch != nil && strings.TrimSpace(q) != "" {
-				state.retryAISearch()
-				return
-			}
-			state.aiSearchCancelled = true
-			state.refresh()
-		}))
-	}
+	speed := newFindSpeedControl(state, state.retryAISearch)
+	items = append(items, speed.box)
 	view := findWaitScroll(container.NewVBox(items...))
 	model.relayout = view.Refresh
+	speed.relayout = view.Refresh
 	return view
 }
 

@@ -95,6 +95,10 @@ func showAIPanel(state *AppState, action, selectedText, question string, span se
 // showAIPanelForPassage keeps the composer or selection's captured page through
 // retries and appearance rebuilds, even if the reader has since navigated.
 func showAIPanelForPassage(state *AppState, action string, passage aiPassage, question string, span selSpan) {
+	showAIPanelWithSpeed(state, action, passage, question, span, aiSpeedChoice{})
+}
+
+func showAIPanelWithSpeed(state *AppState, action string, passage aiPassage, question string, span selSpan, choice aiSpeedChoice) {
 	if state == nil || state.window == nil {
 		return
 	}
@@ -119,7 +123,7 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 	// The reopen keeps the captured passage, so a light/dark change rebuilds
 	// the panel about the passage selected, wherever the reader now is.
 	reopen := func() {
-		showAIPanelForPassage(state, action, passage, question, span)
+		showAIPanelWithSpeed(state, action, passage, question, span, choice)
 	}
 
 	// The native overlay floats above the canvas; hide it while the modal is up.
@@ -249,7 +253,12 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 	// keeps billing the reader's key for an answer nobody will read. Every
 	// exit — Close, Cancel, a re-run — goes through stopThinking.
 	var cancelFetch func()
+	var speed *aiSpeedControl
 	stopThinking := func() {
+		if speed != nil {
+			speed.close()
+			speed = nil
+		}
 		if thinkingBar != nil {
 			thinkingBar.Stop()
 			thinkingBar = nil
@@ -485,16 +494,11 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 		// Empty until the request says which model it is sending to, and new
 		// with every request, so a re-run never shows the model before it.
 		modelLine = newAIModelLine(aiModelInUse{})
-		// Reads the field at TAP time (not the value at build time), so it
-		// always abandons the request that is actually running — the mistake
-		// the Find surface's first Cancel made.
-		var fasterRow fyne.CanvasObject = spacer(0)
-		if pid, fm, label, ok := fasterModelOffer(state); ok {
-			fasterRow = container.NewVBox(spacer(6), fasterModelControl(label, func() {
-				applyFasterModel(state, pid, fm)
-				startFetch() // startFetch abandons the slow request before starting this one
-			}))
-		}
+		speed = newAISpeedControl(state, func(next aiSpeedChoice) {
+			choice = next
+			startFetch()
+		})
+		speed.active = func() bool { return sheetShowing(state, popup) }
 		cancelBtn := widget.NewButton("Cancel", func() {
 			diagnose("panel_cancel")
 			userClosed = true
@@ -529,7 +533,7 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 			// colour (SurfaceAlt), so a bare Cancel here had no visible
 			// box at all. The outline restores one.
 			spacer(4), container.NewCenter(inputFrame(cancelBtn, pal.Border)),
-			fasterRow,
+			speed.box,
 		))
 		waitContent := withQuestion(waitCol)
 		waitScroll := container.NewVScroll(waitContent)
@@ -537,6 +541,7 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 		// A model name that wraps makes the column taller: fit the panel to
 		// it again, as below, so Cancel stays inside the scroll's reach.
 		modelLine.relayout = func() { fitBody(waitScroll, waitContent.MinSize().Height+10, leadFoot) }
+		speed.relayout = modelLine.relayout
 		// Replace, don't layer. The answer scroll underneath is empty in this
 		// state, but it still carries the answer cap as its minimum size, and in
 		// a stack that minimum wins — so the panel was sized for an answer that
@@ -649,7 +654,13 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 			// Each action has a row of its own: Try again, then the billing
 			// link or the faster model, which a timeout's message names only
 			// when it is offered here.
-			shown, actions := aiErrorRecovery(state, presentation, func() { startFetch() })
+			gen := fetchGen
+			control := makeAISpeedControl(state, func(next aiSpeedChoice) {
+				choice = next
+				startFetch()
+			}, true)
+			control.active = func() bool { return gen == fetchGen && !userClosed && sheetShowing(state, popup) }
+			shown, actions := aiErrorRecovery(presentation, control)
 			if special {
 				msg = shown
 			}
@@ -725,15 +736,17 @@ func showAIPanelForPassage(state *AppState, action string, passage aiPassage, qu
 		ctx, cancelTimeout := context.WithTimeout(ctx, aiRequestBudget)
 		ctx = devDiagnosticRequestContext(ctx, requestID)
 		ctx = withAIPassage(ctx, passage)
+		ctx = withAISpeedChoice(ctx, choice)
 		// The request names its model on the waiting state it started, and
 		// only there: a request the faster-model switch or Try again has
 		// replaced (a newer gen), or one whose wait is over (Close, Cancel,
 		// an answer — every exit stops the bar), can still report its retry.
 		ctx = showAIModelOnUI(ctx, func(m aiModelInUse) {
-			if gen != fetchGen || thinkingBar == nil {
+			if gen != fetchGen || thinkingBar == nil || !sheetShowing(state, popup) {
 				return
 			}
 			modelLine.show(m)
+			speed.show(m)
 		})
 		cancelFetch = cancel // so Close / Cancel can abandon THIS request
 		requestProvider := activeAIProvider(state)

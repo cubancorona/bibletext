@@ -249,7 +249,7 @@ func TestBuildSearchResultsViewAIStates(t *testing.T) {
 	state = aiState(true)
 	state.aiSearchErr = fmt.Errorf("connection reset")
 	retried := false
-	state.retryAISearch = func() { retried = true }
+	state.retryAISearch = func(aiSpeedChoice) { retried = true }
 	view = buildSearchResultsView(state)
 	if want := friendlyAIError(state.aiSearchErr); !treeHasText(view, want) {
 		t.Errorf("error state missing %q; texts: %v", want, treeTexts(view))

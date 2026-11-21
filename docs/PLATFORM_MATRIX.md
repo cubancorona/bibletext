@@ -860,7 +860,7 @@ exercise meaningful wrap-width change. BACKLOG.md records the bounded Mac
 saved-restore result and remaining native gates. No bar,
 rail, icon, button or font dimension changes with the carry.
 
-A bar wider than 560 points, `ui_compact.go:1099`
+A bar wider than 560 points, `ui_compact.go:1085`
 (`const tabBarSpreadMaxWidth float32 = 560`), centres its tabs at their
 designed slots, as UIKit's own tab bar does on an iPad; a narrower one
 spreads them across its width. Under the one rule only a window taller than

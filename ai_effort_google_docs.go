@@ -6,15 +6,14 @@ import (
 )
 
 // Google publishes the supported levels in a Markdown table. Only the
-// exact model's levels column describes usable choices. The default column
-// and the surrounding prose also name levels used by other models.
+// exact row gives that model’s levels and its default.
 // https://aistudio.google.com/docs/thinking.md
-func geminiDocumentEfforts(body []byte, model string) []string {
+func geminiDocumentEfforts(body []byte, model string) effortDocument {
 	if !strings.HasPrefix(model, "gemini-") || strings.HasPrefix(model, "gemini-2.") || strings.HasPrefix(model, "gemini-1.") ||
 		containsAnySubstr(model, modelExcludeSubstrings) || containsAnySubstr(model, []string{"-live", "-omni-", "-translate"}) {
 		// The Interactions table lists symbolic levels even for Gemini 2.5,
 		// where this app's generateContent endpoint takes a numeric budget.
-		return nil
+		return effortDocument{}
 	}
 	section, table := false, false
 	for line := range strings.SplitSeq(string(body), "\n") {
@@ -52,7 +51,14 @@ func geminiDocumentEfforts(body []byte, model string) []string {
 				}
 			}
 		}
-		return levels
+		defaultLevel := ""
+		if name, ok := strings.CutPrefix(strings.ToLower(cells[1]), "on ("); ok {
+			name, ok = strings.CutSuffix(name, ")")
+			if ok && slices.Contains(levels, name) {
+				defaultLevel = name
+			}
+		}
+		return effortDocument{Levels: levels, Default: &defaultLevel}
 	}
-	return nil
+	return effortDocument{}
 }

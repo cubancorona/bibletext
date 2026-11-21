@@ -20,6 +20,7 @@ type effortDocument struct {
 	Model   string   `json:"model"`
 	Checked int64    `json:"checked"`
 	Levels  []string `json:"levels"`
+	Default *string  `json:"default,omitempty"`
 }
 
 func effortDocKey(provider, model string) string { return "ai.effortDoc." + provider + "." + model }
@@ -31,29 +32,27 @@ func savedEffortDocument(prefs prefStore, provider, model string) (d effortDocum
 	return d
 }
 
-func saveEffortDocument(prefs prefStore, provider, model, target string, levels []string) {
-	if prefs == nil || target == "" || levels == nil {
+func (d effortDocument) save(prefs prefStore, provider, model, target string) {
+	if prefs == nil || target == "" || d.Levels == nil {
 		return
 	}
 	if target != effectiveEffortTarget(prefs, provider, model, readEffortCatalog(prefs, provider)) {
 		return
 	}
-	data, err := json.Marshal(effortDocument{target, time.Now().Unix(), levels})
+	d.Model, d.Checked = target, time.Now().Unix()
+	data, err := json.Marshal(d)
 	if err == nil {
 		prefs.SetString(effortDocKey(provider, target), string(data))
 	}
 }
 
 // Consult the public source only for a model the signed-in catalog actually
-// returned. A catalog's explicit list (including an empty list) takes priority.
+// returned. Explicitly unsupported models need no settings or default lookup.
 func effortDocumentTarget(prefs prefStore, provider, model string, models []discoveredModel) string {
 	if prefs == nil || len(models) == 0 || (provider != providerOpenAI && provider != providerGemini) {
 		return ""
 	}
 	c := readEffortCatalog(prefs, provider)
-	if _, reported := c.Levels[model]; reported {
-		return ""
-	}
 	available := slices.ContainsFunc(models, func(m discoveredModel) bool {
 		return m.id == model || slices.Contains(m.aliases, model)
 	})
@@ -61,8 +60,15 @@ func effortDocumentTarget(prefs prefStore, provider, model string, models []disc
 		return ""
 	}
 	target := effectiveEffortTarget(prefs, provider, model, c)
+	levels, reported := c.Levels[model]
+	if !reported {
+		levels, reported = c.Levels[target]
+	}
+	if reported && len(levels) == 0 {
+		return ""
+	}
 	d := savedEffortDocument(prefs, provider, target)
-	if d.Model == target && time.Since(time.Unix(d.Checked, 0)) < effortDocAge {
+	if d.Model == target && freshEffortEvidence(d.Checked) {
 		return ""
 	}
 
@@ -71,12 +77,13 @@ func effortDocumentTarget(prefs prefStore, provider, model string, models []disc
 
 var publicModelSlug = regexp.MustCompile(`^[a-z][a-z0-9]*([.-][a-z0-9]+)*$`)
 var datedModel = regexp.MustCompile(`-[0-9]{4}-[0-9]{2}-[0-9]{2}$`)
-var cardLevelList = regexp.MustCompile(`(?i)\breasoning[._ ]effort\s+supports\s*:?\s*([^.!]{1,200})(?:[.!]|$)`)
+var cardLevelList = regexp.MustCompile(`(?im)(?:^|[.!][ \t]+)reasoning[._ ]effort\s+supports\s*:?\s*([^.!]{1,200})(?:[.!]|$)`)
+var cardDefault = regexp.MustCompile(`\b([a-z]+)\s+\(default\)`)
 
-func openAIDocumentEfforts(body []byte, model string) []string {
+func openAIDocumentEfforts(body []byte, model string) effortDocument {
 	card := strings.ToLower(string(body))
 	if !strings.Contains(card, "| chat completions | `v1/chat/completions` | supported |") {
-		return nil
+		return effortDocument{}
 	}
 	description, _, _ := strings.Cut(card, "## model details")
 	base := datedModel.ReplaceAllString(model, "")
@@ -85,29 +92,38 @@ func openAIDocumentEfforts(body []byte, model string) []string {
 		// An alias can redirect to a different card. Require a declaration
 		// identifying the requested alias, rather than a pricing comparison.
 		if !strings.Contains(description, "the `"+model+"` alias routes requests to ") {
-			return nil
+			return effortDocument{}
 		}
 	} else if base != model {
 		snapshot := "\n- default snapshot: `" + model + "`\n"
 		_, section, _ := strings.Cut(card, "\n## snapshots\n")
 		section, _, _ = strings.Cut(section, "\n## ")
 		if !strings.Contains(card, snapshot) && !slices.Contains(strings.Split(section, "\n"), "- `"+model+"`") {
-			return nil
+			return effortDocument{}
 		}
 	}
-	description = strings.NewReplacer("`", "", "(default)", "").Replace(description)
+	description = strings.ReplaceAll(description, "`", "")
 	// Model cards can wrap a single Markdown list sentence across lines.
 	// Stop at paragraph boundaries so unrelated prose cannot finish a list.
 	var list string
 	for _, paragraph := range strings.Split(description, "\n\n") {
-		match := cardLevelList.FindStringSubmatch(strings.Join(strings.Fields(paragraph), " "))
+		match := cardLevelList.FindStringSubmatch(paragraph)
 		if len(match) == 2 {
-			list = strings.TrimSpace(match[1])
+			list = strings.Join(strings.Fields(match[1]), " ")
 			break
 		}
 	}
 	if list == "" || strings.HasSuffix(list, ",") || strings.HasSuffix(list, " and") || strings.HasSuffix(list, " or") {
-		return nil
+		return effortDocument{}
+	}
+	var defaultLevel *string
+	if strings.Contains(list, "(default)") {
+		match := cardDefault.FindStringSubmatch(list)
+		if len(match) != 2 || strings.Count(list, "(default)") != 1 {
+			return effortDocument{}
+		}
+		defaultLevel = &match[1]
+		list = strings.Replace(list, "(default)", "", 1)
 	}
 	var levels []string
 	for _, level := range strings.Fields(strings.ReplaceAll(list, ",", " ")) {
@@ -120,17 +136,20 @@ func openAIDocumentEfforts(body []byte, model string) []string {
 				levels = append(levels, level)
 			}
 		default:
-			return nil // prose is not a list of choices
+			return effortDocument{} // prose is not a list of choices
 		}
 	}
-	return levels
+	if defaultLevel != nil && !slices.Contains(levels, *defaultLevel) {
+		return effortDocument{}
+	}
+	return effortDocument{Levels: levels, Default: defaultLevel}
 }
 
 var lookupEffortDocument = fetchEffortDocument
 
-func fetchEffortDocument(ctx context.Context, provider, model string) []string {
+func fetchEffortDocument(ctx context.Context, provider, model string) effortDocument {
 	if len(model) > 100 || !publicModelSlug.MatchString(model) {
-		return nil
+		return effortDocument{}
 	}
 	var address string
 	switch provider {
@@ -139,11 +158,11 @@ func fetchEffortDocument(ctx context.Context, provider, model string) []string {
 	case providerGemini:
 		address = "https://aistudio.google.com/docs/thinking.md"
 	default:
-		return nil
+		return effortDocument{}
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
 	if err != nil {
-		return nil
+		return effortDocument{}
 	}
 	req.Header.Set("Accept", "text/markdown")
 	client := &http.Client{
@@ -157,16 +176,16 @@ func fetchEffortDocument(ctx context.Context, provider, model string) []string {
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil
+		return effortDocument{}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil
+		return effortDocument{}
 	}
 	const limit = 512 << 10
 	body, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil || len(body) > limit {
-		return nil
+		return effortDocument{}
 	}
 	if provider == providerGemini {
 		return geminiDocumentEfforts(body, model)

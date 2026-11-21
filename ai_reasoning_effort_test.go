@@ -153,9 +153,9 @@ func TestAIReasoningEffortOnWire(t *testing.T) {
 }
 
 func TestAIReasoningEffortFollowsRediscoveredModel(t *testing.T) {
-	for _, replacement := range []struct{ model, effort string }{
-		{"gpt-5.4", "xhigh"},
-		{"gpt-5-future", ""},
+	for _, replacement := range []struct{ model, effort, label string }{
+		{"gpt-5.4", "xhigh", "Extra high"},
+		{"gpt-5-future", "", ""},
 	} {
 		t.Run(replacement.model, func(t *testing.T) {
 			store := newTestKeyStore()
@@ -167,11 +167,23 @@ func TestAIReasoningEffortFollowsRediscoveredModel(t *testing.T) {
 			r.list = func(context.Context, string) ([]discoveredModel, error) {
 				return []discoveredModel{{id: replacement.model, rank: 1}}, nil
 			}
-			if got, err := r.generate(context.Background(), "A synthetic question."); err != nil || got != "OK" {
+			var reported []aiModelInUse
+			ctx := withAIModelObserver(context.Background(), func(m aiModelInUse) { reported = append(reported, m) })
+			if got, err := r.generate(ctx, "A synthetic question."); err != nil || got != "OK" {
 				t.Fatalf("generate = %q, %v", got, err)
 			}
 			checkEffortInRequest(t, gone, openAIModel, "high")
 			checkEffortInRequest(t, good, replacement.model, replacement.effort)
+			want := []aiModelInUse{
+				{provider: providerOpenAI, model: openAIModel, effortLabel: "High", lowerEffort: "medium"},
+				{provider: providerOpenAI, model: replacement.model, effortLabel: replacement.label},
+			}
+			if replacement.effort == "xhigh" {
+				want[1].lowerEffort = "high"
+			}
+			if !slices.Equal(reported, want) {
+				t.Errorf("progress reports = %+v, want %+v", reported, want)
+			}
 		})
 	}
 }

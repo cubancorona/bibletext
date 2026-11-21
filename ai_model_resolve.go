@@ -37,7 +37,8 @@ type discoveredModel struct {
 	docsModel string // canonical model ID identified by the provider for a rolling alias
 	// A nil list means that the catalog omitted the capability. A present
 	// empty list means that the provider explicitly offers no effort control.
-	efforts []string
+	efforts       []string
+	defaultEffort *string
 }
 
 // modelLister fetches a provider's available models using the user's key.
@@ -119,7 +120,8 @@ func (r *modelResolver) generate(ctx context.Context, prompt string) (string, er
 	// Test-key can say the pinned model no longer works, pick another or
 	// Recommended. Self-heal is only for the Recommended path (default / prior
 	// self-healed pick), where staying working matters more than the exact model.
-	if r.isPinned(model) {
+	_, choseSpeed := ctx.Value(aiSpeedChoiceKey{}).(aiSpeedChoice)
+	if r.isPinned(model) || choseSpeed {
 		return "", modelGoneError{provider: r.id, tried: model}
 	}
 	fresh, models, listErr := r.rediscover(ctx, model)
@@ -139,18 +141,25 @@ func (r *modelResolver) generate(ctx context.Context, prompt string) (string, er
 // Read the effort once per model attempt. The request, answer cache and waiting
 // screen then share the same actual model, including a newly discovered one.
 func (r *modelResolver) generateWithModel(ctx context.Context, model, prompt string, fresh []discoveredModel) (string, error) {
-	effort := ""
+	var prefs prefStore
 	if r.store != nil {
-		if fresh == nil {
-			effort = aiReasoningEffort(r.store.prefs, r.id, model)
-		} else {
-			// This request may have started before Settings fetched a newer
-			// catalog. Validate the retry against its own list in memory.
-			effort = effortCatalogFromModels(r.id, fresh).selected(r.store.prefs, r.id, model)
-		}
+		prefs = r.store.prefs
+	}
+	var catalog modelEffortCatalog
+	if fresh == nil {
+		catalog = readEffortCatalog(prefs, r.id)
+	} else {
+		// Validate a retry against its own list even if Settings has since
+		// fetched a different set of capabilities.
+		catalog = effortCatalogFromModels(r.id, fresh)
+	}
+	levels := catalog.choices(prefs, r.id, model)
+	effort, err := requestedModelEffort(ctx, prefs, r.id, model, levels)
+	if err != nil {
+		return "", err
 	}
 	reportAIRequestOptions(ctx, r.id, model, effort)
-	reportAIModel(ctx, r.id, model)
+	reportAIModel(ctx, catalog.attemptReport(prefs, r.id, model, effort, levels))
 	return r.build(model, effort).generate(ctx, prompt)
 }
 
@@ -463,12 +472,20 @@ func listOpenAIModels(baseURL string) modelLister {
 		for _, m := range r.Data {
 			model := discoveredModel{id: m.ID, rank: m.Created, aliases: m.Aliases}
 			var caps struct {
-				Efforts []string `json:"reasoning_effort"`
+				Efforts []string        `json:"reasoning_effort"`
+				Default json.RawMessage `json:"default_reasoning_effort"`
 			}
 			// xAI includes these in its ordinary /models response. An absent
 			// or unrecognized capability still leaves the model selectable.
 			if len(m.Capabilities) > 0 && json.Unmarshal(m.Capabilities, &caps) == nil {
 				model.efforts = caps.Efforts
+				if len(caps.Default) != 0 {
+					// Ignore malformed defaults without dropping a valid option list.
+					var value string
+					if json.Unmarshal(caps.Default, &value) == nil {
+						model.defaultEffort = &value
+					}
+				}
 			}
 			out = append(out, model)
 		}

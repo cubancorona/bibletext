@@ -578,7 +578,10 @@ func runAIActionForPassage(ctx context.Context, state *AppState, action string, 
 	if err != nil {
 		return "", err
 	}
-	ctx, options := trackAIRequestOptions(ctx, store, id)
+	ctx, options, err := trackAIRequestOptions(ctx, store, id)
+	if err != nil {
+		return "", err
+	}
 	cacheKey := func() string {
 		scope := aiRequestScope(options.provider, options.cacheModel(), action, question, p)
 		return aiCacheKey(scope, p.Book, p.Chapter, p.Text)
