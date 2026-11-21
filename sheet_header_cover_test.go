@@ -61,7 +61,7 @@ func shortWindowSheets(t *testing.T) []desktopSheet {
 			del.OnTapped()
 		}},
 		desktopSheet{"model picker", func(t *testing.T, s *AppState) {
-			settings := settingsWithListedModels(t, s, 20)
+			settings := settingsWithListedModels(t, s, 20, nil)
 			pick := findTreeButton(settings, "Recommended")
 			if pick == nil {
 				t.Fatalf("control: no model button in Settings; texts %v", treeTexts(settings))
@@ -80,7 +80,7 @@ func shortWindowSheets(t *testing.T) []desktopSheet {
 // the list from it; the fetch's context is cancelled as that goroutine
 // returns, after the landing, so waiting on it orders the landing before
 // anything the test reads.
-func settingsWithListedModels(t *testing.T, s *AppState, n int) fyne.CanvasObject {
+func settingsWithListedModels(t *testing.T, s *AppState, n int, whileLoading func(fyne.CanvasObject)) fyne.CanvasObject {
 	t.Helper()
 	asked := make(chan context.Context, 1)
 	answer := make(chan struct{})
@@ -104,7 +104,12 @@ func settingsWithListedModels(t *testing.T, s *AppState, n int) fyne.CanvasObjec
 	case <-time.After(2 * time.Second):
 		t.Fatal("control: Settings did not fetch the model list for the saved key")
 	}
-	close(answer)
+	func() {
+		defer close(answer)
+		if whileLoading != nil {
+			whileLoading(settings)
+		}
+	}()
 	select {
 	case <-ctx.Done():
 	case <-time.After(2 * time.Second):

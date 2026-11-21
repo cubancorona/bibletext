@@ -257,8 +257,8 @@ var aiSearchGenerate = func(ctx context.Context, info providerInfo, store *keySt
 
 // runAISearch performs a natural-language passage search with the active provider
 // and resolves the returned references against the loaded Bible. The returned verses
-// are real scripture from our data. Results are cached per provider+query so
-// re-asking the same thing is free.
+// are real scripture from our data. The cache separates queries, providers,
+// models and reasoning efforts.
 func runAISearch(ctx context.Context, state *AppState, query string) ([]Verse, error) {
 	q := strings.TrimSpace(query)
 	if q == "" {
@@ -276,12 +276,18 @@ func runAISearch(ctx context.Context, state *AppState, query string) ([]Verse, e
 		return nil, &noKeyError{provider: info}
 	}
 
-	cacheKey := aiCacheKey(id+"|search", "", 0, strings.ToLower(q))
-	raw, cached := aiCacheGet(cacheKey)
+	ctx, options := trackAIRequestOptions(ctx, store, id)
+	normalizedQuery := strings.ToLower(q)
+	cacheKey := func() string {
+		return aiCacheKey(options.provider+"|"+options.cacheModel()+"|search", "", 0, normalizedQuery)
+	}
+	raw, cached := aiCacheGet(cacheKey())
 	if !cached {
 		// The search leaves the device only for a provider the reader has
 		// allowed with this key (ai_permission.go), however the search was
 		// started.
+		ctx, release := store.readerRequestContext(ctx, id, key)
+		defer release()
 		if !store.aiAllowed(id, key) {
 			return nil, &aiPermissionError{provider: info}
 		}
@@ -290,7 +296,7 @@ func runAISearch(ctx context.Context, state *AppState, query string) ([]Verse, e
 			return nil, withAIErrorProvider(err, info)
 		}
 		raw = out
-		aiCacheSet(cacheKey, out)
+		aiCacheSet(cacheKey(), out)
 	}
 	return resolveReferenceList(state.Bible, raw), nil
 }

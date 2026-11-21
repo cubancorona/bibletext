@@ -1,11 +1,18 @@
 package bibletext
 
 // Tests for the settings model dropdown's data shaping: the provider's live
-// model list filtered to chat-capable ids, stable-first, newest-first, capped.
+// model list filtered to chat-capable ids, stable-first, newest-first.
 
 import (
+	"context"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
+
+	"fyne.io/fyne/v2"
 )
 
 func TestDropdownModelIDs(t *testing.T) {
@@ -38,18 +45,108 @@ func TestDropdownModelIDs(t *testing.T) {
 	}
 }
 
-func TestDropdownModelIDsCap(t *testing.T) {
+func TestDropdownModelIDsKeepsEveryEligibleModel(t *testing.T) {
+	const count = 250
 	var models []discoveredModel
-	for i := 0; i < dropdownModelCap+20; i++ {
+	for i := 0; i < count; i++ {
 		models = append(models, discoveredModel{id: fmt.Sprintf("model-%03d", i), rank: int64(i)})
 	}
+	models = append(models, discoveredModel{id: "test-embedding"}, models[0])
 	got := dropdownModelIDs(models, nil, "gemini")
-	if len(got) != dropdownModelCap {
-		t.Fatalf("dropdown must cap at %d, got %d", dropdownModelCap, len(got))
+	if len(got) != count {
+		t.Fatalf("dropdown has %d choices for %d distinct eligible models", len(got), count)
 	}
-	// Newest (highest rank) first.
-	if got[0] != fmt.Sprintf("model-%03d", dropdownModelCap+19) {
-		t.Fatalf("newest model must lead, got %s", got[0])
+	for i, id := range got {
+		if want := fmt.Sprintf("model-%03d", count-1-i); id != want {
+			t.Fatalf("choice %d = %s, want %s", i, id, want)
+		}
+	}
+}
+
+func TestGeminiModelListPaginates(t *testing.T) {
+	const cursor = "next+&/=?"
+	for _, tc := range []struct {
+		name, second string
+		wantErr      bool
+	}{
+		{"two pages", `{"models":[{"name":"models/gemini-second","supportedGenerationMethods":["generateContent"]}]}`, false},
+		{"repeated token", `{"nextPageToken":"next+&/=?"}`, true},
+		{"invalid second page", `{"models":`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var requests atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				q := r.URL.Query()
+				if r.Method != http.MethodGet || r.URL.Path != "/v1beta/models" || q.Get("pageSize") != "1000" || r.Header.Get("x-goog-api-key") != "synthetic-key" {
+					t.Errorf("invalid model-list request")
+				}
+				switch requests.Add(1) {
+				case 1:
+					if q.Has("pageToken") {
+						t.Error("first request should have no page token")
+					}
+					io.WriteString(w, `{"models":[{"name":"models/gemini-first","supportedGenerationMethods":["generateContent"]},{"name":"models/embed","supportedGenerationMethods":["embedContent"]}],"nextPageToken":"next+&/=?"}`)
+				case 2:
+					if q.Get("pageToken") != cursor || len(q) != 2 {
+						t.Errorf("opaque page token did not round-trip")
+					}
+					io.WriteString(w, tc.second)
+				default:
+					t.Error("requested another page after an invalid or repeated cursor")
+					w.WriteHeader(http.StatusBadRequest)
+				}
+			}))
+			defer server.Close()
+			models, err := listGeminiModels(server.URL+"/v1beta")(context.Background(), "synthetic-key")
+			if requests.Load() != 2 {
+				t.Fatalf("got %d requests, want two", requests.Load())
+			}
+			if tc.wantErr {
+				if err == nil || models != nil {
+					t.Fatalf("incomplete catalog returned %v, %v", models, err)
+				}
+				return
+			}
+			if err != nil || len(models) != 2 || models[0].id != "gemini-first" || models[1].id != "gemini-second" {
+				t.Fatalf("paginated catalog returned %v, %v", models, err)
+			}
+		})
+	}
+}
+
+func TestLongModelPickerScrollsToAndSelectsLastModel(t *testing.T) {
+	const count = 150
+	state, _ := desktopWindow(t, fyne.NewSize(600, 650))
+	var initialHeight float32
+	settingsWithListedModels(t, state, count, func(settings fyne.CanvasObject) {
+		model := findTreeButton(settings, "Recommended")
+		if model == nil {
+			t.Fatal("missing Model button")
+		}
+		model.OnTapped()
+		list := settingsPickerList(t, state)
+		if got := list.Length(); got != 1 {
+			t.Fatalf("picker has %d options while loading, want only Recommended", got)
+		}
+		initialHeight = list.Size().Height
+	})
+	list := settingsPickerList(t, state)
+	if got := list.Length(); got != count+1 {
+		t.Fatalf("picker has %d rows, want Recommended and all %d eligible models", got, count)
+	}
+	if height := list.CreateItem().MinSize().Height; height != 44 {
+		t.Fatalf("model row height is %g, want 44", height)
+	}
+	if height := list.Size().Height; height <= initialHeight || height >= state.window.Canvas().Size().Height {
+		t.Fatalf("open list did not grow to fit the window: height %g, previously %g", height, initialHeight)
+	}
+	list.ScrollToBottom()
+	if offset := list.GetScrollOffset(); offset <= 44 {
+		t.Fatalf("last model was not reached by scrolling: offset %g", offset)
+	}
+	list.Select(count)
+	if got := state.keys().overrideModel(defaultProviderID); got != "gemini-sample-00" {
+		t.Fatalf("selecting the final model saved %q", got)
 	}
 }
 

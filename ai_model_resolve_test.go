@@ -35,11 +35,11 @@ func TestResolverDoesNotHealAnExplicitPin(t *testing.T) {
 		store: store, id: providerOpenAI, def: "gpt-4o-mini", tier: "mini",
 		list: func(_ context.Context, _ string) ([]discoveredModel, error) {
 			listed = true
-			return []discoveredModel{{"gpt-4o-mini", 400}}, nil
+			return []discoveredModel{{id: "gpt-4o-mini", rank: 400}}, nil
 		},
 		// The pinned gpt-5.5-pro 404s on the chat endpoint (Responses-only). The
 		// mini-tier default WOULD answer — but we must NOT silently substitute it.
-		build: func(m string) aiClient {
+		build: func(m, _ string) aiClient {
 			return stubClient{model: m, reply: map[string]string{"gpt-4o-mini": "OK"}}
 		},
 	}
@@ -157,10 +157,10 @@ func TestACapAtOrAboveTheBudgetIsNotRetried(t *testing.T) {
 func TestPickInTier(t *testing.T) {
 	// Newest in-tier stable wins; non-chat variants and out-of-tier are excluded.
 	models := []discoveredModel{
-		{"claude-3-5-haiku-20241022", 100},
-		{"claude-haiku-4-5", 200},
-		{"claude-haiku-5-preview", 250}, // newer but preview → loses to stable
-		{"claude-opus-4-8", 300},        // out of tier → never picked
+		{id: "claude-3-5-haiku-20241022", rank: 100},
+		{id: "claude-haiku-4-5", rank: 200},
+		{id: "claude-haiku-5-preview", rank: 250}, // newer but preview → loses to stable
+		{id: "claude-opus-4-8", rank: 300},        // out of tier → never picked
 	}
 	got, ok := pickInTier(models, "haiku", nil)
 	if !ok || got != "claude-haiku-4-5" {
@@ -170,23 +170,23 @@ func TestPickInTier(t *testing.T) {
 	// OpenAI: "mini" variants that can't chat must be dropped even though they
 	// contain the tier keyword.
 	oai := []discoveredModel{
-		{"gpt-4o-mini", 10},
-		{"gpt-4o-mini-tts", 20},
-		{"gpt-4o-mini-realtime-preview", 30},
-		{"gpt-4o-mini-search-preview", 40},
-		{"gpt-5-mini", 50}, // newest real mini → wins
+		{id: "gpt-4o-mini", rank: 10},
+		{id: "gpt-4o-mini-tts", rank: 20},
+		{id: "gpt-4o-mini-realtime-preview", rank: 30},
+		{id: "gpt-4o-mini-search-preview", rank: 40},
+		{id: "gpt-5-mini", rank: 50}, // newest real mini → wins
 	}
 	if got, ok := pickInTier(oai, "mini", nil); !ok || got != "gpt-5-mini" {
 		t.Fatalf("mini pick = %q,%v; want gpt-5-mini", got, ok)
 	}
 
 	// Preview used only when nothing stable is in tier.
-	if got, ok := pickInTier([]discoveredModel{{"grok-9-beta", 1}}, "grok", nil); !ok || got != "grok-9-beta" {
+	if got, ok := pickInTier([]discoveredModel{{id: "grok-9-beta", rank: 1}}, "grok", nil); !ok || got != "grok-9-beta" {
 		t.Fatalf("beta-only pick = %q,%v; want grok-9-beta", got, ok)
 	}
 
 	// No in-tier match → no fallback to an out-of-tier (pricier) model.
-	if got, ok := pickInTier([]discoveredModel{{"claude-opus-4-8", 1}}, "haiku", nil); ok {
+	if got, ok := pickInTier([]discoveredModel{{id: "claude-opus-4-8", rank: 1}}, "haiku", nil); ok {
 		t.Errorf("expected no haiku match, got %q", got)
 	}
 }
@@ -199,9 +199,9 @@ func TestPickInTier(t *testing.T) {
 // just the settings dropdown.
 func TestPickInTierHonorsExtraExclude(t *testing.T) {
 	models := []discoveredModel{
-		{"gpt-5", 100},
-		{"gpt-5.2-pro", 300}, // newest in tier, but Responses-API-only
-		{"gpt-5.2", 200},
+		{id: "gpt-5", rank: 100},
+		{id: "gpt-5.2-pro", rank: 300}, // newest in tier, but Responses-API-only
+		{id: "gpt-5.2", rank: 200},
 	}
 	if got, ok := pickInTier(models, "gpt-5", openAIChatOnlyExclude); !ok || got != "gpt-5.2" {
 		t.Fatalf("gpt-5 pick = %q,%v; want gpt-5.2 (the -pro id must be excluded)", got, ok)
@@ -230,10 +230,10 @@ func TestResolverSelfHeals(t *testing.T) {
 		store: store, id: providerAnthropic, def: "claude-haiku-4-5", tier: "haiku",
 		list: func(_ context.Context, _ string) ([]discoveredModel, error) {
 			listed = true
-			return []discoveredModel{{"claude-haiku-9-1", 900}, {"claude-opus-4-8", 999}}, nil
+			return []discoveredModel{{id: "claude-haiku-9-1", rank: 900}, {id: "claude-opus-4-8", rank: 999}}, nil
 		},
 		// The default is retired (not in reply); only the discovered model answers.
-		build: func(m string) aiClient {
+		build: func(m, _ string) aiClient {
 			return stubClient{model: m, reply: map[string]string{"claude-haiku-9-1": "OK"}}
 		},
 	}
@@ -264,14 +264,66 @@ func TestResolverModelGoneWhenNoReplacement(t *testing.T) {
 	r := &modelResolver{
 		store: store, id: providerAnthropic, def: "claude-haiku-4-5", tier: "haiku",
 		list: func(_ context.Context, _ string) ([]discoveredModel, error) {
-			return []discoveredModel{{"claude-opus-4-8", 1}}, nil // nothing in-tier
+			return []discoveredModel{{id: "claude-opus-4-8", rank: 1}}, nil // nothing in-tier
 		},
-		build: func(m string) aiClient { return stubClient{model: m, reply: map[string]string{}} },
+		build: func(m, _ string) aiClient { return stubClient{model: m, reply: map[string]string{}} },
 	}
 	_, err := r.generate(context.Background(), "hi")
 	var mg modelGoneError
 	if !errors.As(err, &mg) {
 		t.Fatalf("expected modelGoneError, got %v", err)
+	}
+}
+
+func TestRediscoveryKeepsNewerSettingsCatalog(t *testing.T) {
+	const model = "claude-haiku-synthetic"
+	for _, tc := range []struct {
+		name       string
+		currentKey string
+		canceled   bool
+	}{
+		{"same key", "synthetic-first", false},
+		{"replaced key", "synthetic-second", true},
+		{"cleared key", "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := newTestKeyStore()
+			store.setAPIKey(providerAnthropic, "synthetic-first")
+			retried := false
+			r := &modelResolver{
+				store: store, id: providerAnthropic, def: "claude-haiku-old", tier: "haiku", apiKey: "synthetic-first",
+				list: func(context.Context, string) ([]discoveredModel, error) {
+					// Settings recorded newer capabilities before the in-flight
+					// discovery completed. The reader may also have changed keys.
+					rememberModelEfforts(store.prefs, providerAnthropic, []discoveredModel{
+						{id: model, efforts: []string{"high"}},
+					})
+					setAIReasoningEffort(store.prefs, providerAnthropic, model, "high")
+					store.setAPIKey(providerAnthropic, tc.currentKey)
+					return []discoveredModel{{id: model, efforts: []string{"low"}}}, nil
+				},
+				build: func(m, effort string) aiClient {
+					if m == model {
+						retried = true
+						if effort != "" {
+							t.Errorf("retry sent effort %q absent from its model list", effort)
+						}
+					}
+					return stubClient{model: m, reply: map[string]string{model: "OK"}}
+				},
+			}
+			answer, err := r.generate(context.Background(), "Synthetic question.")
+			if tc.canceled {
+				if !errors.Is(err, context.Canceled) || retried || store.resolvedModel(providerAnthropic) != "" {
+					t.Fatalf("superseded request retried=%v, err=%v, resolved=%q", retried, err, store.resolvedModel(providerAnthropic))
+				}
+			} else if err != nil || answer != "OK" || !retried || store.resolvedModel(providerAnthropic) != model {
+				t.Fatalf("same-key recovery = %q, %v, retried=%v", answer, err, retried)
+			}
+			if got := aiReasoningEffort(store.prefs, providerAnthropic, model); got != "high" {
+				t.Errorf("older discovery replaced newer Settings choices: selected effort = %q", got)
+			}
+		})
 	}
 }
 
@@ -284,7 +336,7 @@ func TestResolverSurfacesDiscoveryError(t *testing.T) {
 	r := &modelResolver{
 		store: store, id: providerGrok, def: "grok-2-latest", tier: "grok",
 		list:  func(_ context.Context, _ string) ([]discoveredModel, error) { return nil, listErr },
-		build: func(m string) aiClient { return stubClient{model: m, reply: map[string]string{}} },
+		build: func(m, _ string) aiClient { return stubClient{model: m, reply: map[string]string{}} },
 	}
 	_, err := r.generate(context.Background(), "hi")
 	if !errors.Is(err, error(listErr)) {
@@ -306,7 +358,7 @@ func TestResolverPassesNonModelErrorsThrough(t *testing.T) {
 			discovered = true
 			return nil, nil
 		},
-		build: func(m string) aiClient { return stubClient{model: m, other: authErr} },
+		build: func(m, _ string) aiClient { return stubClient{model: m, other: authErr} },
 	}
 	_, err := r.generate(context.Background(), "hi")
 	if !errors.Is(err, error(authErr)) {
@@ -393,9 +445,9 @@ func TestFriendlyBadKey400SaysKeyRejected(t *testing.T) {
 func TestPickInTierPrefersLightOverReasoning(t *testing.T) {
 	// Real Grok ids and creation ranks (2026-08-07), newest first.
 	models := []discoveredModel{
-		{"grok-4.20-0309-reasoning", 1773014402},     // newest, marked heavy
-		{"grok-4.20-multi-agent-0309", 1773014401},   // marked heavy
-		{"grok-4.20-0309-non-reasoning", 1773014400}, // oldest, but light
+		{id: "grok-4.20-0309-reasoning", rank: 1773014402},     // newest, marked heavy
+		{id: "grok-4.20-multi-agent-0309", rank: 1773014401},   // marked heavy
+		{id: "grok-4.20-0309-non-reasoning", rank: 1773014400}, // oldest, but light
 	}
 	got, ok := pickInTier(models, "grok", nil)
 	if !ok {
@@ -407,19 +459,19 @@ func TestPickInTierPrefersLightOverReasoning(t *testing.T) {
 
 	// Opaque ids are not guessable — newest still wins, which is exactly why the
 	// pin matters. Locked so the limitation is visible rather than assumed away.
-	opaque := []discoveredModel{{"grok-4.5", 1782691200}, {"grok-4.3", 1776384000}}
+	opaque := []discoveredModel{{id: "grok-4.5", rank: 1782691200}, {id: "grok-4.3", rank: 1776384000}}
 	if got, ok := pickInTier(opaque, "grok", nil); !ok || got != "grok-4.5" {
 		t.Errorf("opaque ids fall back to newest-wins: got %q ok=%v", got, ok)
 	}
 
 	// The discriminating tiers keep pure newest-wins.
-	anth := []discoveredModel{{"claude-haiku-4-5", 2}, {"claude-haiku-3-5", 1}}
+	anth := []discoveredModel{{id: "claude-haiku-4-5", rank: 2}, {id: "claude-haiku-3-5", rank: 1}}
 	if got, ok := pickInTier(anth, "haiku", nil); !ok || got != "claude-haiku-4-5" {
 		t.Errorf("haiku tier should still take the newest: got %q ok=%v", got, ok)
 	}
 
 	// A tier holding ONLY heavy models still resolves (better than nothing).
-	only := []discoveredModel{{"grok-9-reasoning", 3}, {"grok-8-reasoning", 2}}
+	only := []discoveredModel{{id: "grok-9-reasoning", rank: 3}, {id: "grok-8-reasoning", rank: 2}}
 	if got, ok := pickInTier(only, "grok", nil); !ok || got != "grok-9-reasoning" {
 		t.Errorf("all-heavy tier must still resolve to the newest: got %q ok=%v", got, ok)
 	}

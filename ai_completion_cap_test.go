@@ -85,7 +85,7 @@ func openAIResolverAgainst(store *keyStore, s *openAIStandIn, listed []discovere
 			*asked = true
 			return listed, nil
 		},
-		build: func(m string) aiClient { return newOpenAIClient("test-key", s.srv.URL, m) },
+		build: func(m, _ string) aiClient { return newOpenAIClient("test-key", s.srv.URL, m) },
 	}
 }
 
@@ -99,7 +99,7 @@ func TestAPinnedModelWithALowerCompletionCapAnswersAtItsCap(t *testing.T) {
 	store := newTestKeyStore()
 	store.setOverrideModel(providerOpenAI, capped)
 	asked := false
-	r := openAIResolverAgainst(store, s, []discoveredModel{{"gpt-5.2", 200}}, &asked)
+	r := openAIResolverAgainst(store, s, []discoveredModel{{id: "gpt-5.2", rank: 200}}, &asked)
 
 	out, err := r.generate(context.Background(), "Reply with the single word: OK")
 	var mg modelGoneError
@@ -145,7 +145,7 @@ func TestAPinnedModelTheProviderLacksStillReadsAsGone(t *testing.T) {
 	store := newTestKeyStore()
 	store.setOverrideModel(providerOpenAI, "gpt-5.5-pro")
 	asked := false
-	r := openAIResolverAgainst(store, s, []discoveredModel{{"gpt-5.2", 200}}, &asked)
+	r := openAIResolverAgainst(store, s, []discoveredModel{{id: "gpt-5.2", rank: 200}}, &asked)
 
 	out, err := r.generate(context.Background(), "hi")
 	var mg modelGoneError
@@ -169,7 +169,7 @@ func TestTheRecommendedPathStillSelfHealsOnA404(t *testing.T) {
 	s := newOpenAIStandIn(t, map[string]int{"gpt-5.2": aiMaxOutputTokens})
 	store := newTestKeyStore()
 	asked := false
-	r := openAIResolverAgainst(store, s, []discoveredModel{{openAIModel, 100}, {"gpt-5.2", 200}}, &asked)
+	r := openAIResolverAgainst(store, s, []discoveredModel{{id: openAIModel, rank: 100}, {id: "gpt-5.2", rank: 200}}, &asked)
 
 	out, err := r.generate(context.Background(), "hi")
 	if err != nil || out != "OK" {

@@ -62,7 +62,7 @@ func (c sendClient) generate(context.Context, string) (string, error) {
 func routedResolver(store *keyStore, id string, sends chan<- *resolverSend, replacement string) *modelResolver {
 	info, _ := providerByID(id)
 	r := info.New(store, "test-key").(*modelResolver)
-	r.build = func(m string) aiClient { return sendClient{model: m, sends: sends} }
+	r.build = func(m, _ string) aiClient { return sendClient{model: m, sends: sends} }
 	r.list = func(context.Context, string) ([]discoveredModel, error) {
 		return []discoveredModel{{id: replacement, rank: 1}}, nil
 	}
@@ -225,7 +225,7 @@ func TestTheResolverReportsEachModelBeforeSendingIt(t *testing.T) {
 	run := func(store *keyStore) []string {
 		var log []string
 		r := routedResolver(store, providerGemini, nil, "gemini-3-pro")
-		r.build = func(m string) aiClient {
+		r.build = func(m, _ string) aiClient {
 			return clientFunc(func(context.Context, string) (string, error) {
 				log = append(log, "send "+m)
 				if m != "gemini-3-pro" { // every model but the replacement is gone

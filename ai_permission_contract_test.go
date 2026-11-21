@@ -109,6 +109,7 @@ func productionGoFiles(t *testing.T) []string {
 func TestOnlyTheTwoSeamsBehindThePermissionSendTheReadersText(t *testing.T) {
 	fset := token.NewFileSet()
 	where := map[string][]string{}
+	var resolverUsesModel bool
 	for _, f := range productionGoFiles(t) {
 		file, err := parser.ParseFile(fset, filepath.Join(repoRoot(t), f), nil, parser.SkipObjectResolution)
 		if err != nil {
@@ -148,6 +149,15 @@ func TestOnlyTheTwoSeamsBehindThePermissionSendTheReadersText(t *testing.T) {
 		for _, o := range owned {
 			owner := o.owner
 			ast.Inspect(o.node, func(n ast.Node) bool {
+				// A retry sends through the same private helper as the first
+				// attempt. Neither a call nor a method value may escape the resolver.
+				if sel, ok := n.(*ast.SelectorExpr); ok && sel.Sel.Name == "generateWithModel" {
+					if owner != "modelResolver.generate" {
+						t.Errorf("%s accesses the provider retry helper outside the resolver: %s", owner, fset.Position(sel.Pos()))
+					} else {
+						resolverUsesModel = true
+					}
+				}
 				call, ok := n.(*ast.CallExpr)
 				if !ok {
 					return true
@@ -164,8 +174,11 @@ func TestOnlyTheTwoSeamsBehindThePermissionSendTheReadersText(t *testing.T) {
 			})
 		}
 	}
+	if !resolverUsesModel {
+		t.Error("modelResolver.generate no longer uses the audited retry helper")
+	}
 	want := map[string]bool{
-		"aiStudyGenerate": true, "aiSearchGenerate": true, "aiKeyTestRun": true, "modelResolver.generate": true,
+		"aiStudyGenerate": true, "aiSearchGenerate": true, "aiKeyTestRun": true, "modelResolver.generateWithModel": true,
 	}
 	for owner, at := range where {
 		if !want[owner] {

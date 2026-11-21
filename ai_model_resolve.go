@@ -31,8 +31,13 @@ import (
 // and a rank where higher = newer/preferred (a unix timestamp, or a parsed
 // version number for providers that don't date their models).
 type discoveredModel struct {
-	id   string
-	rank int64
+	id        string
+	rank      int64
+	aliases   []string
+	docsModel string // canonical model ID identified by the provider for a rolling alias
+	// A nil list means that the catalog omitted the capability. A present
+	// empty list means that the provider explicitly offers no effort control.
+	efforts []string
 }
 
 // modelLister fetches a provider's available models using the user's key.
@@ -56,7 +61,7 @@ type modelResolver struct {
 	extraExclude []string
 	apiKey       string
 	list         modelLister
-	build        func(model string) aiClient
+	build        func(model, effort string) aiClient
 }
 
 var _ aiClient = (*modelResolver)(nil)
@@ -104,11 +109,7 @@ func (r *modelResolver) isPinned(model string) bool {
 
 func (r *modelResolver) generate(ctx context.Context, prompt string) (string, error) {
 	model := r.currentModel()
-	// Each send is announced before it goes, the retry below included, so a
-	// waiting screen names the model the request is working on rather than
-	// the one it was configured with (ai_model_in_use.go).
-	reportAIModel(ctx, r.id, model)
-	out, err := r.build(model).generate(ctx, prompt)
+	out, err := r.generateWithModel(ctx, model, prompt, nil)
 	if err == nil || !isModelNotFound(err) {
 		return out, err
 	}
@@ -121,7 +122,7 @@ func (r *modelResolver) generate(ctx context.Context, prompt string) (string, er
 	if r.isPinned(model) {
 		return "", modelGoneError{provider: r.id, tried: model}
 	}
-	fresh, listErr := r.rediscover(ctx, model)
+	fresh, models, listErr := r.rediscover(ctx, model)
 	if fresh == "" {
 		// If discovery couldn't even list the models (bad key, no credits, offline),
 		// that underlying error is far more useful than "model unavailable" — surface
@@ -132,30 +133,62 @@ func (r *modelResolver) generate(ctx context.Context, prompt string) (string, er
 		}
 		return "", modelGoneError{provider: r.id, tried: model}
 	}
-	reportAIModel(ctx, r.id, fresh)
-	return r.build(fresh).generate(ctx, prompt)
+	return r.generateWithModel(ctx, fresh, prompt, models)
+}
+
+// Read the effort once per model attempt. The request, answer cache and waiting
+// screen then share the same actual model, including a newly discovered one.
+func (r *modelResolver) generateWithModel(ctx context.Context, model, prompt string, fresh []discoveredModel) (string, error) {
+	effort := ""
+	if r.store != nil {
+		if fresh == nil {
+			effort = aiReasoningEffort(r.store.prefs, r.id, model)
+		} else {
+			// This request may have started before Settings fetched a newer
+			// catalog. Validate the retry against its own list in memory.
+			effort = effortCatalogFromModels(r.id, fresh).selected(r.store.prefs, r.id, model)
+		}
+	}
+	reportAIRequestOptions(ctx, r.id, model, effort)
+	reportAIModel(ctx, r.id, model)
+	return r.build(model, effort).generate(ctx, prompt)
 }
 
 // rediscover asks the provider for a current in-tier model distinct from the one
-// that just failed, and caches it. It returns ("", nil) when the provider listed
-// fine but has no usable in-tier replacement, and ("", err) when the list call
-// itself failed (so the caller can surface the real reason).
-func (r *modelResolver) rediscover(ctx context.Context, tried string) (string, error) {
+// that just failed. Its model list belongs to this retry. Only Settings
+// replaces the stored catalog after checking the key and fetch sequence.
+func (r *modelResolver) rediscover(ctx context.Context, tried string) (string, []discoveredModel, error) {
 	if r.list == nil {
-		return "", nil
+		return "", nil, nil
+	}
+	if err := checkAIReaderRequest(ctx); err != nil {
+		return "", nil, err
+	}
+	var storedKey string
+	if r.store != nil {
+		storedKey = providerAPIKey(r.store, r.id)
 	}
 	models, err := r.list(ctx, r.apiKey)
 	if err != nil {
-		return "", err
+		return "", nil, err
+	}
+	if err := checkAIReaderRequest(ctx); err != nil {
+		return "", nil, err
 	}
 	best, ok := pickInTier(models, r.tier, r.extraExclude)
 	if !ok || best == tried {
-		return "", nil
+		return "", nil, nil
 	}
 	if r.store != nil {
+		// A caller can supply a key directly when no stored key exists.
+		// If the reader switched or cleared the active key, stop before
+		// caching its replacement model or sending another request.
+		if providerAPIKey(r.store, r.id) != storedKey || (storedKey != "" && storedKey != r.apiKey) {
+			return "", nil, context.Canceled
+		}
 		r.store.setResolvedModel(r.id, best)
 	}
-	return best, nil
+	return best, models, nil
 }
 
 // isModelNotFound reports whether an error is the provider saying the requested
@@ -236,24 +269,13 @@ func isHeavyReasoningModel(lowID string) bool {
 	return containsAnySubstr(lowID, reasoningModelSubstrings)
 }
 
-// pickInTier chooses the best current model whose id contains the tier keyword,
-// dropping non-chat variants (the shared exclude list plus the provider's own
-// extraExclude), preferring stable over preview and newer over older. It NEVER
-// falls back to an out-of-tier model, so self-heal keeps the reader in the tier
-// the shipped default promised — neither silently pricier nor silently worse.
-// dropdownModelCap bounds the settings dropdown: enough to show every current
-// chat model a provider offers without the popup becoming an endless scroll
-// (Gemini alone lists dozens of variants).
-const dropdownModelCap = 24
-
 // dropdownModelIDs turns a provider's live model list into the settings
 // dropdown's choices: non-chat variants dropped (the shared exclude list plus a
 // per-provider `extra` list, e.g. OpenAI's "-pro" Responses-only tier that would
 // 404 on the chat endpoint — kept per-provider because Gemini's "gemini-2.5-pro"
 // IS a valid chat model), de-duplicated, then ordered: the provider's own model
 // family first (so "gemini" leads over "gemma"/"learnlm"), stable before preview,
-// newest first, capped. Unlike pickInTier this is NOT tier-limited — pinning a
-// bigger or different-family model is exactly what the picker is for.
+// newest first. Every eligible model stays available for an explicit selection.
 func dropdownModelIDs(models []discoveredModel, extra []string, family string) []string {
 	family = strings.ToLower(family)
 	type cand struct {
@@ -289,9 +311,6 @@ func dropdownModelIDs(models []discoveredModel, extra []string, family string) [
 		}
 		return cands[i].id > cands[j].id // deterministic tiebreak
 	})
-	if len(cands) > dropdownModelCap {
-		cands = cands[:dropdownModelCap]
-	}
 	out := make([]string, len(cands))
 	for i, c := range cands {
 		out[i] = c.id
@@ -308,6 +327,8 @@ func modelFamilyOf(defaultModel string) string {
 	return defaultModel
 }
 
+// pickInTier chooses the best current model in the requested tier. It drops
+// non-chat variants and prefers stable, newer models to recover a retired pin.
 func pickInTier(models []discoveredModel, tier string, extraExclude []string) (string, bool) {
 	tier = strings.ToLower(tier)
 	if tier == "" {
@@ -374,24 +395,43 @@ func listAnthropicModels(baseURL string) modelLister {
 		}
 		req.Header.Set("x-api-key", apiKey)
 		req.Header.Set("anthropic-version", anthropicVersion)
-		body, err := doAIRequest(newHTTPClient(), req)
-		if err != nil {
-			return nil, err
+		client := newHTTPClient()
+		var out []discoveredModel
+		seen := map[string]bool{}
+		for {
+			body, err := doAIRequest(client, req)
+			if err != nil {
+				return nil, err
+			}
+			var r struct {
+				Data []struct {
+					ID           string                      `json:"id"`
+					CreatedAt    string                      `json:"created_at"`
+					Capabilities *anthropicModelCapabilities `json:"capabilities"`
+				} `json:"data"`
+				HasMore bool   `json:"has_more"`
+				LastID  string `json:"last_id"`
+			}
+			if err := json.Unmarshal(body, &r); err != nil {
+				return nil, err
+			}
+			for _, m := range r.Data {
+				out = append(out, discoveredModel{
+					id: m.ID, rank: parseRFC3339Unix(m.CreatedAt), efforts: m.Capabilities.effortChoices(m.ID),
+				})
+			}
+			if !r.HasMore {
+				return out, nil
+			}
+			if r.LastID == "" || seen[r.LastID] {
+				return nil, errors.New("Claude model list did not advance")
+			}
+			seen[r.LastID] = true
+			page := req.URL.Query()
+			page.Set("after_id", r.LastID)
+			req = req.Clone(ctx)
+			req.URL.RawQuery = page.Encode()
 		}
-		var r struct {
-			Data []struct {
-				ID        string `json:"id"`
-				CreatedAt string `json:"created_at"`
-			} `json:"data"`
-		}
-		if err := json.Unmarshal(body, &r); err != nil {
-			return nil, err
-		}
-		out := make([]discoveredModel, 0, len(r.Data))
-		for _, m := range r.Data {
-			out = append(out, discoveredModel{id: m.ID, rank: parseRFC3339Unix(m.CreatedAt)})
-		}
-		return out, nil
 	}
 }
 
@@ -410,8 +450,10 @@ func listOpenAIModels(baseURL string) modelLister {
 		}
 		var r struct {
 			Data []struct {
-				ID      string `json:"id"`
-				Created int64  `json:"created"`
+				ID           string          `json:"id"`
+				Created      int64           `json:"created"`
+				Aliases      []string        `json:"aliases"`
+				Capabilities json.RawMessage `json:"capabilities"`
 			} `json:"data"`
 		}
 		if err := json.Unmarshal(body, &r); err != nil {
@@ -419,7 +461,16 @@ func listOpenAIModels(baseURL string) modelLister {
 		}
 		out := make([]discoveredModel, 0, len(r.Data))
 		for _, m := range r.Data {
-			out = append(out, discoveredModel{id: m.ID, rank: m.Created})
+			model := discoveredModel{id: m.ID, rank: m.Created, aliases: m.Aliases}
+			var caps struct {
+				Efforts []string `json:"reasoning_effort"`
+			}
+			// xAI includes these in its ordinary /models response. An absent
+			// or unrecognized capability still leaves the model selectable.
+			if len(m.Capabilities) > 0 && json.Unmarshal(m.Capabilities, &caps) == nil {
+				model.efforts = caps.Efforts
+			}
+			out = append(out, model)
 		}
 		return out, nil
 	}
@@ -435,28 +486,40 @@ func listGeminiModels(baseURL string) modelLister {
 			return nil, err
 		}
 		req.Header.Set("x-goog-api-key", apiKey)
-		body, err := doAIRequest(newHTTPClient(), req)
-		if err != nil {
-			return nil, err
-		}
-		var r struct {
-			Models []struct {
-				Name    string   `json:"name"`
-				Methods []string `json:"supportedGenerationMethods"`
-			} `json:"models"`
-		}
-		if err := json.Unmarshal(body, &r); err != nil {
-			return nil, err
-		}
+		client := newHTTPClient()
+		seen := map[string]bool{}
 		var out []discoveredModel
-		for _, m := range r.Models {
-			if !containsExact(m.Methods, "generateContent") {
-				continue
+		for {
+			body, err := doAIRequest(client, req)
+			if err != nil {
+				return nil, err
 			}
-			id := strings.TrimPrefix(m.Name, "models/")
-			out = append(out, discoveredModel{id: id, rank: parseVersionRank(id)})
+			var r struct {
+				Models        []geminiCatalogModel `json:"models"`
+				NextPageToken string               `json:"nextPageToken"`
+			}
+			if err := json.Unmarshal(body, &r); err != nil {
+				return nil, err
+			}
+			for _, m := range r.Models {
+				if !containsExact(m.Methods, "generateContent") {
+					continue
+				}
+				id := strings.TrimPrefix(m.Name, "models/")
+				out = append(out, discoveredModel{id: id, rank: parseVersionRank(id), efforts: m.efforts(), docsModel: m.documentModel()})
+			}
+			if r.NextPageToken == "" {
+				return out, nil
+			}
+			if seen[r.NextPageToken] {
+				return nil, errors.New("Gemini model list did not advance")
+			}
+			seen[r.NextPageToken] = true
+			next := req.URL.Query()
+			next.Set("pageToken", r.NextPageToken)
+			req = req.Clone(ctx)
+			req.URL.RawQuery = next.Encode()
 		}
-		return out, nil
 	}
 }
 

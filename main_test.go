@@ -291,6 +291,7 @@ var (
 
 func TestMain(m *testing.M) {
 	withheldCredentials = withholdCredentials()
+	lookupEffortDocument = nil // Settings tests exercise public catalog reads with local fixtures.
 	externalOpener = func(u *url.URL) error {
 		openedMu.Lock()
 		opened = append(opened, u.String())

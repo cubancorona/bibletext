@@ -697,8 +697,22 @@ keystroke supersedes it (pinned in `search_race_test.go`).
   policy; reasoning models count hidden thinking against it, so a low cap starves
   them into empty answers). Temperature `0.4` for Gemini / Grok / non-reasoning
   ChatGPT models; the OpenAI reasoning families and Claude use provider defaults
-  (`openAIFixedTemperature`). Identical requests are cached in memory, keyed by
-  provider + resolved model + action + passage.
+  (`openAIFixedTemperature`). Study and Find cache answers in memory by provider,
+  resolved model and reasoning effort. Study also keys on the action and passage
+  (and the question for Ask), while Find keys on the search query.
+  The model picker also discovers reasoning controls. Explicit choices from the
+  provider's model list take precedence, including an empty set. When an OpenAI
+  or Gemini listing omits the choices, Settings can check the selected model
+  against the provider's public documentation. This lookup sends no key or
+  study text. Known model settings are also bundled for offline use.
+  Settings saves choices separately for each provider and model, and rechecks
+  them against available options before sending a request. ChatGPT and Grok
+  use `reasoning_effort`, Claude uses effort or a thinking budget, and Gemini
+  uses a thinking level or budget. Budget controls show token counts.
+  Recommended leaves the provider's default in effect.
+  Study and Find bind each outgoing request to the permission for its provider
+  and key. Clearing or replacing the key, or turning AI off, cancels requests
+  under that permission, including a pending retry on a replacement model.
 - Ask's prompt keeps the answer focused on the question, distinguishes passage
   statements from reported speech and inference, and identifies unsupported
   assumptions. Differing readings are included when relevant. Quotations use

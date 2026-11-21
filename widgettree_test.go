@@ -32,6 +32,8 @@ func walkTree(o fyne.CanvasObject, visit func(fyne.CanvasObject)) {
 		for _, c := range v.Objects {
 			walkTree(c, visit)
 		}
+	case *container.Clip:
+		walkTree(v.Content, visit)
 	case *container.Scroll:
 		walkTree(v.Content, visit)
 	case *container.ThemeOverride:

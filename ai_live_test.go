@@ -116,9 +116,6 @@ func TestLiveModelDropdown(t *testing.T) {
 			if len(ids) == 0 {
 				t.Fatalf("dropdown would be empty for %s (raw list had %d)", p.Name, len(models))
 			}
-			if len(ids) > dropdownModelCap {
-				t.Fatalf("dropdown over cap: %d", len(ids))
-			}
 			t.Logf("%s → %d choices, first: %v", p.Name, len(ids), ids[:min(3, len(ids))])
 		})
 	}

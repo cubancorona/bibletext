@@ -178,7 +178,7 @@ func TestParseGeminiText(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := parseGeminiText([]byte(tc.body))
+			got, err := new(geminiResponse).parseText([]byte(tc.body))
 			if tc.wantErr != (err != nil) || (!tc.wantErr && got != tc.want) {
 				t.Fatalf("got (%q, %v)", got, err)
 			}
@@ -292,7 +292,7 @@ func TestFriendlyErrorForADeclinedPassage(t *testing.T) {
 				t.Errorf("friendly = %q", got)
 			}
 			// Through the resolver every study request goes through.
-			r := &modelResolver{id: providerGemini, def: "m", build: func(string) aiClient { return c.client(m) }}
+			r := &modelResolver{id: providerGemini, def: "m", build: func(string, string) aiClient { return c.client(m) }}
 			if _, err := r.generate(context.Background(), "p"); !errors.As(err, &declined) {
 				t.Errorf("the resolver hid the declined passage: %v", err)
 			}

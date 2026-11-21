@@ -267,7 +267,7 @@ func TestAIHTTP408DoesNotUseBodyDrivenRecovery(t *testing.T) {
 					listed = true
 					return []discoveredModel{{id: "gpt-synthetic-next", rank: 1}}, nil
 				},
-				build: func(model string) aiClient {
+				build: func(model, _ string) aiClient {
 					built = append(built, model)
 					return &openAIClient{apiKey: "synthetic-key", baseURL: "https://synthetic.invalid/v1", model: model, http: client}
 				},

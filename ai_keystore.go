@@ -9,9 +9,11 @@ package bibletext
 // Wrapped behind small interfaces so tests can substitute in-memory stores.
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"strings"
+	"sync"
 
 	"fyne.io/fyne/v2"
 )
@@ -60,8 +62,9 @@ type keysLeftByRestore interface {
 }
 
 type keyStore struct {
-	prefs   prefStore
-	secrets secretStore
+	readerRequests sync.Map // *aiReaderRequest to its context.CancelFunc
+	prefs          prefStore
+	secrets        secretStore
 	// notRestoredDismissed holds, per account, a ✕ on keyNotRestoredLine
 	// tapped in this run, so the line stays dismissed for the rest of it
 	// where the store could not keep the record (dismissKeyNotRestored).
@@ -472,6 +475,12 @@ func (k *keyStore) clearAIAllowed(id string) {
 	if k.prefs.String(prefAIAllowedPrefix+id) != "" {
 		k.prefs.SetString(prefAIAllowedPrefix+id, "")
 	}
+	k.readerRequests.Range(func(request, cancel any) bool {
+		if request.(*aiReaderRequest).provider == id {
+			cancel.(context.CancelFunc)()
+		}
+		return true
+	})
 }
 
 func (k *keyStore) apiKey(id string) string {

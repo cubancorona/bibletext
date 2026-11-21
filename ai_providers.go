@@ -168,8 +168,15 @@ func aiProviders() []providerInfo {
 			New: func(store *keyStore, k string) aiClient {
 				return &modelResolver{
 					store: store, id: providerGemini, def: geminiModel, tier: "pro", apiKey: k,
-					list:  listGeminiModels(geminiBaseURL),
-					build: func(m string) aiClient { return newGeminiClient(k, m) },
+					list: listGeminiModels(geminiBaseURL),
+					build: func(m, effort string) aiClient {
+						client := newGeminiClient(k, m)
+						client.thinking = geminiThinkingOptions(effort)
+						if store != nil {
+							client.prefs = store.prefs
+						}
+						return client
+					},
 				}
 			},
 			ListModels: listGeminiModels(geminiBaseURL),
@@ -182,7 +189,14 @@ func aiProviders() []providerInfo {
 					store: store, id: providerOpenAI, def: openAIModel, tier: "gpt-5", apiKey: k,
 					extraExclude: openAIChatOnlyExclude,
 					list:         listOpenAIModels(openAIBaseURL),
-					build:        func(m string) aiClient { return newOpenAIClient(k, openAIBaseURL, m) },
+					build: func(m, effort string) aiClient {
+						client := newOpenAIClient(k, openAIBaseURL, m)
+						client.reasoningEffort = effort
+						if store != nil {
+							client.omitTemperature = effort != "" || len(modelEffortChoices(store.prefs, providerOpenAI, m)) > 0
+						}
+						return client
+					},
 				}
 			},
 			ListModels: listOpenAIModels(openAIBaseURL),
@@ -201,8 +215,12 @@ func aiProviders() []providerInfo {
 			New: func(store *keyStore, k string) aiClient {
 				return &modelResolver{
 					store: store, id: providerAnthropic, def: anthropicModel, tier: "opus", apiKey: k,
-					list:  listAnthropicModels(anthropicBaseURL),
-					build: func(m string) aiClient { return newAnthropicClient(k, m) },
+					list: listAnthropicModels(anthropicBaseURL),
+					build: func(m, effort string) aiClient {
+						client := newAnthropicClient(k, m)
+						client.effort = effort
+						return client
+					},
 				}
 			},
 			ListModels: listAnthropicModels(anthropicBaseURL),
@@ -215,8 +233,12 @@ func aiProviders() []providerInfo {
 			New: func(store *keyStore, k string) aiClient {
 				return &modelResolver{
 					store: store, id: providerGrok, def: grokModel, tier: "grok", apiKey: k,
-					list:  listOpenAIModels(grokBaseURL),
-					build: func(m string) aiClient { return newOpenAIClient(k, grokBaseURL, m) },
+					list: listOpenAIModels(grokBaseURL),
+					build: func(m, effort string) aiClient {
+						client := newOpenAIClient(k, grokBaseURL, m)
+						client.reasoningEffort = effort
+						return client
+					},
 				}
 			},
 			ListModels: listOpenAIModels(grokBaseURL),
@@ -287,10 +309,12 @@ func sameOriginRedirect(req *http.Request, via []*http.Request) error {
 // --- Gemini (generateContent) ----------------------------------------------
 
 type geminiClient struct {
-	apiKey  string
-	model   string
-	baseURL string
-	http    httpClient
+	apiKey   string
+	model    string
+	thinking *geminiThinkingConfig
+	prefs    prefStore
+	baseURL  string
+	http     httpClient
 }
 
 func newGeminiClient(apiKey, model string) *geminiClient {
@@ -305,14 +329,21 @@ type geminiContent struct {
 	Parts []geminiPart `json:"parts"`
 }
 type geminiPart struct {
-	Text string `json:"text"`
+	Text    string `json:"text"`
+	Thought bool   `json:"thought,omitempty"`
 }
 type geminiGenConfig struct {
-	Temperature     float64 `json:"temperature,omitempty"`
-	MaxOutputTokens int     `json:"maxOutputTokens,omitempty"`
+	Temperature     float64               `json:"temperature,omitempty"`
+	MaxOutputTokens int                   `json:"maxOutputTokens,omitempty"`
+	ThinkingConfig  *geminiThinkingConfig `json:"thinkingConfig,omitempty"`
+}
+type geminiThinkingConfig struct {
+	ThinkingLevel  string `json:"thinkingLevel,omitempty"`
+	ThinkingBudget *int   `json:"thinkingBudget,omitempty"`
 }
 type geminiResponse struct {
-	Candidates []struct {
+	ModelVersion string `json:"modelVersion"`
+	Candidates   []struct {
 		Content      geminiContent `json:"content"`
 		FinishReason string        `json:"finishReason"`
 	} `json:"candidates"`
@@ -325,9 +356,10 @@ func (c *geminiClient) generate(ctx context.Context, prompt string) (string, err
 	if strings.TrimSpace(c.apiKey) == "" {
 		return "", errNoAPIKey
 	}
+	config := &geminiGenConfig{Temperature: 0.4, MaxOutputTokens: aiMaxOutputTokens, ThinkingConfig: c.thinking}
 	payload, err := json.Marshal(geminiRequest{
 		Contents:         []geminiContent{{Parts: []geminiPart{{Text: prompt}}}},
-		GenerationConfig: &geminiGenConfig{Temperature: 0.4, MaxOutputTokens: aiMaxOutputTokens},
+		GenerationConfig: config,
 	})
 	if err != nil {
 		return "", err
@@ -344,7 +376,12 @@ func (c *geminiClient) generate(ctx context.Context, prompt string) (string, err
 	if err != nil {
 		return "", err
 	}
-	return parseGeminiText(body)
+	var gr geminiResponse
+	text, err := gr.parseText(body)
+	if err == nil {
+		rememberGeminiResponseTarget(c.prefs, c.model, gr.ModelVersion)
+	}
+	return text, err
 }
 
 // A provider can stop a model mid-answer — the output limit reached, a
@@ -369,9 +406,8 @@ func markIfTruncated(text string, complete bool) string {
 	return text + aiTruncatedSuffix
 }
 
-func parseGeminiText(body []byte) (string, error) {
-	var gr geminiResponse
-	if err := json.Unmarshal(body, &gr); err != nil {
+func (gr *geminiResponse) parseText(body []byte) (string, error) {
+	if err := json.Unmarshal(body, gr); err != nil {
 		return "", fmt.Errorf("decoding AI response: %w", err)
 	}
 	if gr.PromptFeedback != nil && gr.PromptFeedback.BlockReason != "" {
@@ -383,7 +419,9 @@ func parseGeminiText(body []byte) (string, error) {
 	}
 	var sb strings.Builder
 	for _, p := range gr.Candidates[0].Content.Parts {
-		sb.WriteString(p.Text)
+		if !p.Thought {
+			sb.WriteString(p.Text)
+		}
 	}
 	text := strings.TrimSpace(sb.String())
 	reason := gr.Candidates[0].FinishReason
@@ -417,10 +455,12 @@ func geminiWithheld(reason string) bool {
 // --- OpenAI-compatible (ChatGPT + Grok share /chat/completions) -------------
 
 type openAIClient struct {
-	apiKey  string
-	model   string
-	baseURL string
-	http    httpClient
+	apiKey          string
+	model           string
+	reasoningEffort string
+	omitTemperature bool
+	baseURL         string
+	http            httpClient
 }
 
 func newOpenAIClient(apiKey, baseURL, model string) *openAIClient {
@@ -428,8 +468,9 @@ func newOpenAIClient(apiKey, baseURL, model string) *openAIClient {
 }
 
 type openAIRequest struct {
-	Model    string          `json:"model"`
-	Messages []openAIMessage `json:"messages"`
+	Model           string          `json:"model"`
+	Messages        []openAIMessage `json:"messages"`
+	ReasoningEffort string          `json:"reasoning_effort,omitempty"`
 	// Temperature is omitted for the reasoning families, which accept only
 	// their default and reject any explicit value with a 400.
 	Temperature float64 `json:"temperature,omitempty"`
@@ -498,9 +539,10 @@ func (c *openAIClient) send(ctx context.Context, prompt string, budget int) ([]b
 	reqBody := openAIRequest{
 		Model:               c.model,
 		Messages:            []openAIMessage{{Role: "user", Content: prompt}},
+		ReasoningEffort:     c.reasoningEffort,
 		MaxCompletionTokens: budget,
 	}
-	if !openAIFixedTemperature(c.model) {
+	if !c.omitTemperature && !openAIFixedTemperature(c.model) {
 		reqBody.Temperature = 0.4
 	}
 	payload, err := json.Marshal(reqBody)
@@ -597,6 +639,7 @@ func parseOpenAIText(body []byte) (string, error) {
 type anthropicClient struct {
 	apiKey  string
 	model   string
+	effort  string
 	baseURL string
 	http    httpClient
 }
@@ -606,9 +649,18 @@ func newAnthropicClient(apiKey, model string) *anthropicClient {
 }
 
 type anthropicRequest struct {
-	Model     string             `json:"model"`
-	MaxTokens int                `json:"max_tokens"`
-	Messages  []anthropicMessage `json:"messages"`
+	Model        string                 `json:"model"`
+	MaxTokens    int                    `json:"max_tokens"`
+	Messages     []anthropicMessage     `json:"messages"`
+	OutputConfig *anthropicOutputConfig `json:"output_config,omitempty"`
+	Thinking     *anthropicThinking     `json:"thinking,omitempty"`
+}
+type anthropicOutputConfig struct {
+	Effort string `json:"effort"`
+}
+type anthropicThinking struct {
+	Type         string `json:"type"`
+	BudgetTokens int    `json:"budget_tokens,omitempty"`
 }
 type anthropicMessage struct {
 	Role    string `json:"role"`
@@ -630,11 +682,25 @@ func (c *anthropicClient) generate(ctx context.Context, prompt string) (string, 
 	if strings.TrimSpace(c.apiKey) == "" {
 		return "", errNoAPIKey
 	}
-	payload, err := json.Marshal(anthropicRequest{
+	bodyConfig := anthropicRequest{
 		Model:     c.model,
 		MaxTokens: aiMaxOutputTokens,
 		Messages:  []anthropicMessage{{Role: "user", Content: prompt}},
-	})
+	}
+	if c.effort != "" {
+		if budget, err := strconv.Atoi(c.effort); err == nil {
+			bodyConfig.Thinking = &anthropicThinking{Type: "enabled", BudgetTokens: budget}
+		} else {
+			bodyConfig.OutputConfig = &anthropicOutputConfig{Effort: c.effort}
+			// These models accept adaptive thinking but default to off.
+			// Enable it when the reader explicitly chooses reasoning effort.
+			switch c.model {
+			case "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-4-6":
+				bodyConfig.Thinking = &anthropicThinking{Type: "adaptive"}
+			}
+		}
+	}
+	payload, err := json.Marshal(bodyConfig)
 	if err != nil {
 		return "", err
 	}
@@ -706,7 +772,19 @@ func parseAnthropicText(body []byte) (string, error) {
 // Only the write tells a deadline's two phases apart: one that expires during
 // the TLS handshake and one that expires after the write reach the caller as
 // the same error (aiWriteTrace).
-func doAIRequest(client httpClient, req *http.Request) ([]byte, error) {
+func doAIRequest(client httpClient, req *http.Request) (result []byte, resultErr error) {
+	if reader, ok := req.Context().Value(aiReaderRequestKey{}).(*aiReaderRequest); ok {
+		var release func()
+		req, release = reader.networkRequest(req)
+		defer func() {
+			// A response or a transport error can arrive as the grant is
+			// withdrawn. Discard the result before it reaches the answer cache.
+			if checkAIReaderRequest(req.Context()) == context.Canceled {
+				result, resultErr = nil, context.Canceled
+			}
+			release()
+		}()
+	}
 	const attempts = 3
 	var lastErr error
 	for attempt := 0; attempt < attempts; attempt++ {
@@ -725,6 +803,9 @@ func doAIRequest(client httpClient, req *http.Request) ([]byte, error) {
 			}
 		}
 
+		if err := checkAIReaderRequest(req.Context()); err != nil {
+			return nil, err
+		}
 		var sent aiWriteTrace
 		resp, err := client.Do(sent.attach(req))
 		if err != nil {
@@ -815,6 +896,7 @@ func safeAIErrorDetail(body []byte) string {
 	var env struct {
 		Error struct {
 			Message string `json:"message"`
+			Param   string `json:"param"`
 		} `json:"error"`
 	}
 	message := ""
@@ -826,7 +908,16 @@ func safeAIErrorDetail(body []byte) string {
 	if n, ok := completionCapIn(message); ok {
 		return completionCapDetail + strconv.Itoa(n)
 	}
-	if strings.Contains(strings.ToLower(message), "model") {
+	low := strings.ToLower(message)
+	// A provider can change which efforts an existing model accepts. Keep a
+	// refusal of that parameter from triggering discovery and a second send.
+	if env.Error.Param == "reasoning_effort" || env.Error.Param == "output_config.effort" || containsAnySubstr(low, []string{
+		"reasoning_effort", "thinkinglevel", "thinking_level", "thinking level", "output_config.effort", "budget_tokens",
+		"thinkingbudget", "thinking_budget", "thinking budget",
+	}) {
+		return ""
+	}
+	if strings.Contains(low, "model") {
 		return "model unavailable"
 	}
 	return ""

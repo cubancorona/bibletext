@@ -578,11 +578,12 @@ func runAIActionForPassage(ctx context.Context, state *AppState, action string, 
 	if err != nil {
 		return "", err
 	}
-	model := activeModelFor(store, id)
-	scope := aiRequestScope(id, model, action, question, p)
-
-	cacheKey := aiCacheKey(scope, p.Book, p.Chapter, p.Text)
-	if cached, ok := aiCacheGet(cacheKey); ok {
+	ctx, options := trackAIRequestOptions(ctx, store, id)
+	cacheKey := func() string {
+		scope := aiRequestScope(options.provider, options.cacheModel(), action, question, p)
+		return aiCacheKey(scope, p.Book, p.Chapter, p.Text)
+	}
+	if cached, ok := aiCacheGet(cacheKey()); ok {
 		devDiagnosticEvent("cache_hit", devDiagnosticMetric{Key: "action", Value: devDiagnosticAction(action)},
 			devDiagnosticMetric{Key: "bytes", Value: int64(len(cached))},
 			devDiagnosticMetric{Key: "request_id", Value: devDiagnosticRequestID(ctx)})
@@ -598,6 +599,8 @@ func runAIActionForPassage(ctx context.Context, state *AppState, action string, 
 	// The last step before the reader's text leaves the device: whatever path
 	// reached here, nothing goes to a provider the reader has not allowed
 	// with this key (ai_permission.go).
+	ctx, release := store.readerRequestContext(ctx, id, key)
+	defer release()
 	if !store.aiAllowed(id, key) {
 		return "", &aiPermissionError{provider: info}
 	}
@@ -606,7 +609,7 @@ func runAIActionForPassage(ctx context.Context, state *AppState, action string, 
 	if err != nil {
 		return "", withAIErrorProvider(err, info)
 	}
-	aiCacheSet(cacheKey, out)
+	aiCacheSet(cacheKey(), out)
 	return out, nil
 }
 

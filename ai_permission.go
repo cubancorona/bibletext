@@ -33,6 +33,8 @@ package bibletext
 // the reader's text.
 
 import (
+	"context"
+	"net/http"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -40,6 +42,52 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
+
+// A grant applies to the reader requests started under it. Revoking it cancels
+// these contexts, including an in-flight HTTP call or retry backoff. Granting
+// permission again can authorize a new request but cannot revive an old one.
+type aiReaderRequest struct {
+	store         *keyStore
+	provider, key string
+	grant         context.Context
+}
+
+type aiReaderRequestKey struct{}
+
+func (k *keyStore) readerRequestContext(ctx context.Context, provider, key string) (context.Context, context.CancelFunc) {
+	grant, revoke := context.WithCancel(context.Background())
+	request := &aiReaderRequest{store: k, provider: provider, key: key, grant: grant}
+	k.readerRequests.Store(request, revoke)
+	return context.WithValue(ctx, aiReaderRequestKey{}, request), func() {
+		k.readerRequests.Delete(request)
+		revoke()
+	}
+}
+
+// The reader's UI operation owns the parent context. Each network operation
+// can also be cancelled by withdrawing permission, independently of that UI.
+func (r *aiReaderRequest) networkRequest(req *http.Request) (*http.Request, func()) {
+	ctx, cancel := context.WithCancel(req.Context())
+	stop := context.AfterFunc(r.grant, cancel)
+	return req.WithContext(ctx), func() { stop(); cancel() }
+}
+
+// Recheck the effective credential too: an environment-provided key can change
+// independently of Settings. Model-list refreshes and Settings' fixed probe
+// carry no reader text and therefore have no reader request to check.
+func checkAIReaderRequest(ctx context.Context) error {
+	r, _ := ctx.Value(aiReaderRequestKey{}).(*aiReaderRequest)
+	if r == nil {
+		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if r.grant.Err() != nil || !r.store.aiAllowed(r.provider, r.key) || providerAPIKey(r.store, r.provider) != r.key {
+		return context.Canceled
+	}
+	return nil
+}
 
 // The question's wording, with the provider's display name filled in
 // (providerInfo.Name, "Claude (Anthropic)").

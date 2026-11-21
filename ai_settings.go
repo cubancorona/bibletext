@@ -133,6 +133,7 @@ func openAISettings(state *AppState) {
 	// the key rows built below can ask for it when their status line changes
 	// height.
 	var fitSheet func()
+	closed := false
 
 	// keyArea shows only the selected provider's key + status; it rebuilds when the
 	// picker changes. Everything auto-saves straight to the on-device store — there
@@ -226,6 +227,9 @@ func openAISettings(state *AppState) {
 			resultExtras.Objects = nil
 			resultExtras.Hide()
 			t := slot.test
+			if syncModelChoice != nil {
+				syncModelChoice()
+			}
 			if t == nil || t.provider != info.ID {
 				result.Hide()
 				return
@@ -362,6 +366,7 @@ func openAISettings(state *AppState) {
 				fitSheet()
 				fitSheet()
 			}
+
 		}
 		// Auto-save: every edit writes straight to the on-device key store. A new
 		// key also (re-)fetches the provider's model list for the dropdown below.
@@ -381,18 +386,9 @@ func openAISettings(state *AppState) {
 		// provider's OWN current model list, fetched live with the user's key
 		// whenever this area renders or a key is pasted — so new models appear as
 		// soon as the provider publishes them, with no app update.
-		effModel := store.resolvedModel(id)
-		if effModel == "" {
-			effModel = info.Model
-		}
-		// The button says "Recommended"; WHICH model that currently means goes
-		// in the caption underneath. Carrying the model id on the button made
-		// it the longest control on the sheet, and once the row gained its
-		// "Model" label there was no longer width for both — the id was
-		// clipped mid-word ("gemini-pro-lates"). The caption has a full line
-		// to itself and wraps.
-		recommended := "Recommended"
-		modelCaption := caption("Recommended keeps itself current automatically — " + effModel + " today.")
+		// Keep the full Recommended model id in the wrapping caption.
+		const recommended = "Recommended"
+		modelCaption := caption("").(*widget.RichText)
 
 		// Until (or unless) the live list arrives, the choices are Recommended
 		// plus any model already pinned, so the control is honest offline too.
@@ -410,9 +406,67 @@ func openAISettings(state *AppState) {
 		// on iPhone. The modal matches the app's chapter-picker
 		// convention and always shows an explicit close.
 		var pickerPop *widget.PopUp
-		var pickerList *widget.List
+		var refreshModelPicker func()
 		modelBtn := widget.NewButtonWithIcon(selected, theme.MenuDropDownIcon(), nil)
 		modelBtn.Alignment = widget.ButtonAlignLeading
+		effortBtn := widget.NewButtonWithIcon(recommended, theme.MenuDropDownIcon(), nil)
+		effortBtn.Alignment = widget.ButtonAlignLeading
+		modelRows := modelSettingsRows(state, modelBtn, effortBtn)
+		rows := modelRows.Layout.(*modelSettingsLayout)
+		var liveModels []discoveredModel
+		checkedDocs := make(map[string]bool)
+		var refreshEffort func()
+		refreshEffort = func() {
+			model := activeModelFor(store, id)
+			target := effortDocumentTarget(store.prefs, id, model, liveModels)
+			lookup := lookupEffortDocument
+			if target != "" && !checkedDocs[model+"|"+target] && lookup != nil {
+				checkedDocs[model+"|"+target] = true
+				go func() {
+					ctx, cancel := context.WithTimeout(context.Background(), 7*time.Second)
+					defer cancel()
+					levels := lookup(ctx, id, target)
+					fyne.Do(func() {
+						if closed || renderGen != gen || levels == nil ||
+							effortDocumentTarget(store.prefs, id, model, liveModels) != target {
+							return
+						}
+						saveEffortDocument(store.prefs, id, model, target, levels)
+						if activeModelFor(store, id) == model {
+							refreshEffort()
+						}
+					})
+				}()
+			}
+			levels := modelEffortChoices(store.prefs, id, model)
+			show := len(levels) != 0
+			rows.effortLabel.SetText(effortSettingLabel(levels))
+			changed := show != rows.effort.Visible()
+			if show {
+				rows.effort.Show()
+				rows.effortLabel.Show()
+				effortBtn.SetText(effortDisplayName(aiReasoningEffort(store.prefs, id, model)))
+			} else {
+				rows.effort.Hide()
+				rows.effortLabel.Hide()
+			}
+			effectiveDefault := store.resolvedModel(id)
+			if effectiveDefault == "" {
+				effectiveDefault = info.Model
+			}
+			segment := modelCaption.Segments[0].(*widget.TextSegment)
+			note := "Recommended keeps itself current automatically — " + effectiveDefault + " today."
+			if segment.Text != note {
+				segment.Text = note
+				modelCaption.Refresh()
+			}
+			modelRows.Refresh()
+			if changed && fitSheet != nil {
+				fitSheet()
+				fitSheet()
+			}
+		}
+
 		applyChoice := func(sel string) {
 			if sel == recommended {
 				store.setOverrideModel(id, "")
@@ -421,6 +475,7 @@ func openAISettings(state *AppState) {
 			}
 			selected = sel
 			modelBtn.SetText(sel)
+			refreshEffort()
 		}
 		// A model pinned outside the picker (the Test key verdict's
 		// faster-model action) is read back from the store: the row shows
@@ -435,8 +490,9 @@ func openAISettings(state *AppState) {
 			}
 			selected = sel
 			modelBtn.SetText(sel)
-			if pickerList != nil {
-				pickerList.Refresh()
+			refreshEffort()
+			if refreshModelPicker != nil {
+				refreshModelPicker()
 			}
 		}
 		closePicker := func() {
@@ -444,24 +500,26 @@ func openAISettings(state *AppState) {
 				pickerPop.Hide()
 				pickerPop = nil
 			}
-			pickerList = nil
+			refreshModelPicker = nil
 		}
-		modelBtn.OnTapped = func() {
+		openPicker := func(name string, choices func() []string, current func() string, choose func(string)) {
 			const rowHeight = 44 // touch-sized rows, like the mobile book list
 			list := widget.NewList(
-				func() int { return len(options) },
+				func() int { return len(choices()) },
 				func() fyne.CanvasObject {
 					l := canvas.NewText("", pal.Text)
 					l.TextSize = 14
-					return container.NewPadded(l)
+					// A uniformly sized template lets the list find visible rows
+					// directly even for accounts with hundreds of models.
+					return container.NewPadded(l, spacer(rowHeight-2*theme.Padding()))
 				},
 				func(i widget.ListItemID, o fyne.CanvasObject) {
-					if i < 0 || i >= len(options) {
+					if i < 0 || i >= len(choices()) {
 						return
 					}
 					l := o.(*fyne.Container).Objects[0].(*canvas.Text)
-					l.Text = options[i]
-					if options[i] == selected {
+					l.Text = choices()[i]
+					if choices()[i] == current() {
 						l.Color = pal.Accent
 						l.TextStyle = fyne.TextStyle{Bold: true}
 					} else {
@@ -470,19 +528,14 @@ func openAISettings(state *AppState) {
 					}
 					l.Refresh()
 				})
-			for i := 0; i < len(options); i++ {
-				list.SetItemHeight(widget.ListItemID(i), rowHeight)
-			}
 			list.OnSelected = func(i widget.ListItemID) {
-				if i < 0 || i >= len(options) {
+				if i < 0 || i >= len(choices()) {
 					return
 				}
-				applyChoice(options[i])
+				choose(choices()[i])
 				closePicker()
 			}
-			pickerList = list
-
-			title := canvas.NewText("Model", pal.Text)
+			title := canvas.NewText(name, pal.Text)
 			title.TextSize = 16
 			title.TextStyle = fyne.TextStyle{Bold: true}
 			x := widget.NewButtonWithIcon("", theme.CancelIcon(), closePicker)
@@ -504,25 +557,59 @@ func openAISettings(state *AppState) {
 			fitPicker := func() {
 				cs := cnv.Size()
 				w := min(cs.Width-48, 420)
-				// The height the whole list takes, which a covering picker
-				// would ask for (coverHeaderUnlessClear). The list scrolls, so
-				// the picker clears the header on every window the app allows
-				// and never covers it (TestDesktopSheetsClearOrCoverTheHeaderOnShortWindows).
-				whole := float32(len(options))*rowHeight + 72
-				h := min(cs.Height-140, whole)
+				// The list reports only its minimum viewport. Replace that with
+				// the height of all rows and the gaps Fyne places between them.
+				n := list.Length()
+				gap := list.Theme().Size(theme.SizeNamePadding)
+				fullList := float32(n)*list.CreateItem().MinSize().Height + float32(max(0, n-1))*gap
+				whole := pop.MinSize().Height - list.MinSize().Height + fullList
+				h := min(sheetMostHeight(state, cnv)-2*sheetBottomMargin, whole)
 				h = clearOfHeader(h, cs.Height, headerClearance(state))
 				pop.Resize(fyne.NewSize(w, h))
 				coverHeaderUnlessClear(state, pop, whole)
 			}
 			fitPicker()
+			if name == "Model" {
+				refreshModelPicker = func() {
+					list.Refresh()
+					fitPicker()
+				}
+			}
 			registerSheetRefit(state, pop, fitPicker)
-			for i, o := range options {
-				if o == selected {
+			for i, o := range choices() {
+				if o == current() {
 					list.ScrollTo(widget.ListItemID(i))
 					break
 				}
 			}
 		}
+
+		modelBtn.OnTapped = func() {
+			openPicker("Model", func() []string { return options }, func() string { return selected }, applyChoice)
+		}
+		effortBtn.OnTapped = func() {
+			model := activeModelFor(store, id)
+			levels := modelEffortChoices(store.prefs, id, model)
+			if len(levels) == 0 {
+				refreshEffort()
+				return
+			}
+			choices := []string{recommended}
+			values := map[string]string{recommended: ""}
+			for _, level := range levels {
+				label := effortDisplayName(level)
+				choices = append(choices, label)
+				values[label] = level
+			}
+			current := func() string { return effortDisplayName(aiReasoningEffort(store.prefs, id, model)) }
+			openPicker(effortSettingLabel(levels), func() []string { return choices }, current, func(choice string) {
+				if value, ok := values[choice]; ok && activeModelFor(store, id) == model {
+					setAIReasoningEffort(store.prefs, id, model, value)
+				}
+				refreshEffort()
+			})
+		}
+		refreshEffort()
 
 		// fetchModels populates the dropdown from the provider's live list. Guards:
 		//   • fetchedKey — only refetch when the key CHANGES (set on success, and
@@ -549,7 +636,7 @@ func openAISettings(state *AppState) {
 				models, err := aiSettingsListModels(ctx, info, key)
 				ids := dropdownModelIDs(models, info.ExtraModelExclude, modelFamilyOf(info.Model))
 				fyne.Do(func() {
-					if gen != renderGen || seq != fetchSeq {
+					if closed || gen != renderGen || seq != fetchSeq || key != strings.TrimSpace(providerAPIKey(store, id)) {
 						return // superseded by a newer render or a newer fetch
 					}
 					if err != nil || len(ids) == 0 {
@@ -557,6 +644,9 @@ func openAISettings(state *AppState) {
 						return
 					}
 					fetchedKey = key
+					liveModels = models
+					checkedDocs = make(map[string]bool)
+					rememberModelEfforts(store.prefs, id, models)
 					opts := []string{recommended}
 					cur := store.overrideModel(id)
 					if cur != "" && !containsExact(ids, cur) {
@@ -564,15 +654,7 @@ func openAISettings(state *AppState) {
 					}
 					opts = append(opts, ids...)
 					options = opts
-					if cur != "" {
-						selected = cur
-					} else {
-						selected = recommended
-					}
-					modelBtn.SetText(selected)
-					if pickerList != nil {
-						pickerList.Refresh() // live list landed while the picker is open
-					}
+					syncModelChoice()
 				})
 			}()
 		}
@@ -623,8 +705,7 @@ func openAISettings(state *AppState) {
 				result,
 				resultExtras,
 				widget.NewSeparator(),
-				settingsRow("Model", container.NewThemeOverride(modelBtn,
-					compactTheme{Theme: state.theme, text: 15})),
+				modelRows,
 				modelCaption,
 			),
 		}
@@ -671,7 +752,6 @@ func openAISettings(state *AppState) {
 	// card dismisses it. done() runs the cleanup either way (re-show the native
 	// reading overlay + re-render so a red-letter toggle takes effect).
 	var popup *widget.PopUp
-	closed := false
 	done := func() {
 		if closed {
 			return
@@ -1228,12 +1308,6 @@ func settingsGroup(pal palette, rows ...fyne.CanvasObject) fyne.CanvasObject {
 	// text box, which is exactly the confusion those two near-identical values
 	// produce.
 	return surface(container.NewVBox(rows...), pal.SurfaceAlt, pal.Border, fyne.Size{})
-}
-
-// settingsRow is the grouped-list row shape: label on the left, the control
-// filling the rest of the row, label centred against the control's height.
-func settingsRow(label string, control fyne.CanvasObject) fyne.CanvasObject {
-	return container.NewBorder(nil, nil, container.NewCenter(widget.NewLabel(label)), nil, control)
 }
 
 // providerKeyLabel names the key row for a provider: the product alone

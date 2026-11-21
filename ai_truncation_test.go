@@ -33,7 +33,7 @@ func TestParsersMarkAnAnswerTheModelWasCutOffIn(t *testing.T) {
 		{
 			"gemini MAX_TOKENS",
 			`{"candidates":[{"content":{"parts":[{"text":"` + partial + `"}]},"finishReason":"MAX_TOKENS"}]}`,
-			parseGeminiText,
+			new(geminiResponse).parseText,
 		},
 		{
 			"openai length",
@@ -76,7 +76,7 @@ func TestParsersLeaveAFinishedAnswerAlone(t *testing.T) {
 			parseAnthropicText},
 		{"gemini STOP",
 			`{"candidates":[{"content":{"parts":[{"text":"` + whole + `"}]},"finishReason":"STOP"}]}`,
-			parseGeminiText},
+			new(geminiResponse).parseText},
 		{"openai stop",
 			`{"choices":[{"message":{"content":"` + whole + `"},"finish_reason":"stop"}]}`,
 			parseOpenAIText},
@@ -102,7 +102,7 @@ func TestAnEmptyTruncatedAnswerIsStillAnError(t *testing.T) {
 		parse func([]byte) (string, error)
 	}{
 		{"anthropic", `{"content":[{"type":"text","text":""}],"stop_reason":"max_tokens"}`, parseAnthropicText},
-		{"gemini", `{"candidates":[{"content":{"parts":[{"text":""}]},"finishReason":"MAX_TOKENS"}]}`, parseGeminiText},
+		{"gemini", `{"candidates":[{"content":{"parts":[{"text":""}]},"finishReason":"MAX_TOKENS"}]}`, new(geminiResponse).parseText},
 		{"openai", `{"choices":[{"message":{"content":""},"finish_reason":"length"}]}`, parseOpenAIText},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
