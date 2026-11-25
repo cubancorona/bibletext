@@ -36,9 +36,27 @@ func assertMobileStudyMargins(t *testing.T, w fyne.Window, popup *widget.PopUp) 
 	if box.x0 < 22.5 || box.x1 > w.Canvas().Size().Width-22.5 || box.y0 < 39.5 || box.y1 > w.Canvas().Size().Height-39.5 {
 		t.Errorf("card lost its margins in the resized window: %v on %v", box, w.Canvas().Size())
 	}
-	for _, name := range []string{"Copy", "Report", "Close"} {
+	pending := findTreeButton(popup, "Cancel") != nil
+	errored := findTreeButton(popup, "Try again") != nil || findTreeButton(popup, "Open AI settings") != nil
+	var wantVisible []string
+	switch {
+	case pending:
+		wantVisible = []string{"Cancel"}
+	case errored:
+		wantVisible = []string{"Close"}
+	default:
+		wantVisible = []string{"Copy", "Report", "Close"}
+	}
+	if pending || errored {
+		for _, hidden := range []string{"Copy", "Report"} {
+			if b := findTreeButton(popup, hidden); b != nil && studyObjectVisible(popup, b) {
+				t.Errorf("%s stayed visible while no answer is shown", hidden)
+			}
+		}
+	}
+	for _, name := range wantVisible {
 		button := findTreeButton(popup, name)
-		if button == nil {
+		if button == nil || !studyObjectVisible(popup, button) {
 			t.Fatalf("the card lost %s", name)
 		}
 		pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(button)

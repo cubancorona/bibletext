@@ -64,38 +64,106 @@ func (l timeoutLinkLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
 }
 
 func (c *aiSpeedControl) timeoutSwitch(p aiErrorPresentation) fyne.CanvasObject {
-	if !p.timeout || p.providerID == "" || c.provider != p.providerID || c.offer.target.model == "" {
+	if c == nil || !p.timeout || p.providerID == "" || c.provider != p.providerID || len(c.box.Objects) == 0 {
 		return nil
 	}
 	return c.box
 }
 
 func (c *aiSpeedControl) tryAgain() {
-	if c.closed || c.retry == nil || (c.active != nil && !c.active()) {
+	if c == nil || c.closed || c.retry == nil || (c.active != nil && !c.active()) {
 		return
 	}
+	if c.state != nil && c.state.window != nil && c.state.window.Canvas() != nil && c.tryBtn != nil &&
+		c.state.window.Canvas().Focused() == fyne.Focusable(c.tryBtn) {
+		c.state.requestWaitFocusRestore()
+	}
+	next := validatedSpeedChoice(c.state, c.choice)
+	if next.effort != "" && c.state != nil {
+		if aiReasoningEffort(c.state.keys().prefs, next.provider, next.model) != c.offer.savedEffort {
+			next = aiSpeedChoice{}
+		}
+	}
 	c.close()
-	c.retry(aiSpeedChoice{})
+	c.retry(next)
+	c.state.consumeWaitFocusRestore(nil)
+}
+
+const aiTimeoutChoicesMeasure float32 = 280
+
+type timeoutChoicesLayout struct {
+	control *aiSpeedControl
+}
+
+func (l timeoutChoicesLayout) MinSize(objs []fyne.CanvasObject) fyne.Size {
+	if len(objs) == 0 || l.control == nil || !objs[0].Visible() {
+		return fyne.Size{}
+	}
+	if l.control.keyTest {
+		return objs[0].MinSize()
+	}
+	w := aiTimeoutChoicesMeasure
+	if lay, ok := l.control.box.Layout.(*aiSpeedRowsLayout); ok && lay.width > 0 {
+		w = min(aiTimeoutChoicesMeasure, lay.width)
+	}
+	l.control.setWidth(w)
+	return fyne.NewSize(w, objs[0].MinSize().Height)
+}
+
+func (l timeoutChoicesLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
+	if len(objs) == 0 || l.control == nil || !objs[0].Visible() {
+		return
+	}
+	if l.control.keyTest {
+		objs[0].Move(fyne.NewPos(0, 0))
+		objs[0].Resize(size)
+		return
+	}
+	m := aiTimeoutChoicesMeasure
+	if size.Width > 0 {
+		m = min(aiTimeoutChoicesMeasure, size.Width)
+	}
+	l.control.setWidth(m)
+	h := objs[0].MinSize().Height
+	objs[0].Move(fyne.NewPos(max(0, (size.Width-m)/2), 0))
+	objs[0].Resize(fyne.NewSize(m, h))
+	if c, ok := objs[0].(*fyne.Container); ok && c.Layout != nil {
+		c.Layout.Layout(c.Objects, fyne.NewSize(m, h))
+	}
 }
 
 // The message and its actions share the same validated switch offer.
 func aiErrorRecovery(p aiErrorPresentation, control *aiSpeedControl) (string, *fyne.Container) {
-	items := []fyne.CanvasObject{container.NewCenter(widget.NewButton("Try again", control.tryAgain))}
+	border := lightPalette.Border
+	if control != nil && control.state != nil {
+		border = control.state.pal().Border
+	}
+	tryBtn := widget.NewButton("Try again", control.tryAgain)
+	if control != nil {
+		control.tryBtn = tryBtn
+	}
+	items := []fyne.CanvasObject{container.NewCenter(inputFrame(tryBtn, border))}
 	if link := aiBillingLink(p); link != nil {
 		items = append(items, container.NewCenter(link))
 	}
 	faster := control.timeoutSwitch(p)
 	if faster != nil {
-		items = append(items, faster)
+		items = append(items, container.New(timeoutChoicesLayout{control: control}, faster))
 	}
-	return p.shown(faster != nil), container.NewVBox(items...)
+	fasterModelOffered := faster != nil && control != nil && control.offer.target.model != ""
+	return p.shown(fasterModelOffered), container.NewVBox(items...)
 }
 
 func aiSearchErrorView(state *AppState, err error, retry func(aiSpeedChoice)) fyne.CanvasObject {
 	if state.findSpeed != nil {
 		state.findSpeed.close()
 	}
-	control := makeAISpeedControl(state, retry, true)
+	control := newAITimeoutSpeedControl(state, func(next aiSpeedChoice) {
+		state.aiSearchRestarted = false
+		if retry != nil {
+			retry(next)
+		}
+	}, state.aiSearchChoice, state.aiSearchLastModel)
 	state.findSpeed = control
 	gen, query := state.askSession.gen, state.aiSearchQuery
 	control.active = func() bool {
@@ -104,7 +172,11 @@ func aiSearchErrorView(state *AppState, err error, retry func(aiSpeedChoice)) fy
 	}
 	p, special := aiSpecialError(err)
 	if !special {
-		return aiSearchMessageView(friendlyAIError(err), "Try again", control.tryAgain)
+		_, actions := aiErrorRecovery(aiErrorPresentation{}, control)
+		lbl := widget.NewLabel(friendlyAIError(err))
+		lbl.Wrapping = fyne.TextWrapWord
+		lbl.Alignment = fyne.TextAlignCenter
+		return findWaitScroll(container.NewVBox(wrappedParagraph(lbl, 300), spacer(12), actions))
 	}
 	message, actions := aiErrorRecovery(p, control)
 	lbl := widget.NewLabel(message)
@@ -112,7 +184,9 @@ func aiSearchErrorView(state *AppState, err error, retry func(aiSpeedChoice)) fy
 	lbl.Alignment = fyne.TextAlignCenter
 	items := []fyne.CanvasObject{wrappedParagraph(lbl, 300)}
 	if p.detail != "" {
-		items = append(items, aiErrorDetail(p))
+		detail := aiErrorDetail(p)
+		detail.Resize(fyne.NewSize(300, detail.MinSize().Height))
+		items = append(items, container.NewGridWrap(fyne.NewSize(300, detail.MinSize().Height), detail))
 	}
 	items = append(items, spacer(12), actions)
 	return findWaitScroll(container.NewVBox(items...))

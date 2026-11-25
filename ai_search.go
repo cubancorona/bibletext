@@ -89,6 +89,11 @@ func showFindModel(state *AppState, gen int, m aiModelInUse) {
 		return
 	}
 	state.aiSearchModel = m
+	state.aiSearchLastModel = m
+	if state.findWaitCol != nil {
+		state.findWaitCol.show(m)
+		return
+	}
 	if state.findSpeed != nil {
 		state.findSpeed.show(m)
 	}
@@ -105,18 +110,24 @@ func newFindModelLine(state *AppState) *aiModelLine {
 }
 
 // newFindSpeedControl attaches the new view to reports for the active Find.
-// A rebuilt view can immediately restore the choices for its current attempt.
+// A rebuilt view immediately restores the choices for its current attempt.
 func newFindSpeedControl(state *AppState, retry func(aiSpeedChoice)) *aiSpeedControl {
 	if state.findSpeed != nil {
 		state.findSpeed.close()
 	}
-	speed := newAISpeedControl(state, retry)
+	seed := state.aiSearchModel
+	if seed.model == "" {
+		seed = state.aiSearchLastModel
+	}
+	if seed.model == "" {
+		seed = seedAISpeedReport(state, state.aiSearchChoice)
+	}
+	speed := buildAISpeedControl(state, retry, false, false, state.aiSearchChoice, seed)
 	state.findSpeed = speed
 	gen := state.askSession.gen
 	speed.active = func() bool {
 		return state.findSpeed == speed && state.aiSearchLoading && state.askSession.Current(gen)
 	}
-	speed.show(state.aiSearchModel)
 	return speed
 }
 
@@ -222,6 +233,10 @@ func clearAISearchContext(state *AppState) {
 	state.aiSearchResults = nil
 	state.aiSearchErr = nil
 	state.aiSearchLoading = false
+	state.aiSearchModel = aiModelInUse{}
+	state.aiSearchLastModel = aiModelInUse{}
+	state.aiSearchChoice = aiSpeedChoice{}
+	state.aiSearchRestarted = false
 }
 
 // aiListMarkerPattern strips a leading list bullet or "1." / "2)" numbering the

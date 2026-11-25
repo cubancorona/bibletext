@@ -82,13 +82,19 @@ func studyDisclosureButton(root fyne.CanvasObject, expanded bool) *widget.Button
 	if expanded {
 		icon = iconDisclosureCollapse
 	}
-	var found *widget.Button
+	var matches []*widget.Button
 	walkTree(root, func(object fyne.CanvasObject) {
-		if button, ok := object.(*widget.Button); ok && button.Text == "" && button.Icon != nil && button.Icon.Name() == icon.Name() {
-			found = button
+		if button, ok := object.(*widget.Button); ok && button.Text == "" && button.Icon == icon {
+			matches = append(matches, button)
 		}
 	})
-	return found
+	if len(matches) > 1 {
+		panic("multiple citation disclosure buttons in Study sheet")
+	}
+	if len(matches) == 1 {
+		return matches[0]
+	}
+	return nil
 }
 
 func studyObjectVisible(root, target fyne.CanvasObject) bool {

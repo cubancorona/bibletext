@@ -17,7 +17,20 @@ import (
 )
 
 func aiErrorActions(state *AppState, p aiErrorPresentation, retry func()) *fyne.Container {
-	_, actions := aiErrorRecovery(p, makeAISpeedControl(state, func(aiSpeedChoice) { retry() }, true))
+	var fn func(aiSpeedChoice)
+	if retry != nil {
+		fn = func(aiSpeedChoice) { retry() }
+	}
+	_, actions := aiErrorRecovery(p, newAITimeoutSpeedControl(state, fn, aiSpeedChoice{}, aiModelInUse{}))
+	return actions
+}
+
+func aiKeyTestErrorActions(state *AppState, p aiErrorPresentation, retry func()) *fyne.Container {
+	var fn func(aiSpeedChoice)
+	if retry != nil {
+		fn = func(aiSpeedChoice) { retry() }
+	}
+	_, actions := aiErrorRecovery(p, makeAISpeedControl(state, fn, true))
 	return actions
 }
 
@@ -29,6 +42,25 @@ func timeoutLinkIn(root fyne.CanvasObject) *widget.Hyperlink {
 		}
 	})
 	return found
+}
+
+func timeoutFasterIn(root fyne.CanvasObject) fyne.CanvasObject {
+	if row := waitingAction(root, "Switch to a faster model and try again"); row != nil {
+		return row
+	}
+	if link := timeoutLinkIn(root); link != nil {
+		return link
+	}
+	return nil
+}
+
+func tapTimeoutFaster(target fyne.CanvasObject) {
+	switch v := target.(type) {
+	case *aiSwitchActionRow:
+		v.Tapped(nil)
+	case *widget.Hyperlink:
+		v.OnTapped()
+	}
 }
 
 func syntheticAIAccountError() error {
@@ -46,6 +78,7 @@ func aiErrorOutbound(root fyne.CanvasObject, label string) *outboundLink {
 }
 
 func TestAIErrorStudyRetryKeepsCapturedRequest(t *testing.T) {
+	armAISpeedClock(t)
 	for _, action := range []string{aiActionExplain, aiActionContext, aiActionTranslation, aiActionCompare, aiActionAsk} {
 		for _, timeout := range []bool{false, true} {
 			t.Run(action+map[bool]string{false: "/account", true: "/timeout"}[timeout], func(t *testing.T) {
@@ -72,16 +105,16 @@ func TestAIErrorStudyRetryKeepsCapturedRequest(t *testing.T) {
 					t.Fatal("the study error lost its provider-specific explanation")
 				}
 				for _, label := range []string{"Copy", "Report"} {
-					if b := findTreeButton(popup, label); b == nil || !b.Disabled() {
-						t.Fatal("an error left answer actions enabled")
+					if b := findTreeButton(popup, label); b != nil && studyObjectVisible(popup, b) {
+						t.Fatal("an error left answer actions visible")
 					}
 				}
 				if timeout {
-					faster := timeoutLinkIn(popup)
+					faster := timeoutFasterIn(popup)
 					if faster == nil {
 						t.Fatal("a timeout lost the faster-model action")
 					}
-					faster.OnTapped()
+					tapTimeoutFaster(faster)
 					if state.keys().overrideModel(info.ID) != info.FastModel {
 						t.Fatal("the timeout action did not select the provider's faster model")
 					}
@@ -133,7 +166,7 @@ func TestAIHTTP408StudyKeepsGenericRetryWithoutFasterModel(t *testing.T) {
 			finishCapturedStudyRequest(t, first, "", &apiHTTPError{StatusCode: http.StatusRequestTimeout})
 			popup := topPopup(t, w)
 			const want = "The AI service returned an error. Please try again shortly."
-			if !treeHasText(popup, want) || timeoutLinkIn(popup) != nil {
+			if !treeHasText(popup, want) || timeoutFasterIn(popup) != nil {
 				t.Fatal("HTTP 408 did not keep generic guidance without timeout recovery")
 			}
 			retry := findTreeButton(popup, "Try again")
@@ -152,6 +185,7 @@ func TestAIHTTP408StudyKeepsGenericRetryWithoutFasterModel(t *testing.T) {
 
 // A queued timeout action belongs only to the Study panel and attempt that showed it.
 func TestStudyTimeoutActionExpiresWithItsPanelOrAttempt(t *testing.T) {
+	armAISpeedClock(t)
 	for _, leave := range []string{"close", "evict", "retry"} {
 		t.Run(leave, func(t *testing.T) {
 			test.NewTempApp(t)
@@ -164,7 +198,7 @@ func TestStudyTimeoutActionExpiresWithItsPanelOrAttempt(t *testing.T) {
 			first := nextCapturedStudyRequest(t, requests, "initial request")
 			finishCapturedStudyRequest(t, first, "", syntheticAITimeout())
 			popup := topPopup(t, w)
-			link := timeoutLinkIn(popup)
+			link := timeoutFasterIn(popup)
 			again := findTreeButton(popup, "Try again")
 			if link == nil || again == nil {
 				t.Fatal("timeout has no retry actions")
@@ -179,7 +213,7 @@ func TestStudyTimeoutActionExpiresWithItsPanelOrAttempt(t *testing.T) {
 				again.OnTapped()
 				next = nextCapturedStudyRequest(t, requests, "ordinary retry")
 			}
-			link.OnTapped()
+			tapTimeoutFaster(link)
 			again.OnTapped()
 			if got := state.keys().overrideModel(defaultProviderID); got != "" {
 				t.Fatalf("retired timeout set model %q", got)
@@ -197,6 +231,7 @@ func TestStudyTimeoutActionExpiresWithItsPanelOrAttempt(t *testing.T) {
 }
 
 func TestFindTimeoutSwitchUsesTheShownTargetOnTheCurrentPane(t *testing.T) {
+	armAISpeedClock(t)
 	for _, layout := range []string{"Search tab", "sidebar"} {
 		t.Run(layout, func(t *testing.T) {
 			isolateAICache(t)
@@ -247,21 +282,21 @@ func TestFindTimeoutSwitchUsesTheShownTargetOnTheCurrentPane(t *testing.T) {
 			first := next()
 			first.finish <- syntheticAITimeout()
 			<-first.ctx.Done()
-			retired := timeoutLinkIn(pane())
+			retired := waitingAction(pane(), "Switch to a faster model and try again")
 			if retired == nil {
 				t.Fatal("missing original timeout action")
 			}
 			rebuild()
 			gen := state.askSession.gen
-			retired.OnTapped()
+			retired.Tapped(nil)
 			if !state.askSession.Current(gen) || store.overrideModel(info.ID) != "" {
 				t.Fatal("detached Find timeout changed Settings or retried")
 			}
-			link := timeoutLinkIn(pane())
-			if link == nil || link.Text != "Set "+info.FastModel+" in Settings · Low" {
-				t.Fatalf("missing destination and saved effort in %v", treeTexts(pane()))
+			row := waitingAction(pane(), "Switch to a faster model and try again")
+			if row == nil || row.detail != info.FastModel+" · saves in Settings" {
+				t.Fatalf("missing destination and scope note in %v", treeTexts(pane()))
 			}
-			link.OnTapped()
+			row.Tapped(nil)
 			second := next()
 			choice, _ := second.ctx.Value(aiSpeedChoiceKey{}).(aiSpeedChoice)
 			actual := second.ctx.Value(aiRequestIdentityKey{}).(*aiRequestIdentity)
@@ -311,29 +346,39 @@ func TestTimeoutModelAndEffortFitNarrowRecoveryScreens(t *testing.T) {
 					w.SetContent(container.New(safeAreaLayout{s, theme.Padding()}, root))
 					w.Resize(fyne.NewSize(s.w, s.h))
 				}
-				link := timeoutLinkIn(root)
-				if link == nil || !strings.Contains(link.Text, info.FastModel+" in Settings · Recommended") {
-					t.Fatalf("missing model or effort on %s: %v", surface, treeTexts(root))
+				var targetObj fyne.CanvasObject
+				if surface == "Test key" {
+					link := timeoutLinkIn(root)
+					if link == nil || !strings.Contains(link.Text, info.FastModel+" in Settings · Recommended") {
+						t.Fatalf("missing model or effort on %s: %v", surface, treeTexts(root))
+					}
+					targetObj = link
+				} else {
+					row := waitingAction(root, "Switch to a faster model and try again")
+					if row == nil || row.detail != info.FastModel+" · saves in Settings" {
+						t.Fatalf("missing timeout switch row on %s: %v", surface, treeTexts(root))
+					}
+					targetObj = row
 				}
 				drv := fyne.CurrentApp().Driver()
-				x := drv.AbsolutePositionForObject(link).X
-				right := x + link.Size().Width
-				if x < 0 || right > width+0.5 || link.Size().Width <= 0 || link.Size().Height < link.MinSize().Height-0.5 {
-					t.Fatalf("link spans %.1f..%.1f on %.0fpt, drawn %.1fpt high, needs %.1fpt", x, right, width, link.Size().Height, link.MinSize().Height)
+				x := drv.AbsolutePositionForObject(targetObj).X
+				right := x + targetObj.Size().Width
+				if x < 0 || right > width+0.5 || targetObj.Size().Width <= 0 || targetObj.Size().Height < targetObj.MinSize().Height-0.5 {
+					t.Fatalf("timeout action spans %.1f..%.1f on %.0fpt, drawn %.1fpt high, needs %.1fpt", x, right, width, targetObj.Size().Height, targetObj.MinSize().Height)
 				}
 				walkTree(root, func(o fyne.CanvasObject) {
 					sc, ok := o.(*container.Scroll)
-					if !ok || timeoutLinkIn(sc.Content) != link {
+					if !ok || timeoutFasterIn(sc.Content) != targetObj {
 						return
 					}
 					left := drv.AbsolutePositionForObject(sc).X
 					if x < left-0.5 || right > left+sc.Size().Width+0.5 {
-						t.Errorf("link spans %.1f..%.1f but its scroll viewport spans %.1f..%.1f", x, right, left, left+sc.Size().Width)
+						t.Errorf("timeout action spans %.1f..%.1f but its scroll viewport spans %.1f..%.1f", x, right, left, left+sc.Size().Width)
 					}
 				})
 				if surface == "Test key" {
 					root.(*widget.PopUp).Hide()
-					link.OnTapped()
+					tapTimeoutFaster(targetObj)
 					if got := store.overrideModel(info.ID); got != "" {
 						t.Fatalf("dismissed Settings pinned model %q", got)
 					}
@@ -394,6 +439,7 @@ func TestAIErrorBillingKindOffersTheBillingLink(t *testing.T) {
 }
 
 func TestAIErrorFasterActionNeverSwitchesAnotherProvider(t *testing.T) {
+	armAISpeedClock(t)
 	app := test.NewApp()
 	t.Cleanup(app.Quit)
 	state := sampleState()
@@ -403,21 +449,21 @@ func TestAIErrorFasterActionNeverSwitchesAnotherProvider(t *testing.T) {
 	p, _ := aiSpecialError(withAIErrorProvider(syntheticAITimeout(), info))
 	retries := 0
 	view := aiErrorActions(state, p, func() { retries++ })
-	faster := timeoutLinkIn(view)
+	faster := timeoutFasterIn(view)
 	if faster == nil {
 		t.Fatal("control: the active provider has no faster-model offer")
 	}
 	state.keys().setActiveProvider(providerAnthropic)
-	faster.OnTapped()
+	tapTimeoutFaster(faster)
 	if retries != 0 || state.keys().overrideModel(info.ID) != "" || state.keys().overrideModel(providerAnthropic) != "" {
 		t.Fatal("a stale timeout view switched a different account or sent another request")
 	}
-	if timeoutLinkIn(aiErrorActions(state, p, func() { retries++ })) != nil {
+	if timeoutFasterIn(aiErrorActions(state, p, func() { retries++ })) != nil {
 		t.Fatal("a non-active provider's error offered the active provider's faster model")
 	}
 	state.keys().setActiveProvider(info.ID)
 	state.keys().setOverrideModel(info.ID, info.FastModel)
-	if timeoutLinkIn(aiErrorActions(state, p, func() { retries++ })) != nil {
+	if timeoutFasterIn(aiErrorActions(state, p, func() { retries++ })) != nil {
 		t.Fatal("a provider already on its faster model was offered it again")
 	}
 }
@@ -448,7 +494,7 @@ func TestAIErrorFindActionsAndProviderCapture(t *testing.T) {
 	retries := 0
 	state.aiSearchActive, state.aiSearchErr = true, searchErr
 	view := aiSearchErrorView(state, searchErr, func(aiSpeedChoice) { retries++ })
-	if timeoutLinkIn(view) != nil {
+	if timeoutFasterIn(view) != nil {
 		t.Fatal("Find offered the wrong provider's faster model")
 	}
 	findTreeButton(view, "Try again").OnTapped()
@@ -581,7 +627,7 @@ func TestTheTimeoutLineNamesTheFasterModelOnlyWhereItIsOffered(t *testing.T) {
 		if !treeHasText(root, prefix+line) || treeHasText(root, prefix+other) {
 			t.Errorf("%s: the timeout reads %v, want %q", o.name, treeTexts(root), prefix+line)
 		}
-		if got := timeoutLinkIn(root) != nil; got != o.faster {
+		if got := timeoutFasterIn(root) != nil; got != o.faster {
 			t.Errorf("%s: the faster-model action shown %v, want %v", o.name, got, o.faster)
 		}
 	}
@@ -783,12 +829,12 @@ func aiPanelHeaderGaps(t *testing.T, popup *widget.PopUp, action string) []float
 }
 
 // aiErrorSecondAction is what an account-limit or timeout error offers under
-// Try again: the provider's billing link, or the faster model.
+// Try again: the provider's billing link, or the bottom-most timeout row.
 func aiErrorSecondAction(t *testing.T, popup *widget.PopUp, info providerInfo, timeout bool) fyne.CanvasObject {
 	t.Helper()
 	if timeout {
-		if link := timeoutLinkIn(popup); link != nil {
-			return link
+		if act := timeoutFasterIn(popup); act != nil {
+			return act
 		}
 	} else if link := aiErrorOutbound(popup, info.ShortName+" billing"); link != nil {
 		return link
@@ -982,39 +1028,60 @@ var aiRecoveryPhones = []insetScreen{
 	{"667x375 phone, landscape", 667, 375, 0, 0, 0, 0},
 }
 
-// aiRecoveryCutOn is, for each canvas in aiRecoveryPhones, the account-limit
-// and timeout errors whose column, the message and, under an account limit,
-// the line quoting the provider, is taller than the message viewport the
-// most a sheet may be leaves there, for every provider. The column scrolls;
-// Try again, the second action and the footer stay in sight. On the iPhone
-// 17 Pro Max held sideways the message of an account limit on Explain and
-// Compare is whole, but for Claude's, which runs to a fourth line, and the
-// quoted line under it is what scrolls.
-var aiRecoveryCutOn = map[string][]string{
-	"iPhone 17 Pro Max, landscape": {"account limit, Explain", "account limit, Compare", "account limit, Ask"},
-	"iPhone 16 Pro, landscape": {"account limit, Explain", "account limit, Compare", "account limit, Ask",
-		"timeout, Ask"},
-	"iPhone SE (1st generation), landscape": {"account limit, Explain", "account limit, Compare", "account limit, Ask",
-		"timeout, Explain", "timeout, Compare", "timeout, Ask"},
-	"Android phone, landscape, cutout on the left": {"account limit, Explain", "account limit, Compare", "account limit, Ask",
-		"timeout, Explain", "timeout, Compare", "timeout, Ask"},
-	"Android QA phone, landscape": {"account limit, Explain", "account limit, Compare", "account limit, Ask",
-		"timeout, Ask"},
-	"800x360 phone, landscape": {"account limit, Explain", "account limit, Compare", "account limit, Ask",
-		"timeout, Explain", "timeout, Compare", "timeout, Ask"},
-	"800x360 with system bars": {"account limit, Explain", "account limit, Compare", "account limit, Ask",
-		"timeout, Explain", "timeout, Compare", "timeout, Ask"},
-	"667x375 phone, landscape": {"account limit, Explain", "account limit, Compare", "account limit, Ask",
-		"timeout, Ask"},
+// aiRecoveryAccountCutOn lists, per phone canvas, the account-limit forms
+// whose message and quoted clause exceed the normal message viewport and so
+// scroll above the pinned recovery rows. On the iPhone 17 Pro Max held
+// sideways, only Claude's four-line account message cuts on Explain/Compare.
+var aiRecoveryAccountCutOn = map[string][]string{
+	"iPhone 17 Pro Max, landscape":                 {"account limit, Ask"},
+	"iPhone 16 Pro, landscape":                     {"account limit, Explain", "account limit, Compare", "account limit, Ask"},
+	"iPhone SE (1st generation), landscape":        {"account limit, Explain", "account limit, Compare", "account limit, Ask"},
+	"Android phone, landscape, cutout on the left": {"account limit, Explain", "account limit, Compare", "account limit, Ask"},
+	"Android QA phone, landscape":                  {"account limit, Explain", "account limit, Compare", "account limit, Ask"},
+	"800x360 phone, landscape":                     {"account limit, Explain", "account limit, Compare", "account limit, Ask"},
+	"800x360 with system bars":                     {"account limit, Explain", "account limit, Compare", "account limit, Ask"},
+	"667x375 phone, landscape":                     {"account limit, Explain", "account limit, Compare", "account limit, Ask"},
+}
+
+func aiRecoveryIsCut(screenName, providerID string, timeout bool, formAction string) bool {
+	formName := map[bool]string{false: "account limit", true: "timeout"}[timeout] + ", " + formAction
+	if !timeout {
+		if screenName == "iPhone 17 Pro Max, landscape" && providerID == providerAnthropic {
+			return true
+		}
+		for _, name := range aiRecoveryAccountCutOn[screenName] {
+			if name == formName {
+				return true
+			}
+		}
+		return false
+	}
+	// Providers whose shipped default offers both lower-reasoning and faster-model
+	// timeout rows mount two 44pt recovery rows; Gemini's unseeded Recommended
+	// default mounts the single faster-model row.
+	if providerID == providerGemini {
+		return screenName == "iPhone SE (1st generation), landscape" || screenName == "800x360 with system bars"
+	}
+	switch screenName {
+	case "iPhone 16 Pro, landscape",
+		"iPhone SE (1st generation), landscape",
+		"Android phone, landscape, cutout on the left",
+		"Android QA phone, landscape",
+		"800x360 phone, landscape",
+		"800x360 with system bars",
+		"667x375 phone, landscape":
+		return true
+	}
+	return false
 }
 
 // The account-limit and timeout errors keep the error state's rule on every
 // phone canvas the error tests lay out, held sideways: the panel's spacing
 // stays the panel's (wantTheErrorSpacing), the panel stays inside the safe
 // area, and the column is whole, or, where even the most a sheet may be is
-// too short for it (aiRecoveryCutOn), the panel takes that most and the
-// column scrolls to its last line, Try again, the second action and the
-// footer in sight. If the fixed chrome cannot leave one readable message
+// too short for it (aiRecoveryIsCut / aiRecoveryAccountCutOn), the panel takes
+// that most and the column scrolls to its last line, Try again, the second
+// action and the footer in sight. If the fixed chrome cannot leave one readable message
 // line, the combined overflow layout keeps title and Close fixed instead. Every
 // provider's own account-limit body and its quoted clause are measured, on
 // the fixed study verb, the comparison and Ask with a one-line question.
@@ -1025,16 +1092,13 @@ var aiRecoveryCutOn = map[string][]string{
 func TestTheAIAccountAndTimeoutErrorsKeepTheErrorRuleOnPhones(t *testing.T) {
 	reqs := stubCapturedStudyRequests(t)
 	for _, s := range aiRecoveryPhones {
-		cut := map[string]bool{}
-		for _, name := range aiRecoveryCutOn[s.name] {
-			cut[name] = true
-		}
 		for _, info := range aiProviders() {
 			for _, timeout := range []bool{false, true} {
 				for _, form := range []struct{ name, action, question string }{
 					{"Explain", aiActionExplain, ""}, {"Compare", aiActionCompare, ""}, {"Ask", aiActionAsk, aiShortQuestion},
 				} {
 					kind := map[bool]string{false: "account limit", true: "timeout"}[timeout]
+					isCut := aiRecoveryIsCut(s.name, info.ID, timeout, form.name)
 					t.Run(fmt.Sprintf("%s/%s/%s, %s", s.name, info.ID, kind, form.name), func(t *testing.T) {
 						st, w := insetWindow(t, s, 0)
 						st.keys().setActiveProvider(info.ID)
@@ -1098,7 +1162,7 @@ func TestTheAIAccountAndTimeoutErrorsKeepTheErrorRuleOnPhones(t *testing.T) {
 							t.Errorf("the second action spans %.1f..%.1f, outside the sheet from %.1f or over the footer at %.1f",
 								secondY, secondY+second.Size().Height, top, footer)
 						}
-						if !cut[f.name] {
+						if !isCut {
 							if !shown {
 								t.Errorf("the error's column is cut:%s, its viewport %.1f..%.1f", ends, scTop, scTop+sc.Size().Height)
 							}
@@ -1108,7 +1172,7 @@ func TestTheAIAccountAndTimeoutErrorsKeepTheErrorRuleOnPhones(t *testing.T) {
 							t.Errorf("the panel is %.1fpt tall with its column cut, where a sheet may be %.1fpt", bottom-top, most)
 						}
 						if shown {
-							t.Errorf("control: the column is whole here, where aiRecoveryCutOn records it cut")
+							t.Errorf("control: the column is whole here, where aiRecoveryIsCut records it cut")
 						}
 						sc.ScrollToBottom()
 						last := column[len(column)-1]

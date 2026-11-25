@@ -97,17 +97,35 @@ func TestTheAIErrorWordingWordForWord(t *testing.T) {
 		}
 		add(tc.id+" account limit, first row", rows[0], "Try again")
 		add(tc.id+" account limit, second row", rows[1], tc.link)
-		rows = aiErrorActionRows(t, aiErrorActions(state, timeout, func() {}))
+		timeoutActions := aiErrorActions(state, timeout, func() {})
+		rows = aiErrorActionRows(t, timeoutActions)
 		if len(rows) != 2 {
 			t.Fatalf("%s: the timeout offers %v", tc.id, rows)
 		}
 		add(tc.id+" timeout, first row", rows[0], "Try again")
+		_, openRows := collectSpeedRows(timeoutActions)
+		if len(openRows) == 0 {
+			t.Fatalf("%s: missing open timeout speed rows", tc.id)
+		}
+		fastRow := openRows[len(openRows)-1]
+		add(tc.id+" timeout, faster-model row", fastRow.titleText+"\n"+fastRow.detail,
+			"Switch to a faster model and try again\n"+info.FastModel+" · saves in Settings")
+		if len(openRows) == 2 {
+			seed := seedAISpeedReport(state, aiSpeedChoice{})
+			add(tc.id+" timeout, lower-effort row", openRows[0].titleText+"\n"+openRows[0].detail,
+				"Try again with less reasoning\n"+effortNoteLabel(seed.lowerEffort))
+		}
+
+		keyTestRows := aiErrorActionRows(t, aiKeyTestErrorActions(state, timeout, func() {}))
+		if len(keyTestRows) != 2 {
+			t.Fatalf("%s: Test key timeout offers %v", tc.id, keyTestRows)
+		}
 		target := speedTargetReport(state.keys().prefs, info.ID, info.FastModel)
 		want := "Set " + info.FastModel + " in Settings"
 		if target.effortLabel != "" {
 			want += " · " + target.effortLabel
 		}
-		add(tc.id+" timeout, second row", rows[1], want)
+		add(tc.id+" Test key timeout, second row", keyTestRows[1], want)
 
 		// The quoted reason as the screen draws it.
 		view := aiSearchErrorView(state, account, func(aiSpeedChoice) {})

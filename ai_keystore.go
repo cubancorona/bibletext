@@ -14,6 +14,7 @@ import (
 	"encoding/hex"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"fyne.io/fyne/v2"
 )
@@ -65,11 +66,28 @@ type keyStore struct {
 	readerRequests sync.Map // *aiReaderRequest to its context.CancelFunc
 	prefs          prefStore
 	secrets        secretStore
+	// mutation advances whenever a key, provider, model override or permission
+	// changes through this store, so UI controls can re-validate their offer
+	// without reading the platform credential store on every frame or tap.
+	mutation atomic.Uint64
 	// notRestoredDismissed holds, per account, a ✕ on keyNotRestoredLine
 	// tapped in this run, so the line stays dismissed for the rest of it
 	// where the store could not keep the record (dismissKeyNotRestored).
 	// Touched only from the UI thread, by the Settings sheet.
 	notRestoredDismissed map[string]bool
+}
+
+func (k *keyStore) seq() uint64 {
+	if k == nil {
+		return 0
+	}
+	return k.mutation.Load()
+}
+
+func (k *keyStore) bump() {
+	if k != nil {
+		k.mutation.Add(1)
+	}
 }
 
 const (
@@ -381,6 +399,7 @@ func (k *keyStore) setActiveProvider(id string) {
 		return
 	}
 	k.prefs.SetString(prefActiveProvider, id)
+	k.bump()
 }
 
 // aiEnabled reports whether AI features are available at all — false when the
@@ -407,6 +426,7 @@ func (k *keyStore) setAIEnabled(on bool) {
 		}
 	}
 	k.prefs.SetString(prefAIEnabled, v)
+	k.bump()
 }
 
 // aiAllowedForm begins every permission record. A record holding anything
@@ -461,6 +481,7 @@ func (k *keyStore) setAIAllowed(id, key string) {
 		return
 	}
 	k.prefs.SetString(prefAIAllowedPrefix+id, rec)
+	k.bump()
 }
 
 // clearAIAllowed erases provider id's permission, writing only when there is
@@ -475,6 +496,7 @@ func (k *keyStore) clearAIAllowed(id string) {
 	if k.prefs.String(prefAIAllowedPrefix+id) != "" {
 		k.prefs.SetString(prefAIAllowedPrefix+id, "")
 	}
+	k.bump()
 	k.readerRequests.Range(func(request, cancel any) bool {
 		if request.(*aiReaderRequest).provider == id {
 			cancel.(context.CancelFunc)()
@@ -533,11 +555,13 @@ func (k *keyStore) setAPIKey(id, key string) bool {
 			// The reader saved or cleared a key: the mark says which
 			// (keyLeftOnOldDevice).
 			k.setKeySavedMark(id, key != "")
+			k.bump()
 			return true
 		}
 		if key == "" {
 			// A failed DELETE must be reported: the key is still stored, and
 			// telling the reader it is gone would be a false assurance.
+			k.bump()
 			return false
 		}
 		// A failed WRITE falls back to Preferences — the same place builds
@@ -549,9 +573,11 @@ func (k *keyStore) setAPIKey(id, key string) bool {
 		// location (keyInSecureStore), so this never claims to be a keychain.
 		k.prefs.SetString(prefKeyPrefix+id, key)
 		k.setKeySavedMark(id, true)
+		k.bump()
 		return true
 	}
 	k.prefs.SetString(prefKeyPrefix+id, key)
+	k.bump()
 	return true
 }
 
@@ -568,6 +594,7 @@ func (k *keyStore) setOverrideModel(id, model string) {
 		return
 	}
 	k.prefs.SetString(prefModelOverridePrefix+id, strings.TrimSpace(model))
+	k.bump()
 }
 
 // resolvedModel is the model self-heal discovered for a provider when the
@@ -604,4 +631,5 @@ func (k *keyStore) setResolvedModel(id, model string) {
 	if info, ok := providerByID(id); ok {
 		k.prefs.SetString(prefModelResolvedForPrefix+id, info.Model)
 	}
+	k.bump()
 }

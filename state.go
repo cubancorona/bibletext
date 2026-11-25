@@ -67,11 +67,16 @@ type AppState struct {
 	// stops the one before it, and the landing, Cancel, a mode switch and
 	// leaving the tab stop the one there is (stopFindWait).
 	findBar *widget.ProgressBarInfinite
-	// Keep the reported options when a tab is rebuilt. Only the current
-	// caption and speed control receive subsequent reports or accept taps.
-	aiSearchModel aiModelInUse
-	findModelLine *aiModelLine
-	findSpeed     *aiSpeedControl
+	// Keep the reported options and submitted speed choice when a tab is rebuilt
+	// or an attempt times out. Only the current caption and speed control
+	// receive subsequent reports or accept taps.
+	aiSearchModel     aiModelInUse
+	aiSearchLastModel aiModelInUse
+	aiSearchChoice    aiSpeedChoice
+	aiSearchRestarted bool
+	findModelLine     *aiModelLine
+	findSpeed         *aiSpeedControl
+	findWaitCol       *aiWaitColumn
 	// repaintFind redraws the Search tab's Find results from state, in the tab
 	// that is on the canvas NOW. A Find's completion paints through it rather
 	// than into the results host of the build that submitted it, which a
@@ -446,6 +451,11 @@ type AppState struct {
 	// fetch updates it per book via loadProgressFn so the spinner shows real progress
 	// ("Downloading the Bible… John (43 of 66)") instead of a blind indeterminate bar.
 	loadingMsg *canvas.Text
+
+	// restoreWaitFocus requests that the next waiting view built on the UI
+	// goroutine synchronously restore keyboard focus before spawning its request
+	// goroutine. UI-goroutine only.
+	restoreWaitFocus bool
 }
 
 // stopFindWait retires the controls of the old Find view. A detached bar keeps
@@ -456,6 +466,7 @@ func (s *AppState) stopFindWait() {
 		s.findSpeed = nil
 	}
 	s.findModelLine = nil
+	s.findWaitCol = nil
 	if s.findBar != nil {
 		s.findBar.Stop()
 		s.findBar = nil

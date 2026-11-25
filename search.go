@@ -56,9 +56,10 @@ func buildSearchResultsView(state *AppState) fyne.CanvasObject {
 			// having NO results: the flag exists only to suppress a false
 			// zero-result message, so it must never hide real, paid-for
 			// passages if some path leaves it stale.
-			return aiSearchMessageView("Search cancelled.", "Try again", func() {
+			return aiSearchMessageView(state, "Search cancelled.", "Try again", func() {
+				state.aiSearchRestarted = false
 				if state.retryAISearch != nil {
-					state.retryAISearch(aiSpeedChoice{})
+					state.retryAISearch(validatedSpeedChoice(state, state.aiSearchChoice))
 				}
 			})
 		case len(state.aiSearchResults) == 0 && strings.TrimSpace(state.aiSearchQuery) == "":
@@ -234,90 +235,153 @@ func aiNoKeyView(state *AppState) fyne.CanvasObject {
 		wrappedParagraph(body, 300), spacer(14),
 		container.NewCenter(setup),
 	)
-	return container.NewCenter(col)
+	return findWaitScroll(col)
 }
 
-// aiSearchMessageView centres a short message with an optional action button —
-// used for AI-search errors (with a Try again retry).
-func aiSearchMessageView(msg, action string, onAction func()) fyne.CanvasObject {
+// aiSearchMessageView centres a short message with an optional framed action
+// button inside a scrollable Find viewport.
+func aiSearchMessageView(state *AppState, msg, action string, onAction func()) fyne.CanvasObject {
 	lbl := widget.NewLabel(msg)
 	lbl.Wrapping = fyne.TextWrapWord
 	lbl.Alignment = fyne.TextAlignCenter
 
 	items := []fyne.CanvasObject{wrappedParagraph(lbl, 300)}
 	if action != "" && onAction != nil {
-		btn := widget.NewButton(action, onAction)
-		items = append(items, spacer(12), container.NewCenter(btn))
+		border := lightPalette.Border
+		if state != nil {
+			border = state.pal().Border
+		}
+		var btn *widget.Button
+		btn = widget.NewButton(action, func() {
+			if state != nil && state.window != nil && state.window.Canvas() != nil &&
+				state.window.Canvas().Focused() == fyne.Focusable(btn) {
+				state.requestWaitFocusRestore()
+			}
+			onAction()
+			state.consumeWaitFocusRestore(nil)
+		})
+		items = append(items, spacer(12), container.NewCenter(inputFrame(btn, border)))
 	}
-	return container.NewCenter(container.NewVBox(items...))
+	return findWaitScroll(container.NewVBox(items...))
 }
 
-// aiSearchingView is the in-progress state while an AI passage search runs (used on
-// desktop, where results replace the reading pane). A plain centered line — no animated
-// ProgressBarInfinite, which would pin the whole canvas dirty (see the scroll-lag note).
+// aiSearchingView is the in-progress state while an AI passage search runs in
+// the sidebar layout (where results replace the reading pane). It shares the
+// waiting column with the Search tab and Study sheet, omitting only the
+// animated ProgressBarInfinite so the desktop reading canvas is not pinned
+// dirty.
 func aiSearchingView(state *AppState) fyne.CanvasObject {
 	pal := state.pal()
-	msg := canvas.NewText("Searching with AI…", pal.TextMuted)
-	msg.Alignment = fyne.TextAlignCenter
-	msg.TextSize = 16
+	var view *container.Scroll
+	speed := newFindSpeedControl(state, func(choice aiSpeedChoice) {
+		state.aiSearchRestarted = true
+		if state.retryAISearch != nil {
+			state.retryAISearch(choice)
+		}
+	})
 
-	// No ticking elapsed counter on purpose: a per-second repaint pins the
-	// canvas dirty (the same reason there is no ProgressBarInfinite here). One
-	// honest line sets the expectation instead — a high-capability model can
-	// legitimately think for a minute or more (aiRequestBudget) — and Cancel
-	// keeps the wait the reader's choice, not a constant's.
-	// Width-bounded caption (the app's muted style) so the column has a stable
-	// measure and every element centres against the same axis.
-	hint := container.NewGridWrap(fyne.NewSize(260, captionHeightFor(2)),
-		centeredCaption("Capable models can take a minute or more."))
-
-	// The model the request reported, if it has yet (showFindModel), over the
-	// hint in the hint's style, as on the Search tab.
-	model := newFindModelLine(state)
-	items := []fyne.CanvasObject{container.NewCenter(msg), spacer(10),
-		container.NewCenter(model.box), container.NewCenter(hint)}
-
-	// The handler is a WRAPPER, not state.cancelAISearch itself: a Button stores
-	// the func VALUE it is given, so binding the field directly would pin
-	// whichever search was in flight when this view was built — from the second
-	// Find on, Cancel would abandon the PREVIOUS request and leave the current
-	// one running. Reading the field at tap time always hits the live one.
+	// The handler is a wrapper, not state.cancelAISearch itself: a Button stores
+	// the func value it is given, so binding the field directly would pin
+	// whichever search was in flight when this view was built. Reading the field
+	// at tap time always reaches the live request.
 	cancelBtn := widget.NewButton("Cancel", func() {
 		abandonAISearch(state)
 		state.aiSearchCancelled = true
 		state.refresh() // → the cancelled state (never a false "found nothing")
 	})
-	// inputFrame: the theme fills buttons with SurfaceAlt, which is near-equal
-	// to the page ground here (and IS the card fill on the study panel), so a
-	// bare button reads as floating text. The outline gives it
-	// the same visible box the app's cards and fields carry.
-	items = append(items, spacer(4), container.NewCenter(inputFrame(cancelBtn, state.pal().Border)))
 
-	speed := newFindSpeedControl(state, state.retryAISearch)
-	items = append(items, speed.box)
-	view := findWaitScroll(container.NewVBox(items...))
+	status := "Searching with AI…"
+	if state.aiSearchRestarted {
+		status = "Searching with AI again…"
+	}
+	seed := state.aiSearchModel
+	if seed.model == "" {
+		seed = state.aiSearchLastModel
+	}
+	if seed.model == "" {
+		seed = seedAISpeedReport(state, state.aiSearchChoice)
+	}
+	model := newFindModelLine(state)
+	col := newAIWaitColumn(pal, status, nil, model, speed, inputFrame(cancelBtn, pal.Border), 0, seed)
+	state.findWaitCol = col
+	view = findWaitScroll(col.box)
 	model.relayout = view.Refresh
 	speed.relayout = view.Refresh
 	return view
 }
 
-// findWaitScroll holds a Find wait's column, on the Search tab and here:
-// centred in the space the wait is given, and scrolling when that space is
-// shorter than the column. The column's height is fixed (the line, the bar on
-// the Search tab, the model, the hint, Cancel and the faster-model offer) and
-// the space is not. On a phone held sideways the Search tab's results area is
-// shorter than the column: beside the rail a phone has there, and more so
-// above a bottom bar, which left about half of it (an iPhone's, before the
-// rail). A column merely centred there overflowed it at both ends:
-// "Searching with AI…" under the header, Cancel under the tab bar, where
-// nothing could bring it back. In the scroll the column starts at the area's
-// top and Cancel is a scroll away; wherever there is room the scroll never
-// engages, and the column centres as it always has. The Study panel's
-// waiting column scrolls for the same reason (setThinking in ai_panel.go).
-// Refresh on the scroll lays the column out again, which is what a model line
-// that wraps needs.
+// findWaitScroll holds a Find wait or recovery column on the Search tab and in
+// the sidebar layout: centred in the space available, and scrolling when a
+// short viewport (such as a phone in landscape) leaves less height than the
+// column needs. For the waiting column, vertical centring is anchored to its
+// closed height through Cancel and any collapsed "Faster options" row so
+// expanding the choices unfolds downward without moving Cancel.
 func findWaitScroll(col fyne.CanvasObject) *container.Scroll {
-	return container.NewVScroll(container.NewCenter(col))
+	lay := &findWaitCenterLayout{}
+	sc := container.NewVScroll(container.New(lay, col))
+	lay.scroll = sc
+	return sc
+}
+
+type findWaitCenterLayout struct {
+	scroll *container.Scroll
+}
+
+func (l *findWaitCenterLayout) columnMetrics(col fyne.CanvasObject, width float32) (colMin fyne.Size, baseH, openH float32, waitCol bool) {
+	if c, ok := col.(*fyne.Container); ok {
+		if wl, ok := c.Layout.(*aiWaitLayout); ok {
+			totalH, bh, oh := wl.boundsAt(width)
+			return fyne.NewSize(wl.measure(wl.width), totalH), bh, oh, true
+		}
+	}
+	ms := col.MinSize()
+	return ms, ms.Height, ms.Height, false
+}
+
+func (l *findWaitCenterLayout) topFor(viewH, baseH, openH float32) float32 {
+	if viewH <= baseH {
+		return 0
+	}
+	top := (viewH - baseH) / 2
+	if viewH >= openH {
+		return min(top, viewH-openH)
+	}
+	return top
+}
+
+func (l *findWaitCenterLayout) MinSize(objs []fyne.CanvasObject) fyne.Size {
+	if len(objs) == 0 {
+		return fyne.Size{}
+	}
+	var viewW, viewH float32
+	if l.scroll != nil {
+		sz := l.scroll.Size()
+		viewW, viewH = sz.Width, sz.Height
+	}
+	colMin, baseH, openH, _ := l.columnMetrics(objs[0], viewW)
+	top := l.topFor(viewH, baseH, openH)
+	return fyne.NewSize(colMin.Width, top+colMin.Height)
+}
+
+func (l *findWaitCenterLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
+	if len(objs) == 0 {
+		return
+	}
+	col := objs[0]
+	viewH := size.Height
+	if l.scroll != nil && l.scroll.Size().Height > 0 {
+		viewH = l.scroll.Size().Height
+	}
+	colMin, baseH, openH, waitCol := l.columnMetrics(col, size.Width)
+	top := l.topFor(viewH, baseH, openH)
+	if waitCol {
+		col.Move(fyne.NewPos(0, top))
+		col.Resize(fyne.NewSize(size.Width, colMin.Height))
+		return
+	}
+	cw := min(colMin.Width, size.Width)
+	col.Move(fyne.NewPos(max(0, (size.Width-cw)/2), top))
+	col.Resize(fyne.NewSize(cw, colMin.Height))
 }
 
 // buildSearchModeControls builds the whole mode row; see its definition below.

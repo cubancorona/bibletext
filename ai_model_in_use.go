@@ -130,8 +130,9 @@ const aiModelLineWidth = 260
 // fills it moves nothing around it; a name too long for the measure wraps onto
 // more lines.
 type aiModelLine struct {
-	text *widget.RichText
-	box  *fyne.Container
+	text    *widget.RichText
+	measure *widget.RichText
+	box     *fyne.Container
 	// relayout lays out again whatever holds the line, when a report changes
 	// its height. The screen that draws the line sets it; nil means nothing.
 	relayout func()
@@ -145,16 +146,65 @@ func newAIModelLine(m aiModelInUse) *aiModelLine {
 	}
 }
 
+// reserve pre-sizes an empty model line to the wrapped height m will take once
+// reported, without displaying m before the request has reported it.
+func (l *aiModelLine) reserve(m aiModelInUse) {
+	if l == nil || l.String() != "" {
+		return
+	}
+	if m.model == "" {
+		l.measure = nil
+	} else {
+		l.measure = centeredCaption(m.label())
+	}
+	width := float32(aiModelLineWidth)
+	if lay, ok := l.box.Layout.(modelLineLayout); ok && lay.width > 0 {
+		width = lay.width
+	}
+	l.box.Layout = modelLineLayout{width: width, measure: l.measure}
+}
+
+// rowsAt returns the number of caption rows the line occupies at width,
+// counting any reserved pre-report seed when the visible text is still empty.
+func (l *aiModelLine) rowsAt(width float32) int {
+	if l == nil {
+		return 1
+	}
+	if l.text.Size().Width != width {
+		l.text.Resize(fyne.NewSize(width, l.text.MinSize().Height))
+	}
+	rows := captionLines(l.text.MinSize().Height)
+	if l.String() == "" && l.measure != nil {
+		if l.measure.Size().Width != width {
+			l.measure.Resize(fyne.NewSize(width, l.measure.MinSize().Height))
+		}
+		if n := captionLines(l.measure.MinSize().Height); n > rows {
+			rows = n
+		}
+	}
+	return rows
+}
+
 // show puts m on the line.
 func (l *aiModelLine) show(m aiModelInUse) {
 	if l == nil || len(l.text.Segments) == 0 {
 		return
 	}
 	seg, ok := l.text.Segments[0].(*widget.TextSegment)
-	if !ok || seg.Text == m.label() {
+	if !ok {
+		return
+	}
+	if seg.Text == m.label() && (m.model == "" || l.measure == nil) {
 		return
 	}
 	before := l.box.MinSize().Height
+	if m.model != "" && l.measure != nil {
+		l.measure = nil
+		if lay, ok := l.box.Layout.(modelLineLayout); ok {
+			lay.measure = nil
+			l.box.Layout = lay
+		}
+	}
 	seg.Text = m.label()
 	l.text.Refresh()
 	if l.box.MinSize().Height != before && l.relayout != nil {
@@ -180,16 +230,32 @@ func (l *aiModelLine) String() string {
 // is asked. Its own height is not the one reported: it carries the RichText's
 // inner padding above and below the text, which the hint's box leaves out, so
 // taking it made even the empty line taller than a line of the hint and
-// pushed Cancel further down than the words need. An empty line counts one.
-type modelLineLayout struct{ width float32 }
+// pushed Cancel further down than the words need. An empty line counts one, or
+// the wrapped row count of its reserved seed when waiting on its first report.
+type modelLineLayout struct {
+	width   float32
+	measure *widget.RichText
+}
 
 func (l modelLineLayout) MinSize(objs []fyne.CanvasObject) fyne.Size {
 	lines := 1
+	empty := true
 	for _, o := range objs {
 		if o.Size().Width != l.width {
 			o.Resize(fyne.NewSize(l.width, o.MinSize().Height))
 		}
+		if rt, ok := o.(*widget.RichText); ok && rt.String() != "" {
+			empty = false
+		}
 		if n := captionLines(o.MinSize().Height); n > lines {
+			lines = n
+		}
+	}
+	if empty && l.measure != nil {
+		if l.measure.Size().Width != l.width {
+			l.measure.Resize(fyne.NewSize(l.width, l.measure.MinSize().Height))
+		}
+		if n := captionLines(l.measure.MinSize().Height); n > lines {
 			lines = n
 		}
 	}

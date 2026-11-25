@@ -138,6 +138,42 @@ func (r *modelResolver) generate(ctx context.Context, prompt string) (string, er
 	return r.generateWithModel(ctx, fresh, prompt, models)
 }
 
+// attemptOptions resolves the model's supported effort levels, effective wire
+// effort and waiting-screen report from one pure path shared by the resolver
+// and synchronous waiting-screen seeding.
+func attemptOptions(choice aiSpeedChoice, prefs prefStore, provider, model string, catalog modelEffortCatalog) ([]string, string, aiModelInUse, error) {
+	levels := catalog.choices(prefs, provider, model)
+	effort, err := requestedModelEffort(withAISpeedChoice(context.Background(), choice), prefs, provider, model, levels)
+	if err != nil {
+		return nil, "", aiModelInUse{}, err
+	}
+	return levels, effort, catalog.attemptReport(prefs, provider, model, effort, levels), nil
+}
+
+// seedAISpeedReport computes the report the resolver will emit on its first
+// attempt for the currently configured model, so waiting controls open with
+// their settled choices on the first frame.
+func seedAISpeedReport(state *AppState, choice aiSpeedChoice) aiModelInUse {
+	if state == nil || !aiFeaturesEnabled(state) {
+		return aiModelInUse{}
+	}
+	store := state.keys()
+	id := store.activeProvider()
+	if _, ok := providerByID(id); !ok {
+		return aiModelInUse{}
+	}
+	model := activeModelFor(store, id)
+	if model == "" {
+		return aiModelInUse{}
+	}
+	catalog := readEffortCatalog(store.prefs, id)
+	if _, _, report, err := attemptOptions(choice, store.prefs, id, model, catalog); err == nil {
+		return report
+	}
+	_, _, report, _ := attemptOptions(aiSpeedChoice{}, store.prefs, id, model, catalog)
+	return report
+}
+
 // Read the effort once per model attempt. The request, answer cache and waiting
 // screen then share the same actual model, including a newly discovered one.
 func (r *modelResolver) generateWithModel(ctx context.Context, model, prompt string, fresh []discoveredModel) (string, error) {
@@ -153,13 +189,13 @@ func (r *modelResolver) generateWithModel(ctx context.Context, model, prompt str
 		// fetched a different set of capabilities.
 		catalog = effortCatalogFromModels(r.id, fresh)
 	}
-	levels := catalog.choices(prefs, r.id, model)
-	effort, err := requestedModelEffort(ctx, prefs, r.id, model, levels)
+	choice, _ := ctx.Value(aiSpeedChoiceKey{}).(aiSpeedChoice)
+	_, effort, report, err := attemptOptions(choice, prefs, r.id, model, catalog)
 	if err != nil {
 		return "", err
 	}
 	reportAIRequestOptions(ctx, r.id, model, effort)
-	reportAIModel(ctx, catalog.attemptReport(prefs, r.id, model, effort, levels))
+	reportAIModel(ctx, report)
 	return r.build(model, effort).generate(ctx, prompt)
 }
 

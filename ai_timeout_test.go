@@ -441,16 +441,16 @@ func TestStudyPanelCloseAbandonsRequest(t *testing.T) {
 	if overlay == nil {
 		t.Fatal("the study panel did not open")
 	}
-	closeBtn := findTreeButton(overlay, "Close")
-	if closeBtn == nil {
-		t.Fatalf("no Close button on the study panel; texts %v", treeTexts(overlay))
+	exitBtn := findTreeButton(overlay, "Cancel")
+	if exitBtn == nil {
+		t.Fatalf("no Cancel exit button on the waiting study panel; texts %v", treeTexts(overlay))
 	}
-	closeBtn.OnTapped()
+	exitBtn.OnTapped()
 
 	select {
 	case <-ctx.Done():
 	case <-time.After(2 * time.Second):
-		t.Fatal("Close left the study request running — it keeps billing for the whole budget")
+		t.Fatal("the footer exit left the study request running — it keeps billing for the whole budget")
 	}
 }
 
@@ -513,6 +513,7 @@ func stubAIActionParked(t *testing.T) (ctxs chan context.Context) {
 // orphaned to run (and bill the reader's key) for the whole aiRequestBudget
 // with no way left to stop it.
 func TestStudyPanelFasterSwitchAbandonsTheSlowRequest(t *testing.T) {
+	armAISpeedClock(t)
 	app := test.NewApp()
 	defer app.Quit()
 	ctxs := stubAIActionParked(t)
@@ -554,6 +555,7 @@ func TestStudyPanelFasterSwitchAbandonsTheSlowRequest(t *testing.T) {
 // nil'd the one-slot cancelFetch (disarming Close/Cancel for the LIVE request)
 // and painted its own cancellation error over the new thinking state.
 func TestStudyPanelStaleSettleCannotDisarmTheNewRequest(t *testing.T) {
+	armAISpeedClock(t)
 	app := test.NewApp()
 	defer app.Quit()
 
@@ -611,7 +613,7 @@ func TestStudyPanelStaleSettleCannotDisarmTheNewRequest(t *testing.T) {
 	// The panel must still be waiting on the fast request — not showing the
 	// stale request's cancellation as an error.
 	overlay := w.Canvas().Overlays().Top()
-	if !treeHasText(overlay, "Reading the passage…") {
+	if !treeHasText(overlay, "Reading the passage again…") {
 		t.Fatalf("the stale settle repainted the live thinking state; texts %v", treeTexts(overlay))
 	}
 	// And Cancel must still command the fast request — the stale settle must

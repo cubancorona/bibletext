@@ -59,9 +59,7 @@ func scopeRowText(t *testing.T, r *aiSwitchActionRow) string {
 			}
 		})
 	}
-	for _, obj := range test.WidgetRenderer(r).Objects() {
-		visit(obj)
-	}
+	visit(r.box)
 	return strings.Join(strings.Fields(strings.Join(runs, " ")), " ")
 }
 
@@ -73,13 +71,14 @@ func scopeContains(t *testing.T, rendered, want string) {
 }
 
 func TestWaitingActionExplainsItsScopeOnAShortPhone(t *testing.T) {
+	armAISpeedClock(t)
 	for _, tc := range []struct {
 		name, model, saved, lower string
 		levels                    []string
 	}{
 		{"named-effort", geminiFastModel, "high", "medium", []string{"medium", "high"}},
 		{"numeric-budget", geminiFastModel, "4096", "1024", []string{"1024", "4096"}},
-		{"only-model", "gemini-synthetic-source", "low", "", []string{"low", "high"}},
+		{"only-model", "gemini-3-pro", "low", "", []string{"low", "high"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sc := insetScreen{"short portrait", 320, 568, 20, 0, 0, 0}
@@ -104,10 +103,11 @@ func TestWaitingActionExplainsItsScopeOnAShortPhone(t *testing.T) {
 			}
 			words := scopeRowText(t, rows[0])
 			if tc.lower != "" {
-				scopeContains(t, words, "this time")
-				scopeContains(t, words, "stays the same.")
+				scopeContains(t, words, "Use less reasoning this time")
+				scopeContains(t, words, effortNoteLabel(tc.lower))
 			} else {
-				scopeContains(t, words, "Restart this request and save "+geminiFastModel+" in Settings.")
+				scopeContains(t, words, "Switch to a faster model")
+				scopeContains(t, words, geminiFastModel+" · saves in Settings")
 			}
 			rows[0].Tapped(nil)
 			next := nextSend(t, sends)
@@ -126,6 +126,7 @@ func TestWaitingActionExplainsItsScopeOnAShortPhone(t *testing.T) {
 }
 
 func TestWaitingActionTextFitsAndMatchesTheRestart(t *testing.T) {
+	armAISpeedClock(t)
 	for _, sc := range []insetScreen{
 		{"portrait", 393, 852, 53, 34, 0, 0},
 		{"compact-landscape", 667, 375, 0, 21, 44, 44},
@@ -141,7 +142,7 @@ func TestWaitingActionTextFitsAndMatchesTheRestart(t *testing.T) {
 				t.Cleanup(func() { appearanceVariant = original })
 				st, w := insetWindow(t, sc, 0)
 				switchThemeUnder(st.app, variant)
-				const model = "gemini-synthetic-study"
+				const model = "gemini-3-pro"
 				store := st.keys()
 				store.setActiveProvider(providerGemini)
 				store.setAPIKey(providerGemini, "synthetic")
@@ -149,13 +150,12 @@ func TestWaitingActionTextFitsAndMatchesTheRestart(t *testing.T) {
 				store.setOverrideModel(providerGemini, model)
 				high, lower := "high", "medium"
 				choices := []string{"low", "medium", "high"}
-				title := "Use Medium effort this time"
-				detail := "Restart this request with Medium effort. Your saved effort stays the same."
+				title := "Use less reasoning this time"
+				detail := "Medium effort"
 				if action == "budget" {
 					high, lower = "4096", "1024"
 					choices = []string{lower, high}
-					title = "Use a smaller thinking budget this time"
-					detail = "Restart this request with a limit of 1,024 tokens. Your saved budget stays the same."
+					detail = "1,024 tokens"
 				}
 				rememberModelEfforts(store.prefs, providerGemini, []discoveredModel{{id: model, efforts: choices}, {id: geminiFastModel, efforts: []string{"low", "high"}}})
 				setAIReasoningEffort(store.prefs, providerGemini, model, high)
@@ -176,12 +176,13 @@ func TestWaitingActionTextFitsAndMatchesTheRestart(t *testing.T) {
 				checkSend(model, high)
 				wantInsideTheSafeArea(t, sc, p)
 				h, rows := scopeRows(p)
-				if h == nil || len(rows) != 2 || h.expanded {
+				if h == nil || len(rows) != 0 || h.expanded {
 					t.Fatalf("wrong initial disclosure: %v, %d", h != nil, len(rows))
 				}
 				h.Tapped(nil)
-				if !h.expanded {
-					t.Fatal("not expanded")
+				_, rows = scopeRows(p)
+				if !h.expanded || len(rows) != 2 {
+					t.Fatalf("not expanded cleanly: expanded=%v, rows=%d", h.expanded, len(rows))
 				}
 				position := fyne.CurrentApp().Driver().AbsolutePositionForObject
 				if position(rows[1]).Y+0.5 < position(rows[0]).Y+rows[0].Size().Height {
@@ -191,23 +192,25 @@ func TestWaitingActionTextFitsAndMatchesTheRestart(t *testing.T) {
 				scopeContains(t, effortRow, title)
 				scopeContains(t, effortRow, detail)
 				scopeContains(t, modelRow, "Switch to a faster model")
-				scopeContains(t, modelRow, "Restart this request and save "+geminiFastModel+" in Settings.")
-				scopeContains(t, modelRow, "Low")
+				scopeContains(t, modelRow, geminiFastModel+" · saves in Settings")
 				cancel := findTreeButton(p, "Cancel")
 				if cancel == nil {
 					t.Fatal("no Cancel")
 				}
-				scroll := scrollHolding(p, cancel)
+				scroll := scrollHolding(p, h)
 				if scroll == nil {
 					t.Fatal("no waiting column")
 				}
-				for _, act := range []fyne.CanvasObject{h, rows[0], rows[1], cancel} {
+				for _, act := range []fyne.CanvasObject{h, rows[0], rows[1]} {
 					local, ok := descendantPos(scroll.Content, act)
 					size := act.Size()
 					if !ok || size.Width <= 0 || size.Height <= 0 || local.Y < -0.5 ||
 						local.Y+size.Height > scroll.Content.Size().Height+0.5 || size.Height > scroll.Size().Height+0.5 {
 						t.Fatalf("unreachable action %T: position %v, size %v, content %v viewport %v", act, local, size, scroll.Content.Size(), scroll.Size())
 					}
+				}
+				if scrollHolding(p, cancel) != nil {
+					t.Fatal("Study Cancel must stand in the fixed footer, not inside the waiting scroll")
 				}
 				if dir := os.Getenv("BIBLETEXT_PANE_SNAPSHOT_DIR"); dir != "" && action != "model" {
 					writeRenderPNG(t, filepath.Join(dir, "ai-wait-"+sc.name+"-"+action+".png"), w.Canvas().Capture())

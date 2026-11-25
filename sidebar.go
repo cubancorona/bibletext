@@ -96,6 +96,8 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		state.aiSearchResults = nil
 		state.aiSearchLoading = true
 		state.aiSearchCancelled = false
+		state.aiSearchChoice = choice
+		state.aiSearchLastModel = seedAISpeedReport(state, choice)
 		state.aiSearchModel = aiModelInUse{} // this request has not said yet
 		// Installed BEFORE the refresh below, because that refresh SYNCHRONOUSLY
 		// builds aiSearchingView — which only renders Cancel when this hook is
@@ -110,6 +112,7 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 			cancelSearch()
 		})
 		state.refresh() // → aiSearchingView (with Cancel)
+		state.consumeWaitFocusRestore(nil)
 		cancelSearch = startAISearch(state, q, choice, func(m aiModelInUse) {
 			showFindModel(state, gen, m)
 		}, func(verses []Verse, err error) {
@@ -138,7 +141,10 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		})
 	}
 	state.retryAISearch = func(choice aiSpeedChoice) { runAsk(state.aiSearchQuery, choice) }
-	aiEntry.OnSubmitted = func(q string) { runAsk(q, aiSpeedChoice{}) }
+	aiEntry.OnSubmitted = func(q string) {
+		state.aiSearchRestarted = false
+		runAsk(q, aiSpeedChoice{})
+	}
 
 	clearAsk := widget.NewButtonWithIcon("", theme.CancelIcon(), func() {
 		abandonAISearch(state) // cancel the REQUEST (invalidates the session too)
@@ -147,6 +153,10 @@ func buildSidebar(state *AppState) fyne.CanvasObject {
 		state.aiSearchResults = nil
 		state.aiSearchErr = nil
 		state.aiSearchCancelled = false
+		state.aiSearchModel = aiModelInUse{}
+		state.aiSearchLastModel = aiModelInUse{}
+		state.aiSearchChoice = aiSpeedChoice{}
+		state.aiSearchRestarted = false
 		if state.IsSearching {
 			state.refresh() // → prompt
 		}

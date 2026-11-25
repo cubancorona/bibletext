@@ -136,19 +136,23 @@ func aiErrorActionCuts(t *testing.T, popup *widget.PopUp, f aiErrorForm, sc *con
 		cuts = append(cuts, fmt.Sprintf("%s spans %.1f..%.1f, outside the sheet's %.1f..%.1f or overlapping its scroll ending %.1f",
 			f.button, y, y+btn.Size().Height, sheetTop, sheetBottom, bottom))
 	}
-	// The footer's buttons stand below the error action, inside the sheet.
-	for _, name := range []string{"Report", "Copy", "Close"} {
-		b := findTreeButton(popup, name)
-		if b == nil {
-			t.Fatalf("control: the panel has no %s; texts %v", name, treeTexts(popup))
+	// Answer-only buttons stay hidden on an error; Close stands below the
+	// pinned recovery action, inside the sheet.
+	for _, hidden := range []string{"Report", "Copy"} {
+		if b := findTreeButton(popup, hidden); b != nil && studyObjectVisible(popup, b) {
+			cuts = append(cuts, hidden+" is visible on an error sheet")
 		}
-		if y := drv.AbsolutePositionForObject(b).Y; y < sheetTop-0.5 || y+b.Size().Height > sheetBottom+0.5 {
-			cuts = append(cuts, fmt.Sprintf("%s spans %.1f..%.1f, outside the sheet's %.1f..%.1f",
-				name, y, y+b.Size().Height, sheetTop, sheetBottom))
-		}
-		if y := drv.AbsolutePositionForObject(b).Y; y < drv.AbsolutePositionForObject(btn).Y+btn.Size().Height-0.5 {
-			cuts = append(cuts, name+" overlaps the pinned error action")
-		}
+	}
+	closeBtn := findTreeButton(popup, "Close")
+	if closeBtn == nil {
+		t.Fatalf("control: the panel has no Close; texts %v", treeTexts(popup))
+	}
+	if y := drv.AbsolutePositionForObject(closeBtn).Y; y < sheetTop-0.5 || y+closeBtn.Size().Height > sheetBottom+0.5 {
+		cuts = append(cuts, fmt.Sprintf("Close spans %.1f..%.1f, outside the sheet's %.1f..%.1f",
+			y, y+closeBtn.Size().Height, sheetTop, sheetBottom))
+	}
+	if y := drv.AbsolutePositionForObject(closeBtn).Y; y < drv.AbsolutePositionForObject(btn).Y+btn.Size().Height-0.5 {
+		cuts = append(cuts, "Close overlaps the pinned error action")
 	}
 	return cuts
 }
@@ -329,11 +333,11 @@ func TestTheAIErrorClosesTheQuoteBeforeCoveringTheHeader(t *testing.T) {
 		form      aiErrorForm
 		selection string
 	}{
-		{620, forms[0], aiLongSelection},
-		{620, forms[1], aiLongSelection},
-		{620, forms[2], aiLongSelection},
-		{620, forms[3], aiLongSelection},
-		{480, forms[4], "For God so loved the world"},
+		{580, forms[0], aiLongSelection},
+		{580, forms[1], aiLongSelection},
+		{580, forms[2], aiLongSelection},
+		{580, forms[3], aiLongSelection},
+		{445, forms[4], "For God so loved the world"},
 	} {
 		t.Run(fmt.Sprintf("1280x%.0f/%s", tc.height, tc.form.name), func(t *testing.T) {
 			app.asNew(t)
@@ -454,10 +458,7 @@ func TestAQuestionTooLongForTheWindowKeepsTheErrorPanelOnIt(t *testing.T) {
 // leaves the error whole for every form.
 // The 732x240 canvas is laid out as before the change, the sheet filling it.
 var aiErrorCutOn = map[string][]string{
-	"iPhone SE (1st generation), landscape": {"Explain", "Compare", "Ask",
-		"Explain, allowance spent"},
-	"640x320 under a 24pt status bar": {"Explain", "Compare", "Ask", "Explain, allowance spent",
-		"Explain, no key"},
+	"640x320 under a 24pt status bar": {"Explain", "Compare", "Ask", "Explain, allowance spent"},
 	"732x240 split screen": {"Explain", "Compare", "Ask", "Explain, allowance spent",
 		"Explain, no key"},
 }

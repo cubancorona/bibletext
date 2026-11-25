@@ -13,6 +13,7 @@ import (
 )
 
 func TestAskSpeedChoicesFollowTheEffortOfEachAttempt(t *testing.T) {
+	armAISpeedClock(t)
 	app := test.NewApp()
 	defer app.Quit()
 	w := test.NewWindow(widget.NewLabel("reading"))
@@ -33,9 +34,9 @@ func TestAskSpeedChoicesFollowTheEffortOfEachAttempt(t *testing.T) {
 				t.Fatal("missing speed choices")
 			}
 			toggle.Tapped(nil)
-			row := waitingAction(panel, "Use "+effortDisplayName(effort)+" effort this time")
-			if row == nil {
-				t.Fatalf("no %q effort action after expanding the choices", effort)
+			row := waitingAction(panel, "Use less reasoning this time")
+			if row == nil || row.detail != effortNoteLabel(effort) {
+				t.Fatalf("no %q effort action after expanding the choices: %v", effort, treeTexts(panel))
 			}
 			row.Tapped(nil)
 		}

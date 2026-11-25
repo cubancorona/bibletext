@@ -347,12 +347,16 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       day and Go-to arrivals show NO trail.
 - [ ] Exactly one of Search|Find|Notes-bubble is lit at any time; the pair
       vanishes with Assistant=None, the bubble with notes off.
-- [ ] Find: Cancel appears on the FIRST search of a session; cancelling
-      says "Search cancelled." — never "no matching passages"; the
-      faster-model offer appears only when something faster exists; every
-      teardown route (✕, toggle, sidebar collapse, Assistant→None) kills
-      the in-flight state — no immortal "Searching with AI…".
-- [ ] The AI answer panel: quote ellipsizes, Cancel exists while thinking,
+- [ ] Find: Cancel appears on the FIRST search of a session; cancelling on
+      the Search tab returns to the calm prompt (while the sidebar layout
+      shows "Search cancelled." with a framed Try again) — never "no matching
+      passages"; the faster-model offer appears only on capable models when
+      something faster exists; every teardown route (✕, toggle, sidebar
+      collapse, Assistant→None) kills the in-flight state — no immortal
+      "Searching with AI…".
+- [ ] The AI answer panel: quote ellipsizes, a single framed Cancel stands in
+      the footer while thinking (with Report, Copy and the disclaimer hidden
+      until an answer lands, and unframed Close on answers and errors),
       truncated answers carry the honest cut-off line, the reading text
       never paints THROUGH the panel, and a no-key error offers settings.
       A comparison (title Perspectives; `compare` opens one without a key)
@@ -361,34 +365,37 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       settles; a declined passage says so and offers Try again, not the
       connection line.
 - [ ] Every AI wait names the model at work, on all five platforms: the
-      Study with AI panel and Find show one line under the bar, over
-      "Capable models can take a minute or more.", in that hint's size and
+      Study with AI panel and Find show one line under the 4pt bar, over
+      "Capable models can take a minute or more." (hidden when already on the
+      provider's fast model), in that hint's size and
       muted colour and centred on its axis — `Gemini (Google) ·
       gemini-pro-latest`, the Settings pickers' own names; Settings → Test
       key shows the same line under "Testing…". It fills a moment after the
-      wait appears. On a model with reasoning controls, select High and
+      wait appears without shifting any surrounding box. On a model with reasoning controls, select High and
       confirm the line ends in “· High”. Repeat with Recommended and with
       a model that takes a token budget. A model without a known effort
       control shows just its provider and model. Recommended includes the
       level in parentheses when the model's default is verified. With
       `BIBLETEXT_DESKTOP_TABS=sidebar`, the sidebar's Find wait carries it too.
-- [ ] In an Ask or Find wait where both faster options are available, open
-      “Switch to a faster model or reasoning effort”. The request keeps
-      running while the choices are open. The lower-effort or budget action
-      says “this time” and the model switch identifies the model it saves
-      in Settings. Choose the lower setting. Ask a new question and check that its caption shows
-      the original effort. Switch models and check that the destination
-      and effort shown before the switch match the new caption and Settings.
-      On the faster model at High, check that the lower retry is directly
-      accessible. On a short landscape screen, scroll to both expanded
-      actions and Cancel.
+- [ ] In an Ask or Find wait where both faster options are available, tap
+      “Faster options”. The request keeps running while the two plain rows
+      unfold underneath, and on Find Cancel does not shift upward. The
+      lower-effort or budget row reads “Use less reasoning this time” with
+      its level or token budget note, and the model row reads “Switch to a
+      faster model” (`{model} · saves in Settings`). Choose the lower setting:
+      the status line updates to “… again…”, and a subsequent new question
+      returns to the saved effort. Switch models and check that Settings now
+      pins the faster model. On the faster model at High, check that the
+      single lower-reasoning row is directly shown without a toggle. On a
+      short landscape screen, expanding “Faster options” scrolls the revealed
+      rows into view while Study's Cancel remains pinned in the footer.
 - [ ] The model line on a small screen: pin a long model id (a Gemini
-      preview); on a 375pt phone it wraps to a second line and never widens
+      preview); on a 375pt phone it wraps onto multiple lines and never widens
       the card or the Search tab. On a phone in landscape (iPhone SE, a Pro
-      Max, an Android phone) the Study wait still scrolls to Cancel with the
-      wrapped line, and nothing paints past the card or over its footer.
-      The empty line, before the name arrives, sits as close under the bar
-      and over the hint as the name will, and the name moves nothing.
+      Max, an Android phone) the Study wait keeps its status line whole while
+      Cancel stays pinned in the footer, and nothing paints past the card.
+      Before the first report arrives for the configured model, the seeded
+      column already reserves its settled height so the report moves nothing.
 - [ ] Find on a phone in landscape (iPhone SE, an iPhone Pro Max and an
       Android phone, each with the rail): ask a Find, then turn
       the phone. "Searching with AI…" and the bar sit at the top of the
@@ -1080,8 +1087,8 @@ Each line was a real screen defect this list would have caught:
 14. iOS/macOS: bold-weight highlight re-wrapped the paragraph (~17% wider
     Georgia); a wash may change colour only.
 15. All: a leaked infinite progress bar (load screen theme-flip, closed
-    cross-refs panel) pinned the canvas dirty at ~20fps and made scrolling
-    judder until force-quit.
+    cross-refs panel) pinned the canvas dirty on every animation tick and
+    made scrolling judder until force-quit.
 16. Browser: deleting your open note made a stranger's note appear
     expanded — focus outlived the deleted id and fell to the next note.
 17. Android: the Go-to keyboard lift arrived in dp not px (~2.2× overstated)

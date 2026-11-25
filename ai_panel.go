@@ -8,6 +8,7 @@ package bibletext
 
 import (
 	"context"
+	"image/color"
 	"net/url"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -36,25 +38,152 @@ func (t aiPassageDisclosureTheme) Size(name fyne.ThemeSizeName) float32 {
 	return t.Theme.Size(name)
 }
 
-// aiPassageHeaderLayout lets the touch target use the citation's surrounding
-// space while retaining at least twelve points between quotation and citation.
-type aiPassageHeaderLayout struct{ citation fyne.CanvasObject }
+// aiPassageHeaderLayout places the quotation (when expanded) above the citation
+// row with 12pt from quotation to citation and 12pt from citation to the header
+// rule (5pt inside this block plus VBox's 7pt padding), while letting the 44pt
+// tap band overlap surrounding air across the full width of the row.
+type aiPassageHeaderLayout struct {
+	box        *fyne.Container
+	quote      fyne.CanvasObject
+	citation   fyne.CanvasObject
+	wash       *canvas.Rectangle
+	hit        fyne.CanvasObject
+	disclosure fyne.CanvasObject
+}
 
-func (l aiPassageHeaderLayout) box(objects []fyne.CanvasObject) fyne.Layout {
-	gap := float32(12)
-	if len(objects) > 1 {
-		gap = fyne.Max(0, gap-(objects[1].MinSize().Height-l.citation.MinSize().Height)/2)
+const (
+	aiQuoteToCitationGap = float32(12)
+	aiCitationOuterAir   = float32(5) // + 7pt VBox padding = 12pt to title or header rule
+)
+
+func (l *aiPassageHeaderLayout) measureCitation(width float32) float32 {
+	citeW := max(32, width-minTapTarget)
+	if width > 0 && l.citation.Size().Width != citeW {
+		l.citation.Resize(fyne.NewSize(citeW, l.citation.MinSize().Height))
 	}
-	return layout.NewCustomPaddedVBoxLayout(gap)
+	return l.citation.MinSize().Height
 }
 
-func (l aiPassageHeaderLayout) MinSize(objects []fyne.CanvasObject) fyne.Size {
-	return l.box(objects).MinSize(objects)
+func (l *aiPassageHeaderLayout) MinSize([]fyne.CanvasObject) fyne.Size {
+	w := float32(0)
+	if l.box != nil {
+		w = l.box.Size().Width
+	}
+	citeH := l.measureCitation(w)
+	minW := l.citation.MinSize().Width + minTapTarget
+	if !l.quote.Visible() {
+		return fyne.NewSize(minW, aiCitationOuterAir+citeH+aiCitationOuterAir)
+	}
+	qs := l.quote.MinSize()
+	return fyne.NewSize(max(qs.Width, minW), qs.Height+aiQuoteToCitationGap+citeH+aiCitationOuterAir)
 }
 
-func (l aiPassageHeaderLayout) Layout(objects []fyne.CanvasObject, size fyne.Size) {
-	l.box(objects).Layout(objects, size)
+func (l *aiPassageHeaderLayout) Layout(_ []fyne.CanvasObject, size fyne.Size) {
+	citeW := max(0, size.Width-minTapTarget)
+	citeH := l.measureCitation(size.Width)
+	citeY := aiCitationOuterAir
+	if l.quote.Visible() {
+		qh := l.quote.MinSize().Height
+		l.quote.Move(fyne.NewPos(0, 0))
+		l.quote.Resize(fyne.NewSize(size.Width, qh))
+		citeY = qh + aiQuoteToCitationGap
+	}
+	l.citation.Move(fyne.NewPos(0, citeY))
+	l.citation.Resize(fyne.NewSize(citeW, citeH))
+
+	hitH := max(minTapTarget, citeH)
+	hitY := citeY + citeH/2 - hitH/2
+	if l.box != nil && l.box.Position().Y < 11 && hitY < 0 {
+		hitY = 0
+	}
+	l.wash.Move(fyne.NewPos(0, hitY))
+	l.wash.Resize(fyne.NewSize(size.Width, hitH))
+	l.hit.Move(fyne.NewPos(0, hitY))
+	l.hit.Resize(fyne.NewSize(citeW, hitH))
+	l.disclosure.Move(fyne.NewPos(citeW, hitY))
+	l.disclosure.Resize(fyne.NewSize(minTapTarget, hitH))
 }
+
+// aiCitationTapArea extends the passage disclosure's tap and hover target
+// across the citation text without adding a second keyboard tab stop.
+type aiCitationTapArea struct {
+	widget.BaseWidget
+	state   *AppState
+	wash    *canvas.Rectangle
+	onTap   func()
+	hovered bool
+	pressed bool
+}
+
+func newAICitationTapArea(state *AppState, wash *canvas.Rectangle, onTap func()) *aiCitationTapArea {
+	a := &aiCitationTapArea{state: state, wash: wash, onTap: onTap}
+	a.ExtendBaseWidget(a)
+	return a
+}
+
+func (a *aiCitationTapArea) CreateRenderer() fyne.WidgetRenderer {
+	return widget.NewSimpleRenderer(canvas.NewRectangle(color.Transparent))
+}
+
+func (a *aiCitationTapArea) syncWash() {
+	pal := lightPalette
+	if a.state != nil {
+		pal = a.state.pal()
+	} else if isDark() {
+		pal = darkPalette
+	}
+	switch {
+	case a.pressed:
+		a.wash.FillColor = theme.Color(theme.ColorNamePressed)
+	case a.hovered:
+		a.wash.FillColor = paletteHover(pal)
+	default:
+		a.wash.FillColor = color.Transparent
+	}
+	a.wash.Refresh()
+}
+
+func (a *aiCitationTapArea) Tapped(*fyne.PointEvent) {
+	a.pressed = false
+	a.syncWash()
+	if a.onTap != nil {
+		a.onTap()
+	}
+}
+
+func (a *aiCitationTapArea) MouseIn(*desktop.MouseEvent) {
+	a.hovered = true
+	a.syncWash()
+}
+
+func (a *aiCitationTapArea) MouseMoved(*desktop.MouseEvent) {}
+
+func (a *aiCitationTapArea) MouseOut() {
+	a.hovered = false
+	a.pressed = false
+	a.syncWash()
+}
+
+func (a *aiCitationTapArea) MouseDown(*desktop.MouseEvent) {
+	a.pressed = true
+	a.syncWash()
+}
+
+func (a *aiCitationTapArea) MouseUp(*desktop.MouseEvent) {
+	if a.pressed {
+		a.pressed = false
+		a.syncWash()
+	}
+}
+
+func (a *aiCitationTapArea) Cursor() desktop.Cursor { return desktop.PointerCursor }
+
+var (
+	_ fyne.Tappable      = (*aiCitationTapArea)(nil)
+	_ desktop.Hoverable  = (*aiCitationTapArea)(nil)
+	_ desktop.Mouseable  = (*aiCitationTapArea)(nil)
+	_ desktop.Cursorable = (*aiCitationTapArea)(nil)
+)
 
 // aiErrorViewportLayout lets the message scroll use less than Fyne's 32pt
 // scroll minimum when the pinned action and the sheet's chrome need the room.
@@ -186,12 +315,26 @@ func showAIPanelWithSpeed(state *AppState, action string, passage aiPassage, que
 		detailsButton.Importance = widget.LowImportance
 		compactButton := container.NewThemeOverride(detailsButton,
 			aiPassageDisclosureTheme{fyne.CurrentApp().Settings().Theme()})
-		disclosure := container.NewGridWrap(fyne.NewSize(minTapTarget, minTapTarget), compactButton)
 		setPassagePreviewCompact(preview, true)
+		citeWash := canvas.NewRectangle(color.Transparent)
+		citeWash.CornerRadius = 8
+		citeHit := newAICitationTapArea(state, citeWash, func() {
+			if detailsButton.OnTapped != nil {
+				detailsButton.OnTapped()
+			}
+		})
 		// Keep the title on its own row: long action titles and the disclosure
 		// would otherwise widen the popup beyond a narrow phone's canvas.
-		citationRow := container.NewBorder(nil, nil, nil, container.New(vCenterLayout{}, disclosure), container.New(vCenterLayout{}, preview))
-		headerItems = append(headerItems, container.New(aiPassageHeaderLayout{citation: preview}, detailsBox, citationRow))
+		headerLay := &aiPassageHeaderLayout{
+			quote:      detailsBox,
+			citation:   preview,
+			wash:       citeWash,
+			hit:        citeHit,
+			disclosure: compactButton,
+		}
+		passageHeader := container.New(headerLay, citeWash, detailsBox, preview, citeHit, compactButton)
+		headerLay.box = passageHeader
+		headerItems = append(headerItems, passageHeader)
 	} else {
 		headerItems = append(headerItems, preview)
 	}
@@ -203,7 +346,7 @@ func showAIPanelWithSpeed(state *AppState, action string, passage aiPassage, que
 	// maxBodyH) so short answers show in full with no empty space, and only very
 	// long ones need to scroll.
 	ps := sheetPanelSize(state, cnv)
-	bodyW := ps.Width - 44
+	bodyW := ps.Width - 36
 	// A floor for the states that size themselves before the popup exists. The
 	// real cap is worked out per-state in fitBody, from the chrome the panel
 	// actually has rather than a guess at it.
@@ -243,7 +386,7 @@ func showAIPanelWithSpeed(state *AppState, action string, passage aiPassage, que
 	var userClosed bool
 
 	// A running ProgressBarInfinite ticks an animation every frame, which keeps the
-	// whole canvas marked dirty and forces a full-tree repaint at ~20fps — that
+	// whole canvas marked dirty and forces a full-tree repaint on each frame — that
 	// competes with scrolling and lingers (until renderer-cache expiry) if the panel
 	// is dismissed mid-spin. Track the live spinner and Stop() it on every exit from
 	// the thinking state so the animation never outlives the panel.
@@ -324,12 +467,18 @@ func showAIPanelWithSpeed(state *AppState, action string, passage aiPassage, que
 	var fittedLeast func() float32
 	var errorViewport *aiErrorViewportLayout
 	var errorOverflow *aiErrorOverflow
+	var waitColumn *aiWaitColumn
+	var disclaimerText *widget.RichText
+	var disclaimer fyne.CanvasObject
 	fitBody := func(sc *container.Scroll, want float32, least func() float32) {
 		if errorOverflow != nil {
 			errorOverflow.restore(content, header, footer, body)
 		}
 		if want < 1 {
 			want = 1
+		}
+		if disclaimer != nil && disclaimer.Visible() && disclaimerText != nil {
+			disclaimerText.Resize(fyne.NewSize(bodyW, disclaimerText.MinSize().Height))
 		}
 		fittedBody, fittedWant, fittedLeast = sc, want, least
 		var leastH float32
@@ -375,6 +524,19 @@ func showAIPanelWithSpeed(state *AppState, action string, passage aiPassage, que
 			}
 			setContextHeight(minF(contextH, ps.Height/3))
 			need := fyne.Max(minF(want, 96), leastH)
+			if thinkingBar != nil {
+				baseWant := want
+				if waitColumn != nil {
+					curH, closedH, _ := waitColumn.lay.boundsAt(bodyW)
+					if curH > closedH {
+						baseWant = fyne.Max(1, want-(curH-closedH))
+					}
+				}
+				// While waiting, automatic collapse yields the quote before
+				// clipping the closed waiting column on short portrait screens,
+				// without collapsing an open quote mid-tap when Faster options opens.
+				need = fyne.Max(baseWant, leastH)
+			}
 			available := func() float32 {
 				return ps.Height - (popup.MinSize().Height - sc.MinSize().Height)
 			}
@@ -430,8 +592,12 @@ func showAIPanelWithSpeed(state *AppState, action string, passage aiPassage, que
 		}
 	}
 
-	closeBtn := widget.NewButton("Close", func() {
-		diagnose("panel_close")
+	exitBtn := widget.NewButton("Close", func() {
+		if thinkingBar != nil {
+			diagnose("panel_cancel")
+		} else {
+			diagnose("panel_close")
+		}
 		userClosed = true
 		stopThinking()
 		if popup != nil {
@@ -439,19 +605,58 @@ func showAIPanelWithSpeed(state *AppState, action string, passage aiPassage, que
 		}
 		restore()
 	})
+	exitOutline := canvas.NewRectangle(color.Transparent)
+	exitOutline.StrokeColor = pal.Border
+	exitOutline.StrokeWidth = 1
+	exitOutline.CornerRadius = 10
+	exitSlot := container.NewStack(exitBtn, exitOutline)
 
-	disclaimer := canvas.NewText("AI-generated — may be imperfect. Verify important details.", pal.TextMuted)
-	disclaimer.TextSize = 11
+	disclaimerText = widget.NewRichText(&widget.TextSegment{
+		Text: "AI-generated — may be imperfect. Verify important details.",
+		Style: widget.RichTextStyle{
+			ColorName: colorNameMuted,
+			SizeName:  theme.SizeNameCaptionText,
+		},
+	})
+	disclaimerText.Wrapping = fyne.TextWrapWord
+	disclaimer = container.NewThemeOverride(disclaimerText,
+		passageCitationTheme{fyne.CurrentApp().Settings().Theme()})
 
 	footer = container.NewVBox(
 		widget.NewSeparator(),
 		disclaimer,
-		container.NewHBox(reportBtn, layout.NewSpacer(), copyBtn, closeBtn),
+		container.NewHBox(reportBtn, layout.NewSpacer(), copyBtn, exitSlot),
 	)
+
+	setFooterState := func(mode string) {
+		answered := mode == "answer"
+		if answered {
+			disclaimerText.Resize(fyne.NewSize(bodyW, disclaimerText.MinSize().Height))
+			disclaimer.Show()
+			reportBtn.Show()
+			copyBtn.Show()
+		} else {
+			disclaimer.Hide()
+			reportBtn.Hide()
+			copyBtn.Hide()
+		}
+		if mode == "thinking" {
+			exitBtn.SetText("Cancel")
+			exitOutline.Show()
+		} else {
+			exitBtn.SetText("Close")
+			exitOutline.Hide()
+		}
+		exitOutline.Refresh()
+		exitSlot.Refresh()
+		footer.Refresh()
+	}
 
 	clearErrorOverflow := func() {
 		if errorOverflow != nil {
 			errorOverflow.restore(content, header, footer, body)
+			exitSlot.Refresh()
+			footer.Refresh()
 			errorOverflow = nil
 		}
 	}
@@ -459,110 +664,85 @@ func showAIPanelWithSpeed(state *AppState, action string, passage aiPassage, que
 	// --- State transitions. Each of the three swaps the body for its own
 	// content and then sizes the panel to it; none inherits the height another
 	// left behind.
-	// Declared before setThinking so the waiting state's "faster model" offer
-	// can re-run the request; assigned below.
+	// Declared before setThinking so the waiting state's speed control can
+	// re-run the request; assigned below.
 	var startFetch func()
 	// fetchGen identifies the request the panel currently cares about (Find's
 	// aiSearchSession, in miniature). Every startFetch bumps it; a completion
 	// compares its captured value and bails when superseded. Without this, a
-	// request abandoned by the faster-model re-run would still settle here —
-	// nil-ing cancelFetch (disarming the NEW request's cancel) and painting its
-	// stale answer or cancellation error over the state the reader moved on to.
+	// request abandoned by a speed re-run would still settle here — nil-ing
+	// cancelFetch (disarming the NEW request's cancel) and painting its stale
+	// answer or cancellation error over the state the reader moved on to.
 	var fetchGen int
 	// modelLine names the model the request in flight is sending to, as that
 	// request reports it (ai_model_in_use.go). It belongs to the waiting state
 	// setThinking drew last; a report from any other request is dropped.
 	var modelLine *aiModelLine
+	var lastReport aiModelInUse
+	var restarted bool
 
 	setThinking := func() {
 		clearErrorOverflow()
-		// Same reason as setError: a re-run (the faster-model switch, Try again)
-		// leaves the previous answer on neither the screen nor the clipboard.
+		// Same reason as setError: a re-run (a speed choice, Try again) leaves
+		// the previous answer on neither the screen nor the clipboard.
 		current = ""
 		copyBtn.Disable()
 		reportBtn.Disable()
+		setFooterState("thinking")
+
 		bar := widget.NewProgressBarInfinite()
 		thinkingBar = bar
-		msg := widget.NewLabel("Reading the passage…")
-		msg.Alignment = fyne.TextAlignCenter
-		// The budget is generous enough for a thinking model (aiRequestBudget),
-		// so say so — otherwise a minute of spinner reads as a hang. Close is
-		// the way out here (it calls stopThinking, so the ProgressBarInfinite
-		// stops repainting the canvas); the Find surface has its own Cancel.
-		hint := container.NewGridWrap(fyne.NewSize(260, captionHeightFor(2)),
-			centeredCaption("Capable models can take a minute or more."))
+		seed := seedAISpeedReport(state, choice)
+		lastReport = seed
 		// Empty until the request says which model it is sending to, and new
 		// with every request, so a re-run never shows the model before it.
 		modelLine = newAIModelLine(aiModelInUse{})
-		speed = newAISpeedControl(state, func(next aiSpeedChoice) {
+		var waitScroll *container.Scroll
+		activeSpeed := newAISpeedControlForChoice(state, func(next aiSpeedChoice) {
 			choice = next
+			restarted = true
 			startFetch()
-		})
-		speed.active = func() bool { return sheetShowing(state, popup) }
-		cancelBtn := widget.NewButton("Cancel", func() {
-			diagnose("panel_cancel")
-			userClosed = true
-			stopThinking() // cancels the request, not just the spinner
-			if popup != nil {
-				popup.Hide()
-			}
-			restore()
-		})
-		// The whole waiting column sits in a scroll. Its natural height (~290pt)
-		// is FIXED while the panel's is not: on a landscape phone the body region
-		// can be half that, and the column painted its tail — Cancel included —
-		// over the footer or past the card. In the common case
-		// the scroll has room and never engages. Spacers are gone (inside a
-		// scroll they collapse to nothing anyway); squeezeWidthLayout stops the
-		// scroll widening the column sideways (sheet_fit.go).
-		//
-		// The scroll is never shorter than the column down to the foot of the
-		// waiting line (lead), Ask's question above it included: a scroll
-		// sized only from the room left over cut the line through the middle
-		// on a window, or a phone held sideways, just too short for the
-		// column (fitBody's least).
-		lead := container.NewVBox(spacer(8), container.NewCenter(msg))
-		waitCol := container.New(squeezeWidthLayout{}, container.NewVBox(
-			lead, spacer(10),
-			// Bounded, not full-bleed: a panel-wide bar reads as a banner
-			// rather than a quiet progress hint, and it dwarfed the text.
-			container.NewCenter(container.NewGridWrap(fyne.NewSize(240, bar.MinSize().Height), bar)),
-			// The model, under the bar and over the hint, in the hint's style.
-			spacer(10), container.NewCenter(modelLine.box), container.NewCenter(hint),
-			// inputFrame: the theme's button fill IS this panel's card
-			// colour (SurfaceAlt), so a bare Cancel here had no visible
-			// box at all. The outline restores one.
-			spacer(4), container.NewCenter(inputFrame(cancelBtn, pal.Border)),
-			speed.box,
-		))
+		}, choice)
+		activeSpeed.active = func() bool { return sheetShowing(state, popup) }
+		activeSpeed.onExpand = func() { scrollExpandedChoicesIntoView(waitScroll, activeSpeed) }
+		speed = activeSpeed
+
+		status := "Reading the passage…"
+		if restarted {
+			status = "Reading the passage again…"
+		}
+		restarted = false
+
+		col := newAIWaitColumn(pal, status, bar, modelLine, activeSpeed, nil, bodyW, seed)
+		waitColumn = col
+		// The waiting column sits in a scroll so a short landscape viewport
+		// keeps the waiting line whole while the footer's single Cancel stays
+		// pinned below; squeezeWidthLayout stops the scroll widening the column
+		// sideways (sheet_fit.go).
+		waitCol := container.New(squeezeWidthLayout{}, col.box)
 		waitContent := withQuestion(waitCol)
-		waitScroll := container.NewVScroll(waitContent)
-		leadFoot := wholeThrough(waitContent, waitCol, lead)
-		// A model name that wraps makes the column taller: fit the panel to
-		// it again, as below, so Cancel stays inside the scroll's reach.
-		modelLine.relayout = func() { fitBody(waitScroll, waitContent.MinSize().Height+10, leadFoot) }
-		speed.relayout = modelLine.relayout
-		// Replace, don't layer. The answer scroll underneath is empty in this
-		// state, but it still carries the answer cap as its minimum size, and in
-		// a stack that minimum wins — so the panel was sized for an answer that
-		// is not there yet and the fit below could not shrink it. setError
-		// already replaced; this is the same swap.
+		waitScroll = container.NewVScroll(waitContent)
+		least := func() float32 {
+			return waitContent.MinSize().Height - waitCol.MinSize().Height + col.statusFoot()
+		}
+		modelLine.relayout = func() { fitBody(waitScroll, waitContent.MinSize().Height+10, least) }
+		activeSpeed.relayout = modelLine.relayout
 		body.Objects = []fyne.CanvasObject{waitScroll}
 		body.Refresh()
-		// Size the panel to the waiting column, as the answer and error states
-		// size it to theirs. Re-entering this state from an error — Try again,
-		// or the faster-model switch — used to leave the panel at the height the
-		// previous state chose, which is what put Cancel under the footer.
-		fitBody(waitScroll, waitContent.MinSize().Height+10, leadFoot)
+		fitBody(waitScroll, waitContent.MinSize().Height+10, least)
+		state.consumeWaitFocusRestore(popup)
 	}
 	setResult := func(text string) {
 		clearErrorOverflow()
 		renderStarted := devDiagnosticNow()
 		diagnose("render_start", devDiagnosticMetric{Key: "bytes", Value: int64(len(text))})
 		stopThinking()
+		waitColumn = nil
+		restarted = false
 		current = text
 		copyBtn.Enable()
 		reportBtn.Enable()
+		setFooterState("answer")
 		// The answer has landed, so a light/dark rebuild may bring the panel
 		// back: the reopen runs the same action, which aiCache answers at once
 		// without a second request. Only now — while a request is in flight the
@@ -576,9 +756,9 @@ func showAIPanelWithSpeed(state *AppState, action string, passage aiPassage, que
 		}
 		diagnose("render_parsed", devDiagnosticSince(renderStarted))
 		// Wrapped answer text reports its true height at a known width.
-		// Pre-wrap at the body width so the height is right, then
+		// Pre-wrap at the real body width so the height is right, then
 		// fit the panel to the answer (capped at maxBodyH).
-		answerView.Resize(fyne.NewSize(bodyW-16, answerView.MinSize().Height))
+		answerView.Resize(fyne.NewSize(bodyW, answerView.MinSize().Height))
 		if questionText != nil {
 			questionText.Resize(fyne.NewSize(bodyW-16, questionText.MinSize().Height))
 		}
@@ -609,37 +789,30 @@ func showAIPanelWithSpeed(state *AppState, action string, passage aiPassage, que
 		msg, needsSettings := friendlyAIError(err), isNoKeyError(err)
 		presentation, special := aiSpecialError(err)
 		stopThinking()
+		waitColumn = nil
+		restarted = false
 		// An error is not an answer aiCache holds, so reopening would ask
 		// again, on the reader's key: the error state never comes back after a
 		// light/dark rebuild. Only setResult registers, and nothing leads from
 		// an answer back to a request today, so no registration is live here;
 		// this forget is the belt to that, should a path ever be added.
 		forgetSheetReopen(state, popup)
-		// Drop the previous answer with its buttons. Copy was already disabled
-		// here; Report was not, and nothing disabled it anywhere, so it kept
-		// pointing at whatever `current` still held. Report mails the answer to
-		// support as the flagging surface for AI content — mailing a stale one
-		// from under an error message is the worst version of that.
+		// Drop the previous answer with its buttons, and hide the answer-only
+		// footer furniture while no generated text is shown.
 		current = ""
 		copyBtn.Disable()
 		reportBtn.Disable()
+		setFooterState("error")
 		if markdownAnswer != nil {
 			markdownAnswer.setText("")
 		} else {
 			answer.ParseMarkdown("")
 		}
+		gen := fetchGen
 		var action fyne.CanvasObject
 		if needsSettings {
 			actBtn := widget.NewButton("Open AI settings", func() {
 				diagnose("panel_settings")
-				// Every dismiss path undoes what opening the panel did: mark it
-				// closed so a late reply cannot reopen it, and put the native
-				// reading overlay back. Close and Cancel already did both; this
-				// path did neither, and was correct only because the settings
-				// sheet restores the overlay itself and rebuildWindow clears the
-				// latch as a backstop. Two distant invariants is not a guarantee
-				// — the backstop exists because this latch has been left on
-				// before, and a blank verse pane is what that looks like.
 				userClosed = true
 				stopThinking()
 				if popup != nil {
@@ -651,20 +824,20 @@ func showAIPanelWithSpeed(state *AppState, action string, passage aiPassage, que
 			actBtn.Importance = widget.HighImportance
 			action = container.NewCenter(actBtn)
 		} else {
-			// Each action has a row of its own: Try again, then the billing
-			// link or the faster model, which a timeout's message names only
-			// when it is offered here.
-			gen := fetchGen
-			control := makeAISpeedControl(state, func(next aiSpeedChoice) {
+			// Each recovery option has a row of its own: a framed Try again
+			// preserving any valid one-time effort, then the billing link or
+			// the open timeout speed rows from the attempt's last report.
+			control := newAITimeoutSpeedControl(state, func(next aiSpeedChoice) {
 				choice = next
 				startFetch()
-			}, true)
+			}, choice, lastReport)
+			control.setWidth(min(aiTimeoutChoicesMeasure, bodyW))
 			control.active = func() bool { return gen == fetchGen && !userClosed && sheetShowing(state, popup) }
 			shown, actions := aiErrorRecovery(presentation, control)
 			if special {
 				msg = shown
 			}
-			action = container.NewCenter(actions)
+			action = container.New(squeezeWidthLayout{}, actions)
 		}
 		lbl := widget.NewLabel(msg)
 		lbl.Wrapping = fyne.TextWrapWord
@@ -674,8 +847,10 @@ func showAIPanelWithSpeed(state *AppState, action string, passage aiPassage, que
 		// The message and Ask's question keep their natural height wherever a
 		// sheet has room for it, and scroll only once that room is exhausted.
 		errItems := []fyne.CanvasObject{spacer(8), lbl}
+		var detailObj fyne.CanvasObject
 		if special && presentation.detail != "" {
-			errItems = append(errItems, aiErrorDetail(presentation))
+			detailObj = aiErrorDetail(presentation)
+			errItems = append(errItems, detailObj)
 		}
 		errCol := container.New(squeezeWidthLayout{}, container.NewVBox(errItems...))
 		errContent := withQuestion(errCol)
@@ -685,12 +860,23 @@ func showAIPanelWithSpeed(state *AppState, action string, passage aiPassage, que
 			container.New(errorViewport, errScroll))}
 		body.Refresh()
 		errorOverflow = newAIErrorOverflow(title, headerItems[1:], errContent, action,
-			disclaimer, reportBtn, copyBtn, closeBtn, errScroll, body.Objects[0])
-		// Pre-wrap the message at the body width before measuring, for the same
-		// reason the answer is pre-wrapped: a word-wrapped label reports its
-		// true height only once it has wrapped at a known width.
-		lbl.Resize(fyne.NewSize(bodyW-16, lbl.MinSize().Height))
-		fitBody(errScroll, errContent.MinSize().Height+10, wholeThrough(errContent, errCol, errCol))
+			exitSlot, errScroll, body.Objects[0])
+		// Pre-wrap the message at the real body width before measuring, for the
+		// same reason the answer is pre-wrapped: a word-wrapped label reports
+		// its true height only once it has wrapped at a known width.
+		lbl.Resize(fyne.NewSize(bodyW, lbl.MinSize().Height))
+		if detailObj != nil {
+			detailObj.Resize(fyne.NewSize(bodyW, detailObj.MinSize().Height))
+		}
+		if questionText != nil {
+			questionText.Resize(fyne.NewSize(bodyW-16, questionText.MinSize().Height))
+		}
+		errContent.Resize(fyne.NewSize(bodyW, errContent.MinSize().Height))
+		least := wholeThrough(errContent, errCol, errCol)
+		fitBody(errScroll, errContent.MinSize().Height+10, least)
+		lbl.Refresh()
+		errScroll.Refresh()
+		fitBody(errScroll, errContent.MinSize().Height+10, least)
 	}
 
 	startFetch = func() {
@@ -743,6 +929,11 @@ func showAIPanelWithSpeed(state *AppState, action string, passage aiPassage, que
 		// an answer — every exit stops the bar), can still report its retry.
 		ctx = showAIModelOnUI(ctx, func(m aiModelInUse) {
 			if gen != fetchGen || thinkingBar == nil || !sheetShowing(state, popup) {
+				return
+			}
+			lastReport = m
+			if waitColumn != nil {
+				waitColumn.show(m)
 				return
 			}
 			modelLine.show(m)
@@ -828,7 +1019,10 @@ func showAIPanelWithSpeed(state *AppState, action string, passage aiPassage, que
 			passageExcerpt.setMaxLines(noteExcerptMaxLinesFor(fyne.CurrentDevice().IsMobile(), cnv.Size().Height))
 		}
 		ps = sheetPanelSize(state, cnv)
-		bodyW = ps.Width - 44
+		bodyW = ps.Width - 36
+		if waitColumn != nil {
+			waitColumn.lay.width = bodyW
+		}
 		if fittedBody != nil {
 			offset := fittedBody.Offset
 			var contextOffset fyne.Position

@@ -355,6 +355,7 @@ func TestTheStudyWaitNamesTheModelAndFollowsTheRetry(t *testing.T) {
 // reader's override; the line would keep the capable model's name while the
 // fast one works).
 func TestTheStudyWaitFollowsTheFasterModel(t *testing.T) {
+	armAISpeedClock(t)
 	app := test.NewApp()
 	defer app.Quit()
 	sends := routeStudy(t, "gemini-3-pro")
@@ -388,6 +389,7 @@ func TestTheStudyWaitFollowsTheFasterModel(t *testing.T) {
 // repaints the dismissed panel); setThinking reusing the last line (the new
 // wait names the replaced request's model before its own has said).
 func TestTheStudyWaitIgnoresAStaleReport(t *testing.T) {
+	armAISpeedClock(t)
 	app := test.NewApp()
 	defer app.Quit()
 	ctxs := stubAIActionParked(t)
@@ -523,25 +525,32 @@ func TestTheStudyWaitWrapsALongModelAndKeepsCancelInReach(t *testing.T) {
 			if cancel == nil {
 				t.Fatalf("no Cancel; texts %v", treeTexts(p))
 			}
-			scroll := scrollHolding(p, cancel)
+			if scrollHolding(p, cancel) != nil {
+				t.Fatal("Cancel must stand in the fixed footer rather than inside the waiting scroll")
+			}
+			drv := fyne.CurrentApp().Driver()
+			if cy := drv.AbsolutePositionForObject(cancel).Y; cy < top-0.5 || cy+cancel.Size().Height > bottom+0.5 {
+				t.Errorf("Cancel spans %v..%v, outside the panel %v..%v", cy, cy+cancel.Size().Height, top, bottom)
+			}
+			scroll := scrollHolding(p, line)
 			if scroll == nil {
-				t.Fatal("Cancel is not inside the waiting column's scroll")
+				t.Fatal("the model line is not inside the waiting column's scroll")
 			}
 			col := scroll.Content
 			if got, want := col.Size().Height, col.MinSize().Height; got < want {
 				t.Errorf("the waiting column is laid out %vpt tall but needs %vpt: the grown line "+
 					"overlaps what is under it and the scroll stops short of it", got, want)
 			}
-			pos, _ := descendantPos(col, cancel)
-			if end := pos.Y + cancel.Size().Height; end > col.Size().Height {
-				t.Errorf("Cancel ends at %vpt, past the %vpt the scroll can reach", end, col.Size().Height)
+			pos, _ := descendantPos(col, line)
+			if end := pos.Y + line.Size().Height; end > col.Size().Height {
+				t.Errorf("the model line ends at %vpt, past the %vpt the scroll can reach", end, col.Size().Height)
 			}
 			if vh := scroll.Size().Height; vh <= 0 || vh > bottom-top {
 				t.Errorf("the scroll's viewport is %vpt inside a %vpt panel", vh, bottom-top)
 			}
 			if vh, need := scroll.Size().Height, col.MinSize().Height; sc.room && vh < need {
 				t.Errorf("the screen has room for the %vpt column, but the panel shows %vpt of it: "+
-					"Cancel needs a scroll", need, vh)
+					"the waiting column needs a scroll", need, vh)
 			}
 		})
 	}
@@ -603,6 +612,7 @@ func TestTheFindWaitNamesTheModelAndFollowsTheRetry(t *testing.T) {
 // FIND'S LINE FOLLOWS THE FASTER-MODEL SWITCH. Mutation: the resolver naming
 // the shipped default rather than the model it resolves.
 func TestTheFindWaitFollowsTheFasterModel(t *testing.T) {
+	armAISpeedClock(t)
 	sends := routeFind(t, "gemini-3-pro")
 	h := liveFindTab(t)
 	store := h.state.keys()
@@ -615,8 +625,8 @@ func TestTheFindWaitFollowsTheFasterModel(t *testing.T) {
 	wantModelLine(t, h.pane(), "Gemini (Google) · "+geminiModel, "before the switch")
 
 	sw := waitingAction(h.pane(), "Switch to a faster model")
-	if sw == nil || sw.detail != "Restart this request and save "+geminiFastModel+" in Settings. Effort: High." {
-		t.Fatalf("missing switch or destination effort; displayed %v", treeTexts(h.pane()))
+	if sw == nil || sw.detail != geminiFastModel+" · saves in Settings" {
+		t.Fatalf("missing switch or destination scope note; displayed %v", treeTexts(h.pane()))
 	}
 	sw.Tapped(nil)
 	if fast := nextSend(t, sends); fast.model != geminiFastModel || fast.effort != "high" {
@@ -686,14 +696,14 @@ func TestAFindAskedAgainMidFlightNamesItsModelAndLands(t *testing.T) {
 // laid out shorter than its wrapped name has its last lines over the hint.
 func wantLineLaidOut(t *testing.T, o fyne.CanvasObject, when string) {
 	t.Helper()
-	box, _ := modelLineBox(o)
+	box, line := modelLineBox(o)
 	var hint *widget.RichText
 	walkTree(o, func(n fyne.CanvasObject) {
 		if rt, ok := n.(*widget.RichText); ok && hint == nil && rt.String() == hintText {
 			hint = rt
 		}
 	})
-	if box == nil || hint == nil {
+	if box == nil || line == nil || hint == nil {
 		t.Fatalf("%s: the wait needs both the model line and the hint; texts %v", when, treeTexts(o))
 	}
 	if got, want := box.Size().Height, box.MinSize().Height; got < want {
@@ -704,8 +714,12 @@ func wantLineLaidOut(t *testing.T, o fyne.CanvasObject, when string) {
 	if !lok || !hok {
 		t.Fatalf("%s: the line or the hint is not in the wait's tree of containers", when)
 	}
-	if end := lp.Y + box.MinSize().Height; hp.Y < end {
-		t.Errorf("%s: the hint starts at %vpt, inside the line that ends at %vpt", when, hp.Y, end)
+	pad := theme.InnerPadding()
+	rows := captionLines(line.MinSize().Height)
+	lineTextEnd := lp.Y + pad + float32(rows)*captionRow()
+	hintTextTop := hp.Y + pad
+	if hintTextTop < lineTextEnd-0.5 {
+		t.Errorf("%s: the hint text starts at %vpt, inside the wrapped model line ending at %vpt", when, hintTextTop, lineTextEnd)
 	}
 }
 
@@ -955,14 +969,16 @@ func wantWaitInReach(t *testing.T, area fyne.CanvasObject, msg fyne.CanvasObject
 	}
 }
 
-// columnOf is the wait's column: the nearest vertical box above msg.
+// columnOf is the wait's column: the nearest waiting column or vertical box above msg.
 func columnOf(t *testing.T, area, msg fyne.CanvasObject) *fyne.Container {
 	t.Helper()
 	path := pathTo(area, msg)
 	vbox := reflect.TypeOf(layout.NewVBoxLayout())
 	for i := len(path) - 2; i >= 0; i-- {
-		if c, ok := path[i].(*fyne.Container); ok && reflect.TypeOf(c.Layout) == vbox {
-			return c
+		if c, ok := path[i].(*fyne.Container); ok {
+			if _, wait := c.Layout.(*aiWaitLayout); wait || reflect.TypeOf(c.Layout) == vbox {
+				return c
+			}
 		}
 	}
 	t.Fatal("the wait has no column")
@@ -983,7 +999,7 @@ func columnOf(t *testing.T, area, msg fyne.CanvasObject) *fyne.Container {
 // the whole wait shows at once, centred, as it always has. Mutation: the
 // Search tab's wait without its scroll (findWaitScroll).
 func TestTheFindWaitKeepsCancelInReachOnALandscapePhone(t *testing.T) {
-	const long = "gemini-2.5-flash-lite-preview-09-2025-thinking-experimental"
+	const long = "gemini-2.5-pro-preview-09-2025-thinking-budget-experimental"
 	for _, sc := range []struct {
 		nav   string
 		w, h  float32
@@ -999,8 +1015,8 @@ func TestTheFindWaitKeepsCancelInReachOnALandscapePhone(t *testing.T) {
 		{"rail", 667, 375, true},
 		{"rail", 800, 360, true},
 		{"rail", 844, 390, true},
-		{"rail", 932, 430, true},
-		{"rail", 956, 440, true},
+		{"rail", 932, 430, false},
+		{"rail", 956, 440, false},
 	} {
 		t.Run(fmt.Sprintf("%s %vx%v", sc.nav, sc.w, sc.h), func(t *testing.T) {
 			t.Setenv("BIBLETEXT_DESKTOP_TABS", sc.nav)
@@ -1035,10 +1051,10 @@ func TestTheFindWaitKeepsCancelInReachOnALandscapePhone(t *testing.T) {
 				t.Fatal("missing speed choices for a model with a lower effort and a faster model")
 			}
 			toggle.Tapped(nil)
-			retry := waitingAction(root, "Use Medium effort this time")
+			retry := waitingAction(root, "Use less reasoning this time")
 			sw := waitingAction(root, "Switch to a faster model")
 			target := speedTargetReport(store.prefs, providerGemini, geminiFastModel)
-			if retry == nil || sw == nil || sw.detail != switchModelDetail(target) {
+			if retry == nil || retry.detail != "Medium effort" || sw == nil || sw.detail != fasterModelNoteLabel(target) {
 				t.Fatalf("speed options missing their actions or target: %v", treeTexts(root))
 			}
 			parts["lower effort"], parts["model switch"] = retry, sw
@@ -1053,7 +1069,8 @@ func TestTheFindWaitKeepsCancelInReachOnALandscapePhone(t *testing.T) {
 // in a window the reader can make as short as they like. Mutation: that wait
 // without its scroll.
 func TestTheDesktopFindWaitKeepsCancelInReachInAShortPane(t *testing.T) {
-	const long = "gemini-2.5-flash-lite-preview-09-2025-thinking-experimental"
+	armAISpeedClock(t)
+	const long = "gemini-2.5-pro-preview-09-2025-thinking-budget-experimental"
 	app := test.NewApp()
 	defer app.Quit()
 	stubAIGenerate(t)

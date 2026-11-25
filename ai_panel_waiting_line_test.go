@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
@@ -60,20 +61,20 @@ func aiWaitingForms(studies chan context.Context, question string) []aiWaitingFo
 const aiShortQuestion = "What does the world mean here, and who is meant by it?"
 
 // waitingLineIn finds the waiting line and the scroll that holds it.
-func waitingLineIn(t *testing.T, popup *widget.PopUp) (*container.Scroll, *widget.Label) {
+func waitingLineIn(t *testing.T, popup *widget.PopUp) (*container.Scroll, fyne.CanvasObject) {
 	t.Helper()
 	var sc *container.Scroll
-	var line *widget.Label
+	var line fyne.CanvasObject
 	walkTree(popup, func(o fyne.CanvasObject) {
 		if s, ok := o.(*container.Scroll); ok {
 			walkTree(s.Content, func(n fyne.CanvasObject) {
-				if l, ok := n.(*widget.Label); ok && l.Text == aiWaitingLine {
+				if l, ok := n.(*canvas.Text); ok && (l.Text == aiWaitingLine || l.Text == "Reading the passage again…") {
 					sc, line = s, l
 				}
 			})
 		}
 	})
-	if sc == nil || !sc.Visible() {
+	if sc == nil || !sc.Visible() || line == nil {
 		t.Fatalf("control: the panel is not waiting; texts %v", treeTexts(popup))
 	}
 	return sc, line
@@ -146,9 +147,10 @@ func TestACoveringWaitingPanelTakesItsNaturalHeightWithItsLineWhole(t *testing.T
 	studies := stubAIActionParked(t)
 	app := newDesktopApp(t)
 	covered := 0
+	coveringQuestion := strings.TrimSpace(strings.Repeat(aiShortQuestion+" ", 4))
 	for h := float32(386); h <= 440; h++ {
 		win := fyne.NewSize(1280, h)
-		for _, f := range aiWaitingForms(studies, aiShortQuestion) {
+		for _, f := range aiWaitingForms(studies, coveringQuestion) {
 			t.Run(fmt.Sprintf("%.0fx%.0f/%s", win.Width, win.Height, f.name), func(t *testing.T) {
 				app.asNew(t)
 				st, w := app.window(t, win)
@@ -243,17 +245,17 @@ var aiLongSelection = strings.TrimSpace(strings.Repeat(
 // quoteDisclosure is the citation's button that opens and closes the quote.
 func quoteDisclosure(t *testing.T, popup *widget.PopUp) *widget.Button {
 	t.Helper()
-	var b *widget.Button
+	var matches []*widget.Button
 	walkTree(popup, func(o fyne.CanvasObject) {
 		if bt, ok := o.(*widget.Button); ok && bt.Text == "" &&
 			(bt.Icon == iconDisclosureExpand || bt.Icon == iconDisclosureCollapse) {
-			b = bt
+			matches = append(matches, bt)
 		}
 	})
-	if b == nil {
-		t.Fatalf("control: the citation has no disclosure; texts %v", treeTexts(popup))
+	if len(matches) != 1 {
+		t.Fatalf("control: expected 1 citation disclosure button, got %d; texts %v", len(matches), treeTexts(popup))
 	}
-	return b
+	return matches[0]
 }
 
 // A long question can make the waiting line need more than the few answer
@@ -408,7 +410,7 @@ func wantInsideTheSafeArea(t *testing.T, s insetScreen, popup *widget.PopUp) (to
 // 0..440pt, over the 20pt under the home indicator.
 func TestAQuestionTooLongForTheWindowKeepsTheWaitingPanelOnIt(t *testing.T) {
 	studies := stubAIActionParked(t)
-	long := strings.TrimSpace(strings.Repeat("Who is meant by the world here, and how far does the love reach? ", 18))
+	long := strings.TrimSpace(strings.Repeat("Who is meant by the world here, and how far does the love reach? ", 24))
 	ask := aiWaitingForms(studies, long)[2]
 	t.Run("desktop", func(t *testing.T) {
 		app := newDesktopApp(t)

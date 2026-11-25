@@ -748,19 +748,25 @@ keystroke supersedes it (pinned in `search_race_test.go`).
   goroutine, and each screen drops a report from a request it is no longer
   waiting on (the panel's fetch generation, Find's session token, the key
   test's sequence number).
-- Study and Find offer a lower effort or smaller token budget for the same
-  question when the next lower supported setting is known. This retry
-  cancels the previous attempt. Its model and effort travel in the request
-  context and in the answer's cache key. A new question uses Settings again.
-  The alternative model switch shows the destination and its saved effort
-  before selecting it in Settings. One available action appears directly
-  under Cancel. When both are available, “Switch to a faster model or reasoning
-  effort” expands in place. Each choice explains whether it applies to this
-  request or saves a new model in Settings.
+- Study and Find share one waiting column ([ai_wait_column.go](ai_wait_column.go))
+  and speed control ([ai_speed_control.go](ai_speed_control.go)), seeded
+  synchronously from `attemptOptions` so the first frame already holds its
+  settled geometry. Study and Find offer a lower effort or smaller token budget
+  for the same question ("Use less reasoning this time") when a lower supported
+  setting is known, alongside a faster-model switch ("Switch to a faster model",
+  `{model} · saves in Settings`) when the active model is a capable model.
+  When only one choice applies it renders directly as a plain borderless row;
+  when both apply, "Faster options" expands and collapses the two rows in place
+  with a 500ms tap-arm delay on newly drawn rows. Study uses a single exit in
+  the sheet footer (framed Cancel while waiting, unframed Close once an answer
+  or error lands, with Report, Copy and the wrapping disclaimer shown only on
+  answers).
 - AI request errors are classified at the transport boundary in
   [ai_errors.go](ai_errors.go), retaining the HTTP cause and captured provider.
   Confirmed credit/spend errors offer that provider's billing link; timeouts
-  offer retry and the existing faster-model action. Generic rate limits,
+  offer a framed Try again (preserving any still-valid one-time effort choice)
+  with any applicable lower-effort and faster-model recovery rows shown directly
+  open beneath it on Study and Find, and a compact Settings link on Test key. Generic rate limits,
   authentication, cancellation and the output-token allowance remain distinct.
   Only recognized safe reason clauses are displayed, never raw provider error
   bodies. [ai_error_ui.go](ai_error_ui.go) shares presentation across Study,

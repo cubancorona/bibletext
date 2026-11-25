@@ -23,7 +23,8 @@ import (
 
 // fasterModelOffer describes the switch available for the active provider, if
 // any. ok is false when AI is off, the provider has no economy model, or the
-// reader is already using that model.
+// reader is already on that model or a lighter pinned override — so an economy
+// model is offered only when there is genuinely something faster to move to.
 func fasterModelOffer(state *AppState) (providerID, model, label string, ok bool) {
 	if state == nil || !aiFeaturesEnabled(state) {
 		return "", "", "", false
@@ -40,23 +41,54 @@ func fasterModelOffer(state *AppState) (providerID, model, label string, ok bool
 	if strings.EqualFold(current, info.FastModel) {
 		return "", "", "", false // already on the quick one — nothing to offer
 	}
+	if override := store.overrideModel(id); override != "" && !isCapableOverrideForFasterOffer(id, override, info) {
+		return "", "", "", false
+	}
 	// "Switch", not "Use": this writes the same per-provider override the
 	// Settings model picker does, so it persists until the reader changes it
 	// back. A label implying a one-off would misrepresent that.
 	return id, info.FastModel, "Switch to a faster model", true
 }
 
-// fasterModelControl renders the offer as a small link line — Fyne's stock
-// Hyperlink, in the palette accent via the theme's ColorNameHyperlink mapping,
-// at caption size — so it reads as a quiet aside under Cancel rather than a
-// competing action. Cancel keeps the only real button on the screen. A stock
-// widget rather than hand-rolled tappable text: it brings the hover underline,
-// keyboard focus and Space activation for free, and re-resolves its colour on
-// a theme flip. Standard size names only — a custom ThemeSizeName measures as
-// ZERO under any theme that doesn't define it (the Fyne test theme, a future
-// override), collapsing the link's tap hit-band to nothing. (A LowImportance
-// button was tried first: a bold body-size label, louder than Cancel's own —
-// and inside a chip-theme override it rendered washed-out and mis-measured.)
+func hasLightModelToken(low string) bool {
+	parts := strings.FieldsFunc(low, func(r rune) bool {
+		return r == '-' || r == '_' || r == '.' || r == '/' || r == ' '
+	})
+	for _, p := range parts {
+		switch p {
+		case "flash", "lite", "nano", "mini", "haiku", "small", "micro", "instant", "gemma", "fast":
+			return true
+		}
+	}
+	return containsAnySubstr(low, []string{"non-reasoning", "no-reasoning", "non-thinking"})
+}
+
+// isCapableOverrideForFasterOffer reports whether an explicit model override
+// sits in a capable tier above info.FastModel. Lighter or economy overrides
+// (flash-lite, flash, nano, mini, haiku, non-reasoning variants) must not be
+// offered info.FastModel as "faster".
+func isCapableOverrideForFasterOffer(providerID, model string, info providerInfo) bool {
+	low := strings.ToLower(strings.TrimSpace(model))
+	if low == "" || strings.EqualFold(low, info.FastModel) {
+		return false
+	}
+	if hasLightModelToken(low) {
+		return false
+	}
+	if providerID == providerGrok {
+		if curRank, fastRank := parseVersionRank(low), parseVersionRank(strings.ToLower(info.FastModel)); curRank > 0 && fastRank > 0 && curRank < fastRank {
+			return false
+		}
+	}
+	return true
+}
+
+// fasterModelControl renders a secondary action as a caption-size stock
+// Hyperlink in the palette accent via ColorNameHyperlink, used on sheets such
+// as the shared-notes offer and Settings' key-test recovery where a full button
+// would compete with the primary controls. Standard size names only — a custom
+// ThemeSizeName measures as ZERO under any theme that does not define it,
+// collapsing the link's tap hit-band.
 func fasterModelControl(label string, onTapped func()) fyne.CanvasObject {
 	return container.NewCenter(fasterModelLink(label, onTapped))
 }

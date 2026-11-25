@@ -134,23 +134,23 @@ func settingsWithListedModels(t *testing.T, s *AppState, n int, whileLoading fun
 // windows either side of each sheet's last covering height hold the line in
 // both directions.
 var coversAt = map[fyne.Size][]string{
-	{Width: 1280, Height: 386}: {"Go to", "note composer", "share confirmation", "cross-references", "AI answer",
+	{Width: 1280, Height: 386}: {"Go to", "note composer", "share confirmation", "cross-references",
 		"link notice", "note-link offer", "Ask"},
-	{Width: 507, Height: 386}: {"Go to", "note composer", "share confirmation", "cross-references", "AI answer",
+	{Width: 507, Height: 386}: {"Go to", "note composer", "share confirmation", "cross-references",
 		"link notice", "note-link offer", "Ask"},
-	{Width: 1280, Height: 392}: {"Go to", "note composer", "share confirmation", "cross-references", "AI answer",
+	{Width: 1280, Height: 392}: {"Go to", "note composer", "share confirmation", "cross-references",
 		"link notice", "note-link offer", "Ask"},
-	{Width: 1280, Height: 393}: {"Go to", "note composer", "share confirmation", "cross-references", "AI answer",
+	{Width: 1280, Height: 393}: {"Go to", "note composer", "share confirmation", "cross-references",
 		"link notice", "note-link offer", "Ask"},
-	{Width: 1280, Height: 395}: {"Go to", "note composer", "share confirmation", "cross-references", "AI answer",
+	{Width: 1280, Height: 395}: {"Go to", "note composer", "share confirmation", "cross-references",
 		"link notice", "note-link offer", "Ask"},
-	{Width: 1280, Height: 396}: {"note composer", "share confirmation", "AI answer", "link notice", "note-link offer", "Ask"},
-	{Width: 1280, Height: 398}: {"note composer", "share confirmation", "AI answer", "link notice", "note-link offer", "Ask"},
-	{Width: 1280, Height: 399}: {"share confirmation", "AI answer", "link notice", "note-link offer"},
-	{Width: 1280, Height: 401}: {"share confirmation", "AI answer", "link notice", "note-link offer"},
-	{Width: 1280, Height: 407}: {"share confirmation", "AI answer", "link notice", "note-link offer"},
-	{Width: 1280, Height: 408}: {"AI answer", "link notice", "note-link offer"},
-	{Width: 1280, Height: 413}: {"AI answer", "link notice", "note-link offer"},
+	{Width: 1280, Height: 396}: {"note composer", "share confirmation", "link notice", "note-link offer", "Ask"},
+	{Width: 1280, Height: 398}: {"note composer", "share confirmation", "link notice", "note-link offer", "Ask"},
+	{Width: 1280, Height: 399}: {"share confirmation", "link notice", "note-link offer"},
+	{Width: 1280, Height: 401}: {"share confirmation", "link notice", "note-link offer"},
+	{Width: 1280, Height: 407}: {"share confirmation", "link notice", "note-link offer"},
+	{Width: 1280, Height: 408}: {"link notice", "note-link offer"},
+	{Width: 1280, Height: 413}: {"link notice", "note-link offer"},
 	{Width: 1280, Height: 414}: {"link notice", "note-link offer"},
 	{Width: 1280, Height: 418}: {"link notice", "note-link offer"},
 	{Width: 1280, Height: 419}: {"link notice"},
@@ -257,7 +257,7 @@ func landedStudySheets() []desktopSheet {
 // there. The error covers it at 401pt as well, where its body is never
 // shorter than its message and Try again (ai_panel_error_whole_test.go).
 var landedCoversAt = map[fyne.Size][]string{
-	{Width: 1280, Height: 386}: {"AI answer, short", "AI answer, error"},
+	{Width: 1280, Height: 386}: {"AI answer, error"},
 	{Width: 1280, Height: 401}: {"AI answer, error"},
 }
 

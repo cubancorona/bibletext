@@ -20,10 +20,9 @@ type aiErrorOverflow struct {
 	active     bool
 }
 
-func newAIErrorOverflow(title fyne.CanvasObject, context []fyne.CanvasObject, message, recovery, disclaimer fyne.CanvasObject, report, copy, close *widget.Button, messageScroll *container.Scroll, normalBody fyne.CanvasObject) *aiErrorOverflow {
+func newAIErrorOverflow(title fyne.CanvasObject, context []fyne.CanvasObject, message, recovery, close fyne.CanvasObject, messageScroll *container.Scroll, normalBody fyne.CanvasObject) *aiErrorOverflow {
 	items := append([]fyne.CanvasObject(nil), context...)
-	items = append(items, message, recovery, widget.NewSeparator(), disclaimer,
-		container.NewHBox(report, layout.NewSpacer(), copy))
+	items = append(items, message, recovery)
 	column := container.NewVBox(items...)
 	return &aiErrorOverflow{
 		message: messageScroll,

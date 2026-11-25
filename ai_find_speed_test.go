@@ -12,6 +12,7 @@ import (
 // A Find already using its provider's fast model can still lower an explicit
 // effort. Follow the actual tap through both layouts and into the resolver.
 func TestFindRetriesAtLowerEffortOnlyForThisSearch(t *testing.T) {
+	armAISpeedClock(t)
 	for _, layout := range []string{"Search tab", "sidebar"} {
 		t.Run(layout, func(t *testing.T) {
 			sends := routeFind(t, "gemini-3-pro")
@@ -52,8 +53,8 @@ func TestFindRetriesAtLowerEffortOnlyForThisSearch(t *testing.T) {
 			}
 			ask("First synthetic request")
 			checkSend("high")
-			retired := waitingAction(pane(), "Use Medium effort this time")
-			if retired == nil {
+			retired := waitingAction(pane(), "Use less reasoning this time")
+			if retired == nil || retired.detail != "Medium effort" {
 				t.Fatalf("missing lower-effort action, displayed %v", treeTexts(pane()))
 			}
 			rebuild()
@@ -62,8 +63,8 @@ func TestFindRetriesAtLowerEffortOnlyForThisSearch(t *testing.T) {
 			if !state.askSession.Current(gen) {
 				t.Fatal("a superseded Find control restarted the search")
 			}
-			lower := waitingAction(pane(), "Use Medium effort this time")
-			if lower == nil {
+			lower := waitingAction(pane(), "Use less reasoning this time")
+			if lower == nil || lower.detail != "Medium effort" {
 				t.Fatalf("a rebuild lost the lower-effort action, displayed %v", treeTexts(pane()))
 			}
 			lower.Tapped(nil)
@@ -71,7 +72,7 @@ func TestFindRetriesAtLowerEffortOnlyForThisSearch(t *testing.T) {
 			if got := aiReasoningEffort(store.prefs, providerGemini, geminiFastModel); got != "high" {
 				t.Fatalf("retry changed the saved effort to %q", got)
 			}
-			if waitingAction(pane(), "Use Low effort this time") == nil {
+			if low := waitingAction(pane(), "Use less reasoning this time"); low == nil || low.detail != "Low effort" {
 				t.Fatalf("retry still offers options from the old attempt, displayed %v", treeTexts(pane()))
 			}
 

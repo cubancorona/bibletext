@@ -226,16 +226,10 @@ func tabCellsFor(state *AppState, items []tabDestination, padY float32) []fyne.C
 			if state.CurrentTab == i {
 				return
 			}
-			// A tab switch rebuilds the window, which discards the Search tab's
-			// live widgets. Abandon any in-flight Find first — the rebuilt tab
-			// cannot reach the old request, so without this it billed on for
-			// the rest of aiRequestBudget with no control able to stop it.
-			//
-			// And say so in state: the Search tab is drawn from state when the
-			// reader comes back, and a Find abandoned half way is a cancelled
-			// Find — never the answer "found nothing", which is what its
-			// question with no results would otherwise read as (the mode
-			// switch records it the same way).
+			// Leaving the Search tab stops any in-flight Find rather than keeping
+			// a multi-minute request billing out of sight on Read or Books, and
+			// marks it cancelled in state so returning to the Search tab never
+			// claims "found nothing".
 			inFlight := state.cancelAISearch != nil
 			abandonAISearch(state)
 			if inFlight {
@@ -638,24 +632,18 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 	var runAsk func(string, aiSpeedChoice)
 	var renderFind func()
 
-	// findSearchingView is the in-progress state: the line, the bar, the model
-	// at work, the hint, Cancel, and the faster-model offer. Built by
-	// renderFind, from state, so a tab rebuilt while a Find is in flight — a
-	// light/dark change, a rotation, a translation landing — shows the search
-	// still running, with a Cancel that reaches it, instead of the empty
-	// prompt.
+	// findSearchingView is the in-progress state: the status line, the slim
+	// progress bar, the model caption and hint, Cancel, and any faster choices.
+	// Built by renderFind from state, so a tab rebuilt while a Find is in
+	// flight — a light/dark change, a rotation, a translation landing — shows
+	// the search still running, with a Cancel that reaches it, instead of the
+	// empty prompt.
 	findSearchingView := func() fyne.CanvasObject {
 		bar := widget.NewProgressBarInfinite()
 		state.findBar = bar
-		msg := canvas.NewText("Searching with AI…", pal.TextMuted)
-		msg.Alignment = fyne.TextAlignCenter
-		// caption() is the app's muted, WRAPPING caption style — a canvas.Text
-		// would neither wrap nor bound the column's width, which is what pushed
-		// the progress bar off-centre (the VBox grew to the hint's full width
-		// while the fixed-width bar stayed left-aligned inside it).
-		hint := container.NewGridWrap(fyne.NewSize(260, captionHeightFor(2)),
-			centeredCaption("Capable models can take a minute or more."))
+		var view *container.Scroll
 		speed := newFindSpeedControl(state, func(choice aiSpeedChoice) {
+			state.aiSearchRestarted = true
 			runAsk(state.aiSearchQuery, choice)
 		})
 		// Cancel reaches the request through state (abandonAISearch), never
@@ -666,19 +654,21 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 			state.aiSearchCancelled = true
 			renderFind()
 		})
-		// The model the request reported, if it has yet (showFindModel). The
-		// column scrolls (findWaitScroll): a phone in landscape leaves it
-		// about half its height.
+		status := "Searching with AI…"
+		if state.aiSearchRestarted {
+			status = "Searching with AI again…"
+		}
+		seed := state.aiSearchModel
+		if seed.model == "" {
+			seed = state.aiSearchLastModel
+		}
+		if seed.model == "" {
+			seed = seedAISpeedReport(state, state.aiSearchChoice)
+		}
 		model := newFindModelLine(state)
-		view := findWaitScroll(container.NewVBox(
-			container.NewCenter(msg), spacer(10),
-			container.NewCenter(container.NewGridWrap(fyne.NewSize(240, bar.MinSize().Height), bar)),
-			spacer(10), container.NewCenter(model.box), container.NewCenter(hint),
-			// inputFrame: the theme's SurfaceAlt button fill is near-invisible
-			// on this ground, so give Cancel the app's standard visible outline.
-			spacer(4), container.NewCenter(inputFrame(cancelBtn, state.pal().Border)),
-			speed.box,
-		))
+		col := newAIWaitColumn(pal, status, bar, model, speed, inputFrame(cancelBtn, pal.Border), 0, seed)
+		state.findWaitCol = col
+		view = findWaitScroll(col.box)
 		model.relayout = view.Refresh
 		speed.relayout = view.Refresh
 		return view
@@ -726,6 +716,7 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		}
 		resultsHost.Objects = []fyne.CanvasObject{view}
 		resultsHost.Refresh()
+		state.consumeWaitFocusRestore(resultsHost)
 	}
 	// The landing's way in: whichever build of this tab is on the canvas when
 	// a Find lands repaints it, and only while it is in Find mode — a mode
@@ -772,6 +763,8 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		state.aiSearchLoading = true
 		state.aiSearchErr = nil
 		state.aiSearchCancelled = false
+		state.aiSearchChoice = choice
+		state.aiSearchLastModel = seedAISpeedReport(state, choice)
 		state.aiSearchModel = aiModelInUse{} // this request has not said yet
 		// Declared before the call so the hook can close over it; the real cancel
 		// func replaces it the moment startFind returns. Published to
@@ -827,7 +820,10 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		})
 	}
 	registerPageField(state, pageFieldFind, aiEntry)
-	aiEntry.OnSubmitted = func(q string) { runAsk(q, aiSpeedChoice{}) }
+	aiEntry.OnSubmitted = func(q string) {
+		state.aiSearchRestarted = false
+		runAsk(q, aiSpeedChoice{})
+	}
 	askBtn := widget.NewButtonWithIcon("", theme.SearchIcon(), func() { aiEntry.OnSubmitted(aiEntry.Text) })
 	askBtn.Importance = widget.LowImportance
 
@@ -873,6 +869,10 @@ func buildMobileSearchTab(state *AppState, switchToRead func()) fyne.CanvasObjec
 		state.aiSearchQuery = ""
 		state.aiSearchErr = nil // the pane is drawn from state: a kept error would come back
 		state.aiSearchCancelled = false
+		state.aiSearchModel = aiModelInUse{}
+		state.aiSearchLastModel = aiModelInUse{}
+		state.aiSearchChoice = aiSpeedChoice{}
+		state.aiSearchRestarted = false
 		applyMode()
 	})
 	clearAskBtn.Importance = widget.LowImportance

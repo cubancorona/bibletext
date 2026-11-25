@@ -17,7 +17,7 @@ link to another provider.
 |---|---|---|
 | Exhausted account credit or spending limit | A recognized structured credit/spend code or a narrowly recognized provider clause. Gemini's documented 402 `RESOURCE_EXHAUSTED` is a depleted-prepay case. A clause alone does not count when a Google `QuotaFailure` or `RetryInfo` detail names a quota or a retry delay. | Name the provider; explain that the account behind the key needs attention with its vendor; offer the provider's billing link and Try again. |
 | Other billing issue | A documented billing-error type without evidence of an exhausted balance or cap. | Describe a billing issue, without asserting that credit has run out; offer the same billing link and Try again. |
-| Request timeout | The request's deadline, or the transport's wait for the response headers, met after the request was written whole: no response headers in time, or the request's deadline before the answer was whole. Or HTTP 504. | Name the provider, say the request was stopped, offer Try again and, when available, the existing faster-model action. Sent once. |
+| Request timeout | The request's deadline, or the transport's wait for the response headers, met after the request was written whole: no response headers in time, or the request's deadline before the answer was whole. Or HTTP 504. | Name the provider, say the request was stopped, offer Try again and, when available, the lower-reasoning retry and/or faster-model action. Sent once. |
 | HTTP 408 | A completed HTTP 408 response, without evidence that the request's own deadline expired. | Keep the existing ordinary 4xx policy: one attempt, then "The AI service returned an error. Please try again shortly." and existing generic recovery actions. No timeout-only faster-model action. |
 | Connection never made, or lost | A refused connection, a DNS failure, a dial, DNS or TLS handshake timeout, or the request's deadline met before the request was written whole; or a connection that fails once made, reset, or timed out by TCP when its peer stops answering (ETIMEDOUT), before the response or inside it. | Keep 1.2.24's handling: up to three attempts while the request's budget lasts, then "Couldn't reach the AI service. Check your connection and try again." |
 | Ordinary rate limit or quota | A transient rate-limit code, a Google `QuotaFailure` or `RetryInfo` detail without a structured account code, or ambiguous 429 / `RESOURCE_EXHAUSTED` without account evidence. | Keep the existing retry guidance. An HTTP status alone does not prove exhausted funds. |
@@ -34,8 +34,8 @@ exhausted account, so its `QuotaFailure` and `RetryInfo` details, which name
 a per-minute or per-day quota and the delay before a retry, outrank that
 clause unless a structured account code or `ErrorInfo` reason is present.
 Unknown or malformed bodies continue through ordinary safe error handling.
-No account failure is retried automatically. Only an explicit Try again or
-faster-model action sends another request.
+No account failure is retried automatically. Only an explicit Try again,
+lower-reasoning retry or faster-model action sends another request.
 
 A timeout is the provider's only when the request was written whole and
 one of the request's own timers then ran out: its deadline, or the
@@ -92,8 +92,8 @@ held byte for byte, straight apostrophes and curly quotation marks
 included, by `TestTheAIErrorWordingWordForWord` (`ai_error_wording_test.go`).
 
 Decided 15 and 16 October 2026: the account-limit message, the quoted
-reason under it, the "{Provider} billing" link, Try again, the "Switch to
-a faster model" action, and the timeout line. The account-limit message is:
+reason under it, the "{Provider} billing" link, Try again, and the timeout
+line. The account-limit message is:
 
 > {Provider} didn't accept the request: the account behind your key has
 > reached its spending limit or run out of credit. You can change that with
@@ -137,11 +137,17 @@ no billing link is offered; and the vendors are named OpenAI, Anthropic,
 Google and SpaceXSI.
 
 The faster-model action is offered only for the captured provider while it
-is still active. On a timeout, the action identifies the model it will set
-in Settings and includes that model's saved effort when supported. Tapping
-it retries with that model. Closing the screen retires the action, and the
-callback rechecks the credential, model and offer before changing Settings.
-Settings' Test key offers the same switch beside its explicit test control.
+is still active and using a capable model. On Study and Find timeouts,
+recovery options appear as plain open rows directly beneath the framed Try
+again button: "Try again with less reasoning" (with the lower level or token
+budget note, applied for the retried request only) and "Switch to a faster
+model and try again" (`{model} · saves in Settings`). Tapping Try again
+preserves any still-valid one-time effort choice from the failed attempt unless
+the reader has since changed the saved effort or model in Settings.
+Closing the screen retires the actions, and each callback rechecks the
+credential, model and offer before changing Settings. Settings' Test key
+retains its compact inline `Set {model} in Settings` link beside its explicit
+test control.
 
 ## Provider reason text
 
@@ -162,10 +168,12 @@ Billing destinations are fixed HTTPS URLs mapped to known providers.
 ## Presentation
 
 `ai_error_ui.go` supplies the shared detail, billing link and actions. Study
-errors normally keep their recovery actions below the message scroll. When
+errors normally keep their recovery actions below the message scroll, and
+hide the answer-only disclaimer, Report and Copy controls while no answer
+exists, leaving a single unframed Close exit in the footer. When
 that fixed content cannot leave one readable message line inside the safe
 sheet bounds, the title and Close remain fixed while passage, question,
-message, recovery rows, disclaimer and disabled Report/Copy scroll together.
+message and recovery rows scroll together.
 Find keeps its complete message and controls in a scrollable viewport. Settings keeps its existing Test key workflow and
 adds the relevant recovery detail. Existing icon, button and toolbar visual
 dimensions are reused.
@@ -173,7 +181,7 @@ dimensions are reused.
 Decided 2 November 2026: the study panel's error state keeps the panel's
 own spacing on every screen. The header's rows stay the theme's padding,
 7 points, apart, and each action has a row of its own, Try again first and
-then the billing link or the faster model; no gap shrinks and no row is
+then the billing link or the timeout speed rows; no gap shrinks and no row is
 shared to make room on a short phone. The column, the message and the
 quoted reason under it, is kept whole by the rule every state of the panel
 follows (`fitBody` and `wholeThrough` in `ai_panel.go`): the panel covers
@@ -183,12 +191,12 @@ the pinned actions. Decided 3 November 2026: if that fixed layout cannot
 leave a readable message line, use the combined overflow layout described
 above. Normal-height composition returns when the window grows or an answer
 replaces the error. Header gaps, separate recovery rows and all text/control
-sizes stay unchanged. `aiRecoveryCutOn` holds the normal-layout cut cases;
+sizes stay unchanged. `aiRecoveryIsCut` (`aiRecoveryAccountCutOn`) holds the normal-layout cut cases;
 `TestAIErrorExceptionalHeightScrollsContextAndRecovery` holds the exceptional
 safe bounds and scroll reachability. An expanded quote retains its own scroll
 viewport and the reader's choice.
 
-Copy and Report remain disabled for an error, and the previous answer is
+Copy and Report remain disabled and hidden for an error, and the previous answer is
 cleared. An error is not cached as an answer. A theme rebuild must not
 silently repeat a paid request to recreate an error screen.
 
@@ -224,7 +232,7 @@ real account limits or paid requests. Cover:
 - Provider changes before completion and before a recovery tap; inactive
   provider key tests; no model mutation or retry for the wrong provider.
 - Study, Ask, Compare, compact and sidebar Find, and Settings Test key;
-  retry/faster/billing actions, stale completion, disabled Copy/Report and
+  retry/faster/billing actions, stale completion, hidden Copy/Report and
   short portrait/landscape layouts.
 
 Run the focused AI error and panel tests before the complete default,

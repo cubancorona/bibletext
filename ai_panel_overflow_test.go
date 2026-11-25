@@ -26,7 +26,19 @@ func errorRecoveryScroll(popup *widget.PopUp) *container.Scroll {
 	return found
 }
 
-// The last controls must be reachable by scrolling without moving Close.
+func lastOverflowTarget(root fyne.CanvasObject) fyne.CanvasObject {
+	var last fyne.CanvasObject
+	walkVisibleControls(root, func(o fyne.CanvasObject) {
+		switch o.(type) {
+		case *widget.Button, *outboundLink, *aiSwitchActionRow:
+			last = o
+		}
+	})
+	return last
+}
+
+// The last controls must be reachable by scrolling without moving Close, while
+// answer-only controls stay hidden.
 func wantAIErrorOverflowReachable(t *testing.T, popup *widget.PopUp) {
 	t.Helper()
 	scroll := errorRecoveryScroll(popup)
@@ -36,15 +48,21 @@ func wantAIErrorOverflowReachable(t *testing.T, popup *widget.PopUp) {
 	driver := fyne.CurrentApp().Driver()
 	closeButton := findTreeButton(popup, "Close")
 	before := driver.AbsolutePositionForObject(closeButton)
-	for _, name := range []string{"Try again", "Report", "Copy"} {
-		button := findTreeButton(scroll.Content, name)
-		if button == nil || button.Size().Height < button.MinSize().Height-.5 {
-			t.Fatalf("combined scroll lost or shrank %s", name)
+	tryBtn := findTreeButton(scroll.Content, "Try again")
+	if tryBtn == nil || tryBtn.Size().Height < tryBtn.MinSize().Height-.5 {
+		t.Fatal("combined scroll lost or shrank Try again")
+	}
+	for _, name := range []string{"Report", "Copy"} {
+		if b := findTreeButton(popup, name); b != nil && studyObjectVisible(popup, b) {
+			t.Errorf("error state left %s visible", name)
 		}
 	}
 	offset := scroll.Offset
 	scroll.ScrollToBottom()
-	last := findTreeButton(scroll.Content, "Copy")
+	last := lastOverflowTarget(scroll.Content)
+	if last == nil {
+		t.Fatal("combined scroll has no visible recovery control")
+	}
 	lastPosition := driver.AbsolutePositionForObject(last)
 	top := driver.AbsolutePositionForObject(scroll)
 	if lastPosition.Y < top.Y-.5 || lastPosition.Y+last.Size().Height > top.Y+scroll.Size().Height+.5 {
@@ -57,7 +75,7 @@ func wantAIErrorOverflowReachable(t *testing.T, popup *widget.PopUp) {
 }
 
 func TestAIErrorExceptionalHeightScrollsContextAndRecovery(t *testing.T) {
-	for _, size := range []fyne.Size{{Width: 640, Height: 320}, {Width: 732, Height: 240}} {
+	for _, size := range []fyne.Size{{Width: 640, Height: 280}, {Width: 732, Height: 240}} {
 		for _, action := range []string{aiActionExplain, aiActionCompare, aiActionAsk} {
 			for _, timeout := range []bool{false, true} {
 				t.Run(fmt.Sprintf("%.0fx%.0f/%s/timeout=%t", size.Width, size.Height, action, timeout), func(t *testing.T) {
@@ -96,24 +114,26 @@ func TestAIErrorExceptionalHeightScrollsContextAndRecovery(t *testing.T) {
 						t.Errorf("Close escaped the card: %v / %v", position, closeButton.Size())
 					}
 					for _, label := range []string{"Copy", "Report"} {
-						button := findTreeButton(scroll.Content, label)
-						if button == nil || !button.Disabled() {
-							t.Errorf("scroll lost disabled %s", label)
+						if button := findTreeButton(popup, label); button != nil && studyObjectVisible(popup, button) {
+							t.Errorf("error left %s visible", label)
 						}
 					}
-					if !strings.Contains(strings.Join(treeTexts(scroll.Content), " "), "AI-generated") {
-						t.Error("overflow discarded the disclosure")
+					if strings.Contains(strings.Join(treeTexts(scroll.Content), " "), "AI-generated") {
+						t.Error("overflow showed the answer disclaimer when no answer exists")
 					}
 					closePosition := position
 					scroll.ScrollToBottom()
 					if fyne.CurrentApp().Driver().AbsolutePositionForObject(closeButton) != closePosition {
 						t.Error("scrolling moved the fixed Close control")
 					}
-					copyButton := findTreeButton(scroll.Content, "Copy")
-					last := fyne.CurrentApp().Driver().AbsolutePositionForObject(copyButton)
+					lastObj := lastOverflowTarget(scroll.Content)
+					if lastObj == nil {
+						t.Fatal("no recovery control in scroll")
+					}
+					last := fyne.CurrentApp().Driver().AbsolutePositionForObject(lastObj)
 					top := fyne.CurrentApp().Driver().AbsolutePositionForObject(scroll)
-					if last.Y < top.Y-.5 || last.Y+copyButton.Size().Height > top.Y+scroll.Size().Height+.5 {
-						t.Errorf("last recovery content is unreachable: %.1f..%.1f in %.1f..%.1f", last.Y, last.Y+copyButton.Size().Height, top.Y, top.Y+scroll.Size().Height)
+					if last.Y < top.Y-.5 || last.Y+lastObj.Size().Height > top.Y+scroll.Size().Height+.5 {
+						t.Errorf("last recovery content is unreachable: %.1f..%.1f in %.1f..%.1f", last.Y, last.Y+lastObj.Size().Height, top.Y, top.Y+scroll.Size().Height)
 					}
 					test.Tap(closeButton)
 				})
@@ -180,8 +200,8 @@ func TestAIErrorOverflowAdditionalForms(t *testing.T) {
 				t.Error("the exceptional error lost an explicit passage expansion")
 			}
 			for _, label := range []string{"Copy", "Report"} {
-				if button := findTreeButton(popup, label); button == nil || !button.Disabled() {
-					t.Errorf("error lost disabled %s", label)
+				if button := findTreeButton(popup, label); button != nil && studyObjectVisible(popup, button) {
+					t.Errorf("error left %s visible", label)
 				}
 			}
 			test.Tap(findTreeButton(popup, "Close"))
@@ -242,7 +262,7 @@ func TestAIErrorLayoutSnapshots(t *testing.T) {
 			geometry := map[string]any{"sheet": map[string]float32{"left": box.x0, "top": box.y0, "right": box.x1, "bottom": box.y1}}
 			title := aiPanelTitle(t, popup, aiActionAsk)
 			geometry["title"] = map[string]any{"position": fyne.CurrentApp().Driver().AbsolutePositionForObject(title), "size": title.Size(), "minimum": title.MinSize()}
-			for _, label := range []string{"Try again", "Report", "Copy", "Close"} {
+			for _, label := range []string{"Try again", "Close"} {
 				button := findTreeButton(popup, label)
 				geometry[label] = map[string]any{"position": fyne.CurrentApp().Driver().AbsolutePositionForObject(button), "size": button.Size(), "minimum": button.MinSize()}
 			}

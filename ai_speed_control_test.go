@@ -1,35 +1,64 @@
 package bibletext
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 )
 
-// A hidden action still exists in the disclosure's container. Only return
-// controls the reader can activate from the current view.
+// armAISpeedClock installs a deterministic synthetic clock whose steps exceed
+// aiSpeedArmDelay so non-timing tests can tap freshly rendered choice rows
+// immediately without sleeping. Timing tests install their own manual clock.
+func armAISpeedClock(t *testing.T) {
+	t.Helper()
+	prev := aiSpeedNow
+	now := time.Unix(1_700_000_000, 0)
+	aiSpeedNow = func() time.Time {
+		now = now.Add(time.Second)
+		return now
+	}
+	t.Cleanup(func() { aiSpeedNow = prev })
+}
+
+// Only return controls the reader can activate from the current view, and fail
+// loudly if duplicate visible rows ever share the same title.
 func waitingAction(root fyne.CanvasObject, label string) *aiSwitchActionRow {
-	var action *aiSwitchActionRow
+	var matches []*aiSwitchActionRow
 	walkVisibleControls(root, func(o fyne.CanvasObject) {
-		if r, ok := o.(*aiSwitchActionRow); ok && r.label.Text == label {
-			action = r
+		if r, ok := o.(*aiSwitchActionRow); ok && r.titleText == label {
+			matches = append(matches, r)
 		}
 	})
-	return action
+	if len(matches) > 1 {
+		panic(fmt.Sprintf("found %d visible speed actions titled %q", len(matches), label))
+	}
+	if len(matches) == 1 {
+		return matches[0]
+	}
+	return nil
 }
 
 func waitingDisclosure(root fyne.CanvasObject) *aiSwitchDisclosure {
-	var toggle *aiSwitchDisclosure
+	var matches []*aiSwitchDisclosure
 	walkVisibleControls(root, func(o fyne.CanvasObject) {
 		if r, ok := o.(*aiSwitchDisclosure); ok {
-			toggle = r
+			matches = append(matches, r)
 		}
 	})
-	return toggle
+	if len(matches) > 1 {
+		panic(fmt.Sprintf("found %d visible speed disclosures", len(matches)))
+	}
+	if len(matches) == 1 {
+		return matches[0]
+	}
+	return nil
 }
 
 func TestAISpeedControlOffersAndValidatesEachRetry(t *testing.T) {
+	armAISpeedClock(t)
 	app := test.NewApp()
 	t.Cleanup(app.Quit)
 	state := sampleState()
@@ -37,7 +66,7 @@ func TestAISpeedControlOffersAndValidatesEachRetry(t *testing.T) {
 	state.aiKeys = store
 	store.setActiveProvider(providerOpenAI)
 	store.setAPIKey(providerOpenAI, "synthetic")
-	const source = "gpt-synthetic-study"
+	const source = "gpt-5.4-pro"
 	store.setOverrideModel(providerOpenAI, source)
 	rememberModelEfforts(store.prefs, providerOpenAI, []discoveredModel{
 		{id: source, efforts: []string{"low", "medium", "high"}},
@@ -66,25 +95,28 @@ func TestAISpeedControlOffersAndValidatesEachRetry(t *testing.T) {
 	w := test.NewWindow(c.box)
 	t.Cleanup(w.Close)
 	toggle := waitingDisclosure(c.box)
-	if toggle == nil || toggle.title.Text+" "+toggle.second.Text != "Switch to a faster model or reasoning effort" || toggle.expanded || waitingAction(c.box, "Use Medium effort this time") != nil {
+	if toggle == nil || toggle.title.Text != "Faster options" || toggle.expanded || waitingAction(c.box, "Use less reasoning this time") != nil {
 		t.Fatal("missing speed-options control")
 	}
 	w.Canvas().Focus(toggle)
 	toggle.TypedKey(&fyne.KeyEvent{Name: fyne.KeySpace})
-	if sw := waitingAction(c.box, "Switch to a faster model"); sw == nil || sw.detail != "Restart this request and save "+openAIFastModel+" in Settings. Effort: High." {
-		t.Fatalf("switch should show the destination's saved effort: %v", treeTexts(c.box))
+	if sw := waitingAction(c.box, "Switch to a faster model"); sw == nil || sw.detail != openAIFastModel+" · saves in Settings" {
+		t.Fatalf("switch should show the destination scope note: %v", treeTexts(c.box))
 	}
-	old := tap("Use Medium effort this time")
+	if lowerRow := waitingAction(c.box, "Use less reasoning this time"); lowerRow == nil || lowerRow.detail != "Medium effort" {
+		t.Fatalf("lower-effort row should show Medium effort: %v", treeTexts(c.box))
+	}
+	old := tap("Use less reasoning this time")
 	toggle.TypedKey(&fyne.KeyEvent{Name: fyne.KeySpace})
 	if waitingDisclosure(c.box) != toggle || w.Canvas().Focused() != toggle {
 		t.Fatal("collapsing the choices lost keyboard focus")
 	}
 	old()
-	if len(calls) != 0 || waitingAction(c.box, "Use Medium effort this time") != nil {
+	if len(calls) != 0 || waitingAction(c.box, "Use less reasoning this time") != nil {
 		t.Fatalf("a dismissed offer was still active: %v", calls)
 	}
 	toggle.Tapped(nil)
-	lower := tap("Use Medium effort this time")
+	lower := tap("Use less reasoning this time")
 	lower()
 	lower()
 	if len(calls) != 1 || calls[0] != (aiSpeedChoice{providerOpenAI, source, "medium"}) ||
@@ -96,20 +128,24 @@ func TestAISpeedControlOffersAndValidatesEachRetry(t *testing.T) {
 	// saved High setting remains intact.
 	newWait("low")
 	waitingDisclosure(c.box).Tapped(nil)
-	tap("Use Low effort this time")()
+	if lowerRow := waitingAction(c.box, "Use less reasoning this time"); lowerRow == nil || lowerRow.detail != "Low effort" {
+		t.Fatalf("expected Low effort note: %v", treeTexts(c.box))
+	}
+	tap("Use less reasoning this time")()
 	if len(calls) != 2 || calls[1].effort != "low" || aiReasoningEffort(store.prefs, providerOpenAI, source) != "high" {
 		t.Fatalf("wrong second step: %v", calls)
 	}
 
-	// A stale offer cannot pin a different effort from the one shown.
-	// The refreshed direct control exposes the new choice before applying it.
+	// A stale offer cannot pin a different effort from the one active when
+	// options() built it. The refreshed direct control exposes the updated
+	// offer before applying it.
 	newWait("")
 	firstSwitch := tap("Switch to a faster model")
 	setAIReasoningEffort(store.prefs, providerOpenAI, openAIFastModel, "low")
 	firstSwitch()
 	sw := waitingAction(c.box, "Switch to a faster model")
 	if len(calls) != 2 || activeModelFor(store, providerOpenAI) != source ||
-		sw == nil || sw.detail != "Restart this request and save "+openAIFastModel+" in Settings. Effort: Low." {
+		sw == nil || sw.detail != openAIFastModel+" · saves in Settings" {
 		t.Fatalf("stale destination retried or failed to repaint: %v, %v", calls, treeTexts(c.box))
 	}
 	tap("Switch to a faster model")()
@@ -131,6 +167,7 @@ func TestAISpeedControlOffersAndValidatesEachRetry(t *testing.T) {
 }
 
 func TestAISpeedControlOnlyAValidLowerBudgetCanRetry(t *testing.T) {
+	armAISpeedClock(t)
 	app := test.NewApp()
 	t.Cleanup(app.Quit)
 	for _, change := range []string{"none", "key", "model", "provider", "level removed", "permission withdrawn", "closed", "inactive view"} {
@@ -147,8 +184,8 @@ func TestAISpeedControlOnlyAValidLowerBudgetCanRetry(t *testing.T) {
 			var calls []aiSpeedChoice
 			c := newAISpeedControl(state, func(choice aiSpeedChoice) { calls = append(calls, choice) })
 			c.show(aiModelInUse{provider: providerGemini, model: geminiFastModel, lowerEffort: "4096"})
-			budget := waitingAction(c.box, "Use a smaller thinking budget this time")
-			if budget == nil || budget.detail != "Restart this request with a limit of 4,096 tokens. Your saved budget stays the same." || waitingDisclosure(c.box) != nil || waitingAction(c.box, "Switch to a faster model") != nil {
+			budget := waitingAction(c.box, "Use less reasoning this time")
+			if budget == nil || budget.detail != "4,096 tokens" || waitingDisclosure(c.box) != nil || waitingAction(c.box, "Switch to a faster model") != nil {
 				t.Fatalf("only the direct budget action should show: %v", treeTexts(c.box))
 			}
 			switch change {
