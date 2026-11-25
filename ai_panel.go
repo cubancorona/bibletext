@@ -17,6 +17,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/driver/mobile"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -170,6 +171,25 @@ func (a *aiCitationTapArea) MouseDown(*desktop.MouseEvent) {
 }
 
 func (a *aiCitationTapArea) MouseUp(*desktop.MouseEvent) {
+	if a.pressed {
+		a.pressed = false
+		a.syncWash()
+	}
+}
+
+func (a *aiCitationTapArea) TouchDown(*mobile.TouchEvent) {
+	a.pressed = true
+	a.syncWash()
+}
+
+func (a *aiCitationTapArea) TouchUp(*mobile.TouchEvent) {
+	if a.pressed {
+		a.pressed = false
+		a.syncWash()
+	}
+}
+
+func (a *aiCitationTapArea) TouchCancel(*mobile.TouchEvent) {
 	if a.pressed {
 		a.pressed = false
 		a.syncWash()

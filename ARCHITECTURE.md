@@ -158,7 +158,7 @@ real files; `*_test.go` files are omitted.
 
 | File | Responsibility |
 | --- | --- |
-| `ui.go` | Shared header plus loading/error views |
+| `ui.go`, `slim_progress_bar.go` | Shared header, loading/error views, 4pt slim progress bar wrapper (`newSlimProgressBar`), and `stopInfiniteBars` lifecycle sweep |
 | `ui_compact.go` / `tab_rail.go` | Shared Read / Books / Search composition; the same destinations render as a bottom bar or left rail |
 | `ui_desktop.go` / `ui_compact_desktop.go` | `!ios && !android` — shared layout with the window-shape navigation rule (a rail when square or wider, a bar when taller, moved by `desktop_navigation.go` after a resize settles) plus keyboard shortcuts; `BIBLETEXT_DESKTOP_TABS=sidebar` retains the former HSplit for diagnostics |
 | `ui_mobile.go` | `ios \|\| android` — shared touch layout with the platform-native reading pane; tablets move navigation to the left edge in landscape; phones present the Read tab full-screen in landscape (`phone_landscape.go`, on by default) |
@@ -250,14 +250,14 @@ prose.
 | `ai_providers.go` | Gemini / OpenAI / Anthropic / Grok HTTP clients + models |
 | `ai_keystore.go` | On-device key storage (`keyStore`): Apple Keychain on **iOS only**, preferences elsewhere (incl. macOS); env-var override |
 | `ai_secure_store_darwin.go` / `ai_secure_store_other.go` | `//go:build ios` Keychain adapter (AfterFirstUnlock, backup-restorable) / its no-op twin everywhere else |
-| `ai_settings.go` | AI-study settings sheet (provider pick, key paste, Test key) |
+| `ai_settings.go`, `ai_settings_picker_row.go`, `ai_model_settings_layout.go` | AI-study settings sheet (provider pick, framed key paste, Test key, plain Model & effort/budget picker rows, modal picker sheet) |
 | `key_test_progress.go` | What a Test key has shown so far — its wait, the model it reports, its verdict — held on `AppState` per key section and painted by whichever Settings sheet is showing, so the line outlives the sheet a light/dark reopen drains |
 | `status_line.go` | A line of text in one colour, size and style, broken between words to the width of its row: the status line under each key field in Settings, and the translation picker's row names, publishers and captions |
 | `key_actions_row.go` | The Paste / Test key / Clear row under each key field in Settings: one line where it fits, the button that would run past the card on a line of its own where it does not |
 | `wrap_check.go` | The Settings switches (footnotes, shared notes, red letter): widget.Check with a label that breaks between words where its row is too narrow for it |
 | `ai_panel.go` | AI answer panel (prose result, Report button, disclosure line) |
 | `ai_search.go` | AI "Find" passage search on the Search tab (returns verses) |
-| `ai_model_in_use.go`, `ai_speed_control.go` | The model and effort reported for each send, the progress caption, and the faster options for the current attempt |
+| `ai_wait_column.go`, `ai_model_in_use.go`, `ai_speed_control.go` | Shared AI waiting column (`aiWaitColumn`), the model and effort reported for each send, the progress caption, and the faster options for waiting and timeout recovery |
 | `ai_menu_darwin.go` | Native selection-menu → Go bridge (shared with reading overlays) |
 
 ### Share

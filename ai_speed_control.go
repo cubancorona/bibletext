@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/driver/mobile"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -714,6 +715,28 @@ func (r *aiSwitchHit) MouseUp(*desktop.MouseEvent) {
 	}
 }
 
+func (r *aiSwitchHit) TouchDown(*mobile.TouchEvent) {
+	if r.guard && aiSpeedNow().Before(r.armedAt) {
+		return
+	}
+	r.pressed = true
+	r.syncChrome()
+}
+
+func (r *aiSwitchHit) TouchUp(*mobile.TouchEvent) {
+	if r.pressed {
+		r.pressed = false
+		r.syncChrome()
+	}
+}
+
+func (r *aiSwitchHit) TouchCancel(*mobile.TouchEvent) {
+	if r.pressed {
+		r.pressed = false
+		r.syncChrome()
+	}
+}
+
 func (r *aiSwitchHit) Cursor() desktop.Cursor { return desktop.PointerCursor }
 
 var (
@@ -721,11 +744,13 @@ var (
 	_ fyne.Focusable     = (*aiSwitchDisclosure)(nil)
 	_ desktop.Hoverable  = (*aiSwitchDisclosure)(nil)
 	_ desktop.Mouseable  = (*aiSwitchDisclosure)(nil)
+	_ mobile.Touchable   = (*aiSwitchDisclosure)(nil)
 	_ desktop.Cursorable = (*aiSwitchDisclosure)(nil)
 	_ fyne.Tappable      = (*aiSwitchActionRow)(nil)
 	_ fyne.Focusable     = (*aiSwitchActionRow)(nil)
 	_ desktop.Hoverable  = (*aiSwitchActionRow)(nil)
 	_ desktop.Mouseable  = (*aiSwitchActionRow)(nil)
+	_ mobile.Touchable   = (*aiSwitchActionRow)(nil)
 	_ desktop.Cursorable = (*aiSwitchActionRow)(nil)
 )
 

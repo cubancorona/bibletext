@@ -428,9 +428,9 @@ func crossRefTreasuryLoading(bar *widget.ProgressBarInfinite) fyne.CanvasObject 
 	if bar == nil {
 		bar = widget.NewProgressBarInfinite()
 	}
-	return container.New(layout.NewCustomPaddedVBoxLayout(2),
+	return container.New(layout.NewCustomPaddedVBoxLayout(4),
 		crossRefNoteCaption("Finding related passages…"),
-		container.New(layout.NewCustomPaddedLayout(0, 6, 0, 0), bar),
+		container.New(layout.NewCustomPaddedLayout(0, 6, 0, 0), newLeadingSlimProgressBar(bar)),
 	)
 }
 

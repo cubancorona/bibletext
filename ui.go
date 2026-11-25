@@ -162,7 +162,7 @@ func buildLoadingView(state *AppState) fyne.CanvasObject {
 		spacer(6),
 		container.NewCenter(msg),
 		spacer(14),
-		container.NewGridWrap(fyne.NewSize(220, bar.MinSize().Height), bar),
+		container.NewCenter(container.NewGridWrap(fyne.NewSize(220, slimProgressHeight), bar)),
 	)
 
 	base := canvas.NewRectangle(pal.Background)

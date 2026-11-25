@@ -20,10 +20,10 @@ import (
 
 const (
 	aiWaitMeasure          float32 = 260
-	aiWaitBarMaxW          float32 = 240
+	aiWaitBarMaxW          float32 = slimProgressMaxWidth
 	aiWaitTop              float32 = 12
 	aiWaitStatusToBar      float32 = 13
-	aiWaitBarH             float32 = 4
+	aiWaitBarH             float32 = slimProgressHeight
 	aiWaitBarToCaption     float32 = 10
 	aiWaitCaptionPitch     float32 = 16
 	aiWaitCaptionToChoices float32 = 10

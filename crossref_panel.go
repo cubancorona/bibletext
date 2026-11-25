@@ -215,7 +215,7 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 		thinkingBar = bar
 		msg := widget.NewLabel("Finding related passages…")
 		msg.Alignment = fyne.TextAlignCenter
-		setCentered(container.NewVBox(msg, bar))
+		setCentered(container.NewVBox(msg, spacer(4), newSlimProgressBar(bar)))
 	}
 	// load asks for the Treasury and lands the list; set below, since the
 	// error state's Try again runs it again (ensureCrossRefs forgets a
@@ -226,9 +226,9 @@ func showCrossRefsAt(state *AppState, text string, span selSpan, place *crossRef
 		lbl := widget.NewLabel(crossRefOfflineMessage)
 		lbl.Wrapping = fyne.TextWrapWord
 		lbl.Alignment = fyne.TextAlignCenter
-		// The AI panel's verb for the same state, under the sentence.
+		// The AI panel's verb and outline for the same state, under the sentence.
 		retry := widget.NewButton("Try again", func() { load() })
-		setCentered(container.NewVBox(lbl, spacer(12), container.NewCenter(retry)))
+		setCentered(container.NewVBox(lbl, spacer(12), container.NewCenter(inputFrame(retry, pal.Border))))
 	}
 	follow := func(cc crossRef) {
 		closePanel()

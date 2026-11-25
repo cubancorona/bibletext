@@ -125,24 +125,23 @@ func settingsWithListedModels(t *testing.T, s *AppState, n int, whileLoading fun
 // shortWindowSheets that cannot clear the header there with the content
 // those tests give it, and so covers it. Each sheet covers on every window up
 // to a height and clears it above: the link notice to 440pt, the note-link
-// offer to 418pt, the cross-references while they load to 395pt (their
-// footer's sources line names only the sets on screen, so it stands empty
-// and hidden until the list lands), the share confirmation with a long text
-// to 407pt (430pt at 507pt wide), Go to to 395pt, the note composer and Ask
-// to 398pt, and the AI answer while it waits to 413pt, where the scroll under
-// its waiting line keeps the line whole (ai_panel_waiting_line_test.go). The
-// windows either side of each sheet's last covering height hold the line in
-// both directions.
+// offer to 418pt, the cross-references while they load clear even at 386pt
+// with the 4pt bar (their footer's sources line names only the sets on screen,
+// so it stands empty and hidden until the list lands), the share confirmation
+// with a long text to 407pt (430pt at 507pt wide), Go to to 395pt, the note
+// composer and Ask to 398pt, and the AI answer while it waits clears at 386pt
+// too (ai_panel_waiting_line_test.go). The windows either side of each sheet's
+// last covering height hold the line in both directions.
 var coversAt = map[fyne.Size][]string{
-	{Width: 1280, Height: 386}: {"Go to", "note composer", "share confirmation", "cross-references",
+	{Width: 1280, Height: 386}: {"Go to", "note composer", "share confirmation",
 		"link notice", "note-link offer", "Ask"},
-	{Width: 507, Height: 386}: {"Go to", "note composer", "share confirmation", "cross-references",
+	{Width: 507, Height: 386}: {"Go to", "note composer", "share confirmation",
 		"link notice", "note-link offer", "Ask"},
-	{Width: 1280, Height: 392}: {"Go to", "note composer", "share confirmation", "cross-references",
+	{Width: 1280, Height: 392}: {"Go to", "note composer", "share confirmation",
 		"link notice", "note-link offer", "Ask"},
-	{Width: 1280, Height: 393}: {"Go to", "note composer", "share confirmation", "cross-references",
+	{Width: 1280, Height: 393}: {"Go to", "note composer", "share confirmation",
 		"link notice", "note-link offer", "Ask"},
-	{Width: 1280, Height: 395}: {"Go to", "note composer", "share confirmation", "cross-references",
+	{Width: 1280, Height: 395}: {"Go to", "note composer", "share confirmation",
 		"link notice", "note-link offer", "Ask"},
 	{Width: 1280, Height: 396}: {"note composer", "share confirmation", "link notice", "note-link offer", "Ask"},
 	{Width: 1280, Height: 398}: {"note composer", "share confirmation", "link notice", "note-link offer", "Ask"},
@@ -445,12 +444,12 @@ func TestASheetCoveringTheHeaderIsSizedAgainWithTheWindow(t *testing.T) {
 }
 
 // The cross-references stay clear or covering through their load. The waiting
-// state's message and bar do not scroll, so on the least window the panel
-// covers the header while the list loads; the listed state scrolls, and when
-// the list lands the panel is sized for it, below the header, as one opened
-// listed is. Nothing but the body changes between the two, so the panel is
-// sized again whenever the body changes. Mutation guarded: the landing leaving
-// the panel at the covering height the waiting state took.
+// state's message and 4pt bar do not scroll, so on a 350pt-tall window the
+// panel covers the header while the list loads; the listed state scrolls, and
+// when the list lands the panel is sized for it, below the header, as one
+// opened listed is. Nothing but the body changes between the two, so the panel
+// is sized again whenever the body changes. Mutation guarded: the landing
+// leaving the panel at the covering height the waiting state took.
 func TestTheCrossReferencesAreSizedAgainWhenTheirListLands(t *testing.T) {
 	for _, localGospel := range []bool{false, true} {
 		name := "Treasury only"
@@ -461,7 +460,7 @@ func TestTheCrossReferencesAreSizedAgainWhenTheirListLands(t *testing.T) {
 			desktopSheets(t) // the seams the panel's load runs through
 			var land func()
 			crossRefsRun = func(work func()) { land = work }
-			st, w := desktopWindow(t, fyne.NewSize(1280, 386))
+			st, w := desktopWindow(t, fyne.NewSize(1280, 350))
 			span := selSpan{lo: 1, hi: 1}
 			if localGospel {
 				withBeatitudes(st)
@@ -475,8 +474,8 @@ func TestTheCrossReferencesAreSizedAgainWhenTheirListLands(t *testing.T) {
 			popup := pickerPopup(t, st, func(s *AppState) { showCrossRefs(s, "", span) })
 			defer popup.Hide()
 			// A local Gospel list already scrolls, so it clears the header
-			// while loading. With no local content, the old whole-panel
-			// waiting message still needs the full short-window height.
+			// while loading. With no local content, the whole-panel waiting
+			// message with its 4pt bar covers the header on a 350pt window.
 			if covering := wantClearOrCovering(t, st, w, popup); covering == localGospel {
 				t.Fatalf("waiting panel covers header=%v, want %v", covering, !localGospel)
 			}

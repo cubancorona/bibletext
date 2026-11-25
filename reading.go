@@ -443,25 +443,6 @@ func rebuildWindow(state *AppState) {
 	// marking the canvas dirty on every frame until the operation's completion
 	// path finally lands. Stop() is idempotent, so a later stop from that path is
 	// harmless.
-	var stopInfiniteBars func(fyne.CanvasObject)
-	stopInfiniteBars = func(o fyne.CanvasObject) {
-		switch t := o.(type) {
-		case *widget.ProgressBarInfinite:
-			t.Stop()
-		case *widget.Activity:
-			t.Stop()
-		case *fyne.Container:
-			for _, c := range t.Objects {
-				stopInfiniteBars(c)
-			}
-		case *container.Scroll:
-			stopInfiniteBars(t.Content)
-		case *widget.PopUp:
-			stopInfiniteBars(t.Content)
-		case contentWrapper:
-			stopInfiniteBars(t.wrappedContent())
-		}
-	}
 	cnv := state.window.Canvas()
 	for o := cnv.Overlays().Top(); o != nil; o = cnv.Overlays().Top() {
 		stopInfiniteBars(o)

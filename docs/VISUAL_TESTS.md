@@ -294,7 +294,7 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
 
 - [ ] The speaker expands in place to the card WITHOUT changing header
       height (the card once drew past its hit rect — visible ▶ hit
-      skip-back); "Read aloud ▾" must not slide under the ✕.
+      skip-back); the "Read aloud" source chip must not slide under the ✕.
 - [ ] Recorded streams show a buffering spinner until sound is audible;
       taps during buffering are ignored.
 - [ ] The amber narration wash tracks the voice verse-by-verse; nothing
@@ -386,9 +386,16 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       the status line updates to “… again…”, and a subsequent new question
       returns to the saved effort. Switch models and check that Settings now
       pins the faster model. On the faster model at High, check that the
-      single lower-reasoning row is directly shown without a toggle. On a
-      short landscape screen, expanding “Faster options” scrolls the revealed
-      rows into view while Study's Cancel remains pinned in the footer.
+      single lower-reasoning row is directly shown without a toggle. On Study,
+      expanding “Faster options” on a short landscape screen scrolls the
+      revealed rows into view while Cancel remains pinned in the footer; on
+      Find, Cancel remains fixed in place and a drag reaches the unfolded rows
+      when the viewport is shorter than the open column.
+- [ ] On a Study or Find timeout with a capable model at High, verify that
+      framed Try again stands above open plain recovery rows (“Try again with
+      less reasoning” and “Switch to a faster model and try again”) without a
+      disclosure toggle, and that an effort-only timeout offers “Try again with
+      less reasoning” without claiming a faster model in the message.
 - [ ] The model line on a small screen: pin a long model id (a Gemini
       preview); on a 375pt phone it wraps onto multiple lines and never widens
       the card or the Search tab. On a phone in landscape (iPhone SE, a Pro
@@ -690,8 +697,10 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
 - [ ] NKJV reading pane: no chapter-bottom rule or note section; the
       Settings card remains present. Publisher cross-references appear in
       the separate cross-references panel in ordinary builds.
-- [ ] Cross-references panel: loading bar STOPS on close (a leaked
-      infinite bar once pinned the canvas at ~20fps); Gospel selections
+- [ ] Cross-references panel: 4pt loading bar STOPS on close (a leaked
+      infinite bar once pinned the canvas at ~20fps); group headers and inline
+      notes fold with 14pt muted stroke chevrons (down closed, up open); offline
+      error shows a framed Try again; Gospel selections
       show embedded PARALLEL rows even offline; rows never display a verse
       number the WEB lacks (the doxology's 92 rows are the probe).
 
@@ -735,9 +744,13 @@ Store: 4 received notes on 4 paragraphs + 1 chapter-scope, all minimized.
       elsewhere); Paste/Test/Clear in that order everywhere; the bundled
       API.Bible key must NEVER show its characters behind the reveal eye;
       Clear works even when the field shows the bundled placeholder.
-- [ ] The model picker is a floating sheet with margins — never a
-      full-screen takeover; provider A's slow model list must never fill
-      provider B's dropdown.
+- [ ] Both API key inputs wear a persistent 1pt border outline; Model and
+      Reasoning effort / Thinking budget render as plain 44pt value rows whose
+      trailing dropdown marks align with "Get a key" above the bottom
+      Recommended note; the modal picker is a floating SurfaceAlt sheet with
+      margins, an 18pt bold title, and a check mark on the active row (truncating
+      long IDs before the mark on 320pt screens) — never a full-screen takeover;
+      provider A's slow model list must never fill provider B's dropdown.
 - [ ] Notes off with notes stored: Cancel restores the checkbox; Keep
       preserves the store and re-enabling re-projects the chapter's note
       IMMEDIATELY; Delete clears the on-screen note and tint at once (the
