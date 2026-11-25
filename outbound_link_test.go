@@ -223,41 +223,116 @@ func TestOutboundLinkArrowOpensTheLink(t *testing.T) {
 	}
 }
 
-// No string in the app's source spells U+2197 any more: drawn by Fyne it is
-// the emoji tile, whatever follows it. Comments may name it; string literals
-// may not. Parsed, not grepped, so a comment quoting the old label does not
-// count and a literal hidden in a concatenation does.
+// No UI string in the app's shipping source carries directional arrow or
+// triangle characters: none of Atkinson Hyperlegible or Fyne's Noto Sans holds
+// U+25BE, U+25B8, U+25BC, U+2303, U+2304, U+2190, U+2192 or U+2197, so Fyne either
+// substitutes an emoji tile (U+2197) or falls back to a platform-dependent
+// system font that corrupts font-measurement caches. Comments and CLI stdout/
+// stderr fmt.Print* / fmt.Fprint* messages may name them; UI string literals
+// may not. Parsed, not grepped, so a comment quoting an old label does not
+// count and an escaped literal hidden in a concatenation does.
 func TestNoUIStringCarriesTheArrowCharacter(t *testing.T) {
-	const arrow = "↗"
+	banned := []struct {
+		glyph string
+		code  string
+	}{
+		{"↗", `\u2197`},
+		{"▾", `\u25be`},
+		{"▸", `\u25b8`},
+		{"▼", `\u25bc`},
+		{"⌃", `\u2303`},
+		{"⌄", `\u2304`},
+		{"←", `\u2190`},
+		{"→", `\u2192`},
+	}
+	hasBanned := func(s string) bool {
+		for _, b := range banned {
+			if strings.Contains(s, b.glyph) {
+				return true
+			}
+		}
+		return false
+	}
+	isDevTagged := func(f *ast.File) bool {
+		for _, cg := range f.Comments {
+			for _, c := range cg.List {
+				if strings.HasPrefix(c.Text, "//go:build") && strings.Contains(c.Text, "bibletextdev") {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	isTerminalPrint := func(call *ast.CallExpr) bool {
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok {
+			return false
+		}
+		pkg, ok := sel.X.(*ast.Ident)
+		if !ok || pkg.Name != "fmt" {
+			return false
+		}
+		switch sel.Sel.Name {
+		case "Print", "Printf", "Println", "Fprint", "Fprintf", "Fprintln":
+			return true
+		}
+		return false
+	}
 	fset := token.NewFileSet()
 	entries, err := os.ReadDir(".")
 	if err != nil {
 		t.Fatal(err)
 	}
-	literalsWith := func(src string) (hits []string) {
-		f, err := parser.ParseFile(fset, "x.go", src, parser.SkipObjectResolution)
+	literalsWith := func(src string) (hits []string, skippedDev bool) {
+		f, err := parser.ParseFile(fset, "x.go", src, parser.ParseComments|parser.SkipObjectResolution)
 		if err != nil {
 			t.Fatalf("parse: %v", err)
 		}
+		if isDevTagged(f) {
+			return nil, true
+		}
+		skipLit := map[*ast.BasicLit]bool{}
+		ast.Inspect(f, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if ok && isTerminalPrint(call) {
+				for _, arg := range call.Args {
+					ast.Inspect(arg, func(m ast.Node) bool {
+						if lit, ok := m.(*ast.BasicLit); ok {
+							skipLit[lit] = true
+						}
+						return true
+					})
+				}
+			}
+			return true
+		})
 		ast.Inspect(f, func(n ast.Node) bool {
 			lit, ok := n.(*ast.BasicLit)
-			if !ok || lit.Kind != token.STRING {
+			if !ok || lit.Kind != token.STRING || skipLit[lit] {
 				return true
 			}
 			// The value, not the source text: "\u2197" is the same string.
-			if v, err := strconv.Unquote(lit.Value); err == nil && strings.Contains(v, arrow) {
+			if v, err := strconv.Unquote(lit.Value); err == nil && hasBanned(v) {
 				hits = append(hits, fset.Position(lit.Pos()).String()+" "+lit.Value)
 			}
 			return true
 		})
-		return hits
+		return hits, false
 	}
-	// CONTROL: the sweep finds the label as it used to be written, and as an
-	// escape, and not a comment that quotes it.
-	if len(literalsWith("package p\nvar s = \"Get a key "+arrow+"\"\n")) != 1 ||
-		len(literalsWith("package p\nvar s = \"Get a key \\u2197\"\n")) != 1 ||
-		len(literalsWith("package p\n// \"Get a key "+arrow+"\"\nvar s = 1\n")) != 0 {
-		t.Fatal("the sweep cannot tell a string literal from a comment")
+	// CONTROL: the sweep finds every banned glyph both raw and escaped in UI
+	// strings, while ignoring comments, dev-tagged harnesses, and terminal logs.
+	for _, b := range banned {
+		rawHits, _ := literalsWith("package p\nvar s = \"Label " + b.glyph + "\"\n")
+		escHits, _ := literalsWith("package p\nvar s = \"Label " + b.code + "\"\n")
+		cmtHits, _ := literalsWith("package p\n// \"Label " + b.glyph + "\"\nvar s = 1\n")
+		logHits, _ := literalsWith("package p\nimport \"fmt\"\nfunc f() { fmt.Printf(\"log " + b.glyph + "\\n\") }\n")
+		if len(rawHits) != 1 || len(escHits) != 1 || len(cmtHits) != 0 || len(logHits) != 0 {
+			t.Fatalf("sweep control failed for %s (%s): raw=%d esc=%d cmt=%d log=%d",
+				b.glyph, b.code, len(rawHits), len(escHits), len(cmtHits), len(logHits))
+		}
+	}
+	if _, dev := literalsWith("//go:build bibletextdev\n\npackage p\nvar s = \"dev →\"\n"); !dev {
+		t.Fatal("sweep control failed to skip bibletextdev file")
 	}
 	scanned := 0
 	var offenders []string
@@ -270,8 +345,12 @@ func TestNoUIStringCarriesTheArrowCharacter(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		hits, skippedDev := literalsWith(string(src))
+		if skippedDev {
+			continue
+		}
 		scanned++
-		for _, h := range literalsWith(string(src)) {
+		for _, h := range hits {
 			offenders = append(offenders, strings.Replace(h, "x.go", name, 1))
 		}
 	}
@@ -279,7 +358,7 @@ func TestNoUIStringCarriesTheArrowCharacter(t *testing.T) {
 		t.Fatalf("scanned only %d files; the sweep is not reaching the package", scanned)
 	}
 	if len(offenders) > 0 {
-		t.Errorf("U+2197 in a string, which Fyne draws as a colour emoji — use newOutboundLink:\n  %s",
+		t.Errorf("banned arrow or triangle glyph in a UI string literal — use vector SVG resources instead:\n  %s",
 			strings.Join(offenders, "\n  "))
 	}
 }

@@ -8,6 +8,15 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+type composeDisclosureTheme struct{ fyne.Theme }
+
+func (t composeDisclosureTheme) Size(name fyne.ThemeSizeName) float32 {
+	if name == theme.SizeNameInlineIcon {
+		return 14
+	}
+	return t.Theme.Size(name)
+}
+
 // composeViewport keeps the sheet's background full height while its form
 // fits above the keyboard. The native editor stays outside the passage scroll:
 // a UIKit view does not inherit clipping from a Fyne scroll container.
@@ -44,7 +53,7 @@ func newComposeViewport(c fyne.Canvas, form *fyne.Container, compactLabel, passa
 	cite.Wrapping = fyne.TextWrapWord
 	citeView := container.NewThemeOverride(cite, passageCitationTheme{fyne.CurrentApp().Settings().Theme()})
 	v.citation = citeView
-	v.disclosure = widget.NewButton("Show passage", func() {
+	v.disclosure = widget.NewButtonWithIcon("Show passage", iconDisclosureExpand, func() {
 		slot, nativeSlot := entry.(*noteEntrySlot)
 		if nativeSlot && !slot.current() {
 			return
@@ -65,12 +74,14 @@ func newComposeViewport(c fyne.Canvas, form *fyne.Container, compactLabel, passa
 			}
 		}
 	})
-	v.summary = container.NewBorder(nil, nil, nil, v.disclosure, citeView)
-	var singleLabel fyne.CanvasObject = v.disclosure
+	v.disclosure.IconPlacement = widget.ButtonIconTrailingText
+	disclosureSlot := container.NewThemeOverride(v.disclosure, composeDisclosureTheme{fyne.CurrentApp().Settings().Theme()})
+	v.summary = container.NewBorder(nil, nil, nil, disclosureSlot, citeView)
+	var singleLead fyne.CanvasObject
 	if keepStatus {
-		singleLabel = container.NewHBox(v.disclosure, compactLabel)
+		singleLead = compactLabel
 	}
-	v.singleRow = container.NewBorder(nil, nil, singleLabel, actions, citeView)
+	v.singleRow = container.NewBorder(nil, nil, singleLead, container.NewHBox(disclosureSlot, actions), citeView)
 	v.metadata = container.NewBorder(v.summary, nil, nil, nil, v.scroll)
 	v.root = container.New(v, form)
 	return v.root
@@ -131,14 +142,16 @@ func (v *composeViewport) Layout(_ []fyne.CanvasObject, size fyne.Size) {
 	if v.expanded {
 		v.excerpt.setMaxLines(len([]rune(v.excerpt.text)) + 1)
 		v.citation.Hide() // the expanded passage contains its own citation
-		if v.disclosure.Text != "Hide passage" {
-			v.disclosure.SetText("Hide passage")
+		if v.disclosure.Text != "Hide passage" || v.disclosure.Icon != iconDisclosureCollapse {
+			v.disclosure.Text = "Hide passage"
+			v.disclosure.SetIcon(iconDisclosureCollapse)
 		}
 		v.scroll.Show()
 	} else {
 		v.citation.Show()
-		if v.disclosure.Text != "Show passage" {
-			v.disclosure.SetText("Show passage")
+		if v.disclosure.Text != "Show passage" || v.disclosure.Icon != iconDisclosureExpand {
+			v.disclosure.Text = "Show passage"
+			v.disclosure.SetIcon(iconDisclosureExpand)
 		}
 		v.scroll.Hide()
 	}

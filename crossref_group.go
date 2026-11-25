@@ -74,7 +74,7 @@ type crossRefGroupRow struct {
 
 	open    bool
 	header  *tapCard          // the label and its icon: the tap that opens and closes; nil for a group with nothing to open
-	icon    *widget.Icon      // points right while closed, down while open
+	icon    *widget.Icon      // points down while closed, up while open
 	head    *fyne.Container   // when margin is true: the letter in the margin and the printed group beside it
 	letter  *canvas.Text      // when margin is true: the note's letter, in the margin
 	stem    *canvas.Rectangle // when margin is true: the rule from under the letter beside the well; hidden while closed
@@ -250,9 +250,8 @@ func (r *crossRefGroupRow) keepLetterInView(into float32) {
 	}
 }
 
-// crossRefFoldIconSize is the box a row's disclosure mark is drawn in: a
-// little over the toolkit's inline size, at which the mark was a triangle
-// eight points by four.
+// crossRefFoldIconSize is the square box a row's disclosure mark is centred in,
+// keeping the row's 26pt icon footprint while framing a 14pt stroke chevron.
 const crossRefFoldIconSize float32 = 26
 
 // crossRefFoldIcon is icon at that size, at the middle of its row's height.
@@ -260,13 +259,25 @@ func crossRefFoldIcon(icon *widget.Icon) fyne.CanvasObject {
 	return container.NewCenter(container.NewGridWrap(fyne.NewSize(crossRefFoldIconSize, crossRefFoldIconSize), icon))
 }
 
-// crossRefGroupIcon is the row's disclosure mark, in the label's muted colour.
+var (
+	crossRefChevronClosed = theme.NewColoredResource(
+		fyne.NewStaticResource("crossref_disclosure_down.svg", []byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 26"><path d="M7.75 11.25L9.15 9.85L13 13.7L16.85 9.85L18.25 11.25L13 16.5Z" fill="#000000"/></svg>`)),
+		theme.ColorNamePlaceHolder,
+	)
+	crossRefChevronOpen = theme.NewColoredResource(
+		fyne.NewStaticResource("crossref_disclosure_up.svg", []byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 26"><path d="M7.75 14.75L9.15 16.15L13 12.3L16.85 16.15L18.25 14.75L13 9.5Z" fill="#000000"/></svg>`)),
+		theme.ColorNamePlaceHolder,
+	)
+)
+
+// crossRefGroupIcon is the row's disclosure chevron (14pt stroke chevron
+// centred in the 26pt box), in the label's muted colour: down while closed, up
+// while open.
 func crossRefGroupIcon(open bool) fyne.Resource {
-	res := theme.MenuExpandIcon()
 	if open {
-		res = theme.MenuDropDownIcon()
+		return crossRefChevronOpen
 	}
-	return theme.NewColoredResource(res, theme.ColorNamePlaceHolder)
+	return crossRefChevronClosed
 }
 
 func (r *crossRefGroupRow) CreateRenderer() fyne.WidgetRenderer {

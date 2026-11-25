@@ -115,7 +115,7 @@ func promptAskQuestionForPassage(state *AppState, passage aiPassage, question st
 	askBtn := widget.NewButton("Ask", doAsk)
 	askBtn.Importance = widget.HighImportance
 	cancelBtn := widget.NewButton("Cancel", closeAsk)
-	actions := container.NewBorder(nil, nil, nil, container.NewHBox(cancelBtn, askBtn))
+	actions := container.NewBorder(nil, nil, nil, container.NewHBox(inputFrame(cancelBtn, pal.Border), askBtn))
 
 	var entrySlot fyne.CanvasObject
 	if useNative {

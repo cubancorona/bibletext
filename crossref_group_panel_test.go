@@ -401,11 +401,15 @@ func TestEachNoteStandsOnAGroundOfItsOwn(t *testing.T) {
 	if right(scroll) > x(top.Content)+top.Content.Size().Width {
 		t.Errorf("the scroll ends at %v, past the panel's edge at %v", right(scroll), x(top.Content)+top.Content.Size().Width)
 	}
-	// A row's disclosure mark is drawn in a box of its own size.
+	// A row's disclosure mark is drawn in a box of its own size as a 26-unit
+	// stroke chevron (down when closed, up when open).
 	for _, icon := range []*widget.Icon{a.icon, b.icon, inner.icon} {
 		if icon.Size() != fyne.NewSize(crossRefFoldIconSize, crossRefFoldIconSize) {
 			t.Errorf("a disclosure mark is %v, want %v square", icon.Size(), crossRefFoldIconSize)
 		}
+	}
+	if a.icon.Resource != crossRefGroupIcon(true) || b.icon.Resource != crossRefGroupIcon(false) || inner.icon.Resource != crossRefGroupIcon(false) {
+		t.Errorf("disclosure mark resources do not match open/closed chevron states")
 	}
 
 	// Every row of a note stands on that note's ground, and on no other.

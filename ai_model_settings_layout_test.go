@@ -176,25 +176,97 @@ func TestSettingsEffortPickerUsesEffectiveModel(t *testing.T) {
 	}
 }
 
-func TestModelEffortRowsShareColumnsAndPreserveModelTarget(t *testing.T) {
+func TestModelEffortPlainRowsAlignAndStackIndependently(t *testing.T) {
 	state := newAppearanceHarness(t, true).state
-	model := widget.NewButton("Recommended", func() {})
-	effort := widget.NewButton("Recommended", func() {})
-	pair := modelSettingsRows(state, model, effort)
+	model := newSettingsPickerRow(state, "Model", "Recommended")
+	effort := newSettingsPickerRow(state, "Reasoning effort", "Recommended")
+	tappedModel, tappedEffort := 0, 0
+	model.OnTapped = func() { tappedModel++ }
+	effort.OnTapped = func() { tappedEffort++ }
+	pair := modelSettingsRows(model, effort)
 	r := pair.Layout.(*modelSettingsLayout)
+
 	pair.Resize(fyne.NewSize(330, 100))
-	if r.model.Position().X != r.effort.Position().X || r.model.Size() != r.effort.Size() {
-		t.Fatalf("picker columns differ: Model %v/%v, effort %v/%v", r.model.Position(), r.model.Size(), r.effort.Position(), r.effort.Size())
+	if r.model.Size().Width != 330 || r.effort.Size().Width != 330 {
+		t.Fatalf("rows do not span full width: Model %v, effort %v", r.model.Size(), r.effort.Size())
 	}
-	if gap := r.effort.Position().Y - r.model.Size().Height; gap != 4 {
-		t.Errorf("gap = %g, want 4", gap)
+	if r.model.Size().Height < minTapTarget || r.effort.Size().Height < minTapTarget {
+		t.Fatalf("row heights below 44pt tap target: Model %v, effort %v", r.model.Size(), r.effort.Size())
 	}
-	if !r.modelHit.Visible() || r.modelHit.Size().Width <= 0 || r.modelHit.Position().X+r.modelHit.Size().Width != r.model.Position().X {
-		t.Fatalf("hit extension does not end at Model's left edge: %v/%v", r.modelHit.Position(), r.modelHit.Size())
+	if r.model.mark.Position().X != r.effort.mark.Position().X {
+		t.Fatalf("dropdown triangles do not share a trailing column: Model %g, effort %g",
+			r.model.mark.Position().X, r.effort.mark.Position().X)
 	}
-	pair.Resize(fyne.NewSize(r.labelWidth()+r.minButtonWidth-1, 180))
-	if r.model.Position().X != 0 || r.model.Position().Y < r.modelLabel.Size().Height || r.modelHit.Visible() || r.modelHit.Size().Width != 0 {
-		t.Fatal("narrow picker escaped its label or retained a stray hit area")
+	if r.model.value.Position().X+r.model.value.Size().Width > r.model.mark.Position().X {
+		t.Fatalf("value text reaches into the dropdown icon box: value %v/%v, mark %v",
+			r.model.value.Position(), r.model.value.Size(), r.model.mark.Position())
+	}
+
+	// On a 252pt card (320pt phone), Model + Recommended stays on one 44pt line
+	// while Reasoning effort + Recommended drops cleanly onto a second line.
+	pair.Resize(fyne.NewSize(252, 140))
+	if r.model.Size().Height != minTapTarget {
+		t.Fatalf("Model + Recommended stacked unnecessarily at 252pt: height %g", r.model.Size().Height)
+	}
+	if r.effort.Size().Height <= minTapTarget || r.effort.Position().Y+r.effort.value.Position().Y <= r.effortLabel.Position().Y {
+		t.Fatalf("Reasoning effort + Recommended did not stack onto a second line at 252pt: height %g", r.effort.Size().Height)
+	}
+	if r.model.mark.Position().X != r.effort.mark.Position().X {
+		t.Fatalf("stacked row lost trailing triangle alignment: Model %g, effort %g",
+			r.model.mark.Position().X, r.effort.mark.Position().X)
+	}
+
+	// Keyboard Space and Return activate the embedded button.
+	model.TypedKey(&fyne.KeyEvent{Name: fyne.KeySpace})
+	effort.TypedKey(&fyne.KeyEvent{Name: fyne.KeyReturn})
+	if tappedModel != 1 || tappedEffort != 1 {
+		t.Fatalf("keyboard activation counts = (%d, %d), want (1, 1)", tappedModel, tappedEffort)
+	}
+}
+
+func TestModelRecommendedCaptionIncludesVerifiedEffort(t *testing.T) {
+	const base = "Recommended keeps itself current automatically — "
+	for _, tc := range []struct {
+		name                                              string
+		effectiveDefault, model, savedEffort, defEff, act string
+		want                                              string
+	}{
+		{
+			name:             "default model with verified named effort",
+			effectiveDefault: "gemini-4-carbon", model: "gemini-4-carbon", defEff: "medium", act: "medium",
+			want: base + "gemini-4-carbon · Medium effort today.",
+		},
+		{
+			name:             "default model with numeric budget",
+			effectiveDefault: "claude-sonnet-4-5", model: "claude-sonnet-4-5", defEff: "16384", act: "16384",
+			want: base + "claude-sonnet-4-5 · 16,384 tokens today.",
+		},
+		{
+			name:             "pinned model on Recommended effort with both defaults verified",
+			effectiveDefault: "gemini-4-carbon", model: "gemini-4-neon", savedEffort: "", defEff: "medium", act: "high",
+			want: base + "gemini-4-carbon · Medium effort today (High effort on gemini-4-neon).",
+		},
+		{
+			name:             "pinned model on Recommended effort when only pinned model default is verified",
+			effectiveDefault: "gemini-pro-latest", model: "gemini-4-neon", savedEffort: "", defEff: "", act: "high",
+			want: base + "gemini-pro-latest today (High effort on gemini-4-neon).",
+		},
+		{
+			name:             "pinned model with explicit effort keeps default summary only",
+			effectiveDefault: "gemini-4-carbon", model: "gemini-4-neon", savedEffort: "low", defEff: "medium", act: "high",
+			want: base + "gemini-4-carbon · Medium effort today.",
+		},
+		{
+			name:             "offline unverified fallback never guesses",
+			effectiveDefault: "gemini-pro-latest", model: "gemini-pro-latest",
+			want: base + "gemini-pro-latest today.",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := modelRecommendedCaption(tc.effectiveDefault, tc.model, tc.savedEffort, tc.defEff, tc.act); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 

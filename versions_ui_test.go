@@ -47,8 +47,8 @@ func TestVersionSelectorUI(t *testing.T) {
 	if anchor == nil {
 		t.Fatal("could not find versionPickerAnchor")
 	}
-	// The header subtitle names the ACTIVE translation.
-	if want := state.currentVersion().Name + "  ▾"; anchor.text != want {
+	// The header subtitle names the ACTIVE translation alongside a vector dropdown mark.
+	if want := state.currentVersion().Name; anchor.text != want {
 		t.Errorf("selector reads %q, want %q", anchor.text, want)
 	}
 

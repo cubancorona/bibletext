@@ -27,7 +27,7 @@ func versionSelector(state *AppState) fyne.CanvasObject {
 
 	// 13pt (was 10 — the smallest text in the app, on the primary translation
 	// switcher). TextMuted now passes WCAG AA at this size in both palettes.
-	anchor := newVersionPickerAnchor(state, v.Name+"  ▾", pal.TextMuted, 13)
+	anchor := newVersionPickerAnchor(state, v.Name, pal.TextMuted, 13)
 	if state.currentMode != modeTesting {
 		return anchor
 	}
@@ -59,11 +59,16 @@ func newVersionPickerAnchor(state *AppState, text string, tint color.NRGBA, size
 func (a *versionPickerAnchor) CreateRenderer() fyne.WidgetRenderer {
 	lbl := canvas.NewText(a.text, a.tint)
 	lbl.TextSize = a.size
-	w := fyne.MeasureText(a.text, a.size, lbl.TextStyle).Width
+	const chevSize = 16
+	chev := canvas.NewImageFromResource(theme.NewColoredResource(theme.MenuDropDownIcon(), theme.ColorNamePlaceHolder))
+	chev.FillMode = canvas.ImageFillContain
+	chev.SetMinSize(fyne.NewSize(chevSize, chevSize))
+	row := container.New(layout.NewCustomPaddedHBoxLayout(2), container.NewCenter(lbl), container.NewCenter(chev))
+	w := fyne.MeasureText(a.text, a.size, lbl.TextStyle).Width + 2 + chevSize
 	// a.size+12 made this the smallest tap target in the app (~22pt). Pad the box
 	// well past the text instead — the header has the room, and the translation
 	// switcher is a primary control on a phone.
-	box := container.NewGridWrap(fyne.NewSize(w+tapTextHPad, a.size+26), container.NewCenter(offsetHeaderText(lbl)))
+	box := container.NewGridWrap(fyne.NewSize(w+tapTextHPad, a.size+26), container.NewCenter(offsetHeaderText(row)))
 	return widget.NewSimpleRenderer(box)
 }
 

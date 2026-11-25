@@ -23,17 +23,15 @@ import (
 )
 
 func findKeyEntry(o fyne.CanvasObject) *widget.Entry {
-	switch v := o.(type) {
-	case *widget.Entry:
-		return v
-	case *fyne.Container:
-		for _, c := range v.Objects {
-			if e := findKeyEntry(c); e != nil {
-				return e
+	var found *widget.Entry
+	walkTree(o, func(c fyne.CanvasObject) {
+		if found == nil {
+			if e, ok := c.(*widget.Entry); ok {
+				found = e
 			}
 		}
-	}
-	return nil
+	})
+	return found
 }
 
 func TestBundledBibleKeyIsNotReadableInSettings(t *testing.T) {

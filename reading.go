@@ -74,13 +74,13 @@ func buildReadingView(state *AppState) fyne.CanvasObject {
 //
 //	┌─────────────────────────────────────────────────────┐
 //	│ Genesis 1 ⧉                                    ⤢    │
-//	│ Chapter 1 of 50 ▾   ←  →                            │
+//	│ Chapter 1 of 50     ←  →                            │
 //	└─────────────────────────────────────────────────────┘
 func chapterHeader(state *AppState, chapterNumbers []int) fyne.CanvasObject {
 	pal := state.pal()
 	total := len(chapterNumbers)
 
-	// "Book N ⌄" — one cohesive tap target (text + a clear dropdown chevron) that
+	// "Book N ▾" — one cohesive tap target (text + a clear dropdown triangle) that
 	// opens the combined reference picker (book list + chapter grid).
 	const titleBoxH = 38
 	ref := newReferenceButton(fmt.Sprintf("%s %d", state.CurrentBook, state.CurrentChapter), pal.Text, headingTextSize, titleBoxH, func() {
@@ -345,9 +345,9 @@ func (t *tapText) Tapped(*fyne.PointEvent) {
 // Make sure Fyne dispatches taps to us.
 var _ fyne.Tappable = (*tapText)(nil)
 
-// referenceButton is the tappable book+chapter heading ("John 10 ⌄") that opens
+// referenceButton is the tappable book+chapter heading ("John 10 ▾") that opens
 // the combined reference picker. It renders the bold reference text followed
-// immediately by a clear, full-size dropdown chevron — one cohesive, unambiguous
+// immediately by a clear, full-size dropdown triangle — one cohesive, unambiguous
 // affordance in a single comfortable hit box. (It replaces a heading + a separate
 // tiny muted caret, which read as a small ambiguous mark floating a wide gap from
 // the text.)
@@ -438,15 +438,17 @@ func rebuildWindow(state *AppState) {
 	// it left spinning, repainting the canvas forever). Every modal already closes
 	// before navigating, so this is normally a no-op; it makes the invariant
 	// explicit and survives any future path that rebuilds without closing first.
-	// Stop any infinite progress bars inside an overlay BEFORE evicting it:
-	// Hide() hides the popup but a running ProgressBarInfinite animation keeps
-	// marking the canvas dirty (~20fps full-tree repaints) until the operation's
-	// completion path finally lands. Stop() is idempotent, so a later stop from
-	// that path is harmless.
+	// Stop any running progress bars or activity spinners inside an overlay BEFORE
+	// evicting it: Hide() hides the popup, whereas a running animation keeps
+	// marking the canvas dirty on every frame until the operation's completion
+	// path finally lands. Stop() is idempotent, so a later stop from that path is
+	// harmless.
 	var stopInfiniteBars func(fyne.CanvasObject)
 	stopInfiniteBars = func(o fyne.CanvasObject) {
 		switch t := o.(type) {
 		case *widget.ProgressBarInfinite:
+			t.Stop()
+		case *widget.Activity:
 			t.Stop()
 		case *fyne.Container:
 			for _, c := range t.Objects {

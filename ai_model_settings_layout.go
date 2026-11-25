@@ -1,102 +1,73 @@
 package bibletext
 
 import (
-	"image/color"
-
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
-// modelSettingsLayout shares the value column between the two pickers.
-// A single Model picker keeps the original row geometry. Where both labels
-// and a Recommended button cannot fit, each label sits above its own button.
+// modelSettingsLayout places the Model and Reasoning effort / Thinking budget
+// plain value rows on the ASSISTANT card. Each row decides from its own live
+// label and value text whether both fit on one line or stack onto two lines.
+// The container's reported bottom aligns flush with the final visible row's
+// padded text box so the following VBox caption sits at the same bottom-note
+// spacing as READING's caption.
 type modelSettingsLayout struct {
 	modelLabel, effortLabel *widget.Label
-	model, effort           fyne.CanvasObject
-	modelHit                fyne.CanvasObject
-	minButtonWidth, width   float32
+	model, effort           *settingsPickerRow
+	width                   float32
 }
 
-func modelSettingsRows(state *AppState, model, effort *widget.Button) *fyne.Container {
-	compact := compactTheme{Theme: state.theme, text: 15}
-	modelSlot := container.NewThemeOverride(model, compact)
-	effortSlot := container.NewThemeOverride(effort, compact)
+func modelSettingsRows(model, effort *settingsPickerRow) *fyne.Container {
 	rows := &modelSettingsLayout{
-		modelLabel: widget.NewLabel("Model"), effortLabel: widget.NewLabel("Reasoning effort"),
-		model: container.NewClip(modelSlot), effort: effortSlot,
-		minButtonWidth: effortSlot.MinSize().Width,
-		modelHit:       newTappableArea(canvas.NewRectangle(color.Transparent), func() { model.OnTapped() }),
+		modelLabel:  model.label,
+		effortLabel: effort.label,
+		model:       model,
+		effort:      effort,
 	}
-	return container.New(rows, rows.modelLabel, rows.model, rows.effortLabel, rows.effort, rows.modelHit)
+	return container.New(rows, model, model.label, effort, effort.label)
 }
 
-const modelPickerGap float32 = 4
-
-func (r *modelSettingsLayout) labelWidth() float32 {
-	if !r.effort.Visible() {
-		return r.modelLabel.MinSize().Width
+func (r *modelSettingsLayout) blockGeometry(w float32) (modelY, modelH, effortY, effortH, totalH float32, mg, eg pickerRowGeometry) {
+	in := r.model.Theme().Size(theme.SizeNameInnerPadding)
+	mg = r.model.geometry(w)
+	modelY = -mg.labelPos.Y
+	modelH = mg.height
+	modelFoot := modelY + mg.textBottom + in
+	totalH = modelFoot
+	if r.effort.Visible() {
+		eg = r.effort.geometry(w)
+		effortLabelY := modelFoot + theme.Padding()
+		effortY = effortLabelY - eg.labelPos.Y
+		effortH = eg.height
+		totalH = effortY + eg.textBottom + in
 	}
-	return max(r.modelLabel.MinSize().Width, r.effortLabel.MinSize().Width)
-}
-
-func (r *modelSettingsLayout) stacked() bool {
-	return r.effort.Visible() && r.width > 0 && r.width < r.labelWidth()+modelPickerGap+r.minButtonWidth
-}
-
-func (r *modelSettingsLayout) rowHeight(label, control fyne.CanvasObject) float32 {
-	h := max(float32(38), control.MinSize().Height)
-	if r.stacked() {
-		return label.MinSize().Height + h
-	}
-	return max(label.MinSize().Height, h)
+	return
 }
 
 func (r *modelSettingsLayout) MinSize(_ []fyne.CanvasObject) fyne.Size {
-	h := r.rowHeight(r.modelLabel, r.model)
+	_, _, _, _, totalH, _, _ := r.blockGeometry(r.width)
+	minW := r.modelLabel.MinSize().Width
 	if r.effort.Visible() {
-		h += modelPickerGap + r.rowHeight(r.effortLabel, r.effort)
+		minW = max(minW, r.effortLabel.MinSize().Width)
 	}
-	return fyne.NewSize(max(r.labelWidth(), r.minButtonWidth), h)
+	return fyne.NewSize(minW, totalH)
 }
 
 func (r *modelSettingsLayout) Layout(_ []fyne.CanvasObject, size fyne.Size) {
 	r.width = size.Width
-	column := r.labelWidth() + modelPickerGap
-	originalStart := r.modelLabel.MinSize().Width + theme.Padding()
-	if !r.effort.Visible() {
-		column = originalStart
-	}
-	place := func(label, control fyne.CanvasObject, y float32) float32 {
-		lh := label.MinSize().Height
-		h := r.rowHeight(label, control)
-		if r.stacked() {
-			label.Move(fyne.NewPos(0, y))
-			label.Resize(fyne.NewSize(size.Width, lh))
-			control.Move(fyne.NewPos(0, y+lh))
-			control.Resize(fyne.NewSize(size.Width, h-lh))
-		} else {
-			label.Move(fyne.NewPos(0, y+(h-lh)/2))
-			label.Resize(fyne.NewSize(r.labelWidth(), lh))
-			control.Move(fyne.NewPos(column, y))
-			control.Resize(fyne.NewSize(max(float32(0), size.Width-column), h))
-		}
-		return h
-	}
-	h := place(r.modelLabel, r.model, 0)
+	modelY, modelH, effortY, effortH, _, mg, eg := r.blockGeometry(size.Width)
+	r.model.Move(fyne.NewPos(0, modelY))
+	r.model.Resize(fyne.NewSize(size.Width, modelH))
+	r.model.Refresh()
+	r.modelLabel.Move(fyne.NewPos(0, modelY+mg.labelPos.Y))
+	r.modelLabel.Resize(mg.labelSize)
 	if r.effort.Visible() {
-		place(r.effortLabel, r.effort, h+modelPickerGap)
-	}
-	// Extend the Model button to its original left edge only where the
-	// shared column has actually moved it to the right.
-	if !r.stacked() && column > originalStart {
-		r.modelHit.Move(fyne.NewPos(originalStart, 0))
-		r.modelHit.Resize(fyne.NewSize(column-originalStart, h))
-		r.modelHit.Show()
-	} else {
-		r.modelHit.Hide()
-		r.modelHit.Resize(fyne.Size{})
+		r.effort.Move(fyne.NewPos(0, effortY))
+		r.effort.Resize(fyne.NewSize(size.Width, effortH))
+		r.effort.Refresh()
+		r.effortLabel.Move(fyne.NewPos(0, effortY+eg.labelPos.Y))
+		r.effortLabel.Resize(eg.labelSize)
 	}
 }

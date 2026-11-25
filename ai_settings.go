@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -301,11 +302,8 @@ func openAISettings(state *AppState) {
 			}()
 		}
 		testBtn := widget.NewButtonWithIcon("Test key", theme.MediaPlayIcon(), func() { runKeyTest(aiSpeedChoice{}) })
-		// A normal-weight button with an icon, so it clearly reads as tappable. A
-		// low-importance button is borderless — it looks like a plain bold label and
-		// hides that it's interactive (and on touch there's no hover state to reveal
-		// it). Fyne's principle is that every interaction should be visually hinted, so
-		// the icon + button background match the Paste / Clear buttons beside it.
+		// Leading icon + bold label so the action reads as tappable alongside Paste
+		// and Clear on the same row.
 
 		// API keys are pasted, not typed — a one-tap Paste avoids fighting the
 		// on-screen keyboard (which otherwise covers this field on a phone).
@@ -418,16 +416,15 @@ func openAISettings(state *AppState) {
 		// convention and always shows an explicit close.
 		var pickerPop *widget.PopUp
 		var refreshModelPicker func()
-		modelBtn := widget.NewButtonWithIcon(selected, theme.MenuDropDownIcon(), nil)
-		modelBtn.Alignment = widget.ButtonAlignLeading
-		effortBtn := widget.NewButtonWithIcon(recommended, theme.MenuDropDownIcon(), nil)
-		effortBtn.Alignment = widget.ButtonAlignLeading
-		modelRows := modelSettingsRows(state, modelBtn, effortBtn)
+		modelBtn := newSettingsPickerRow(state, "Model", selected)
+		effortBtn := newSettingsPickerRow(state, "Reasoning effort", recommended)
+		modelRows := modelSettingsRows(modelBtn, effortBtn)
 		rows := modelRows.Layout.(*modelSettingsLayout)
 		var liveModels []discoveredModel
 		checkedDocs := make(map[string]bool)
 		var refreshEffort func()
 		refreshEffort = func() {
+			prevRowsH := modelRows.MinSize().Height
 			model := activeModelFor(store, id)
 			target := effortDocumentTarget(store.prefs, id, model, liveModels)
 			lookup := lookupEffortDocument
@@ -453,10 +450,11 @@ func openAISettings(state *AppState) {
 			show := len(levels) != 0
 			rows.effortLabel.SetText(effortSettingLabel(levels))
 			changed := show != rows.effort.Visible()
+			savedEffort := aiReasoningEffort(store.prefs, id, model)
 			if show {
 				rows.effort.Show()
 				rows.effortLabel.Show()
-				effortBtn.SetText(effortDisplayName(aiReasoningEffort(store.prefs, id, model)))
+				effortBtn.SetText(effortDisplayName(savedEffort))
 			} else {
 				rows.effort.Hide()
 				rows.effortLabel.Hide()
@@ -465,14 +463,19 @@ func openAISettings(state *AppState) {
 			if effectiveDefault == "" {
 				effectiveDefault = info.Model
 			}
+			cat := readEffortCatalog(store.prefs, id)
+			defLvls := modelEffortChoices(store.prefs, id, effectiveDefault)
+			defEff := verifiedDefaultEffort(store.prefs, id, effectiveDefault, cat, defLvls)
+			actEff := verifiedDefaultEffort(store.prefs, id, model, cat, levels)
 			segment := modelCaption.Segments[0].(*widget.TextSegment)
-			note := "Recommended keeps itself current automatically — " + effectiveDefault + " today."
+			note := modelRecommendedCaption(effectiveDefault, model, savedEffort, defEff, actEff)
 			if segment.Text != note {
 				segment.Text = note
 				modelCaption.Refresh()
+				changed = true
 			}
 			modelRows.Refresh()
-			if changed && fitSheet != nil {
+			if (changed || modelRows.MinSize().Height != prevRowsH) && fitSheet != nil {
 				fitSheet()
 				fitSheet()
 			}
@@ -520,24 +523,36 @@ func openAISettings(state *AppState) {
 				func() fyne.CanvasObject {
 					l := canvas.NewText("", pal.Text)
 					l.TextSize = 14
+					check := widget.NewIcon(theme.NewPrimaryThemedResource(theme.ConfirmIcon()))
+					check.Hide()
+					textCell := container.New(&pickerItemTextLayout{text: l, check: check}, l)
+					row := container.NewBorder(nil, nil, nil, container.NewCenter(check), textCell)
 					// A uniformly sized template lets the list find visible rows
 					// directly even for accounts with hundreds of models.
-					return container.NewPadded(l, spacer(rowHeight-2*theme.Padding()))
+					return container.NewPadded(row, spacer(rowHeight-2*theme.Padding()))
 				},
 				func(i widget.ListItemID, o fyne.CanvasObject) {
 					if i < 0 || i >= len(choices()) {
 						return
 					}
-					l := o.(*fyne.Container).Objects[0].(*canvas.Text)
-					l.Text = choices()[i]
+					row := o.(*fyne.Container).Objects[0].(*fyne.Container)
+					textCell := row.Objects[0].(*fyne.Container)
+					lay := textCell.Layout.(*pickerItemTextLayout)
+					l := textCell.Objects[0].(*canvas.Text)
+					check := row.Objects[1].(*fyne.Container).Objects[0].(*widget.Icon)
+					lay.full = choices()[i]
 					if choices()[i] == current() {
 						l.Color = pal.Accent
 						l.TextStyle = fyne.TextStyle{Bold: true}
+						check.Show()
 					} else {
 						l.Color = pal.Text
 						l.TextStyle = fyne.TextStyle{}
+						check.Hide()
 					}
+					lay.Layout(textCell.Objects, textCell.Size())
 					l.Refresh()
+					row.Refresh()
 				})
 			list.OnSelected = func(i widget.ListItemID) {
 				if i < 0 || i >= len(choices()) {
@@ -547,12 +562,12 @@ func openAISettings(state *AppState) {
 				closePicker()
 			}
 			title := canvas.NewText(name, pal.Text)
-			title.TextSize = 16
+			title.TextSize = 18
 			title.TextStyle = fyne.TextStyle{Bold: true}
 			x := widget.NewButtonWithIcon("", theme.CancelIcon(), closePicker)
 			x.Importance = widget.LowImportance
-			hdr := container.NewBorder(nil, nil, container.NewCenter(title), x)
-			card := surface(container.NewBorder(hdr, nil, nil, nil, list), pal.Surface, pal.Border, fyne.Size{})
+			hdr := container.NewVBox(container.NewBorder(nil, nil, container.NewCenter(title), x), widget.NewSeparator())
+			card := surface(container.NewBorder(hdr, nil, nil, nil, list), pal.SurfaceAlt, pal.Border, fyne.Size{})
 
 			pickerPop = widget.NewModalPopUp(card, cnv)
 			pickerPop.Show()
@@ -616,6 +631,9 @@ func openAISettings(state *AppState) {
 			openPicker(effortSettingLabel(levels), func() []string { return choices }, current, func(choice string) {
 				if value, ok := values[choice]; ok && activeModelFor(store, id) == model {
 					setAIReasoningEffort(store.prefs, id, model, value)
+					if state.aiSearchChoice.provider == id && state.aiSearchChoice.model == model {
+						state.aiSearchChoice = aiSpeedChoice{}
+					}
 				}
 				refreshEffort()
 			})
@@ -690,7 +708,7 @@ func openAISettings(state *AppState) {
 				container.NewBorder(nil, nil, container.NewCenter(widget.NewLabel(providerKeyLabel(info))), link),
 				// The field gets its OWN full-width line under that label: an API
 				// key is long, and sharing a row with the label left it a stub.
-				withCaret(state, entry),
+				inputFrame(withCaret(state, entry), pal.Border),
 				// Paste + Clear + Test on one row; the result label gets its OWN
 				// full-width row below. It must NOT share the row as a Border
 				// center: on a phone the three buttons leave only a sliver of
@@ -846,11 +864,8 @@ func openAISettings(state *AppState) {
 	// Deliberately NOT DangerImportance: a filled red button shouts at a reader
 	// who is only passing through Settings, and the weight belongs on the
 	// confirmation (whose "Delete them" IS danger-marked), not on the way in,
-	// where it simply reads as too loud. It keeps a button background and the
-	// trash icon
-	// rather than going borderless, because a low-importance button reads as a
-	// plain label and hides that it is tappable — the same reasoning as the
-	// Paste / Clear / Test row above.
+	// where it simply reads as too loud. The trash icon + bold label mark it as
+	// an action alongside the Paste / Test / Clear buttons above.
 	deleteNotesBtn := widget.NewButtonWithIcon("Delete all notes", theme.DeleteIcon(), nil)
 	// The count sits beside the verb and is its own tappable: it says how much
 	// "all" is before you commit to it, and it doubles as the way TO the notes —
@@ -1106,8 +1121,8 @@ func openAISettings(state *AppState) {
 	// the sheet's drew it, and a text is painted into a texture exactly as
 	// wide as it measured, so the line lost its last 3.6pt. Without the
 	// override the sheet's text is measured and drawn through the same cache.
-	// A size for part of the sheet belongs on that part (the model button, the
-	// site link), where it holds no such character.
+	// A size for part of the sheet belongs on that part (the site link), where
+	// it holds no such character.
 
 	// A CARD-sized sheet at a fixed width, taking its height from the content but
 	// NEVER taller than the screen. The fixed width keeps the popup's overlay-
@@ -1331,10 +1346,44 @@ func providerKeyLabel(info providerInfo) string {
 	return name + " key"
 }
 
+// effortPhrase formats a verified wire effort or numeric thinking budget for
+// the Recommended caption: named levels append " effort" ("High effort"),
+// while numeric token budgets already carry their unit ("16,384 tokens").
+func effortPhrase(effort string) string {
+	if effort == "" {
+		return ""
+	}
+	if strings.EqualFold(effort, "none") {
+		return "No reasoning"
+	}
+	label := effortDisplayName(effort)
+	if _, err := strconv.Atoi(effort); err == nil {
+		return label
+	}
+	return label + " effort"
+}
+
+func modelRecommendedCaption(effectiveDefault, model, savedEffort, defEff, actEff string) string {
+	const prefix = "Recommended keeps itself current automatically — "
+	if model == effectiveDefault && defEff != "" {
+		return prefix + effectiveDefault + " · " + effortPhrase(defEff) + " today."
+	}
+	if model != effectiveDefault && savedEffort == "" && actEff != "" {
+		if defEff != "" {
+			return prefix + effectiveDefault + " · " + effortPhrase(defEff) + " today (" + effortPhrase(actEff) + " on " + model + ")."
+		}
+		return prefix + effectiveDefault + " today (" + effortPhrase(actEff) + " on " + model + ")."
+	}
+	if defEff != "" {
+		return prefix + effectiveDefault + " · " + effortPhrase(defEff) + " today."
+	}
+	return prefix + effectiveDefault + " today."
+}
+
 // compactTheme shrinks only the base text size of a subtree (applied via
 // container.NewThemeOverride), delegating everything else to the app theme.
-// Its callers pass the size they want: the model button at 15, the site link at
-// 11 and the notes list's capacity notice at 12, all under the 18pt base. Keep
+// Its callers pass the size they want: the site link at 11 and the notes
+// list's capacity notice at 12, both under the 18pt base. Keep
 // it around text the UI faces can draw entirely: an override also gives its
 // subtree font caches of its own, so a character that has to come from a system
 // font can be drawn wider than it was measured (see showAISettings).

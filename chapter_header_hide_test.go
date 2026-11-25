@@ -815,7 +815,7 @@ func sweepChapter(t *testing.T, th *bibleTheme, s hideSurface, book string, chap
 	for i := len(widths) - 1; i >= 0 && !stop(); i-- {
 		w := widths[i]
 		open = read(w)
-		assertCardLabel(t, open, "Read aloud ▾")
+		assertCardLabel(t, open, "Read aloud")
 		hidden[w] = fmt.Sprint(assertCoverage(t, open, tally, nil))
 		assertNothingMoved(t, closed[w], open, fmt.Sprintf("at %.0f, the card open", w))
 	}
@@ -829,7 +829,7 @@ func sweepChapter(t *testing.T, th *bibleTheme, s hideSurface, book string, chap
 	host.Refresh()
 	for _, w := range widths {
 		narrated := read(w)
-		assertCardLabel(t, narrated, "Narrator ▾")
+		assertCardLabel(t, narrated, "Narrator")
 		if got := fmt.Sprint(assertCoverage(t, narrated, nil, nil)); got != hidden[w] {
 			t.Errorf("at %.0f the Narrator card hides %s, the Read aloud card %s", w, got, hidden[w])
 		}

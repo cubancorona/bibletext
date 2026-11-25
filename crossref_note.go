@@ -148,7 +148,7 @@ type crossRefNoteRow struct {
 
 	open   bool
 	header *tapCard          // the letter, the printed note and its icon: the tap that closes and opens
-	icon   *widget.Icon      // points down while open, right while closed
+	icon   *widget.Icon      // points up while open, down while closed
 	head   *fyne.Container   // the letter in the margin and the printed note beside it, as they lie on the row
 	letter *canvas.Text      // the note's letter, in the margin
 	label  *crossRefPrinted  // the note as printed

@@ -2,9 +2,9 @@ package bibletext
 
 // The Settings → Translations section: the reader's own API.Bible key (BYOK)
 // unlocking licensed translations — today the NKJV. Mirrors the AI key row's
-// conventions exactly (auto-save on change, Paste/Clear with visible button
-// chrome, a keychain-aware saved status, an async Test), so the two key
-// surfaces feel like one design.
+// conventions (auto-save on change, Paste/Test/Clear action buttons, a
+// keychain-aware saved status, an async Test), so the two key surfaces feel
+// like one design.
 
 import (
 	"context"
@@ -471,7 +471,7 @@ func bibleKeySection(state *AppState, pal palette, onKeyPresence func()) (rows, 
 		// label row, top-right of the box, matching the assistant section.
 		container.NewBorder(nil, nil, container.NewCenter(widget.NewLabel("API.Bible key")), link),
 		// Field on its own full-width line: an API key is long.
-		entry,
+		inputFrame(withCaret(state, entry), pal.Border),
 		// The same row as the assistant's (key_actions_row.go).
 		actionsRow,
 		// Status has the row to itself, but for the ✕ of a key a restore did

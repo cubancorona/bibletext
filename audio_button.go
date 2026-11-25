@@ -57,6 +57,29 @@ import (
 // the UI goroutine; persists across header rebuilds.
 var audioPanelOpen bool
 
+// activeAudioSpinner holds the currently running buffering indicator, if any,
+// on the UI goroutine so card rebuilds, state transitions, and closes stop it
+// cleanly instead of leaving its animation ticking until renderer eviction.
+var activeAudioSpinner *widget.Activity
+
+func stopAudioSpinner() {
+	if activeAudioSpinner != nil {
+		activeAudioSpinner.Stop()
+		activeAudioSpinner = nil
+	}
+}
+
+func stopAudioActivities(o fyne.CanvasObject) {
+	switch v := o.(type) {
+	case *widget.Activity:
+		v.Stop()
+	case *fyne.Container:
+		for _, c := range v.Objects {
+			stopAudioActivities(c)
+		}
+	}
+}
+
 // audioControl returns a self-refreshing host: audio state changes (play/pause,
 // end, source pick) and expand/collapse re-render ONLY this small control, never
 // the whole reading pane. Rebuilding the pane (state.refreshReadingOnly) re-pins
@@ -74,6 +97,8 @@ func audioControl(state *AppState, boxH float32, onRender func(open bool)) fyne.
 	host := container.NewStack()
 	var rebuild func()
 	rebuild = func() {
+		stopAudioSpinner()
+		stopAudioActivities(host)
 		host.Objects = []fyne.CanvasObject{audioControlContent(state, boxH, rebuild)}
 		host.Refresh()
 		if onRender != nil {
@@ -190,14 +215,15 @@ func buildAudioCard(state *AppState, displayKind audioKind, synthetic, playing, 
 	)
 	// The source selector is a LABELED chip, not a bare glyph: a 16px person/waveform
 	// icon alone (the old control) signalled neither "this is a button" nor "narrators
-	// live here" — the narrator menu was effectively undiscoverable. Text + ▾ fixes
-	// both, and the wide chip pulls mis-taps away from the play button beneath it.
-	srcLabel := "Read aloud ▾"
+	// live here" — the narrator menu was effectively undiscoverable. Text + trailing
+	// dropdown icon fixes both, and the wide chip pulls mis-taps away from the play
+	// button beneath it.
+	srcLabel := "Read aloud"
 	if displayKind == audioRecorded {
 		// "Narrator" would claim a person read it; a machine voice is a "Voice".
-		srcLabel = "Narrator ▾"
+		srcLabel = "Narrator"
 		if synthetic {
-			srcLabel = "Voice ▾"
+			srcLabel = "Voice"
 		}
 	}
 	src := newLabeledTapChip(state, audioSourceIcon(displayKind, synthetic), srcLabel, srcRowH, cb.onSrc)
@@ -205,8 +231,10 @@ func buildAudioCard(state *AppState, displayKind audioKind, synthetic, playing, 
 	back.disabled = !canSeek
 	var play fyne.CanvasObject
 	if buffering {
+		stopAudioSpinner()
 		spin := widget.NewActivity()
 		spin.Start()
+		activeAudioSpinner = spin
 		play = container.NewGridWrap(fyne.NewSize(transportRowH, transportRowH), container.NewCenter(spin))
 	} else {
 		play = newIconTapButton(state, playGlyph, 28, transportRowH, cb.onPlay)
@@ -292,8 +320,14 @@ func (c *labeledTapChip) CreateRenderer() fyne.WidgetRenderer {
 	img.SetMinSize(fyne.NewSize(14, 14))
 	lbl := canvas.NewText(c.label, c.state.pal().TextMuted)
 	lbl.TextSize = 13
-	w := fyne.MeasureText(c.label, 13, lbl.TextStyle).Width + 14 + 6 + 16
-	row := container.NewHBox(container.NewCenter(img), hgap(6), container.NewCenter(lbl))
+	const chevSize = 16
+	chev := canvas.NewImageFromResource(theme.NewColoredResource(theme.MenuDropDownIcon(), theme.ColorNamePlaceHolder))
+	chev.FillMode = canvas.ImageFillContain
+	chev.SetMinSize(fyne.NewSize(chevSize, chevSize))
+	textW := fyne.MeasureText(c.label, 13, lbl.TextStyle).Width
+	row := container.New(layout.NewCustomPaddedHBoxLayout(0),
+		container.NewCenter(img), hgap(6), container.NewCenter(lbl), hgap(1), container.NewCenter(chev))
+	w := textW + 14 + 6 + 1 + chevSize + 6
 	box := container.NewGridWrap(fyne.NewSize(w, c.boxH), container.NewCenter(row))
 	return widget.NewSimpleRenderer(box)
 }

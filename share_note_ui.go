@@ -348,7 +348,7 @@ func promptShareNoteWith(state *AppState, selectedText string, span selSpan, not
 	sendBtn := widget.NewButton("Share", send)
 	sendBtn.Importance = widget.HighImportance
 	cancelBtn := widget.NewButton("Cancel", closeSheet)
-	actions := container.NewBorder(nil, nil, nil, container.NewHBox(cancelBtn, sendBtn))
+	actions := container.NewBorder(nil, nil, nil, container.NewHBox(inputFrame(cancelBtn, pal.Border), sendBtn))
 
 	// The field's slot in the form. With the native view in play the slot is a
 	// transparent tracking widget — the UITextView or EditText is parked exactly
