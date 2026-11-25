@@ -1,6 +1,6 @@
 # Roadmap
 
-The plan as of **3 November 2026**: which release each open item in
+The plan as of **21 November 2026**: which release each open item in
 [BACKLOG.md](BACKLOG.md) is planned for, in what order, and the decisions still
 open. It is the plan, not a promise, and it is updated as releases go out: a
 row leaves when its release ships, an item moves when a decision settles it,
@@ -988,13 +988,14 @@ tests and open decisions. Row 3 was too, and left the switch for 1.2.23 (row 10 
 | 10 | Verse of the day: possible later additions — one opt-in daily notification | Readers can choose one notification a day with the day's verse, on iPhone first, then Android. | L / medium | iPhone, iPad, Android. **Divergence:** Mac, Windows and Linux. | Switch, with one part that is not | Open: build it on the desktops too, or record the divergence; how Android's manifest gets its entries; the optional `/today` page, the sparkle in phone landscape, a first-open dot. | On Android, scheduling needs an alarm receiver and `RECEIVE_BOOT_COMPLETED`, both in the static `cmd/mobile/AndroidManifest.xml`, which the Go tag does not reach (`POST_NOTIFICATIONS` is already declared). So either `scripts/build-android.sh` writes a tag-aware manifest, or inert entries land first in a minor. An inexact daily alarm needs no special permission; exact alarms would add a Play permissions declaration. iOS needs a new bridge. |
 | 11 | More share-card typefaces with true small capitals | Verse pictures gain the reading face (Junicode), and perhaps EB Garamond. Most verses' default picture changes typeface. | S (M with EB Garamond) / low | All six | Switch | Recorded: add Junicode; EB Garamond only after a read of its licence's reserved-name terms. Open: accept that a reader sharing the same verse again sees a different look. | It changes every reader's default picture, so it goes with the new features. |
 | 12 | The Windows and Linux pane does not hyphenate (in "The reading page: what is left after 24 September 2026") | On Windows and Linux the justified page hyphenates, so its lines sit tighter, as on the website and Android. | M–L / medium | Windows, Linux | Switch | Open: accept a hyphenation dictionary's size and licence, as a Go module or as data. Copy and selection keep words whole. | A Go module used only by `next` files still enters `go.mod` and `go.sum` for every build, though release binaries do not link it; the release guards (`verify-not-next.sh`) still hold. Shipping the patterns as data avoids the module. |
-| 13 | oto 3.5 on Linux: pure-Go PulseAudio (in "Linux stores: from the listing source to two live channels") | Nothing if it works. Linux narration goes through PulseAudio, and the snap loses its ALSA plumbing and the fallback question inside its confinement. | M / medium | Linux (the Go version change reaches every build) | **Branch** | Open: whether to do it at all, and whether it travels with the Fyne toolkit work. | oto 3.5 needs Go 1.25; `go.mod` says `go 1.24.0` with `oto/v3 v3.4.0`, and every workflow pins `go-version: "1.24"`. No build tag chooses a module version, so it cannot sit behind the switch. It would drop `libasound2-dev`. Go 1.25 needs macOS 12, already the app's minimum. Paired with the toolkit work if that goes ahead, for one toolchain pass; otherwise alone, after a Linux audio pass on the virtual machine. |
+| 13 | oto 3.5 on Linux: pure-Go PulseAudio (in "Linux stores: from the listing source to two live channels") | Nothing if it works. Linux narration goes through PulseAudio, and the snap loses its ALSA plumbing and the fallback question inside its confinement. | M / medium | Linux (the Go version change reaches every build) | **Branch** | Open: whether to do it at all, and whether it travels with the Fyne toolkit work. | oto 3.5 needs Go 1.25; `go.mod` says `go 1.24.0` with `oto/v3 v3.4.0`, and every workflow pins `go-version: "1.24"`. No build tag chooses a module version, so it cannot sit behind the switch. It would drop `libasound2-dev`. Go 1.25 needs macOS 12, already the app's minimum. Including oto requires a Linux audio check on the virtual machine. The Fyne assessment can proceed independently. |
 
-**Outside the backlog:** the Fyne 2.8 upgrade, or the move to the
-`cubancorona/fyne` fork, also keeps a branch, because it changes the toolkit
-every build compiles (NEXT.md, *What needs a branch instead*; FYNE_28_PORT.md;
-FYNE_FORK_POLICY.md). The 2.8 port is not to be adopted yet: the shared
-shaper's data race is open. The fork switch waits for a go-ahead.
+**Toolkit assessment for the next major release.** Assess Fyne **v2.8.3 final**
+on `fu/fyne-2.8` once upstream tags it. A toolkit change reaches every native
+build, so the port follows the [branch exception](NEXT.md#what-needs-a-branch-instead).
+The [assessment plan and blast radius](FYNE_28_PORT.md) cover source installs,
+release packaging, reader-visible regressions and saved data. Decision 30
+records inclusion or deferral at the start of the major release's run-up.
 
 ---
 
@@ -1299,10 +1300,11 @@ later minor releases, *Next major* and *Stays*.
     after a licence read; accepting the change to default pictures.
 29. **Windows and Linux hyphenation** (Next major, row 12): a dictionary's
     size and licence, as a Go module or as data.
-30. **Toolkit and toolchain** (Next major, row 13, and *Outside the
-    backlog*): whether the major carries the Fyne 2.8 port or the fork
-    switch, and whether oto 3.5 (Go 1.25) goes with it. These are the only
-    pieces that keep a branch.
+30. **Toolkit and toolchain** (Next major, row 13 and the toolkit assessment).
+    Fyne **v2.8.3 final** is the assessment target. Inclusion and
+    the fork delivery method are open pending the [assessment](FYNE_28_PORT.md).
+    If the candidate misses the release decision, the major proceeds on 2.7.4.
+    Whether oto 3.5 travels with it remains a separate decision.
 
 ### Whenever suits (they stay in the backlog until then)
 

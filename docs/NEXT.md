@@ -150,7 +150,7 @@ branch of their own:
 
 | Change | Why the switch cannot hold it | Now |
 |---|---|---|
-| A toolkit upgrade | `go.mod` names one version of each module, and the release scripts swap in the patched Fyne for the build (`patches/README.md`); no build tag chooses a module version | the Fyne 2.8 port (`FYNE_28_PORT.md`), on a branch that is not published |
+| A toolkit upgrade | `go.mod` names one version of each module, and the release scripts swap in the patched Fyne for the build (`patches/README.md`); no build tag chooses a module version | [Fyne v2.8.3 final](FYNE_28_PORT.md), under assessment on `fu/fyne-2.8` |
 | Raising the minimum iOS or macOS version | the floor is one value in `config/product.json`, the one every Apple build and store listing derives from (`check-min-os-versions.py`); no build tag changes it | none |
 | A change to how stored data is laid out | on an iPhone or iPad a build with the switch on shares the store build's data, and on a computer the build without it (*Trying it on a device*), so data written the new way would be read the old way the moment the other build runs, and a move between layouts is one-way | none |
 
@@ -164,9 +164,9 @@ Such a branch is kept current so that it never becomes the parked kind:
    short; a fix readers need before it ships goes out from the last
    release's tag (*A fix during the run-up*, below).
 
-The Fyne 2.8 port predates this rule and has not been brought up to date
-since it was made, so its first catch-up, after the next minor release, is
-the largest.
+For Fyne, [roadmap decision 30](ROADMAP.md) determines whether the port
+merges at the start of the run-up. Its [assessment](FYNE_28_PORT.md) uses
+the final upstream tag and compares the packages with the shipping toolkit.
 
 ## Building and testing both states
 
