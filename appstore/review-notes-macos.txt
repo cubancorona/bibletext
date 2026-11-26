@@ -1,12 +1,12 @@
-VERSION 1.2.27 (macOS)
+VERSION 1.2.28 (macOS)
 
 BibleText is a Bible reader. No account, login, or registration is required, and reading, search, navigation, notes, and cross-references need no AI-provider key. Downloaded scripture stays readable and searchable offline; downloads and optional provider services need connectivity when used.
 
 WHAT CHANGED IN THIS BUILD
-Choose how much reasoning your AI assistant uses in Settings. Supported Gemini, ChatGPT, Claude, and Grok models offer effort levels or a thinking budget. Leave it on Recommended to use the provider’s default. BibleText remembers your choice for each model.
+Clearer AI study waiting and Settings controls. Model and reasoning choices open in a clean list, key fields have clearer outlines, and progress bars match across study, translation and audio downloads. If an AI study request times out at a higher reasoning setting, retrying steps down to a faster setting automatically.
 
-HOW TO EXERCISE 1.2.27
-Open Settings and choose ChatGPT. Leave Model on Recommended, open Reasoning effort, and select High. Close and reopen Settings to confirm High is saved. Return Reasoning effort to Recommended.
+HOW TO EXERCISE 1.2.28
+Open Settings and choose ChatGPT. Open Model to view the model list and choose a model, then open Reasoning effort and select High. Close and reopen Settings to confirm both choices are saved, then return them to Recommended.
 
 STUDY GESTURE ON THE MAC
 Selection actions live on the right-click menu rather than a touch popover. Select any passage and right-click: the menu offers the system’s Copy and Look Up, Cross-references, Share and Study with AI. Choose None in Settings → Assistant to hide AI features. AI answers require a provider key; core reading needs none.

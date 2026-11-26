@@ -1,0 +1,1 @@
+Clearer AI study waiting and Settings controls. Model and reasoning choices open in a clean list, key fields have clearer outlines, and progress bars match across study, translation and audio downloads. If an AI study request times out at a higher reasoning setting, retrying steps down to a faster setting automatically.

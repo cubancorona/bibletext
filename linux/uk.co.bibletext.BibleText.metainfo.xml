@@ -75,6 +75,16 @@
     </screenshot>
   </screenshots>
   <releases>
+    <release version="1.2.28" date="2026-11-26">
+      <description>
+        <p>Clearer AI study waiting and Settings controls.</p>
+        <ul>
+          <li>Model and reasoning choices in Settings open in a clean list, with clearer outlines on key fields and crisp dropdown markers.</li>
+          <li>Consistent slim progress bars across cross-references, translation downloads, audio downloads and key checks.</li>
+          <li>If an AI study request times out at a higher reasoning setting, retrying steps down to a faster setting automatically.</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.2.27" date="2026-11-21">
       <description>
         <p>Choose how much reasoning your AI assistant uses in Settings.</p>

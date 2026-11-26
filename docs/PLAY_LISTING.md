@@ -202,6 +202,10 @@ Also confirm from the final AAB:
 - target audience and Families eligibility are selected from the real intended
   audience, not to avoid or trigger a policy track.
 
+## Release notes — 1.2.28
+
+> Clearer AI study waiting and Settings controls. Model and reasoning choices open in a clean list, key fields have clearer outlines, and progress bars match across study, translation and audio downloads. If an AI study request times out at a higher reasoning setting, retrying steps down to a faster setting automatically. Controls and pickers highlight immediately on touch.
+
 ## Release notes — 1.2.27
 
 > Choose how much reasoning your AI assistant uses in Settings. Supported Gemini, ChatGPT, Claude, and Grok models offer effort levels or a thinking budget. Leave it on Recommended to use the provider’s default. BibleText remembers your choice for each model.
